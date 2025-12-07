@@ -29,6 +29,7 @@ use std::{
     future::Future,
 };
 
+pub mod casino;
 mod elo;
 mod fixed;
 pub mod state_transition;

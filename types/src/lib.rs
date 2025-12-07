@@ -1,5 +1,6 @@
 pub mod api;
 pub use api::Query;
+pub mod casino;
 pub mod execution;
 use commonware_cryptography::{
     sha256::{Digest, Sha256},

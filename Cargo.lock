@@ -449,6 +449,7 @@ dependencies = [
  "commonware-cryptography",
  "commonware-storage",
  "commonware-utils",
+ "rand",
  "serde",
  "serde_json",
 ]
