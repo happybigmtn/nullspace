@@ -1,8 +1,8 @@
 
 import React from 'react';
-import { GameState, Card } from '../../types';
+import { GameState, Card } from '../../../types';
 import { Hand } from '../GameComponents';
-import { calculateHiLoProjection } from '../../utils/gameUtils';
+import { calculateHiLoProjection } from '../../../utils/gameUtils';
 
 interface HiLoViewProps {
     gameState: GameState;

@@ -11,6 +11,10 @@
 use super::{CasinoGame, GameError, GameResult, GameRng};
 use battleware_types::casino::GameSession;
 
+/// Maximum cards in a blackjack hand (prevents DoS via large allocations).
+/// Theoretical max is ~11 cards (4 aces at 1 + 4 twos + 3 threes = 21).
+const MAX_HAND_SIZE: usize = 11;
+
 /// Blackjack game stages
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -20,12 +24,15 @@ pub enum Stage {
     Complete = 2,
 }
 
-impl From<u8> for Stage {
-    fn from(value: u8) -> Self {
+impl TryFrom<u8> for Stage {
+    type Error = GameError;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
-            0 => Stage::PlayerTurn,
-            1 => Stage::DealerTurn,
-            _ => Stage::Complete,
+            0 => Ok(Stage::PlayerTurn),
+            1 => Ok(Stage::DealerTurn),
+            2 => Ok(Stage::Complete),
+            _ => Err(GameError::InvalidPayload),
         }
     }
 }
@@ -99,7 +106,8 @@ fn parse_state(state: &[u8]) -> Option<(Vec<u8>, Vec<u8>, Stage)> {
     }
     let p_len = state[idx] as usize;
     idx += 1;
-    if idx + p_len > state.len() {
+    // Bounds check: reject impossibly large hand sizes
+    if p_len > MAX_HAND_SIZE || idx + p_len > state.len() {
         return None;
     }
     let player_cards: Vec<u8> = state[idx..idx + p_len].to_vec();
@@ -111,7 +119,8 @@ fn parse_state(state: &[u8]) -> Option<(Vec<u8>, Vec<u8>, Stage)> {
     }
     let d_len = state[idx] as usize;
     idx += 1;
-    if idx + d_len > state.len() {
+    // Bounds check: reject impossibly large hand sizes
+    if d_len > MAX_HAND_SIZE || idx + d_len > state.len() {
         return None;
     }
     let dealer_cards: Vec<u8> = state[idx..idx + d_len].to_vec();
@@ -121,7 +130,7 @@ fn parse_state(state: &[u8]) -> Option<(Vec<u8>, Vec<u8>, Stage)> {
     if idx >= state.len() {
         return None;
     }
-    let stage = Stage::from(state[idx]);
+    let stage = Stage::try_from(state[idx]).ok()?;
 
     Some((player_cards, dealer_cards, stage))
 }
@@ -187,11 +196,10 @@ impl CasinoGame for Blackjack {
             return Err(GameError::GameAlreadyComplete);
         }
 
-        // Recreate deck excluding dealt cards
-        let mut deck: Vec<u8> = (0..52)
-            .filter(|c| !player_cards.contains(c) && !dealer_cards.contains(c))
-            .collect();
-        rng.shuffle(&mut deck);
+        // Recreate deck excluding dealt cards (using optimized bit-set)
+        let mut all_cards = player_cards.clone();
+        all_cards.extend_from_slice(&dealer_cards);
+        let mut deck = rng.create_deck_excluding(&all_cards);
 
         match stage {
             Stage::PlayerTurn => {
@@ -239,8 +247,10 @@ impl CasinoGame for Blackjack {
                         player_cards.push(card);
                         session.move_count += 1;
 
-                        // Double the bet (will be handled by caller)
-                        session.bet *= 2;
+                        // Double the bet with overflow protection
+                        session.bet = session.bet
+                            .checked_mul(2)
+                            .ok_or(GameError::InvalidMove)?;
 
                         let (value, _) = hand_value(&player_cards);
                         if value > 21 {
@@ -297,8 +307,9 @@ impl Blackjack {
             // Both blackjack = push
             GameResult::Push
         } else if player_bj {
-            // Player blackjack pays 3:2
-            GameResult::Win(session.bet * 3 / 2)
+            // Player blackjack pays 3:2 (with overflow protection)
+            let payout = session.bet.saturating_mul(3) / 2;
+            GameResult::Win(payout)
         } else if dealer_bj {
             // Dealer blackjack
             GameResult::Loss
@@ -342,6 +353,7 @@ mod tests {
             move_count: 0,
             created_at: 0,
             is_complete: false,
+            super_mode: battleware_types::casino::SuperModeState::default(),
         }
     }
 

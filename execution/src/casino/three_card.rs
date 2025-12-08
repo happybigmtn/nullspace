@@ -215,19 +215,20 @@ impl CasinoGame for ThreeCardPoker {
                 let dealer_qualifies = dealer_hand.0 >= HandRank::Pair ||
                     dealer_hand.1[0] >= 12; // Queen or higher
 
-                // Calculate ante bonus (paid regardless of dealer)
-                let bonus = ante_bonus(player_hand.0) * session.bet;
+                // Calculate ante bonus (paid regardless of dealer) with overflow protection
+                let bonus = session.bet.saturating_mul(ante_bonus(player_hand.0));
+                let double_bet = session.bet.saturating_mul(2);
 
                 if !dealer_qualifies {
                     // Ante pays 1:1, play bet pushes, plus bonus
-                    Ok(GameResult::Win(session.bet + bonus))
+                    Ok(GameResult::Win(session.bet.saturating_add(bonus)))
                 } else {
                     // Compare hands
                     match compare_hands(&player_hand, &dealer_hand) {
                         std::cmp::Ordering::Greater => {
                             // Player wins: ante and play both pay 1:1
                             // Total win = 2 bets (ante + play) + bonus
-                            Ok(GameResult::Win(session.bet * 2 + bonus))
+                            Ok(GameResult::Win(double_bet.saturating_add(bonus)))
                         }
                         std::cmp::Ordering::Less => {
                             // Dealer wins: lose ante and play
@@ -236,8 +237,8 @@ impl CasinoGame for ThreeCardPoker {
                                 // Won bonus but lost main bet
                                 // Net result depends on comparison
                                 // For simplicity, if bonus covers losses it's a win
-                                if bonus > session.bet * 2 {
-                                    Ok(GameResult::Win(bonus - session.bet * 2))
+                                if bonus > double_bet {
+                                    Ok(GameResult::Win(bonus.saturating_sub(double_bet)))
                                 } else {
                                     Ok(GameResult::Loss)
                                 }
@@ -282,6 +283,7 @@ mod tests {
             move_count: 0,
             created_at: 0,
             is_complete: false,
+            super_mode: battleware_types::casino::SuperModeState::default(),
         }
     }
 

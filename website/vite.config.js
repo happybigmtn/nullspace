@@ -51,7 +51,15 @@ export default defineConfig({
     'import.meta.env.VITE_URL': JSON.stringify(backendUrl)
   },
   server: {
-    port: 3000
+    port: 3000,
+    proxy: {
+      '/api': {
+        target: backendUrl,
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ''),
+        ws: true
+      }
+    }
   },
   optimizeDeps: {
     exclude: ['./wasm/pkg/battleware_wasm.js']

@@ -5,19 +5,18 @@ use battleware_types::api::Summary;
 use battleware_types::{
     api::{Lookup, Submission, Update, UpdatesFilter},
     execution::{
-        transaction_namespace, Creature, Event, Instruction, Key, Leaderboard, Outcome, Output,
+        transaction_namespace, Event, Instruction, Key, Output,
         Seed, Transaction as ExecutionTransaction, Value, NAMESPACE,
     },
     Identity, Query,
 };
 use commonware_codec::{Encode, ReadExt};
+#[cfg(feature = "testing")]
 use commonware_consensus::threshold_simplex::types::{seed_namespace, view_message};
 #[cfg(feature = "testing")]
 use commonware_cryptography::bls12381::primitives::ops;
-use commonware_cryptography::bls12381::{
-    primitives::variant::MinSig,
-    tle::{encrypt, Block},
-};
+#[cfg(feature = "testing")]
+use commonware_cryptography::bls12381::primitives::variant::MinSig;
 use commonware_cryptography::{ed25519, Hasher, PrivateKeyExt, Sha256, Signer as _};
 #[cfg(feature = "testing")]
 use commonware_runtime::{deterministic::Runner, Runner as _};
@@ -115,72 +114,78 @@ pub struct Transaction {
 
 #[wasm_bindgen]
 impl Transaction {
-    /// Sign a new generate transaction.
-    #[wasm_bindgen]
-    pub fn generate(signer: &Signer, nonce: u64) -> Result<Transaction, JsValue> {
-        let instruction = Instruction::Generate;
-        let tx = ExecutionTransaction::sign(&signer.private_key, nonce, instruction);
-        Ok(Transaction { inner: tx })
-    }
-
-    /// Sign a new match transaction.
-    #[wasm_bindgen]
-    pub fn match_tx(signer: &Signer, nonce: u64) -> Result<Transaction, JsValue> {
-        let instruction = Instruction::Match;
-        let tx = ExecutionTransaction::sign(&signer.private_key, nonce, instruction);
-        Ok(Transaction { inner: tx })
-    }
-
-    /// Sign a new move transaction.
-    #[wasm_bindgen]
-    pub fn move_tx(
-        signer: &Signer,
-        nonce: u64,
-        identity: &[u8],
-        expiry: u64,
-        move_index: u8,
-    ) -> Result<Transaction, JsValue> {
-        // Parse identity
-        let identity = decode_bls_public(identity)?;
-
-        // Create seed namespace and view message
-        let seed_ns = seed_namespace(NAMESPACE);
-        let view_msg = view_message(expiry);
-
-        // Create a 32-byte move message with the move data
-        let mut message = [0u8; 32];
-        message[0] = move_index; // First byte is the actual move
-
-        // Encrypt the move
-        let ciphertext = encrypt::<_, MinSig>(
-            &mut OsRng,
-            identity,
-            (Some(&seed_ns), &view_msg[..]),
-            &Block::new(message),
-        );
-
-        let instruction = Instruction::Move(ciphertext);
-        let tx = ExecutionTransaction::sign(&signer.private_key, nonce, instruction);
-        Ok(Transaction { inner: tx })
-    }
-
-    #[wasm_bindgen]
-    pub fn settle_tx(signer: &Signer, nonce: u64, seed: &[u8]) -> Result<Transaction, JsValue> {
-        // Parse the full seed structure
-        let mut buf = seed;
-        let seed = Seed::read(&mut buf)
-            .map_err(|e| JsValue::from_str(&format!("Failed to parse seed: {e:?}")))?;
-
-        // Extract just the signature from the seed
-        let instruction = Instruction::Settle(seed.signature);
-        let tx = ExecutionTransaction::sign(&signer.private_key, nonce, instruction);
-        Ok(Transaction { inner: tx })
-    }
-
     /// Encode the transaction.
     #[wasm_bindgen]
     pub fn encode(&self) -> Vec<u8> {
         self.inner.encode().to_vec()
+    }
+
+    /// Sign a new casino start game transaction.
+    #[wasm_bindgen]
+    pub fn casino_start_game(
+        signer: &Signer,
+        nonce: u64,
+        game_type: u8,
+        bet: u64,
+        session_id: u64,
+    ) -> Result<Transaction, JsValue> {
+        use battleware_types::casino::GameType;
+        let game_type = match game_type {
+            0 => GameType::Baccarat,
+            1 => GameType::Blackjack,
+            2 => GameType::CasinoWar,
+            3 => GameType::Craps,
+            4 => GameType::VideoPoker,
+            5 => GameType::HiLo,
+            6 => GameType::Roulette,
+            7 => GameType::SicBo,
+            8 => GameType::ThreeCard,
+            9 => GameType::UltimateHoldem,
+            _ => return Err(JsValue::from_str(&format!("Invalid game type: {}", game_type))),
+        };
+        let instruction = Instruction::CasinoStartGame { game_type, bet, session_id };
+        let tx = ExecutionTransaction::sign(&signer.private_key, nonce, instruction);
+        Ok(Transaction { inner: tx })
+    }
+
+    /// Sign a new casino game move transaction.
+    #[wasm_bindgen]
+    pub fn casino_game_move(
+        signer: &Signer,
+        nonce: u64,
+        session_id: u64,
+        payload: &[u8],
+    ) -> Result<Transaction, JsValue> {
+        let instruction = Instruction::CasinoGameMove {
+            session_id,
+            payload: payload.to_vec(),
+        };
+        let tx = ExecutionTransaction::sign(&signer.private_key, nonce, instruction);
+        Ok(Transaction { inner: tx })
+    }
+
+    /// Sign a new casino toggle shield transaction.
+    #[wasm_bindgen]
+    pub fn casino_toggle_shield(signer: &Signer, nonce: u64) -> Result<Transaction, JsValue> {
+        let instruction = Instruction::CasinoToggleShield;
+        let tx = ExecutionTransaction::sign(&signer.private_key, nonce, instruction);
+        Ok(Transaction { inner: tx })
+    }
+
+    /// Sign a new casino toggle double transaction.
+    #[wasm_bindgen]
+    pub fn casino_toggle_double(signer: &Signer, nonce: u64) -> Result<Transaction, JsValue> {
+        let instruction = Instruction::CasinoToggleDouble;
+        let tx = ExecutionTransaction::sign(&signer.private_key, nonce, instruction);
+        Ok(Transaction { inner: tx })
+    }
+
+    /// Sign a new casino register transaction.
+    #[wasm_bindgen]
+    pub fn casino_register(signer: &Signer, nonce: u64, name: &str) -> Result<Transaction, JsValue> {
+        let instruction = Instruction::CasinoRegister { name: name.to_string() };
+        let tx = ExecutionTransaction::sign(&signer.private_key, nonce, instruction);
+        Ok(Transaction { inner: tx })
     }
 }
 
@@ -194,19 +199,14 @@ pub fn encode_account_key(public_key: &[u8]) -> Result<Vec<u8>, JsValue> {
     Ok(key.encode().to_vec())
 }
 
-/// Encode a battle key.
+/// Encode a casino player key.
 #[wasm_bindgen]
-pub fn encode_battle_key(digest: &[u8]) -> Result<Vec<u8>, JsValue> {
-    let key = Key::Battle(commonware_cryptography::sha256::Digest(
-        digest.try_into().expect("Invalid digest length"),
-    ));
+pub fn encode_casino_player_key(public_key: &[u8]) -> Result<Vec<u8>, JsValue> {
+    let mut buf = public_key;
+    let pk = ed25519::PublicKey::read(&mut buf)
+        .map_err(|e| JsValue::from_str(&format!("Invalid public key: {e:?}")))?;
+    let key = Key::CasinoPlayer(pk);
     Ok(key.encode().to_vec())
-}
-
-/// Encode a leaderboard key.
-#[wasm_bindgen]
-pub fn encode_leaderboard_key() -> Vec<u8> {
-    Key::Leaderboard.encode().to_vec()
 }
 
 /// Encode UpdatesFilter::All
@@ -245,24 +245,6 @@ pub fn encode_query_index(index: u64) -> Vec<u8> {
     query.encode().to_vec()
 }
 
-fn process_leaderboard(leaderboard: &Leaderboard) -> Vec<serde_json::Value> {
-    leaderboard
-        .players
-        .iter()
-        .map(|(public_key, stats)| {
-            serde_json::json!([
-                public_key.encode().to_vec(),
-                {
-                    "elo": stats.elo,
-                    "wins": stats.wins,
-                    "losses": stats.losses,
-                    "draws": stats.draws
-                }
-            ])
-        })
-        .collect()
-}
-
 // Helper function to convert Value to JSON
 fn decode_value(value: Value) -> Result<JsValue, JsValue> {
     // Convert to JSON
@@ -270,54 +252,7 @@ fn decode_value(value: Value) -> Result<JsValue, JsValue> {
         Value::Account(account) => {
             serde_json::json!({
                 "type": "Account",
-                "nonce": account.nonce,
-                "creature": account.creature.map(|c| {
-                    serde_json::json!({
-                        "traits": c.traits.to_vec()
-                    })
-                }),
-                "battle": account.battle.map(|b| hex(&b.encode())),
-                "elo": account.stats.elo,
-                "wins": account.stats.wins,
-                "losses": account.stats.losses,
-                "draws": account.stats.draws
-            })
-        }
-        Value::Lobby { expiry, players } => {
-            serde_json::json!({
-                "type": "Lobby",
-                "expiry": expiry,
-                "players": players.iter().map(|p| hex(&p.encode())).collect::<Vec<_>>()
-            })
-        }
-        Value::Battle {
-            expiry,
-            round,
-            player_a,
-            player_a_max_health,
-            player_a_health,
-            player_a_pending,
-            player_a_move_counts,
-            player_b,
-            player_b_max_health,
-            player_b_health,
-            player_b_pending,
-            player_b_move_counts,
-        } => {
-            serde_json::json!({
-                "type": "Battle",
-                "expiry": expiry,
-                "round": round,
-                "player_a": hex(&player_a.encode()),
-                "player_a_max_health": player_a_max_health,
-                "player_a_health": player_a_health,
-                "player_a_pending": player_a_pending.is_some(),
-                "player_a_move_counts": player_a_move_counts.to_vec(),
-                "player_b": hex(&player_b.encode()),
-                "player_b_max_health": player_b_max_health,
-                "player_b_health": player_b_health,
-                "player_b_pending": player_b_pending.is_some(),
-                "player_b_move_counts": player_b_move_counts.to_vec()
+                "nonce": account.nonce
             })
         }
         Value::Commit { height, start: _ } => {
@@ -326,10 +261,53 @@ fn decode_value(value: Value) -> Result<JsValue, JsValue> {
                 "height": height
             })
         }
-        Value::Leaderboard(leaderboard) => {
+        // Casino values
+        Value::CasinoPlayer(player) => {
             serde_json::json!({
-                "type": "Leaderboard",
-                "players": process_leaderboard(&leaderboard)
+                "type": "CasinoPlayer",
+                "name": player.name,
+                "chips": player.chips,
+                "shields": player.shields,
+                "doubles": player.doubles,
+                "active_shield": player.active_shield,
+                "active_double": player.active_double,
+                "active_session": player.active_session
+            })
+        }
+        Value::CasinoSession(session) => {
+            serde_json::json!({
+                "type": "CasinoSession",
+                "id": session.id,
+                "player": hex(&session.player.encode()),
+                "game_type": format!("{:?}", session.game_type),
+                "bet": session.bet,
+                "state_blob": hex(&session.state_blob),
+                "move_count": session.move_count,
+                "is_complete": session.is_complete
+            })
+        }
+        Value::CasinoLeaderboard(leaderboard) => {
+            let entries: Vec<_> = leaderboard
+                .entries
+                .iter()
+                .map(|e| {
+                    serde_json::json!({
+                        "player": hex(&e.player.encode()),
+                        "name": e.name,
+                        "chips": e.chips
+                    })
+                })
+                .collect();
+            serde_json::json!({
+                "type": "CasinoLeaderboard",
+                "entries": entries
+            })
+        }
+        Value::Tournament(tournament) => {
+            serde_json::json!({
+                "type": "Tournament",
+                "id": tournament.id,
+                "phase": format!("{:?}", tournament.phase)
             })
         }
     };
@@ -402,209 +380,124 @@ pub fn decode_seed(seed: &[u8], identity: &[u8]) -> Result<JsValue, JsValue> {
 /// Helper function to convert an Event to JSON
 fn decode_event(event: &Event) -> Result<serde_json::Value, JsValue> {
     let json = match event {
-        Event::Generated { account, creature } => {
+        // Casino events
+        Event::CasinoPlayerRegistered { player, name } => {
             serde_json::json!({
-                "type": "Generated",
-                "account": hex(&account.encode()),
-                "creature": {
-                    "traits": creature.traits.to_vec()
-                }
+                "type": "CasinoPlayerRegistered",
+                "player": hex(&player.encode()),
+                "name": name
             })
         }
-        Event::Matched {
-            battle,
-            expiry,
-            player_a,
-            player_a_creature,
-            player_a_stats,
-            player_b,
-            player_b_creature,
-            player_b_stats,
+        Event::CasinoGameStarted {
+            session_id,
+            player,
+            game_type,
+            bet,
+            initial_state,
         } => {
             serde_json::json!({
-                "type": "Matched",
-                "battle": hex(&battle.encode()),
-                "expiry": expiry,
-                "player_a": hex(&player_a.encode()),
-                "player_a_creature": {
-                    "traits": player_a_creature.traits.to_vec()
-                },
-                "player_a_stats": {
-                    "elo": player_a_stats.elo,
-                    "wins": player_a_stats.wins,
-                    "losses": player_a_stats.losses,
-                    "draws": player_a_stats.draws
-                },
-                "player_b": hex(&player_b.encode()),
-                "player_b_creature": {
-                    "traits": player_b_creature.traits.to_vec()
-                },
-                "player_b_stats": {
-                    "elo": player_b_stats.elo,
-                    "wins": player_b_stats.wins,
-                    "losses": player_b_stats.losses,
-                    "draws": player_b_stats.draws
-                }
+                "type": "CasinoGameStarted",
+                "session_id": session_id,
+                "player": hex(&player.encode()),
+                "game_type": format!("{:?}", game_type),
+                "bet": bet,
+                "initial_state": hex(initial_state)
             })
         }
-        Event::Moved {
-            battle,
-            round,
-            expiry,
-            player_a,
-            player_a_health,
-            player_a_move,
-            player_a_move_counts,
-            player_a_power,
-            player_b,
-            player_b_health,
-            player_b_move,
-            player_b_move_counts,
-            player_b_power,
+        Event::CasinoGameMoved {
+            session_id,
+            move_number,
+            new_state,
         } => {
             serde_json::json!({
-                "type": "Moved",
-                "battle": hex(&battle.encode()),
-                "round": round,
-                "expiry": expiry,
-                "player_a": hex(&player_a.encode()),
-                "player_a_health": player_a_health,
-                "player_a_move": player_a_move,
-                "player_a_move_counts": player_a_move_counts.to_vec(),
-                "player_a_power": player_a_power,
-                "player_b": hex(&player_b.encode()),
-                "player_b_health": player_b_health,
-                "player_b_move": player_b_move,
-                "player_b_move_counts": player_b_move_counts.to_vec(),
-                "player_b_power": player_b_power
+                "type": "CasinoGameMoved",
+                "session_id": session_id,
+                "move_number": move_number,
+                "new_state": hex(new_state)
             })
         }
-        Event::Settled {
-            battle,
-            round,
-            player_a,
-            player_a_old,
-            player_a_new,
-            player_b,
-            player_b_old,
-            player_b_new,
-            outcome,
-            leaderboard,
+        Event::CasinoGameCompleted {
+            session_id,
+            player,
+            game_type,
+            payout,
+            final_chips,
+            was_shielded,
+            was_doubled,
         } => {
-            let outcome_str = match outcome {
-                Outcome::PlayerA => "PlayerA",
-                Outcome::PlayerB => "PlayerB",
-                Outcome::Draw => "Draw",
+            serde_json::json!({
+                "type": "CasinoGameCompleted",
+                "session_id": session_id,
+                "player": hex(&player.encode()),
+                "game_type": format!("{:?}", game_type),
+                "payout": payout,
+                "final_chips": final_chips,
+                "was_shielded": was_shielded,
+                "was_doubled": was_doubled
+            })
+        }
+        Event::CasinoLeaderboardUpdated { leaderboard } => {
+            let entries: Vec<_> = leaderboard
+                .entries
+                .iter()
+                .map(|e| {
+                    serde_json::json!({
+                        "player": hex(&e.player.encode()),
+                        "name": e.name,
+                        "chips": e.chips
+                    })
+                })
+                .collect();
+            serde_json::json!({
+                "type": "CasinoLeaderboardUpdated",
+                "entries": entries
+            })
+        }
+        // Tournament events
+        Event::TournamentStarted { id, start_block } => {
+            serde_json::json!({
+                "type": "TournamentStarted",
+                "id": id,
+                "start_block": start_block
+            })
+        }
+        Event::PlayerJoined { tournament_id, player } => {
+            serde_json::json!({
+                "type": "PlayerJoined",
+                "tournament_id": tournament_id,
+                "player": hex(&player.encode())
+            })
+        }
+        Event::TournamentPhaseChanged { id, phase } => {
+            let phase_str = match phase {
+                battleware_types::casino::TournamentPhase::Registration => "Registration",
+                battleware_types::casino::TournamentPhase::Active => "Active",
+                battleware_types::casino::TournamentPhase::Complete => "Complete",
             };
-
             serde_json::json!({
-                "type": "Settled",
-                "battle": hex(&battle.encode()),
-                "round": round,
-                "player_a": hex(&player_a.encode()),
-                "player_a_old": {
-                    "elo": player_a_old.elo,
-                    "wins": player_a_old.wins,
-                    "losses": player_a_old.losses,
-                    "draws": player_a_old.draws
-                },
-                "player_a_new": {
-                    "elo": player_a_new.elo,
-                    "wins": player_a_new.wins,
-                    "losses": player_a_new.losses,
-                    "draws": player_a_new.draws
-                },
-                "player_b": hex(&player_b.encode()),
-                "player_b_old": {
-                    "elo": player_b_old.elo,
-                    "wins": player_b_old.wins,
-                    "losses": player_b_old.losses,
-                    "draws": player_b_old.draws
-                },
-                "player_b_new": {
-                    "elo": player_b_new.elo,
-                    "wins": player_b_new.wins,
-                    "losses": player_b_new.losses,
-                    "draws": player_b_new.draws
-                },
-                "outcome": outcome_str,
-                "leaderboard": process_leaderboard(leaderboard)
+                "type": "TournamentPhaseChanged",
+                "id": id,
+                "phase": phase_str
             })
         }
-        Event::Locked {
-            battle,
-            round,
-            locker,
-            observer,
-            ciphertext,
-        } => {
+        Event::TournamentEnded { id, rankings } => {
+            let rankings_json: Vec<_> = rankings
+                .iter()
+                .map(|(player, chips)| {
+                    serde_json::json!({
+                        "player": hex(&player.encode()),
+                        "chips": chips
+                    })
+                })
+                .collect();
             serde_json::json!({
-                "type": "Locked",
-                "battle": hex(&battle.encode()),
-                "round": round,
-                "locker": hex(&locker.encode()),
-                "observer": hex(&observer.encode()),
-                "ciphertext": hex(&ciphertext.encode())
+                "type": "TournamentEnded",
+                "id": id,
+                "rankings": rankings_json
             })
         }
     };
     Ok(json)
-}
-
-// Creature generation
-#[wasm_bindgen]
-pub fn generate_creature_from_traits(traits: &[u8]) -> Result<JsValue, JsValue> {
-    let creature = Creature {
-        traits: traits.try_into().expect("Invalid traits length"),
-    };
-
-    // Calculate derived stats
-    let health = creature.health();
-    let move_strengths = creature.get_move_strengths();
-    let move_limits = creature.get_move_usage_limits();
-    let json = serde_json::json!({
-        "traits": creature.traits.to_vec(),
-        "health": health,
-        "moves": [
-            {
-                "index": 0,
-                "name": "No-op",
-                "strength": move_strengths[0],
-                "usage_limit": move_limits[0],
-                "is_defense": false
-            },
-            {
-                "index": 1,
-                "name": "Defense",
-                "strength": move_strengths[1],
-                "usage_limit": move_limits[1],
-                "is_defense": true
-            },
-            {
-                "index": 2,
-                "name": "Attack 1",
-                "strength": move_strengths[2],
-                "usage_limit": move_limits[2],
-                "is_defense": false
-            },
-            {
-                "index": 3,
-                "name": "Attack 2",
-                "strength": move_strengths[3],
-                "usage_limit": move_limits[3],
-                "is_defense": false
-            },
-            {
-                "index": 4,
-                "name": "Attack 3",
-                "strength": move_strengths[4],
-                "usage_limit": move_limits[4],
-                "is_defense": false
-            }
-        ]
-    });
-
-    to_object(&json)
 }
 
 /// Decode a BLS public key.
@@ -679,10 +572,14 @@ fn process_output(output: &Output) -> Result<serde_json::Value, JsValue> {
     match output {
         Output::Transaction(tx) => {
             let instruction = match &tx.instruction {
-                Instruction::Generate => "Generate",
-                Instruction::Match => "Match",
-                Instruction::Move(_ciphertext) => "Move",
-                Instruction::Settle(_signature) => "Settle",
+                // Casino instructions
+                Instruction::CasinoRegister { .. } => "CasinoRegister",
+                Instruction::CasinoDeposit { .. } => "CasinoDeposit",
+                Instruction::CasinoStartGame { .. } => "CasinoStartGame",
+                Instruction::CasinoGameMove { .. } => "CasinoGameMove",
+                Instruction::CasinoToggleShield => "CasinoToggleShield",
+                Instruction::CasinoToggleDouble => "CasinoToggleDouble",
+                Instruction::CasinoJoinTournament { .. } => "CasinoJoinTournament",
             };
             Ok(serde_json::json!({
                 "type": "Transaction",

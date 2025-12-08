@@ -8,31 +8,17 @@ use commonware_consensus::threshold_simplex::types::{
     Seed as CSeed, View,
 };
 use commonware_cryptography::{
-    bls12381::{
-        primitives::variant::{MinSig, Variant},
-        tle::Ciphertext,
-    },
+    bls12381::primitives::variant::{MinSig, Variant},
     ed25519::{self, Batch, PublicKey},
     sha256::{Digest, Sha256},
     BatchVerifier, Committable, Digestible, Hasher, Signer, Verifier,
 };
 use commonware_utils::{modulo, union};
-use std::{collections::BTreeSet, fmt::Debug, hash::Hash};
+use std::{fmt::Debug, hash::Hash};
 
-pub const MAX_LOBBY_SIZE: usize = 128;
-pub const ALLOWED_MOVES: usize = 4;
-pub const TOTAL_MOVES: usize = 1 + ALLOWED_MOVES; // Includes move 0 (no-op) + 4 actual moves
-pub const MIN_HEALTH_POINTS: u8 = 75;
-pub const TOTAL_SKILL_POINTS: u16 = 300;
-pub const SKILLS: usize = 5;
-pub const BASE_MOVE_LIMIT: u16 = 15;
-
-pub const NAMESPACE: &[u8] = b"_BATTLEWARE";
+pub const NAMESPACE: &[u8] = b"_SUPERSOCIETY";
 pub const TRANSACTION_SUFFIX: &[u8] = b"_TX";
 pub const MAX_BLOCK_TRANSACTIONS: usize = 100;
-pub const MAX_BATTLE_ROUNDS: u8 = 15;
-pub const LOBBY_EXPIRY: u64 = 25;
-pub const MOVE_EXPIRY: u64 = 50;
 
 pub type Seed = CSeed<MinSig>;
 pub type Notarization = CNotarization<MinSig, Digest>;
@@ -151,38 +137,124 @@ impl Digestible for Transaction {
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[allow(clippy::large_enum_variant)]
 pub enum Instruction {
-    Generate,
-    Match,
-    Move(Ciphertext<MinSig>),
-    Settle(Signature),
+    // Casino instructions (tags 10-17)
+    /// Register a new casino player with a name.
+    /// Binary: [10] [nameLen:u32 BE] [nameBytes...]
+    CasinoRegister { name: String },
+
+    /// Deposit chips (for testing/faucet).
+    /// Binary: [11] [amount:u64 BE]
+    CasinoDeposit { amount: u64 },
+
+    /// Start a new casino game session.
+    /// Binary: [12] [gameType:u8] [bet:u64 BE] [sessionId:u64 BE]
+    CasinoStartGame {
+        game_type: crate::casino::GameType,
+        bet: u64,
+        session_id: u64,
+    },
+
+    /// Make a move in an active casino game.
+    /// Binary: [13] [sessionId:u64 BE] [payloadLen:u32 BE] [payload...]
+    CasinoGameMove { session_id: u64, payload: Vec<u8> },
+
+    /// Toggle shield modifier for next game.
+    /// Binary: [14]
+    CasinoToggleShield,
+
+    /// Toggle double modifier for next game.
+    /// Binary: [15]
+    CasinoToggleDouble,
+
+    /// Join a tournament.
+    /// Binary: [16] [tournamentId:u64 BE]
+    CasinoJoinTournament { tournament_id: u64 },
 }
 
 impl Write for Instruction {
     fn write(&self, writer: &mut impl BufMut) {
         match self {
-            Self::Generate => 0u8.write(writer),
-            Self::Match => 1u8.write(writer),
-            Self::Move(ciphertext) => {
-                2u8.write(writer);
-                ciphertext.write(writer);
+            // Casino instructions (tags 10-17)
+            Self::CasinoRegister { name } => {
+                10u8.write(writer);
+                (name.len() as u32).write(writer);
+                writer.put_slice(name.as_bytes());
             }
-            Self::Settle(signature) => {
-                3u8.write(writer);
-                signature.write(writer);
+            Self::CasinoDeposit { amount } => {
+                11u8.write(writer);
+                amount.write(writer);
+            }
+            Self::CasinoStartGame { game_type, bet, session_id } => {
+                12u8.write(writer);
+                game_type.write(writer);
+                bet.write(writer);
+                session_id.write(writer);
+            }
+            Self::CasinoGameMove { session_id, payload } => {
+                13u8.write(writer);
+                session_id.write(writer);
+                (payload.len() as u32).write(writer);
+                writer.put_slice(payload);
+            }
+            Self::CasinoToggleShield => 14u8.write(writer),
+            Self::CasinoToggleDouble => 15u8.write(writer),
+            Self::CasinoJoinTournament { tournament_id } => {
+                16u8.write(writer);
+                tournament_id.write(writer);
             }
         }
     }
 }
+
+/// Maximum name length for casino player registration
+pub const CASINO_MAX_NAME_LENGTH: usize = 32;
+
+/// Maximum payload length for casino game moves
+pub const CASINO_MAX_PAYLOAD_LENGTH: usize = 256;
 
 impl Read for Instruction {
     type Cfg = ();
 
     fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
         let instruction = match reader.get_u8() {
-            0 => Self::Generate,
-            1 => Self::Match,
-            2 => Self::Move(Ciphertext::read(reader)?),
-            3 => Self::Settle(Signature::read(reader)?),
+            // Casino instructions (tags 10-17)
+            10 => {
+                let name_len = u32::read(reader)? as usize;
+                if name_len > CASINO_MAX_NAME_LENGTH {
+                    return Err(Error::Invalid("Instruction", "casino name too long"));
+                }
+                if reader.remaining() < name_len {
+                    return Err(Error::EndOfBuffer);
+                }
+                let mut name_bytes = vec![0u8; name_len];
+                reader.copy_to_slice(&mut name_bytes);
+                let name = String::from_utf8(name_bytes)
+                    .map_err(|_| Error::Invalid("Instruction", "invalid UTF-8 in casino name"))?;
+                Self::CasinoRegister { name }
+            }
+            11 => Self::CasinoDeposit { amount: u64::read(reader)? },
+            12 => Self::CasinoStartGame {
+                game_type: crate::casino::GameType::read(reader)?,
+                bet: u64::read(reader)?,
+                session_id: u64::read(reader)?,
+            },
+            13 => {
+                let session_id = u64::read(reader)?;
+                let payload_len = u32::read(reader)? as usize;
+                if payload_len > CASINO_MAX_PAYLOAD_LENGTH {
+                    return Err(Error::Invalid("Instruction", "casino payload too long"));
+                }
+                if reader.remaining() < payload_len {
+                    return Err(Error::EndOfBuffer);
+                }
+                let mut payload = vec![0u8; payload_len];
+                reader.copy_to_slice(&mut payload);
+                Self::CasinoGameMove { session_id, payload }
+            }
+            14 => Self::CasinoToggleShield,
+            15 => Self::CasinoToggleDouble,
+            16 => Self::CasinoJoinTournament { tournament_id: u64::read(reader)? },
+
             i => return Err(Error::InvalidEnum(i)),
         };
 
@@ -194,178 +266,15 @@ impl EncodeSize for Instruction {
     fn encode_size(&self) -> usize {
         u8::SIZE
             + match self {
-                Self::Generate | Self::Match => 0,
-                Self::Move(ciphertext) => ciphertext.encode_size(),
-                Self::Settle(signature) => signature.encode_size(),
+                // Casino
+                Self::CasinoRegister { name } => 4 + name.len(),
+                Self::CasinoDeposit { .. } => 8,
+                Self::CasinoStartGame { .. } => 1 + 8 + 8,
+                Self::CasinoGameMove { payload, .. } => 8 + 4 + payload.len(),
+                Self::CasinoToggleShield | Self::CasinoToggleDouble => 0,
+                Self::CasinoJoinTournament { .. } => 8,
             }
     }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Creature {
-    pub traits: [u8; Digest::SIZE],
-}
-
-impl Creature {
-    /// Distributes skill points deterministically based on input hash
-    /// Ensures health >= MIN_HEALTH_POINTS and other skills >= 1
-    /// Total points sum to TOTAL_SKILL_POINTS
-    fn distribute_skill_points(digest: &[u8; Digest::SIZE]) -> [u8; SKILLS] {
-        // Start with minimum values
-        let mut skills = [1u8; SKILLS];
-        skills[0] = MIN_HEALTH_POINTS;
-
-        // Calculate remaining points to distribute
-        let min_sum: u16 = MIN_HEALTH_POINTS as u16 + ALLOWED_MOVES as u16; // health + 4 other skills at 1 each
-        let remaining_points = TOTAL_SKILL_POINTS - min_sum;
-
-        // Use hash bytes to deterministically distribute remaining points
-        // First, calculate weights from hash
-        let weights: Vec<u16> = digest[0..SKILLS].iter().map(|&b| b as u16 + 1).collect();
-        let weight_sum: u16 = weights.iter().sum();
-
-        // Distribute remaining points proportionally
-        let mut distributed: u16 = 0;
-        for i in 0..SKILLS {
-            let additional = (remaining_points * weights[i] / weight_sum) as u8;
-            let before = skills[i];
-            skills[i] = skills[i].saturating_add(additional);
-            let actual_added = (skills[i] - before) as u16;
-            distributed += actual_added;
-        }
-
-        // Handle any rounding remainder by adding to skills in order
-        let mut remainder = remaining_points - distributed;
-        let mut iter = 0;
-        while remainder > 0 {
-            let idx = iter % SKILLS;
-            let skill = &mut skills[idx];
-            if let Some(new_skill) = skill.checked_add(1) {
-                *skill = new_skill;
-                remainder = remainder.saturating_sub(1);
-            }
-            iter += 1;
-        }
-
-        skills
-    }
-
-    /// Calculate action effectiveness for a given move
-    /// Returns (is_defensive, effectiveness)
-    fn calculate_action(traits: &[u8], index: u8, multiplier: u8) -> (bool, u8) {
-        // If index is out of bounds or 0 (no move), return no action
-        // Valid moves are 1-4 (inclusive)
-        if index == 0 || index > ALLOWED_MOVES as u8 {
-            return (false, 0);
-        }
-
-        // Scale effectiveness from 1/2 to full strength
-        // Note: traits array starts at index 0, but move indices now start at 1
-        let max_effectiveness = traits[index as usize];
-        // multiplier ranges from 0 to u8::MAX, we want to map this to 0.5-1.0 of max_effectiveness
-        // Formula: min + (multiplier/u8::MAX) * (max - min) where min = max/2
-        let min_effectiveness = max_effectiveness / 2;
-        let range = max_effectiveness - min_effectiveness;
-        let scaled_effectiveness =
-            min_effectiveness + ((range as u16 * multiplier as u16) / u8::MAX as u16) as u8;
-
-        // Return scaled effectiveness (move 1 is defensive)
-        if index == 1 {
-            (true, scaled_effectiveness)
-        } else {
-            (false, scaled_effectiveness)
-        }
-    }
-
-    pub fn new(actor: PublicKey, nonce: u64, seed: Signature) -> Self {
-        // Compute raw traits from seed
-        let mut hasher = Sha256::new();
-        hasher.update(actor.as_ref());
-        hasher.update(nonce.to_be_bytes().as_ref());
-        hasher.update(seed.encode().as_ref());
-        let mut traits = hasher.finalize().0;
-
-        // Distribute skill points
-        let skills = Self::distribute_skill_points(&traits);
-        traits[..SKILLS].copy_from_slice(&skills);
-        Self { traits }
-    }
-
-    pub fn health(&self) -> u8 {
-        self.traits[0]
-    }
-
-    pub fn action(&self, index: u8, seed: Signature) -> (bool, u8) {
-        // Compute effectiveness
-        let mut hasher = Sha256::new();
-        hasher.update(self.traits.as_ref());
-        hasher.update(seed.encode().as_ref());
-        let effectiveness = hasher.finalize().0;
-
-        // Scale effectiveness
-        Self::calculate_action(&self.traits, index, effectiveness[0])
-    }
-
-    // Get the max effectiveness values for all moves
-    // Returns array indexed by move (0 = no-op, 1-4 = actual moves)
-    // Each element is the max strength for that move
-    pub fn get_move_strengths(&self) -> [u8; TOTAL_MOVES] {
-        [
-            0,              // Move 0: no-op
-            self.traits[1], // Move 1: defense
-            self.traits[2], // Move 2: attack 1
-            self.traits[3], // Move 3: attack 2
-            self.traits[4], // Move 4: attack 3
-        ]
-    }
-
-    // Get move usage limits based on strength ranking
-    // Returns array indexed by move (0 = no-op/unlimited, 1-4 = actual moves)
-    // All moves get limited uses inversely proportional to their strength
-    pub fn get_move_usage_limits(&self) -> [u8; TOTAL_MOVES] {
-        // Extract move strengths
-        let strengths = [
-            self.traits[1], // Defense
-            self.traits[2], // Attack 1
-            self.traits[3], // Attack 2
-            self.traits[4], // Attack 3
-        ];
-
-        // Find the weakest move's strength to use as reference
-        let weakest_strength = *strengths.iter().min().unwrap() as u16;
-
-        // Calculate limits for each move
-        let mut limits = [0u8; TOTAL_MOVES];
-        limits[0] = u8::MAX; // Move 0 (no-op) has unlimited uses
-
-        for (i, &strength) in strengths.iter().enumerate() {
-            // All moves get limited uses inversely proportional to their strength
-            // Weakest moves get BASE_MOVE_LIMIT uses, stronger moves get fewer
-            let limit = (BASE_MOVE_LIMIT * weakest_strength / strength as u16).clamp(1, 20) as u8;
-            limits[i + 1] = limit; // +1 because index 0 is no-op
-        }
-
-        limits
-    }
-}
-
-impl Write for Creature {
-    fn write(&self, writer: &mut impl BufMut) {
-        self.traits.write(writer);
-    }
-}
-
-impl Read for Creature {
-    type Cfg = ();
-
-    fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
-        let traits = <[u8; Digest::SIZE]>::read(reader)?;
-        Ok(Self { traits })
-    }
-}
-
-impl FixedSize for Creature {
-    const SIZE: usize = Digest::SIZE;
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -577,73 +486,16 @@ pub fn leader_index(seed: &[u8], participants: usize) -> usize {
     modulo(seed, participants as u64) as usize
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Stats {
-    pub elo: u16,
-    pub wins: u32,
-    pub losses: u32,
-    pub draws: u32,
-}
-
-impl Stats {
-    pub fn plays(&self) -> u64 {
-        self.wins as u64 + self.losses as u64 + self.draws as u64
-    }
-}
-
-impl Default for Stats {
-    fn default() -> Self {
-        Self {
-            elo: 1000,
-            wins: 0,
-            losses: 0,
-            draws: 0,
-        }
-    }
-}
-
-impl Write for Stats {
-    fn write(&self, writer: &mut impl BufMut) {
-        self.elo.write(writer);
-        self.wins.write(writer);
-        self.losses.write(writer);
-        self.draws.write(writer);
-    }
-}
-
-impl Read for Stats {
-    type Cfg = ();
-
-    fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
-        Ok(Self {
-            elo: u16::read(reader)?,
-            wins: u32::read(reader)?,
-            losses: u32::read(reader)?,
-            draws: u32::read(reader)?,
-        })
-    }
-}
-
-impl FixedSize for Stats {
-    const SIZE: usize = u16::SIZE + u32::SIZE * 3;
-}
-
+/// Minimal account structure for transaction nonce tracking.
+/// Used for replay protection across all transaction types.
 #[derive(Clone, Default, Eq, PartialEq, Debug)]
 pub struct Account {
     pub nonce: u64,
-
-    pub creature: Option<Creature>,
-    pub battle: Option<Digest>,
-
-    pub stats: Stats,
 }
 
 impl Write for Account {
     fn write(&self, writer: &mut impl BufMut) {
         self.nonce.write(writer);
-        self.creature.write(writer);
-        self.battle.write(writer);
-        self.stats.write(writer);
     }
 }
 
@@ -651,16 +503,8 @@ impl Read for Account {
     type Cfg = ();
 
     fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
-        let nonce = u64::read(reader)?;
-        let creature = Option::<Creature>::read(reader)?;
-        let battle = Option::<Digest>::read(reader)?;
-        let stats = Stats::read(reader)?;
-
         Ok(Self {
-            nonce,
-            creature,
-            battle,
-            stats,
+            nonce: u64::read(reader)?,
         })
     }
 }
@@ -668,81 +512,44 @@ impl Read for Account {
 impl EncodeSize for Account {
     fn encode_size(&self) -> usize {
         self.nonce.encode_size()
-            + self.creature.encode_size()
-            + self.battle.encode_size()
-            + self.stats.encode_size()
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Default)]
-pub struct Leaderboard {
-    pub players: Vec<(PublicKey, Stats)>,
-}
-
-impl Leaderboard {
-    pub fn update(&mut self, player: PublicKey, stats: Stats) {
-        // Update player (if they already exist)
-        if let Some(index) = self.players.iter().position(|(p, _)| p == &player) {
-            // If an update drops a players score considerably, they may no longer actually be in the top 10
-            // but we don't have a reference to the other scores, so we can't replace them. The next player
-            // that settles with a score higher will replace them.
-            self.players[index] = (player, stats);
-        } else {
-            // Add the player to the leaderboard
-            self.players.push((player, stats));
-        }
-
-        // Sort the leaderboard
-        self.players.sort_by(|a, b| b.1.elo.cmp(&a.1.elo));
-
-        // Keep only the top 10 players
-        self.players.truncate(10);
-    }
-}
-
-impl Write for Leaderboard {
-    fn write(&self, writer: &mut impl BufMut) {
-        self.players.write(writer);
-    }
-}
-
-impl Read for Leaderboard {
-    type Cfg = ();
-
-    fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
-        Ok(Self {
-            players: Vec::<_>::read_range(reader, 0..=10)?,
-        })
-    }
-}
-
-impl EncodeSize for Leaderboard {
-    fn encode_size(&self) -> usize {
-        self.players.encode_size()
     }
 }
 
 #[derive(Hash, Eq, PartialEq, Ord, PartialOrd, Clone)]
 pub enum Key {
+    /// Account for nonce tracking (tag 0)
     Account(PublicKey),
-    Lobby,
-    Battle(Digest),
-    Leaderboard,
+
+    // Casino keys (tags 10-13)
+    CasinoPlayer(PublicKey),
+    CasinoSession(u64),
+    CasinoLeaderboard,
+    Tournament(u64),
 }
 
 impl Write for Key {
     fn write(&self, writer: &mut impl BufMut) {
         match self {
-            Self::Account(account) => {
+            // Account key (tag 0)
+            Self::Account(pk) => {
                 0u8.write(writer);
-                account.write(writer);
+                pk.write(writer);
             }
-            Self::Lobby => 1u8.write(writer),
-            Self::Battle(battle) => {
-                2u8.write(writer);
-                battle.write(writer);
+
+            // Casino keys (tags 10-13)
+            Self::CasinoPlayer(pk) => {
+                10u8.write(writer);
+                pk.write(writer);
             }
-            Self::Leaderboard => 3u8.write(writer),
+            Self::CasinoSession(id) => {
+                11u8.write(writer);
+                id.write(writer);
+            }
+            Self::CasinoLeaderboard => 12u8.write(writer),
+            Self::Tournament(id) => {
+                13u8.write(writer);
+                id.write(writer);
+            }
         }
     }
 }
@@ -752,10 +559,15 @@ impl Read for Key {
 
     fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
         let key = match reader.get_u8() {
+            // Account key (tag 0)
             0 => Self::Account(PublicKey::read(reader)?),
-            1 => Self::Lobby,
-            2 => Self::Battle(Digest::read(reader)?),
-            3 => Self::Leaderboard,
+
+            // Casino keys (tags 10-13)
+            10 => Self::CasinoPlayer(PublicKey::read(reader)?),
+            11 => Self::CasinoSession(u64::read(reader)?),
+            12 => Self::CasinoLeaderboard,
+            13 => Self::Tournament(u64::read(reader)?),
+
             i => return Err(Error::InvalidEnum(i)),
         };
 
@@ -767,10 +579,14 @@ impl EncodeSize for Key {
     fn encode_size(&self) -> usize {
         u8::SIZE
             + match self {
+                // Account key
                 Self::Account(_) => PublicKey::SIZE,
-                Self::Lobby => 0,
-                Self::Battle(_) => Digest::SIZE,
-                Self::Leaderboard => 0,
+
+                // Casino keys
+                Self::CasinoPlayer(_) => PublicKey::SIZE,
+                Self::CasinoSession(_) => u64::SIZE,
+                Self::CasinoLeaderboard => 0,
+                Self::Tournament(_) => u64::SIZE,
             }
     }
 }
@@ -778,83 +594,54 @@ impl EncodeSize for Key {
 #[derive(Clone, Eq, PartialEq, Debug)]
 #[allow(clippy::large_enum_variant)]
 pub enum Value {
+    /// Account for nonce tracking (tag 0)
     Account(Account),
-    Lobby {
-        expiry: u64,
 
-        players: BTreeSet<PublicKey>,
-    },
-    Battle {
-        expiry: u64,
-        round: u8,
-
-        player_a: PublicKey,
-        player_a_max_health: u8,
-        player_a_health: u8,
-        player_a_pending: Option<Ciphertext<MinSig>>,
-        player_a_move_counts: [u8; TOTAL_MOVES],
-
-        player_b: PublicKey,
-        player_b_max_health: u8,
-        player_b_health: u8,
-        player_b_pending: Option<Ciphertext<MinSig>>,
-        player_b_move_counts: [u8; TOTAL_MOVES],
-    },
+    // System values
     Commit {
         height: u64,
         start: u64,
     },
-    Leaderboard(Leaderboard),
+
+    // Casino values (tags 10-13)
+    CasinoPlayer(crate::casino::Player),
+    CasinoSession(crate::casino::GameSession),
+    CasinoLeaderboard(crate::casino::CasinoLeaderboard),
+    Tournament(crate::casino::Tournament),
 }
 
 impl Write for Value {
     fn write(&self, writer: &mut impl BufMut) {
         match self {
+            // Account value (tag 0)
             Self::Account(account) => {
                 0u8.write(writer);
                 account.write(writer);
             }
-            Self::Lobby { expiry, players } => {
-                1u8.write(writer);
-                expiry.write(writer);
-                players.write(writer);
-            }
-            Self::Battle {
-                expiry,
-                round,
-                player_a,
-                player_a_max_health,
-                player_a_health,
-                player_a_pending,
-                player_a_move_counts,
-                player_b,
-                player_b_max_health,
-                player_b_health,
-                player_b_pending,
-                player_b_move_counts,
-            } => {
-                2u8.write(writer);
-                expiry.write(writer);
-                round.write(writer);
-                player_a.write(writer);
-                player_a_max_health.write(writer);
-                player_a_health.write(writer);
-                player_a_pending.write(writer);
-                player_a_move_counts.write(writer);
-                player_b.write(writer);
-                player_b_max_health.write(writer);
-                player_b_health.write(writer);
-                player_b_pending.write(writer);
-                player_b_move_counts.write(writer);
-            }
+
+            // System values
             Self::Commit { height, start } => {
                 3u8.write(writer);
                 height.write(writer);
                 start.write(writer);
             }
-            Self::Leaderboard(leaderboard) => {
-                4u8.write(writer);
+
+            // Casino values (tags 10-13)
+            Self::CasinoPlayer(player) => {
+                10u8.write(writer);
+                player.write(writer);
+            }
+            Self::CasinoSession(session) => {
+                11u8.write(writer);
+                session.write(writer);
+            }
+            Self::CasinoLeaderboard(leaderboard) => {
+                12u8.write(writer);
                 leaderboard.write(writer);
+            }
+            Self::Tournament(tournament) => {
+                13u8.write(writer);
+                tournament.write(writer);
             }
         }
     }
@@ -865,33 +652,21 @@ impl Read for Value {
 
     fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
         let value = match reader.get_u8() {
+            // Account value (tag 0)
             0 => Self::Account(Account::read(reader)?),
-            1 => Self::Lobby {
-                expiry: u64::read(reader)?,
-                players: BTreeSet::<PublicKey>::read_cfg(
-                    reader,
-                    &(RangeCfg::from(0..=MAX_LOBBY_SIZE), ()),
-                )?,
-            },
-            2 => Self::Battle {
-                expiry: u64::read(reader)?,
-                round: u8::read(reader)?,
-                player_a: PublicKey::read(reader)?,
-                player_a_max_health: u8::read(reader)?,
-                player_a_health: u8::read(reader)?,
-                player_a_pending: Option::<Ciphertext<MinSig>>::read(reader)?,
-                player_a_move_counts: <[u8; TOTAL_MOVES]>::read(reader)?,
-                player_b: PublicKey::read(reader)?,
-                player_b_max_health: u8::read(reader)?,
-                player_b_health: u8::read(reader)?,
-                player_b_pending: Option::<Ciphertext<MinSig>>::read(reader)?,
-                player_b_move_counts: <[u8; TOTAL_MOVES]>::read(reader)?,
-            },
+
+            // System values
             3 => Self::Commit {
                 height: u64::read(reader)?,
                 start: u64::read(reader)?,
             },
-            4 => Self::Leaderboard(Leaderboard::read(reader)?),
+
+            // Casino values (tags 10-13)
+            10 => Self::CasinoPlayer(crate::casino::Player::read(reader)?),
+            11 => Self::CasinoSession(crate::casino::GameSession::read(reader)?),
+            12 => Self::CasinoLeaderboard(crate::casino::CasinoLeaderboard::read(reader)?),
+            13 => Self::Tournament(crate::casino::Tournament::read(reader)?),
+
             i => return Err(Error::InvalidEnum(i)),
         };
 
@@ -903,225 +678,150 @@ impl EncodeSize for Value {
     fn encode_size(&self) -> usize {
         u8::SIZE
             + match self {
+                // Account value
                 Self::Account(account) => account.encode_size(),
-                Self::Lobby { expiry, players } => expiry.encode_size() + players.encode_size(),
-                Self::Battle {
-                    expiry,
-                    round,
-                    player_a,
-                    player_a_max_health,
-                    player_a_health,
-                    player_a_pending,
-                    player_a_move_counts,
-                    player_b,
-                    player_b_max_health,
-                    player_b_health,
-                    player_b_pending,
-                    player_b_move_counts,
-                } => {
-                    expiry.encode_size()
-                        + round.encode_size()
-                        + player_a.encode_size()
-                        + player_a_max_health.encode_size()
-                        + player_a_health.encode_size()
-                        + player_a_pending.encode_size()
-                        + player_a_move_counts.encode_size()
-                        + player_b.encode_size()
-                        + player_b_max_health.encode_size()
-                        + player_b_health.encode_size()
-                        + player_b_pending.encode_size()
-                        + player_b_move_counts.encode_size()
-                }
+
+                // System values
                 Self::Commit { height, start } => height.encode_size() + start.encode_size(),
-                Self::Leaderboard(leaderboard) => leaderboard.encode_size(),
+
+                // Casino values
+                Self::CasinoPlayer(player) => player.encode_size(),
+                Self::CasinoSession(session) => session.encode_size(),
+                Self::CasinoLeaderboard(leaderboard) => leaderboard.encode_size(),
+                Self::Tournament(tournament) => tournament.encode_size(),
             }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Outcome {
-    PlayerA,
-    PlayerB,
-    Draw,
-}
-
-impl Write for Outcome {
-    fn write(&self, writer: &mut impl BufMut) {
-        match self {
-            Self::PlayerA => 0u8.write(writer),
-            Self::PlayerB => 1u8.write(writer),
-            Self::Draw => 2u8.write(writer),
-        }
-    }
-}
-
-impl Read for Outcome {
-    type Cfg = ();
-
-    fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
-        let outcome = match reader.get_u8() {
-            0 => Self::PlayerA,
-            1 => Self::PlayerB,
-            2 => Self::Draw,
-            i => return Err(Error::InvalidEnum(i)),
-        };
-
-        Ok(outcome)
-    }
-}
-
-impl FixedSize for Outcome {
-    const SIZE: usize = u8::SIZE;
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 #[allow(clippy::large_enum_variant)]
 pub enum Event {
-    Generated {
-        account: PublicKey,
-        creature: Creature,
+    // Casino events (tags 20-24)
+    CasinoPlayerRegistered {
+        player: PublicKey,
+        name: String,
     },
-    Matched {
-        battle: Digest,
-        expiry: u64,
-        player_a: PublicKey,
-        player_a_creature: Creature,
-        player_a_stats: Stats,
-        player_b: PublicKey,
-        player_b_creature: Creature,
-        player_b_stats: Stats,
+    CasinoGameStarted {
+        session_id: u64,
+        player: PublicKey,
+        game_type: crate::casino::GameType,
+        bet: u64,
+        initial_state: Vec<u8>,
     },
-    Locked {
-        battle: Digest,
-        round: u8,
-        locker: PublicKey,
-        observer: PublicKey,
-        ciphertext: Ciphertext<MinSig>,
+    CasinoGameMoved {
+        session_id: u64,
+        move_number: u32,
+        new_state: Vec<u8>,
     },
-    Moved {
-        battle: Digest,
-        round: u8,
-        expiry: u64,
-        player_a: PublicKey,
-        player_a_health: u8,
-        player_a_move: u8,
-        player_a_move_counts: [u8; TOTAL_MOVES],
-        player_a_power: u8,
-        player_b: PublicKey,
-        player_b_health: u8,
-        player_b_move: u8,
-        player_b_move_counts: [u8; TOTAL_MOVES],
-        player_b_power: u8,
+    CasinoGameCompleted {
+        session_id: u64,
+        player: PublicKey,
+        game_type: crate::casino::GameType,
+        payout: i64,
+        final_chips: u64,
+        was_shielded: bool,
+        was_doubled: bool,
     },
-    Settled {
-        battle: Digest,
-        round: u8,
-        player_a: PublicKey,
-        player_a_old: Stats,
-        player_a_new: Stats,
-        player_b: PublicKey,
-        player_b_old: Stats,
-        player_b_new: Stats,
-        outcome: Outcome,
-        leaderboard: Leaderboard,
+    CasinoLeaderboardUpdated {
+        leaderboard: crate::casino::CasinoLeaderboard,
+    },
+
+    // Tournament events (tags 25-28)
+    TournamentStarted {
+        id: u64,
+        start_block: u64,
+    },
+    PlayerJoined {
+        tournament_id: u64,
+        player: PublicKey,
+    },
+    TournamentPhaseChanged {
+        id: u64,
+        phase: crate::casino::TournamentPhase,
+    },
+    TournamentEnded {
+        id: u64,
+        rankings: Vec<(PublicKey, u64)>,
     },
 }
 
 impl Write for Event {
     fn write(&self, writer: &mut impl BufMut) {
         match self {
-            Self::Generated { account, creature } => {
-                0u8.write(writer);
-                account.write(writer);
-                creature.write(writer);
+            // Casino events (tags 20-24)
+            Self::CasinoPlayerRegistered { player, name } => {
+                20u8.write(writer);
+                player.write(writer);
+                (name.len() as u32).write(writer);
+                writer.put_slice(name.as_bytes());
             }
-            Self::Matched {
-                battle,
-                expiry,
-                player_a,
-                player_a_creature,
-                player_a_stats,
-                player_b,
-                player_b_creature,
-                player_b_stats,
+            Self::CasinoGameStarted {
+                session_id,
+                player,
+                game_type,
+                bet,
+                initial_state,
             } => {
-                1u8.write(writer);
-                battle.write(writer);
-                expiry.write(writer);
-                player_a.write(writer);
-                player_a_creature.write(writer);
-                player_a_stats.write(writer);
-                player_b.write(writer);
-                player_b_creature.write(writer);
-                player_b_stats.write(writer);
+                21u8.write(writer);
+                session_id.write(writer);
+                player.write(writer);
+                game_type.write(writer);
+                bet.write(writer);
+                initial_state.write(writer);
             }
-            Self::Locked {
-                battle,
-                round,
-                locker,
-                observer,
-                ciphertext,
+            Self::CasinoGameMoved {
+                session_id,
+                move_number,
+                new_state,
             } => {
-                2u8.write(writer);
-                battle.write(writer);
-                round.write(writer);
-                locker.write(writer);
-                observer.write(writer);
-                ciphertext.write(writer);
+                22u8.write(writer);
+                session_id.write(writer);
+                move_number.write(writer);
+                new_state.write(writer);
             }
-            Self::Moved {
-                battle,
-                round,
-                expiry,
-                player_a,
-                player_a_health,
-                player_a_move,
-                player_a_move_counts,
-                player_a_power,
-                player_b,
-                player_b_health,
-                player_b_move,
-                player_b_move_counts,
-                player_b_power,
+            Self::CasinoGameCompleted {
+                session_id,
+                player,
+                game_type,
+                payout,
+                final_chips,
+                was_shielded,
+                was_doubled,
             } => {
-                3u8.write(writer);
-                battle.write(writer);
-                round.write(writer);
-                expiry.write(writer);
-                player_a.write(writer);
-                player_a_health.write(writer);
-                player_a_move.write(writer);
-                player_a_move_counts.write(writer);
-                player_a_power.write(writer);
-                player_b.write(writer);
-                player_b_health.write(writer);
-                player_b_move.write(writer);
-                player_b_move_counts.write(writer);
-                player_b_power.write(writer);
+                23u8.write(writer);
+                session_id.write(writer);
+                player.write(writer);
+                game_type.write(writer);
+                payout.write(writer);
+                final_chips.write(writer);
+                was_shielded.write(writer);
+                was_doubled.write(writer);
             }
-            Self::Settled {
-                battle,
-                round,
-                player_a,
-                player_a_old,
-                player_a_new,
-                player_b,
-                player_b_old,
-                player_b_new,
-                outcome,
-                leaderboard,
-            } => {
-                4u8.write(writer);
-                battle.write(writer);
-                round.write(writer);
-                player_a.write(writer);
-                player_a_old.write(writer);
-                player_a_new.write(writer);
-                player_b.write(writer);
-                player_b_old.write(writer);
-                player_b_new.write(writer);
-                outcome.write(writer);
+            Self::CasinoLeaderboardUpdated { leaderboard } => {
+                24u8.write(writer);
                 leaderboard.write(writer);
+            }
+
+            // Tournament events (tags 25-28)
+            Self::TournamentStarted { id, start_block } => {
+                25u8.write(writer);
+                id.write(writer);
+                start_block.write(writer);
+            }
+            Self::PlayerJoined { tournament_id, player } => {
+                26u8.write(writer);
+                tournament_id.write(writer);
+                player.write(writer);
+            }
+            Self::TournamentPhaseChanged { id, phase } => {
+                27u8.write(writer);
+                id.write(writer);
+                phase.write(writer);
+            }
+            Self::TournamentEnded { id, rankings } => {
+                28u8.write(writer);
+                id.write(writer);
+                rankings.write(writer);
             }
         }
     }
@@ -1132,54 +832,65 @@ impl Read for Event {
 
     fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
         let event = match reader.get_u8() {
-            0 => Self::Generated {
-                account: PublicKey::read(reader)?,
-                creature: Creature::read(reader)?,
+            // Casino events (tags 20-24)
+            20 => {
+                let player = PublicKey::read(reader)?;
+                let name_len = u32::read(reader)? as usize;
+                if name_len > CASINO_MAX_NAME_LENGTH {
+                    return Err(Error::Invalid("Event", "casino name too long"));
+                }
+                if reader.remaining() < name_len {
+                    return Err(Error::EndOfBuffer);
+                }
+                let mut name_bytes = vec![0u8; name_len];
+                reader.copy_to_slice(&mut name_bytes);
+                let name = String::from_utf8(name_bytes)
+                    .map_err(|_| Error::Invalid("Event", "invalid UTF-8 in casino name"))?;
+                Self::CasinoPlayerRegistered { player, name }
+            }
+            21 => Self::CasinoGameStarted {
+                session_id: u64::read(reader)?,
+                player: PublicKey::read(reader)?,
+                game_type: crate::casino::GameType::read(reader)?,
+                bet: u64::read(reader)?,
+                initial_state: Vec::<u8>::read_range(reader, 0..=1024)?,
             },
-            1 => Self::Matched {
-                battle: Digest::read(reader)?,
-                expiry: u64::read(reader)?,
-                player_a: PublicKey::read(reader)?,
-                player_a_creature: Creature::read(reader)?,
-                player_a_stats: Stats::read(reader)?,
-                player_b: PublicKey::read(reader)?,
-                player_b_creature: Creature::read(reader)?,
-                player_b_stats: Stats::read(reader)?,
+            22 => Self::CasinoGameMoved {
+                session_id: u64::read(reader)?,
+                move_number: u32::read(reader)?,
+                new_state: Vec::<u8>::read_range(reader, 0..=1024)?,
             },
-            2 => Self::Locked {
-                battle: Digest::read(reader)?,
-                round: u8::read(reader)?,
-                locker: PublicKey::read(reader)?,
-                observer: PublicKey::read(reader)?,
-                ciphertext: Ciphertext::<MinSig>::read(reader)?,
+            23 => Self::CasinoGameCompleted {
+                session_id: u64::read(reader)?,
+                player: PublicKey::read(reader)?,
+                game_type: crate::casino::GameType::read(reader)?,
+                payout: i64::read(reader)?,
+                final_chips: u64::read(reader)?,
+                was_shielded: bool::read(reader)?,
+                was_doubled: bool::read(reader)?,
             },
-            3 => Self::Moved {
-                battle: Digest::read(reader)?,
-                round: u8::read(reader)?,
-                expiry: u64::read(reader)?,
-                player_a: PublicKey::read(reader)?,
-                player_a_health: u8::read(reader)?,
-                player_a_move: u8::read(reader)?,
-                player_a_move_counts: <[u8; TOTAL_MOVES]>::read(reader)?,
-                player_a_power: u8::read(reader)?,
-                player_b: PublicKey::read(reader)?,
-                player_b_health: u8::read(reader)?,
-                player_b_move: u8::read(reader)?,
-                player_b_move_counts: <[u8; TOTAL_MOVES]>::read(reader)?,
-                player_b_power: u8::read(reader)?,
+            24 => Self::CasinoLeaderboardUpdated {
+                leaderboard: crate::casino::CasinoLeaderboard::read(reader)?,
             },
-            4 => Self::Settled {
-                battle: Digest::read(reader)?,
-                round: u8::read(reader)?,
-                player_a: PublicKey::read(reader)?,
-                player_a_old: Stats::read(reader)?,
-                player_a_new: Stats::read(reader)?,
-                player_b: PublicKey::read(reader)?,
-                player_b_old: Stats::read(reader)?,
-                player_b_new: Stats::read(reader)?,
-                outcome: Outcome::read(reader)?,
-                leaderboard: Leaderboard::read(reader)?,
+
+            // Tournament events (tags 25-28)
+            25 => Self::TournamentStarted {
+                id: u64::read(reader)?,
+                start_block: u64::read(reader)?,
             },
+            26 => Self::PlayerJoined {
+                tournament_id: u64::read(reader)?,
+                player: PublicKey::read(reader)?,
+            },
+            27 => Self::TournamentPhaseChanged {
+                id: u64::read(reader)?,
+                phase: crate::casino::TournamentPhase::read(reader)?,
+            },
+            28 => Self::TournamentEnded {
+                id: u64::read(reader)?,
+                rankings: Vec::<(PublicKey, u64)>::read_range(reader, 0..=1000)?,
+            },
+
             i => return Err(Error::InvalidEnum(i)),
         };
 
@@ -1191,92 +902,61 @@ impl EncodeSize for Event {
     fn encode_size(&self) -> usize {
         u8::SIZE
             + match self {
-                Self::Generated { account, creature } => {
-                    account.encode_size() + creature.encode_size()
+                // Casino events (tags 20-24)
+                Self::CasinoPlayerRegistered { player, name } => {
+                    player.encode_size() + 4 + name.len()
                 }
-                Self::Matched {
-                    battle,
-                    expiry,
-                    player_a,
-                    player_a_creature,
-                    player_a_stats,
-                    player_b,
-                    player_b_creature,
-                    player_b_stats,
+                Self::CasinoGameStarted {
+                    session_id,
+                    player,
+                    game_type,
+                    bet,
+                    initial_state,
                 } => {
-                    battle.encode_size()
-                        + expiry.encode_size()
-                        + player_a.encode_size()
-                        + player_a_creature.encode_size()
-                        + player_a_stats.encode_size()
-                        + player_b.encode_size()
-                        + player_b_creature.encode_size()
-                        + player_b_stats.encode_size()
+                    session_id.encode_size()
+                        + player.encode_size()
+                        + game_type.encode_size()
+                        + bet.encode_size()
+                        + initial_state.encode_size()
                 }
-                Self::Locked {
-                    battle,
-                    round,
-                    locker,
-                    observer,
-                    ciphertext,
+                Self::CasinoGameMoved {
+                    session_id,
+                    move_number,
+                    new_state,
                 } => {
-                    battle.encode_size()
-                        + round.encode_size()
-                        + locker.encode_size()
-                        + observer.encode_size()
-                        + ciphertext.encode_size()
+                    session_id.encode_size() + move_number.encode_size() + new_state.encode_size()
                 }
-                Self::Moved {
-                    battle,
-                    round,
-                    expiry,
-                    player_a,
-                    player_a_health,
-                    player_a_move,
-                    player_a_move_counts,
-                    player_a_power,
-                    player_b,
-                    player_b_health,
-                    player_b_move,
-                    player_b_move_counts,
-                    player_b_power,
+                Self::CasinoGameCompleted {
+                    session_id,
+                    player,
+                    game_type,
+                    payout,
+                    final_chips,
+                    was_shielded,
+                    was_doubled,
                 } => {
-                    battle.encode_size()
-                        + round.encode_size()
-                        + expiry.encode_size()
-                        + player_a.encode_size()
-                        + player_a_health.encode_size()
-                        + player_a_move.encode_size()
-                        + player_a_move_counts.encode_size()
-                        + player_a_power.encode_size()
-                        + player_b.encode_size()
-                        + player_b_health.encode_size()
-                        + player_b_move.encode_size()
-                        + player_b_move_counts.encode_size()
-                        + player_b_power.encode_size()
+                    session_id.encode_size()
+                        + player.encode_size()
+                        + game_type.encode_size()
+                        + payout.encode_size()
+                        + final_chips.encode_size()
+                        + was_shielded.encode_size()
+                        + was_doubled.encode_size()
                 }
-                Self::Settled {
-                    battle,
-                    round,
-                    player_a,
-                    player_a_old,
-                    player_a_new,
-                    player_b,
-                    player_b_old,
-                    player_b_new,
-                    outcome,
-                    leaderboard,
-                } => {
-                    battle.encode_size()
-                        + round.encode_size()
-                        + player_a.encode_size()
-                        + player_a_old.encode_size()
-                        + player_a_new.encode_size()
-                        + player_b.encode_size()
-                        + player_b_old.encode_size()
-                        + player_b_new.encode_size()
-                        + outcome.encode_size()
-                        + leaderboard.encode_size()
+                Self::CasinoLeaderboardUpdated { leaderboard } => leaderboard.encode_size(),
+
+                // Tournament events (tags 25-28)
+                Self::TournamentStarted { id, start_block } => {
+                    id.encode_size() + start_block.encode_size()
+                }
+                Self::PlayerJoined { tournament_id, player } => {
+                    tournament_id.encode_size() + player.encode_size()
+                }
+                Self::TournamentPhaseChanged { id, phase } => {
+                    id.encode_size() + phase.encode_size()
+                }
+                Self::TournamentEnded { id, rankings } => {
+                    id.encode_size() + rankings.encode_size()
                 }
             }
     }
@@ -1428,203 +1108,3 @@ impl Digestible for Progress {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_distribute_skill_points() {
-        let test_digests = [
-            [0u8; Digest::SIZE],
-            [255u8; Digest::SIZE],
-            [128u8; Digest::SIZE],
-        ];
-
-        for digest in test_digests {
-            let skills = Creature::distribute_skill_points(&digest);
-            assert!(skills[0] >= MIN_HEALTH_POINTS);
-            for skill in skills.iter().skip(1) {
-                assert!(*skill >= 1);
-            }
-            let sum: u16 = skills.iter().map(|&s| s as u16).sum();
-            assert_eq!(sum, TOTAL_SKILL_POINTS);
-        }
-    }
-
-    #[test]
-    fn test_distribute_skill_points_deterministic() {
-        let digest = [42u8; Digest::SIZE];
-        let skills1 = Creature::distribute_skill_points(&digest);
-        let skills2 = Creature::distribute_skill_points(&digest);
-        assert_eq!(skills1, skills2, "Not deterministic");
-    }
-
-    #[test]
-    fn test_distribute_skill_points_unbalanced_health() {
-        let mut digest = [0u8; Digest::SIZE];
-        digest[0] = 255;
-        digest[1] = 0;
-        digest[2] = 0;
-        digest[3] = 0;
-        digest[4] = 0;
-        let skills = Creature::distribute_skill_points(&digest);
-
-        assert!(skills[0] >= MIN_HEALTH_POINTS);
-        for skill in skills.iter().skip(1) {
-            assert!(*skill >= 1);
-        }
-        let sum: u16 = skills.iter().map(|&s| s as u16).sum();
-        assert_eq!(sum, TOTAL_SKILL_POINTS);
-    }
-
-    #[test]
-    fn test_distribute_skill_points_unbalanced_attack() {
-        let mut digest = [0u8; Digest::SIZE];
-        digest[0] = 0;
-        digest[1] = 0;
-        digest[2] = 0;
-        digest[3] = 0;
-        digest[4] = 255;
-        let skills = Creature::distribute_skill_points(&digest);
-
-        assert!(skills[0] >= MIN_HEALTH_POINTS);
-        for skill in skills.iter().skip(1) {
-            assert!(*skill >= 1);
-        }
-        let sum: u16 = skills.iter().map(|&s| s as u16).sum();
-        assert_eq!(sum, TOTAL_SKILL_POINTS);
-    }
-
-    #[test]
-    fn test_calculate_action() {
-        // Test traits with different strengths
-        let traits = {
-            let mut t = [0u8; Digest::SIZE];
-            t[0] = 100; // health
-            t[1] = 50; // defense
-            t[2] = 60; // attack 1
-            t[3] = 70; // attack 2
-            t[4] = 80; // attack 3
-            t
-        };
-
-        // Test invalid indices
-        assert_eq!(Creature::calculate_action(&traits, 0, 128), (false, 0));
-        assert_eq!(Creature::calculate_action(&traits, 5, 128), (false, 0));
-
-        // Test defensive move (index 1)
-        let (is_defensive, effectiveness) = Creature::calculate_action(&traits, 1, 128);
-        assert!(is_defensive);
-        assert!(effectiveness >= 25);
-        assert!(effectiveness <= 50);
-
-        // Test attack moves (indices 2-4)
-        for i in 2..=4 {
-            let (is_defensive, effectiveness) = Creature::calculate_action(&traits, i, 128);
-            assert!(!is_defensive);
-            let max_eff = traits[i as usize];
-            assert!(effectiveness >= max_eff / 2 && effectiveness <= max_eff);
-        }
-
-        let (_, min_eff) = Creature::calculate_action(&traits, 2, 0);
-        let (_, max_eff) = Creature::calculate_action(&traits, 2, 255);
-
-        assert_eq!(min_eff, traits[2] / 2); // Minimum effectiveness
-        assert_eq!(max_eff, traits[2]); // Maximum effectiveness
-    }
-
-    #[test]
-    fn test_get_move_usage_limits() {
-        // Create a creature with known traits
-        let mut creature = Creature {
-            traits: [0u8; Digest::SIZE],
-        };
-        creature.traits[0] = 100; // health
-        creature.traits[1] = 20; // defense (weakest)
-        creature.traits[2] = 40; // attack 1
-        creature.traits[3] = 60; // attack 2
-        creature.traits[4] = 80; // attack 3 (strongest)
-
-        let limits = creature.get_move_usage_limits();
-
-        // Move 0 (no-op) should have unlimited uses
-        assert_eq!(limits[0], u8::MAX);
-
-        // All actual moves (1-4) should have limited uses
-        for limit in limits.iter().skip(1) {
-            assert!(*limit >= 1 && *limit <= 20);
-        }
-
-        // Defense (weakest, move 1) should have most uses (BASE_MOVE_LIMIT)
-        assert_eq!(limits[1], 15);
-
-        // Stronger moves should have fewer uses
-        assert!(limits[1] > limits[2]); // defense > attack 1
-        assert!(limits[2] > limits[3]); // attack 1 > attack 2
-        assert!(limits[3] > limits[4]); // attack 2 > attack 3
-    }
-
-    #[test]
-    fn test_get_move_usage_limits_equal_strengths() {
-        // Test with equal strength moves
-        let mut creature = Creature {
-            traits: [0u8; Digest::SIZE],
-        };
-        creature.traits[0] = 100; // health
-        creature.traits[1] = 50; // all moves equal strength
-        creature.traits[2] = 50;
-        creature.traits[3] = 50;
-        creature.traits[4] = 50;
-
-        let limits = creature.get_move_usage_limits();
-
-        // Move 0 (no-op) should have unlimited uses
-        assert_eq!(limits[0], u8::MAX);
-
-        // All actual moves (1-4) should have the same limit (BASE_MOVE_LIMIT)
-        for limit in limits.iter().skip(1) {
-            assert_eq!(*limit, 15);
-        }
-    }
-
-    #[test]
-    fn test_get_move_usage_limits_edge_cases() {
-        // Test with extreme differences in strength
-        let mut creature = Creature {
-            traits: [0u8; Digest::SIZE],
-        };
-        creature.traits[0] = 100; // health
-        creature.traits[1] = 10; // defense (weakest)
-        creature.traits[2] = 255; // attack 1 (very strong)
-        creature.traits[3] = 128; // attack 2 (medium)
-        creature.traits[4] = 200; // attack 3 (strong)
-
-        let limits = creature.get_move_usage_limits();
-
-        // Move 0 (no-op) should have unlimited uses
-        assert_eq!(limits[0], u8::MAX);
-
-        // All actual moves (1-4) should be clamped between 1 and 20
-        for limit in limits.iter().skip(1) {
-            assert!(*limit >= 1);
-            assert!(*limit <= 20);
-        }
-
-        // Defense (weakest, move 1) should have BASE_MOVE_LIMIT
-        assert_eq!(limits[1], 15);
-
-        // Very strong moves should be clamped at minimum
-        assert_eq!(limits[2], 1); // attack 1 (move 2) is so strong it hits the minimum
-
-        // Check relative ordering based on strength
-        // Calculation: 15 * 10 / 255 = 0.58, clamped to 1
-        // Calculation: 15 * 10 / 128 = 1.17, clamped to 1
-        // Calculation: 15 * 10 / 200 = 0.75, clamped to 1
-        // All strong attacks get clamped to minimum
-        assert_eq!(limits[2], 1); // attack 1 (move 2)
-        assert_eq!(limits[3], 1); // attack 2 (move 3)
-        assert_eq!(limits[4], 1); // attack 3 (move 4)
-        assert_eq!(limits[2], 1); // attack 2
-        assert_eq!(limits[3], 1); // attack 3
-    }
-}

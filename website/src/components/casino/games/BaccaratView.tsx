@@ -1,8 +1,8 @@
 
 import React from 'react';
-import { GameState } from '../../types';
+import { GameState } from '../../../types';
 import { Hand } from '../GameComponents';
-import { getBaccaratValue } from '../../utils/gameUtils';
+import { getBaccaratValue } from '../../../utils/gameUtils';
 
 export const BaccaratView: React.FC<{ gameState: GameState }> = ({ gameState }) => {
     // Consolidate main bet and side bets for display

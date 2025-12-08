@@ -1,8 +1,8 @@
 
 import React from 'react';
-import { GameState, Card } from '../../types';
+import { GameState, Card } from '../../../types';
 import { Hand } from '../GameComponents';
-import { evaluateVideoPokerHand } from '../../utils/gameUtils';
+import { evaluateVideoPokerHand } from '../../../utils/gameUtils';
 
 interface VideoPokerViewProps {
     gameState: GameState;

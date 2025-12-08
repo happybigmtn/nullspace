@@ -300,6 +300,7 @@ dependencies = [
  "battleware-execution",
  "battleware-simulator",
  "battleware-types",
+ "clap",
  "commonware-codec",
  "commonware-consensus",
  "commonware-cryptography",
@@ -315,6 +316,7 @@ dependencies = [
  "tokio",
  "tokio-tungstenite",
  "tracing",
+ "tracing-subscriber",
  "url",
 ]
 

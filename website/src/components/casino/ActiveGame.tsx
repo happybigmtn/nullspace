@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { GameState, GameType, Card } from '../types';
+import { GameState, GameType, Card } from '../../types';
 import { BlackjackView } from './games/BlackjackView';
 import { CrapsView } from './games/CrapsView';
 import { BaccaratView } from './games/BaccaratView';
@@ -23,9 +23,12 @@ interface ActiveGameProps {
 export const ActiveGame: React.FC<ActiveGameProps> = ({ gameState, deck, numberInput, onToggleHold, aiAdvice }) => {
   if (gameState.type === GameType.NONE) {
      return (
-         <div className="flex-1 flex items-center justify-center">
-             <div className="text-2xl font-bold text-gray-500 tracking-widest animate-pulse">
-                 TYPE '/' FOR FUN
+         <div className="flex-1 flex flex-col items-center justify-center gap-4">
+             <div className="text-[12rem] font-bold text-terminal-green leading-none animate-pulse cursor-pointer select-none" style={{ textShadow: '0 0 40px rgba(0, 255, 136, 0.5), 0 0 80px rgba(0, 255, 136, 0.3)' }}>
+                 /
+             </div>
+             <div className="text-sm text-gray-600 tracking-[0.3em] uppercase">
+                 press to play
              </div>
          </div>
      );

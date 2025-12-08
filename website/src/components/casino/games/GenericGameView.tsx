@@ -1,8 +1,8 @@
 
 import React from 'react';
-import { GameState } from '../../types';
+import { GameState } from '../../../types';
 import { Hand } from '../GameComponents';
-import { getVisibleHandValue } from '../../utils/gameUtils';
+import { getVisibleHandValue } from '../../../utils/gameUtils';
 
 export const GenericGameView: React.FC<{ gameState: GameState }> = ({ gameState }) => {
     return (

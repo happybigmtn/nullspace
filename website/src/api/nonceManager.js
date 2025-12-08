@@ -1,5 +1,5 @@
 /**
- * Manages transaction nonces and pending transactions for a Battleware account.
+ * Manages transaction nonces and pending transactions for a Casino account.
  * Handles automatic nonce synchronization, transaction resubmission, and cleanup.
  */
 export class NonceManager {
@@ -13,7 +13,7 @@ export class NonceManager {
     this.transactionQueue = Promise.resolve(); // Queue for sequential transaction submission
 
     // Configuration constants
-    this.TX_STORAGE_PREFIX = 'battleware_tx_';
+    this.TX_STORAGE_PREFIX = 'casino_tx_';
     this.RESUBMIT_INTERVAL_MS = 10000; // Try to resubmit transactions every 10 seconds
   }
 
@@ -33,7 +33,7 @@ export class NonceManager {
 
     // Check if network identity has changed (indicates network reset)
     const currentIdentity = this.wasm.identityHex;
-    const identityKey = 'battleware_identity';
+    const identityKey = 'casino_identity';
     const storedIdentity = localStorage.getItem(identityKey);
 
     if (storedIdentity && storedIdentity !== currentIdentity) {
@@ -145,7 +145,7 @@ export class NonceManager {
    * @returns {number} The current nonce value
    */
   getCurrentNonce() {
-    const key = 'battleware_nonce';
+    const key = 'casino_nonce';
     const stored = localStorage.getItem(key);
     return stored ? parseInt(stored) : 0;
   }
@@ -156,7 +156,7 @@ export class NonceManager {
    * @private
    */
   setNonce(nonce) {
-    const key = 'battleware_nonce';
+    const key = 'casino_nonce';
     localStorage.setItem(key, nonce.toString());
   }
 
@@ -165,7 +165,7 @@ export class NonceManager {
    * @private
    */
   resetNonce() {
-    const key = 'battleware_nonce';
+    const key = 'casino_nonce';
     localStorage.setItem(key, '0');
   }
 
@@ -359,7 +359,7 @@ export class NonceManager {
    * Submit a transaction with automatic nonce management.
    * @param {Function} createTxFn - Function that creates transaction data given a nonce
    * @param {string} txType - Type of transaction for logging
-   * @returns {Promise<{status: string}>} Transaction result
+   * @returns {Promise<{status: string, nonce: number, txHash: string}>} Transaction result
    * @throws {Error} If transaction submission fails
    * @private
    */
@@ -371,6 +371,9 @@ export class NonceManager {
       try {
         // Create the transaction with the nonce
         const txData = createTxFn(nonce);
+
+        // Compute a short hash of the tx data for display
+        const txHash = this.computeTxHash(txData);
 
         // Store the transaction before submitting
         this.storeTransaction(nonce, txData);
@@ -387,7 +390,7 @@ export class NonceManager {
           localStorage.removeItem(key);
         }
 
-        return result;
+        return { ...result, nonce, txHash };
       } catch (error) {
         // Continue trying to submit transactions until confirmed
         console.error(`Error submitting ${txType} transaction with nonce ${nonce}:`, error.message);
@@ -401,52 +404,19 @@ export class NonceManager {
   }
 
   /**
-   * Submit a creature generation transaction.
-   * @returns {Promise<{status: string}>} Transaction result
+   * Compute a short hash of transaction data for display.
+   * @param {Uint8Array} txData - The transaction data
+   * @returns {string} Short hex hash (first 8 chars)
+   * @private
    */
-  async submitGenerate() {
-    return this.submitTransaction(
-      (nonce) => this.wasm.createGenerateTransaction(nonce),
-      'generate'
-    );
-  }
-
-  /**
-   * Submit a matchmaking transaction.
-   * @returns {Promise<{status: string}>} Transaction result
-   */
-  async submitMatch() {
-    return this.submitTransaction(
-      (nonce) => this.wasm.createMatchTransaction(nonce),
-      'match'
-    );
-  }
-
-  /**
-   * Submit a battle move transaction.
-   * @param {Uint8Array} battleId - The battle identifier
-   * @param {number} moveIndex - The move index to execute
-   * @param {number} expiry - Move expiration time
-   * @param {Uint8Array} masterPublic - Master public key for verification
-   * @returns {Promise<{status: string}>} Transaction result
-   */
-  async submitMove(battleId, moveIndex, expiry, masterPublic) {
-    return this.submitTransaction(
-      (nonce) => this.wasm.createMoveTransaction(nonce, masterPublic, expiry, moveIndex),
-      'move'
-    );
-  }
-
-  /**
-   * Submit a battle settlement transaction.
-   * @param {Uint8Array} seed - The seed for settlement
-   * @returns {Promise<{status: string}>} Transaction result
-   */
-  async submitSettle(seed) {
-    return this.submitTransaction(
-      (nonce) => this.wasm.createSettleTransaction(nonce, seed),
-      'settle'
-    );
+  computeTxHash(txData) {
+    // Simple hash: XOR all bytes and combine with length
+    let hash = txData.length;
+    for (let i = 0; i < txData.length; i++) {
+      hash = ((hash << 5) - hash + txData[i]) | 0;
+    }
+    // Convert to hex and take first 8 chars
+    return Math.abs(hash).toString(16).toUpperCase().padStart(8, '0').slice(0, 8);
   }
 
   /**
@@ -466,5 +436,66 @@ export class NonceManager {
       this.setNonce(nextExpectedNonce);
     } else {
     }
+  }
+
+  /**
+   * Submit a casino register transaction.
+   * @param {string} name - The player name
+   * @returns {Promise<{status: string}>} Transaction result
+   */
+  async submitCasinoRegister(name) {
+    return this.submitTransaction(
+      (nonce) => this.wasm.createCasinoRegisterTransaction(nonce, name),
+      'casinoRegister'
+    );
+  }
+
+  /**
+   * Submit a casino start game transaction.
+   * @param {number} gameType - The game type (0-9)
+   * @param {bigint} bet - The bet amount
+   * @param {bigint} sessionId - The session ID
+   * @returns {Promise<{status: string}>} Transaction result
+   */
+  async submitCasinoStartGame(gameType, bet, sessionId) {
+    return this.submitTransaction(
+      (nonce) => this.wasm.createCasinoStartGameTransaction(nonce, gameType, bet, sessionId),
+      'casinoStartGame'
+    );
+  }
+
+  /**
+   * Submit a casino game move transaction.
+   * @param {bigint} sessionId - The session ID
+   * @param {Uint8Array} payload - The move payload
+   * @returns {Promise<{status: string}>} Transaction result
+   */
+  async submitCasinoGameMove(sessionId, payload) {
+    return this.submitTransaction(
+      (nonce) => this.wasm.createCasinoGameMoveTransaction(nonce, sessionId, payload),
+      'casinoGameMove'
+    );
+  }
+
+  /**
+   * Submit a casino toggle shield transaction.
+   * @returns {Promise<{status: string}>} Transaction result
+   */
+  async submitCasinoToggleShield() {
+    return this.submitTransaction(
+      (nonce) => this.wasm.createCasinoToggleShieldTransaction(nonce),
+      'casinoToggleShield'
+    );
+  }
+
+  /**
+   * Submit a casino toggle double transaction.
+   * @returns {Promise<{status: string}>} Transaction result
+   */
+  async submitCasinoToggleDouble() {
+    return this.submitTransaction(
+      (nonce) => this.wasm.createCasinoToggleDoubleTransaction(nonce),
+      'casinoToggleDouble'
+    );
   }
 }

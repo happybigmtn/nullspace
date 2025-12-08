@@ -125,12 +125,15 @@ impl CasinoGame for HiLo {
                 // Cash out with current accumulated amount
                 session.is_complete = true;
 
-                // Calculate actual payout from accumulator
+                // Calculate actual payout from accumulator with overflow protection
                 // accumulator is in basis points, so divide by BASE_MULTIPLIER
-                let payout = (session.bet as i64 * accumulator) / BASE_MULTIPLIER;
+                let payout = (session.bet as i64)
+                    .checked_mul(accumulator)
+                    .and_then(|v| v.checked_div(BASE_MULTIPLIER))
+                    .unwrap_or(i64::MAX);
 
                 // Return profit (payout - original bet)
-                let profit = payout - session.bet as i64;
+                let profit = payout.saturating_sub(session.bet as i64);
                 if profit > 0 {
                     Ok(GameResult::Win(profit as u64))
                 } else if profit < 0 {
@@ -149,8 +152,7 @@ impl CasinoGame for HiLo {
                 }
 
                 // Draw new card (recreate deck without current card)
-                let mut deck: Vec<u8> = (0..52).filter(|&c| c != current_card).collect();
-                rng.shuffle(&mut deck);
+                let mut deck = rng.create_deck_excluding(&[current_card]);
                 let new_card = rng.draw_card(&mut deck).ok_or(GameError::InvalidMove)?;
                 let new_rank = card_rank(new_card);
 
@@ -164,9 +166,12 @@ impl CasinoGame for HiLo {
                 };
 
                 if correct {
-                    // Calculate new accumulator
+                    // Calculate new accumulator with overflow protection
                     let multiplier = calculate_multiplier(current_rank, guess_higher);
-                    let new_accumulator = (accumulator * multiplier) / BASE_MULTIPLIER;
+                    let new_accumulator = accumulator
+                        .checked_mul(multiplier)
+                        .and_then(|v| v.checked_div(BASE_MULTIPLIER))
+                        .unwrap_or(i64::MAX); // Cap at maximum on overflow
 
                     session.state_blob = serialize_state(new_card, new_accumulator);
                     Ok(GameResult::Continue)
@@ -203,6 +208,7 @@ mod tests {
             move_count: 0,
             created_at: 0,
             is_complete: false,
+            super_mode: battleware_types::casino::SuperModeState::default(),
         }
     }
 

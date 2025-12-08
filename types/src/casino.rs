@@ -46,6 +46,15 @@ pub const STARTING_DOUBLES: u32 = 3;
 /// Game session expiry in blocks
 pub const SESSION_EXPIRY: u64 = 100;
 
+/// Faucet deposit amount (dev mode only)
+pub const FAUCET_AMOUNT: u64 = 10_000;
+
+/// Faucet rate limit in blocks (100 blocks ≈ 5 minutes at 3s/block)
+pub const FAUCET_RATE_LIMIT: u64 = 100;
+
+/// Initial chips granted on registration
+pub const INITIAL_CHIPS: u64 = 1_000;
+
 /// Casino game types matching frontend GameType enum
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(u8)]
@@ -93,6 +102,111 @@ impl FixedSize for GameType {
     const SIZE: usize = 1;
 }
 
+/// Super mode multiplier type
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum SuperType {
+    Card = 0,    // Specific card (rank+suit)
+    Number = 1,  // Roulette/Craps number
+    Total = 2,   // Sic Bo sum
+    Rank = 3,    // Card rank only
+    Suit = 4,    // Card suit only
+}
+
+impl Write for SuperType {
+    fn write(&self, writer: &mut impl BufMut) {
+        (*self as u8).write(writer);
+    }
+}
+
+impl Read for SuperType {
+    type Cfg = ();
+
+    fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
+        let value = u8::read(reader)?;
+        match value {
+            0 => Ok(Self::Card),
+            1 => Ok(Self::Number),
+            2 => Ok(Self::Total),
+            3 => Ok(Self::Rank),
+            4 => Ok(Self::Suit),
+            i => Err(Error::InvalidEnum(i)),
+        }
+    }
+}
+
+impl FixedSize for SuperType {
+    const SIZE: usize = 1;
+}
+
+/// Super mode multiplier entry
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SuperMultiplier {
+    pub id: u8,            // Card (0-51), number (0-36), or total (4-17)
+    pub multiplier: u16,   // 2-500x
+    pub super_type: SuperType,
+}
+
+impl Write for SuperMultiplier {
+    fn write(&self, writer: &mut impl BufMut) {
+        self.id.write(writer);
+        self.multiplier.write(writer);
+        self.super_type.write(writer);
+    }
+}
+
+impl Read for SuperMultiplier {
+    type Cfg = ();
+
+    fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
+        Ok(Self {
+            id: u8::read(reader)?,
+            multiplier: u16::read(reader)?,
+            super_type: SuperType::read(reader)?,
+        })
+    }
+}
+
+impl EncodeSize for SuperMultiplier {
+    fn encode_size(&self) -> usize {
+        self.id.encode_size() + self.multiplier.encode_size() + self.super_type.encode_size()
+    }
+}
+
+/// Super mode state
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct SuperModeState {
+    pub is_active: bool,
+    pub multipliers: Vec<SuperMultiplier>,
+    pub streak_level: u8,  // For HiLo only
+}
+
+impl Write for SuperModeState {
+    fn write(&self, writer: &mut impl BufMut) {
+        self.is_active.write(writer);
+        self.multipliers.write(writer);
+        self.streak_level.write(writer);
+    }
+}
+
+impl Read for SuperModeState {
+    type Cfg = ();
+
+    fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
+        Ok(Self {
+            is_active: bool::read(reader)?,
+            multipliers: Vec::<SuperMultiplier>::read_range(reader, 0..=10)?,
+            streak_level: u8::read(reader)?,
+        })
+    }
+}
+
+impl EncodeSize for SuperModeState {
+    fn encode_size(&self) -> usize {
+        self.is_active.encode_size() + self.multipliers.encode_size() + self.streak_level.encode_size()
+    }
+}
+
 /// Player state for casino games
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct Player {
@@ -105,6 +219,7 @@ pub struct Player {
     pub active_shield: bool,
     pub active_double: bool,
     pub active_session: Option<u64>,
+    pub last_deposit_block: u64,
 }
 
 impl Player {
@@ -112,13 +227,29 @@ impl Player {
         Self {
             nonce: 0,
             name,
-            chips: STARTING_CHIPS,
+            chips: INITIAL_CHIPS,
             shields: STARTING_SHIELDS,
             doubles: STARTING_DOUBLES,
             rank: 0,
             active_shield: false,
             active_double: false,
             active_session: None,
+            last_deposit_block: 0,
+        }
+    }
+
+    pub fn new_with_block(name: String, block: u64) -> Self {
+        Self {
+            nonce: 0,
+            name,
+            chips: INITIAL_CHIPS,
+            shields: STARTING_SHIELDS,
+            doubles: STARTING_DOUBLES,
+            rank: 0,
+            active_shield: false,
+            active_double: false,
+            active_session: None,
+            last_deposit_block: block,
         }
     }
 }
@@ -134,6 +265,7 @@ impl Write for Player {
         self.active_shield.write(writer);
         self.active_double.write(writer);
         self.active_session.write(writer);
+        self.last_deposit_block.write(writer);
     }
 }
 
@@ -151,6 +283,7 @@ impl Read for Player {
             active_shield: bool::read(reader)?,
             active_double: bool::read(reader)?,
             active_session: Option::<u64>::read(reader)?,
+            last_deposit_block: u64::read(reader)?,
         })
     }
 }
@@ -166,6 +299,7 @@ impl EncodeSize for Player {
             + self.active_shield.encode_size()
             + self.active_double.encode_size()
             + self.active_session.encode_size()
+            + self.last_deposit_block.encode_size()
     }
 }
 
@@ -180,6 +314,7 @@ pub struct GameSession {
     pub move_count: u32,
     pub created_at: u64,
     pub is_complete: bool,
+    pub super_mode: SuperModeState,
 }
 
 impl Write for GameSession {
@@ -192,6 +327,7 @@ impl Write for GameSession {
         self.move_count.write(writer);
         self.created_at.write(writer);
         self.is_complete.write(writer);
+        self.super_mode.write(writer);
     }
 }
 
@@ -208,6 +344,7 @@ impl Read for GameSession {
             move_count: u32::read(reader)?,
             created_at: u64::read(reader)?,
             is_complete: bool::read(reader)?,
+            super_mode: SuperModeState::read(reader)?,
         })
     }
 }
@@ -222,6 +359,7 @@ impl EncodeSize for GameSession {
             + self.move_count.encode_size()
             + self.created_at.encode_size()
             + self.is_complete.encode_size()
+            + self.super_mode.encode_size()
     }
 }
 
@@ -542,6 +680,91 @@ impl EncodeSize for CasinoValue {
             Self::Session(s) => s.encode_size(),
             Self::Leaderboard(l) => l.encode_size(),
         }
+    }
+}
+
+/// Tournament phases
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[repr(u8)]
+pub enum TournamentPhase {
+    #[default]
+    Registration = 0,  // 1 minute (~20 blocks at 3s/block)
+    Active = 1,        // 5 minutes (~100 blocks)
+    Complete = 2,
+}
+
+impl Write for TournamentPhase {
+    fn write(&self, writer: &mut impl BufMut) {
+        (*self as u8).write(writer);
+    }
+}
+
+impl Read for TournamentPhase {
+    type Cfg = ();
+
+    fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
+        match u8::read(reader)? {
+            0 => Ok(Self::Registration),
+            1 => Ok(Self::Active),
+            2 => Ok(Self::Complete),
+            i => Err(Error::InvalidEnum(i)),
+        }
+    }
+}
+
+impl FixedSize for TournamentPhase {
+    const SIZE: usize = 1;
+}
+
+/// Tournament state
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct Tournament {
+    pub id: u64,
+    pub phase: TournamentPhase,
+    pub start_block: u64,
+    pub players: Vec<PublicKey>,
+    pub starting_chips: u64,        // 10000
+    pub starting_shields: u32,      // 3
+    pub starting_doubles: u32,      // 3
+}
+
+impl Write for Tournament {
+    fn write(&self, writer: &mut impl BufMut) {
+        self.id.write(writer);
+        self.phase.write(writer);
+        self.start_block.write(writer);
+        self.players.write(writer);
+        self.starting_chips.write(writer);
+        self.starting_shields.write(writer);
+        self.starting_doubles.write(writer);
+    }
+}
+
+impl Read for Tournament {
+    type Cfg = ();
+
+    fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
+        Ok(Self {
+            id: u64::read(reader)?,
+            phase: TournamentPhase::read(reader)?,
+            start_block: u64::read(reader)?,
+            players: Vec::<PublicKey>::read_range(reader, 0..=1000)?,
+            starting_chips: u64::read(reader)?,
+            starting_shields: u32::read(reader)?,
+            starting_doubles: u32::read(reader)?,
+        })
+    }
+}
+
+impl EncodeSize for Tournament {
+    fn encode_size(&self) -> usize {
+        self.id.encode_size()
+            + self.phase.encode_size()
+            + self.start_block.encode_size()
+            + self.players.encode_size()
+            + self.starting_chips.encode_size()
+            + self.starting_shields.encode_size()
+            + self.starting_doubles.encode_size()
     }
 }
 

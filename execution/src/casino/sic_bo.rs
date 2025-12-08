@@ -169,28 +169,28 @@ impl CasinoGame for SicBo {
             }
             BetType::SpecificTriple => {
                 if triple && dice[0] == number {
-                    session.bet * 150
+                    session.bet.saturating_mul(150)
                 } else {
                     0
                 }
             }
             BetType::AnyTriple => {
                 if triple {
-                    session.bet * 24
+                    session.bet.saturating_mul(24)
                 } else {
                     0
                 }
             }
             BetType::SpecificDouble => {
                 if count_number(&dice, number) >= 2 {
-                    session.bet * 8
+                    session.bet.saturating_mul(8)
                 } else {
                     0
                 }
             }
             BetType::Total => {
                 if total == number {
-                    session.bet * total_payout(number)
+                    session.bet.saturating_mul(total_payout(number))
                 } else {
                     0
                 }
@@ -198,9 +198,9 @@ impl CasinoGame for SicBo {
             BetType::Single => {
                 let count = count_number(&dice, number);
                 match count {
-                    1 => session.bet,      // 1:1
-                    2 => session.bet * 2,  // 2:1
-                    3 => session.bet * 3,  // 3:1
+                    1 => session.bet,                    // 1:1
+                    2 => session.bet.saturating_mul(2),  // 2:1
+                    3 => session.bet.saturating_mul(3),  // 3:1
                     _ => 0,
                 }
             }
@@ -236,6 +236,7 @@ mod tests {
             move_count: 0,
             created_at: 0,
             is_complete: false,
+            super_mode: battleware_types::casino::SuperModeState::default(),
         }
     }
 

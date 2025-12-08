@@ -58,28 +58,36 @@ fn card_suit(card: u8) -> u8 {
 }
 
 /// Evaluate a 5-card poker hand.
+/// Optimized to avoid heap allocations.
 pub fn evaluate_hand(cards: &[u8; 5]) -> Hand {
-    let mut ranks: Vec<u8> = cards.iter().map(|&c| card_rank(c)).collect();
+    // Extract ranks and suits into fixed arrays
+    let mut ranks = [0u8; 5];
+    let mut suits = [0u8; 5];
+    for i in 0..5 {
+        ranks[i] = card_rank(cards[i]);
+        suits[i] = card_suit(cards[i]);
+    }
     ranks.sort_unstable();
 
-    let suits: Vec<u8> = cards.iter().map(|&c| card_suit(c)).collect();
-    let is_flush = suits.iter().all(|&s| s == suits[0]);
+    // Check flush
+    let is_flush = suits[0] == suits[1] && suits[1] == suits[2]
+                && suits[2] == suits[3] && suits[3] == suits[4];
+
+    // Check for duplicates (to determine if straight is possible)
+    let has_duplicates = ranks[0] == ranks[1] || ranks[1] == ranks[2]
+                      || ranks[2] == ranks[3] || ranks[3] == ranks[4];
 
     // Check for straight (including A-2-3-4-5 and 10-J-Q-K-A)
-    let is_straight = {
-        let mut sorted = ranks.clone();
-        sorted.dedup();
-        if sorted.len() != 5 {
-            false
-        } else if sorted == [1, 10, 11, 12, 13] {
-            // A-10-J-Q-K (ace high straight)
-            true
-        } else if sorted == [1, 2, 3, 4, 5] {
-            // A-2-3-4-5 (ace low straight)
-            true
-        } else {
-            sorted[4] - sorted[0] == 4
-        }
+    let is_straight = if has_duplicates {
+        false
+    } else if ranks == [1, 10, 11, 12, 13] {
+        // A-10-J-Q-K (ace high straight / royal)
+        true
+    } else if ranks == [1, 2, 3, 4, 5] {
+        // A-2-3-4-5 (ace low straight)
+        true
+    } else {
+        ranks[4] - ranks[0] == 4
     };
 
     let is_royal = ranks == [1, 10, 11, 12, 13];
@@ -90,7 +98,7 @@ pub fn evaluate_hand(cards: &[u8; 5]) -> Hand {
         counts[r as usize] += 1;
     }
 
-    let mut pairs = 0;
+    let mut pairs = 0u8;
     let mut three_kind = false;
     let mut four_kind = false;
     let mut high_pair = false; // Jacks or better
@@ -203,14 +211,13 @@ impl CasinoGame for VideoPoker {
         let hold_mask = payload[0];
         session.move_count += 1;
 
-        // Create deck without current held cards
+        // Create deck without current held cards (using optimized bit-set)
         let held_cards: Vec<u8> = (0..5)
             .filter(|i| hold_mask & (1 << i) != 0)
             .map(|i| cards[i])
             .collect();
 
-        let mut deck: Vec<u8> = (0..52).filter(|c| !held_cards.contains(c)).collect();
-        rng.shuffle(&mut deck);
+        let mut deck = rng.create_deck_excluding(&held_cards);
 
         // Replace non-held cards
         for i in 0..5 {
@@ -227,7 +234,8 @@ impl CasinoGame for VideoPoker {
         let multiplier = payout_multiplier(hand);
 
         if multiplier > 0 {
-            Ok(GameResult::Win(session.bet * multiplier))
+            let winnings = session.bet.saturating_mul(multiplier);
+            Ok(GameResult::Win(winnings))
         } else {
             Ok(GameResult::Loss)
         }
@@ -256,6 +264,7 @@ mod tests {
             move_count: 0,
             created_at: 0,
             is_complete: false,
+            super_mode: battleware_types::casino::SuperModeState::default(),
         }
     }
 

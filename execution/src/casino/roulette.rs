@@ -147,7 +147,7 @@ impl CasinoGame for Roulette {
 
         // Check if bet wins
         if bet_wins(bet_type, bet_number, result) {
-            let winnings = session.bet * payout_multiplier(bet_type);
+            let winnings = session.bet.saturating_mul(payout_multiplier(bet_type));
             Ok(GameResult::Win(winnings))
         } else {
             Ok(GameResult::Loss)
@@ -177,6 +177,7 @@ mod tests {
             move_count: 0,
             created_at: 0,
             is_complete: false,
+            super_mode: battleware_types::casino::SuperModeState::default(),
         }
     }
 
