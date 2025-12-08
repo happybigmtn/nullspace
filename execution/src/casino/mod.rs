@@ -188,8 +188,8 @@ pub enum GameError {
 /// Trait for casino game implementations.
 pub trait CasinoGame {
     /// Initialize game state after StartGame.
-    /// Returns the initial state blob.
-    fn init(session: &mut GameSession, rng: &mut GameRng);
+    /// Returns the initial state blob and immediate result (if any).
+    fn init(session: &mut GameSession, rng: &mut GameRng) -> GameResult;
 
     /// Process a player move.
     /// Updates the session state and returns the result.
@@ -201,7 +201,7 @@ pub trait CasinoGame {
 }
 
 /// Dispatch game initialization to the appropriate game module.
-pub fn init_game(session: &mut GameSession, rng: &mut GameRng) {
+pub fn init_game(session: &mut GameSession, rng: &mut GameRng) -> GameResult {
     match session.game_type {
         GameType::Baccarat => baccarat::Baccarat::init(session, rng),
         GameType::Blackjack => blackjack::Blackjack::init(session, rng),

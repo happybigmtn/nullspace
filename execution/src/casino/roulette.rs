@@ -103,9 +103,10 @@ fn payout_multiplier(bet_type: BetType) -> u64 {
 pub struct Roulette;
 
 impl CasinoGame for Roulette {
-    fn init(session: &mut GameSession, _rng: &mut GameRng) {
+    fn init(session: &mut GameSession, _rng: &mut GameRng) -> GameResult {
         // No initial state needed - waiting for bet
         session.state_blob = vec![];
+        GameResult::Continue
     }
 
     fn process_move(
@@ -147,7 +148,9 @@ impl CasinoGame for Roulette {
 
         // Check if bet wins
         if bet_wins(bet_type, bet_number, result) {
-            let winnings = session.bet.saturating_mul(payout_multiplier(bet_type));
+            // Return stake + winnings
+            let multiplier = payout_multiplier(bet_type).saturating_add(1);
+            let winnings = session.bet.saturating_mul(multiplier);
             Ok(GameResult::Win(winnings))
         } else {
             Ok(GameResult::Loss)

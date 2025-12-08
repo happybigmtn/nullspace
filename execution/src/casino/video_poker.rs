@@ -174,7 +174,7 @@ fn serialize_state(stage: Stage, cards: &[u8; 5]) -> Vec<u8> {
 pub struct VideoPoker;
 
 impl CasinoGame for VideoPoker {
-    fn init(session: &mut GameSession, rng: &mut GameRng) {
+    fn init(session: &mut GameSession, rng: &mut GameRng) -> GameResult {
         // Deal 5 cards
         let mut deck = rng.create_deck();
         let cards: [u8; 5] = [
@@ -186,6 +186,7 @@ impl CasinoGame for VideoPoker {
         ];
 
         session.state_blob = serialize_state(Stage::Deal, &cards);
+        GameResult::Continue
     }
 
     fn process_move(

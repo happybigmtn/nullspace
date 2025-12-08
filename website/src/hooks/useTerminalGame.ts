@@ -311,10 +311,22 @@ export const useTerminalGame = () => {
     });
 
     const unsubCompleted = chainService.onGameCompleted((event: CasinoGameCompletedEvent) => {
+      // DEBUG: Log all incoming CasinoGameCompleted events
+      console.log('[useTerminalGame] CasinoGameCompleted received:', {
+        eventSessionId: event.sessionId?.toString(),
+        eventSessionIdType: typeof event.sessionId,
+        currentSessionId: currentSessionIdRef.current?.toString(),
+        currentSessionIdType: typeof currentSessionIdRef.current,
+        match: event.sessionId === currentSessionIdRef.current,
+        finalChips: event.finalChips?.toString(),
+        payout: event.payout?.toString(),
+      });
+
       // Only process events for our current session
       if (currentSessionIdRef.current && event.sessionId === currentSessionIdRef.current) {
         const payout = Number(event.payout);
         const finalChips = Number(event.finalChips);
+        console.log('[useTerminalGame] Session ID matched! Updating chips to:', finalChips);
 
         setStats(prev => ({
           ...prev,
@@ -381,22 +393,35 @@ export const useTerminalGame = () => {
           type: currentType,
           playerCards: pCards,
           dealerCards: dCards,
-          stage: stage === 3 ? 'RESULT' : 'PLAYING',
-          message: stage === 3 ? 'GAME COMPLETE' : 'HIT (H) / STAND (S)',
+          stage: stage === 2 ? 'RESULT' : 'PLAYING',
+          message: stage === 2 ? 'GAME COMPLETE' : 'HIT (H) / STAND (S)',
         }));
       } else if (currentType === GameType.HILO) {
         // [currentCard:u8] [accumulator:i64 BE]
+        // Accumulator is in basis points (10000 = 1x multiplier)
         const currentCard = decodeCard(stateBlob[0]);
-        const accumulator = Number(view.getBigInt64(1, false)); // Big Endian
+        const accumulatorBasisPoints = Number(view.getBigInt64(1, false)); // Big Endian
 
-        setGameState(prev => ({
-          ...prev,
-          type: currentType,
-          playerCards: [currentCard],
-          hiloAccumulator: accumulator,
-          stage: 'PLAYING',
-          message: `POT: ${accumulator} | HIGHER (H) / LOWER (L)`,
-        }));
+        setGameState(prev => {
+          // Calculate actual pot value: bet * accumulator / 10000
+          const actualPot = Math.floor(prev.bet * accumulatorBasisPoints / 10000);
+          // Preserve card history by appending new card if it's different from last
+          const prevCards = prev.playerCards || [];
+          const lastCard = prevCards.length > 0 ? prevCards[prevCards.length - 1] : null;
+          const newCards = (lastCard && lastCard.rank === currentCard.rank && lastCard.suit === currentCard.suit)
+            ? prevCards
+            : [...prevCards, currentCard];
+
+          return {
+            ...prev,
+            type: currentType,
+            playerCards: newCards,
+            hiloAccumulator: actualPot,
+            hiloGraphData: [...(prev.hiloGraphData || []), actualPot],
+            stage: 'PLAYING',
+            message: `POT: $${actualPot.toLocaleString()} | HIGHER (H) / LOWER (L)`,
+          };
+        });
       } else if (currentType === GameType.BACCARAT) {
         // [playerHandLen:u8] [playerCards:u8×n] [bankerHandLen:u8] [bankerCards:u8×n]
         let offset = 0;
@@ -421,6 +446,7 @@ export const useTerminalGame = () => {
         }));
       } else if (currentType === GameType.VIDEO_POKER) {
         // [stage:u8] [c1:u8] [c2:u8] [c3:u8] [c4:u8] [c5:u8]
+        // Stage: 0 = Deal (waiting for hold selection), 1 = Draw (game complete)
         const stage = stateBlob[0];
         const cards: Card[] = [];
         for (let i = 1; i <= 5; i++) {
@@ -431,8 +457,8 @@ export const useTerminalGame = () => {
           ...prev,
           type: currentType,
           playerCards: cards,
-          stage: stage === 2 ? 'RESULT' : 'PLAYING',
-          message: stage === 0 ? 'HOLD (1-5), DRAW (D)' : stage === 1 ? 'DRAW (D)' : 'GAME COMPLETE',
+          stage: stage === 1 ? 'RESULT' : 'PLAYING',
+          message: stage === 0 ? 'HOLD (1-5), DRAW (D)' : 'GAME COMPLETE',
         }));
       } else if (currentType === GameType.CASINO_WAR) {
         // [playerCard:u8] [dealerCard:u8] [stage:u8]
@@ -440,13 +466,15 @@ export const useTerminalGame = () => {
         const dealerCard = decodeCard(stateBlob[1]);
         const stage = stateBlob[2];
 
+        // Stage: 0 = Initial (cards dealt), 1 = War (tie occurred)
+        // Game completion comes from CasinoGameCompleted event, not stage value
         setGameState(prev => ({
           ...prev,
           type: currentType,
           playerCards: [playerCard],
           dealerCards: [dealerCard],
-          stage: stage === 2 ? 'RESULT' : 'PLAYING',
-          message: stage === 2 ? 'GAME COMPLETE' : stage === 1 ? 'WAR! GO TO WAR (W) / SURRENDER (S)' : 'DEALT',
+          stage: 'PLAYING',
+          message: stage === 1 ? 'WAR! GO TO WAR (W) / SURRENDER (S)' : 'DEALT',
         }));
       } else if (currentType === GameType.CRAPS) {
         // [phase:u8] [main_point:u8] [d1:u8] [d2:u8] [bet_count:u8] [bets...]
@@ -647,6 +675,7 @@ export const useTerminalGame = () => {
         if (result.txHash) setLastTxSig(result.txHash);
 
         // Store session ID and game type for tracking events
+        console.log('[useTerminalGame] Storing sessionId in ref:', sessionId.toString(), 'type:', typeof sessionId);
         currentSessionIdRef.current = sessionId;
         gameTypeRef.current = type;
         setCurrentSessionId(sessionId);

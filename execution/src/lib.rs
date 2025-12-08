@@ -412,18 +412,96 @@ impl<'a, S: State> Layer<'a, S> {
 
         // Initialize game
         let mut rng = crate::casino::GameRng::new(&self.seed, session_id, 0);
-        crate::casino::init_game(&mut session, &mut rng);
+        let result = crate::casino::init_game(&mut session, &mut rng);
 
         let initial_state = session.state_blob.clone();
-        self.insert(Key::CasinoSession(session_id), Value::CasinoSession(session));
+        self.insert(Key::CasinoSession(session_id), Value::CasinoSession(session.clone()));
 
-        vec![Event::CasinoGameStarted {
+        let mut events = vec![Event::CasinoGameStarted {
             session_id,
             player: public.clone(),
             game_type,
             bet,
             initial_state,
-        }]
+        }];
+
+        // Handle immediate result (e.g. Natural Blackjack)
+        if !matches!(result, crate::casino::GameResult::Continue) {
+            if let Some(Value::CasinoPlayer(mut player)) = self.get(&Key::CasinoPlayer(public.clone())).await {
+                match result {
+                    crate::casino::GameResult::Win(base_payout) => {
+                        let mut payout = base_payout as i64;
+                        let was_doubled = player.active_double;
+                        if was_doubled && player.doubles > 0 {
+                            payout *= 2;
+                            player.doubles -= 1;
+                        }
+                        player.chips = player.chips.saturating_add(payout as u64);
+                        player.active_shield = false;
+                        player.active_double = false;
+
+                        let final_chips = player.chips;
+                        self.insert(Key::CasinoPlayer(public.clone()), Value::CasinoPlayer(player.clone()));
+                        self.update_casino_leaderboard(public, &player).await;
+
+                        events.push(Event::CasinoGameCompleted {
+                            session_id,
+                            player: public.clone(),
+                            game_type: session.game_type,
+                            payout,
+                            final_chips,
+                            was_shielded: false,
+                            was_doubled,
+                        });
+                    }
+                    crate::casino::GameResult::Push => {
+                        player.chips = player.chips.saturating_add(session.bet);
+                        player.active_shield = false;
+                        player.active_double = false;
+
+                        let final_chips = player.chips;
+                        self.insert(Key::CasinoPlayer(public.clone()), Value::CasinoPlayer(player.clone()));
+
+                        events.push(Event::CasinoGameCompleted {
+                            session_id,
+                            player: public.clone(),
+                            game_type: session.game_type,
+                            payout: session.bet as i64,
+                            final_chips,
+                            was_shielded: false,
+                            was_doubled: false,
+                        });
+                    }
+                    crate::casino::GameResult::Loss => {
+                        let was_shielded = player.active_shield && player.shields > 0;
+                        let payout = if was_shielded {
+                            player.shields -= 1;
+                            0
+                        } else {
+                            -(session.bet as i64)
+                        };
+                        player.active_shield = false;
+                        player.active_double = false;
+
+                        let final_chips = player.chips;
+                        self.insert(Key::CasinoPlayer(public.clone()), Value::CasinoPlayer(player.clone()));
+
+                        events.push(Event::CasinoGameCompleted {
+                            session_id,
+                            player: public.clone(),
+                            game_type: session.game_type,
+                            payout,
+                            final_chips,
+                            was_shielded,
+                            was_doubled: false,
+                        });
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        events
     }
 
     async fn handle_casino_game_move(

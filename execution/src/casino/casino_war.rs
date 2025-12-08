@@ -76,13 +76,14 @@ fn serialize_state(player_card: u8, dealer_card: u8, stage: Stage) -> Vec<u8> {
 pub struct CasinoWar;
 
 impl CasinoGame for CasinoWar {
-    fn init(session: &mut GameSession, rng: &mut GameRng) {
+    fn init(session: &mut GameSession, rng: &mut GameRng) -> GameResult {
         // Deal one card each
         let mut deck = rng.create_deck();
         let player_card = rng.draw_card(&mut deck).unwrap();
         let dealer_card = rng.draw_card(&mut deck).unwrap();
 
         session.state_blob = serialize_state(player_card, dealer_card, Stage::Initial);
+        GameResult::Continue
     }
 
     fn process_move(
@@ -116,7 +117,7 @@ impl CasinoGame for CasinoWar {
                 if player_rank > dealer_rank {
                     // Player wins 1:1
                     session.is_complete = true;
-                    Ok(GameResult::Win(session.bet))
+                    Ok(GameResult::Win(session.bet.saturating_mul(2)))
                 } else if player_rank < dealer_rank {
                     // Dealer wins
                     session.is_complete = true;
@@ -161,7 +162,8 @@ impl CasinoGame for CasinoWar {
                         if new_player_rank >= new_dealer_rank {
                             // Player wins - in war, tie goes to player
                             // Win original bet (doubled bet breaks even on tie)
-                            Ok(GameResult::Win(session.bet))
+                            // Payout 2x (Stake + Win)
+                            Ok(GameResult::Win(session.bet.saturating_mul(2)))
                         } else {
                             // Lose both bets (original + war bet)
                             // For simplicity, we just mark as loss

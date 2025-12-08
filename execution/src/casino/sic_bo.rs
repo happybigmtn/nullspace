@@ -92,8 +92,9 @@ fn serialize_state(dice: [u8; 3]) -> Vec<u8> {
 pub struct SicBo;
 
 impl CasinoGame for SicBo {
-    fn init(session: &mut GameSession, _rng: &mut GameRng) {
+    fn init(session: &mut GameSession, _rng: &mut GameRng) -> GameResult {
         session.state_blob = vec![];
+        GameResult::Continue
     }
 
     fn process_move(
@@ -141,56 +142,56 @@ impl CasinoGame for SicBo {
         let winnings = match bet_type {
             BetType::Small => {
                 if !triple && total >= 4 && total <= 10 {
-                    session.bet
+                    session.bet.saturating_mul(2) // 1:1 -> 2x
                 } else {
                     0
                 }
             }
             BetType::Big => {
                 if !triple && total >= 11 && total <= 17 {
-                    session.bet
+                    session.bet.saturating_mul(2)
                 } else {
                     0
                 }
             }
             BetType::Odd => {
                 if total % 2 == 1 && !triple {
-                    session.bet
+                    session.bet.saturating_mul(2)
                 } else {
                     0
                 }
             }
             BetType::Even => {
                 if total % 2 == 0 && !triple {
-                    session.bet
+                    session.bet.saturating_mul(2)
                 } else {
                     0
                 }
             }
             BetType::SpecificTriple => {
                 if triple && dice[0] == number {
-                    session.bet.saturating_mul(150)
+                    session.bet.saturating_mul(151) // 150:1 -> 151x
                 } else {
                     0
                 }
             }
             BetType::AnyTriple => {
                 if triple {
-                    session.bet.saturating_mul(24)
+                    session.bet.saturating_mul(25) // 24:1 -> 25x
                 } else {
                     0
                 }
             }
             BetType::SpecificDouble => {
                 if count_number(&dice, number) >= 2 {
-                    session.bet.saturating_mul(8)
+                    session.bet.saturating_mul(9) // 8:1 -> 9x
                 } else {
                     0
                 }
             }
             BetType::Total => {
                 if total == number {
-                    session.bet.saturating_mul(total_payout(number))
+                    session.bet.saturating_mul(total_payout(number) + 1)
                 } else {
                     0
                 }
@@ -198,9 +199,9 @@ impl CasinoGame for SicBo {
             BetType::Single => {
                 let count = count_number(&dice, number);
                 match count {
-                    1 => session.bet,                    // 1:1
-                    2 => session.bet.saturating_mul(2),  // 2:1
-                    3 => session.bet.saturating_mul(3),  // 3:1
+                    1 => session.bet.saturating_mul(2),  // 1:1 -> 2x
+                    2 => session.bet.saturating_mul(3),  // 2:1 -> 3x
+                    3 => session.bet.saturating_mul(4),  // 3:1 -> 4x
                     _ => 0,
                 }
             }

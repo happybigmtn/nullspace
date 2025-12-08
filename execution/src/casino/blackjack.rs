@@ -149,7 +149,7 @@ fn serialize_state(player_cards: &[u8], dealer_cards: &[u8], stage: Stage) -> Ve
 pub struct Blackjack;
 
 impl CasinoGame for Blackjack {
-    fn init(session: &mut GameSession, rng: &mut GameRng) {
+    fn init(session: &mut GameSession, rng: &mut GameRng) -> GameResult {
         let mut deck = rng.create_deck();
 
         // Deal initial cards: player gets 2, dealer gets 2 (second hidden)
@@ -166,13 +166,23 @@ impl CasinoGame for Blackjack {
         let player_bj = is_blackjack(&player_cards);
         let dealer_bj = is_blackjack(&dealer_cards);
 
-        let stage = if player_bj || dealer_bj {
-            Stage::Complete
+        let (stage, result) = if player_bj || dealer_bj {
+            session.is_complete = true;
+            if player_bj && dealer_bj {
+                (Stage::Complete, GameResult::Push)
+            } else if player_bj {
+                // Player blackjack pays 3:2 (return stake + 1.5x)
+                let payout = session.bet.saturating_mul(5) / 2;
+                (Stage::Complete, GameResult::Win(payout))
+            } else {
+                (Stage::Complete, GameResult::Loss)
+            }
         } else {
-            Stage::PlayerTurn
+            (Stage::PlayerTurn, GameResult::Continue)
         };
 
         session.state_blob = serialize_state(&player_cards, &dealer_cards, stage);
+        result
     }
 
     fn process_move(
@@ -315,10 +325,10 @@ impl Blackjack {
             GameResult::Loss
         } else if dealer_value > 21 {
             // Dealer busts
-            GameResult::Win(session.bet)
+            GameResult::Win(session.bet.saturating_mul(2))
         } else if player_value > dealer_value {
             // Player wins
-            GameResult::Win(session.bet)
+            GameResult::Win(session.bet.saturating_mul(2))
         } else if player_value < dealer_value {
             // Dealer wins
             GameResult::Loss

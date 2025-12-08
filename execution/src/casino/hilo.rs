@@ -92,7 +92,7 @@ fn serialize_state(current_card: u8, accumulator: i64) -> Vec<u8> {
 pub struct HiLo;
 
 impl CasinoGame for HiLo {
-    fn init(session: &mut GameSession, rng: &mut GameRng) {
+    fn init(session: &mut GameSession, rng: &mut GameRng) -> GameResult {
         // Deal one card to start
         let mut deck = rng.create_deck();
         let card = rng.draw_card(&mut deck).unwrap();
@@ -101,6 +101,7 @@ impl CasinoGame for HiLo {
         let accumulator = BASE_MULTIPLIER;
 
         session.state_blob = serialize_state(card, accumulator);
+        GameResult::Continue
     }
 
     fn process_move(

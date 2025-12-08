@@ -248,7 +248,7 @@ fn serialize_state(
 pub struct UltimateHoldem;
 
 impl CasinoGame for UltimateHoldem {
-    fn init(session: &mut GameSession, rng: &mut GameRng) {
+    fn init(session: &mut GameSession, rng: &mut GameRng) -> GameResult {
         let mut deck = rng.create_deck();
 
         // Deal player cards
@@ -273,6 +273,7 @@ impl CasinoGame for UltimateHoldem {
         ];
 
         session.state_blob = serialize_state(Stage::Preflop, &player, &community, &dealer, 0);
+        GameResult::Continue
     }
 
     fn process_move(
@@ -400,36 +401,35 @@ fn resolve_showdown(
     let blind_pay = ante.saturating_mul(blind_bonus);
 
     if tie {
-        // Push - just get blind bonus if any
-        if blind_pay > 0 {
-            Ok(GameResult::Win(blind_pay))
-        } else {
-            Ok(GameResult::Push)
-        }
+        // Push - return all stakes (Ante + Play + Blind) + Blind Bonus (if any? No, tie usually doesn't pay blind bonus unless specified, but usually push).
+        // Rules: "If the hand is a tie, the Ante, Play, and Blind bets push."
+        // Return: Ante + Play + Blind (Blind = Ante)
+        let total_return = ante.saturating_add(play_bet).saturating_add(ante);
+        Ok(GameResult::Win(total_return))
     } else if player_wins {
         if dealer_qualifies {
-            // Win ante (1:1), play (1:1), and blind (1:1 or bonus)
-            let winnings = ante
-                .saturating_add(play_bet)
-                .saturating_add(ante.max(blind_pay));
-            Ok(GameResult::Win(winnings))
+            // Win Ante (1:1), Play (1:1), Blind (Pay table or Push)
+            // Return: 2*Ante + 2*Play + (Blind + BlindBonus)
+            // If no bonus, Blind pushes (return Blind).
+            let blind_return = ante.saturating_add(blind_pay);
+            let total_return = ante.saturating_mul(2)
+                .saturating_add(play_bet.saturating_mul(2))
+                .saturating_add(blind_return);
+            Ok(GameResult::Win(total_return))
         } else {
-            // Ante pushes, win play (1:1), blind bonus
-            let winnings = play_bet.saturating_add(blind_pay);
-            if winnings > 0 {
-                Ok(GameResult::Win(winnings))
-            } else {
-                Ok(GameResult::Push)
-            }
+            // Dealer doesn't qualify: Ante Pushes, Play Wins (1:1), Blind Wins (Pay table or Push)
+            // Return: 1*Ante + 2*Play + (Blind + BlindBonus)
+            let blind_return = ante.saturating_add(blind_pay);
+            let total_return = ante
+                .saturating_add(play_bet.saturating_mul(2))
+                .saturating_add(blind_return);
+            Ok(GameResult::Win(total_return))
         }
     } else {
-        // Lose ante, play, and blind (unless bonus covers)
-        let losses = ante.saturating_add(ante).saturating_add(play_bet);
-        if blind_pay > losses {
-            Ok(GameResult::Win(blind_pay.saturating_sub(losses)))
-        } else {
-            Ok(GameResult::Loss)
-        }
+        // Lose Ante, Play, Blind
+        // Unless Blind Bonus covers it? (Bad Beat Bonus? Not standard).
+        // Standard UTH: Lose everything.
+        Ok(GameResult::Loss)
     }
 }
 

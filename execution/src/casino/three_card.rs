@@ -160,7 +160,7 @@ fn serialize_state(player: &[u8; 3], dealer: &[u8; 3], stage: Stage) -> Vec<u8> 
 pub struct ThreeCardPoker;
 
 impl CasinoGame for ThreeCardPoker {
-    fn init(session: &mut GameSession, rng: &mut GameRng) {
+    fn init(session: &mut GameSession, rng: &mut GameRng) -> GameResult {
         // Deal 3 cards each
         let mut deck = rng.create_deck();
         let player = [
@@ -175,6 +175,7 @@ impl CasinoGame for ThreeCardPoker {
         ];
 
         session.state_blob = serialize_state(&player, &dealer, Stage::Ante);
+        GameResult::Continue
     }
 
     fn process_move(
@@ -217,18 +218,23 @@ impl CasinoGame for ThreeCardPoker {
 
                 // Calculate ante bonus (paid regardless of dealer) with overflow protection
                 let bonus = session.bet.saturating_mul(ante_bonus(player_hand.0));
-                let double_bet = session.bet.saturating_mul(2);
+                let _double_bet = session.bet.saturating_mul(2);
 
                 if !dealer_qualifies {
-                    // Ante pays 1:1, play bet pushes, plus bonus
-                    Ok(GameResult::Win(session.bet.saturating_add(bonus)))
+                    // Ante pays 1:1 (2x return), play bet pushes (1x return), plus bonus
+                    // Total return: 2*Ante + 1*Play + Bonus
+                    // Ante = Play = bet. So 3*bet + Bonus.
+                    let base_return = session.bet.saturating_mul(3);
+                    Ok(GameResult::Win(base_return.saturating_add(bonus)))
                 } else {
                     // Compare hands
                     match compare_hands(&player_hand, &dealer_hand) {
                         std::cmp::Ordering::Greater => {
                             // Player wins: ante and play both pay 1:1
-                            // Total win = 2 bets (ante + play) + bonus
-                            Ok(GameResult::Win(double_bet.saturating_add(bonus)))
+                            // Total return: 2*Ante + 2*Play + Bonus
+                            // = 4*bet + Bonus
+                            let total_return = session.bet.saturating_mul(4);
+                            Ok(GameResult::Win(total_return.saturating_add(bonus)))
                         }
                         std::cmp::Ordering::Less => {
                             // Dealer wins: lose ante and play
@@ -236,23 +242,32 @@ impl CasinoGame for ThreeCardPoker {
                             if bonus > 0 {
                                 // Won bonus but lost main bet
                                 // Net result depends on comparison
-                                // For simplicity, if bonus covers losses it's a win
-                                if bonus > double_bet {
-                                    Ok(GameResult::Win(bonus.saturating_sub(double_bet)))
-                                } else {
-                                    Ok(GameResult::Loss)
-                                }
+                                // If bonus covers losses (double_bet), return the difference?
+                                // No, Win(amount) adds to chips.
+                                // We paid double_bet.
+                                // If bonus is 500. We lost 200.
+                                // We should get 500 back?
+                                // Wait. "Ante Bonus" is paid on the Ante wager.
+                                // If I have SF (5:1). Bet 100.
+                                // Bonus is 500.
+                                // If I lose hand.
+                                // Do I get 500 check? Or do I lose my 100 ante?
+                                // Rules: "Ante Bonus is paid ... regardless of dealer's hand".
+                                // So I get 500.
+                                // I lost my 100 ante and 100 play.
+                                // So I get 500 check.
+                                // Net: -200 + 500 = +300.
+                                // So Win(bonus).
+                                Ok(GameResult::Win(bonus))
                             } else {
                                 Ok(GameResult::Loss)
                             }
                         }
                         std::cmp::Ordering::Equal => {
                             // Push
-                            if bonus > 0 {
-                                Ok(GameResult::Win(bonus))
-                            } else {
-                                Ok(GameResult::Push)
-                            }
+                            // Return Ante + Play + Bonus
+                            let base_return = session.bet.saturating_mul(2);
+                            Ok(GameResult::Win(base_return.saturating_add(bonus)))
                         }
                     }
                 }

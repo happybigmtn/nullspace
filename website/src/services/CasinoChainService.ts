@@ -190,6 +190,13 @@ export class CasinoChainService {
     });
 
     this.client.onEvent('CasinoGameCompleted', (event: any) => {
+      // DEBUG: Log raw event from chain
+      console.log('[CasinoChainService] Raw CasinoGameCompleted event:', {
+        rawSessionId: event.session_id,
+        rawSessionIdType: typeof event.session_id,
+        rawPayout: event.payout,
+        rawFinalChips: event.final_chips,
+      });
       try {
         const parsed: CasinoGameCompletedEvent = {
           type: 'CasinoGameCompleted',
@@ -201,6 +208,7 @@ export class CasinoChainService {
           wasShielded: event.was_shielded,
           wasDoubled: event.was_doubled,
         };
+        console.log('[CasinoChainService] Parsed sessionId:', parsed.sessionId.toString(), 'type:', typeof parsed.sessionId);
         this.gameCompletedHandlers.forEach(h => h(parsed));
       } catch (error) {
         console.error('[CasinoChainService] Failed to parse CasinoGameCompleted:', error);
@@ -247,6 +255,7 @@ export class CasinoChainService {
    */
   async startGame(gameType: GameType, bet: bigint): Promise<{ sessionId: bigint; txHash?: string }> {
     const sessionId = sessionIdCounter++;
+    console.log('[CasinoChainService] startGame generated sessionId:', sessionId.toString(), 'type:', typeof sessionId);
 
     // Use the NonceManager to submit the transaction
     const result = await (this.client as any).nonceManager.submitCasinoStartGame(gameType, bet, sessionId);

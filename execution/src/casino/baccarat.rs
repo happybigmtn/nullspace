@@ -129,9 +129,10 @@ fn serialize_state(player_cards: &[u8], banker_cards: &[u8]) -> Vec<u8> {
 pub struct Baccarat;
 
 impl CasinoGame for Baccarat {
-    fn init(session: &mut GameSession, _rng: &mut GameRng) {
+    fn init(session: &mut GameSession, _rng: &mut GameRng) -> GameResult {
         // Empty state - waiting for bet
         session.state_blob = vec![];
+        GameResult::Continue
     }
 
     fn process_move(
@@ -195,13 +196,13 @@ impl CasinoGame for Baccarat {
         let result = if player_total == banker_total {
             // Tie
             match bet_type {
-                BetType::Tie => GameResult::Win(session.bet.saturating_mul(8)),
+                BetType::Tie => GameResult::Win(session.bet.saturating_mul(9)),
                 _ => GameResult::Push, // Push for Player/Banker bets on tie
             }
         } else if player_total > banker_total {
             // Player wins
             match bet_type {
-                BetType::Player => GameResult::Win(session.bet),
+                BetType::Player => GameResult::Win(session.bet.saturating_mul(2)),
                 BetType::Tie => GameResult::Loss,
                 BetType::Banker => GameResult::Loss,
             }
@@ -209,8 +210,9 @@ impl CasinoGame for Baccarat {
             // Banker wins
             match bet_type {
                 BetType::Banker => {
-                    // 5% commission - win 95% of bet (with overflow protection)
-                    let winnings = session.bet.saturating_mul(95) / 100;
+                    // 5% commission - win 95% of bet (return stake + 0.95x)
+                    // bet + bet*0.95 = bet * 1.95 = bet * 195 / 100
+                    let winnings = session.bet.saturating_mul(195) / 100;
                     if winnings > 0 {
                         GameResult::Win(winnings)
                     } else {

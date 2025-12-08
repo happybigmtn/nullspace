@@ -220,9 +220,12 @@ impl CrapsState {
 /// Calculate pass/don't pass payout (1:1 on flat bet + odds)
 fn calculate_pass_payout(bet: &CrapsBet, won: bool, is_pass: bool) -> i64 {
     if won {
-        let flat = bet.amount as i64;
+        // Flat bet pays 1:1 -> Return 2x
+        let flat = bet.amount.saturating_mul(2) as i64;
         let odds = if bet.odds_amount > 0 && bet.target > 0 {
-            calculate_odds_payout(bet.target, bet.odds_amount, is_pass) as i64
+            // Odds bet returns stake + winnings
+            let winnings = calculate_odds_payout(bet.target, bet.odds_amount, is_pass);
+            bet.odds_amount.saturating_add(winnings) as i64
         } else {
             0
         };
@@ -232,7 +235,7 @@ fn calculate_pass_payout(bet: &CrapsBet, won: bool, is_pass: bool) -> i64 {
     }
 }
 
-/// Calculate true odds payout
+/// Calculate true odds payout (WINNINGS ONLY)
 fn calculate_odds_payout(point: u8, odds_amount: u64, is_pass: bool) -> u64 {
     match point {
         4 | 10 => {
@@ -263,8 +266,8 @@ fn calculate_odds_payout(point: u8, odds_amount: u64, is_pass: bool) -> u64 {
 /// Calculate field bet payout
 fn calculate_field_payout(total: u8, amount: u64) -> i64 {
     match total {
-        2 | 12 => amount.saturating_mul(2) as i64, // 2:1
-        3 | 4 | 9 | 10 | 11 => amount as i64,      // 1:1
+        2 | 12 => amount.saturating_mul(3) as i64, // 2:1 -> 3x
+        3 | 4 | 9 | 10 | 11 => amount.saturating_mul(2) as i64, // 1:1 -> 2x
         _ => -(amount as i64),                     // 5,6,7,8 lose
     }
 }
@@ -284,7 +287,8 @@ fn calculate_yes_payout(target: u8, amount: u64, hit: bool) -> i64 {
 
     // 1% commission on winnings
     let commission = true_odds.saturating_div(100);
-    true_odds.saturating_sub(commission) as i64
+    let winnings = true_odds.saturating_sub(commission);
+    winnings.saturating_add(amount) as i64
 }
 
 /// Calculate NO (lay) bet payout with 1% commission
@@ -302,7 +306,8 @@ fn calculate_no_payout(target: u8, amount: u64, seven_hit: bool) -> i64 {
 
     // 1% commission
     let commission = true_odds.saturating_div(100);
-    true_odds.saturating_sub(commission) as i64
+    let winnings = true_odds.saturating_sub(commission);
+    winnings.saturating_add(amount) as i64
 }
 
 /// Calculate NEXT (hop) bet payout with 1% commission
@@ -325,7 +330,7 @@ fn calculate_next_payout(target: u8, total: u8, amount: u64) -> i64 {
 
     let winnings = amount.saturating_mul(multiplier);
     let commission = winnings.saturating_div(100);
-    winnings.saturating_sub(commission) as i64
+    winnings.saturating_sub(commission).saturating_add(amount) as i64
 }
 
 /// Calculate hardway bet payout
@@ -342,7 +347,7 @@ fn calculate_hardway_payout(target: u8, d1: u8, d2: u8, total: u8, amount: u64) 
             6 | 8 => amount.saturating_mul(9),  // 9:1
             _ => amount,
         };
-        Some(payout as i64)
+        Some(payout.saturating_add(amount) as i64)
     } else if is_easy || is_seven {
         // Lose
         Some(-(amount as i64))
@@ -678,8 +683,9 @@ fn update_phase(state: &mut CrapsState, total: u8) {
 pub struct Craps;
 
 impl CasinoGame for Craps {
-    fn init(session: &mut GameSession, _rng: &mut GameRng) {
+    fn init(session: &mut GameSession, _rng: &mut GameRng) -> GameResult {
         session.state_blob = vec![];
+        GameResult::Continue
     }
 
     fn process_move(
