@@ -1,8 +1,8 @@
 
 import React from 'react';
-import { GameState } from '../../types';
+import { GameState } from '../../../types';
 import { DiceRender } from '../GameComponents';
-import { calculateCrapsExposure } from '../../utils/gameUtils';
+import { calculateCrapsExposure } from '../../../utils/gameUtils';
 
 export const CrapsView: React.FC<{ gameState: GameState }> = ({ gameState }) => {
     return (

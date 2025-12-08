@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Card, Suit } from '../types';
+import { Card, Suit } from '../../types';
 
 export const CardRender: React.FC<{ card: Card; small?: boolean; forcedColor?: string }> = ({ card, small, forcedColor }) => {
   if (card.isHidden) {

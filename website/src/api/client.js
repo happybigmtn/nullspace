@@ -5,13 +5,13 @@ import { NonceManager } from './nonceManager.js';
 const FETCH_RETRY_DELAY_MS = 1000;
 
 /**
- * Client for communicating with the Battleware simulator.
+ * Client for communicating with the Casino chain.
  * Handles WebSocket connections, transaction submission, and state queries.
  */
-export class BattlewareClient {
+export class CasinoClient {
   constructor(baseUrl = '/api', wasm) {
     if (!wasm) {
-      throw new Error('WasmWrapper is required for BattlewareClient');
+      throw new Error('WasmWrapper is required for CasinoClient');
     }
     this.baseUrl = baseUrl;
     this.wasm = wasm;
@@ -142,15 +142,26 @@ export class BattlewareClient {
 
   /**
    * Wait for the first seed to arrive.
+   * First tries to fetch existing seed via REST API, then falls back to WebSocket.
    * @returns {Promise<void>} Resolves when first seed is received
    */
-  waitForFirstSeed() {
-    return new Promise((resolve) => {
-      if (this.latestSeed) {
-        resolve();
-        return;
-      }
+  async waitForFirstSeed() {
+    if (this.latestSeed) {
+      return;
+    }
 
+    // First, try to fetch an existing seed via REST API
+    console.log('Checking for existing seed via REST API...');
+    const result = await this.queryLatestSeed();
+    if (result.found) {
+      console.log('Found existing seed via REST API, view:', result.seed.view);
+      this.latestSeed = result.seed;
+      return;
+    }
+
+    console.log('No existing seed found, waiting for WebSocket event...');
+    // Fall back to waiting for WebSocket event
+    return new Promise((resolve) => {
       // Set up a one-time handler for the first seed
       const unsubscribe = this.onEvent('Seed', () => {
         unsubscribe();
@@ -239,6 +250,37 @@ export class BattlewareClient {
   }
 
   /**
+   * Query the latest seed via REST API.
+   * @returns {Promise<{found: boolean, seed?: any, seedBytes?: Uint8Array}>} Query result
+   */
+  async queryLatestSeed() {
+    // Encode the query for latest seed
+    const queryBytes = this.wasm.encodeQuery('latest');
+    const hexQuery = this.wasm.bytesToHex(queryBytes);
+
+    const response = await fetch(`${this.baseUrl}/seed/${hexQuery}`);
+
+    if (response.status === 404) {
+      return { found: false };
+    }
+
+    if (response.status !== 200) {
+      console.log(`Latest seed query returned ${response.status}`);
+      return { found: false };
+    }
+
+    const seedBytes = await response.arrayBuffer();
+    const seedBytesArray = new Uint8Array(seedBytes);
+    try {
+      const seed = this.wasm.decodeSeed(seedBytesArray);
+      return { found: true, seed, seedBytes: seedBytesArray };
+    } catch (error) {
+      console.error('Failed to decode latest seed:', error);
+      return { found: false };
+    }
+  }
+
+  /**
    * Connect to the updates WebSocket stream with exponential backoff.
    * @param {Uint8Array|null} publicKey - Public key bytes for account filter, or null for all events
    * @returns {Promise<void>}
@@ -261,7 +303,15 @@ export class BattlewareClient {
       const filterHex = this.wasm.bytesToHex(filterBytes);
 
       let wsUrl;
-      if (this.baseUrl.startsWith('http://') || this.baseUrl.startsWith('https://')) {
+      // Try to use VITE_URL directly for WebSocket to bypass proxy issues
+      const directUrl = import.meta.env.VITE_URL;
+      if (directUrl) {
+        // Use the direct backend URL for WebSocket connections
+        const url = new URL(directUrl);
+        wsUrl = url.protocol === 'https:'
+          ? `wss://${url.host}/updates/${filterHex}`
+          : `ws://${url.host}/updates/${filterHex}`;
+      } else if (this.baseUrl.startsWith('http://') || this.baseUrl.startsWith('https://')) {
         // Full URL provided, convert to WebSocket URL
         const url = new URL(this.baseUrl);
         wsUrl = url.protocol === 'https:'
@@ -290,6 +340,7 @@ export class BattlewareClient {
       };
 
       this.updatesWs.onmessage = async (event) => {
+        console.log('[WebSocket] Received message, data type:', typeof event.data, event.data instanceof Blob ? 'Blob' : 'not Blob');
         try {
           let bytes;
           if (event.data instanceof Blob) {
@@ -310,6 +361,7 @@ export class BattlewareClient {
           // Now we have binary data in bytes, decode it
           try {
             const decodedUpdate = this.wasm.decodeUpdate(bytes);
+            console.log('[WebSocket] Decoded update type:', decodedUpdate.type, decodedUpdate.type === 'Events' ? `(${decodedUpdate.events?.length} events)` : '');
 
             // Check if it's a Seed or Events/FilteredEvents update
             if (decodedUpdate.type === 'Seed') {
@@ -318,6 +370,7 @@ export class BattlewareClient {
             } else if (decodedUpdate.type === 'Events') {
               // Process each event from the array - treat FilteredEvents the same as Events
               for (const eventData of decodedUpdate.events) {
+                console.log('[WebSocket] Event type:', eventData.type, 'data:', eventData);
                 // Check if this is a transaction from our account
                 if (eventData.type === 'Transaction') {
                   if (this.nonceManager.publicKeyHex &&
@@ -458,52 +511,26 @@ export class BattlewareClient {
     return null;
   }
 
-
-  async getBattle(battleDigest) {
-    const keyBytes = this.wasm.encodeBattleKey(battleDigest);
+  /**
+   * Get casino player information by public key.
+   * @param {Uint8Array} publicKeyBytes - Player public key
+   * @returns {Promise<Object|null>} CasinoPlayer data or null if not found
+   */
+  async getCasinoPlayer(publicKeyBytes) {
+    const keyBytes = this.wasm.encodeCasinoPlayerKey(publicKeyBytes);
     const result = await this.queryState(keyBytes);
 
-    if (result.found && result.value.type === 'Battle') {
-      return result.value;
+    if (result.found && result.value) {
+      // Value is already a plain object from WASM
+      if (result.value.type === 'CasinoPlayer') {
+        return result.value;
+      } else {
+        console.log('Value is not a CasinoPlayer type:', result.value.type);
+        return null;
+      }
     }
 
     return null;
-  }
-
-  /**
-   * Submit a creature generation transaction.
-   * @returns {Promise<{status: string}>} Transaction result
-   */
-  async submitGenerate() {
-    return this.nonceManager.submitGenerate();
-  }
-
-  /**
-   * Submit a matchmaking transaction.
-   * @returns {Promise<{status: string}>} Transaction result
-   */
-  async submitMatch() {
-    return this.nonceManager.submitMatch();
-  }
-
-  /**
-   * Submit a battle move transaction.
-   * @param {Uint8Array} battleId - Battle identifier
-   * @param {number} moveIndex - Move index to execute
-   * @param {number} expiry - Move expiration time
-   * @returns {Promise<{status: string}>} Transaction result
-   */
-  async submitMove(battleId, moveIndex, expiry) {
-    return this.nonceManager.submitMove(battleId, moveIndex, expiry, this.masterPublic);
-  }
-
-  /**
-   * Submit a battle settlement transaction.
-   * @param {Uint8Array} seed - Settlement seed
-   * @returns {Promise<{status: string}>} Transaction result
-   */
-  async submitSettle(seed) {
-    return this.nonceManager.submitSettle(seed);
   }
 
   /**
@@ -519,7 +546,7 @@ export class BattlewareClient {
     }
 
     // Check if we have a stored private key in localStorage
-    const storedPrivateKeyHex = localStorage.getItem('battleware_private_key');
+    const storedPrivateKeyHex = localStorage.getItem('casino_private_key');
 
     if (storedPrivateKeyHex) {
       // Convert hex string back to bytes
@@ -532,7 +559,7 @@ export class BattlewareClient {
 
       // Store the private key for persistence (Note: In production, consider more secure storage)
       const privateKeyHex = this.wasm.getPrivateKeyHex();
-      localStorage.setItem('battleware_private_key', privateKeyHex);
+      localStorage.setItem('casino_private_key', privateKeyHex);
       console.log('Generated new keypair using browser crypto API and saved to localStorage');
     }
 
@@ -544,61 +571,6 @@ export class BattlewareClient {
     console.log('Using keypair with public key:', keypair.publicKeyHex);
 
     return keypair;
-  }
-
-  /**
-   * Fetch and format the leaderboard data.
-   * @returns {Promise<Array>} Formatted leaderboard array
-   */
-  async fetchLeaderboard() {
-    try {
-      const keyBytes = this.wasm.encodeLeaderboardKey();
-      const hashedKey = this.wasm.hashKey(keyBytes);
-      const hexKey = this.wasm.bytesToHex(hashedKey);
-
-      let response;
-      while (true) {
-        response = await fetch(`${this.baseUrl}/state/${hexKey}`);
-
-        if (response.status === 404) {
-          return [];
-        }
-
-        if (response.status === 200) {
-          break;
-        }
-
-        // Retry on any other status
-        console.log(`Leaderboard query returned ${response.status}, retrying...`);
-        await new Promise(resolve => setTimeout(resolve, FETCH_RETRY_DELAY_MS));
-      }
-
-      // Decode value using WASM - returns a plain object
-      const buffer = await response.arrayBuffer();
-      const valueBytes = new Uint8Array(buffer);
-      const leaderboard = this.wasm.decodeLookup(valueBytes);
-      const players = leaderboard.players;
-
-      // Format players - each player is [publicKeyBytes, stats]
-      const formattedPlayers = players
-        .map(player => {
-          const [publicKeyBytes, stats] = player;
-          const publicKeyHex = this.wasm.bytesToHex(new Uint8Array(publicKeyBytes));
-          return {
-            publicKey: publicKeyHex,
-            elo: stats.elo,
-            wins: stats.wins,
-            losses: stats.losses,
-            draws: stats.draws
-          };
-        })
-        .sort((a, b) => b.elo - a.elo); // Sort by ELO descending
-
-      return formattedPlayers;
-    } catch (error) {
-      console.error('Failed to fetch leaderboard:', error);
-      return [];
-    }
   }
 
 }

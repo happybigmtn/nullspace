@@ -65,67 +65,14 @@ export class WasmWrapper {
     return this.keypair.private_key_hex;
   }
 
-  // Create a generate transaction
-  createGenerateTransaction(nonce) {
-    if (!this.keypair) {
-      throw new Error('Keypair not initialized');
-    }
-    // Convert nonce to BigInt for WASM
-    const tx = this.wasm.Transaction.generate(this.keypair, BigInt(nonce));
-    return tx.encode();
-  }
-
-  // Create a match transaction
-  createMatchTransaction(nonce) {
-    if (!this.keypair) {
-      throw new Error('Keypair not initialized');
-    }
-    // Convert nonce to BigInt for WASM
-    const tx = this.wasm.Transaction.match_tx(this.keypair, BigInt(nonce));
-    return tx.encode();
-  }
-
-  // Create a move transaction
-  createMoveTransaction(nonce, masterPublicBytes, expiry, moveIndex) {
-    if (!this.keypair) {
-      throw new Error('Keypair not initialized');
-    }
-    // Convert nonce to BigInt for WASM
-    const tx = this.wasm.Transaction.move_tx(
-      this.keypair,
-      BigInt(nonce),
-      masterPublicBytes,
-      BigInt(expiry),
-      moveIndex
-    );
-    return tx.encode();
-  }
-
-  // Create a settle transaction
-  createSettleTransaction(nonce, seedBytes) {
-    if (!this.keypair) {
-      throw new Error('Keypair not initialized');
-    }
-    // Convert nonce to BigInt for WASM
-    const tx = this.wasm.Transaction.settle_tx(
-      this.keypair,
-      BigInt(nonce),
-      seedBytes
-    );
-    return tx.encode();
-  }
-
   // Encode keys
   encodeAccountKey(publicKeyBytes) {
     return this.wasm.encode_account_key(publicKeyBytes);
   }
 
-  encodeBattleKey(digestBytes) {
-    return this.wasm.encode_battle_key(digestBytes);
-  }
-
-  encodeLeaderboardKey() {
-    return this.wasm.encode_leaderboard_key();
+  // Encode casino player key
+  encodeCasinoPlayerKey(publicKeyBytes) {
+    return this.wasm.encode_casino_player_key(publicKeyBytes);
   }
 
   // Encode UpdatesFilter for all events
@@ -176,11 +123,6 @@ export class WasmWrapper {
       // Re-throw with the original error message
       throw new Error(error.toString());
     }
-  }
-
-  // Generate creature from traits
-  generateCreatureFromTraits(traits) {
-    return this.wasm.generate_creature_from_traits(traits);
   }
 
   // Convert hex to bytes
@@ -269,5 +211,71 @@ export class WasmWrapper {
   // Get access to Transaction class
   get Transaction() {
     return this.wasm.Transaction;
+  }
+
+  // Create a casino start game transaction
+  createCasinoStartGameTransaction(nonce, gameType, bet, sessionId) {
+    if (!this.keypair) {
+      throw new Error('Keypair not initialized');
+    }
+    const tx = this.wasm.Transaction.casino_start_game(
+      this.keypair,
+      BigInt(nonce),
+      gameType,
+      BigInt(bet),
+      BigInt(sessionId)
+    );
+    return tx.encode();
+  }
+
+  // Create a casino game move transaction
+  createCasinoGameMoveTransaction(nonce, sessionId, payload) {
+    if (!this.keypair) {
+      throw new Error('Keypair not initialized');
+    }
+    const tx = this.wasm.Transaction.casino_game_move(
+      this.keypair,
+      BigInt(nonce),
+      BigInt(sessionId),
+      payload
+    );
+    return tx.encode();
+  }
+
+  // Create a casino toggle shield transaction
+  createCasinoToggleShieldTransaction(nonce) {
+    if (!this.keypair) {
+      throw new Error('Keypair not initialized');
+    }
+    const tx = this.wasm.Transaction.casino_toggle_shield(
+      this.keypair,
+      BigInt(nonce)
+    );
+    return tx.encode();
+  }
+
+  // Create a casino toggle double transaction
+  createCasinoToggleDoubleTransaction(nonce) {
+    if (!this.keypair) {
+      throw new Error('Keypair not initialized');
+    }
+    const tx = this.wasm.Transaction.casino_toggle_double(
+      this.keypair,
+      BigInt(nonce)
+    );
+    return tx.encode();
+  }
+
+  // Create a casino register transaction
+  createCasinoRegisterTransaction(nonce, name) {
+    if (!this.keypair) {
+      throw new Error('Keypair not initialized');
+    }
+    const tx = this.wasm.Transaction.casino_register(
+      this.keypair,
+      BigInt(nonce),
+      name
+    );
+    return tx.encode();
   }
 }

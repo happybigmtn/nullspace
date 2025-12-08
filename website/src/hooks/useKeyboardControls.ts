@@ -118,22 +118,9 @@ export const useKeyboardControls = ({
             if (e.key.toLowerCase() === 'z') gameActions.toggleShield();
             if (e.key.toLowerCase() === 'x') gameActions.toggleDouble();
 
-            // Bet Amounts (1-9)
-            const bets = [0, 1, 5, 25, 100, 500, 1000, 5000, 10000, 50000];
-            const num = parseInt(e.key);
-            if (!isNaN(num)) {
-                if (num === 0) {
-                    uiActions.setCustomBetOpen(true);
-                    setTimeout(() => inputRefs.customBet.current?.focus(), 10);
-                } else {
-                    uiActions.setBetAmount(bets[num]);
-                }
-                return;
-            }
-
-            // Specific Game Keys
+            // Specific Game Keys - handle BEFORE bet amounts to allow number key overrides
             const k = e.key.toLowerCase();
-            
+
             if (gameState.type === GameType.BLACKJACK) {
                 if (k === 'h') gameActions.bjHit();
                 if (k === 's') gameActions.bjStand();
@@ -143,7 +130,11 @@ export const useKeyboardControls = ({
                 if (k === 'n') gameActions.bjInsurance(false);
             } else if (gameState.type === GameType.VIDEO_POKER) {
                 if (k === 'd') gameActions.drawVideoPoker();
-                if (['1','2','3','4','5'].includes(k)) gameActions.toggleHold(parseInt(k)-1);
+                // 1-5 toggle hold on cards - takes priority over bet changes
+                if (['1','2','3','4','5'].includes(e.key)) {
+                    gameActions.toggleHold(parseInt(e.key)-1);
+                    return;
+                }
             } else if (gameState.type === GameType.HILO) {
                 if (k === 'h') gameActions.hiloPlay('HIGHER');
                 if (k === 'l') gameActions.hiloPlay('LOWER');
@@ -161,7 +152,11 @@ export const useKeyboardControls = ({
                 if (k === 'b') gameActions.placeRouletteBet('BLACK');
                 if (k === 'e') gameActions.placeRouletteBet('EVEN');
                 if (k === 'o') gameActions.placeRouletteBet('ODD');
-                if (k === '0') gameActions.placeRouletteBet('ZERO');
+                // '0' places ZERO bet - takes priority over custom bet dialog
+                if (e.key === '0') {
+                    gameActions.placeRouletteBet('ZERO');
+                    return;
+                }
                 if (k === 't') gameActions.rebetRoulette();
                 if (k === 'u') gameActions.undoRouletteBet();
             } else if (gameState.type === GameType.THREE_CARD) {
@@ -194,6 +189,22 @@ export const useKeyboardControls = ({
                 if (k === 'a') gameActions.placeSicBoBet('TRIPLE_ANY');
                 if (k === 't') gameActions.rebetSicBo();
                 if (k === 'u') gameActions.undoSicBoBet();
+            }
+
+            // Bet Amounts (Ctrl+1-9, Ctrl+0 for custom) - requires Ctrl modifier to avoid conflicts
+            if (e.ctrlKey && !e.shiftKey && !e.altKey) {
+                const bets = [0, 1, 5, 25, 100, 500, 1000, 5000, 10000, 50000];
+                const num = parseInt(e.key);
+                if (!isNaN(num)) {
+                    e.preventDefault(); // Prevent browser shortcuts like Ctrl+1 for tabs
+                    if (num === 0) {
+                        uiActions.setCustomBetOpen(true);
+                        setTimeout(() => inputRefs.customBet.current?.focus(), 10);
+                    } else {
+                        uiActions.setBetAmount(bets[num]);
+                    }
+                    return;
+                }
             }
         };
 

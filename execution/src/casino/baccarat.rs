@@ -12,6 +12,9 @@
 use super::{CasinoGame, GameError, GameResult, GameRng};
 use battleware_types::casino::GameSession;
 
+/// Maximum cards in a Baccarat hand (2-3 cards per hand).
+const MAX_HAND_SIZE: usize = 3;
+
 /// Bet types in Baccarat.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -96,14 +99,16 @@ fn parse_state(state: &[u8]) -> Option<(Vec<u8>, Vec<u8>)> {
     }
 
     let player_len = state[0] as usize;
-    if state.len() < 1 + player_len + 1 {
+    // Bounds check: reject impossibly large hand sizes
+    if player_len > MAX_HAND_SIZE || state.len() < 1 + player_len + 1 {
         return None;
     }
 
     let player_cards: Vec<u8> = state[1..1 + player_len].to_vec();
     let banker_len = state[1 + player_len] as usize;
 
-    if state.len() < 1 + player_len + 1 + banker_len {
+    // Bounds check: reject impossibly large hand sizes
+    if banker_len > MAX_HAND_SIZE || state.len() < 1 + player_len + 1 + banker_len {
         return None;
     }
 
@@ -190,7 +195,7 @@ impl CasinoGame for Baccarat {
         let result = if player_total == banker_total {
             // Tie
             match bet_type {
-                BetType::Tie => GameResult::Win(session.bet * 8),
+                BetType::Tie => GameResult::Win(session.bet.saturating_mul(8)),
                 _ => GameResult::Push, // Push for Player/Banker bets on tie
             }
         } else if player_total > banker_total {
@@ -204,8 +209,8 @@ impl CasinoGame for Baccarat {
             // Banker wins
             match bet_type {
                 BetType::Banker => {
-                    // 5% commission - win 95% of bet
-                    let winnings = (session.bet * 95) / 100;
+                    // 5% commission - win 95% of bet (with overflow protection)
+                    let winnings = session.bet.saturating_mul(95) / 100;
                     if winnings > 0 {
                         GameResult::Win(winnings)
                     } else {
@@ -243,6 +248,7 @@ mod tests {
             move_count: 0,
             created_at: 0,
             is_complete: false,
+            super_mode: battleware_types::casino::SuperModeState::default(),
         }
     }
 

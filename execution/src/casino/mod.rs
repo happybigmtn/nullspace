@@ -21,6 +21,7 @@ pub mod hilo;
 mod integration_tests;
 pub mod roulette;
 pub mod sic_bo;
+pub mod super_mode;
 pub mod three_card;
 pub mod ultimate_holdem;
 pub mod video_poker;
@@ -80,6 +81,11 @@ impl GameRng {
         (a << 8) | b
     }
 
+    /// Get a random f32 value in range [0.0, 1.0).
+    pub fn next_f32(&mut self) -> f32 {
+        (self.next_u8() as f32) / 256.0
+    }
+
     /// Get a random value in range [0, max).
     pub fn next_bounded(&mut self, max: u8) -> u8 {
         if max == 0 {
@@ -134,6 +140,26 @@ impl GameRng {
     pub fn spin_roulette(&mut self) -> u8 {
         self.next_bounded(37)
     }
+
+    /// Create a shuffled deck excluding specific cards.
+    /// Uses a bit-set for O(n) performance instead of O(n*m) .contains() calls.
+    pub fn create_deck_excluding(&mut self, excluded: &[u8]) -> Vec<u8> {
+        // Use u64 as bit-set for 52 cards (cards 0-51)
+        let mut used: u64 = 0;
+        for &card in excluded {
+            if card < 52 {
+                used |= 1u64 << card;
+            }
+        }
+
+        // Collect remaining cards
+        let mut deck: Vec<u8> = (0..52)
+            .filter(|&c| used & (1u64 << c) == 0)
+            .collect();
+
+        self.shuffle(&mut deck);
+        deck
+    }
 }
 
 /// Result of processing a game move.
@@ -151,15 +177,12 @@ pub enum GameResult {
 /// Error during game execution.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GameError {
+    /// Invalid payload format or content.
     InvalidPayload,
-    InsufficientChips,
+    /// Invalid move for current game state.
     InvalidMove,
+    /// Game session has already completed.
     GameAlreadyComplete,
-    NoActiveSession,
-    SessionNotFound,
-    NotSessionOwner,
-    PlayerNotFound,
-    PlayerAlreadyExists,
 }
 
 /// Trait for casino game implementations.
@@ -227,11 +250,11 @@ pub fn apply_modifiers(player: &mut Player, payout: i64) -> (i64, bool, bool) {
         was_shielded = true;
     }
 
-    // Double: doubles wins
+    // Double: doubles wins (with overflow protection)
     if payout > 0 && player.active_double && player.doubles > 0 {
         player.doubles -= 1;
         player.active_double = false;
-        final_payout = payout * 2;
+        final_payout = payout.saturating_mul(2);
         was_doubled = true;
     }
 
@@ -240,6 +263,27 @@ pub fn apply_modifiers(player: &mut Player, payout: i64) -> (i64, bool, bool) {
     player.active_double = false;
 
     (final_payout, was_shielded, was_doubled)
+}
+
+/// Calculate super mode fee (20% of bet)
+pub fn get_super_mode_fee(bet: u64) -> u64 {
+    bet / 5  // 20%
+}
+
+/// Generate super mode multipliers for a game type
+pub fn generate_super_multipliers(game_type: GameType, rng: &mut GameRng) -> Vec<battleware_types::casino::SuperMultiplier> {
+    match game_type {
+        GameType::Baccarat => super_mode::generate_baccarat_multipliers(rng),
+        GameType::Roulette => super_mode::generate_roulette_multipliers(rng),
+        GameType::Blackjack => super_mode::generate_blackjack_multipliers(rng),
+        GameType::Craps => super_mode::generate_craps_multipliers(rng),
+        GameType::SicBo => super_mode::generate_sic_bo_multipliers(rng),
+        GameType::VideoPoker => super_mode::generate_video_poker_multipliers(rng),
+        GameType::ThreeCard => super_mode::generate_three_card_multipliers(rng),
+        GameType::UltimateHoldem => super_mode::generate_uth_multipliers(rng),
+        GameType::CasinoWar => super_mode::generate_casino_war_multipliers(rng),
+        GameType::HiLo => Vec::new(),  // HiLo uses streak-based system
+    }
 }
 
 #[cfg(test)]

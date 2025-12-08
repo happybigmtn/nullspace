@@ -141,10 +141,7 @@ impl CasinoGame for CasinoWar {
                     Move::War => {
                         // Go to war - bet is doubled (player adds equal bet)
                         // Burn 3 cards, then deal new cards
-                        let mut deck: Vec<u8> = (0..52)
-                            .filter(|&c| c != player_card && c != dealer_card)
-                            .collect();
-                        rng.shuffle(&mut deck);
+                        let mut deck = rng.create_deck_excluding(&[player_card, dealer_card]);
 
                         // Burn 3 cards
                         for _ in 0..3 {
@@ -203,6 +200,7 @@ mod tests {
             move_count: 0,
             created_at: 0,
             is_complete: false,
+            super_mode: battleware_types::casino::SuperModeState::default(),
         }
     }
 

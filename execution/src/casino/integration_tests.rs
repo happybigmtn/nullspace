@@ -25,6 +25,7 @@ mod tests {
             move_count: 0,
             created_at: 0,
             is_complete: false,
+            super_mode: battleware_types::casino::SuperModeState::default(),
         }
     }
 

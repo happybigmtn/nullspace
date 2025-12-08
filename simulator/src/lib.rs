@@ -312,44 +312,64 @@ async fn handle_updates_ws(
     simulator: Arc<Simulator>,
     filter: String,
 ) {
+    tracing::info!("Updates WebSocket connected, filter: {}", filter);
     let (mut sender, _receiver) = socket.split();
     let mut updates = simulator.update_subscriber();
 
     // Parse filter from URL path using UpdatesFilter
     let filter = match from_hex(&filter) {
         Some(filter) => filter,
-        None => return,
+        None => {
+            tracing::warn!("Failed to parse filter hex");
+            return;
+        }
     };
     let subscription = match UpdatesFilter::decode(&mut filter.as_slice()) {
         Ok(subscription) => subscription,
-        Err(_) => return,
+        Err(e) => {
+            tracing::warn!("Failed to decode UpdatesFilter: {:?}", e);
+            return;
+        }
     };
+    tracing::info!("UpdatesFilter parsed successfully: {:?}", subscription);
 
     // Send updates based on subscription
     while let Ok(internal_update) = updates.recv().await {
+        tracing::debug!("Received internal update");
         // Convert InternalUpdate to Update and apply filtering
         let update = match internal_update {
-            InternalUpdate::Seed(seed) => Some(Update::Seed(seed)),
+            InternalUpdate::Seed(seed) => {
+                tracing::debug!("Broadcasting Seed update");
+                Some(Update::Seed(seed))
+            }
             InternalUpdate::Events(events, digests) => match &subscription {
-                UpdatesFilter::All => Some(Update::Events(events)),
+                UpdatesFilter::All => {
+                    tracing::debug!("Broadcasting Events update (All filter)");
+                    Some(Update::Events(events))
+                }
                 UpdatesFilter::Account(account) => {
+                    tracing::debug!("Filtering Events for account");
                     filter_updates_for_account(events, digests, account).await
                 }
             },
         };
         let Some(update) = update else {
+            tracing::debug!("Update filtered out");
             continue;
         };
 
         // Send update
+        tracing::info!("Sending update to WebSocket client");
         if sender
             .send(axum::extract::ws::Message::Binary(update.encode().to_vec()))
             .await
             .is_err()
         {
+            tracing::warn!("Failed to send update, client disconnected");
             break;
         }
     }
+    tracing::info!("Updates WebSocket handler exiting");
 }
 
 async fn handle_mempool_ws(socket: axum::extract::ws::WebSocket, simulator: Arc<Simulator>) {
@@ -413,21 +433,20 @@ async fn filter_updates_for_account(
 
 fn is_event_relevant_to_account(event: &Event, account: &PublicKey) -> bool {
     match event {
-        Event::Generated {
-            account: player, ..
-        } => account == player,
-        Event::Matched {
-            player_a, player_b, ..
-        } => player_a == account || player_b == account,
-        Event::Locked {
-            locker, observer, ..
-        } => locker == account || observer == account,
-        Event::Moved {
-            player_a, player_b, ..
-        } => player_a == account || player_b == account,
-        Event::Settled {
-            player_a, player_b, ..
-        } => player_a == account || player_b == account,
+        // Casino events - check if player matches
+        Event::CasinoPlayerRegistered { player, .. } => player == account,
+        Event::CasinoGameStarted { player, .. } => player == account,
+        Event::CasinoGameMoved { .. } => false, // No player field, handled by session
+        Event::CasinoGameCompleted { player, .. } => player == account,
+        Event::CasinoLeaderboardUpdated { .. } => true, // Leaderboard updates are public
+        // Tournament events
+        Event::TournamentStarted { .. } => true, // Tournament start is public
+        Event::PlayerJoined { player, .. } => player == account,
+        Event::TournamentPhaseChanged { .. } => true, // Phase changes are public
+        Event::TournamentEnded { rankings, .. } => {
+            // Check if account is in the rankings
+            rankings.iter().any(|(player, _)| player == account)
+        }
     }
 }
 
@@ -437,7 +456,7 @@ mod tests {
     use battleware_execution::mocks::{
         create_account_keypair, create_adbs, create_network_keypair, create_seed, execute_block,
     };
-    use battleware_types::execution::{Instruction, Key, Stats, Transaction, Value};
+    use battleware_types::execution::{Instruction, Key, Transaction, Value};
     use commonware_cryptography::{Hasher, Sha256};
     use commonware_runtime::{deterministic::Runner, Runner as _};
     use commonware_storage::store::operation::Variable;
@@ -480,7 +499,13 @@ mod tests {
         let mut mempool_rx = simulator.mempool_subscriber();
 
         let (private, _) = create_account_keypair(1);
-        let tx = Transaction::sign(&private, 1, Instruction::Generate);
+        let tx = Transaction::sign(
+            &private,
+            1,
+            Instruction::CasinoRegister {
+                name: "TestPlayer".to_string(),
+            },
+        );
 
         simulator.submit_transactions(vec![tx.clone()]);
 
@@ -500,9 +525,15 @@ mod tests {
             let simulator = Simulator::new(network_identity);
             let (mut state, mut events) = create_adbs(&context).await;
 
-            // Create mock transaction
+            // Create mock transaction - register a casino player
             let (private, public) = create_account_keypair(1);
-            let tx = Transaction::sign(&private, 0, Instruction::Generate);
+            let tx = Transaction::sign(
+                &private,
+                0,
+                Instruction::CasinoRegister {
+                    name: "TestPlayer".to_string(),
+                },
+            );
 
             // Create summary using helper
             let (_, summary) = execute_block(
@@ -546,8 +577,6 @@ mod tests {
                 panic!("account not found");
             };
             assert_eq!(account.nonce, 1);
-            assert_eq!(account.battle, None);
-            assert_eq!(account.stats, Stats::default());
 
             // Query for non-existent account
             let (_, other_public) = create_account_keypair(2);
@@ -570,11 +599,29 @@ mod tests {
             let (private2, _public2) = create_account_keypair(2);
             let (private3, _public3) = create_account_keypair(3);
 
-            // Create transactions from all accounts
+            // Create transactions from all accounts - register casino players
             let txs = vec![
-                Transaction::sign(&private1, 0, Instruction::Generate),
-                Transaction::sign(&private2, 0, Instruction::Generate),
-                Transaction::sign(&private3, 0, Instruction::Generate),
+                Transaction::sign(
+                    &private1,
+                    0,
+                    Instruction::CasinoRegister {
+                        name: "Player1".to_string(),
+                    },
+                ),
+                Transaction::sign(
+                    &private2,
+                    0,
+                    Instruction::CasinoRegister {
+                        name: "Player2".to_string(),
+                    },
+                ),
+                Transaction::sign(
+                    &private3,
+                    0,
+                    Instruction::CasinoRegister {
+                        name: "Player3".to_string(),
+                    },
+                ),
             ];
 
             // Execute block
@@ -616,12 +663,13 @@ mod tests {
 
                     // Verify we only have events related to account1
                     for (_loc, op) in &filtered_events.events_proof_ops {
-                        if let Keyless::Append(Output::Event(Event::Generated {
-                            account, ..
+                        if let Keyless::Append(Output::Event(Event::CasinoPlayerRegistered {
+                            player,
+                            ..
                         })) = op
                         {
                             assert_eq!(
-                                account, &public1,
+                                player, &public1,
                                 "Filtered events should only contain account1"
                             );
                         }
@@ -660,10 +708,19 @@ mod tests {
             // Create multiple accounts
             let accounts: Vec<_> = (0..5).map(create_account_keypair).collect();
 
-            // Block 1: Multiple account generations in a single block
+            // Block 1: Multiple casino registrations in a single block
             let txs1: Vec<_> = accounts
                 .iter()
-                .map(|(private, _)| Transaction::sign(private, 0, Instruction::Generate))
+                .enumerate()
+                .map(|(i, (private, _))| {
+                    Transaction::sign(
+                        private,
+                        0,
+                        Instruction::CasinoRegister {
+                            name: format!("Player{}", i),
+                        },
+                    )
+                })
                 .collect();
 
             let (_, summary1) = execute_block(
@@ -695,14 +752,15 @@ mod tests {
                     panic!("Account not found for {public:?}");
                 };
                 assert_eq!(account.nonce, 1);
-                assert!(account.creature.is_some());
             }
 
-            // Block 2: Multiple transactions from subset of accounts
+            // Block 2: Deposit chips to subset of accounts
             let txs2: Vec<_> = accounts
                 .iter()
                 .take(3)
-                .map(|(private, _)| Transaction::sign(private, 1, Instruction::Generate))
+                .map(|(private, _)| {
+                    Transaction::sign(private, 1, Instruction::CasinoDeposit { amount: 1000 })
+                })
                 .collect();
 
             let (_, summary2) = execute_block(

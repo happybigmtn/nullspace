@@ -1,8 +1,8 @@
 
 import React from 'react';
-import { GameState, SicBoBet } from '../../types';
+import { GameState, SicBoBet } from '../../../types';
 import { DiceRender } from '../GameComponents';
-import { calculateSicBoOutcomeExposure, getSicBoCombinations } from '../../utils/gameUtils';
+import { calculateSicBoOutcomeExposure, getSicBoCombinations } from '../../../utils/gameUtils';
 
 export const SicBoView: React.FC<{ gameState: GameState, numberInput?: string }> = ({ gameState, numberInput = "" }) => {
     

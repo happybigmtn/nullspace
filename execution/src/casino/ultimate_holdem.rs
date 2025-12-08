@@ -102,23 +102,28 @@ fn card_suit(card: u8) -> u8 {
 
 /// Evaluate best 5-card hand from 7 cards.
 /// Returns (HandRank, high cards for tiebreaker).
-pub fn evaluate_best_hand(cards: &[u8]) -> (HandRank, Vec<u8>) {
+/// Optimized to avoid heap allocations.
+pub fn evaluate_best_hand(cards: &[u8]) -> (HandRank, [u8; 5]) {
     let mut best_rank = HandRank::HighCard;
-    let mut best_kickers = vec![0u8; 5];
+    let mut best_kickers = [0u8; 5];
 
-    // Generate all 5-card combinations from 7 cards
-    for i in 0..cards.len() {
-        for j in (i + 1)..cards.len() {
-            // Skip cards i and j to make 5-card hand
-            let hand: Vec<u8> = cards
-                .iter()
-                .enumerate()
-                .filter(|(idx, _)| *idx != i && *idx != j)
-                .map(|(_, &c)| c)
-                .collect();
+    // Generate all 21 5-card combinations from 7 cards (C(7,5) = 21)
+    // We iterate over which 2 cards to skip
+    let n = cards.len();
+    for i in 0..n {
+        for j in (i + 1)..n {
+            // Build 5-card hand by skipping indices i and j
+            let mut hand = [0u8; 5];
+            let mut k = 0;
+            for (idx, &card) in cards.iter().enumerate() {
+                if idx != i && idx != j {
+                    hand[k] = card;
+                    k += 1;
+                }
+            }
 
-            if hand.len() == 5 {
-                let (rank, kickers) = evaluate_5_card(&hand);
+            if k == 5 {
+                let (rank, kickers) = evaluate_5_card_fast(&hand);
                 if rank > best_rank || (rank == best_rank && kickers > best_kickers) {
                     best_rank = rank;
                     best_kickers = kickers;
@@ -130,26 +135,41 @@ pub fn evaluate_best_hand(cards: &[u8]) -> (HandRank, Vec<u8>) {
     (best_rank, best_kickers)
 }
 
-/// Evaluate a 5-card hand.
-fn evaluate_5_card(cards: &[u8]) -> (HandRank, Vec<u8>) {
-    let mut ranks: Vec<u8> = cards.iter().map(|&c| card_rank(c)).collect();
+/// Evaluate a 5-card hand without heap allocations.
+fn evaluate_5_card_fast(cards: &[u8; 5]) -> (HandRank, [u8; 5]) {
+    // Extract ranks and suits
+    let mut ranks = [0u8; 5];
+    let mut suits = [0u8; 5];
+    for i in 0..5 {
+        ranks[i] = card_rank(cards[i]);
+        suits[i] = card_suit(cards[i]);
+    }
+
+    // Sort ranks descending for kickers
     ranks.sort_unstable_by(|a, b| b.cmp(a));
 
-    let suits: Vec<u8> = cards.iter().map(|&c| card_suit(c)).collect();
-    let is_flush = suits.iter().all(|&s| s == suits[0]);
+    // Check flush
+    let is_flush = suits[0] == suits[1] && suits[1] == suits[2]
+                && suits[2] == suits[3] && suits[3] == suits[4];
 
-    // Check for straight
-    let mut sorted = ranks.clone();
+    // Check straight - need sorted ascending with no duplicates
+    let mut sorted = ranks;
     sorted.sort_unstable();
-    sorted.dedup();
 
-    let is_straight = if sorted.len() == 5 {
-        sorted[4] - sorted[0] == 4 || sorted == vec![2, 3, 4, 5, 14] // A-2-3-4-5
-    } else {
+    // Check for duplicates
+    let has_duplicates = sorted[0] == sorted[1] || sorted[1] == sorted[2]
+                      || sorted[2] == sorted[3] || sorted[3] == sorted[4];
+
+    let is_straight = if has_duplicates {
         false
+    } else if sorted[4] - sorted[0] == 4 {
+        true
+    } else {
+        // Check A-2-3-4-5 (wheel)
+        sorted == [2, 3, 4, 5, 14]
     };
 
-    let is_royal = sorted == vec![10, 11, 12, 13, 14];
+    let is_royal = sorted == [10, 11, 12, 13, 14];
 
     // Count ranks
     let mut counts = [0u8; 15];
@@ -157,41 +177,44 @@ fn evaluate_5_card(cards: &[u8]) -> (HandRank, Vec<u8>) {
         counts[r as usize] += 1;
     }
 
-    let mut pairs = Vec::new();
-    let mut trips = None;
-    let mut quads = None;
+    // Find pairs, trips, quads
+    let mut pair_count = 0u8;
+    let mut has_trips = false;
+    let mut has_quads = false;
 
-    for (rank, &count) in counts.iter().enumerate().rev() {
+    for &count in &counts {
         match count {
-            2 => pairs.push(rank as u8),
-            3 => trips = Some(rank as u8),
-            4 => quads = Some(rank as u8),
+            2 => pair_count += 1,
+            3 => has_trips = true,
+            4 => has_quads = true,
             _ => {}
         }
     }
 
     // Determine hand rank
-    if is_royal && is_flush {
-        (HandRank::RoyalFlush, ranks)
+    let hand_rank = if is_royal && is_flush {
+        HandRank::RoyalFlush
     } else if is_straight && is_flush {
-        (HandRank::StraightFlush, ranks)
-    } else if quads.is_some() {
-        (HandRank::FourOfAKind, ranks)
-    } else if trips.is_some() && !pairs.is_empty() {
-        (HandRank::FullHouse, ranks)
+        HandRank::StraightFlush
+    } else if has_quads {
+        HandRank::FourOfAKind
+    } else if has_trips && pair_count >= 1 {
+        HandRank::FullHouse
     } else if is_flush {
-        (HandRank::Flush, ranks)
+        HandRank::Flush
     } else if is_straight {
-        (HandRank::Straight, ranks)
-    } else if trips.is_some() {
-        (HandRank::ThreeOfAKind, ranks)
-    } else if pairs.len() >= 2 {
-        (HandRank::TwoPair, ranks)
-    } else if pairs.len() == 1 {
-        (HandRank::Pair, ranks)
+        HandRank::Straight
+    } else if has_trips {
+        HandRank::ThreeOfAKind
+    } else if pair_count >= 2 {
+        HandRank::TwoPair
+    } else if pair_count == 1 {
+        HandRank::Pair
     } else {
-        (HandRank::HighCard, ranks)
-    }
+        HandRank::HighCard
+    };
+
+    (hand_rank, ranks)
 }
 
 fn parse_state(state: &[u8]) -> Option<(Stage, [u8; 2], [u8; 5], [u8; 2], u8)> {
@@ -337,12 +360,16 @@ fn resolve_showdown(
 ) -> Result<GameResult, GameError> {
     session.is_complete = true;
 
-    // Build 7-card hands
-    let mut player_cards = player_hole.to_vec();
-    player_cards.extend_from_slice(community);
+    // Build 7-card hands (stack allocated)
+    let player_cards: [u8; 7] = [
+        player_hole[0], player_hole[1],
+        community[0], community[1], community[2], community[3], community[4],
+    ];
 
-    let mut dealer_cards = dealer_hole.to_vec();
-    dealer_cards.extend_from_slice(community);
+    let dealer_cards: [u8; 7] = [
+        dealer_hole[0], dealer_hole[1],
+        community[0], community[1], community[2], community[3], community[4],
+    ];
 
     let player_hand = evaluate_best_hand(&player_cards);
     let dealer_hand = evaluate_best_hand(&dealer_cards);
@@ -353,15 +380,15 @@ fn resolve_showdown(
     // Calculate total bet: ante + blind + play (play_multiplier * ante)
     // For simplicity, session.bet is the ante
     let ante = session.bet;
-    let play_bet = ante * play_multiplier as u64;
+    let play_bet = ante.saturating_mul(play_multiplier as u64);
 
     // Compare hands
     let player_wins = player_hand.0 > dealer_hand.0
         || (player_hand.0 == dealer_hand.0 && player_hand.1 > dealer_hand.1);
     let tie = player_hand.0 == dealer_hand.0 && player_hand.1 == dealer_hand.1;
 
-    // Calculate blind bonus (paid regardless)
-    let blind_bonus = match player_hand.0 {
+    // Calculate blind bonus (paid regardless) with overflow protection
+    let blind_bonus: u64 = match player_hand.0 {
         HandRank::RoyalFlush => 500,
         HandRank::StraightFlush => 50,
         HandRank::FourOfAKind => 10,
@@ -370,7 +397,7 @@ fn resolve_showdown(
         HandRank::Straight => 1,
         _ => 0,
     };
-    let blind_pay = ante * blind_bonus;
+    let blind_pay = ante.saturating_mul(blind_bonus);
 
     if tie {
         // Push - just get blind bonus if any
@@ -382,11 +409,13 @@ fn resolve_showdown(
     } else if player_wins {
         if dealer_qualifies {
             // Win ante (1:1), play (1:1), and blind (1:1 or bonus)
-            let winnings = ante + play_bet + ante.max(blind_pay);
+            let winnings = ante
+                .saturating_add(play_bet)
+                .saturating_add(ante.max(blind_pay));
             Ok(GameResult::Win(winnings))
         } else {
             // Ante pushes, win play (1:1), blind bonus
-            let winnings = play_bet + blind_pay;
+            let winnings = play_bet.saturating_add(blind_pay);
             if winnings > 0 {
                 Ok(GameResult::Win(winnings))
             } else {
@@ -395,8 +424,9 @@ fn resolve_showdown(
         }
     } else {
         // Lose ante, play, and blind (unless bonus covers)
-        if blind_pay > ante + ante + play_bet {
-            Ok(GameResult::Win(blind_pay - ante - ante - play_bet))
+        let losses = ante.saturating_add(ante).saturating_add(play_bet);
+        if blind_pay > losses {
+            Ok(GameResult::Win(blind_pay.saturating_sub(losses)))
         } else {
             Ok(GameResult::Loss)
         }
@@ -425,6 +455,7 @@ mod tests {
             move_count: 0,
             created_at: 0,
             is_complete: false,
+            super_mode: battleware_types::casino::SuperModeState::default(),
         }
     }
 

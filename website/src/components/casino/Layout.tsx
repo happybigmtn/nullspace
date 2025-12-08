@@ -1,22 +1,26 @@
 
 import React from 'react';
-import { LeaderboardEntry, PlayerStats, GameType } from '../types';
-import { formatTime, HELP_CONTENT } from '../utils/gameUtils';
+import { LeaderboardEntry, PlayerStats, GameType } from '../../types';
+import { formatTime, HELP_CONTENT } from '../../utils/gameUtils';
 
 interface HeaderProps {
     phase: string;
     tournamentTime: number;
     stats: PlayerStats;
+    lastTxSig?: string;
 }
 
-export const Header: React.FC<HeaderProps> = ({ phase, tournamentTime, stats }) => (
+export const Header: React.FC<HeaderProps> = ({ phase, tournamentTime, stats, lastTxSig }) => (
     <header className="h-12 border-b border-terminal-dim flex items-center justify-between px-4 z-10 bg-terminal-black/90 backdrop-blur">
     <div className="flex items-center gap-4">
-        <span className="font-bold tracking-tighter text-white">TERMINAL</span>
+        <span className="font-bold tracking-tighter text-white">null<span className="text-terminal-green">/</span>space</span>
         <div className="flex items-center gap-2">
-            <span className="text-xs px-2 py-1 bg-terminal-dim rounded text-gray-400">{phase} PHASE</span>
-            <span className="text-[10px] text-gray-600 bg-gray-900 border border-gray-800 px-1.5 py-0.5 rounded">[/] CMD</span>
             <span className="text-[10px] text-gray-600 bg-gray-900 border border-gray-800 px-1.5 py-0.5 rounded">[?] HELP</span>
+            {lastTxSig && (
+                <span className="text-[10px] text-terminal-green bg-gray-900 border border-terminal-green/30 px-1.5 py-0.5 rounded font-mono">
+                    TX: {lastTxSig}
+                </span>
+            )}
         </div>
     </div>
     <div className="flex items-center gap-6 text-sm">
@@ -25,7 +29,7 @@ export const Header: React.FC<HeaderProps> = ({ phase, tournamentTime, stats }) 
                 <span className={`font-bold ${tournamentTime < 60 ? 'text-terminal-accent animate-pulse' : 'text-white'}`}>{formatTime(tournamentTime)}</span>
             </div>
             <div className="flex items-center gap-2">
-                <span className="text-gray-500">SHIELDS <span className="text-[10px] bg-gray-900 px-1 rounded ml-1">[Z]</span></span>
+                <span className="text-gray-500">SHIELDS</span>
                 <div className="flex gap-1">
                     {[...Array(3)].map((_, i) => (
                         <div key={i} className={`w-2 h-2 rounded-full ${i < stats.shields ? 'bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.8)]' : 'bg-gray-800'}`} />
@@ -33,7 +37,7 @@ export const Header: React.FC<HeaderProps> = ({ phase, tournamentTime, stats }) 
                 </div>
             </div>
             <div className="flex items-center gap-2">
-                <span className="text-gray-500">DOUBLES <span className="text-[10px] bg-gray-900 px-1 rounded ml-1">[X]</span></span>
+                <span className="text-gray-500">DOUBLES</span>
                 <div className="flex gap-1">
                     {[...Array(3)].map((_, i) => (
                         <div key={i} className={`w-2 h-2 rounded-full ${i < stats.doubles ? 'bg-purple-400 shadow-[0_0_8px_rgba(192,132,252,0.8)]' : 'bg-gray-800'}`} />
@@ -172,11 +176,11 @@ export const Footer: React.FC<{ currentBet?: number }> = ({ currentBet }) => {
                 const isSelected = currentBet === bet;
                 return (
                     <span key={i} className={isSelected ? 'text-terminal-green font-bold' : ''}>
-                        [{i + 1}]{label}
+                        ^{i + 1} {label}
                     </span>
                 );
             })}
-            <span className={isCustom ? 'text-terminal-green font-bold' : ''}>[0]CUSTOM</span>
+            <span className={isCustom ? 'text-terminal-green font-bold' : ''}>^0 CUSTOM</span>
         </footer>
     );
 };

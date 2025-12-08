@@ -33,3 +33,21 @@ axum = { workspace = true }
 commonware-runtime = { workspace = true }
 commonware-storage = { workspace = true }
 rand = { workspace = true }
+
+[[bin]]
+name = "dev-executor"
+path = "src/bin/dev_executor.rs"
+required-features = []
+
+[dependencies.clap]
+workspace = true
+
+[dependencies.tracing-subscriber]
+workspace = true
+
+[dependencies.commonware-runtime]
+workspace = true
+
+[dependencies.commonware-storage]
+workspace = true
+

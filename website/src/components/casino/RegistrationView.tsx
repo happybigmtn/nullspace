@@ -1,7 +1,7 @@
 
 import React from 'react';
-import { PlayerStats, LeaderboardEntry } from '../types';
-import { formatTime } from '../utils/gameUtils';
+import { PlayerStats, LeaderboardEntry } from '../../types';
+import { formatTime } from '../../utils/gameUtils';
 
 interface RegistrationViewProps {
   stats: PlayerStats;

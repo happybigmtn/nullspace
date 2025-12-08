@@ -3,27 +3,23 @@ module.exports = {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
+  darkMode: 'class',
   theme: {
     extend: {
-      colors: {
-        'retro-blue': '#0000ee',
-        'retro-white': '#ffffff',
-      },
       fontFamily: {
-        'retro': ['"Press Start 2P"', 'Consolas', 'Monaco', 'Courier New', 'monospace'],
+        mono: ['"JetBrains Mono"', 'monospace'],
+        sans: ['"Inter"', 'sans-serif'],
       },
-      borderColor: {
-        'retro-blue': '#0000ee',
-        'retro-white': '#ffffff',
-      },
-      backgroundColor: {
-        'retro-blue': '#0000ee',
-        'retro-white': '#ffffff',
-      },
-      textColor: {
-        'retro-blue': '#0000ee',
-        'retro-white': '#ffffff',
-      },
+      colors: {
+        terminal: {
+          black: '#0a0a0a',
+          dark: '#111111',
+          green: '#00ff41',
+          dim: '#333333',
+          accent: '#ff003c',
+          gold: '#ffd700',
+        }
+      }
     },
   },
   plugins: [],

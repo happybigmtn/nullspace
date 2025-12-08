@@ -1,7 +1,7 @@
 
 import React from 'react';
-import { GameState, RouletteBet } from '../../types';
-import { getRouletteColor, calculateRouletteExposure } from '../../utils/gameUtils';
+import { GameState, RouletteBet } from '../../../types';
+import { getRouletteColor, calculateRouletteExposure } from '../../../utils/gameUtils';
 
 export const RouletteView: React.FC<{ gameState: GameState; numberInput?: string }> = ({ gameState, numberInput = "" }) => {
     const lastNum = gameState.rouletteHistory.length > 0 ? gameState.rouletteHistory[gameState.rouletteHistory.length - 1] : null;
