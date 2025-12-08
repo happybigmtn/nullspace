@@ -3,7 +3,7 @@ let wasmModule = null;
 
 export async function initWasm() {
   if (!wasmModule) {
-    wasmModule = await import('../../wasm/pkg/battleware_wasm.js');
+    wasmModule = await import('../../wasm/pkg/nullspace_wasm.js');
     await wasmModule.default();
   }
   return wasmModule;

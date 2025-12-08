@@ -18,7 +18,7 @@
 //! 8 = Column (2:1) - number = 0/1/2
 
 use super::{CasinoGame, GameError, GameResult, GameRng};
-use battleware_types::casino::GameSession;
+use nullspace_types::casino::GameSession;
 
 /// Red numbers on a roulette wheel.
 const RED_NUMBERS: [u8; 18] = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
@@ -162,9 +162,9 @@ impl CasinoGame for Roulette {
 mod tests {
     use super::*;
     use crate::mocks::{create_account_keypair, create_network_keypair, create_seed};
-    use battleware_types::casino::GameType;
+    use nullspace_types::casino::GameType;
 
-    fn create_test_seed() -> battleware_types::Seed {
+    fn create_test_seed() -> nullspace_types::Seed {
         let (network_secret, _) = create_network_keypair();
         create_seed(&network_secret, 1)
     }
@@ -180,7 +180,7 @@ mod tests {
             move_count: 0,
             created_at: 0,
             is_complete: false,
-            super_mode: battleware_types::casino::SuperModeState::default(),
+            super_mode: nullspace_types::casino::SuperModeState::default(),
         }
     }
 
@@ -348,8 +348,8 @@ mod tests {
             let result = Roulette::process_move(&mut test_session, &[0, 0], &mut rng);
 
             if let Ok(GameResult::Win(amount)) = result {
-                // Straight bet pays 35:1
-                assert_eq!(amount, 100 * 35);
+                // Straight bet pays 35:1 plus stake returned = 36x total
+                assert_eq!(amount, 100 * 36);
                 return; // Found a winning case
             }
         }

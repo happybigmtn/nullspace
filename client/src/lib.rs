@@ -35,11 +35,11 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use battleware_execution::mocks::{
+    use nullspace_execution::mocks::{
         create_account_keypair, create_adbs, create_network_keypair, create_seed, execute_block,
     };
-    use battleware_simulator::{Api, Simulator};
-    use battleware_types::{
+    use nullspace_simulator::{Api, Simulator};
+    use nullspace_types::{
         api::{Update, UpdatesFilter},
         execution::{Instruction, Key, Stats, Transaction, Value},
         Identity, Query, Seed,

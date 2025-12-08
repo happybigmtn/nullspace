@@ -1,5 +1,5 @@
-use battleware_execution::state_transition::StateTransitionResult;
-use battleware_types::execution::{Output, Value};
+use nullspace_execution::state_transition::StateTransitionResult;
+use nullspace_types::execution::{Output, Value};
 use bytes::Bytes;
 use commonware_consensus::{
     aggregation::types::{Activity, Certificate, Index},

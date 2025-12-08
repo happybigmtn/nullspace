@@ -1,4 +1,4 @@
-use battleware_types::{Block, Seed};
+use nullspace_types::{Block, Seed};
 use commonware_consensus::threshold_simplex::types::{Context, View};
 use commonware_consensus::{Automaton, Relay, Reporter};
 use commonware_cryptography::sha256::Digest;

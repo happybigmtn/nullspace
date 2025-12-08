@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use battleware_types::{
+use nullspace_types::{
     api::Update,
     execution::{
         Account, Event, Instruction, Output, Seed, Transaction, Value, LOBBY_EXPIRY, TOTAL_MOVES,
@@ -433,10 +433,10 @@ impl Engine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use battleware_execution::mocks::{
+    use nullspace_execution::mocks::{
         create_account_keypair, create_adbs, create_network_keypair, execute_block,
     };
-    use battleware_types::{api::Events, execution::Key};
+    use nullspace_types::{api::Events, execution::Key};
     use commonware_cryptography::{Hasher, Sha256};
     use commonware_macros::test_traced;
     use commonware_runtime::{deterministic, Runner};

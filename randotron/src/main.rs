@@ -1,5 +1,5 @@
-use battleware_client::Client;
-use battleware_randotron::{Config, Engine, EngineConfig};
+use nullspace_client::Client;
+use nullspace_randotron::{Config, Engine, EngineConfig};
 use clap::{Arg, Command};
 use commonware_runtime::{tokio, Metrics, Runner};
 use std::str::FromStr;
@@ -8,7 +8,7 @@ use tracing::{info, Level};
 fn main() {
     // Parse arguments
     let matches = Command::new("randotron")
-        .about("Randomly battle players on a battleware chain.")
+        .about("Randomly battle players on a nullspace chain.")
         .arg(Arg::new("hosts").long("hosts").required(false)) // needed for compatibility with commonware-deployer
         .arg(Arg::new("config").long("config").required(true))
         .get_matches();

@@ -5158,7 +5158,7 @@
                     },
                     "direction": "backward",
                     "editorMode": "code",
-                    "expr": "{filename=\"/var/log/binary.log\", deployer_name=~\"$Validator\", deployer_region=~\"$Region\"} | json | target !~ \".*battleware_randotron.*\" | line_format ` [{{.detected_level}}] {{.fields_message}}`",
+                    "expr": "{filename=\"/var/log/binary.log\", deployer_name=~\"$Validator\", deployer_region=~\"$Region\"} | json | target !~ \".*nullspace_randotron.*\" | line_format ` [{{.detected_level}}] {{.fields_message}}`",
                     "queryType": "range",
                     "refId": "A"
                 }
@@ -5202,7 +5202,7 @@
                     },
                     "direction": "backward",
                     "editorMode": "code",
-                    "expr": "{filename=\"/var/log/binary.log\", deployer_name=~\"$Validator\", deployer_region=~\"$Region\"} | json | target =~ \".*battleware_randotron.*\" | line_format ` [{{.detected_level}}] {{.fields_message}}{{if .fields_generating}} generating={{.fields_generating}}{{end}}{{if .fields_lobby}} lobby={{.fields_lobby}}{{end}}{{if .fields_battle}} battle={{.fields_battle}}{{end}}{{if .fields_elapsed}} elapsed={{.fields_elapsed}}{{end}}{{if .fields_attempts}} attempts={{.fields_attempts}}{{end}}`",
+                    "expr": "{filename=\"/var/log/binary.log\", deployer_name=~\"$Validator\", deployer_region=~\"$Region\"} | json | target =~ \".*nullspace_randotron.*\" | line_format ` [{{.detected_level}}] {{.fields_message}}{{if .fields_generating}} generating={{.fields_generating}}{{end}}{{if .fields_lobby}} lobby={{.fields_lobby}}{{end}}{{if .fields_battle}} battle={{.fields_battle}}{{end}}{{if .fields_elapsed}} elapsed={{.fields_elapsed}}{{end}}{{if .fields_attempts}} attempts={{.fields_attempts}}{{end}}`",
                     "queryType": "range",
                     "refId": "A"
                 }

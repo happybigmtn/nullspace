@@ -26,8 +26,8 @@ pub mod three_card;
 pub mod ultimate_holdem;
 pub mod video_poker;
 
-use battleware_types::casino::{GameSession, GameType, Player};
-use battleware_types::Seed;
+use nullspace_types::casino::{GameSession, GameType, Player};
+use nullspace_types::Seed;
 use commonware_codec::Encode;
 use commonware_cryptography::sha256::Sha256;
 use commonware_cryptography::Hasher;
@@ -166,10 +166,18 @@ impl GameRng {
 pub enum GameResult {
     /// Game is still in progress, state updated.
     Continue,
-    /// Game completed with a win. Value is chips won (before modifiers).
+    /// Game continues, but with a balance update (e.g. intermediate win or new bet).
+    /// `payout` is the net change to player balance (positive = add, negative = deduct).
+    ContinueWithUpdate { payout: i64 },
+    /// Game completed with a win. Value is chips won (TOTAL RETURN: stake + profit).
     Win(u64),
     /// Game completed with a loss.
     Loss,
+    /// Game completed with a loss AND an additional deduction (for mid-game bet increases).
+    /// The value is the extra amount to deduct beyond the initial bet.
+    /// Used when games like Blackjack double-down or Casino War go-to-war increase
+    /// the bet mid-game and then the player loses.
+    LossWithExtraDeduction(u64),
     /// Game completed with a push (tie, bet returned).
     Push,
 }
@@ -271,7 +279,7 @@ pub fn get_super_mode_fee(bet: u64) -> u64 {
 }
 
 /// Generate super mode multipliers for a game type
-pub fn generate_super_multipliers(game_type: GameType, rng: &mut GameRng) -> Vec<battleware_types::casino::SuperMultiplier> {
+pub fn generate_super_multipliers(game_type: GameType, rng: &mut GameRng) -> Vec<nullspace_types::casino::SuperMultiplier> {
     match game_type {
         GameType::Baccarat => super_mode::generate_baccarat_multipliers(rng),
         GameType::Roulette => super_mode::generate_roulette_multipliers(rng),

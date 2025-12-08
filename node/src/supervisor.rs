@@ -1,4 +1,4 @@
-use battleware_types::{leader_index, Evaluation, Identity, Signature};
+use nullspace_types::{leader_index, Evaluation, Identity, Signature};
 use commonware_codec::Encode;
 use commonware_consensus::{
     aggregation::types::Epoch, threshold_simplex::types::View, Monitor, Supervisor as Su,

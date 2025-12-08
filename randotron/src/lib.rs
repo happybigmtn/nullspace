@@ -1,8 +1,8 @@
 mod state_machine;
 
 use anyhow::Result;
-use battleware_client::Client;
-use battleware_types::{
+use nullspace_client::Client;
+use nullspace_types::{
     api::{Update, UpdatesFilter, MAX_SUBMISSION_TRANSACTIONS},
     execution::{Account, Key, Value},
     Query,

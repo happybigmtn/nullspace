@@ -1,17 +1,17 @@
 [package]
-name = "battleware-execution"
+name = "nullspace-execution"
 edition.workspace = true
 publish = true
 version.workspace = true
 license.workspace = true
-description = "Execution environment for battleware."
+description = "Execution environment for nullspace."
 readme = "README.md"
-homepage = "https://battleware.xyz"
-repository = "https://github.com/commonwarexyz/battleware/tree/main/execution"
-documentation = "https://docs.rs/battleware-execution"
+homepage = "https://nullspace.xyz"
+repository = "https://github.com/commonwarexyz/nullspace/tree/main/execution"
+documentation = "https://docs.rs/nullspace-execution"
 
 [dependencies]
-battleware-types = { workspace = true }
+nullspace-types = { workspace = true }
 commonware-codec = { workspace = true }
 commonware-cryptography = { workspace = true }
 commonware-utils = { workspace = true }

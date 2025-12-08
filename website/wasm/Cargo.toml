@@ -1,5 +1,5 @@
 [package]
-name = "battleware-wasm"
+name = "nullspace-wasm"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -9,7 +9,7 @@ crate-type = ["cdylib"]
 
 [features]
 default = []
-testing = ["battleware-execution/mocks"]
+testing = ["nullspace-execution/mocks"]
 
 [dependencies]
 # WASM specific dependencies
@@ -18,8 +18,8 @@ serde-wasm-bindgen = "0.6"
 getrandom = { version = "0.2", features = ["js"] }
 
 # Workspace dependencies
-battleware-execution = { workspace = true, default-features = false }
-battleware-types = { workspace = true }
+nullspace-execution = { workspace = true, default-features = false }
+nullspace-types = { workspace = true }
 commonware-codec = { workspace = true }
 commonware-consensus = { workspace = true }
 commonware-cryptography = { workspace = true }
@@ -32,4 +32,4 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]
-battleware-wasm = { path = ".", features = ["testing"] }
+nullspace-wasm = { path = ".", features = ["testing"] }

@@ -1,18 +1,18 @@
 [package]
-name = "battleware-randotron"
+name = "nullspace-randotron"
 publish = true
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Simple bot that randomly plays battleware."
+description = "Simple bot that randomly plays nullspace."
 readme = "README.md"
-homepage = "https://battleware.xyz"
-repository = "https://github.com/commonwarexyz/battleware/tree/main/randotron"
-documentation = "https://docs.rs/battleware-randotron"
+homepage = "https://nullspace.xyz"
+repository = "https://github.com/commonwarexyz/nullspace/tree/main/randotron"
+documentation = "https://docs.rs/nullspace-randotron"
 
 [dependencies]
-battleware-client = { workspace = true }
-battleware-types = { workspace = true }
+nullspace-client = { workspace = true }
+nullspace-types = { workspace = true }
 commonware-cryptography = { workspace = true }
 commonware-codec = { workspace = true }
 commonware-consensus = { workspace = true }
@@ -33,5 +33,5 @@ serde_yaml = { workspace = true }
 anyhow = { workspace = true }
 
 [dev-dependencies]
-battleware-execution = { workspace = true }
+nullspace-execution = { workspace = true }
 commonware-runtime = { workspace = true }

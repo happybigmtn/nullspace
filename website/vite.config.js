@@ -62,7 +62,7 @@ export default defineConfig({
     }
   },
   optimizeDeps: {
-    exclude: ['./wasm/pkg/battleware_wasm.js']
+    exclude: ['./wasm/pkg/nullspace_wasm.js']
   },
   build: {
     modulePreload: {

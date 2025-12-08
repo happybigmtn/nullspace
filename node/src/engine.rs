@@ -4,7 +4,7 @@ use crate::{
     seeder,
     supervisor::{EpochSupervisor, ViewSupervisor},
 };
-use battleware_types::{Activity, Block, Evaluation, NAMESPACE};
+use nullspace_types::{Activity, Block, Evaluation, NAMESPACE};
 use commonware_broadcast::buffered;
 use commonware_consensus::{
     aggregation, marshal,

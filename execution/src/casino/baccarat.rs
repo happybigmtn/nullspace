@@ -10,7 +10,7 @@
 //! 2 = Tie (8:1)
 
 use super::{CasinoGame, GameError, GameResult, GameRng};
-use battleware_types::casino::GameSession;
+use nullspace_types::casino::GameSession;
 
 /// Maximum cards in a Baccarat hand (2-3 cards per hand).
 const MAX_HAND_SIZE: usize = 3;
@@ -232,9 +232,9 @@ impl CasinoGame for Baccarat {
 mod tests {
     use super::*;
     use crate::mocks::{create_account_keypair, create_network_keypair, create_seed};
-    use battleware_types::casino::GameType;
+    use nullspace_types::casino::GameType;
 
-    fn create_test_seed() -> battleware_types::Seed {
+    fn create_test_seed() -> nullspace_types::Seed {
         let (network_secret, _) = create_network_keypair();
         create_seed(&network_secret, 1)
     }
@@ -250,7 +250,7 @@ mod tests {
             move_count: 0,
             created_at: 0,
             is_complete: false,
-            super_mode: battleware_types::casino::SuperModeState::default(),
+            super_mode: nullspace_types::casino::SuperModeState::default(),
         }
     }
 
@@ -400,7 +400,12 @@ mod tests {
             // Verify result is one of the valid outcomes
             match result.unwrap() {
                 GameResult::Win(_) | GameResult::Loss | GameResult::Push => {}
-                GameResult::Continue => panic!("Baccarat should complete in one move"),
+                GameResult::Continue | GameResult::ContinueWithUpdate { .. } => {
+                    panic!("Baccarat should complete in one move")
+                }
+                GameResult::LossWithExtraDeduction(_) => {
+                    // Valid loss outcome (though Baccarat doesn't use this)
+                }
             }
         }
     }

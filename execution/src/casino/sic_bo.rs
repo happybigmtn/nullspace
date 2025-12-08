@@ -18,7 +18,7 @@
 //! 8 = Single number appears (1:1 to 3:1) - number = 1-6
 
 use super::{CasinoGame, GameError, GameResult, GameRng};
-use battleware_types::casino::GameSession;
+use nullspace_types::casino::GameSession;
 
 /// Sic Bo bet types.
 #[repr(u8)]
@@ -219,9 +219,9 @@ impl CasinoGame for SicBo {
 mod tests {
     use super::*;
     use crate::mocks::{create_account_keypair, create_network_keypair, create_seed};
-    use battleware_types::casino::GameType;
+    use nullspace_types::casino::GameType;
 
-    fn create_test_seed() -> battleware_types::Seed {
+    fn create_test_seed() -> nullspace_types::Seed {
         let (network_secret, _) = create_network_keypair();
         create_seed(&network_secret, 1)
     }
@@ -237,7 +237,7 @@ mod tests {
             move_count: 0,
             created_at: 0,
             is_complete: false,
-            super_mode: battleware_types::casino::SuperModeState::default(),
+            super_mode: nullspace_types::casino::SuperModeState::default(),
         }
     }
 

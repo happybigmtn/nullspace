@@ -43,7 +43,7 @@ pub struct Peers {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use battleware_types::execution::{Instruction, Transaction};
+    use nullspace_types::execution::{Instruction, Transaction};
     use commonware_cryptography::{
         bls12381::{
             dkg::ops,
@@ -1043,8 +1043,8 @@ mod tests {
                     // Remove any pending transactions
                     for event in summary.events_proof_ops.iter() {
                         if let commonware_storage::store::operation::Keyless::Append(
-                            battleware_types::execution::Output::Event(
-                                battleware_types::execution::Event::Generated { account, .. },
+                            nullspace_types::execution::Output::Event(
+                                nullspace_types::execution::Event::Generated { account, .. },
                             ),
                         ) = event
                         {

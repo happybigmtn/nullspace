@@ -1,17 +1,17 @@
-# Supersociety Battleware Integration Plan
+# Supersociety Nullspace Integration Plan
 
 ## Objective
-Migrate the `supersociety` frontend-only prototype to a fully decentralized application by forking `battleware` and replacing its game logic with `supersociety`'s casino games.
+Migrate the `supersociety` frontend-only prototype to a fully decentralized application by forking `nullspace` and replacing its game logic with `supersociety`'s casino games.
 
 ## Repository Setup
-1.  **Fork:** Create `supersociety-battleware` from `battleware`.
-2.  **Import:** Copy `supersociety` frontend code into `supersociety-battleware/website`.
+1.  **Fork:** Create `supersociety-nullspace` from `nullspace`.
+2.  **Import:** Copy `supersociety` frontend code into `supersociety-nullspace/website`.
 
 ## Phase 1: Backend Adaptation (The Chain)
 We need to replace "Creature Battler" with "Decentralized Casino".
 
 ### 1. Types (`types` crate)
-*   **Rename/Replace:** `battleware-types` -> `supersociety-types` (conceptually).
+*   **Rename/Replace:** `nullspace-types` -> `supersociety-types` (conceptually).
 *   **Define State:**
     *   Remove `Creature`, `Battle`.
     *   Add `Player` struct:
@@ -118,7 +118,7 @@ The Rust `Instruction` enum serialization **must** match `chainService.ts` exact
 **Action:** Create a unit test in `types/src/execution.rs` that takes a hardcoded hex string (generated from `chainService.ts`) and asserts it deserializes correctly into the Rust `Instruction` enum.
 
 ## Phase 2: Frontend Adaptation (The Client)
-We need to hook the existing `supersociety` React UI to the `battleware` node.
+We need to hook the existing `supersociety` React UI to the `nullspace` node.
 
 ### 1. API Client (`website/src/api`)
 *   **Update `client.js`:**
@@ -131,7 +131,7 @@ We need to hook the existing `supersociety` React UI to the `battleware` node.
 
 ### 3. Service Layer
 *   **Refactor `ChainService`:**
-    *   Instead of `fetch`, use `BattlewareClient` (which handles connection/auth).
+    *   Instead of `fetch`, use `NullspaceClient` (which handles connection/auth).
     *   Instead of polling (`setInterval`), subscribe to `client.onEvent('Moved')`.
 
 ### 4. UI Components
@@ -1073,7 +1073,7 @@ Layer::apply(&mut self, transaction: &Transaction) -> Vec<Event>
 **Instruction Enum (Tags 10-16 ALREADY DEFINED):**
 ```rust
 pub enum Instruction {
-    // Battleware (0-3) - EXISTING
+    // Nullspace (0-3) - EXISTING
     Generate,
     Match,
     Move(Ciphertext<MinSig>),
@@ -1097,7 +1097,7 @@ pub enum Instruction {
 **Key Enum (Tags 10-13 ALREADY DEFINED):**
 ```rust
 pub enum Key {
-    // Battleware (0-3)
+    // Nullspace (0-3)
     Account(PublicKey),
     Lobby,
     Battle(Digest),
@@ -1114,7 +1114,7 @@ pub enum Key {
 **Value Enum (Tags 10-13 ALREADY DEFINED):**
 ```rust
 pub enum Value {
-    // Battleware (0-4)
+    // Nullspace (0-4)
     Account(Account),
     Lobby { expiry: u64, players: BTreeSet<PublicKey> },
     Battle { ... },
@@ -1132,7 +1132,7 @@ pub enum Value {
 **Event Enum - NEEDS EXTENSION (Add Tags 20-24):**
 ```rust
 pub enum Event {
-    // Battleware (0-4) - EXISTING
+    // Nullspace (0-4) - EXISTING
     Generated { account: PublicKey, creature: Creature },
     Matched { battle: Digest, ... },
     Locked { battle: Digest, ... },
@@ -1482,7 +1482,7 @@ async fn apply(&mut self, transaction: &Transaction) -> Vec<Event> {
     // ... existing account retrieval ...
 
     match &transaction.instruction {
-        // ... existing Battleware cases (Generate, Match, Move, Settle) ...
+        // ... existing Nullspace cases (Generate, Match, Move, Settle) ...
 
         // Casino instructions
         Instruction::CasinoRegister { name } => {
@@ -2531,7 +2531,7 @@ function serializeCasinoJoinTournament(tournamentId: bigint): Uint8Array {
 ```typescript
 // website/src/services/CasinoChainService.ts
 
-import { BattlewareClient } from '../api/client';
+import { NullspaceClient } from '../api/client';
 
 export interface Player {
     chips: bigint;
@@ -2552,10 +2552,10 @@ export interface GameSession {
 }
 
 export class CasinoChainService {
-    private client: BattlewareClient;
+    private client: NullspaceClient;
     private sessionId: bigint = 0n;
 
-    constructor(client: BattlewareClient) {
+    constructor(client: NullspaceClient) {
         this.client = client;
     }
 
@@ -2753,7 +2753,7 @@ function waitForEvent<T>(
 website/
 ├── src/
 │   ├── api/
-│   │   ├── client.js        # BattlewareClient (WebSocket, transactions)
+│   │   ├── client.js        # NullspaceClient (WebSocket, transactions)
 │   │   ├── nonceManager.js  # Transaction nonce management
 │   │   └── wasm.js          # WASM wrapper
 │   ├── utils/

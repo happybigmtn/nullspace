@@ -1,9 +1,9 @@
-use battleware_types::api::Pending;
+use nullspace_types::api::Pending;
 #[cfg(test)]
-use battleware_types::execution::Transaction;
-use battleware_types::{api::Summary, Seed};
+use nullspace_types::execution::Transaction;
+use nullspace_types::{api::Summary, Seed};
 #[cfg(test)]
-use battleware_types::{Identity, NAMESPACE};
+use nullspace_types::{Identity, NAMESPACE};
 #[cfg(test)]
 use commonware_consensus::{threshold_simplex::types::View, Viewable};
 use commonware_cryptography::ed25519::Batch;
@@ -124,8 +124,8 @@ impl Indexer for Mock {
     }
 }
 
-impl Indexer for battleware_client::Client {
-    type Error = battleware_client::Error;
+impl Indexer for nullspace_client::Client {
+    type Error = nullspace_client::Error;
 
     async fn submit_seed(&self, seed: Seed) -> Result<(), Self::Error> {
         self.submit_seed(seed).await
@@ -136,8 +136,8 @@ impl Indexer for battleware_client::Client {
     ) -> Result<impl Stream<Item = Result<Pending, Self::Error>>, Self::Error> {
         match self.connect_mempool().await {
             Ok(stream) => Ok(stream
-                .map(|result| result.map_err(|_| battleware_client::Error::UnexpectedResponse))),
-            Err(_) => Err(battleware_client::Error::UnexpectedResponse),
+                .map(|result| result.map_err(|_| nullspace_client::Error::UnexpectedResponse))),
+            Err(_) => Err(nullspace_client::Error::UnexpectedResponse),
         }
     }
 

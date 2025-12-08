@@ -1,5 +1,5 @@
 use crate::{Error, Result};
-use battleware_types::{
+use nullspace_types::{
     api::{Events, Update},
     Identity, Seed, NAMESPACE,
 };

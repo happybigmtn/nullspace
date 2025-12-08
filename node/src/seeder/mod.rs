@@ -3,7 +3,7 @@ mod ingress;
 
 use crate::{indexer::Indexer, supervisor::ViewSupervisor};
 pub use actor::Actor;
-use battleware_types::Identity;
+use nullspace_types::Identity;
 use commonware_cryptography::ed25519::PublicKey;
 use governor::Quota;
 pub use ingress::{Mailbox, Message};

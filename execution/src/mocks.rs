@@ -1,5 +1,5 @@
 use crate::{state_transition, Adb};
-use battleware_types::{
+use nullspace_types::{
     api::Summary,
     execution::{Output, Progress, Seed, Transaction, Value},
     Identity, NAMESPACE,

@@ -3,13 +3,13 @@
 ## 2025-12-07: On-Chain Integration for useTerminalGame Hook
 
 ### Summary
-Modified `/home/r/Coding/supersociety-battleware/website/src/hooks/useTerminalGame.ts` to integrate with the on-chain casino system via `CasinoChainService`. The hook now supports both on-chain and local fallback modes.
+Modified `/home/r/Coding/supersociety-nullspace/website/src/hooks/useTerminalGame.ts` to integrate with the on-chain casino system via `CasinoChainService`. The hook now supports both on-chain and local fallback modes.
 
 ### Changes Made
 
 #### 1. Chain Service Integration
 - Added `CasinoChainService` integration with automatic initialization
-- Added `BattlewareClient` and `WasmWrapper` imports for blockchain communication
+- Added `NullspaceClient` and `WasmWrapper` imports for blockchain communication
 - Created session tracking using `currentSessionId` state and ref for immediate access
 - Added `isOnChain` flag to enable/disable on-chain mode with graceful fallback
 
@@ -108,7 +108,7 @@ User Action → Optimistic Update → Chain Transaction → Event → State Upda
 
 **Event Flow:**
 ```
-Chain → WebSocket → BattlewareClient → CasinoChainService → Event Handlers → UI Update
+Chain → WebSocket → NullspaceClient → CasinoChainService → Event Handlers → UI Update
 ```
 
 ### Testing
@@ -124,10 +124,10 @@ Chain → WebSocket → BattlewareClient → CasinoChainService → Event Handle
 5. Implement tournament registration via chain service
 
 ### Files Modified
-- `/home/r/Coding/supersociety-battleware/website/src/hooks/useTerminalGame.ts`
+- `/home/r/Coding/supersociety-nullspace/website/src/hooks/useTerminalGame.ts`
 
 ### Dependencies
-- `CasinoChainService` from `/home/r/Coding/supersociety-battleware/website/src/services/CasinoChainService.ts`
-- `BattlewareClient` from `/home/r/Coding/supersociety-battleware/website/src/api/client.js`
-- `WasmWrapper` from `/home/r/Coding/supersociety-battleware/website/src/api/wasm.js`
-- Casino types from `/home/r/Coding/supersociety-battleware/website/src/types/casino.ts`
+- `CasinoChainService` from `/home/r/Coding/supersociety-nullspace/website/src/services/CasinoChainService.ts`
+- `NullspaceClient` from `/home/r/Coding/supersociety-nullspace/website/src/api/client.js`
+- `WasmWrapper` from `/home/r/Coding/supersociety-nullspace/website/src/api/wasm.js`
+- Casino types from `/home/r/Coding/supersociety-nullspace/website/src/types/casino.ts`

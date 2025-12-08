@@ -24,8 +24,8 @@ RUN rustup default stable
 RUN rustup target add aarch64-unknown-linux-gnu
 
 # Set the working directory
-WORKDIR /battleware
+WORKDIR /nullspace
 
 # Build the binaries
 ENTRYPOINT ["/bin/bash", "-c"]
-CMD ["cargo build --release -p battleware-node -p battleware-randotron --target aarch64-unknown-linux-gnu && cp target/aarch64-unknown-linux-gnu/release/battleware-node target/aarch64-unknown-linux-gnu/release/battleware-randotron deployer/assets/"]
+CMD ["cargo build --release -p nullspace-node -p nullspace-randotron --target aarch64-unknown-linux-gnu && cp target/aarch64-unknown-linux-gnu/release/nullspace-node target/aarch64-unknown-linux-gnu/release/nullspace-randotron deployer/assets/"]

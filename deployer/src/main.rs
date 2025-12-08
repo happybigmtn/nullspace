@@ -1,5 +1,5 @@
-use battleware_node::{Config as ValidatorConfig, Peers};
-use battleware_randotron::Config as RandotronConfig;
+use nullspace_node::{Config as ValidatorConfig, Peers};
+use nullspace_randotron::Config as RandotronConfig;
 use clap::{value_parser, Arg, ArgMatches, Command};
 use commonware_codec::Encode;
 use commonware_cryptography::{
@@ -21,8 +21,8 @@ use std::{
 use tracing::{error, info};
 use uuid::Uuid;
 
-const VALIDATOR_PACKAGE: &str = "battleware-node";
-const RANDOTRON_PACKAGE: &str = "battleware-randotron";
+const VALIDATOR_PACKAGE: &str = "nullspace-node";
+const RANDOTRON_PACKAGE: &str = "nullspace-randotron";
 const PORT: u16 = 4545;
 const STORAGE_CLASS: &str = "gp3";
 const DASHBOARD_FILE: &str = "dashboard.json";
@@ -34,10 +34,10 @@ fn main() {
 
     // Define the main command with subcommands
     let app = Command::new("setup")
-        .about("Manage configuration files for an battleware deployment.")
+        .about("Manage configuration files for an nullspace deployment.")
         .subcommand(
             Command::new("generate")
-                .about("Generate configuration files for an battleware deployment")
+                .about("Generate configuration files for an nullspace deployment")
                 .arg(
                     Arg::new("peers")
                         .long("peers")
@@ -403,7 +403,7 @@ fn generate_local(
     // Emit start commands
     info!(?bootstrappers, "setup complete");
     println!("To start simulator, run:");
-    println!("cargo run -p battleware-simulator -- --identity {identity}");
+    println!("cargo run -p nullspace-simulator -- --identity {identity}");
     println!("To start website, run: (in `website` directory)");
     println!("VITE_IDENTITY={identity} VITE_URL={indexer} npm run preview");
     println!("To start validators, run:");

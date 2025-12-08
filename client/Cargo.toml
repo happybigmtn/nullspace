@@ -1,18 +1,18 @@
 [package]
-name = "battleware-client"
+name = "nullspace-client"
 edition.workspace = true
 publish = true
 version.workspace = true
 license.workspace = true
-description = "SDK for interacting with battleware."
-homepage = "https://battleware.xyz"
-repository = "https://github.com/commonwarexyz/battleware/tree/main/client"
-documentation = "https://docs.rs/battleware-client"
+description = "SDK for interacting with nullspace."
+homepage = "https://nullspace.xyz"
+repository = "https://github.com/commonwarexyz/nullspace/tree/main/client"
+documentation = "https://docs.rs/nullspace-client"
 readme = "README.md"
 
 [dependencies]
-battleware-execution = { workspace = true, features = ["mocks"] }
-battleware-types = { workspace = true }
+nullspace-execution = { workspace = true, features = ["mocks"] }
+nullspace-types = { workspace = true }
 commonware-codec = { workspace = true }
 commonware-consensus = { workspace = true }
 commonware-cryptography = { workspace = true }
@@ -28,7 +28,7 @@ thiserror = { workspace = true }
 futures = { workspace = true }
 
 [dev-dependencies]
-battleware-simulator = { workspace = true }
+nullspace-simulator = { workspace = true }
 axum = { workspace = true }
 commonware-runtime = { workspace = true }
 commonware-storage = { workspace = true }

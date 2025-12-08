@@ -1,5 +1,5 @@
 use crate::{events::Stream, Error, Result};
-use battleware_types::{
+use nullspace_types::{
     api::{Lookup, Pending, Submission, Summary, Update, UpdatesFilter},
     execution::{Key, Seed, Transaction},
     Identity,
@@ -17,7 +17,7 @@ use url::Url;
 /// Timeout for connections and requests
 const TIMEOUT: Duration = Duration::from_secs(30);
 
-/// Battleware API client
+/// Nullspace API client
 #[derive(Clone)]
 pub struct Client {
     pub base_url: Url,

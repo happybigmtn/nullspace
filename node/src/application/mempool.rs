@@ -1,4 +1,4 @@
-use battleware_types::execution::Transaction;
+use nullspace_types::execution::Transaction;
 use commonware_cryptography::{ed25519::PublicKey, sha256::Digest, Digestible};
 use commonware_runtime::Metrics;
 use prometheus_client::metrics::gauge::Gauge;
@@ -163,7 +163,7 @@ impl Mempool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use battleware_types::execution::Instruction;
+    use nullspace_types::execution::Instruction;
     use commonware_cryptography::{ed25519::PrivateKey, PrivateKeyExt, Signer};
     use commonware_runtime::{deterministic, Runner};
 

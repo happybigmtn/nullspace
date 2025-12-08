@@ -12,7 +12,7 @@
 //! [2] = Cashout - take current pot
 
 use super::{CasinoGame, GameError, GameResult, GameRng};
-use battleware_types::casino::GameSession;
+use nullspace_types::casino::GameSession;
 
 /// Base multiplier in basis points (1.0 = 10000)
 const BASE_MULTIPLIER: i64 = 10_000;
@@ -133,14 +133,14 @@ impl CasinoGame for HiLo {
                     .and_then(|v| v.checked_div(BASE_MULTIPLIER))
                     .unwrap_or(i64::MAX);
 
-                // Return profit (payout - original bet)
-                let profit = payout.saturating_sub(session.bet as i64);
-                if profit > 0 {
-                    Ok(GameResult::Win(profit as u64))
-                } else if profit < 0 {
-                    Ok(GameResult::Loss)
+                // Return total payout (stake + winnings), consistent with other games
+                // Win(amount) means "add this to player chips" and the original bet
+                // was already deducted at StartGame
+                if payout > 0 {
+                    Ok(GameResult::Win(payout as u64))
                 } else {
-                    Ok(GameResult::Push)
+                    // Accumulator is 0 or negative (shouldn't happen in normal play)
+                    Ok(GameResult::Loss)
                 }
             }
             Move::Higher | Move::Lower => {
@@ -191,9 +191,9 @@ impl CasinoGame for HiLo {
 mod tests {
     use super::*;
     use crate::mocks::{create_account_keypair, create_network_keypair, create_seed};
-    use battleware_types::casino::GameType;
+    use nullspace_types::casino::GameType;
 
-    fn create_test_seed() -> battleware_types::Seed {
+    fn create_test_seed() -> nullspace_types::Seed {
         let (network_secret, _) = create_network_keypair();
         create_seed(&network_secret, 1)
     }
@@ -209,7 +209,7 @@ mod tests {
             move_count: 0,
             created_at: 0,
             is_complete: false,
-            super_mode: battleware_types::casino::SuperModeState::default(),
+            super_mode: nullspace_types::casino::SuperModeState::default(),
         }
     }
 
@@ -297,10 +297,10 @@ mod tests {
         assert!(result.is_ok());
         assert!(session.is_complete);
 
-        // Immediate cashout at 1x should be a push
+        // Immediate cashout at 1x returns the bet (stake returned = Win(100))
         match result.unwrap() {
-            GameResult::Push => {}
-            _ => panic!("Expected push on immediate cashout"),
+            GameResult::Win(amount) => assert_eq!(amount, 100), // Returns the original bet
+            _ => panic!("Expected Win on immediate cashout"),
         }
     }
 
@@ -356,6 +356,10 @@ mod tests {
                     assert!(acc > BASE_MULTIPLIER);
                 }
                 Ok(GameResult::Loss) => {
+                    break;
+                }
+                Err(_) => {
+                    // Error (e.g., trying to guess higher than King) - break to avoid infinite loop
                     break;
                 }
                 _ => {}

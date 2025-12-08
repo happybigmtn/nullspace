@@ -6,9 +6,9 @@
 //! 3. Executes blocks periodically
 //! 4. Submits block summaries back to the simulator
 
-use battleware_client::Client;
-use battleware_execution::mocks::{create_adbs, create_network_keypair, execute_block};
-use battleware_types::{api, execution::Transaction, Identity};
+use nullspace_client::Client;
+use nullspace_execution::mocks::{create_adbs, create_network_keypair, execute_block};
+use nullspace_types::{api, execution::Transaction, Identity};
 use clap::Parser;
 use commonware_codec::DecodeExt;
 use commonware_runtime::{tokio as cw_tokio, Clock, Runner};

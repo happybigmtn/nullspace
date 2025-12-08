@@ -2,7 +2,7 @@ use crate::{
     aggregator::{ingress::Mailbox, Config, Message},
     indexer::Indexer,
 };
-use battleware_types::{
+use nullspace_types::{
     api::Summary,
     execution::{Output, Progress, Value},
     genesis_digest,

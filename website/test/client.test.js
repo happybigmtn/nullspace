@@ -7,7 +7,7 @@ import { WebSocket } from 'ws';
 import fetch from 'node-fetch';
 import fs from 'fs/promises';
 import { WasmWrapper } from '../src/api/wasm.js';
-import { BattlewareClient } from '../src/api/client.js';
+import { NullspaceClient } from '../src/api/client.js';
 
 // We need to use dynamic import for WASM in Node.js environment
 let wasmWrapper;
@@ -69,7 +69,7 @@ async function startSimulator() {
   const testIdentityHex = wasmWrapper.bytesToHex(testIdentity);
 
   // Always use the pre-built binary for consistent and fast test execution
-  const simulatorPath = path.join(__dirname, '../../target/release/battleware-simulator');
+  const simulatorPath = path.join(__dirname, '../../target/release/nullspace-simulator');
   const simulatorArgs = ['-p', SIMULATOR_PORT.toString(), '-i', testIdentityHex];
 
   simulatorProcess = spawn(simulatorPath, simulatorArgs, {
@@ -100,11 +100,11 @@ before(async () => {
   // Load WASM wrapper
   try {
     // First, manually load and initialize the WASM module for Node.js environment
-    const wasmPath = path.join(__dirname, '../wasm/pkg/battleware_wasm_bg.wasm');
+    const wasmPath = path.join(__dirname, '../wasm/pkg/nullspace_wasm_bg.wasm');
     const wasmBuffer = await fs.readFile(wasmPath);
 
     // Import the JS bindings
-    const wasmJs = await import('../wasm/pkg/battleware_wasm.js');
+    const wasmJs = await import('../wasm/pkg/nullspace_wasm.js');
 
     // Initialize with the WASM buffer for Node.js
     await wasmJs.default(wasmBuffer);
@@ -473,7 +473,7 @@ describe('WASM Tests', () => {
     wasm.identityBytes = wasmWrapper.getIdentity(0n);
 
     // Create client and keypair
-    const client = new BattlewareClient(SIMULATOR_URL, wasm);
+    const client = new NullspaceClient(SIMULATOR_URL, wasm);
     const keypair = client.wasm.createKeypair();
     const publicKey = client.wasm.getPublicKeyBytes();
     await client.initNonceManager(
@@ -510,7 +510,7 @@ describe('WASM Tests', () => {
     wasm.identityBytes = wasmWrapper.getIdentity(0n);
 
     // Create client
-    const client = new BattlewareClient(SIMULATOR_URL, wasm);
+    const client = new NullspaceClient(SIMULATOR_URL, wasm);
 
     // Test 1: Event handler returns unsubscribe function
     const handler1 = () => { };
@@ -559,7 +559,7 @@ describe('WASM Tests', () => {
     wasm.identityBytes = wasmWrapper.getIdentity(0n);
 
     // Create client with invalid URL to force reconnection
-    const client = new BattlewareClient('http://localhost:9999', wasm);
+    const client = new NullspaceClient('http://localhost:9999', wasm);
 
     // Test reconnection config initialization
     assert.equal(client.reconnectConfig.baseDelay, 1000, 'Should have base delay set');
@@ -703,15 +703,15 @@ describe('API Tests', () => {
     wasm.wasm = wasmWrapper.wasm;
     wasm.identityBytes = wasmWrapper.getIdentity(0n);
 
-    return { BattlewareClient, WasmWrapper, wasm };
+    return { NullspaceClient, WasmWrapper, wasm };
   }
 
   test('Client destroy method cleanup', async (t) => {
-    const { BattlewareClient, wasm } = await createTestClient();
+    const { NullspaceClient, wasm } = await createTestClient();
     wasm.createKeypair();
 
     // Create client and initialize
-    const client = new BattlewareClient(SIMULATOR_URL, wasm);
+    const client = new NullspaceClient(SIMULATOR_URL, wasm);
     const keypair = {
       publicKey: wasm.getPublicKeyBytes(),
       publicKeyHex: wasm.getPublicKeyHex()
@@ -740,11 +740,11 @@ describe('API Tests', () => {
   });
 
   test('Client can submit transactions and receive correct response', async (t) => {
-    const { BattlewareClient, wasm } = await createTestClient();
+    const { NullspaceClient, wasm } = await createTestClient();
     wasm.createKeypair();
 
     // Create client
-    const client = new BattlewareClient(SIMULATOR_URL, wasm);
+    const client = new NullspaceClient(SIMULATOR_URL, wasm);
 
     // Test submitTransaction returns correct response format
     const tx = wasm.createGenerateTransaction(0);
@@ -761,10 +761,10 @@ describe('API Tests', () => {
   });
 
   test('Client can get current view from seed', async (t) => {
-    const { BattlewareClient, wasm } = await createTestClient();
+    const { NullspaceClient, wasm } = await createTestClient();
 
     // Create client
-    const client = new BattlewareClient(SIMULATOR_URL, wasm);
+    const client = new NullspaceClient(SIMULATOR_URL, wasm);
 
     // Initialize nonce manager with a test keypair
     const keypair = client.wasm.createKeypair();
@@ -801,10 +801,10 @@ describe('API Tests', () => {
   });
 
   test('Client can query seeds', async (t) => {
-    const { BattlewareClient, wasm } = await createTestClient();
+    const { NullspaceClient, wasm } = await createTestClient();
 
     // Create client
-    const client = new BattlewareClient(SIMULATOR_URL, wasm);
+    const client = new NullspaceClient(SIMULATOR_URL, wasm);
 
     // Query seed by view 1 (should exist from previous test)
     const result = await client.querySeed(1);
@@ -820,11 +820,11 @@ describe('API Tests', () => {
   });
 
   test('Security warning for localStorage keypair', async (t) => {
-    const { BattlewareClient, wasm } = await createTestClient();
+    const { NullspaceClient, wasm } = await createTestClient();
     wasm.createKeypair();
 
     // Create client
-    const client = new BattlewareClient(SIMULATOR_URL, wasm);
+    const client = new NullspaceClient(SIMULATOR_URL, wasm);
 
     // Mock console.warn to capture warning
     const originalWarn = console.warn;
@@ -904,11 +904,11 @@ describe('API Tests', () => {
   });
 
   test('Client can query state', async (t) => {
-    const { BattlewareClient, wasm } = await createTestClient();
+    const { NullspaceClient, wasm } = await createTestClient();
     wasm.createKeypair();
 
     // Create client
-    const client = new BattlewareClient(SIMULATOR_URL, wasm);
+    const client = new NullspaceClient(SIMULATOR_URL, wasm);
 
     // Query account state (should not exist)
     const publicKeyBytes = wasm.getPublicKeyBytes();
@@ -926,7 +926,7 @@ describe('API Tests', () => {
   });
 
   test('Client retries fetch on non-200/404 responses', async (t) => {
-    const { BattlewareClient, wasm } = await createTestClient();
+    const { NullspaceClient, wasm } = await createTestClient();
     wasm.createKeypair();
 
     // Create a mock fetch that fails initially, then succeeds
@@ -990,7 +990,7 @@ describe('API Tests', () => {
 
     try {
       // Create client
-      const client = new BattlewareClient(SIMULATOR_URL, wasm);
+      const client = new NullspaceClient(SIMULATOR_URL, wasm);
 
       // Test queryState retry
       fetchCallCount = 0;

@@ -517,19 +517,24 @@ export class CasinoClient {
    * @returns {Promise<Object|null>} CasinoPlayer data or null if not found
    */
   async getCasinoPlayer(publicKeyBytes) {
+    console.log('[Client] getCasinoPlayer called with publicKeyBytes:', publicKeyBytes?.length, 'bytes');
     const keyBytes = this.wasm.encodeCasinoPlayerKey(publicKeyBytes);
+    console.log('[Client] Encoded player key:', keyBytes?.length, 'bytes');
     const result = await this.queryState(keyBytes);
+    console.log('[Client] queryState result:', result);
 
     if (result.found && result.value) {
       // Value is already a plain object from WASM
       if (result.value.type === 'CasinoPlayer') {
+        console.log('[Client] Found CasinoPlayer:', result.value);
         return result.value;
       } else {
-        console.log('Value is not a CasinoPlayer type:', result.value.type);
+        console.log('[Client] Value is not a CasinoPlayer type:', result.value.type);
         return null;
       }
     }
 
+    console.log('[Client] Player not found on-chain');
     return null;
   }
 

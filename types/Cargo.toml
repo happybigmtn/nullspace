@@ -1,14 +1,14 @@
 [package]
-name = "battleware-types"
+name = "nullspace-types"
 edition.workspace = true
 publish = true
 version.workspace = true
 license.workspace = true
-description = "Common types used throughout battleware."
+description = "Common types used throughout nullspace."
 readme = "README.md"
-homepage = "https://battleware.xyz"
-repository = "https://github.com/commonwarexyz/battleware/tree/main/types"
-documentation = "https://docs.rs/battleware-types"
+homepage = "https://nullspace.xyz"
+repository = "https://github.com/commonwarexyz/nullspace/tree/main/types"
+documentation = "https://docs.rs/nullspace-types"
 
 [dependencies]
 commonware-codec = { workspace = true }

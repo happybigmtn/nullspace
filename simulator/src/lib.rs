@@ -6,7 +6,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use battleware_types::{
+use nullspace_types::{
     api::{Events, FilteredEvents, Lookup, Pending, Submission, Summary, Update, UpdatesFilter},
     execution::{Event, Output, Progress, Seed, Transaction, Value},
     Identity, Query, NAMESPACE,
@@ -453,10 +453,10 @@ fn is_event_relevant_to_account(event: &Event, account: &PublicKey) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use battleware_execution::mocks::{
+    use nullspace_execution::mocks::{
         create_account_keypair, create_adbs, create_network_keypair, create_seed, execute_block,
     };
-    use battleware_types::execution::{Instruction, Key, Transaction, Value};
+    use nullspace_types::execution::{Instruction, Key, Transaction, Value};
     use commonware_cryptography::{Hasher, Sha256};
     use commonware_runtime::{deterministic::Runner, Runner as _};
     use commonware_storage::store::operation::Variable;

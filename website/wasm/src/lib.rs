@@ -1,8 +1,8 @@
 #[cfg(feature = "testing")]
-use battleware_execution::mocks;
+use nullspace_execution::mocks;
 #[cfg(feature = "testing")]
-use battleware_types::api::Summary;
-use battleware_types::{
+use nullspace_types::api::Summary;
+use nullspace_types::{
     api::{Lookup, Submission, Update, UpdatesFilter},
     execution::{
         transaction_namespace, Event, Instruction, Key, Output,
@@ -129,7 +129,7 @@ impl Transaction {
         bet: u64,
         session_id: u64,
     ) -> Result<Transaction, JsValue> {
-        use battleware_types::casino::GameType;
+        use nullspace_types::casino::GameType;
         let game_type = match game_type {
             0 => GameType::Baccarat,
             1 => GameType::Blackjack,
@@ -484,9 +484,9 @@ fn decode_event(event: &Event) -> Result<serde_json::Value, JsValue> {
         }
         Event::TournamentPhaseChanged { id, phase } => {
             let phase_str = match phase {
-                battleware_types::casino::TournamentPhase::Registration => "Registration",
-                battleware_types::casino::TournamentPhase::Active => "Active",
-                battleware_types::casino::TournamentPhase::Complete => "Complete",
+                nullspace_types::casino::TournamentPhase::Registration => "Registration",
+                nullspace_types::casino::TournamentPhase::Active => "Active",
+                nullspace_types::casino::TournamentPhase::Complete => "Complete",
             };
             serde_json::json!({
                 "type": "TournamentPhaseChanged",

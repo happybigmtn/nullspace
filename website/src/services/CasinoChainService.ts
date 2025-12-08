@@ -159,6 +159,14 @@ export class CasinoChainService {
 
     // Subscribe to typed events from the client
     this.client.onEvent('CasinoGameStarted', (event: any) => {
+      // DEBUG: Log raw event from chain
+      console.log('[CasinoChainService] Raw CasinoGameStarted event:', {
+        rawSessionId: event.session_id,
+        rawSessionIdType: typeof event.session_id,
+        rawGameType: event.game_type,
+        rawBet: event.bet,
+        rawInitialState: event.initial_state,
+      });
       try {
         // Event is already decoded by the client, just pass it through
         const parsed: CasinoGameStartedEvent = {
@@ -169,6 +177,14 @@ export class CasinoChainService {
           bet: BigInt(event.bet),
           initialState: this.hexToBytes(event.initial_state),
         };
+        console.log('[CasinoChainService] Parsed CasinoGameStarted:', {
+          sessionId: parsed.sessionId.toString(),
+          sessionIdType: typeof parsed.sessionId,
+          gameType: parsed.gameType,
+          bet: parsed.bet.toString(),
+          initialStateLen: parsed.initialState.length,
+          numHandlers: this.gameStartedHandlers.length,
+        });
         this.gameStartedHandlers.forEach(h => h(parsed));
       } catch (error) {
         console.error('[CasinoChainService] Failed to parse CasinoGameStarted:', error);

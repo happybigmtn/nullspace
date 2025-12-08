@@ -1,13 +1,13 @@
-# battleware-deployer
+# nullspace-deployer
 
-[![Crates.io](https://img.shields.io/crates/v/battleware-deployer.svg)](https://crates.io/crates/battleware-deployer)
-[![Docs.rs](https://docs.rs/battleware-deployer/badge.svg)](https://docs.rs/battleware-deployer)
+[![Crates.io](https://img.shields.io/crates/v/nullspace-deployer.svg)](https://crates.io/crates/nullspace-deployer)
+[![Docs.rs](https://docs.rs/nullspace-deployer/badge.svg)](https://docs.rs/nullspace-deployer)
 
-Tools for deploying `battleware`.
+Tools for deploying `nullspace`.
 
 ## Status
 
-`battleware-deployer` is **ALPHA** software and is not yet recommended for production use. Developers should expect breaking changes and occasional instability.
+`nullspace-deployer` is **ALPHA** software and is not yet recommended for production use. Developers should expect breaking changes and occasional instability.
 
 ## Setup
 
@@ -18,32 +18,32 @@ _To run this example, you must first install [Rust](https://www.rust-lang.org/to
 #### Create Artifacts
 
 ```bash
-cargo run --bin battleware-deployer -- generate --peers 5 --bootstrappers 1 --worker-threads 3 --log-level info --message-backlog 16384 --mailbox-size 16384 --deque-size 10 --execution-concurrency 1 --output test --indexer http://127.0.0.1:8080 local --start-port 3000
+cargo run --bin nullspace-deployer -- generate --peers 5 --bootstrappers 1 --worker-threads 3 --log-level info --message-backlog 16384 --mailbox-size 16384 --deque-size 10 --execution-concurrency 1 --output test --indexer http://127.0.0.1:8080 local --start-port 3000
 ```
 
 _If setup succeeds, you should see the following output:_
 
 ```
-2025-09-09T01:03:30.046667Z  INFO battleware_deployer: generated network key identity=b2a5befa67f46b3bf8c8f965de6b3cb5090ac3f6bb3dbc87ff6b55c36f509e87162bbca9c1deb3784723a965c66107d918aead5c2b768e78dd8af0bbd014917d37b9b45c342bfa6754fe27a241f3dcd08015b1fb806d0f734801a1c7e5ec5f07
-2025-09-09T01:03:30.047877Z  INFO battleware_deployer: wrote validator configuration file path="4a6bc722a59613d2208284e89d2dd4508dec584f51e8e3cb94415c2cab3b55a8.yaml"
-2025-09-09T01:03:30.048151Z  INFO battleware_deployer: wrote validator configuration file path="52af657848395bbab28c6529932c0542a23f0f55d7bfa42af73547b26fe8fcb9.yaml"
-2025-09-09T01:03:30.048411Z  INFO battleware_deployer: wrote validator configuration file path="6c186cd9e3ab5c99689c1844d563e568f7d29a22feb2d3424082eb0df62f1581.yaml"
-2025-09-09T01:03:30.048659Z  INFO battleware_deployer: wrote validator configuration file path="720f1779931c6850adaaf3f6a4d45c42a4a01ad888c52e27f1c331c2e7b10a2a.yaml"
-2025-09-09T01:03:30.048918Z  INFO battleware_deployer: wrote validator configuration file path="be51578d4406281ff85355c3d159cd28ee63addf478ff3147a24514f35f93a3d.yaml"
-2025-09-09T01:03:30.049022Z  INFO battleware_deployer: wrote randotron configuration file path="randotron_0.yaml"
-2025-09-09T01:03:30.049030Z  INFO battleware_deployer: setup complete bootstrappers=["52af657848395bbab28c6529932c0542a23f0f55d7bfa42af73547b26fe8fcb9"]
+2025-09-09T01:03:30.046667Z  INFO nullspace_deployer: generated network key identity=b2a5befa67f46b3bf8c8f965de6b3cb5090ac3f6bb3dbc87ff6b55c36f509e87162bbca9c1deb3784723a965c66107d918aead5c2b768e78dd8af0bbd014917d37b9b45c342bfa6754fe27a241f3dcd08015b1fb806d0f734801a1c7e5ec5f07
+2025-09-09T01:03:30.047877Z  INFO nullspace_deployer: wrote validator configuration file path="4a6bc722a59613d2208284e89d2dd4508dec584f51e8e3cb94415c2cab3b55a8.yaml"
+2025-09-09T01:03:30.048151Z  INFO nullspace_deployer: wrote validator configuration file path="52af657848395bbab28c6529932c0542a23f0f55d7bfa42af73547b26fe8fcb9.yaml"
+2025-09-09T01:03:30.048411Z  INFO nullspace_deployer: wrote validator configuration file path="6c186cd9e3ab5c99689c1844d563e568f7d29a22feb2d3424082eb0df62f1581.yaml"
+2025-09-09T01:03:30.048659Z  INFO nullspace_deployer: wrote validator configuration file path="720f1779931c6850adaaf3f6a4d45c42a4a01ad888c52e27f1c331c2e7b10a2a.yaml"
+2025-09-09T01:03:30.048918Z  INFO nullspace_deployer: wrote validator configuration file path="be51578d4406281ff85355c3d159cd28ee63addf478ff3147a24514f35f93a3d.yaml"
+2025-09-09T01:03:30.049022Z  INFO nullspace_deployer: wrote randotron configuration file path="randotron_0.yaml"
+2025-09-09T01:03:30.049030Z  INFO nullspace_deployer: setup complete bootstrappers=["52af657848395bbab28c6529932c0542a23f0f55d7bfa42af73547b26fe8fcb9"]
 To start simulator, run:
-cargo run -p battleware-simulator -- --identity b2a5befa67f46b3bf8c8f965de6b3cb5090ac3f6bb3dbc87ff6b55c36f509e87162bbca9c1deb3784723a965c66107d918aead5c2b768e78dd8af0bbd014917d37b9b45c342bfa6754fe27a241f3dcd08015b1fb806d0f734801a1c7e5ec5f07
+cargo run -p nullspace-simulator -- --identity b2a5befa67f46b3bf8c8f965de6b3cb5090ac3f6bb3dbc87ff6b55c36f509e87162bbca9c1deb3784723a965c66107d918aead5c2b768e78dd8af0bbd014917d37b9b45c342bfa6754fe27a241f3dcd08015b1fb806d0f734801a1c7e5ec5f07
 To start website, run: (in `website` directory)
 VITE_IDENTITY=b2a5befa67f46b3bf8c8f965de6b3cb5090ac3f6bb3dbc87ff6b55c36f509e87162bbca9c1deb3784723a965c66107d918aead5c2b768e78dd8af0bbd014917d37b9b45c342bfa6754fe27a241f3dcd08015b1fb806d0f734801a1c7e5ec5f07 VITE_URL=http://127.0.0.1:8080 npm run preview
 To start validators, run:
-4a6bc722a59613d2208284e89d2dd4508dec584f51e8e3cb94415c2cab3b55a8: cargo run -p battleware-node -- --peers=/Users/patrickogrady/code/battleware/deployer/test/peers.yaml --config=/Users/patrickogrady/code/battleware/deployer/test/4a6bc722a59613d2208284e89d2dd4508dec584f51e8e3cb94415c2cab3b55a8.yaml
-52af657848395bbab28c6529932c0542a23f0f55d7bfa42af73547b26fe8fcb9: cargo run -p battleware-node -- --peers=/Users/patrickogrady/code/battleware/deployer/test/peers.yaml --config=/Users/patrickogrady/code/battleware/deployer/test/52af657848395bbab28c6529932c0542a23f0f55d7bfa42af73547b26fe8fcb9.yaml
-6c186cd9e3ab5c99689c1844d563e568f7d29a22feb2d3424082eb0df62f1581: cargo run -p battleware-node -- --peers=/Users/patrickogrady/code/battleware/deployer/test/peers.yaml --config=/Users/patrickogrady/code/battleware/deployer/test/6c186cd9e3ab5c99689c1844d563e568f7d29a22feb2d3424082eb0df62f1581.yaml
-720f1779931c6850adaaf3f6a4d45c42a4a01ad888c52e27f1c331c2e7b10a2a: cargo run -p battleware-node -- --peers=/Users/patrickogrady/code/battleware/deployer/test/peers.yaml --config=/Users/patrickogrady/code/battleware/deployer/test/720f1779931c6850adaaf3f6a4d45c42a4a01ad888c52e27f1c331c2e7b10a2a.yaml
-be51578d4406281ff85355c3d159cd28ee63addf478ff3147a24514f35f93a3d: cargo run -p battleware-node -- --peers=/Users/patrickogrady/code/battleware/deployer/test/peers.yaml --config=/Users/patrickogrady/code/battleware/deployer/test/be51578d4406281ff85355c3d159cd28ee63addf478ff3147a24514f35f93a3d.yaml
+4a6bc722a59613d2208284e89d2dd4508dec584f51e8e3cb94415c2cab3b55a8: cargo run -p nullspace-node -- --peers=/Users/patrickogrady/code/nullspace/deployer/test/peers.yaml --config=/Users/patrickogrady/code/nullspace/deployer/test/4a6bc722a59613d2208284e89d2dd4508dec584f51e8e3cb94415c2cab3b55a8.yaml
+52af657848395bbab28c6529932c0542a23f0f55d7bfa42af73547b26fe8fcb9: cargo run -p nullspace-node -- --peers=/Users/patrickogrady/code/nullspace/deployer/test/peers.yaml --config=/Users/patrickogrady/code/nullspace/deployer/test/52af657848395bbab28c6529932c0542a23f0f55d7bfa42af73547b26fe8fcb9.yaml
+6c186cd9e3ab5c99689c1844d563e568f7d29a22feb2d3424082eb0df62f1581: cargo run -p nullspace-node -- --peers=/Users/patrickogrady/code/nullspace/deployer/test/peers.yaml --config=/Users/patrickogrady/code/nullspace/deployer/test/6c186cd9e3ab5c99689c1844d563e568f7d29a22feb2d3424082eb0df62f1581.yaml
+720f1779931c6850adaaf3f6a4d45c42a4a01ad888c52e27f1c331c2e7b10a2a: cargo run -p nullspace-node -- --peers=/Users/patrickogrady/code/nullspace/deployer/test/peers.yaml --config=/Users/patrickogrady/code/nullspace/deployer/test/720f1779931c6850adaaf3f6a4d45c42a4a01ad888c52e27f1c331c2e7b10a2a.yaml
+be51578d4406281ff85355c3d159cd28ee63addf478ff3147a24514f35f93a3d: cargo run -p nullspace-node -- --peers=/Users/patrickogrady/code/nullspace/deployer/test/peers.yaml --config=/Users/patrickogrady/code/nullspace/deployer/test/be51578d4406281ff85355c3d159cd28ee63addf478ff3147a24514f35f93a3d.yaml
 To start randotrons, run:
-randotron_0: cargo run -p battleware-randotron -- --config=/Users/patrickogrady/code/battleware/deployer/test/randotron_0.yaml
+randotron_0: cargo run -p nullspace-randotron -- --config=/Users/patrickogrady/code/nullspace/deployer/test/randotron_0.yaml
 To view metrics, run:
 4a6bc722a59613d2208284e89d2dd4508dec584f51e8e3cb94415c2cab3b55a8: curl http://localhost:3001/metrics
 52af657848395bbab28c6529932c0542a23f0f55d7bfa42af73547b26fe8fcb9: curl http://localhost:3003/metrics
@@ -87,7 +87,7 @@ cargo install commonware-deployer
 #### Create Artifacts
 
 ```bash
-cargo run --bin battleware-deployer -- generate --peers 50 --bootstrappers 5 --worker-threads 3 --log-level info --message-backlog 16384 --mailbox-size 16384 --deque-size 10 --execution-concurrency 4 --indexer TODO --output assets remote --regions us-west-1,us-east-1,eu-west-1,ap-northeast-1,eu-north-1,ap-south-1,sa-east-1,eu-central-1,ap-northeast-2,ap-southeast-2 --monitoring-instance-type c7g.4xlarge --monitoring-storage-size 100 --randotron-instance-type c7g.xlarge --randotron-storage-size 25 --instance-type c7g.xlarge --storage-size 25 --dashboard dashboard.json
+cargo run --bin nullspace-deployer -- generate --peers 50 --bootstrappers 5 --worker-threads 3 --log-level info --message-backlog 16384 --mailbox-size 16384 --deque-size 10 --execution-concurrency 4 --indexer TODO --output assets remote --regions us-west-1,us-east-1,eu-west-1,ap-northeast-1,eu-north-1,ap-south-1,sa-east-1,eu-central-1,ap-northeast-2,ap-southeast-2 --monitoring-instance-type c7g.4xlarge --monitoring-storage-size 100 --randotron-instance-type c7g.xlarge --randotron-storage-size 25 --instance-type c7g.xlarge --storage-size 25 --dashboard dashboard.json
 ```
 
 #### Build Validator Binary
@@ -95,13 +95,13 @@ cargo run --bin battleware-deployer -- generate --peers 50 --bootstrappers 5 --w
 ##### Build Cross-Platform Compiler
 
 ```bash
-docker build -t battleware-builder .
+docker build -t nullspace-builder .
 ```
 
 ##### Compile Binary for ARM64
 
 ```bash
-docker run -it -v ${PWD}/..:/battleware battleware-builder
+docker run -it -v ${PWD}/..:/nullspace nullspace-builder
 ```
 
 ###### Local Compilation
@@ -109,10 +109,10 @@ docker run -it -v ${PWD}/..:/battleware battleware-builder
 _Before running this command, ensure you change any `version` dependencies you'd like to compile locally to `path` dependencies in `Cargo.toml`._
 
 ```bash
-docker run -it -v ${PWD}/..:/battleware -v ${PWD}/../../monorepo:/monorepo battleware-builder
+docker run -it -v ${PWD}/..:/nullspace -v ${PWD}/../../monorepo:/monorepo nullspace-builder
 ```
 
-_Emitted binary `battleware-node` and `battleware-randotron` are placed in `assets`._
+_Emitted binary `nullspace-node` and `nullspace-randotron` are placed in `assets`._
 
 #### Deploy Validator Binary
 
@@ -132,7 +132,7 @@ _This dashboard is only accessible from the IP used to deploy the infrastructure
 ##### Re-Compile Binary for ARM64
 
 ```bash
-docker run -it -v ${PWD}/..:/battleware battleware-builder
+docker run -it -v ${PWD}/..:/nullspace nullspace-builder
 ```
 
 ##### Restart Validator Binary on EC2 Instances

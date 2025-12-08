@@ -1,4 +1,4 @@
-use battleware_types::{Activity, Seed};
+use nullspace_types::{Activity, Seed};
 use bytes::Bytes;
 use commonware_consensus::{
     threshold_simplex::types::{Seedable, View},

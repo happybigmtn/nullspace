@@ -1,10 +1,10 @@
-# battleware-execution
+# nullspace-execution
 
-[![Crates.io](https://img.shields.io/crates/v/battleware-execution.svg)](https://crates.io/crates/battleware-execution)
-[![Docs.rs](https://docs.rs/battleware-execution/badge.svg)](https://docs.rs/battleware-execution)
+[![Crates.io](https://img.shields.io/crates/v/nullspace-execution.svg)](https://crates.io/crates/nullspace-execution)
+[![Docs.rs](https://docs.rs/nullspace-execution/badge.svg)](https://docs.rs/nullspace-execution)
 
-Execution environment for `battleware`.
+Execution environment for `nullspace`.
 
 ## Status
 
-`battleware-execution` is **ALPHA** software and is not yet recommended for production use. Developers should expect breaking changes and occasional instability.
+`nullspace-execution` is **ALPHA** software and is not yet recommended for production use. Developers should expect breaking changes and occasional instability.

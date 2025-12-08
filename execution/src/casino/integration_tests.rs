@@ -7,9 +7,9 @@
 mod tests {
     use crate::casino::{init_game, process_game_move, GameResult, GameRng};
     use crate::mocks::{create_account_keypair, create_network_keypair, create_seed};
-    use battleware_types::casino::{GameSession, GameType};
+    use nullspace_types::casino::{GameSession, GameType};
 
-    fn create_test_seed() -> battleware_types::Seed {
+    fn create_test_seed() -> nullspace_types::Seed {
         let (network_secret, _) = create_network_keypair();
         create_seed(&network_secret, 1)
     }
@@ -25,7 +25,7 @@ mod tests {
             move_count: 0,
             created_at: 0,
             is_complete: false,
-            super_mode: battleware_types::casino::SuperModeState::default(),
+            super_mode: nullspace_types::casino::SuperModeState::default(),
         }
     }
 
@@ -55,11 +55,14 @@ mod tests {
             init_game(&mut session, &mut rng);
 
             // Verify state was set
-            assert!(
-                !session.is_complete,
-                "Game {:?} should not be complete after init",
-                game_type
-            );
+            // Note: Blackjack can complete on init if dealt a natural blackjack
+            if *game_type != GameType::Blackjack {
+                assert!(
+                    !session.is_complete,
+                    "Game {:?} should not be complete after init",
+                    game_type
+                );
+            }
         }
     }
 

@@ -11,7 +11,7 @@
 //! [2] = Surrender (after tie, forfeit half bet)
 
 use super::{CasinoGame, GameError, GameResult, GameRng};
-use battleware_types::casino::GameSession;
+use nullspace_types::casino::GameSession;
 
 /// Get card rank for war (Ace is high = 14).
 fn card_rank(card: u8) -> u8 {
@@ -140,7 +140,10 @@ impl CasinoGame for CasinoWar {
                         Ok(GameResult::Loss)
                     }
                     Move::War => {
-                        // Go to war - bet is doubled (player adds equal bet)
+                        // Go to war - player adds equal bet (war bet)
+                        // War bet amount equals the original ante
+                        let war_bet = session.bet;
+
                         // Burn 3 cards, then deal new cards
                         let mut deck = rng.create_deck_excluding(&[player_card, dealer_card]);
 
@@ -160,14 +163,16 @@ impl CasinoGame for CasinoWar {
                         session.is_complete = true;
 
                         if new_player_rank >= new_dealer_rank {
-                            // Player wins - in war, tie goes to player
-                            // Win original bet (doubled bet breaks even on tie)
-                            // Payout 2x (Stake + Win)
+                            // Player wins war (tie goes to player)
+                            // Standard casino war payout: ante wins 1:1, war bet pushes
+                            // Player gets back: ante + 1:1 win + war bet = 3 * ante
+                            // But war_bet wasn't charged, so actual return: 3 * ante - war_bet = 2 * ante
                             Ok(GameResult::Win(session.bet.saturating_mul(2)))
                         } else {
-                            // Lose both bets (original + war bet)
-                            // For simplicity, we just mark as loss
-                            Ok(GameResult::Loss)
+                            // Lose both bets (original ante + war bet)
+                            // Original ante was charged at StartGame
+                            // War bet was NOT charged, so need LossWithExtraDeduction
+                            Ok(GameResult::LossWithExtraDeduction(war_bet))
                         }
                     }
                     Move::Play => {
@@ -184,9 +189,9 @@ impl CasinoGame for CasinoWar {
 mod tests {
     use super::*;
     use crate::mocks::{create_account_keypair, create_network_keypair, create_seed};
-    use battleware_types::casino::GameType;
+    use nullspace_types::casino::GameType;
 
-    fn create_test_seed() -> battleware_types::Seed {
+    fn create_test_seed() -> nullspace_types::Seed {
         let (network_secret, _) = create_network_keypair();
         create_seed(&network_secret, 1)
     }
@@ -202,7 +207,7 @@ mod tests {
             move_count: 0,
             created_at: 0,
             is_complete: false,
-            super_mode: battleware_types::casino::SuperModeState::default(),
+            super_mode: nullspace_types::casino::SuperModeState::default(),
         }
     }
 
@@ -228,7 +233,8 @@ mod tests {
         let mut rng = GameRng::new(&seed, session.id, 1);
         let result = CasinoWar::process_move(&mut session, &[0], &mut rng);
 
-        assert!(matches!(result, Ok(GameResult::Win(100))));
+        // Win(200) = stake(100) + winnings(100) for 1:1 payout
+        assert!(matches!(result, Ok(GameResult::Win(200))));
         assert!(session.is_complete);
     }
 
@@ -294,10 +300,10 @@ mod tests {
         assert!(result.is_ok());
         assert!(session.is_complete);
 
-        // Result should be Win or Loss
+        // Result should be Win, Loss, or LossWithExtraDeduction
         match result.unwrap() {
-            GameResult::Win(_) | GameResult::Loss => {}
-            _ => panic!("Expected Win or Loss after war"),
+            GameResult::Win(_) | GameResult::Loss | GameResult::LossWithExtraDeduction(_) => {}
+            _ => panic!("Expected Win, Loss, or LossWithExtraDeduction after war"),
         }
     }
 

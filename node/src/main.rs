@@ -1,6 +1,6 @@
-use battleware_client::Client;
-use battleware_node::{engine, Config, Peers};
-use battleware_types::NAMESPACE;
+use nullspace_client::Client;
+use nullspace_node::{engine, Config, Peers};
+use nullspace_types::NAMESPACE;
 use clap::{Arg, Command};
 use commonware_codec::{Decode, DecodeExt};
 use commonware_cryptography::{
@@ -52,7 +52,7 @@ const MAX_UPLOADS_OUTSTANDING: usize = 4;
 fn main() {
     // Parse arguments
     let matches = Command::new("node")
-        .about("Node for a battleware chain.")
+        .about("Node for a nullspace chain.")
         .arg(Arg::new("hosts").long("hosts").required(false))
         .arg(Arg::new("peers").long("peers").required(false))
         .arg(Arg::new("config").long("config").required(true))

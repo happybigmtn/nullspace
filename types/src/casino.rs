@@ -35,7 +35,7 @@ pub const MAX_NAME_LENGTH: usize = 32;
 pub const MAX_PAYLOAD_LENGTH: usize = 256;
 
 /// Starting chips for new players
-pub const STARTING_CHIPS: u64 = 10_000;
+pub const STARTING_CHIPS: u64 = 1_000;
 
 /// Starting shields per tournament
 pub const STARTING_SHIELDS: u32 = 3;
@@ -47,7 +47,7 @@ pub const STARTING_DOUBLES: u32 = 3;
 pub const SESSION_EXPIRY: u64 = 100;
 
 /// Faucet deposit amount (dev mode only)
-pub const FAUCET_AMOUNT: u64 = 10_000;
+pub const FAUCET_AMOUNT: u64 = 1_000;
 
 /// Faucet rate limit in blocks (100 blocks ≈ 5 minutes at 3s/block)
 pub const FAUCET_RATE_LIMIT: u64 = 100;
@@ -106,11 +106,11 @@ impl FixedSize for GameType {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum SuperType {
-    Card = 0,    // Specific card (rank+suit)
-    Number = 1,  // Roulette/Craps number
-    Total = 2,   // Sic Bo sum
-    Rank = 3,    // Card rank only
-    Suit = 4,    // Card suit only
+    Card = 0,   // Specific card (rank+suit)
+    Number = 1, // Roulette/Craps number
+    Total = 2,  // Sic Bo sum
+    Rank = 3,   // Card rank only
+    Suit = 4,   // Card suit only
 }
 
 impl Write for SuperType {
@@ -142,8 +142,8 @@ impl FixedSize for SuperType {
 /// Super mode multiplier entry
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SuperMultiplier {
-    pub id: u8,            // Card (0-51), number (0-36), or total (4-17)
-    pub multiplier: u16,   // 2-500x
+    pub id: u8,          // Card (0-51), number (0-36), or total (4-17)
+    pub multiplier: u16, // 2-500x
     pub super_type: SuperType,
 }
 
@@ -178,7 +178,7 @@ impl EncodeSize for SuperMultiplier {
 pub struct SuperModeState {
     pub is_active: bool,
     pub multipliers: Vec<SuperMultiplier>,
-    pub streak_level: u8,  // For HiLo only
+    pub streak_level: u8, // For HiLo only
 }
 
 impl Write for SuperModeState {
@@ -203,7 +203,9 @@ impl Read for SuperModeState {
 
 impl EncodeSize for SuperModeState {
     fn encode_size(&self) -> usize {
-        self.is_active.encode_size() + self.multipliers.encode_size() + self.streak_level.encode_size()
+        self.is_active.encode_size()
+            + self.multipliers.encode_size()
+            + self.streak_level.encode_size()
     }
 }
 
@@ -384,10 +386,7 @@ pub enum CasinoInstruction {
 
     /// Make a move in an active game
     /// Binary: [3] [sessionId:u64 BE] [payloadLen:u32 BE] [payload...]
-    GameMove {
-        session_id: u64,
-        payload: Vec<u8>,
-    },
+    GameMove { session_id: u64, payload: Vec<u8> },
 
     /// Toggle shield modifier
     /// Binary: [4]
@@ -411,13 +410,20 @@ impl Write for CasinoInstruction {
                 1u8.write(writer);
                 amount.write(writer);
             }
-            Self::StartGame { game_type, bet, session_id } => {
+            Self::StartGame {
+                game_type,
+                bet,
+                session_id,
+            } => {
                 2u8.write(writer);
                 game_type.write(writer);
                 bet.write(writer);
                 session_id.write(writer);
             }
-            Self::GameMove { session_id, payload } => {
+            Self::GameMove {
+                session_id,
+                payload,
+            } => {
                 3u8.write(writer);
                 session_id.write(writer);
                 (payload.len() as u32).write(writer);
@@ -458,7 +464,11 @@ impl Read for CasinoInstruction {
                 let game_type = GameType::read(reader)?;
                 let bet = u64::read(reader)?;
                 let session_id = u64::read(reader)?;
-                Ok(Self::StartGame { game_type, bet, session_id })
+                Ok(Self::StartGame {
+                    game_type,
+                    bet,
+                    session_id,
+                })
             }
             3 => {
                 let session_id = u64::read(reader)?;
@@ -468,7 +478,10 @@ impl Read for CasinoInstruction {
                 }
                 let mut payload = vec![0u8; payload_len];
                 reader.copy_to_slice(&mut payload);
-                Ok(Self::GameMove { session_id, payload })
+                Ok(Self::GameMove {
+                    session_id,
+                    payload,
+                })
             }
             4 => Ok(Self::ToggleShield),
             5 => Ok(Self::ToggleDouble),
@@ -688,8 +701,8 @@ impl EncodeSize for CasinoValue {
 #[repr(u8)]
 pub enum TournamentPhase {
     #[default]
-    Registration = 0,  // 1 minute (~20 blocks at 3s/block)
-    Active = 1,        // 5 minutes (~100 blocks)
+    Registration = 0, // 1 minute (~20 blocks at 3s/block)
+    Active = 1, // 5 minutes (~100 blocks)
     Complete = 2,
 }
 
@@ -723,9 +736,9 @@ pub struct Tournament {
     pub phase: TournamentPhase,
     pub start_block: u64,
     pub players: Vec<PublicKey>,
-    pub starting_chips: u64,        // 10000
-    pub starting_shields: u32,      // 3
-    pub starting_doubles: u32,      // 3
+    pub starting_chips: u64,   // 10000
+    pub starting_shields: u32, // 3
+    pub starting_doubles: u32, // 3
 }
 
 impl Write for Tournament {
@@ -772,10 +785,7 @@ impl EncodeSize for Tournament {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CasinoEvent {
     /// Player registered
-    PlayerRegistered {
-        player: PublicKey,
-        name: String,
-    },
+    PlayerRegistered { player: PublicKey, name: String },
 
     /// Game session started
     GameStarted {
@@ -805,9 +815,7 @@ pub enum CasinoEvent {
     },
 
     /// Leaderboard updated
-    LeaderboardUpdated {
-        leaderboard: CasinoLeaderboard,
-    },
+    LeaderboardUpdated { leaderboard: CasinoLeaderboard },
 }
 
 impl Write for CasinoEvent {
@@ -818,7 +826,13 @@ impl Write for CasinoEvent {
                 player.write(writer);
                 write_string(name, writer);
             }
-            Self::GameStarted { session_id, player, game_type, bet, initial_state } => {
+            Self::GameStarted {
+                session_id,
+                player,
+                game_type,
+                bet,
+                initial_state,
+            } => {
                 1u8.write(writer);
                 session_id.write(writer);
                 player.write(writer);
@@ -826,13 +840,25 @@ impl Write for CasinoEvent {
                 bet.write(writer);
                 initial_state.write(writer);
             }
-            Self::GameMoved { session_id, move_number, new_state } => {
+            Self::GameMoved {
+                session_id,
+                move_number,
+                new_state,
+            } => {
                 2u8.write(writer);
                 session_id.write(writer);
                 move_number.write(writer);
                 new_state.write(writer);
             }
-            Self::GameCompleted { session_id, player, game_type, payout, final_chips, was_shielded, was_doubled } => {
+            Self::GameCompleted {
+                session_id,
+                player,
+                game_type,
+                payout,
+                final_chips,
+                was_shielded,
+                was_doubled,
+            } => {
                 3u8.write(writer);
                 session_id.write(writer);
                 player.write(writer);
@@ -895,19 +921,33 @@ impl EncodeSize for CasinoEvent {
             Self::PlayerRegistered { player, name } => {
                 player.encode_size() + string_encode_size(name)
             }
-            Self::GameStarted { session_id, player, game_type, bet, initial_state } => {
+            Self::GameStarted {
+                session_id,
+                player,
+                game_type,
+                bet,
+                initial_state,
+            } => {
                 session_id.encode_size()
                     + player.encode_size()
                     + game_type.encode_size()
                     + bet.encode_size()
                     + initial_state.encode_size()
             }
-            Self::GameMoved { session_id, move_number, new_state } => {
-                session_id.encode_size()
-                    + move_number.encode_size()
-                    + new_state.encode_size()
-            }
-            Self::GameCompleted { session_id, player, game_type, payout, final_chips, was_shielded, was_doubled } => {
+            Self::GameMoved {
+                session_id,
+                move_number,
+                new_state,
+            } => session_id.encode_size() + move_number.encode_size() + new_state.encode_size(),
+            Self::GameCompleted {
+                session_id,
+                player,
+                game_type,
+                payout,
+                final_chips,
+                was_shielded,
+                was_doubled,
+            } => {
                 session_id.encode_size()
                     + player.encode_size()
                     + game_type.encode_size()
@@ -916,9 +956,7 @@ impl EncodeSize for CasinoEvent {
                     + was_shielded.encode_size()
                     + was_doubled.encode_size()
             }
-            Self::LeaderboardUpdated { leaderboard } => {
-                leaderboard.encode_size()
-            }
+            Self::LeaderboardUpdated { leaderboard } => leaderboard.encode_size(),
         }
     }
 }
@@ -952,7 +990,9 @@ mod tests {
 
     #[test]
     fn test_register_instruction_binary_format() {
-        let instruction = CasinoInstruction::Register { name: "Alice".to_string() };
+        let instruction = CasinoInstruction::Register {
+            name: "Alice".to_string(),
+        };
         let encoded = instruction.encode();
 
         // Verify binary format: [0] [nameLen:u32 BE] [nameBytes...]
@@ -995,7 +1035,9 @@ mod tests {
     #[test]
     fn test_instruction_roundtrip() {
         let instructions = vec![
-            CasinoInstruction::Register { name: "TestPlayer".to_string() },
+            CasinoInstruction::Register {
+                name: "TestPlayer".to_string(),
+            },
             CasinoInstruction::Deposit { amount: 5000 },
             CasinoInstruction::StartGame {
                 game_type: GameType::HiLo,

@@ -8,7 +8,7 @@
     "preview": "npm run build && vite preview",
     "build:wasm": "cd wasm && wasm-pack build --target web --out-dir pkg",
     "build:wasm-test": "cd wasm && wasm-pack build --target web --out-dir pkg -- --features testing",
-    "pretest": "cd .. && cargo build --release --bin battleware-simulator",
+    "pretest": "cd .. && cargo build --release --bin nullspace-simulator",
     "test": "npm run build:wasm-test && node --test test/*.test.js"
   },
   "keywords": [],

@@ -102,6 +102,8 @@ export const useTerminalGame = () => {
   const [currentSessionId, setCurrentSessionId] = useState<bigint | null>(null);
   const currentSessionIdRef = useRef<bigint | null>(null);
   const gameTypeRef = useRef<GameType>(GameType.NONE);
+  const baccaratSelectionRef = useRef<'PLAYER' | 'BANKER'>('PLAYER');
+  const gameStateRef = useRef<GameState | null>(null); // Track game state for event handlers
   const [isOnChain, setIsOnChain] = useState(false);
   const [lastTxSig, setLastTxSig] = useState<string | null>(null);
   const clientRef = useRef<CasinoClient | null>(null);
@@ -131,6 +133,14 @@ export const useTerminalGame = () => {
         await client.connectUpdates(null);  // null = receive ALL updates
         console.log('[useTerminalGame] Connected to updates WebSocket (All filter)');
 
+        // Fetch account state for nonce synchronization - this is critical!
+        // The NonceManager needs the account data to sync the local nonce with chain state.
+        // If the backend was restarted and chain state was reset, this ensures we reset
+        // the local nonce to 0 instead of using a stale higher nonce from localStorage.
+        const account = await client.getAccount(keypair.publicKey);
+        await client.initNonceManager(keypair.publicKeyHex, keypair.publicKey, account);
+        console.log('[useTerminalGame] NonceManager initialized with account:', account ? `nonce=${account.nonce}` : 'null (new account)');
+
         // Fetch on-chain player state to sync chips, shields, doubles, and active modifiers
         try {
           const playerState = await client.getCasinoPlayer(keypair.publicKey);
@@ -153,6 +163,7 @@ export const useTerminalGame = () => {
             }));
 
             setIsRegistered(true);
+            hasRegisteredRef.current = true;
 
             // Check for active session and restore game state
             if (playerState.activeSession) {
@@ -184,7 +195,17 @@ export const useTerminalGame = () => {
               }
             }
           } else {
-            console.log('[useTerminalGame] No on-chain player state found, using defaults');
+            console.log('[useTerminalGame] No on-chain player state found, resetting registration state');
+            // Player doesn't exist on chain - reset registration state
+            // This handles the case where the backend was restarted and chain state was lost
+            hasRegisteredRef.current = false;
+            setIsRegistered(false);
+            // Also clear the localStorage registration flag
+            const privateKeyHex = localStorage.getItem('casino_private_key');
+            if (privateKeyHex) {
+              localStorage.removeItem(`casino_registered_${privateKeyHex}`);
+              console.log('[useTerminalGame] Cleared localStorage registration flag for key:', privateKeyHex.substring(0, 8) + '...');
+            }
           }
         } catch (playerError) {
           console.warn('[useTerminalGame] Failed to fetch player state:', playerError);
@@ -278,27 +299,151 @@ export const useTerminalGame = () => {
     return () => clearInterval(interval);
   }, [stats.chips, phase, chainService, isRegistered]);
 
+  // Keep gameStateRef in sync with gameState for event handlers
+  useEffect(() => {
+    gameStateRef.current = gameState;
+  }, [gameState]);
+
+  // Helper to generate descriptive result messages
+  const generateResultMessage = (gameType: GameType, state: GameState | null, payout: number): string => {
+    const resultPart = payout >= 0 ? `Won ${payout}` : `Lost ${Math.abs(payout)}`;
+
+    if (!state) return resultPart;
+
+    switch (gameType) {
+      case GameType.BACCARAT: {
+        const pScore = state.playerCards.reduce((sum, c) => (sum + getBaccaratValue([c])) % 10, 0);
+        const bScore = state.dealerCards.reduce((sum, c) => (sum + getBaccaratValue([c])) % 10, 0);
+        const winner = pScore > bScore ? 'PLAYER' : bScore > pScore ? 'BANKER' : 'TIE';
+        return `${winner} wins ${pScore}-${bScore}. ${resultPart}`;
+      }
+      case GameType.BLACKJACK: {
+        const pVal = getHandValue(state.playerCards);
+        const dVal = getHandValue(state.dealerCards);
+        const pBust = pVal > 21;
+        const dBust = dVal > 21;
+        if (pVal === 21 && state.playerCards.length === 2) return `BLACKJACK! ${resultPart}`;
+        if (pBust) return `Bust (${pVal}). ${resultPart}`;
+        if (dBust) return `Dealer bust (${dVal}). ${resultPart}`;
+        return `${pVal} vs ${dVal}. ${resultPart}`;
+      }
+      case GameType.CASINO_WAR: {
+        const pCard = state.playerCards[0];
+        const dCard = state.dealerCards[0];
+        if (!pCard || !dCard) return resultPart;
+        return `${pCard.rank} vs ${dCard.rank}. ${resultPart}`;
+      }
+      case GameType.HILO: {
+        const lastCard = state.playerCards[state.playerCards.length - 1];
+        if (!lastCard) return resultPart;
+        return `${lastCard.rank}${lastCard.suit}. ${resultPart}`;
+      }
+      case GameType.VIDEO_POKER: {
+        const hand = evaluateVideoPokerHand(state.playerCards);
+        return `${hand.rank}. ${resultPart}`;
+      }
+      case GameType.THREE_CARD: {
+        const pHand = evaluateThreeCardHand(state.playerCards);
+        const dHand = evaluateThreeCardHand(state.dealerCards);
+        return `${pHand.rank} vs ${dHand.rank}. ${resultPart}`;
+      }
+      case GameType.ULTIMATE_HOLDEM: {
+        const pVal = getHandValue(state.playerCards);
+        const dVal = getHandValue(state.dealerCards);
+        return `Player ${pVal} vs Dealer ${dVal}. ${resultPart}`;
+      }
+      case GameType.CRAPS: {
+        const total = state.dice[0] + state.dice[1];
+        return `Rolled ${total}. ${resultPart}`;
+      }
+      case GameType.ROULETTE: {
+        const last = state.rouletteHistory[state.rouletteHistory.length - 1];
+        if (last === undefined) return resultPart;
+        const color = getRouletteColor(last);
+        return `${last} ${color}. ${resultPart}`;
+      }
+      case GameType.SIC_BO: {
+        const total = state.dice.reduce((a, b) => a + b, 0);
+        return `Rolled ${total} (${state.dice.join('-')}). ${resultPart}`;
+      }
+      default:
+        return resultPart;
+    }
+  };
+
   // Subscribe to chain events
   useEffect(() => {
     if (!chainService || !isOnChain) return;
 
     const unsubStarted = chainService.onGameStarted((event: CasinoGameStartedEvent) => {
+      // DEBUG: Log all incoming CasinoGameStarted events
+      console.log('[useTerminalGame] CasinoGameStarted received:', {
+        eventSessionId: event.sessionId?.toString(),
+        eventSessionIdType: typeof event.sessionId,
+        currentSessionId: currentSessionIdRef.current?.toString(),
+        currentSessionIdType: typeof currentSessionIdRef.current,
+        match: event.sessionId === currentSessionIdRef.current,
+        gameType: event.gameType,
+        initialStateLen: event.initialState?.length,
+      });
+
       // Only process events for our current session
       if (currentSessionIdRef.current && event.sessionId === currentSessionIdRef.current) {
+        console.log('[useTerminalGame] Session ID matched! Processing CasinoGameStarted');
         // Store game type for use in subsequent move events
         const frontendGameType = CHAIN_TO_FRONTEND_GAME_TYPE[event.gameType];
         gameTypeRef.current = frontendGameType;
 
         // Parse the initial state to get dealt cards
         if (event.initialState && event.initialState.length > 0) {
+          console.log('[useTerminalGame] Parsing initial state for game type:', frontendGameType);
           parseGameState(event.initialState, frontendGameType);
+
+          // For Casino War, auto-confirm after cards are dealt (unless it's a war situation)
+          // Stage 0 = Initial deal, Stage 1 = War (tie occurred, needs user decision)
+          if (frontendGameType === GameType.CASINO_WAR && chainService && currentSessionIdRef.current) {
+            const stage = event.initialState[2]; // [playerCard, dealerCard, stage]
+            if (stage === 0) {
+              console.log('[useTerminalGame] Auto-confirming Casino War deal');
+              const payload = new Uint8Array([0]); // Confirm - triggers comparison
+              chainService.sendMove(currentSessionIdRef.current, payload)
+                .then(result => {
+                  if (result.txHash) setLastTxSig(result.txHash);
+                  setGameState(prev => ({ ...prev, message: 'COMPARING...' }));
+                })
+                .catch(error => {
+                  console.error('[useTerminalGame] Casino War auto-confirm failed:', error);
+                  setGameState(prev => ({ ...prev, message: 'CONFIRM FAILED' }));
+                });
+            }
+          }
         } else {
+          console.log('[useTerminalGame] Empty initial state, setting stage to PLAYING');
           setGameState(prev => ({
             ...prev,
             stage: 'PLAYING',
             message: 'GAME STARTED - WAITING FOR CARDS',
           }));
+
+          // For Baccarat, auto-send the deal move immediately after game starts
+          // This allows single space bar press to start and deal
+          if (frontendGameType === GameType.BACCARAT && chainService && currentSessionIdRef.current) {
+            console.log('[useTerminalGame] Auto-dealing Baccarat with selection:', baccaratSelectionRef.current);
+            const betType = baccaratSelectionRef.current === 'PLAYER' ? 0 : 1;
+            const payload = new Uint8Array([betType]);
+            chainService.sendMove(currentSessionIdRef.current, payload)
+              .then(result => {
+                if (result.txHash) setLastTxSig(result.txHash);
+                setGameState(prev => ({ ...prev, message: 'DEALING...' }));
+              })
+              .catch(error => {
+                console.error('[useTerminalGame] Baccarat auto-deal failed:', error);
+                setGameState(prev => ({ ...prev, message: 'DEAL FAILED' }));
+              });
+          }
         }
+      } else {
+        console.log('[useTerminalGame] Session ID mismatch or no current session');
       }
     });
 
@@ -344,10 +489,12 @@ export const useTerminalGame = () => {
           }));
         }
 
+        // Generate descriptive result message using current game state
+        const resultMessage = generateResultMessage(gameTypeRef.current, gameStateRef.current, payout);
         setGameState(prev => ({
           ...prev,
           stage: 'RESULT',
-          message: payout >= 0 ? `WON ${payout}` : `LOST ${Math.abs(payout)}`,
+          message: resultMessage,
           lastResult: payout,
         }));
 
@@ -373,20 +520,34 @@ export const useTerminalGame = () => {
       // Parse based on game type
       if (currentType === GameType.BLACKJACK) {
         // [pLen:u8] [pCards:u8×pLen] [dLen:u8] [dCards:u8×dLen] [stage:u8]
+        if (stateBlob.length < 3) {
+          console.error('[parseGameState] Blackjack state blob too short:', stateBlob.length);
+          return;
+        }
         let offset = 0;
         const pLen = stateBlob[offset++];
+        // Validate blob length: need pLen + 1 (dLen) + at least 1 dealer card + 1 (stage)
+        const minExpectedLength = 1 + pLen + 1 + 1 + 1; // pLen byte + pCards + dLen byte + at least 1 dCard + stage
+        if (stateBlob.length < minExpectedLength) {
+          console.error('[parseGameState] Blackjack state blob too short for pLen:', pLen, 'blob length:', stateBlob.length);
+          return;
+        }
         const pCards: Card[] = [];
-        for (let i = 0; i < pLen; i++) {
+        for (let i = 0; i < pLen && offset < stateBlob.length; i++) {
           const cardVal = stateBlob[offset++];
           pCards.push(decodeCard(cardVal));
         }
+        if (offset >= stateBlob.length) {
+          console.error('[parseGameState] Blackjack state blob ended early at offset:', offset);
+          return;
+        }
         const dLen = stateBlob[offset++];
         const dCards: Card[] = [];
-        for (let i = 0; i < dLen; i++) {
+        for (let i = 0; i < dLen && offset < stateBlob.length; i++) {
           const cardVal = stateBlob[offset++];
           dCards.push({ ...decodeCard(cardVal), isHidden: i > 0 }); // First dealer card visible
         }
-        const stage = stateBlob[offset++];
+        const stage = offset < stateBlob.length ? stateBlob[offset++] : 0;
 
         setGameState(prev => ({
           ...prev,
@@ -399,6 +560,10 @@ export const useTerminalGame = () => {
       } else if (currentType === GameType.HILO) {
         // [currentCard:u8] [accumulator:i64 BE]
         // Accumulator is in basis points (10000 = 1x multiplier)
+        if (stateBlob.length < 9) {
+          console.error('[parseGameState] HiLo state blob too short:', stateBlob.length);
+          return;
+        }
         const currentCard = decodeCard(stateBlob[0]);
         const accumulatorBasisPoints = Number(view.getBigInt64(1, false)); // Big Endian
 
@@ -424,15 +589,23 @@ export const useTerminalGame = () => {
         });
       } else if (currentType === GameType.BACCARAT) {
         // [playerHandLen:u8] [playerCards:u8×n] [bankerHandLen:u8] [bankerCards:u8×n]
+        if (stateBlob.length < 2) {
+          console.error('[parseGameState] Baccarat state blob too short:', stateBlob.length);
+          return;
+        }
         let offset = 0;
         const pLen = stateBlob[offset++];
+        if (stateBlob.length < 1 + pLen + 1) {
+          console.error('[parseGameState] Baccarat state blob too short for pLen:', pLen);
+          return;
+        }
         const pCards: Card[] = [];
-        for (let i = 0; i < pLen; i++) {
+        for (let i = 0; i < pLen && offset < stateBlob.length; i++) {
           pCards.push(decodeCard(stateBlob[offset++]));
         }
         const bLen = stateBlob[offset++];
         const bCards: Card[] = [];
-        for (let i = 0; i < bLen; i++) {
+        for (let i = 0; i < bLen && offset < stateBlob.length; i++) {
           bCards.push(decodeCard(stateBlob[offset++]));
         }
 
@@ -447,9 +620,13 @@ export const useTerminalGame = () => {
       } else if (currentType === GameType.VIDEO_POKER) {
         // [stage:u8] [c1:u8] [c2:u8] [c3:u8] [c4:u8] [c5:u8]
         // Stage: 0 = Deal (waiting for hold selection), 1 = Draw (game complete)
+        if (stateBlob.length < 6) {
+          console.error('[parseGameState] Video Poker state blob too short:', stateBlob.length);
+          return;
+        }
         const stage = stateBlob[0];
         const cards: Card[] = [];
-        for (let i = 1; i <= 5; i++) {
+        for (let i = 1; i <= 5 && i < stateBlob.length; i++) {
           cards.push(decodeCard(stateBlob[i]));
         }
 
@@ -462,6 +639,10 @@ export const useTerminalGame = () => {
         }));
       } else if (currentType === GameType.CASINO_WAR) {
         // [playerCard:u8] [dealerCard:u8] [stage:u8]
+        if (stateBlob.length < 3) {
+          console.error('[parseGameState] Casino War state blob too short:', stateBlob.length);
+          return;
+        }
         const playerCard = decodeCard(stateBlob[0]);
         const dealerCard = decodeCard(stateBlob[1]);
         const stage = stateBlob[2];
@@ -478,6 +659,10 @@ export const useTerminalGame = () => {
         }));
       } else if (currentType === GameType.CRAPS) {
         // [phase:u8] [main_point:u8] [d1:u8] [d2:u8] [bet_count:u8] [bets...]
+        if (stateBlob.length < 5) {
+          console.error('[parseGameState] Craps state blob too short:', stateBlob.length);
+          return;
+        }
         const phase = stateBlob[0]; // 0=ComeOut, 1=Point
         const mainPoint = stateBlob[1];
         const d1 = stateBlob[2];
@@ -534,6 +719,10 @@ export const useTerminalGame = () => {
         }
       } else if (currentType === GameType.THREE_CARD) {
         // [pCard1:u8] [pCard2:u8] [pCard3:u8] [dCard1:u8] [dCard2:u8] [dCard3:u8] [stage:u8]
+        if (stateBlob.length < 7) {
+          console.error('[parseGameState] Three Card state blob too short:', stateBlob.length);
+          return;
+        }
         const pCards: Card[] = [
           decodeCard(stateBlob[0]),
           decodeCard(stateBlob[1]),
@@ -556,6 +745,10 @@ export const useTerminalGame = () => {
         }));
       } else if (currentType === GameType.ULTIMATE_HOLDEM) {
         // [stage:u8] [pCard1:u8] [pCard2:u8] [community1-5:u8×5] [dCard1:u8] [dCard2:u8] [playBetMultiplier:u8]
+        if (stateBlob.length < 11) {
+          console.error('[parseGameState] Ultimate Holdem state blob too short:', stateBlob.length);
+          return;
+        }
         const stage = stateBlob[0]; // 0=Preflop, 1=Flop, 2=River, 3=Showdown
         const pCards: Card[] = [
           decodeCard(stateBlob[1]),
@@ -596,25 +789,53 @@ export const useTerminalGame = () => {
 
   // Helper to decode card value (0-51) to Card object
   const decodeCard = (value: number): Card => {
+    // Handle invalid input
+    if (value === undefined || value === null || isNaN(value) || value < 0 || value > 51) {
+      console.warn('[decodeCard] Invalid card value:', value);
+      return { rank: '2', suit: '♠', value: 2, isHidden: false };
+    }
     const suits: readonly ['♠', '♥', '♦', '♣'] = ['♠', '♥', '♦', '♣'] as const;
     const ranks: readonly ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'] = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'] as const;
 
     const suit = suits[Math.floor(value / 13)];
-    const rank = ranks[value % 13];
-    const cardValue = value % 13 + 1;
+    const rankIdx = value % 13;
+    const rank = ranks[rankIdx];
+    // Calculate proper blackjack value: 2-10 for number cards, 10 for face cards, 11 for Ace
+    let cardValue: number;
+    if (rankIdx === 0) {
+      cardValue = 11; // Ace
+    } else if (rankIdx <= 8) {
+      cardValue = rankIdx + 1; // 2-9 -> value 2-9 (index 1-8)
+    } else if (rankIdx === 9) {
+      cardValue = 10; // 10
+    } else {
+      cardValue = 10; // J, Q, K
+    }
 
     return {
       suit,
       rank,
-      value: cardValue > 10 ? 10 : cardValue,
+      value: cardValue,
       isHidden: false,
     };
   };
 
   // --- CORE ACTIONS ---
 
-  // Track if we've registered on-chain
-  const hasRegisteredRef = useRef(false);
+  // Track if we've registered on-chain - check localStorage first
+  // Note: We use casino_private_key as identifier since that's what client.js stores
+  // Using lazy initialization to avoid calling on every render
+  const hasRegisteredRef = useRef<boolean | null>(null);
+  if (hasRegisteredRef.current === null) {
+    const privateKeyHex = localStorage.getItem('casino_private_key');
+    if (privateKeyHex) {
+      hasRegisteredRef.current = localStorage.getItem(`casino_registered_${privateKeyHex}`) === 'true';
+      console.log('[useTerminalGame] Loaded registration status from localStorage:', hasRegisteredRef.current, 'for key:', privateKeyHex.substring(0, 8) + '...');
+    } else {
+      console.log('[useTerminalGame] No private key in localStorage, assuming not registered');
+      hasRegisteredRef.current = false;
+    }
+  }
 
   const startGame = async (type: GameType) => {
     // Optimistic update
@@ -648,7 +869,7 @@ export const useTerminalGame = () => {
       baccaratLastRoundBets: [],
       lastResult: 0,
       activeModifiers: { shield: false, double: false },
-      baccaratSelection: 'PLAYER',
+      baccaratSelection: prev.baccaratSelection, // Preserve selection from previous game
       insuranceBet: 0,
       blackjackStack: [],
       completedHands: [],
@@ -662,11 +883,74 @@ export const useTerminalGame = () => {
       try {
         // Ensure player is registered on-chain first
         if (!hasRegisteredRef.current) {
-          const playerName = `Player_${Date.now().toString(36)}`;
-          console.log('[useTerminalGame] Registering on-chain as:', playerName);
-          await chainService.register(playerName);
-          hasRegisteredRef.current = true;
-          console.log('[useTerminalGame] Registration submitted');
+          // First check if player already exists on-chain (handles React StrictMode remounts)
+          console.log('[useTerminalGame] Checking on-chain state (hasRegisteredRef=false), clientRef:', !!clientRef.current, 'publicKeyBytesRef:', !!publicKeyBytesRef.current);
+          try {
+            if (!clientRef.current) {
+              console.warn('[useTerminalGame] clientRef.current is null, cannot check on-chain state');
+            } else if (!publicKeyBytesRef.current) {
+              console.warn('[useTerminalGame] publicKeyBytesRef.current is null, cannot check on-chain state');
+            } else {
+              const existingPlayer = await clientRef.current.getCasinoPlayer(publicKeyBytesRef.current);
+              console.log('[useTerminalGame] getCasinoPlayer result:', existingPlayer);
+              if (existingPlayer) {
+                console.log('[useTerminalGame] Player already registered on-chain:', existingPlayer);
+                hasRegisteredRef.current = true;
+                // Persist to localStorage as well
+                const privateKeyHex = localStorage.getItem('casino_private_key');
+                if (privateKeyHex) {
+                  localStorage.setItem(`casino_registered_${privateKeyHex}`, 'true');
+                }
+                setIsRegistered(true);
+                setStats(prev => ({
+                  ...prev,
+                  chips: existingPlayer.chips,
+                  shields: existingPlayer.shields,
+                  doubles: existingPlayer.doubles,
+                }));
+              }
+            }
+          } catch (e) {
+            // Log actual error, not just assume player doesn't exist
+            console.error('[useTerminalGame] Error checking player on-chain:', e);
+          }
+
+          // Only register if player still doesn't exist
+          if (!hasRegisteredRef.current) {
+            const playerName = `Player_${Date.now().toString(36)}`;
+            console.log('[useTerminalGame] Registering on-chain as:', playerName, '(hasRegisteredRef was false)');
+            await chainService.register(playerName);
+            hasRegisteredRef.current = true;
+            // Persist registration status to localStorage
+            const privateKeyHex = localStorage.getItem('casino_private_key');
+            if (privateKeyHex) {
+              localStorage.setItem(`casino_registered_${privateKeyHex}`, 'true');
+            }
+            console.log('[useTerminalGame] Registration submitted, waiting for confirmation...');
+
+            // Poll for player state to confirm registration (max 5 seconds)
+            const maxAttempts = 10;
+            for (let i = 0; i < maxAttempts; i++) {
+              await new Promise(resolve => setTimeout(resolve, 500));
+              try {
+                const playerState = await clientRef.current?.getCasinoPlayer(publicKeyBytesRef.current!);
+                if (playerState) {
+                  console.log('[useTerminalGame] Registration confirmed:', playerState);
+                  setStats(prev => ({
+                    ...prev,
+                    chips: playerState.chips,
+                    shields: playerState.shields,
+                    doubles: playerState.doubles,
+                  }));
+                  break;
+                }
+              } catch (e) {
+                console.log('[useTerminalGame] Waiting for registration...', i + 1);
+              }
+            }
+          }
+        } else {
+          console.log('[useTerminalGame] Skipping registration check - hasRegisteredRef already true (from localStorage or previous check)');
         }
 
         const chainGameType = GAME_TYPE_MAP[type];
@@ -1052,7 +1336,15 @@ export const useTerminalGame = () => {
     if (gameState.stage === 'PLAYING') return;
     if (stats.chips < gameState.bet) { setGameState(prev => ({ ...prev, message: "INSUFFICIENT FUNDS" })); return; }
 
-    // If on-chain mode for other games, just wait for chain events
+    // If on-chain mode with no active session, start a new game
+    // This handles the case where a previous game completed and user presses space to play again
+    if (isOnChain && chainService && !currentSessionIdRef.current) {
+      console.log('[useTerminalGame] deal() - No active session, starting new game for:', gameState.type);
+      startGame(gameState.type);
+      return;
+    }
+
+    // If on-chain mode with active session, wait for chain events
     if (isOnChain && chainService && currentSessionIdRef.current) {
       setGameState(prev => ({ ...prev, message: 'WAITING FOR DEAL...' }));
       return;
@@ -1531,7 +1823,10 @@ export const useTerminalGame = () => {
   };
 
   const baccaratActions = {
-      toggleSelection: (sel: 'PLAYER'|'BANKER') => setGameState(prev => ({ ...prev, baccaratSelection: sel })),
+      toggleSelection: (sel: 'PLAYER'|'BANKER') => {
+        baccaratSelectionRef.current = sel;
+        setGameState(prev => ({ ...prev, baccaratSelection: sel }));
+      },
       placeBet: (type: BaccaratBet['type']) => {
           if (stats.chips < gameState.bet) return;
           setGameState(prev => ({ ...prev, baccaratUndoStack: [...prev.baccaratUndoStack, prev.baccaratBets], baccaratBets: [...prev.baccaratBets, { type, amount: prev.bet }] }));

@@ -103,6 +103,15 @@ export class NonceManager {
     }
 
     if (!account) {
+      // Account doesn't exist on chain - always ensure clean state
+      const localNonce = this.getCurrentNonce();
+      const pendingTxs = this.getPendingTransactions();
+
+      if (localNonce > 0 || pendingTxs.length > 0) {
+        console.log(`Account not found on chain - resetting state (localNonce=${localNonce}, pendingTxs=${pendingTxs.length})`);
+        this.resetNonce();
+        this.cleanupAllTransactions();
+      }
       return;
     }
 
@@ -134,8 +143,15 @@ export class NonceManager {
       this.cleanupConfirmedTransactions(serverNonce - 1);
     }
 
-    // Compare and sync nonces
-    if (serverNonce > localNonce) {
+    // Always sync local nonce to match server - chain is source of truth
+    if (serverNonce !== localNonce) {
+      if (localNonce > serverNonce) {
+        console.log(`Local nonce (${localNonce}) is ahead of server (${serverNonce}) - resetting to server nonce`);
+        // Also clear stale pending transactions when resetting backwards
+        this.cleanupAllTransactions();
+      } else {
+        console.log(`Advancing local nonce from ${localNonce} to ${serverNonce}`);
+      }
       this.setNonce(serverNonce);
     }
   }
@@ -331,9 +347,27 @@ export class NonceManager {
         return;
       }
 
+      const currentNonce = this.getCurrentNonce();
 
-      // Try to resubmit all pending transactions
-      for (const txRecord of pendingTxs) {
+      // Check for stale transactions (nonces >= current nonce means they're from a previous session)
+      // This can happen if the server was reset but the client still has old pending transactions
+      const staleTxs = pendingTxs.filter(tx => tx.nonce >= currentNonce);
+      if (staleTxs.length > 0) {
+        console.log(`Found ${staleTxs.length} stale pending transactions with nonces >= ${currentNonce}, clearing them`);
+        for (const tx of staleTxs) {
+          const key = `${this.TX_STORAGE_PREFIX}${tx.nonce}`;
+          localStorage.removeItem(key);
+        }
+        // Re-fetch pending transactions after cleanup
+        const validTxs = this.getPendingTransactions();
+        if (validTxs.length === 0) {
+          return;
+        }
+      }
+
+      // Try to resubmit valid pending transactions (those with nonces < currentNonce)
+      const validPendingTxs = pendingTxs.filter(tx => tx.nonce < currentNonce);
+      for (const txRecord of validPendingTxs) {
         // Convert array back to Uint8Array
         const txData = new Uint8Array(txRecord.txData);
 

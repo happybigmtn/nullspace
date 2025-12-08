@@ -1,7 +1,7 @@
 use std::num::NonZero;
 
 use crate::indexer::Indexer;
-use battleware_types::Evaluation;
+use nullspace_types::Evaluation;
 use commonware_cryptography::{
     bls12381::primitives::{group, poly::Poly},
     ed25519::PublicKey,

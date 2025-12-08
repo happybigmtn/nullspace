@@ -22,7 +22,7 @@
 //! 4 = Fold (river only if no previous bet)
 
 use super::{CasinoGame, GameError, GameResult, GameRng};
-use battleware_types::casino::GameSession;
+use nullspace_types::casino::GameSession;
 
 /// Game stages.
 #[repr(u8)]
@@ -400,36 +400,41 @@ fn resolve_showdown(
     };
     let blind_pay = ante.saturating_mul(blind_bonus);
 
+    // NOTE: play_bet was NOT charged at StartGame, so we must adjust payouts accordingly.
+    // On wins/ties: subtract play_bet from the calculated return.
+    // On losses: use LossWithExtraDeduction to deduct the uncharged play_bet.
+
     if tie {
-        // Push - return all stakes (Ante + Play + Blind) + Blind Bonus (if any? No, tie usually doesn't pay blind bonus unless specified, but usually push).
+        // Push - return all stakes (Ante + Play + Blind)
         // Rules: "If the hand is a tie, the Ante, Play, and Blind bets push."
-        // Return: Ante + Play + Blind (Blind = Ante)
-        let total_return = ante.saturating_add(play_bet).saturating_add(ante);
+        // Calculated return: Ante + Play + Blind (Blind = Ante)
+        // Actual return: subtract play_bet since it wasn't charged
+        let total_return = ante.saturating_add(ante); // Just Ante + Blind (play_bet wasn't charged)
         Ok(GameResult::Win(total_return))
     } else if player_wins {
         if dealer_qualifies {
             // Win Ante (1:1), Play (1:1), Blind (Pay table or Push)
-            // Return: 2*Ante + 2*Play + (Blind + BlindBonus)
-            // If no bonus, Blind pushes (return Blind).
+            // Calculated return: 2*Ante + 2*Play + (Blind + BlindBonus)
+            // Actual return: subtract play_bet since it wasn't charged
             let blind_return = ante.saturating_add(blind_pay);
             let total_return = ante.saturating_mul(2)
-                .saturating_add(play_bet.saturating_mul(2))
+                .saturating_add(play_bet) // Only 1x play_bet since 1x was "returned" but never charged
                 .saturating_add(blind_return);
             Ok(GameResult::Win(total_return))
         } else {
             // Dealer doesn't qualify: Ante Pushes, Play Wins (1:1), Blind Wins (Pay table or Push)
-            // Return: 1*Ante + 2*Play + (Blind + BlindBonus)
+            // Calculated return: 1*Ante + 2*Play + (Blind + BlindBonus)
+            // Actual return: subtract play_bet since it wasn't charged
             let blind_return = ante.saturating_add(blind_pay);
             let total_return = ante
-                .saturating_add(play_bet.saturating_mul(2))
+                .saturating_add(play_bet) // Only 1x play_bet since 1x was "returned" but never charged
                 .saturating_add(blind_return);
             Ok(GameResult::Win(total_return))
         }
     } else {
         // Lose Ante, Play, Blind
-        // Unless Blind Bonus covers it? (Bad Beat Bonus? Not standard).
-        // Standard UTH: Lose everything.
-        Ok(GameResult::Loss)
+        // Play bet was NOT charged, so need LossWithExtraDeduction
+        Ok(GameResult::LossWithExtraDeduction(play_bet))
     }
 }
 
@@ -437,9 +442,9 @@ fn resolve_showdown(
 mod tests {
     use super::*;
     use crate::mocks::{create_account_keypair, create_network_keypair, create_seed};
-    use battleware_types::casino::GameType;
+    use nullspace_types::casino::GameType;
 
-    fn create_test_seed() -> battleware_types::Seed {
+    fn create_test_seed() -> nullspace_types::Seed {
         let (network_secret, _) = create_network_keypair();
         create_seed(&network_secret, 1)
     }
@@ -455,7 +460,7 @@ mod tests {
             move_count: 0,
             created_at: 0,
             is_complete: false,
-            super_mode: battleware_types::casino::SuperModeState::default(),
+            super_mode: nullspace_types::casino::SuperModeState::default(),
         }
     }
 

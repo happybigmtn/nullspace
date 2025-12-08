@@ -17,7 +17,7 @@
 //! [3] - Clear all bets (only before first roll)
 
 use super::{CasinoGame, GameError, GameResult, GameRng};
-use battleware_types::casino::GameSession;
+use nullspace_types::casino::GameSession;
 
 /// Number of ways to roll each total with 2d6
 const WAYS: [u8; 13] = [0, 0, 1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1];
@@ -824,7 +824,12 @@ impl CasinoGame for Craps {
                     }
                 } else {
                     // Game continues with active bets
-                    Ok(GameResult::Continue)
+                    // Use ContinueWithUpdate if there are intermediate payouts/losses
+                    if total_payout != 0 {
+                        Ok(GameResult::ContinueWithUpdate { payout: total_payout })
+                    } else {
+                        Ok(GameResult::Continue)
+                    }
                 }
             }
 
@@ -847,9 +852,9 @@ impl CasinoGame for Craps {
 mod tests {
     use super::*;
     use crate::mocks::{create_account_keypair, create_network_keypair, create_seed};
-    use battleware_types::casino::GameType;
+    use nullspace_types::casino::GameType;
 
-    fn create_test_seed() -> battleware_types::Seed {
+    fn create_test_seed() -> nullspace_types::Seed {
         let (network_secret, _) = create_network_keypair();
         create_seed(&network_secret, 1)
     }
@@ -865,7 +870,7 @@ mod tests {
             move_count: 0,
             created_at: 0,
             is_complete: false,
-            super_mode: battleware_types::casino::SuperModeState::default(),
+            super_mode: nullspace_types::casino::SuperModeState::default(),
         }
     }
 
@@ -924,35 +929,37 @@ mod tests {
 
     #[test]
     fn test_field_payout() {
-        assert_eq!(calculate_field_payout(2, 100), 200); // 2:1
-        assert_eq!(calculate_field_payout(12, 100), 200); // 2:1
-        assert_eq!(calculate_field_payout(3, 100), 100); // 1:1
-        assert_eq!(calculate_field_payout(11, 100), 100); // 1:1
+        // Payouts are TOTAL RETURN (stake + winnings)
+        assert_eq!(calculate_field_payout(2, 100), 300);  // 2:1 -> 3x total
+        assert_eq!(calculate_field_payout(12, 100), 300); // 2:1 -> 3x total
+        assert_eq!(calculate_field_payout(3, 100), 200);  // 1:1 -> 2x total
+        assert_eq!(calculate_field_payout(11, 100), 200); // 1:1 -> 2x total
         assert_eq!(calculate_field_payout(7, 100), -100); // lose
     }
 
     #[test]
     fn test_yes_payout() {
-        // Place 6 hits
-        assert_eq!(calculate_yes_payout(6, 100, true), 119); // (120 - 1% commission)
+        // Place 6 hits - returns stake + (winnings - commission)
+        // 6:5 odds = 120 winnings, 1% commission = 1, so 119 + 100 = 219 total
+        assert_eq!(calculate_yes_payout(6, 100, true), 219);
         // Place 6 misses (7 rolled)
         assert_eq!(calculate_yes_payout(6, 100, false), -100);
     }
 
     #[test]
     fn test_next_payout() {
-        // Hop on 7
-        assert_eq!(calculate_next_payout(7, 7, 100), 495); // 5x - 1% = 495
-        // Hop on 2
-        assert_eq!(calculate_next_payout(2, 2, 100), 3465); // 35x - 1% = 3465
+        // Hop on 7: 5x multiplier = 500, 1% commission = 5, so 495 + 100 = 595 total
+        assert_eq!(calculate_next_payout(7, 7, 100), 595);
+        // Hop on 2: 35x multiplier = 3500, 1% commission = 35, so 3465 + 100 = 3565 total
+        assert_eq!(calculate_next_payout(2, 2, 100), 3565);
         // Miss
         assert_eq!(calculate_next_payout(7, 6, 100), -100);
     }
 
     #[test]
     fn test_hardway_payout() {
-        // Hard 6 (3,3) wins
-        assert_eq!(calculate_hardway_payout(6, 3, 3, 6, 100), Some(900)); // 9:1
+        // Hard 6 (3,3) wins - 9:1 = 900 + 100 stake = 1000 total
+        assert_eq!(calculate_hardway_payout(6, 3, 3, 6, 100), Some(1000));
         // Easy 6 (2,4) loses
         assert_eq!(calculate_hardway_payout(6, 2, 4, 6, 100), Some(-100));
         // Seven out loses

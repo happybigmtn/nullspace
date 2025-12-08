@@ -1,5 +1,5 @@
 use crate::{Client, Error, Result};
-use battleware_types::{api::Query, Seed, NAMESPACE};
+use nullspace_types::{api::Query, Seed, NAMESPACE};
 use commonware_codec::{DecodeExt, Encode};
 use commonware_consensus::Viewable;
 use url::Url;

@@ -199,8 +199,14 @@ export const generateSuperMultipliers = (gameType: GameType): SuperMultiplier[] 
 
 // --- HAND VALUES ---
 export const getHandValue = (cards: Card[]): number => {
-  let value = cards.reduce((acc, c) => acc + c.value, 0);
-  let aces = cards.filter(c => c.rank === 'A').length;
+  if (!cards || !Array.isArray(cards)) return 0;
+  // Filter out undefined/null cards and cards with invalid values
+  const validCards = cards.filter(c => c && typeof c.value === 'number' && !isNaN(c.value));
+  if (validCards.length !== cards.length) {
+    console.warn('[getHandValue] Some cards were invalid:', cards);
+  }
+  let value = validCards.reduce((acc, c) => acc + c.value, 0);
+  let aces = validCards.filter(c => c.rank === 'A').length;
   while (value > 21 && aces > 0) {
     value -= 10;
     aces--;
@@ -209,7 +215,10 @@ export const getHandValue = (cards: Card[]): number => {
 };
 
 export const getBaccaratValue = (cards: Card[]): number => {
-  return cards.reduce((acc, c) => {
+  if (!cards || !Array.isArray(cards)) return 0;
+  // Filter out undefined/null cards
+  const validCards = cards.filter(c => c && c.rank !== undefined);
+  return validCards.reduce((acc, c) => {
     let val = c.value;
     if (c.rank === '10' || c.rank === 'J' || c.rank === 'Q' || c.rank === 'K') val = 0;
     if (c.rank === 'A') val = 1;

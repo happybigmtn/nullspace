@@ -1,5 +1,5 @@
-use battleware_simulator::{Api, Simulator};
-use battleware_types::Identity;
+use nullspace_simulator::{Api, Simulator};
+use nullspace_types::Identity;
 use clap::Parser;
 use commonware_codec::DecodeExt;
 use std::sync::Arc;

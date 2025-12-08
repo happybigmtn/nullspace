@@ -12,7 +12,7 @@ pub use execution::{
 };
 
 /// Genesis message to use during initialization.
-const GENESIS: &[u8] = b"commonware is neat";
+const GENESIS: &[u8] = b"nullspace is the future";
 
 /// Get the genesis block.
 pub fn genesis_block() -> Block {

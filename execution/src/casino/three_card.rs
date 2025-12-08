@@ -13,7 +13,7 @@
 //! [1] = Fold (lose ante)
 
 use super::{CasinoGame, GameError, GameResult, GameRng};
-use battleware_types::casino::GameSession;
+use nullspace_types::casino::GameSession;
 
 /// Three Card Poker stages.
 #[repr(u8)]
@@ -218,55 +218,50 @@ impl CasinoGame for ThreeCardPoker {
 
                 // Calculate ante bonus (paid regardless of dealer) with overflow protection
                 let bonus = session.bet.saturating_mul(ante_bonus(player_hand.0));
-                let _double_bet = session.bet.saturating_mul(2);
+
+                // NOTE: play_bet was NOT charged at StartGame, so we must adjust payouts.
+                // play_bet = ante = session.bet
+                let play_bet = session.bet;
 
                 if !dealer_qualifies {
                     // Ante pays 1:1 (2x return), play bet pushes (1x return), plus bonus
-                    // Total return: 2*Ante + 1*Play + Bonus
-                    // Ante = Play = bet. So 3*bet + Bonus.
-                    let base_return = session.bet.saturating_mul(3);
+                    // Calculated return: 2*Ante + 1*Play + Bonus = 3*bet + Bonus
+                    // Actual return: subtract play_bet (wasn't charged) = 2*bet + Bonus
+                    let base_return = session.bet.saturating_mul(2);
                     Ok(GameResult::Win(base_return.saturating_add(bonus)))
                 } else {
                     // Compare hands
                     match compare_hands(&player_hand, &dealer_hand) {
                         std::cmp::Ordering::Greater => {
                             // Player wins: ante and play both pay 1:1
-                            // Total return: 2*Ante + 2*Play + Bonus
-                            // = 4*bet + Bonus
-                            let total_return = session.bet.saturating_mul(4);
+                            // Calculated return: 2*Ante + 2*Play + Bonus = 4*bet + Bonus
+                            // Actual return: subtract play_bet = 3*bet + Bonus
+                            let total_return = session.bet.saturating_mul(3);
                             Ok(GameResult::Win(total_return.saturating_add(bonus)))
                         }
                         std::cmp::Ordering::Less => {
                             // Dealer wins: lose ante and play
-                            // Note: bonus still paid if applicable
+                            // Play bet was NOT charged, so need LossWithExtraDeduction
+                            // Bonus is paid regardless - it reduces the loss
                             if bonus > 0 {
-                                // Won bonus but lost main bet
-                                // Net result depends on comparison
-                                // If bonus covers losses (double_bet), return the difference?
-                                // No, Win(amount) adds to chips.
-                                // We paid double_bet.
-                                // If bonus is 500. We lost 200.
-                                // We should get 500 back?
-                                // Wait. "Ante Bonus" is paid on the Ante wager.
-                                // If I have SF (5:1). Bet 100.
-                                // Bonus is 500.
-                                // If I lose hand.
-                                // Do I get 500 check? Or do I lose my 100 ante?
-                                // Rules: "Ante Bonus is paid ... regardless of dealer's hand".
-                                // So I get 500.
-                                // I lost my 100 ante and 100 play.
-                                // So I get 500 check.
-                                // Net: -200 + 500 = +300.
-                                // So Win(bonus).
-                                Ok(GameResult::Win(bonus))
+                                // Net: -ante - play + bonus
+                                // Since only ante was charged, we need to deduct play_bet
+                                // and add the bonus
+                                if bonus > play_bet {
+                                    // Bonus covers play_bet loss, return remainder
+                                    Ok(GameResult::Win(bonus.saturating_sub(play_bet)))
+                                } else {
+                                    // Play_bet loss exceeds bonus
+                                    Ok(GameResult::LossWithExtraDeduction(play_bet.saturating_sub(bonus)))
+                                }
                             } else {
-                                Ok(GameResult::Loss)
+                                Ok(GameResult::LossWithExtraDeduction(play_bet))
                             }
                         }
                         std::cmp::Ordering::Equal => {
-                            // Push
-                            // Return Ante + Play + Bonus
-                            let base_return = session.bet.saturating_mul(2);
+                            // Push - Return Ante + Play + Bonus
+                            // Actual return: just Ante + Bonus (play_bet wasn't charged)
+                            let base_return = session.bet;
                             Ok(GameResult::Win(base_return.saturating_add(bonus)))
                         }
                     }
@@ -280,9 +275,9 @@ impl CasinoGame for ThreeCardPoker {
 mod tests {
     use super::*;
     use crate::mocks::{create_account_keypair, create_network_keypair, create_seed};
-    use battleware_types::casino::GameType;
+    use nullspace_types::casino::GameType;
 
-    fn create_test_seed() -> battleware_types::Seed {
+    fn create_test_seed() -> nullspace_types::Seed {
         let (network_secret, _) = create_network_keypair();
         create_seed(&network_secret, 1)
     }
@@ -298,7 +293,7 @@ mod tests {
             move_count: 0,
             created_at: 0,
             is_complete: false,
-            super_mode: battleware_types::casino::SuperModeState::default(),
+            super_mode: nullspace_types::casino::SuperModeState::default(),
         }
     }
 

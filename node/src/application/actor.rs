@@ -9,8 +9,8 @@ use crate::{
     seeder,
     supervisor::{EpochSupervisor, Supervisor, ViewSupervisor},
 };
-use battleware_execution::{nonce, state_transition, Adb, Noncer};
-use battleware_types::{
+use nullspace_execution::{nonce, state_transition, Adb, Noncer};
+use nullspace_types::{
     execution::{Output, Value, MAX_BLOCK_TRANSACTIONS},
     genesis_block, genesis_digest, Block, Identity,
 };

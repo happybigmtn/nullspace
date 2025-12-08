@@ -7,7 +7,7 @@ use crate::{
     indexer::Indexer,
     seeder::{ingress::Mailbox, Config, Message},
 };
-use battleware_types::Seed;
+use nullspace_types::Seed;
 use commonware_codec::{DecodeExt, Encode};
 use commonware_consensus::{threshold_simplex::types::View, Viewable};
 use commonware_cryptography::{

@@ -191,17 +191,38 @@ export const useKeyboardControls = ({
                 if (k === 'u') gameActions.undoSicBoBet();
             }
 
-            // Bet Amounts (Ctrl+1-9, Ctrl+0 for custom) - requires Ctrl modifier to avoid conflicts
+            // Bet Amounts (ArrowUp/ArrowDown to cycle, Ctrl+1-9, Ctrl+0 for custom)
+            const bets = [1, 5, 25, 100, 500, 1000, 5000, 10000, 50000];
+
+            // Arrow keys to cycle through bet amounts (only when not in input mode)
+            if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && !uiState.commandOpen && !uiState.customBetOpen) {
+                e.preventDefault();
+                const currentBet = gameState.bet || 50;
+                const currentIndex = bets.findIndex(b => b >= currentBet);
+                let newIndex: number;
+
+                if (e.key === 'ArrowUp') {
+                    // Increase bet - go to next higher value or stay at max
+                    newIndex = currentIndex === -1 ? bets.length - 1 : Math.min(currentIndex + 1, bets.length - 1);
+                } else {
+                    // Decrease bet - go to next lower value or stay at min
+                    newIndex = currentIndex <= 0 ? 0 : currentIndex - 1;
+                }
+
+                uiActions.setBetAmount(bets[newIndex]);
+                return;
+            }
+
+            // Ctrl+1-9 for direct bet selection, Ctrl+0 for custom
             if (e.ctrlKey && !e.shiftKey && !e.altKey) {
-                const bets = [0, 1, 5, 25, 100, 500, 1000, 5000, 10000, 50000];
                 const num = parseInt(e.key);
                 if (!isNaN(num)) {
                     e.preventDefault(); // Prevent browser shortcuts like Ctrl+1 for tabs
                     if (num === 0) {
                         uiActions.setCustomBetOpen(true);
                         setTimeout(() => inputRefs.customBet.current?.focus(), 10);
-                    } else {
-                        uiActions.setBetAmount(bets[num]);
+                    } else if (num <= bets.length) {
+                        uiActions.setBetAmount(bets[num - 1]);
                     }
                     return;
                 }

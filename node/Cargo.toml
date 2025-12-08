@@ -1,19 +1,19 @@
 [package]
-name = "battleware-node"
+name = "nullspace-node"
 edition.workspace = true
 publish = true
 version.workspace = true
 license.workspace = true
-description = "Validator that participates in a battleware network."
+description = "Validator that participates in a nullspace network."
 readme = "README.md"
-homepage = "https://battleware.xyz"
-repository = "https://github.com/commonwarexyz/battleware/tree/main/node"
-documentation = "https://docs.rs/battleware-node"
+homepage = "https://nullspace.xyz"
+repository = "https://github.com/commonwarexyz/nullspace/tree/main/node"
+documentation = "https://docs.rs/nullspace-node"
 
 [dependencies]
-battleware-types = { workspace = true }
-battleware-client = { workspace = true }
-battleware-execution = { workspace = true, features = ["parallel"] }
+nullspace-types = { workspace = true }
+nullspace-client = { workspace = true }
+nullspace-execution = { workspace = true, features = ["parallel"] }
 commonware-broadcast = { workspace = true }
 commonware-codec = { workspace = true }
 commonware-consensus = { workspace = true }

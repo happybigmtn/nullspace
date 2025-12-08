@@ -9,7 +9,7 @@
 //! [2] = Double Down
 
 use super::{CasinoGame, GameError, GameResult, GameRng};
-use battleware_types::casino::GameSession;
+use nullspace_types::casino::GameSession;
 
 /// Maximum cards in a blackjack hand (prevents DoS via large allocations).
 /// Theoretical max is ~11 cards (4 aces at 1 + 4 twos + 3 threes = 21).
@@ -252,6 +252,9 @@ impl CasinoGame for Blackjack {
                             return Err(GameError::InvalidMove);
                         }
 
+                        // Record the extra bet amount (not charged by Layer)
+                        let extra_bet = session.bet;
+
                         // Draw exactly one card
                         let card = rng.draw_card(&mut deck).ok_or(GameError::InvalidMove)?;
                         player_cards.push(card);
@@ -264,15 +267,31 @@ impl CasinoGame for Blackjack {
 
                         let (value, _) = hand_value(&player_cards);
                         if value > 21 {
-                            // Player busts
+                            // Player busts - need to deduct the extra bet that wasn't charged
                             session.state_blob =
                                 serialize_state(&player_cards, &dealer_cards, Stage::Complete);
                             session.is_complete = true;
-                            return Ok(GameResult::Loss);
+                            return Ok(GameResult::LossWithExtraDeduction(extra_bet));
                         }
 
-                        // Must stand after double
-                        Self::dealer_play(session, player_cards, dealer_cards, deck, rng)
+                        // Must stand after double - get result and adjust for uncharged extra bet
+                        let result = Self::dealer_play(session, player_cards, dealer_cards, deck, rng)?;
+                        Ok(match result {
+                            GameResult::Win(payout) => {
+                                // Reduce payout by extra_bet since it wasn't charged
+                                GameResult::Win(payout.saturating_sub(extra_bet))
+                            }
+                            GameResult::Loss => {
+                                // Need to deduct the extra bet
+                                GameResult::LossWithExtraDeduction(extra_bet)
+                            }
+                            GameResult::Push => {
+                                // Push returns bet, but only half was charged
+                                // Return only what was actually charged (original bet)
+                                GameResult::Win(extra_bet)
+                            }
+                            other => other,
+                        })
                     }
                 }
             }
@@ -345,9 +364,9 @@ impl Blackjack {
 mod tests {
     use super::*;
     use crate::mocks::{create_account_keypair, create_network_keypair, create_seed};
-    use battleware_types::casino::GameType;
+    use nullspace_types::casino::GameType;
 
-    fn create_test_seed() -> battleware_types::Seed {
+    fn create_test_seed() -> nullspace_types::Seed {
         let (network_secret, _) = create_network_keypair();
         create_seed(&network_secret, 1)
     }
@@ -363,7 +382,7 @@ mod tests {
             move_count: 0,
             created_at: 0,
             is_complete: false,
-            super_mode: battleware_types::casino::SuperModeState::default(),
+            super_mode: nullspace_types::casino::SuperModeState::default(),
         }
     }
 

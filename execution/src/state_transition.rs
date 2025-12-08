@@ -1,5 +1,5 @@
 use crate::{Adb, Layer, State};
-use battleware_types::{
+use nullspace_types::{
     execution::{Output, Seed, Transaction, Value},
     Identity, NAMESPACE,
 };

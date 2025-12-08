@@ -1,4 +1,4 @@
-use battleware_types::{
+use nullspace_types::{
     execution::{Account, Event, Instruction, Key, Output, Transaction, Value},
     Seed,
 };
@@ -248,19 +248,33 @@ impl<'a, S: State> Layer<'a, S> {
     }
 
     async fn prepare(&mut self, transaction: &Transaction) -> bool {
+        eprintln!(
+            "[PREPARE DEBUG] Processing tx from {:02x}{:02x}{:02x}{:02x}, tx_nonce: {}, instruction: {:?}",
+            transaction.public[0], transaction.public[1], transaction.public[2], transaction.public[3],
+            transaction.nonce,
+            std::mem::discriminant(&transaction.instruction)
+        );
+
         // Get account
         let mut account = if let Some(Value::Account(account)) =
             self.get(&Key::Account(transaction.public.clone())).await
         {
+            eprintln!("[PREPARE DEBUG] Found existing account, stored_nonce: {}", account.nonce);
             account
         } else {
+            eprintln!("[PREPARE DEBUG] No account found, using default (nonce=0)");
             Account::default()
         };
 
         // Ensure nonce is correct
         if account.nonce != transaction.nonce {
+            eprintln!(
+                "[PREPARE DEBUG] NONCE MISMATCH! stored={} tx={} - DROPPING TRANSACTION",
+                account.nonce, transaction.nonce
+            );
             return false;
         }
+        eprintln!("[PREPARE DEBUG] Nonce OK, proceeding with transaction");
 
         // Increment nonce
         account.nonce += 1;
@@ -278,6 +292,11 @@ impl<'a, S: State> Layer<'a, S> {
     }
 
     async fn apply(&mut self, transaction: &Transaction) -> Vec<Event> {
+        eprintln!(
+            "[APPLY DEBUG] Applying transaction from {:02x}{:02x}{:02x}{:02x}, instruction: {:?}",
+            transaction.public[0], transaction.public[1], transaction.public[2], transaction.public[3],
+            std::mem::discriminant(&transaction.instruction)
+        );
         match &transaction.instruction {
             Instruction::CasinoRegister { name } => {
                 self.handle_casino_register(&transaction.public, name).await
@@ -316,15 +335,26 @@ impl<'a, S: State> Layer<'a, S> {
     // === Casino Handler Methods ===
 
     async fn handle_casino_register(&mut self, public: &PublicKey, name: &str) -> Vec<Event> {
+        eprintln!(
+            "[CASINO DEBUG] handle_casino_register: Registering player {:02x}{:02x}{:02x}{:02x} as '{}'",
+            public[0], public[1], public[2], public[3], name
+        );
+
         // Check if player already exists
         if self.get(&Key::CasinoPlayer(public.clone())).await.is_some() {
+            eprintln!("[CASINO DEBUG] handle_casino_register: Player already exists, skipping");
             return vec![]; // Player already registered
         }
 
         // Create new player with initial chips and current block for rate limiting
-        let player = battleware_types::casino::Player::new_with_block(
+        let player = nullspace_types::casino::Player::new_with_block(
             name.to_string(),
             self.seed.view
+        );
+
+        eprintln!(
+            "[CASINO DEBUG] handle_casino_register: Creating new player with chips={}",
+            player.chips
         );
 
         self.insert(
@@ -346,12 +376,12 @@ impl<'a, S: State> Layer<'a, S> {
 
         // Check rate limiting
         let current_block = self.seed.view;
-        if player.last_deposit_block + battleware_types::casino::FAUCET_RATE_LIMIT > current_block {
+        if player.last_deposit_block + nullspace_types::casino::FAUCET_RATE_LIMIT > current_block {
             return vec![];
         }
 
         // Grant faucet chips
-        player.chips = player.chips.saturating_add(battleware_types::casino::FAUCET_AMOUNT);
+        player.chips = player.chips.saturating_add(nullspace_types::casino::FAUCET_AMOUNT);
         player.last_deposit_block = current_block;
 
         self.insert(
@@ -370,14 +400,27 @@ impl<'a, S: State> Layer<'a, S> {
     async fn handle_casino_start_game(
         &mut self,
         public: &PublicKey,
-        game_type: battleware_types::casino::GameType,
+        game_type: nullspace_types::casino::GameType,
         bet: u64,
         session_id: u64,
     ) -> Vec<Event> {
         // Get player
+        eprintln!(
+            "[CASINO DEBUG] handle_casino_start_game: Looking up player {:02x}{:02x}{:02x}{:02x}",
+            public[0], public[1], public[2], public[3]
+        );
         let mut player = match self.get(&Key::CasinoPlayer(public.clone())).await {
-            Some(Value::CasinoPlayer(p)) => p,
-            _ => return vec![],
+            Some(Value::CasinoPlayer(p)) => {
+                eprintln!("[CASINO DEBUG] handle_casino_start_game: Found player with chips={}", p.chips);
+                p
+            }
+            _ => {
+                eprintln!(
+                    "[CASINO DEBUG] handle_casino_start_game: Player NOT FOUND for {:02x}{:02x}{:02x}{:02x}, returning empty events",
+                    public[0], public[1], public[2], public[3]
+                );
+                return vec![];
+            }
         };
 
         // Check player has enough chips
@@ -398,7 +441,7 @@ impl<'a, S: State> Layer<'a, S> {
         );
 
         // Create game session
-        let mut session = battleware_types::casino::GameSession {
+        let mut session = nullspace_types::casino::GameSession {
             id: session_id,
             player: public.clone(),
             game_type,
@@ -407,7 +450,7 @@ impl<'a, S: State> Layer<'a, S> {
             move_count: 0,
             created_at: self.seed.view,
             is_complete: false,
-            super_mode: battleware_types::casino::SuperModeState::default(),
+            super_mode: nullspace_types::casino::SuperModeState::default(),
         };
 
         // Initialize game
@@ -544,6 +587,27 @@ impl<'a, S: State> Layer<'a, S> {
             crate::casino::GameResult::Continue => {
                 self.insert(Key::CasinoSession(session_id), Value::CasinoSession(session));
             }
+            crate::casino::GameResult::ContinueWithUpdate { payout } => {
+                // Handle mid-game balance updates (additional bets or intermediate payouts)
+                if let Some(Value::CasinoPlayer(mut player)) =
+                    self.get(&Key::CasinoPlayer(public.clone())).await
+                {
+                    if payout < 0 {
+                        // Deducting chips (new bet placed)
+                        let deduction = (-payout) as u64;
+                        if player.chips < deduction {
+                            // Insufficient funds - reject the move
+                            return vec![];
+                        }
+                        player.chips = player.chips.saturating_sub(deduction);
+                    } else {
+                        // Adding chips (intermediate win)
+                        player.chips = player.chips.saturating_add(payout as u64);
+                    }
+                    self.insert(Key::CasinoPlayer(public.clone()), Value::CasinoPlayer(player));
+                }
+                self.insert(Key::CasinoSession(session_id), Value::CasinoSession(session));
+            }
             crate::casino::GameResult::Win(base_payout) => {
                 session.is_complete = true;
                 self.insert(Key::CasinoSession(session_id), Value::CasinoSession(session.clone()));
@@ -634,6 +698,43 @@ impl<'a, S: State> Layer<'a, S> {
                     });
                 }
             }
+            crate::casino::GameResult::LossWithExtraDeduction(extra) => {
+                // Loss with additional deduction for mid-game bet increases
+                // (e.g., Blackjack double-down, Casino War go-to-war)
+                session.is_complete = true;
+                self.insert(Key::CasinoSession(session_id), Value::CasinoSession(session.clone()));
+
+                if let Some(Value::CasinoPlayer(mut player)) =
+                    self.get(&Key::CasinoPlayer(public.clone())).await
+                {
+                    let was_shielded = player.active_shield && player.shields > 0;
+                    let payout = if was_shielded {
+                        player.shields -= 1;
+                        0 // Shield prevents loss (but extra still deducted)
+                    } else {
+                        -(session.bet as i64)
+                    };
+
+                    // Deduct the extra amount that wasn't charged at StartGame
+                    player.chips = player.chips.saturating_sub(extra);
+
+                    player.active_shield = false;
+                    player.active_double = false;
+
+                    let final_chips = player.chips;
+                    self.insert(Key::CasinoPlayer(public.clone()), Value::CasinoPlayer(player.clone()));
+
+                    events.push(Event::CasinoGameCompleted {
+                        session_id,
+                        player: public.clone(),
+                        game_type: session.game_type,
+                        payout: payout - (extra as i64), // Total loss includes extra
+                        final_chips,
+                        was_shielded,
+                        was_doubled: false,
+                    });
+                }
+            }
         }
 
         events
@@ -664,19 +765,19 @@ impl<'a, S: State> Layer<'a, S> {
         // Get or create tournament
         let mut tournament = match self.get(&Key::Tournament(tournament_id)).await {
             Some(Value::Tournament(t)) => t,
-            _ => battleware_types::casino::Tournament {
+            _ => nullspace_types::casino::Tournament {
                 id: tournament_id,
-                phase: battleware_types::casino::TournamentPhase::Registration,
+                phase: nullspace_types::casino::TournamentPhase::Registration,
                 start_block: 0,
                 players: Vec::new(),
-                starting_chips: battleware_types::casino::STARTING_CHIPS,
-                starting_shields: battleware_types::casino::STARTING_SHIELDS,
-                starting_doubles: battleware_types::casino::STARTING_DOUBLES,
+                starting_chips: nullspace_types::casino::STARTING_CHIPS,
+                starting_shields: nullspace_types::casino::STARTING_SHIELDS,
+                starting_doubles: nullspace_types::casino::STARTING_DOUBLES,
             },
         };
 
         // Check if can join
-        if !matches!(tournament.phase, battleware_types::casino::TournamentPhase::Registration) {
+        if !matches!(tournament.phase, nullspace_types::casino::TournamentPhase::Registration) {
             return vec![];
         }
 
@@ -693,10 +794,10 @@ impl<'a, S: State> Layer<'a, S> {
         }]
     }
 
-    async fn update_casino_leaderboard(&mut self, public: &PublicKey, player: &battleware_types::casino::Player) {
+    async fn update_casino_leaderboard(&mut self, public: &PublicKey, player: &nullspace_types::casino::Player) {
         let mut leaderboard = match self.get(&Key::CasinoLeaderboard).await {
             Some(Value::CasinoLeaderboard(lb)) => lb,
-            _ => battleware_types::casino::CasinoLeaderboard::default(),
+            _ => nullspace_types::casino::CasinoLeaderboard::default(),
         };
         leaderboard.update(public.clone(), player.name.clone(), player.chips);
         self.insert(Key::CasinoLeaderboard, Value::CasinoLeaderboard(leaderboard));

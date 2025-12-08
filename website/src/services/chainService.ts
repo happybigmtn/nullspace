@@ -71,9 +71,25 @@ const RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A']
 const SUITS = ['♠', '♥', '♦', '♣'];
 
 export function decodeCard(cardValue: number): Card {
-    const rank = RANKS[cardValue % 13];
+    // Handle invalid input
+    if (cardValue === undefined || cardValue === null || isNaN(cardValue) || cardValue < 0 || cardValue > 51) {
+        console.warn('[decodeCard] Invalid card value:', cardValue);
+        // Return a placeholder card rather than crashing
+        return { rank: '2', suit: '♠', value: 2 };
+    }
+    const rankIdx = cardValue % 13;
+    const rank = RANKS[rankIdx];
     const suit = SUITS[Math.floor(cardValue / 13)];
-    return { rank, suit, value: cardValue };
+    // Calculate proper blackjack value (2-11) instead of raw card index
+    let value: number;
+    if (rankIdx <= 8) {
+        value = rankIdx + 2; // 2-10
+    } else if (rankIdx <= 11) {
+        value = 10; // J, Q, K
+    } else {
+        value = 11; // Ace
+    }
+    return { rank, suit, value };
 }
 
 export function getCardValue(card: Card): number {

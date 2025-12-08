@@ -5,7 +5,7 @@
 //! and application logic.
 
 use super::GameRng;
-use battleware_types::casino::{SuperMultiplier, SuperModeState, SuperType};
+use nullspace_types::casino::{SuperMultiplier, SuperModeState, SuperType};
 
 /// Generate Lightning Baccarat multipliers (1-5 cards, 2-8x)
 pub fn generate_baccarat_multipliers(rng: &mut GameRng) -> Vec<SuperMultiplier> {
