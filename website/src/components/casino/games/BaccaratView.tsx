@@ -66,7 +66,7 @@ export const BaccaratView: React.FC<{ gameState: GameState }> = ({ gameState }) 
             </div>
 
             {/* BETS SIDEBAR */}
-            <div className="absolute top-0 right-0 bottom-24 w-40 bg-terminal-black/80 border-l border-terminal-dim p-2 backdrop-blur-sm z-30 flex flex-col">
+            <div className="absolute top-0 right-0 bottom-24 w-40 bg-terminal-black/80 border-l-2 border-gray-700 p-2 backdrop-blur-sm z-30 flex flex-col">
                 <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-2 border-b border-gray-800 pb-1 flex-none text-center">Bets</div>
                 <div className="flex-1 overflow-y-auto flex flex-col justify-center space-y-1">
                     {allBets.map((b, i) => (
@@ -79,7 +79,7 @@ export const BaccaratView: React.FC<{ gameState: GameState }> = ({ gameState }) 
             </div>
 
             {/* CONTROLS */}
-            <div className="absolute bottom-8 left-0 right-0 h-16 bg-terminal-black/90 border-t border-terminal-dim flex items-center justify-center gap-2 p-2 z-40">
+            <div className="absolute bottom-8 left-0 right-0 h-16 bg-terminal-black/90 border-t-2 border-gray-700 flex items-center justify-center gap-2 p-2 z-40">
                     <div className="flex gap-2">
                         <div className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${isPlayerSelected ? 'border-terminal-green' : 'border-terminal-dim'}`}>
                             <span className={`font-bold text-sm ${isPlayerSelected ? 'text-terminal-green' : 'text-white'}`}>P</span>

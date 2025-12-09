@@ -10,6 +10,7 @@
 //! [1] = War (after tie, go to war)
 //! [2] = Surrender (after tie, forfeit half bet)
 
+use super::super_mode::apply_super_multiplier_cards;
 use super::{CasinoGame, GameError, GameResult, GameRng};
 use nullspace_types::casino::GameSession;
 
@@ -117,7 +118,18 @@ impl CasinoGame for CasinoWar {
                 if player_rank > dealer_rank {
                     // Player wins 1:1
                     session.is_complete = true;
-                    Ok(GameResult::Win(session.bet.saturating_mul(2)))
+                    let base_winnings = session.bet.saturating_mul(2);
+                    // Apply super mode multipliers if active
+                    let final_winnings = if session.super_mode.is_active {
+                        apply_super_multiplier_cards(
+                            &[player_card],
+                            &session.super_mode.multipliers,
+                            base_winnings,
+                        )
+                    } else {
+                        base_winnings
+                    };
+                    Ok(GameResult::Win(final_winnings))
                 } else if player_rank < dealer_rank {
                     // Dealer wins
                     session.is_complete = true;
@@ -167,7 +179,18 @@ impl CasinoGame for CasinoWar {
                             // Standard casino war payout: ante wins 1:1, war bet pushes
                             // Player gets back: ante + 1:1 win + war bet = 3 * ante
                             // But war_bet wasn't charged, so actual return: 3 * ante - war_bet = 2 * ante
-                            Ok(GameResult::Win(session.bet.saturating_mul(2)))
+                            let base_winnings = session.bet.saturating_mul(2);
+                            // Apply super mode multipliers if active
+                            let final_winnings = if session.super_mode.is_active {
+                                apply_super_multiplier_cards(
+                                    &[new_player_card],
+                                    &session.super_mode.multipliers,
+                                    base_winnings,
+                                )
+                            } else {
+                                base_winnings
+                            };
+                            Ok(GameResult::Win(final_winnings))
                         } else {
                             // Lose both bets (original ante + war bet)
                             // Original ante was charged at StartGame

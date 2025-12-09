@@ -7,17 +7,19 @@
 use super::GameRng;
 use nullspace_types::casino::{SuperMultiplier, SuperModeState, SuperType};
 
-/// Generate Lightning Baccarat multipliers (1-5 cards, 2-8x)
+/// Generate Lightning Baccarat multipliers (3-5 Aura Cards, 2-8x)
+///
+/// Distribution per plan:
+/// - Card count: 60% 3 cards, 30% 4 cards, 10% 5 cards
+/// - Multipliers: 35% 2x, 30% 3x, 20% 4x, 10% 5x, 5% 8x
+/// - Expected multiplier per card: 3.1x
+/// - Max multiplier: 8^5 = 32,768x (capped at 512x for sustainability)
 pub fn generate_baccarat_multipliers(rng: &mut GameRng) -> Vec<SuperMultiplier> {
-    // 1-5 cards based on probability
+    // 3-5 cards based on probability (60/30/10)
     let roll = rng.next_f32();
     let count = if roll < 0.6 {
-        1
-    } else if roll < 0.8 {
-        2
-    } else if roll < 0.9 {
         3
-    } else if roll < 0.98 {
+    } else if roll < 0.9 {
         4
     } else {
         5
@@ -36,7 +38,7 @@ pub fn generate_baccarat_multipliers(rng: &mut GameRng) -> Vec<SuperMultiplier> 
             }
         };
 
-        // Assign multiplier (2,3,4,5,8x with decreasing probability)
+        // Assign multiplier: 35% 2x, 30% 3x, 20% 4x, 10% 5x, 5% 8x
         let m_roll = rng.next_f32();
         let multiplier = if m_roll < 0.35 {
             2
@@ -101,12 +103,19 @@ pub fn generate_roulette_multipliers(rng: &mut GameRng) -> Vec<SuperMultiplier> 
     mults
 }
 
-/// Generate Strike Blackjack multipliers (3 cards, 2-10x)
+/// Generate Strike Blackjack multipliers (5 Strike Cards, 2-10x)
+///
+/// Distribution per plan:
+/// - 5 Strike Cards (specific rank+suit)
+/// - Multipliers: 40% 2x, 30% 3x, 20% 5x, 7% 7x, 3% 10x
+/// - Player Blackjack: Guaranteed minimum 2x multiplier
+/// - Maximum: 10x × 10x × 2x = 200x
+/// - Hit Frequency: ~12.5% in winning hands
 pub fn generate_blackjack_multipliers(rng: &mut GameRng) -> Vec<SuperMultiplier> {
-    let mut mults = Vec::with_capacity(3);
+    let mut mults = Vec::with_capacity(5);
     let mut used = 0u64;
 
-    for _ in 0..3 {
+    for _ in 0..5 {
         let card = loop {
             let c = rng.next_u8() % 52;
             if (used & (1 << c)) == 0 {
@@ -115,14 +124,15 @@ pub fn generate_blackjack_multipliers(rng: &mut GameRng) -> Vec<SuperMultiplier>
             }
         };
 
+        // Distribution: 40% 2x, 30% 3x, 20% 5x, 7% 7x, 3% 10x
         let roll = rng.next_f32();
-        let multiplier = if roll < 0.4 {
+        let multiplier = if roll < 0.40 {
             2
-        } else if roll < 0.7 {
+        } else if roll < 0.70 {
             3
-        } else if roll < 0.85 {
+        } else if roll < 0.90 {
             5
-        } else if roll < 0.95 {
+        } else if roll < 0.97 {
             7
         } else {
             10
@@ -206,7 +216,21 @@ pub fn generate_sic_bo_multipliers(rng: &mut GameRng) -> Vec<SuperMultiplier> {
     mults
 }
 
-/// Generate Mega Video Poker multipliers (4 cards, 2-5x)
+/// Generate Mega Video Poker multipliers (4 Mega Cards)
+///
+/// Distribution per plan (COUNT-BASED multipliers):
+/// - 4 Mega Cards selected (specific rank+suit, revealed before draw)
+/// - Multiplier based on count in final hand:
+///   - 1 Mega Card: 1.5x (stored as 15, divide by 10 when applying)
+///   - 2 Mega Cards: 3x
+///   - 3 Mega Cards: 10x
+///   - 4 Mega Cards: 100x
+///   - Mega Card in Royal Flush: 1000x
+/// - Hit Frequency: ~35% for at least 1 Mega
+///
+/// NOTE: This stores a base marker multiplier of 1. The actual payout
+/// calculation should use `apply_video_poker_mega_multiplier()` which
+/// counts matching cards and applies count-based multipliers.
 pub fn generate_video_poker_multipliers(rng: &mut GameRng) -> Vec<SuperMultiplier> {
     let mut mults = Vec::with_capacity(4);
     let mut used = 0u64;
@@ -220,19 +244,77 @@ pub fn generate_video_poker_multipliers(rng: &mut GameRng) -> Vec<SuperMultiplie
             }
         };
 
-        let multiplier = 2 + (rng.next_u8() % 4) as u16; // 2-5x
+        // Store 1 as marker - actual multiplier is count-based
         mults.push(SuperMultiplier {
             id: card,
-            multiplier,
+            multiplier: 1, // Marker for count-based system
             super_type: SuperType::Card,
         });
     }
     mults
 }
 
-/// Generate Flash Three Card Poker multipliers (2 suits, 2x)
+/// Apply Video Poker Mega multiplier based on count of Mega Cards in hand
+///
+/// Returns the boosted payout based on how many Mega Cards are in the final hand.
+pub fn apply_video_poker_mega_multiplier(
+    hand_cards: &[u8],
+    multipliers: &[SuperMultiplier],
+    base_payout: u64,
+    is_royal_flush: bool,
+) -> u64 {
+    let mut mega_count = 0;
+    let mut has_mega_in_royal = false;
+
+    for card in hand_cards {
+        for m in multipliers {
+            if m.super_type == SuperType::Card && *card == m.id {
+                mega_count += 1;
+                if is_royal_flush {
+                    has_mega_in_royal = true;
+                }
+            }
+        }
+    }
+
+    // Apply count-based multiplier
+    let multiplier: u64 = if has_mega_in_royal {
+        1000
+    } else {
+        match mega_count {
+            0 => 1,
+            1 => 15, // 1.5x stored as 15, caller divides by 10
+            2 => 30, // 3x stored as 30
+            3 => 100,
+            _ => 1000, // 4+ Mega Cards
+        }
+    };
+
+    // For fractional multipliers, multiply then divide
+    if mega_count == 1 && !has_mega_in_royal {
+        base_payout.saturating_mul(15) / 10
+    } else if mega_count == 2 && !has_mega_in_royal {
+        base_payout.saturating_mul(3)
+    } else {
+        base_payout.saturating_mul(multiplier)
+    }
+}
+
+/// Generate Flash Three Card Poker multipliers (2 Flash Suits)
+///
+/// Distribution per plan (CONFIGURATION-BASED multipliers):
+/// - 2 Flash Suits selected (26 cards = half deck eligible)
+/// - Multiplier based on hand configuration:
+///   - 2 cards same Flash Suit: 2x
+///   - 3 cards same Flash Suit (Flush): 5x
+///   - Flash Suit Straight: 4x
+///   - Flash Suit Straight Flush: 25x
+/// - Hit Frequency: ~29% for 2+ cards in same Flash Suit
+///
+/// NOTE: Use `apply_three_card_flash_multiplier()` for proper
+/// configuration-based multiplier application.
 pub fn generate_three_card_multipliers(rng: &mut GameRng) -> Vec<SuperMultiplier> {
-    // 2 suits with 2x
+    // 2 Flash Suits
     let suit1 = rng.next_u8() % 4;
     let suit2 = loop {
         let s = rng.next_u8() % 4;
@@ -244,20 +326,80 @@ pub fn generate_three_card_multipliers(rng: &mut GameRng) -> Vec<SuperMultiplier
     vec![
         SuperMultiplier {
             id: suit1,
-            multiplier: 2,
+            multiplier: 1, // Marker for config-based system
             super_type: SuperType::Suit,
         },
         SuperMultiplier {
             id: suit2,
-            multiplier: 2,
+            multiplier: 1,
             super_type: SuperType::Suit,
         },
     ]
 }
 
-/// Generate Blitz Ultimate Texas Hold'em multipliers (2 ranks, 2x)
+/// Apply Three Card Poker Flash multiplier based on hand configuration
+///
+/// Returns the boosted payout based on Flash Suit matches in the hand.
+pub fn apply_three_card_flash_multiplier(
+    hand_cards: &[u8], // 3 cards, each 0-51
+    multipliers: &[SuperMultiplier],
+    base_payout: u64,
+    is_straight: bool,
+    is_flush: bool,
+) -> u64 {
+    // Count cards in each Flash Suit
+    let mut flash_suit_counts = [0u8; 4];
+    for card in hand_cards {
+        let suit = card / 13;
+        for m in multipliers {
+            if m.super_type == SuperType::Suit && suit == m.id {
+                flash_suit_counts[suit as usize] += 1;
+            }
+        }
+    }
+
+    let max_flash_count = flash_suit_counts.iter().max().copied().unwrap_or(0);
+
+    // Determine multiplier based on configuration
+    let multiplier: u64 = if is_flush && is_straight && max_flash_count == 3 {
+        // Flash Suit Straight Flush
+        25
+    } else if is_flush && max_flash_count == 3 {
+        // 3 cards same Flash Suit (Flush)
+        5
+    } else if is_straight && max_flash_count >= 2 {
+        // Flash Suit Straight (at least 2 cards in Flash Suit)
+        4
+    } else if max_flash_count >= 2 {
+        // 2+ cards in same Flash Suit
+        2
+    } else {
+        1
+    };
+
+    base_payout.saturating_mul(multiplier)
+}
+
+/// Generate Blitz Ultimate Texas Hold'em multipliers (2 Blitz Ranks)
+///
+/// Distribution per plan (HAND-STRENGTH-BASED multipliers):
+/// - 2 Blitz ranks selected (any suit matches = 8 cards from 52 eligible)
+/// - Multiplier based on hand strength when Blitz card in winning hand:
+///   - Pair: 2x
+///   - Two Pair: 3x
+///   - Three of a Kind: 5x
+///   - Straight: 4x
+///   - Flush: 4x
+///   - Full House: 6x
+///   - Four of a Kind: 15x
+///   - Straight Flush: 25x
+///   - Royal Flush: 50x
+/// - Special: Both hole cards Blitz + win = automatic 5x
+/// - Hit Frequency: ~63% Blitz in 7 cards, ~18% in winning pair+
+///
+/// NOTE: Use `apply_uth_blitz_multiplier()` for proper hand-based multiplier.
 pub fn generate_uth_multipliers(rng: &mut GameRng) -> Vec<SuperMultiplier> {
-    // 2 ranks with 2x
+    // 2 Blitz ranks (any suit matches)
     let rank1 = rng.next_u8() % 13;
     let rank2 = loop {
         let r = rng.next_u8() % 13;
@@ -269,20 +411,96 @@ pub fn generate_uth_multipliers(rng: &mut GameRng) -> Vec<SuperMultiplier> {
     vec![
         SuperMultiplier {
             id: rank1,
-            multiplier: 2,
+            multiplier: 1, // Marker for hand-based system
             super_type: SuperType::Rank,
         },
         SuperMultiplier {
             id: rank2,
-            multiplier: 2,
+            multiplier: 1,
             super_type: SuperType::Rank,
         },
     ]
 }
 
-/// Generate Strike Casino War multipliers (3 ranks, 3x)
+/// Hand ranking for UTH Blitz multiplier
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum UthHandRank {
+    HighCard,
+    Pair,
+    TwoPair,
+    ThreeOfAKind,
+    Straight,
+    Flush,
+    FullHouse,
+    FourOfAKind,
+    StraightFlush,
+    RoyalFlush,
+}
+
+/// Apply UTH Blitz multiplier based on hand strength
+///
+/// Returns the boosted payout based on Blitz ranks in the winning hand.
+pub fn apply_uth_blitz_multiplier(
+    final_hand: &[u8],      // 5-card final hand
+    hole_cards: &[u8],      // 2 player hole cards
+    multipliers: &[SuperMultiplier],
+    base_payout: u64,
+    hand_rank: UthHandRank,
+) -> u64 {
+    // Check if any card in final hand is a Blitz rank
+    let has_blitz_in_hand = final_hand.iter().any(|card| {
+        let rank = card % 13;
+        multipliers.iter().any(|m| m.super_type == SuperType::Rank && rank == m.id)
+    });
+
+    if !has_blitz_in_hand {
+        return base_payout;
+    }
+
+    // Check for double Blitz hole cards bonus
+    let both_hole_cards_blitz = hole_cards.iter().all(|card| {
+        let rank = card % 13;
+        multipliers.iter().any(|m| m.super_type == SuperType::Rank && rank == m.id)
+    });
+
+    // Determine base multiplier from hand strength
+    let hand_mult: u64 = match hand_rank {
+        UthHandRank::HighCard => 1,
+        UthHandRank::Pair => 2,
+        UthHandRank::TwoPair => 3,
+        UthHandRank::ThreeOfAKind => 5,
+        UthHandRank::Straight => 4,
+        UthHandRank::Flush => 4,
+        UthHandRank::FullHouse => 6,
+        UthHandRank::FourOfAKind => 15,
+        UthHandRank::StraightFlush => 25,
+        UthHandRank::RoyalFlush => 50,
+    };
+
+    // Apply both hole cards Blitz bonus (automatic 5x if better)
+    let final_mult = if both_hole_cards_blitz && hand_mult < 5 {
+        5
+    } else {
+        hand_mult
+    };
+
+    base_payout.saturating_mul(final_mult)
+}
+
+/// Generate Strike Casino War multipliers (3 Strike Ranks)
+///
+/// Distribution per plan (SCENARIO-BASED multipliers):
+/// - 3 Strike Ranks selected (any suit = 24 cards per rank in 6-deck shoe)
+/// - Multiplier based on scenario:
+///   - Your card is Strike Rank, win: 2x
+///   - Both cards Strike Rank, win war: 3x
+///   - Both cards same Strike Rank (tie), win war: 5x
+/// - Hit Frequency: 3/13 = 23.08% for your card being Strike
+/// - Special: War Bonus Wheel has 10% chance to add 2x-5x boost
+///
+/// NOTE: Use `apply_casino_war_strike_multiplier()` for proper scenario-based multiplier.
 pub fn generate_casino_war_multipliers(rng: &mut GameRng) -> Vec<SuperMultiplier> {
-    // 3 ranks with 3x
+    // 3 Strike Ranks
     let mut mults = Vec::with_capacity(3);
     let mut used = 0u16;
 
@@ -297,20 +515,80 @@ pub fn generate_casino_war_multipliers(rng: &mut GameRng) -> Vec<SuperMultiplier
 
         mults.push(SuperMultiplier {
             id: rank,
-            multiplier: 3,
+            multiplier: 1, // Marker for scenario-based system
             super_type: SuperType::Rank,
         });
     }
     mults
 }
 
-/// Generate Super HiLo state (streak-based, no random multipliers)
+/// Apply Casino War Strike multiplier based on scenario
+///
+/// Returns the boosted payout based on Strike Rank matches.
+pub fn apply_casino_war_strike_multiplier(
+    player_card: u8,        // 0-51
+    dealer_card: u8,        // 0-51
+    multipliers: &[SuperMultiplier],
+    base_payout: u64,
+    won_war: bool,          // True if player won after going to war
+    was_tie: bool,          // True if original cards tied
+) -> u64 {
+    let player_rank = player_card % 13;
+    let dealer_rank = dealer_card % 13;
+
+    let player_is_strike = multipliers.iter()
+        .any(|m| m.super_type == SuperType::Rank && player_rank == m.id);
+    let dealer_is_strike = multipliers.iter()
+        .any(|m| m.super_type == SuperType::Rank && dealer_rank == m.id);
+
+    // Determine multiplier based on scenario
+    let multiplier: u64 = if was_tie && player_rank == dealer_rank && player_is_strike && won_war {
+        // Both cards same Strike Rank (tie), won war
+        5
+    } else if player_is_strike && dealer_is_strike && won_war {
+        // Both cards Strike Rank, won war
+        3
+    } else if player_is_strike {
+        // Your card is Strike Rank, win
+        2
+    } else {
+        1
+    };
+
+    base_payout.saturating_mul(multiplier)
+}
+
+/// Generate Super HiLo state (streak-based progressive multipliers)
+///
+/// Distribution per plan (STREAK-BASED multipliers):
+/// | Correct Calls | Multiplier | Probability from Start |
+/// |---------------|-----------|----------------------|
+/// | 1             | 1.5x      | ~50%                 |
+/// | 2             | 2.5x      | ~25%                 |
+/// | 3             | 4x        | ~12.5%               |
+/// | 4             | 7x        | ~6.25%               |
+/// | 5             | 12x       | ~3.13%               |
+/// | 6             | 20x       | ~1.56%               |
+/// | 7             | 35x       | ~0.78%               |
+/// | 8             | 60x       | ~0.39%               |
+/// | 9             | 100x      | ~0.20%               |
+/// | 10+           | 200x      | ~0.10%               |
+///
+/// - Ace Bonus: Correct call on Ace = 3x multiplier boost
+/// - Stored as x10 for fractional values (15 = 1.5x, 25 = 2.5x)
 pub fn generate_hilo_state(streak: u8) -> SuperModeState {
-    // Streak-based multipliers, no random generation
+    // Streak-based progressive multipliers (stored as x10 for 1.5x and 2.5x)
     let base_mult = match streak {
-        0..=1 => 15, // 1.5x (stored as 15 = 1.5 * 10)
-        2..=3 => 25, // 2.5x
-        _ => 40,     // 4.0x
+        0 | 1 => 15,  // 1.5x
+        2 => 25,      // 2.5x
+        3 => 40,      // 4x
+        4 => 70,      // 7x
+        5 => 120,     // 12x
+        6 => 200,     // 20x
+        7 => 350,     // 35x
+        8 => 600,     // 60x
+        9 => 1000,    // 100x
+        _ => 2000,    // 200x (10+ streaks)
     };
 
     SuperModeState {
@@ -322,6 +600,34 @@ pub fn generate_hilo_state(streak: u8) -> SuperModeState {
         }],
         streak_level: streak,
     }
+}
+
+/// Apply HiLo streak multiplier to payout
+///
+/// Handles the x10 storage format for fractional multipliers.
+pub fn apply_hilo_streak_multiplier(
+    base_payout: u64,
+    streak: u8,
+    was_ace: bool,
+) -> u64 {
+    let mult = match streak {
+        0 | 1 => 15,  // 1.5x
+        2 => 25,      // 2.5x
+        3 => 40,      // 4x
+        4 => 70,      // 7x
+        5 => 120,     // 12x
+        6 => 200,     // 20x
+        7 => 350,     // 35x
+        8 => 600,     // 60x
+        9 => 1000,    // 100x
+        _ => 2000,    // 200x
+    };
+
+    // Apply Ace bonus (3x boost) if applicable
+    let final_mult = if was_ace { mult * 3 } else { mult };
+
+    // Divide by 10 to handle fractional storage
+    base_payout.saturating_mul(final_mult as u64) / 10
 }
 
 /// Apply super multiplier for card-based games
@@ -384,6 +690,103 @@ pub fn apply_super_multiplier_total(
     base_payout
 }
 
+// ============================================================================
+// Aura Meter System (Cross-Game Feature)
+// ============================================================================
+
+/// Maximum Aura Meter value (triggers Super Aura Round)
+pub const AURA_METER_MAX: u8 = 5;
+
+/// Update the player's Aura Meter based on round outcome.
+///
+/// The meter increments when:
+/// - Player paid Super Mode fee (implied by calling this function)
+/// - Player lost the round (won = false)
+/// - At least one Aura element appeared in the round
+///
+/// Returns the new meter value.
+pub fn update_aura_meter(current_meter: u8, had_aura_element: bool, won: bool) -> u8 {
+    if had_aura_element && !won {
+        // Near-miss: Aura element appeared but player lost
+        (current_meter + 1).min(AURA_METER_MAX)
+    } else if won {
+        // Win resets the meter (they got their bonus)
+        0
+    } else {
+        // No Aura element, keep current value
+        current_meter
+    }
+}
+
+/// Check if the player qualifies for a Super Aura Round.
+///
+/// At 5/5 meter, the next round becomes a Super Aura Round with:
+/// - Enhanced multiplier distribution (all multipliers × 1.5)
+/// - Guaranteed at least one Aura element in player's outcome area
+pub fn is_super_aura_round(aura_meter: u8) -> bool {
+    aura_meter >= AURA_METER_MAX
+}
+
+/// Reset the Aura Meter after a Super Aura Round completes.
+pub fn reset_aura_meter() -> u8 {
+    0
+}
+
+/// Generate enhanced multipliers for Super Aura Round.
+///
+/// Takes base multipliers and boosts them by 1.5x (rounded down).
+pub fn enhance_multipliers_for_aura_round(multipliers: &mut [SuperMultiplier]) {
+    for m in multipliers {
+        // Multiply by 1.5 (3/2)
+        m.multiplier = (m.multiplier * 3) / 2;
+    }
+}
+
+/// Check if any of the outcome elements match Aura elements.
+///
+/// Used to determine if the round qualifies as a "near-miss" for meter purposes.
+pub fn check_aura_element_presence(
+    outcome_cards: &[u8],
+    outcome_numbers: &[u8],
+    outcome_totals: &[u8],
+    multipliers: &[SuperMultiplier],
+) -> bool {
+    // Check cards
+    for card in outcome_cards {
+        for m in multipliers {
+            let matches = match m.super_type {
+                SuperType::Card => *card == m.id,
+                SuperType::Rank => (*card % 13) == m.id,
+                SuperType::Suit => (*card / 13) == m.id,
+                _ => false,
+            };
+            if matches {
+                return true;
+            }
+        }
+    }
+
+    // Check numbers
+    for num in outcome_numbers {
+        for m in multipliers {
+            if m.super_type == SuperType::Number && *num == m.id {
+                return true;
+            }
+        }
+    }
+
+    // Check totals
+    for total in outcome_totals {
+        for m in multipliers {
+            if m.super_type == SuperType::Total && *total == m.id {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -400,7 +803,8 @@ mod tests {
         let mut rng = create_test_rng(1);
         let mults = generate_baccarat_multipliers(&mut rng);
 
-        assert!(!mults.is_empty() && mults.len() <= 5);
+        // Now 3-5 cards (was 1-5)
+        assert!(mults.len() >= 3 && mults.len() <= 5);
         for m in &mults {
             assert!(m.id < 52);
             assert!(m.multiplier >= 2 && m.multiplier <= 8);
@@ -433,7 +837,8 @@ mod tests {
         let mut rng = create_test_rng(3);
         let mults = generate_blackjack_multipliers(&mut rng);
 
-        assert_eq!(mults.len(), 3);
+        // Now 5 Strike Cards (was 3)
+        assert_eq!(mults.len(), 5);
         for m in &mults {
             assert!(m.id < 52);
             assert!(m.multiplier >= 2 && m.multiplier <= 10);
@@ -475,7 +880,8 @@ mod tests {
         assert_eq!(mults.len(), 4);
         for m in &mults {
             assert!(m.id < 52);
-            assert!(m.multiplier >= 2 && m.multiplier <= 5);
+            // Now uses marker multiplier=1 (actual multiplier is count-based)
+            assert_eq!(m.multiplier, 1);
             assert_eq!(m.super_type, SuperType::Card);
         }
     }
@@ -488,7 +894,8 @@ mod tests {
         assert_eq!(mults.len(), 2);
         for m in &mults {
             assert!(m.id < 4);
-            assert_eq!(m.multiplier, 2);
+            // Now uses marker multiplier=1 (actual multiplier is config-based)
+            assert_eq!(m.multiplier, 1);
             assert_eq!(m.super_type, SuperType::Suit);
         }
         assert_ne!(mults[0].id, mults[1].id);
@@ -502,7 +909,8 @@ mod tests {
         assert_eq!(mults.len(), 2);
         for m in &mults {
             assert!(m.id < 13);
-            assert_eq!(m.multiplier, 2);
+            // Now uses marker multiplier=1 (actual multiplier is hand-based)
+            assert_eq!(m.multiplier, 1);
             assert_eq!(m.super_type, SuperType::Rank);
         }
         assert_ne!(mults[0].id, mults[1].id);
@@ -516,7 +924,8 @@ mod tests {
         assert_eq!(mults.len(), 3);
         for m in &mults {
             assert!(m.id < 13);
-            assert_eq!(m.multiplier, 3);
+            // Now uses marker multiplier=1 (actual multiplier is scenario-based)
+            assert_eq!(m.multiplier, 1);
             assert_eq!(m.super_type, SuperType::Rank);
         }
     }
@@ -525,15 +934,21 @@ mod tests {
     fn test_generate_hilo_state() {
         let state0 = generate_hilo_state(0);
         assert_eq!(state0.streak_level, 0);
-        assert_eq!(state0.multipliers[0].multiplier, 15);
+        assert_eq!(state0.multipliers[0].multiplier, 15); // 1.5x
 
         let state2 = generate_hilo_state(2);
         assert_eq!(state2.streak_level, 2);
-        assert_eq!(state2.multipliers[0].multiplier, 25);
+        assert_eq!(state2.multipliers[0].multiplier, 25); // 2.5x
 
+        // Updated streak 5 now has 12x (120) instead of 4x (40)
         let state5 = generate_hilo_state(5);
         assert_eq!(state5.streak_level, 5);
-        assert_eq!(state5.multipliers[0].multiplier, 40);
+        assert_eq!(state5.multipliers[0].multiplier, 120); // 12x
+
+        // Test higher streaks
+        let state10 = generate_hilo_state(10);
+        assert_eq!(state10.streak_level, 10);
+        assert_eq!(state10.multipliers[0].multiplier, 2000); // 200x
     }
 
     #[test]
@@ -592,5 +1007,143 @@ mod tests {
 
         let payout2 = apply_super_multiplier_total(7, &multipliers, 60);
         assert_eq!(payout2, 60); // No multiplier
+    }
+
+    // ========== Aura Meter Tests ==========
+
+    #[test]
+    fn test_update_aura_meter_near_miss() {
+        // Near-miss: had aura element but lost
+        let new_meter = update_aura_meter(0, true, false);
+        assert_eq!(new_meter, 1);
+
+        let new_meter = update_aura_meter(4, true, false);
+        assert_eq!(new_meter, 5);
+
+        // Capped at 5
+        let new_meter = update_aura_meter(5, true, false);
+        assert_eq!(new_meter, 5);
+    }
+
+    #[test]
+    fn test_update_aura_meter_win_resets() {
+        // Win resets the meter
+        let new_meter = update_aura_meter(3, true, true);
+        assert_eq!(new_meter, 0);
+
+        let new_meter = update_aura_meter(5, false, true);
+        assert_eq!(new_meter, 0);
+    }
+
+    #[test]
+    fn test_update_aura_meter_no_aura_element() {
+        // No aura element, keep current
+        let new_meter = update_aura_meter(3, false, false);
+        assert_eq!(new_meter, 3);
+    }
+
+    #[test]
+    fn test_is_super_aura_round() {
+        assert!(!is_super_aura_round(0));
+        assert!(!is_super_aura_round(4));
+        assert!(is_super_aura_round(5));
+        assert!(is_super_aura_round(6)); // Edge case
+    }
+
+    #[test]
+    fn test_enhance_multipliers_for_aura_round() {
+        let mut mults = vec![
+            SuperMultiplier { id: 0, multiplier: 2, super_type: SuperType::Card },
+            SuperMultiplier { id: 1, multiplier: 8, super_type: SuperType::Card },
+        ];
+        enhance_multipliers_for_aura_round(&mut mults);
+        assert_eq!(mults[0].multiplier, 3); // 2 * 1.5 = 3
+        assert_eq!(mults[1].multiplier, 12); // 8 * 1.5 = 12
+    }
+
+    #[test]
+    fn test_check_aura_element_presence_cards() {
+        let multipliers = vec![
+            SuperMultiplier { id: 5, multiplier: 1, super_type: SuperType::Card },
+        ];
+
+        // Card matches
+        assert!(check_aura_element_presence(&[5], &[], &[], &multipliers));
+        // Card doesn't match
+        assert!(!check_aura_element_presence(&[10], &[], &[], &multipliers));
+    }
+
+    #[test]
+    fn test_check_aura_element_presence_numbers() {
+        let multipliers = vec![
+            SuperMultiplier { id: 17, multiplier: 100, super_type: SuperType::Number },
+        ];
+
+        // Number matches
+        assert!(check_aura_element_presence(&[], &[17], &[], &multipliers));
+        // Number doesn't match
+        assert!(!check_aura_element_presence(&[], &[5], &[], &multipliers));
+    }
+
+    // ========== New Apply Function Tests ==========
+
+    #[test]
+    fn test_apply_video_poker_mega_multiplier() {
+        let multipliers = vec![
+            SuperMultiplier { id: 0, multiplier: 1, super_type: SuperType::Card },
+            SuperMultiplier { id: 1, multiplier: 1, super_type: SuperType::Card },
+            SuperMultiplier { id: 2, multiplier: 1, super_type: SuperType::Card },
+            SuperMultiplier { id: 3, multiplier: 1, super_type: SuperType::Card },
+        ];
+
+        // 1 Mega Card = 1.5x
+        let payout = apply_video_poker_mega_multiplier(&[0, 10, 20, 30, 40], &multipliers, 100, false);
+        assert_eq!(payout, 150); // 100 * 1.5
+
+        // 2 Mega Cards = 3x
+        let payout = apply_video_poker_mega_multiplier(&[0, 1, 20, 30, 40], &multipliers, 100, false);
+        assert_eq!(payout, 300); // 100 * 3
+
+        // No Mega Cards = 1x
+        let payout = apply_video_poker_mega_multiplier(&[10, 20, 30, 40, 50], &multipliers, 100, false);
+        assert_eq!(payout, 100);
+    }
+
+    #[test]
+    fn test_apply_hilo_streak_multiplier() {
+        // Streak 1 = 1.5x -> 100 * 15 / 10 = 150
+        let payout = apply_hilo_streak_multiplier(100, 1, false);
+        assert_eq!(payout, 150);
+
+        // Streak 3 = 4x -> 100 * 40 / 10 = 400
+        let payout = apply_hilo_streak_multiplier(100, 3, false);
+        assert_eq!(payout, 400);
+
+        // Streak 5 = 12x -> 100 * 120 / 10 = 1200
+        let payout = apply_hilo_streak_multiplier(100, 5, false);
+        assert_eq!(payout, 1200);
+
+        // Streak 10+ = 200x -> 100 * 2000 / 10 = 20000
+        let payout = apply_hilo_streak_multiplier(100, 10, false);
+        assert_eq!(payout, 20000);
+
+        // Ace bonus: 3x extra on streak 3 = 12x -> 100 * 120 / 10 = 1200
+        let payout = apply_hilo_streak_multiplier(100, 3, true);
+        assert_eq!(payout, 1200);
+    }
+
+    #[test]
+    fn test_apply_casino_war_strike_multiplier() {
+        let multipliers = vec![
+            SuperMultiplier { id: 5, multiplier: 1, super_type: SuperType::Rank }, // Rank 5 (6s)
+        ];
+
+        // Player card is Strike (rank 5), win = 2x
+        let payout = apply_casino_war_strike_multiplier(5, 10, &multipliers, 100, false, false);
+        assert_eq!(payout, 200);
+
+        // Neither card is Strike = 1x
+        let payout = apply_casino_war_strike_multiplier(10, 11, &multipliers, 100, false, false);
+        assert_eq!(payout, 100);
     }
 }

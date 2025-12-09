@@ -12,6 +12,7 @@
 //! [0] = Play (match ante)
 //! [1] = Fold (lose ante)
 
+use super::super_mode::apply_super_multiplier_cards;
 use super::{CasinoGame, GameError, GameResult, GameRng};
 use nullspace_types::casino::GameSession;
 
@@ -227,8 +228,18 @@ impl CasinoGame for ThreeCardPoker {
                     // Ante pays 1:1 (2x return), play bet pushes (1x return), plus bonus
                     // Calculated return: 2*Ante + 1*Play + Bonus = 3*bet + Bonus
                     // Actual return: subtract play_bet (wasn't charged) = 2*bet + Bonus
-                    let base_return = session.bet.saturating_mul(2);
-                    Ok(GameResult::Win(base_return.saturating_add(bonus)))
+                    let base_return = session.bet.saturating_mul(2).saturating_add(bonus);
+                    // Apply super mode multipliers if active
+                    let final_return = if session.super_mode.is_active {
+                        apply_super_multiplier_cards(
+                            &player_cards,
+                            &session.super_mode.multipliers,
+                            base_return,
+                        )
+                    } else {
+                        base_return
+                    };
+                    Ok(GameResult::Win(final_return))
                 } else {
                     // Compare hands
                     match compare_hands(&player_hand, &dealer_hand) {
@@ -236,8 +247,18 @@ impl CasinoGame for ThreeCardPoker {
                             // Player wins: ante and play both pay 1:1
                             // Calculated return: 2*Ante + 2*Play + Bonus = 4*bet + Bonus
                             // Actual return: subtract play_bet = 3*bet + Bonus
-                            let total_return = session.bet.saturating_mul(3);
-                            Ok(GameResult::Win(total_return.saturating_add(bonus)))
+                            let base_return = session.bet.saturating_mul(3).saturating_add(bonus);
+                            // Apply super mode multipliers if active
+                            let final_return = if session.super_mode.is_active {
+                                apply_super_multiplier_cards(
+                                    &player_cards,
+                                    &session.super_mode.multipliers,
+                                    base_return,
+                                )
+                            } else {
+                                base_return
+                            };
+                            Ok(GameResult::Win(final_return))
                         }
                         std::cmp::Ordering::Less => {
                             // Dealer wins: lose ante and play
@@ -261,8 +282,18 @@ impl CasinoGame for ThreeCardPoker {
                         std::cmp::Ordering::Equal => {
                             // Push - Return Ante + Play + Bonus
                             // Actual return: just Ante + Bonus (play_bet wasn't charged)
-                            let base_return = session.bet;
-                            Ok(GameResult::Win(base_return.saturating_add(bonus)))
+                            let base_return = session.bet.saturating_add(bonus);
+                            // Apply super mode multipliers if active (even on push with bonus)
+                            let final_return = if session.super_mode.is_active && bonus > 0 {
+                                apply_super_multiplier_cards(
+                                    &player_cards,
+                                    &session.super_mode.multipliers,
+                                    base_return,
+                                )
+                            } else {
+                                base_return
+                            };
+                            Ok(GameResult::Win(final_return))
                         }
                     }
                 }

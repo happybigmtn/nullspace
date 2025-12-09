@@ -120,7 +120,8 @@ The easiest way to build a bot is using the provided `client` crate.
 
 ```rust
 use nullspace_client::Client;
-use nullspace_types::casino::{GameType, CasinoInstruction};
+use nullspace_types::casino::GameType;
+use nullspace_types::execution::Instruction;
 
 async fn main() -> Result<()> {
     // 1. Initialize Client
@@ -129,7 +130,7 @@ async fn main() -> Result<()> {
 
     // 2. Start Game
     let session_id = 1; // Manage session IDs locally
-    let start_tx = create_tx(&secret, nonce, CasinoInstruction::StartGame {
+    let start_tx = create_tx(&secret, nonce, Instruction::CasinoStartGame {
         game_type: GameType::HiLo,
         bet: 100,
         session_id,
@@ -144,7 +145,7 @@ async fn main() -> Result<()> {
             // logic here...
             
             // 4. Submit Move
-            let move_tx = create_tx(&secret, nonce + 1, CasinoInstruction::GameMove {
+            let move_tx = create_tx(&secret, nonce + 1, Instruction::CasinoGameMove {
                 session_id,
                 payload: vec![0], // Guess Higher
             });

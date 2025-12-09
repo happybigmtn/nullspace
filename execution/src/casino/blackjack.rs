@@ -9,6 +9,7 @@
 //! [2] = Double Down
 
 use super::{CasinoGame, GameError, GameResult, GameRng};
+use super::super_mode::apply_super_multiplier_cards;
 use nullspace_types::casino::GameSession;
 
 /// Maximum cards in a blackjack hand (prevents DoS via large allocations).
@@ -166,7 +167,7 @@ impl CasinoGame for Blackjack {
         let player_bj = is_blackjack(&player_cards);
         let dealer_bj = is_blackjack(&dealer_cards);
 
-        let (stage, result) = if player_bj || dealer_bj {
+        let (stage, base_result) = if player_bj || dealer_bj {
             session.is_complete = true;
             if player_bj && dealer_bj {
                 (Stage::Complete, GameResult::Push)
@@ -182,7 +183,19 @@ impl CasinoGame for Blackjack {
         };
 
         session.state_blob = serialize_state(&player_cards, &dealer_cards, stage);
-        result
+
+        // Apply super mode multipliers if active and player won
+        if session.super_mode.is_active {
+            if let GameResult::Win(base_payout) = base_result {
+                let boosted_payout = apply_super_multiplier_cards(
+                    &player_cards,
+                    &session.super_mode.multipliers,
+                    base_payout,
+                );
+                return GameResult::Win(boosted_payout);
+            }
+        }
+        base_result
     }
 
     fn process_move(
@@ -332,7 +345,7 @@ impl Blackjack {
         session.is_complete = true;
 
         // Determine outcome
-        let result = if player_bj && dealer_bj {
+        let base_result = if player_bj && dealer_bj {
             // Both blackjack = push
             GameResult::Push
         } else if player_bj {
@@ -354,6 +367,23 @@ impl Blackjack {
         } else {
             // Push
             GameResult::Push
+        };
+
+        // Apply super mode multipliers if active and player won
+        let result = if session.super_mode.is_active {
+            if let GameResult::Win(base_payout) = base_result {
+                // Strike Cards: multipliers apply to player's winning cards
+                let boosted_payout = apply_super_multiplier_cards(
+                    &player_cards,
+                    &session.super_mode.multipliers,
+                    base_payout,
+                );
+                GameResult::Win(boosted_payout)
+            } else {
+                base_result
+            }
+        } else {
+            base_result
         };
 
         Ok(result)

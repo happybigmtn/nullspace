@@ -21,6 +21,7 @@
 //! 3 = Bet 1x (river - required if haven't bet yet)
 //! 4 = Fold (river only if no previous bet)
 
+use super::super_mode::apply_super_multiplier_cards;
 use super::{CasinoGame, GameError, GameResult, GameRng};
 use nullspace_types::casino::GameSession;
 
@@ -404,6 +405,19 @@ fn resolve_showdown(
     // On wins/ties: subtract play_bet from the calculated return.
     // On losses: use LossWithExtraDeduction to deduct the uncharged play_bet.
 
+    // Helper to apply super mode multiplier
+    let apply_multiplier = |base: u64| -> u64 {
+        if session.super_mode.is_active {
+            apply_super_multiplier_cards(
+                &player_cards,
+                &session.super_mode.multipliers,
+                base,
+            )
+        } else {
+            base
+        }
+    };
+
     if tie {
         // Push - return all stakes (Ante + Play + Blind)
         // Rules: "If the hand is a tie, the Ante, Play, and Blind bets push."
@@ -417,19 +431,19 @@ fn resolve_showdown(
             // Calculated return: 2*Ante + 2*Play + (Blind + BlindBonus)
             // Actual return: subtract play_bet since it wasn't charged
             let blind_return = ante.saturating_add(blind_pay);
-            let total_return = ante.saturating_mul(2)
+            let base_return = ante.saturating_mul(2)
                 .saturating_add(play_bet) // Only 1x play_bet since 1x was "returned" but never charged
                 .saturating_add(blind_return);
-            Ok(GameResult::Win(total_return))
+            Ok(GameResult::Win(apply_multiplier(base_return)))
         } else {
             // Dealer doesn't qualify: Ante Pushes, Play Wins (1:1), Blind Wins (Pay table or Push)
             // Calculated return: 1*Ante + 2*Play + (Blind + BlindBonus)
             // Actual return: subtract play_bet since it wasn't charged
             let blind_return = ante.saturating_add(blind_pay);
-            let total_return = ante
+            let base_return = ante
                 .saturating_add(play_bet) // Only 1x play_bet since 1x was "returned" but never charged
                 .saturating_add(blind_return);
-            Ok(GameResult::Win(total_return))
+            Ok(GameResult::Win(apply_multiplier(base_return)))
         }
     } else {
         // Lose Ante, Play, Blind

@@ -110,7 +110,7 @@ export const ThreeCardPokerView: React.FC<ThreeCardPokerViewProps> = ({ gameStat
             </div>
 
             {/* Pair Plus Info Sidebar */}
-            <div className="absolute top-0 left-0 bottom-24 w-36 bg-terminal-black/80 border-r border-terminal-dim p-2 overflow-y-auto backdrop-blur-sm z-30 flex flex-col">
+            <div className="absolute top-0 left-0 bottom-24 w-36 bg-terminal-black/80 border-r-2 border-gray-700 p-2 overflow-y-auto backdrop-blur-sm z-30 flex flex-col">
                 <h3 className="text-[10px] font-bold text-gray-500 mb-2 tracking-widest text-center border-b border-gray-800 pb-1 flex-none">PAIR PLUS</h3>
                 <div className="flex-1 flex flex-col justify-center space-y-2 text-[10px]">
                     <div className="flex justify-between"><span className="text-gray-400">Straight Flush</span><span className="text-terminal-gold">40:1</span></div>
@@ -122,7 +122,7 @@ export const ThreeCardPokerView: React.FC<ThreeCardPokerViewProps> = ({ gameStat
             </div>
 
             {/* Game Rules Sidebar */}
-            <div className="absolute top-0 right-0 bottom-24 w-36 bg-terminal-black/80 border-l border-terminal-dim p-2 backdrop-blur-sm z-30 flex flex-col">
+            <div className="absolute top-0 right-0 bottom-24 w-36 bg-terminal-black/80 border-l-2 border-gray-700 p-2 backdrop-blur-sm z-30 flex flex-col">
                 <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-2 border-b border-gray-800 pb-1 flex-none text-center">Rules</div>
                 <div className="flex-1 overflow-y-auto flex flex-col justify-center space-y-2 text-[9px] text-gray-400">
                     <div>• Dealer qualifies with Queen-high or better</div>
@@ -133,7 +133,7 @@ export const ThreeCardPokerView: React.FC<ThreeCardPokerViewProps> = ({ gameStat
             </div>
 
             {/* Controls */}
-            <div className="absolute bottom-8 left-0 right-0 h-16 bg-terminal-black/90 border-t border-terminal-dim flex items-center justify-center gap-2 p-2 z-40">
+            <div className="absolute bottom-8 left-0 right-0 h-16 bg-terminal-black/90 border-t-2 border-gray-700 flex items-center justify-center gap-2 p-2 z-40">
                 {gameState.stage === 'BETTING' && (
                     <>
                         <div className="flex flex-col items-center border border-gray-700 rounded bg-black/50 px-3 py-1">

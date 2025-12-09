@@ -1,10 +1,15 @@
-//! Roulette game implementation.
+//! Roulette game implementation with multi-bet support.
 //!
 //! State blob format:
-//! Empty before spin, [result:u8] after spin.
+//! [bet_count:u8] [bets:RouletteBet×count] [result:u8]?
 //!
-//! Payload format (bet types):
-//! [betType:u8] [number:u8]
+//! Each RouletteBet (10 bytes):
+//! [bet_type:u8] [number:u8] [amount:u64 BE]
+//!
+//! Payload format:
+//! [0, bet_type, number, amount_bytes...] - Place bet (adds to pending bets)
+//! [1] - Spin wheel and resolve all bets
+//! [2] - Clear all pending bets
 //!
 //! Bet types:
 //! 0 = Straight (single number, 35:1)
@@ -17,8 +22,12 @@
 //! 7 = Dozen (1-12, 13-24, 25-36, 2:1) - number = 0/1/2
 //! 8 = Column (2:1) - number = 0/1/2
 
+use super::super_mode::apply_super_multiplier_number;
 use super::{CasinoGame, GameError, GameResult, GameRng};
 use nullspace_types::casino::GameSession;
+
+/// Maximum number of bets per session.
+const MAX_BETS: usize = 20;
 
 /// Red numbers on a roulette wheel.
 const RED_NUMBERS: [u8; 18] = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
@@ -100,12 +109,106 @@ fn payout_multiplier(bet_type: BetType) -> u64 {
     }
 }
 
+/// Individual bet in roulette.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RouletteBet {
+    pub bet_type: BetType,
+    pub number: u8,
+    pub amount: u64,
+}
+
+impl RouletteBet {
+    /// Serialize to 10 bytes: [bet_type:u8] [number:u8] [amount:u64 BE]
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(10);
+        bytes.push(self.bet_type as u8);
+        bytes.push(self.number);
+        bytes.extend_from_slice(&self.amount.to_be_bytes());
+        bytes
+    }
+
+    /// Deserialize from 10 bytes
+    fn from_bytes(bytes: &[u8]) -> Option<Self> {
+        if bytes.len() < 10 {
+            return None;
+        }
+        let bet_type = BetType::try_from(bytes[0]).ok()?;
+        let number = bytes[1];
+        let amount = u64::from_be_bytes(bytes[2..10].try_into().ok()?);
+        Some(RouletteBet { bet_type, number, amount })
+    }
+}
+
+/// Game state for multi-bet roulette.
+struct RouletteState {
+    bets: Vec<RouletteBet>,
+    result: Option<u8>,
+}
+
+impl RouletteState {
+    fn new() -> Self {
+        RouletteState {
+            bets: Vec::new(),
+            result: None,
+        }
+    }
+
+    /// Serialize state to blob
+    fn to_blob(&self) -> Vec<u8> {
+        let mut blob = Vec::new();
+        blob.push(self.bets.len() as u8);
+        for bet in &self.bets {
+            blob.extend_from_slice(&bet.to_bytes());
+        }
+        if let Some(result) = self.result {
+            blob.push(result);
+        }
+        blob
+    }
+
+    /// Deserialize state from blob
+    fn from_blob(blob: &[u8]) -> Option<Self> {
+        if blob.is_empty() {
+            return Some(RouletteState::new());
+        }
+
+        let mut offset = 0;
+
+        // Parse bets
+        if offset >= blob.len() {
+            return None;
+        }
+        let bet_count = blob[offset] as usize;
+        offset += 1;
+
+        let mut bets = Vec::new();
+        for _ in 0..bet_count {
+            if offset + 10 > blob.len() {
+                return None;
+            }
+            let bet = RouletteBet::from_bytes(&blob[offset..offset + 10])?;
+            bets.push(bet);
+            offset += 10;
+        }
+
+        // Parse result (if present)
+        let result = if offset < blob.len() {
+            Some(blob[offset])
+        } else {
+            None
+        };
+
+        Some(RouletteState { bets, result })
+    }
+}
+
 pub struct Roulette;
 
 impl CasinoGame for Roulette {
     fn init(session: &mut GameSession, _rng: &mut GameRng) -> GameResult {
-        // No initial state needed - waiting for bet
-        session.state_blob = vec![];
+        // Initialize with empty state
+        let state = RouletteState::new();
+        session.state_blob = state.to_blob();
         GameResult::Continue
     }
 
@@ -118,42 +221,129 @@ impl CasinoGame for Roulette {
             return Err(GameError::GameAlreadyComplete);
         }
 
-        if payload.len() < 2 {
+        if payload.is_empty() {
             return Err(GameError::InvalidPayload);
         }
 
-        let bet_type = BetType::try_from(payload[0])?;
-        let bet_number = payload[1];
+        // Parse current state
+        let mut state = RouletteState::from_blob(&session.state_blob)
+            .ok_or(GameError::InvalidPayload)?;
 
-        // Validate bet number
-        match bet_type {
-            BetType::Straight => {
-                if bet_number > 36 {
+        match payload[0] {
+            // [0, bet_type, number, amount_bytes...] - Place bet
+            0 => {
+                if payload.len() < 11 {
                     return Err(GameError::InvalidPayload);
                 }
-            }
-            BetType::Dozen | BetType::Column => {
-                if bet_number > 2 {
+
+                // Wheel already spun - can't place more bets
+                if state.result.is_some() {
+                    return Err(GameError::InvalidMove);
+                }
+
+                let bet_type = BetType::try_from(payload[1])?;
+                let number = payload[2];
+                let amount = u64::from_be_bytes(
+                    payload[3..11].try_into().map_err(|_| GameError::InvalidPayload)?
+                );
+
+                if amount == 0 {
                     return Err(GameError::InvalidPayload);
                 }
+
+                // Validate bet number
+                match bet_type {
+                    BetType::Straight => {
+                        if number > 36 {
+                            return Err(GameError::InvalidPayload);
+                        }
+                    }
+                    BetType::Dozen | BetType::Column => {
+                        if number > 2 {
+                            return Err(GameError::InvalidPayload);
+                        }
+                    }
+                    _ => {} // No number needed for other bets
+                }
+
+                // Check max bets limit
+                if state.bets.len() >= MAX_BETS {
+                    return Err(GameError::InvalidMove);
+                }
+
+                // Add bet (allow duplicates for roulette - bet on same spot multiple times)
+                state.bets.push(RouletteBet { bet_type, number, amount });
+
+                session.state_blob = state.to_blob();
+                Ok(GameResult::Continue)
             }
-            _ => {} // No number needed for other bets
-        }
 
-        // Spin the wheel
-        let result = rng.spin_roulette();
-        session.state_blob = vec![result];
-        session.move_count += 1;
-        session.is_complete = true;
+            // [1] - Spin wheel and resolve all bets
+            1 => {
+                // Must have at least one bet
+                if state.bets.is_empty() {
+                    return Err(GameError::InvalidMove);
+                }
 
-        // Check if bet wins
-        if bet_wins(bet_type, bet_number, result) {
-            // Return stake + winnings
-            let multiplier = payout_multiplier(bet_type).saturating_add(1);
-            let winnings = session.bet.saturating_mul(multiplier);
-            Ok(GameResult::Win(winnings))
-        } else {
-            Ok(GameResult::Loss)
+                // Wheel already spun
+                if state.result.is_some() {
+                    return Err(GameError::InvalidMove);
+                }
+
+                // Spin the wheel
+                let result = rng.spin_roulette();
+                state.result = Some(result);
+
+                // Calculate total payout across all bets
+                let mut total_wagered: u64 = 0;
+                let mut total_winnings: u64 = 0;
+
+                for bet in &state.bets {
+                    total_wagered = total_wagered.saturating_add(bet.amount);
+                    if bet_wins(bet.bet_type, bet.number, result) {
+                        // Win: return stake + winnings
+                        let multiplier = payout_multiplier(bet.bet_type).saturating_add(1);
+                        total_winnings = total_winnings.saturating_add(bet.amount.saturating_mul(multiplier));
+                    }
+                    // Loss: nothing added to winnings
+                }
+
+                session.state_blob = state.to_blob();
+                session.move_count += 1;
+                session.is_complete = true;
+
+                // Determine final result
+                if total_winnings > 0 {
+                    // Apply super mode multipliers if active
+                    let final_winnings = if session.super_mode.is_active {
+                        // Lucky Number: multiplier applies to the winning number
+                        apply_super_multiplier_number(
+                            result,
+                            &session.super_mode.multipliers,
+                            total_winnings,
+                        )
+                    } else {
+                        total_winnings
+                    };
+                    Ok(GameResult::Win(final_winnings))
+                } else {
+                    Ok(GameResult::Loss)
+                }
+            }
+
+            // [2] - Clear all pending bets
+            2 => {
+                // Can't clear after wheel spun
+                if state.result.is_some() {
+                    return Err(GameError::InvalidMove);
+                }
+
+                state.bets.clear();
+                session.state_blob = state.to_blob();
+                Ok(GameResult::Continue)
+            }
+
+            _ => Err(GameError::InvalidPayload),
         }
     }
 }
@@ -289,6 +479,37 @@ mod tests {
         assert_eq!(payout_multiplier(BetType::Column), 2);
     }
 
+    /// Helper to create place bet payload
+    fn place_bet_payload(bet_type: BetType, number: u8, amount: u64) -> Vec<u8> {
+        let mut payload = vec![0, bet_type as u8, number];
+        payload.extend_from_slice(&amount.to_be_bytes());
+        payload
+    }
+
+    #[test]
+    fn test_place_bet() {
+        let seed = create_test_seed();
+        let mut session = create_test_session(100);
+        let mut rng = GameRng::new(&seed, session.id, 0);
+
+        Roulette::init(&mut session, &mut rng);
+        assert!(!session.is_complete);
+
+        // Place a red bet
+        let mut rng = GameRng::new(&seed, session.id, 1);
+        let payload = place_bet_payload(BetType::Red, 0, 100);
+        let result = Roulette::process_move(&mut session, &payload, &mut rng);
+
+        assert!(result.is_ok());
+        assert!(!session.is_complete); // Game continues - need to spin
+
+        // Verify bet was stored
+        let state = RouletteState::from_blob(&session.state_blob).unwrap();
+        assert_eq!(state.bets.len(), 1);
+        assert_eq!(state.bets[0].bet_type, BetType::Red);
+        assert_eq!(state.bets[0].amount, 100);
+    }
+
     #[test]
     fn test_game_completes_after_spin() {
         let seed = create_test_seed();
@@ -297,15 +518,56 @@ mod tests {
 
         Roulette::init(&mut session, &mut rng);
         assert!(!session.is_complete);
-        assert!(session.state_blob.is_empty());
 
+        // Place a red bet
         let mut rng = GameRng::new(&seed, session.id, 1);
-        let result = Roulette::process_move(&mut session, &[1, 0], &mut rng); // Bet on red
+        let payload = place_bet_payload(BetType::Red, 0, 100);
+        Roulette::process_move(&mut session, &payload, &mut rng).unwrap();
+
+        // Spin the wheel
+        let mut rng = GameRng::new(&seed, session.id, 2);
+        let result = Roulette::process_move(&mut session, &[1], &mut rng);
 
         assert!(result.is_ok());
         assert!(session.is_complete);
-        assert_eq!(session.state_blob.len(), 1);
-        assert!(session.state_blob[0] <= 36);
+
+        // State should have bet and result
+        let state = RouletteState::from_blob(&session.state_blob).unwrap();
+        assert!(state.result.is_some());
+        assert!(state.result.unwrap() <= 36);
+    }
+
+    #[test]
+    fn test_multi_bet() {
+        let seed = create_test_seed();
+        let mut session = create_test_session(100);
+        let mut rng = GameRng::new(&seed, session.id, 0);
+
+        Roulette::init(&mut session, &mut rng);
+
+        // Place multiple bets
+        let mut rng = GameRng::new(&seed, session.id, 1);
+        let payload = place_bet_payload(BetType::Red, 0, 50);
+        Roulette::process_move(&mut session, &payload, &mut rng).unwrap();
+
+        let mut rng = GameRng::new(&seed, session.id, 2);
+        let payload = place_bet_payload(BetType::Straight, 17, 25);
+        Roulette::process_move(&mut session, &payload, &mut rng).unwrap();
+
+        let mut rng = GameRng::new(&seed, session.id, 3);
+        let payload = place_bet_payload(BetType::Odd, 0, 25);
+        Roulette::process_move(&mut session, &payload, &mut rng).unwrap();
+
+        // Verify all bets stored
+        let state = RouletteState::from_blob(&session.state_blob).unwrap();
+        assert_eq!(state.bets.len(), 3);
+
+        // Spin
+        let mut rng = GameRng::new(&seed, session.id, 4);
+        let result = Roulette::process_move(&mut session, &[1], &mut rng);
+
+        assert!(result.is_ok());
+        assert!(session.is_complete);
     }
 
     #[test]
@@ -318,34 +580,73 @@ mod tests {
 
         let mut rng = GameRng::new(&seed, session.id, 1);
         // Straight bet on 37 (invalid)
-        let result = Roulette::process_move(&mut session, &[0, 37], &mut rng);
+        let payload = place_bet_payload(BetType::Straight, 37, 100);
+        let result = Roulette::process_move(&mut session, &payload, &mut rng);
         assert!(matches!(result, Err(GameError::InvalidPayload)));
 
         // Dozen bet on 3 (invalid, should be 0, 1, or 2)
-        let result = Roulette::process_move(&mut session, &[7, 3], &mut rng);
+        let payload = place_bet_payload(BetType::Dozen, 3, 100);
+        let result = Roulette::process_move(&mut session, &payload, &mut rng);
         assert!(matches!(result, Err(GameError::InvalidPayload)));
     }
 
     #[test]
-    fn test_straight_win_payout() {
+    fn test_spin_without_bets() {
         let seed = create_test_seed();
         let mut session = create_test_session(100);
         let mut rng = GameRng::new(&seed, session.id, 0);
 
         Roulette::init(&mut session, &mut rng);
 
-        // We need to find a seed that produces a known result
-        // For testing, let's just verify the payout calculation is correct
-        // by manually checking a few spins
+        // Try to spin without placing bets
+        let mut rng = GameRng::new(&seed, session.id, 1);
+        let result = Roulette::process_move(&mut session, &[1], &mut rng);
+
+        assert!(matches!(result, Err(GameError::InvalidMove)));
+    }
+
+    #[test]
+    fn test_clear_bets() {
+        let seed = create_test_seed();
+        let mut session = create_test_session(100);
+        let mut rng = GameRng::new(&seed, session.id, 0);
+
+        Roulette::init(&mut session, &mut rng);
+
+        // Place a bet
+        let mut rng = GameRng::new(&seed, session.id, 1);
+        let payload = place_bet_payload(BetType::Red, 0, 100);
+        Roulette::process_move(&mut session, &payload, &mut rng).unwrap();
+
+        // Clear bets
+        let mut rng = GameRng::new(&seed, session.id, 2);
+        let result = Roulette::process_move(&mut session, &[2], &mut rng);
+        assert!(result.is_ok());
+
+        // Verify bets cleared
+        let state = RouletteState::from_blob(&session.state_blob).unwrap();
+        assert!(state.bets.is_empty());
+    }
+
+    #[test]
+    fn test_straight_win_payout() {
+        let seed = create_test_seed();
+
+        // Find a session that produces a known result
         for session_id in 1..100 {
             let mut test_session = create_test_session(100);
             test_session.id = session_id;
             let mut rng = GameRng::new(&seed, session_id, 0);
             Roulette::init(&mut test_session, &mut rng);
 
+            // Place bet on number 0
             let mut rng = GameRng::new(&seed, session_id, 1);
-            // Bet on number 0
-            let result = Roulette::process_move(&mut test_session, &[0, 0], &mut rng);
+            let payload = place_bet_payload(BetType::Straight, 0, 100);
+            Roulette::process_move(&mut test_session, &payload, &mut rng).unwrap();
+
+            // Spin
+            let mut rng = GameRng::new(&seed, session_id, 2);
+            let result = Roulette::process_move(&mut test_session, &[1], &mut rng);
 
             if let Ok(GameResult::Win(amount)) = result {
                 // Straight bet pays 35:1 plus stake returned = 36x total

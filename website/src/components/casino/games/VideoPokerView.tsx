@@ -36,7 +36,7 @@ export const VideoPokerView: React.FC<VideoPokerViewProps> = ({ gameState, onTog
             </div>
 
             {/* CONTROLS */}
-            <div className="absolute bottom-8 left-0 right-0 h-16 bg-terminal-black/90 border-t border-terminal-dim flex items-center justify-center gap-2 p-2 z-40">
+            <div className="absolute bottom-8 left-0 right-0 h-16 bg-terminal-black/90 border-t-2 border-gray-700 flex items-center justify-center gap-2 p-2 z-40">
                     <div className="flex gap-2">
                         {[1,2,3,4,5].map(n => (
                             <div key={n} className="flex flex-col items-center border border-terminal-dim rounded bg-black/50 px-3 py-1">
