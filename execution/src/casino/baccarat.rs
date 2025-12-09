@@ -449,12 +449,20 @@ impl CasinoGame for Baccarat {
                     GameResult::Push
                 } else if net_payout > 0 {
                     // Net win: return total wagered + net winnings
-                    let total_return = total_wagered.saturating_add(net_payout as u64);
+                    // Safe cast: positive i64 fits in u64
+                    let winnings = u64::try_from(net_payout).unwrap_or(0);
+                    let total_return = total_wagered.saturating_add(winnings);
                     GameResult::Win(total_return)
                 } else if net_payout < 0 {
                     // Net loss
-                    let loss_amount = (-net_payout) as u64;
-                    if loss_amount >= total_wagered {
+                    // Use checked_neg to safely convert negative i64 to positive value
+                    let loss_amount = net_payout.checked_neg()
+                        .and_then(|v| u64::try_from(v).ok())
+                        .unwrap_or(0);
+                    if loss_amount == 0 {
+                        // Overflow case - treat as total loss
+                        GameResult::Loss
+                    } else if loss_amount >= total_wagered {
                         GameResult::Loss
                     } else {
                         // Partial loss - return remaining stake

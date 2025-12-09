@@ -139,6 +139,8 @@ impl CasinoGame for HiLo {
                 // Win(amount) means "add this to player chips" and the original bet
                 // was already deducted at StartGame
                 if base_payout > 0 {
+                    // Safe cast: positive i64 fits in u64
+                    let payout_u64 = u64::try_from(base_payout).unwrap_or(0);
                     // Apply super mode streak multiplier if active
                     // move_count represents the streak (number of correct guesses)
                     let final_payout = if session.super_mode.is_active && session.move_count > 0 {
@@ -147,12 +149,12 @@ impl CasinoGame for HiLo {
                         // Cap streak at u8::MAX for the multiplier function
                         let streak = session.move_count.min(u8::MAX as u32) as u8;
                         apply_hilo_streak_multiplier(
-                            base_payout as u64,
+                            payout_u64,
                             streak,
                             is_ace,
                         )
                     } else {
-                        base_payout as u64
+                        payout_u64
                     };
                     Ok(GameResult::Win(final_payout))
                 } else {

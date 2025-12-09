@@ -248,33 +248,19 @@ impl<'a, S: State> Layer<'a, S> {
     }
 
     async fn prepare(&mut self, transaction: &Transaction) -> bool {
-        eprintln!(
-            "[PREPARE DEBUG] Processing tx from {:02x}{:02x}{:02x}{:02x}, tx_nonce: {}, instruction: {:?}",
-            transaction.public[0], transaction.public[1], transaction.public[2], transaction.public[3],
-            transaction.nonce,
-            std::mem::discriminant(&transaction.instruction)
-        );
-
         // Get account
         let mut account = if let Some(Value::Account(account)) =
             self.get(&Key::Account(transaction.public.clone())).await
         {
-            eprintln!("[PREPARE DEBUG] Found existing account, stored_nonce: {}", account.nonce);
             account
         } else {
-            eprintln!("[PREPARE DEBUG] No account found, using default (nonce=0)");
             Account::default()
         };
 
         // Ensure nonce is correct
         if account.nonce != transaction.nonce {
-            eprintln!(
-                "[PREPARE DEBUG] NONCE MISMATCH! stored={} tx={} - DROPPING TRANSACTION",
-                account.nonce, transaction.nonce
-            );
             return false;
         }
-        eprintln!("[PREPARE DEBUG] Nonce OK, proceeding with transaction");
 
         // Increment nonce
         account.nonce += 1;
@@ -292,11 +278,6 @@ impl<'a, S: State> Layer<'a, S> {
     }
 
     async fn apply(&mut self, transaction: &Transaction) -> Vec<Event> {
-        eprintln!(
-            "[APPLY DEBUG] Applying transaction from {:02x}{:02x}{:02x}{:02x}, instruction: {:?}",
-            transaction.public[0], transaction.public[1], transaction.public[2], transaction.public[3],
-            std::mem::discriminant(&transaction.instruction)
-        );
         match &transaction.instruction {
             Instruction::CasinoRegister { name } => {
                 self.handle_casino_register(&transaction.public, name).await
@@ -335,14 +316,8 @@ impl<'a, S: State> Layer<'a, S> {
     // === Casino Handler Methods ===
 
     async fn handle_casino_register(&mut self, public: &PublicKey, name: &str) -> Vec<Event> {
-        eprintln!(
-            "[CASINO DEBUG] handle_casino_register: Registering player {:02x}{:02x}{:02x}{:02x} as '{}'",
-            public[0], public[1], public[2], public[3], name
-        );
-
         // Check if player already exists
         if self.get(&Key::CasinoPlayer(public.clone())).await.is_some() {
-            eprintln!("[CASINO DEBUG] handle_casino_register: Player already exists, skipping");
             return vec![]; // Player already registered
         }
 
@@ -350,11 +325,6 @@ impl<'a, S: State> Layer<'a, S> {
         let player = nullspace_types::casino::Player::new_with_block(
             name.to_string(),
             self.seed.view
-        );
-
-        eprintln!(
-            "[CASINO DEBUG] handle_casino_register: Creating new player with chips={}",
-            player.chips
         );
 
         self.insert(
@@ -405,22 +375,9 @@ impl<'a, S: State> Layer<'a, S> {
         session_id: u64,
     ) -> Vec<Event> {
         // Get player
-        eprintln!(
-            "[CASINO DEBUG] handle_casino_start_game: Looking up player {:02x}{:02x}{:02x}{:02x}",
-            public[0], public[1], public[2], public[3]
-        );
         let mut player = match self.get(&Key::CasinoPlayer(public.clone())).await {
-            Some(Value::CasinoPlayer(p)) => {
-                eprintln!("[CASINO DEBUG] handle_casino_start_game: Found player with chips={}", p.chips);
-                p
-            }
-            _ => {
-                eprintln!(
-                    "[CASINO DEBUG] handle_casino_start_game: Player NOT FOUND for {:02x}{:02x}{:02x}{:02x}, returning empty events",
-                    public[0], public[1], public[2], public[3]
-                );
-                return vec![];
-            }
+            Some(Value::CasinoPlayer(p)) => p,
+            _ => return vec![],
         };
 
         // Check player has enough chips
@@ -479,7 +436,9 @@ impl<'a, S: State> Layer<'a, S> {
                             payout *= 2;
                             player.doubles -= 1;
                         }
-                        player.chips = player.chips.saturating_add(payout as u64);
+                        // Safe cast: payout should always be positive for Win result
+                        let addition = u64::try_from(payout).unwrap_or(0);
+                        player.chips = player.chips.saturating_add(addition);
                         player.active_shield = false;
                         player.active_double = false;
 
@@ -594,15 +553,20 @@ impl<'a, S: State> Layer<'a, S> {
                 {
                     if payout < 0 {
                         // Deducting chips (new bet placed)
-                        let deduction = (-payout) as u64;
-                        if player.chips < deduction {
-                            // Insufficient funds - reject the move
+                        // Use checked_neg to safely convert negative i64 to positive value
+                        let deduction = payout.checked_neg()
+                            .and_then(|v| u64::try_from(v).ok())
+                            .unwrap_or(0);
+                        if deduction == 0 || player.chips < deduction {
+                            // Insufficient funds or overflow - reject the move
                             return vec![];
                         }
                         player.chips = player.chips.saturating_sub(deduction);
                     } else {
                         // Adding chips (intermediate win)
-                        player.chips = player.chips.saturating_add(payout as u64);
+                        // Safe cast: positive i64 fits in u64
+                        let addition = u64::try_from(payout).unwrap_or(0);
+                        player.chips = player.chips.saturating_add(addition);
                     }
                     self.insert(Key::CasinoPlayer(public.clone()), Value::CasinoPlayer(player));
                 }
@@ -622,7 +586,9 @@ impl<'a, S: State> Layer<'a, S> {
                         payout *= 2;
                         player.doubles -= 1;
                     }
-                    player.chips = player.chips.saturating_add(payout as u64);
+                    // Safe cast: payout should always be positive for Win result
+                    let addition = u64::try_from(payout).unwrap_or(0);
+                    player.chips = player.chips.saturating_add(addition);
                     player.active_shield = false;
                     player.active_double = false;
 

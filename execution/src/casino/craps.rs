@@ -819,16 +819,18 @@ impl CasinoGame for Craps {
                 if state.bets.is_empty() {
                     session.is_complete = true;
                     if total_payout > 0 {
+                        // Safe cast: positive i64 fits in u64
+                        let payout_u64 = u64::try_from(total_payout).unwrap_or(0);
                         // Apply super mode multipliers if active
                         let final_payout = if session.super_mode.is_active {
                             let total = d1.saturating_add(d2);
                             apply_super_multiplier_total(
                                 total,
                                 &session.super_mode.multipliers,
-                                total_payout as u64,
+                                payout_u64,
                             )
                         } else {
-                            total_payout as u64
+                            payout_u64
                         };
                         Ok(GameResult::Win(final_payout))
                     } else if total_payout < 0 {
