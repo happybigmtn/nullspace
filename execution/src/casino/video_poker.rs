@@ -9,6 +9,7 @@
 //! [holdMask:u8] - bits indicate which cards to hold
 //! bit 0 = hold card 1, bit 1 = hold card 2, etc.
 
+use super::super_mode::apply_super_multiplier_cards;
 use super::{CasinoGame, GameError, GameResult, GameRng};
 use nullspace_types::casino::GameSession;
 
@@ -235,8 +236,18 @@ impl CasinoGame for VideoPoker {
         let multiplier = payout_multiplier(hand);
 
         if multiplier > 0 {
-            let winnings = session.bet.saturating_mul(multiplier);
-            Ok(GameResult::Win(winnings))
+            let base_winnings = session.bet.saturating_mul(multiplier);
+            // Apply super mode multipliers if active
+            let final_winnings = if session.super_mode.is_active {
+                apply_super_multiplier_cards(
+                    &cards,
+                    &session.super_mode.multipliers,
+                    base_winnings,
+                )
+            } else {
+                base_winnings
+            };
+            Ok(GameResult::Win(final_winnings))
         } else {
             Ok(GameResult::Loss)
         }

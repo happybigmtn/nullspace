@@ -23,19 +23,19 @@ export const RouletteView: React.FC<{ gameState: GameState; numberInput?: string
         const colorClass = color === 'RED' ? 'text-terminal-accent' : color === 'BLACK' ? 'text-white' : 'text-terminal-green';
 
         return (
-            <div key={num} className="flex items-center h-4 text-[9px]">
+            <div key={num} className="flex items-center h-7 text-base">
                 <div className="flex-1 flex justify-end items-center pr-1 gap-1 min-w-0">
-                    {pnl < 0 && <span className="text-[8px] text-gray-400 truncate">{Math.abs(pnl)}</span>}
+                    {pnl < 0 && <span className="text-sm text-gray-400 truncate">{Math.abs(pnl)}</span>}
                     {pnl < 0 && (
-                        <div className="bg-terminal-accent/80 h-2 rounded-l" style={{ width: `${barPercent}%` }} />
+                        <div className="bg-terminal-accent/80 h-3 rounded-l" style={{ width: `${barPercent}%` }} />
                     )}
                 </div>
-                <div className={`w-5 text-center font-bold ${colorClass} flex-shrink-0`}>{num}</div>
+                <div className={`w-7 text-center font-bold ${colorClass} flex-shrink-0`}>{num}</div>
                 <div className="flex-1 flex justify-start items-center pl-1 gap-1 min-w-0">
                     {pnl > 0 && (
-                        <div className="bg-terminal-green/80 h-2 rounded-r" style={{ width: `${barPercent}%` }} />
+                        <div className="bg-terminal-green/80 h-3 rounded-r" style={{ width: `${barPercent}%` }} />
                     )}
-                    {pnl > 0 && <span className="text-[8px] text-gray-400 truncate">{pnl}</span>}
+                    {pnl > 0 && <span className="text-sm text-gray-400 truncate">{pnl}</span>}
                 </div>
             </div>
         );
@@ -78,7 +78,7 @@ export const RouletteView: React.FC<{ gameState: GameState; numberInput?: string
             </div>
 
             {/* EXPOSURE SIDEBAR */}
-            <div className="absolute top-0 left-0 bottom-24 w-60 bg-terminal-black/80 border-r border-terminal-dim p-2 overflow-hidden backdrop-blur-sm z-30 flex flex-col">
+            <div className="absolute top-0 left-0 bottom-24 w-60 bg-terminal-black/80 border-r-2 border-gray-700 p-2 overflow-hidden backdrop-blur-sm z-30 flex flex-col">
                 <h3 className="text-[10px] font-bold text-gray-500 mb-2 tracking-widest text-center border-b border-gray-800 pb-1 flex-none">EXPOSURE</h3>
                 
                 {/* 0 Row */}
@@ -86,24 +86,24 @@ export const RouletteView: React.FC<{ gameState: GameState; numberInput?: string
                     {renderExposureRow(0)}
                 </div>
 
-                <div className="flex-1 flex flex-row relative">
+                <div className="flex-1 flex flex-row relative overflow-hidden">
                     {/* Vertical Divider */}
                     <div className="absolute left-1/2 top-0 bottom-0 w-px bg-gray-800 -translate-x-1/2"></div>
-                    
+
                     {/* 1-18 */}
-                    <div className="flex-1 flex flex-col justify-between pr-1">
+                    <div className="flex-1 flex flex-col gap-0.5 pr-1">
                         {Array.from({ length: 18 }, (_, i) => i + 1).map(num => renderExposureRow(num))}
                     </div>
-                    
+
                     {/* 19-36 */}
-                    <div className="flex-1 flex flex-col justify-between pl-1">
+                    <div className="flex-1 flex flex-col gap-0.5 pl-1">
                         {Array.from({ length: 18 }, (_, i) => i + 19).map(num => renderExposureRow(num))}
                     </div>
                 </div>
             </div>
 
             {/* ACTIVE BETS SIDEBAR */}
-            <div className="absolute top-0 right-0 bottom-24 w-60 bg-terminal-black/80 border-l border-terminal-dim p-2 backdrop-blur-sm z-30 flex flex-col">
+            <div className="absolute top-0 right-0 bottom-24 w-60 bg-terminal-black/80 border-l-2 border-gray-700 p-2 backdrop-blur-sm z-30 flex flex-col">
                 <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-2 border-b border-gray-800 pb-1 flex-none text-center">Table Bets</div>
                 <div className="flex-1 overflow-y-auto flex flex-col justify-center space-y-1">
                     {gameState.rouletteBets.length === 0 ? (
@@ -115,7 +115,7 @@ export const RouletteView: React.FC<{ gameState: GameState; numberInput?: string
             </div>
 
             {/* CONTROLS */}
-            <div className="absolute bottom-8 left-0 right-0 h-16 bg-terminal-black/90 border-t border-terminal-dim flex items-center justify-center gap-2 p-2 z-40 overflow-x-auto">
+            <div className="absolute bottom-8 left-0 right-0 h-16 bg-terminal-black/90 border-t-2 border-gray-700 flex items-center justify-center gap-2 p-2 z-40 overflow-x-auto">
                     <div className="flex gap-2">
                         <div className="flex flex-col items-center border border-terminal-accent rounded bg-black/50 px-3 py-1">
                             <span className="text-terminal-accent font-bold text-sm">R</span>

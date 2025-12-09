@@ -16,6 +16,7 @@
 //! [2] - Roll dice
 //! [3] - Clear all bets (only before first roll)
 
+use super::super_mode::apply_super_multiplier_total;
 use super::{CasinoGame, GameError, GameResult, GameRng};
 use nullspace_types::casino::GameSession;
 
@@ -816,7 +817,18 @@ impl CasinoGame for Craps {
                 if state.bets.is_empty() {
                     session.is_complete = true;
                     if total_payout > 0 {
-                        Ok(GameResult::Win(total_payout as u64))
+                        // Apply super mode multipliers if active
+                        let final_payout = if session.super_mode.is_active {
+                            let total = d1.saturating_add(d2);
+                            apply_super_multiplier_total(
+                                total,
+                                &session.super_mode.multipliers,
+                                total_payout as u64,
+                            )
+                        } else {
+                            total_payout as u64
+                        };
+                        Ok(GameResult::Win(final_payout))
                     } else if total_payout < 0 {
                         Ok(GameResult::Loss)
                     } else {

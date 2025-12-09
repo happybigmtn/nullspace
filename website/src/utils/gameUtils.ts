@@ -489,11 +489,12 @@ export const getRouletteColumn = (num: number): number => {
 export const calculateRouletteExposure = (outcome: number, bets: RouletteBet[]) => {
     let pnl = 0;
     const color = getRouletteColor(outcome);
+    const column = outcome === 0 ? -1 : (outcome - 1) % 3; // 0, 1, 2 for columns
+    const dozen = outcome === 0 ? -1 : Math.floor((outcome - 1) / 12); // 0, 1, 2 for dozens
 
     bets.forEach(bet => {
-        let win = 0;
         let payoutMult = 0;
-        
+
         if (bet.type === 'STRAIGHT' && bet.target === outcome) payoutMult = 35;
         else if (bet.type === 'RED' && color === 'RED') payoutMult = 1;
         else if (bet.type === 'BLACK' && color === 'BLACK') payoutMult = 1;
@@ -502,10 +503,17 @@ export const calculateRouletteExposure = (outcome: number, bets: RouletteBet[]) 
         else if (bet.type === 'LOW' && outcome >= 1 && outcome <= 18) payoutMult = 1;
         else if (bet.type === 'HIGH' && outcome >= 19 && outcome <= 36) payoutMult = 1;
         else if (bet.type === 'ZERO' && outcome === 0) payoutMult = 35;
-        
+        // Dozen bets: 1-12, 13-24, 25-36 (2:1 payout)
+        else if (bet.type === 'DOZEN_1' && dozen === 0) payoutMult = 2;
+        else if (bet.type === 'DOZEN_2' && dozen === 1) payoutMult = 2;
+        else if (bet.type === 'DOZEN_3' && dozen === 2) payoutMult = 2;
+        // Column bets: COL_1 = 1,4,7..., COL_2 = 2,5,8..., COL_3 = 3,6,9... (2:1 payout)
+        else if (bet.type === 'COL_1' && column === 0) payoutMult = 2;
+        else if (bet.type === 'COL_2' && column === 1) payoutMult = 2;
+        else if (bet.type === 'COL_3' && column === 2) payoutMult = 2;
+
         if (payoutMult > 0) {
-            win = bet.amount * payoutMult;
-            pnl += win; 
+            pnl += bet.amount * payoutMult;
         } else {
             pnl -= bet.amount;
         }
@@ -515,47 +523,150 @@ export const calculateRouletteExposure = (outcome: number, bets: RouletteBet[]) 
 };
 
 // --- CRAPS LOGIC ---
-export const calculateCrapsExposure = (total: number, point: number | null, bets: CrapsBet[]) => {
+
+// True odds payout for PASS odds (matches on-chain craps.rs)
+const crapsPassOddsPayout = (point: number, oddsAmount: number): number => {
+    switch (point) {
+        case 4: case 10: return oddsAmount * 2; // 2:1
+        case 5: case 9: return oddsAmount * 1.5; // 3:2
+        case 6: case 8: return oddsAmount * 1.2; // 6:5
+        default: return 0;
+    }
+};
+
+// True odds payout for DONT_PASS odds (inverse of pass odds)
+const crapsDontPassOddsPayout = (point: number, oddsAmount: number): number => {
+    switch (point) {
+        case 4: case 10: return oddsAmount * 0.5; // 1:2
+        case 5: case 9: return oddsAmount * (2/3); // 2:3
+        case 6: case 8: return oddsAmount * (5/6); // 5:6
+        default: return 0;
+    }
+};
+
+// YES (Place) bet payout with 1% commission - matches on-chain
+const crapsYesPayout = (target: number, amount: number): number => {
+    let trueOdds = 0;
+    switch (target) {
+        case 4: case 10: trueOdds = amount * 2; break; // 2:1
+        case 5: case 9: trueOdds = amount * 1.5; break; // 3:2
+        case 6: case 8: trueOdds = amount * 1.2; break; // 6:5
+        default: trueOdds = amount;
+    }
+    // 1% commission on winnings
+    return trueOdds * 0.99;
+};
+
+// NO (Lay) bet payout with 1% commission - matches on-chain
+const crapsNoPayout = (target: number, amount: number): number => {
+    let trueOdds = 0;
+    switch (target) {
+        case 4: case 10: trueOdds = amount * 0.5; break; // 1:2
+        case 5: case 9: trueOdds = amount * (2/3); break; // 2:3
+        case 6: case 8: trueOdds = amount * (5/6); break; // 5:6
+        default: trueOdds = amount;
+    }
+    // 1% commission on winnings
+    return trueOdds * 0.99;
+};
+
+// NEXT (Hop) bet payout with 1% commission - matches on-chain
+const crapsNextPayout = (target: number, amount: number): number => {
+    const ways = WAYS[target] || 0;
+    let multiplier = 0;
+    switch (ways) {
+        case 1: multiplier = 35; break; // 2 or 12
+        case 2: multiplier = 17; break; // 3 or 11
+        case 3: multiplier = 11; break; // 4 or 10
+        case 4: multiplier = 8; break;  // 5 or 9
+        case 5: multiplier = 6; break;  // 6 or 8
+        case 6: multiplier = 5; break;  // 7
+        default: multiplier = 1;
+    }
+    return amount * multiplier * 0.99; // 1% commission
+};
+
+// Hardway bet payout - matches on-chain
+const crapsHardwayPayout = (target: number, amount: number): number => {
+    switch (target) {
+        case 4: case 10: return amount * 7; // 7:1
+        case 6: case 8: return amount * 9;  // 9:1
+        default: return 0;
+    }
+};
+
+// Overload to optionally specify hard roll explicitly
+export const calculateCrapsExposure = (total: number, point: number | null, bets: CrapsBet[], forceHard?: boolean) => {
     let pnl = 0;
-    
+    // If forceHard is specified, use that; otherwise calculate from total
+    const isHard = forceHard !== undefined ? forceHard : (total % 2 === 0 && total >= 4 && total <= 10);
+
     bets.forEach(bet => {
          let winAmount = 0;
          let loseAmount = 0;
-         
+
          if (bet.type === 'PASS') {
               if (point === null) {
                   if (total === 7 || total === 11) winAmount = bet.amount;
                   else if (total === 2 || total === 3 || total === 12) loseAmount = bet.amount;
               } else {
-                  if (total === point) { 
-                      winAmount = bet.amount; 
-                      if (bet.oddsAmount) winAmount += bet.oddsAmount * (WAYS[point]/WAYS[7]);
+                  if (total === point) {
+                      winAmount = bet.amount;
+                      if (bet.oddsAmount) winAmount += crapsPassOddsPayout(point, bet.oddsAmount);
                   } else if (total === 7) loseAmount = bet.amount + (bet.oddsAmount || 0);
               }
          } else if (bet.type === 'DONT_PASS') {
                if (point === null) {
                    if (total === 2 || total === 3) winAmount = bet.amount;
                    else if (total === 7 || total === 11) loseAmount = bet.amount;
+                   // 12 is a push, no pnl change
                } else {
                    if (total === 7) {
                        winAmount = bet.amount;
-                       // Approx odds for DP? Usually 1:2 for 4/10 etc.
-                       // Simplified
-                       if (bet.oddsAmount) winAmount += bet.oddsAmount * 0.5; 
+                       if (bet.oddsAmount) winAmount += crapsDontPassOddsPayout(point, bet.oddsAmount);
                    } else if (total === point) loseAmount = bet.amount + (bet.oddsAmount || 0);
+               }
+         } else if (bet.type === 'COME') {
+              // COME acts like PASS but on its own point
+              if (bet.target === 0) {
+                  // Pending - first roll for this bet
+                  if (total === 7 || total === 11) winAmount = bet.amount;
+                  else if (total === 2 || total === 3 || total === 12) loseAmount = bet.amount;
+              } else {
+                  // Has traveled to a point
+                  if (total === bet.target) {
+                      winAmount = bet.amount;
+                      if (bet.oddsAmount) winAmount += crapsPassOddsPayout(bet.target, bet.oddsAmount);
+                  } else if (total === 7) loseAmount = bet.amount + (bet.oddsAmount || 0);
+              }
+         } else if (bet.type === 'DONT_COME') {
+               if (bet.target === 0) {
+                   if (total === 2 || total === 3) winAmount = bet.amount;
+                   else if (total === 7 || total === 11) loseAmount = bet.amount;
+               } else {
+                   if (total === 7) {
+                       winAmount = bet.amount;
+                       if (bet.oddsAmount) winAmount += crapsDontPassOddsPayout(bet.target, bet.oddsAmount);
+                   } else if (total === bet.target) loseAmount = bet.amount + (bet.oddsAmount || 0);
                }
          } else if (bet.type === 'FIELD') {
               if ([2,12].includes(total)) winAmount = bet.amount * 2;
               else if ([3,4,9,10,11].includes(total)) winAmount = bet.amount;
               else loseAmount = bet.amount;
-         } else if (bet.type === 'YES' && bet.target === total) {
-              winAmount = bet.amount * 1.5; // Simplified Place Win
-         } else if (bet.type === 'YES' && total === 7) {
-              loseAmount = bet.amount;
-         } else if (bet.type === 'NO' && total === 7) {
-              winAmount = bet.amount * 0.5; // Simplified Lay Win
-         } else if (bet.type === 'NO' && bet.target === total) {
-              loseAmount = bet.amount;
+         } else if (bet.type === 'YES') {
+              if (bet.target === total) winAmount = crapsYesPayout(bet.target, bet.amount);
+              else if (total === 7) loseAmount = bet.amount;
+         } else if (bet.type === 'NO') {
+              if (total === 7) winAmount = crapsNoPayout(bet.target!, bet.amount);
+              else if (bet.target === total) loseAmount = bet.amount;
+         } else if (bet.type === 'NEXT') {
+              if (total === bet.target) winAmount = crapsNextPayout(bet.target, bet.amount);
+              else loseAmount = bet.amount;
+         } else if (bet.type === 'HARDWAY') {
+              const hardTarget = bet.target!;
+              if (isHard && total === hardTarget) winAmount = crapsHardwayPayout(hardTarget, bet.amount);
+              else if (total === hardTarget || total === 7) loseAmount = bet.amount;
+              // Otherwise still working
          }
 
          pnl += winAmount;
@@ -567,13 +678,14 @@ export const calculateCrapsExposure = (total: number, point: number | null, bets
 /**
  * Resolves craps bets after a roll, returning pnl and remaining bets
  * Bets are resolved (removed) when they win or lose
- * PASS/DONT_PASS: resolve on 7, 11, 2, 3, 12 (come out) or point/7 (point phase)
- * FIELD: always resolves (single roll bet)
- * YES/NO: resolve when target or 7 is rolled
+ * Uses the same payout calculations as on-chain craps.rs
  */
 export const resolveCrapsBets = (total: number, point: number | null, bets: CrapsBet[]): { pnl: number; remainingBets: CrapsBet[] } => {
     let pnl = 0;
     const remainingBets: CrapsBet[] = [];
+    const d1 = Math.ceil(total / 2);
+    const d2 = total - d1;
+    const isHard = d1 === d2;
 
     bets.forEach(bet => {
         let resolved = false;
@@ -582,15 +694,12 @@ export const resolveCrapsBets = (total: number, point: number | null, bets: Crap
 
         if (bet.type === 'PASS') {
             if (point === null) {
-                // Come Out Roll
                 if (total === 7 || total === 11) { winAmount = bet.amount; resolved = true; }
                 else if (total === 2 || total === 3 || total === 12) { loseAmount = bet.amount; resolved = true; }
-                // 4,5,6,8,9,10 = point established, bet stays
             } else {
-                // Point Phase
                 if (total === point) {
                     winAmount = bet.amount;
-                    if (bet.oddsAmount) winAmount += bet.oddsAmount * (WAYS[point]/WAYS[7]);
+                    if (bet.oddsAmount) winAmount += crapsPassOddsPayout(point, bet.oddsAmount);
                     resolved = true;
                 } else if (total === 7) {
                     loseAmount = bet.amount + (bet.oddsAmount || 0);
@@ -601,29 +710,64 @@ export const resolveCrapsBets = (total: number, point: number | null, bets: Crap
             if (point === null) {
                 if (total === 2 || total === 3) { winAmount = bet.amount; resolved = true; }
                 else if (total === 7 || total === 11) { loseAmount = bet.amount; resolved = true; }
-                else if (total === 12) { resolved = true; } // Push - bet returns
+                else if (total === 12) { resolved = true; } // Push
             } else {
                 if (total === 7) {
                     winAmount = bet.amount;
-                    if (bet.oddsAmount) winAmount += bet.oddsAmount * 0.5;
+                    if (bet.oddsAmount) winAmount += crapsDontPassOddsPayout(point, bet.oddsAmount);
                     resolved = true;
                 } else if (total === point) {
                     loseAmount = bet.amount + (bet.oddsAmount || 0);
                     resolved = true;
                 }
             }
+        } else if (bet.type === 'COME') {
+            if (bet.target === 0) {
+                if (total === 7 || total === 11) { winAmount = bet.amount; resolved = true; }
+                else if (total === 2 || total === 3 || total === 12) { loseAmount = bet.amount; resolved = true; }
+                // Otherwise travels to point - handled elsewhere
+            } else {
+                if (total === bet.target) {
+                    winAmount = bet.amount;
+                    if (bet.oddsAmount) winAmount += crapsPassOddsPayout(bet.target, bet.oddsAmount);
+                    resolved = true;
+                } else if (total === 7) {
+                    loseAmount = bet.amount + (bet.oddsAmount || 0);
+                    resolved = true;
+                }
+            }
+        } else if (bet.type === 'DONT_COME') {
+            if (bet.target === 0) {
+                if (total === 2 || total === 3) { winAmount = bet.amount; resolved = true; }
+                else if (total === 7 || total === 11) { loseAmount = bet.amount; resolved = true; }
+            } else {
+                if (total === 7) {
+                    winAmount = bet.amount;
+                    if (bet.oddsAmount) winAmount += crapsDontPassOddsPayout(bet.target, bet.oddsAmount);
+                    resolved = true;
+                } else if (total === bet.target) {
+                    loseAmount = bet.amount + (bet.oddsAmount || 0);
+                    resolved = true;
+                }
+            }
         } else if (bet.type === 'FIELD') {
-            // Field always resolves on any roll
             if ([2, 12].includes(total)) winAmount = bet.amount * 2;
             else if ([3, 4, 9, 10, 11].includes(total)) winAmount = bet.amount;
             else loseAmount = bet.amount;
             resolved = true;
         } else if (bet.type === 'YES') {
-            if (bet.target === total) { winAmount = bet.amount * 1.5; resolved = true; }
+            if (bet.target === total) { winAmount = crapsYesPayout(bet.target, bet.amount); resolved = true; }
             else if (total === 7) { loseAmount = bet.amount; resolved = true; }
         } else if (bet.type === 'NO') {
-            if (total === 7) { winAmount = bet.amount * 0.5; resolved = true; }
+            if (total === 7) { winAmount = crapsNoPayout(bet.target!, bet.amount); resolved = true; }
             else if (bet.target === total) { loseAmount = bet.amount; resolved = true; }
+        } else if (bet.type === 'NEXT') {
+            if (total === bet.target) { winAmount = crapsNextPayout(bet.target, bet.amount); resolved = true; }
+            else { loseAmount = bet.amount; resolved = true; }
+        } else if (bet.type === 'HARDWAY') {
+            const hardTarget = bet.target!;
+            if (isHard && total === hardTarget) { winAmount = crapsHardwayPayout(hardTarget, bet.amount); resolved = true; }
+            else if (total === hardTarget || total === 7) { loseAmount = bet.amount; resolved = true; }
         }
 
         pnl += winAmount;
@@ -637,14 +781,186 @@ export const resolveCrapsBets = (total: number, point: number | null, bets: Crap
     return { pnl, remainingBets };
 };
 
-export const getSicBoCombinations = () => {
-    const combos = [];
-    for (let i = 4; i <= 17; i++) {
-        combos.push([1, 1, i-2]); // Not mathematically rigorous for all dice but sufficient for Sum check
-    }
-    return combos;
+// Returns total items for Sic Bo exposure (totals 3-18)
+export const getSicBoTotalItems = (): { total: number; isTriple: boolean; label: string }[] => {
+    return [
+        { total: 3, isTriple: true, label: '3' },
+        { total: 4, isTriple: false, label: '4' },
+        { total: 5, isTriple: false, label: '5' },
+        { total: 6, isTriple: false, label: '6' },
+        { total: 7, isTriple: false, label: '7' },
+        { total: 8, isTriple: false, label: '8' },
+        { total: 9, isTriple: false, label: '9' },
+        { total: 10, isTriple: false, label: '10' },
+        { total: 11, isTriple: false, label: '11' },
+        { total: 12, isTriple: false, label: '12' },
+        { total: 13, isTriple: false, label: '13' },
+        { total: 14, isTriple: false, label: '14' },
+        { total: 15, isTriple: false, label: '15' },
+        { total: 16, isTriple: false, label: '16' },
+        { total: 17, isTriple: false, label: '17' },
+        { total: 18, isTriple: true, label: '18' },
+    ];
 }
 
+// Returns combination items for Sic Bo exposure (Singles, Doubles, Triples)
+// matchCount indicates how many dice show the number (for SINGLE bets: 1=1:1, 2=2:1, 3=3:1)
+export const getSicBoCombinationItems = (): { type: 'SINGLE' | 'SINGLE_2X' | 'SINGLE_3X' | 'DOUBLE' | 'TRIPLE' | 'ANY_TRIPLE'; target?: number; label: string }[] => {
+    return [
+        // Singles 1-6 (1 match = 1:1)
+        { type: 'SINGLE', target: 1, label: '1' },
+        { type: 'SINGLE', target: 2, label: '2' },
+        { type: 'SINGLE', target: 3, label: '3' },
+        { type: 'SINGLE', target: 4, label: '4' },
+        { type: 'SINGLE', target: 5, label: '5' },
+        { type: 'SINGLE', target: 6, label: '6' },
+        // Singles 2x (2 matches = 2:1 for single bet)
+        { type: 'SINGLE_2X', target: 1, label: '1×2' },
+        { type: 'SINGLE_2X', target: 2, label: '2×2' },
+        { type: 'SINGLE_2X', target: 3, label: '3×2' },
+        { type: 'SINGLE_2X', target: 4, label: '4×2' },
+        { type: 'SINGLE_2X', target: 5, label: '5×2' },
+        { type: 'SINGLE_2X', target: 6, label: '6×2' },
+        // Singles 3x (3 matches = 3:1 for single bet, also triggers triple)
+        { type: 'SINGLE_3X', target: 1, label: '1×3' },
+        { type: 'SINGLE_3X', target: 2, label: '2×3' },
+        { type: 'SINGLE_3X', target: 3, label: '3×3' },
+        { type: 'SINGLE_3X', target: 4, label: '4×3' },
+        { type: 'SINGLE_3X', target: 5, label: '5×3' },
+        { type: 'SINGLE_3X', target: 6, label: '6×3' },
+        // Doubles 1-6 (8:1)
+        { type: 'DOUBLE', target: 1, label: '1-1' },
+        { type: 'DOUBLE', target: 2, label: '2-2' },
+        { type: 'DOUBLE', target: 3, label: '3-3' },
+        { type: 'DOUBLE', target: 4, label: '4-4' },
+        { type: 'DOUBLE', target: 5, label: '5-5' },
+        { type: 'DOUBLE', target: 6, label: '6-6' },
+        // Triples 1-6 (150:1)
+        { type: 'TRIPLE', target: 1, label: '1-1-1' },
+        { type: 'TRIPLE', target: 2, label: '2-2-2' },
+        { type: 'TRIPLE', target: 3, label: '3-3-3' },
+        { type: 'TRIPLE', target: 4, label: '4-4-4' },
+        { type: 'TRIPLE', target: 5, label: '5-5-5' },
+        { type: 'TRIPLE', target: 6, label: '6-6-6' },
+        // Any Triple (24:1)
+        { type: 'ANY_TRIPLE', label: 'ANY 3' },
+    ];
+}
+
+// Legacy function for backwards compatibility
+export const getSicBoCombinations = (): { total: number; combo: number[]; isTriple: boolean; label: string }[] => {
+    return getSicBoTotalItems().map(item => ({
+        total: item.total,
+        combo: item.isTriple ? [item.total / 3, item.total / 3, item.total / 3] : [1, 1, item.total - 2],
+        isTriple: item.isTriple,
+        label: item.label
+    }));
+}
+
+// Sic Bo payout table for Total bets - matches on-chain sic_bo.rs
+const sicBoTotalPayout = (total: number): number => {
+    switch (total) {
+        case 4: case 17: return 50;
+        case 5: case 16: return 18;
+        case 6: case 15: return 14;
+        case 7: case 14: return 12;
+        case 8: case 13: return 8;
+        case 9: case 10: case 11: case 12: return 6;
+        default: return 0;
+    }
+};
+
+// Calculate exposure for a specific total (for Small/Big/Sum bets)
+// isTriple indicates if the total was rolled as a triple (e.g., 3-3-3 for 9)
+export const calculateSicBoTotalExposure = (total: number, isTriple: boolean, bets: SicBoBet[]) => {
+    let pnl = 0;
+
+    bets.forEach(b => {
+        let win = 0;
+        // Small: sum 4-10, non-triple (1:1)
+        if (b.type === 'SMALL') {
+            if (!isTriple && total >= 4 && total <= 10) win = b.amount;
+        }
+        // Big: sum 11-17, non-triple (1:1)
+        else if (b.type === 'BIG') {
+            if (!isTriple && total >= 11 && total <= 17) win = b.amount;
+        }
+        // Sum: specific total (various payouts)
+        else if (b.type === 'SUM' && total === b.target) {
+            win = b.amount * sicBoTotalPayout(total);
+        }
+
+        if (win > 0) pnl += win;
+        else pnl -= b.amount;
+    });
+    return pnl;
+}
+
+// Calculate exposure for a specific combination outcome (Single/Double/Triple/Any Triple)
+// For SINGLE: shows P&L if that number appears once (1:1)
+// For SINGLE_2X: shows P&L if that number appears twice (2:1 for single bet, also triggers double)
+// For SINGLE_3X: shows P&L if that number appears three times (3:1 for single bet, also triggers triple)
+// For DOUBLE: shows P&L if that double hits (8:1)
+// For TRIPLE: shows P&L if that specific triple hits (150:1)
+// For ANY_TRIPLE: shows P&L if any triple hits (24:1)
+export const calculateSicBoCombinationExposure = (
+    type: 'SINGLE' | 'SINGLE_2X' | 'SINGLE_3X' | 'DOUBLE' | 'TRIPLE' | 'ANY_TRIPLE',
+    target: number | undefined,
+    bets: SicBoBet[]
+) => {
+    let pnl = 0;
+
+    bets.forEach(b => {
+        let win = 0;
+
+        // SINGLE (1 match = 1:1)
+        if (type === 'SINGLE' && b.type === 'SINGLE_DIE' && b.target === target) {
+            win = b.amount * 1;
+        }
+        // SINGLE_2X (2 matches = 2:1 for single bet)
+        else if (type === 'SINGLE_2X' && b.type === 'SINGLE_DIE' && b.target === target) {
+            win = b.amount * 2;
+        }
+        // SINGLE_2X also triggers DOUBLE_SPECIFIC bet
+        else if (type === 'SINGLE_2X' && b.type === 'DOUBLE_SPECIFIC' && b.target === target) {
+            win = b.amount * 8;
+        }
+        // SINGLE_3X (3 matches = 3:1 for single bet)
+        else if (type === 'SINGLE_3X' && b.type === 'SINGLE_DIE' && b.target === target) {
+            win = b.amount * 3;
+        }
+        // SINGLE_3X also triggers TRIPLE_SPECIFIC bet
+        else if (type === 'SINGLE_3X' && b.type === 'TRIPLE_SPECIFIC' && b.target === target) {
+            win = b.amount * 150;
+        }
+        // SINGLE_3X also triggers TRIPLE_ANY bet
+        else if (type === 'SINGLE_3X' && b.type === 'TRIPLE_ANY') {
+            win = b.amount * 24;
+        }
+        // DOUBLE (8:1)
+        else if (type === 'DOUBLE' && b.type === 'DOUBLE_SPECIFIC' && b.target === target) {
+            win = b.amount * 8;
+        }
+        // TRIPLE (150:1)
+        else if (type === 'TRIPLE' && b.type === 'TRIPLE_SPECIFIC' && b.target === target) {
+            win = b.amount * 150;
+        }
+        // ANY_TRIPLE (24:1)
+        else if (type === 'ANY_TRIPLE' && b.type === 'TRIPLE_ANY') {
+            win = b.amount * 24;
+        }
+        // TRIPLE outcome also triggers ANY_TRIPLE bet
+        else if (type === 'TRIPLE' && b.type === 'TRIPLE_ANY') {
+            win = b.amount * 24;
+        }
+
+        if (win > 0) pnl += win;
+        else pnl -= b.amount;
+    });
+    return pnl;
+}
+
+// Legacy function - calculates exposure for a specific dice combination
 export const calculateSicBoOutcomeExposure = (combo: number[], bets: SicBoBet[]) => {
     let pnl = 0;
     const sum = combo.reduce((a,b)=>a+b,0);
@@ -655,8 +971,20 @@ export const calculateSicBoOutcomeExposure = (combo: number[], bets: SicBoBet[])
          let win = 0;
          if (b.type === 'SMALL' && sum >= 4 && sum <= 10 && !isTriple) win = b.amount;
          else if (b.type === 'BIG' && sum >= 11 && sum <= 17 && !isTriple) win = b.amount;
-         else if (b.type === 'SUM' && sum === b.target) win = b.amount * 6; // Simplified
-         
+         else if (b.type === 'SUM' && sum === b.target) win = b.amount * sicBoTotalPayout(sum);
+         else if (b.type === 'TRIPLE_ANY' && isTriple) win = b.amount * 24;
+         else if (b.type === 'TRIPLE_SPECIFIC' && isTriple && d1 === b.target) win = b.amount * 150;
+         else if (b.type === 'DOUBLE_SPECIFIC') {
+             const count = [d1, d2, d3].filter(d => d === b.target).length;
+             if (count >= 2) win = b.amount * 8;
+         }
+         else if (b.type === 'SINGLE_DIE') {
+             const count = [d1, d2, d3].filter(d => d === b.target).length;
+             if (count === 1) win = b.amount * 1;
+             else if (count === 2) win = b.amount * 2;
+             else if (count === 3) win = b.amount * 3;
+         }
+
          if (win > 0) pnl += win;
          else pnl -= b.amount;
     });

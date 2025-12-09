@@ -11,16 +11,11 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ phase, tournamentTime, stats, lastTxSig }) => (
-    <header className="h-12 border-b border-terminal-dim flex items-center justify-between px-4 z-10 bg-terminal-black/90 backdrop-blur">
+    <header className="h-12 border-b-2 border-gray-700 flex items-center justify-between px-4 z-10 bg-terminal-black/90 backdrop-blur">
     <div className="flex items-center gap-4">
         <span className="font-bold tracking-tighter text-white">null<span className="text-terminal-green">/</span>space</span>
         <div className="flex items-center gap-2">
             <span className="text-[10px] text-gray-600 bg-gray-900 border border-gray-800 px-1.5 py-0.5 rounded">[?] HELP</span>
-            {lastTxSig && (
-                <span className="text-[10px] text-terminal-green bg-gray-900 border border-terminal-green/30 px-1.5 py-0.5 rounded font-mono">
-                    TX: {lastTxSig}
-                </span>
-            )}
         </div>
     </div>
     <div className="flex items-center gap-6 text-sm">
@@ -131,7 +126,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ leaderboard, history, viewMode
     };
 
     return (
-        <aside className="w-64 border-l border-terminal-dim bg-terminal-black/50 hidden md:flex flex-col">
+        <aside className="w-64 border-l-2 border-gray-700 bg-terminal-black/50 hidden md:flex flex-col">
             {/* Live Feed Header */}
             <div className="p-4 pb-2 flex-none">
                 <div className="flex justify-between items-center mb-2">
@@ -153,7 +148,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ leaderboard, history, viewMode
             </div>
             
             {/* Logs Area */}
-            <div className="flex-none h-48 border-t border-terminal-dim p-4 bg-terminal-black/30">
+            <div className="flex-none h-48 border-t-2 border-gray-700 p-4 bg-terminal-black/30">
                 <h3 className="text-xs font-bold text-gray-500 mb-2 tracking-widest">LOG</h3>
                 <div className="h-full overflow-y-auto flex flex-col gap-1 text-xs text-gray-600 font-mono scrollbar-thin">
                     {history.slice(-15).reverse().map((log, i) => (
@@ -170,7 +165,7 @@ export const Footer: React.FC<{ currentBet?: number }> = ({ currentBet }) => {
     const isCustom = currentBet && !bets.includes(currentBet);
 
     return (
-        <footer className="fixed bottom-0 left-0 right-0 md:w-[calc(100%-16rem)] border-t border-terminal-dim bg-terminal-black/95 text-xs text-gray-600 py-1 px-4 flex justify-center gap-6 z-20">
+        <footer className="fixed bottom-0 left-0 right-0 md:w-[calc(100%-16rem)] border-t-2 border-gray-700 bg-terminal-black/95 text-xs text-gray-600 py-1 px-4 flex justify-center gap-6 z-20">
             {bets.map((bet, i) => {
                 const label = bet >= 1000 ? `${bet/1000}K` : `$${bet}`;
                 const isSelected = currentBet === bet;

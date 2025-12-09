@@ -266,12 +266,39 @@ export class CasinoChainService {
   }
 
   /**
-   * Start a new game session
+   * Generate the next session ID without submitting anything.
+   * Call this to get the session ID before submitting, so you can store it
+   * in a ref before the WebSocket event arrives.
+   */
+  generateNextSessionId(): bigint {
+    const sessionId = sessionIdCounter++;
+    console.log('[CasinoChainService] generateNextSessionId:', sessionId.toString());
+    return sessionId;
+  }
+
+  /**
+   * Start a new game session with a pre-generated session ID.
+   * Use generateNextSessionId() first, store it, then call this.
+   * @param sessionId - The pre-generated session ID
+   * @returns Object with session ID and transaction hash
+   */
+  async startGameWithSessionId(gameType: GameType, bet: bigint, sessionId: bigint): Promise<{ sessionId: bigint; txHash?: string }> {
+    console.log('[CasinoChainService] startGameWithSessionId:', sessionId.toString(), 'type:', typeof sessionId);
+
+    // Use the NonceManager to submit the transaction
+    const result = await (this.client as any).nonceManager.submitCasinoStartGame(gameType, bet, sessionId);
+
+    return { sessionId, txHash: result.txHash };
+  }
+
+  /**
+   * Start a new game session (legacy - session ID generated internally)
+   * WARNING: This may cause race conditions where the WebSocket event arrives
+   * before the session ID is stored. Prefer generateNextSessionId() + startGameWithSessionId().
    * @returns Object with session ID and transaction hash
    */
   async startGame(gameType: GameType, bet: bigint): Promise<{ sessionId: bigint; txHash?: string }> {
-    const sessionId = sessionIdCounter++;
-    console.log('[CasinoChainService] startGame generated sessionId:', sessionId.toString(), 'type:', typeof sessionId);
+    const sessionId = this.generateNextSessionId();
 
     // Use the NonceManager to submit the transaction
     const result = await (this.client as any).nonceManager.submitCasinoStartGame(gameType, bet, sessionId);

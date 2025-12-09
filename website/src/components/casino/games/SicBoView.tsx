@@ -2,14 +2,12 @@
 import React from 'react';
 import { GameState, SicBoBet } from '../../../types';
 import { DiceRender } from '../GameComponents';
-import { calculateSicBoOutcomeExposure, getSicBoCombinations } from '../../../utils/gameUtils';
+import { getSicBoTotalItems, getSicBoCombinationItems, calculateSicBoTotalExposure, calculateSicBoCombinationExposure } from '../../../utils/gameUtils';
 
 export const SicBoView: React.FC<{ gameState: GameState, numberInput?: string }> = ({ gameState, numberInput = "" }) => {
-    
-    const combinations = getSicBoCombinations();
-    const splitIndex = Math.ceil(combinations.length / 2);
-    const leftCombos = combinations.slice(0, splitIndex);
-    const rightCombos = combinations.slice(splitIndex);
+
+    const totalItems = getSicBoTotalItems();
+    const combinationItems = getSicBoCombinationItems();
 
     const renderBetItem = (bet: SicBoBet, i: number) => (
         <div key={i} className="flex justify-between items-center text-xs border border-gray-800 p-1 rounded bg-black/50">
@@ -20,26 +18,57 @@ export const SicBoView: React.FC<{ gameState: GameState, numberInput?: string }>
         </div>
     );
 
-    const renderExposureRow = (combo: number[]) => {
-        const pnl = calculateSicBoOutcomeExposure(combo, gameState.sicBoBets);
-        const label = combo.join('-');
-        
-        // PnL display optimized for visibility without horizontal bars taking up space
-        return (
-            <div key={label} className="flex items-center h-5 text-[10px] w-full">
-                <div className="flex-1 flex justify-end items-center text-right pr-2 overflow-hidden">
-                    {pnl < 0 && <span className="text-terminal-accent font-mono truncate">{Math.abs(pnl).toLocaleString()}</span>}
-                </div>
-                
-                {/* Fixed Center Indicator */}
-                <div className="flex-none w-10 flex justify-center items-center relative">
-                    <span className="text-gray-500 font-mono tracking-tighter z-10 bg-terminal-black/80 px-1">{label}</span>
-                    {pnl < 0 && <div className="absolute right-0 top-1 bottom-1 w-0.5 bg-terminal-accent" />}
-                    {pnl > 0 && <div className="absolute left-0 top-1 bottom-1 w-0.5 bg-terminal-green" />}
-                </div>
+    // Render a single exposure row for TOTALS column
+    const renderTotalRow = (entry: { total: number; isTriple: boolean; label: string }, idx: number) => {
+        const pnl = calculateSicBoTotalExposure(entry.total, entry.isTriple, gameState.sicBoBets);
+        const pnlRounded = Math.round(pnl);
 
-                <div className="flex-1 flex justify-start items-center pl-2 overflow-hidden">
-                    {pnl > 0 && <span className="text-terminal-green font-mono truncate">{pnl.toLocaleString()}</span>}
+        return (
+            <div key={idx} className="flex items-center h-5 text-xs w-full">
+                <div className="flex-1 flex justify-end items-center text-right pr-1 overflow-hidden">
+                    {pnlRounded < 0 && <span className="text-terminal-accent font-mono text-[10px]">-{Math.abs(pnlRounded).toLocaleString()}</span>}
+                </div>
+                <div className="flex-none w-6 flex justify-center items-center relative">
+                    <span className={`font-mono z-10 text-[10px] ${entry.isTriple ? 'text-terminal-gold font-bold' : 'text-gray-500'}`}>
+                        {entry.label}
+                    </span>
+                    {pnlRounded < 0 && <div className="absolute right-0 top-0.5 bottom-0.5 w-0.5 bg-terminal-accent" />}
+                    {pnlRounded > 0 && <div className="absolute left-0 top-0.5 bottom-0.5 w-0.5 bg-terminal-green" />}
+                </div>
+                <div className="flex-1 flex justify-start items-center pl-1 overflow-hidden">
+                    {pnlRounded > 0 && <span className="text-terminal-green font-mono text-[10px]">+{pnlRounded.toLocaleString()}</span>}
+                </div>
+            </div>
+        );
+    };
+
+    // Render a single exposure row for COMBINATIONS column
+    const renderComboRow = (entry: { type: 'SINGLE' | 'SINGLE_2X' | 'SINGLE_3X' | 'DOUBLE' | 'TRIPLE' | 'ANY_TRIPLE'; target?: number; label: string }, idx: number) => {
+        const pnl = calculateSicBoCombinationExposure(entry.type, entry.target, gameState.sicBoBets);
+        const pnlRounded = Math.round(pnl);
+
+        // Color code by type
+        const typeColor = entry.type === 'SINGLE' ? 'text-cyan-400'
+            : entry.type === 'SINGLE_2X' ? 'text-cyan-300'
+            : entry.type === 'SINGLE_3X' ? 'text-cyan-200'
+            : entry.type === 'DOUBLE' ? 'text-purple-400'
+            : entry.type === 'TRIPLE' ? 'text-terminal-gold'
+            : 'text-terminal-gold';
+
+        return (
+            <div key={idx} className="flex items-center h-5 text-xs w-full">
+                <div className="flex-1 flex justify-end items-center text-right pr-1 overflow-hidden">
+                    {pnlRounded < 0 && <span className="text-terminal-accent font-mono text-[10px]">-{Math.abs(pnlRounded).toLocaleString()}</span>}
+                </div>
+                <div className="flex-none w-10 flex justify-center items-center relative">
+                    <span className={`font-mono z-10 text-[10px] ${typeColor}`}>
+                        {entry.label}
+                    </span>
+                    {pnlRounded < 0 && <div className="absolute right-0 top-0.5 bottom-0.5 w-0.5 bg-terminal-accent" />}
+                    {pnlRounded > 0 && <div className="absolute left-0 top-0.5 bottom-0.5 w-0.5 bg-terminal-green" />}
+                </div>
+                <div className="flex-1 flex justify-start items-center pl-1 overflow-hidden">
+                    {pnlRounded > 0 && <span className="text-terminal-green font-mono text-[10px]">+{pnlRounded.toLocaleString()}</span>}
                 </div>
             </div>
         );
@@ -47,7 +76,7 @@ export const SicBoView: React.FC<{ gameState: GameState, numberInput?: string }>
 
     return (
         <>
-            <div className="flex-1 w-full flex flex-col items-center justify-center gap-8 relative z-10 pl-96 pr-60 pb-20">
+            <div className="flex-1 w-full flex flex-col items-center justify-center gap-8 relative z-10 pl-64 pr-60 pb-20">
                 <h1 className="absolute top-0 text-xl font-bold text-gray-500 tracking-widest uppercase">SIC BO</h1>
                 {/* Dice Display */}
                 <div className="min-h-[120px] flex items-center justify-center">
@@ -92,27 +121,49 @@ export const SicBoView: React.FC<{ gameState: GameState, numberInput?: string }>
                  )}
             </div>
 
-             {/* EXPOSURE SIDEBAR - Keep wide for combinations text */}
-             <div className="absolute top-0 left-0 bottom-24 w-96 bg-terminal-black/80 border-r border-terminal-dim p-2 overflow-hidden backdrop-blur-sm z-30 flex flex-col">
-                <h3 className="text-[10px] font-bold text-gray-500 mb-2 tracking-widest text-center border-b border-gray-800 pb-1 flex-none">EXPOSURE (COMBOS)</h3>
-                <div className="flex-1 flex flex-row relative">
-                     {/* Vertical Divider */}
+             {/* EXPOSURE SIDEBAR - Two Columns: Totals | Combinations */}
+             <div className="absolute top-0 left-0 bottom-24 w-64 bg-terminal-black/80 border-r-2 border-gray-700 p-2 overflow-hidden backdrop-blur-sm z-30 flex flex-col">
+                {/* Two-column header */}
+                <div className="flex-none flex border-b border-gray-800 pb-1 mb-1">
+                    <div className="flex-1 text-center">
+                        <span className="text-[9px] font-bold text-gray-500 tracking-widest">TOTALS</span>
+                    </div>
+                    <div className="flex-1 text-center">
+                        <span className="text-[9px] font-bold text-gray-500 tracking-widest">COMBOS</span>
+                    </div>
+                </div>
+
+                <div className="flex-1 flex flex-row relative overflow-hidden">
+                    {/* Vertical Divider */}
                     <div className="absolute left-1/2 top-0 bottom-0 w-px bg-gray-800 -translate-x-1/2"></div>
-                    
-                    {/* Left Column */}
-                    <div className="flex-1 flex flex-col justify-between pr-2 border-r border-gray-800/50">
-                        {leftCombos.map(combo => renderExposureRow(combo))}
+
+                    {/* Left Column - Totals 3-18 */}
+                    <div className="flex-1 flex flex-col gap-0 pr-1 border-r border-gray-800/50 overflow-y-auto">
+                        {totalItems.map((entry, idx) => renderTotalRow(entry, idx))}
                     </div>
 
-                    {/* Right Column */}
-                    <div className="flex-1 flex flex-col justify-between pl-2">
-                        {rightCombos.map(combo => renderExposureRow(combo))}
+                    {/* Right Column - Singles (1x/2x/3x), Doubles, Triples */}
+                    <div className="flex-1 flex flex-col gap-0 pl-1 overflow-y-auto">
+                        <div className="text-[8px] text-cyan-400 text-center mb-0.5">1×</div>
+                        {combinationItems.filter(c => c.type === 'SINGLE').map((entry, idx) => renderComboRow(entry, idx))}
+
+                        <div className="text-[8px] text-cyan-300 text-center mt-0.5 mb-0.5">2×</div>
+                        {combinationItems.filter(c => c.type === 'SINGLE_2X').map((entry, idx) => renderComboRow(entry, idx + 6))}
+
+                        <div className="text-[8px] text-cyan-200 text-center mt-0.5 mb-0.5">3×</div>
+                        {combinationItems.filter(c => c.type === 'SINGLE_3X').map((entry, idx) => renderComboRow(entry, idx + 12))}
+
+                        <div className="text-[8px] text-purple-400 text-center mt-0.5 mb-0.5">DBL</div>
+                        {combinationItems.filter(c => c.type === 'DOUBLE').map((entry, idx) => renderComboRow(entry, idx + 18))}
+
+                        <div className="text-[8px] text-terminal-gold text-center mt-0.5 mb-0.5">TRP</div>
+                        {combinationItems.filter(c => c.type === 'TRIPLE' || c.type === 'ANY_TRIPLE').map((entry, idx) => renderComboRow(entry, idx + 24))}
                     </div>
                 </div>
             </div>
 
             {/* ACTIVE BETS SIDEBAR - Reduced to w-60 */}
-            <div className="absolute top-0 right-0 bottom-24 w-60 bg-terminal-black/80 border-l border-terminal-dim p-2 backdrop-blur-sm z-30 flex flex-col">
+            <div className="absolute top-0 right-0 bottom-24 w-60 bg-terminal-black/80 border-l-2 border-gray-700 p-2 backdrop-blur-sm z-30 flex flex-col">
                     <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-2 border-b border-gray-800 pb-1 flex-none text-center">Table Bets</div>
                     <div className="flex-1 overflow-y-auto flex flex-col justify-center space-y-1">
                         {gameState.sicBoBets.length > 0 ? (
@@ -124,7 +175,7 @@ export const SicBoView: React.FC<{ gameState: GameState, numberInput?: string }>
             </div>
 
             {/* CONTROLS */}
-            <div className="absolute bottom-8 left-0 right-0 h-16 bg-terminal-black/90 border-t border-terminal-dim flex items-center justify-center gap-2 p-2 z-40 overflow-x-auto">
+            <div className="absolute bottom-8 left-0 right-0 h-16 bg-terminal-black/90 border-t-2 border-gray-700 flex items-center justify-center gap-2 p-2 z-40 overflow-x-auto">
                     <div className="flex gap-2">
                         <div className="flex flex-col items-center border border-terminal-dim rounded bg-black/50 px-3 py-1">
                             <span className="text-white font-bold text-sm">S</span>

@@ -138,16 +138,24 @@ mod tests {
         let mut rng = GameRng::new(&seed, session.id, 0);
         init_game(&mut session, &mut rng);
 
+        // Place bet: [0, bet_type, number, amount_bytes...]
+        let mut place_bet_payload = vec![0, 1, 0]; // Action 0, RED bet (type 1), number 0
+        place_bet_payload.extend_from_slice(&100u64.to_be_bytes());
+
         let mut rng = GameRng::new(&seed, session.id, 1);
-        // Bet on red (1, 0)
-        let result = process_game_move(&mut session, &[1, 0], &mut rng);
+        let result = process_game_move(&mut session, &place_bet_payload, &mut rng);
+        assert!(result.is_ok());
+        assert!(!session.is_complete); // Game continues - need to spin
+
+        // Spin wheel: [1]
+        let mut rng = GameRng::new(&seed, session.id, 2);
+        let result = process_game_move(&mut session, &[1], &mut rng);
 
         assert!(result.is_ok());
         assert!(session.is_complete);
 
-        // State should contain the result
-        assert_eq!(session.state_blob.len(), 1);
-        assert!(session.state_blob[0] <= 36);
+        // State should contain bet + result (11 bytes: bet_count + 10-byte bet + result)
+        assert!(session.state_blob.len() >= 2);
     }
 
     /// Test Craps point phase flow.
@@ -255,15 +263,24 @@ mod tests {
         let mut rng = GameRng::new(&seed, session.id, 0);
         init_game(&mut session, &mut rng);
 
+        // Place bet: [0, bet_type, amount_bytes...]
+        let mut place_bet_payload = vec![0, 1]; // Action 0, Banker bet (type 1)
+        place_bet_payload.extend_from_slice(&100u64.to_be_bytes());
+
         let mut rng = GameRng::new(&seed, session.id, 1);
-        // Bet on banker (1)
+        let result = process_game_move(&mut session, &place_bet_payload, &mut rng);
+        assert!(result.is_ok());
+        assert!(!session.is_complete); // Game continues - need to deal
+
+        // Deal cards: [1]
+        let mut rng = GameRng::new(&seed, session.id, 2);
         let result = process_game_move(&mut session, &[1], &mut rng);
 
         assert!(result.is_ok());
         assert!(session.is_complete);
 
-        // State should have player and banker cards
-        assert!(session.state_blob.len() >= 6);
+        // State should have bets and cards
+        assert!(session.state_blob.len() >= 10);
     }
 
     /// Test Casino War tie handling.
@@ -313,10 +330,20 @@ mod tests {
             let mut rng = GameRng::new(&seed, session.id, 0);
             init_game(&mut session, &mut rng);
 
-            let mut rng = GameRng::new(&seed, session.id, 1);
-            let result = process_game_move(&mut session, &[*bet_type, *bet_num], &mut rng);
+            // Place bet: [0, bet_type, number, amount_bytes...]
+            let mut place_bet_payload = vec![0, *bet_type, *bet_num];
+            place_bet_payload.extend_from_slice(&100u64.to_be_bytes());
 
-            assert!(result.is_ok(), "Bet type {} failed", name);
+            let mut rng = GameRng::new(&seed, session.id, 1);
+            let result = process_game_move(&mut session, &place_bet_payload, &mut rng);
+            assert!(result.is_ok(), "Place bet failed for {}", name);
+            assert!(!session.is_complete, "Game should not complete after placing bet for {}", name);
+
+            // Roll dice: [1]
+            let mut rng = GameRng::new(&seed, session.id, 2);
+            let result = process_game_move(&mut session, &[1], &mut rng);
+
+            assert!(result.is_ok(), "Roll dice failed for {}", name);
             assert!(session.is_complete, "Game should complete for {}", name);
         }
     }
@@ -367,11 +394,22 @@ mod tests {
         init_game(&mut session1, &mut rng1);
         init_game(&mut session2, &mut rng2);
 
+        // Place straight bet on 17: [0, bet_type=0 (Straight), number=17, amount]
+        let mut bet_payload = vec![0, 0, 17];
+        bet_payload.extend_from_slice(&100u64.to_be_bytes());
+
         let mut rng1 = GameRng::new(&seed, 1, 1);
         let mut rng2 = GameRng::new(&seed, 2, 1);
 
-        process_game_move(&mut session1, &[0, 17], &mut rng1).unwrap();
-        process_game_move(&mut session2, &[0, 17], &mut rng2).unwrap();
+        process_game_move(&mut session1, &bet_payload, &mut rng1).unwrap();
+        process_game_move(&mut session2, &bet_payload, &mut rng2).unwrap();
+
+        // Now spin both wheels
+        let mut rng1 = GameRng::new(&seed, 1, 2);
+        let mut rng2 = GameRng::new(&seed, 2, 2);
+
+        process_game_move(&mut session1, &[1], &mut rng1).unwrap();
+        process_game_move(&mut session2, &[1], &mut rng2).unwrap();
 
         // Results should be different (with very high probability)
         assert_ne!(session1.state_blob, session2.state_blob);
@@ -386,15 +424,21 @@ mod tests {
         let mut rng = GameRng::new(&seed, session.id, 0);
         init_game(&mut session, &mut rng);
 
-        // Complete the game
+        // Place a bet: [0, bet_type=1 (RED), number=0, amount]
+        let mut bet_payload = vec![0, 1, 0];
+        bet_payload.extend_from_slice(&100u64.to_be_bytes());
         let mut rng = GameRng::new(&seed, session.id, 1);
-        process_game_move(&mut session, &[1, 0], &mut rng).unwrap();
+        process_game_move(&mut session, &bet_payload, &mut rng).unwrap();
+
+        // Complete the game by spinning
+        let mut rng = GameRng::new(&seed, session.id, 2);
+        process_game_move(&mut session, &[1], &mut rng).unwrap();
 
         assert!(session.is_complete);
 
         // Try another move
-        let mut rng = GameRng::new(&seed, session.id, 2);
-        let result = process_game_move(&mut session, &[1, 0], &mut rng);
+        let mut rng = GameRng::new(&seed, session.id, 3);
+        let result = process_game_move(&mut session, &[1], &mut rng);
 
         assert!(result.is_err());
     }

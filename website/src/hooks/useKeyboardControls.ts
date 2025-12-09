@@ -178,11 +178,27 @@ export const useKeyboardControls = ({
                     if (e.key === '1') { gameActions.uhBet(1); return; }
                 }
             } else if (gameState.type === GameType.CRAPS) {
+                // Handle input mode first - number selection
+                if (gameState.crapsInputMode !== 'NONE') {
+                    const numMap: Record<string, number> = { '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '0': 10, '-': 11, '=': 12 };
+                    const selectedNum = numMap[e.key];
+                    if (selectedNum !== undefined) {
+                        gameActions.placeCrapsNumberBet(gameState.crapsInputMode, selectedNum);
+                        gameActions.setGameState((prev: any) => ({ ...prev, crapsInputMode: 'NONE' }));
+                        return;
+                    }
+                    return; // Absorb other keys while in input mode
+                }
+
                 if (k === 'p') gameActions.placeCrapsBet(gameState.crapsPoint ? 'COME' : 'PASS');
                 if (k === 'd') gameActions.placeCrapsBet(gameState.crapsPoint ? 'DONT_COME' : 'DONT_PASS');
                 if (k === 'f') gameActions.placeCrapsBet('FIELD');
                 if (k === 'o') gameActions.addCrapsOdds();
                 if (k === 'u') gameActions.undoCrapsBet();
+                if (k === 'y') gameActions.setGameState((prev: any) => ({ ...prev, crapsInputMode: 'YES' }));
+                if (k === 'n') gameActions.setGameState((prev: any) => ({ ...prev, crapsInputMode: 'NO' }));
+                if (k === 'x') gameActions.setGameState((prev: any) => ({ ...prev, crapsInputMode: 'NEXT' }));
+                if (k === 'h') gameActions.setGameState((prev: any) => ({ ...prev, crapsInputMode: 'HARDWAY' }));
             } else if (gameState.type === GameType.SIC_BO) {
                 if (k === 's') gameActions.placeSicBoBet('SMALL');
                 if (k === 'b') gameActions.placeSicBoBet('BIG');

@@ -11,6 +11,7 @@
 //! [1] = Lower - guess next card is lower
 //! [2] = Cashout - take current pot
 
+use super::super_mode::apply_hilo_streak_multiplier;
 use super::{CasinoGame, GameError, GameResult, GameRng};
 use nullspace_types::casino::GameSession;
 
@@ -128,7 +129,7 @@ impl CasinoGame for HiLo {
 
                 // Calculate actual payout from accumulator with overflow protection
                 // accumulator is in basis points, so divide by BASE_MULTIPLIER
-                let payout = (session.bet as i64)
+                let base_payout = (session.bet as i64)
                     .checked_mul(accumulator)
                     .and_then(|v| v.checked_div(BASE_MULTIPLIER))
                     .unwrap_or(i64::MAX);
@@ -136,8 +137,23 @@ impl CasinoGame for HiLo {
                 // Return total payout (stake + winnings), consistent with other games
                 // Win(amount) means "add this to player chips" and the original bet
                 // was already deducted at StartGame
-                if payout > 0 {
-                    Ok(GameResult::Win(payout as u64))
+                if base_payout > 0 {
+                    // Apply super mode streak multiplier if active
+                    // move_count represents the streak (number of correct guesses)
+                    let final_payout = if session.super_mode.is_active && session.move_count > 0 {
+                        // Check if current card is an Ace for bonus
+                        let is_ace = card_rank(current_card) == 1;
+                        // Cap streak at u8::MAX for the multiplier function
+                        let streak = session.move_count.min(u8::MAX as u32) as u8;
+                        apply_hilo_streak_multiplier(
+                            base_payout as u64,
+                            streak,
+                            is_ace,
+                        )
+                    } else {
+                        base_payout as u64
+                    };
+                    Ok(GameResult::Win(final_payout))
                 } else {
                     // Accumulator is 0 or negative (shouldn't happen in normal play)
                     Ok(GameResult::Loss)

@@ -2,6 +2,7 @@
 import React from 'react';
 import { PlayerStats, LeaderboardEntry } from '../../types';
 import { formatTime } from '../../utils/gameUtils';
+import { BotConfig, DEFAULT_BOT_CONFIG } from '../../services/BotService';
 
 interface RegistrationViewProps {
   stats: PlayerStats;
@@ -9,14 +10,18 @@ interface RegistrationViewProps {
   isRegistered: boolean;
   timeLeft: number;
   onRegister: () => void;
+  botConfig: BotConfig;
+  onBotConfigChange: (config: BotConfig) => void;
 }
 
-export const RegistrationView: React.FC<RegistrationViewProps> = ({ 
-  stats, 
-  leaderboard, 
-  isRegistered, 
-  timeLeft, 
-  onRegister 
+export const RegistrationView: React.FC<RegistrationViewProps> = ({
+  stats,
+  leaderboard,
+  isRegistered,
+  timeLeft,
+  onRegister,
+  botConfig,
+  onBotConfigChange
 }) => {
   const pnlData = stats.pnlHistory;
   const maxVal = Math.max(...pnlData, 100);
@@ -117,6 +122,88 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
                            </div>
                        </div>
                   </div>
+              </div>
+
+              {/* BOT CONFIGURATION */}
+              <div className="mt-8 border-t border-gray-800 pt-6">
+                  <div className="flex items-center justify-between mb-4">
+                      <h2 className="text-sm font-bold text-gray-500 tracking-widest">BOT OPPONENTS (OPTIONAL)</h2>
+                      <button
+                          className={`px-4 py-2 rounded text-xs font-bold transition-colors ${
+                              botConfig.enabled
+                                  ? 'bg-terminal-accent text-black'
+                                  : 'bg-gray-800 text-gray-500 hover:bg-gray-700'
+                          }`}
+                          onClick={() => onBotConfigChange({ ...botConfig, enabled: !botConfig.enabled })}
+                      >
+                          {botConfig.enabled ? 'BOTS ENABLED' : 'ENABLE BOTS'}
+                      </button>
+                  </div>
+
+                  {botConfig.enabled && (
+                      <div className="grid grid-cols-3 gap-4 bg-gray-900/50 p-4 rounded border border-gray-800">
+                          {/* Number of Bots */}
+                          <div>
+                              <label className="text-[10px] text-gray-500 uppercase tracking-widest block mb-2">
+                                  NUMBER OF BOTS
+                              </label>
+                              <div className="flex items-center gap-2">
+                                  <input
+                                      type="range"
+                                      min="10"
+                                      max="200"
+                                      step="10"
+                                      value={botConfig.numBots}
+                                      onChange={(e) => onBotConfigChange({ ...botConfig, numBots: parseInt(e.target.value) })}
+                                      className="flex-1 accent-terminal-green bg-gray-800"
+                                  />
+                                  <span className="text-terminal-green font-mono w-12 text-right">{botConfig.numBots}</span>
+                              </div>
+                          </div>
+
+                          {/* Bet Interval */}
+                          <div>
+                              <label className="text-[10px] text-gray-500 uppercase tracking-widest block mb-2">
+                                  BET INTERVAL (SEC)
+                              </label>
+                              <div className="flex items-center gap-2">
+                                  <input
+                                      type="range"
+                                      min="1000"
+                                      max="10000"
+                                      step="1000"
+                                      value={botConfig.betIntervalMs}
+                                      onChange={(e) => onBotConfigChange({ ...botConfig, betIntervalMs: parseInt(e.target.value) })}
+                                      className="flex-1 accent-terminal-green bg-gray-800"
+                                  />
+                                  <span className="text-terminal-green font-mono w-12 text-right">{botConfig.betIntervalMs / 1000}s</span>
+                              </div>
+                          </div>
+
+                          {/* Randomize */}
+                          <div>
+                              <label className="text-[10px] text-gray-500 uppercase tracking-widest block mb-2">
+                                  RANDOMIZE TIMING
+                              </label>
+                              <button
+                                  className={`w-full py-2 rounded text-xs font-bold transition-colors ${
+                                      botConfig.randomizeInterval
+                                          ? 'bg-terminal-green/20 text-terminal-green border border-terminal-green'
+                                          : 'bg-gray-800 text-gray-500 border border-gray-700'
+                                  }`}
+                                  onClick={() => onBotConfigChange({ ...botConfig, randomizeInterval: !botConfig.randomizeInterval })}
+                              >
+                                  {botConfig.randomizeInterval ? 'RANDOM' : 'FIXED'}
+                              </button>
+                          </div>
+                      </div>
+                  )}
+
+                  {botConfig.enabled && (
+                      <div className="mt-2 text-[10px] text-gray-600 text-center">
+                          {botConfig.numBots} bots will make random bets every ~{botConfig.betIntervalMs / 1000}s during the tournament
+                      </div>
+                  )}
               </div>
           </div>
       </div>
