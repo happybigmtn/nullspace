@@ -421,21 +421,41 @@ pub struct CasinoLeaderboard {
 
 impl CasinoLeaderboard {
     pub fn update(&mut self, player: PublicKey, name: String, chips: u64) {
-        // Remove existing entry for this player
-        self.entries.retain(|e| e.player != player);
+        // Find and remove existing entry for this player
+        let mut existing_idx = None;
+        for (i, e) in self.entries.iter().enumerate() {
+            if e.player == player {
+                existing_idx = Some(i);
+                break;
+            }
+        }
+        if let Some(idx) = existing_idx {
+            self.entries.remove(idx);
+        }
 
-        // Add new entry
-        self.entries.push(LeaderboardEntry {
+        // Early exit: if we have 10 entries and new chips is <= lowest, skip
+        if self.entries.len() >= 10 {
+            if let Some(last) = self.entries.last() {
+                if chips <= last.chips {
+                    return;
+                }
+            }
+        }
+
+        // Find insertion point using binary search (entries sorted descending by chips)
+        let insert_pos = self.entries
+            .binary_search_by(|e| chips.cmp(&e.chips))
+            .unwrap_or_else(|pos| pos);
+
+        // Insert at correct position
+        self.entries.insert(insert_pos, LeaderboardEntry {
             player,
             name,
             chips,
             rank: 0,
         });
 
-        // Sort by chips descending
-        self.entries.sort_by(|a, b| b.chips.cmp(&a.chips));
-
-        // Keep top 10 and update ranks
+        // Truncate to 10 and update ranks only for affected entries
         self.entries.truncate(10);
         for (i, entry) in self.entries.iter_mut().enumerate() {
             entry.rank = (i + 1) as u32;
@@ -548,6 +568,24 @@ impl EncodeSize for Tournament {
             + self.starting_chips.encode_size()
             + self.starting_shields.encode_size()
             + self.starting_doubles.encode_size()
+    }
+}
+
+impl Tournament {
+    /// Check if a player is already in the tournament.
+    /// Currently O(n), prepared for future HashSet optimization.
+    pub fn contains_player(&self, player: &PublicKey) -> bool {
+        self.players.contains(player)
+    }
+
+    /// Add a player to the tournament.
+    /// Returns true if the player was added, false if they were already present.
+    pub fn add_player(&mut self, player: PublicKey) -> bool {
+        if self.contains_player(&player) {
+            return false;
+        }
+        self.players.push(player);
+        true
     }
 }
 

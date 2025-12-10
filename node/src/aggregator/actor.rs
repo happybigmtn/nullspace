@@ -66,10 +66,13 @@ impl Read for Proofs {
     type Cfg = ();
 
     fn read_cfg(reader: &mut impl Buf, _: &()) -> Result<Self, commonware_codec::Error> {
-        let state_proof = Proof::<Digest>::read_cfg(reader, &500)?;
-        let state_proof_ops = Vec::read_range(reader, 0..=500)?;
-        let events_proof = Proof::<Digest>::read_cfg(reader, &500)?;
-        let events_proof_ops = Vec::read_range(reader, 0..=500)?;
+        // Limits scaled for MAX_BLOCK_TRANSACTIONS=500
+        // Each tx can generate ~4 state ops and ~2 events
+        // Using 3000 for state ops and 2000 for event ops to handle edge cases
+        let state_proof = Proof::<Digest>::read_cfg(reader, &3000)?;
+        let state_proof_ops = Vec::read_range(reader, 0..=3000)?;
+        let events_proof = Proof::<Digest>::read_cfg(reader, &2000)?;
+        let events_proof_ops = Vec::read_range(reader, 0..=2000)?;
         Ok(Self {
             state_proof,
             state_proof_ops,

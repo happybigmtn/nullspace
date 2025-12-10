@@ -5,10 +5,12 @@ use prometheus_client::metrics::gauge::Gauge;
 use std::collections::{BTreeMap, HashMap, VecDeque};
 
 /// The maximum number of transactions a single account can have in the mempool.
-const MAX_BACKLOG: usize = 16;
+// Increased for higher transaction throughput per account
+const MAX_BACKLOG: usize = 64;
 
 /// The maximum number of transactions in the mempool.
-const MAX_TRANSACTIONS: usize = 32_768;
+// Scaled for 1000+ concurrent players
+const MAX_TRANSACTIONS: usize = 100_000;
 
 /// A mempool for transactions.
 pub struct Mempool {
@@ -174,7 +176,7 @@ mod tests {
             let mut mempool = Mempool::new(ctx);
 
             let private = PrivateKey::from_seed(1);
-            let tx = Transaction::sign(&private, 0, Instruction::Generate);
+            let tx = Transaction::sign(&private, 0, Instruction::CasinoDeposit { amount: 100 });
             let digest = tx.digest();
             let public = tx.public.clone();
 
@@ -195,7 +197,7 @@ mod tests {
             let mut mempool = Mempool::new(ctx);
 
             let private = PrivateKey::from_seed(1);
-            let tx = Transaction::sign(&private, 0, Instruction::Generate);
+            let tx = Transaction::sign(&private, 0, Instruction::CasinoDeposit { amount: 100 });
 
             mempool.add(tx.clone());
             mempool.add(tx);
@@ -213,8 +215,8 @@ mod tests {
             let mut mempool = Mempool::new(ctx);
 
             let private = PrivateKey::from_seed(1);
-            let tx1 = Transaction::sign(&private, 0, Instruction::Generate);
-            let tx2 = Transaction::sign(&private, 0, Instruction::Match);
+            let tx1 = Transaction::sign(&private, 0, Instruction::CasinoDeposit { amount: 100 });
+            let tx2 = Transaction::sign(&private, 0, Instruction::CasinoToggleShield);
             let digest1 = tx1.digest();
             let digest2 = tx2.digest();
 
@@ -237,7 +239,7 @@ mod tests {
             let private = PrivateKey::from_seed(1);
 
             for nonce in 0..5 {
-                let tx = Transaction::sign(&private, nonce, Instruction::Generate);
+                let tx = Transaction::sign(&private, nonce, Instruction::CasinoDeposit { amount: 100 });
                 mempool.add(tx);
             }
 
@@ -256,7 +258,7 @@ mod tests {
             let private = PrivateKey::from_seed(1);
 
             for nonce in 0..=MAX_BACKLOG {
-                let tx = Transaction::sign(&private, nonce as u64, Instruction::Generate);
+                let tx = Transaction::sign(&private, nonce as u64, Instruction::CasinoDeposit { amount: 100 });
                 mempool.add(tx);
             }
 
@@ -278,7 +280,7 @@ mod tests {
 
             for seed in 0..5 {
                 let private = PrivateKey::from_seed(seed);
-                let tx = Transaction::sign(&private, 0, Instruction::Generate);
+                let tx = Transaction::sign(&private, 0, Instruction::CasinoDeposit { amount: 100 });
                 mempool.add(tx);
             }
 
@@ -298,7 +300,7 @@ mod tests {
             let public = private.public_key();
 
             for nonce in 0..5 {
-                let tx = Transaction::sign(&private, nonce, Instruction::Generate);
+                let tx = Transaction::sign(&private, nonce, Instruction::CasinoDeposit { amount: 100 });
                 mempool.add(tx);
             }
 
@@ -324,7 +326,7 @@ mod tests {
             let public = private.public_key();
 
             for nonce in 0..3 {
-                let tx = Transaction::sign(&private, nonce, Instruction::Generate);
+                let tx = Transaction::sign(&private, nonce, Instruction::CasinoDeposit { amount: 100 });
                 mempool.add(tx);
             }
 
@@ -358,7 +360,7 @@ mod tests {
             let mut mempool = Mempool::new(ctx);
 
             let private = PrivateKey::from_seed(1);
-            let tx = Transaction::sign(&private, 0, Instruction::Generate);
+            let tx = Transaction::sign(&private, 0, Instruction::CasinoDeposit { amount: 100 });
             let expected_nonce = tx.nonce;
 
             mempool.add(tx);
@@ -382,7 +384,7 @@ mod tests {
             let private = PrivateKey::from_seed(1);
 
             for nonce in 0..3 {
-                let tx = Transaction::sign(&private, nonce, Instruction::Generate);
+                let tx = Transaction::sign(&private, nonce, Instruction::CasinoDeposit { amount: 100 });
                 mempool.add(tx);
             }
 
@@ -410,7 +412,7 @@ mod tests {
                 privates.push(private.clone());
 
                 for nonce in 0..2 {
-                    let tx = Transaction::sign(&private, nonce, Instruction::Generate);
+                    let tx = Transaction::sign(&private, nonce, Instruction::CasinoDeposit { amount: 100 });
                     mempool.add(tx);
                 }
             }
@@ -449,8 +451,8 @@ mod tests {
 
             let private2 = PrivateKey::from_seed(2);
 
-            let tx1 = Transaction::sign(&private1, 0, Instruction::Generate);
-            let tx2 = Transaction::sign(&private2, 0, Instruction::Generate);
+            let tx1 = Transaction::sign(&private1, 0, Instruction::CasinoDeposit { amount: 100 });
+            let tx2 = Transaction::sign(&private2, 0, Instruction::CasinoDeposit { amount: 200 });
 
             mempool.add(tx1);
             mempool.add(tx2);
@@ -471,7 +473,7 @@ mod tests {
 
             for seed in 0..=MAX_TRANSACTIONS {
                 let private = PrivateKey::from_seed(seed as u64);
-                let tx = Transaction::sign(&private, 0, Instruction::Generate);
+                let tx = Transaction::sign(&private, 0, Instruction::CasinoDeposit { amount: 100 });
                 mempool.add(tx);
             }
 
@@ -489,7 +491,7 @@ mod tests {
             assert_eq!(mempool.accounts.get(), 0);
 
             let private = PrivateKey::from_seed(1);
-            let tx = Transaction::sign(&private, 0, Instruction::Generate);
+            let tx = Transaction::sign(&private, 0, Instruction::CasinoDeposit { amount: 100 });
             mempool.add(tx);
 
             assert_eq!(mempool.unique.get(), 1);

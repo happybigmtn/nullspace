@@ -12,6 +12,8 @@ interface RegistrationViewProps {
   onRegister: () => void;
   botConfig: BotConfig;
   onBotConfigChange: (config: BotConfig) => void;
+  onStartTournament?: () => void;
+  isTournamentStarting?: boolean;
 }
 
 export const RegistrationView: React.FC<RegistrationViewProps> = ({
@@ -21,7 +23,9 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
   timeLeft,
   onRegister,
   botConfig,
-  onBotConfigChange
+  onBotConfigChange,
+  onStartTournament,
+  isTournamentStarting
 }) => {
   const pnlData = stats.pnlHistory;
   const maxVal = Math.max(...pnlData, 100);
@@ -37,30 +41,43 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
   }).join(' ');
 
   return (
-      <div className="flex flex-col h-screen w-screen bg-terminal-black text-white font-mono items-center justify-center p-8">
-          <div className="max-w-4xl w-full border border-terminal-green rounded-lg p-8 shadow-2xl relative bg-black/80 backdrop-blur">
-              <h1 className="text-3xl font-bold text-center mb-2 tracking-[0.5em] text-white">TOURNAMENT RESULTS</h1>
-              
-              {/* COUNTDOWN TIMER */}
-              <div className="text-center mb-8">
-                  <span className="text-xs text-gray-500 tracking-widest block mb-1">NEXT ROUND STARTS IN</span>
-                  <span className="text-4xl font-bold text-terminal-accent animate-pulse font-mono">
-                      {formatTime(timeLeft)}
-                  </span>
+      <div className="flex flex-col min-h-screen w-screen bg-terminal-black text-white font-mono items-center justify-center p-4 sm:p-6 md:p-8 overflow-auto">
+          <div className="max-w-4xl w-full border border-terminal-green rounded-lg p-4 sm:p-6 md:p-8 shadow-2xl relative bg-black/80 backdrop-blur">
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-center mb-2 tracking-[0.2em] sm:tracking-[0.3em] md:tracking-[0.5em] text-white">
+                  {timeLeft > 0 ? 'TOURNAMENT ACTIVE' : 'TOURNAMENT LOBBY'}
+              </h1>
+
+              {/* STATUS MESSAGE */}
+              <div className="text-center mb-4 sm:mb-6 md:mb-8">
+                  {timeLeft > 0 ? (
+                      <>
+                          <span className="text-[10px] sm:text-xs text-gray-500 tracking-widest block mb-1">TOURNAMENT ENDS IN</span>
+                          <span className="text-2xl sm:text-3xl md:text-4xl font-bold text-terminal-accent animate-pulse font-mono">
+                              {formatTime(timeLeft)}
+                          </span>
+                      </>
+                  ) : (
+                      <>
+                          <span className="text-[10px] sm:text-xs text-gray-500 tracking-widest block mb-1">TOURNAMENT STATUS</span>
+                          <span className="text-lg sm:text-xl md:text-2xl font-bold text-terminal-green font-mono">
+                              CONFIGURE BOTS & START
+                          </span>
+                      </>
+                  )}
               </div>
-              
-              <div className="grid grid-cols-2 gap-12">
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-12">
                   {/* STATS */}
-                  <div className="space-y-6">
-                      <h2 className="text-xl font-bold text-gray-500 border-b border-gray-800 pb-2">YOUR PERFORMANCE</h2>
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                           <div className="bg-gray-900 p-4 rounded border border-gray-800">
-                               <div className="text-gray-500 text-xs mb-1">FINAL CHIPS</div>
-                               <div className="text-2xl text-terminal-gold font-bold">${stats.chips.toLocaleString()}</div>
+                  <div className="space-y-4 sm:space-y-6">
+                      <h2 className="text-base sm:text-lg md:text-xl font-bold text-gray-500 border-b border-gray-800 pb-2">YOUR PERFORMANCE</h2>
+                      <div className="grid grid-cols-2 gap-2 sm:gap-4 text-sm">
+                           <div className="bg-gray-900 p-2 sm:p-4 rounded border border-gray-800">
+                               <div className="text-gray-500 text-[10px] sm:text-xs mb-1">FINAL CHIPS</div>
+                               <div className="text-lg sm:text-xl md:text-2xl text-terminal-gold font-bold">${stats.chips.toLocaleString()}</div>
                            </div>
-                           <div className="bg-gray-900 p-4 rounded border border-gray-800">
-                               <div className="text-gray-500 text-xs mb-1">FINAL RANK</div>
-                               <div className="text-2xl text-terminal-green font-bold">#{stats.rank}</div>
+                           <div className="bg-gray-900 p-2 sm:p-4 rounded border border-gray-800">
+                               <div className="text-gray-500 text-[10px] sm:text-xs mb-1">FINAL RANK</div>
+                               <div className="text-lg sm:text-xl md:text-2xl text-terminal-green font-bold">#{stats.rank}</div>
                            </div>
                       </div>
                       
@@ -151,7 +168,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
                                   <input
                                       type="range"
                                       min="10"
-                                      max="200"
+                                      max="300"
                                       step="10"
                                       value={botConfig.numBots}
                                       onChange={(e) => onBotConfigChange({ ...botConfig, numBots: parseInt(e.target.value) })}
@@ -202,6 +219,26 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
                   {botConfig.enabled && (
                       <div className="mt-2 text-[10px] text-gray-600 text-center">
                           {botConfig.numBots} bots will make random bets every ~{botConfig.betIntervalMs / 1000}s during the tournament
+                      </div>
+                  )}
+
+                  {/* START TOURNAMENT BUTTON - shows when registered */}
+                  {isRegistered && onStartTournament && (
+                      <div className="mt-6 text-center">
+                          <button
+                              className={`px-12 py-4 font-bold text-xl rounded transition-all shadow-lg ${
+                                  isTournamentStarting
+                                      ? 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                                      : 'bg-terminal-green text-black hover:bg-green-400 shadow-[0_0_30px_rgba(0,255,65,0.5)] animate-pulse'
+                              }`}
+                              onClick={onStartTournament}
+                              disabled={isTournamentStarting}
+                          >
+                              {isTournamentStarting ? 'STARTING...' : '🎰 START TOURNAMENT'}
+                          </button>
+                          <div className="mt-2 text-[10px] text-gray-500">
+                              5-minute tournament{botConfig.enabled ? ` with ${botConfig.numBots} bot opponents` : ' (solo mode - enable bots above for competition)'}
+                          </div>
                       </div>
                   )}
               </div>

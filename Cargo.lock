@@ -1925,6 +1925,7 @@ dependencies = [
  "nullspace-simulator",
  "nullspace-types",
  "rand",
+ "rayon",
  "reqwest 0.11.27",
  "serde",
  "thiserror 2.0.12",

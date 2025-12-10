@@ -27,7 +27,7 @@ use std::{
     },
     time::{Duration, Instant},
 };
-use tracing::{info, warn};
+use tracing::info;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about = "Bot stress test for casino games")]
@@ -74,19 +74,19 @@ impl BotState {
     }
 
     fn next_nonce(&self) -> u64 {
-        self.nonce.fetch_add(1, Ordering::SeqCst)
+        self.nonce.fetch_add(1, Ordering::Relaxed)
     }
 
     fn next_session_id(&self) -> u64 {
-        self.session_counter.fetch_add(1, Ordering::SeqCst)
+        self.session_counter.fetch_add(1, Ordering::Relaxed)
     }
 
     fn record_game(&self, won: bool) {
-        self.games_played.fetch_add(1, Ordering::SeqCst);
+        self.games_played.fetch_add(1, Ordering::Relaxed);
         if won {
-            self.games_won.fetch_add(1, Ordering::SeqCst);
+            self.games_won.fetch_add(1, Ordering::Relaxed);
         } else {
-            self.games_lost.fetch_add(1, Ordering::SeqCst);
+            self.games_lost.fetch_add(1, Ordering::Relaxed);
         }
     }
 }
@@ -110,20 +110,20 @@ impl Metrics {
     }
 
     fn record_submit(&self, success: bool, latency_ms: u64) {
-        self.transactions_submitted.fetch_add(1, Ordering::SeqCst);
+        self.transactions_submitted.fetch_add(1, Ordering::Relaxed);
         if success {
-            self.transactions_success.fetch_add(1, Ordering::SeqCst);
+            self.transactions_success.fetch_add(1, Ordering::Relaxed);
         } else {
-            self.transactions_failed.fetch_add(1, Ordering::SeqCst);
+            self.transactions_failed.fetch_add(1, Ordering::Relaxed);
         }
-        self.total_latency_ms.fetch_add(latency_ms, Ordering::SeqCst);
+        self.total_latency_ms.fetch_add(latency_ms, Ordering::Relaxed);
     }
 
     fn print_summary(&self, elapsed: Duration) {
-        let submitted = self.transactions_submitted.load(Ordering::SeqCst);
-        let success = self.transactions_success.load(Ordering::SeqCst);
-        let failed = self.transactions_failed.load(Ordering::SeqCst);
-        let total_latency = self.total_latency_ms.load(Ordering::SeqCst);
+        let submitted = self.transactions_submitted.load(Ordering::Relaxed);
+        let success = self.transactions_success.load(Ordering::Relaxed);
+        let failed = self.transactions_failed.load(Ordering::Relaxed);
+        let total_latency = self.total_latency_ms.load(Ordering::Relaxed);
 
         let tps = if elapsed.as_secs() > 0 {
             submitted as f64 / elapsed.as_secs_f64()
@@ -219,6 +219,35 @@ fn generate_move_payload(game_type: GameType, rng: &mut StdRng, move_number: u32
     }
 }
 
+/// Helper function to flush a batch of transactions
+async fn flush_batch(
+    client: &Arc<Client>,
+    pending_txs: &mut Vec<Transaction>,
+    metrics: &Arc<Metrics>,
+) {
+    if pending_txs.is_empty() {
+        return;
+    }
+
+    let start = Instant::now();
+    let num_txs = pending_txs.len();
+
+    match client.submit_transactions(pending_txs.drain(..).collect()).await {
+        Ok(_) => {
+            let latency = start.elapsed().as_millis() as u64;
+            for _ in 0..num_txs {
+                metrics.record_submit(true, latency);
+            }
+        }
+        Err(_) => {
+            let latency = start.elapsed().as_millis() as u64;
+            for _ in 0..num_txs {
+                metrics.record_submit(false, latency);
+            }
+        }
+    }
+}
+
 /// Run a single bot
 async fn run_bot(
     client: Arc<Client>,
@@ -228,9 +257,9 @@ async fn run_bot(
     metrics: Arc<Metrics>,
 ) {
     let mut rng = StdRng::from_entropy();
+    let mut pending_txs: Vec<Transaction> = Vec::with_capacity(5);
 
     // Register the bot
-    let start = Instant::now();
     let register_tx = Transaction::sign(
         &bot.keypair,
         bot.next_nonce(),
@@ -238,18 +267,11 @@ async fn run_bot(
             name: bot.name.clone(),
         },
     );
+    pending_txs.push(register_tx);
 
-    match client.submit_transactions(vec![register_tx]).await {
-        Ok(_) => {
-            metrics.record_submit(true, start.elapsed().as_millis() as u64);
-            info!("Bot {} registered", bot.name);
-        }
-        Err(e) => {
-            metrics.record_submit(false, start.elapsed().as_millis() as u64);
-            warn!("Bot {} failed to register: {:?}", bot.name, e);
-            return;
-        }
-    }
+    // Flush registration immediately
+    flush_batch(&client, &mut pending_txs, &metrics).await;
+    info!("Bot {} registered", bot.name);
 
     // Small delay after registration
     tokio::time::sleep(Duration::from_millis(50)).await;
@@ -274,7 +296,6 @@ async fn run_bot(
         let bet = 10; // Small consistent bet
 
         // Start game
-        let start = Instant::now();
         let start_tx = Transaction::sign(
             &bot.keypair,
             bot.next_nonce(),
@@ -284,20 +305,7 @@ async fn run_bot(
                 session_id,
             },
         );
-
-        match client.submit_transactions(vec![start_tx]).await {
-            Ok(_) => {
-                metrics.record_submit(true, start.elapsed().as_millis() as u64);
-            }
-            Err(e) => {
-                metrics.record_submit(false, start.elapsed().as_millis() as u64);
-                warn!("Bot {} failed to start game: {:?}", bot.name, e);
-                continue;
-            }
-        }
-
-        // Small delay to let game initialize
-        tokio::time::sleep(Duration::from_millis(20)).await;
+        pending_txs.push(start_tx);
 
         // Make moves until game completes (max 5 moves to prevent infinite loops)
         for move_num in 0..5u32 {
@@ -306,7 +314,6 @@ async fn run_bot(
                 break;
             }
 
-            let start = Instant::now();
             let move_tx = Transaction::sign(
                 &bot.keypair,
                 bot.next_nonce(),
@@ -315,21 +322,18 @@ async fn run_bot(
                     payload,
                 },
             );
+            pending_txs.push(move_tx);
 
-            match client.submit_transactions(vec![move_tx]).await {
-                Ok(_) => {
-                    metrics.record_submit(true, start.elapsed().as_millis() as u64);
-                }
-                Err(_) => {
-                    metrics.record_submit(false, start.elapsed().as_millis() as u64);
-                    // Game might have ended, that's ok
-                    break;
-                }
+            // Flush batch when it reaches size 5
+            if pending_txs.len() >= 5 {
+                flush_batch(&client, &mut pending_txs, &metrics).await;
+                // Small delay between batches
+                tokio::time::sleep(Duration::from_millis(10)).await;
             }
-
-            // Small delay between moves
-            tokio::time::sleep(Duration::from_millis(10)).await;
         }
+
+        // Flush remaining transactions after each game
+        flush_batch(&client, &mut pending_txs, &metrics).await;
 
         // Record game played (we don't track win/loss without reading state)
         bot.record_game(rng.gen_bool(0.5)); // Random for now
@@ -339,10 +343,13 @@ async fn run_bot(
         }
     }
 
+    // Flush any remaining transactions
+    flush_batch(&client, &mut pending_txs, &metrics).await;
+
     info!(
         "Bot {} finished: {} games played",
         bot.name,
-        bot.games_played.load(Ordering::SeqCst)
+        bot.games_played.load(Ordering::Relaxed)
     );
 }
 

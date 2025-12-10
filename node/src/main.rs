@@ -224,7 +224,7 @@ fn main() {
         let resolver = network.register(RESOLVER_CHANNEL, resolver_limit, config.message_backlog);
 
         // Register broadcast channel
-        let broadcaster_limit = Quota::per_second(NonZeroU32::new(8).unwrap());
+        let broadcaster_limit = Quota::per_second(NonZeroU32::new(32).unwrap()); // Increased for faster block propagation
         let broadcaster = network.register(
             BROADCASTER_CHANNEL,
             broadcaster_limit,

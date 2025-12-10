@@ -11,7 +11,7 @@ documentation = "https://docs.rs/nullspace-client"
 readme = "README.md"
 
 [dependencies]
-nullspace-execution = { workspace = true, features = ["mocks"] }
+nullspace-execution = { workspace = true, features = ["mocks", "parallel"] }
 nullspace-types = { workspace = true }
 commonware-codec = { workspace = true }
 commonware-consensus = { workspace = true }
@@ -27,6 +27,7 @@ url = { workspace = true }
 thiserror = { workspace = true }
 futures = { workspace = true }
 rand = { workspace = true }
+rayon = { workspace = true }
 
 [dev-dependencies]
 nullspace-simulator = { workspace = true }

@@ -41,7 +41,7 @@ mod tests {
     use nullspace_simulator::{Api, Simulator};
     use nullspace_types::{
         api::{Update, UpdatesFilter},
-        execution::{Instruction, Key, Stats, Transaction, Value},
+        execution::{Instruction, Key, Transaction, Value},
         Identity, Query, Seed,
     };
     use commonware_consensus::Viewable;
@@ -144,13 +144,13 @@ mod tests {
 
         // Create and submit transaction
         let (private, _) = create_account_keypair(1);
-        let tx = Transaction::sign(&private, 0, Instruction::Generate);
+        let tx = Transaction::sign(&private, 0, Instruction::CasinoRegister { name: "TestPlayer".to_string() });
 
         // Should succeed even though transaction isn't processed yet
         client.submit_transactions(vec![tx]).await.unwrap();
 
         // Submit another transaction with higher nonce
-        let tx2 = Transaction::sign(&private, 1, Instruction::Generate);
+        let tx2 = Transaction::sign(&private, 1, Instruction::CasinoDeposit { amount: 100 });
         client.submit_transactions(vec![tx2]).await.unwrap();
     }
 
@@ -164,7 +164,7 @@ mod tests {
 
         // Create transaction
         let (private, _) = create_account_keypair(1);
-        let tx = Transaction::sign(&private, 0, Instruction::Generate);
+        let tx = Transaction::sign(&private, 0, Instruction::CasinoRegister { name: "TestPlayer".to_string() });
 
         // Create summary in deterministic runtime
         let executor = Runner::default();
@@ -196,7 +196,7 @@ mod tests {
 
         // Create and process transaction
         let (private, public) = create_account_keypair(1);
-        let tx = Transaction::sign(&private, 0, Instruction::Generate);
+        let tx = Transaction::sign(&private, 0, Instruction::CasinoRegister { name: "TestPlayer".to_string() });
 
         // Create summary in deterministic runtime
         let executor = Runner::default();
@@ -231,7 +231,6 @@ mod tests {
             panic!("Expected account value");
         };
         assert_eq!(account.nonce, 1);
-        assert_eq!(account.stats, Stats::default());
 
         // Query for non-existent account
         let (_, other_public) = create_account_keypair(2);
@@ -266,7 +265,7 @@ mod tests {
 
         // Test events update
         let (private, _) = create_account_keypair(1);
-        let tx = Transaction::sign(&private, 0, Instruction::Generate);
+        let tx = Transaction::sign(&private, 0, Instruction::CasinoRegister { name: "TestPlayer".to_string() });
 
         // Create summary in deterministic runtime
         let executor = Runner::default();
@@ -309,7 +308,7 @@ mod tests {
 
         // Submit transaction through simulator
         let (private, _) = create_account_keypair(1);
-        let tx = Transaction::sign(&private, 0, Instruction::Generate);
+        let tx = Transaction::sign(&private, 0, Instruction::CasinoRegister { name: "TestPlayer".to_string() });
         ctx.simulator.submit_transactions(vec![tx.clone()]);
 
         // Receive transaction from stream

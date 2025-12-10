@@ -13,7 +13,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 const SORTED_GAMES = Object.values(GameType).filter(g => g !== GameType.NONE).sort();
 
 export default function CasinoApp() {
-  const { stats, gameState, setGameState, deck, aiAdvice, tournamentTime, phase, leaderboard, isRegistered, lastTxSig, botConfig, setBotConfig, actions } = useTerminalGame();
+  const { stats, gameState, setGameState, deck, aiAdvice, tournamentTime, phase, leaderboard, isRegistered, lastTxSig, botConfig, setBotConfig, isTournamentStarting, startTournament, actions } = useTerminalGame();
 
   // UI State
   const [commandOpen, setCommandOpen] = useState(false);
@@ -77,6 +77,8 @@ export default function CasinoApp() {
               onRegister={actions.registerForTournament}
               botConfig={botConfig}
               onBotConfigChange={setBotConfig}
+              onStartTournament={startTournament}
+              isTournamentStarting={isTournamentStarting}
           />
       );
   }

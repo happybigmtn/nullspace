@@ -81,50 +81,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let (_, mut read) = ws_stream.split();
         let block_interval = Duration::from_millis(block_interval_ms);
+        let mut last_block_time = std::time::Instant::now();
 
         loop {
-            // Use tokio::select! to handle both the timer and WebSocket
+            // Use tokio::select! with timeout to ensure periodic block execution
             tokio::select! {
-                // Wait for block interval
-                _ = context.sleep(block_interval) => {
-                    // Check for pending transactions
-                    if pending_txs.is_empty() {
-                        continue;
-                    }
+                biased;
 
-                    let txs = std::mem::take(&mut pending_txs);
-                    info!(count = txs.len(), view, "Executing block");
-
-                    // Execute block
-                    let (seed, summary) = execute_block(
-                        &network_secret,
-                        network_identity,
-                        &mut state,
-                        &mut events,
-                        view,
-                        txs,
-                    )
-                    .await;
-
-                    // Verify and get digests
-                    let Some((_state_digests, _events_digests)) = summary.verify(&network_identity) else {
-                        warn!("Summary verification failed");
-                        continue;
-                    };
-
-                    // Submit seed first
-                    if let Err(e) = client.submit_seed(seed).await {
-                        warn!(?e, "Failed to submit seed");
-                    }
-
-                    // Submit summary
-                    if let Err(e) = client.submit_summary(summary).await {
-                        warn!(?e, "Failed to submit summary");
-                    }
-
-                    info!(view, "Block executed and submitted");
-                    view += 1;
-                }
+                // Short timeout to ensure we don't block forever
+                _ = tokio::time::sleep(Duration::from_millis(10)) => {}
 
                 // Process WebSocket messages
                 msg = read.next() => {
@@ -133,8 +98,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             info!(len = data.len(), "Received binary message from mempool");
                             match api::Pending::decode(&mut data.as_slice()) {
                                 Ok(pending) => {
-                                    info!(count = pending.transactions.len(), "Received transactions from mempool");
-                                    pending_txs.extend(pending.transactions);
+                                    let tx_count = pending.transactions.len();
+                                    if tx_count > 0 {
+                                        info!(count = tx_count, total_pending = pending_txs.len() + tx_count, "Adding transactions to pending queue");
+                                        pending_txs.extend(pending.transactions);
+                                    }
                                 }
                                 Err(e) => {
                                     warn!(?e, "Failed to decode Pending");
@@ -144,19 +112,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         Some(Ok(Message::Text(text))) => {
                             info!(text = %text, "Received text message from mempool");
                         }
-                        Some(Ok(Message::Ping(_))) => {
-                            info!("Received ping from mempool");
-                        }
-                        Some(Ok(Message::Pong(_))) => {
-                            info!("Received pong from mempool");
-                        }
+                        Some(Ok(Message::Ping(_))) => {}
+                        Some(Ok(Message::Pong(_))) => {}
                         Some(Ok(Message::Close(frame))) => {
                             warn!(?frame, "Mempool WebSocket closed");
                             break;
                         }
-                        Some(Ok(Message::Frame(_))) => {
-                            info!("Received raw frame from mempool");
-                        }
+                        Some(Ok(Message::Frame(_))) => {}
                         Some(Err(e)) => {
                             warn!(?e, "Mempool WebSocket error");
                             break;
@@ -166,6 +128,50 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             break;
                         }
                     }
+                }
+            }
+
+            // Check if it's time to execute a block (regardless of WebSocket messages)
+            let elapsed = last_block_time.elapsed();
+            if elapsed >= block_interval {
+                if pending_txs.is_empty() {
+                    // Reset timer even if no transactions to avoid log spam
+                    last_block_time = std::time::Instant::now();
+                } else {
+                    let txs = std::mem::take(&mut pending_txs);
+                    info!(count = txs.len(), view, elapsed_ms = elapsed.as_millis(), "Executing block");
+
+                // Execute block
+                let (seed, summary) = execute_block(
+                    &network_secret,
+                    network_identity,
+                    &mut state,
+                    &mut events,
+                    view,
+                    txs,
+                )
+                .await;
+
+                // Verify and get digests
+                let Some((_state_digests, _events_digests)) = summary.verify(&network_identity) else {
+                    warn!("Summary verification failed");
+                    last_block_time = std::time::Instant::now();
+                    continue;
+                };
+
+                // Submit seed first
+                if let Err(e) = client.submit_seed(seed).await {
+                    warn!(?e, "Failed to submit seed");
+                }
+
+                // Submit summary
+                if let Err(e) = client.submit_summary(summary).await {
+                    warn!(?e, "Failed to submit summary");
+                }
+
+                info!(view, "Block executed and submitted");
+                view += 1;
+                last_block_time = std::time::Instant::now();
                 }
             }
         }

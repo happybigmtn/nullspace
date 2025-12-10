@@ -4,6 +4,7 @@
 //! execution layer, validating state transitions and on-chain events.
 
 use nullspace_execution::{Layer, Memory, State};
+use commonware_runtime::ThreadPool;
 use nullspace_execution::mocks::{create_account_keypair, create_network_keypair, create_seed};
 use nullspace_types::{
     execution::{Event, Instruction, Key, Transaction, Value},
@@ -25,12 +26,19 @@ struct Context {
     player_public: PublicKey,
     nonce: u64,
     view: u64,
+    pool: ThreadPool,
 }
 impl Context {
     async fn new() -> Self {
         let (network_secret, network_public) = create_network_keypair();
         let (player_secret, player_public) = create_account_keypair(1);
-        
+        let pool = ThreadPool::new(
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(2)
+                .build()
+                .expect("failed to create thread pool")
+        );
+
         let mut ctx = Self {
             state: Memory::default(),
             network_secret,
@@ -39,6 +47,7 @@ impl Context {
             player_public,
             nonce: 0,
             view: 1,
+            pool,
         };
         
         // Register player
@@ -56,9 +65,9 @@ impl Context {
     async fn execute(&mut self, instruction: Instruction) -> Vec<Event> {
         let seed = create_seed(&self.network_secret, self.view);
         let mut layer = Layer::new(&self.state, self.network_public.clone(), NAMESPACE, seed);
-        
+
         let tx = Transaction::sign(&self.player_secret, self.nonce, instruction);
-        let (outputs, _) = layer.execute(vec![tx]).await;
+        let (outputs, _) = layer.execute(self.pool.clone(), vec![tx]).await;
         
         // Extract events
         let mut events = Vec::new();

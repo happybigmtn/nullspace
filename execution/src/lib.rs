@@ -748,10 +748,9 @@ impl<'a, S: State> Layer<'a, S> {
         }
 
         // Add player (check not already joined)
-        if tournament.players.contains(public) {
+        if !tournament.add_player(public.clone()) {
             return vec![]; // Already joined
         }
-        tournament.players.push(public.clone());
         self.insert(Key::Tournament(tournament_id), Value::Tournament(tournament));
 
         vec![Event::PlayerJoined {

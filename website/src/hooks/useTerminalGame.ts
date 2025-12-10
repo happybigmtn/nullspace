@@ -130,11 +130,13 @@ export const useTerminalGame = () => {
   const [deck, setDeck] = useState<Card[]>([]);
   const [aiAdvice, setAiAdvice] = useState<string | null>(null);
   const [tournamentTime, setTournamentTime] = useState(0);
-  const [phase, setPhase] = useState<TournamentPhase>('ACTIVE');
+  const [phase, setPhase] = useState<TournamentPhase>('REGISTRATION');
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [isRegistered, setIsRegistered] = useState(false);
   const [botConfig, setBotConfig] = useState<BotConfig>(DEFAULT_BOT_CONFIG);
   const botServiceRef = useRef<BotService | null>(null);
+  const [isTournamentStarting, setIsTournamentStarting] = useState(false);
+  const [manualTournamentEndTime, setManualTournamentEndTime] = useState<number | null>(null);
 
   // Chain service integration
   const [chainService, setChainService] = useState<CasinoChainService | null>(null);
@@ -262,67 +264,42 @@ export const useTerminalGame = () => {
     initChain();
   }, []);
 
+  // Track tick counter for leaderboard polling (every 3 ticks = 3 seconds)
+  const tickCounterRef = useRef(0);
+
   // --- TOURNAMENT CLOCK ---
   useEffect(() => {
     const interval = setInterval(() => {
       const now = Date.now();
-      const regDuration = 10 * 1000; // 10 seconds registration
-      const activeDuration = 5 * 60 * 1000; // 5 mins active
-      const cycleDuration = regDuration + activeDuration;
-      const elapsed = now % cycleDuration;
 
-      const isReg = elapsed < regDuration;
+      // If we have a manual tournament running, use that timer
+      if (manualTournamentEndTime !== null) {
+        const remaining = Math.max(0, manualTournamentEndTime - now);
+        setTournamentTime(Math.ceil(remaining / 1000));
 
-      if (isReg) {
-          if (phase !== 'REGISTRATION') {
-              setPhase('REGISTRATION');
-              setIsRegistered(false);
-              // Auto-register for the next round
-              setTimeout(async () => {
-                if (!isRegistered && chainService && clientRef.current && publicKeyBytesRef.current) {
-                  const playerName = `Player_${Date.now().toString(36)}`;
-                  try {
-                    await chainService.register(playerName);
-                    setIsRegistered(true);
-                    hasRegisteredRef.current = true;
+        // Tournament ended
+        if (remaining <= 0) {
+          console.log('[useTerminalGame] Manual tournament ended');
+          setManualTournamentEndTime(null);
+          setPhase('REGISTRATION');
 
-                    // Fetch on-chain player state instead of using hardcoded values
-                    // Wait a moment for the registration to be processed
-                    setTimeout(async () => {
-                      try {
-                        const playerState = await clientRef.current!.getCasinoPlayer(publicKeyBytesRef.current!);
-                        if (playerState) {
-                          setStats(prev => ({
-                            ...prev,
-                            chips: playerState.chips,
-                            shields: playerState.shields,
-                            doubles: playerState.doubles,
-                            history: [],
-                            pnlByGame: {},
-                            pnlHistory: []
-                          }));
-                        }
-                      } catch (e) {
-                        console.warn('[useTerminalGame] Failed to fetch player state after registration:', e);
-                      }
-                    }, 500);
-                  } catch (e) {
-                    console.error('[useTerminalGame] Registration failed:', e);
-                  }
-                }
-              }, 100);
+          // Stop bots
+          const botService = botServiceRef.current;
+          if (botService) {
+            botService.stop();
           }
-          setTournamentTime(Math.floor((regDuration - elapsed) / 1000));
+        }
       } else {
-          if (phase !== 'ACTIVE') {
-               setPhase('ACTIVE');
-          }
-          const activeElapsed = elapsed - regDuration;
-          setTournamentTime(Math.floor((activeDuration - activeElapsed) / 1000));
+        // Manual tournament mode - stay in REGISTRATION until user starts tournament
+        // No cyclic automatic phase switching
+        if (phase === 'REGISTRATION') {
+          setTournamentTime(0); // No countdown when waiting for user to start
+        }
       }
 
-      // Poll on-chain leaderboard every tick during ACTIVE phase
-      if (phase === 'ACTIVE' && clientRef.current) {
+      // Poll on-chain leaderboard every 3 seconds during ACTIVE phase
+      tickCounterRef.current++;
+      if (phase === 'ACTIVE' && clientRef.current && tickCounterRef.current % 3 === 0) {
         (async () => {
           try {
             const leaderboardData = await clientRef.current!.getCasinoLeaderboard();
@@ -374,7 +351,7 @@ export const useTerminalGame = () => {
       }
     }, 1000);
     return () => clearInterval(interval);
-  }, [stats.chips, phase, chainService, isRegistered]);
+  }, [stats.chips, phase, chainService, isRegistered, manualTournamentEndTime]);
 
   // --- BOT SERVICE MANAGEMENT ---
   useEffect(() => {
@@ -2592,6 +2569,37 @@ export const useTerminalGame = () => {
       }
   };
 
+  // Start a manual 5-minute tournament (solo mode or with bots)
+  const startTournament = async () => {
+    if (isTournamentStarting) return;
+
+    setIsTournamentStarting(true);
+    console.log(`[useTerminalGame] Starting manual tournament${botConfig.enabled ? ` with ${botConfig.numBots} bots` : ' (solo mode)'}...`);
+
+    // Force phase to ACTIVE
+    setPhase('ACTIVE');
+
+    // Set end time for 5 minutes from now
+    const endTime = Date.now() + 5 * 60 * 1000;
+    setManualTournamentEndTime(endTime);
+    setTournamentTime(5 * 60);
+
+    // Start the bots if enabled
+    if (botConfig.enabled) {
+      const botService = botServiceRef.current;
+      if (botService) {
+        try {
+          await botService.start();
+          console.log('[useTerminalGame] Bots started for tournament');
+        } catch (e) {
+          console.error('[useTerminalGame] Failed to start bots:', e);
+        }
+      }
+    }
+
+    setIsTournamentStarting(false);
+  };
+
   const getAdvice = async () => {
       setAiAdvice("Scanning...");
       const advice = await getStrategicAdvice(gameState.type, gameState.playerCards, gameState.dealerCards[0], stats.history);
@@ -2611,6 +2619,8 @@ export const useTerminalGame = () => {
     lastTxSig,
     botConfig,
     setBotConfig,
+    isTournamentStarting,
+    startTournament,
     actions: {
         startGame,
         setBetAmount,

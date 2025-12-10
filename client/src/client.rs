@@ -45,7 +45,13 @@ impl Client {
         let mut ws_url = base_url.clone();
         ws_url.set_scheme(ws_scheme).unwrap();
 
-        let http_client = HttpClient::builder().timeout(TIMEOUT).build().unwrap();
+        let http_client = HttpClient::builder()
+            .timeout(TIMEOUT)
+            .pool_max_idle_per_host(100)  // More connections per host
+            .pool_idle_timeout(Duration::from_secs(60))  // Keep connections alive
+            .tcp_keepalive(Duration::from_secs(30))  // TCP keepalive
+            .build()
+            .unwrap();
 
         Self {
             base_url,

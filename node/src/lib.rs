@@ -1004,8 +1004,10 @@ mod tests {
                 // Generate a signer
                 let signer = PrivateKey::from_seed(i as u64);
 
-                // Generate a transaction
-                let tx = Transaction::sign(&signer, 0, Instruction::Generate);
+                // Generate a casino registration transaction
+                let tx = Transaction::sign(&signer, 0, Instruction::CasinoRegister {
+                    name: format!("Player{}", i)
+                });
                 indexer.submit_tx(tx.clone());
                 remaining.insert(signer.public_key(), tx);
 
@@ -1044,11 +1046,11 @@ mod tests {
                     for event in summary.events_proof_ops.iter() {
                         if let commonware_storage::store::operation::Keyless::Append(
                             nullspace_types::execution::Output::Event(
-                                nullspace_types::execution::Event::Generated { account, .. },
+                                nullspace_types::execution::Event::CasinoPlayerRegistered { player, .. },
                             ),
                         ) = event
                         {
-                            remaining.remove(account);
+                            remaining.remove(player);
                         }
                     }
 

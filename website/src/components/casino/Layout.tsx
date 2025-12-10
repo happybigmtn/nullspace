@@ -11,19 +11,19 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ phase, tournamentTime, stats, lastTxSig }) => (
-    <header className="h-12 border-b-2 border-gray-700 flex items-center justify-between px-4 z-10 bg-terminal-black/90 backdrop-blur">
-    <div className="flex items-center gap-4">
-        <span className="font-bold tracking-tighter text-white">null<span className="text-terminal-green">/</span>space</span>
-        <div className="flex items-center gap-2">
+    <header className="h-12 border-b-2 border-gray-700 flex items-center justify-between px-2 sm:px-4 z-10 bg-terminal-black/90 backdrop-blur">
+    <div className="flex items-center gap-2 sm:gap-4">
+        <span className="font-bold tracking-tighter text-white text-sm sm:text-base">null<span className="text-terminal-green">/</span>space</span>
+        <div className="hidden sm:flex items-center gap-2">
             <span className="text-[10px] text-gray-600 bg-gray-900 border border-gray-800 px-1.5 py-0.5 rounded">[?] HELP</span>
         </div>
     </div>
-    <div className="flex items-center gap-6 text-sm">
-            <div className="flex items-center gap-2">
-                <span className="text-gray-500">TIMER</span>
+    <div className="flex items-center gap-2 sm:gap-4 md:gap-6 text-xs sm:text-sm">
+            <div className="flex items-center gap-1 sm:gap-2">
+                <span className="text-gray-500 hidden sm:inline">TIMER</span>
                 <span className={`font-bold ${tournamentTime < 60 ? 'text-terminal-accent animate-pulse' : 'text-white'}`}>{formatTime(tournamentTime)}</span>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="hidden sm:flex items-center gap-2">
                 <span className="text-gray-500">SHIELDS</span>
                 <div className="flex gap-1">
                     {[...Array(3)].map((_, i) => (
@@ -31,7 +31,7 @@ export const Header: React.FC<HeaderProps> = ({ phase, tournamentTime, stats, la
                     ))}
                 </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="hidden sm:flex items-center gap-2">
                 <span className="text-gray-500">DOUBLES</span>
                 <div className="flex gap-1">
                     {[...Array(3)].map((_, i) => (
@@ -39,9 +39,22 @@ export const Header: React.FC<HeaderProps> = ({ phase, tournamentTime, stats, la
                     ))}
                 </div>
             </div>
-            <div className="flex items-center gap-2">
-                <span className="text-gray-500">CHIPS</span>
-                <span className="text-terminal-gold font-bold text-lg">${stats.chips.toLocaleString()}</span>
+            {/* Mobile: Compact shields/doubles indicator */}
+            <div className="flex sm:hidden items-center gap-1">
+                <div className="flex gap-0.5">
+                    {[...Array(3)].map((_, i) => (
+                        <div key={i} className={`w-1.5 h-1.5 rounded-full ${i < stats.shields ? 'bg-cyan-400' : 'bg-gray-800'}`} />
+                    ))}
+                </div>
+                <div className="flex gap-0.5">
+                    {[...Array(3)].map((_, i) => (
+                        <div key={i} className={`w-1.5 h-1.5 rounded-full ${i < stats.doubles ? 'bg-purple-400' : 'bg-gray-800'}`} />
+                    ))}
+                </div>
+            </div>
+            <div className="flex items-center gap-1 sm:gap-2">
+                <span className="text-gray-500 hidden sm:inline">CHIPS</span>
+                <span className="text-terminal-gold font-bold text-sm sm:text-lg">${stats.chips.toLocaleString()}</span>
             </div>
     </div>
     </header>
@@ -165,17 +178,17 @@ export const Footer: React.FC<{ currentBet?: number }> = ({ currentBet }) => {
     const isCustom = currentBet && !bets.includes(currentBet);
 
     return (
-        <footer className="fixed bottom-0 left-0 right-0 md:w-[calc(100%-16rem)] border-t-2 border-gray-700 bg-terminal-black/95 text-xs text-gray-600 py-1 px-4 flex justify-center gap-6 z-20">
+        <footer className="fixed bottom-0 left-0 right-0 md:right-64 border-t-2 border-gray-700 bg-terminal-black/95 text-[10px] sm:text-xs text-gray-600 py-1 px-2 sm:px-4 flex flex-wrap justify-center gap-2 sm:gap-4 md:gap-6 z-20">
             {bets.map((bet, i) => {
                 const label = bet >= 1000 ? `${bet/1000}K` : `$${bet}`;
                 const isSelected = currentBet === bet;
                 return (
-                    <span key={i} className={isSelected ? 'text-terminal-green font-bold' : ''}>
+                    <span key={i} className={`whitespace-nowrap ${isSelected ? 'text-terminal-green font-bold' : ''}`}>
                         ^{i + 1} {label}
                     </span>
                 );
             })}
-            <span className={isCustom ? 'text-terminal-green font-bold' : ''}>^0 CUSTOM</span>
+            <span className={`whitespace-nowrap ${isCustom ? 'text-terminal-green font-bold' : ''}`}>^0 CUSTOM</span>
         </footer>
     );
 };
@@ -195,26 +208,26 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, searchQu
     const filtered = sortedGames.filter(g => g.toLowerCase().includes(searchQuery.toLowerCase()));
 
     return (
-        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-start justify-center pt-32">
-            <div className="w-[600px] bg-terminal-black border border-terminal-dim rounded shadow-2xl overflow-hidden flex flex-col max-h-[500px]">
-                <div className="p-4 border-b border-terminal-dim flex items-center gap-2">
+        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-start justify-center pt-16 sm:pt-32 px-4">
+            <div className="w-full max-w-[600px] bg-terminal-black border border-terminal-dim rounded shadow-2xl overflow-hidden flex flex-col max-h-[70vh] sm:max-h-[500px]">
+                <div className="p-3 sm:p-4 border-b border-terminal-dim flex items-center gap-2">
                     <span className="text-terminal-green font-bold">&gt;</span>
-                    <input 
+                    <input
                         ref={inputRef}
-                        type="text" 
+                        type="text"
                         value={searchQuery}
                         onChange={(e) => onSearchChange(e.target.value)}
-                        className="flex-1 bg-transparent outline-none text-white placeholder-gray-700 uppercase"
+                        className="flex-1 bg-transparent outline-none text-white placeholder-gray-700 uppercase text-sm sm:text-base"
                         placeholder="TYPE COMMAND OR GAME NAME..."
                         autoFocus
                     />
                 </div>
                 <div className="flex-1 overflow-y-auto p-2">
                     {filtered.map((game, i) => (
-                        <div 
+                        <div
                             key={game}
                             onClick={() => onSelectGame(game)}
-                            className="flex items-center gap-3 p-2 hover:bg-terminal-dim cursor-pointer rounded group"
+                            className="flex items-center gap-3 p-2 hover:bg-terminal-dim cursor-pointer rounded group text-sm sm:text-base"
                         >
                             <span className="text-gray-600 font-mono w-6 text-right group-hover:text-terminal-green">{i < 9 ? i + 1 : i === 9 ? 0 : ''}</span>
                             <span className="text-gray-400 group-hover:text-white">{game}</span>
@@ -237,22 +250,22 @@ export const CustomBetOverlay: React.FC<{ isOpen: boolean; betString: string; in
     if (!isOpen) return null;
 
     return (
-         <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center">
-             <div className="bg-terminal-black border border-terminal-green p-8 rounded shadow-xl flex flex-col items-center gap-4">
-                 <div className="text-sm tracking-widest text-gray-400">ENTER CUSTOM BET AMOUNT</div>
-                 <div className="flex items-center gap-1 text-4xl text-terminal-gold font-bold">
+         <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center px-4">
+             <div className="bg-terminal-black border border-terminal-green p-4 sm:p-8 rounded shadow-xl flex flex-col items-center gap-3 sm:gap-4 w-full max-w-sm">
+                 <div className="text-xs sm:text-sm tracking-widest text-gray-400">ENTER CUSTOM BET AMOUNT</div>
+                 <div className="flex items-center gap-1 text-2xl sm:text-4xl text-terminal-gold font-bold">
                      <span>$</span>
-                     <input 
+                     <input
                         ref={inputRef}
                         type="text"
                         value={betString}
                         readOnly
-                        className="bg-transparent outline-none w-48 text-center"
+                        className="bg-transparent outline-none w-32 sm:w-48 text-center"
                      />
-                     <span className="animate-pulse bg-terminal-green w-3 h-8 block"></span>
+                     <span className="animate-pulse bg-terminal-green w-2 sm:w-3 h-6 sm:h-8 block"></span>
                  </div>
-                 <div className="text-xs text-gray-600 mt-4 flex gap-4">
-                     <span>[0-9] TYPE AMOUNT</span>
+                 <div className="text-[10px] sm:text-xs text-gray-600 mt-2 sm:mt-4 flex flex-wrap justify-center gap-2 sm:gap-4">
+                     <span>[0-9] TYPE</span>
                      <span>[ENTER] CONFIRM</span>
                      <span>[ESC] CANCEL</span>
                  </div>
@@ -278,28 +291,28 @@ export const HelpOverlay: React.FC<HelpOverlayProps> = ({ isOpen, onClose, gameT
 
         if (detailInfo) {
              return (
-                <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-8">
-                    <div className="bg-terminal-black border border-terminal-accent rounded-lg shadow-2xl max-w-lg w-full flex flex-col">
-                        <div className="p-6 border-b border-terminal-dim bg-terminal-dim/20">
-                             <div className="text-xs text-terminal-green mb-2 font-bold">[ {detail.toUpperCase()} ] COMMAND DETAIL</div>
-                             <h2 className="text-xl font-bold text-white tracking-widest">{detailInfo.title}</h2>
+                <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-8">
+                    <div className="bg-terminal-black border border-terminal-accent rounded-lg shadow-2xl max-w-lg w-full flex flex-col max-h-[90vh] overflow-y-auto">
+                        <div className="p-4 sm:p-6 border-b border-terminal-dim bg-terminal-dim/20">
+                             <div className="text-[10px] sm:text-xs text-terminal-green mb-2 font-bold">[ {detail.toUpperCase()} ] COMMAND DETAIL</div>
+                             <h2 className="text-lg sm:text-xl font-bold text-white tracking-widest">{detailInfo.title}</h2>
                         </div>
-                        <div className="p-6 space-y-6">
+                        <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
                             <div>
-                                <h4 className="text-terminal-green font-bold text-xs mb-1">WIN CONDITION</h4>
-                                <p className="text-sm text-gray-300">{detailInfo.win}</p>
+                                <h4 className="text-terminal-green font-bold text-[10px] sm:text-xs mb-1">WIN CONDITION</h4>
+                                <p className="text-xs sm:text-sm text-gray-300">{detailInfo.win}</p>
                             </div>
                             <div>
-                                <h4 className="text-terminal-accent font-bold text-xs mb-1">LOSS CONDITION</h4>
-                                <p className="text-sm text-gray-300">{detailInfo.loss}</p>
+                                <h4 className="text-terminal-accent font-bold text-[10px] sm:text-xs mb-1">LOSS CONDITION</h4>
+                                <p className="text-xs sm:text-sm text-gray-300">{detailInfo.loss}</p>
                             </div>
-                            <div className="bg-gray-900 p-3 rounded border border-gray-800">
+                            <div className="bg-gray-900 p-2 sm:p-3 rounded border border-gray-800">
                                 <h4 className="text-gray-500 font-bold text-[10px] mb-1">EXAMPLE</h4>
-                                <p className="text-xs text-gray-400 font-mono">{detailInfo.example}</p>
+                                <p className="text-[10px] sm:text-xs text-gray-400 font-mono">{detailInfo.example}</p>
                             </div>
                         </div>
-                        <div className="p-4 border-t border-terminal-dim text-center">
-                            <span className="text-xs text-gray-500">[ESC] BACK</span>
+                        <div className="p-3 sm:p-4 border-t border-terminal-dim text-center">
+                            <span className="text-[10px] sm:text-xs text-gray-500">[ESC] BACK</span>
                         </div>
                     </div>
                 </div>
@@ -430,29 +443,29 @@ export const HelpOverlay: React.FC<HelpOverlayProps> = ({ isOpen, onClose, gameT
     };
 
     return (
-        <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-8" onClick={onClose}>
-            <div className="bg-terminal-black border border-terminal-dim rounded-lg shadow-2xl max-w-2xl w-full flex flex-col max-h-full" onClick={e => e.stopPropagation()}>
-                <div className="p-6 border-b border-terminal-dim flex justify-between items-center bg-terminal-dim/20">
-                    <div className="flex flex-col">
-                        <h2 className="text-xl font-bold text-white tracking-widest">HELP & COMMANDS</h2>
-                        <span className="text-xs text-terminal-green mt-1">TYPE ANY COMMAND KEY BELOW FOR DETAILS</span>
+        <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-8" onClick={onClose}>
+            <div className="bg-terminal-black border border-terminal-dim rounded-lg shadow-2xl max-w-2xl w-full flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+                <div className="p-4 sm:p-6 border-b border-terminal-dim flex justify-between items-center bg-terminal-dim/20 gap-2">
+                    <div className="flex flex-col min-w-0">
+                        <h2 className="text-base sm:text-xl font-bold text-white tracking-widest">HELP & COMMANDS</h2>
+                        <span className="text-[10px] sm:text-xs text-terminal-green mt-1 hidden sm:block">TYPE ANY COMMAND KEY BELOW FOR DETAILS</span>
                     </div>
-                    <span className="text-xs text-gray-500">[ESC] CLOSE</span>
+                    <span className="text-[10px] sm:text-xs text-gray-500 whitespace-nowrap">[ESC] CLOSE</span>
                 </div>
-                
-                <div className="p-6 overflow-y-auto space-y-8">
+
+                <div className="p-4 sm:p-6 overflow-y-auto space-y-6 sm:space-y-8">
                     {/* General Shortcuts */}
-                    <div className="space-y-4">
-                        <h3 className="text-terminal-gold font-bold border-b border-terminal-dim pb-1">GLOBAL COMMANDS</h3>
-                        <div className="grid grid-cols-3 gap-4 text-sm text-gray-300">
+                    <div className="space-y-3 sm:space-y-4">
+                        <h3 className="text-terminal-gold font-bold border-b border-terminal-dim pb-1 text-sm sm:text-base">GLOBAL COMMANDS</h3>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-4 text-xs sm:text-sm text-gray-300">
                             <div><span className="text-white font-bold">[/]</span> GAME MENU</div>
                             <div><span className="text-white font-bold">[?]</span> TOGGLE HELP</div>
                             <div><span className="text-white font-bold">[Z]</span> USE SHIELD</div>
                             <div><span className="text-white font-bold">[X]</span> USE DOUBLE</div>
                             <div><span className="text-white font-bold">[L]</span> LEADERBOARD VIEW</div>
                         </div>
-                        <div className="text-xs text-gray-500 mt-2">
-                             BET SIZING SHORTCUTS: [1] $1, [2] $5, [3] $25, ... [0] CUSTOM
+                        <div className="text-[10px] sm:text-xs text-gray-500 mt-2">
+                             BET SIZING: [1] $1, [2] $5, [3] $25, ... [0] CUSTOM
                         </div>
                     </div>
 

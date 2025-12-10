@@ -18,7 +18,8 @@ use std::{fmt::Debug, hash::Hash};
 
 pub const NAMESPACE: &[u8] = b"_SUPERSOCIETY";
 pub const TRANSACTION_SUFFIX: &[u8] = b"_TX";
-pub const MAX_BLOCK_TRANSACTIONS: usize = 100;
+// Phase 1 scaling: Increased from 100 to 500 for higher throughput
+pub const MAX_BLOCK_TRANSACTIONS: usize = 500;
 
 pub type Seed = CSeed<MinSig>;
 pub type Notarization = CNotarization<MinSig, Digest>;
