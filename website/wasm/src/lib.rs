@@ -361,6 +361,7 @@ fn decode_value(value: Value) -> Result<JsValue, JsValue> {
                 "player_count": tournament.players.len()
             })
         }
+        _ => serde_json::Value::Null,
     };
 
     to_object(&json)
@@ -646,6 +647,7 @@ fn process_output(output: &Output) -> Result<serde_json::Value, JsValue> {
                 Instruction::CasinoToggleDouble => "CasinoToggleDouble",
                 Instruction::CasinoJoinTournament { .. } => "CasinoJoinTournament",
                 Instruction::CasinoStartTournament { .. } => "CasinoStartTournament",
+                _ => "Unknown",
             };
             Ok(serde_json::json!({
                 "type": "Transaction",

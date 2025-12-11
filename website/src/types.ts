@@ -122,6 +122,9 @@ export interface GameState {
   // HiLo
   hiloAccumulator: number;
   hiloGraphData: number[];
+  
+  // Session Tracking
+  sessionWager: number;
 }
 
 export interface LeaderboardEntry {

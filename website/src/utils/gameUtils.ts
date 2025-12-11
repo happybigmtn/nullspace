@@ -531,6 +531,48 @@ export const calculateRouletteExposure = (outcome: number, bets: RouletteBet[]) 
     return pnl;
 };
 
+/**
+ * Resolves roulette bets after a spin, returning pnl and detailed results
+ */
+export const resolveRouletteBets = (outcome: number, bets: RouletteBet[]): { pnl: number; results: string[] } => {
+    let pnl = 0;
+    const results: string[] = [];
+    const color = getRouletteColor(outcome);
+    const column = outcome === 0 ? -1 : (outcome - 1) % 3;
+    const dozen = outcome === 0 ? -1 : Math.floor((outcome - 1) / 12);
+
+    bets.forEach(bet => {
+        let payoutMult = 0;
+        let won = false;
+
+        if (bet.type === 'STRAIGHT' && bet.target === outcome) payoutMult = 35;
+        else if (bet.type === 'RED' && color === 'RED') payoutMult = 1;
+        else if (bet.type === 'BLACK' && color === 'BLACK') payoutMult = 1;
+        else if (bet.type === 'ODD' && outcome !== 0 && outcome % 2 !== 0) payoutMult = 1;
+        else if (bet.type === 'EVEN' && outcome !== 0 && outcome % 2 === 0) payoutMult = 1;
+        else if (bet.type === 'LOW' && outcome >= 1 && outcome <= 18) payoutMult = 1;
+        else if (bet.type === 'HIGH' && outcome >= 19 && outcome <= 36) payoutMult = 1;
+        else if (bet.type === 'ZERO' && outcome === 0) payoutMult = 35;
+        else if (bet.type === 'DOZEN_1' && dozen === 0) payoutMult = 2;
+        else if (bet.type === 'DOZEN_2' && dozen === 1) payoutMult = 2;
+        else if (bet.type === 'DOZEN_3' && dozen === 2) payoutMult = 2;
+        else if (bet.type === 'COL_1' && column === 0) payoutMult = 2;
+        else if (bet.type === 'COL_2' && column === 1) payoutMult = 2;
+        else if (bet.type === 'COL_3' && column === 2) payoutMult = 2;
+
+        if (payoutMult > 0) {
+            const win = bet.amount * payoutMult;
+            pnl += win;
+            results.push(`${bet.type}${bet.target !== undefined ? ' ' + bet.target : ''} WIN (+$${win})`);
+        } else {
+            pnl -= bet.amount;
+            results.push(`${bet.type}${bet.target !== undefined ? ' ' + bet.target : ''} LOSS (-$${bet.amount})`);
+        }
+    });
+
+    return { pnl, results };
+};
+
 // --- CRAPS LOGIC ---
 
 // True odds payout for PASS odds (matches on-chain craps.rs)
@@ -689,9 +731,10 @@ export const calculateCrapsExposure = (total: number, point: number | null, bets
  * Bets are resolved (removed) when they win or lose
  * Uses the same payout calculations as on-chain craps.rs
  */
-export const resolveCrapsBets = (total: number, point: number | null, bets: CrapsBet[]): { pnl: number; remainingBets: CrapsBet[] } => {
+export const resolveCrapsBets = (total: number, point: number | null, bets: CrapsBet[]): { pnl: number; remainingBets: CrapsBet[]; results: string[] } => {
     let pnl = 0;
     const remainingBets: CrapsBet[] = [];
+    const results: string[] = [];
     const d1 = Math.ceil(total / 2);
     const d2 = total - d1;
     const isHard = d1 === d2;
@@ -782,12 +825,16 @@ export const resolveCrapsBets = (total: number, point: number | null, bets: Crap
         pnl += winAmount;
         if (loseAmount > 0) pnl -= loseAmount;
 
-        if (!resolved) {
+        if (resolved) {
+            if (winAmount > 0) results.push(`${bet.type}${bet.target ? ' ' + bet.target : ''} WIN (+$${Math.floor(winAmount)})`);
+            else if (loseAmount > 0) results.push(`${bet.type}${bet.target ? ' ' + bet.target : ''} LOSS (-$${loseAmount})`);
+            else results.push(`${bet.type} PUSH`);
+        } else {
             remainingBets.push(bet);
         }
     });
 
-    return { pnl, remainingBets };
+    return { pnl, remainingBets, results };
 };
 
 // Returns total items for Sic Bo exposure (totals 3-18)
@@ -1016,6 +1063,45 @@ export const calculateSicBoOutcomeExposure = (combo: number[], bets: SicBoBet[])
     });
     return pnl;
 }
+
+/**
+ * Resolves Sic Bo bets after a roll, returning pnl and detailed results
+ */
+export const resolveSicBoBets = (combo: number[], bets: SicBoBet[]): { pnl: number; results: string[] } => {
+    let pnl = 0;
+    const results: string[] = [];
+    const sum = combo.reduce((a,b)=>a+b,0);
+    const d1 = combo[0], d2 = combo[1], d3 = combo[2];
+    const isTriple = d1 === d2 && d2 === d3;
+
+    bets.forEach(b => {
+         let win = 0;
+         if (b.type === 'SMALL' && sum >= 4 && sum <= 10 && !isTriple) win = b.amount;
+         else if (b.type === 'BIG' && sum >= 11 && sum <= 17 && !isTriple) win = b.amount;
+         else if (b.type === 'SUM' && sum === b.target) win = b.amount * sicBoTotalPayout(sum);
+         else if (b.type === 'TRIPLE_ANY' && isTriple) win = b.amount * 24;
+         else if (b.type === 'TRIPLE_SPECIFIC' && isTriple && d1 === b.target) win = b.amount * 150;
+         else if (b.type === 'DOUBLE_SPECIFIC') {
+             const count = [d1, d2, d3].filter(d => d === b.target).length;
+             if (count >= 2) win = b.amount * 8;
+         }
+         else if (b.type === 'SINGLE_DIE') {
+             const count = [d1, d2, d3].filter(d => d === b.target).length;
+             if (count === 1) win = b.amount * 1;
+             else if (count === 2) win = b.amount * 2;
+             else if (count === 3) win = b.amount * 3;
+         }
+
+         if (win > 0) {
+             pnl += win;
+             results.push(`${b.type}${b.target !== undefined ? ' ' + b.target : ''} WIN (+$${win})`);
+         } else {
+             pnl -= b.amount;
+             results.push(`${b.type}${b.target !== undefined ? ' ' + b.target : ''} LOSS (-$${b.amount})`);
+         }
+    });
+    return { pnl, results };
+};
 
 export const calculateHiLoProjection = (cards: Card[], deck: Card[], currentPot: number) => {
     if (cards.length === 0) return { high: 0, low: 0 };

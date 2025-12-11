@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { GameType, PlayerStats, GameState, Card, LeaderboardEntry, TournamentPhase, CompletedHand, CrapsBet, RouletteBet, SicBoBet, BaccaratBet } from '../types';
 import { GameType as ChainGameType, CasinoGameStartedEvent, CasinoGameMovedEvent, CasinoGameCompletedEvent } from '../types/casino';
-import { createDeck, rollDie, getHandValue, getBaccaratValue, getHiLoRank, WAYS, getRouletteColor, evaluateVideoPokerHand, calculateCrapsExposure, calculateSicBoOutcomeExposure, getSicBoCombinations } from '../utils/gameUtils';
+import { createDeck, rollDie, getHandValue, getBaccaratValue, getHiLoRank, WAYS, getRouletteColor, evaluateVideoPokerHand, calculateCrapsExposure, calculateSicBoOutcomeExposure, getSicBoCombinations, resolveCrapsBets, resolveRouletteBets, resolveSicBoBets, evaluateThreeCardHand } from '../utils/gameUtils';
 import { getStrategicAdvice } from '../services/geminiService';
 import { CasinoChainService } from '../services/CasinoChainService';
 import { CasinoClient } from '../api/client.js';
@@ -126,7 +126,8 @@ export const useTerminalGame = () => {
     blackjackStack: [],
     completedHands: [],
     hiloAccumulator: 0,
-    hiloGraphData: []
+    hiloGraphData: [],
+    sessionWager: 0
   });
 
   const [deck, setDeck] = useState<Card[]>([]);
@@ -493,89 +494,155 @@ export const useTerminalGame = () => {
     gameStateRef.current = gameState;
   }, [gameState]);
 
-  // Helper to generate descriptive result messages
-  const generateResultMessage = (gameType: GameType, state: GameState | null, payout: number): string => {
-    // Show net P&L with sign (e.g., "+$50" or "-$50")
-    const resultPart = payout >= 0 ? `+$${payout}` : `-$${Math.abs(payout)}`;
+  // Helper to generate descriptive result messages and detailed logs
+  const generateGameResult = (gameType: GameType, state: GameState | null, netPnL: number): { summary: string, details: string[] } => {
+    // Show net P&L with sign
+    const resultPart = netPnL >= 0 ? `+$${netPnL}` : `-$${Math.abs(netPnL)}`;
+    const details: string[] = [];
 
-    if (!state) return resultPart;
+    if (!state) return { summary: resultPart, details };
+
+    let summary = resultPart;
 
     switch (gameType) {
       case GameType.BACCARAT: {
-        // Skip formatting if no cards dealt yet
-        if (state.playerCards.length === 0 || state.dealerCards.length === 0) {
-          return resultPart;
-        }
-        // Use getBaccaratValue directly on the full hand - it handles modulo internally
+        if (state.playerCards.length === 0 || state.dealerCards.length === 0) return { summary, details };
         const pScore = getBaccaratValue(state.playerCards);
         const bScore = getBaccaratValue(state.dealerCards);
         const winner = pScore > bScore ? 'PLAYER' : bScore > pScore ? 'BANKER' : 'TIE';
-        // Show winner's score first
-        const scoreDisplay = winner === 'TIE' ? `${pScore}-${bScore}` :
-                            winner === 'PLAYER' ? `${pScore}-${bScore}` : `${bScore}-${pScore}`;
-        return `${winner} wins ${scoreDisplay}. ${resultPart}`;
+        const scoreDisplay = winner === 'TIE' ? `${pScore}-${bScore}` : winner === 'PLAYER' ? `${pScore}-${bScore}` : `${bScore}-${pScore}`;
+        summary = `${winner} wins ${scoreDisplay}. ${resultPart}`;
+        
+        // Generate details for bets
+        state.baccaratBets.forEach(bet => {
+            let win = false;
+            let amount = 0;
+            if (bet.type === 'TIE' && winner === 'TIE') { win = true; amount = bet.amount * 8; }
+            else if (bet.type === 'P_PAIR' && state.playerCards[0].rank === state.playerCards[1].rank) { win = true; amount = bet.amount * 11; }
+            else if (bet.type === 'B_PAIR' && state.dealerCards[0].rank === state.dealerCards[1].rank) { win = true; amount = bet.amount * 11; }
+            
+            if (win) details.push(`${bet.type} WIN (+$${amount})`);
+            else details.push(`${bet.type} LOSS (-$${bet.amount})`);
+        });
+        // Main bet detail
+        const mainBet = state.sessionWager - state.baccaratBets.reduce((a,b) => a + b.amount, 0); // Approx
+        if (mainBet > 0) {
+             if (state.baccaratSelection === winner) details.push(`${state.baccaratSelection} WIN (+$${mainBet})`);
+             else if (winner !== 'TIE') details.push(`${state.baccaratSelection} LOSS (-$${mainBet})`);
+             else details.push(`${state.baccaratSelection} PUSH`);
+        }
+        break;
       }
       case GameType.BLACKJACK: {
-        // Defensive checks for missing card data
-        if (!state.playerCards?.length || !state.dealerCards?.length) {
-          return resultPart;
-        }
+        if (!state.playerCards?.length || !state.dealerCards?.length) return { summary, details };
         const pVal = getHandValue(state.playerCards);
         const dVal = getHandValue(state.dealerCards);
         const pBust = pVal > 21;
         const dBust = dVal > 21;
-        if (pVal === 21 && state.playerCards.length === 2) return `BLACKJACK! ${resultPart}`;
-        if (pBust) return `Bust (${pVal}). ${resultPart}`;
-        if (dBust) return `Dealer bust (${dVal}). ${resultPart}`;
-        return `${pVal} vs ${dVal}. ${resultPart}`;
+        
+        if (pVal === 21 && state.playerCards.length === 2) summary = `BLACKJACK! ${resultPart}`;
+        else if (pBust) summary = `Bust (${pVal}). ${resultPart}`;
+        else if (dBust) summary = `Dealer bust (${dVal}). ${resultPart}`;
+        else summary = `${pVal} vs ${dVal}. ${resultPart}`;
+        
+        if (netPnL > 0) details.push(`WIN (+$${netPnL})`);
+        else if (netPnL < 0) details.push(`LOSS (-$${Math.abs(netPnL)})`);
+        else details.push(`PUSH`);
+        break;
       }
       case GameType.CASINO_WAR: {
         const pCard = state.playerCards[0];
         const dCard = state.dealerCards[0];
-        if (!pCard || !dCard) return resultPart;
-        return `${pCard.rank} vs ${dCard.rank}. ${resultPart}`;
+        if (!pCard || !dCard) return { summary, details };
+        summary = `${pCard.rank} vs ${dCard.rank}. ${resultPart}`;
+        if (netPnL > 0) details.push(`WIN (+$${netPnL})`);
+        else if (netPnL < 0) details.push(`LOSS (-$${Math.abs(netPnL)})`);
+        else details.push(`TIE/PUSH`);
+        break;
       }
       case GameType.HILO: {
         const lastCard = state.playerCards[state.playerCards.length - 1];
-        if (!lastCard) return resultPart;
-        return `${lastCard.rank}${lastCard.suit}. ${resultPart}`;
+        if (!lastCard) return { summary, details };
+        summary = `${lastCard.rank}${lastCard.suit}. ${resultPart}`;
+        details.push(`Outcome: ${lastCard.rank}${lastCard.suit}`);
+        if (netPnL > 0) details.push(`WIN (+$${netPnL})`);
+        else details.push(`LOSS (-$${Math.abs(netPnL)})`);
+        break;
       }
       case GameType.VIDEO_POKER: {
         const hand = evaluateVideoPokerHand(state.playerCards);
-        return `${hand.rank}. ${resultPart}`;
+        summary = `${hand.rank}. ${resultPart}`;
+        details.push(`${hand.rank}`);
+        if (netPnL > 0) details.push(`WIN (+$${netPnL})`);
+        else details.push(`LOSS (-$${Math.abs(netPnL)})`);
+        break;
       }
       case GameType.THREE_CARD: {
         const pHand = evaluateThreeCardHand(state.playerCards);
         const dHand = evaluateThreeCardHand(state.dealerCards);
-        return `${pHand.rank} vs ${dHand.rank}. ${resultPart}`;
+        summary = `${pHand.rank} vs ${dHand.rank}. ${resultPart}`;
+        details.push(`Player: ${pHand.rank}`);
+        details.push(`Dealer: ${dHand.rank}`);
+        if (netPnL > 0) details.push(`WIN (+$${netPnL})`);
+        else if (netPnL < 0) details.push(`LOSS (-$${Math.abs(netPnL)})`);
+        else details.push(`PUSH`);
+        break;
       }
       case GameType.ULTIMATE_HOLDEM: {
         const pVal = getHandValue(state.playerCards);
         const dVal = getHandValue(state.dealerCards);
-        return `Player ${pVal} vs Dealer ${dVal}. ${resultPart}`;
+        summary = `Player ${pVal} vs Dealer ${dVal}. ${resultPart}`;
+        if (netPnL > 0) details.push(`WIN (+$${netPnL})`);
+        else if (netPnL < 0) details.push(`LOSS (-$${Math.abs(netPnL)})`);
+        else details.push(`PUSH`);
+        break;
       }
       case GameType.CRAPS: {
-        if (!state.dice || state.dice.length < 2) return resultPart;
+        if (!state.dice || state.dice.length < 2) return { summary, details };
         const d1 = state.dice[0];
         const d2 = state.dice[1];
         const total = d1 + d2;
-        // Simple message format: Rolled: [total]. Won $X / Lost $Y.
-        return `Rolled: ${total}. ${resultPart}`;
+        summary = `Rolled: ${total}. ${resultPart}`;
+        
+        // Use resolveCrapsBets to generate details using Bets from state
+        // Note: we use state.crapsBets here, but if game is over, active bets might be cleared?
+        // Actually, resolveCrapsBets processes *all* bets passed to it.
+        // We need the bets that were active *before* the result cleared them.
+        // gameStateRef.current holds the state from the last move.
+        // If this is CasinoGameCompleted, the state might not have cleared them yet if we rely on local clearing?
+        // Actually, parseGameState updates crapsBets from chain.
+        // If chain cleared them, they are gone.
+        // We should ideally use `crapsLastRoundBets` if `crapsBets` is empty, or combine them?
+        // For simplicity, we'll try to use crapsBets + lastRoundBets?
+        const betsToResolve = state.crapsBets.length > 0 ? state.crapsBets : state.crapsLastRoundBets;
+        const res = resolveCrapsBets(total, state.crapsPoint, betsToResolve);
+        details.push(...res.results);
+        break;
       }
       case GameType.ROULETTE: {
         const last = state.rouletteHistory[state.rouletteHistory.length - 1];
-        if (last === undefined) return resultPart;
+        if (last === undefined) return { summary, details };
         const color = getRouletteColor(last);
-        return `${last} ${color}. ${resultPart}`;
+        summary = `${last} ${color}. ${resultPart}`;
+        
+        // Use resolveRouletteBets
+        const betsToResolve = state.rouletteBets.length > 0 ? state.rouletteBets : state.rouletteLastRoundBets;
+        const res = resolveRouletteBets(last, betsToResolve);
+        details.push(...res.results);
+        break;
       }
       case GameType.SIC_BO: {
-        if (!state.dice || state.dice.length < 3) return resultPart;
+        if (!state.dice || state.dice.length < 3) return { summary, details };
         const total = state.dice.reduce((a, b) => a + b, 0);
-        return `Rolled ${total} (${state.dice.join('-')}). ${resultPart}`;
+        summary = `Rolled ${total} (${state.dice.join('-')}). ${resultPart}`;
+        
+        const betsToResolve = state.sicBoBets.length > 0 ? state.sicBoBets : state.sicBoLastRoundBets;
+        const res = resolveSicBoBets(state.dice, betsToResolve);
+        details.push(...res.results);
+        break;
       }
-      default:
-        return resultPart;
     }
+    return { summary, details };
   };
 
   // Subscribe to chain events
@@ -905,13 +972,20 @@ export const useTerminalGame = () => {
         // Mark the time of this WebSocket balance update to prevent polling from overwriting
         lastBalanceUpdateRef.current = Date.now();
 
-        // Generate descriptive result message using current game state
-        const resultMessage = generateResultMessage(gameTypeRef.current, gameStateRef.current, payout);
+        // Calculate Net PnL: Payout (Gross) - Total Wagered
+        const netPnL = payout - (gameStateRef.current?.sessionWager || 0);
+        console.log('[useTerminalGame] PnL Calc: Payout', payout, '- Wager', gameStateRef.current?.sessionWager, '=', netPnL);
+
+        // Generate descriptive result message using Net PnL
+        const { summary: resultMessage, details } = generateGameResult(gameTypeRef.current, gameStateRef.current, netPnL);
 
         // Update stats including history and pnlByGame
         setStats(prev => {
           const currentGameType = gameTypeRef.current;
-          const pnlEntry = { [currentGameType]: (prev.pnlByGame[currentGameType] || 0) + payout };
+          const pnlEntry = { [currentGameType]: (prev.pnlByGame[currentGameType] || 0) + netPnL };
+          // Format history: Summary line, then detail lines
+          const newHistory = [resultMessage, ...details];
+          
           return {
             ...prev,
             chips: finalChips,
@@ -919,9 +993,9 @@ export const useTerminalGame = () => {
             shields: event.wasShielded ? prev.shields - 1 : prev.shields,
             doubles: event.wasDoubled ? prev.doubles - 1 : prev.doubles,
             // Add to history log
-            history: [...prev.history, resultMessage],
+            history: [...prev.history, ...newHistory],
             pnlByGame: { ...prev.pnlByGame, ...pnlEntry },
-            pnlHistory: [...prev.pnlHistory, (prev.pnlHistory[prev.pnlHistory.length - 1] || 0) + payout].slice(-MAX_GRAPH_POINTS),
+            pnlHistory: [...prev.pnlHistory, (prev.pnlHistory[prev.pnlHistory.length - 1] || 0) + netPnL].slice(-MAX_GRAPH_POINTS),
           };
         });
 
@@ -937,7 +1011,8 @@ export const useTerminalGame = () => {
           ...prev,
           stage: 'RESULT',
           message: resultMessage,
-          lastResult: payout,
+          lastResult: netPnL,
+          sessionWager: 0 // Reset wager for next round
         }));
 
         // Clear session and pending flag
@@ -1415,7 +1490,8 @@ export const useTerminalGame = () => {
             crapsBets: parsedBets,
             crapsRollHistory: newHistory,
             stage: 'PLAYING' as const,
-            message: `ROLLED ${total}`,
+            // Only update message if dice changed, otherwise keep existing message (e.g. "ODDS +$X")
+            message: diceChanged ? `ROLLED ${total}` : prev.message,
           };
           // Also update ref inside for consistency
           gameStateRef.current = newState;
@@ -1439,6 +1515,15 @@ export const useTerminalGame = () => {
         if (stateBlob.length > resultOffset) {
           const result = stateBlob[resultOffset];
           console.log('[parseGameState] Roulette: result=' + result);
+          
+          // Update ref synchronously so CasinoGameCompleted handler has access to history
+          if (gameStateRef.current) {
+            gameStateRef.current = {
+              ...gameStateRef.current,
+              rouletteHistory: [...(gameStateRef.current.rouletteHistory || []), result].slice(-MAX_GRAPH_POINTS),
+            };
+          }
+
           setGameState(prev => ({
             ...prev,
             type: currentType,
@@ -1475,6 +1560,16 @@ export const useTerminalGame = () => {
           const dice = [stateBlob[diceOffset], stateBlob[diceOffset + 1], stateBlob[diceOffset + 2]];
           const total = dice[0] + dice[1] + dice[2];
           console.log('[parseGameState] SicBo: dice=' + dice.join(',') + ', total=' + total);
+          
+          // Update ref synchronously so CasinoGameCompleted handler has access to dice
+          if (gameStateRef.current) {
+            gameStateRef.current = {
+              ...gameStateRef.current,
+              dice: dice,
+              sicBoHistory: [...(gameStateRef.current.sicBoHistory || []), dice].slice(-MAX_GRAPH_POINTS),
+            };
+          }
+
           setGameState(prev => ({
             ...prev,
             type: currentType,
@@ -1668,7 +1763,8 @@ export const useTerminalGame = () => {
       blackjackStack: [],
       completedHands: [],
       hiloAccumulator: 0,
-      hiloGraphData: []
+      hiloGraphData: [],
+      sessionWager: 0
     }));
     setAiAdvice(null);
 
@@ -1799,6 +1895,7 @@ export const useTerminalGame = () => {
         setGameState(prev => ({
           ...prev,
           message: "WAITING FOR CHAIN...",
+          sessionWager: Number(initialBetAmount) // Initialize wager tracking
         }));
       } catch (error) {
         console.error('[useTerminalGame] Failed to start game on-chain:', error);
@@ -2178,8 +2275,8 @@ export const useTerminalGame = () => {
       let logs: string[] = [];
       const dVal = getHandValue(dealerHand);
       if (gameState.insuranceBet > 0) {
-          if (dVal === 21 && dealerHand.length === 2) { totalWin += gameState.insuranceBet * 3; logs.push(`INS WON`); }
-          else { totalWin -= gameState.insuranceBet; logs.push(`INS LOST`); }
+          if (dVal === 21 && dealerHand.length === 2) { totalWin += gameState.insuranceBet * 3; logs.push(`Insurance WIN (+$${gameState.insuranceBet * 2})`); }
+          else { totalWin -= gameState.insuranceBet; logs.push(`Insurance LOSS (-$${gameState.insuranceBet})`); }
       }
       hands.forEach((hand, idx) => {
           const pVal = getHandValue(hand.cards);
@@ -2190,17 +2287,23 @@ export const useTerminalGame = () => {
           else if (pVal > dVal) win = hand.bet;
           else if (pVal < dVal) win = -hand.bet;
           totalWin += win;
-          logs.push(win > 0 ? `H${idx+1} WIN` : win < 0 ? `H${idx+1} LOSE` : `H${idx+1} PUSH`);
+          
+          const handName = hands.length > 1 ? `Hand ${idx+1}` : 'Hand';
+          if (win > 0) logs.push(`${handName} WIN (+$${win})`);
+          else if (win < 0) logs.push(`${handName} LOSS (-$${Math.abs(win)})`);
+          else logs.push(`${handName} PUSH`);
       });
       let finalWin = totalWin;
-      let msg = logs.join('|');
-      if (finalWin < 0 && gameState.activeModifiers.shield) { finalWin = 0; msg += " [SHIELD]"; }
-      if (finalWin > 0 && gameState.activeModifiers.double) { finalWin *= 2; msg += " [DOUBLE]"; }
+      let summarySuffix = "";
+      if (finalWin < 0 && gameState.activeModifiers.shield) { finalWin = 0; summarySuffix = " [SHIELD SAVED]"; }
+      if (finalWin > 0 && gameState.activeModifiers.double) { finalWin *= 2; summarySuffix = " [DOUBLE BONUS]"; }
+
+      const summary = `${finalWin >= 0 ? 'WON' : 'LOST'} ${Math.abs(finalWin)}${summarySuffix}`;
 
       const pnlEntry = { [GameType.BLACKJACK]: (stats.pnlByGame[GameType.BLACKJACK] || 0) + finalWin };
       setStats(prev => ({
         ...prev,
-        history: [...prev.history, msg],
+        history: [...prev.history, summary, ...logs],
         pnlByGame: { ...prev.pnlByGame, ...pnlEntry },
         pnlHistory: [...prev.pnlHistory, (prev.pnlHistory[prev.pnlHistory.length - 1] || 0) + finalWin].slice(-MAX_GRAPH_POINTS)
       }));
@@ -2342,23 +2445,67 @@ export const useTerminalGame = () => {
         const pVal = (getBaccaratValue([p1]) + getBaccaratValue([p2])) % 10;
         const bVal = (getBaccaratValue([b1]) + getBaccaratValue([b2])) % 10;
         let winner = pVal > bVal ? 'PLAYER' : bVal > pVal ? 'BANKER' : 'TIE';
-        let totalWin = 0;
-        if (winner === 'TIE') totalWin += 0; 
-        else if (winner === gameState.baccaratSelection) totalWin += gameState.bet;
-        else totalWin -= gameState.bet;
         
+        let totalWin = 0;
+        const results: string[] = [];
+
+        // Main bet resolution
+        let mainWin = 0;
+        if (winner === 'TIE') {
+            results.push(`${gameState.baccaratSelection} PUSH`);
+        } else if (winner === gameState.baccaratSelection) {
+            mainWin = gameState.bet;
+            totalWin += mainWin;
+            results.push(`${gameState.baccaratSelection} WIN (+$${mainWin})`);
+        } else {
+            totalWin -= gameState.bet;
+            results.push(`${gameState.baccaratSelection} LOSS (-$${gameState.bet})`);
+        }
+        
+        // Side bets resolution
         gameState.baccaratBets.forEach(b => {
-             if (b.type === 'TIE' && winner === 'TIE') totalWin += b.amount * 8;
-             else if (b.type === 'P_PAIR' && p1.rank === p2.rank) totalWin += b.amount * 11;
-             else if (b.type === 'B_PAIR' && b1.rank === b2.rank) totalWin += b.amount * 11;
-             else totalWin -= b.amount;
+             let win = 0;
+             if (b.type === 'TIE' && winner === 'TIE') win = b.amount * 8;
+             else if (b.type === 'P_PAIR' && p1.rank === p2.rank) win = b.amount * 11;
+             else if (b.type === 'B_PAIR' && b1.rank === b2.rank) win = b.amount * 11;
+             
+             if (win > 0) {
+                 totalWin += win;
+                 results.push(`${b.type} WIN (+$${win})`);
+             } else {
+                 totalWin -= b.amount;
+                 results.push(`${b.type} LOSS (-$${b.amount})`);
+             }
         });
+        
+        const scoreDisplay = winner === 'TIE' ? `${pVal}-${bVal}` : winner === 'PLAYER' ? `${pVal}-${bVal}` : `${bVal}-${pVal}`;
+        const summary = `${winner} wins ${scoreDisplay}. ${totalWin >= 0 ? '+' : '-'}$${Math.abs(totalWin)}`;
+
+        setStats(prev => ({
+            ...prev,
+            chips: prev.chips + totalWin,
+            history: [...prev.history, summary, ...results],
+            pnlByGame: { ...prev.pnlByGame, [GameType.BACCARAT]: (prev.pnlByGame[GameType.BACCARAT] || 0) + totalWin },
+            pnlHistory: [...prev.pnlHistory, (prev.pnlHistory[prev.pnlHistory.length - 1] || 0) + totalWin].slice(-MAX_GRAPH_POINTS)
+        }));
         
         setGameState(prev => ({ ...prev, stage: 'RESULT', playerCards: [p1, p2], dealerCards: [b1, b2], baccaratLastRoundBets: prev.baccaratBets, baccaratUndoStack: [] }));
         setGameState(prev => ({ ...prev, message: `${winner} WINS`, lastResult: totalWin }));
     } else if (gameState.type === GameType.CASINO_WAR) {
         const p1 = newDeck.pop()!, d1 = newDeck.pop()!;
         let win = p1.value > d1.value ? gameState.bet : p1.value < d1.value ? -gameState.bet : 0;
+        
+        const summary = `${p1.rank} vs ${d1.rank}. ${win >= 0 ? '+' : '-'}$${Math.abs(win)}`;
+        const details = [win > 0 ? `WIN (+$${win})` : win < 0 ? `LOSS (-$${Math.abs(win)})` : 'TIE'];
+
+        setStats(prev => ({
+            ...prev,
+            chips: prev.chips + win,
+            history: [...prev.history, summary, ...details],
+            pnlByGame: { ...prev.pnlByGame, [GameType.CASINO_WAR]: (prev.pnlByGame[GameType.CASINO_WAR] || 0) + win },
+            pnlHistory: [...prev.pnlHistory, (prev.pnlHistory[prev.pnlHistory.length - 1] || 0) + win].slice(-MAX_GRAPH_POINTS)
+        }));
+
         setGameState(prev => ({ ...prev, stage: 'RESULT', playerCards: [p1], dealerCards: [d1] }));
         setGameState(prev => ({ ...prev, message: win > 0 ? "WIN" : win < 0 ? "LOSE" : "TIE", lastResult: win }));
     } else if (gameState.type === GameType.THREE_CARD) {
@@ -2430,6 +2577,18 @@ export const useTerminalGame = () => {
       });
       const { rank, multiplier } = evaluateVideoPokerHand(hand);
       const profit = (gameState.bet * multiplier) - gameState.bet;
+      
+      const summary = `${rank}. ${profit >= 0 ? '+' : '-'}$${Math.abs(profit)}`;
+      const details = [profit > 0 ? `WIN (+$${profit})` : `LOSS (-$${Math.abs(profit)})`];
+
+      setStats(prev => ({
+          ...prev,
+          chips: prev.chips + profit,
+          history: [...prev.history, summary, ...details],
+          pnlByGame: { ...prev.pnlByGame, [GameType.VIDEO_POKER]: (prev.pnlByGame[GameType.VIDEO_POKER] || 0) + profit },
+          pnlHistory: [...prev.pnlHistory, (prev.pnlHistory[prev.pnlHistory.length - 1] || 0) + profit].slice(-MAX_GRAPH_POINTS)
+      }));
+
       setGameState(prev => ({ ...prev, playerCards: hand, stage: 'RESULT', lastResult: profit }));
       setGameState(prev => ({ ...prev, message: multiplier > 0 ? `${rank}!` : "LOST" }));
   };
@@ -2468,6 +2627,9 @@ export const useTerminalGame = () => {
       const curr = gameState.playerCards[gameState.playerCards.length-1];
       const cVal = getHiLoRank(curr);
       const nVal = getHiLoRank(next);
+      
+      const summary = `Guess ${guess}: ${next.rank}${next.suit}.`;
+      
       if (cVal === nVal) {
           setGameState(prev => ({ ...prev, playerCards: [...prev.playerCards, next], message: "PUSH. POT REMAINS." }));
           return;
@@ -2478,8 +2640,20 @@ export const useTerminalGame = () => {
           const newAcc = Math.floor(gameState.hiloAccumulator * 1.5);
           setGameState(prev => ({ ...prev, playerCards: [...prev.playerCards, next], hiloAccumulator: newAcc, hiloGraphData: [...prev.hiloGraphData, newAcc].slice(-MAX_GRAPH_POINTS), message: `CORRECT! POT: ${newAcc}` }));
       } else {
+          const pnl = -gameState.bet;
+          const fullSummary = `${summary} -$${gameState.bet}`;
+          const details = [`LOSS (-$${gameState.bet})`];
+          
+          setStats(prev => ({
+              ...prev,
+              chips: prev.chips + pnl,
+              history: [...prev.history, fullSummary, ...details],
+              pnlByGame: { ...prev.pnlByGame, [GameType.HILO]: (prev.pnlByGame[GameType.HILO] || 0) + pnl },
+              pnlHistory: [...prev.pnlHistory, (prev.pnlHistory[prev.pnlHistory.length - 1] || 0) + pnl].slice(-MAX_GRAPH_POINTS)
+          }));
+          
           setGameState(prev => ({ ...prev, playerCards: [...prev.playerCards, next], hiloGraphData: [...prev.hiloGraphData, 0].slice(-MAX_GRAPH_POINTS), stage: 'RESULT' }));
-          setGameState(prev => ({ ...prev, message: "WRONG", lastResult: -gameState.bet }));
+          setGameState(prev => ({ ...prev, message: "WRONG", lastResult: pnl }));
       }
   };
   const hiloCashout = async () => {
@@ -2512,13 +2686,31 @@ export const useTerminalGame = () => {
 
        // Local mode fallback
       const profit = gameState.hiloAccumulator - gameState.bet;
+      const summary = `CASHED OUT. +$${profit}`;
+      const details = [`WIN (+$${profit})`];
+      
+      setStats(prev => ({
+          ...prev,
+          chips: prev.chips + profit,
+          history: [...prev.history, summary, ...details],
+          pnlByGame: { ...prev.pnlByGame, [GameType.HILO]: (prev.pnlByGame[GameType.HILO] || 0) + profit },
+          pnlHistory: [...prev.pnlHistory, (prev.pnlHistory[prev.pnlHistory.length - 1] || 0) + profit].slice(-MAX_GRAPH_POINTS)
+      }));
+      
       setGameState(prev => ({ ...prev, message: "CASHED OUT", lastResult: profit }));
   };
 
   // --- ROULETTE / SIC BO / CRAPS / BACCARAT BETTING HELPERS ---
   const placeRouletteBet = (type: RouletteBet['type'], target?: number) => {
       if (stats.chips < gameState.bet) return;
-      setGameState(prev => ({ ...prev, rouletteUndoStack: [...prev.rouletteUndoStack, prev.rouletteBets], rouletteBets: [...prev.rouletteBets, { type, amount: prev.bet, target }], message: `BET ${type}`, rouletteInputMode: 'NONE' }));
+      setGameState(prev => ({ 
+          ...prev, 
+          rouletteUndoStack: [...prev.rouletteUndoStack, prev.rouletteBets], 
+          rouletteBets: [...prev.rouletteBets, { type, amount: prev.bet, target }], 
+          message: `BET ${type}`, 
+          rouletteInputMode: 'NONE',
+          sessionWager: prev.sessionWager + prev.bet // Track wager
+      }));
   };
   const undoRouletteBet = () => {
       if (gameState.rouletteUndoStack.length === 0) return;
@@ -2664,26 +2856,42 @@ export const useTerminalGame = () => {
 
       // Local mode fallback (original logic)
       const num = Math.floor(Math.random() * 37);
-      let win = 0;
-      gameState.rouletteBets.forEach(b => {
-          const color = getRouletteColor(num);
-          if (b.type === 'STRAIGHT' && b.target === num) win += b.amount * 35;
-          else if (b.type === 'RED' && color === 'RED') win += b.amount;
-          else if (b.type === 'BLACK' && color === 'BLACK') win += b.amount;
-          else if (b.type === 'ODD' && num!==0 && num%2!==0) win += b.amount;
-          else if (b.type === 'EVEN' && num!==0 && num%2===0) win += b.amount;
-          else if (b.type === 'LOW' && num>=1 && num<=18) win += b.amount;
-          else if (b.type === 'HIGH' && num>=19 && num<=36) win += b.amount;
-          else if (b.type === 'ZERO' && num===0) win += b.amount * 35;
-          else win -= b.amount;
-      });
-      setGameState(prev => ({ ...prev, rouletteHistory: [...prev.rouletteHistory, num].slice(-MAX_GRAPH_POINTS), rouletteLastRoundBets: prev.rouletteBets, rouletteBets: [], rouletteUndoStack: [] }));
-      setGameState(prev => ({ ...prev, message: `SPUN ${num}`, lastResult: win }));
+      
+      const { pnl, results } = resolveRouletteBets(num, gameState.rouletteBets);
+      
+      // Update stats using new format
+      const color = getRouletteColor(num);
+      const summary = `${num} ${color}. ${pnl >= 0 ? '+' : '-'}$${Math.abs(pnl)}`;
+      
+      setStats(prev => ({ 
+          ...prev, 
+          chips: prev.chips + pnl,
+          history: [...prev.history, summary, ...results],
+          pnlByGame: { ...prev.pnlByGame, [GameType.ROULETTE]: (prev.pnlByGame[GameType.ROULETTE] || 0) + pnl },
+          pnlHistory: [...prev.pnlHistory, (prev.pnlHistory[prev.pnlHistory.length - 1] || 0) + pnl].slice(-MAX_GRAPH_POINTS)
+      }));
+
+      setGameState(prev => ({ 
+          ...prev, 
+          rouletteHistory: [...prev.rouletteHistory, num].slice(-MAX_GRAPH_POINTS), 
+          rouletteLastRoundBets: prev.rouletteBets, 
+          rouletteBets: [], 
+          rouletteUndoStack: [],
+          message: `SPUN ${num}`, 
+          lastResult: pnl 
+      }));
   };
 
   const placeSicBoBet = (type: SicBoBet['type'], target?: number) => {
       if (stats.chips < gameState.bet) return;
-      setGameState(prev => ({ ...prev, sicBoUndoStack: [...prev.sicBoUndoStack, prev.sicBoBets], sicBoBets: [...prev.sicBoBets, { type, amount: prev.bet, target }], message: `BET ${type}`, sicBoInputMode: 'NONE' }));
+      setGameState(prev => ({ 
+          ...prev, 
+          sicBoUndoStack: [...prev.sicBoUndoStack, prev.sicBoBets], 
+          sicBoBets: [...prev.sicBoBets, { type, amount: prev.bet, target }], 
+          message: `BET ${type}`, 
+          sicBoInputMode: 'NONE',
+          sessionWager: prev.sessionWager + prev.bet // Track wager
+      }));
   };
   const undoSicBoBet = () => {
        if (gameState.sicBoUndoStack.length === 0) return;
@@ -2752,9 +2960,20 @@ export const useTerminalGame = () => {
 
        // Local mode fallback
        const d = [rollDie(), rollDie(), rollDie()];
-       const win = calculateSicBoOutcomeExposure(d, gameState.sicBoBets); // reuse helper for actual calc
+       const { pnl, results } = resolveSicBoBets(d, gameState.sicBoBets);
+       const total = d.reduce((a,b)=>a+b,0);
+       const summary = `Rolled ${total} (${d.join('-')}). ${pnl >= 0 ? '+' : '-'}$${Math.abs(pnl)}`;
+
+       setStats(prev => ({
+           ...prev,
+           chips: prev.chips + pnl,
+           history: [...prev.history, summary, ...results],
+           pnlByGame: { ...prev.pnlByGame, [GameType.SIC_BO]: (prev.pnlByGame[GameType.SIC_BO] || 0) + pnl },
+           pnlHistory: [...prev.pnlHistory, (prev.pnlHistory[prev.pnlHistory.length - 1] || 0) + pnl].slice(-MAX_GRAPH_POINTS)
+       }));
+
        setGameState(prev => ({ ...prev, dice: d, sicBoHistory: [...prev.sicBoHistory, d].slice(-MAX_GRAPH_POINTS), sicBoLastRoundBets: prev.sicBoBets, sicBoBets: [], sicBoUndoStack: [] }));
-       setGameState(prev => ({ ...prev, message: `ROLLED ${d.reduce((a,b)=>a+b,0)}`, lastResult: win }));
+       setGameState(prev => ({ ...prev, message: `ROLLED ${total}`, lastResult: pnl }));
   };
 
   // Helper to serialize a single Craps bet for chain submission
@@ -2801,7 +3020,14 @@ export const useTerminalGame = () => {
       let bets = [...gameState.crapsBets];
       if (type === 'PASS') bets = bets.filter(b => b.type !== 'DONT_PASS' || !b.local);
       if (type === 'DONT_PASS') bets = bets.filter(b => b.type !== 'PASS' || !b.local);
-      setGameState(prev => ({ ...prev, crapsUndoStack: [...prev.crapsUndoStack, prev.crapsBets], crapsBets: [...bets, { type, amount: prev.bet, target, status: (type==='COME'||type==='DONT_COME')?'PENDING':'ON', local: true }], message: `BET ${type}`, crapsInputMode: 'NONE' }));
+      setGameState(prev => ({ 
+          ...prev, 
+          crapsUndoStack: [...prev.crapsUndoStack, prev.crapsBets], 
+          crapsBets: [...bets, { type, amount: prev.bet, target, status: (type==='COME'||type==='DONT_COME')?'PENDING':'ON', local: true }], 
+          message: `BET ${type}`, 
+          crapsInputMode: 'NONE',
+          sessionWager: prev.sessionWager + prev.bet // Track wager
+      }));
   };
   const undoCrapsBet = () => {
        if (gameState.crapsUndoStack.length === 0) return;
@@ -2865,7 +3091,12 @@ export const useTerminalGame = () => {
       setGameState(prev => {
           const bets = [...prev.crapsBets];
           bets[idx] = { ...bets[idx], oddsAmount: currentOdds + oddsToAdd };
-          return { ...prev, crapsBets: bets, message: "ADDING ODDS..." };
+          return { 
+              ...prev, 
+              crapsBets: bets, 
+              message: "ADDING ODDS...",
+              sessionWager: prev.sessionWager + oddsToAdd // Track wager
+          };
       });
 
       // Send to chain if we have an active session
@@ -2976,7 +3207,27 @@ export const useTerminalGame = () => {
 
        // Local mode fallback
        const d1=rollDie(), d2=rollDie(), total=d1+d2;
-       const pnl = calculateCrapsExposure(total, gameState.crapsPoint, newBetsToPlace); // Use newBetsToPlace for PnL
+       
+       // Calculate PnL and details
+       const { pnl, remainingBets, results } = resolveCrapsBets(total, gameState.crapsPoint, newBetsToPlace); 
+       // Note: In local mode we need to handle existing bets too if we wanted full fidelity, 
+       // but current local logic focuses on new bets for simplicity or assumes bets stay? 
+       // The original code passed `newBetsToPlace` to `calculateCrapsExposure`. 
+       // Let's stick to that for consistency with original local behavior, 
+       // but ideally we should track ALL active bets.
+       // Given "newBetsToPlace" was used, we'll use that.
+       
+       const summary = `Rolled: ${total}. ${pnl >= 0 ? '+' : '-'}$${Math.abs(pnl)}`;
+
+       // Update stats
+       setStats(prev => ({
+           ...prev,
+           chips: prev.chips + pnl,
+           history: [...prev.history, summary, ...results],
+           pnlByGame: { ...prev.pnlByGame, [GameType.CRAPS]: (prev.pnlByGame[GameType.CRAPS] || 0) + pnl },
+           pnlHistory: [...prev.pnlHistory, (prev.pnlHistory[prev.pnlHistory.length - 1] || 0) + pnl].slice(-MAX_GRAPH_POINTS)
+       }));
+
        // Update point logic simplified
        let newPoint = gameState.crapsPoint;
        if (gameState.crapsPoint === null && [4,5,6,8,9,10].includes(total)) newPoint = total;
@@ -2990,7 +3241,7 @@ export const useTerminalGame = () => {
          crapsPoint: newPoint,
          crapsRollHistory: newHistory,
          crapsLastRoundBets: newBetsToPlace.length > 0 ? newBetsToPlace : prev.crapsLastRoundBets,
-         crapsBets: [],
+         crapsBets: remainingBets, // Keep unresolved bets
          message: `ROLLED ${total}`,
          lastResult: pnl
        }));
@@ -3006,12 +3257,14 @@ export const useTerminalGame = () => {
           const existingIndex = gameState.baccaratBets.findIndex(b => b.type === type);
           if (existingIndex >= 0) {
               // Remove the bet
+              const amountToRemove = gameState.baccaratBets[existingIndex].amount;
               const newBets = gameState.baccaratBets.filter((_, i) => i !== existingIndex);
               baccaratBetsRef.current = newBets;
               setGameState(prev => ({
                   ...prev,
                   baccaratUndoStack: [...prev.baccaratUndoStack, prev.baccaratBets],
-                  baccaratBets: newBets
+                  baccaratBets: newBets,
+                  sessionWager: prev.sessionWager - amountToRemove // Decrease wager
               }));
           } else {
               // Add the bet
@@ -3021,7 +3274,8 @@ export const useTerminalGame = () => {
               setGameState(prev => ({
                   ...prev,
                   baccaratUndoStack: [...prev.baccaratUndoStack, prev.baccaratBets],
-                  baccaratBets: newBets
+                  baccaratBets: newBets,
+                  sessionWager: prev.sessionWager + prev.bet // Increase wager
               }));
           }
       },
@@ -3080,7 +3334,11 @@ export const useTerminalGame = () => {
           const payload = new Uint8Array([0]);
           const result = await chainService.sendMove(currentSessionIdRef.current, payload);
           if (result.txHash) setLastTxSig(result.txHash);
-          setGameState(prev => ({ ...prev, message: 'PLAYING...' }));
+          setGameState(prev => ({ 
+              ...prev, 
+              message: 'PLAYING...',
+              sessionWager: prev.sessionWager + prev.bet // Track Play bet
+          }));
           return;
         // NOTE: Do NOT clear isPendingRef here - wait for CasinoGameMoved event
         } catch (error) {
@@ -3106,23 +3364,42 @@ export const useTerminalGame = () => {
 
       let totalWin = 0;
       let message = '';
+      const details: string[] = [];
 
       if (!dealerQualifies) {
           totalWin = gameState.bet; // Ante wins 1:1, Play pushes
           message = "DEALER DOESN'T QUALIFY - ANTE WINS";
+          details.push(`Ante WIN (+$${gameState.bet})`);
+          details.push(`Play PUSH`);
       } else {
           // Compare hands
           if (playerHand.value > dealerHand.value) {
               totalWin = gameState.bet * 2; // Ante + Play win
               message = `${playerHand.rank} WINS!`;
+              details.push(`Ante WIN (+$${gameState.bet})`);
+              details.push(`Play WIN (+$${gameState.bet})`);
           } else if (playerHand.value < dealerHand.value) {
               totalWin = -gameState.bet * 2; // Lose ante + play
               message = `DEALER ${dealerHand.rank} WINS`;
+              details.push(`Ante LOSS (-$${gameState.bet})`);
+              details.push(`Play LOSS (-$${gameState.bet})`);
           } else {
               totalWin = 0;
               message = "PUSH";
+              details.push(`Ante PUSH`);
+              details.push(`Play PUSH`);
           }
       }
+
+      const summary = `${playerHand.rank} vs ${dealerHand.rank}. ${totalWin >= 0 ? '+' : '-'}$${Math.abs(totalWin)}`;
+
+      setStats(prev => ({
+          ...prev,
+          chips: prev.chips + totalWin,
+          history: [...prev.history, summary, ...details],
+          pnlByGame: { ...prev.pnlByGame, [GameType.THREE_CARD]: (prev.pnlByGame[GameType.THREE_CARD] || 0) + totalWin },
+          pnlHistory: [...prev.pnlHistory, (prev.pnlHistory[prev.pnlHistory.length - 1] || 0) + totalWin].slice(-MAX_GRAPH_POINTS)
+      }));
 
       setGameState(prev => ({ ...prev, dealerCards: dealerRevealed, stage: 'RESULT' }));
       setGameState(prev => ({ ...prev, message, lastResult: totalWin }));
@@ -3159,8 +3436,20 @@ export const useTerminalGame = () => {
 
       // Local mode fallback
       const dealerRevealed = gameState.dealerCards.map(c => ({ ...c, isHidden: false }));
+      const pnl = -gameState.bet;
+      const summary = `FOLDED. -$${gameState.bet}`;
+      const details = [`Ante LOSS (-$${gameState.bet})`];
+
+      setStats(prev => ({
+          ...prev,
+          chips: prev.chips + pnl,
+          history: [...prev.history, summary, ...details],
+          pnlByGame: { ...prev.pnlByGame, [GameType.THREE_CARD]: (prev.pnlByGame[GameType.THREE_CARD] || 0) + pnl },
+          pnlHistory: [...prev.pnlHistory, (prev.pnlHistory[prev.pnlHistory.length - 1] || 0) + pnl].slice(-MAX_GRAPH_POINTS)
+      }));
+
       setGameState(prev => ({ ...prev, dealerCards: dealerRevealed, stage: 'RESULT' }));
-      setGameState(prev => ({ ...prev, message: "FOLDED", lastResult: -gameState.bet }));
+      setGameState(prev => ({ ...prev, message: "FOLDED", lastResult: pnl }));
   };
 
   // --- CASINO WAR ---
@@ -3312,7 +3601,15 @@ export const useTerminalGame = () => {
           }
           const result = await chainService.sendMove(currentSessionIdRef.current, payload);
           if (result.txHash) setLastTxSig(result.txHash);
-          setGameState(prev => ({ ...prev, message: `BETTING ${multiplier}X...` }));
+          
+          // Calculate bet amount based on multiplier
+          const betAmount = gameState.bet * multiplier;
+          
+          setGameState(prev => ({ 
+              ...prev, 
+              message: `BETTING ${multiplier}X...`,
+              sessionWager: prev.sessionWager + betAmount // Track Play bet
+          }));
           return;
         // NOTE: Do NOT clear isPendingRef here - wait for CasinoGameMoved event
         } catch (error) {
@@ -3351,19 +3648,43 @@ export const useTerminalGame = () => {
       const dealerQualifies = dealerRevealed[0].rank === dealerRevealed[1].rank ||
           dealerRevealed.some(c => community.some(cc => cc.rank === c.rank));
 
+      const details: string[] = [];
+
       if (!dealerQualifies) {
           totalWin = gameState.bet; // Ante wins, play/blind push
           message = "DEALER DOESN'T QUALIFY";
+          details.push(`Ante WIN (+$${gameState.bet})`);
+          details.push(`Play PUSH`);
+          details.push(`Blind PUSH`);
       } else if (pVal > dVal) {
-          totalWin = gameState.bet * (2 + multiplier); // Win ante + play
+          totalWin = gameState.bet * (2 + multiplier); // Win ante + play (blind logic omitted for brevity in local mode)
           message = "YOU WIN!";
+          details.push(`Ante WIN (+$${gameState.bet})`);
+          details.push(`Play WIN (+$${playBet})`);
+          details.push(`Blind PUSH (Simulated)`);
       } else if (pVal < dVal) {
-          totalWin = -(gameState.bet * (2 + multiplier));
+          totalWin = -(gameState.bet * (2 + multiplier)); // Lose ante + play + blind
           message = "DEALER WINS";
+          details.push(`Ante LOSS (-$${gameState.bet})`);
+          details.push(`Play LOSS (-$${playBet})`);
+          details.push(`Blind LOSS (-$${gameState.bet})`);
       } else {
           totalWin = 0;
           message = "PUSH";
+          details.push(`Ante PUSH`);
+          details.push(`Play PUSH`);
+          details.push(`Blind PUSH`);
       }
+
+      const summary = `Player ${pVal} vs Dealer ${dVal}. ${totalWin >= 0 ? '+' : '-'}$${Math.abs(totalWin)}`;
+
+      setStats(prev => ({
+          ...prev,
+          chips: prev.chips + totalWin,
+          history: [...prev.history, summary, ...details],
+          pnlByGame: { ...prev.pnlByGame, [GameType.ULTIMATE_HOLDEM]: (prev.pnlByGame[GameType.ULTIMATE_HOLDEM] || 0) + totalWin },
+          pnlHistory: [...prev.pnlHistory, (prev.pnlHistory[prev.pnlHistory.length - 1] || 0) + totalWin].slice(-MAX_GRAPH_POINTS)
+      }));
 
       setGameState(prev => ({
           ...prev,
@@ -3405,8 +3726,20 @@ export const useTerminalGame = () => {
 
       // Local mode fallback
       const dealerRevealed = gameState.dealerCards.map(c => ({ ...c, isHidden: false }));
+      const pnl = -gameState.bet * 2; // Ante + Blind
+      const summary = `FOLDED. -$${Math.abs(pnl)}`;
+      const details = [`Ante LOSS (-$${gameState.bet})`, `Blind LOSS (-$${gameState.bet})`];
+
+      setStats(prev => ({
+          ...prev,
+          chips: prev.chips + pnl,
+          history: [...prev.history, summary, ...details],
+          pnlByGame: { ...prev.pnlByGame, [GameType.ULTIMATE_HOLDEM]: (prev.pnlByGame[GameType.ULTIMATE_HOLDEM] || 0) + pnl },
+          pnlHistory: [...prev.pnlHistory, (prev.pnlHistory[prev.pnlHistory.length - 1] || 0) + pnl].slice(-MAX_GRAPH_POINTS)
+      }));
+
       setGameState(prev => ({ ...prev, dealerCards: dealerRevealed, stage: 'RESULT' }));
-      setGameState(prev => ({ ...prev, message: "FOLDED", lastResult: -gameState.bet * 2 }));
+      setGameState(prev => ({ ...prev, message: "FOLDED", lastResult: pnl }));
   };
 
   const registerForTournament = async () => {

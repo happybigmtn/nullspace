@@ -11,6 +11,7 @@ import { VideoPokerView } from './games/VideoPokerView';
 import { ThreeCardPokerView } from './games/ThreeCardPokerView';
 import { UltimateHoldemView } from './games/UltimateHoldemView';
 import { GenericGameView } from './games/GenericGameView';
+import { BigWinEffect } from './BigWinEffect';
 
 interface ActiveGameProps {
   gameState: GameState;
@@ -36,6 +37,11 @@ export const ActiveGame: React.FC<ActiveGameProps> = ({ gameState, deck, numberI
 
   return (
     <>
+         <BigWinEffect 
+            amount={gameState.lastResult} 
+            show={gameState.stage === 'RESULT' && gameState.lastResult > 0} 
+         />
+
          {gameState.type === GameType.BLACKJACK && <BlackjackView gameState={gameState} />}
          {gameState.type === GameType.CRAPS && <CrapsView gameState={gameState} />}
          {gameState.type === GameType.BACCARAT && <BaccaratView gameState={gameState} />}
