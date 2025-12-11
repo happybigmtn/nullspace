@@ -179,6 +179,61 @@ pub enum Instruction {
         start_time_ms: u64,
         end_time_ms: u64,
     },
+
+    // Staking & House Instructions (tags 18-21)
+    /// Stake chips for voting power and rewards.
+    /// Binary: [18] [amount:u64 BE] [duration:u64 BE]
+    Stake { amount: u64, duration: u64 },
+
+    /// Unstake chips after lockup period.
+    /// Binary: [19]
+    Unstake,
+
+    /// Claim staking rewards.
+    /// Binary: [20]
+    ClaimRewards,
+
+    /// Trigger end-of-epoch processing (admin/keeper only).
+    /// Binary: [21]
+    ProcessEpoch,
+
+    // Virtual Liquidity / Vault Instructions (tags 22-25)
+    /// Create a new Vault (CDP).
+    /// Binary: [22]
+    CreateVault,
+
+    /// Deposit RNG collateral into vault.
+    /// Binary: [23] [amount:u64 BE]
+    DepositCollateral { amount: u64 },
+
+    /// Borrow vUSDT against collateral.
+    /// Binary: [24] [amount:u64 BE]
+    BorrowUSDT { amount: u64 },
+
+    /// Repay vUSDT debt.
+    /// Binary: [25] [amount:u64 BE]
+    RepayUSDT { amount: u64 },
+
+    // AMM Instructions (tags 26-28)
+    /// Swap tokens on the AMM.
+    /// Binary: [26] [amountIn:u64 BE] [minAmountOut:u64 BE] [isBuyingRng:u8]
+    Swap {
+        amount_in: u64,
+        min_amount_out: u64,
+        is_buying_rng: bool,
+    },
+
+    /// Add liquidity to AMM.
+    /// Binary: [27] [rngAmount:u64 BE] [usdtAmount:u64 BE]
+    AddLiquidity { rng_amount: u64, usdt_amount: u64 },
+
+    /// Remove liquidity from AMM.
+    /// Binary: [28] [shares:u64 BE]
+    RemoveLiquidity { shares: u64 },
+
+    /// End a tournament and distribute prizes.
+    /// Binary: [29] [tournamentId:u64 BE]
+    CasinoEndTournament { tournament_id: u64 },
 }
 
 impl Write for Instruction {
@@ -217,6 +272,59 @@ impl Write for Instruction {
                 tournament_id.write(writer);
                 start_time_ms.write(writer);
                 end_time_ms.write(writer);
+            }
+
+            // Staking (18-21)
+            Self::Stake { amount, duration } => {
+                18u8.write(writer);
+                amount.write(writer);
+                duration.write(writer);
+            }
+            Self::Unstake => 19u8.write(writer),
+            Self::ClaimRewards => 20u8.write(writer),
+            Self::ProcessEpoch => 21u8.write(writer),
+
+            // Vaults (22-25)
+            Self::CreateVault => 22u8.write(writer),
+            Self::DepositCollateral { amount } => {
+                23u8.write(writer);
+                amount.write(writer);
+            }
+            Self::BorrowUSDT { amount } => {
+                24u8.write(writer);
+                amount.write(writer);
+            }
+            Self::RepayUSDT { amount } => {
+                25u8.write(writer);
+                amount.write(writer);
+            }
+
+            // AMM (26-28)
+            Self::Swap {
+                amount_in,
+                min_amount_out,
+                is_buying_rng,
+            } => {
+                26u8.write(writer);
+                amount_in.write(writer);
+                min_amount_out.write(writer);
+                is_buying_rng.write(writer);
+            }
+            Self::AddLiquidity {
+                rng_amount,
+                usdt_amount,
+            } => {
+                27u8.write(writer);
+                rng_amount.write(writer);
+                usdt_amount.write(writer);
+            }
+            Self::RemoveLiquidity { shares } => {
+                28u8.write(writer);
+                shares.write(writer);
+            }
+            Self::CasinoEndTournament { tournament_id } => {
+                29u8.write(writer);
+                tournament_id.write(writer);
             }
         }
     }
@@ -276,6 +384,34 @@ impl Read for Instruction {
                 end_time_ms: u64::read(reader)?,
             },
 
+            // Staking (18-21)
+            18 => Self::Stake {
+                amount: u64::read(reader)?,
+                duration: u64::read(reader)?,
+            },
+            19 => Self::Unstake,
+            20 => Self::ClaimRewards,
+            21 => Self::ProcessEpoch,
+
+            // Vaults (22-25)
+            22 => Self::CreateVault,
+            23 => Self::DepositCollateral { amount: u64::read(reader)? },
+            24 => Self::BorrowUSDT { amount: u64::read(reader)? },
+            25 => Self::RepayUSDT { amount: u64::read(reader)? },
+
+            // AMM (26-28)
+            26 => Self::Swap {
+                amount_in: u64::read(reader)?,
+                min_amount_out: u64::read(reader)?,
+                is_buying_rng: bool::read(reader)?,
+            },
+            27 => Self::AddLiquidity {
+                rng_amount: u64::read(reader)?,
+                usdt_amount: u64::read(reader)?,
+            },
+            28 => Self::RemoveLiquidity { shares: u64::read(reader)? },
+            29 => Self::CasinoEndTournament { tournament_id: u64::read(reader)? },
+
             i => return Err(Error::InvalidEnum(i)),
         };
 
@@ -294,7 +430,34 @@ impl EncodeSize for Instruction {
                 Self::CasinoGameMove { payload, .. } => 8 + 4 + payload.len(),
                 Self::CasinoToggleShield | Self::CasinoToggleDouble => 0,
                 Self::CasinoJoinTournament { .. } => 8,
-                Self::CasinoStartTournament { .. } => 8 + 8 + 8, // tournament_id + start_time_ms + end_time_ms
+                Self::CasinoStartTournament { .. } => 8 + 8 + 8,
+
+                // Staking
+                Self::Stake { amount, duration } => amount.encode_size() + duration.encode_size(),
+                Self::Unstake | Self::ClaimRewards | Self::ProcessEpoch => 0,
+
+                // Vaults
+                Self::CreateVault => 0,
+                Self::DepositCollateral { amount }
+                | Self::BorrowUSDT { amount }
+                | Self::RepayUSDT { amount } => amount.encode_size(),
+
+                // AMM
+                Self::Swap {
+                    amount_in,
+                    min_amount_out,
+                    is_buying_rng,
+                } => {
+                    amount_in.encode_size()
+                        + min_amount_out.encode_size()
+                        + is_buying_rng.encode_size()
+                }
+                Self::AddLiquidity {
+                    rng_amount,
+                    usdt_amount,
+                } => rng_amount.encode_size() + usdt_amount.encode_size(),
+                Self::RemoveLiquidity { shares } => shares.encode_size(),
+                Self::CasinoEndTournament { tournament_id } => tournament_id.encode_size(),
             }
     }
 }
@@ -547,6 +710,17 @@ pub enum Key {
     CasinoSession(u64),
     CasinoLeaderboard,
     Tournament(u64),
+
+    // Staking & House keys (tags 14-15)
+    House,
+    Staker(PublicKey),
+
+    // Virtual Liquidity keys (tags 16-17)
+    Vault(PublicKey),
+    AmmPool,
+    
+    // LP Balance (Tag 18)
+    LpBalance(PublicKey),
 }
 
 impl Write for Key {
@@ -572,6 +746,24 @@ impl Write for Key {
                 13u8.write(writer);
                 id.write(writer);
             }
+
+            // Staking & House
+            Self::House => 14u8.write(writer),
+            Self::Staker(pk) => {
+                15u8.write(writer);
+                pk.write(writer);
+            }
+
+            // Virtual Liquidity
+            Self::Vault(pk) => {
+                16u8.write(writer);
+                pk.write(writer);
+            }
+            Self::AmmPool => 17u8.write(writer),
+            Self::LpBalance(pk) => {
+                18u8.write(writer);
+                pk.write(writer);
+            }
         }
     }
 }
@@ -589,6 +781,15 @@ impl Read for Key {
             11 => Self::CasinoSession(u64::read(reader)?),
             12 => Self::CasinoLeaderboard,
             13 => Self::Tournament(u64::read(reader)?),
+
+            // Staking & House
+            14 => Self::House,
+            15 => Self::Staker(PublicKey::read(reader)?),
+
+            // Virtual Liquidity
+            16 => Self::Vault(PublicKey::read(reader)?),
+            17 => Self::AmmPool,
+            18 => Self::LpBalance(PublicKey::read(reader)?),
 
             i => return Err(Error::InvalidEnum(i)),
         };
@@ -609,6 +810,15 @@ impl EncodeSize for Key {
                 Self::CasinoSession(_) => u64::SIZE,
                 Self::CasinoLeaderboard => 0,
                 Self::Tournament(_) => u64::SIZE,
+
+                // Staking & House
+                Self::House => 0,
+                Self::Staker(_) => PublicKey::SIZE,
+
+                // Virtual Liquidity
+                Self::Vault(_) => PublicKey::SIZE,
+                Self::AmmPool => 0,
+                Self::LpBalance(_) => PublicKey::SIZE,
             }
     }
 }
@@ -630,6 +840,17 @@ pub enum Value {
     CasinoSession(crate::casino::GameSession),
     CasinoLeaderboard(crate::casino::CasinoLeaderboard),
     Tournament(crate::casino::Tournament),
+
+    // Staking & House values (tags 14-15)
+    House(crate::casino::HouseState),
+    Staker(crate::casino::Staker),
+
+    // Virtual Liquidity values (tags 16-17)
+    Vault(crate::casino::Vault),
+    AmmPool(crate::casino::AmmPool),
+    
+    // LP Balance (Tag 18)
+    LpBalance(u64),
 }
 
 impl Write for Value {
@@ -665,6 +886,30 @@ impl Write for Value {
                 13u8.write(writer);
                 tournament.write(writer);
             }
+
+            // Staking & House
+            Self::House(house) => {
+                14u8.write(writer);
+                house.write(writer);
+            }
+            Self::Staker(staker) => {
+                15u8.write(writer);
+                staker.write(writer);
+            }
+
+            // Virtual Liquidity
+            Self::Vault(vault) => {
+                16u8.write(writer);
+                vault.write(writer);
+            }
+            Self::AmmPool(pool) => {
+                17u8.write(writer);
+                pool.write(writer);
+            }
+            Self::LpBalance(bal) => {
+                18u8.write(writer);
+                bal.write(writer);
+            }
         }
     }
 }
@@ -689,6 +934,15 @@ impl Read for Value {
             12 => Self::CasinoLeaderboard(crate::casino::CasinoLeaderboard::read(reader)?),
             13 => Self::Tournament(crate::casino::Tournament::read(reader)?),
 
+            // Staking & House
+            14 => Self::House(crate::casino::HouseState::read(reader)?),
+            15 => Self::Staker(crate::casino::Staker::read(reader)?),
+
+            // Virtual Liquidity
+            16 => Self::Vault(crate::casino::Vault::read(reader)?),
+            17 => Self::AmmPool(crate::casino::AmmPool::read(reader)?),
+            18 => Self::LpBalance(u64::read(reader)?),
+
             i => return Err(Error::InvalidEnum(i)),
         };
 
@@ -711,6 +965,15 @@ impl EncodeSize for Value {
                 Self::CasinoSession(session) => session.encode_size(),
                 Self::CasinoLeaderboard(leaderboard) => leaderboard.encode_size(),
                 Self::Tournament(tournament) => tournament.encode_size(),
+
+                // Staking & House
+                Self::House(house) => house.encode_size(),
+                Self::Staker(staker) => staker.encode_size(),
+
+                // Virtual Liquidity
+                Self::Vault(vault) => vault.encode_size(),
+                Self::AmmPool(pool) => pool.encode_size(),
+                Self::LpBalance(bal) => bal.encode_size(),
             }
     }
 }

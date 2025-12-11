@@ -1,0 +1,802 @@
+[
+  {
+    "block": 111,
+    "house_pnl": 1000,
+    "rng_price": 0.9985470766162273,
+    "total_burned": 250,
+    "amm_rng": 1000741,
+    "amm_vusdt": 999287
+  },
+  {
+    "block": 111,
+    "house_pnl": 1000,
+    "rng_price": 0.9985470766162273,
+    "total_burned": 250,
+    "amm_rng": 1000741,
+    "amm_vusdt": 999287
+  },
+  {
+    "block": 112,
+    "house_pnl": 2000,
+    "rng_price": 0.9985470766162273,
+    "total_burned": 250,
+    "amm_rng": 1000741,
+    "amm_vusdt": 999287
+  },
+  {
+    "block": 112,
+    "house_pnl": 2000,
+    "rng_price": 0.9985470766162273,
+    "total_burned": 250,
+    "amm_rng": 1000741,
+    "amm_vusdt": 999287
+  },
+  {
+    "block": 113,
+    "house_pnl": 3000,
+    "rng_price": 0.9985470766162273,
+    "total_burned": 250,
+    "amm_rng": 1000741,
+    "amm_vusdt": 999287
+  },
+  {
+    "block": 114,
+    "house_pnl": 3000,
+    "rng_price": 0.9891495796580974,
+    "total_burned": 500,
+    "amm_rng": 1005491,
+    "amm_vusdt": 994581
+  },
+  {
+    "block": 115,
+    "house_pnl": 4000,
+    "rng_price": 0.9891495796580974,
+    "total_burned": 500,
+    "amm_rng": 1005491,
+    "amm_vusdt": 994581
+  },
+  {
+    "block": 116,
+    "house_pnl": 4000,
+    "rng_price": 0.9971092667223178,
+    "total_burned": 500,
+    "amm_rng": 1001476,
+    "amm_vusdt": 998581
+  },
+  {
+    "block": 117,
+    "house_pnl": 5000,
+    "rng_price": 0.9971092667223178,
+    "total_burned": 500,
+    "amm_rng": 1001476,
+    "amm_vusdt": 998581
+  },
+  {
+    "block": 117,
+    "house_pnl": 5000,
+    "rng_price": 0.9971092667223178,
+    "total_burned": 500,
+    "amm_rng": 1001476,
+    "amm_vusdt": 998581
+  },
+  {
+    "block": 119,
+    "house_pnl": 6000,
+    "rng_price": 0.9877323782132443,
+    "total_burned": 750,
+    "amm_rng": 1006226,
+    "amm_vusdt": 993882
+  },
+  {
+    "block": 119,
+    "house_pnl": 6000,
+    "rng_price": 0.9877323782132443,
+    "total_burned": 750,
+    "amm_rng": 1006226,
+    "amm_vusdt": 993882
+  },
+  {
+    "block": 120,
+    "house_pnl": 7000,
+    "rng_price": 0.9877323782132443,
+    "total_burned": 750,
+    "amm_rng": 1006226,
+    "amm_vusdt": 993882
+  },
+  {
+    "block": 120,
+    "house_pnl": 7000,
+    "rng_price": 0.9877323782132443,
+    "total_burned": 750,
+    "amm_rng": 1006226,
+    "amm_vusdt": 993882
+  },
+  {
+    "block": 122,
+    "house_pnl": 8000,
+    "rng_price": 0.9956865112427098,
+    "total_burned": 750,
+    "amm_rng": 1002205,
+    "amm_vusdt": 997882
+  },
+  {
+    "block": 123,
+    "house_pnl": 8000,
+    "rng_price": 0.986329081239976,
+    "total_burned": 1000,
+    "amm_rng": 1006955,
+    "amm_vusdt": 993189
+  },
+  {
+    "block": 124,
+    "house_pnl": 9000,
+    "rng_price": 0.986329081239976,
+    "total_burned": 1000,
+    "amm_rng": 1006955,
+    "amm_vusdt": 993189
+  },
+  {
+    "block": 124,
+    "house_pnl": 9000,
+    "rng_price": 0.986329081239976,
+    "total_burned": 1000,
+    "amm_rng": 1006955,
+    "amm_vusdt": 993189
+  },
+  {
+    "block": 125,
+    "house_pnl": 10000,
+    "rng_price": 0.986329081239976,
+    "total_burned": 1000,
+    "amm_rng": 1006955,
+    "amm_vusdt": 993189
+  },
+  {
+    "block": 125,
+    "house_pnl": 10000,
+    "rng_price": 0.986329081239976,
+    "total_burned": 1000,
+    "amm_rng": 1006955,
+    "amm_vusdt": 993189
+  },
+  {
+    "block": 127,
+    "house_pnl": 11000,
+    "rng_price": 0.9771030092764195,
+    "total_burned": 1250,
+    "amm_rng": 1011705,
+    "amm_vusdt": 988540
+  },
+  {
+    "block": 128,
+    "house_pnl": 11000,
+    "rng_price": 0.9850144893017347,
+    "total_burned": 1250,
+    "amm_rng": 1007640,
+    "amm_vusdt": 992540
+  },
+  {
+    "block": 129,
+    "house_pnl": 12000,
+    "rng_price": 0.9850144893017347,
+    "total_burned": 1250,
+    "amm_rng": 1007640,
+    "amm_vusdt": 992540
+  },
+  {
+    "block": 129,
+    "house_pnl": 12000,
+    "rng_price": 0.9850144893017347,
+    "total_burned": 1250,
+    "amm_rng": 1007640,
+    "amm_vusdt": 992540
+  },
+  {
+    "block": 130,
+    "house_pnl": 13000,
+    "rng_price": 0.9850144893017347,
+    "total_burned": 1250,
+    "amm_rng": 1007640,
+    "amm_vusdt": 992540
+  },
+  {
+    "block": 131,
+    "house_pnl": 13000,
+    "rng_price": 0.9758077420756823,
+    "total_burned": 1500,
+    "amm_rng": 1012390,
+    "amm_vusdt": 987898
+  },
+  {
+    "block": 132,
+    "house_pnl": 14000,
+    "rng_price": 0.9758077420756823,
+    "total_burned": 1500,
+    "amm_rng": 1012390,
+    "amm_vusdt": 987898
+  },
+  {
+    "block": 132,
+    "house_pnl": 14000,
+    "rng_price": 0.9758077420756823,
+    "total_burned": 1500,
+    "amm_rng": 1012390,
+    "amm_vusdt": 987898
+  },
+  {
+    "block": 134,
+    "house_pnl": 15000,
+    "rng_price": 0.9837135036496351,
+    "total_burned": 1500,
+    "amm_rng": 1008320,
+    "amm_vusdt": 991898
+  },
+  {
+    "block": 134,
+    "house_pnl": 15000,
+    "rng_price": 0.9837135036496351,
+    "total_burned": 1500,
+    "amm_rng": 1008320,
+    "amm_vusdt": 991898
+  },
+  {
+    "block": 136,
+    "house_pnl": 16000,
+    "rng_price": 0.9745249587886325,
+    "total_burned": 1750,
+    "amm_rng": 1013070,
+    "amm_vusdt": 987262
+  },
+  {
+    "block": 136,
+    "house_pnl": 16000,
+    "rng_price": 0.9745249587886325,
+    "total_burned": 1750,
+    "amm_rng": 1013070,
+    "amm_vusdt": 987262
+  },
+  {
+    "block": 137,
+    "house_pnl": 17000,
+    "rng_price": 0.9745249587886325,
+    "total_burned": 1750,
+    "amm_rng": 1013070,
+    "amm_vusdt": 987262
+  },
+  {
+    "block": 137,
+    "house_pnl": 17000,
+    "rng_price": 0.9745249587886325,
+    "total_burned": 1750,
+    "amm_rng": 1013070,
+    "amm_vusdt": 987262
+  },
+  {
+    "block": 138,
+    "house_pnl": 18000,
+    "rng_price": 0.9745249587886325,
+    "total_burned": 1750,
+    "amm_rng": 1013070,
+    "amm_vusdt": 987262
+  },
+  {
+    "block": 140,
+    "house_pnl": 18000,
+    "rng_price": 0.9733275986059088,
+    "total_burned": 2000,
+    "amm_rng": 1013707,
+    "amm_vusdt": 986669
+  },
+  {
+    "block": 141,
+    "house_pnl": 19000,
+    "rng_price": 0.9733275986059088,
+    "total_burned": 2000,
+    "amm_rng": 1013707,
+    "amm_vusdt": 986669
+  },
+  {
+    "block": 141,
+    "house_pnl": 19000,
+    "rng_price": 0.9733275986059088,
+    "total_burned": 2000,
+    "amm_rng": 1013707,
+    "amm_vusdt": 986669
+  },
+  {
+    "block": 142,
+    "house_pnl": 20000,
+    "rng_price": 0.9733275986059088,
+    "total_burned": 2000,
+    "amm_rng": 1013707,
+    "amm_vusdt": 986669
+  },
+  {
+    "block": 142,
+    "house_pnl": 20000,
+    "rng_price": 0.9733275986059088,
+    "total_burned": 2000,
+    "amm_rng": 1013707,
+    "amm_vusdt": 986669
+  },
+  {
+    "block": 144,
+    "house_pnl": 21000,
+    "rng_price": 0.9642832245249431,
+    "total_burned": 2250,
+    "amm_rng": 1018457,
+    "amm_vusdt": 982081
+  },
+  {
+    "block": 144,
+    "house_pnl": 21000,
+    "rng_price": 0.9642832245249431,
+    "total_burned": 2250,
+    "amm_rng": 1018457,
+    "amm_vusdt": 982081
+  },
+  {
+    "block": 146,
+    "house_pnl": 22000,
+    "rng_price": 0.9721414635540978,
+    "total_burned": 2250,
+    "amm_rng": 1014339,
+    "amm_vusdt": 986081
+  },
+  {
+    "block": 146,
+    "house_pnl": 22000,
+    "rng_price": 0.9721414635540978,
+    "total_burned": 2250,
+    "amm_rng": 1014339,
+    "amm_vusdt": 986081
+  },
+  {
+    "block": 147,
+    "house_pnl": 23000,
+    "rng_price": 0.9721414635540978,
+    "total_burned": 2250,
+    "amm_rng": 1014339,
+    "amm_vusdt": 986081
+  },
+  {
+    "block": 148,
+    "house_pnl": 23000,
+    "rng_price": 0.9631141146651568,
+    "total_burned": 2500,
+    "amm_rng": 1019089,
+    "amm_vusdt": 981499
+  },
+  {
+    "block": 149,
+    "house_pnl": 24000,
+    "rng_price": 0.9631141146651568,
+    "total_burned": 2500,
+    "amm_rng": 1019089,
+    "amm_vusdt": 981499
+  },
+  {
+    "block": 149,
+    "house_pnl": 24000,
+    "rng_price": 0.9631141146651568,
+    "total_burned": 2500,
+    "amm_rng": 1019089,
+    "amm_vusdt": 981499
+  },
+  {
+    "block": 150,
+    "house_pnl": 25000,
+    "rng_price": 0.9631141146651568,
+    "total_burned": 2500,
+    "amm_rng": 1019089,
+    "amm_vusdt": 981499
+  },
+  {
+    "block": 151,
+    "house_pnl": 25000,
+    "rng_price": 0.9709675003891756,
+    "total_burned": 2500,
+    "amm_rng": 1014966,
+    "amm_vusdt": 985499
+  },
+  {
+    "block": 153,
+    "house_pnl": 26000,
+    "rng_price": 0.9619570547093504,
+    "total_burned": 2750,
+    "amm_rng": 1019716,
+    "amm_vusdt": 980923
+  },
+  {
+    "block": 153,
+    "house_pnl": 26000,
+    "rng_price": 0.9619570547093504,
+    "total_burned": 2750,
+    "amm_rng": 1019716,
+    "amm_vusdt": 980923
+  },
+  {
+    "block": 154,
+    "house_pnl": 27000,
+    "rng_price": 0.9619570547093504,
+    "total_burned": 2750,
+    "amm_rng": 1019716,
+    "amm_vusdt": 980923
+  },
+  {
+    "block": 154,
+    "house_pnl": 27000,
+    "rng_price": 0.9619570547093504,
+    "total_burned": 2750,
+    "amm_rng": 1019716,
+    "amm_vusdt": 980923
+  },
+  {
+    "block": 155,
+    "house_pnl": 28000,
+    "rng_price": 0.9619570547093504,
+    "total_burned": 2750,
+    "amm_rng": 1019716,
+    "amm_vusdt": 980923
+  },
+  {
+    "block": 156,
+    "house_pnl": 28000,
+    "rng_price": 0.9530711609755717,
+    "total_burned": 3000,
+    "amm_rng": 1024466,
+    "amm_vusdt": 976389
+  },
+  {
+    "block": 158,
+    "house_pnl": 29000,
+    "rng_price": 0.9608840153719644,
+    "total_burned": 3000,
+    "amm_rng": 1020299,
+    "amm_vusdt": 980389
+  },
+  {
+    "block": 158,
+    "house_pnl": 29000,
+    "rng_price": 0.9608840153719644,
+    "total_burned": 3000,
+    "amm_rng": 1020299,
+    "amm_vusdt": 980389
+  },
+  {
+    "block": 159,
+    "house_pnl": 30000,
+    "rng_price": 0.9608840153719644,
+    "total_burned": 3000,
+    "amm_rng": 1020299,
+    "amm_vusdt": 980389
+  },
+  {
+    "block": 159,
+    "house_pnl": 30000,
+    "rng_price": 0.9608840153719644,
+    "total_burned": 3000,
+    "amm_rng": 1020299,
+    "amm_vusdt": 980389
+  },
+  {
+    "block": 161,
+    "house_pnl": 31000,
+    "rng_price": 0.9520130257187706,
+    "total_burned": 3250,
+    "amm_rng": 1025049,
+    "amm_vusdt": 975860
+  },
+  {
+    "block": 161,
+    "house_pnl": 31000,
+    "rng_price": 0.9520130257187706,
+    "total_burned": 3250,
+    "amm_rng": 1025049,
+    "amm_vusdt": 975860
+  },
+  {
+    "block": 162,
+    "house_pnl": 32000,
+    "rng_price": 0.9520130257187706,
+    "total_burned": 3250,
+    "amm_rng": 1025049,
+    "amm_vusdt": 975860
+  },
+  {
+    "block": 163,
+    "house_pnl": 32000,
+    "rng_price": 0.9598208600831833,
+    "total_burned": 3250,
+    "amm_rng": 1020878,
+    "amm_vusdt": 979860
+  },
+  {
+    "block": 164,
+    "house_pnl": 33000,
+    "rng_price": 0.9598208600831833,
+    "total_burned": 3250,
+    "amm_rng": 1020878,
+    "amm_vusdt": 979860
+  },
+  {
+    "block": 165,
+    "house_pnl": 33000,
+    "rng_price": 0.9509646772514011,
+    "total_burned": 3500,
+    "amm_rng": 1025628,
+    "amm_vusdt": 975336
+  },
+  {
+    "block": 166,
+    "house_pnl": 34000,
+    "rng_price": 0.9509646772514011,
+    "total_burned": 3500,
+    "amm_rng": 1025628,
+    "amm_vusdt": 975336
+  },
+  {
+    "block": 166,
+    "house_pnl": 34000,
+    "rng_price": 0.9509646772514011,
+    "total_burned": 3500,
+    "amm_rng": 1025628,
+    "amm_vusdt": 975336
+  },
+  {
+    "block": 167,
+    "house_pnl": 35000,
+    "rng_price": 0.9509646772514011,
+    "total_burned": 3500,
+    "amm_rng": 1025628,
+    "amm_vusdt": 975336
+  },
+  {
+    "block": 167,
+    "house_pnl": 35000,
+    "rng_price": 0.9509646772514011,
+    "total_burned": 3500,
+    "amm_rng": 1025628,
+    "amm_vusdt": 975336
+  },
+  {
+    "block": 170,
+    "house_pnl": 36000,
+    "rng_price": 0.949999171671557,
+    "total_burned": 3750,
+    "amm_rng": 1026163,
+    "amm_vusdt": 974854
+  },
+  {
+    "block": 170,
+    "house_pnl": 36000,
+    "rng_price": 0.949999171671557,
+    "total_burned": 3750,
+    "amm_rng": 1026163,
+    "amm_vusdt": 974854
+  },
+  {
+    "block": 171,
+    "house_pnl": 37000,
+    "rng_price": 0.949999171671557,
+    "total_burned": 3750,
+    "amm_rng": 1026163,
+    "amm_vusdt": 974854
+  },
+  {
+    "block": 171,
+    "house_pnl": 37000,
+    "rng_price": 0.949999171671557,
+    "total_burned": 3750,
+    "amm_rng": 1026163,
+    "amm_vusdt": 974854
+  },
+  {
+    "block": 172,
+    "house_pnl": 38000,
+    "rng_price": 0.949999171671557,
+    "total_burned": 3750,
+    "amm_rng": 1026163,
+    "amm_vusdt": 974854
+  },
+  {
+    "block": 173,
+    "house_pnl": 38000,
+    "rng_price": 0.9412782649942333,
+    "total_burned": 4000,
+    "amm_rng": 1030913,
+    "amm_vusdt": 970376
+  },
+  {
+    "block": 174,
+    "house_pnl": 39000,
+    "rng_price": 0.9412782649942333,
+    "total_burned": 4000,
+    "amm_rng": 1030913,
+    "amm_vusdt": 970376
+  },
+  {
+    "block": 175,
+    "house_pnl": 39000,
+    "rng_price": 0.9490422657578597,
+    "total_burned": 4000,
+    "amm_rng": 1026694,
+    "amm_vusdt": 974376
+  },
+  {
+    "block": 176,
+    "house_pnl": 40000,
+    "rng_price": 0.9490422657578597,
+    "total_burned": 4000,
+    "amm_rng": 1026694,
+    "amm_vusdt": 974376
+  },
+  {
+    "block": 176,
+    "house_pnl": 40000,
+    "rng_price": 0.9490422657578597,
+    "total_burned": 4000,
+    "amm_rng": 1026694,
+    "amm_vusdt": 974376
+  },
+  {
+    "block": 178,
+    "house_pnl": 41000,
+    "rng_price": 0.9403351030206196,
+    "total_burned": 4250,
+    "amm_rng": 1031444,
+    "amm_vusdt": 969903
+  },
+  {
+    "block": 178,
+    "house_pnl": 41000,
+    "rng_price": 0.9403351030206196,
+    "total_burned": 4250,
+    "amm_rng": 1031444,
+    "amm_vusdt": 969903
+  },
+  {
+    "block": 179,
+    "house_pnl": 42000,
+    "rng_price": 0.9403351030206196,
+    "total_burned": 4250,
+    "amm_rng": 1031444,
+    "amm_vusdt": 969903
+  },
+  {
+    "block": 179,
+    "house_pnl": 42000,
+    "rng_price": 0.9403351030206196,
+    "total_burned": 4250,
+    "amm_rng": 1031444,
+    "amm_vusdt": 969903
+  },
+  {
+    "block": 181,
+    "house_pnl": 43000,
+    "rng_price": 0.9480949084958349,
+    "total_burned": 4250,
+    "amm_rng": 1027221,
+    "amm_vusdt": 973903
+  },
+  {
+    "block": 182,
+    "house_pnl": 43000,
+    "rng_price": 0.9394004288880211,
+    "total_burned": 4500,
+    "amm_rng": 1031971,
+    "amm_vusdt": 969434
+  },
+  {
+    "block": 183,
+    "house_pnl": 44000,
+    "rng_price": 0.9394004288880211,
+    "total_burned": 4500,
+    "amm_rng": 1031971,
+    "amm_vusdt": 969434
+  },
+  {
+    "block": 183,
+    "house_pnl": 44000,
+    "rng_price": 0.9394004288880211,
+    "total_burned": 4500,
+    "amm_rng": 1031971,
+    "amm_vusdt": 969434
+  },
+  {
+    "block": 184,
+    "house_pnl": 45000,
+    "rng_price": 0.9394004288880211,
+    "total_burned": 4500,
+    "amm_rng": 1031971,
+    "amm_vusdt": 969434
+  },
+  {
+    "block": 184,
+    "house_pnl": 45000,
+    "rng_price": 0.9394004288880211,
+    "total_burned": 4500,
+    "amm_rng": 1031971,
+    "amm_vusdt": 969434
+  },
+  {
+    "block": 186,
+    "house_pnl": 46000,
+    "rng_price": 0.9308251689702437,
+    "total_burned": 4750,
+    "amm_rng": 1036721,
+    "amm_vusdt": 965006
+  },
+  {
+    "block": 187,
+    "house_pnl": 46000,
+    "rng_price": 0.9385455056152568,
+    "total_burned": 4750,
+    "amm_rng": 1032455,
+    "amm_vusdt": 969006
+  },
+  {
+    "block": 188,
+    "house_pnl": 47000,
+    "rng_price": 0.9385455056152568,
+    "total_burned": 4750,
+    "amm_rng": 1032455,
+    "amm_vusdt": 969006
+  },
+  {
+    "block": 188,
+    "house_pnl": 47000,
+    "rng_price": 0.9385455056152568,
+    "total_burned": 4750,
+    "amm_rng": 1032455,
+    "amm_vusdt": 969006
+  },
+  {
+    "block": 189,
+    "house_pnl": 48000,
+    "rng_price": 0.9385455056152568,
+    "total_burned": 4750,
+    "amm_rng": 1032455,
+    "amm_vusdt": 969006
+  },
+  {
+    "block": 190,
+    "house_pnl": 48000,
+    "rng_price": 0.929982018983711,
+    "total_burned": 5000,
+    "amm_rng": 1037205,
+    "amm_vusdt": 964582
+  },
+  {
+    "block": 191,
+    "house_pnl": 49000,
+    "rng_price": 0.929982018983711,
+    "total_burned": 5000,
+    "amm_rng": 1037205,
+    "amm_vusdt": 964582
+  },
+  {
+    "block": 191,
+    "house_pnl": 49000,
+    "rng_price": 0.929982018983711,
+    "total_burned": 5000,
+    "amm_rng": 1037205,
+    "amm_vusdt": 964582
+  },
+  {
+    "block": 193,
+    "house_pnl": 50000,
+    "rng_price": 0.93769888715166,
+    "total_burned": 5000,
+    "amm_rng": 1032935,
+    "amm_vusdt": 968582
+  },
+  {
+    "block": 193,
+    "house_pnl": 50000,
+    "rng_price": 0.93769888715166,
+    "total_burned": 5000,
+    "amm_rng": 1032935,
+    "amm_vusdt": 968582
+  }
+]

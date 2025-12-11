@@ -24,6 +24,7 @@ export default function CasinoApp() {
   const [searchQuery, setSearchQuery] = useState("");
   const [leaderboardView, setLeaderboardView] = useState<'RANK' | 'PAYOUT'>('RANK');
   const [numberInputString, setNumberInputString] = useState("");
+  const [focusMode, setFocusMode] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const customBetRef = useRef<HTMLInputElement>(null);
@@ -97,6 +98,8 @@ export default function CasinoApp() {
            tournamentTime={tournamentTime}
            stats={stats}
            lastTxSig={lastTxSig ?? undefined}
+           focusMode={focusMode}
+           setFocusMode={setFocusMode}
        />
 
        <div className="flex flex-1 overflow-hidden relative">
@@ -112,7 +115,9 @@ export default function CasinoApp() {
                />
              </ErrorBoundary>
           </main>
-          <Sidebar leaderboard={leaderboard} history={stats.history} viewMode={leaderboardView} currentChips={stats.chips} />
+          {!focusMode && (
+             <Sidebar leaderboard={leaderboard} history={stats.history} viewMode={leaderboardView} currentChips={stats.chips} />
+          )}
        </div>
 
        {gameState.type !== GameType.NONE && <Footer currentBet={gameState.bet} />}

@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "node",
+      "args": [
+        "/home/r/Coding/supersociety-battleware/.playwright-mcp/microsoft-playwright-mcp/cli.js"
+      ]
+    }
+  }
+}

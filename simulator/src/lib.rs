@@ -30,6 +30,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 use tokio::sync::broadcast;
+use tower_governor::{governor::GovernorConfigBuilder, key_extractor::SmartIpKeyExtractor, GovernorLayer};
 use tower_http::cors::{Any, CorsLayer};
 
 #[derive(Clone)]
@@ -267,6 +268,17 @@ impl Api {
             .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
             .allow_headers([header::CONTENT_TYPE]);
 
+        // Configure Rate Limiting
+        // 10,000 requests per second with a burst of 20,000
+        let governor_conf = Arc::new(
+            GovernorConfigBuilder::default()
+                .per_second(10_000)
+                .burst_size(20_000)
+                .key_extractor(SmartIpKeyExtractor)
+                .finish()
+                .unwrap(),
+        );
+
         Router::new()
             .route("/submit", post(submit))
             .route("/seed/:query", get(query_seed))
@@ -274,6 +286,9 @@ impl Api {
             .route("/updates/:filter", get(updates_ws))
             .route("/mempool", get(mempool_ws))
             .layer(cors)
+            .layer(GovernorLayer {
+                config: governor_conf,
+            })
             .with_state(self.simulator.clone())
     }
 }

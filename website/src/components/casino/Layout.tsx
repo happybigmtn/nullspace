@@ -8,13 +8,21 @@ interface HeaderProps {
     tournamentTime: number;
     stats: PlayerStats;
     lastTxSig?: string;
+    focusMode: boolean;
+    setFocusMode: (mode: boolean) => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ phase, tournamentTime, stats, lastTxSig }) => (
+export const Header: React.FC<HeaderProps> = ({ phase, tournamentTime, stats, lastTxSig, focusMode, setFocusMode }) => (
     <header className="h-12 border-b-2 border-gray-700 flex items-center justify-between px-2 sm:px-4 z-10 bg-terminal-black/90 backdrop-blur">
     <div className="flex items-center gap-2 sm:gap-4">
         <span className="font-bold tracking-tighter text-white text-sm sm:text-base">null<span className="text-terminal-green">/</span>space</span>
         <div className="hidden sm:flex items-center gap-2">
+            <button 
+                onClick={() => setFocusMode(!focusMode)}
+                className={`text-[10px] border px-1.5 py-0.5 rounded transition-colors ${focusMode ? 'bg-terminal-green text-black border-terminal-green' : 'text-gray-600 bg-gray-900 border-gray-800 hover:border-gray-600'}`}
+            >
+                {focusMode ? 'FOCUS ON' : 'FOCUS OFF'}
+            </button>
             <span className="text-[10px] text-gray-600 bg-gray-900 border border-gray-800 px-1.5 py-0.5 rounded">[?] HELP</span>
         </div>
     </div>

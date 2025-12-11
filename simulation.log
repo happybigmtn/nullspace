@@ -1,0 +1,139 @@
+warning: irrefutable `if let` pattern
+    --> execution/src/lib.rs:1630:20
+     |
+1630 |                 if let Task::Seed(_) = op {
+     |                    ^^^^^^^^^^^^^^^^^^^^^^
+     |
+     = note: this pattern will always match, so the `if let` is useless
+     = help: consider replacing the `if let` with a `let`
+     = note: `#[warn(irrefutable_let_patterns)]` on by default
+
+warning: variable does not need to be mutable
+   --> execution/src/casino/blackjack.rs:244:13
+    |
+244 |         let mut hands = vec![HandState {
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` on by default
+
+warning: variant `Seed` is never constructed
+   --> execution/src/lib.rs:208:5
+    |
+207 | enum Task {
+    |      ---- variant in this enum
+208 |     Seed(Seed),
+    |     ^^^^
+    |
+    = note: `#[warn(dead_code)]` on by default
+
+warning: field `0` is never read
+   --> execution/src/lib.rs:212:10
+    |
+212 |     Seed(bool),
+    |     ---- ^^^^
+    |     |
+    |     field in this variant
+    |
+help: consider changing the field to be of unit type to suppress this warning while preserving the field numbering, or remove the field
+    |
+212 -     Seed(bool),
+212 +     Seed(()),
+    |
+
+warning: method `delete` is never used
+   --> execution/src/lib.rs:253:8
+    |
+227 | impl<'a, S: State> Layer<'a, S> {
+    | ------------------------------- method in this implementation
+...
+253 |     fn delete(&mut self, key: Key) {
+    |        ^^^^^^
+
+warning: constant `SCALE` is never used
+ --> execution/src/fixed.rs:3:11
+  |
+3 | pub const SCALE: i32 = 10000;
+  |           ^^^^^
+
+warning: constant `HALF_SCALE` is never used
+ --> execution/src/fixed.rs:4:11
+  |
+4 | pub const HALF_SCALE: i64 = SCALE as i64 / 2;
+  |           ^^^^^^^^^^
+
+warning: multiple associated items are never used
+  --> execution/src/fixed.rs:12:12
+   |
+10 | impl Decimal {
+   | ------------ associated items in this implementation
+11 |     /// Create from an integer value
+12 |     pub fn from_int(value: i32) -> Self {
+   |            ^^^^^^^^
+...
+17 |     pub fn from_u16(value: u16) -> Self {
+   |            ^^^^^^^^
+...
+22 |     pub fn from_frac(numerator: i32, denominator: i32) -> Self {
+   |            ^^^^^^^^^
+...
+29 |     pub fn to_int_rounded(self) -> i32 {
+   |            ^^^^^^^^^^^^^^
+...
+38 |     pub fn to_u16_rounded(self) -> u16 {
+   |            ^^^^^^^^^^^^^^
+...
+49 |     pub fn div_int(self, other: i32) -> Self {
+   |            ^^^^^^^
+...
+54 |     pub fn mul(self, other: Self) -> Self {
+   |            ^^^
+...
+59 |     pub fn div(self, other: Self) -> Self {
+   |            ^^^
+
+warning: `nullspace-execution` (lib) generated 8 warnings (run `cargo fix --lib -p nullspace-execution` to apply 1 suggestion)
+   Compiling nullspace-client v0.0.1 (/home/r/Coding/supersociety-battleware/client)
+warning: unused import: `AmmPool`
+  --> client/examples/simulation_ecosystem.rs:14:36
+   |
+14 |     casino::{GameType, HouseState, AmmPool},
+   |                                    ^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `error`
+  --> client/examples/simulation_ecosystem.rs:34:27
+   |
+34 | use tracing::{info, warn, error};
+   |                           ^^^^^
+
+warning: `nullspace-client` (example "simulation_ecosystem") generated 2 warnings (run `cargo fix --example "simulation_ecosystem"` to apply 2 suggestions)
+    Finished `release` profile [optimized] target(s) in 3.09s
+     Running `target/release/examples/simulation_ecosystem --identity 92b050b6fbe80695b5d56835e978918e37c8707a7fad09a01ae782d4c3170c9baa4c2c196b36eac6b78ceb210b287aeb0727ef1c60e48042142f7bcc8b6382305cd50c5a4542c44ec72a4de6640c194f8ef36bea1dbed168ab6fd8681d910d55 --duration 30`
+[2m2025-12-11T19:03:31.386266Z[0m [32m INFO[0m [2msimulation_ecosystem[0m[2m:[0m Starting Enhanced Ecosystem Simulation
+[2m2025-12-11T19:03:31.394595Z[0m [32m INFO[0m [2msimulation_ecosystem[0m[2m:[0m Starting Monitor...
+[2m2025-12-11T19:03:31.394640Z[0m [32m INFO[0m [2msimulation_ecosystem[0m[2m:[0m Maximizer: Started.
+[2m2025-12-11T19:03:31.417447Z[0m [32m INFO[0m [2msimulation_ecosystem[0m[2m:[0m Keeper: Processing Epoch...
+[2m2025-12-11T19:03:31.899761Z[0m [32m INFO[0m [2msimulation_ecosystem[0m[2m:[0m DEBUG: Whale0 State - Name: Whale0, Chips: 1000, vUSDT: 0
+[2m2025-12-11T19:03:31.902548Z[0m [32m INFO[0m [2msimulation_ecosystem[0m[2m:[0m DEBUG: Maximizer State - Chips: 1000
+[2m2025-12-11T19:03:36.473761Z[0m [32m INFO[0m [2msimulation_ecosystem[0m[2m:[0m Whale0: PUMP Buying 29574 vUSDT of RNG
+[2m2025-12-11T19:03:36.899147Z[0m [32m INFO[0m [2msimulation_ecosystem[0m[2m:[0m DEBUG: Whale0 State - Name: Whale0, Chips: 1000, vUSDT: 0
+[2m2025-12-11T19:03:36.901434Z[0m [32m INFO[0m [2msimulation_ecosystem[0m[2m:[0m DEBUG: Maximizer State - Chips: 1000
+[2m2025-12-11T19:03:41.398999Z[0m [32m INFO[0m [2msimulation_ecosystem[0m[2m:[0m DEBUG: Whale0 State - Name: Whale0, Chips: 1000, vUSDT: 0
+[2m2025-12-11T19:03:41.401349Z[0m [32m INFO[0m [2msimulation_ecosystem[0m[2m:[0m DEBUG: Maximizer State - Chips: 1000
+[2m2025-12-11T19:03:41.417938Z[0m [32m INFO[0m [2msimulation_ecosystem[0m[2m:[0m Keeper: Processing Epoch...
+[2m2025-12-11T19:03:41.474310Z[0m [32m INFO[0m [2msimulation_ecosystem[0m[2m:[0m Whale0: PUMP Buying 19702 vUSDT of RNG
+[2m2025-12-11T19:03:46.398283Z[0m [32m INFO[0m [2msimulation_ecosystem[0m[2m:[0m DEBUG: Whale0 State - Name: Whale0, Chips: 1000, vUSDT: 0
+[2m2025-12-11T19:03:46.400288Z[0m [32m INFO[0m [2msimulation_ecosystem[0m[2m:[0m DEBUG: Maximizer State - Chips: 1000
+[2m2025-12-11T19:03:51.398560Z[0m [32m INFO[0m [2msimulation_ecosystem[0m[2m:[0m DEBUG: Whale0 State - Name: Whale0, Chips: 1000, vUSDT: 0
+[2m2025-12-11T19:03:51.401090Z[0m [32m INFO[0m [2msimulation_ecosystem[0m[2m:[0m DEBUG: Maximizer State - Chips: 1000
+[2m2025-12-11T19:03:51.417813Z[0m [32m INFO[0m [2msimulation_ecosystem[0m[2m:[0m Keeper: Processing Epoch...
+[2m2025-12-11T19:03:51.899206Z[0m [32m INFO[0m [2msimulation_ecosystem[0m[2m:[0m DEBUG: Whale0 State - Name: Whale0, Chips: 1000, vUSDT: 0
+[2m2025-12-11T19:03:51.901471Z[0m [32m INFO[0m [2msimulation_ecosystem[0m[2m:[0m DEBUG: Maximizer State - Chips: 1000
+[2m2025-12-11T19:03:56.398730Z[0m [32m INFO[0m [2msimulation_ecosystem[0m[2m:[0m DEBUG: Whale0 State - Name: Whale0, Chips: 1000, vUSDT: 0
+[2m2025-12-11T19:03:56.400798Z[0m [32m INFO[0m [2msimulation_ecosystem[0m[2m:[0m DEBUG: Maximizer State - Chips: 1000
+[2m2025-12-11T19:03:56.474008Z[0m [32m INFO[0m [2msimulation_ecosystem[0m[2m:[0m Whale0: DUMP Selling 17662 RNG
+[2m2025-12-11T19:03:56.899146Z[0m [32m INFO[0m [2msimulation_ecosystem[0m[2m:[0m DEBUG: Whale0 State - Name: Whale0, Chips: 1000, vUSDT: 0
+[2m2025-12-11T19:03:56.902289Z[0m [32m INFO[0m [2msimulation_ecosystem[0m[2m:[0m DEBUG: Maximizer State - Chips: 1000

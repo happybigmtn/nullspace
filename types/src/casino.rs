@@ -55,6 +55,11 @@ pub const FAUCET_RATE_LIMIT: u64 = 100;
 /// Initial chips granted on registration
 pub const INITIAL_CHIPS: u64 = 1_000;
 
+/// Tokenomics Constants
+pub const TOTAL_SUPPLY: u64 = 1_000_000_000;
+pub const ANNUAL_EMISSION_RATE_BPS: u64 = 1000; // 10%
+pub const TOURNAMENTS_PER_DAY: u64 = 288; // 24 * 60 / 5
+
 /// Error codes for CasinoError events
 pub const ERROR_PLAYER_ALREADY_REGISTERED: u8 = 1;
 pub const ERROR_PLAYER_NOT_FOUND: u8 = 2;
@@ -68,6 +73,7 @@ pub const ERROR_INVALID_MOVE: u8 = 9;
 pub const ERROR_RATE_LIMITED: u8 = 10;
 pub const ERROR_TOURNAMENT_NOT_REGISTERING: u8 = 11;
 pub const ERROR_ALREADY_IN_TOURNAMENT: u8 = 12;
+pub const ERROR_TOURNAMENT_LIMIT_REACHED: u8 = 13;
 
 /// Casino game types matching frontend GameType enum
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -229,6 +235,7 @@ pub struct Player {
     pub nonce: u64,
     pub name: String,
     pub chips: u64,
+    pub vusdt_balance: u64, // Virtual USDT balance
     pub shields: u32,
     pub doubles: u32,
     pub rank: u32,
@@ -239,6 +246,10 @@ pub struct Player {
     /// Aura Meter for Super Mode (0-5 segments).
     /// Increments on near-misses, triggers Super Aura Round at 5.
     pub aura_meter: u8,
+    // Tournament tracking
+    pub tournaments_played_today: u8,
+    pub last_tournament_ts: u64,
+    pub is_kyc_verified: bool,
 }
 
 impl Player {
@@ -247,6 +258,7 @@ impl Player {
             nonce: 0,
             name,
             chips: INITIAL_CHIPS,
+            vusdt_balance: 0,
             shields: STARTING_SHIELDS,
             doubles: STARTING_DOUBLES,
             rank: 0,
@@ -255,6 +267,9 @@ impl Player {
             active_session: None,
             last_deposit_block: 0,
             aura_meter: 0,
+            tournaments_played_today: 0,
+            last_tournament_ts: 0,
+            is_kyc_verified: false,
         }
     }
 
@@ -263,6 +278,7 @@ impl Player {
             nonce: 0,
             name,
             chips: INITIAL_CHIPS,
+            vusdt_balance: 0,
             shields: STARTING_SHIELDS,
             doubles: STARTING_DOUBLES,
             rank: 0,
@@ -271,6 +287,9 @@ impl Player {
             active_session: None,
             last_deposit_block: block,
             aura_meter: 0,
+            tournaments_played_today: 0,
+            last_tournament_ts: 0,
+            is_kyc_verified: false,
         }
     }
 }
@@ -280,6 +299,7 @@ impl Write for Player {
         self.nonce.write(writer);
         write_string(&self.name, writer);
         self.chips.write(writer);
+        self.vusdt_balance.write(writer);
         self.shields.write(writer);
         self.doubles.write(writer);
         self.rank.write(writer);
@@ -288,6 +308,9 @@ impl Write for Player {
         self.active_session.write(writer);
         self.last_deposit_block.write(writer);
         self.aura_meter.write(writer);
+        self.tournaments_played_today.write(writer);
+        self.last_tournament_ts.write(writer);
+        self.is_kyc_verified.write(writer);
     }
 }
 
@@ -299,6 +322,7 @@ impl Read for Player {
             nonce: u64::read(reader)?,
             name: read_string(reader, MAX_NAME_LENGTH)?,
             chips: u64::read(reader)?,
+            vusdt_balance: u64::read(reader)?,
             shields: u32::read(reader)?,
             doubles: u32::read(reader)?,
             rank: u32::read(reader)?,
@@ -307,6 +331,9 @@ impl Read for Player {
             active_session: Option::<u64>::read(reader)?,
             last_deposit_block: u64::read(reader)?,
             aura_meter: u8::read(reader)?,
+            tournaments_played_today: u8::read(reader)?,
+            last_tournament_ts: u64::read(reader)?,
+            is_kyc_verified: bool::read(reader)?,
         })
     }
 }
@@ -316,6 +343,7 @@ impl EncodeSize for Player {
         self.nonce.encode_size()
             + string_encode_size(&self.name)
             + self.chips.encode_size()
+            + self.vusdt_balance.encode_size()
             + self.shields.encode_size()
             + self.doubles.encode_size()
             + self.rank.encode_size()
@@ -324,6 +352,9 @@ impl EncodeSize for Player {
             + self.active_session.encode_size()
             + self.last_deposit_block.encode_size()
             + self.aura_meter.encode_size()
+            + self.tournaments_played_today.encode_size()
+            + self.last_tournament_ts.encode_size()
+            + self.is_kyc_verified.encode_size()
     }
 }
 
@@ -550,6 +581,7 @@ pub struct Tournament {
     /// Unix timestamp (milliseconds) when the tournament ends
     pub end_time_ms: u64,
     pub players: Vec<PublicKey>,
+    pub prize_pool: u64,
     pub starting_chips: u64,   // 1000
     pub starting_shields: u32, // 3
     pub starting_doubles: u32, // 3
@@ -563,6 +595,7 @@ impl Write for Tournament {
         self.start_time_ms.write(writer);
         self.end_time_ms.write(writer);
         self.players.write(writer);
+        self.prize_pool.write(writer);
         self.starting_chips.write(writer);
         self.starting_shields.write(writer);
         self.starting_doubles.write(writer);
@@ -580,6 +613,7 @@ impl Read for Tournament {
             start_time_ms: u64::read(reader)?,
             end_time_ms: u64::read(reader)?,
             players: Vec::<PublicKey>::read_range(reader, 0..=1000)?,
+            prize_pool: u64::read(reader)?,
             starting_chips: u64::read(reader)?,
             starting_shields: u32::read(reader)?,
             starting_doubles: u32::read(reader)?,
@@ -595,6 +629,7 @@ impl EncodeSize for Tournament {
             + self.start_time_ms.encode_size()
             + self.end_time_ms.encode_size()
             + self.players.encode_size()
+            + self.prize_pool.encode_size()
             + self.starting_chips.encode_size()
             + self.starting_shields.encode_size()
             + self.starting_doubles.encode_size()
@@ -616,6 +651,199 @@ impl Tournament {
         }
         self.players.push(player);
         true
+    }
+}
+
+/// House state for the "Central Bank" model
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct HouseState {
+    pub current_epoch: u64,
+    pub epoch_start_ts: u64,
+    pub net_pnl: i128,          // Net Profit/Loss for current epoch (House Edge - Player Wins)
+    pub total_staked_amount: u64,
+    pub total_voting_power: u128,
+    pub accumulated_fees: u64,  // Fees from AMM or other sources
+    pub total_burned: u64,      // Total RNG burned via Sell Tax
+}
+
+impl HouseState {
+    pub fn new(start_ts: u64) -> Self {
+        Self {
+            current_epoch: 0,
+            epoch_start_ts: start_ts,
+            net_pnl: 0,
+            total_staked_amount: 0,
+            total_voting_power: 0,
+            accumulated_fees: 0,
+            total_burned: 0,
+        }
+    }
+}
+
+impl Write for HouseState {
+    fn write(&self, writer: &mut impl BufMut) {
+        self.current_epoch.write(writer);
+        self.epoch_start_ts.write(writer);
+        self.net_pnl.write(writer);
+        self.total_staked_amount.write(writer);
+        self.total_voting_power.write(writer);
+        self.accumulated_fees.write(writer);
+        self.total_burned.write(writer);
+    }
+}
+
+impl Read for HouseState {
+    type Cfg = ();
+
+    fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
+        Ok(Self {
+            current_epoch: u64::read(reader)?,
+            epoch_start_ts: u64::read(reader)?,
+            net_pnl: i128::read(reader)?,
+            total_staked_amount: u64::read(reader)?,
+            total_voting_power: u128::read(reader)?,
+            accumulated_fees: u64::read(reader)?,
+            total_burned: u64::read(reader)?,
+        })
+    }
+}
+
+impl EncodeSize for HouseState {
+    fn encode_size(&self) -> usize {
+        self.current_epoch.encode_size()
+            + self.epoch_start_ts.encode_size()
+            + self.net_pnl.encode_size()
+            + self.total_staked_amount.encode_size()
+            + self.total_voting_power.encode_size()
+            + self.accumulated_fees.encode_size()
+            + self.total_burned.encode_size()
+    }
+}
+
+/// Staker state
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct Staker {
+    pub balance: u64,
+    pub unlock_ts: u64,
+    pub last_claim_epoch: u64,
+    pub voting_power: u128,
+}
+
+impl Write for Staker {
+    fn write(&self, writer: &mut impl BufMut) {
+        self.balance.write(writer);
+        self.unlock_ts.write(writer);
+        self.last_claim_epoch.write(writer);
+        self.voting_power.write(writer);
+    }
+}
+
+impl Read for Staker {
+    type Cfg = ();
+
+    fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
+        Ok(Self {
+            balance: u64::read(reader)?,
+            unlock_ts: u64::read(reader)?,
+            last_claim_epoch: u64::read(reader)?,
+            voting_power: u128::read(reader)?,
+        })
+    }
+}
+
+impl EncodeSize for Staker {
+    fn encode_size(&self) -> usize {
+        self.balance.encode_size()
+            + self.unlock_ts.encode_size()
+            + self.last_claim_epoch.encode_size()
+            + self.voting_power.encode_size()
+    }
+}
+
+/// Vault state for CDP (Collateralized Debt Position)
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct Vault {
+    pub collateral_rng: u64,
+    pub debt_vusdt: u64,
+}
+
+impl Write for Vault {
+    fn write(&self, writer: &mut impl BufMut) {
+        self.collateral_rng.write(writer);
+        self.debt_vusdt.write(writer);
+    }
+}
+
+impl Read for Vault {
+    type Cfg = ();
+
+    fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
+        Ok(Self {
+            collateral_rng: u64::read(reader)?,
+            debt_vusdt: u64::read(reader)?,
+        })
+    }
+}
+
+impl EncodeSize for Vault {
+    fn encode_size(&self) -> usize {
+        self.collateral_rng.encode_size() + self.debt_vusdt.encode_size()
+    }
+}
+
+/// AMM Pool state (Constant Product Market Maker)
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct AmmPool {
+    pub reserve_rng: u64,
+    pub reserve_vusdt: u64,
+    pub total_shares: u64,
+    pub fee_basis_points: u16, // e.g., 30 = 0.3%
+    pub sell_tax_basis_points: u16, // e.g., 500 = 5%
+}
+
+impl AmmPool {
+    pub fn new(fee_bps: u16) -> Self {
+        Self {
+            reserve_rng: 0,
+            reserve_vusdt: 0,
+            total_shares: 0,
+            fee_basis_points: fee_bps,
+            sell_tax_basis_points: 500, // 5% default
+        }
+    }
+}
+
+impl Write for AmmPool {
+    fn write(&self, writer: &mut impl BufMut) {
+        self.reserve_rng.write(writer);
+        self.reserve_vusdt.write(writer);
+        self.total_shares.write(writer);
+        self.fee_basis_points.write(writer);
+        self.sell_tax_basis_points.write(writer);
+    }
+}
+
+impl Read for AmmPool {
+    type Cfg = ();
+
+    fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
+        Ok(Self {
+            reserve_rng: u64::read(reader)?,
+            reserve_vusdt: u64::read(reader)?,
+            total_shares: u64::read(reader)?,
+            fee_basis_points: u16::read(reader)?,
+            sell_tax_basis_points: u16::read(reader)?,
+        })
+    }
+}
+
+impl EncodeSize for AmmPool {
+    fn encode_size(&self) -> usize {
+        self.reserve_rng.encode_size()
+            + self.reserve_vusdt.encode_size()
+            + self.total_shares.encode_size()
+            + self.fee_basis_points.encode_size()
+            + self.sell_tax_basis_points.encode_size()
     }
 }
 

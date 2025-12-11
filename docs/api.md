@@ -57,17 +57,19 @@ pub struct Transaction {
 
 ### 4. Game Payload Schemas
 
-This is the critical section for bot developers. Each game type requires a specific binary payload for its moves.
+This is the critical section for bot developers. Each game type requires a specific binary payload for its moves. All amounts are big-endian `u64`.
 
 ### 4.1 Baccarat (GameType = 0)
-*   **Player Bet:** `[0x00]`
-*   **Banker Bet:** `[0x01]`
-*   **Tie Bet:** `[0x02]`
+*   **Place Bet:** `[0x00, bet_type:u8, amount:u64_BE]`
+    *   *Bet Types:* 0=Player, 1=Banker, 2=Tie, 3=PlayerPair, 4=BankerPair.
+*   **Deal:** `[0x01]`
+*   **Clear Bets:** `[0x02]`
 
 ### 4.2 Blackjack (GameType = 1)
 *   **Hit:** `[0x00]`
 *   **Stand:** `[0x01]`
 *   **Double:** `[0x02]`
+*   **Split:** `[0x03]`
 
 ### 4.3 Casino War (GameType = 2)
 *   **Play (Initial):** `[0x00]`
@@ -83,7 +85,7 @@ This is the critical section for bot developers. Each game type requires a speci
 
 ### 4.5 Video Poker (GameType = 4)
 *   **Draw Cards:** `[hold_mask:u8]`
-    *   *Hold Mask:* Bitmask of cards to keep (bit 0 = card 1, etc.). e.g., `0b00001` (1) holds 1st card.
+    *   *Hold Mask:* Bitmask of cards to keep (bit 0 = card 1, etc.). e.g., `0b11111` (31) holds all cards.
 
 ### 4.6 HiLo (GameType = 5)
 *   **Higher:** `[0x00]`
@@ -91,13 +93,17 @@ This is the critical section for bot developers. Each game type requires a speci
 *   **Cashout:** `[0x02]`
 
 ### 4.7 Roulette (GameType = 6)
-*   **Bet:** `[bet_type:u8, number:u8]`
+*   **Place Bet:** `[0x00, bet_type:u8, number:u8, amount:u64_BE]`
     *   *Bet Types:* 0=Straight, 1=Red, 2=Black, 3=Even, 4=Odd, 5=Low, 6=High, 7=Dozen, 8=Column.
     *   *Number:* Used for Straight (0-36), Dozen (0-2), Column (0-2). Ignored for others.
+*   **Spin:** `[0x01]`
+*   **Clear Bets:** `[0x02]`
 
 ### 4.8 Sic Bo (GameType = 7)
-*   **Bet:** `[bet_type:u8, number:u8]`
+*   **Place Bet:** `[0x00, bet_type:u8, number:u8, amount:u64_BE]`
     *   *Bet Types:* 0=Small, 1=Big, 2=Odd, 3=Even, 4=SpecificTriple, 5=AnyTriple, 6=SpecificDouble, 7=Total, 8=Single.
+*   **Roll:** `[0x01]`
+*   **Clear Bets:** `[0x02]`
 
 ### 4.9 Three Card Poker (GameType = 8)
 *   **Play:** `[0x00]`
