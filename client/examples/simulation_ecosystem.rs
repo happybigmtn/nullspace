@@ -108,7 +108,16 @@ struct EconomySnapshot {
     unstake_actions: u64,
     claim_actions: u64,
     errors_invalid_move: u64,
+    errors_invalid_bet: u64,
     errors_insufficient: u64,
+    errors_player_not_found: u64,
+    errors_session_exists: u64,
+    errors_session_not_found: u64,
+    errors_session_not_owned: u64,
+    errors_session_complete: u64,
+    errors_tournament_not_registering: u64,
+    errors_already_in_tournament: u64,
+    errors_tournament_limit_reached: u64,
     errors_rate_limited: u64,
     errors_other: u64,
     submit_failures: u64,
@@ -745,7 +754,16 @@ struct ActivityTally {
     unstake_actions: u64,
     claim_actions: u64,
     errors_invalid_move: u64,
+    errors_invalid_bet: u64,
     errors_insufficient: u64,
+    errors_player_not_found: u64,
+    errors_session_exists: u64,
+    errors_session_not_found: u64,
+    errors_session_not_owned: u64,
+    errors_session_complete: u64,
+    errors_tournament_not_registering: u64,
+    errors_already_in_tournament: u64,
+    errors_tournament_limit_reached: u64,
     errors_rate_limited: u64,
     errors_other: u64,
     vault_collateral: u64,
@@ -938,8 +956,35 @@ async fn run_monitor(
                                     nullspace_types::casino::ERROR_INVALID_MOVE => {
                                         metrics.errors_invalid_move += 1;
                                     }
+                                    nullspace_types::casino::ERROR_INVALID_BET => {
+                                        metrics.errors_invalid_bet += 1;
+                                    }
                                     nullspace_types::casino::ERROR_INSUFFICIENT_FUNDS => {
                                         metrics.errors_insufficient += 1;
+                                    }
+                                    nullspace_types::casino::ERROR_PLAYER_NOT_FOUND => {
+                                        metrics.errors_player_not_found += 1;
+                                    }
+                                    nullspace_types::casino::ERROR_SESSION_EXISTS => {
+                                        metrics.errors_session_exists += 1;
+                                    }
+                                    nullspace_types::casino::ERROR_SESSION_NOT_FOUND => {
+                                        metrics.errors_session_not_found += 1;
+                                    }
+                                    nullspace_types::casino::ERROR_SESSION_NOT_OWNED => {
+                                        metrics.errors_session_not_owned += 1;
+                                    }
+                                    nullspace_types::casino::ERROR_SESSION_COMPLETE => {
+                                        metrics.errors_session_complete += 1;
+                                    }
+                                    nullspace_types::casino::ERROR_TOURNAMENT_NOT_REGISTERING => {
+                                        metrics.errors_tournament_not_registering += 1;
+                                    }
+                                    nullspace_types::casino::ERROR_ALREADY_IN_TOURNAMENT => {
+                                        metrics.errors_already_in_tournament += 1;
+                                    }
+                                    nullspace_types::casino::ERROR_TOURNAMENT_LIMIT_REACHED => {
+                                        metrics.errors_tournament_limit_reached += 1;
                                     }
                                     nullspace_types::casino::ERROR_RATE_LIMITED => {
                                         metrics.errors_rate_limited += 1;
@@ -1030,7 +1075,16 @@ async fn run_monitor(
                 unstake_actions: metrics.unstake_actions,
                 claim_actions: metrics.claim_actions,
                 errors_invalid_move: metrics.errors_invalid_move,
+                errors_invalid_bet: metrics.errors_invalid_bet,
                 errors_insufficient: metrics.errors_insufficient,
+                errors_player_not_found: metrics.errors_player_not_found,
+                errors_session_exists: metrics.errors_session_exists,
+                errors_session_not_found: metrics.errors_session_not_found,
+                errors_session_not_owned: metrics.errors_session_not_owned,
+                errors_session_complete: metrics.errors_session_complete,
+                errors_tournament_not_registering: metrics.errors_tournament_not_registering,
+                errors_already_in_tournament: metrics.errors_already_in_tournament,
+                errors_tournament_limit_reached: metrics.errors_tournament_limit_reached,
                 errors_rate_limited: metrics.errors_rate_limited,
                 errors_other: metrics.errors_other,
                 submit_failures: submit_failures_delta,
