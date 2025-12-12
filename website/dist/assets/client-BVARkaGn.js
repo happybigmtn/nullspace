@@ -609,6 +609,80 @@ export class CasinoClient {
   }
 
   /**
+   * Get vault state for an account.
+   * @param {Uint8Array} publicKeyBytes - Account public key
+   * @returns {Promise<Object|null>} Vault data or null if not found
+   */
+  async getVault(publicKeyBytes) {
+    const keyBytes = this.wasm.encodeVaultKey(publicKeyBytes);
+    const result = await this.queryState(keyBytes);
+
+    if (result.found && result.value) {
+      if (result.value.type === 'Vault') {
+        return snakeToCamel(result.value);
+      }
+      return null;
+    }
+
+    return null;
+  }
+
+  /**
+   * Get AMM pool state.
+   * @returns {Promise<Object|null>} AmmPool data or null if not found
+   */
+  async getAmmPool() {
+    const keyBytes = this.wasm.encodeAmmPoolKey();
+    const result = await this.queryState(keyBytes);
+
+    if (result.found && result.value) {
+      if (result.value.type === 'AmmPool') {
+        return snakeToCamel(result.value);
+      }
+      return null;
+    }
+
+    return null;
+  }
+
+  /**
+   * Get LP balance for an account.
+   * @param {Uint8Array} publicKeyBytes - Account public key
+   * @returns {Promise<Object|null>} LpBalance data or null if not found
+   */
+  async getLpBalance(publicKeyBytes) {
+    const keyBytes = this.wasm.encodeLpBalanceKey(publicKeyBytes);
+    const result = await this.queryState(keyBytes);
+
+    if (result.found && result.value) {
+      if (result.value.type === 'LpBalance') {
+        return snakeToCamel(result.value);
+      }
+      return null;
+    }
+
+    return null;
+  }
+
+  /**
+   * Get house state.
+   * @returns {Promise<Object|null>} House data or null if not found
+   */
+  async getHouse() {
+    const keyBytes = this.wasm.encodeHouseKey();
+    const result = await this.queryState(keyBytes);
+
+    if (result.found && result.value) {
+      if (result.value.type === 'House') {
+        return snakeToCamel(result.value);
+      }
+      return null;
+    }
+
+    return null;
+  }
+
+  /**
    * Get existing keypair from localStorage or create a new one.
    * @returns {{publicKey: Uint8Array, publicKeyHex: string}} Keypair information
    * @warning Private keys are stored in localStorage which is not secure.

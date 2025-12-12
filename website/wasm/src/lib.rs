@@ -252,6 +252,88 @@ impl Transaction {
         let tx = ExecutionTransaction::sign(&signer.private_key, nonce, instruction);
         Ok(Transaction { inner: tx })
     }
+
+    /// Sign a new create vault transaction.
+    #[wasm_bindgen]
+    pub fn create_vault(signer: &Signer, nonce: u64) -> Result<Transaction, JsValue> {
+        let instruction = Instruction::CreateVault;
+        let tx = ExecutionTransaction::sign(&signer.private_key, nonce, instruction);
+        Ok(Transaction { inner: tx })
+    }
+
+    /// Sign a new deposit collateral transaction.
+    #[wasm_bindgen]
+    pub fn deposit_collateral(
+        signer: &Signer,
+        nonce: u64,
+        amount: u64,
+    ) -> Result<Transaction, JsValue> {
+        let instruction = Instruction::DepositCollateral { amount };
+        let tx = ExecutionTransaction::sign(&signer.private_key, nonce, instruction);
+        Ok(Transaction { inner: tx })
+    }
+
+    /// Sign a new borrow vUSDT transaction.
+    #[wasm_bindgen]
+    pub fn borrow_usdt(signer: &Signer, nonce: u64, amount: u64) -> Result<Transaction, JsValue> {
+        let instruction = Instruction::BorrowUSDT { amount };
+        let tx = ExecutionTransaction::sign(&signer.private_key, nonce, instruction);
+        Ok(Transaction { inner: tx })
+    }
+
+    /// Sign a new repay vUSDT transaction.
+    #[wasm_bindgen]
+    pub fn repay_usdt(signer: &Signer, nonce: u64, amount: u64) -> Result<Transaction, JsValue> {
+        let instruction = Instruction::RepayUSDT { amount };
+        let tx = ExecutionTransaction::sign(&signer.private_key, nonce, instruction);
+        Ok(Transaction { inner: tx })
+    }
+
+    /// Sign a new AMM swap transaction.
+    #[wasm_bindgen]
+    pub fn swap(
+        signer: &Signer,
+        nonce: u64,
+        amount_in: u64,
+        min_amount_out: u64,
+        is_buying_rng: bool,
+    ) -> Result<Transaction, JsValue> {
+        let instruction = Instruction::Swap {
+            amount_in,
+            min_amount_out,
+            is_buying_rng,
+        };
+        let tx = ExecutionTransaction::sign(&signer.private_key, nonce, instruction);
+        Ok(Transaction { inner: tx })
+    }
+
+    /// Sign a new add liquidity transaction.
+    #[wasm_bindgen]
+    pub fn add_liquidity(
+        signer: &Signer,
+        nonce: u64,
+        rng_amount: u64,
+        usdt_amount: u64,
+    ) -> Result<Transaction, JsValue> {
+        let instruction = Instruction::AddLiquidity {
+            rng_amount,
+            usdt_amount,
+        };
+        let tx = ExecutionTransaction::sign(&signer.private_key, nonce, instruction);
+        Ok(Transaction { inner: tx })
+    }
+
+    /// Sign a new remove liquidity transaction.
+    #[wasm_bindgen]
+    pub fn remove_liquidity(
+        signer: &Signer,
+        nonce: u64,
+        shares: u64,
+    ) -> Result<Transaction, JsValue> {
+        let instruction = Instruction::RemoveLiquidity { shares };
+        let tx = ExecutionTransaction::sign(&signer.private_key, nonce, instruction);
+        Ok(Transaction { inner: tx })
+    }
 }
 
 /// Encode an account key.
@@ -292,6 +374,40 @@ pub fn encode_casino_leaderboard_key() -> Vec<u8> {
 #[wasm_bindgen]
 pub fn encode_casino_tournament_key(tournament_id: u64) -> Vec<u8> {
     let key = Key::Tournament(tournament_id);
+    key.encode().to_vec()
+}
+
+/// Encode a vault key.
+#[wasm_bindgen]
+pub fn encode_vault_key(public_key: &[u8]) -> Result<Vec<u8>, JsValue> {
+    let mut buf = public_key;
+    let pk = ed25519::PublicKey::read(&mut buf)
+        .map_err(|e| JsValue::from_str(&format!("Invalid public key: {e:?}")))?;
+    let key = Key::Vault(pk);
+    Ok(key.encode().to_vec())
+}
+
+/// Encode the AMM pool key.
+#[wasm_bindgen]
+pub fn encode_amm_pool_key() -> Vec<u8> {
+    let key = Key::AmmPool;
+    key.encode().to_vec()
+}
+
+/// Encode an LP balance key.
+#[wasm_bindgen]
+pub fn encode_lp_balance_key(public_key: &[u8]) -> Result<Vec<u8>, JsValue> {
+    let mut buf = public_key;
+    let pk = ed25519::PublicKey::read(&mut buf)
+        .map_err(|e| JsValue::from_str(&format!("Invalid public key: {e:?}")))?;
+    let key = Key::LpBalance(pk);
+    Ok(key.encode().to_vec())
+}
+
+/// Encode the house key.
+#[wasm_bindgen]
+pub fn encode_house_key() -> Vec<u8> {
+    let key = Key::House;
     key.encode().to_vec()
 }
 
@@ -351,13 +467,25 @@ fn decode_value(value: Value) -> Result<JsValue, JsValue> {
         Value::CasinoPlayer(player) => {
             serde_json::json!({
                 "type": "CasinoPlayer",
+                "nonce": player.nonce,
                 "name": player.name,
                 "chips": player.chips,
+                "vusdt_balance": player.vusdt_balance,
                 "shields": player.shields,
                 "doubles": player.doubles,
+                "tournament_chips": player.tournament_chips,
+                "tournament_shields": player.tournament_shields,
+                "tournament_doubles": player.tournament_doubles,
+                "active_tournament": player.active_tournament,
+                "rank": player.rank,
                 "active_shield": player.active_shield,
                 "active_double": player.active_double,
-                "active_session": player.active_session
+                "active_session": player.active_session,
+                "last_deposit_block": player.last_deposit_block,
+                "aura_meter": player.aura_meter,
+                "tournaments_played_today": player.tournaments_played_today,
+                "last_tournament_ts": player.last_tournament_ts,
+                "is_kyc_verified": player.is_kyc_verified
             })
         }
         Value::CasinoSession(session) => {
@@ -390,6 +518,26 @@ fn decode_value(value: Value) -> Result<JsValue, JsValue> {
             })
         }
         Value::Tournament(tournament) => {
+            let players: Vec<_> = tournament
+                .players
+                .iter()
+                .map(|pk| hex(&pk.encode()))
+                .collect();
+
+            let leaderboard_entries: Vec<_> = tournament
+                .leaderboard
+                .entries
+                .iter()
+                .map(|e| {
+                    serde_json::json!({
+                        "player": hex(&e.player.encode()),
+                        "name": e.name,
+                        "chips": e.chips,
+                        "rank": e.rank
+                    })
+                })
+                .collect();
+
             serde_json::json!({
                 "type": "Tournament",
                 "id": tournament.id,
@@ -397,10 +545,63 @@ fn decode_value(value: Value) -> Result<JsValue, JsValue> {
                 "start_block": tournament.start_block,
                 "start_time_ms": tournament.start_time_ms,
                 "end_time_ms": tournament.end_time_ms,
-                "player_count": tournament.players.len()
+                "players": players,
+                "prize_pool": tournament.prize_pool,
+                "starting_chips": tournament.starting_chips,
+                "starting_shields": tournament.starting_shields,
+                "starting_doubles": tournament.starting_doubles,
+                "leaderboard": {
+                    "entries": leaderboard_entries
+                }
             })
         }
-        _ => serde_json::Value::Null,
+        // Staking & House values
+        Value::House(house) => {
+            serde_json::json!({
+                "type": "House",
+                "current_epoch": house.current_epoch,
+                "epoch_start_ts": house.epoch_start_ts,
+                "net_pnl": house.net_pnl.to_string(),
+                "total_staked_amount": house.total_staked_amount,
+                "total_voting_power": house.total_voting_power.to_string(),
+                "accumulated_fees": house.accumulated_fees,
+                "total_burned": house.total_burned,
+                "total_issuance": house.total_issuance
+            })
+        }
+        Value::Staker(staker) => {
+            serde_json::json!({
+                "type": "Staker",
+                "balance": staker.balance,
+                "unlock_ts": staker.unlock_ts,
+                "last_claim_epoch": staker.last_claim_epoch,
+                "voting_power": staker.voting_power.to_string()
+            })
+        }
+        // Virtual Liquidity values
+        Value::Vault(vault) => {
+            serde_json::json!({
+                "type": "Vault",
+                "collateral_rng": vault.collateral_rng,
+                "debt_vusdt": vault.debt_vusdt
+            })
+        }
+        Value::AmmPool(pool) => {
+            serde_json::json!({
+                "type": "AmmPool",
+                "reserve_rng": pool.reserve_rng,
+                "reserve_vusdt": pool.reserve_vusdt,
+                "total_shares": pool.total_shares,
+                "fee_basis_points": pool.fee_basis_points,
+                "sell_tax_basis_points": pool.sell_tax_basis_points
+            })
+        }
+        Value::LpBalance(bal) => {
+            serde_json::json!({
+                "type": "LpBalance",
+                "balance": bal
+            })
+        }
     };
 
     to_object(&json)
@@ -602,6 +803,116 @@ fn decode_event(event: &Event) -> Result<serde_json::Value, JsValue> {
                 "type": "TournamentEnded",
                 "id": id,
                 "rankings": rankings_json
+            })
+        }
+
+        // Vault & AMM events
+        Event::VaultCreated { player } => {
+            serde_json::json!({
+                "type": "VaultCreated",
+                "player": hex(&player.encode())
+            })
+        }
+        Event::CollateralDeposited {
+            player,
+            amount,
+            new_collateral,
+        } => {
+            serde_json::json!({
+                "type": "CollateralDeposited",
+                "player": hex(&player.encode()),
+                "amount": amount,
+                "new_collateral": new_collateral
+            })
+        }
+        Event::VusdtBorrowed {
+            player,
+            amount,
+            new_debt,
+        } => {
+            serde_json::json!({
+                "type": "VusdtBorrowed",
+                "player": hex(&player.encode()),
+                "amount": amount,
+                "new_debt": new_debt
+            })
+        }
+        Event::VusdtRepaid {
+            player,
+            amount,
+            new_debt,
+        } => {
+            serde_json::json!({
+                "type": "VusdtRepaid",
+                "player": hex(&player.encode()),
+                "amount": amount,
+                "new_debt": new_debt
+            })
+        }
+        Event::AmmSwapped {
+            player,
+            is_buying_rng,
+            amount_in,
+            amount_out,
+            fee_amount,
+            burned_amount,
+            reserve_rng,
+            reserve_vusdt,
+        } => {
+            serde_json::json!({
+                "type": "AmmSwapped",
+                "player": hex(&player.encode()),
+                "is_buying_rng": is_buying_rng,
+                "amount_in": amount_in,
+                "amount_out": amount_out,
+                "fee_amount": fee_amount,
+                "burned_amount": burned_amount,
+                "reserve_rng": reserve_rng,
+                "reserve_vusdt": reserve_vusdt
+            })
+        }
+        Event::LiquidityAdded {
+            player,
+            rng_amount,
+            vusdt_amount,
+            shares_minted,
+            total_shares,
+            reserve_rng,
+            reserve_vusdt,
+            lp_balance,
+        } => {
+            serde_json::json!({
+                "type": "LiquidityAdded",
+                "player": hex(&player.encode()),
+                "rng_amount": rng_amount,
+                "vusdt_amount": vusdt_amount,
+                "shares_minted": shares_minted,
+                "total_shares": total_shares,
+                "reserve_rng": reserve_rng,
+                "reserve_vusdt": reserve_vusdt,
+                "lp_balance": lp_balance
+            })
+        }
+        Event::LiquidityRemoved {
+            player,
+            rng_amount,
+            vusdt_amount,
+            shares_burned,
+            total_shares,
+            reserve_rng,
+            reserve_vusdt,
+            lp_balance,
+        } => {
+            serde_json::json!({
+                "type": "LiquidityRemoved",
+                "player": hex(&player.encode()),
+                "rng_amount": rng_amount,
+                "vusdt_amount": vusdt_amount,
+                "shares_burned": shares_burned,
+                "total_shares": total_shares,
+                "reserve_rng": reserve_rng,
+                "reserve_vusdt": reserve_vusdt,
+                "lp_balance": lp_balance
             })
         }
     };

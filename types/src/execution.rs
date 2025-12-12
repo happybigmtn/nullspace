@@ -1064,6 +1064,56 @@ pub enum Event {
         id: u64,
         rankings: Vec<(PublicKey, u64)>,
     },
+
+    // Vault & AMM events (tags 30-36)
+    VaultCreated {
+        player: PublicKey,
+    },
+    CollateralDeposited {
+        player: PublicKey,
+        amount: u64,
+        new_collateral: u64,
+    },
+    VusdtBorrowed {
+        player: PublicKey,
+        amount: u64,
+        new_debt: u64,
+    },
+    VusdtRepaid {
+        player: PublicKey,
+        amount: u64,
+        new_debt: u64,
+    },
+    AmmSwapped {
+        player: PublicKey,
+        is_buying_rng: bool,
+        amount_in: u64,
+        amount_out: u64,
+        fee_amount: u64,
+        burned_amount: u64,
+        reserve_rng: u64,
+        reserve_vusdt: u64,
+    },
+    LiquidityAdded {
+        player: PublicKey,
+        rng_amount: u64,
+        vusdt_amount: u64,
+        shares_minted: u64,
+        total_shares: u64,
+        reserve_rng: u64,
+        reserve_vusdt: u64,
+        lp_balance: u64,
+    },
+    LiquidityRemoved {
+        player: PublicKey,
+        rng_amount: u64,
+        vusdt_amount: u64,
+        shares_burned: u64,
+        total_shares: u64,
+        reserve_rng: u64,
+        reserve_vusdt: u64,
+        lp_balance: u64,
+    },
 }
 
 impl Write for Event {
@@ -1160,6 +1210,102 @@ impl Write for Event {
                 id.write(writer);
                 rankings.write(writer);
             }
+
+            // Vault & AMM events (tags 30-36)
+            Self::VaultCreated { player } => {
+                30u8.write(writer);
+                player.write(writer);
+            }
+            Self::CollateralDeposited {
+                player,
+                amount,
+                new_collateral,
+            } => {
+                31u8.write(writer);
+                player.write(writer);
+                amount.write(writer);
+                new_collateral.write(writer);
+            }
+            Self::VusdtBorrowed {
+                player,
+                amount,
+                new_debt,
+            } => {
+                32u8.write(writer);
+                player.write(writer);
+                amount.write(writer);
+                new_debt.write(writer);
+            }
+            Self::VusdtRepaid {
+                player,
+                amount,
+                new_debt,
+            } => {
+                33u8.write(writer);
+                player.write(writer);
+                amount.write(writer);
+                new_debt.write(writer);
+            }
+            Self::AmmSwapped {
+                player,
+                is_buying_rng,
+                amount_in,
+                amount_out,
+                fee_amount,
+                burned_amount,
+                reserve_rng,
+                reserve_vusdt,
+            } => {
+                34u8.write(writer);
+                player.write(writer);
+                is_buying_rng.write(writer);
+                amount_in.write(writer);
+                amount_out.write(writer);
+                fee_amount.write(writer);
+                burned_amount.write(writer);
+                reserve_rng.write(writer);
+                reserve_vusdt.write(writer);
+            }
+            Self::LiquidityAdded {
+                player,
+                rng_amount,
+                vusdt_amount,
+                shares_minted,
+                total_shares,
+                reserve_rng,
+                reserve_vusdt,
+                lp_balance,
+            } => {
+                35u8.write(writer);
+                player.write(writer);
+                rng_amount.write(writer);
+                vusdt_amount.write(writer);
+                shares_minted.write(writer);
+                total_shares.write(writer);
+                reserve_rng.write(writer);
+                reserve_vusdt.write(writer);
+                lp_balance.write(writer);
+            }
+            Self::LiquidityRemoved {
+                player,
+                rng_amount,
+                vusdt_amount,
+                shares_burned,
+                total_shares,
+                reserve_rng,
+                reserve_vusdt,
+                lp_balance,
+            } => {
+                36u8.write(writer);
+                player.write(writer);
+                rng_amount.write(writer);
+                vusdt_amount.write(writer);
+                shares_burned.write(writer);
+                total_shares.write(writer);
+                reserve_rng.write(writer);
+                reserve_vusdt.write(writer);
+                lp_balance.write(writer);
+            }
         }
     }
 }
@@ -1251,6 +1397,56 @@ impl Read for Event {
                 rankings: Vec::<(PublicKey, u64)>::read_range(reader, 0..=1000)?,
             },
 
+            // Vault & AMM events (tags 30-36)
+            30 => Self::VaultCreated {
+                player: PublicKey::read(reader)?,
+            },
+            31 => Self::CollateralDeposited {
+                player: PublicKey::read(reader)?,
+                amount: u64::read(reader)?,
+                new_collateral: u64::read(reader)?,
+            },
+            32 => Self::VusdtBorrowed {
+                player: PublicKey::read(reader)?,
+                amount: u64::read(reader)?,
+                new_debt: u64::read(reader)?,
+            },
+            33 => Self::VusdtRepaid {
+                player: PublicKey::read(reader)?,
+                amount: u64::read(reader)?,
+                new_debt: u64::read(reader)?,
+            },
+            34 => Self::AmmSwapped {
+                player: PublicKey::read(reader)?,
+                is_buying_rng: bool::read(reader)?,
+                amount_in: u64::read(reader)?,
+                amount_out: u64::read(reader)?,
+                fee_amount: u64::read(reader)?,
+                burned_amount: u64::read(reader)?,
+                reserve_rng: u64::read(reader)?,
+                reserve_vusdt: u64::read(reader)?,
+            },
+            35 => Self::LiquidityAdded {
+                player: PublicKey::read(reader)?,
+                rng_amount: u64::read(reader)?,
+                vusdt_amount: u64::read(reader)?,
+                shares_minted: u64::read(reader)?,
+                total_shares: u64::read(reader)?,
+                reserve_rng: u64::read(reader)?,
+                reserve_vusdt: u64::read(reader)?,
+                lp_balance: u64::read(reader)?,
+            },
+            36 => Self::LiquidityRemoved {
+                player: PublicKey::read(reader)?,
+                rng_amount: u64::read(reader)?,
+                vusdt_amount: u64::read(reader)?,
+                shares_burned: u64::read(reader)?,
+                total_shares: u64::read(reader)?,
+                reserve_rng: u64::read(reader)?,
+                reserve_vusdt: u64::read(reader)?,
+                lp_balance: u64::read(reader)?,
+            },
+
             i => return Err(Error::InvalidEnum(i)),
         };
 
@@ -1327,6 +1523,81 @@ impl EncodeSize for Event {
                     id.encode_size() + phase.encode_size()
                 }
                 Self::TournamentEnded { id, rankings } => id.encode_size() + rankings.encode_size(),
+
+                // Vault & AMM events (tags 30-36)
+                Self::VaultCreated { player } => player.encode_size(),
+                Self::CollateralDeposited {
+                    player,
+                    amount,
+                    new_collateral,
+                } => player.encode_size() + amount.encode_size() + new_collateral.encode_size(),
+                Self::VusdtBorrowed {
+                    player,
+                    amount,
+                    new_debt,
+                } => player.encode_size() + amount.encode_size() + new_debt.encode_size(),
+                Self::VusdtRepaid {
+                    player,
+                    amount,
+                    new_debt,
+                } => player.encode_size() + amount.encode_size() + new_debt.encode_size(),
+                Self::AmmSwapped {
+                    player,
+                    is_buying_rng,
+                    amount_in,
+                    amount_out,
+                    fee_amount,
+                    burned_amount,
+                    reserve_rng,
+                    reserve_vusdt,
+                } => {
+                    player.encode_size()
+                        + is_buying_rng.encode_size()
+                        + amount_in.encode_size()
+                        + amount_out.encode_size()
+                        + fee_amount.encode_size()
+                        + burned_amount.encode_size()
+                        + reserve_rng.encode_size()
+                        + reserve_vusdt.encode_size()
+                }
+                Self::LiquidityAdded {
+                    player,
+                    rng_amount,
+                    vusdt_amount,
+                    shares_minted,
+                    total_shares,
+                    reserve_rng,
+                    reserve_vusdt,
+                    lp_balance,
+                } => {
+                    player.encode_size()
+                        + rng_amount.encode_size()
+                        + vusdt_amount.encode_size()
+                        + shares_minted.encode_size()
+                        + total_shares.encode_size()
+                        + reserve_rng.encode_size()
+                        + reserve_vusdt.encode_size()
+                        + lp_balance.encode_size()
+                }
+                Self::LiquidityRemoved {
+                    player,
+                    rng_amount,
+                    vusdt_amount,
+                    shares_burned,
+                    total_shares,
+                    reserve_rng,
+                    reserve_vusdt,
+                    lp_balance,
+                } => {
+                    player.encode_size()
+                        + rng_amount.encode_size()
+                        + vusdt_amount.encode_size()
+                        + shares_burned.encode_size()
+                        + total_shares.encode_size()
+                        + reserve_rng.encode_size()
+                        + reserve_vusdt.encode_size()
+                        + lp_balance.encode_size()
+                }
             }
     }
 }

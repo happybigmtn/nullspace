@@ -564,4 +564,90 @@ export class NonceManager {
       'casinoEndTournament'
     );
   }
+
+  /**
+   * Submit a create vault transaction.
+   * @returns {Promise<{status: string, txHash?: string}>} Transaction result
+   */
+  async submitCreateVault() {
+    return this.submitTransaction(
+      (nonce) => this.wasm.createCreateVaultTransaction(nonce),
+      'createVault'
+    );
+  }
+
+  /**
+   * Submit a deposit collateral transaction.
+   * @param {bigint|number} amount - Amount of RNG to lock as collateral
+   * @returns {Promise<{status: string, txHash?: string}>} Transaction result
+   */
+  async submitDepositCollateral(amount) {
+    return this.submitTransaction(
+      (nonce) => this.wasm.createDepositCollateralTransaction(nonce, amount),
+      'depositCollateral'
+    );
+  }
+
+  /**
+   * Submit a borrow vUSDT transaction.
+   * @param {bigint|number} amount - Amount of vUSDT to borrow
+   * @returns {Promise<{status: string, txHash?: string}>} Transaction result
+   */
+  async submitBorrowUsdt(amount) {
+    return this.submitTransaction(
+      (nonce) => this.wasm.createBorrowUsdtTransaction(nonce, amount),
+      'borrowUsdt'
+    );
+  }
+
+  /**
+   * Submit a repay vUSDT transaction.
+   * @param {bigint|number} amount - Amount of vUSDT to repay
+   * @returns {Promise<{status: string, txHash?: string}>} Transaction result
+   */
+  async submitRepayUsdt(amount) {
+    return this.submitTransaction(
+      (nonce) => this.wasm.createRepayUsdtTransaction(nonce, amount),
+      'repayUsdt'
+    );
+  }
+
+  /**
+   * Submit an AMM swap transaction.
+   * @param {bigint|number} amountIn - Amount of input token
+   * @param {bigint|number} minAmountOut - Minimum amount out (slippage protection)
+   * @param {boolean} isBuyingRng - True to swap vUSDT->RNG, false to swap RNG->vUSDT
+   * @returns {Promise<{status: string, txHash?: string}>} Transaction result
+   */
+  async submitSwap(amountIn, minAmountOut, isBuyingRng) {
+    return this.submitTransaction(
+      (nonce) => this.wasm.createSwapTransaction(nonce, amountIn, minAmountOut, isBuyingRng),
+      'swap'
+    );
+  }
+
+  /**
+   * Submit an add liquidity transaction.
+   * @param {bigint|number} rngAmount - RNG amount
+   * @param {bigint|number} usdtAmount - vUSDT amount
+   * @returns {Promise<{status: string, txHash?: string}>} Transaction result
+   */
+  async submitAddLiquidity(rngAmount, usdtAmount) {
+    return this.submitTransaction(
+      (nonce) => this.wasm.createAddLiquidityTransaction(nonce, rngAmount, usdtAmount),
+      'addLiquidity'
+    );
+  }
+
+  /**
+   * Submit a remove liquidity transaction.
+   * @param {bigint|number} shares - LP shares to burn
+   * @returns {Promise<{status: string, txHash?: string}>} Transaction result
+   */
+  async submitRemoveLiquidity(shares) {
+    return this.submitTransaction(
+      (nonce) => this.wasm.createRemoveLiquidityTransaction(nonce, shares),
+      'removeLiquidity'
+    );
+  }
 }

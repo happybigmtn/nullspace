@@ -90,6 +90,26 @@ export class WasmWrapper {
     return this.wasm.encode_casino_tournament_key(BigInt(tournamentId));
   }
 
+  // Encode vault key
+  encodeVaultKey(publicKeyBytes) {
+    return this.wasm.encode_vault_key(publicKeyBytes);
+  }
+
+  // Encode AMM pool key
+  encodeAmmPoolKey() {
+    return this.wasm.encode_amm_pool_key();
+  }
+
+  // Encode LP balance key
+  encodeLpBalanceKey(publicKeyBytes) {
+    return this.wasm.encode_lp_balance_key(publicKeyBytes);
+  }
+
+  // Encode house key
+  encodeHouseKey() {
+    return this.wasm.encode_house_key();
+  }
+
   // Encode UpdatesFilter for all events
   encodeUpdatesFilterAll() {
     return this.wasm.encode_updates_filter_all();
@@ -344,6 +364,99 @@ export class WasmWrapper {
       this.keypair,
       BigInt(nonce),
       BigInt(tournamentId)
+    );
+    return tx.encode();
+  }
+
+  // Create a create vault transaction
+  createCreateVaultTransaction(nonce) {
+    if (!this.keypair) {
+      throw new Error('Keypair not initialized');
+    }
+    const tx = this.wasm.Transaction.create_vault(
+      this.keypair,
+      BigInt(nonce)
+    );
+    return tx.encode();
+  }
+
+  // Create a deposit collateral transaction
+  createDepositCollateralTransaction(nonce, amount) {
+    if (!this.keypair) {
+      throw new Error('Keypair not initialized');
+    }
+    const tx = this.wasm.Transaction.deposit_collateral(
+      this.keypair,
+      BigInt(nonce),
+      BigInt(amount)
+    );
+    return tx.encode();
+  }
+
+  // Create a borrow vUSDT transaction
+  createBorrowUsdtTransaction(nonce, amount) {
+    if (!this.keypair) {
+      throw new Error('Keypair not initialized');
+    }
+    const tx = this.wasm.Transaction.borrow_usdt(
+      this.keypair,
+      BigInt(nonce),
+      BigInt(amount)
+    );
+    return tx.encode();
+  }
+
+  // Create a repay vUSDT transaction
+  createRepayUsdtTransaction(nonce, amount) {
+    if (!this.keypair) {
+      throw new Error('Keypair not initialized');
+    }
+    const tx = this.wasm.Transaction.repay_usdt(
+      this.keypair,
+      BigInt(nonce),
+      BigInt(amount)
+    );
+    return tx.encode();
+  }
+
+  // Create an AMM swap transaction
+  createSwapTransaction(nonce, amountIn, minAmountOut, isBuyingRng) {
+    if (!this.keypair) {
+      throw new Error('Keypair not initialized');
+    }
+    const tx = this.wasm.Transaction.swap(
+      this.keypair,
+      BigInt(nonce),
+      BigInt(amountIn),
+      BigInt(minAmountOut),
+      !!isBuyingRng
+    );
+    return tx.encode();
+  }
+
+  // Create an add liquidity transaction
+  createAddLiquidityTransaction(nonce, rngAmount, usdtAmount) {
+    if (!this.keypair) {
+      throw new Error('Keypair not initialized');
+    }
+    const tx = this.wasm.Transaction.add_liquidity(
+      this.keypair,
+      BigInt(nonce),
+      BigInt(rngAmount),
+      BigInt(usdtAmount)
+    );
+    return tx.encode();
+  }
+
+  // Create a remove liquidity transaction
+  createRemoveLiquidityTransaction(nonce, shares) {
+    if (!this.keypair) {
+      throw new Error('Keypair not initialized');
+    }
+    const tx = this.wasm.Transaction.remove_liquidity(
+      this.keypair,
+      BigInt(nonce),
+      BigInt(shares)
     );
     return tx.encode();
   }

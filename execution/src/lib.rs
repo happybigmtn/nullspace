@@ -1739,7 +1739,9 @@ impl<'a, S: State> Layer<'a, S> {
 
         let vault = nullspace_types::casino::Vault::default();
         self.insert(Key::Vault(public.clone()), Value::Vault(vault));
-        vec![]
+        vec![Event::VaultCreated {
+            player: public.clone(),
+        }]
     }
 
     async fn handle_deposit_collateral(&mut self, public: &PublicKey, amount: u64) -> Vec<Event> {
@@ -1771,6 +1773,7 @@ impl<'a, S: State> Layer<'a, S> {
 
         player.chips -= amount;
         vault.collateral_rng += amount;
+        let new_collateral = vault.collateral_rng;
 
         self.insert(
             Key::CasinoPlayer(public.clone()),
@@ -1778,7 +1781,11 @@ impl<'a, S: State> Layer<'a, S> {
         );
         self.insert(Key::Vault(public.clone()), Value::Vault(vault));
 
-        vec![]
+        vec![Event::CollateralDeposited {
+            player: public.clone(),
+            amount,
+            new_collateral,
+        }]
     }
 
     async fn handle_borrow_usdt(&mut self, public: &PublicKey, amount: u64) -> Vec<Event> {
@@ -1832,7 +1839,11 @@ impl<'a, S: State> Layer<'a, S> {
             );
         }
 
-        vec![]
+        vec![Event::VusdtBorrowed {
+            player: public.clone(),
+            amount,
+            new_debt,
+        }]
     }
 
     async fn handle_repay_usdt(&mut self, public: &PublicKey, amount: u64) -> Vec<Event> {
@@ -1859,6 +1870,7 @@ impl<'a, S: State> Layer<'a, S> {
 
         player.vusdt_balance -= actual_repay;
         vault.debt_vusdt -= actual_repay;
+        let new_debt = vault.debt_vusdt;
 
         self.insert(
             Key::CasinoPlayer(public.clone()),
@@ -1866,7 +1878,11 @@ impl<'a, S: State> Layer<'a, S> {
         );
         self.insert(Key::Vault(public.clone()), Value::Vault(vault));
 
-        vec![]
+        vec![Event::VusdtRepaid {
+            player: public.clone(),
+            amount: actual_repay,
+            new_debt,
+        }]
     }
 
     async fn handle_swap(
@@ -1876,6 +1892,7 @@ impl<'a, S: State> Layer<'a, S> {
         min_amount_out: u64,
         is_buying_rng: bool,
     ) -> Vec<Event> {
+        let original_amount_in = amount_in;
         let mut amm = self.get_or_init_amm().await;
         let mut player = match self.get(&Key::CasinoPlayer(public.clone())).await {
             Some(Value::CasinoPlayer(p)) => p,
@@ -1989,13 +2006,24 @@ impl<'a, S: State> Layer<'a, S> {
             self.insert(Key::House, Value::House(house));
         }
 
+        let event = Event::AmmSwapped {
+            player: public.clone(),
+            is_buying_rng,
+            amount_in: original_amount_in,
+            amount_out,
+            fee_amount: fee_amount as u64,
+            burned_amount,
+            reserve_rng: amm.reserve_rng,
+            reserve_vusdt: amm.reserve_vusdt,
+        };
+
         self.insert(
             Key::CasinoPlayer(public.clone()),
             Value::CasinoPlayer(player),
         );
         self.insert(Key::AmmPool, Value::AmmPool(amm));
 
-        vec![]
+        vec![event]
     }
 
     async fn handle_add_liquidity(
@@ -2083,6 +2111,17 @@ impl<'a, S: State> Layer<'a, S> {
 
         let new_lp_balance = lp_balance.saturating_add(shares_minted);
 
+        let event = Event::LiquidityAdded {
+            player: public.clone(),
+            rng_amount,
+            vusdt_amount: usdt_amount,
+            shares_minted,
+            total_shares: amm.total_shares,
+            reserve_rng: amm.reserve_rng,
+            reserve_vusdt: amm.reserve_vusdt,
+            lp_balance: new_lp_balance,
+        };
+
         self.insert(
             Key::CasinoPlayer(public.clone()),
             Value::CasinoPlayer(player),
@@ -2093,7 +2132,7 @@ impl<'a, S: State> Layer<'a, S> {
             Value::LpBalance(new_lp_balance),
         );
 
-        vec![]
+        vec![event]
     }
 
     async fn handle_remove_liquidity(&mut self, public: &PublicKey, shares: u64) -> Vec<Event> {
@@ -2136,6 +2175,17 @@ impl<'a, S: State> Layer<'a, S> {
 
         let new_lp_balance = lp_balance.saturating_sub(shares);
 
+        let event = Event::LiquidityRemoved {
+            player: public.clone(),
+            rng_amount: amount_rng,
+            vusdt_amount: amount_vusd,
+            shares_burned: shares,
+            total_shares: amm.total_shares,
+            reserve_rng: amm.reserve_rng,
+            reserve_vusdt: amm.reserve_vusdt,
+            lp_balance: new_lp_balance,
+        };
+
         self.insert(
             Key::CasinoPlayer(public.clone()),
             Value::CasinoPlayer(player),
@@ -2146,7 +2196,7 @@ impl<'a, S: State> Layer<'a, S> {
             Value::LpBalance(new_lp_balance),
         );
 
-        vec![]
+        vec![event]
     }
     pub async fn execute(
         &mut self,

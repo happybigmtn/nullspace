@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 
 export type PlayMode = 'CASH' | 'FREEROLL';
 
@@ -49,8 +50,17 @@ export const ModeSelectView: React.FC<ModeSelectViewProps> = ({ onSelect }) => {
             </div>
           </button>
         </div>
+
+        <div className="mt-6 text-center text-[10px] text-gray-600 tracking-widest">
+          <Link to="/liquidity" className="text-terminal-green hover:underline">
+            LIQUIDITY / AMM
+          </Link>
+          <span className="mx-2">·</span>
+          <Link to="/explorer" className="text-gray-400 hover:underline">
+            BLOCK EXPLORER
+          </Link>
+        </div>
       </div>
     </div>
   );
 };
-
