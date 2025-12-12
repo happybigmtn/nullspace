@@ -241,6 +241,10 @@ pub struct Player {
     pub vusdt_balance: u64, // Virtual USDT balance
     pub shields: u32,
     pub doubles: u32,
+    pub tournament_chips: u64,
+    pub tournament_shields: u32,
+    pub tournament_doubles: u32,
+    pub active_tournament: Option<u64>,
     pub rank: u32,
     pub active_shield: bool,
     pub active_double: bool,
@@ -264,6 +268,10 @@ impl Player {
             vusdt_balance: 0,
             shields: STARTING_SHIELDS,
             doubles: STARTING_DOUBLES,
+            tournament_chips: 0,
+            tournament_shields: 0,
+            tournament_doubles: 0,
+            active_tournament: None,
             rank: 0,
             active_shield: false,
             active_double: false,
@@ -285,6 +293,10 @@ impl Player {
             vusdt_balance: 0,
             shields: STARTING_SHIELDS,
             doubles: STARTING_DOUBLES,
+            tournament_chips: 0,
+            tournament_shields: 0,
+            tournament_doubles: 0,
+            active_tournament: None,
             rank: 0,
             active_shield: false,
             active_double: false,
@@ -307,6 +319,10 @@ impl Write for Player {
         self.vusdt_balance.write(writer);
         self.shields.write(writer);
         self.doubles.write(writer);
+        self.tournament_chips.write(writer);
+        self.tournament_shields.write(writer);
+        self.tournament_doubles.write(writer);
+        self.active_tournament.write(writer);
         self.rank.write(writer);
         self.active_shield.write(writer);
         self.active_double.write(writer);
@@ -330,6 +346,10 @@ impl Read for Player {
             vusdt_balance: u64::read(reader)?,
             shields: u32::read(reader)?,
             doubles: u32::read(reader)?,
+            tournament_chips: u64::read(reader)?,
+            tournament_shields: u32::read(reader)?,
+            tournament_doubles: u32::read(reader)?,
+            active_tournament: Option::<u64>::read(reader)?,
             rank: u32::read(reader)?,
             active_shield: bool::read(reader)?,
             active_double: bool::read(reader)?,
@@ -351,6 +371,10 @@ impl EncodeSize for Player {
             + self.vusdt_balance.encode_size()
             + self.shields.encode_size()
             + self.doubles.encode_size()
+            + self.tournament_chips.encode_size()
+            + self.tournament_shields.encode_size()
+            + self.tournament_doubles.encode_size()
+            + self.active_tournament.encode_size()
             + self.rank.encode_size()
             + self.active_shield.encode_size()
             + self.active_double.encode_size()
@@ -375,6 +399,8 @@ pub struct GameSession {
     pub created_at: u64,
     pub is_complete: bool,
     pub super_mode: SuperModeState,
+    pub is_tournament: bool,
+    pub tournament_id: Option<u64>,
 }
 
 impl Write for GameSession {
@@ -388,6 +414,8 @@ impl Write for GameSession {
         self.created_at.write(writer);
         self.is_complete.write(writer);
         self.super_mode.write(writer);
+        self.is_tournament.write(writer);
+        self.tournament_id.write(writer);
     }
 }
 
@@ -405,6 +433,8 @@ impl Read for GameSession {
             created_at: u64::read(reader)?,
             is_complete: bool::read(reader)?,
             super_mode: SuperModeState::read(reader)?,
+            is_tournament: bool::read(reader)?,
+            tournament_id: Option::<u64>::read(reader)?,
         })
     }
 }
@@ -420,6 +450,8 @@ impl EncodeSize for GameSession {
             + self.created_at.encode_size()
             + self.is_complete.encode_size()
             + self.super_mode.encode_size()
+            + self.is_tournament.encode_size()
+            + self.tournament_id.encode_size()
     }
 }
 
@@ -594,6 +626,7 @@ pub struct Tournament {
     pub starting_chips: u64,   // 1000
     pub starting_shields: u32, // 3
     pub starting_doubles: u32, // 3
+    pub leaderboard: CasinoLeaderboard,
 }
 
 impl Write for Tournament {
@@ -608,6 +641,7 @@ impl Write for Tournament {
         self.starting_chips.write(writer);
         self.starting_shields.write(writer);
         self.starting_doubles.write(writer);
+        self.leaderboard.write(writer);
     }
 }
 
@@ -626,6 +660,7 @@ impl Read for Tournament {
             starting_chips: u64::read(reader)?,
             starting_shields: u32::read(reader)?,
             starting_doubles: u32::read(reader)?,
+            leaderboard: CasinoLeaderboard::read(reader)?,
         })
     }
 }
@@ -642,6 +677,7 @@ impl EncodeSize for Tournament {
             + self.starting_chips.encode_size()
             + self.starting_shields.encode_size()
             + self.starting_doubles.encode_size()
+            + self.leaderboard.encode_size()
     }
 }
 

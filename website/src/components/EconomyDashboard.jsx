@@ -7,6 +7,7 @@ import RoleVolumeChart from './charts/RoleVolumeChart';
 import ErrorChart from './charts/ErrorChart';
 import CollateralChart from './charts/CollateralChart';
 import StatsCard from './StatsCard';
+import GameTables from './GameTables';
 
 const EconomyDashboard = () => {
   const [data, setData] = useState([]);
@@ -59,6 +60,7 @@ const EconomyDashboard = () => {
         <RoleVolumeChart data={data} />
         <CollateralChart data={data} />
         <ErrorChart data={data} />
+        <GameTables data={data} />
         <PnLChart data={data} />
       </div>
     </div>

@@ -237,6 +237,8 @@ mod tests {
             created_at: 0,
             is_complete: false,
             super_mode: nullspace_types::casino::SuperModeState::default(),
+            is_tournament: false,
+            tournament_id: None,
         }
     }
 

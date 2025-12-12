@@ -12,9 +12,7 @@ use commonware_cryptography::{
     bls12381::primitives::variant::MinSig,
     ed25519::{self, PublicKey},
     sha256::Digest,
-    Digestible,
-    PrivateKeyExt,
-    Signer,
+    Digestible, PrivateKeyExt, Signer,
 };
 use commonware_storage::{
     adb::{
@@ -1231,7 +1229,10 @@ mod tests {
             InternalUpdate::Seed(received_seed) => assert_eq!(received_seed, seed),
             _ => panic!("Expected seed update"),
         }
-        assert_eq!(simulator.query_seed(&ChainQuery::Latest), Some(seed.clone()));
+        assert_eq!(
+            simulator.query_seed(&ChainQuery::Latest),
+            Some(seed.clone())
+        );
         assert_eq!(simulator.query_seed(&ChainQuery::Index(1)), Some(seed));
 
         // Submit another seed
@@ -1242,9 +1243,15 @@ mod tests {
             InternalUpdate::Seed(received_seed) => assert_eq!(received_seed, seed),
             _ => panic!("Expected seed update"),
         }
-        assert_eq!(simulator.query_seed(&ChainQuery::Latest), Some(seed.clone()));
+        assert_eq!(
+            simulator.query_seed(&ChainQuery::Latest),
+            Some(seed.clone())
+        );
         assert_eq!(simulator.query_seed(&ChainQuery::Index(2)), None);
-        assert_eq!(simulator.query_seed(&ChainQuery::Index(3)), Some(seed.clone()));
+        assert_eq!(
+            simulator.query_seed(&ChainQuery::Index(3)),
+            Some(seed.clone())
+        );
     }
 
     #[test]

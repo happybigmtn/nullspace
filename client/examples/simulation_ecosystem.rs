@@ -26,6 +26,7 @@ use nullspace_types::{
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use serde::Serialize;
 use std::{
+    collections::HashMap,
     fs::File,
     io::Write,
     sync::{
@@ -104,6 +105,9 @@ struct EconomySnapshot {
     game_bet_volume: u64,
     game_net_payout: i64,
     game_starts: u64,
+    tournament_game_bet_volume: u64,
+    tournament_game_net_payout: i64,
+    tournament_game_starts: u64,
     stakes_in: u64,
     unstake_actions: u64,
     claim_actions: u64,
@@ -139,6 +143,10 @@ struct EconomySnapshot {
     tournament_ended: u64,
     epoch_calls: u64,
     errors: u64,
+    game_stats: Vec<GameStat>,
+    top_players: Vec<PlayerStat>,
+    freeroll_game_stats: Vec<GameStat>,
+    freeroll_top_players: Vec<PlayerStat>,
 }
 
 struct SubmitRateState {
@@ -147,6 +155,10 @@ struct SubmitRateState {
 }
 
 static SUBMIT_RATE_STATE: OnceLock<Mutex<SubmitRateState>> = OnceLock::new();
+
+fn to_hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{:02x}", b)).collect()
+}
 
 async fn throttle_submissions() {
     let limiter = SUBMIT_RATE_STATE.get_or_init(|| {
@@ -761,6 +773,9 @@ struct ActivityTally {
     game_bet_volume: u64,
     game_net_payout: i64,
     game_starts: u64,
+    tournament_game_bet_volume: u64,
+    tournament_game_net_payout: i64,
+    tournament_game_starts: u64,
     stakes_in: u64,
     unstake_actions: u64,
     claim_actions: u64,
@@ -790,6 +805,28 @@ struct ActivityTally {
     errors: u64,
 }
 
+#[derive(Clone, Serialize)]
+struct GameStat {
+    game_type: String,
+    bet_volume: u64,
+    net_payout: i64,
+    house_edge: i64,
+}
+
+#[derive(Clone, Serialize)]
+struct PlayerStat {
+    player: String,
+    game_pnl: i64,
+    bet_volume: u64,
+    sessions: u64,
+}
+
+#[derive(Clone, Copy)]
+struct SessionMeta {
+    bet: u64,
+    is_tournament: bool,
+}
+
 // === Monitor ===
 async fn run_monitor(
     client: Arc<Client>,
@@ -804,6 +841,11 @@ async fn run_monitor(
     let mut log = Vec::new();
     let mut last_price = 1.0f64;
     let mut last_submit_failures = 0u64;
+    let mut game_stats: HashMap<String, (u64, i64)> = HashMap::new();
+    let mut player_stats: HashMap<String, (u64, i64, u64)> = HashMap::new(); // bet_volume, game_pnl, sessions
+    let mut freeroll_game_stats: HashMap<String, (u64, i64)> = HashMap::new();
+    let mut freeroll_player_stats: HashMap<String, (u64, i64, u64)> = HashMap::new();
+    let mut session_bets: HashMap<u64, SessionMeta> = HashMap::new();
 
     info!("Starting Monitor (Block-based)...");
 
@@ -959,11 +1001,54 @@ async fn run_monitor(
                                 Instruction::RemoveLiquidity { shares } => {
                                     metrics.liquidity_shares_removed += *shares
                                 }
-                                Instruction::CasinoStartGame { bet, .. } => {
-                                    metrics.game_starts += 1;
-                                    metrics.game_bet_volume += *bet;
-                                    if tx.public == maximizer_pk {
-                                        metrics.maximizer_game_bet_volume += *bet;
+                                Instruction::CasinoStartGame {
+                                    bet,
+                                    game_type,
+                                    session_id,
+                                } => {
+                                    // Determine if this is a freeroll tournament session
+                                    let is_tournament = match client
+                                        .query_state(&Key::CasinoSession(*session_id))
+                                        .await
+                                    {
+                                        Ok(Some(lookup)) => match lookup.operation.value() {
+                                            Some(Value::CasinoSession(s)) => s.is_tournament,
+                                            _ => false,
+                                        },
+                                        _ => false,
+                                    };
+
+                                    session_bets
+                                        .insert(*session_id, SessionMeta { bet: *bet, is_tournament });
+
+                                    if is_tournament {
+                                        metrics.tournament_game_starts += 1;
+                                        metrics.tournament_game_bet_volume += *bet;
+                                        let game_name = format!("{:?}", game_type);
+                                        let entry =
+                                            freeroll_game_stats.entry(game_name).or_insert((0, 0));
+                                        entry.0 = entry.0.saturating_add(*bet);
+                                        let player_key = to_hex(tx.public.as_ref());
+                                        let entry_p = freeroll_player_stats
+                                            .entry(player_key)
+                                            .or_insert((0, 0, 0));
+                                        entry_p.0 = entry_p.0.saturating_add(*bet);
+                                        entry_p.2 = entry_p.2.saturating_add(1);
+                                    } else {
+                                        metrics.game_starts += 1;
+                                        metrics.game_bet_volume += *bet;
+                                        if tx.public == maximizer_pk {
+                                            metrics.maximizer_game_bet_volume += *bet;
+                                        }
+                                        // Track per-game bet volume and player sessions
+                                        let game_name = format!("{:?}", game_type);
+                                        let entry = game_stats.entry(game_name).or_insert((0, 0));
+                                        entry.0 = entry.0.saturating_add(*bet);
+                                        let player_key = to_hex(tx.public.as_ref());
+                                        let entry_p =
+                                            player_stats.entry(player_key).or_insert((0, 0, 0));
+                                        entry_p.0 = entry_p.0.saturating_add(*bet);
+                                        entry_p.2 = entry_p.2.saturating_add(1);
                                     }
                                 }
                                 Instruction::CasinoStartTournament { .. } => {
@@ -983,8 +1068,44 @@ async fn run_monitor(
                             }
                         }
                         Output::Event(ev) => match ev {
-                            Event::CasinoGameCompleted { payout, .. } => {
-                                metrics.game_net_payout += payout
+                            Event::CasinoGameCompleted {
+                                session_id,
+                                payout,
+                                game_type,
+                                player,
+                                ..
+                            } => {
+                                let meta = session_bets.remove(&session_id);
+                                let bet_for_session = meta.map(|m| m.bet).unwrap_or(0);
+                                let is_tournament = meta.map(|m| m.is_tournament).unwrap_or(false);
+                                // Net PnL is payout minus original wager for wins/pushes,
+                                // but raw payout already contains the loss for busts.
+                                let net_pnl = if payout >= 0 {
+                                    payout - bet_for_session as i64
+                                } else {
+                                    payout
+                                };
+                                if is_tournament {
+                                    metrics.tournament_game_net_payout += net_pnl;
+                                    let game_name = format!("{:?}", game_type);
+                                    let entry =
+                                        freeroll_game_stats.entry(game_name).or_insert((0, 0));
+                                    entry.1 += net_pnl;
+                                    let player_key = to_hex(player.as_ref());
+                                    let entry_p = freeroll_player_stats
+                                        .entry(player_key)
+                                        .or_insert((0, 0, 0));
+                                    entry_p.1 += net_pnl;
+                                } else {
+                                    metrics.game_net_payout += net_pnl;
+                                    let game_name = format!("{:?}", game_type);
+                                    let entry = game_stats.entry(game_name).or_insert((0, 0));
+                                    entry.1 += net_pnl;
+                                    let player_key = to_hex(player.as_ref());
+                                    let entry_p =
+                                        player_stats.entry(player_key).or_insert((0, 0, 0));
+                                    entry_p.1 += net_pnl;
+                                }
                             }
                             Event::TournamentStarted { .. } => metrics.tournament_started += 1,
                             Event::PlayerJoined { .. } => metrics.tournament_joined += 1,
@@ -1060,6 +1181,53 @@ async fn run_monitor(
                 .accumulated_fees
                 .saturating_sub(last_house.accumulated_fees); // Approx global fees
 
+            // 3a. Aggregate game stats and top players
+            let mut game_stats_vec: Vec<GameStat> = game_stats
+                .iter()
+                .map(|(name, (bet_volume, net_payout))| GameStat {
+                    game_type: name.clone(),
+                    bet_volume: *bet_volume,
+                    net_payout: *net_payout,
+                    house_edge: -*net_payout,
+                })
+                .collect();
+            game_stats_vec.sort_by(|a, b| b.bet_volume.cmp(&a.bet_volume));
+
+            let mut freeroll_game_stats_vec: Vec<GameStat> = freeroll_game_stats
+                .iter()
+                .map(|(name, (bet_volume, net_payout))| GameStat {
+                    game_type: name.clone(),
+                    bet_volume: *bet_volume,
+                    net_payout: *net_payout,
+                    house_edge: 0, // Freeroll: no house edge
+                })
+                .collect();
+            freeroll_game_stats_vec.sort_by(|a, b| b.bet_volume.cmp(&a.bet_volume));
+
+            let mut top_players_vec: Vec<PlayerStat> = player_stats
+                .iter()
+                .map(|(pk, (bet_volume, pnl, sessions))| PlayerStat {
+                    player: pk.clone(),
+                    game_pnl: *pnl,
+                    bet_volume: *bet_volume,
+                    sessions: *sessions,
+                })
+                .collect();
+            top_players_vec.sort_by(|a, b| b.game_pnl.cmp(&a.game_pnl));
+            top_players_vec.truncate(10);
+
+            let mut freeroll_top_players_vec: Vec<PlayerStat> = freeroll_player_stats
+                .iter()
+                .map(|(pk, (bet_volume, pnl, sessions))| PlayerStat {
+                    player: pk.clone(),
+                    game_pnl: *pnl,
+                    bet_volume: *bet_volume,
+                    sessions: *sessions,
+                })
+                .collect();
+            freeroll_top_players_vec.sort_by(|a, b| b.game_pnl.cmp(&a.game_pnl));
+            freeroll_top_players_vec.truncate(10);
+
             // 3. Maximizer NW
             let mut max_nw = 0i64;
             let mut max_debt = 0u64;
@@ -1110,6 +1278,9 @@ async fn run_monitor(
                 game_bet_volume: metrics.game_bet_volume,
                 game_net_payout: metrics.game_net_payout,
                 game_starts: metrics.game_starts,
+                tournament_game_bet_volume: metrics.tournament_game_bet_volume,
+                tournament_game_net_payout: metrics.tournament_game_net_payout,
+                tournament_game_starts: metrics.tournament_game_starts,
                 stakes_in: metrics.stakes_in,
                 unstake_actions: metrics.unstake_actions,
                 claim_actions: metrics.claim_actions,
@@ -1145,6 +1316,10 @@ async fn run_monitor(
                 tournament_ended: metrics.tournament_ended,
                 epoch_calls: metrics.epoch_calls,
                 errors: metrics.errors,
+                game_stats: game_stats_vec.clone(),
+                top_players: top_players_vec.clone(),
+                freeroll_game_stats: freeroll_game_stats_vec.clone(),
+                freeroll_top_players: freeroll_top_players_vec.clone(),
             });
 
             // Write to file

@@ -224,6 +224,8 @@ async fn test_casino_war(ctx: &mut Context) {
             created_at: 0,
             is_complete: false,
             super_mode: SuperModeState::default(),
+            is_tournament: false,
+            tournament_id: None,
         };
         ctx.inject_session(session).await;
 
@@ -249,6 +251,8 @@ async fn test_casino_war(ctx: &mut Context) {
             created_at: 0,
             is_complete: false,
             super_mode: SuperModeState::default(),
+            is_tournament: false,
+            tournament_id: None,
         };
         ctx.inject_session(session).await;
 

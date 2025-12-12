@@ -522,6 +522,22 @@ impl<'a, S: State> Layer<'a, S> {
             }
         };
 
+        // Determine play mode (cash vs tournament)
+        let mut is_tournament = false;
+        let mut tournament_id = None;
+        if let Some(active_tid) = player.active_tournament {
+            if let Some(Value::Tournament(t)) = self.get(&Key::Tournament(active_tid)).await {
+                if matches!(t.phase, nullspace_types::casino::TournamentPhase::Active) {
+                    is_tournament = true;
+                    tournament_id = Some(active_tid);
+                } else {
+                    player.active_tournament = None;
+                }
+            } else {
+                player.active_tournament = None;
+            }
+        }
+
         // Check player has enough chips
         if bet == 0 {
             return vec![Event::CasinoError {
@@ -531,12 +547,17 @@ impl<'a, S: State> Layer<'a, S> {
                 message: "Bet must be greater than zero".to_string(),
             }];
         }
-        if player.chips < bet {
+        let available_stack = if is_tournament {
+            player.tournament_chips
+        } else {
+            player.chips
+        };
+        if available_stack < bet {
             return vec![Event::CasinoError {
                 player: public.clone(),
                 session_id: Some(session_id),
                 error_code: nullspace_types::casino::ERROR_INSUFFICIENT_FUNDS,
-                message: format!("Insufficient chips: have {}, need {}", player.chips, bet),
+                message: format!("Insufficient chips: have {}, need {}", available_stack, bet),
             }];
         }
 
@@ -551,19 +572,22 @@ impl<'a, S: State> Layer<'a, S> {
         }
 
         // Deduct bet from player
-        player.chips = player.chips.saturating_sub(bet);
+        if is_tournament {
+            player.tournament_chips = player.tournament_chips.saturating_sub(bet);
+        } else {
+            player.chips = player.chips.saturating_sub(bet);
+        }
         self.insert(
             Key::CasinoPlayer(public.clone()),
             Value::CasinoPlayer(player.clone()),
         );
 
         // Update House PnL (Income)
-        self.update_house_pnl(bet as i128).await;
+        if !is_tournament {
+            self.update_house_pnl(bet as i128).await;
+        }
 
-        // Update leaderboard after bet deduction
-        self.update_casino_leaderboard(public, &player).await;
-
-        // Create game session
+        // Create game session and update leaderboard after bet deduction
         let mut session = nullspace_types::casino::GameSession {
             id: session_id,
             player: public.clone(),
@@ -574,7 +598,11 @@ impl<'a, S: State> Layer<'a, S> {
             created_at: self.seed.view,
             is_complete: false,
             super_mode: nullspace_types::casino::SuperModeState::default(),
+            is_tournament,
+            tournament_id,
         };
+        self.update_leaderboard_for_session(&session, public, &player)
+            .await;
 
         // Initialize game
         let mut rng = crate::casino::GameRng::new(&self.seed, session_id, 0);
@@ -603,25 +631,44 @@ impl<'a, S: State> Layer<'a, S> {
                     crate::casino::GameResult::Win(base_payout) => {
                         let mut payout = base_payout as i64;
                         let was_doubled = player.active_double;
-                        if was_doubled && player.doubles > 0 {
+                        if was_doubled
+                            && ((session.is_tournament && player.tournament_doubles > 0)
+                                || (!session.is_tournament && player.doubles > 0))
+                        {
                             payout *= 2;
-                            player.doubles -= 1;
+                            if session.is_tournament {
+                                player.tournament_doubles -= 1;
+                            } else {
+                                player.doubles -= 1;
+                            }
                         }
                         // Safe cast: payout should always be positive for Win result
                         let addition = u64::try_from(payout).unwrap_or(0);
-                        player.chips = player.chips.saturating_add(addition);
+                        if session.is_tournament {
+                            player.tournament_chips =
+                                player.tournament_chips.saturating_add(addition);
+                        } else {
+                            player.chips = player.chips.saturating_add(addition);
+                        }
                         player.active_shield = false;
                         player.active_double = false;
 
                         // Update House PnL (Payout)
-                        self.update_house_pnl(-(payout as i128)).await;
+                        if !session.is_tournament {
+                            self.update_house_pnl(-(payout as i128)).await;
+                        }
 
-                        let final_chips = player.chips;
+                        let final_chips = if session.is_tournament {
+                            player.tournament_chips
+                        } else {
+                            player.chips
+                        };
                         self.insert(
                             Key::CasinoPlayer(public.clone()),
                             Value::CasinoPlayer(player.clone()),
                         );
-                        self.update_casino_leaderboard(public, &player).await;
+                        self.update_leaderboard_for_session(&session, public, &player)
+                            .await;
 
                         events.push(Event::CasinoGameCompleted {
                             session_id,
@@ -634,18 +681,28 @@ impl<'a, S: State> Layer<'a, S> {
                         });
                     }
                     crate::casino::GameResult::Push => {
-                        player.chips = player.chips.saturating_add(session.bet);
+                        if session.is_tournament {
+                            player.tournament_chips =
+                                player.tournament_chips.saturating_add(session.bet);
+                        } else {
+                            player.chips = player.chips.saturating_add(session.bet);
+                        }
                         player.active_shield = false;
                         player.active_double = false;
 
-                        let final_chips = player.chips;
+                        let final_chips = if session.is_tournament {
+                            player.tournament_chips
+                        } else {
+                            player.chips
+                        };
                         self.insert(
                             Key::CasinoPlayer(public.clone()),
                             Value::CasinoPlayer(player.clone()),
                         );
 
                         // Update leaderboard after push
-                        self.update_casino_leaderboard(public, &player).await;
+                        self.update_leaderboard_for_session(&session, public, &player)
+                            .await;
 
                         events.push(Event::CasinoGameCompleted {
                             session_id,
@@ -658,9 +715,19 @@ impl<'a, S: State> Layer<'a, S> {
                         });
                     }
                     crate::casino::GameResult::Loss => {
-                        let was_shielded = player.active_shield && player.shields > 0;
+                        let shield_pool = if session.is_tournament {
+                            player.tournament_shields
+                        } else {
+                            player.shields
+                        };
+                        let was_shielded = player.active_shield && shield_pool > 0;
                         let payout = if was_shielded {
-                            player.shields -= 1;
+                            if session.is_tournament {
+                                player.tournament_shields =
+                                    player.tournament_shields.saturating_sub(1);
+                            } else {
+                                player.shields = player.shields.saturating_sub(1);
+                            }
                             0
                         } else {
                             -(session.bet as i64)
@@ -668,14 +735,19 @@ impl<'a, S: State> Layer<'a, S> {
                         player.active_shield = false;
                         player.active_double = false;
 
-                        let final_chips = player.chips;
+                        let final_chips = if session.is_tournament {
+                            player.tournament_chips
+                        } else {
+                            player.chips
+                        };
                         self.insert(
                             Key::CasinoPlayer(public.clone()),
                             Value::CasinoPlayer(player.clone()),
                         );
 
                         // Update leaderboard after immediate loss
-                        self.update_casino_leaderboard(public, &player).await;
+                        self.update_leaderboard_for_session(&session, public, &player)
+                            .await;
 
                         events.push(Event::CasinoGameCompleted {
                             session_id,
@@ -766,13 +838,20 @@ impl<'a, S: State> Layer<'a, S> {
                 );
             }
             crate::casino::GameResult::ContinueWithUpdate { payout } => {
-                // Update House PnL
-                self.update_house_pnl(-(payout as i128)).await;
+                // Update House PnL for cash games only
+                if !session.is_tournament {
+                    self.update_house_pnl(-(payout as i128)).await;
+                }
 
                 // Handle mid-game balance updates (additional bets or intermediate payouts)
                 if let Some(Value::CasinoPlayer(mut player)) =
                     self.get(&Key::CasinoPlayer(public.clone())).await
                 {
+                    let stack = if session.is_tournament {
+                        &mut player.tournament_chips
+                    } else {
+                        &mut player.chips
+                    };
                     if payout < 0 {
                         // Deducting chips (new bet placed)
                         // Use checked_neg to safely convert negative i64 to positive value
@@ -780,7 +859,7 @@ impl<'a, S: State> Layer<'a, S> {
                             .checked_neg()
                             .and_then(|v| u64::try_from(v).ok())
                             .unwrap_or(0);
-                        if deduction == 0 || player.chips < deduction {
+                        if deduction == 0 || *stack < deduction {
                             // Insufficient funds or overflow - reject the move
                             return vec![Event::CasinoError {
                                 player: public.clone(),
@@ -788,16 +867,16 @@ impl<'a, S: State> Layer<'a, S> {
                                 error_code: nullspace_types::casino::ERROR_INSUFFICIENT_FUNDS,
                                 message: format!(
                                     "Insufficient chips for additional bet: have {}, need {}",
-                                    player.chips, deduction
+                                    *stack, deduction
                                 ),
                             }];
                         }
-                        player.chips = player.chips.saturating_sub(deduction);
+                        *stack = stack.saturating_sub(deduction);
                     } else {
                         // Adding chips (intermediate win)
                         // Safe cast: positive i64 fits in u64
                         let addition = u64::try_from(payout).unwrap_or(0);
-                        player.chips = player.chips.saturating_add(addition);
+                        *stack = stack.saturating_add(addition);
                     }
                     self.insert(
                         Key::CasinoPlayer(public.clone()),
@@ -805,7 +884,8 @@ impl<'a, S: State> Layer<'a, S> {
                     );
 
                     // Update leaderboard after mid-game balance change
-                    self.update_casino_leaderboard(public, &player).await;
+                    self.update_leaderboard_for_session(&session, public, &player)
+                        .await;
                 }
                 self.insert(
                     Key::CasinoSession(session_id),
@@ -825,22 +905,37 @@ impl<'a, S: State> Layer<'a, S> {
                 {
                     let mut payout = base_payout as i64;
                     let was_doubled = player.active_double;
-                    if was_doubled && player.doubles > 0 {
+                    let doubles_pool = if session.is_tournament {
+                        &mut player.tournament_doubles
+                    } else {
+                        &mut player.doubles
+                    };
+                    if was_doubled && *doubles_pool > 0 {
                         payout *= 2;
-                        player.doubles -= 1;
+                        *doubles_pool -= 1;
                     }
                     // Safe cast: payout should always be positive for Win result
                     let addition = u64::try_from(payout).unwrap_or(0);
-                    player.chips = player.chips.saturating_add(addition);
+                    let stack = if session.is_tournament {
+                        &mut player.tournament_chips
+                    } else {
+                        &mut player.chips
+                    };
+                    *stack = stack.saturating_add(addition);
                     player.active_shield = false;
                     player.active_double = false;
 
-                    let final_chips = player.chips;
+                    if !session.is_tournament {
+                        self.update_house_pnl(-(payout as i128)).await;
+                    }
+
+                    let final_chips = *stack;
                     self.insert(
                         Key::CasinoPlayer(public.clone()),
                         Value::CasinoPlayer(player.clone()),
                     );
-                    self.update_casino_leaderboard(public, &player).await;
+                    self.update_leaderboard_for_session(&session, public, &player)
+                        .await;
 
                     events.push(Event::CasinoGameCompleted {
                         session_id,
@@ -864,21 +959,29 @@ impl<'a, S: State> Layer<'a, S> {
                     self.get(&Key::CasinoPlayer(public.clone())).await
                 {
                     // Return bet on push
-                    player.chips = player.chips.saturating_add(session.bet);
+                    let stack = if session.is_tournament {
+                        &mut player.tournament_chips
+                    } else {
+                        &mut player.chips
+                    };
+                    *stack = stack.saturating_add(session.bet);
                     player.active_shield = false;
                     player.active_double = false;
 
                     // Update House PnL (Refund)
-                    self.update_house_pnl(-(session.bet as i128)).await;
+                    if !session.is_tournament {
+                        self.update_house_pnl(-(session.bet as i128)).await;
+                    }
 
-                    let final_chips = player.chips;
+                    let final_chips = *stack;
                     self.insert(
                         Key::CasinoPlayer(public.clone()),
                         Value::CasinoPlayer(player.clone()),
                     );
 
                     // Update leaderboard after push
-                    self.update_casino_leaderboard(public, &player).await;
+                    self.update_leaderboard_for_session(&session, public, &player)
+                        .await;
 
                     events.push(Event::CasinoGameCompleted {
                         session_id,
@@ -901,9 +1004,14 @@ impl<'a, S: State> Layer<'a, S> {
                 if let Some(Value::CasinoPlayer(mut player)) =
                     self.get(&Key::CasinoPlayer(public.clone())).await
                 {
-                    let was_shielded = player.active_shield && player.shields > 0;
+                    let shields_pool = if session.is_tournament {
+                        &mut player.tournament_shields
+                    } else {
+                        &mut player.shields
+                    };
+                    let was_shielded = player.active_shield && *shields_pool > 0;
                     let payout = if was_shielded {
-                        player.shields -= 1;
+                        *shields_pool = shields_pool.saturating_sub(1);
                         0 // Shield prevents loss
                     } else {
                         -(session.bet as i64)
@@ -911,14 +1019,20 @@ impl<'a, S: State> Layer<'a, S> {
                     player.active_shield = false;
                     player.active_double = false;
 
-                    let final_chips = player.chips;
+                    let stack = if session.is_tournament {
+                        &mut player.tournament_chips
+                    } else {
+                        &mut player.chips
+                    };
+                    let final_chips = *stack;
                     self.insert(
                         Key::CasinoPlayer(public.clone()),
                         Value::CasinoPlayer(player.clone()),
                     );
 
                     // Update leaderboard after loss
-                    self.update_casino_leaderboard(public, &player).await;
+                    self.update_leaderboard_for_session(&session, public, &player)
+                        .await;
 
                     events.push(Event::CasinoGameCompleted {
                         session_id,
@@ -943,32 +1057,45 @@ impl<'a, S: State> Layer<'a, S> {
                 if let Some(Value::CasinoPlayer(mut player)) =
                     self.get(&Key::CasinoPlayer(public.clone())).await
                 {
-                    let was_shielded = player.active_shield && player.shields > 0;
+                    let shields_pool = if session.is_tournament {
+                        &mut player.tournament_shields
+                    } else {
+                        &mut player.shields
+                    };
+                    let stack = if session.is_tournament {
+                        &mut player.tournament_chips
+                    } else {
+                        &mut player.chips
+                    };
+                    let was_shielded = player.active_shield && *shields_pool > 0;
                     let payout = if was_shielded {
-                        player.shields -= 1;
+                        *shields_pool = shields_pool.saturating_sub(1);
                         0 // Shield prevents loss (but extra still deducted)
                     } else {
                         -(session.bet as i64)
                     };
 
                     // Deduct the extra amount that wasn't charged at StartGame
-                    player.chips = player.chips.saturating_sub(extra);
+                    *stack = stack.saturating_sub(extra);
 
                     // Update House PnL (Extra gain)
                     // Note: Shield does NOT prevent this extra deduction in current logic
-                    self.update_house_pnl(extra as i128).await;
+                    if !session.is_tournament {
+                        self.update_house_pnl(extra as i128).await;
+                    }
 
                     player.active_shield = false;
                     player.active_double = false;
 
-                    let final_chips = player.chips;
+                    let final_chips = *stack;
                     self.insert(
                         Key::CasinoPlayer(public.clone()),
                         Value::CasinoPlayer(player.clone()),
                     );
 
                     // Update leaderboard after loss with extra deduction
-                    self.update_casino_leaderboard(public, &player).await;
+                    self.update_leaderboard_for_session(&session, public, &player)
+                        .await;
 
                     events.push(Event::CasinoGameCompleted {
                         session_id,
@@ -994,14 +1121,26 @@ impl<'a, S: State> Layer<'a, S> {
                 if let Some(Value::CasinoPlayer(mut player)) =
                     self.get(&Key::CasinoPlayer(public.clone())).await
                 {
-                    let was_shielded = player.active_shield && player.shields > 0;
+                    let shields_pool = if session.is_tournament {
+                        &mut player.tournament_shields
+                    } else {
+                        &mut player.shields
+                    };
+                    let stack = if session.is_tournament {
+                        &mut player.tournament_chips
+                    } else {
+                        &mut player.chips
+                    };
+                    let was_shielded = player.active_shield && *shields_pool > 0;
                     let payout = if was_shielded {
                         // Shield prevents loss - refund the pre-deducted amount
-                        player.shields -= 1;
-                        player.chips = player.chips.saturating_add(total_loss);
+                        *shields_pool = shields_pool.saturating_sub(1);
+                        *stack = stack.saturating_add(total_loss);
 
                         // Update House PnL (Refund)
-                        self.update_house_pnl(-(total_loss as i128)).await;
+                        if !session.is_tournament {
+                            self.update_house_pnl(-(total_loss as i128)).await;
+                        }
 
                         0
                     } else {
@@ -1011,14 +1150,15 @@ impl<'a, S: State> Layer<'a, S> {
                     player.active_shield = false;
                     player.active_double = false;
 
-                    let final_chips = player.chips;
+                    let final_chips = *stack;
                     self.insert(
                         Key::CasinoPlayer(public.clone()),
                         Value::CasinoPlayer(player.clone()),
                     );
 
                     // Update leaderboard after pre-deducted loss
-                    self.update_casino_leaderboard(public, &player).await;
+                    self.update_leaderboard_for_session(&session, public, &player)
+                        .await;
 
                     events.push(Event::CasinoGameCompleted {
                         session_id,
@@ -1113,6 +1253,7 @@ impl<'a, S: State> Layer<'a, S> {
                 starting_chips: nullspace_types::casino::STARTING_CHIPS,
                 starting_shields: nullspace_types::casino::STARTING_SHIELDS,
                 starting_doubles: nullspace_types::casino::STARTING_DOUBLES,
+                leaderboard: nullspace_types::casino::CasinoLeaderboard::default(),
             },
         };
 
@@ -1142,6 +1283,7 @@ impl<'a, S: State> Layer<'a, S> {
         // Update player tracking
         player.tournaments_played_today += 1;
         player.last_tournament_ts = current_time_sec;
+        player.active_tournament = Some(tournament_id);
 
         self.insert(
             Key::CasinoPlayer(public.clone()),
@@ -1180,6 +1322,7 @@ impl<'a, S: State> Layer<'a, S> {
                     starting_chips: nullspace_types::casino::STARTING_CHIPS,
                     starting_shields: nullspace_types::casino::STARTING_SHIELDS,
                     starting_doubles: nullspace_types::casino::STARTING_DOUBLES,
+                    leaderboard: nullspace_types::casino::CasinoLeaderboard::default(),
                 };
                 t.add_player(public.clone());
                 t
@@ -1218,15 +1361,16 @@ impl<'a, S: State> Layer<'a, S> {
         tournament.end_time_ms = end_time_ms;
         tournament.prize_pool = prize_pool;
 
-        // Reset chips for all players and rebuild leaderboard for this tournament
+        // Reset tournament-only stacks for all players and rebuild the tournament leaderboard
         let mut leaderboard = nullspace_types::casino::CasinoLeaderboard::default();
         for player_pk in &tournament.players {
             if let Some(Value::CasinoPlayer(mut player)) =
                 self.get(&Key::CasinoPlayer(player_pk.clone())).await
             {
-                player.chips = tournament.starting_chips;
-                player.shields = tournament.starting_shields;
-                player.doubles = tournament.starting_doubles;
+                player.tournament_chips = tournament.starting_chips;
+                player.tournament_shields = tournament.starting_shields;
+                player.tournament_doubles = tournament.starting_doubles;
+                player.active_tournament = Some(tournament_id);
                 player.active_shield = false;
                 player.active_double = false;
                 player.active_session = None;
@@ -1236,15 +1380,15 @@ impl<'a, S: State> Layer<'a, S> {
                     Key::CasinoPlayer(player_pk.clone()),
                     Value::CasinoPlayer(player.clone()),
                 );
-                leaderboard.update(player_pk.clone(), player.name.clone(), player.chips);
+                leaderboard.update(
+                    player_pk.clone(),
+                    player.name.clone(),
+                    player.tournament_chips,
+                );
             }
         }
 
-        // Publish a tournament-scoped leaderboard snapshot
-        self.insert(
-            Key::CasinoLeaderboard,
-            Value::CasinoLeaderboard(leaderboard),
-        );
+        tournament.leaderboard = leaderboard;
 
         self.insert(
             Key::Tournament(tournament_id),
@@ -1276,13 +1420,13 @@ impl<'a, S: State> Layer<'a, S> {
             return vec![];
         }
 
-        // Gather player chips
+        // Gather player tournament chips
         let mut rankings: Vec<(PublicKey, u64)> = Vec::new();
         for player_pk in &tournament.players {
             if let Some(Value::CasinoPlayer(p)) =
                 self.get(&Key::CasinoPlayer(player_pk.clone())).await
             {
-                rankings.push((player_pk.clone(), p.chips));
+                rankings.push((player_pk.clone(), p.tournament_chips));
             }
         }
 
@@ -1315,9 +1459,31 @@ impl<'a, S: State> Layer<'a, S> {
                     if let Some(Value::CasinoPlayer(mut p)) =
                         self.get(&Key::CasinoPlayer(pk.clone())).await
                     {
-                        p.chips += payout;
+                        // Tournament prizes are credited to the real bankroll
+                        p.chips = p.chips.saturating_add(payout);
                         self.insert(Key::CasinoPlayer(pk.clone()), Value::CasinoPlayer(p));
                     }
+                }
+            }
+        }
+
+        // Clear tournament flags and stacks now that the event is over
+        for player_pk in &tournament.players {
+            if let Some(Value::CasinoPlayer(mut player)) =
+                self.get(&Key::CasinoPlayer(player_pk.clone())).await
+            {
+                if player.active_tournament == Some(tournament_id) {
+                    player.active_tournament = None;
+                    player.tournament_chips = 0;
+                    player.tournament_shields = 0;
+                    player.tournament_doubles = 0;
+                    player.active_shield = false;
+                    player.active_double = false;
+                    player.active_session = None;
+                    self.insert(
+                        Key::CasinoPlayer(player_pk.clone()),
+                        Value::CasinoPlayer(player.clone()),
+                    );
                 }
             }
         }
@@ -1348,6 +1514,35 @@ impl<'a, S: State> Layer<'a, S> {
             Key::CasinoLeaderboard,
             Value::CasinoLeaderboard(leaderboard),
         );
+    }
+
+    async fn update_tournament_leaderboard(
+        &mut self,
+        tournament_id: u64,
+        public: &PublicKey,
+        player: &nullspace_types::casino::Player,
+    ) {
+        if let Some(Value::Tournament(mut t)) = self.get(&Key::Tournament(tournament_id)).await {
+            t.leaderboard
+                .update(public.clone(), player.name.clone(), player.tournament_chips);
+            self.insert(Key::Tournament(tournament_id), Value::Tournament(t));
+        }
+    }
+
+    async fn update_leaderboard_for_session(
+        &mut self,
+        session: &nullspace_types::casino::GameSession,
+        public: &PublicKey,
+        player: &nullspace_types::casino::Player,
+    ) {
+        if session.is_tournament {
+            if let Some(tid) = session.tournament_id {
+                self.update_tournament_leaderboard(tid, public, player)
+                    .await;
+            }
+        } else {
+            self.update_casino_leaderboard(public, player).await;
+        }
     }
 
     async fn update_house_pnl(&mut self, amount: i128) {

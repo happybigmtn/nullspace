@@ -47,6 +47,8 @@ export interface GameSession {
   moveCount: number;
   createdAt: bigint;
   isComplete: boolean;
+  isTournament: boolean;
+  tournamentId: bigint | null;
 }
 
 /**
