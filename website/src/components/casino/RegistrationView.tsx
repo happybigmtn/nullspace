@@ -3,6 +3,7 @@ import React from 'react';
 import { PlayerStats, LeaderboardEntry } from '../../types';
 import { formatTime } from '../../utils/gameUtils';
 import { BotConfig, DEFAULT_BOT_CONFIG } from '../../services/BotService';
+import { usePasskeyAuth } from '../../hooks/usePasskeyAuth';
 
 interface RegistrationViewProps {
   stats: PlayerStats;
@@ -27,6 +28,12 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
   onStartTournament,
   isTournamentStarting
 }) => {
+  const {
+    session: passkeySession,
+    register: registerPasskey,
+    loading: passkeyLoading,
+    error: passkeyError
+  } = usePasskeyAuth();
   const pnlData = stats.pnlHistory;
   const maxVal = Math.max(...pnlData, 100);
   const minVal = Math.min(...pnlData, -100);
@@ -127,6 +134,21 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
                                    PRESS [R] TO REGISTER
                                </button>
                            )}
+                           <div className="text-xs text-gray-400 flex flex-col items-center gap-1">
+                               <button
+                                   onClick={registerPasskey}
+                                   disabled={passkeyLoading}
+                                   className="text-terminal-green hover:underline disabled:opacity-50"
+                               >
+                                   {passkeyLoading ? 'Pairing passkey...' : 'Use passkey (beta)'}
+                               </button>
+                               {passkeySession && (
+                                   <span className="text-[10px] text-terminal-green">
+                                       Passkey ready · {passkeySession.credentialId.slice(0, 8)}...
+                                   </span>
+                               )}
+                               {passkeyError && <span className="text-[10px] text-terminal-accent">{passkeyError}</span>}
+                           </div>
                            
                            <div className="text-center">
                                 <div className="text-[10px] text-gray-500 mb-1">REGISTERED PLAYERS</div>

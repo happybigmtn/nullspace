@@ -2,6 +2,10 @@ import React, { useEffect, useState } from 'react';
 import SupplyChart from './charts/SupplyChart';
 import PnLChart from './charts/PnLChart';
 import IssuanceChart from './charts/IssuanceChart';
+import PoolHealthChart from './charts/PoolHealthChart';
+import RoleVolumeChart from './charts/RoleVolumeChart';
+import ErrorChart from './charts/ErrorChart';
+import CollateralChart from './charts/CollateralChart';
 import StatsCard from './StatsCard';
 
 const EconomyDashboard = () => {
@@ -23,6 +27,9 @@ const EconomyDashboard = () => {
   const first = data[0];
   const burnRate = ((last.total_burned - first.total_burned) / (data.length * 0.5)).toFixed(2); // RNG/s (approx 500ms intervals)
   const supply = 1_000_000_000 + (last.total_issuance || 0) - last.total_burned;
+  const tvl = last.pool_tvl_vusdt || 0;
+  const lpPrice = last.lp_share_price_vusdt || 0;
+  const maxNw = last.maximizer_nw || 0;
 
   return (
     <div className="bg-gray-950 min-h-screen text-gray-100 p-8 font-sans">
@@ -37,6 +44,10 @@ const EconomyDashboard = () => {
           <StatsCard title="Circulating Supply" value={supply.toLocaleString()} subtext="RNG" />
           <StatsCard title="Total Burned" value={last.total_burned.toLocaleString()} subtext="🔥 RNG" trend="down" />
           <StatsCard title="Burn Rate" value={`${burnRate}/s`} subtext="Avg" trend="down" />
+          <StatsCard title="Pool TVL" value={`$${tvl.toLocaleString()}`} subtext="vUSDT" trend="up" />
+          <StatsCard title="LP Share Price" value={`$${lpPrice.toFixed(4)}`} subtext="vUSDT / LP" trend="up" />
+          <StatsCard title="AMM k" value={Number(last.amm_invariant_k || 0).toLocaleString()} subtext="Invariant" />
+          <StatsCard title="Maximizer NW" value={`$${maxNw.toLocaleString()}`} subtext="vUSDT eq." trend="up" />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -44,6 +55,10 @@ const EconomyDashboard = () => {
           <IssuanceChart data={data} />
         </div>
 
+        <PoolHealthChart data={data} />
+        <RoleVolumeChart data={data} />
+        <CollateralChart data={data} />
+        <ErrorChart data={data} />
         <PnLChart data={data} />
       </div>
     </div>

@@ -7,3 +7,18 @@ Browserslist: browsers data (caniuse-lite) is 6 months old. Please run:
   npx update-browserslist-db@latest
   Why you should do it regularly: https://github.com/browserslist/update-db#readme
 5:23:57 PM [vite] (client) page reload wasm/src/lib.rs
+10:17:55 PM [vite] (client) page reload public/economy_log.json
+10:23:27 PM [vite] (client) hmr update /src/App.jsx, /src/index.css
+10:24:01 PM [vite] (client) hmr update /src/components/casino/RegistrationView.tsx, /src/index.css
+10:24:08 PM [vite] (client) hmr update /src/components/casino/RegistrationView.tsx, /src/index.css
+10:24:16 PM [vite] (client) hmr update /src/components/casino/RegistrationView.tsx, /src/index.css
+10:33:35 PM [vite] (client) page reload public/economy_log.json
+10:33:38 PM [vite] (client) page reload public/economy_log.json
+10:33:41 PM [vite] (client) page reload wasm/pkg/package.json
+10:33:41 PM [vite] (client) page reload wasm/pkg/nullspace_wasm.d.ts
+10:33:41 PM [vite] (client) page reload wasm/pkg/nullspace_wasm_bg.wasm.d.ts
+10:33:51 PM [vite] (client) page reload wasm/pkg/package.json
+10:37:31 PM [vite] (client) hmr update /src/index.css, /src/components/charts/IssuanceChart.jsx, /src/components/charts/SupplyChart.jsx
+10:38:42 PM [vite] (client) hmr update /src/components/EconomyDashboard.jsx, /src/index.css
+✓ Copied preview.png to dist
+✓ Copied preview.png to dist

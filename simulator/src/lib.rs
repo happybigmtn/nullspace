@@ -1,15 +1,20 @@
 use axum::{
     body::Bytes,
-    extract::{ws::WebSocketUpgrade, State as AxumState},
-    http::{header, Method, StatusCode},
+    extract::{ws::WebSocketUpgrade, Path, Query, State as AxumState},
+    http::{header, HeaderMap, Method, StatusCode},
     response::IntoResponse,
     routing::{get, post},
-    Router,
+    Json, Router,
 };
-use commonware_codec::{DecodeExt, Encode};
+use commonware_codec::{DecodeExt, Encode, ReadExt};
 use commonware_consensus::{aggregation::types::Certificate, Viewable};
 use commonware_cryptography::{
-    bls12381::primitives::variant::MinSig, ed25519::PublicKey, sha256::Digest,
+    bls12381::primitives::variant::MinSig,
+    ed25519::{self, PublicKey},
+    sha256::Digest,
+    Digestible,
+    PrivateKeyExt,
+    Signer,
 };
 use commonware_storage::{
     adb::{
@@ -18,28 +23,102 @@ use commonware_storage::{
     },
     store::operation::{Keyless, Variable},
 };
-use commonware_utils::from_hex;
+use commonware_utils::{from_hex, hex};
 use futures::{SinkExt, StreamExt};
 use nullspace_types::{
     api::{Events, FilteredEvents, Lookup, Pending, Submission, Summary, Update, UpdatesFilter},
     execution::{Event, Output, Progress, Seed, Transaction, Value},
-    Identity, Query, NAMESPACE,
+    Identity, Query as ChainQuery, NAMESPACE,
 };
+use rand::rngs::OsRng;
+use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     sync::{Arc, RwLock},
+    time::{SystemTime, UNIX_EPOCH},
 };
 use tokio::sync::broadcast;
 use tower_governor::{
     governor::GovernorConfigBuilder, key_extractor::SmartIpKeyExtractor, GovernorLayer,
 };
 use tower_http::cors::{Any, CorsLayer};
+use uuid::Uuid;
 
 #[derive(Clone)]
 #[allow(clippy::large_enum_variant)]
 pub enum InternalUpdate {
     Seed(Seed),
     Events(Events, Vec<(u64, Digest)>),
+}
+
+#[derive(Clone, Serialize)]
+pub struct ExplorerBlock {
+    height: u64,
+    view: u64,
+    block_digest: String,
+    parent: Option<String>,
+    tx_hashes: Vec<String>,
+    tx_count: usize,
+    indexed_at_ms: u64,
+}
+
+#[derive(Clone, Serialize)]
+pub struct ExplorerTransaction {
+    hash: String,
+    block_height: u64,
+    block_digest: String,
+    position: u32,
+    public_key: String,
+    nonce: u64,
+    instruction: String,
+}
+
+#[derive(Clone, Default, Serialize)]
+pub struct AccountActivity {
+    public_key: String,
+    txs: Vec<String>,
+    events: Vec<String>,
+    last_nonce: Option<u64>,
+    last_updated_height: Option<u64>,
+}
+
+#[derive(Default)]
+pub struct ExplorerState {
+    indexed_blocks: BTreeMap<u64, ExplorerBlock>,
+    blocks_by_hash: HashMap<Digest, ExplorerBlock>,
+    txs_by_hash: HashMap<Digest, ExplorerTransaction>,
+    accounts: HashMap<PublicKey, AccountActivity>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct PasskeyChallenge {
+    challenge: String,
+    issued_at_ms: u64,
+}
+
+#[derive(Clone, Serialize)]
+pub struct PasskeyCredential {
+    credential_id: String,
+    webauthn_public_key: String,
+    ed25519_public_key: String,
+    ed25519_private_bytes: Vec<u8>,
+    created_at_ms: u64,
+}
+
+#[derive(Clone)]
+pub struct PasskeySession {
+    token: String,
+    credential_id: String,
+    issued_at_ms: u64,
+    expires_at_ms: u64,
+}
+
+#[derive(Default)]
+pub struct PasskeyStore {
+    challenges: HashMap<String, PasskeyChallenge>,
+    credentials: HashMap<String, PasskeyCredential>,
+    sessions: HashMap<String, PasskeySession>,
 }
 
 #[derive(Default)]
@@ -54,6 +133,9 @@ pub struct State {
 
     submitted_events: HashSet<u64>,
     submitted_state: HashSet<u64>,
+
+    explorer: ExplorerState,
+    passkeys: PasskeyStore,
 }
 
 #[derive(Clone)]
@@ -80,6 +162,143 @@ impl Simulator {
 }
 
 impl Simulator {
+    fn now_ms() -> u64 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64
+    }
+
+    fn record_event_for_accounts(
+        accounts: &mut HashMap<PublicKey, AccountActivity>,
+        event: &Event,
+        height: u64,
+    ) {
+        let event_name = match event {
+            Event::CasinoPlayerRegistered { .. } => "CasinoPlayerRegistered",
+            Event::CasinoGameStarted { .. } => "CasinoGameStarted",
+            Event::CasinoGameMoved { .. } => "CasinoGameMoved",
+            Event::CasinoGameCompleted { .. } => "CasinoGameCompleted",
+            Event::CasinoLeaderboardUpdated { .. } => "CasinoLeaderboardUpdated",
+            Event::CasinoError { .. } => "CasinoError",
+            Event::TournamentStarted { .. } => "TournamentStarted",
+            Event::PlayerJoined { .. } => "PlayerJoined",
+            Event::TournamentPhaseChanged { .. } => "TournamentPhaseChanged",
+            Event::TournamentEnded { .. } => "TournamentEnded",
+        };
+
+        let mut touch_account = |pk: &PublicKey| {
+            let activity = accounts
+                .entry(pk.clone())
+                .or_insert_with(|| AccountActivity {
+                    public_key: hex(pk.as_ref()),
+                    ..Default::default()
+                });
+            activity.events.push(event_name.to_string());
+            activity.last_updated_height = Some(height);
+        };
+
+        match event {
+            Event::CasinoPlayerRegistered { player, .. } => touch_account(player),
+            Event::CasinoGameStarted { player, .. } => touch_account(player),
+            Event::CasinoGameMoved { .. } => {} // broadcasted; not account-specific
+            Event::CasinoGameCompleted { player, .. } => touch_account(player),
+            Event::CasinoLeaderboardUpdated { .. } => {}
+            Event::CasinoError { player, .. } => touch_account(player),
+            Event::TournamentStarted { .. } => {}
+            Event::PlayerJoined { player, .. } => touch_account(player),
+            Event::TournamentPhaseChanged { .. } => {}
+            Event::TournamentEnded { rankings, .. } => {
+                for (pk, _) in rankings {
+                    touch_account(pk);
+                }
+            }
+        }
+    }
+
+    fn index_block_from_summary(&self, progress: &Progress, ops: &[Keyless<Output>]) {
+        let mut state = match self.state.write() {
+            Ok(state) => state,
+            Err(e) => {
+                tracing::error!(
+                    "Failed to acquire write lock in index_block_from_summary: {}",
+                    e
+                );
+                return;
+            }
+        };
+
+        if state.explorer.indexed_blocks.contains_key(&progress.height) {
+            return;
+        }
+
+        let parent = progress.height.checked_sub(1).and_then(|h| {
+            state
+                .explorer
+                .indexed_blocks
+                .get(&h)
+                .map(|b| b.block_digest.clone())
+        });
+        let mut tx_hashes = Vec::new();
+
+        for (idx, op) in ops.iter().enumerate() {
+            match op {
+                Keyless::Append(Output::Transaction(tx)) => {
+                    let digest = tx.digest();
+                    let hash_hex = hex(digest.as_ref());
+                    tx_hashes.push(hash_hex.clone());
+                    let entry = ExplorerTransaction {
+                        hash: hash_hex.clone(),
+                        block_height: progress.height,
+                        block_digest: hex(progress.block_digest.as_ref()),
+                        position: idx as u32,
+                        public_key: hex(tx.public.as_ref()),
+                        nonce: tx.nonce,
+                        instruction: format!("{:?}", tx.instruction),
+                    };
+                    state.explorer.txs_by_hash.insert(digest, entry);
+
+                    let activity = state
+                        .explorer
+                        .accounts
+                        .entry(tx.public.clone())
+                        .or_insert_with(|| AccountActivity {
+                            public_key: hex(tx.public.as_ref()),
+                            ..Default::default()
+                        });
+                    activity.txs.push(hash_hex);
+                    activity.last_nonce = Some(tx.nonce);
+                    activity.last_updated_height = Some(progress.height);
+                }
+                Keyless::Append(Output::Event(evt)) => {
+                    Self::record_event_for_accounts(
+                        &mut state.explorer.accounts,
+                        evt,
+                        progress.height,
+                    );
+                }
+                _ => {}
+            }
+        }
+
+        let tx_count = tx_hashes.len();
+        let block = ExplorerBlock {
+            height: progress.height,
+            view: progress.view,
+            block_digest: hex(progress.block_digest.as_ref()),
+            parent,
+            tx_hashes,
+            tx_count,
+            indexed_at_ms: Self::now_ms(),
+        };
+
+        state
+            .explorer
+            .blocks_by_hash
+            .insert(progress.block_digest, block.clone());
+        state.explorer.indexed_blocks.insert(progress.height, block);
+    }
+
     pub fn submit_seed(&self, seed: Seed) {
         let mut state = match self.state.write() {
             Ok(state) => state,
@@ -171,13 +390,16 @@ impl Simulator {
             }
         } // Release lock before broadcasting
 
+        // Index blocks/transactions for explorer consumers
+        self.index_block_from_summary(&summary.progress, &summary.events_proof_ops);
+
         // Broadcast events with digests for efficient filtering
         if let Err(e) = self.update_tx.send(InternalUpdate::Events(
             Events {
-                progress: summary.progress,
-                certificate: summary.certificate,
-                events_proof: summary.events_proof,
-                events_proof_ops: summary.events_proof_ops,
+                progress: summary.progress.clone(),
+                certificate: summary.certificate.clone(),
+                events_proof: summary.events_proof.clone(),
+                events_proof_ops: summary.events_proof_ops.clone(),
             },
             events_digests,
         )) {
@@ -231,7 +453,7 @@ impl Simulator {
         })
     }
 
-    pub fn query_seed(&self, query: &Query) -> Option<Seed> {
+    pub fn query_seed(&self, query: &ChainQuery) -> Option<Seed> {
         let state = match self.state.read() {
             Ok(state) => state,
             Err(e) => {
@@ -240,8 +462,8 @@ impl Simulator {
             }
         };
         match query {
-            Query::Latest => state.seeds.last_key_value().map(|(_, seed)| seed.clone()),
-            Query::Index(index) => state.seeds.get(index).cloned(),
+            ChainQuery::Latest => state.seeds.last_key_value().map(|(_, seed)| seed.clone()),
+            ChainQuery::Index(index) => state.seeds.get(index).cloned(),
         }
     }
 
@@ -287,6 +509,15 @@ impl Api {
             .route("/state/:query", get(query_state))
             .route("/updates/:filter", get(updates_ws))
             .route("/mempool", get(mempool_ws))
+            .route("/explorer/blocks", get(list_blocks))
+            .route("/explorer/blocks/:id", get(get_block))
+            .route("/explorer/tx/:hash", get(get_transaction))
+            .route("/explorer/account/:pubkey", get(get_account_activity))
+            .route("/explorer/search", get(search_explorer))
+            .route("/webauthn/challenge", get(get_passkey_challenge))
+            .route("/webauthn/register", post(register_passkey))
+            .route("/webauthn/login", post(login_passkey))
+            .route("/webauthn/sign", post(sign_with_passkey))
             .layer(cors)
             .layer(GovernorLayer {
                 config: governor_conf,
@@ -350,7 +581,7 @@ async fn query_seed(
         Some(raw) => raw,
         None => return StatusCode::BAD_REQUEST.into_response(),
     };
-    let query = match Query::decode(&mut raw.as_slice()) {
+    let query = match ChainQuery::decode(&mut raw.as_slice()) {
         Ok(query) => query,
         Err(_) => return StatusCode::BAD_REQUEST.into_response(),
     };
@@ -550,6 +781,362 @@ async fn handle_mempool_ws(socket: axum::extract::ws::WebSocket, simulator: Arc<
     let _ = sender.close().await;
 }
 
+#[derive(Deserialize)]
+struct Pagination {
+    offset: Option<usize>,
+    limit: Option<usize>,
+}
+
+async fn list_blocks(
+    AxumState(simulator): AxumState<Arc<Simulator>>,
+    Query(pagination): Query<Pagination>,
+) -> impl IntoResponse {
+    let offset = pagination.offset.unwrap_or(0);
+    let limit = pagination.limit.unwrap_or(20).min(200);
+
+    let state = match simulator.state.read() {
+        Ok(state) => state,
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    };
+
+    let total = state.explorer.indexed_blocks.len();
+    let blocks: Vec<_> = state
+        .explorer
+        .indexed_blocks
+        .iter()
+        .rev()
+        .skip(offset)
+        .take(limit)
+        .map(|(_, b)| b.clone())
+        .collect();
+
+    let next_offset = if offset + blocks.len() < total {
+        Some(offset + blocks.len())
+    } else {
+        None
+    };
+
+    Json(json!({ "blocks": blocks, "next_offset": next_offset, "total": total })).into_response()
+}
+
+async fn get_block(
+    AxumState(simulator): AxumState<Arc<Simulator>>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    let state = match simulator.state.read() {
+        Ok(state) => state,
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    };
+
+    // Try height first
+    let block_opt = if let Ok(height) = id.parse::<u64>() {
+        state.explorer.indexed_blocks.get(&height).cloned()
+    } else {
+        // Try hash
+        from_hex(&id)
+            .and_then(|raw| Digest::decode(&mut raw.as_slice()).ok())
+            .and_then(|digest| state.explorer.blocks_by_hash.get(&digest).cloned())
+    };
+
+    match block_opt {
+        Some(block) => Json(block).into_response(),
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+async fn get_transaction(
+    AxumState(simulator): AxumState<Arc<Simulator>>,
+    Path(hash): Path<String>,
+) -> impl IntoResponse {
+    let raw = match from_hex(&hash) {
+        Some(raw) => raw,
+        None => return StatusCode::BAD_REQUEST.into_response(),
+    };
+    let digest = match Digest::decode(&mut raw.as_slice()) {
+        Ok(d) => d,
+        Err(_) => return StatusCode::BAD_REQUEST.into_response(),
+    };
+
+    let state = match simulator.state.read() {
+        Ok(state) => state,
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    };
+
+    match state.explorer.txs_by_hash.get(&digest) {
+        Some(tx) => Json(tx).into_response(),
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+async fn get_account_activity(
+    AxumState(simulator): AxumState<Arc<Simulator>>,
+    Path(pubkey): Path<String>,
+) -> impl IntoResponse {
+    let raw = match from_hex(&pubkey) {
+        Some(raw) => raw,
+        None => return StatusCode::BAD_REQUEST.into_response(),
+    };
+    let public_key = match ed25519::PublicKey::read(&mut raw.as_slice()) {
+        Ok(pk) => pk,
+        Err(_) => return StatusCode::BAD_REQUEST.into_response(),
+    };
+
+    let state = match simulator.state.read() {
+        Ok(state) => state,
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    };
+
+    match state.explorer.accounts.get(&public_key) {
+        Some(account) => Json(account).into_response(),
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct SearchQuery {
+    q: String,
+}
+
+async fn search_explorer(
+    AxumState(simulator): AxumState<Arc<Simulator>>,
+    Query(params): Query<SearchQuery>,
+) -> impl IntoResponse {
+    let state = match simulator.state.read() {
+        Ok(state) => state,
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    };
+
+    let q = params.q.trim();
+
+    // Height search
+    if let Ok(height) = q.parse::<u64>() {
+        if let Some(block) = state.explorer.indexed_blocks.get(&height) {
+            return Json(json!({"type": "block", "block": block})).into_response();
+        }
+    }
+
+    // Hex search
+    if let Some(raw) = from_hex(q) {
+        if raw.len() == 32 {
+            if let Ok(digest) = Digest::decode(&mut raw.as_slice()) {
+                if let Some(block) = state.explorer.blocks_by_hash.get(&digest) {
+                    return Json(json!({"type": "block", "block": block})).into_response();
+                }
+                if let Some(tx) = state.explorer.txs_by_hash.get(&digest) {
+                    return Json(json!({"type": "transaction", "transaction": tx})).into_response();
+                }
+            }
+        }
+
+        // Account search
+        if let Ok(pk) = ed25519::PublicKey::read(&mut raw.as_slice()) {
+            if let Some(account) = state.explorer.accounts.get(&pk) {
+                return Json(json!({"type": "account", "account": account})).into_response();
+            }
+        }
+    }
+
+    StatusCode::NOT_FOUND.into_response()
+}
+
+#[derive(Serialize)]
+struct ChallengeResponse {
+    challenge: String,
+}
+
+async fn get_passkey_challenge(
+    AxumState(simulator): AxumState<Arc<Simulator>>,
+) -> impl IntoResponse {
+    let challenge = Uuid::new_v4().to_string().replace('-', "");
+    let issued_at_ms = Simulator::now_ms();
+    let passkey_challenge = PasskeyChallenge {
+        challenge: challenge.clone(),
+        issued_at_ms,
+    };
+
+    let mut state = match simulator.state.write() {
+        Ok(state) => state,
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    };
+    state
+        .passkeys
+        .challenges
+        .insert(challenge.clone(), passkey_challenge);
+
+    Json(ChallengeResponse { challenge }).into_response()
+}
+
+#[derive(Deserialize)]
+struct RegisterRequest {
+    credential_id: String,
+    webauthn_public_key: String,
+    challenge: String,
+}
+
+#[derive(Serialize)]
+struct RegisterResponse {
+    credential_id: String,
+    ed25519_public_key: String,
+}
+
+async fn register_passkey(
+    AxumState(simulator): AxumState<Arc<Simulator>>,
+    Json(req): Json<RegisterRequest>,
+) -> impl IntoResponse {
+    let mut state = match simulator.state.write() {
+        Ok(state) => state,
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    };
+
+    if state.passkeys.challenges.remove(&req.challenge).is_none() {
+        return StatusCode::BAD_REQUEST.into_response();
+    }
+
+    let mut rng = OsRng;
+    let private = ed25519::PrivateKey::from_rng(&mut rng);
+    let public = private.public_key();
+
+    let cred = PasskeyCredential {
+        credential_id: req.credential_id.clone(),
+        webauthn_public_key: req.webauthn_public_key.clone(),
+        ed25519_public_key: hex(public.as_ref()),
+        ed25519_private_bytes: private.as_ref().to_vec(),
+        created_at_ms: Simulator::now_ms(),
+    };
+
+    state
+        .passkeys
+        .credentials
+        .insert(req.credential_id.clone(), cred);
+
+    Json(RegisterResponse {
+        credential_id: req.credential_id,
+        ed25519_public_key: hex(public.as_ref()),
+    })
+    .into_response()
+}
+
+#[derive(Deserialize)]
+struct LoginRequest {
+    credential_id: String,
+    challenge: String,
+}
+
+#[derive(Serialize)]
+struct LoginResponse {
+    session_token: String,
+    credential_id: String,
+    ed25519_public_key: String,
+}
+
+async fn login_passkey(
+    AxumState(simulator): AxumState<Arc<Simulator>>,
+    Json(req): Json<LoginRequest>,
+) -> impl IntoResponse {
+    let mut state = match simulator.state.write() {
+        Ok(state) => state,
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    };
+
+    if state.passkeys.challenges.remove(&req.challenge).is_none() {
+        return StatusCode::BAD_REQUEST.into_response();
+    }
+
+    let credential = match state.passkeys.credentials.get(&req.credential_id) {
+        Some(c) => c.clone(),
+        None => return StatusCode::NOT_FOUND.into_response(),
+    };
+
+    let token = Uuid::new_v4().to_string();
+    let now = Simulator::now_ms();
+    let session = PasskeySession {
+        token: token.clone(),
+        credential_id: credential.credential_id.clone(),
+        issued_at_ms: now,
+        expires_at_ms: now + 30 * 60 * 1000, // 30 minutes
+    };
+    state.passkeys.sessions.insert(token.clone(), session);
+
+    Json(LoginResponse {
+        session_token: token,
+        credential_id: credential.credential_id,
+        ed25519_public_key: credential.ed25519_public_key,
+    })
+    .into_response()
+}
+
+#[derive(Deserialize)]
+struct SignRequest {
+    message_hex: String,
+}
+
+#[derive(Serialize)]
+struct SignResponse {
+    signature_hex: String,
+    public_key: String,
+}
+
+async fn sign_with_passkey(
+    AxumState(simulator): AxumState<Arc<Simulator>>,
+    headers: HeaderMap,
+    Json(req): Json<SignRequest>,
+) -> impl IntoResponse {
+    let token = headers
+        .get(header::AUTHORIZATION)
+        .and_then(|h| h.to_str().ok())
+        .and_then(|s| s.strip_prefix("Bearer "))
+        .map(|s| s.to_string());
+
+    let token = match token {
+        Some(t) => t,
+        None => return StatusCode::UNAUTHORIZED.into_response(),
+    };
+
+    let mut state = match simulator.state.write() {
+        Ok(state) => state,
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    };
+
+    let session = match state.passkeys.sessions.get(&token) {
+        Some(s) => s.clone(),
+        None => return StatusCode::UNAUTHORIZED.into_response(),
+    };
+
+    if session.expires_at_ms < Simulator::now_ms() {
+        state.passkeys.sessions.remove(&token);
+        return StatusCode::UNAUTHORIZED.into_response();
+    }
+
+    let credential = match state.passkeys.credentials.get(&session.credential_id) {
+        Some(c) => c.clone(),
+        None => return StatusCode::UNAUTHORIZED.into_response(),
+    };
+
+    let raw = match from_hex(&req.message_hex) {
+        Some(raw) => raw,
+        None => return StatusCode::BAD_REQUEST.into_response(),
+    };
+
+    let mut buf = credential.ed25519_private_bytes.as_slice();
+    let private = match ed25519::PrivateKey::read(&mut buf) {
+        Ok(pk) => pk,
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    };
+
+    let signature = private.sign(
+        Some(&nullspace_types::execution::transaction_namespace(
+            NAMESPACE,
+        )),
+        &raw,
+    );
+
+    Json(SignResponse {
+        signature_hex: hex(signature.as_ref()),
+        public_key: credential.ed25519_public_key,
+    })
+    .into_response()
+}
+
 async fn filter_updates_for_account(
     events: Events,
     digests: Vec<(u64, Digest)>,
@@ -644,8 +1231,8 @@ mod tests {
             InternalUpdate::Seed(received_seed) => assert_eq!(received_seed, seed),
             _ => panic!("Expected seed update"),
         }
-        assert_eq!(simulator.query_seed(&Query::Latest), Some(seed.clone()));
-        assert_eq!(simulator.query_seed(&Query::Index(1)), Some(seed));
+        assert_eq!(simulator.query_seed(&ChainQuery::Latest), Some(seed.clone()));
+        assert_eq!(simulator.query_seed(&ChainQuery::Index(1)), Some(seed));
 
         // Submit another seed
         let seed = create_seed(&network_secret, 3);
@@ -655,9 +1242,9 @@ mod tests {
             InternalUpdate::Seed(received_seed) => assert_eq!(received_seed, seed),
             _ => panic!("Expected seed update"),
         }
-        assert_eq!(simulator.query_seed(&Query::Latest), Some(seed.clone()));
-        assert_eq!(simulator.query_seed(&Query::Index(2)), None);
-        assert_eq!(simulator.query_seed(&Query::Index(3)), Some(seed.clone()));
+        assert_eq!(simulator.query_seed(&ChainQuery::Latest), Some(seed.clone()));
+        assert_eq!(simulator.query_seed(&ChainQuery::Index(2)), None);
+        assert_eq!(simulator.query_seed(&ChainQuery::Index(3)), Some(seed.clone()));
     }
 
     #[test]
