@@ -104,7 +104,8 @@ describe('NonceManager Tests', async () => {
   test('Initialize and basic nonce management', async () => {
     nonceManager = new NonceManager(mockClient, wasmWrapper);
     
-    await nonceManager.init(keypair.publicKeyHex, keypair.publicKey);
+    const account = await mockClient.getAccount(keypair.publicKey);
+    await nonceManager.init(keypair.publicKeyHex, keypair.publicKey, account);
     
     // Initial nonce should be 0
     assert.equal(nonceManager.getCurrentNonce(), 0);
@@ -123,10 +124,11 @@ describe('NonceManager Tests', async () => {
   test('Transaction storage and retrieval', async () => {
     nonceManager = new NonceManager(mockClient, wasmWrapper);
     
-    await nonceManager.init(keypair.publicKeyHex, keypair.publicKey);
+    const account = await mockClient.getAccount(keypair.publicKey);
+    await nonceManager.init(keypair.publicKeyHex, keypair.publicKey, account);
     
     // Create and store an actual transaction
-    const txData = wasmWrapper.createGenerateTransaction(0);
+    const txData = wasmWrapper.createCasinoDepositTransaction(0, 1);
     nonceManager.storeTransaction(0, txData);
     
     // Get pending transactions
@@ -161,10 +163,11 @@ describe('NonceManager Tests', async () => {
   test('Submit transaction with nonce management', async () => {
     nonceManager = new NonceManager(mockClient, wasmWrapper);
     
-    await nonceManager.init(keypair.publicKeyHex, keypair.publicKey);
+    const account = await mockClient.getAccount(keypair.publicKey);
+    await nonceManager.init(keypair.publicKeyHex, keypair.publicKey, account);
     
-    // Submit a generate transaction
-    const result = await nonceManager.submitGenerate();
+    // Submit a deposit transaction
+    const result = await nonceManager.submitCasinoDeposit(1);
     assert.equal(result.status, 'accepted');
     
     // Nonce should be incremented
@@ -182,12 +185,13 @@ describe('NonceManager Tests', async () => {
   test('Cleanup confirmed transactions', async () => {
     nonceManager = new NonceManager(mockClient, wasmWrapper);
     
-    await nonceManager.init(keypair.publicKeyHex, keypair.publicKey);
+    const account = await mockClient.getAccount(keypair.publicKey);
+    await nonceManager.init(keypair.publicKeyHex, keypair.publicKey, account);
     
     // Store multiple actual transactions
-    nonceManager.storeTransaction(0, wasmWrapper.createGenerateTransaction(0));
-    nonceManager.storeTransaction(1, wasmWrapper.createMatchTransaction(1));
-    nonceManager.storeTransaction(2, wasmWrapper.createGenerateTransaction(2));
+    nonceManager.storeTransaction(0, wasmWrapper.createCasinoDepositTransaction(0, 1));
+    nonceManager.storeTransaction(1, wasmWrapper.createCreateVaultTransaction(1));
+    nonceManager.storeTransaction(2, wasmWrapper.createCasinoDepositTransaction(2, 1));
     
     // Cleanup transactions with nonce <= 1
     nonceManager.cleanupConfirmedTransactions(1);
@@ -207,9 +211,9 @@ describe('NonceManager Tests', async () => {
     await nonceManager.init(keypair.publicKeyHex, keypair.publicKey, null);
     
     // Submit several transactions
-    await nonceManager.submitGenerate();
-    await nonceManager.submitMatch();
-    await nonceManager.submitGenerate();
+    await nonceManager.submitCasinoDeposit(1);
+    await nonceManager.submitCreateVault();
+    await nonceManager.submitCasinoDeposit(1);
     
     // Local nonce should be 3
     assert.equal(nonceManager.getCurrentNonce(), 3);
@@ -238,9 +242,9 @@ describe('NonceManager Tests', async () => {
     await nonceManager.init(keypair.publicKeyHex, keypair.publicKey, null);
     
     // Submit several transactions
-    await nonceManager.submitGenerate();
-    await nonceManager.submitMatch();
-    await nonceManager.submitGenerate();
+    await nonceManager.submitCasinoDeposit(1);
+    await nonceManager.submitCreateVault();
+    await nonceManager.submitCasinoDeposit(1);
     
     // Local nonce should be 3
     assert.equal(nonceManager.getCurrentNonce(), 3);
@@ -252,14 +256,10 @@ describe('NonceManager Tests', async () => {
     const account = await mockClient.getAccount(keypair.publicKey);
     nonceManager.syncWithAccountState(account);
     
-    // Local nonce should remain at 3 (keep client's higher nonce)
-    assert.equal(nonceManager.getCurrentNonce(), 3);
-    
-    // Transaction with nonce 0 should be cleaned up, leaving 2 pending
+    // Client is ahead of server => reset to server nonce and clear stale pending
+    assert.equal(nonceManager.getCurrentNonce(), 1);
     const pending = nonceManager.getPendingTransactions();
-    assert.equal(pending.length, 2);
-    assert.equal(pending[0].nonce, 1, 'First pending should be nonce 1');
-    assert.equal(pending[1].nonce, 2, 'Second pending should be nonce 2');
+    assert.equal(pending.length, 0);
     
     // Cleanup
     nonceManager.destroy();
@@ -279,19 +279,16 @@ describe('NonceManager Tests', async () => {
     nonceManager.setNonce(5);
     
     // Store some pending transactions
-    nonceManager.storeTransaction(3, wasmWrapper.createGenerateTransaction(3));
-    nonceManager.storeTransaction(4, wasmWrapper.createMatchTransaction(4));
+    nonceManager.storeTransaction(3, wasmWrapper.createCasinoDepositTransaction(3, 1));
+    nonceManager.storeTransaction(4, wasmWrapper.createCreateVaultTransaction(4));
     
     // Initialize
-    await nonceManager.init(keypair.publicKeyHex, keypair.publicKey);
+    await nonceManager.init(keypair.publicKeyHex, keypair.publicKey, null);
     
-    // Since identity hasn't changed (no previous identity stored), state should be preserved
-    // even though account doesn't exist
-    assert.equal(nonceManager.getCurrentNonce(), 5);
-    
-    // Pending transactions should be preserved
+    // If account doesn't exist, we reset local state to avoid nonce drift.
+    assert.equal(nonceManager.getCurrentNonce(), 0);
     const pending = nonceManager.getPendingTransactions();
-    assert.equal(pending.length, 2);
+    assert.equal(pending.length, 0);
     
     // Cleanup
     nonceManager.destroy();
@@ -311,11 +308,12 @@ describe('NonceManager Tests', async () => {
     
     nonceManager = new NonceManager(flakeyClient, wasmWrapper);
     
-    await nonceManager.init(keypair.publicKeyHex, keypair.publicKey);
+    const account = await flakeyClient.getAccount(keypair.publicKey);
+    await nonceManager.init(keypair.publicKeyHex, keypair.publicKey, account);
     
     // Try to submit a transaction (should fail first time)
     try {
-      await nonceManager.submitGenerate();
+      await nonceManager.submitCasinoDeposit(1);
     } catch (error) {
       assert(error.message.includes('Network error'));
     }
@@ -328,7 +326,7 @@ describe('NonceManager Tests', async () => {
     assert.equal(pending.length, 1);
     
     // Now try again (should succeed)
-    const result = await nonceManager.submitGenerate();
+    const result = await nonceManager.submitCasinoDeposit(1);
     assert.equal(result.status, 'accepted');
     
     // Nonce should be incremented after success
@@ -345,12 +343,13 @@ describe('NonceManager Tests', async () => {
   test('Multiple pending transactions with gaps', async () => {
     nonceManager = new NonceManager(mockClient, wasmWrapper);
     
-    await nonceManager.init(keypair.publicKeyHex, keypair.publicKey);
+    const account = await mockClient.getAccount(keypair.publicKey);
+    await nonceManager.init(keypair.publicKeyHex, keypair.publicKey, account);
     
     // Manually store transactions with gaps
-    nonceManager.storeTransaction(0, wasmWrapper.createGenerateTransaction(0));
-    nonceManager.storeTransaction(2, wasmWrapper.createGenerateTransaction(2));
-    nonceManager.storeTransaction(5, wasmWrapper.createGenerateTransaction(5));
+    nonceManager.storeTransaction(0, wasmWrapper.createCasinoDepositTransaction(0, 1));
+    nonceManager.storeTransaction(2, wasmWrapper.createCasinoDepositTransaction(2, 1));
+    nonceManager.storeTransaction(5, wasmWrapper.createCasinoDepositTransaction(5, 1));
     
     // Get pending transactions should return them sorted by nonce
     const pending = nonceManager.getPendingTransactions();
@@ -374,12 +373,13 @@ describe('NonceManager Tests', async () => {
   test('Sequential transaction submission', async () => {
     nonceManager = new NonceManager(mockClient, wasmWrapper);
     
-    await nonceManager.init(keypair.publicKeyHex, keypair.publicKey);
+    const account = await mockClient.getAccount(keypair.publicKey);
+    await nonceManager.init(keypair.publicKeyHex, keypair.publicKey, account);
     
     // Submit multiple transactions sequentially
-    await nonceManager.submitGenerate();
-    await nonceManager.submitMatch();
-    await nonceManager.submitGenerate();
+    await nonceManager.submitCasinoDeposit(1);
+    await nonceManager.submitCreateVault();
+    await nonceManager.submitCasinoDeposit(1);
     
     // Nonce should be incremented correctly
     assert.equal(nonceManager.getCurrentNonce(), 3);
@@ -398,15 +398,16 @@ describe('NonceManager Tests', async () => {
   test('Concurrent transaction submission', async () => {
     nonceManager = new NonceManager(mockClient, wasmWrapper);
     
-    await nonceManager.init(keypair.publicKeyHex, keypair.publicKey);
+    const account = await mockClient.getAccount(keypair.publicKey);
+    await nonceManager.init(keypair.publicKeyHex, keypair.publicKey, account);
     
     // Submit multiple transactions concurrently
     const promises = [
-      nonceManager.submitGenerate(),
-      nonceManager.submitMatch(),
-      nonceManager.submitGenerate(),
-      nonceManager.submitMatch(),
-      nonceManager.submitGenerate()
+      nonceManager.submitCasinoDeposit(1),
+      nonceManager.submitCreateVault(),
+      nonceManager.submitCasinoDeposit(1),
+      nonceManager.submitCreateVault(),
+      nonceManager.submitCasinoDeposit(1)
     ];
     
     const results = await Promise.all(promises);
@@ -470,10 +471,12 @@ describe('NonceManager Tests', async () => {
   test('Concurrent resubmit operations', async () => {
     nonceManager = new NonceManager(mockClient, wasmWrapper);
     
-    await nonceManager.init(keypair.publicKeyHex, keypair.publicKey);
+    const account = await mockClient.getAccount(keypair.publicKey);
+    await nonceManager.init(keypair.publicKeyHex, keypair.publicKey, account);
     
     // Store a pending transaction
-    nonceManager.storeTransaction(0, wasmWrapper.createGenerateTransaction(0));
+    nonceManager.setNonce(1);
+    nonceManager.storeTransaction(0, wasmWrapper.createCasinoDepositTransaction(0, 1));
     
     // Track resubmit calls
     let submitCalls = 0;
@@ -510,7 +513,7 @@ describe('NonceManager Tests', async () => {
     await nonceManager.init(keypair.publicKeyHex, keypair.publicKey, null);
     
     // Submit a transaction
-    await nonceManager.submitGenerate();
+    await nonceManager.submitCasinoDeposit(1);
     assert.equal(nonceManager.getCurrentNonce(), 1);
     
     // Store the transaction with nonce 0 (simulating an unconfirmed transaction)
@@ -561,8 +564,8 @@ describe('NonceManager Tests', async () => {
     await nonceManager.init(keypair.publicKeyHex, keypair.publicKey, initialAccount);
     
     // Submit some transactions
-    await nonceManager.submitGenerate();
-    await nonceManager.submitMatch();
+    await nonceManager.submitCasinoDeposit(1);
+    await nonceManager.submitCreateVault();
     
     // Local nonce should be 2
     assert.equal(nonceManager.getCurrentNonce(), 2);
@@ -575,12 +578,10 @@ describe('NonceManager Tests', async () => {
     const deletedAccount = await deletableClient.getAccount(keypair.publicKey);
     nonceManager.syncWithAccountState(deletedAccount);
     
-    // Nonce should remain at 2
-    assert.equal(nonceManager.getCurrentNonce(), 2);
-    
-    // Pending transactions should remain
+    // If account is missing, we reset local state to avoid nonce drift.
+    assert.equal(nonceManager.getCurrentNonce(), 0);
     const pendingAfter = nonceManager.getPendingTransactions();
-    assert.equal(pendingAfter.length, pendingBefore, 'Pending transactions should be preserved');
+    assert.equal(pendingAfter.length, 0, 'Pending transactions should be cleared');
     
     // Cleanup
     nonceManager.destroy();
@@ -589,10 +590,12 @@ describe('NonceManager Tests', async () => {
   test('Transaction retry count tracking without limit', async () => {
     nonceManager = new NonceManager(mockClient, wasmWrapper);
     
-    await nonceManager.init(keypair.publicKeyHex, keypair.publicKey);
+    const account = await mockClient.getAccount(keypair.publicKey);
+    await nonceManager.init(keypair.publicKeyHex, keypair.publicKey, account);
+    nonceManager.setNonce(1);
     
     // Store a transaction with high retry count
-    const txData = wasmWrapper.createGenerateTransaction(0);
+    const txData = wasmWrapper.createCasinoDepositTransaction(0, 1);
     const key = `${nonceManager.TX_STORAGE_PREFIX}0`;  // No publicKeyHex in the key
     const txRecord = {
       nonce: 0,
@@ -617,10 +620,11 @@ describe('NonceManager Tests', async () => {
   test('Corrupted localStorage data handling', async () => {
     nonceManager = new NonceManager(mockClient, wasmWrapper);
     
-    await nonceManager.init(keypair.publicKeyHex, keypair.publicKey);
+    const account = await mockClient.getAccount(keypair.publicKey);
+    await nonceManager.init(keypair.publicKeyHex, keypair.publicKey, account);
     
     // Store valid transaction
-    await nonceManager.submitGenerate();
+    await nonceManager.submitCasinoDeposit(1);
     
     // Add corrupted data
     const corruptKey = `${nonceManager.TX_STORAGE_PREFIX}999`;

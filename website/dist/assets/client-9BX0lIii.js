@@ -1,6 +1,6 @@
 import { WasmWrapper } from './wasm.js';
 import { NonceManager } from './nonceManager.js';
-import { snakeToCamel } from '../utils/caseNormalizer';
+import { snakeToCamel } from '../utils/caseNormalizer.js';
 
 // Delay between fetch retries
 const FETCH_RETRY_DELAY_MS = 1000;

@@ -532,6 +532,19 @@ impl Block {
     }
 }
 
+/// The canonical genesis block used by the node.
+pub fn genesis_block() -> Block {
+    // Use a deterministic, stable parent digest so the genesis commitment is constant.
+    // (Digest does not implement Default.)
+    let parent = Sha256::hash(b"NULLSPACE_GENESIS");
+    Block::new(parent, 0, 0, Vec::new())
+}
+
+/// The digest/commitment of the canonical genesis block.
+pub fn genesis_digest() -> Digest {
+    genesis_block().digest()
+}
+
 impl Write for Block {
     fn write(&self, writer: &mut impl BufMut) {
         self.parent.write(writer);

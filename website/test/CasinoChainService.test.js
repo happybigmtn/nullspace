@@ -11,7 +11,7 @@ import {
   deserializeCasinoGameStarted,
   deserializeCasinoGameMoved,
   deserializeCasinoGameCompleted,
-} from '../src/services/CasinoChainService.js';
+} from '../src/services/CasinoChainService.serializers.js';
 
 // ============================================================================
 // Helper Functions

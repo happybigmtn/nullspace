@@ -157,7 +157,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .query_state(&Key::CasinoPlayer(bot.keypair.public_key()))
                 .await?
             {
-                if let Value::CasinoPlayer(p) = lookup.operation.value() {
+                if let Some(Value::CasinoPlayer(p)) = lookup.operation.value() {
                     info!("Current Chips: {}", p.chips);
                 }
             }

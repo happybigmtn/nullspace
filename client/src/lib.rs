@@ -75,7 +75,12 @@ mod tests {
             let base_url = format!("http://{actual_addr}");
 
             let server_handle = tokio::spawn(async move {
-                axum::serve(listener, router).await.unwrap();
+                axum::serve(
+                    listener,
+                    router.into_make_service_with_connect_info::<SocketAddr>(),
+                )
+                .await
+                .unwrap();
             });
 
             // Give server time to start

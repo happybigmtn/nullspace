@@ -183,6 +183,17 @@ impl Simulator {
             Event::PlayerJoined { .. } => "PlayerJoined",
             Event::TournamentPhaseChanged { .. } => "TournamentPhaseChanged",
             Event::TournamentEnded { .. } => "TournamentEnded",
+            Event::VaultCreated { .. } => "VaultCreated",
+            Event::CollateralDeposited { .. } => "CollateralDeposited",
+            Event::VusdtBorrowed { .. } => "VusdtBorrowed",
+            Event::VusdtRepaid { .. } => "VusdtRepaid",
+            Event::AmmSwapped { .. } => "AmmSwapped",
+            Event::LiquidityAdded { .. } => "LiquidityAdded",
+            Event::LiquidityRemoved { .. } => "LiquidityRemoved",
+            Event::Staked { .. } => "Staked",
+            Event::Unstaked { .. } => "Unstaked",
+            Event::EpochProcessed { .. } => "EpochProcessed",
+            Event::RewardsClaimed { .. } => "RewardsClaimed",
         };
 
         let mut touch_account = |pk: &PublicKey| {
@@ -211,6 +222,17 @@ impl Simulator {
                     touch_account(pk);
                 }
             }
+            Event::VaultCreated { player } => touch_account(player),
+            Event::CollateralDeposited { player, .. } => touch_account(player),
+            Event::VusdtBorrowed { player, .. } => touch_account(player),
+            Event::VusdtRepaid { player, .. } => touch_account(player),
+            Event::AmmSwapped { player, .. } => touch_account(player),
+            Event::LiquidityAdded { player, .. } => touch_account(player),
+            Event::LiquidityRemoved { player, .. } => touch_account(player),
+            Event::Staked { player, .. } => touch_account(player),
+            Event::Unstaked { player, .. } => touch_account(player),
+            Event::RewardsClaimed { player, .. } => touch_account(player),
+            Event::EpochProcessed { .. } => {}
         }
     }
 
@@ -1200,6 +1222,19 @@ fn is_event_relevant_to_account(event: &Event, account: &PublicKey) -> bool {
             // Check if account is in the rankings
             rankings.iter().any(|(player, _)| player == account)
         }
+        // Liquidity / Vault events
+        Event::VaultCreated { player } => player == account,
+        Event::CollateralDeposited { player, .. } => player == account,
+        Event::VusdtBorrowed { player, .. } => player == account,
+        Event::VusdtRepaid { player, .. } => player == account,
+        Event::AmmSwapped { player, .. } => player == account,
+        Event::LiquidityAdded { player, .. } => player == account,
+        Event::LiquidityRemoved { player, .. } => player == account,
+        // Staking events
+        Event::Staked { player, .. } => player == account,
+        Event::Unstaked { player, .. } => player == account,
+        Event::RewardsClaimed { player, .. } => player == account,
+        Event::EpochProcessed { .. } => true,
     }
 }
 
