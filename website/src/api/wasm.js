@@ -110,6 +110,11 @@ export class WasmWrapper {
     return this.wasm.encode_house_key();
   }
 
+  // Encode staker key
+  encodeStakerKey(publicKeyBytes) {
+    return this.wasm.encode_staker_key(publicKeyBytes);
+  }
+
   // Encode UpdatesFilter for all events
   encodeUpdatesFilterAll() {
     return this.wasm.encode_updates_filter_all();
@@ -364,6 +369,56 @@ export class WasmWrapper {
       this.keypair,
       BigInt(nonce),
       BigInt(tournamentId)
+    );
+    return tx.encode();
+  }
+
+  // Create a stake transaction
+  createStakeTransaction(nonce, amount, duration) {
+    if (!this.keypair) {
+      throw new Error('Keypair not initialized');
+    }
+    const tx = this.wasm.Transaction.stake(
+      this.keypair,
+      BigInt(nonce),
+      BigInt(amount),
+      BigInt(duration)
+    );
+    return tx.encode();
+  }
+
+  // Create an unstake transaction
+  createUnstakeTransaction(nonce) {
+    if (!this.keypair) {
+      throw new Error('Keypair not initialized');
+    }
+    const tx = this.wasm.Transaction.unstake(
+      this.keypair,
+      BigInt(nonce)
+    );
+    return tx.encode();
+  }
+
+  // Create a claim rewards transaction
+  createClaimRewardsTransaction(nonce) {
+    if (!this.keypair) {
+      throw new Error('Keypair not initialized');
+    }
+    const tx = this.wasm.Transaction.claim_rewards(
+      this.keypair,
+      BigInt(nonce)
+    );
+    return tx.encode();
+  }
+
+  // Create a process epoch transaction
+  createProcessEpochTransaction(nonce) {
+    if (!this.keypair) {
+      throw new Error('Keypair not initialized');
+    }
+    const tx = this.wasm.Transaction.process_epoch(
+      this.keypair,
+      BigInt(nonce)
     );
     return tx.encode();
   }

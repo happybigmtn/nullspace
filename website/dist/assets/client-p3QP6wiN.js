@@ -683,6 +683,25 @@ export class CasinoClient {
   }
 
   /**
+   * Get staker state for an account.
+   * @param {Uint8Array} publicKeyBytes - Account public key
+   * @returns {Promise<Object|null>} Staker data or null if not found
+   */
+  async getStaker(publicKeyBytes) {
+    const keyBytes = this.wasm.encodeStakerKey(publicKeyBytes);
+    const result = await this.queryState(keyBytes);
+
+    if (result.found && result.value) {
+      if (result.value.type === 'Staker') {
+        return snakeToCamel(result.value);
+      }
+      return null;
+    }
+
+    return null;
+  }
+
+  /**
    * Get existing keypair from localStorage or create a new one.
    * @returns {{publicKey: Uint8Array, publicKeyHex: string}} Keypair information
    * @warning Private keys are stored in localStorage which is not secure.

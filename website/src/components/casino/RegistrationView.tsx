@@ -4,6 +4,7 @@ import { PlayerStats, LeaderboardEntry } from '../../types';
 import { formatTime } from '../../utils/gameUtils';
 import { BotConfig } from '../../services/BotService';
 import { usePasskeyAuth } from '../../hooks/usePasskeyAuth';
+import { PlaySwapStakeTabs } from '../PlaySwapStakeTabs';
 
 interface RegistrationViewProps {
   stats: PlayerStats;
@@ -56,6 +57,9 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
 
   return (
       <div className="flex flex-col min-h-screen w-screen bg-terminal-black text-white font-mono items-center justify-center p-4 sm:p-6 md:p-8 overflow-auto">
+          <div className="max-w-4xl w-full mb-3 flex justify-center">
+              <PlaySwapStakeTabs />
+          </div>
           <div className="max-w-4xl w-full border border-terminal-green rounded-lg p-4 sm:p-6 md:p-8 shadow-2xl relative bg-black/80 backdrop-blur">
               <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-center mb-2 tracking-[0.2em] sm:tracking-[0.3em] md:tracking-[0.5em] text-white">
                   FREEROLL LOBBY

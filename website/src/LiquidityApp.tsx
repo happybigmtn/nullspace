@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { WasmWrapper } from './api/wasm.js';
 import { CasinoClient } from './api/client.js';
+import { PlaySwapStakeTabs } from './components/PlaySwapStakeTabs';
 
 type ActivityItem = { ts: number; message: string };
 
@@ -345,9 +345,7 @@ export default function LiquidityApp() {
     <div className="min-h-screen bg-terminal-black text-white font-mono p-4">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-800 pb-3 mb-4">
         <div className="flex items-center gap-3">
-          <Link to="/" className="text-sm text-terminal-green hover:underline">
-            ← Casino
-          </Link>
+          <PlaySwapStakeTabs />
           <div className="text-lg font-bold tracking-widest">Liquidity / AMM</div>
           <div className="text-[10px] text-gray-500 tracking-widest">{status}</div>
         </div>
@@ -611,4 +609,3 @@ export default function LiquidityApp() {
     </div>
   );
 }
-

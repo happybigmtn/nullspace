@@ -1643,7 +1643,14 @@ impl<'a, S: State> Layer<'a, S> {
         house.total_voting_power += (amount as u128) * (duration as u128); // Approximation for new stake
         self.insert(Key::House, Value::House(house));
 
-        vec![] // Staked event?
+        vec![Event::Staked {
+            player: public.clone(),
+            amount,
+            duration,
+            new_balance: staker.balance,
+            unlock_ts: staker.unlock_ts,
+            voting_power: staker.voting_power,
+        }]
     }
 
     async fn handle_unstake(&mut self, public: &PublicKey) -> Vec<Event> {
@@ -1664,6 +1671,8 @@ impl<'a, S: State> Layer<'a, S> {
         if staker.balance == 0 {
             return vec![];
         }
+
+        let unstake_amount = staker.balance;
 
         // Return chips
         if let Some(Value::CasinoPlayer(mut player)) =
@@ -1687,13 +1696,28 @@ impl<'a, S: State> Layer<'a, S> {
         staker.voting_power = 0;
         self.insert(Key::Staker(public.clone()), Value::Staker(staker));
 
-        vec![]
+        vec![Event::Unstaked {
+            player: public.clone(),
+            amount: unstake_amount,
+        }]
     }
 
-    async fn handle_claim_rewards(&mut self, _public: &PublicKey) -> Vec<Event> {
+    async fn handle_claim_rewards(&mut self, public: &PublicKey) -> Vec<Event> {
         // Placeholder for distribution logic
         // In this MVP, rewards are auto-compounded or we just skip this for now
-        vec![]
+        let staker = match self.get(&Key::Staker(public.clone())).await {
+            Some(Value::Staker(s)) => s,
+            _ => return vec![],
+        };
+
+        if staker.balance == 0 {
+            return vec![];
+        }
+
+        vec![Event::RewardsClaimed {
+            player: public.clone(),
+            amount: 0,
+        }]
     }
 
     async fn handle_process_epoch(&mut self, _public: &PublicKey) -> Vec<Event> {
@@ -1719,7 +1743,10 @@ impl<'a, S: State> Layer<'a, S> {
             house.epoch_start_ts = self.seed.view;
             house.net_pnl = 0; // Reset for next week
 
+            let epoch = house.current_epoch;
             self.insert(Key::House, Value::House(house));
+
+            return vec![Event::EpochProcessed { epoch }];
         }
 
         vec![]

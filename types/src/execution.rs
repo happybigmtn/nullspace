@@ -1114,6 +1114,27 @@ pub enum Event {
         reserve_vusdt: u64,
         lp_balance: u64,
     },
+
+    // Staking events (tags 37-40)
+    Staked {
+        player: PublicKey,
+        amount: u64,
+        duration: u64,
+        new_balance: u64,
+        unlock_ts: u64,
+        voting_power: u128,
+    },
+    Unstaked {
+        player: PublicKey,
+        amount: u64,
+    },
+    EpochProcessed {
+        epoch: u64,
+    },
+    RewardsClaimed {
+        player: PublicKey,
+        amount: u64,
+    },
 }
 
 impl Write for Event {
@@ -1306,6 +1327,38 @@ impl Write for Event {
                 reserve_vusdt.write(writer);
                 lp_balance.write(writer);
             }
+
+            // Staking events (tags 37-40)
+            Self::Staked {
+                player,
+                amount,
+                duration,
+                new_balance,
+                unlock_ts,
+                voting_power,
+            } => {
+                37u8.write(writer);
+                player.write(writer);
+                amount.write(writer);
+                duration.write(writer);
+                new_balance.write(writer);
+                unlock_ts.write(writer);
+                voting_power.write(writer);
+            }
+            Self::Unstaked { player, amount } => {
+                38u8.write(writer);
+                player.write(writer);
+                amount.write(writer);
+            }
+            Self::EpochProcessed { epoch } => {
+                39u8.write(writer);
+                epoch.write(writer);
+            }
+            Self::RewardsClaimed { player, amount } => {
+                40u8.write(writer);
+                player.write(writer);
+                amount.write(writer);
+            }
         }
     }
 }
@@ -1445,6 +1498,25 @@ impl Read for Event {
                 reserve_rng: u64::read(reader)?,
                 reserve_vusdt: u64::read(reader)?,
                 lp_balance: u64::read(reader)?,
+            },
+            37 => Self::Staked {
+                player: PublicKey::read(reader)?,
+                amount: u64::read(reader)?,
+                duration: u64::read(reader)?,
+                new_balance: u64::read(reader)?,
+                unlock_ts: u64::read(reader)?,
+                voting_power: u128::read(reader)?,
+            },
+            38 => Self::Unstaked {
+                player: PublicKey::read(reader)?,
+                amount: u64::read(reader)?,
+            },
+            39 => Self::EpochProcessed {
+                epoch: u64::read(reader)?,
+            },
+            40 => Self::RewardsClaimed {
+                player: PublicKey::read(reader)?,
+                amount: u64::read(reader)?,
             },
 
             i => return Err(Error::InvalidEnum(i)),
@@ -1598,6 +1670,24 @@ impl EncodeSize for Event {
                         + reserve_vusdt.encode_size()
                         + lp_balance.encode_size()
                 }
+                Self::Staked {
+                    player,
+                    amount,
+                    duration,
+                    new_balance,
+                    unlock_ts,
+                    voting_power,
+                } => {
+                    player.encode_size()
+                        + amount.encode_size()
+                        + duration.encode_size()
+                        + new_balance.encode_size()
+                        + unlock_ts.encode_size()
+                        + voting_power.encode_size()
+                }
+                Self::Unstaked { player, amount } => player.encode_size() + amount.encode_size(),
+                Self::EpochProcessed { epoch } => epoch.encode_size(),
+                Self::RewardsClaimed { player, amount } => player.encode_size() + amount.encode_size(),
             }
     }
 }

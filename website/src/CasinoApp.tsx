@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { GameType } from './types';
 import { useTerminalGame } from './hooks/useTerminalGame';
 import { useKeyboardControls } from './hooks/useKeyboardControls';
+import { PlaySwapStakeTabs } from './components/PlaySwapStakeTabs';
 
 // Components
 import { Header, Sidebar, Footer, CommandPalette, CustomBetOverlay, HelpOverlay, TournamentAlert } from './components/casino/Layout';
@@ -113,6 +114,10 @@ export default function CasinoApp() {
            setFocusMode={setFocusMode}
            showTimer={playMode === 'FREEROLL'}
        />
+
+       <div className="border-b border-gray-800 bg-terminal-black/90 backdrop-blur px-4 py-2 flex items-center justify-center">
+           <PlaySwapStakeTabs />
+       </div>
 
        <div className="flex flex-1 overflow-hidden relative">
           <main className={`flex-1 flex flex-col relative bg-terminal-black p-4 overflow-y-auto ${gameState.type !== GameType.NONE ? 'pb-20 md:pb-4' : ''}`}>

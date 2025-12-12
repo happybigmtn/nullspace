@@ -650,4 +650,50 @@ export class NonceManager {
       'removeLiquidity'
     );
   }
+
+  /**
+   * Submit a stake transaction.
+   * @param {bigint|number} amount - Amount of RNG to stake
+   * @param {bigint|number} duration - Lock duration (in blocks/views)
+   * @returns {Promise<{status: string, txHash?: string}>} Transaction result
+   */
+  async submitStake(amount, duration) {
+    return this.submitTransaction(
+      (nonce) => this.wasm.createStakeTransaction(nonce, amount, duration),
+      'stake'
+    );
+  }
+
+  /**
+   * Submit an unstake transaction.
+   * @returns {Promise<{status: string, txHash?: string}>} Transaction result
+   */
+  async submitUnstake() {
+    return this.submitTransaction(
+      (nonce) => this.wasm.createUnstakeTransaction(nonce),
+      'unstake'
+    );
+  }
+
+  /**
+   * Submit a claim rewards transaction.
+   * @returns {Promise<{status: string, txHash?: string}>} Transaction result
+   */
+  async submitClaimRewards() {
+    return this.submitTransaction(
+      (nonce) => this.wasm.createClaimRewardsTransaction(nonce),
+      'claimRewards'
+    );
+  }
+
+  /**
+   * Submit an epoch processing transaction.
+   * @returns {Promise<{status: string, txHash?: string}>} Transaction result
+   */
+  async submitProcessEpoch() {
+    return this.submitTransaction(
+      (nonce) => this.wasm.createProcessEpochTransaction(nonce),
+      'processEpoch'
+    );
+  }
 }

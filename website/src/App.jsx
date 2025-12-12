@@ -1,7 +1,8 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import CasinoApp from './CasinoApp';
 import EconomyDashboard from './components/EconomyDashboard';
 import LiquidityApp from './LiquidityApp';
+import StakingApp from './StakingApp';
 import ExplorerLayout from './explorer/ExplorerLayout';
 import BlocksPage from './explorer/BlocksPage';
 import BlockDetailPage from './explorer/BlockDetailPage';
@@ -15,7 +16,9 @@ function App() {
       <Routes>
         <Route path="/" element={<CasinoApp />} />
         <Route path="/economy" element={<EconomyDashboard />} />
-        <Route path="/liquidity" element={<LiquidityApp />} />
+        <Route path="/swap" element={<LiquidityApp />} />
+        <Route path="/stake" element={<StakingApp />} />
+        <Route path="/liquidity" element={<Navigate to="/swap" replace />} />
         <Route path="/explorer" element={<ExplorerLayout />}>
           <Route index element={<BlocksPage />} />
           <Route path="blocks/:id" element={<BlockDetailPage />} />

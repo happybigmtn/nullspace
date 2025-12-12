@@ -253,6 +253,43 @@ impl Transaction {
         Ok(Transaction { inner: tx })
     }
 
+    /// Sign a new stake transaction.
+    #[wasm_bindgen]
+    pub fn stake(
+        signer: &Signer,
+        nonce: u64,
+        amount: u64,
+        duration: u64,
+    ) -> Result<Transaction, JsValue> {
+        let instruction = Instruction::Stake { amount, duration };
+        let tx = ExecutionTransaction::sign(&signer.private_key, nonce, instruction);
+        Ok(Transaction { inner: tx })
+    }
+
+    /// Sign a new unstake transaction.
+    #[wasm_bindgen]
+    pub fn unstake(signer: &Signer, nonce: u64) -> Result<Transaction, JsValue> {
+        let instruction = Instruction::Unstake;
+        let tx = ExecutionTransaction::sign(&signer.private_key, nonce, instruction);
+        Ok(Transaction { inner: tx })
+    }
+
+    /// Sign a new claim rewards transaction.
+    #[wasm_bindgen]
+    pub fn claim_rewards(signer: &Signer, nonce: u64) -> Result<Transaction, JsValue> {
+        let instruction = Instruction::ClaimRewards;
+        let tx = ExecutionTransaction::sign(&signer.private_key, nonce, instruction);
+        Ok(Transaction { inner: tx })
+    }
+
+    /// Sign a new process epoch transaction.
+    #[wasm_bindgen]
+    pub fn process_epoch(signer: &Signer, nonce: u64) -> Result<Transaction, JsValue> {
+        let instruction = Instruction::ProcessEpoch;
+        let tx = ExecutionTransaction::sign(&signer.private_key, nonce, instruction);
+        Ok(Transaction { inner: tx })
+    }
+
     /// Sign a new create vault transaction.
     #[wasm_bindgen]
     pub fn create_vault(signer: &Signer, nonce: u64) -> Result<Transaction, JsValue> {
@@ -409,6 +446,16 @@ pub fn encode_lp_balance_key(public_key: &[u8]) -> Result<Vec<u8>, JsValue> {
 pub fn encode_house_key() -> Vec<u8> {
     let key = Key::House;
     key.encode().to_vec()
+}
+
+/// Encode a staker key.
+#[wasm_bindgen]
+pub fn encode_staker_key(public_key: &[u8]) -> Result<Vec<u8>, JsValue> {
+    let mut buf = public_key;
+    let pk = ed25519::PublicKey::read(&mut buf)
+        .map_err(|e| JsValue::from_str(&format!("Invalid public key: {e:?}")))?;
+    let key = Key::Staker(pk);
+    Ok(key.encode().to_vec())
 }
 
 /// Encode UpdatesFilter::All
@@ -915,6 +962,46 @@ fn decode_event(event: &Event) -> Result<serde_json::Value, JsValue> {
                 "lp_balance": lp_balance
             })
         }
+
+        // Staking events
+        Event::Staked {
+            player,
+            amount,
+            duration,
+            new_balance,
+            unlock_ts,
+            voting_power,
+        } => {
+            serde_json::json!({
+                "type": "Staked",
+                "player": hex(&player.encode()),
+                "amount": amount,
+                "duration": duration,
+                "new_balance": new_balance,
+                "unlock_ts": unlock_ts,
+                "voting_power": voting_power.to_string()
+            })
+        }
+        Event::Unstaked { player, amount } => {
+            serde_json::json!({
+                "type": "Unstaked",
+                "player": hex(&player.encode()),
+                "amount": amount
+            })
+        }
+        Event::EpochProcessed { epoch } => {
+            serde_json::json!({
+                "type": "EpochProcessed",
+                "epoch": epoch
+            })
+        }
+        Event::RewardsClaimed { player, amount } => {
+            serde_json::json!({
+                "type": "RewardsClaimed",
+                "player": hex(&player.encode()),
+                "amount": amount
+            })
+        }
     };
     Ok(json)
 }
@@ -1000,6 +1087,22 @@ fn process_output(output: &Output) -> Result<serde_json::Value, JsValue> {
                 Instruction::CasinoToggleDouble => "CasinoToggleDouble",
                 Instruction::CasinoJoinTournament { .. } => "CasinoJoinTournament",
                 Instruction::CasinoStartTournament { .. } => "CasinoStartTournament",
+                Instruction::CasinoEndTournament { .. } => "CasinoEndTournament",
+
+                // Staking instructions
+                Instruction::Stake { .. } => "Stake",
+                Instruction::Unstake => "Unstake",
+                Instruction::ClaimRewards => "ClaimRewards",
+                Instruction::ProcessEpoch => "ProcessEpoch",
+
+                // Vault / AMM instructions
+                Instruction::CreateVault => "CreateVault",
+                Instruction::DepositCollateral { .. } => "DepositCollateral",
+                Instruction::BorrowUSDT { .. } => "BorrowUSDT",
+                Instruction::RepayUSDT { .. } => "RepayUSDT",
+                Instruction::Swap { .. } => "Swap",
+                Instruction::AddLiquidity { .. } => "AddLiquidity",
+                Instruction::RemoveLiquidity { .. } => "RemoveLiquidity",
                 _ => "Unknown",
             };
             Ok(serde_json::json!({

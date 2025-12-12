@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { PlaySwapStakeTabs } from '../PlaySwapStakeTabs';
 
 export type PlayMode = 'CASH' | 'FREEROLL';
 
@@ -10,6 +11,9 @@ interface ModeSelectViewProps {
 export const ModeSelectView: React.FC<ModeSelectViewProps> = ({ onSelect }) => {
   return (
     <div className="flex flex-col min-h-screen w-screen bg-terminal-black text-white font-mono items-center justify-center p-4 sm:p-6 md:p-8 overflow-auto">
+      <div className="max-w-3xl w-full mb-3 flex justify-center">
+        <PlaySwapStakeTabs />
+      </div>
       <div className="max-w-3xl w-full border border-terminal-green rounded-lg p-4 sm:p-6 md:p-8 shadow-2xl relative bg-black/80 backdrop-blur">
         <div className="text-center mb-6">
           <div className="text-xs text-gray-500 tracking-[0.4em] mb-2">WELCOME TO</div>
@@ -52,8 +56,12 @@ export const ModeSelectView: React.FC<ModeSelectViewProps> = ({ onSelect }) => {
         </div>
 
         <div className="mt-6 text-center text-[10px] text-gray-600 tracking-widest">
-          <Link to="/liquidity" className="text-terminal-green hover:underline">
-            LIQUIDITY / AMM
+          <Link to="/swap" className="text-terminal-green hover:underline">
+            SWAP / LIQUIDITY
+          </Link>
+          <span className="mx-2">·</span>
+          <Link to="/stake" className="text-terminal-green hover:underline">
+            STAKING
           </Link>
           <span className="mx-2">·</span>
           <Link to="/explorer" className="text-gray-400 hover:underline">
