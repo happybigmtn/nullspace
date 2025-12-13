@@ -165,7 +165,9 @@ export const CrapsView = React.memo<{ gameState: GameState }>(({ gameState }) =>
                         gameState.crapsBets.map((b, i) => (
                             <div key={i} className="flex justify-between items-center text-xs border border-gray-800 p-1 rounded bg-black/50">
                                 <div className="flex flex-col">
-                                    <span className="text-terminal-green font-bold text-[10px]">{b.type} {b.target}</span>
+                                    <span className="text-terminal-green font-bold text-[10px]">
+                                        {b.type}{b.target !== undefined ? ` ${b.target}` : ''}
+                                    </span>
                                     <span className="text-[9px] text-gray-500">{b.status === 'PENDING' ? 'WAIT' : 'ON'}</span>
                                 </div>
                                 <div className="text-right">
@@ -273,8 +275,8 @@ export const CrapsView = React.memo<{ gameState: GameState }>(({ gameState }) =>
                                          }
                                          return "";
                                      };
-
-                                     if (gameState.crapsInputMode === 'YES' || gameState.crapsInputMode === 'NO') {
+                                    
+                                     if (gameState.crapsInputMode === 'YES' || gameState.crapsInputMode === 'NO' || gameState.crapsInputMode === 'BUY') {
                                          [4,5,6,8,9,10].forEach(n => {
                                             numbersToRender.push({ num: n, label: n.toString(), payout: getProfit(gameState.crapsInputMode, n) });
                                          });

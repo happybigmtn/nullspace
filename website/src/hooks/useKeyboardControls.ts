@@ -4,7 +4,7 @@ import { GameType, GameState } from '../types';
 
 interface KeyboardControlsProps {
   gameState: GameState;
-  uiState: { commandOpen: boolean; customBetOpen: boolean; helpOpen: boolean; searchQuery: string };
+  uiState: { commandOpen: boolean; customBetOpen: boolean; helpOpen: boolean; searchQuery: string; numberInputString: string };
   uiActions: {
       setCommandOpen: (v: boolean) => void;
       setCustomBetOpen: (v: boolean) => void;
@@ -27,6 +27,7 @@ interface KeyboardControlsProps {
     bjDouble: () => void;
     bjSplit: () => void;
     bjInsurance: (take: boolean) => void;
+    bjToggle21Plus3: () => void;
     drawVideoPoker: () => void;
     toggleHold: (index: number) => void;
     hiloPlay: (choice: 'HIGHER' | 'LOWER') => void;
@@ -38,15 +39,23 @@ interface KeyboardControlsProps {
       undo: () => void;
     };
     placeRouletteBet: (betType: string, target?: number) => void;
+    cycleRouletteZeroRule: () => void;
     rebetRoulette: () => void;
     undoRouletteBet: () => void;
     threeCardPlay: () => void;
     threeCardFold: () => void;
+    threeCardTogglePairPlus: () => void;
+    threeCardToggleSixCardBonus: () => void;
+    threeCardToggleProgressive: () => void;
+    casinoWarToggleTieBet: () => void;
     casinoWarGoToWar: () => void;
     casinoWarSurrender: () => void;
     uhCheck: () => void;
     uhFold: () => void;
     uhBet: (multiplier: number) => void;
+    uthToggleTrips: () => void;
+    uthToggleSixCardBonus: () => void;
+    uthToggleProgressive: () => void;
     placeCrapsBet: (betType: string) => void;
     placeCrapsNumberBet: (inputMode: string, number: number) => void;
     addCrapsOdds: () => void;
@@ -142,7 +151,7 @@ export const useKeyboardControls = ({
             }
             
             // Numeric Input (Roulette/SicBo)
-            if (gameState.rouletteInputMode === 'NUMBER' || gameState.sicBoInputMode === 'SUM') {
+            if (gameState.rouletteInputMode !== 'NONE' || gameState.sicBoInputMode === 'SUM') {
                  if (e.key === 'Enter') {
                      // Trigger logic in App/Hook
                  } else if (/^[0-9]$/.test(e.key)) {
@@ -162,6 +171,9 @@ export const useKeyboardControls = ({
             const k = e.key.toLowerCase();
 
             if (gameState.type === GameType.BLACKJACK) {
+                if (k === 'j') gameActions.bjToggle21Plus3();
+                // Only allow blackjack actions during player turn (not during betting/reveal stages).
+                if (gameState.stage !== 'PLAYING' || gameState.message.includes('REVEAL')) return;
                 if (k === 'h') gameActions.bjHit();
                 if (k === 's') gameActions.bjStand();
                 if (k === 'd') gameActions.bjDouble();
@@ -185,6 +197,8 @@ export const useKeyboardControls = ({
                 if (k === 'e') gameActions.baccaratActions.placeBet('TIE');
                 if (k === 'q') gameActions.baccaratActions.placeBet('P_PAIR');
                 if (k === 'w') gameActions.baccaratActions.placeBet('B_PAIR');
+                // Lucky 6 side bet
+                if (e.key === '6') { gameActions.baccaratActions.placeBet('LUCKY6'); return; }
                 if (k === 't') gameActions.baccaratActions.rebet();
                 if (k === 'u') gameActions.baccaratActions.undo();
             } else if (gameState.type === GameType.ROULETTE) {
@@ -192,6 +206,37 @@ export const useKeyboardControls = ({
                 if (k === 'b') gameActions.placeRouletteBet('BLACK');
                 if (k === 'e') gameActions.placeRouletteBet('EVEN');
                 if (k === 'o') gameActions.placeRouletteBet('ODD');
+                if (k === 'p') gameActions.cycleRouletteZeroRule();
+                if (k === 'n') {
+                    uiActions.setNumberInputString("");
+                    gameActions.setGameState((prev) => ({ ...prev, rouletteInputMode: 'STRAIGHT' }));
+                    return;
+                }
+                if (k === 's') {
+                    uiActions.setNumberInputString("");
+                    gameActions.setGameState((prev) => ({ ...prev, rouletteInputMode: 'SPLIT_H' }));
+                    return;
+                }
+                if (k === 'v') {
+                    uiActions.setNumberInputString("");
+                    gameActions.setGameState((prev) => ({ ...prev, rouletteInputMode: 'SPLIT_V' }));
+                    return;
+                }
+                if (k === 'w') {
+                    uiActions.setNumberInputString("");
+                    gameActions.setGameState((prev) => ({ ...prev, rouletteInputMode: 'STREET' }));
+                    return;
+                }
+                if (k === 'c') {
+                    uiActions.setNumberInputString("");
+                    gameActions.setGameState((prev) => ({ ...prev, rouletteInputMode: 'CORNER' }));
+                    return;
+                }
+                if (e.key === '6') {
+                    uiActions.setNumberInputString("");
+                    gameActions.setGameState((prev) => ({ ...prev, rouletteInputMode: 'SIX_LINE' }));
+                    return;
+                }
                 // '0' places ZERO bet - takes priority over custom bet dialog
                 if (e.key === '0') {
                     gameActions.placeRouletteBet('ZERO');
@@ -200,12 +245,26 @@ export const useKeyboardControls = ({
                 if (k === 't') gameActions.rebetRoulette();
                 if (k === 'u') gameActions.undoRouletteBet();
             } else if (gameState.type === GameType.THREE_CARD) {
-                if (k === 'p') gameActions.threeCardPlay();
-                if (k === 'f') gameActions.threeCardFold();
+                if (gameState.stage === 'BETTING') {
+                    if (k === 'p') gameActions.threeCardTogglePairPlus();
+                    if (e.key === '6') { gameActions.threeCardToggleSixCardBonus(); return; }
+                    if (k === 'j') gameActions.threeCardToggleProgressive();
+                } else if (!gameState.message.includes('REVEAL')) {
+                    if (k === 'p') gameActions.threeCardPlay();
+                    if (k === 'f') gameActions.threeCardFold();
+                }
             } else if (gameState.type === GameType.CASINO_WAR) {
+                if (k === 't') gameActions.casinoWarToggleTieBet();
                 if (k === 'w') gameActions.casinoWarGoToWar();
                 if (k === 's') gameActions.casinoWarSurrender();
             } else if (gameState.type === GameType.ULTIMATE_HOLDEM) {
+                if (gameState.stage === 'BETTING') {
+                    if (k === 't') gameActions.uthToggleTrips();
+                    if (e.key === '6') { gameActions.uthToggleSixCardBonus(); return; }
+                    if (k === 'j') gameActions.uthToggleProgressive();
+                    return;
+                }
+                if (gameState.message.includes('REVEAL')) return;
                 if (k === 'c') gameActions.uhCheck();
                 if (k === 'f') gameActions.uhFold();
                 // For betting, we override the standard bet shortcuts in Ultimate Holdem
@@ -236,6 +295,7 @@ export const useKeyboardControls = ({
                 if (k === 'p') gameActions.placeCrapsBet(gameState.crapsPoint ? 'COME' : 'PASS');
                 if (k === 'd') gameActions.placeCrapsBet(gameState.crapsPoint ? 'DONT_COME' : 'DONT_PASS');
                 if (k === 'f') gameActions.placeCrapsBet('FIELD');
+                if (k === 'b') gameActions.placeCrapsBet('FIRE');
                 if (k === 'o') gameActions.addCrapsOdds();
                 if (k === 'u') gameActions.undoCrapsBet();
                 if (k === 't') gameActions.rebetCraps();
@@ -243,11 +303,141 @@ export const useKeyboardControls = ({
                 if (k === 'n') gameActions.setGameState((prev) => ({ ...prev, crapsInputMode: 'NO' }));
                 if (k === 'x') gameActions.setGameState((prev) => ({ ...prev, crapsInputMode: 'NEXT' }));
                 if (k === 'h') gameActions.setGameState((prev) => ({ ...prev, crapsInputMode: 'HARDWAY' }));
+                if (k === 'i') gameActions.setGameState((prev) => ({ ...prev, crapsInputMode: 'BUY' }));
+                if (k === 's') gameActions.placeCrapsBet('ATS_SMALL');
+                if (k === 'l') gameActions.placeCrapsBet('ATS_TALL');
+                if (k === 'a') gameActions.placeCrapsBet('ATS_ALL');
             } else if (gameState.type === GameType.SIC_BO) {
+                // Handle Sic Bo input modes (specific dice/combination selection)
+                if (gameState.sicBoInputMode !== 'NONE') {
+                    // SUM input uses the global numeric input handler + Enter in CasinoApp.
+                    if (gameState.sicBoInputMode !== 'SUM') {
+                        const digit = parseInt(e.key);
+                        if (!isNaN(digit) && digit >= 1 && digit <= 6) {
+                            if (gameState.sicBoInputMode === 'SINGLE') {
+                                gameActions.placeSicBoBet('SINGLE_DIE', digit);
+                                return;
+                            }
+                            if (gameState.sicBoInputMode === 'DOUBLE') {
+                                gameActions.placeSicBoBet('DOUBLE_SPECIFIC', digit);
+                                return;
+                            }
+                            if (gameState.sicBoInputMode === 'TRIPLE') {
+                                gameActions.placeSicBoBet('TRIPLE_SPECIFIC', digit);
+                                return;
+                            }
+                            if (gameState.sicBoInputMode === 'DOMINO') {
+                                // Domino selection: choose two distinct numbers (1-6).
+                                if (uiState.numberInputString.length === 0) {
+                                    uiActions.setNumberInputString(String(digit));
+                                    return;
+                                }
+
+                                const first = parseInt(uiState.numberInputString[0]);
+                                if (!isNaN(first) && first !== digit) {
+                                    const min = Math.min(first, digit);
+                                    const max = Math.max(first, digit);
+                                    const encoded = (min << 4) | max;
+                                    gameActions.placeSicBoBet('DOMINO', encoded);
+                                    uiActions.setNumberInputString("");
+                                }
+                                return;
+                            }
+
+                            if (gameState.sicBoInputMode === 'HOP3_HARD') {
+                                // Three-number hard hop: pick a number to appear twice, then a distinct single.
+                                if (uiState.numberInputString.length === 0) {
+                                    uiActions.setNumberInputString(String(digit));
+                                    return;
+                                }
+
+                                const doubled = parseInt(uiState.numberInputString[0]);
+                                if (!isNaN(doubled) && doubled !== digit) {
+                                    const encoded = (doubled << 4) | digit;
+                                    gameActions.placeSicBoBet('HOP3_HARD', encoded);
+                                    uiActions.setNumberInputString("");
+                                }
+                                return;
+                            }
+
+                            if (
+                              gameState.sicBoInputMode === 'HOP3_EASY'
+                              || gameState.sicBoInputMode === 'HOP4_EASY'
+                            ) {
+                                const needed = gameState.sicBoInputMode === 'HOP3_EASY' ? 3 : 4;
+                                const current = uiState.numberInputString;
+                                const digitChar = String(digit);
+                                if (current.includes(digitChar)) {
+                                    return;
+                                }
+
+                                const next = current + digitChar;
+                                uiActions.setNumberInputString(next);
+
+                                if (next.length === needed) {
+                                    let mask = 0;
+                                    for (const ch of next) {
+                                        const n = parseInt(ch);
+                                        if (!isNaN(n) && n >= 1 && n <= 6) {
+                                            mask |= 1 << (n - 1);
+                                        }
+                                    }
+                                    gameActions.placeSicBoBet(gameState.sicBoInputMode, mask);
+                                    uiActions.setNumberInputString("");
+                                }
+                                return;
+                            }
+                        }
+                        // Absorb other keys while in a non-SUM input mode.
+                        return;
+                    }
+                    return;
+                }
+
                 if (k === 's') gameActions.placeSicBoBet('SMALL');
                 if (k === 'b') gameActions.placeSicBoBet('BIG');
                 if (k === 'a') gameActions.placeSicBoBet('TRIPLE_ANY');
-                if (k === 't') gameActions.rebetSicBo();
+                if (k === 'n') {
+                    uiActions.setNumberInputString("");
+                    gameActions.setGameState((prev) => ({ ...prev, sicBoInputMode: 'SINGLE' }));
+                    return;
+                }
+                if (k === 'd') {
+                    uiActions.setNumberInputString("");
+                    gameActions.setGameState((prev) => ({ ...prev, sicBoInputMode: 'DOUBLE' }));
+                    return;
+                }
+                if (k === 't') {
+                    uiActions.setNumberInputString("");
+                    gameActions.setGameState((prev) => ({ ...prev, sicBoInputMode: 'TRIPLE' }));
+                    return;
+                }
+                if (k === 'c') {
+                    uiActions.setNumberInputString("");
+                    gameActions.setGameState((prev) => ({ ...prev, sicBoInputMode: 'DOMINO' }));
+                    return;
+                }
+                if (k === 'e') {
+                    uiActions.setNumberInputString("");
+                    gameActions.setGameState((prev) => ({ ...prev, sicBoInputMode: 'HOP3_EASY' }));
+                    return;
+                }
+                if (k === 'h') {
+                    uiActions.setNumberInputString("");
+                    gameActions.setGameState((prev) => ({ ...prev, sicBoInputMode: 'HOP3_HARD' }));
+                    return;
+                }
+                if (k === 'f') {
+                    uiActions.setNumberInputString("");
+                    gameActions.setGameState((prev) => ({ ...prev, sicBoInputMode: 'HOP4_EASY' }));
+                    return;
+                }
+                if (k === 'm') {
+                    uiActions.setNumberInputString("");
+                    gameActions.setGameState((prev) => ({ ...prev, sicBoInputMode: 'SUM' }));
+                    return;
+                }
+                if (k === 'r') gameActions.rebetSicBo();
                 if (k === 'u') gameActions.undoSicBoBet();
             }
 

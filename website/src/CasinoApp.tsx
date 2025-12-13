@@ -37,7 +37,7 @@ export default function CasinoApp() {
   // Keyboard
   useKeyboardControls({
       gameState,
-      uiState: { commandOpen, customBetOpen, helpOpen, searchQuery },
+      uiState: { commandOpen, customBetOpen, helpOpen, searchQuery, numberInputString },
       uiActions: {
           setCommandOpen, setCustomBetOpen, setHelpOpen, setHelpDetail, setSearchQuery,
           setCustomBetString, setNumberInputString,
@@ -67,7 +67,47 @@ export default function CasinoApp() {
   const handleNumberInputEnter = () => {
       const val = parseInt(numberInputString);
       if (!isNaN(val)) {
-          if (gameState.type === GameType.ROULETTE) actions.placeRouletteBet('STRAIGHT', val);
+          if (gameState.type === GameType.ROULETTE) {
+              let betType: Parameters<typeof actions.placeRouletteBet>[0] | null = null;
+              let valid = true;
+
+              switch (gameState.rouletteInputMode) {
+                  case 'STRAIGHT':
+                      betType = 'STRAIGHT';
+                      valid = val >= 0 && val <= 36;
+                      break;
+                  case 'SPLIT_H':
+                      betType = 'SPLIT_H';
+                      valid = val >= 1 && val <= 35 && val % 3 !== 0;
+                      break;
+                  case 'SPLIT_V':
+                      betType = 'SPLIT_V';
+                      valid = val >= 1 && val <= 33;
+                      break;
+                  case 'STREET':
+                      betType = 'STREET';
+                      valid = val >= 1 && val <= 34 && (val - 1) % 3 === 0;
+                      break;
+                  case 'CORNER':
+                      betType = 'CORNER';
+                      valid = val >= 1 && val <= 32 && val % 3 !== 0;
+                      break;
+                  case 'SIX_LINE':
+                      betType = 'SIX_LINE';
+                      valid = val >= 1 && val <= 31 && (val - 1) % 3 === 0;
+                      break;
+                  case 'NONE':
+                      betType = null;
+                      valid = false;
+                      break;
+              }
+
+              if (betType && valid) {
+                  actions.placeRouletteBet(betType, val);
+              } else {
+                  setGameState((prev) => ({ ...prev, message: "INVALID NUMBER" }));
+              }
+          }
           if (gameState.type === GameType.SIC_BO) actions.placeSicBoBet('SUM', val);
       }
       setNumberInputString("");
@@ -101,7 +141,7 @@ export default function CasinoApp() {
         if (e.key === 'Enter') {
             if (commandOpen) handleCommandEnter();
             if (customBetOpen) handleCustomBetEnter();
-            if (gameState.rouletteInputMode === 'NUMBER' || gameState.sicBoInputMode === 'SUM') handleNumberInputEnter();
+            if (gameState.rouletteInputMode !== 'NONE' || gameState.sicBoInputMode === 'SUM') handleNumberInputEnter();
         }
         if (e.key.toLowerCase() === 'l' && !commandOpen && !customBetOpen) setLeaderboardView(prev => prev === 'RANK' ? 'PAYOUT' : 'RANK');
     }}>

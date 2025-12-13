@@ -77,6 +77,9 @@ export const RouletteView = React.memo<{ gameState: GameState; numberInput?: str
                     <div className="text-2xl font-bold text-terminal-gold tracking-widest animate-pulse">
                         {gameState.message}
                     </div>
+                    <div className="text-[10px] text-gray-500 uppercase tracking-widest">
+                        ZERO RULE: {gameState.rouletteZeroRule.split('_').join(' ')}
+                    </div>
                 </div>
             </div>
 
@@ -159,7 +162,27 @@ export const RouletteView = React.memo<{ gameState: GameState; numberInput?: str
                         </div>
                          <div className="flex flex-col items-center border border-terminal-dim rounded bg-black/50 px-3 py-1 cursor-pointer">
                             <span className="text-white font-bold text-sm">N</span>
-                            <span className="text-[10px] text-gray-500">NUM</span>
+                            <span className="text-[10px] text-gray-500">STRAIGHT</span>
+                        </div>
+                        <div className="flex flex-col items-center border border-terminal-dim rounded bg-black/50 px-3 py-1 cursor-pointer">
+                            <span className="text-white font-bold text-sm">S</span>
+                            <span className="text-[10px] text-gray-500">SPLIT</span>
+                        </div>
+                        <div className="flex flex-col items-center border border-terminal-dim rounded bg-black/50 px-3 py-1 cursor-pointer">
+                            <span className="text-white font-bold text-sm">V</span>
+                            <span className="text-[10px] text-gray-500">VSPLIT</span>
+                        </div>
+                        <div className="flex flex-col items-center border border-terminal-dim rounded bg-black/50 px-3 py-1 cursor-pointer">
+                            <span className="text-white font-bold text-sm">W</span>
+                            <span className="text-[10px] text-gray-500">STREET</span>
+                        </div>
+                        <div className="flex flex-col items-center border border-terminal-dim rounded bg-black/50 px-3 py-1 cursor-pointer">
+                            <span className="text-white font-bold text-sm">C</span>
+                            <span className="text-[10px] text-gray-500">CORNER</span>
+                        </div>
+                        <div className="flex flex-col items-center border border-terminal-dim rounded bg-black/50 px-3 py-1 cursor-pointer">
+                            <span className="text-white font-bold text-sm">6</span>
+                            <span className="text-[10px] text-gray-500">SIX</span>
                         </div>
                      </div>
                     <div className="w-px h-8 bg-gray-800 mx-2"></div>
@@ -172,6 +195,11 @@ export const RouletteView = React.memo<{ gameState: GameState; numberInput?: str
                             <span className="text-gray-500 font-bold text-sm">U</span>
                             <span className="text-[10px] text-gray-600">UNDO</span>
                         </div>
+                    </div>
+                    <div className="w-px h-8 bg-gray-800 mx-2"></div>
+                    <div className="flex flex-col items-center border border-gray-700 rounded bg-black/50 px-3 py-1 cursor-pointer">
+                        <span className="text-gray-500 font-bold text-sm">P</span>
+                        <span className="text-[10px] text-gray-600">RULE</span>
                     </div>
                     <div className="w-px h-8 bg-gray-800 mx-2"></div>
                     <div className="flex gap-2">
@@ -192,10 +220,17 @@ export const RouletteView = React.memo<{ gameState: GameState; numberInput?: str
             </div>
 
             {/* NUM INPUT MODAL */}
-            {gameState.rouletteInputMode === 'NUMBER' && (
+            {gameState.rouletteInputMode !== 'NONE' && (
                  <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center">
                      <div className="bg-terminal-black border border-terminal-green p-6 rounded-lg shadow-xl flex flex-col items-center gap-4">
-                         <div className="text-sm tracking-widest text-gray-400 uppercase">TYPE NUMBER (0-36)</div>
+                         <div className="text-sm tracking-widest text-gray-400 uppercase">
+                             {gameState.rouletteInputMode === 'STRAIGHT' && "TYPE NUMBER (0-36)"}
+                             {gameState.rouletteInputMode === 'SPLIT_H' && "TYPE LEFT NUMBER (1-35, NOT 3N)"}
+                             {gameState.rouletteInputMode === 'SPLIT_V' && "TYPE TOP NUMBER (1-33)"}
+                             {gameState.rouletteInputMode === 'STREET' && "TYPE ROW START (1,4,...,34)"}
+                             {gameState.rouletteInputMode === 'CORNER' && "TYPE TOP-LEFT (1-32, NOT 3N)"}
+                             {gameState.rouletteInputMode === 'SIX_LINE' && "TYPE ROW START (1,4,...,31)"}
+                         </div>
                          <div className="text-4xl text-white font-bold font-mono h-12 flex items-center justify-center border-b border-gray-700 w-32">
                              {numberInput}
                              <span className="animate-pulse">_</span>

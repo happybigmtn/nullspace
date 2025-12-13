@@ -21,6 +21,10 @@
 //! 6 = Specific double (8:1) - number = 1-6
 //! 7 = Total of N (various payouts) - number = 4-17
 //! 8 = Single number appears (1:1 to 3:1) - number = 1-6
+//! 9 = Domino (two faces) (5:1) - number = (min<<4)|max, min/max in 1-6 and min<max
+//! 10 = Three-Number Easy Hop (30:1) - number = 6-bit mask of chosen numbers (exactly 3 bits set)
+//! 11 = Three-Number Hard Hop (50:1) - number = (double<<4)|single, both 1-6 and distinct
+//! 12 = Four-Number Easy Hop (7:1) - number = 6-bit mask of chosen numbers (exactly 4 bits set)
 
 use super::super_mode::apply_super_multiplier_total;
 use super::{CasinoGame, GameError, GameResult, GameRng};
@@ -39,6 +43,10 @@ pub enum BetType {
     SpecificDouble = 6, // At least two of specific (8:1)
     Total = 7,          // Specific total (various)
     Single = 8,         // Single number appears 1-3 times (1:1 to 3:1)
+    Domino = 9,         // Two-number combination (5:1)
+    ThreeNumberEasyHop = 10, // Three unique numbers (30:1)
+    ThreeNumberHardHop = 11, // Two of one number + one of another (50:1)
+    FourNumberEasyHop = 12,  // Three-of-four numbers (7:1)
 }
 
 impl TryFrom<u8> for BetType {
@@ -55,6 +63,10 @@ impl TryFrom<u8> for BetType {
             6 => Ok(BetType::SpecificDouble),
             7 => Ok(BetType::Total),
             8 => Ok(BetType::Single),
+            9 => Ok(BetType::Domino),
+            10 => Ok(BetType::ThreeNumberEasyHop),
+            11 => Ok(BetType::ThreeNumberHardHop),
+            12 => Ok(BetType::FourNumberEasyHop),
             _ => Err(GameError::InvalidPayload),
         }
     }
@@ -182,6 +194,20 @@ fn count_number(dice: &[u8; 3], number: u8) -> u8 {
     dice.iter().filter(|&&d| d == number).count() as u8
 }
 
+fn dice_all_distinct(dice: &[u8; 3]) -> bool {
+    dice[0] != dice[1] && dice[0] != dice[2] && dice[1] != dice[2]
+}
+
+fn dice_mask(dice: &[u8; 3]) -> u8 {
+    let mut mask: u8 = 0;
+    for &d in dice {
+        if (1..=6).contains(&d) {
+            mask |= 1u8 << (d - 1);
+        }
+    }
+    mask
+}
+
 /// Calculate payout for a single bet given the dice result.
 fn calculate_bet_payout(bet: &SicBoBet, dice: &[u8; 3]) -> u64 {
     let total: u8 = dice.iter().sum();
@@ -253,6 +279,59 @@ fn calculate_bet_payout(bet: &SicBoBet, dice: &[u8; 3]) -> u64 {
                 _ => 0,
             }
         }
+        BetType::Domino => {
+            let min = (bet.number >> 4) & 0x0f;
+            let max = bet.number & 0x0f;
+            if min < 1 || min > 6 || max < 1 || max > 6 || min >= max {
+                return 0;
+            }
+            if count_number(dice, min) >= 1 && count_number(dice, max) >= 1 {
+                // 5:1 -> return 6x (stake + winnings)
+                bet.amount.saturating_mul(6)
+            } else {
+                0
+            }
+        }
+        BetType::ThreeNumberEasyHop => {
+            // number encodes a 6-bit mask of the chosen numbers (1..6), with exactly 3 bits set.
+            let mask = bet.number;
+            if mask & !0x3F != 0 || mask.count_ones() != 3 {
+                return 0;
+            }
+            if dice_all_distinct(dice) && (dice_mask(dice) & mask) == dice_mask(dice) {
+                // 30:1 -> return 31x
+                bet.amount.saturating_mul(31)
+            } else {
+                0
+            }
+        }
+        BetType::ThreeNumberHardHop => {
+            // number encodes (double<<4)|single.
+            let double = (bet.number >> 4) & 0x0F;
+            let single = bet.number & 0x0F;
+            if double < 1 || double > 6 || single < 1 || single > 6 || double == single {
+                return 0;
+            }
+            if count_number(dice, double) == 2 && count_number(dice, single) == 1 {
+                // 50:1 -> return 51x
+                bet.amount.saturating_mul(51)
+            } else {
+                0
+            }
+        }
+        BetType::FourNumberEasyHop => {
+            // number encodes a 6-bit mask of the chosen numbers (1..6), with exactly 4 bits set.
+            let mask = bet.number;
+            if mask & !0x3F != 0 || mask.count_ones() != 4 {
+                return 0;
+            }
+            if dice_all_distinct(dice) && (dice_mask(dice) & mask) == dice_mask(dice) {
+                // 7:1 -> return 8x
+                bet.amount.saturating_mul(8)
+            } else {
+                0
+            }
+        }
     }
 }
 
@@ -309,6 +388,35 @@ impl CasinoGame for SicBo {
                             return Err(GameError::InvalidPayload);
                         }
                     }
+                    BetType::Domino => {
+                        let min = (number >> 4) & 0x0f;
+                        let max = number & 0x0f;
+                        if min < 1 || min > 6 || max < 1 || max > 6 || min >= max {
+                            return Err(GameError::InvalidPayload);
+                        }
+                    }
+                    BetType::ThreeNumberEasyHop => {
+                        if number & !0x3F != 0 || number.count_ones() != 3 {
+                            return Err(GameError::InvalidPayload);
+                        }
+                    }
+                    BetType::ThreeNumberHardHop => {
+                        let double = (number >> 4) & 0x0f;
+                        let single = number & 0x0f;
+                        if double < 1
+                            || double > 6
+                            || single < 1
+                            || single > 6
+                            || double == single
+                        {
+                            return Err(GameError::InvalidPayload);
+                        }
+                    }
+                    BetType::FourNumberEasyHop => {
+                        if number & !0x3F != 0 || number.count_ones() != 4 {
+                            return Err(GameError::InvalidPayload);
+                        }
+                    }
                     _ => {}
                 }
 
@@ -350,26 +458,10 @@ impl CasinoGame for SicBo {
                 session.move_count += 1;
                 session.is_complete = true;
 
-                // Determine overall result
-                if total_winnings > total_bet {
-                    // Net win
-                    // Apply super mode multipliers if active
-                    let final_winnings = if session.super_mode.is_active {
-                        let dice_total = dice.iter().sum::<u8>();
-                        apply_super_multiplier_total(
-                            dice_total,
-                            &session.super_mode.multipliers,
-                            total_winnings,
-                        )
-                    } else {
-                        total_winnings
-                    };
-                    Ok(GameResult::Win(final_winnings))
-                } else if total_winnings == total_bet {
-                    // Push - return original bet
-                    Ok(GameResult::Push)
-                } else if total_winnings > 0 {
-                    // Partial win (still a loss overall) - apply multiplier
+                // Determine overall result.
+                // All wagers were deducted via ContinueWithUpdate at bet time, so the completion
+                // result should return the total amount to credit back (if any).
+                if total_winnings > 0 {
                     let final_winnings = if session.super_mode.is_active {
                         let dice_total = dice.iter().sum::<u8>();
                         apply_super_multiplier_total(
@@ -382,7 +474,7 @@ impl CasinoGame for SicBo {
                     };
                     Ok(GameResult::Win(final_winnings))
                 } else {
-                    Ok(GameResult::Loss)
+                    Ok(GameResult::LossPreDeducted(total_bet))
                 }
             }
 
@@ -456,6 +548,68 @@ mod tests {
         assert_eq!(total_payout(5), 18);
         assert_eq!(total_payout(10), 6);
         assert_eq!(total_payout(11), 6);
+    }
+
+    #[test]
+    fn test_domino_two_faces_payout() {
+        // Domino (two faces): pays 5:1 if the roll contains both numbers.
+        // Encoding is (min<<4)|max.
+        let bet = SicBoBet {
+            bet_type: BetType::Domino,
+            number: (2 << 4) | 5,
+            amount: 10,
+        };
+
+        assert_eq!(calculate_bet_payout(&bet, &[1, 2, 5]), 10 * 6);
+        assert_eq!(calculate_bet_payout(&bet, &[2, 2, 5]), 10 * 6);
+        assert_eq!(calculate_bet_payout(&bet, &[2, 5, 5]), 10 * 6);
+
+        // Missing one of the faces loses.
+        assert_eq!(calculate_bet_payout(&bet, &[2, 2, 2]), 0);
+        assert_eq!(calculate_bet_payout(&bet, &[5, 5, 5]), 0);
+        assert_eq!(calculate_bet_payout(&bet, &[1, 3, 4]), 0);
+    }
+
+    #[test]
+    fn test_three_number_easy_hop_payout() {
+        let bet = SicBoBet {
+            bet_type: BetType::ThreeNumberEasyHop,
+            number: (1u8 << 0) | (1u8 << 2) | (1u8 << 4), // {1,3,5}
+            amount: 10,
+        };
+
+        assert_eq!(calculate_bet_payout(&bet, &[1, 3, 5]), 10 * 31);
+        assert_eq!(calculate_bet_payout(&bet, &[5, 1, 3]), 10 * 31);
+        assert_eq!(calculate_bet_payout(&bet, &[1, 1, 5]), 0);
+        assert_eq!(calculate_bet_payout(&bet, &[1, 3, 6]), 0);
+    }
+
+    #[test]
+    fn test_three_number_hard_hop_payout() {
+        let bet = SicBoBet {
+            bet_type: BetType::ThreeNumberHardHop,
+            number: (2u8 << 4) | 4u8, // 2-2-4
+            amount: 10,
+        };
+
+        assert_eq!(calculate_bet_payout(&bet, &[2, 2, 4]), 10 * 51);
+        assert_eq!(calculate_bet_payout(&bet, &[2, 4, 2]), 10 * 51);
+        assert_eq!(calculate_bet_payout(&bet, &[2, 4, 4]), 0);
+        assert_eq!(calculate_bet_payout(&bet, &[2, 2, 2]), 0);
+    }
+
+    #[test]
+    fn test_four_number_easy_hop_payout() {
+        let bet = SicBoBet {
+            bet_type: BetType::FourNumberEasyHop,
+            number: (1u8 << 0) | (1u8 << 2) | (1u8 << 3) | (1u8 << 5), // {1,3,4,6}
+            amount: 10,
+        };
+
+        assert_eq!(calculate_bet_payout(&bet, &[1, 3, 4]), 10 * 8);
+        assert_eq!(calculate_bet_payout(&bet, &[6, 4, 3]), 10 * 8);
+        assert_eq!(calculate_bet_payout(&bet, &[1, 3, 5]), 0);
+        assert_eq!(calculate_bet_payout(&bet, &[1, 1, 4]), 0);
     }
 
     #[test]
@@ -563,6 +717,11 @@ mod tests {
         let payload = place_bet_payload(7, 3, 100);
         let result = SicBo::process_move(&mut session, &payload, &mut rng);
         assert!(matches!(result, Err(GameError::InvalidPayload)));
+
+        // Domino bet with invalid encoding (min == max)
+        let payload = place_bet_payload(9, (3 << 4) | 3, 100);
+        let result = SicBo::process_move(&mut session, &payload, &mut rng);
+        assert!(matches!(result, Err(GameError::InvalidPayload)));
     }
 
     #[test]
@@ -663,8 +822,8 @@ mod tests {
             assert!(session.is_complete);
 
             match result.expect("Failed to process move") {
-                GameResult::Win(_) | GameResult::Loss | GameResult::Push => {}
-                _ => panic!("SicBo should complete with Win, Loss, or Push"),
+                GameResult::Win(_) | GameResult::LossPreDeducted(_) => {}
+                _ => panic!("SicBo should complete with Win or LossPreDeducted"),
             }
         }
     }

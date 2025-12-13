@@ -57,14 +57,11 @@ mod tests {
             init_game(&mut session, &mut rng);
 
             // Verify state was set
-            // Note: Blackjack can complete on init if dealt a natural blackjack
-            if *game_type != GameType::Blackjack {
-                assert!(
-                    !session.is_complete,
-                    "Game {:?} should not be complete after init",
-                    game_type
-                );
-            }
+            assert!(
+                !session.is_complete,
+                "Game {:?} should not be complete after init",
+                game_type
+            );
         }
     }
 
@@ -77,19 +74,22 @@ mod tests {
         let mut rng = GameRng::new(&seed, session.id, 0);
         init_game(&mut session, &mut rng);
 
-        // Keep hitting until we bust or stand
-        let mut move_num = 1;
-        while !session.is_complete {
-            let mut rng = GameRng::new(&seed, session.id, move_num);
-            // Try to stand (1) to end the game
-            let result = process_game_move(&mut session, &[1], &mut rng);
-            assert!(result.is_ok());
-            move_num += 1;
+        // Deal
+        let mut rng = GameRng::new(&seed, session.id, 1);
+        let result = process_game_move(&mut session, &[4], &mut rng);
+        assert!(matches!(result, Ok(GameResult::Continue)));
 
-            if move_num > 20 {
-                panic!("Game should complete within 20 moves");
-            }
+        // If we're still in player turn, stand to end decisions.
+        if session.state_blob.get(1).copied() == Some(1) {
+            let mut rng = GameRng::new(&seed, session.id, 2);
+            let result = process_game_move(&mut session, &[1], &mut rng);
+            assert!(matches!(result, Ok(GameResult::Continue)));
         }
+
+        // Reveal settles.
+        let mut rng = GameRng::new(&seed, session.id, 3);
+        let result = process_game_move(&mut session, &[6], &mut rng);
+        assert!(result.is_ok());
 
         assert!(session.is_complete);
     }
@@ -219,19 +219,29 @@ mod tests {
         let mut rng = GameRng::new(&seed, session.id, 0);
         init_game(&mut session, &mut rng);
 
-        // Check preflop
+        // Deal
         let mut rng = GameRng::new(&seed, session.id, 1);
-        let result = process_game_move(&mut session, &[0], &mut rng);
+        let result = process_game_move(&mut session, &[5], &mut rng);
         assert!(matches!(result, Ok(GameResult::Continue)));
 
-        // Check flop
+        // Check preflop (reveals flop)
         let mut rng = GameRng::new(&seed, session.id, 2);
         let result = process_game_move(&mut session, &[0], &mut rng);
         assert!(matches!(result, Ok(GameResult::Continue)));
 
-        // Bet 1x at river
+        // Check flop (reveals turn+river)
         let mut rng = GameRng::new(&seed, session.id, 3);
+        let result = process_game_move(&mut session, &[0], &mut rng);
+        assert!(matches!(result, Ok(GameResult::Continue)));
+
+        // Bet 1x at river (deduct play bet)
+        let mut rng = GameRng::new(&seed, session.id, 4);
         let result = process_game_move(&mut session, &[3], &mut rng);
+        assert!(matches!(result, Ok(GameResult::ContinueWithUpdate { payout: -100 })));
+
+        // Reveal to resolve
+        let mut rng = GameRng::new(&seed, session.id, 5);
+        let result = process_game_move(&mut session, &[7], &mut rng);
         assert!(result.is_ok());
         assert!(session.is_complete);
     }
@@ -245,13 +255,22 @@ mod tests {
         let mut rng = GameRng::new(&seed, session.id, 0);
         init_game(&mut session, &mut rng);
 
-        // Verify 6 cards dealt + stage
-        assert_eq!(session.state_blob.len(), 7);
+        // Verify fixed-size versioned state
+        assert_eq!(session.state_blob.len(), 32);
 
+        // Deal player cards
         let mut rng = GameRng::new(&seed, session.id, 1);
-        // Play (0)
-        let result = process_game_move(&mut session, &[0], &mut rng);
+        let result = process_game_move(&mut session, &[2], &mut rng);
+        assert!(matches!(result, Ok(GameResult::Continue)));
 
+        // Play (deduct play bet)
+        let mut rng = GameRng::new(&seed, session.id, 2);
+        let result = process_game_move(&mut session, &[0], &mut rng);
+        assert!(matches!(result, Ok(GameResult::ContinueWithUpdate { payout: -100 })));
+
+        // Reveal to resolve
+        let mut rng = GameRng::new(&seed, session.id, 3);
+        let result = process_game_move(&mut session, &[4], &mut rng);
         assert!(result.is_ok());
         assert!(session.is_complete);
     }

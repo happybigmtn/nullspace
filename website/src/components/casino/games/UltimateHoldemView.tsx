@@ -68,6 +68,16 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps>(({ gameSta
                     </div>
                 </div>
 
+                {/* 6-Card Bonus Cards */}
+                {gameState.uthBonusCards.length > 0 && (
+                    <div className="flex flex-col items-center gap-2">
+                        <span className="text-xs uppercase tracking-widest text-gray-500">6-CARD BONUS</span>
+                        <div className="flex gap-2">
+                            <Hand cards={gameState.uthBonusCards} />
+                        </div>
+                    </div>
+                )}
+
                 {/* Center Info */}
                 <div className="text-center space-y-2 relative z-20">
                     <div className="text-xl font-bold text-terminal-gold tracking-widest animate-pulse">
@@ -76,6 +86,9 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps>(({ gameSta
                     <div className="text-xs text-gray-500 flex gap-4 justify-center">
                         <span>ANTE: ${gameState.bet}</span>
                         <span>BLIND: ${gameState.bet}</span>
+                        {gameState.uthTripsBet > 0 && <span>TRIPS: ${gameState.uthTripsBet}</span>}
+                        {gameState.uthSixCardBonusBet > 0 && <span>6-CARD: ${gameState.uthSixCardBonusBet}</span>}
+                        {gameState.uthProgressiveBet > 0 && <span>PROG: ${gameState.uthProgressiveBet}</span>}
                         <span className="text-terminal-gold">{stageDesc}</span>
                     </div>
                 </div>
@@ -144,10 +157,25 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps>(({ gameSta
             {/* Controls */}
             <div className="absolute bottom-8 left-0 right-0 h-16 bg-terminal-black/90 border-t-2 border-gray-700 flex items-center justify-center gap-2 p-2 z-40">
                 {gameState.stage === 'BETTING' && (
-                    <div className="flex flex-col items-center border border-terminal-green/50 rounded bg-black/50 px-3 py-1 w-24">
-                        <span className="text-terminal-green font-bold text-sm">SPACE</span>
-                        <span className="text-[10px] text-gray-500">DEAL</span>
-                    </div>
+                    <>
+                        <div className="flex flex-col items-center border border-gray-700 rounded bg-black/50 px-3 py-1">
+                            <span className="text-white font-bold text-sm">T</span>
+                            <span className="text-[10px] text-gray-500">TRIPS</span>
+                        </div>
+                        <div className="flex flex-col items-center border border-gray-700 rounded bg-black/50 px-3 py-1">
+                            <span className="text-white font-bold text-sm">6</span>
+                            <span className="text-[10px] text-gray-500">6-CARD</span>
+                        </div>
+                        <div className="flex flex-col items-center border border-gray-700 rounded bg-black/50 px-3 py-1">
+                            <span className="text-white font-bold text-sm">J</span>
+                            <span className="text-[10px] text-gray-500">PROG</span>
+                        </div>
+                        <div className="w-px h-8 bg-gray-800 mx-2"></div>
+                        <div className="flex flex-col items-center border border-terminal-green/50 rounded bg-black/50 px-3 py-1 w-24">
+                            <span className="text-terminal-green font-bold text-sm">SPACE</span>
+                            <span className="text-[10px] text-gray-500">DEAL</span>
+                        </div>
+                    </>
                 )}
                 {gameState.stage === 'PLAYING' && gameState.communityCards.length === 0 && (
                     <>

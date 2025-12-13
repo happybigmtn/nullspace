@@ -57,15 +57,19 @@ export const ModeSelectView: React.FC<ModeSelectViewProps> = ({ onSelect }) => {
 
         <div className="mt-6 text-center text-[10px] text-gray-600 tracking-widest">
           <Link to="/swap" className="text-terminal-green hover:underline">
-            SWAP / LIQUIDITY
+            SWAP
+          </Link>
+          <span className="mx-2">·</span>
+          <Link to="/borrow" className="text-terminal-green hover:underline">
+            BORROW
           </Link>
           <span className="mx-2">·</span>
           <Link to="/stake" className="text-terminal-green hover:underline">
-            STAKING
+            STAKE
           </Link>
           <span className="mx-2">·</span>
           <Link to="/explorer" className="text-gray-400 hover:underline">
-            BLOCK EXPLORER
+            BLOCKS
           </Link>
         </div>
       </div>
