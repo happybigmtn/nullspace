@@ -9,14 +9,34 @@ export const SicBoView = React.memo<{ gameState: GameState, numberInput?: string
     const totalItems = useMemo(() => getSicBoTotalItems(), []);
     const combinationItems = useMemo(() => getSicBoCombinationItems(), []);
 
-    const renderBetItem = useCallback((bet: SicBoBet, i: number) => (
-        <div key={i} className="flex justify-between items-center text-xs border border-gray-800 p-1 rounded bg-black/50">
-            <div className="flex flex-col">
-                <span className="text-terminal-green font-bold text-[10px]">{bet.type} {bet.target}</span>
+    const renderBetItem = useCallback((bet: SicBoBet, i: number) => {
+        const targetLabel = (() => {
+            if (bet.type === 'DOMINO' && bet.target !== undefined) {
+                const min = (bet.target >> 4) & 0x0f;
+                const max = bet.target & 0x0f;
+                return `${min}-${max}`;
+            }
+            if ((bet.type === 'HOP3_EASY' || bet.type === 'HOP4_EASY') && bet.target !== undefined) {
+                const parts = [1, 2, 3, 4, 5, 6].filter((n) => (bet.target! & (1 << (n - 1))) !== 0);
+                return parts.join('-');
+            }
+            if (bet.type === 'HOP3_HARD' && bet.target !== undefined) {
+                const doubled = (bet.target >> 4) & 0x0f;
+                const single = bet.target & 0x0f;
+                return `${doubled}-${doubled}-${single}`;
+            }
+            return bet.target !== undefined ? String(bet.target) : '';
+        })();
+
+        return (
+            <div key={i} className="flex justify-between items-center text-xs border border-gray-800 p-1 rounded bg-black/50">
+                <div className="flex flex-col">
+                    <span className="text-terminal-green font-bold text-[10px]">{bet.type} {targetLabel}</span>
+                </div>
+                <div className="text-white text-[10px]">${bet.amount}</div>
             </div>
-            <div className="text-white text-[10px]">${bet.amount}</div>
-        </div>
-    ), []);
+        );
+    }, []);
 
     // Render a single exposure row for TOTALS column
     const renderTotalRow = useCallback((entry: { total: number; isTriple: boolean; label: string }, idx: number) => {
@@ -200,6 +220,22 @@ export const SicBoView = React.memo<{ gameState: GameState, numberInput?: string
                             <span className="text-white font-bold text-sm">T</span>
                             <span className="text-[10px] text-gray-500">TRIPLE</span>
                         </div>
+                        <div className="flex flex-col items-center border border-terminal-dim rounded bg-black/50 px-3 py-1">
+                            <span className="text-white font-bold text-sm">C</span>
+                            <span className="text-[10px] text-gray-500">DOMINO</span>
+                        </div>
+                        <div className="flex flex-col items-center border border-terminal-dim rounded bg-black/50 px-3 py-1">
+                            <span className="text-white font-bold text-sm">E</span>
+                            <span className="text-[10px] text-gray-500">3-HOP</span>
+                        </div>
+                        <div className="flex flex-col items-center border border-terminal-dim rounded bg-black/50 px-3 py-1">
+                            <span className="text-white font-bold text-sm">H</span>
+                            <span className="text-[10px] text-gray-500">HARD</span>
+                        </div>
+                        <div className="flex flex-col items-center border border-terminal-dim rounded bg-black/50 px-3 py-1">
+                            <span className="text-white font-bold text-sm">F</span>
+                            <span className="text-[10px] text-gray-500">4-HOP</span>
+                        </div>
                          <div className="flex flex-col items-center border border-terminal-dim rounded bg-black/50 px-3 py-1">
                             <span className="text-white font-bold text-sm">M</span>
                             <span className="text-[10px] text-gray-500">SUM</span>
@@ -212,7 +248,7 @@ export const SicBoView = React.memo<{ gameState: GameState, numberInput?: string
                             <span className="text-[10px] text-gray-500">ANY 3</span>
                         </div>
                         <div className="flex flex-col items-center border border-gray-700 rounded bg-black/50 px-3 py-1 cursor-pointer">
-                            <span className="text-gray-500 font-bold text-sm">T</span>
+                            <span className="text-gray-500 font-bold text-sm">R</span>
                             <span className="text-[10px] text-gray-600">REBET</span>
                         </div>
                         <div className="flex flex-col items-center border border-gray-700 rounded bg-black/50 px-3 py-1 cursor-pointer">
@@ -246,6 +282,10 @@ export const SicBoView = React.memo<{ gameState: GameState, numberInput?: string
                              {gameState.sicBoInputMode === 'SINGLE' && "SELECT NUMBER (1-6)"}
                              {gameState.sicBoInputMode === 'DOUBLE' && "SELECT DOUBLE (1-6)"}
                              {gameState.sicBoInputMode === 'TRIPLE' && "SELECT TRIPLE (1-6)"}
+                             {gameState.sicBoInputMode === 'DOMINO' && "SELECT 2 NUMBERS (1-6)"}
+                             {gameState.sicBoInputMode === 'HOP3_EASY' && "SELECT 3 NUMBERS (1-6)"}
+                             {gameState.sicBoInputMode === 'HOP3_HARD' && "SELECT DOUBLE THEN SINGLE (1-6)"}
+                             {gameState.sicBoInputMode === 'HOP4_EASY' && "SELECT 4 NUMBERS (1-6)"}
                              {gameState.sicBoInputMode === 'SUM' && "TYPE TOTAL (4-17)"}
                          </div>
                          
@@ -267,7 +307,21 @@ export const SicBoView = React.memo<{ gameState: GameState, numberInput?: string
                              </div>
                          )}
 
-                         <div className="text-xs text-gray-500 mt-2">[ESC] CANCEL {gameState.sicBoInputMode === 'SUM' && "[ENTER] CONFIRM"}</div>
+                         {gameState.sicBoInputMode === 'DOMINO' && numberInput && (
+                             <div className="text-xs text-gray-500">FIRST: {numberInput}</div>
+                         )}
+
+                         {gameState.sicBoInputMode === 'HOP3_HARD' && numberInput && (
+                             <div className="text-xs text-gray-500">DOUBLE: {numberInput}</div>
+                         )}
+
+                         {(gameState.sicBoInputMode === 'HOP3_EASY' || gameState.sicBoInputMode === 'HOP4_EASY') && numberInput && (
+                             <div className="text-xs text-gray-500">SELECTED: {numberInput.split('').join('-')}</div>
+                         )}
+
+                         <div className="text-xs text-gray-500 mt-2">
+                             [ESC] CANCEL {gameState.sicBoInputMode === 'SUM' && "[ENTER] CONFIRM"}
+                         </div>
                      </div>
                  </div>
             )}

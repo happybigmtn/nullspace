@@ -17,6 +17,7 @@
 //! 2 = Tie (8:1)
 //! 3 = Player Pair (11:1)
 //! 4 = Banker Pair (11:1)
+//! 5 = Lucky 6 (banker wins with total 6)
 
 use super::super_mode::apply_super_multiplier_cards;
 use super::{CasinoGame, GameError, GameResult, GameRng};
@@ -25,7 +26,9 @@ use nullspace_types::casino::GameSession;
 /// Maximum cards in a Baccarat hand (2-3 cards per hand).
 const MAX_HAND_SIZE: usize = 3;
 /// Maximum number of bets per session (one of each type).
-const MAX_BETS: usize = 5;
+const MAX_BETS: usize = 6;
+/// WoO notes Baccarat is usually dealt from eight decks.
+const BACCARAT_DECKS: u8 = 8;
 
 /// Bet types in Baccarat.
 #[repr(u8)]
@@ -36,6 +39,7 @@ pub enum BetType {
     Tie = 2,        // 8:1
     PlayerPair = 3, // 11:1
     BankerPair = 4, // 11:1
+    Lucky6 = 5,     // 12:1 (2-card), 23:1 (3-card)
 }
 
 impl TryFrom<u8> for BetType {
@@ -48,6 +52,7 @@ impl TryFrom<u8> for BetType {
             2 => Ok(BetType::Tie),
             3 => Ok(BetType::PlayerPair),
             4 => Ok(BetType::BankerPair),
+            5 => Ok(BetType::Lucky6),
             _ => Err(GameError::InvalidPayload),
         }
     }
@@ -253,6 +258,7 @@ fn calculate_bet_payout(
     banker_total: u8,
     player_has_pair: bool,
     banker_has_pair: bool,
+    banker_cards_len: usize,
 ) -> (i64, bool) {
     // Returns (payout_delta, is_push)
     // payout_delta: positive for win (winnings only), negative for loss (amount lost), 0 for push
@@ -302,6 +308,20 @@ fn calculate_bet_payout(
                 } else {
                     (0, true) // Effectively a push if winnings round to 0
                 }
+            } else {
+                (-(bet.amount as i64), false)
+            }
+        }
+        BetType::Lucky6 => {
+            // Lucky 6 wins when Banker wins with a final total of 6.
+            if banker_total == 6 && banker_total > player_total {
+                // WoO "liberal pay table": 2-card 6 pays 12:1, 3-card 6 pays 23:1 (to 1).
+                let winnings_multiplier = match banker_cards_len {
+                    2 => 12u64,
+                    3 => 23u64,
+                    _ => 0u64,
+                };
+                (bet.amount.saturating_mul(winnings_multiplier) as i64, false)
             } else {
                 (-(bet.amount as i64), false)
             }
@@ -389,7 +409,7 @@ impl CasinoGame for Baccarat {
                 }
 
                 // Deal initial cards
-                let mut deck = rng.create_deck();
+                let mut deck = rng.create_shoe(BACCARAT_DECKS);
 
                 // Deal 2 cards each: Player, Banker, Player, Banker
                 state.player_cards = vec![
@@ -443,6 +463,7 @@ impl CasinoGame for Baccarat {
                         banker_total,
                         player_has_pair,
                         banker_has_pair,
+                        state.banker_cards.len(),
                     );
                     net_payout = net_payout.saturating_add(payout_delta);
                     if !is_push {
@@ -456,7 +477,10 @@ impl CasinoGame for Baccarat {
 
                 // Determine final result
                 let base_result = if all_push && net_payout == 0 {
-                    GameResult::Push
+                    // All wagers push; since wagers were deducted via ContinueWithUpdate at bet time,
+                    // return the full wagered amount here (do not use GameResult::Push, which only
+                    // refunds `session.bet`).
+                    GameResult::Win(total_wagered)
                 } else if net_payout > 0 {
                     // Net win: return total wagered + net winnings
                     // Safe cast: positive i64 fits in u64
@@ -820,7 +844,7 @@ mod tests {
             amount: 100,
         };
         // Banker wins with 9 vs 4
-        let (payout, is_push) = calculate_bet_payout(&bet, 4, 9, false, false);
+        let (payout, is_push) = calculate_bet_payout(&bet, 4, 9, false, false, 2);
         assert!(!is_push);
         assert_eq!(payout, 95); // 95% of 100
     }
@@ -832,7 +856,7 @@ mod tests {
             bet_type: BetType::Tie,
             amount: 100,
         };
-        let (payout, is_push) = calculate_bet_payout(&bet, 5, 5, false, false);
+        let (payout, is_push) = calculate_bet_payout(&bet, 5, 5, false, false, 2);
         assert!(!is_push);
         assert_eq!(payout, 800); // 8x winnings
     }
@@ -844,8 +868,30 @@ mod tests {
             bet_type: BetType::PlayerPair,
             amount: 100,
         };
-        let (payout, _) = calculate_bet_payout(&bet, 5, 7, true, false);
+        let (payout, _) = calculate_bet_payout(&bet, 5, 7, true, false, 2);
         assert_eq!(payout, 1100); // 11x winnings
+    }
+
+    #[test]
+    fn test_lucky_6_payout() {
+        let bet = BaccaratBet {
+            bet_type: BetType::Lucky6,
+            amount: 100,
+        };
+
+        // Banker wins with a 2-card 6
+        let (payout, is_push) = calculate_bet_payout(&bet, 1, 6, false, false, 2);
+        assert!(!is_push);
+        assert_eq!(payout, 1200); // 12x winnings
+
+        // Banker wins with a 3-card 6
+        let (payout, is_push) = calculate_bet_payout(&bet, 1, 6, false, false, 3);
+        assert!(!is_push);
+        assert_eq!(payout, 2300); // 23x winnings
+
+        // Banker loses (no payout)
+        let (payout, _) = calculate_bet_payout(&bet, 7, 6, false, false, 2);
+        assert_eq!(payout, -100);
     }
 
     #[test]
@@ -875,12 +921,8 @@ mod tests {
 
             // Verify result is one of the valid outcomes
             match result.expect("Failed to process move") {
-                GameResult::Win(_) | GameResult::Loss | GameResult::Push => {}
-                GameResult::Continue | GameResult::ContinueWithUpdate { .. } => {
-                    panic!("Baccarat should complete after deal")
-                }
-                GameResult::LossWithExtraDeduction(_) => {}
-                GameResult::LossPreDeducted(_) => {}
+                GameResult::Win(_) | GameResult::LossPreDeducted(_) => {}
+                _ => panic!("Unexpected baccarat result"),
             }
         }
     }

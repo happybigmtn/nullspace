@@ -81,6 +81,15 @@ impl GameRng {
         (a << 8) | b
     }
 
+    /// Get a random u32 value.
+    pub fn next_u32(&mut self) -> u32 {
+        let a = self.next_byte() as u32;
+        let b = self.next_byte() as u32;
+        let c = self.next_byte() as u32;
+        let d = self.next_byte() as u32;
+        (a << 24) | (b << 16) | (c << 8) | d
+    }
+
     /// Get a random f32 value in range [0.0, 1.0).
     pub fn next_f32(&mut self) -> f32 {
         (self.next_u8() as f32) / 256.0
@@ -101,13 +110,46 @@ impl GameRng {
         }
     }
 
+    /// Get a random value in range [0, max) for larger ranges.
+    pub fn next_bounded_u32(&mut self, max: u32) -> u32 {
+        if max == 0 {
+            return 0;
+        }
+        let limit = u32::MAX - (u32::MAX % max);
+        loop {
+            let value = self.next_u32();
+            if value < limit {
+                return value % max;
+            }
+        }
+    }
+
+    /// Get a random value in range [0, max) for `usize` ranges.
+    pub fn next_bounded_usize(&mut self, max: usize) -> usize {
+        if max == 0 {
+            return 0;
+        }
+        if max <= u8::MAX as usize {
+            return self.next_bounded(max as u8) as usize;
+        }
+        if max <= u32::MAX as usize {
+            return self.next_bounded_u32(max as u32) as usize;
+        }
+        // Not expected for casino use-cases.
+        self.next_bounded_u32(u32::MAX) as usize
+    }
+
     /// Draw a card from the deck without replacement.
     /// Cards are 0-51: suit = card/13, rank = card%13.
     pub fn draw_card(&mut self, deck: &mut Vec<u8>) -> Option<u8> {
         if deck.is_empty() {
             return None;
         }
-        let idx = self.next_bounded(deck.len() as u8) as usize;
+        let idx = if deck.len() <= u8::MAX as usize {
+            self.next_bounded(deck.len() as u8) as usize
+        } else {
+            self.next_bounded_usize(deck.len())
+        };
         Some(deck.swap_remove(idx))
     }
 
@@ -118,10 +160,31 @@ impl GameRng {
         deck
     }
 
+    /// Create a shuffled multi-deck shoe.
+    ///
+    /// Cards are still represented as 0-51 (rank/suit); duplicates represent multiple decks.
+    pub fn create_shoe(&mut self, decks: u8) -> Vec<u8> {
+        let decks = decks.max(1);
+        let mut deck: Vec<u8> = Vec::with_capacity(52 * decks as usize);
+        for _ in 0..decks {
+            deck.extend(0u8..52u8);
+        }
+        self.shuffle(&mut deck);
+        deck
+    }
+
     /// Shuffle a slice in place using Fisher-Yates.
     pub fn shuffle<T>(&mut self, slice: &mut [T]) {
+        if slice.len() <= u8::MAX as usize {
+            for i in (1..slice.len()).rev() {
+                let j = self.next_bounded((i + 1) as u8) as usize;
+                slice.swap(i, j);
+            }
+            return;
+        }
+
         for i in (1..slice.len()).rev() {
-            let j = self.next_bounded((i + 1) as u8) as usize;
+            let j = self.next_bounded_usize(i + 1);
             slice.swap(i, j);
         }
     }
@@ -154,6 +217,35 @@ impl GameRng {
 
         // Collect remaining cards
         let mut deck: Vec<u8> = (0..52).filter(|&c| used & (1u64 << c) == 0).collect();
+
+        self.shuffle(&mut deck);
+        deck
+    }
+
+    /// Create a shuffled multi-deck shoe excluding specific cards.
+    ///
+    /// Each excluded card removes a single occurrence up to the provided deck count.
+    pub fn create_shoe_excluding(&mut self, excluded: &[u8], decks: u8) -> Vec<u8> {
+        let decks = decks.max(1);
+        if decks == 1 {
+            return self.create_deck_excluding(excluded);
+        }
+
+        let mut used_counts = [0u8; 52];
+        for &card in excluded {
+            if card < 52 {
+                used_counts[card as usize] = used_counts[card as usize].saturating_add(1);
+            }
+        }
+
+        let mut deck: Vec<u8> = Vec::with_capacity(52 * decks as usize);
+        for card in 0u8..52u8 {
+            let used = used_counts[card as usize];
+            let remaining = decks.saturating_sub(used);
+            for _ in 0..remaining {
+                deck.push(card);
+            }
+        }
 
         self.shuffle(&mut deck);
         deck

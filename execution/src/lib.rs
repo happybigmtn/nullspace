@@ -539,8 +539,16 @@ impl<'a, S: State> Layer<'a, S> {
             }
         }
 
-        // Check player has enough chips
-        if bet == 0 {
+        // Some table-style games place all wagers via `CasinoGameMove` deductions (ContinueWithUpdate),
+        // so they can start with `bet = 0` without charging an extra "entry fee".
+        let allows_zero_bet = matches!(
+            game_type,
+            nullspace_types::casino::GameType::Baccarat
+                | nullspace_types::casino::GameType::Craps
+                | nullspace_types::casino::GameType::Roulette
+                | nullspace_types::casino::GameType::SicBo
+        );
+        if bet == 0 && !allows_zero_bet {
             return vec![Event::CasinoError {
                 player: public.clone(),
                 session_id: Some(session_id),

@@ -520,6 +520,12 @@ export const calculateRouletteExposure = (outcome: number, bets: RouletteBet[]) 
         else if (bet.type === 'COL_1' && column === 0) payoutMult = 2;
         else if (bet.type === 'COL_2' && column === 1) payoutMult = 2;
         else if (bet.type === 'COL_3' && column === 2) payoutMult = 2;
+        // Inside bets
+        else if (bet.type === 'SPLIT_H' && outcome !== 0 && bet.target !== undefined && (outcome === bet.target || outcome === bet.target + 1)) payoutMult = 17;
+        else if (bet.type === 'SPLIT_V' && outcome !== 0 && bet.target !== undefined && (outcome === bet.target || outcome === bet.target + 3)) payoutMult = 17;
+        else if (bet.type === 'STREET' && outcome !== 0 && bet.target !== undefined && outcome >= bet.target && outcome <= bet.target + 2) payoutMult = 11;
+        else if (bet.type === 'CORNER' && outcome !== 0 && bet.target !== undefined && [bet.target, bet.target + 1, bet.target + 3, bet.target + 4].includes(outcome)) payoutMult = 8;
+        else if (bet.type === 'SIX_LINE' && outcome !== 0 && bet.target !== undefined && outcome >= bet.target && outcome <= bet.target + 5) payoutMult = 5;
 
         if (payoutMult > 0) {
             pnl += bet.amount * payoutMult;
@@ -534,7 +540,11 @@ export const calculateRouletteExposure = (outcome: number, bets: RouletteBet[]) 
 /**
  * Resolves roulette bets after a spin, returning pnl and detailed results
  */
-export const resolveRouletteBets = (outcome: number, bets: RouletteBet[]): { pnl: number; results: string[] } => {
+export const resolveRouletteBets = (
+    outcome: number,
+    bets: RouletteBet[],
+    zeroRule: 'STANDARD' | 'LA_PARTAGE' | 'EN_PRISON' | 'EN_PRISON_DOUBLE' = 'STANDARD'
+): { pnl: number; results: string[] } => {
     let pnl = 0;
     const results: string[] = [];
     const color = getRouletteColor(outcome);
@@ -543,7 +553,8 @@ export const resolveRouletteBets = (outcome: number, bets: RouletteBet[]): { pnl
 
     bets.forEach(bet => {
         let payoutMult = 0;
-        let won = false;
+        const isEvenMoney =
+            bet.type === 'RED' || bet.type === 'BLACK' || bet.type === 'ODD' || bet.type === 'EVEN' || bet.type === 'LOW' || bet.type === 'HIGH';
 
         if (bet.type === 'STRAIGHT' && bet.target === outcome) payoutMult = 35;
         else if (bet.type === 'RED' && color === 'RED') payoutMult = 1;
@@ -559,6 +570,19 @@ export const resolveRouletteBets = (outcome: number, bets: RouletteBet[]): { pnl
         else if (bet.type === 'COL_1' && column === 0) payoutMult = 2;
         else if (bet.type === 'COL_2' && column === 1) payoutMult = 2;
         else if (bet.type === 'COL_3' && column === 2) payoutMult = 2;
+        else if (bet.type === 'SPLIT_H' && outcome !== 0 && bet.target !== undefined && (outcome === bet.target || outcome === bet.target + 1)) payoutMult = 17;
+        else if (bet.type === 'SPLIT_V' && outcome !== 0 && bet.target !== undefined && (outcome === bet.target || outcome === bet.target + 3)) payoutMult = 17;
+        else if (bet.type === 'STREET' && outcome !== 0 && bet.target !== undefined && outcome >= bet.target && outcome <= bet.target + 2) payoutMult = 11;
+        else if (bet.type === 'CORNER' && outcome !== 0 && bet.target !== undefined && [bet.target, bet.target + 1, bet.target + 3, bet.target + 4].includes(outcome)) payoutMult = 8;
+        else if (bet.type === 'SIX_LINE' && outcome !== 0 && bet.target !== undefined && outcome >= bet.target && outcome <= bet.target + 5) payoutMult = 5;
+
+        // French La Partage: half-back on zero for even-money bets.
+        if (outcome === 0 && isEvenMoney) {
+            const loss = zeroRule === 'LA_PARTAGE' ? Math.floor(bet.amount / 2) : bet.amount;
+            pnl -= loss;
+            results.push(`${bet.type} ${zeroRule === 'LA_PARTAGE' ? 'HALF' : 'LOSS'} (-$${loss})`);
+            return;
+        }
 
         if (payoutMult > 0) {
             const win = bet.amount * payoutMult;
@@ -621,6 +645,16 @@ const crapsNoPayout = (target: number, amount: number): number => {
     return trueOdds * 0.99;
 };
 
+// BUY bet payout (profit only) - matches on-chain (commission charged separately at placement)
+const crapsBuyPayout = (target: number, amount: number): number => {
+    switch (target) {
+        case 4: case 10: return amount * 2; // 2:1
+        case 5: case 9: return Math.floor((amount * 3) / 2); // 3:2
+        case 6: case 8: return Math.floor((amount * 6) / 5); // 6:5
+        default: return 0;
+    }
+};
+
 // NEXT (Hop) bet payout with 1% commission - matches on-chain
 const crapsNextPayout = (target: number, amount: number): number => {
     const ways = WAYS[target] || 0;
@@ -644,6 +678,38 @@ const crapsHardwayPayout = (target: number, amount: number): number => {
         case 6: case 8: return amount * 9;  // 9:1
         default: return 0;
     }
+};
+
+const atsBitForTotal = (total: number): number => {
+    switch (total) {
+        case 2: return 1 << 0;
+        case 3: return 1 << 1;
+        case 4: return 1 << 2;
+        case 5: return 1 << 3;
+        case 6: return 1 << 4;
+        case 8: return 1 << 5;
+        case 9: return 1 << 6;
+        case 10: return 1 << 7;
+        case 11: return 1 << 8;
+        case 12: return 1 << 9;
+        default: return 0;
+    }
+};
+
+const atsRequiredMask = (type: CrapsBet['type']): number => {
+    const small = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 3) | (1 << 4);
+    const tall = (1 << 5) | (1 << 6) | (1 << 7) | (1 << 8) | (1 << 9);
+    if (type === 'ATS_SMALL') return small;
+    if (type === 'ATS_TALL') return tall;
+    if (type === 'ATS_ALL') return small | tall;
+    return 0;
+};
+
+const atsPayoutTo1 = (type: CrapsBet['type']): number => {
+    if (type === 'ATS_SMALL') return 34;
+    if (type === 'ATS_TALL') return 34;
+    if (type === 'ATS_ALL') return 175;
+    return 0;
 };
 
 // Overload to optionally specify hard roll explicitly
@@ -679,7 +745,7 @@ export const calculateCrapsExposure = (total: number, point: number | null, bets
                }
          } else if (bet.type === 'COME') {
               // COME acts like PASS but on its own point
-              if (bet.target === 0) {
+              if (bet.status === 'PENDING' || bet.target === undefined) {
                   // Pending - first roll for this bet
                   if (total === 7 || total === 11) winAmount = bet.amount;
                   else if (total === 2 || total === 3 || total === 12) loseAmount = bet.amount;
@@ -691,7 +757,7 @@ export const calculateCrapsExposure = (total: number, point: number | null, bets
                   } else if (total === 7) loseAmount = bet.amount + (bet.oddsAmount || 0);
               }
          } else if (bet.type === 'DONT_COME') {
-               if (bet.target === 0) {
+               if (bet.status === 'PENDING' || bet.target === undefined) {
                    if (total === 2 || total === 3) winAmount = bet.amount;
                    else if (total === 7 || total === 11) loseAmount = bet.amount;
                } else {
@@ -710,6 +776,9 @@ export const calculateCrapsExposure = (total: number, point: number | null, bets
          } else if (bet.type === 'NO') {
               if (total === 7) winAmount = crapsNoPayout(bet.target!, bet.amount);
               else if (bet.target === total) loseAmount = bet.amount;
+         } else if (bet.type === 'BUY') {
+              if (bet.target === total) winAmount = crapsBuyPayout(bet.target!, bet.amount);
+              else if (total === 7) loseAmount = bet.amount;
          } else if (bet.type === 'NEXT') {
               if (total === bet.target) winAmount = crapsNextPayout(bet.target, bet.amount);
               else loseAmount = bet.amount;
@@ -718,6 +787,18 @@ export const calculateCrapsExposure = (total: number, point: number | null, bets
               if (isHard && total === hardTarget) winAmount = crapsHardwayPayout(hardTarget, bet.amount);
               else if (total === hardTarget || total === 7) loseAmount = bet.amount;
               // Otherwise still working
+         } else if (bet.type === 'ATS_SMALL' || bet.type === 'ATS_TALL' || bet.type === 'ATS_ALL') {
+              const sevenOut = total === 7 && point !== null;
+              if (sevenOut) {
+                  loseAmount = bet.amount;
+              } else {
+                  const bit = atsBitForTotal(total);
+                  const nextMask = (bet.progressMask || 0) | bit;
+                  const required = atsRequiredMask(bet.type);
+                  if (bit !== 0 && required !== 0 && (nextMask & required) === required) {
+                      winAmount = bet.amount * atsPayoutTo1(bet.type);
+                  }
+              }
          }
 
          pnl += winAmount;
@@ -774,7 +855,7 @@ export const resolveCrapsBets = (total: number, point: number | null, bets: Crap
                 }
             }
         } else if (bet.type === 'COME') {
-            if (bet.target === 0) {
+            if (bet.status === 'PENDING' || bet.target === undefined) {
                 if (total === 7 || total === 11) { winAmount = bet.amount; resolved = true; }
                 else if (total === 2 || total === 3 || total === 12) { loseAmount = bet.amount; resolved = true; }
                 // Otherwise travels to point - handled elsewhere
@@ -789,7 +870,7 @@ export const resolveCrapsBets = (total: number, point: number | null, bets: Crap
                 }
             }
         } else if (bet.type === 'DONT_COME') {
-            if (bet.target === 0) {
+            if (bet.status === 'PENDING' || bet.target === undefined) {
                 if (total === 2 || total === 3) { winAmount = bet.amount; resolved = true; }
                 else if (total === 7 || total === 11) { loseAmount = bet.amount; resolved = true; }
             } else {
@@ -813,6 +894,9 @@ export const resolveCrapsBets = (total: number, point: number | null, bets: Crap
         } else if (bet.type === 'NO') {
             if (total === 7) { winAmount = crapsNoPayout(bet.target!, bet.amount); resolved = true; }
             else if (bet.target === total) { loseAmount = bet.amount; resolved = true; }
+        } else if (bet.type === 'BUY') {
+            if (bet.target === total) { winAmount = crapsBuyPayout(bet.target!, bet.amount); resolved = true; }
+            else if (total === 7) { loseAmount = bet.amount; resolved = true; }
         } else if (bet.type === 'NEXT') {
             if (total === bet.target) { winAmount = crapsNextPayout(bet.target, bet.amount); resolved = true; }
             else { loseAmount = bet.amount; resolved = true; }
@@ -820,6 +904,26 @@ export const resolveCrapsBets = (total: number, point: number | null, bets: Crap
             const hardTarget = bet.target!;
             if (isHard && total === hardTarget) { winAmount = crapsHardwayPayout(hardTarget, bet.amount); resolved = true; }
             else if (total === hardTarget || total === 7) { loseAmount = bet.amount; resolved = true; }
+        } else if (bet.type === 'ATS_SMALL' || bet.type === 'ATS_TALL' || bet.type === 'ATS_ALL') {
+            const sevenOut = total === 7 && point !== null;
+            if (sevenOut) {
+                loseAmount = bet.amount;
+                resolved = true;
+            } else {
+                const bit = atsBitForTotal(total);
+                const nextMask = (bet.progressMask || 0) | bit;
+                const required = atsRequiredMask(bet.type);
+                if (bit !== 0) {
+                    if (required !== 0 && (nextMask & required) === required) {
+                        winAmount = bet.amount * atsPayoutTo1(bet.type);
+                        resolved = true;
+                    } else {
+                        remainingBets.push({ ...bet, progressMask: nextMask });
+                    }
+                } else {
+                    remainingBets.push(bet);
+                }
+            }
         }
 
         pnl += winAmount;
@@ -829,7 +933,7 @@ export const resolveCrapsBets = (total: number, point: number | null, bets: Crap
             if (winAmount > 0) results.push(`${bet.type}${bet.target ? ' ' + bet.target : ''} WIN (+$${Math.floor(winAmount)})`);
             else if (loseAmount > 0) results.push(`${bet.type}${bet.target ? ' ' + bet.target : ''} LOSS (-$${loseAmount})`);
             else results.push(`${bet.type} PUSH`);
-        } else {
+        } else if (!(bet.type === 'ATS_SMALL' || bet.type === 'ATS_TALL' || bet.type === 'ATS_ALL')) {
             remainingBets.push(bet);
         }
     });
@@ -1039,6 +1143,7 @@ export const calculateSicBoOutcomeExposure = (combo: number[], bets: SicBoBet[])
     const sum = combo.reduce((a,b)=>a+b,0);
     const d1 = combo[0], d2 = combo[1], d3 = combo[2];
     const isTriple = d1 === d2 && d2 === d3;
+    const isDistinct = d1 !== d2 && d1 !== d3 && d2 !== d3;
 
     bets.forEach(b => {
          let win = 0;
@@ -1050,6 +1155,34 @@ export const calculateSicBoOutcomeExposure = (combo: number[], bets: SicBoBet[])
          else if (b.type === 'DOUBLE_SPECIFIC') {
              const count = [d1, d2, d3].filter(d => d === b.target).length;
              if (count >= 2) win = b.amount * 8;
+         }
+         else if (b.type === 'DOMINO' && b.target !== undefined) {
+             const min = (b.target >> 4) & 0x0f;
+             const max = b.target & 0x0f;
+             if ([d1, d2, d3].includes(min) && [d1, d2, d3].includes(max)) {
+                 win = b.amount * 5;
+             }
+         }
+         else if (b.type === 'HOP3_EASY' && b.target !== undefined) {
+             const diceMask = (1 << (d1 - 1)) | (1 << (d2 - 1)) | (1 << (d3 - 1));
+             if (isDistinct && (diceMask & b.target) === diceMask) {
+                 win = b.amount * 30;
+             }
+         }
+         else if (b.type === 'HOP3_HARD' && b.target !== undefined) {
+             const doubled = (b.target >> 4) & 0x0f;
+             const single = b.target & 0x0f;
+             const countD = [d1, d2, d3].filter(d => d === doubled).length;
+             const countS = [d1, d2, d3].filter(d => d === single).length;
+             if (countD === 2 && countS === 1) {
+                 win = b.amount * 50;
+             }
+         }
+         else if (b.type === 'HOP4_EASY' && b.target !== undefined) {
+             const diceMask = (1 << (d1 - 1)) | (1 << (d2 - 1)) | (1 << (d3 - 1));
+             if (isDistinct && (diceMask & b.target) === diceMask) {
+                 win = b.amount * 7;
+             }
          }
          else if (b.type === 'SINGLE_DIE') {
              const count = [d1, d2, d3].filter(d => d === b.target).length;
@@ -1073,6 +1206,7 @@ export const resolveSicBoBets = (combo: number[], bets: SicBoBet[]): { pnl: numb
     const sum = combo.reduce((a,b)=>a+b,0);
     const d1 = combo[0], d2 = combo[1], d3 = combo[2];
     const isTriple = d1 === d2 && d2 === d3;
+    const isDistinct = d1 !== d2 && d1 !== d3 && d2 !== d3;
 
     bets.forEach(b => {
          let win = 0;
@@ -1085,6 +1219,37 @@ export const resolveSicBoBets = (combo: number[], bets: SicBoBet[]): { pnl: numb
              const count = [d1, d2, d3].filter(d => d === b.target).length;
              if (count >= 2) win = b.amount * 8;
          }
+         else if (b.type === 'DOMINO' && b.target !== undefined) {
+             const min = (b.target >> 4) & 0x0f;
+             const max = b.target & 0x0f;
+             if ([d1, d2, d3].includes(min) && [d1, d2, d3].includes(max)) {
+                 win = b.amount * 5;
+             }
+         }
+         else if (b.type === 'HOP3_EASY' && b.target !== undefined) {
+             // 3-number easy hop: wins if all three chosen numbers are rolled (distinct).
+             const diceMask = (1 << (d1 - 1)) | (1 << (d2 - 1)) | (1 << (d3 - 1));
+             if (isDistinct && (diceMask & b.target) === diceMask) {
+                 win = b.amount * 30;
+             }
+         }
+         else if (b.type === 'HOP3_HARD' && b.target !== undefined) {
+             // 3-number hard hop: (double<<4)|single, wins on exactly two of the first and one of the second.
+             const doubled = (b.target >> 4) & 0x0f;
+             const single = b.target & 0x0f;
+             const countD = [d1, d2, d3].filter(d => d === doubled).length;
+             const countS = [d1, d2, d3].filter(d => d === single).length;
+             if (countD === 2 && countS === 1) {
+                 win = b.amount * 50;
+             }
+         }
+         else if (b.type === 'HOP4_EASY' && b.target !== undefined) {
+             // 4-number easy hop: wins if the (distinct) roll is a subset of the chosen 4 numbers.
+             const diceMask = (1 << (d1 - 1)) | (1 << (d2 - 1)) | (1 << (d3 - 1));
+             if (isDistinct && (diceMask & b.target) === diceMask) {
+                 win = b.amount * 7;
+             }
+         }
          else if (b.type === 'SINGLE_DIE') {
              const count = [d1, d2, d3].filter(d => d === b.target).length;
              if (count === 1) win = b.amount * 1;
@@ -1092,12 +1257,30 @@ export const resolveSicBoBets = (combo: number[], bets: SicBoBet[]): { pnl: numb
              else if (count === 3) win = b.amount * 3;
          }
 
+         const betLabel = (() => {
+             if (b.type === 'DOMINO' && b.target !== undefined) {
+                 const min = (b.target >> 4) & 0x0f;
+                 const max = b.target & 0x0f;
+                 return `${b.type} ${min}-${max}`;
+             }
+             if ((b.type === 'HOP3_EASY' || b.type === 'HOP4_EASY') && b.target !== undefined) {
+                 const nums = [1, 2, 3, 4, 5, 6].filter((n) => (b.target! & (1 << (n - 1))) !== 0);
+                 return `${b.type} ${nums.join('-')}`;
+             }
+             if (b.type === 'HOP3_HARD' && b.target !== undefined) {
+                 const doubled = (b.target >> 4) & 0x0f;
+                 const single = b.target & 0x0f;
+                 return `${b.type} ${doubled}-${doubled}-${single}`;
+             }
+             return `${b.type}${b.target !== undefined ? ' ' + b.target : ''}`;
+         })();
+
          if (win > 0) {
              pnl += win;
-             results.push(`${b.type}${b.target !== undefined ? ' ' + b.target : ''} WIN (+$${win})`);
+             results.push(`${betLabel} WIN (+$${win})`);
          } else {
              pnl -= b.amount;
-             results.push(`${b.type}${b.target !== undefined ? ' ' + b.target : ''} LOSS (-$${b.amount})`);
+             results.push(`${betLabel} LOSS (-$${b.amount})`);
          }
     });
     return { pnl, results };

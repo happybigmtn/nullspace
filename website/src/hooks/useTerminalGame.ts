@@ -56,7 +56,7 @@ const CHAIN_TO_FRONTEND_GAME_TYPE: Record<ChainGameType, GameType> = {
   [ChainGameType.UltimateHoldem]: GameType.ULTIMATE_HOLDEM,
 };
 
-// Baccarat bet type mapping for on-chain: 0=Player, 1=Banker, 2=Tie, 3=P_PAIR, 4=B_PAIR
+// Baccarat bet type mapping for on-chain: 0=Player, 1=Banker, 2=Tie, 3=P_PAIR, 4=B_PAIR, 5=Lucky6
 // Payload format: [action:u8] [betType:u8] [amount:u64 BE] - 10 bytes total
 // Action 0 = Place bet, Action 1 = Deal cards, Action 2 = Clear bets
 const serializeBaccaratBet = (betType: number, amount: number): Uint8Array => {
@@ -84,6 +84,7 @@ const getBaccaratBetsToPlace = (selection: 'PLAYER' | 'BANKER', sideBets: Baccar
       case 'TIE': betType = 2; break;
       case 'P_PAIR': betType = 3; break;
       case 'B_PAIR': betType = 4; break;
+      case 'LUCKY6': betType = 5; break;
       default: continue;
     }
     bets.push({ betType, amount: sideBet.amount });
@@ -124,6 +125,8 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
     rouletteLastRoundBets: [],
     rouletteHistory: [],
     rouletteInputMode: 'NONE',
+    rouletteZeroRule: 'STANDARD',
+    rouletteIsPrison: false,
     sicBoBets: [],
     sicBoHistory: [],
     sicBoInputMode: 'NONE',
@@ -138,9 +141,19 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
     insuranceBet: 0,
     blackjackStack: [],
     completedHands: [],
+    blackjack21Plus3Bet: 0,
+    threeCardPairPlusBet: 0,
+    threeCardSixCardBonusBet: 0,
+    threeCardProgressiveBet: 0,
+    uthTripsBet: 0,
+    uthSixCardBonusBet: 0,
+    uthProgressiveBet: 0,
+    uthBonusCards: [],
+    casinoWarTieBet: 0,
     hiloAccumulator: 0,
     hiloGraphData: [],
-    sessionWager: 0
+    sessionWager: 0,
+    sessionInterimPayout: 0
   });
 
   const [deck, setDeck] = useState<Card[]>([]);
@@ -149,6 +162,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
   const [phase, setPhase] = useState<TournamentPhase>('REGISTRATION');
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [isRegistered, setIsRegistered] = useState(false);
+  const isRegisteredRef = useRef(false);
   const [botConfig, setBotConfig] = useState<BotConfig>(DEFAULT_BOT_CONFIG);
   const botServiceRef = useRef<BotService | null>(null);
   const [isTournamentStarting, setIsTournamentStarting] = useState(false);
@@ -180,6 +194,139 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
   // Balance update race condition fix: Track last WebSocket balance update time
   const lastBalanceUpdateRef = useRef<number>(0);
   const BALANCE_UPDATE_COOLDOWN = 2000; // 2 second cooldown after WebSocket update
+
+  // Chain response watchdog for on-chain actions that wait on WebSocket events.
+  const awaitingChainResponseRef = useRef(false);
+  const chainResponseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    isRegisteredRef.current = isRegistered;
+  }, [isRegistered]);
+
+  const clearChainResponseTimeout = () => {
+    awaitingChainResponseRef.current = false;
+    if (chainResponseTimeoutRef.current) {
+      clearTimeout(chainResponseTimeoutRef.current);
+      chainResponseTimeoutRef.current = null;
+    }
+  };
+
+  const armChainResponseTimeout = (context: string, expectedSessionId?: bigint | null) => {
+    awaitingChainResponseRef.current = true;
+    if (chainResponseTimeoutRef.current) {
+      clearTimeout(chainResponseTimeoutRef.current);
+    }
+    chainResponseTimeoutRef.current = setTimeout(() => {
+      void (async () => {
+        if (!awaitingChainResponseRef.current) return;
+
+        const sessionId = expectedSessionId ?? currentSessionIdRef.current;
+        if (sessionId === null || sessionId === undefined) {
+          awaitingChainResponseRef.current = false;
+          isPendingRef.current = false;
+          currentSessionIdRef.current = null;
+          setCurrentSessionId(null);
+          setGameState(prev => ({
+            ...prev,
+            stage: 'BETTING',
+            message: `NO CHAIN RESPONSE (${context}) — START dev-executor`,
+          }));
+          return;
+        }
+        if (currentSessionIdRef.current !== sessionId) return;
+
+        // WS fallback: if we missed CasinoGameStarted, pull the session directly.
+        try {
+          const client: any = clientRef.current;
+          if (client) {
+            const sessionState = await client.getCasinoSession(sessionId);
+            if (!awaitingChainResponseRef.current) return;
+            if (currentSessionIdRef.current !== sessionId) return;
+
+            if (sessionState && !sessionState.isComplete) {
+              const frontendGameType =
+                CHAIN_TO_FRONTEND_GAME_TYPE[sessionState.gameType as ChainGameType] ?? gameTypeRef.current;
+              gameTypeRef.current = frontendGameType;
+              setCurrentSessionId(sessionId);
+              // Prime bet/type before parsing so game decoders have correct context (eg blackjack base bet).
+              const primedPrev = gameStateRef.current;
+              if (primedPrev) {
+                const primed = {
+                  ...primedPrev,
+                  type: frontendGameType,
+                  bet:
+                    sessionState.bet !== undefined && sessionState.bet !== null
+                      ? Number(sessionState.bet)
+                      : primedPrev.bet,
+                };
+                gameStateRef.current = primed;
+                setGameState(primed);
+              } else {
+                setGameState(prev => ({
+                  ...prev,
+                  type: frontendGameType,
+                  bet: sessionState.bet !== undefined && sessionState.bet !== null ? Number(sessionState.bet) : prev.bet,
+                }));
+              }
+              parseGameState(sessionState.stateBlob, frontendGameType);
+              clearChainResponseTimeout();
+              isPendingRef.current = false;
+              return;
+            }
+          }
+        } catch {
+          // ignore (we'll fall through to the user-facing timeout message)
+        }
+
+        // No response: clear local session so the user can retry cleanly.
+        awaitingChainResponseRef.current = false;
+        isPendingRef.current = false;
+        currentSessionIdRef.current = null;
+        setCurrentSessionId(null);
+        setGameState(prev => ({
+          ...prev,
+          stage: 'BETTING',
+          message: `NO CHAIN RESPONSE (${context}) — START dev-executor`,
+        }));
+      })();
+    }, 6000);
+  };
+
+  const ensureChainResponsive = async (): Promise<boolean> => {
+    const client: any = clientRef.current;
+    if (!client) return false;
+
+    try {
+      const view = client.getCurrentView?.();
+      if (view !== null && view !== undefined) return true;
+    } catch {
+      // ignore
+    }
+
+    // First try REST to avoid waiting on WS timing.
+    try {
+      const latest = await client.queryLatestSeed?.();
+      if (latest?.found) {
+        // Prime local view cache for downstream checks.
+        client.latestSeed = latest.seed;
+        return true;
+      }
+    } catch {
+      // ignore
+    }
+
+    // Finally, wait briefly for a seed over WS.
+    try {
+      await Promise.race([
+        client.waitForFirstSeed?.(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('seed-timeout')), 1500)),
+      ]);
+      const view = client.getCurrentView?.();
+      return view !== null && view !== undefined;
+    } catch {
+      return false;
+    }
+  };
 
   // Initialize chain service
   useEffect(() => {
@@ -430,6 +577,16 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
         }
 
         if (playMode !== 'FREEROLL') {
+          // Cash mode: keep wallet balances in sync even if we miss WS events.
+          if (playerState) {
+            setStats(prev => ({
+              ...prev,
+              chips: shouldUpdateBalance ? Number(playerState.chips) : prev.chips,
+              shields: Number(playerState.shields),
+              doubles: Number(playerState.doubles),
+            }));
+          }
+
           // Cash leaderboard
           try {
             const leaderboardData = await client.getCasinoLeaderboard();
@@ -684,6 +841,10 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
             if (bet.type === 'TIE' && winner === 'TIE') { win = true; amount = bet.amount * 8; }
             else if (bet.type === 'P_PAIR' && state.playerCards[0].rank === state.playerCards[1].rank) { win = true; amount = bet.amount * 11; }
             else if (bet.type === 'B_PAIR' && state.dealerCards[0].rank === state.dealerCards[1].rank) { win = true; amount = bet.amount * 11; }
+            else if (bet.type === 'LUCKY6' && winner === 'BANKER' && bScore === 6) {
+              win = true;
+              amount = bet.amount * (state.dealerCards.length === 2 ? 12 : 23);
+            }
             
             if (win) details.push(`${bet.type} WIN (+$${amount})`);
             else details.push(`${bet.type} LOSS (-$${bet.amount})`);
@@ -791,7 +952,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
         
         // Use resolveRouletteBets
         const betsToResolve = state.rouletteBets.length > 0 ? state.rouletteBets : state.rouletteLastRoundBets;
-        const res = resolveRouletteBets(last, betsToResolve);
+        const res = resolveRouletteBets(last, betsToResolve, state.rouletteZeroRule);
         details.push(...res.results);
         break;
       }
@@ -832,6 +993,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
       // Only process events for our current session
       if (currentSessionId !== null && eventSessionId === currentSessionId) {
         console.log('[useTerminalGame] Session ID matched! Processing CasinoGameStarted');
+        clearChainResponseTimeout();
         // Clear pending flag - session is now active and ready for moves
         isPendingRef.current = false;
 
@@ -946,6 +1108,20 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
                 isPendingRef.current = true;
                 try {
                   setGameState(prev => ({ ...prev, message: 'PLACING BETS...' }));
+
+                  // Set even-money-on-zero rule (action 3) before placing any bets.
+                  const zeroRule = gameStateRef.current?.rouletteZeroRule ?? 'STANDARD';
+                  const ruleByte =
+                    zeroRule === 'LA_PARTAGE'
+                      ? 1
+                      : zeroRule === 'EN_PRISON'
+                        ? 2
+                        : zeroRule === 'EN_PRISON_DOUBLE'
+                          ? 3
+                          : 0;
+                  const rulePayload = new Uint8Array([3, ruleByte]);
+                  const ruleRes = await chainService.sendMove(currentSessionIdRef.current!, rulePayload);
+                  if (ruleRes.txHash) setLastTxSig(ruleRes.txHash);
 
                   // Send all bets (action 0 for each)
                   for (const bet of rouletteBets) {
@@ -1129,6 +1305,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
 
       // Only process events for our current session
       if (currentSessionId !== null && eventSessionId === currentSessionId) {
+        clearChainResponseTimeout();
         const payout = Number(event.payout);
         const finalChips = Number(event.finalChips);
         console.log('[useTerminalGame] Session ID matched! Updating chips to:', finalChips);
@@ -1136,9 +1313,13 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
         // Mark the time of this WebSocket balance update to prevent polling from overwriting
         lastBalanceUpdateRef.current = Date.now();
 
-        // Calculate Net PnL: Payout (Gross) - Total Wagered
-        const netPnL = payout - (gameStateRef.current?.sessionWager || 0);
-        console.log('[useTerminalGame] PnL Calc: Payout', payout, '- Wager', gameStateRef.current?.sessionWager, '=', netPnL);
+        const sessionWager = gameStateRef.current?.sessionWager || 0;
+        const interimPayout = gameStateRef.current?.sessionInterimPayout || 0;
+        // Event payout semantics:
+        // - positive payout = credited return (stake + winnings)
+        // - negative payout = total loss amount
+        const netPnL = payout >= 0 ? (payout + interimPayout - sessionWager) : (payout + interimPayout);
+        console.log('[useTerminalGame] PnL Calc:', { payout, interimPayout, sessionWager, netPnL });
 
         // Generate descriptive result message using Net PnL
         const { summary: resultMessage, details } = generateGameResult(gameTypeRef.current, gameStateRef.current, netPnL);
@@ -1176,7 +1357,10 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
           stage: 'RESULT',
           message: resultMessage,
           lastResult: netPnL,
-          sessionWager: 0 // Reset wager for next round
+          sessionWager: 0,
+          sessionInterimPayout: 0,
+          rouletteIsPrison: false,
+          casinoWarTieBet: 0 // Reset wager state for next round
         }));
 
         // Clear session and pending flag
@@ -1206,7 +1390,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
           );
 
           // If not in leaderboard, add current player (they might be outside top 10)
-          if (!isPlayerInBoard && myPublicKeyHex && isRegistered) {
+          if (!isPlayerInBoard && myPublicKeyHex && isRegisteredRef.current) {
             newBoard.push({ name: "YOU", chips: currentChipsRef.current, status: 'ALIVE' });
           } else if (myPublicKeyHex) {
             // Mark the current player's entry
@@ -1232,13 +1416,43 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
       }
     });
 
+    // Surface on-chain errors in the play UI (otherwise we can hang on "WAITING FOR CHAIN...").
+    const client: any = clientRef.current;
+    const unsubError =
+      client?.onEvent?.('CasinoError', (e: any) => {
+        try {
+          const message = (e?.message ?? 'UNKNOWN ERROR').toString();
+          const sessionIdRaw = e?.sessionId ?? e?.session_id ?? null;
+          const errorSessionId =
+            sessionIdRaw === null || sessionIdRaw === undefined ? null : BigInt(sessionIdRaw);
+          const current = currentSessionIdRef.current ? BigInt(currentSessionIdRef.current) : null;
+
+          // If this error pertains to the current session, clear it so the user can retry.
+          if (errorSessionId !== null && current !== null && errorSessionId === current) {
+            currentSessionIdRef.current = null;
+            setCurrentSessionId(null);
+            isPendingRef.current = false;
+          }
+
+          setGameState(prev => ({
+            ...prev,
+            message: message.toUpperCase().slice(0, 72),
+          }));
+        } finally {
+          clearChainResponseTimeout();
+          isPendingRef.current = false;
+        }
+      }) ?? (() => {});
+
     return () => {
       unsubStarted();
       unsubMoved();
       unsubCompleted();
       unsubLeaderboard();
+      unsubError();
+      clearChainResponseTimeout();
     };
-  }, [chainService, isOnChain, isRegistered]);
+  }, [chainService, isOnChain]);
 
   // Helper to parse game state from event
   const parseGameState = (stateBlob: Uint8Array, gameType?: GameType) => {
@@ -1248,131 +1462,102 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
 
       // Parse based on game type
       if (currentType === GameType.BLACKJACK) {
-        console.log('[parseGameState] Blackjack state blob received:', {
-          length: stateBlob.length,
-          bytes: Array.from(stateBlob).slice(0, 20),
-          fullBlob: Array.from(stateBlob),
-        });
-        if (stateBlob.length < 3) {
-          console.error('[parseGameState] Blackjack state blob too short');
+        if (stateBlob.length < 2) {
+          console.error('[parseGameState] Blackjack state blob too short:', stateBlob.length);
+          return;
+        }
+
+        const version = stateBlob[0];
+        if (version !== 2) {
+          console.error('[parseGameState] Unsupported blackjack state version:', version);
+          return;
+        }
+        if (stateBlob.length < 14) {
+          console.error('[parseGameState] Blackjack v2 state blob too short:', stateBlob.length);
           return;
         }
 
         let offset = 0;
-        const versionOrPLen = stateBlob[offset++];
-        console.log('[parseGameState] Blackjack version/pLen:', versionOrPLen);
-        
+        offset++; // version
+        const bjStage = stateBlob[offset++]; // 0=Betting,1=PlayerTurn,2=AwaitingReveal,3=Complete
+        const sideBet21p3 = Number(view.getBigUint64(offset, false));
+        offset += 8;
+        const initP1 = stateBlob[offset++];
+        const initP2 = stateBlob[offset++];
+        const activeHandIdx = stateBlob[offset++];
+        const handCount = stateBlob[offset++];
+
+        const baseBet = gameStateRef.current?.bet || 100;
         let pCards: Card[] = [];
-        let dCards: Card[] = [];
-        let stage = 0;
-        let pendingStack: { cards: Card[], bet: number, isDoubled: boolean }[] = [];
-        let finishedHands: CompletedHand[] = [];
-        let activeHandIdx = 0;
+        const dCards: Card[] = [];
+        const pendingStack: { cards: Card[], bet: number, isDoubled: boolean }[] = [];
+        const finishedHands: CompletedHand[] = [];
 
-        // Version 1 starts with 1. Legacy starts with pLen (>= 2).
-        if (versionOrPLen === 1) {
-            // New format (v1)
-            activeHandIdx = stateBlob[offset++];
-            const handCount = stateBlob[offset++];
-            
-            // When activeHandIdx >= handCount, all hands are finished (dealer's turn or game over)
-            // In this case, we still want to display the last played hand as "playerCards"
-            const allHandsFinished = activeHandIdx >= handCount;
+        const allHandsFinished = activeHandIdx >= handCount;
 
-            for (let h = 0; h < handCount; h++) {
-                const betMult = stateBlob[offset++];
-                const status = stateBlob[offset++]; // 0=Play, 1=Stand, 2=Bust, 3=BJ
-                const cLen = stateBlob[offset++];
+        for (let h = 0; h < handCount; h++) {
+          const betMult = stateBlob[offset++];
+          const status = stateBlob[offset++]; // 0=Play, 1=Stand, 2=Bust, 3=BJ
+          offset++; // was_split (unused for display)
+          const cLen = stateBlob[offset++];
 
-                const handCards: Card[] = [];
-                for (let i = 0; i < cLen; i++) {
-                    handCards.push(decodeCard(stateBlob[offset++]));
-                }
+          const handCards: Card[] = [];
+          for (let i = 0; i < cLen; i++) {
+            handCards.push(decodeCard(stateBlob[offset++]));
+          }
 
-                const isDoubled = betMult === 2;
-                // Use current bet from state, or default to 100 if missing
-                const baseBet = gameStateRef.current?.bet || 100;
-                const handBet = baseBet * betMult;
+          const isDoubled = betMult === 2;
+          const handBet = baseBet * betMult;
 
-                if (h === activeHandIdx) {
-                    // This is the currently active hand
-                    pCards = handCards;
-                } else if (allHandsFinished && h === handCount - 1) {
-                    // All hands finished - show the last hand as player cards for display
-                    pCards = handCards;
-                } else if (h > activeHandIdx) {
-                    pendingStack.push({ cards: handCards, bet: handBet, isDoubled });
-                } else {
-                    // Completed hand (for multi-hand scenarios like splits)
-                    let msg = "";
-                    if (status === 2) msg = "BUST";
-                    else if (status === 3) msg = "BLACKJACK";
-                    else if (status === 1) msg = "STAND";
-
-                    finishedHands.push({
-                        cards: handCards,
-                        bet: handBet,
-                        isDoubled,
-                        message: msg
-                    });
-                }
-            }
-            
-            // Dealer cards
-            const dLen = stateBlob[offset++];
-            for (let i = 0; i < dLen; i++) {
-                dCards.push(decodeCard(stateBlob[offset++]));
-            }
-            
-            stage = offset < stateBlob.length ? stateBlob[offset++] : 0;
-
-            console.log('[parseGameState] Blackjack v1 parsed:', {
-              activeHandIdx,
-              handCount: pCards.length > 0 ? 1 : 0,
-              playerCardsCount: pCards.length,
-              playerCards: pCards.map(c => `${c.rank}${c.suit}`),
-              dealerCardsCount: dCards.length,
-              dealerCards: dCards.map(c => `${c.rank}${c.suit}`),
-              stage,
-              pendingStackLen: pendingStack.length,
-              finishedHandsLen: finishedHands.length,
-            });
-        } else {
-            // Legacy format fallback
-            const pLen = versionOrPLen;
-            for (let i = 0; i < pLen && offset < stateBlob.length; i++) {
-                const cardVal = stateBlob[offset++];
-                pCards.push(decodeCard(cardVal));
-            }
-            const dLen = stateBlob[offset++];
-            for (let i = 0; i < dLen && offset < stateBlob.length; i++) {
-                const cardVal = stateBlob[offset++];
-                dCards.push(decodeCard(cardVal));
-            }
-            stage = offset < stateBlob.length ? stateBlob[offset++] : 0;
+          if (!allHandsFinished && h === activeHandIdx) {
+            pCards = handCards;
+          } else if (allHandsFinished && h === handCount - 1) {
+            pCards = handCards;
+          } else if (!allHandsFinished && h > activeHandIdx) {
+            pendingStack.push({ cards: handCards, bet: handBet, isDoubled });
+          } else {
+            let msg = '';
+            if (status === 2) msg = 'BUST';
+            else if (status === 3) msg = 'BLACKJACK';
+            else if (status === 1) msg = 'STAND';
+            finishedHands.push({ cards: handCards, bet: handBet, isDoubled, message: msg });
+          }
         }
 
-        // Set isHidden based on stage: reveal all cards when game is complete (stage=2)
-        const isComplete = stage === 2;
+        const dLen = stateBlob[offset++];
+        for (let i = 0; i < dLen; i++) {
+          dCards.push(decodeCard(stateBlob[offset++]));
+        }
+
+        const isComplete = bjStage === 3;
+        const uiStage =
+          bjStage === 0 ? ('BETTING' as const) : isComplete ? ('RESULT' as const) : ('PLAYING' as const);
+
+        let message = 'SPACE TO DEAL';
+        if (bjStage === 1) message = 'HIT (H) / STAND (S) / DOUBLE (D) / SPLIT (P)';
+        else if (bjStage === 2) message = 'REVEAL (SPACE)';
+        else if (bjStage === 3) message = 'GAME COMPLETE';
+
         const dealerCardsWithVisibility = dCards.map((card, i) => ({
           ...card,
-          isHidden: !isComplete && i > 0 // Only hide non-first cards during play
+          isHidden: !isComplete && i > 0,
         }));
 
-        // Build new state and update ref BEFORE setGameState to avoid race condition
-        // with CasinoGameCompleted event that may arrive before setGameState callback runs
         const prevState = gameStateRef.current;
         const newState = {
           ...prevState,
           type: currentType,
-          playerCards: pCards,
-          dealerCards: dealerCardsWithVisibility,
+          playerCards:
+            bjStage === 0 || initP1 === 0xff || initP2 === 0xff
+              ? []
+              : pCards,
+          dealerCards: bjStage === 0 ? [] : dealerCardsWithVisibility,
           blackjackStack: pendingStack,
           completedHands: finishedHands,
-          stage: (isComplete ? 'RESULT' : 'PLAYING') as 'RESULT' | 'PLAYING',
-          message: isComplete ? 'GAME COMPLETE' : 'HIT (H) / STAND (S)',
-        };
-        // Update ref synchronously BEFORE setGameState
+          blackjack21Plus3Bet: sideBet21p3,
+          stage: uiStage,
+          message,
+        } as GameState;
         gameStateRef.current = newState;
         setGameState(newState);
       } else if (currentType === GameType.HILO) {
@@ -1549,7 +1734,46 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
           return newState;
         });
       } else if (currentType === GameType.CASINO_WAR) {
-        // [playerCard:u8] [dealerCard:u8] [stage:u8]
+        // v1: [version:u8=1] [stage:u8] [playerCard:u8] [dealerCard:u8] [tie_bet:u64 BE]
+        // legacy: [playerCard:u8] [dealerCard:u8] [stage:u8]
+        const looksLikeV1 = stateBlob.length >= 12 && stateBlob[0] === 1;
+
+        if (looksLikeV1) {
+          const stage = stateBlob[1];
+          const playerCardByte = stateBlob[2];
+          const dealerCardByte = stateBlob[3];
+          const tieBet = Number(new DataView(stateBlob.buffer, stateBlob.byteOffset + 4, 8).getBigUint64(0, false));
+
+          const playerCard = stage === 0 ? null : decodeCard(playerCardByte);
+          const dealerCard = stage === 0 ? null : decodeCard(dealerCardByte);
+
+          setGameState(prev => {
+            const shouldRecordTieCredit =
+              stage === 1 && tieBet > 0 && (prev.sessionInterimPayout || 0) === 0;
+            const tieCredit = shouldRecordTieCredit ? tieBet * 11 : (prev.sessionInterimPayout || 0);
+
+            const newState = {
+              ...prev,
+              type: currentType,
+              playerCards: playerCard ? [playerCard] : [],
+              dealerCards: dealerCard ? [dealerCard] : [],
+              casinoWarTieBet: tieBet,
+              sessionInterimPayout: stage === 0 ? 0 : tieCredit,
+              stage: (stage === 0 ? 'BETTING' : 'PLAYING') as const,
+              message:
+                stage === 0
+                  ? (tieBet > 0 ? `TIE BET $${tieBet} - SPACE TO DEAL` : 'TIE BET (T) - SPACE TO DEAL')
+                  : stage === 1
+                    ? 'WAR! GO TO WAR (W) / SURRENDER (S)'
+                    : 'DEALT',
+            };
+            gameStateRef.current = newState;
+            return newState;
+          });
+          return;
+        }
+
+        // Legacy fallback: [playerCard:u8] [dealerCard:u8] [stage:u8]
         if (stateBlob.length < 3) {
           console.error('[parseGameState] Casino War state blob too short:', stateBlob.length);
           return;
@@ -1558,18 +1782,6 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
         const dealerCard = decodeCard(stateBlob[1]);
         const stage = stateBlob[2];
 
-        // Update ref BEFORE setGameState to ensure CasinoGameCompleted handler has access to cards
-        // (React 18's automatic batching defers the updater function execution)
-        if (gameStateRef.current) {
-          gameStateRef.current = {
-            ...gameStateRef.current,
-            playerCards: [playerCard],
-            dealerCards: [dealerCard],
-          };
-        }
-
-        // Stage: 0 = Initial (cards dealt), 1 = War (tie occurred)
-        // Game completion comes from CasinoGameCompleted event, not stage value
         setGameState(prev => {
           const newState = {
             ...prev,
@@ -1579,48 +1791,85 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
             stage: 'PLAYING' as const,
             message: stage === 1 ? 'WAR! GO TO WAR (W) / SURRENDER (S)' : 'DEALT',
           };
-          // Also update ref inside for consistency
           gameStateRef.current = newState;
           return newState;
         });
       } else if (currentType === GameType.CRAPS) {
+        // v1:
+        // [version:u8=1] [phase:u8] [main_point:u8] [d1:u8] [d2:u8] [made_points_mask:u8] [bet_count:u8] [bets...]
+        // Each bet entry is 19 bytes:
+        // [bet_type:u8] [target:u8] [status:u8] [amount:u64 BE] [odds_amount:u64 BE]
+        //
+        // Legacy (pre-version) state is also supported as a fallback:
         // [phase:u8] [main_point:u8] [d1:u8] [d2:u8] [bet_count:u8] [bets...]
-        // Each bet entry is 19 bytes: [bet_type:u8] [target:u8] [status:u8] [amount:u64 BE] [odds_amount:u64 BE]
         if (stateBlob.length < 5) {
           console.error('[parseGameState] Craps state blob too short:', stateBlob.length);
           return;
         }
-        const phase = stateBlob[0]; // 0=ComeOut, 1=Point
-        const mainPoint = stateBlob[1];
-        const d1 = stateBlob[2];
-        const d2 = stateBlob[3];
-        const total = d1 + d2;
-        const betCount = stateBlob[4];
+        const looksLikeV1 = stateBlob[0] === 1 && stateBlob.length >= 7 && (stateBlob[1] === 0 || stateBlob[1] === 1);
+
+        let d1: number;
+        let d2: number;
+        let mainPoint: number;
+        let betCount: number;
+        let betsOffset: number;
+
+        if (looksLikeV1) {
+          mainPoint = stateBlob[2];
+          d1 = stateBlob[3];
+          d2 = stateBlob[4];
+          betCount = stateBlob[6];
+          betsOffset = 7;
+        } else {
+          // Legacy fallback
+          mainPoint = stateBlob[1];
+          d1 = stateBlob[2];
+          d2 = stateBlob[3];
+          betCount = stateBlob[4];
+          betsOffset = 5;
+        }
+
+        const hasDice = d1 > 0 && d2 > 0;
+        const dice = hasDice ? [d1, d2] : [];
+        const total = hasDice ? d1 + d2 : 0;
 
         // Parse bets from state blob
         const BET_TYPE_REVERSE: Record<number, CrapsBet['type']> = {
           0: 'PASS', 1: 'DONT_PASS', 2: 'COME', 3: 'DONT_COME',
           4: 'FIELD', 5: 'YES', 6: 'NO', 7: 'NEXT',
-          8: 'HARDWAY', 9: 'HARDWAY', 10: 'HARDWAY', 11: 'HARDWAY'
+          8: 'HARDWAY', 9: 'HARDWAY', 10: 'HARDWAY', 11: 'HARDWAY',
+          12: 'FIRE',
+          13: 'BUY',
+          15: 'ATS_SMALL',
+          16: 'ATS_TALL',
+          17: 'ATS_ALL',
         };
         const parsedBets: CrapsBet[] = [];
-        let offset = 5;
+        let offset = betsOffset;
         for (let i = 0; i < betCount && offset + 19 <= stateBlob.length; i++) {
           const betTypeVal = stateBlob[offset];
           const target = stateBlob[offset + 1];
           const statusVal = stateBlob[offset + 2];
-          const amountView = new DataView(stateBlob.slice(offset + 3, offset + 11).buffer);
-          const amount = Number(amountView.getBigUint64(0, false));
-          const oddsView = new DataView(stateBlob.slice(offset + 11, offset + 19).buffer);
-          const oddsAmount = Number(oddsView.getBigUint64(0, false));
+          const amount = Number(view.getBigUint64(offset + 3, false));
+          const oddsAmount = Number(view.getBigUint64(offset + 11, false));
 
           const betType = BET_TYPE_REVERSE[betTypeVal] || 'PASS';
+
+          const isHardway = betTypeVal >= 8 && betTypeVal <= 11;
+          const hardTarget = betTypeVal === 8 ? 4 : betTypeVal === 9 ? 6 : betTypeVal === 10 ? 8 : 10;
+
+          const isAts = betTypeVal >= 15 && betTypeVal <= 17;
+          const progressMask = isAts ? oddsAmount : undefined;
+
           parsedBets.push({
             type: betType,
-            target: target > 0 ? target : undefined,
+            target: isHardway
+              ? hardTarget
+              : (target > 0 ? target : undefined),
             status: statusVal === 1 ? 'PENDING' : 'ON',
             amount,
-            oddsAmount: oddsAmount > 0 ? oddsAmount : undefined,
+            oddsAmount: (!isHardway && !isAts && oddsAmount > 0) ? oddsAmount : undefined,
+            progressMask,
           });
           offset += 19;
         }
@@ -1630,7 +1879,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
         if (gameStateRef.current) {
           gameStateRef.current = {
             ...gameStateRef.current,
-            dice: [d1, d2],
+            dice,
             crapsPoint: mainPoint > 0 ? mainPoint : null,
           };
         }
@@ -1638,32 +1887,36 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
         setGameState(prev => {
           // Only update history if dice actually changed (avoids duplicate entries from multiple events)
           const prevDice = prev.dice;
-          const diceChanged = !prevDice || prevDice[0] !== d1 || prevDice[1] !== d2;
+          const diceChanged =
+            prevDice.length !== dice.length ||
+            (dice.length === 2 && (prevDice[0] !== d1 || prevDice[1] !== d2));
 
           // Reset roll history when 7 is rolled (seven-out), otherwise only add if dice changed
           let newHistory = prev.crapsRollHistory;
-          if (diceChanged) {
+          if (hasDice && diceChanged) {
             newHistory = total === 7 ? [total] : [...prev.crapsRollHistory, total].slice(-MAX_GRAPH_POINTS);
           }
 
           const newState = {
             ...prev,
             type: currentType,
-            dice: [d1, d2],
+            dice,
             crapsPoint: mainPoint > 0 ? mainPoint : null,
             crapsBets: parsedBets,
             crapsRollHistory: newHistory,
             stage: 'PLAYING' as const,
             // Only update message if dice changed, otherwise keep existing message (e.g. "ODDS +$X")
-            message: diceChanged ? `ROLLED ${total}` : prev.message,
+            message: hasDice ? (diceChanged ? `ROLLED ${total}` : prev.message) : 'PLACE BETS - SPACE TO ROLL',
           };
           // Also update ref inside for consistency
           gameStateRef.current = newState;
           return newState;
         });
       } else if (currentType === GameType.ROULETTE) {
-        // State format: [bet_count:u8] [bets:10bytes×count] [result:u8]?
-        // Each RouletteBet is 10 bytes: [bet_type:u8] [number:u8] [amount:u64 BE]
+        // v2:
+        // [bet_count:u8] [zero_rule:u8] [phase:u8] [totalWagered:u64 BE] [pendingReturn:u64 BE] [bets:10bytes×count] [result:u8]?
+        // legacy:
+        // [bet_count:u8] [bets:10bytes×count] [result:u8]?
         if (stateBlob.length < 1) {
           console.error('[parseGameState] Roulette state blob too short:', stateBlob.length);
           return;
@@ -1671,7 +1924,26 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
 
         const betCount = stateBlob[0];
         const betsSize = betCount * 10; // Each bet is 10 bytes
-        const resultOffset = 1 + betsSize;
+        const legacyResultOffset = 1 + betsSize;
+        const v2HeaderLen = 19;
+        const v2ResultOffset = v2HeaderLen + betsSize;
+
+        const looksLikeV2 =
+          stateBlob.length === v2HeaderLen + betsSize || stateBlob.length === v2HeaderLen + betsSize + 1;
+
+        const zeroRuleByte = looksLikeV2 ? stateBlob[1] : 0;
+        const phaseByte = looksLikeV2 ? stateBlob[2] : 0;
+        const resultOffset = looksLikeV2 ? v2ResultOffset : legacyResultOffset;
+
+        const zeroRule =
+          zeroRuleByte === 1
+            ? 'LA_PARTAGE'
+            : zeroRuleByte === 2
+              ? 'EN_PRISON'
+              : zeroRuleByte === 3
+                ? 'EN_PRISON_DOUBLE'
+                : 'STANDARD';
+        const rouletteIsPrison = phaseByte === 1;
 
         console.log('[parseGameState] Roulette: betCount=' + betCount + ', betsSize=' + betsSize + ', resultOffset=' + resultOffset + ', totalLen=' + stateBlob.length);
 
@@ -1691,9 +1963,11 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
           setGameState(prev => ({
             ...prev,
             type: currentType,
+            rouletteZeroRule: zeroRule,
+            rouletteIsPrison,
             rouletteHistory: [...prev.rouletteHistory, result].slice(-MAX_GRAPH_POINTS),
-            stage: 'RESULT',
-            message: `LANDED ON ${result}`,
+            stage: rouletteIsPrison && result === 0 ? 'PLAYING' : 'RESULT',
+            message: rouletteIsPrison && result === 0 ? 'EN PRISON - SPACE TO SPIN' : `LANDED ON ${result}`,
           }));
         } else {
           // Betting stage - no result yet
@@ -1701,8 +1975,10 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
           setGameState(prev => ({
             ...prev,
             type: currentType,
+            rouletteZeroRule: zeroRule,
+            rouletteIsPrison,
             stage: 'PLAYING',
-            message: 'PLACE YOUR BETS',
+            message: rouletteIsPrison ? 'EN PRISON - SPACE TO SPIN' : 'PLACE YOUR BETS',
           }));
         }
       } else if (currentType === GameType.SIC_BO) {
@@ -1753,76 +2029,144 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
           }));
         }
       } else if (currentType === GameType.THREE_CARD) {
-        // [pCard1:u8] [pCard2:u8] [pCard3:u8] [dCard1:u8] [dCard2:u8] [dCard3:u8] [stage:u8]
-        if (stateBlob.length < 7) {
+        const version = stateBlob[0];
+        if (version !== 1 && version !== 2 && version !== 3) {
+          console.error('[parseGameState] Unsupported Three Card state version:', version);
+          return;
+        }
+
+        // v3 (32 bytes):
+        // [version:u8=3] [stage:u8] [p1..p3:u8] [d1..d3:u8] [pairplus:u64 BE] [sixcard:u64 BE] [progressive:u64 BE]
+        // v2 (24 bytes):
+        // [version:u8=2] [stage:u8] [p1..p3:u8] [d1..d3:u8] [pairplus:u64 BE] [sixcard:u64 BE]
+        // v1 (16 bytes):
+        // [version:u8=1] [stage:u8] [p1..p3:u8] [d1..d3:u8] [pairplus:u64 BE]
+        const requiredLen = version === 3 ? 32 : version === 2 ? 24 : 16;
+        if (stateBlob.length < requiredLen) {
           console.error('[parseGameState] Three Card state blob too short:', stateBlob.length);
           return;
         }
-        const pCards: Card[] = [
-          decodeCard(stateBlob[0]),
-          decodeCard(stateBlob[1]),
-          decodeCard(stateBlob[2]),
-        ];
-        const stage = stateBlob[6];
-        const dCards: Card[] = [
-          { ...decodeCard(stateBlob[3]), isHidden: stage === 0 },
-          { ...decodeCard(stateBlob[4]), isHidden: stage === 0 },
-          { ...decodeCard(stateBlob[5]), isHidden: stage === 0 },
-        ];
 
-        setGameState(prev => {
+        const stageVal = stateBlob[1]; // 0=Betting, 1=Decision, 2=AwaitingReveal, 3=Complete
+        const pairplusBet = Number(view.getBigUint64(8, false));
+        const sixCardBonusBet = version >= 2 ? Number(view.getBigUint64(16, false)) : 0;
+        const progressiveBet = version === 3 ? Number(view.getBigUint64(24, false)) : 0;
+
+        const pBytes = [stateBlob[2], stateBlob[3], stateBlob[4]];
+        const dBytes = [stateBlob[5], stateBlob[6], stateBlob[7]];
+
+        const pCards: Card[] = stageVal === 0 ? [] : pBytes.map(decodeCard);
+        const dCards: Card[] =
+          stageVal === 0
+            ? []
+            : dBytes.map((b) => ({
+                ...decodeCard(b),
+                isHidden: stageVal !== 3,
+              }));
+
+        const uiStage =
+          stageVal === 0 ? ('BETTING' as const) : stageVal === 3 ? ('RESULT' as const) : ('PLAYING' as const);
+
+        let message = 'SPACE TO DEAL';
+        if (stageVal === 0) message = 'PAIRPLUS (P), 6-CARD (6), PROG (J), SPACE TO DEAL';
+        else if (stageVal === 1) message = 'PLAY (P) OR FOLD (F)';
+        else if (stageVal === 2) message = 'REVEAL (SPACE)';
+        else if (stageVal === 3) message = 'GAME COMPLETE';
+
+        setGameState((prev) => {
           const newState = {
             ...prev,
             type: currentType,
             playerCards: pCards,
             dealerCards: dCards,
-            stage: (stage === 1 ? 'RESULT' : 'PLAYING') as 'RESULT' | 'PLAYING',
-            message: stage === 1 ? 'GAME COMPLETE' : 'PLAY (P) OR FOLD (F)',
+            threeCardPairPlusBet: pairplusBet,
+            threeCardSixCardBonusBet: sixCardBonusBet,
+            threeCardProgressiveBet: progressiveBet,
+            stage: uiStage,
+            message,
           };
-          // Update ref synchronously so CasinoGameCompleted handler has access to cards
           gameStateRef.current = newState;
           return newState;
         });
       } else if (currentType === GameType.ULTIMATE_HOLDEM) {
-        // [stage:u8] [pCard1:u8] [pCard2:u8] [community1-5:u8×5] [dCard1:u8] [dCard2:u8] [playBetMultiplier:u8]
-        if (stateBlob.length < 11) {
+        const version = stateBlob[0];
+        if (version !== 1 && version !== 2 && version !== 3) {
+          console.error('[parseGameState] Unsupported Ultimate Holdem state version:', version);
+          return;
+        }
+
+        // v3 (40 bytes):
+        // [version:u8=3] [stage:u8] [p1..p2:u8] [c1..c5:u8] [d1..d2:u8] [play_mult:u8] [bonus1..bonus4:u8] [trips:u64 BE] [sixcard:u64 BE] [progressive:u64 BE]
+        // v2 (32 bytes):
+        // [version:u8=2] [stage:u8] [p1..p2:u8] [c1..c5:u8] [d1..d2:u8] [play_mult:u8] [bonus1..bonus4:u8] [trips:u64 BE] [sixcard:u64 BE]
+        // v1 (20 bytes):
+        // [version:u8=1] [stage:u8] [p1..p2:u8] [c1..c5:u8] [d1..d2:u8] [play_mult:u8] [trips:u64 BE]
+        const requiredLen = version === 3 ? 40 : version === 2 ? 32 : 20;
+        if (stateBlob.length < requiredLen) {
           console.error('[parseGameState] Ultimate Holdem state blob too short:', stateBlob.length);
           return;
         }
-        const stage = stateBlob[0]; // 0=Preflop, 1=Flop, 2=River, 3=Showdown
-        const pCards: Card[] = [
-          decodeCard(stateBlob[1]),
-          decodeCard(stateBlob[2]),
-        ];
+
+        const stageVal = stateBlob[1]; // 0=Betting,1=Preflop,2=Flop,3=River,4=AwaitingReveal,5=Showdown
+        const pBytes = [stateBlob[2], stateBlob[3]];
+        const cBytes = [stateBlob[4], stateBlob[5], stateBlob[6], stateBlob[7], stateBlob[8]];
+        const dBytes = [stateBlob[9], stateBlob[10]];
+        const playMult = stateBlob[11];
+        const bonusBytes = version >= 2 ? [stateBlob[12], stateBlob[13], stateBlob[14], stateBlob[15]] : [0xff, 0xff, 0xff, 0xff];
+        const tripsBet = Number(view.getBigUint64(version === 1 ? 12 : 16, false));
+        const sixCardBonusBet = version >= 2 ? Number(view.getBigUint64(24, false)) : 0;
+        const progressiveBet = version === 3 ? Number(view.getBigUint64(32, false)) : 0;
+
+        const pCards: Card[] = pBytes[0] === 0xff ? [] : pBytes.map(decodeCard);
+
         const community: Card[] = [];
-        // Community cards revealed based on stage
-        for (let i = 0; i < 5; i++) {
-          const card = decodeCard(stateBlob[3 + i]);
-          if (stage >= 1 && i < 3) community.push(card); // Flop: first 3
-          else if (stage >= 2) community.push(card); // River: all 5
+        for (const b of cBytes) {
+          if (b !== 0xff) community.push(decodeCard(b));
         }
-        const dCards: Card[] = [
-          { ...decodeCard(stateBlob[8]), isHidden: stage < 3 },
-          { ...decodeCard(stateBlob[9]), isHidden: stage < 3 },
-        ];
-        const playBet = stateBlob[10];
 
-        let message = 'CHECK (C) OR BET 4X';
-        if (stage === 1) message = 'CHECK (C) OR BET 2X';
-        else if (stage === 2) message = playBet > 0 ? 'WAITING...' : 'FOLD (F) OR BET 1X';
-        else if (stage === 3) message = 'GAME COMPLETE';
+        const dealerVisible = stageVal === 5;
+        const dCards: Card[] =
+          stageVal === 0 || pCards.length === 0
+            ? []
+            : dBytes.map((b) => ({
+                ...decodeCard(b),
+                isHidden: !dealerVisible,
+              }));
 
-        setGameState(prev => {
+        const bonusVisible = stageVal === 5;
+        const bonusCards: Card[] =
+          version >= 2 && (sixCardBonusBet > 0 || bonusBytes.some((b) => b !== 0xff))
+            ? bonusBytes.map((b) => ({
+                ...decodeCard(b),
+                isHidden: !bonusVisible,
+              }))
+            : [];
+
+        const uiStage =
+          stageVal === 0 ? ('BETTING' as const) : stageVal === 5 ? ('RESULT' as const) : ('PLAYING' as const);
+
+        let message = 'SPACE TO DEAL';
+        if (stageVal === 0) message = 'TRIPS (T), 6-CARD (6), PROG (J), SPACE TO DEAL';
+        else if (stageVal === 1) message = 'CHECK (C) OR BET 3X/4X';
+        else if (stageVal === 2) message = 'CHECK (C) OR BET 2X';
+        else if (stageVal === 3) message = playMult > 0 ? 'REVEAL (SPACE)' : 'FOLD (F) OR BET 1X';
+        else if (stageVal === 4) message = 'REVEAL (SPACE)';
+        else if (stageVal === 5) message = 'GAME COMPLETE';
+
+        setGameState((prev) => {
           const newState = {
             ...prev,
             type: currentType,
             playerCards: pCards,
             dealerCards: dCards,
             communityCards: community,
-            stage: (stage === 3 ? 'RESULT' : 'PLAYING') as 'RESULT' | 'PLAYING',
+            uthTripsBet: tripsBet,
+            uthSixCardBonusBet: sixCardBonusBet,
+            uthProgressiveBet: progressiveBet,
+            uthBonusCards: bonusCards,
+            stage: uiStage,
             message,
           };
-          // Update ref synchronously so CasinoGameCompleted handler has access to cards
           gameStateRef.current = newState;
           return newState;
         });
@@ -1834,6 +2178,10 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
 
   // Helper to decode card value (0-51) to Card object
   const decodeCard = (value: number): Card => {
+    // Unknown/unrevealed placeholder used by some on-chain state blobs.
+    if (value === 0xff) {
+      return { rank: 'A', suit: '♠', value: 0, isHidden: true };
+    }
     // Handle invalid input
     if (value === undefined || value === null || isNaN(value) || value < 0 || value > 51) {
       console.warn('[decodeCard] Invalid card value:', value);
@@ -1910,6 +2258,8 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
       rouletteLastRoundBets: prev.rouletteLastRoundBets,
       rouletteHistory: prev.rouletteHistory,
       rouletteInputMode: 'NONE',
+      rouletteZeroRule: prev.rouletteZeroRule,
+      rouletteIsPrison: false,
       // Preserve sic bo bets when restarting
       sicBoBets: type === GameType.SIC_BO ? prev.sicBoBets : [],
       sicBoHistory: prev.sicBoHistory,
@@ -1926,15 +2276,37 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
       insuranceBet: 0,
       blackjackStack: [],
       completedHands: [],
+      blackjack21Plus3Bet: 0,
+      threeCardPairPlusBet: 0,
+      threeCardSixCardBonusBet: 0,
+      threeCardProgressiveBet: 0,
+      uthTripsBet: 0,
+      uthSixCardBonusBet: 0,
+      uthProgressiveBet: 0,
+      uthBonusCards: [],
+      casinoWarTieBet: 0,
       hiloAccumulator: 0,
       hiloGraphData: [],
-      sessionWager: 0
+      sessionWager: 0,
+      sessionInterimPayout: 0
     }));
     setAiAdvice(null);
 
     // If on-chain mode is enabled, submit transaction
     if (isOnChain && chainService) {
       try {
+        // Guard: if the executor isn't producing blocks, we won't receive CasinoGameStarted.
+        const chainOk = await ensureChainResponsive();
+        if (!chainOk) {
+          clearChainResponseTimeout();
+          setGameState(prev => ({
+            ...prev,
+            stage: 'BETTING',
+            message: 'CHAIN OFFLINE — START nullspace-simulator + dev-executor',
+          }));
+          return;
+        }
+
         // Always verify player exists on-chain before starting game
         // This handles network resets where localStorage flag is stale
         console.log('[useTerminalGame] Verifying on-chain state, clientRef:', !!clientRef.current, 'publicKeyBytesRef:', !!publicKeyBytesRef.current, 'hasRegisteredRef:', hasRegisteredRef.current);
@@ -2045,11 +2417,9 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
         setCurrentSessionId(sessionId);
 
         // For table games (Baccarat, Craps, Roulette, Sic Bo), actual bets are placed via moves.
-        // However, the chain requires a non-zero initial bet to start a game.
-        // We pass the minimum bet amount (1) which satisfies the chain requirement.
-        // For other games (Blackjack, etc.), the initial bet is used.
+        // These games should start with an initial bet of 0 so we don't charge an extra "entry fee".
         const isTableGame = [GameType.BACCARAT, GameType.CRAPS, GameType.ROULETTE, GameType.SIC_BO].includes(type);
-        const initialBetAmount = isTableGame ? 1n : BigInt(gameState.bet);
+        const initialBetAmount = isTableGame ? 0n : BigInt(gameState.bet);
 
         // Now submit the transaction - WebSocket events can be matched immediately
         const result = await chainService.startGameWithSessionId(chainGameType, initialBetAmount, sessionId);
@@ -2059,10 +2429,17 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
         setGameState(prev => ({
           ...prev,
           message: "WAITING FOR CHAIN...",
-          sessionWager: Number(initialBetAmount) // Initialize wager tracking
+          // For table games, wagers are tracked as bets are staged in the UI. Don't overwrite.
+          sessionWager: isTableGame
+            ? prev.sessionWager
+            : type === GameType.ULTIMATE_HOLDEM
+              ? Number(initialBetAmount) * 2
+              : Number(initialBetAmount)
         }));
+        armChainResponseTimeout('START GAME', sessionId);
       } catch (error) {
         console.error('[useTerminalGame] Failed to start game on-chain:', error);
+        clearChainResponseTimeout();
 
         // Clear the session ID we pre-stored since the transaction failed
         currentSessionIdRef.current = null;
@@ -2087,8 +2464,19 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
   };
 
   const setBetAmount = (amount: number) => {
+    // For on-chain games where the base bet is already locked-in at session start,
+    // disallow changing bet size mid-session (even if the game UI stage is "BETTING").
+    const baseBetLocked =
+      isOnChain &&
+      !!currentSessionIdRef.current &&
+      [GameType.BLACKJACK, GameType.THREE_CARD, GameType.ULTIMATE_HOLDEM].includes(gameState.type);
+    if (baseBetLocked) {
+      setGameState(prev => ({ ...prev, message: "BET LOCKED (START NEW GAME)" }));
+      return;
+    }
+
     // Allow bet changes during BETTING, or during PLAYING for table games
-    const isTableGame = [GameType.CRAPS, GameType.ROULETTE, GameType.SIC_BO].includes(gameState.type);
+    const isTableGame = [GameType.BACCARAT, GameType.CRAPS, GameType.ROULETTE, GameType.SIC_BO].includes(gameState.type);
     if (gameState.stage === 'PLAYING' && !isTableGame) return;
     if (stats.chips < amount) {
       setGameState(prev => ({ ...prev, message: "INSUFFICIENT FUNDS" }));
@@ -2173,6 +2561,10 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
    * 6 = Specific double (8:1) - number = 1-6
    * 7 = Total of N (various payouts) - number = 4-17
    * 8 = Single number appears (1:1 to 3:1) - number = 1-6
+   * 9 = Domino (two faces) (5:1) - number = (min<<4)|max
+   * 10 = Three-Number Easy Hop (30:1) - number = 6-bit mask (exactly 3 bits set)
+   * 11 = Three-Number Hard Hop (50:1) - number = (double<<4)|single
+   * 12 = Four-Number Easy Hop (7:1) - number = 6-bit mask (exactly 4 bits set)
    */
   const serializeSicBoBet = (bet: SicBoBet): Uint8Array => {
     // Map frontend bet type to backend bet type
@@ -2184,6 +2576,10 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
       'DOUBLE_SPECIFIC': 6,
       'SUM': 7,
       'SINGLE_DIE': 8,
+      'DOMINO': 9,
+      'HOP3_EASY': 10,
+      'HOP3_HARD': 11,
+      'HOP4_EASY': 12,
     };
 
     const betType = betTypeMap[bet.type];
@@ -2481,9 +2877,73 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
       else setGameState(prev => ({ ...prev, message: "INSURANCE DECLINED" }));
   };
 
+  const bjToggle21Plus3 = async () => {
+    if (gameState.type !== GameType.BLACKJACK) return;
+
+    const prevAmount = gameState.blackjack21Plus3Bet || 0;
+    const nextAmount = prevAmount > 0 ? 0 : gameState.bet;
+    const delta = nextAmount - prevAmount;
+
+    // Local mode: track UI state only (local blackjack engine does not implement 21+3).
+    if (!isOnChain || !chainService || !currentSessionIdRef.current) {
+      setGameState(prev => ({
+        ...prev,
+        blackjack21Plus3Bet: nextAmount,
+        message: nextAmount > 0 ? `21+3 +$${nextAmount}` : '21+3 OFF',
+      }));
+      return;
+    }
+
+    // On-chain: only allow before Deal.
+    if (gameState.stage !== 'BETTING') {
+      setGameState(prev => ({ ...prev, message: '21+3 CLOSED' }));
+      return;
+    }
+
+    if (isPendingRef.current) return;
+    if (nextAmount > 0 && stats.chips < nextAmount) {
+      setGameState(prev => ({ ...prev, message: 'INSUFFICIENT FUNDS' }));
+      return;
+    }
+
+    isPendingRef.current = true;
+    setGameState(prev => ({
+      ...prev,
+      blackjack21Plus3Bet: nextAmount,
+      sessionWager: prev.sessionWager + delta,
+      message: nextAmount > 0 ? `21+3 +$${nextAmount}` : '21+3 OFF',
+    }));
+
+    try {
+      const payload = new Uint8Array(9);
+      payload[0] = 5; // Move 5: Set 21+3 bet
+      new DataView(payload.buffer).setBigUint64(1, BigInt(nextAmount), false);
+
+      const result = await chainService.sendMove(currentSessionIdRef.current, payload);
+      if (result.txHash) setLastTxSig(result.txHash);
+      // NOTE: Do NOT clear isPendingRef here - wait for CasinoGameMoved event
+    } catch (error) {
+      console.error('[useTerminalGame] 21+3 update failed:', error);
+      isPendingRef.current = false;
+      setGameState(prev => ({
+        ...prev,
+        blackjack21Plus3Bet: prevAmount,
+        sessionWager: prev.sessionWager - delta,
+        message: '21+3 FAILED',
+      }));
+    }
+  };
+
   // DEAL HANDLER
   const deal = async () => {
     if (gameState.type === GameType.NONE) return;
+
+    // If we're still waiting for the session to exist on-chain (CasinoGameStarted),
+    // ignore space presses so we don't clobber "WAITING FOR CHAIN..." with other states.
+    if (isOnChain && awaitingChainResponseRef.current) {
+      return;
+    }
+
     if (gameState.type === GameType.CRAPS) { rollCraps(); return; }
     if (gameState.type === GameType.ROULETTE) { spinRoulette(); return; }
     if (gameState.type === GameType.SIC_BO) { rollSicBo(); return; }
@@ -2532,28 +2992,148 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
         }
       }
 
-      // Casino War: when cards are dealt (message='DEALT'), send confirm move to trigger result
-      if (gameState.type === GameType.CASINO_WAR && gameState.stage === 'PLAYING' && gameState.message === 'DEALT') {
+      // Casino War (v1): betting stage -> deal + compare.
+      // Legacy fallback: stage PLAYING + message 'DEALT' -> compare.
+      if (
+        gameState.type === GameType.CASINO_WAR
+        && (gameState.stage === 'BETTING' || (gameState.stage === 'PLAYING' && gameState.message === 'DEALT'))
+      ) {
         // Guard against duplicate submissions
         if (isPendingRef.current) {
-          console.log('[useTerminalGame] Casino War confirm blocked - transaction pending');
+          console.log('[useTerminalGame] Casino War deal blocked - transaction pending');
           return;
         }
 
         isPendingRef.current = true;
         try {
-          const payload = new Uint8Array([0]); // Confirm deal - triggers comparison
+          const payload = new Uint8Array([0]); // Deal + compare
           const result = await chainService.sendMove(sessionId, payload);
           if (result.txHash) setLastTxSig(result.txHash);
-          setGameState(prev => ({ ...prev, message: 'CONFIRMING...' }));
+          setGameState(prev => ({ ...prev, message: 'DEALING...' }));
           // NOTE: Do NOT clear isPendingRef here - wait for CasinoGameMoved event
           return;
         } catch (error) {
-          console.error('[useTerminalGame] Casino War confirm failed:', error);
-          setGameState(prev => ({ ...prev, message: 'CONFIRM FAILED' }));
+          console.error('[useTerminalGame] Casino War deal failed:', error);
+          setGameState(prev => ({ ...prev, message: 'DEAL FAILED' }));
           // Only clear isPending on error, not on success
           isPendingRef.current = false;
           return;
+        }
+      }
+
+      // Blackjack: explicit Deal and Reveal moves (new staged protocol)
+      if (gameState.type === GameType.BLACKJACK) {
+        if (isPendingRef.current) {
+          console.log('[useTerminalGame] Blackjack deal/reveal blocked - transaction pending');
+          return;
+        }
+
+        // Betting stage: send Deal
+        if (gameState.stage === 'BETTING') {
+          isPendingRef.current = true;
+          try {
+            setGameState(prev => ({ ...prev, message: 'DEALING...' }));
+            const result = await chainService.sendMove(sessionId, new Uint8Array([4])); // Move 4: Deal
+            if (result.txHash) setLastTxSig(result.txHash);
+            return;
+          } catch (error) {
+            console.error('[useTerminalGame] Blackjack Deal failed:', error);
+            setGameState(prev => ({ ...prev, message: 'DEAL FAILED' }));
+            isPendingRef.current = false;
+            return;
+          }
+        }
+
+        // AwaitingReveal stage: send Reveal
+        if (gameState.message.includes('REVEAL')) {
+          isPendingRef.current = true;
+          try {
+            setGameState(prev => ({ ...prev, message: 'REVEALING...' }));
+            const result = await chainService.sendMove(sessionId, new Uint8Array([6])); // Move 6: Reveal
+            if (result.txHash) setLastTxSig(result.txHash);
+            return;
+          } catch (error) {
+            console.error('[useTerminalGame] Blackjack Reveal failed:', error);
+            setGameState(prev => ({ ...prev, message: 'REVEAL FAILED' }));
+            isPendingRef.current = false;
+            return;
+          }
+        }
+      }
+
+      // Three Card Poker: staged Deal/Reveal protocol
+      if (gameState.type === GameType.THREE_CARD) {
+        if (isPendingRef.current) {
+          console.log('[useTerminalGame] Three Card deal/reveal blocked - transaction pending');
+          return;
+        }
+
+        if (gameState.stage === 'BETTING') {
+          isPendingRef.current = true;
+          try {
+            setGameState(prev => ({ ...prev, message: 'DEALING...' }));
+            const result = await chainService.sendMove(sessionId, new Uint8Array([2])); // Move 2: Deal
+            if (result.txHash) setLastTxSig(result.txHash);
+            return;
+          } catch (error) {
+            console.error('[useTerminalGame] Three Card Deal failed:', error);
+            setGameState(prev => ({ ...prev, message: 'DEAL FAILED' }));
+            isPendingRef.current = false;
+            return;
+          }
+        }
+
+        if (gameState.message.includes('REVEAL')) {
+          isPendingRef.current = true;
+          try {
+            setGameState(prev => ({ ...prev, message: 'REVEALING...' }));
+            const result = await chainService.sendMove(sessionId, new Uint8Array([4])); // Move 4: Reveal
+            if (result.txHash) setLastTxSig(result.txHash);
+            return;
+          } catch (error) {
+            console.error('[useTerminalGame] Three Card Reveal failed:', error);
+            setGameState(prev => ({ ...prev, message: 'REVEAL FAILED' }));
+            isPendingRef.current = false;
+            return;
+          }
+        }
+      }
+
+      // Ultimate Hold'em: staged Deal/Reveal protocol
+      if (gameState.type === GameType.ULTIMATE_HOLDEM) {
+        if (isPendingRef.current) {
+          console.log('[useTerminalGame] Ultimate Holdem deal/reveal blocked - transaction pending');
+          return;
+        }
+
+        if (gameState.stage === 'BETTING') {
+          isPendingRef.current = true;
+          try {
+            setGameState(prev => ({ ...prev, message: 'DEALING...' }));
+            const result = await chainService.sendMove(sessionId, new Uint8Array([5])); // Action 5: Deal
+            if (result.txHash) setLastTxSig(result.txHash);
+            return;
+          } catch (error) {
+            console.error('[useTerminalGame] Ultimate Holdem Deal failed:', error);
+            setGameState(prev => ({ ...prev, message: 'DEAL FAILED' }));
+            isPendingRef.current = false;
+            return;
+          }
+        }
+
+        if (gameState.message.includes('REVEAL')) {
+          isPendingRef.current = true;
+          try {
+            setGameState(prev => ({ ...prev, message: 'REVEALING...' }));
+            const result = await chainService.sendMove(sessionId, new Uint8Array([7])); // Action 7: Reveal
+            if (result.txHash) setLastTxSig(result.txHash);
+            return;
+          } catch (error) {
+            console.error('[useTerminalGame] Ultimate Holdem Reveal failed:', error);
+            setGameState(prev => ({ ...prev, message: 'REVEAL FAILED' }));
+            isPendingRef.current = false;
+            return;
+          }
         }
       }
     }
@@ -2572,6 +3152,29 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
 
     // If on-chain mode with active session, wait for chain events
     if (isOnChain && chainService && currentSessionIdRef.current) {
+      // If we missed WS events (or the chain restarted), reconcile the session before we "wait" forever.
+      try {
+        const client: any = clientRef.current;
+        const sessionId = currentSessionIdRef.current;
+        if (client && sessionId !== null) {
+          const sessionState = await client.getCasinoSession(sessionId);
+          if (!sessionState || sessionState.isComplete) {
+            currentSessionIdRef.current = null;
+            setCurrentSessionId(null);
+            isPendingRef.current = false;
+            await startGame(gameState.type);
+            return;
+          }
+          const frontendGameType =
+            CHAIN_TO_FRONTEND_GAME_TYPE[sessionState.gameType as ChainGameType] ?? gameTypeRef.current;
+          gameTypeRef.current = frontendGameType;
+          parseGameState(sessionState.stateBlob, frontendGameType);
+          isPendingRef.current = false;
+          return;
+        }
+      } catch {
+        // ignore
+      }
       setGameState(prev => ({ ...prev, message: 'WAITING FOR DEAL...' }));
       return;
     }
@@ -2866,6 +3469,10 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
 
   // --- ROULETTE / SIC BO / CRAPS / BACCARAT BETTING HELPERS ---
   const placeRouletteBet = (type: RouletteBet['type'], target?: number) => {
+      if (gameState.rouletteIsPrison) {
+          setGameState(prev => ({ ...prev, message: 'EN PRISON - NO NEW BETS' }));
+          return;
+      }
       if (stats.chips < gameState.bet) return;
       setGameState(prev => ({ 
           ...prev, 
@@ -2875,6 +3482,49 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
           rouletteInputMode: 'NONE',
           sessionWager: prev.sessionWager + prev.bet // Track wager
       }));
+  };
+
+  const cycleRouletteZeroRule = async () => {
+      if (gameState.type !== GameType.ROULETTE) return;
+
+      const nextRule =
+        gameState.rouletteZeroRule === 'STANDARD'
+          ? 'LA_PARTAGE'
+          : gameState.rouletteZeroRule === 'LA_PARTAGE'
+            ? 'EN_PRISON'
+            : gameState.rouletteZeroRule === 'EN_PRISON'
+              ? 'EN_PRISON_DOUBLE'
+              : 'STANDARD';
+
+      setGameState(prev => ({
+          ...prev,
+          rouletteZeroRule: nextRule,
+          message: `ZERO RULE: ${nextRule.split('_').join(' ')}`,
+      }));
+
+      // If we already have an on-chain roulette session (before spinning), sync the rule immediately.
+      if (isOnChain && chainService && currentSessionIdRef.current && !gameState.rouletteIsPrison) {
+          if (isPendingRef.current) return;
+          isPendingRef.current = true;
+          try {
+              const ruleByte =
+                nextRule === 'LA_PARTAGE'
+                  ? 1
+                  : nextRule === 'EN_PRISON'
+                    ? 2
+                    : nextRule === 'EN_PRISON_DOUBLE'
+                      ? 3
+                      : 0;
+              const payload = new Uint8Array([3, ruleByte]);
+              const result = await chainService.sendMove(currentSessionIdRef.current, payload);
+              if (result.txHash) setLastTxSig(result.txHash);
+              // NOTE: Do NOT clear isPendingRef here - wait for CasinoGameMoved event
+          } catch (e) {
+              console.error('[useTerminalGame] Roulette rule update failed:', e);
+              isPendingRef.current = false;
+              setGameState(prev => ({ ...prev, message: 'RULE UPDATE FAILED' }));
+          }
+      }
   };
   const undoRouletteBet = () => {
       if (gameState.rouletteUndoStack.length === 0) return;
@@ -2887,7 +3537,8 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
   // Helper to serialize a single roulette bet to the format expected by the Rust backend
   // Payload format: [action:u8] [betType:u8] [number:u8] [amount:u64 BE]
   // Action 0 = Place bet, Action 1 = Spin wheel, Action 2 = Clear bets
-  // Bet types: 0=Straight, 1=Red, 2=Black, 3=Even, 4=Odd, 5=Low, 6=High, 7=Dozen, 8=Column
+  // Bet types: 0=Straight, 1=Red, 2=Black, 3=Even, 4=Odd, 5=Low, 6=High, 7=Dozen, 8=Column,
+  // 9=SplitH, 10=SplitV, 11=Street, 12=Corner, 13=SixLine
   const serializeRouletteBet = (bet: RouletteBet): Uint8Array => {
     const payload = new Uint8Array(11);
     payload[0] = 0; // Action 0: Place bet
@@ -2950,6 +3601,26 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
         payload[1] = 0; // BetType::Straight
         payload[2] = 0;
         break;
+      case 'SPLIT_H':
+        payload[1] = 9; // BetType::SplitH
+        payload[2] = bet.target ?? 0;
+        break;
+      case 'SPLIT_V':
+        payload[1] = 10; // BetType::SplitV
+        payload[2] = bet.target ?? 0;
+        break;
+      case 'STREET':
+        payload[1] = 11; // BetType::Street
+        payload[2] = bet.target ?? 0;
+        break;
+      case 'CORNER':
+        payload[1] = 12; // BetType::Corner
+        payload[2] = bet.target ?? 0;
+        break;
+      case 'SIX_LINE':
+        payload[1] = 13; // BetType::SixLine
+        payload[2] = bet.target ?? 0;
+        break;
       default:
         throw new Error(`Unknown bet type: ${bet.type}`);
     }
@@ -2962,7 +3633,10 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
   };
 
   const spinRoulette = async () => {
-      if (gameState.rouletteBets.length === 0) { setGameState(prev => ({ ...prev, message: "PLACE BET" })); return; }
+      if (!gameState.rouletteIsPrison && gameState.rouletteBets.length === 0) {
+        setGameState(prev => ({ ...prev, message: "PLACE BET" }));
+        return;
+      }
 
       // Prevent double-submits
       if (isPendingRef.current) {
@@ -2984,13 +3658,29 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
       if (isOnChain && chainService && currentSessionIdRef.current) {
         try {
           isPendingRef.current = true;
-          setGameState(prev => ({ ...prev, message: 'PLACING BETS...' }));
+          const ruleByte =
+            gameState.rouletteZeroRule === 'LA_PARTAGE'
+              ? 1
+              : gameState.rouletteZeroRule === 'EN_PRISON'
+                ? 2
+                : gameState.rouletteZeroRule === 'EN_PRISON_DOUBLE'
+                  ? 3
+                  : 0;
 
-          // Send all bets sequentially (action 0 for each bet)
-          for (const bet of gameState.rouletteBets) {
-            const betPayload = serializeRouletteBet(bet);
-            const result = await chainService.sendMove(currentSessionIdRef.current!, betPayload);
-            if (result.txHash) setLastTxSig(result.txHash);
+          if (!gameState.rouletteIsPrison) {
+            setGameState(prev => ({ ...prev, message: 'PLACING BETS...' }));
+
+            // Set even-money-on-zero rule (action 3) before placing any bets.
+            const rulePayload = new Uint8Array([3, ruleByte]);
+            const ruleRes = await chainService.sendMove(currentSessionIdRef.current!, rulePayload);
+            if (ruleRes.txHash) setLastTxSig(ruleRes.txHash);
+
+            // Send all bets sequentially (action 0 for each bet)
+            for (const bet of gameState.rouletteBets) {
+              const betPayload = serializeRouletteBet(bet);
+              const result = await chainService.sendMove(currentSessionIdRef.current!, betPayload);
+              if (result.txHash) setLastTxSig(result.txHash);
+            }
           }
 
           // Send spin command (action 1)
@@ -2999,13 +3689,15 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
           const result = await chainService.sendMove(currentSessionIdRef.current, spinPayload);
           if (result.txHash) setLastTxSig(result.txHash);
 
-          // Update UI
-          setGameState(prev => ({
-            ...prev,
-            rouletteLastRoundBets: prev.rouletteBets,
-            rouletteBets: [],
-            rouletteUndoStack: []
-          }));
+          // Update UI (only clear local bets when we're submitting a fresh betting round).
+          if (!gameState.rouletteIsPrison) {
+            setGameState(prev => ({
+              ...prev,
+              rouletteLastRoundBets: prev.rouletteBets,
+              rouletteBets: [],
+              rouletteUndoStack: []
+            }));
+          }
 
           // Result will come via CasinoGameMoved/CasinoGameCompleted events
           // isPendingRef will be cleared in CasinoGameCompleted handler
@@ -3021,7 +3713,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
       // Local mode fallback (original logic)
       const num = Math.floor(Math.random() * 37);
       
-      const { pnl, results } = resolveRouletteBets(num, gameState.rouletteBets);
+      const { pnl, results } = resolveRouletteBets(num, gameState.rouletteBets, gameState.rouletteZeroRule);
       
       // Update stats using new format
       const color = getRouletteColor(num);
@@ -3154,6 +3846,11 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
       'NO': 6,
       'NEXT': 7,
       'HARDWAY': 8, // Will be refined based on target
+      'FIRE': 12,
+      'BUY': 13,
+      'ATS_SMALL': 15,
+      'ATS_TALL': 16,
+      'ATS_ALL': 17,
     };
 
     let betTypeValue = BET_TYPE_MAP[bet.type];
@@ -3169,7 +3866,8 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
     const payload = new Uint8Array(11);
     payload[0] = 0; // Command: Place bet
     payload[1] = betTypeValue;
-    payload[2] = bet.target ?? 0;
+    // Some bet types encode their target in the bet type value (e.g., hardways).
+    payload[2] = bet.type === 'HARDWAY' ? 0 : (bet.target ?? 0);
 
     // Amount as u64 big-endian (8 bytes)
     const amount = BigInt(bet.amount);
@@ -3179,15 +3877,31 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
     return payload;
   };
 
+  const crapsBuyCommission = (amount: number): number =>
+    Math.floor((amount * 5 + 99) / 100); // 5% rounded up
+
+  const crapsBetCost = (bet: CrapsBet): number =>
+    bet.amount + (bet.oddsAmount || 0) + (bet.type === 'BUY' ? crapsBuyCommission(bet.amount) : 0);
+
   const totalCommittedCraps = () =>
-    gameState.crapsBets.reduce(
-      (sum, b) => sum + b.amount + (b.oddsAmount || 0),
-      0
-    );
+    gameState.crapsBets.reduce((sum, b) => sum + crapsBetCost(b), 0);
 
   const placeCrapsBet = (type: CrapsBet['type'], target?: number) => {
       const committed = totalCommittedCraps();
-      if (stats.chips - committed < gameState.bet) {
+      const betAmount = gameState.bet;
+      const placementCost = type === 'BUY' ? betAmount + crapsBuyCommission(betAmount) : betAmount;
+
+      if ((type === 'FIRE' || type === 'ATS_SMALL' || type === 'ATS_TALL' || type === 'ATS_ALL') && gameState.crapsRollHistory.length > 0) {
+          setGameState(prev => ({ ...prev, message: 'BET ONLY BEFORE FIRST ROLL' }));
+          return;
+      }
+
+      if (type === 'FIRE' && gameState.crapsBets.some(b => b.type === 'FIRE' && b.local)) {
+          setGameState(prev => ({ ...prev, message: 'FIRE BET ALREADY PLACED' }));
+          return;
+      }
+
+      if (stats.chips - committed < placementCost) {
           setGameState(prev => ({ ...prev, message: 'INSUFFICIENT FUNDS' }));
           return;
       }
@@ -3200,19 +3914,29 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
           crapsBets: [...bets, { type, amount: prev.bet, target, status: (type==='COME'||type==='DONT_COME')?'PENDING':'ON', local: true }], 
           message: `BET ${type}`, 
           crapsInputMode: 'NONE',
-          sessionWager: prev.sessionWager + prev.bet // Track wager
+          sessionWager: prev.sessionWager + placementCost // Track wager
       }));
   };
   const undoCrapsBet = () => {
        if (gameState.crapsUndoStack.length === 0) return;
-       setGameState(prev => ({ ...prev, crapsBets: prev.crapsUndoStack[prev.crapsUndoStack.length-1], crapsUndoStack: prev.crapsUndoStack.slice(0, -1) }));
+       setGameState(prev => {
+           const nextBets = prev.crapsUndoStack[prev.crapsUndoStack.length - 1];
+           const localCost = (bets: CrapsBet[]) => bets.filter(b => b.local).reduce((s, b) => s + crapsBetCost(b), 0);
+           const delta = localCost(nextBets) - localCost(prev.crapsBets);
+           return {
+               ...prev,
+               crapsBets: nextBets,
+               crapsUndoStack: prev.crapsUndoStack.slice(0, -1),
+               sessionWager: prev.sessionWager + delta,
+           };
+       });
   };
   const rebetCraps = () => {
       if (gameState.crapsLastRoundBets.length === 0) {
           setGameState(prev => ({ ...prev, message: 'NO PREVIOUS BETS' }));
           return;
       }
-      const totalRequired = gameState.crapsLastRoundBets.reduce((a, b) => a + b.amount + (b.oddsAmount || 0), 0);
+      const totalRequired = gameState.crapsLastRoundBets.reduce((a, b) => a + crapsBetCost(b), 0);
       const committed = totalCommittedCraps();
       if (stats.chips < totalRequired + committed) {
           setGameState(prev => ({ ...prev, message: 'INSUFFICIENT FUNDS' }));
@@ -3224,7 +3948,8 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
           ...prev,
           crapsUndoStack: [...prev.crapsUndoStack, prev.crapsBets],
           crapsBets: [...prev.crapsBets, ...rebets],
-          message: 'REBET PLACED'
+          message: 'REBET PLACED',
+          sessionWager: prev.sessionWager + totalRequired,
       }));
   };
   const addCrapsOdds = async () => {
@@ -3314,7 +4039,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
       // Map input mode to bet type
       const betType = mode as CrapsBet['type'];
       // Validate number for each type
-      if (mode === 'YES' || mode === 'NO') {
+      if (mode === 'YES' || mode === 'NO' || mode === 'BUY') {
           if (![4, 5, 6, 8, 9, 10].includes(num)) return;
       } else if (mode === 'NEXT') {
           if (num < 2 || num > 12) return;
@@ -3499,6 +4224,177 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
       return { rank: 'HIGH CARD', value: 0 };
   };
 
+  const threeCardTogglePairPlus = async () => {
+      if (gameState.type !== GameType.THREE_CARD) return;
+
+      const prevAmount = gameState.threeCardPairPlusBet || 0;
+      const nextAmount = prevAmount > 0 ? 0 : gameState.bet;
+      const delta = nextAmount - prevAmount;
+
+      // Local mode: track UI state only (local 3-card engine doesn't implement Pairplus yet).
+      if (!isOnChain || !chainService || !currentSessionIdRef.current) {
+          setGameState(prev => ({
+              ...prev,
+              threeCardPairPlusBet: nextAmount,
+              message: nextAmount > 0 ? `PAIRPLUS +$${nextAmount}` : 'PAIRPLUS OFF',
+          }));
+          return;
+      }
+
+      // On-chain: only allow before Deal.
+      if (gameState.stage !== 'BETTING') {
+          setGameState(prev => ({ ...prev, message: 'PAIRPLUS CLOSED' }));
+          return;
+      }
+
+      if (isPendingRef.current) return;
+      if (nextAmount > 0 && stats.chips < nextAmount) {
+          setGameState(prev => ({ ...prev, message: 'INSUFFICIENT FUNDS' }));
+          return;
+      }
+
+      isPendingRef.current = true;
+      setGameState(prev => ({
+          ...prev,
+          threeCardPairPlusBet: nextAmount,
+          sessionWager: prev.sessionWager + delta,
+          message: nextAmount > 0 ? `PAIRPLUS +$${nextAmount}` : 'PAIRPLUS OFF',
+      }));
+
+      try {
+          const payload = new Uint8Array(9);
+          payload[0] = 3; // Move 3: Set Pairplus
+          new DataView(payload.buffer).setBigUint64(1, BigInt(nextAmount), false);
+
+          const result = await chainService.sendMove(currentSessionIdRef.current, payload);
+          if (result.txHash) setLastTxSig(result.txHash);
+          // NOTE: Do NOT clear isPendingRef here - wait for CasinoGameMoved event
+      } catch (error) {
+          console.error('[useTerminalGame] Pairplus update failed:', error);
+          isPendingRef.current = false;
+          setGameState(prev => ({
+              ...prev,
+              threeCardPairPlusBet: prevAmount,
+              sessionWager: prev.sessionWager - delta,
+              message: 'PAIRPLUS FAILED',
+          }));
+      }
+  };
+
+  const threeCardToggleSixCardBonus = async () => {
+      if (gameState.type !== GameType.THREE_CARD) return;
+
+      const prevAmount = gameState.threeCardSixCardBonusBet || 0;
+      const nextAmount = prevAmount > 0 ? 0 : gameState.bet;
+      const delta = nextAmount - prevAmount;
+
+      // Local mode: track UI state only.
+      if (!isOnChain || !chainService || !currentSessionIdRef.current) {
+          setGameState(prev => ({
+              ...prev,
+              threeCardSixCardBonusBet: nextAmount,
+              message: nextAmount > 0 ? `6-CARD +$${nextAmount}` : '6-CARD OFF',
+          }));
+          return;
+      }
+
+      // On-chain: only allow before Deal.
+      if (gameState.stage !== 'BETTING') {
+          setGameState(prev => ({ ...prev, message: '6-CARD CLOSED' }));
+          return;
+      }
+
+      if (isPendingRef.current) return;
+      if (nextAmount > 0 && stats.chips < nextAmount) {
+          setGameState(prev => ({ ...prev, message: 'INSUFFICIENT FUNDS' }));
+          return;
+      }
+
+      isPendingRef.current = true;
+      setGameState(prev => ({
+          ...prev,
+          threeCardSixCardBonusBet: nextAmount,
+          sessionWager: prev.sessionWager + delta,
+          message: nextAmount > 0 ? `6-CARD +$${nextAmount}` : '6-CARD OFF',
+      }));
+
+      try {
+          const payload = new Uint8Array(9);
+          payload[0] = 5; // Move 5: Set 6-Card Bonus
+          new DataView(payload.buffer).setBigUint64(1, BigInt(nextAmount), false);
+
+          const result = await chainService.sendMove(currentSessionIdRef.current, payload);
+          if (result.txHash) setLastTxSig(result.txHash);
+          // NOTE: Do NOT clear isPendingRef here - wait for CasinoGameMoved event
+      } catch (error) {
+          console.error('[useTerminalGame] 6-card bonus update failed:', error);
+          isPendingRef.current = false;
+          setGameState(prev => ({
+              ...prev,
+              threeCardSixCardBonusBet: prevAmount,
+              sessionWager: prev.sessionWager - delta,
+              message: '6-CARD FAILED',
+          }));
+      }
+  };
+
+  const threeCardToggleProgressive = async () => {
+      if (gameState.type !== GameType.THREE_CARD) return;
+
+      const prevAmount = gameState.threeCardProgressiveBet || 0;
+      const nextAmount = prevAmount > 0 ? 0 : 1;
+      const delta = nextAmount - prevAmount;
+
+      // Local mode: track UI state only.
+      if (!isOnChain || !chainService || !currentSessionIdRef.current) {
+          setGameState(prev => ({
+              ...prev,
+              threeCardProgressiveBet: nextAmount,
+              message: nextAmount > 0 ? `PROG +$${nextAmount}` : 'PROG OFF',
+          }));
+          return;
+      }
+
+      // On-chain: only allow before Deal.
+      if (gameState.stage !== 'BETTING') {
+          setGameState(prev => ({ ...prev, message: 'PROG CLOSED' }));
+          return;
+      }
+
+      if (isPendingRef.current) return;
+      if (nextAmount > 0 && stats.chips < nextAmount) {
+          setGameState(prev => ({ ...prev, message: 'INSUFFICIENT FUNDS' }));
+          return;
+      }
+
+      isPendingRef.current = true;
+      setGameState(prev => ({
+          ...prev,
+          threeCardProgressiveBet: nextAmount,
+          sessionWager: prev.sessionWager + delta,
+          message: nextAmount > 0 ? `PROG +$${nextAmount}` : 'PROG OFF',
+      }));
+
+      try {
+          const payload = new Uint8Array(9);
+          payload[0] = 6; // Move 6: Set Progressive
+          new DataView(payload.buffer).setBigUint64(1, BigInt(nextAmount), false);
+
+          const result = await chainService.sendMove(currentSessionIdRef.current, payload);
+          if (result.txHash) setLastTxSig(result.txHash);
+          // NOTE: Do NOT clear isPendingRef here - wait for CasinoGameMoved event
+      } catch (error) {
+          console.error('[useTerminalGame] Progressive update failed:', error);
+          isPendingRef.current = false;
+          setGameState(prev => ({
+              ...prev,
+              threeCardProgressiveBet: prevAmount,
+              sessionWager: prev.sessionWager - delta,
+              message: 'PROG FAILED',
+          }));
+      }
+  };
+
   const threeCardPlay = async () => {
       if (gameState.type !== GameType.THREE_CARD || gameState.stage !== 'PLAYING') return;
 
@@ -3635,6 +4531,60 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
   };
 
   // --- CASINO WAR ---
+  const casinoWarToggleTieBet = async () => {
+      if (gameState.type !== GameType.CASINO_WAR) return;
+
+      // Only allowed before the deal.
+      if (gameState.stage !== 'BETTING') {
+          setGameState(prev => ({ ...prev, message: 'TIE BET CLOSED' }));
+          return;
+      }
+
+      const prevAmount = gameState.casinoWarTieBet || 0;
+      const nextAmount = prevAmount > 0 ? 0 : gameState.bet;
+      const delta = nextAmount - prevAmount;
+
+      if (isPendingRef.current) return;
+      if (delta > 0 && stats.chips < delta) {
+          setGameState(prev => ({ ...prev, message: 'INSUFFICIENT FUNDS' }));
+          return;
+      }
+
+      // Optimistic update
+      isPendingRef.current = true;
+      setGameState(prev => ({
+          ...prev,
+          casinoWarTieBet: nextAmount,
+          sessionWager: prev.sessionWager + delta,
+          message: nextAmount > 0 ? `TIE BET +$${nextAmount}` : 'TIE BET OFF',
+      }));
+
+      // On-chain: submit move [3, tie_bet:u64 BE]
+      if (isOnChain && chainService && currentSessionIdRef.current) {
+        try {
+          const payload = new Uint8Array(9);
+          payload[0] = 3;
+          new DataView(payload.buffer).setBigUint64(1, BigInt(nextAmount), false);
+          const result = await chainService.sendMove(currentSessionIdRef.current, payload);
+          if (result.txHash) setLastTxSig(result.txHash);
+          return; // wait for moved event to clear isPending
+        } catch (error) {
+          console.error('[useTerminalGame] Casino War tie bet update failed:', error);
+          isPendingRef.current = false;
+          setGameState(prev => ({
+              ...prev,
+              casinoWarTieBet: prevAmount,
+              sessionWager: prev.sessionWager - delta,
+              message: 'TIE BET FAILED',
+          }));
+          return;
+        }
+      }
+
+      // Local mode: just clear pending immediately.
+      isPendingRef.current = false;
+  };
+
   const casinoWarGoToWar = async () => {
       // Check message contains 'WAR' to ensure we're in war state
       if (gameState.type !== GameType.CASINO_WAR || gameState.stage !== 'PLAYING' || !gameState.message.includes('WAR')) return;
@@ -3704,6 +4654,177 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
   };
 
   // --- ULTIMATE HOLDEM ---
+  const uthToggleTrips = async () => {
+      if (gameState.type !== GameType.ULTIMATE_HOLDEM) return;
+
+      const prevAmount = gameState.uthTripsBet || 0;
+      const nextAmount = prevAmount > 0 ? 0 : gameState.bet;
+      const delta = nextAmount - prevAmount;
+
+      // Local mode: track UI state only.
+      if (!isOnChain || !chainService || !currentSessionIdRef.current) {
+          setGameState(prev => ({
+              ...prev,
+              uthTripsBet: nextAmount,
+              message: nextAmount > 0 ? `TRIPS +$${nextAmount}` : 'TRIPS OFF',
+          }));
+          return;
+      }
+
+      // On-chain: only allow before Deal.
+      if (gameState.stage !== 'BETTING') {
+          setGameState(prev => ({ ...prev, message: 'TRIPS CLOSED' }));
+          return;
+      }
+
+      if (isPendingRef.current) return;
+      if (nextAmount > 0 && stats.chips < nextAmount) {
+          setGameState(prev => ({ ...prev, message: 'INSUFFICIENT FUNDS' }));
+          return;
+      }
+
+      isPendingRef.current = true;
+      setGameState(prev => ({
+          ...prev,
+          uthTripsBet: nextAmount,
+          sessionWager: prev.sessionWager + delta,
+          message: nextAmount > 0 ? `TRIPS +$${nextAmount}` : 'TRIPS OFF',
+      }));
+
+      try {
+          const payload = new Uint8Array(9);
+          payload[0] = 6; // Action 6: Set Trips
+          new DataView(payload.buffer).setBigUint64(1, BigInt(nextAmount), false);
+
+          const result = await chainService.sendMove(currentSessionIdRef.current, payload);
+          if (result.txHash) setLastTxSig(result.txHash);
+          // NOTE: Do NOT clear isPendingRef here - wait for CasinoGameMoved event
+      } catch (error) {
+          console.error('[useTerminalGame] Trips update failed:', error);
+          isPendingRef.current = false;
+          setGameState(prev => ({
+              ...prev,
+              uthTripsBet: prevAmount,
+              sessionWager: prev.sessionWager - delta,
+              message: 'TRIPS FAILED',
+          }));
+      }
+  };
+
+  const uthToggleSixCardBonus = async () => {
+      if (gameState.type !== GameType.ULTIMATE_HOLDEM) return;
+
+      const prevAmount = gameState.uthSixCardBonusBet || 0;
+      const nextAmount = prevAmount > 0 ? 0 : gameState.bet;
+      const delta = nextAmount - prevAmount;
+
+      // Local mode: track UI state only.
+      if (!isOnChain || !chainService || !currentSessionIdRef.current) {
+          setGameState(prev => ({
+              ...prev,
+              uthSixCardBonusBet: nextAmount,
+              message: nextAmount > 0 ? `6-CARD +$${nextAmount}` : '6-CARD OFF',
+          }));
+          return;
+      }
+
+      // On-chain: only allow before Deal.
+      if (gameState.stage !== 'BETTING') {
+          setGameState(prev => ({ ...prev, message: '6-CARD CLOSED' }));
+          return;
+      }
+
+      if (isPendingRef.current) return;
+      if (nextAmount > 0 && stats.chips < nextAmount) {
+          setGameState(prev => ({ ...prev, message: 'INSUFFICIENT FUNDS' }));
+          return;
+      }
+
+      isPendingRef.current = true;
+      setGameState(prev => ({
+          ...prev,
+          uthSixCardBonusBet: nextAmount,
+          sessionWager: prev.sessionWager + delta,
+          message: nextAmount > 0 ? `6-CARD +$${nextAmount}` : '6-CARD OFF',
+      }));
+
+      try {
+          const payload = new Uint8Array(9);
+          payload[0] = 9; // Action 9: Set 6-Card Bonus
+          new DataView(payload.buffer).setBigUint64(1, BigInt(nextAmount), false);
+
+          const result = await chainService.sendMove(currentSessionIdRef.current, payload);
+          if (result.txHash) setLastTxSig(result.txHash);
+          // NOTE: Do NOT clear isPendingRef here - wait for CasinoGameMoved event
+      } catch (error) {
+          console.error('[useTerminalGame] 6-card bonus update failed:', error);
+          isPendingRef.current = false;
+          setGameState(prev => ({
+              ...prev,
+              uthSixCardBonusBet: prevAmount,
+              sessionWager: prev.sessionWager - delta,
+              message: '6-CARD FAILED',
+          }));
+      }
+  };
+
+  const uthToggleProgressive = async () => {
+      if (gameState.type !== GameType.ULTIMATE_HOLDEM) return;
+
+      const prevAmount = gameState.uthProgressiveBet || 0;
+      const nextAmount = prevAmount > 0 ? 0 : 1;
+      const delta = nextAmount - prevAmount;
+
+      // Local mode: track UI state only.
+      if (!isOnChain || !chainService || !currentSessionIdRef.current) {
+          setGameState(prev => ({
+              ...prev,
+              uthProgressiveBet: nextAmount,
+              message: nextAmount > 0 ? `PROG +$${nextAmount}` : 'PROG OFF',
+          }));
+          return;
+      }
+
+      // On-chain: only allow before Deal.
+      if (gameState.stage !== 'BETTING') {
+          setGameState(prev => ({ ...prev, message: 'PROG CLOSED' }));
+          return;
+      }
+
+      if (isPendingRef.current) return;
+      if (nextAmount > 0 && stats.chips < nextAmount) {
+          setGameState(prev => ({ ...prev, message: 'INSUFFICIENT FUNDS' }));
+          return;
+      }
+
+      isPendingRef.current = true;
+      setGameState(prev => ({
+          ...prev,
+          uthProgressiveBet: nextAmount,
+          sessionWager: prev.sessionWager + delta,
+          message: nextAmount > 0 ? `PROG +$${nextAmount}` : 'PROG OFF',
+      }));
+
+      try {
+          const payload = new Uint8Array(9);
+          payload[0] = 10; // Action 10: Set Progressive
+          new DataView(payload.buffer).setBigUint64(1, BigInt(nextAmount), false);
+
+          const result = await chainService.sendMove(currentSessionIdRef.current, payload);
+          if (result.txHash) setLastTxSig(result.txHash);
+          // NOTE: Do NOT clear isPendingRef here - wait for CasinoGameMoved event
+      } catch (error) {
+          console.error('[useTerminalGame] Progressive update failed:', error);
+          isPendingRef.current = false;
+          setGameState(prev => ({
+              ...prev,
+              uthProgressiveBet: prevAmount,
+              sessionWager: prev.sessionWager - delta,
+              message: 'PROG FAILED',
+          }));
+      }
+  };
+
   const uhCheck = async () => {
       if (gameState.type !== GameType.ULTIMATE_HOLDEM || gameState.stage !== 'PLAYING') return;
 
@@ -3768,10 +4889,12 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
 
         isPendingRef.current = true;
         try {
-          // Payload: [1] for Bet4x, [2] for Bet2x, [3] for Bet1x
+          // Payload: [1] for Bet4x, [8] for Bet3x, [2] for Bet2x, [3] for Bet1x
           let payload: Uint8Array;
           if (multiplier === 4) {
             payload = new Uint8Array([1]); // Bet4x
+          } else if (multiplier === 3) {
+            payload = new Uint8Array([8]); // Bet3x
           } else if (multiplier === 2) {
             payload = new Uint8Array([2]); // Bet2x
           } else if (multiplier === 1) {
@@ -4089,6 +5212,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
         bjDouble,
         bjSplit,
         bjInsurance,
+        bjToggle21Plus3,
         // Video Poker
         toggleHold,
         drawVideoPoker,
@@ -4097,6 +5221,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
         hiloCashout,
         // Roulette
         placeRouletteBet,
+        cycleRouletteZeroRule,
         undoRouletteBet,
         rebetRoulette,
         // Sic Bo
@@ -4112,12 +5237,19 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
         // Baccarat
         baccaratActions,
         // Three Card Poker
+        threeCardTogglePairPlus,
+        threeCardToggleSixCardBonus,
+        threeCardToggleProgressive,
         threeCardPlay,
         threeCardFold,
         // Casino War
+        casinoWarToggleTieBet,
         casinoWarGoToWar,
         casinoWarSurrender,
         // Ultimate Holdem
+        uthToggleTrips,
+        uthToggleSixCardBonus,
+        uthToggleProgressive,
         uhCheck,
         uhBet,
         uhFold,

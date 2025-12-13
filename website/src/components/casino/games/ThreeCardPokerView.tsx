@@ -95,6 +95,15 @@ export const ThreeCardPokerView = React.memo<ThreeCardPokerViewProps>(({ gameSta
                     </div>
                     <div className="text-sm text-gray-500 flex flex-col items-center gap-1">
                         <span>ANTE: ${gameState.bet.toLocaleString()}</span>
+                        {gameState.threeCardPairPlusBet > 0 && (
+                            <span>PAIR+: ${gameState.threeCardPairPlusBet.toLocaleString()}</span>
+                        )}
+                        {gameState.threeCardSixCardBonusBet > 0 && (
+                            <span>6-CARD: ${gameState.threeCardSixCardBonusBet.toLocaleString()}</span>
+                        )}
+                        {gameState.threeCardProgressiveBet > 0 && (
+                            <span>PROG: ${gameState.threeCardProgressiveBet.toLocaleString()}</span>
+                        )}
                     </div>
                 </div>
 
@@ -152,6 +161,14 @@ export const ThreeCardPokerView = React.memo<ThreeCardPokerViewProps>(({ gameSta
                         <div className="flex flex-col items-center border border-gray-700 rounded bg-black/50 px-3 py-1">
                             <span className="text-white font-bold text-sm">P</span>
                             <span className="text-[10px] text-gray-500">PAIR+</span>
+                        </div>
+                        <div className="flex flex-col items-center border border-gray-700 rounded bg-black/50 px-3 py-1">
+                            <span className="text-white font-bold text-sm">6</span>
+                            <span className="text-[10px] text-gray-500">6-CARD</span>
+                        </div>
+                        <div className="flex flex-col items-center border border-gray-700 rounded bg-black/50 px-3 py-1">
+                            <span className="text-white font-bold text-sm">J</span>
+                            <span className="text-[10px] text-gray-500">PROG</span>
                         </div>
                         <div className="w-px h-8 bg-gray-800 mx-2"></div>
                         <div className="flex flex-col items-center border border-terminal-green/50 rounded bg-black/50 px-3 py-1 w-24">

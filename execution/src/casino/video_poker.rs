@@ -224,13 +224,10 @@ impl CasinoGame for VideoPoker {
         let hold_mask = payload[0];
         session.move_count += 1;
 
-        // Create deck without current held cards (using optimized bit-set)
-        let held_cards: Vec<u8> = (0..5)
-            .filter(|i| hold_mask & (1 << i) != 0)
-            .map(|i| cards[i])
-            .collect();
-
-        let mut deck = rng.create_deck_excluding(&held_cards);
+        // Build the draw deck from the remaining cards in the pack.
+        // All 5 originally-dealt cards are removed from the deck (even discards cannot be re-drawn).
+        let original_cards = cards;
+        let mut deck = rng.create_deck_excluding(&original_cards);
 
         // Replace non-held cards
         for i in 0..5 {
@@ -247,7 +244,10 @@ impl CasinoGame for VideoPoker {
         let multiplier = payout_multiplier(hand);
 
         if multiplier > 0 {
-            let base_winnings = session.bet.saturating_mul(multiplier);
+            // Pay tables are expressed "to 1" (winnings). Our executor expects TOTAL RETURN.
+            let base_winnings = session
+                .bet
+                .saturating_mul(multiplier.saturating_add(1));
             // Apply super mode multipliers if active
             let final_winnings = if session.super_mode.is_active {
                 apply_super_multiplier_cards(&cards, &session.super_mode.multipliers, base_winnings)
@@ -418,14 +418,29 @@ mod tests {
         assert!(result.is_ok());
         let (_, new_cards) = parse_state(&session.state_blob).expect("Failed to parse state");
 
-        // All cards should be different (with high probability)
-        // At least some should be different
+        // None of the original 5 cards may be re-drawn in the same hand.
         let same_count = original_cards
             .iter()
             .filter(|c| new_cards.contains(c))
             .count();
-        // It's possible but very unlikely all 5 are the same
-        assert!(same_count < 5 || original_cards == new_cards);
+        assert_eq!(same_count, 0);
+    }
+
+    #[test]
+    fn test_payout_includes_stake() {
+        let seed = create_test_seed();
+        let mut session = create_test_session(100);
+        let mut rng = GameRng::new(&seed, session.id, 0);
+
+        // Force a known Jacks-or-Better hand and hold all cards so no draw occurs.
+        let cards = [10, 23, 1, 2, 3]; // J-J-2-3-4
+        session.state_blob = serialize_state(Stage::Deal, &cards);
+
+        let result = VideoPoker::process_move(&mut session, &[0b11111], &mut rng)
+            .expect("Failed to process move");
+
+        // Jacks-or-Better pays 1:1 -> total return 2x bet
+        assert!(matches!(result, GameResult::Win(200)));
     }
 
     #[test]

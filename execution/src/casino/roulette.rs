@@ -1,6 +1,16 @@
 //! Roulette game implementation with multi-bet support.
 //!
 //! State blob format:
+//! v2:
+//! [bet_count:u8]
+//! [zero_rule:u8]                 (0=Standard, 1=La Partage, 2=En Prison, 3=En Prison (Double))
+//! [phase:u8]                     (0=Betting, 1=Prison)
+//! [totalWagered:u64 BE]          (sum of all placed bet amounts)
+//! [pendingReturn:u64 BE]         (credited return accumulated before completion; used by En Prison)
+//! [bets:RouletteBet×count]
+//! [result:u8]?                   (last spin result, if any)
+//!
+//! Legacy:
 //! [bet_count:u8] [bets:RouletteBet×count] [result:u8]?
 //!
 //! Each RouletteBet (10 bytes):
@@ -10,6 +20,7 @@
 //! [0, bet_type, number, amount_bytes...] - Place bet (adds to pending bets)
 //! [1] - Spin wheel and resolve all bets
 //! [2] - Clear all pending bets
+//! [3, zero_rule] - Set even-money-on-zero rule
 //!
 //! Bet types:
 //! 0 = Straight (single number, 35:1)
@@ -21,6 +32,11 @@
 //! 6 = High (19-36, 1:1)
 //! 7 = Dozen (1-12, 13-24, 25-36, 2:1) - number = 0/1/2
 //! 8 = Column (2:1) - number = 0/1/2
+//! 9 = SplitH (2 numbers in same row, 17:1) - number = left number (1-35, not multiple of 3)
+//! 10 = SplitV (2 numbers in same column, 17:1) - number = top number (1-33)
+//! 11 = Street (3 numbers in a row, 11:1) - number = row start (1,4,...,34)
+//! 12 = Corner (4-number corner, 8:1) - number = top-left (1-32, not multiple of 3)
+//! 13 = SixLine (6 numbers, 5:1) - number = row start (1,4,...,31)
 
 use super::super_mode::apply_super_multiplier_number;
 use super::{CasinoGame, GameError, GameResult, GameRng};
@@ -29,10 +45,55 @@ use nullspace_types::casino::GameSession;
 /// Maximum number of bets per session.
 const MAX_BETS: usize = 20;
 
+/// v2 header length: bet_count(1) + zero_rule(1) + phase(1) + totalWagered(8) + pendingReturn(8).
+const STATE_HEADER_V2_LEN: usize = 19;
+
 /// Red numbers on a roulette wheel.
 const RED_NUMBERS: [u8; 18] = [
     1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36,
 ];
+
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ZeroRule {
+    Standard = 0,
+    LaPartage = 1,
+    EnPrison = 2,
+    EnPrisonDouble = 3,
+}
+
+impl TryFrom<u8> for ZeroRule {
+    type Error = GameError;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(ZeroRule::Standard),
+            1 => Ok(ZeroRule::LaPartage),
+            2 => Ok(ZeroRule::EnPrison),
+            3 => Ok(ZeroRule::EnPrisonDouble),
+            _ => Err(GameError::InvalidPayload),
+        }
+    }
+}
+
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Phase {
+    Betting = 0,
+    Prison = 1,
+}
+
+impl TryFrom<u8> for Phase {
+    type Error = GameError;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(Phase::Betting),
+            1 => Ok(Phase::Prison),
+            _ => Err(GameError::InvalidPayload),
+        }
+    }
+}
 
 /// Roulette bet types.
 #[repr(u8)]
@@ -47,6 +108,11 @@ pub enum BetType {
     High = 6,     // 19-36 (1:1)
     Dozen = 7,    // 1-12, 13-24, 25-36 (2:1)
     Column = 8,   // First, second, third column (2:1)
+    SplitH = 9,   // Horizontal split (17:1) - number is left cell in row
+    SplitV = 10,  // Vertical split (17:1) - number is top cell in column
+    Street = 11,  // 3-number row (11:1) - number is row start
+    Corner = 12,  // 4-number corner (8:1) - number is top-left cell
+    SixLine = 13, // 6-number (5:1) - number is row start of top row
 }
 
 impl TryFrom<u8> for BetType {
@@ -63,6 +129,11 @@ impl TryFrom<u8> for BetType {
             6 => Ok(BetType::High),
             7 => Ok(BetType::Dozen),
             8 => Ok(BetType::Column),
+            9 => Ok(BetType::SplitH),
+            10 => Ok(BetType::SplitV),
+            11 => Ok(BetType::Street),
+            12 => Ok(BetType::Corner),
+            13 => Ok(BetType::SixLine),
             _ => Err(GameError::InvalidPayload),
         }
     }
@@ -99,6 +170,20 @@ fn bet_wins(bet_type: BetType, bet_number: u8, result: u8) -> bool {
             let column = (result - 1) % 3;
             column == bet_number
         }
+        BetType::SplitH => result == bet_number || result == bet_number.saturating_add(1),
+        BetType::SplitV => result == bet_number || result == bet_number.saturating_add(3),
+        BetType::Street => {
+            result == bet_number
+                || result == bet_number.saturating_add(1)
+                || result == bet_number.saturating_add(2)
+        }
+        BetType::Corner => {
+            result == bet_number
+                || result == bet_number.saturating_add(1)
+                || result == bet_number.saturating_add(3)
+                || result == bet_number.saturating_add(4)
+        }
+        BetType::SixLine => result >= bet_number && result <= bet_number.saturating_add(5),
     }
 }
 
@@ -113,7 +198,18 @@ fn payout_multiplier(bet_type: BetType) -> u64 {
         | BetType::Low
         | BetType::High => 1,
         BetType::Dozen | BetType::Column => 2,
+        BetType::SplitH | BetType::SplitV => 17,
+        BetType::Street => 11,
+        BetType::Corner => 8,
+        BetType::SixLine => 5,
     }
+}
+
+fn is_even_money_bet(bet_type: BetType) -> bool {
+    matches!(
+        bet_type,
+        BetType::Red | BetType::Black | BetType::Even | BetType::Odd | BetType::Low | BetType::High
+    )
 }
 
 /// Individual bet in roulette.
@@ -152,6 +248,10 @@ impl RouletteBet {
 
 /// Game state for multi-bet roulette.
 struct RouletteState {
+    zero_rule: ZeroRule,
+    phase: Phase,
+    total_wagered: u64,
+    pending_return: u64,
     bets: Vec<RouletteBet>,
     result: Option<u8>,
 }
@@ -159,6 +259,10 @@ struct RouletteState {
 impl RouletteState {
     fn new() -> Self {
         RouletteState {
+            zero_rule: ZeroRule::Standard,
+            phase: Phase::Betting,
+            total_wagered: 0,
+            pending_return: 0,
             bets: Vec::new(),
             result: None,
         }
@@ -166,10 +270,16 @@ impl RouletteState {
 
     /// Serialize state to blob
     fn to_blob(&self) -> Vec<u8> {
-        // Capacity: 1 (bet count) + bets (10 bytes each) + 1 (optional result)
-        let capacity = 1 + (self.bets.len() * 10) + if self.result.is_some() { 1 } else { 0 };
+        // Capacity: header + bets (10 bytes each) + 1 (optional result)
+        let capacity = STATE_HEADER_V2_LEN
+            + (self.bets.len() * 10)
+            + if self.result.is_some() { 1 } else { 0 };
         let mut blob = Vec::with_capacity(capacity);
         blob.push(self.bets.len() as u8);
+        blob.push(self.zero_rule as u8);
+        blob.push(self.phase as u8);
+        blob.extend_from_slice(&self.total_wagered.to_be_bytes());
+        blob.extend_from_slice(&self.pending_return.to_be_bytes());
         for bet in &self.bets {
             blob.extend_from_slice(&bet.to_bytes());
         }
@@ -185,45 +295,72 @@ impl RouletteState {
             return Some(RouletteState::new());
         }
 
-        let mut offset = 0;
-
-        // Parse bets
-        if offset >= blob.len() {
-            return None;
-        }
-        let bet_count = blob[offset] as usize;
-        offset += 1;
-
-        // Validate bet count against maximum to prevent DoS via large allocations
-        const MAX_BETS: usize = 20;
+        let bet_count = blob[0] as usize;
         if bet_count > MAX_BETS {
             return None;
         }
 
-        // Validate we have enough bytes before allocating
-        let required_len = offset + (bet_count * 10);
-        if blob.len() < required_len {
-            return None;
-        }
+        let legacy_no_result_len = 1 + (bet_count * 10);
+        let legacy_with_result_len = legacy_no_result_len + 1;
 
-        let mut bets = Vec::with_capacity(bet_count);
-        for _ in 0..bet_count {
-            if offset + 10 > blob.len() {
-                return None;
+        let v2_no_result_len = STATE_HEADER_V2_LEN + (bet_count * 10);
+        let v2_with_result_len = v2_no_result_len + 1;
+
+        if blob.len() == legacy_no_result_len || blob.len() == legacy_with_result_len {
+            let mut offset = 1;
+            let mut bets = Vec::with_capacity(bet_count);
+            let mut total_wagered: u64 = 0;
+            for _ in 0..bet_count {
+                let bet = RouletteBet::from_bytes(&blob[offset..offset + 10])?;
+                total_wagered = total_wagered.saturating_add(bet.amount);
+                bets.push(bet);
+                offset += 10;
             }
-            let bet = RouletteBet::from_bytes(&blob[offset..offset + 10])?;
-            bets.push(bet);
-            offset += 10;
+            let result = if blob.len() == legacy_with_result_len {
+                Some(blob[offset])
+            } else {
+                None
+            };
+            return Some(RouletteState {
+                zero_rule: ZeroRule::Standard,
+                phase: Phase::Betting,
+                total_wagered,
+                pending_return: 0,
+                bets,
+                result,
+            });
         }
 
-        // Parse result (if present)
-        let result = if offset < blob.len() {
-            Some(blob[offset])
-        } else {
-            None
-        };
+        if blob.len() == v2_no_result_len || blob.len() == v2_with_result_len {
+            let zero_rule = ZeroRule::try_from(blob[1]).ok()?;
+            let phase = Phase::try_from(blob[2]).ok()?;
+            let total_wagered = u64::from_be_bytes(blob[3..11].try_into().ok()?);
+            let pending_return = u64::from_be_bytes(blob[11..19].try_into().ok()?);
 
-        Some(RouletteState { bets, result })
+            let mut offset = STATE_HEADER_V2_LEN;
+            let mut bets = Vec::with_capacity(bet_count);
+            for _ in 0..bet_count {
+                let bet = RouletteBet::from_bytes(&blob[offset..offset + 10])?;
+                bets.push(bet);
+                offset += 10;
+            }
+            let result = if blob.len() == v2_with_result_len {
+                Some(blob[offset])
+            } else {
+                None
+            };
+
+            return Some(RouletteState {
+                zero_rule,
+                phase,
+                total_wagered,
+                pending_return,
+                bets,
+                result,
+            });
+        }
+
+        None
     }
 }
 
@@ -261,8 +398,8 @@ impl CasinoGame for Roulette {
                     return Err(GameError::InvalidPayload);
                 }
 
-                // Wheel already spun - can't place more bets
-                if state.result.is_some() {
+                // Bets can only be placed before the first spin.
+                if state.phase != Phase::Betting || state.result.is_some() {
                     return Err(GameError::InvalidMove);
                 }
 
@@ -290,6 +427,36 @@ impl CasinoGame for Roulette {
                             return Err(GameError::InvalidPayload);
                         }
                     }
+                    BetType::SplitH => {
+                        // Horizontal split: (n, n+1) within a row -> n is 1-35 and not rightmost.
+                        if number < 1 || number > 35 || number % 3 == 0 {
+                            return Err(GameError::InvalidPayload);
+                        }
+                    }
+                    BetType::SplitV => {
+                        // Vertical split: (n, n+3) within a column -> n is 1-33.
+                        if number < 1 || number > 33 {
+                            return Err(GameError::InvalidPayload);
+                        }
+                    }
+                    BetType::Street => {
+                        // Street: (n, n+1, n+2) row -> n is 1,4,...,34.
+                        if number < 1 || number > 34 || (number - 1) % 3 != 0 {
+                            return Err(GameError::InvalidPayload);
+                        }
+                    }
+                    BetType::Corner => {
+                        // Corner: (n, n+1, n+3, n+4) -> n is 1-32 and not rightmost.
+                        if number < 1 || number > 32 || number % 3 == 0 {
+                            return Err(GameError::InvalidPayload);
+                        }
+                    }
+                    BetType::SixLine => {
+                        // Six-line: (n..n+5) two adjacent rows -> n is 1,4,...,31.
+                        if number < 1 || number > 31 || (number - 1) % 3 != 0 {
+                            return Err(GameError::InvalidPayload);
+                        }
+                    }
                     _ => {} // No number needed for other bets
                 }
 
@@ -304,6 +471,7 @@ impl CasinoGame for Roulette {
                     number,
                     amount,
                 });
+                state.total_wagered = state.total_wagered.saturating_add(amount);
 
                 session.state_blob = state.to_blob();
                 Ok(GameResult::ContinueWithUpdate {
@@ -313,66 +481,189 @@ impl CasinoGame for Roulette {
 
             // [1] - Spin wheel and resolve all bets
             1 => {
-                // Must have at least one bet
-                if state.bets.is_empty() {
-                    return Err(GameError::InvalidMove);
-                }
+                match state.phase {
+                    Phase::Betting => {
+                        // Must have at least one bet
+                        if state.bets.is_empty() {
+                            return Err(GameError::InvalidMove);
+                        }
 
-                // Wheel already spun
-                if state.result.is_some() {
-                    return Err(GameError::InvalidMove);
-                }
+                        // Wheel already spun
+                        if state.result.is_some() {
+                            return Err(GameError::InvalidMove);
+                        }
 
-                // Spin the wheel
-                let result = rng.spin_roulette();
-                state.result = Some(result);
+                        let result = rng.spin_roulette();
+                        state.result = Some(result);
 
-                // Calculate total payout across all bets
-                let mut total_wagered: u64 = 0;
-                let mut total_winnings: u64 = 0;
+                        // Standard single-spin settlement unless En Prison triggers.
+                        let mut total_return: u64 = 0;
 
-                for bet in &state.bets {
-                    total_wagered = total_wagered.saturating_add(bet.amount);
-                    if bet_wins(bet.bet_type, bet.number, result) {
-                        // Win: return stake + winnings
-                        let multiplier = payout_multiplier(bet.bet_type).saturating_add(1);
-                        total_winnings =
-                            total_winnings.saturating_add(bet.amount.saturating_mul(multiplier));
+                        if result == 0 {
+                            match state.zero_rule {
+                                ZeroRule::Standard => {
+                                    for bet in &state.bets {
+                                        if bet_wins(bet.bet_type, bet.number, result) {
+                                            let multiplier =
+                                                payout_multiplier(bet.bet_type).saturating_add(1);
+                                            total_return = total_return
+                                                .saturating_add(bet.amount.saturating_mul(multiplier));
+                                        }
+                                    }
+                                }
+                                ZeroRule::LaPartage => {
+                                    for bet in &state.bets {
+                                        if bet_wins(bet.bet_type, bet.number, result) {
+                                            let multiplier =
+                                                payout_multiplier(bet.bet_type).saturating_add(1);
+                                            total_return = total_return
+                                                .saturating_add(bet.amount.saturating_mul(multiplier));
+                                        } else if is_even_money_bet(bet.bet_type) {
+                                            // Half-back on even-money bets.
+                                            total_return = total_return.saturating_add(bet.amount / 2);
+                                        }
+                                    }
+                                }
+                                ZeroRule::EnPrison | ZeroRule::EnPrisonDouble => {
+                                    let mut imprisoned: Vec<RouletteBet> = Vec::new();
+
+                                    for bet in &state.bets {
+                                        if bet_wins(bet.bet_type, bet.number, result) {
+                                            let multiplier =
+                                                payout_multiplier(bet.bet_type).saturating_add(1);
+                                            let mut ret = bet.amount.saturating_mul(multiplier);
+                                            if session.super_mode.is_active && ret > 0 {
+                                                ret = apply_super_multiplier_number(
+                                                    result,
+                                                    &session.super_mode.multipliers,
+                                                    ret,
+                                                );
+                                            }
+                                            state.pending_return = state.pending_return.saturating_add(ret);
+                                        } else if is_even_money_bet(bet.bet_type) {
+                                            imprisoned.push(bet.clone());
+                                        }
+                                    }
+
+                                    if imprisoned.is_empty() {
+                                        total_return = state.pending_return;
+                                    } else {
+                                        state.bets = imprisoned;
+                                        state.phase = Phase::Prison;
+
+                                        session.state_blob = state.to_blob();
+                                        session.move_count += 1;
+                                        return Ok(GameResult::Continue);
+                                    }
+                                }
+                            }
+                        } else {
+                            for bet in &state.bets {
+                                if bet_wins(bet.bet_type, bet.number, result) {
+                                    let multiplier =
+                                        payout_multiplier(bet.bet_type).saturating_add(1);
+                                    total_return = total_return
+                                        .saturating_add(bet.amount.saturating_mul(multiplier));
+                                }
+                            }
+                        }
+
+                        if session.super_mode.is_active && total_return > 0 {
+                            // In En Prison on a zero result, pending_return already includes the super multiplier (if any).
+                            if !(
+                                matches!(
+                                    state.zero_rule,
+                                    ZeroRule::EnPrison | ZeroRule::EnPrisonDouble
+                                ) && result == 0
+                            ) {
+                                total_return = apply_super_multiplier_number(
+                                    result,
+                                    &session.super_mode.multipliers,
+                                    total_return,
+                                );
+                            }
+                        }
+
+                        session.state_blob = state.to_blob();
+                        session.move_count += 1;
+                        session.is_complete = true;
+
+                        if total_return > 0 {
+                            Ok(GameResult::Win(total_return))
+                        } else {
+                            Ok(GameResult::LossPreDeducted(state.total_wagered))
+                        }
                     }
-                    // Loss: nothing added to winnings
-                }
+                    Phase::Prison => {
+                        // Second spin to resolve imprisoned even-money bets.
+                        if state.bets.is_empty() {
+                            return Err(GameError::InvalidMove);
+                        }
 
-                session.state_blob = state.to_blob();
-                session.move_count += 1;
-                session.is_complete = true;
+                        let result = rng.spin_roulette();
+                        state.result = Some(result);
 
-                // Determine final result
-                if total_winnings > 0 {
-                    // Apply super mode multipliers if active
-                    let final_winnings = if session.super_mode.is_active {
-                        // Lucky Number: multiplier applies to the winning number
-                        apply_super_multiplier_number(
-                            result,
-                            &session.super_mode.multipliers,
-                            total_winnings,
-                        )
-                    } else {
-                        total_winnings
-                    };
-                    Ok(GameResult::Win(final_winnings))
-                } else {
-                    Ok(GameResult::Loss)
+                        if result == 0 && state.zero_rule == ZeroRule::EnPrisonDouble {
+                            // Double-imprisonment variant: a second 0 re-imprisons the bets.
+                            session.state_blob = state.to_blob();
+                            session.move_count += 1;
+                            return Ok(GameResult::Continue);
+                        }
+
+                        let mut push_return: u64 = 0;
+                        if result != 0 {
+                            for bet in &state.bets {
+                                if bet_wins(bet.bet_type, bet.number, result) {
+                                    // Winning imprisoned bets push (stake returned, no winnings).
+                                    push_return = push_return.saturating_add(bet.amount);
+                                }
+                            }
+                        }
+
+                        if session.super_mode.is_active && push_return > 0 {
+                            push_return = apply_super_multiplier_number(
+                                result,
+                                &session.super_mode.multipliers,
+                                push_return,
+                            );
+                        }
+
+                        let total_return = state.pending_return.saturating_add(push_return);
+
+                        session.state_blob = state.to_blob();
+                        session.move_count += 1;
+                        session.is_complete = true;
+
+                        if total_return > 0 {
+                            Ok(GameResult::Win(total_return))
+                        } else {
+                            Ok(GameResult::LossPreDeducted(state.total_wagered))
+                        }
+                    }
                 }
             }
 
             // [2] - Clear all pending bets
             2 => {
-                // Can't clear after wheel spun
-                if state.result.is_some() {
+                // Can't clear after wheel spun or during En Prison.
+                if state.phase != Phase::Betting || state.result.is_some() {
                     return Err(GameError::InvalidMove);
                 }
 
                 state.bets.clear();
+                session.state_blob = state.to_blob();
+                Ok(GameResult::Continue)
+            }
+
+            // [3, zero_rule] - Set even-money-on-zero rule.
+            3 => {
+                if payload.len() != 2 {
+                    return Err(GameError::InvalidPayload);
+                }
+                if state.phase != Phase::Betting || state.result.is_some() {
+                    return Err(GameError::InvalidMove);
+                }
+                state.zero_rule = ZeroRule::try_from(payload[1])?;
                 session.state_blob = state.to_blob();
                 Ok(GameResult::Continue)
             }
@@ -513,6 +804,50 @@ mod tests {
         assert_eq!(payout_multiplier(BetType::Black), 1);
         assert_eq!(payout_multiplier(BetType::Dozen), 2);
         assert_eq!(payout_multiplier(BetType::Column), 2);
+        assert_eq!(payout_multiplier(BetType::SplitH), 17);
+        assert_eq!(payout_multiplier(BetType::SplitV), 17);
+        assert_eq!(payout_multiplier(BetType::Street), 11);
+        assert_eq!(payout_multiplier(BetType::Corner), 8);
+        assert_eq!(payout_multiplier(BetType::SixLine), 5);
+    }
+
+    #[test]
+    fn test_bet_wins_inside_bets() {
+        // SplitH: 1-2
+        assert!(bet_wins(BetType::SplitH, 1, 1));
+        assert!(bet_wins(BetType::SplitH, 1, 2));
+        assert!(!bet_wins(BetType::SplitH, 1, 3));
+
+        // SplitV: 1-4
+        assert!(bet_wins(BetType::SplitV, 1, 1));
+        assert!(bet_wins(BetType::SplitV, 1, 4));
+        assert!(!bet_wins(BetType::SplitV, 1, 7));
+
+        // Street: 4-5-6
+        assert!(bet_wins(BetType::Street, 4, 4));
+        assert!(bet_wins(BetType::Street, 4, 5));
+        assert!(bet_wins(BetType::Street, 4, 6));
+        assert!(!bet_wins(BetType::Street, 4, 7));
+
+        // Corner: 1-2-4-5
+        assert!(bet_wins(BetType::Corner, 1, 1));
+        assert!(bet_wins(BetType::Corner, 1, 2));
+        assert!(bet_wins(BetType::Corner, 1, 4));
+        assert!(bet_wins(BetType::Corner, 1, 5));
+        assert!(!bet_wins(BetType::Corner, 1, 3));
+
+        // SixLine: 1-2-3-4-5-6
+        for r in 1..=6 {
+            assert!(bet_wins(BetType::SixLine, 1, r));
+        }
+        assert!(!bet_wins(BetType::SixLine, 1, 7));
+
+        // Zero should lose all inside bets.
+        assert!(!bet_wins(BetType::SplitH, 1, 0));
+        assert!(!bet_wins(BetType::SplitV, 1, 0));
+        assert!(!bet_wins(BetType::Street, 1, 0));
+        assert!(!bet_wins(BetType::Corner, 1, 0));
+        assert!(!bet_wins(BetType::SixLine, 1, 0));
     }
 
     /// Helper to create place bet payload
@@ -624,6 +959,31 @@ mod tests {
         let payload = place_bet_payload(BetType::Dozen, 3, 100);
         let result = Roulette::process_move(&mut session, &payload, &mut rng);
         assert!(matches!(result, Err(GameError::InvalidPayload)));
+
+        // SplitH on rightmost number in a row (3-4 would be invalid as a horizontal split)
+        let payload = place_bet_payload(BetType::SplitH, 3, 100);
+        let result = Roulette::process_move(&mut session, &payload, &mut rng);
+        assert!(matches!(result, Err(GameError::InvalidPayload)));
+
+        // SplitV starting too low/high
+        let payload = place_bet_payload(BetType::SplitV, 34, 100);
+        let result = Roulette::process_move(&mut session, &payload, &mut rng);
+        assert!(matches!(result, Err(GameError::InvalidPayload)));
+
+        // Street must start on 1,4,...,34
+        let payload = place_bet_payload(BetType::Street, 2, 100);
+        let result = Roulette::process_move(&mut session, &payload, &mut rng);
+        assert!(matches!(result, Err(GameError::InvalidPayload)));
+
+        // Corner can't start on rightmost column
+        let payload = place_bet_payload(BetType::Corner, 3, 100);
+        let result = Roulette::process_move(&mut session, &payload, &mut rng);
+        assert!(matches!(result, Err(GameError::InvalidPayload)));
+
+        // SixLine must start on 1,4,...,31
+        let payload = place_bet_payload(BetType::SixLine, 34, 100);
+        let result = Roulette::process_move(&mut session, &payload, &mut rng);
+        assert!(matches!(result, Err(GameError::InvalidPayload)));
     }
 
     #[test]
@@ -662,6 +1022,140 @@ mod tests {
         // Verify bets cleared
         let state = RouletteState::from_blob(&session.state_blob).expect("Failed to parse state");
         assert!(state.bets.is_empty());
+    }
+
+    #[test]
+    fn test_la_partage_half_back_on_zero_even_money() {
+        let seed = create_test_seed();
+
+        for session_id in 1..10_000 {
+            let mut test_session = create_test_session(100);
+            test_session.id = session_id;
+            let mut rng = GameRng::new(&seed, session_id, 0);
+            Roulette::init(&mut test_session, &mut rng);
+
+            // Set La Partage (1)
+            let mut rng = GameRng::new(&seed, session_id, 1);
+            Roulette::process_move(&mut test_session, &[3, 1], &mut rng).expect("Failed to set rule");
+
+            // Place a red bet
+            let mut rng = GameRng::new(&seed, session_id, 2);
+            let payload = place_bet_payload(BetType::Red, 0, 100);
+            Roulette::process_move(&mut test_session, &payload, &mut rng).expect("Failed to place bet");
+
+            // Spin
+            let mut rng = GameRng::new(&seed, session_id, 3);
+            let res = Roulette::process_move(&mut test_session, &[1], &mut rng).expect("Spin failed");
+            let state = RouletteState::from_blob(&test_session.state_blob).expect("Failed to parse state");
+
+            if state.result == Some(0) {
+                assert!(matches!(res, GameResult::Win(50)));
+                return;
+            }
+        }
+
+        panic!("did not find a session that landed on 0");
+    }
+
+    #[test]
+    fn test_en_prison_continues_on_zero_then_resolves() {
+        let seed = create_test_seed();
+
+        for session_id in 1..10_000 {
+            let mut test_session = create_test_session(100);
+            test_session.id = session_id;
+            let mut rng = GameRng::new(&seed, session_id, 0);
+            Roulette::init(&mut test_session, &mut rng);
+
+            // Set En Prison (2)
+            let mut rng = GameRng::new(&seed, session_id, 1);
+            Roulette::process_move(&mut test_session, &[3, 2], &mut rng).expect("Failed to set rule");
+
+            // Place a red bet
+            let mut rng = GameRng::new(&seed, session_id, 2);
+            let payload = place_bet_payload(BetType::Red, 0, 100);
+            Roulette::process_move(&mut test_session, &payload, &mut rng).expect("Failed to place bet");
+
+            // First spin
+            let mut rng = GameRng::new(&seed, session_id, 3);
+            let res1 = Roulette::process_move(&mut test_session, &[1], &mut rng).expect("Spin failed");
+            let state1 = RouletteState::from_blob(&test_session.state_blob).expect("Failed to parse state");
+
+            if state1.result != Some(0) {
+                continue;
+            }
+
+            assert!(matches!(res1, GameResult::Continue));
+            assert!(!test_session.is_complete);
+            assert_eq!(state1.phase, Phase::Prison);
+
+            // Second spin
+            let mut rng = GameRng::new(&seed, session_id, 4);
+            let res2 = Roulette::process_move(&mut test_session, &[1], &mut rng).expect("Spin failed");
+            let state2 = RouletteState::from_blob(&test_session.state_blob).expect("Failed to parse state");
+            let result2 = state2.result.expect("Second result should be set");
+
+            assert!(test_session.is_complete);
+
+            if result2 != 0 && is_red(result2) {
+                assert!(matches!(res2, GameResult::Win(100)));
+            } else {
+                assert!(matches!(res2, GameResult::LossPreDeducted(100)));
+            }
+            return;
+        }
+
+        panic!("did not find a session that landed on 0 with En Prison");
+    }
+
+    #[test]
+    fn test_en_prison_double_continues_on_second_zero() {
+        let seed = create_test_seed();
+
+        for session_id in 1..100_000 {
+            let mut test_session = create_test_session(100);
+            test_session.id = session_id;
+            let mut rng = GameRng::new(&seed, session_id, 0);
+            Roulette::init(&mut test_session, &mut rng);
+
+            // Set En Prison (Double) (3)
+            let mut rng = GameRng::new(&seed, session_id, 1);
+            Roulette::process_move(&mut test_session, &[3, 3], &mut rng).expect("Failed to set rule");
+
+            // Place a red bet
+            let mut rng = GameRng::new(&seed, session_id, 2);
+            let payload = place_bet_payload(BetType::Red, 0, 100);
+            Roulette::process_move(&mut test_session, &payload, &mut rng).expect("Failed to place bet");
+
+            // First spin
+            let mut rng = GameRng::new(&seed, session_id, 3);
+            let res1 = Roulette::process_move(&mut test_session, &[1], &mut rng).expect("Spin failed");
+            let state1 = RouletteState::from_blob(&test_session.state_blob).expect("Failed to parse state");
+
+            if state1.result != Some(0) {
+                continue;
+            }
+
+            assert!(matches!(res1, GameResult::Continue));
+            assert!(!test_session.is_complete);
+            assert_eq!(state1.phase, Phase::Prison);
+
+            // Second spin (look for 0 again)
+            let mut rng = GameRng::new(&seed, session_id, 4);
+            let res2 = Roulette::process_move(&mut test_session, &[1], &mut rng).expect("Spin failed");
+            let state2 = RouletteState::from_blob(&test_session.state_blob).expect("Failed to parse state");
+
+            if state2.result != Some(0) {
+                continue;
+            }
+
+            assert!(matches!(res2, GameResult::Continue));
+            assert!(!test_session.is_complete);
+            assert_eq!(state2.phase, Phase::Prison);
+            return;
+        }
+
+        panic!("did not find a session that landed on 0 twice with En Prison Double");
     }
 
     #[test]

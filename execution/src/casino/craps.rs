@@ -1,7 +1,13 @@
-//! Enhanced Craps game implementation with all 12 bet types.
+//! Enhanced Craps game implementation with a multi-bet menu.
 //!
 //! State blob format:
-//! [phase:u8] [main_point:u8] [d1:u8] [d2:u8] [bet_count:u8] [bets:CrapsBetEntry×count]
+//! [version:u8=1]
+//! [phase:u8]
+//! [main_point:u8]
+//! [d1:u8] [d2:u8]
+//! [made_points_mask:u8] (Fire Bet: bits for 4/5/6/8/9/10 made)
+//! [bet_count:u8]
+//! [bets:CrapsBetEntry×count]
 //!
 //! Each CrapsBetEntry (19 bytes):
 //! [bet_type:u8] [target:u8] [status:u8] [amount:u64 BE] [odds_amount:u64 BE]
@@ -19,6 +25,22 @@
 use super::super_mode::apply_super_multiplier_total;
 use super::{CasinoGame, GameError, GameResult, GameRng};
 use nullspace_types::casino::GameSession;
+
+const STATE_VERSION: u8 = 1;
+const MAX_BETS: usize = 20;
+const BUY_COMMISSION_BPS: u64 = 500; // 5.00%
+const BUY_COMMISSION_DENOM: u64 = 10_000;
+
+// All Tall Small (ATS) pay table ("to 1").
+const ATS_SMALL_PAYOUT_TO_1: u64 = 34;
+const ATS_TALL_PAYOUT_TO_1: u64 = 34;
+const ATS_ALL_PAYOUT_TO_1: u64 = 175;
+
+// ATS progress bitmask (stored in `odds_amount` for ATS bet entries).
+// Bits: 2..6 => 0..4, 8..12 => 5..9.
+const ATS_SMALL_MASK: u64 = (1u64 << 0) | (1u64 << 1) | (1u64 << 2) | (1u64 << 3) | (1u64 << 4);
+const ATS_TALL_MASK: u64 = (1u64 << 5) | (1u64 << 6) | (1u64 << 7) | (1u64 << 8) | (1u64 << 9);
+const ATS_ALL_MASK: u64 = ATS_SMALL_MASK | ATS_TALL_MASK;
 
 /// Number of ways to roll each total with 2d6
 const WAYS: [u8; 13] = [0, 0, 1, 2, 3, 4, 5, 6, 5, 4, 3, 2, 1];
@@ -44,7 +66,7 @@ impl TryFrom<u8> for Phase {
     }
 }
 
-/// All 12 bet types in craps.
+/// Supported bet types in craps.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum BetType {
@@ -60,6 +82,11 @@ pub enum BetType {
     Hardway6 = 9,   // 3+3 before 7 or easy 6
     Hardway8 = 10,  // 4+4 before 7 or easy 8
     Hardway10 = 11, // 5+5 before 7 or easy 10
+    Fire = 12,      // Fire Bet side bet (Pay Table A)
+    Buy = 13,       // Buy bet: place-style, fair odds with commission
+    AtsSmall = 15,  // All Tall Small: Small (2-6) before seven-out
+    AtsTall = 16,   // All Tall Small: Tall (8-12) before seven-out
+    AtsAll = 17,    // All Tall Small: All (Small + Tall) before seven-out
 }
 
 impl TryFrom<u8> for BetType {
@@ -79,6 +106,11 @@ impl TryFrom<u8> for BetType {
             9 => Ok(BetType::Hardway6),
             10 => Ok(BetType::Hardway8),
             11 => Ok(BetType::Hardway10),
+            12 => Ok(BetType::Fire),
+            13 => Ok(BetType::Buy),
+            15 => Ok(BetType::AtsSmall),
+            16 => Ok(BetType::AtsTall),
+            17 => Ok(BetType::AtsAll),
             _ => Err(()),
         }
     }
@@ -150,7 +182,10 @@ impl CrapsBet {
 #[derive(Debug)]
 struct BetResult {
     bet_idx: usize,
-    payout: i64,
+    /// Amount to credit to player balance (stake already deducted at bet placement).
+    return_amount: u64,
+    /// Total amount wagered on this bet (used to report losses when completing).
+    wagered: u64,
     resolved: bool,
 }
 
@@ -160,19 +195,22 @@ struct CrapsState {
     main_point: u8,
     d1: u8,
     d2: u8,
+    made_points_mask: u8,
     bets: Vec<CrapsBet>,
 }
 
 impl CrapsState {
     /// Serialize state to blob
     fn to_blob(&self) -> Vec<u8> {
-        // Capacity: 5 (phase, main_point, d1, d2, bet_count) + bets (19 bytes each)
-        let capacity = 5 + (self.bets.len() * 19);
+        // Capacity: 7 (version, phase, main_point, d1, d2, mask, bet_count) + bets (19 bytes each)
+        let capacity = 7 + (self.bets.len() * 19);
         let mut blob = Vec::with_capacity(capacity);
+        blob.push(STATE_VERSION);
         blob.push(self.phase as u8);
         blob.push(self.main_point);
         blob.push(self.d1);
         blob.push(self.d2);
+        blob.push(self.made_points_mask);
         blob.push(self.bets.len() as u8);
 
         for bet in &self.bets {
@@ -184,30 +222,34 @@ impl CrapsState {
 
     /// Deserialize state from blob
     fn from_blob(blob: &[u8]) -> Option<Self> {
-        if blob.len() < 5 {
+        if blob.len() < 7 {
             return None;
         }
 
-        let phase = Phase::try_from(blob[0]).ok()?;
-        let main_point = blob[1];
-        let d1 = blob[2];
-        let d2 = blob[3];
-        let bet_count = blob[4] as usize;
+        if blob[0] != STATE_VERSION {
+            return None;
+        }
+
+        let phase = Phase::try_from(blob[1]).ok()?;
+        let main_point = blob[2];
+        let d1 = blob[3];
+        let d2 = blob[4];
+        let made_points_mask = blob[5];
+        let bet_count = blob[6] as usize;
 
         // Validate bet count against maximum to prevent DoS via large allocations
-        const MAX_BETS: usize = 20;
         if bet_count > MAX_BETS {
             return None;
         }
 
         // Validate we have enough bytes for all bets before allocating
-        let required_len = 5 + (bet_count * 19);
+        let required_len = 7 + (bet_count * 19);
         if blob.len() < required_len {
             return None;
         }
 
         let mut bets = Vec::with_capacity(bet_count);
-        let mut offset = 5;
+        let mut offset = 7;
 
         for _ in 0..bet_count {
             if offset + 19 > blob.len() {
@@ -223,6 +265,7 @@ impl CrapsState {
             main_point,
             d1,
             d2,
+            made_points_mask,
             bets,
         })
     }
@@ -232,22 +275,22 @@ impl CrapsState {
 // Payout Calculations
 // ============================================================================
 
-/// Calculate pass/don't pass payout (1:1 on flat bet + odds)
-fn calculate_pass_payout(bet: &CrapsBet, won: bool, is_pass: bool) -> i64 {
-    if won {
-        // Flat bet pays 1:1 -> Return 2x
-        let flat = bet.amount.saturating_mul(2) as i64;
-        let odds = if bet.odds_amount > 0 && bet.target > 0 {
-            // Odds bet returns stake + winnings
-            let winnings = calculate_odds_payout(bet.target, bet.odds_amount, is_pass);
-            bet.odds_amount.saturating_add(winnings) as i64
-        } else {
-            0
-        };
-        flat.saturating_add(odds)
-    } else {
-        -((bet.amount.saturating_add(bet.odds_amount)) as i64)
+/// Calculate pass/don't pass return (TOTAL RETURN: stake + winnings).
+/// Stake is assumed already deducted at bet placement.
+fn calculate_pass_return(bet: &CrapsBet, won: bool, is_pass: bool) -> u64 {
+    if !won {
+        return 0;
     }
+
+    let flat_return = bet.amount.saturating_mul(2);
+    let odds_return = if bet.odds_amount > 0 && bet.target > 0 {
+        let winnings = calculate_odds_payout(bet.target, bet.odds_amount, is_pass);
+        bet.odds_amount.saturating_add(winnings)
+    } else {
+        0
+    };
+
+    flat_return.saturating_add(odds_return)
 }
 
 /// Calculate true odds payout (WINNINGS ONLY)
@@ -278,19 +321,19 @@ fn calculate_odds_payout(point: u8, odds_amount: u64, is_pass: bool) -> u64 {
     }
 }
 
-/// Calculate field bet payout
-fn calculate_field_payout(total: u8, amount: u64) -> i64 {
+/// Calculate field bet return (TOTAL RETURN: stake + winnings).
+fn calculate_field_payout(total: u8, amount: u64) -> u64 {
     match total {
-        2 | 12 => amount.saturating_mul(3) as i64, // 2:1 -> 3x
-        3 | 4 | 9 | 10 | 11 => amount.saturating_mul(2) as i64, // 1:1 -> 2x
-        _ => -(amount as i64),                     // 5,6,7,8 lose
+        2 | 12 => amount.saturating_mul(3), // 2:1 -> 3x total
+        3 | 4 | 9 | 10 | 11 => amount.saturating_mul(2), // 1:1 -> 2x total
+        _ => 0,
     }
 }
 
-/// Calculate YES (place) bet payout with 1% commission
-fn calculate_yes_payout(target: u8, amount: u64, hit: bool) -> i64 {
+/// Calculate YES (place) bet return with a 1% commission on winnings.
+fn calculate_yes_payout(target: u8, amount: u64, hit: bool) -> u64 {
     if !hit {
-        return -(amount as i64);
+        return 0;
     }
 
     let true_odds = match target {
@@ -300,16 +343,15 @@ fn calculate_yes_payout(target: u8, amount: u64, hit: bool) -> i64 {
         _ => amount,
     };
 
-    // 1% commission on winnings
     let commission = true_odds.saturating_div(100);
     let winnings = true_odds.saturating_sub(commission);
-    winnings.saturating_add(amount) as i64
+    amount.saturating_add(winnings)
 }
 
-/// Calculate NO (lay) bet payout with 1% commission
-fn calculate_no_payout(target: u8, amount: u64, seven_hit: bool) -> i64 {
+/// Calculate NO (lay) bet return with a 1% commission on winnings.
+fn calculate_no_payout(target: u8, amount: u64, seven_hit: bool) -> u64 {
     if !seven_hit {
-        return -(amount as i64);
+        return 0;
     }
 
     let true_odds = match target {
@@ -319,21 +361,49 @@ fn calculate_no_payout(target: u8, amount: u64, seven_hit: bool) -> i64 {
         _ => amount,
     };
 
-    // 1% commission
     let commission = true_odds.saturating_div(100);
     let winnings = true_odds.saturating_sub(commission);
-    winnings.saturating_add(amount) as i64
+    amount.saturating_add(winnings)
 }
 
-/// Calculate NEXT (hop) bet payout with 1% commission
-fn calculate_next_payout(target: u8, total: u8, amount: u64) -> i64 {
+fn calculate_buy_commission(amount: u64) -> u64 {
+    // 5% commission, rounded up to the nearest chip.
+    //
+    // WoO: "Buy bets are like Odds or Place bets ... except you have to pay a 5% commission
+    // ... based on the bet amount."
+    // https://wizardofodds.com/games/craps/basics/#buy
+    amount
+        .saturating_mul(BUY_COMMISSION_BPS)
+        .saturating_add(BUY_COMMISSION_DENOM.saturating_sub(1))
+        .saturating_div(BUY_COMMISSION_DENOM)
+}
+
+/// Calculate BUY bet return (TOTAL RETURN: stake + winnings). Commission is charged separately.
+fn calculate_buy_payout(target: u8, amount: u64, hit: bool) -> u64 {
+    if !hit {
+        return 0;
+    }
+
+    // Fair odds on the number.
+    let winnings = match target {
+        4 | 10 => amount.saturating_mul(2), // 2:1
+        5 | 9 => amount.saturating_mul(3).saturating_div(2), // 3:2
+        6 | 8 => amount.saturating_mul(6).saturating_div(5), // 6:5
+        _ => 0,
+    };
+
+    amount.saturating_add(winnings)
+}
+
+/// Calculate NEXT bet return (TOTAL RETURN: stake + winnings) with a 1% commission on winnings.
+fn calculate_next_payout(target: u8, total: u8, amount: u64) -> u64 {
     if total != target {
-        return -(amount as i64);
+        return 0;
     }
 
     // Payout based on probability
     let ways = WAYS[target as usize];
-    let multiplier = match ways {
+    let multiplier: u64 = match ways {
         1 => 35, // 2 or 12
         2 => 17, // 3 or 11
         3 => 11, // 4 or 10
@@ -345,27 +415,62 @@ fn calculate_next_payout(target: u8, total: u8, amount: u64) -> i64 {
 
     let winnings = amount.saturating_mul(multiplier);
     let commission = winnings.saturating_div(100);
-    winnings.saturating_sub(commission).saturating_add(amount) as i64
+    let winnings = winnings.saturating_sub(commission);
+    amount.saturating_add(winnings)
+}
+
+fn ats_bit_for_total(total: u8) -> u64 {
+    match total {
+        2 => 1u64 << 0,
+        3 => 1u64 << 1,
+        4 => 1u64 << 2,
+        5 => 1u64 << 3,
+        6 => 1u64 << 4,
+        8 => 1u64 << 5,
+        9 => 1u64 << 6,
+        10 => 1u64 << 7,
+        11 => 1u64 << 8,
+        12 => 1u64 << 9,
+        _ => 0,
+    }
+}
+
+fn ats_required_mask(bet_type: BetType) -> u64 {
+    match bet_type {
+        BetType::AtsSmall => ATS_SMALL_MASK,
+        BetType::AtsTall => ATS_TALL_MASK,
+        BetType::AtsAll => ATS_ALL_MASK,
+        _ => 0,
+    }
+}
+
+fn ats_payout_to_1(bet_type: BetType) -> u64 {
+    match bet_type {
+        BetType::AtsSmall => ATS_SMALL_PAYOUT_TO_1,
+        BetType::AtsTall => ATS_TALL_PAYOUT_TO_1,
+        BetType::AtsAll => ATS_ALL_PAYOUT_TO_1,
+        _ => 0,
+    }
 }
 
 /// Calculate hardway bet payout
 /// Returns Some(payout) if resolved, None if still working
-fn calculate_hardway_payout(target: u8, d1: u8, d2: u8, total: u8, amount: u64) -> Option<i64> {
+fn calculate_hardway_payout(target: u8, d1: u8, d2: u8, total: u8, amount: u64) -> Option<u64> {
     let is_hard = d1 == d2 && d1.saturating_mul(2) == target;
     let is_easy = !is_hard && total == target;
     let is_seven = total == 7;
 
     if is_hard {
         // Win!
-        let payout = match target {
+        let winnings = match target {
             4 | 10 => amount.saturating_mul(7), // 7:1
             6 | 8 => amount.saturating_mul(9),  // 9:1
             _ => amount,
         };
-        Some(payout.saturating_add(amount) as i64)
+        Some(amount.saturating_add(winnings))
     } else if is_easy || is_seven {
         // Lose
-        Some(-(amount as i64))
+        Some(0)
     } else {
         // Still working
         None
@@ -386,14 +491,16 @@ fn process_roll(state: &mut CrapsState, d1: u8, d2: u8) -> Vec<BetResult> {
         if bet.bet_type == BetType::Field {
             results.push(BetResult {
                 bet_idx: idx,
-                payout: calculate_field_payout(total, bet.amount),
+                return_amount: calculate_field_payout(total, bet.amount),
+                wagered: bet.amount,
                 resolved: true,
             });
         }
         if bet.bet_type == BetType::Next {
             results.push(BetResult {
                 bet_idx: idx,
-                payout: calculate_next_payout(bet.target, total, bet.amount),
+                return_amount: calculate_next_payout(bet.target, total, bet.amount),
+                wagered: bet.amount,
                 resolved: true,
             });
         }
@@ -415,14 +522,15 @@ fn process_roll(state: &mut CrapsState, d1: u8, d2: u8) -> Vec<BetResult> {
             if let Some(payout) = calculate_hardway_payout(target, d1, d2, total, bet.amount) {
                 results.push(BetResult {
                     bet_idx: idx,
-                    payout,
+                    return_amount: payout,
+                    wagered: bet.amount,
                     resolved: true,
                 });
             }
         }
     }
 
-    // 3. YES/NO bets (working bets only)
+    // 3. YES/NO/BUY bets (working bets only)
     for (idx, bet) in state.bets.iter().enumerate() {
         if bet.status != BetStatus::On {
             continue;
@@ -433,13 +541,15 @@ fn process_roll(state: &mut CrapsState, d1: u8, d2: u8) -> Vec<BetResult> {
                 if total == bet.target {
                     results.push(BetResult {
                         bet_idx: idx,
-                        payout: calculate_yes_payout(bet.target, bet.amount, true),
+                        return_amount: calculate_yes_payout(bet.target, bet.amount, true),
+                        wagered: bet.amount,
                         resolved: true,
                     });
                 } else if total == 7 {
                     results.push(BetResult {
                         bet_idx: idx,
-                        payout: calculate_yes_payout(bet.target, bet.amount, false),
+                        return_amount: calculate_yes_payout(bet.target, bet.amount, false),
+                        wagered: bet.amount,
                         resolved: true,
                     });
                 }
@@ -448,13 +558,33 @@ fn process_roll(state: &mut CrapsState, d1: u8, d2: u8) -> Vec<BetResult> {
                 if total == 7 {
                     results.push(BetResult {
                         bet_idx: idx,
-                        payout: calculate_no_payout(bet.target, bet.amount, true),
+                        return_amount: calculate_no_payout(bet.target, bet.amount, true),
+                        wagered: bet.amount,
                         resolved: true,
                     });
                 } else if total == bet.target {
                     results.push(BetResult {
                         bet_idx: idx,
-                        payout: calculate_no_payout(bet.target, bet.amount, false),
+                        return_amount: calculate_no_payout(bet.target, bet.amount, false),
+                        wagered: bet.amount,
+                        resolved: true,
+                    });
+                }
+            }
+            BetType::Buy => {
+                let commission = calculate_buy_commission(bet.amount);
+                if total == bet.target {
+                    results.push(BetResult {
+                        bet_idx: idx,
+                        return_amount: calculate_buy_payout(bet.target, bet.amount, true),
+                        wagered: bet.amount.saturating_add(commission),
+                        resolved: true,
+                    });
+                } else if total == 7 {
+                    results.push(BetResult {
+                        bet_idx: idx,
+                        return_amount: 0,
+                        wagered: bet.amount.saturating_add(commission),
                         resolved: true,
                     });
                 }
@@ -463,7 +593,32 @@ fn process_roll(state: &mut CrapsState, d1: u8, d2: u8) -> Vec<BetResult> {
         }
     }
 
-    // 4. COME/DONT_COME bets
+    // 4. ATS progress + early wins (resolves immediately when completed).
+    let ats_bit = ats_bit_for_total(total);
+    if ats_bit != 0 {
+        for (idx, bet) in state.bets.iter_mut().enumerate() {
+            if !matches!(
+                bet.bet_type,
+                BetType::AtsSmall | BetType::AtsTall | BetType::AtsAll
+            ) {
+                continue;
+            }
+            bet.odds_amount |= ats_bit;
+            let required = ats_required_mask(bet.bet_type);
+            if required != 0 && (bet.odds_amount & required) == required {
+                let mult = ats_payout_to_1(bet.bet_type);
+                let return_amount = bet.amount.saturating_mul(mult.saturating_add(1));
+                results.push(BetResult {
+                    bet_idx: idx,
+                    return_amount,
+                    wagered: bet.amount,
+                    resolved: true,
+                });
+            }
+        }
+    }
+
+    // 5. COME/DONT_COME bets
     for (idx, bet) in state.bets.iter_mut().enumerate() {
         match (bet.bet_type, bet.status) {
             (BetType::Come, BetStatus::Pending) => {
@@ -472,14 +627,16 @@ fn process_roll(state: &mut CrapsState, d1: u8, d2: u8) -> Vec<BetResult> {
                     7 | 11 => {
                         results.push(BetResult {
                             bet_idx: idx,
-                            payout: bet.amount as i64,
+                            return_amount: bet.amount.saturating_mul(2),
+                            wagered: bet.amount,
                             resolved: true,
                         });
                     }
                     2 | 3 | 12 => {
                         results.push(BetResult {
                             bet_idx: idx,
-                            payout: -(bet.amount as i64),
+                            return_amount: 0,
+                            wagered: bet.amount,
                             resolved: true,
                         });
                     }
@@ -494,20 +651,23 @@ fn process_roll(state: &mut CrapsState, d1: u8, d2: u8) -> Vec<BetResult> {
                 if total == bet.target {
                     // Win!
                     let odds_payout = calculate_odds_payout(bet.target, bet.odds_amount, true);
-                    let total_payout = (bet
+                    let total_payout = bet
                         .amount
+                        .saturating_mul(2)
                         .saturating_add(bet.odds_amount)
-                        .saturating_add(odds_payout)) as i64;
+                        .saturating_add(odds_payout);
                     results.push(BetResult {
                         bet_idx: idx,
-                        payout: total_payout,
+                        return_amount: total_payout,
+                        wagered: bet.amount.saturating_add(bet.odds_amount),
                         resolved: true,
                     });
                 } else if total == 7 {
                     // Lose
                     results.push(BetResult {
                         bet_idx: idx,
-                        payout: -((bet.amount.saturating_add(bet.odds_amount)) as i64),
+                        return_amount: 0,
+                        wagered: bet.amount.saturating_add(bet.odds_amount),
                         resolved: true,
                     });
                 }
@@ -517,7 +677,8 @@ fn process_roll(state: &mut CrapsState, d1: u8, d2: u8) -> Vec<BetResult> {
                     2 | 3 => {
                         results.push(BetResult {
                             bet_idx: idx,
-                            payout: bet.amount as i64,
+                            return_amount: bet.amount.saturating_mul(2),
+                            wagered: bet.amount,
                             resolved: true,
                         });
                     }
@@ -525,14 +686,16 @@ fn process_roll(state: &mut CrapsState, d1: u8, d2: u8) -> Vec<BetResult> {
                         // Push
                         results.push(BetResult {
                             bet_idx: idx,
-                            payout: 0,
+                            return_amount: bet.amount,
+                            wagered: bet.amount,
                             resolved: true,
                         });
                     }
                     7 | 11 => {
                         results.push(BetResult {
                             bet_idx: idx,
-                            payout: -(bet.amount as i64),
+                            return_amount: 0,
+                            wagered: bet.amount,
                             resolved: true,
                         });
                     }
@@ -546,19 +709,22 @@ fn process_roll(state: &mut CrapsState, d1: u8, d2: u8) -> Vec<BetResult> {
                 if total == 7 {
                     // Win!
                     let odds_payout = calculate_odds_payout(bet.target, bet.odds_amount, false);
-                    let total_payout = (bet
+                    let total_payout = bet
                         .amount
+                        .saturating_mul(2)
                         .saturating_add(bet.odds_amount)
-                        .saturating_add(odds_payout)) as i64;
+                        .saturating_add(odds_payout);
                     results.push(BetResult {
                         bet_idx: idx,
-                        payout: total_payout,
+                        return_amount: total_payout,
+                        wagered: bet.amount.saturating_add(bet.odds_amount),
                         resolved: true,
                     });
                 } else if total == bet.target {
                     results.push(BetResult {
                         bet_idx: idx,
-                        payout: -((bet.amount.saturating_add(bet.odds_amount)) as i64),
+                        return_amount: 0,
+                        wagered: bet.amount.saturating_add(bet.odds_amount),
                         resolved: true,
                     });
                 }
@@ -567,11 +733,67 @@ fn process_roll(state: &mut CrapsState, d1: u8, d2: u8) -> Vec<BetResult> {
         }
     }
 
-    // 5. PASS/DONT_PASS
+    // 6. PASS/DONT_PASS
     process_pass_bets(state, total, &mut results);
 
-    // 6. Update phase and main point
-    update_phase(state, total);
+    // 7. Update phase and main point
+    let phase_event = update_phase(state, total);
+    match phase_event {
+        PhaseEvent::PointEstablished(point) => {
+            // Fix pass/don't pass odds tracking: set bet.target to the main point.
+            for bet in state.bets.iter_mut() {
+                if matches!(bet.bet_type, BetType::Pass | BetType::DontPass) && bet.status == BetStatus::On {
+                    bet.target = point;
+                }
+            }
+        }
+        PhaseEvent::PointMade(point) => {
+            if let Some(bit) = point_to_fire_bit(point) {
+                state.made_points_mask |= 1u8 << bit;
+            }
+        }
+        _ => {}
+    }
+
+    // Fire bet resolves on seven-out.
+    if matches!(phase_event, PhaseEvent::SevenOut) {
+        let points_made = state.made_points_mask.count_ones() as u8;
+        let mult = fire_bet_multiplier(points_made);
+        for (idx, bet) in state.bets.iter().enumerate() {
+            if bet.bet_type != BetType::Fire {
+                continue;
+            }
+            let return_amount = if mult == 0 {
+                0
+            } else {
+                bet.amount.saturating_mul(mult.saturating_add(1))
+            };
+            results.push(BetResult {
+                bet_idx: idx,
+                return_amount,
+                wagered: bet.amount,
+                resolved: true,
+            });
+        }
+    }
+
+    // ATS bets lose on seven-out if not already completed.
+    if matches!(phase_event, PhaseEvent::SevenOut) {
+        for (idx, bet) in state.bets.iter().enumerate() {
+            if !matches!(
+                bet.bet_type,
+                BetType::AtsSmall | BetType::AtsTall | BetType::AtsAll
+            ) {
+                continue;
+            }
+            results.push(BetResult {
+                bet_idx: idx,
+                return_amount: 0,
+                wagered: bet.amount,
+                resolved: true,
+            });
+        }
+    }
 
     results
 }
@@ -586,7 +808,8 @@ fn process_pass_bets(state: &CrapsState, total: u8, results: &mut Vec<BetResult>
                         // Win on come out
                         results.push(BetResult {
                             bet_idx: idx,
-                            payout: bet.amount as i64,
+                            return_amount: bet.amount.saturating_mul(2),
+                            wagered: bet.amount,
                             resolved: true,
                         });
                     }
@@ -594,7 +817,8 @@ fn process_pass_bets(state: &CrapsState, total: u8, results: &mut Vec<BetResult>
                         // Lose on come out (craps)
                         results.push(BetResult {
                             bet_idx: idx,
-                            payout: -(bet.amount as i64),
+                            return_amount: 0,
+                            wagered: bet.amount,
                             resolved: true,
                         });
                     }
@@ -606,18 +830,19 @@ fn process_pass_bets(state: &CrapsState, total: u8, results: &mut Vec<BetResult>
             (BetType::Pass, Phase::Point) => {
                 if total == state.main_point {
                     // Hit the point - win
-                    let payout = calculate_pass_payout(bet, true, true);
+                    let return_amount = calculate_pass_return(bet, true, true);
                     results.push(BetResult {
                         bet_idx: idx,
-                        payout,
+                        return_amount,
+                        wagered: bet.amount.saturating_add(bet.odds_amount),
                         resolved: true,
                     });
                 } else if total == 7 {
                     // Seven out - lose
-                    let payout = calculate_pass_payout(bet, false, true);
                     results.push(BetResult {
                         bet_idx: idx,
-                        payout,
+                        return_amount: 0,
+                        wagered: bet.amount.saturating_add(bet.odds_amount),
                         resolved: true,
                     });
                 }
@@ -628,7 +853,8 @@ fn process_pass_bets(state: &CrapsState, total: u8, results: &mut Vec<BetResult>
                         // Lose on come out
                         results.push(BetResult {
                             bet_idx: idx,
-                            payout: -(bet.amount as i64),
+                            return_amount: 0,
+                            wagered: bet.amount,
                             resolved: true,
                         });
                     }
@@ -636,7 +862,8 @@ fn process_pass_bets(state: &CrapsState, total: u8, results: &mut Vec<BetResult>
                         // Win on come out (craps)
                         results.push(BetResult {
                             bet_idx: idx,
-                            payout: bet.amount as i64,
+                            return_amount: bet.amount.saturating_mul(2),
+                            wagered: bet.amount,
                             resolved: true,
                         });
                     }
@@ -644,7 +871,8 @@ fn process_pass_bets(state: &CrapsState, total: u8, results: &mut Vec<BetResult>
                         // Push on 12 (bar)
                         results.push(BetResult {
                             bet_idx: idx,
-                            payout: 0,
+                            return_amount: bet.amount,
+                            wagered: bet.amount,
                             resolved: true,
                         });
                     }
@@ -656,18 +884,19 @@ fn process_pass_bets(state: &CrapsState, total: u8, results: &mut Vec<BetResult>
             (BetType::DontPass, Phase::Point) => {
                 if total == 7 {
                     // Seven out - win for don't pass
-                    let payout = calculate_pass_payout(bet, true, false);
+                    let return_amount = calculate_pass_return(bet, true, false);
                     results.push(BetResult {
                         bet_idx: idx,
-                        payout,
+                        return_amount,
+                        wagered: bet.amount.saturating_add(bet.odds_amount),
                         resolved: true,
                     });
                 } else if total == state.main_point {
                     // Hit the point - lose for don't pass
-                    let payout = calculate_pass_payout(bet, false, false);
                     results.push(BetResult {
                         bet_idx: idx,
-                        payout,
+                        return_amount: 0,
+                        wagered: bet.amount.saturating_add(bet.odds_amount),
                         resolved: true,
                     });
                 }
@@ -677,21 +906,61 @@ fn process_pass_bets(state: &CrapsState, total: u8, results: &mut Vec<BetResult>
     }
 }
 
-/// Update phase and main point after a roll
-fn update_phase(state: &mut CrapsState, total: u8) {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PhaseEvent {
+    None,
+    PointEstablished(u8),
+    PointMade(u8),
+    SevenOut,
+}
+
+fn point_to_fire_bit(point: u8) -> Option<u8> {
+    match point {
+        4 => Some(0),
+        5 => Some(1),
+        6 => Some(2),
+        8 => Some(3),
+        9 => Some(4),
+        10 => Some(5),
+        _ => None,
+    }
+}
+
+fn fire_bet_multiplier(points_made: u8) -> u64 {
+    // WoO Fire Bet Pay Table A (pays "to 1"): 4->24, 5->249, 6->999.
+    // https://wizardofodds.com/games/craps/side-bets/fire-bet/
+    match points_made {
+        4 => 24,
+        5 => 249,
+        6 => 999,
+        _ => 0,
+    }
+}
+
+/// Update phase and main point after a roll.
+fn update_phase(state: &mut CrapsState, total: u8) -> PhaseEvent {
     match state.phase {
         Phase::ComeOut => {
             if ![2, 3, 7, 11, 12].contains(&total) {
-                // Point established
                 state.phase = Phase::Point;
                 state.main_point = total;
+                PhaseEvent::PointEstablished(total)
+            } else {
+                PhaseEvent::None
             }
         }
         Phase::Point => {
-            if total == 7 || total == state.main_point {
-                // Seven out or point hit - back to come out
+            if total == state.main_point {
+                let point = state.main_point;
                 state.phase = Phase::ComeOut;
                 state.main_point = 0;
+                PhaseEvent::PointMade(point)
+            } else if total == 7 {
+                state.phase = Phase::ComeOut;
+                state.main_point = 0;
+                PhaseEvent::SevenOut
+            } else {
+                PhaseEvent::None
             }
         }
     }
@@ -705,7 +974,15 @@ pub struct Craps;
 
 impl CasinoGame for Craps {
     fn init(session: &mut GameSession, _rng: &mut GameRng) -> GameResult {
-        session.state_blob = vec![];
+        let state = CrapsState {
+            phase: Phase::ComeOut,
+            main_point: 0,
+            d1: 0,
+            d2: 0,
+            made_points_mask: 0,
+            bets: Vec::new(),
+        };
+        session.state_blob = state.to_blob();
         GameResult::Continue
     }
 
@@ -718,13 +995,14 @@ impl CasinoGame for Craps {
             return Err(GameError::GameAlreadyComplete);
         }
 
-        // Parse or initialize state
+        // Parse state (or initialize if legacy-empty).
         let mut state = if session.state_blob.is_empty() {
             CrapsState {
                 phase: Phase::ComeOut,
                 main_point: 0,
                 d1: 0,
                 d2: 0,
+                made_points_mask: 0,
                 bets: Vec::new(),
             }
         } else {
@@ -754,6 +1032,71 @@ impl CasinoGame for Craps {
                 if amount == 0 {
                     return Err(GameError::InvalidPayload);
                 }
+                if state.bets.len() >= MAX_BETS {
+                    return Err(GameError::InvalidMove);
+                }
+
+                // Validate target + timing rules.
+                match bet_type {
+                    BetType::Pass
+                    | BetType::DontPass
+                    | BetType::Field
+                    | BetType::Fire
+                    | BetType::AtsSmall
+                    | BetType::AtsTall
+                    | BetType::AtsAll => {
+                        if target != 0 {
+                            return Err(GameError::InvalidPayload);
+                        }
+                    }
+                    BetType::Come | BetType::DontCome => {
+                        if target != 0 {
+                            return Err(GameError::InvalidPayload);
+                        }
+                        // Come/DontCome are only allowed once a point is established.
+                        if state.phase != Phase::Point {
+                            return Err(GameError::InvalidMove);
+                        }
+                    }
+                    BetType::Yes | BetType::No | BetType::Buy => {
+                        if ![4u8, 5, 6, 8, 9, 10].contains(&target) {
+                            return Err(GameError::InvalidPayload);
+                        }
+                    }
+                    BetType::Next => {
+                        if !(2..=12).contains(&target) {
+                            return Err(GameError::InvalidPayload);
+                        }
+                    }
+                    BetType::Hardway4
+                    | BetType::Hardway6
+                    | BetType::Hardway8
+                    | BetType::Hardway10 => {
+                        if target != 0 {
+                            return Err(GameError::InvalidPayload);
+                        }
+                    }
+                }
+
+                if bet_type == BetType::Fire {
+                    // Fire bet may only be placed before the first roll of the shooter hand.
+                    if state.d1 != 0 || state.d2 != 0 || state.made_points_mask != 0 {
+                        return Err(GameError::InvalidMove);
+                    }
+                    if state.bets.iter().any(|b| b.bet_type == BetType::Fire) {
+                        return Err(GameError::InvalidMove);
+                    }
+                }
+
+                if matches!(
+                    bet_type,
+                    BetType::AtsSmall | BetType::AtsTall | BetType::AtsAll
+                ) {
+                    // ATS bets are tracked for the entire shooter hand. Require placement before the first roll.
+                    if state.d1 != 0 || state.d2 != 0 {
+                        return Err(GameError::InvalidMove);
+                    }
+                }
 
                 // Determine initial status
                 let status = match bet_type {
@@ -770,8 +1113,16 @@ impl CasinoGame for Craps {
                 });
 
                 session.state_blob = state.to_blob();
+
+                let deduction = if bet_type == BetType::Buy {
+                    amount.saturating_add(calculate_buy_commission(amount))
+                } else {
+                    amount
+                };
+                let deduction_i64 =
+                    i64::try_from(deduction).map_err(|_| GameError::InvalidPayload)?;
                 Ok(GameResult::ContinueWithUpdate {
-                    payout: -(amount as i64),
+                    payout: -deduction_i64,
                 })
             }
 
@@ -785,6 +1136,9 @@ impl CasinoGame for Craps {
                         .try_into()
                         .map_err(|_| GameError::InvalidPayload)?,
                 );
+                if odds_amount == 0 {
+                    return Err(GameError::InvalidPayload);
+                }
 
                 // Find last contract bet (PASS, DONT_PASS, COME, DONT_COME with status ON)
                 let mut found = false;
@@ -794,6 +1148,9 @@ impl CasinoGame for Craps {
                         BetType::Pass | BetType::DontPass | BetType::Come | BetType::DontCome
                     ) && bet.status == BetStatus::On
                     {
+                        if ![4u8, 5, 6, 8, 9, 10].contains(&bet.target) {
+                            return Err(GameError::InvalidMove);
+                        }
                         bet.odds_amount = bet.odds_amount.saturating_add(odds_amount);
                         found = true;
                         break;
@@ -812,23 +1169,28 @@ impl CasinoGame for Craps {
 
             // [2] - Roll dice
             2 => {
+                if state.bets.is_empty() {
+                    return Err(GameError::InvalidMove);
+                }
                 let d1 = rng.roll_die();
                 let d2 = rng.roll_die();
                 state.d1 = d1;
                 state.d2 = d2;
 
-                session.move_count = session.move_count.saturating_add(1);
-
                 // Process roll
                 let results = process_roll(&mut state, d1, d2);
 
-                // Calculate total payout
-                let mut total_payout: i64 = 0;
+                // Calculate credited return and (for completion reporting) loss amount.
+                let mut total_return: u64 = 0;
+                let mut total_loss: u64 = 0;
                 let mut resolved_indices = Vec::with_capacity(state.bets.len());
 
                 for result in results {
-                    total_payout = total_payout.saturating_add(result.payout);
                     if result.resolved {
+                        total_return = total_return.saturating_add(result.return_amount);
+                        if result.return_amount == 0 {
+                            total_loss = total_loss.saturating_add(result.wagered);
+                        }
                         resolved_indices.push(result.bet_idx);
                     }
                 }
@@ -845,33 +1207,28 @@ impl CasinoGame for Craps {
                 // Check if game is complete (no bets left)
                 if state.bets.is_empty() {
                     session.is_complete = true;
-                    if total_payout > 0 {
-                        // Safe cast: positive i64 fits in u64
-                        let payout_u64 = u64::try_from(total_payout).unwrap_or(0);
+                    if total_return > 0 {
                         // Apply super mode multipliers if active
-                        let final_payout = if session.super_mode.is_active {
-                            let total = d1.saturating_add(d2);
+                        let final_return = if session.super_mode.is_active {
+                            let dice_total = d1.saturating_add(d2);
                             apply_super_multiplier_total(
-                                total,
+                                dice_total,
                                 &session.super_mode.multipliers,
-                                payout_u64,
+                                total_return,
                             )
                         } else {
-                            payout_u64
+                            total_return
                         };
-                        Ok(GameResult::Win(final_payout))
-                    } else if total_payout < 0 {
-                        Ok(GameResult::Loss)
+                        Ok(GameResult::Win(final_return))
                     } else {
-                        Ok(GameResult::Push)
+                        Ok(GameResult::LossPreDeducted(total_loss))
                     }
                 } else {
                     // Game continues with active bets
-                    // Use ContinueWithUpdate if there are intermediate payouts/losses
-                    if total_payout != 0 {
-                        Ok(GameResult::ContinueWithUpdate {
-                            payout: total_payout,
-                        })
+                    // Credit any wins/pushes this roll; losses were already deducted at placement.
+                    if total_return > 0 {
+                        let payout = i64::try_from(total_return).map_err(|_| GameError::InvalidMove)?;
+                        Ok(GameResult::ContinueWithUpdate { payout })
                     } else {
                         Ok(GameResult::Continue)
                     }
@@ -880,7 +1237,7 @@ impl CasinoGame for Craps {
 
             // [3] - Clear all bets (only before first roll)
             3 => {
-                if session.move_count > 0 {
+                if state.d1 != 0 || state.d2 != 0 {
                     return Err(GameError::InvalidMove);
                 }
                 state.bets.clear();
@@ -945,6 +1302,7 @@ mod tests {
             main_point: 6,
             d1: 3,
             d2: 3,
+            made_points_mask: 0b001011, // arbitrary
             bets: vec![
                 CrapsBet {
                     bet_type: BetType::Pass,
@@ -964,13 +1322,16 @@ mod tests {
         };
 
         let blob = state.to_blob();
-        assert_eq!(blob[0], Phase::Point as u8);
-        assert_eq!(blob[1], 6);
-        assert_eq!(blob[4], 2); // bet count
+        assert_eq!(blob[0], STATE_VERSION);
+        assert_eq!(blob[1], Phase::Point as u8);
+        assert_eq!(blob[2], 6);
+        assert_eq!(blob[5], state.made_points_mask);
+        assert_eq!(blob[6], 2); // bet count
 
         let deserialized = CrapsState::from_blob(&blob).expect("Failed to parse state");
         assert_eq!(deserialized.phase, state.phase);
         assert_eq!(deserialized.main_point, state.main_point);
+        assert_eq!(deserialized.made_points_mask, state.made_points_mask);
         assert_eq!(deserialized.bets.len(), 2);
     }
 
@@ -981,26 +1342,97 @@ mod tests {
         assert_eq!(calculate_field_payout(12, 100), 300); // 2:1 -> 3x total
         assert_eq!(calculate_field_payout(3, 100), 200); // 1:1 -> 2x total
         assert_eq!(calculate_field_payout(11, 100), 200); // 1:1 -> 2x total
-        assert_eq!(calculate_field_payout(7, 100), -100); // lose
+        assert_eq!(calculate_field_payout(7, 100), 0); // lose
     }
 
     #[test]
     fn test_yes_payout() {
-        // Place 6 hits - returns stake + (winnings - commission)
-        // 6:5 odds = 120 winnings, 1% commission = 1, so 119 + 100 = 219 total
-        assert_eq!(calculate_yes_payout(6, 100, true), 219);
-        // Place 6 misses (7 rolled)
-        assert_eq!(calculate_yes_payout(6, 100, false), -100);
+        // YES pays true odds with a 1% commission on winnings.
+        // 6:5 on a 60 bet -> 72 winnings + 60 stake = 132 total.
+        assert_eq!(calculate_yes_payout(6, 60, true), 132);
+        // Miss
+        assert_eq!(calculate_yes_payout(6, 60, false), 0);
     }
 
     #[test]
     fn test_next_payout() {
-        // Hop on 7: 5x multiplier = 500, 1% commission = 5, so 495 + 100 = 595 total
-        assert_eq!(calculate_next_payout(7, 7, 100), 595);
-        // Hop on 2: 35x multiplier = 3500, 1% commission = 35, so 3465 + 100 = 3565 total
-        assert_eq!(calculate_next_payout(2, 2, 100), 3565);
+        // NEXT pays with a 1% commission on winnings.
+        assert_eq!(calculate_next_payout(7, 7, 100), 595); // winnings 500 -> -5 commission
+        assert_eq!(calculate_next_payout(2, 2, 100), 3565); // winnings 3500 -> -35 commission
         // Miss
-        assert_eq!(calculate_next_payout(7, 6, 100), -100);
+        assert_eq!(calculate_next_payout(7, 6, 100), 0);
+    }
+
+    #[test]
+    fn test_buy_commission_rounds_up() {
+        assert_eq!(calculate_buy_commission(100), 5);
+        assert_eq!(calculate_buy_commission(1), 1);
+        assert_eq!(calculate_buy_commission(20), 1);
+    }
+
+    #[test]
+    fn test_buy_payout() {
+        assert_eq!(calculate_buy_payout(4, 100, true), 300); // 2:1 -> 3x total
+        assert_eq!(calculate_buy_payout(5, 100, true), 250); // 3:2 -> 2.5x total
+        assert_eq!(calculate_buy_payout(6, 100, true), 220); // 6:5 -> 2.2x total
+        assert_eq!(calculate_buy_payout(4, 100, false), 0);
+    }
+
+    #[test]
+    fn test_ats_small_completes_and_pays() {
+        let mut state = CrapsState {
+            phase: Phase::ComeOut,
+            main_point: 0,
+            d1: 0,
+            d2: 0,
+            made_points_mask: 0,
+            bets: vec![CrapsBet {
+                bet_type: BetType::AtsSmall,
+                target: 0,
+                status: BetStatus::On,
+                amount: 10,
+                odds_amount: 0,
+            }],
+        };
+
+        for (d1, d2) in [(1, 1), (1, 2), (2, 2), (2, 3), (3, 3)] {
+            let results = process_roll(&mut state, d1, d2);
+            let resolved: Vec<_> = results.into_iter().filter(|r| r.resolved).collect();
+            if d1 + d2 == 6 {
+                assert_eq!(resolved.len(), 1);
+                assert_eq!(resolved[0].return_amount, 350); // 34:1 -> 35x total
+                assert_eq!(resolved[0].bet_idx, 0);
+                state.bets.clear();
+            } else {
+                assert!(resolved.is_empty());
+            }
+        }
+    }
+
+    #[test]
+    fn test_ats_loses_on_seven_out() {
+        let mut state = CrapsState {
+            phase: Phase::Point,
+            main_point: 6,
+            d1: 0,
+            d2: 0,
+            made_points_mask: 0,
+            bets: vec![CrapsBet {
+                bet_type: BetType::AtsTall,
+                target: 0,
+                status: BetStatus::On,
+                amount: 10,
+                odds_amount: 0,
+            }],
+        };
+
+        let results = process_roll(&mut state, 3, 4);
+        let ats = results
+            .into_iter()
+            .find(|r| r.resolved && r.bet_idx == 0)
+            .expect("expected ATS bet to resolve on seven-out");
+        assert_eq!(ats.return_amount, 0);
+        assert_eq!(ats.wagered, 10);
     }
 
     #[test]
@@ -1008,9 +1440,9 @@ mod tests {
         // Hard 6 (3,3) wins - 9:1 = 900 + 100 stake = 1000 total
         assert_eq!(calculate_hardway_payout(6, 3, 3, 6, 100), Some(1000));
         // Easy 6 (2,4) loses
-        assert_eq!(calculate_hardway_payout(6, 2, 4, 6, 100), Some(-100));
+        assert_eq!(calculate_hardway_payout(6, 2, 4, 6, 100), Some(0));
         // Seven out loses
-        assert_eq!(calculate_hardway_payout(6, 4, 3, 7, 100), Some(-100));
+        assert_eq!(calculate_hardway_payout(6, 4, 3, 7, 100), Some(0));
         // Still working
         assert_eq!(calculate_hardway_payout(6, 2, 3, 5, 100), None);
     }
@@ -1132,6 +1564,12 @@ mod tests {
 
         Craps::init(&mut session, &mut rng);
 
+        // Force point phase (come bets are only allowed after a point is established).
+        let mut state = CrapsState::from_blob(&session.state_blob).expect("Failed to parse state");
+        state.phase = Phase::Point;
+        state.main_point = 4;
+        session.state_blob = state.to_blob();
+
         // Place come bet
         let mut payload = vec![0, BetType::Come as u8, 0];
         payload.extend_from_slice(&100u64.to_be_bytes());
@@ -1142,28 +1580,11 @@ mod tests {
         let state = CrapsState::from_blob(&session.state_blob).expect("Failed to parse state");
         assert_eq!(state.bets[0].status, BetStatus::Pending);
 
-        // Roll a point (e.g., force a 6 by checking what we get)
-        let mut move_num = 2;
-        while move_num < 50 {
-            let state_before =
-                CrapsState::from_blob(&session.state_blob).expect("Failed to parse state");
-            if state_before.bets.is_empty() {
-                break; // Bet resolved
-            }
-
-            let mut rng = GameRng::new(&seed, session.id, move_num);
-            Craps::process_move(&mut session, &[2], &mut rng).expect("Failed to process move");
-
-            let state_after =
-                CrapsState::from_blob(&session.state_blob).expect("Failed to parse state");
-            if !state_after.bets.is_empty() && state_after.bets[0].status == BetStatus::On {
-                // Come bet traveled
-                assert!(state_after.bets[0].target > 0);
-                break;
-            }
-
-            move_num += 1;
-        }
+        // Roll a point number (6) to travel the come bet.
+        let mut state = CrapsState::from_blob(&session.state_blob).expect("Failed to parse state");
+        process_roll(&mut state, 3, 3);
+        assert_eq!(state.bets[0].status, BetStatus::On);
+        assert_eq!(state.bets[0].target, 6);
     }
 
     #[test]
@@ -1255,5 +1676,65 @@ mod tests {
         assert_eq!(WAYS[2], 1); // One way to roll 2 (1,1)
         assert_eq!(WAYS[7], 6); // Six ways to roll 7
         assert_eq!(WAYS[12], 1); // One way to roll 12 (6,6)
+    }
+
+    #[test]
+    fn test_fire_bet_pays_on_seven_out() {
+        let mut state = CrapsState {
+            phase: Phase::ComeOut,
+            main_point: 0,
+            d1: 0,
+            d2: 0,
+            made_points_mask: 0,
+            bets: vec![CrapsBet {
+                bet_type: BetType::Fire,
+                target: 0,
+                status: BetStatus::On,
+                amount: 10,
+                odds_amount: 0,
+            }],
+        };
+
+        // Make 4, 5, 6, 8.
+        for (d1, d2) in [(2, 2), (2, 2), (2, 3), (2, 3), (3, 3), (3, 3), (4, 4), (4, 4)] {
+            process_roll(&mut state, d1, d2);
+        }
+        assert_eq!(state.made_points_mask.count_ones(), 4);
+
+        // Establish a point, then seven-out to resolve Fire bet.
+        process_roll(&mut state, 4, 5); // 9 establishes a point
+        let results = process_roll(&mut state, 3, 4); // 7 out
+        assert_eq!(results.len(), 1);
+        assert!(results[0].resolved);
+        assert_eq!(results[0].return_amount, 250); // 10 * (24 + 1)
+    }
+
+    #[test]
+    fn test_fire_bet_loses_under_four_points() {
+        let mut state = CrapsState {
+            phase: Phase::ComeOut,
+            main_point: 0,
+            d1: 0,
+            d2: 0,
+            made_points_mask: 0,
+            bets: vec![CrapsBet {
+                bet_type: BetType::Fire,
+                target: 0,
+                status: BetStatus::On,
+                amount: 10,
+                odds_amount: 0,
+            }],
+        };
+
+        // Make 4, 5, 6 (only 3 points).
+        for (d1, d2) in [(2, 2), (2, 2), (2, 3), (2, 3), (3, 3), (3, 3)] {
+            process_roll(&mut state, d1, d2);
+        }
+        assert_eq!(state.made_points_mask.count_ones(), 3);
+
+        process_roll(&mut state, 4, 5); // 9 establishes a point
+        let results = process_roll(&mut state, 3, 4); // 7 out
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].return_amount, 0);
     }
 }
