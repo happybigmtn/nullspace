@@ -29,7 +29,7 @@ use futures::{
 use governor::clock::Clock as GClock;
 use nullspace_types::Seed;
 use rand::RngCore;
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
 const BATCH_ENQUEUE: usize = 20;
 const LAST_UPLOADED_KEY: u64 = 0;
@@ -79,18 +79,23 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
         ),
     ) {
         // Create metadata
-        let mut metadata = Metadata::<_, U64, u64>::init(
+        let mut metadata = match Metadata::<_, U64, u64>::init(
             self.context.with_label("metadata"),
             metadata::Config {
                 partition: format!("{}-metadata", self.config.partition_prefix),
                 codec_config: (),
             },
         )
-        .await
-        .expect("failed to initialize metadata");
+        .await {
+            Ok(metadata) => metadata,
+            Err(err) => {
+                error!(?err, "failed to initialize metadata");
+                return;
+            }
+        };
 
         // Create storage
-        let mut storage = Ordinal::init(
+        let mut storage = match Ordinal::init(
             self.context.with_label("seeder"),
             ordinal::Config {
                 partition: format!("{}-storage", self.config.partition_prefix),
@@ -99,8 +104,13 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                 replay_buffer: self.config.replay_buffer,
             },
         )
-        .await
-        .expect("failed to initialize seeder storage");
+        .await {
+            Ok(storage) => storage,
+            Err(err) => {
+                error!(?err, "failed to initialize seeder storage");
+                return;
+            }
+        };
 
         // Create resolver
         let (resolver_engine, mut resolver) = p2p::Engine::new(
@@ -164,7 +174,10 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                     if end_region > boundary {
                         boundary = end_region;
                         metadata.put(LAST_UPLOADED_KEY.into(), end_region);
-                        metadata.sync().await.expect("failed to sync metadata");
+                        if let Err(err) = metadata.sync().await {
+                            error!(?err, boundary, "failed to sync metadata");
+                            return;
+                        }
                         info!(boundary, "updated seed upload marker");
                     }
                 }
@@ -173,11 +186,14 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
 
                     // Store seed
                     if !storage.has(seed.view()) {
-                        storage
-                            .put(seed.view(), seed.signature)
-                            .await
-                            .expect("failed to put seed");
-                        storage.sync().await.expect("failed to sync seed");
+                        if let Err(err) = storage.put(seed.view(), seed.signature).await {
+                            error!(?err, view = seed.view(), "failed to put seed");
+                            return;
+                        }
+                        if let Err(err) = storage.sync().await {
+                            error!(?err, view = seed.view(), "failed to sync seed");
+                            return;
+                        }
                     }
 
                     // If there were any listeners, send them the seed
@@ -206,13 +222,19 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                     }
                 }
                 Message::Get { view, response } => {
-                    let Some(signature) = storage.get(view).await.expect("failed to get seed")
-                    else {
-                        if self.waiting.insert(view) {
-                            resolver.fetch(view.into()).await;
+                    let signature = match storage.get(view).await {
+                        Ok(Some(signature)) => signature,
+                        Ok(None) => {
+                            if self.waiting.insert(view) {
+                                resolver.fetch(view.into()).await;
+                            }
+                            listeners.entry(view).or_default().push(response);
+                            continue;
                         }
-                        listeners.entry(view).or_default().push(response);
-                        continue;
+                        Err(err) => {
+                            error!(?err, view, "failed to get seed");
+                            return;
+                        }
                     };
                     let _ = response.send(Seed { view, signature });
                 }
@@ -241,11 +263,14 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
 
                     // Store seed
                     if !storage.has(view) {
-                        storage
-                            .put(view, signature)
-                            .await
-                            .expect("failed to put seed");
-                        storage.sync().await.expect("failed to sync seed");
+                        if let Err(err) = storage.put(view, signature).await {
+                            error!(?err, view, "failed to put seed");
+                            return;
+                        }
+                        if let Err(err) = storage.sync().await {
+                            error!(?err, view, "failed to sync seed");
+                            return;
+                        }
                     }
 
                     // Notify listeners
@@ -272,8 +297,13 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                 }
                 Message::Produce { view, response } => {
                     // Serve seed from storage
-                    let Some(encoded) = storage.get(view).await.expect("failed to get seed") else {
-                        continue;
+                    let encoded = match storage.get(view).await {
+                        Ok(Some(encoded)) => encoded,
+                        Ok(None) => continue,
+                        Err(err) => {
+                            error!(?err, view, "failed to get seed");
+                            return;
+                        }
                     };
                     let _ = response.send(encoded.encode().into());
                 }
@@ -282,8 +312,13 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
             // Attempt to upload any seeds
             while uploads_outstanding < self.config.max_uploads_outstanding {
                 // Get next seed
-                let Some(seed) = storage.get(cursor).await.expect("failed to get seed") else {
-                    break;
+                let seed = match storage.get(cursor).await {
+                    Ok(Some(seed)) => seed,
+                    Ok(None) => break,
+                    Err(err) => {
+                        error!(?err, cursor, "failed to get seed");
+                        return;
+                    }
                 };
 
                 // Increment uploads outstanding
