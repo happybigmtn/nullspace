@@ -56,17 +56,22 @@ const WRITE_BUFFER: NonZero<usize> = NZUsize!(1024 * 1024); // 1MB
 const MAX_REPAIR: u64 = 20;
 
 /// Configuration for the [Engine].
-pub struct Config<B: Blocker<PublicKey = PublicKey>, I: Indexer> {
-    pub blocker: B,
+pub struct IdentityConfig {
+    pub signer: PrivateKey,
+    pub polynomial: Poly<Evaluation>,
+    pub share: group::Share,
+    pub participants: Vec<PublicKey>,
+}
+
+pub struct StorageConfig {
     pub partition_prefix: String,
     pub blocks_freezer_table_initial_size: u32,
     pub finalized_freezer_table_initial_size: u32,
     pub buffer_pool_page_size: NonZeroUsize,
     pub buffer_pool_capacity: NonZeroUsize,
-    pub signer: PrivateKey,
-    pub polynomial: Poly<Evaluation>,
-    pub share: group::Share,
-    pub participants: Vec<PublicKey>,
+}
+
+pub struct ConsensusConfig {
     pub mailbox_size: usize,
     pub backfill_quota: Quota,
     pub deque_size: usize,
@@ -81,12 +86,22 @@ pub struct Config<B: Blocker<PublicKey = PublicKey>, I: Indexer> {
     pub max_fetch_size: usize,
     pub fetch_concurrent: usize,
     pub fetch_rate_per_peer: Quota,
+}
 
+pub struct ApplicationConfig<I: Indexer> {
     pub indexer: I,
     pub execution_concurrency: usize,
     pub max_uploads_outstanding: usize,
     pub mempool_max_backlog: usize,
     pub mempool_max_transactions: usize,
+}
+
+pub struct Config<B: Blocker<PublicKey = PublicKey>, I: Indexer> {
+    pub blocker: B,
+    pub identity: IdentityConfig,
+    pub storage: StorageConfig,
+    pub consensus: ConsensusConfig,
+    pub application: ApplicationConfig<I>,
 }
 
 /// The engine that drives the [application].
@@ -142,29 +157,32 @@ impl<
     /// Create a new [Engine].
     pub async fn new(context: E, cfg: Config<B, I>) -> Self {
         // Create the buffer pool
-        let buffer_pool = PoolRef::new(cfg.buffer_pool_page_size, cfg.buffer_pool_capacity);
+        let buffer_pool = PoolRef::new(
+            cfg.storage.buffer_pool_page_size,
+            cfg.storage.buffer_pool_capacity,
+        );
 
         // Create the application
-        let identity = *public::<MinSig>(&cfg.polynomial);
+        let identity = *public::<MinSig>(&cfg.identity.polynomial);
         let (application, view_supervisor, epoch_supervisor, application_mailbox) =
             application::Actor::new(
                 context.with_label("application"),
                 application::Config {
-                    participants: cfg.participants.clone(),
-                    polynomial: cfg.polynomial.clone(),
-                    share: cfg.share.clone(),
-                    mailbox_size: cfg.mailbox_size,
-                    partition_prefix: format!("{}-application", cfg.partition_prefix),
+                    participants: cfg.identity.participants.clone(),
+                    polynomial: cfg.identity.polynomial.clone(),
+                    share: cfg.identity.share.clone(),
+                    mailbox_size: cfg.consensus.mailbox_size,
+                    partition_prefix: format!("{}-application", cfg.storage.partition_prefix),
                     mmr_items_per_blob: MMR_ITEMS_PER_BLOB,
                     mmr_write_buffer: WRITE_BUFFER,
                     log_items_per_section: LOG_ITEMS_PER_SECTION,
                     log_write_buffer: WRITE_BUFFER,
                     locations_items_per_blob: LOCATIONS_ITEMS_PER_BLOB,
                     buffer_pool: buffer_pool.clone(),
-                    indexer: cfg.indexer.clone(),
-                    execution_concurrency: cfg.execution_concurrency,
-                    mempool_max_backlog: cfg.mempool_max_backlog,
-                    mempool_max_transactions: cfg.mempool_max_transactions,
+                    indexer: cfg.application.indexer.clone(),
+                    execution_concurrency: cfg.application.execution_concurrency,
+                    mempool_max_backlog: cfg.application.mempool_max_backlog,
+                    mempool_max_transactions: cfg.application.mempool_max_transactions,
                 },
             );
 
@@ -172,18 +190,18 @@ impl<
         let (seeder, seeder_mailbox) = seeder::Actor::new(
             context.with_label("seeder"),
             seeder::Config {
-                indexer: cfg.indexer.clone(),
+                indexer: cfg.application.indexer.clone(),
                 identity,
                 supervisor: view_supervisor.clone(),
                 namespace: NAMESPACE.to_vec(),
-                public_key: cfg.signer.public_key(),
-                backfill_quota: cfg.backfill_quota,
-                mailbox_size: cfg.mailbox_size,
-                partition_prefix: format!("{}-seeder", cfg.partition_prefix),
+                public_key: cfg.identity.signer.public_key(),
+                backfill_quota: cfg.consensus.backfill_quota,
+                mailbox_size: cfg.consensus.mailbox_size,
+                partition_prefix: format!("{}-seeder", cfg.storage.partition_prefix),
                 items_per_blob: MMR_ITEMS_PER_BLOB,
                 write_buffer: WRITE_BUFFER,
                 replay_buffer: REPLAY_BUFFER,
-                max_uploads_outstanding: cfg.max_uploads_outstanding,
+                max_uploads_outstanding: cfg.application.max_uploads_outstanding,
             },
         );
 
@@ -194,17 +212,17 @@ impl<
                 identity,
                 supervisor: view_supervisor.clone(),
                 namespace: NAMESPACE.to_vec(),
-                public_key: cfg.signer.public_key(),
-                backfill_quota: cfg.backfill_quota,
-                mailbox_size: cfg.mailbox_size,
-                partition: format!("{}-aggregator", cfg.partition_prefix),
+                public_key: cfg.identity.signer.public_key(),
+                backfill_quota: cfg.consensus.backfill_quota,
+                mailbox_size: cfg.consensus.mailbox_size,
+                partition: format!("{}-aggregator", cfg.storage.partition_prefix),
                 buffer_pool: buffer_pool.clone(),
                 prunable_items_per_blob: CACHE_ITEMS_PER_BLOB,
                 persistent_items_per_blob: CERTIFICATES_ITEMS_PER_BLOB,
                 write_buffer: WRITE_BUFFER,
                 replay_buffer: REPLAY_BUFFER,
-                indexer: cfg.indexer.clone(),
-                max_uploads_outstanding: cfg.max_uploads_outstanding,
+                indexer: cfg.application.indexer.clone(),
+                max_uploads_outstanding: cfg.application.max_uploads_outstanding,
             },
         );
 
@@ -212,9 +230,9 @@ impl<
         let (buffer, buffer_mailbox) = buffered::Engine::new(
             context.with_label("buffer"),
             buffered::Config {
-                public_key: cfg.signer.public_key(),
-                mailbox_size: cfg.mailbox_size,
-                deque_size: cfg.deque_size,
+                public_key: cfg.identity.signer.public_key(),
+                mailbox_size: cfg.consensus.mailbox_size,
+                deque_size: cfg.consensus.deque_size,
                 priority: true,
                 codec_config: (),
             },
@@ -225,19 +243,20 @@ impl<
             marshal::Actor::init(
                 context.with_label("marshal"),
                 marshal::Config {
-                    public_key: cfg.signer.public_key(),
+                    public_key: cfg.identity.signer.public_key(),
                     identity,
                     coordinator: view_supervisor.clone(),
-                    partition_prefix: format!("{}-marshal", cfg.partition_prefix),
-                    mailbox_size: cfg.mailbox_size,
-                    backfill_quota: cfg.backfill_quota,
+                    partition_prefix: format!("{}-marshal", cfg.storage.partition_prefix),
+                    mailbox_size: cfg.consensus.mailbox_size,
+                    backfill_quota: cfg.consensus.backfill_quota,
                     view_retention_timeout: cfg
+                        .consensus
                         .activity_timeout
                         .saturating_mul(SYNCER_ACTIVITY_TIMEOUT_MULTIPLIER),
                     namespace: NAMESPACE.to_vec(),
                     prunable_items_per_section: PRUNABLE_ITEMS_PER_SECTION,
                     immutable_items_per_section: IMMUTABLE_ITEMS_PER_SECTION,
-                    freezer_table_initial_size: cfg.blocks_freezer_table_initial_size,
+                    freezer_table_initial_size: cfg.storage.blocks_freezer_table_initial_size,
                     freezer_table_resize_frequency: FREEZER_TABLE_RESIZE_FREQUENCY,
                     freezer_table_resize_chunk_size: FREEZER_TABLE_RESIZE_CHUNK_SIZE,
                     freezer_journal_target_size: FREEZER_JOURNAL_TARGET_SIZE,
@@ -259,22 +278,22 @@ impl<
             context.with_label("consensus"),
             threshold_simplex::Config {
                 namespace: NAMESPACE.to_vec(),
-                crypto: cfg.signer,
+                crypto: cfg.identity.signer,
                 automaton: application_mailbox.clone(),
                 relay: application_mailbox.clone(),
                 reporter,
                 supervisor: view_supervisor,
-                partition: format!("{}-consensus", cfg.partition_prefix),
-                mailbox_size: cfg.mailbox_size,
-                leader_timeout: cfg.leader_timeout,
-                notarization_timeout: cfg.notarization_timeout,
-                nullify_retry: cfg.nullify_retry,
-                fetch_timeout: cfg.fetch_timeout,
-                activity_timeout: cfg.activity_timeout,
-                skip_timeout: cfg.skip_timeout,
-                max_fetch_count: cfg.max_fetch_count,
-                fetch_concurrent: cfg.fetch_concurrent,
-                fetch_rate_per_peer: cfg.fetch_rate_per_peer,
+                partition: format!("{}-consensus", cfg.storage.partition_prefix),
+                mailbox_size: cfg.consensus.mailbox_size,
+                leader_timeout: cfg.consensus.leader_timeout,
+                notarization_timeout: cfg.consensus.notarization_timeout,
+                nullify_retry: cfg.consensus.nullify_retry,
+                fetch_timeout: cfg.consensus.fetch_timeout,
+                activity_timeout: cfg.consensus.activity_timeout,
+                skip_timeout: cfg.consensus.skip_timeout,
+                max_fetch_count: cfg.consensus.max_fetch_count,
+                fetch_concurrent: cfg.consensus.fetch_concurrent,
+                fetch_rate_per_peer: cfg.consensus.fetch_rate_per_peer,
                 replay_buffer: REPLAY_BUFFER,
                 write_buffer: WRITE_BUFFER,
                 buffer_pool: buffer_pool.clone(),
@@ -296,8 +315,8 @@ impl<
                 rebroadcast_timeout: NZDuration!(Duration::from_secs(10)),
                 epoch_bounds: (0, 0),
                 window: NZU64!(16),
-                activity_timeout: cfg.activity_timeout,
-                journal_partition: format!("{}-aggregation", cfg.partition_prefix),
+                activity_timeout: cfg.consensus.activity_timeout,
+                journal_partition: format!("{}-aggregation", cfg.storage.partition_prefix),
                 journal_write_buffer: WRITE_BUFFER,
                 journal_replay_buffer: REPLAY_BUFFER,
                 journal_heights_per_section: NZU64!(16_384),

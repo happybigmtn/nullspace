@@ -63,6 +63,7 @@ This is a second-pass review of the current workspace with a focus on idiomatic 
 - [x] (**behavior-changing**) `execution/src/state_transition.rs`: fail on non-sequential height gaps instead of silently no-op’ing.
 - [x] `execution/src/state_transition.rs`: compare recovery outputs via `Eq` (no `encode()` allocations).
 - [x] `node/src/application/actor.rs`: cache per-account next nonce for inbound tx ingestion (reduces `nonce(&state, ...)` reads).
+- [x] `node/src/{engine.rs,main.rs,tests.rs}`: refactor `engine::Config` into nested structs (`IdentityConfig`, `StorageConfig`, `ConsensusConfig`, `ApplicationConfig`) to reduce parameter soup.
 
 ---
 
@@ -413,13 +414,11 @@ cache.put(height, proofs).await.context("cache put")?;
 - Wires together application, seeder, aggregator, buffer, marshal, consensus, and aggregation engines.
 - Owns many constants governing storage layout and networking limits.
 
+### Progress (implemented)
+- `engine::Config` is now grouped into `IdentityConfig`, `StorageConfig`, `ConsensusConfig`, and `ApplicationConfig` (behavior-preserving structural refactor).
+
 ### Top Issues (ranked)
-1. **Config surface is “flat” and easy to misconfigure**
-   - Impact: difficult to reason about; increases operational risk.
-   - Risk: medium.
-   - Effort: medium.
-   - Location: `node/src/engine.rs:46`–`94` and `node/src/main.rs` mapping.
-2. **Large constant block without clear rationale or sizing guidance**
+1. **Large constant block without clear rationale or sizing guidance**
    - Impact: hard to tune; unclear memory/disk impacts.
    - Risk: low–medium.
    - Effort: low.
@@ -442,7 +441,7 @@ cache.put(height, proofs).await.context("cache put")?;
 
 ### Refactor Plan
 - Phase 1: document constants with concrete sizing math and operational tradeoffs.
-- Phase 2: refactor config into nested structs; keep YAML/backcompat via serde defaults.
+- Phase 2 (**done**): refactor config into nested structs; update call sites.
 - Phase 3: add a “dry-run sizing report” mode to print derived resource estimates (**behavior-changing** if you add CLI flags).
 
 ### Open Questions
