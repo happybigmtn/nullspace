@@ -28,7 +28,9 @@ use futures::{
 };
 use governor::clock::Clock as GClock;
 use nullspace_types::Seed;
+use prometheus_client::metrics::{counter::Counter, gauge::Gauge};
 use rand::RngCore;
+use std::sync::atomic::AtomicU64;
 use tracing::{debug, error, info, warn};
 
 const BATCH_ENQUEUE: usize = 20;
@@ -78,6 +80,32 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
             impl Receiver<PublicKey = PublicKey>,
         ),
     ) {
+        // Metrics
+        let seed_upload_attempts: Counter<u64, AtomicU64> = Counter::default();
+        let seed_upload_failures: Counter<u64, AtomicU64> = Counter::default();
+        let seed_uploads_outstanding: Gauge = Gauge::default();
+        let seed_upload_lag: Gauge = Gauge::default();
+        self.context.register(
+            "seed_upload_attempts_total",
+            "Number of attempts to upload seeds to the indexer",
+            seed_upload_attempts.clone(),
+        );
+        self.context.register(
+            "seed_upload_failures_total",
+            "Number of seed upload failures to the indexer",
+            seed_upload_failures.clone(),
+        );
+        self.context.register(
+            "seed_uploads_outstanding",
+            "Number of concurrent seed uploads in flight",
+            seed_uploads_outstanding.clone(),
+        );
+        self.context.register(
+            "seed_upload_lag",
+            "Difference between next upload cursor and last contiguous uploaded seed",
+            seed_upload_lag.clone(),
+        );
+
         // Create metadata
         let mut metadata = match Metadata::<_, U64, u64>::init(
             self.context.with_label("metadata"),
@@ -152,6 +180,8 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
         let mut boundary = cursor;
         let mut tracked_uploads = RMap::new();
         info!(cursor, "initial seed cursor");
+        seed_upload_lag.set(0);
+        seed_uploads_outstanding.set(0);
 
         // Process messages
         loop {
@@ -162,7 +192,12 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
             match message {
                 Message::Uploaded { view } => {
                     // Decrement uploads outstanding
-                    uploads_outstanding -= 1;
+                    if uploads_outstanding == 0 {
+                        warn!(view, "unexpected seed upload completion with no outstanding uploads");
+                    } else {
+                        uploads_outstanding -= 1;
+                    }
+                    seed_uploads_outstanding.set(uploads_outstanding as i64);
 
                     // Track uploaded view
                     tracked_uploads.insert(view);
@@ -180,6 +215,7 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                         }
                         info!(boundary, "updated seed upload marker");
                     }
+                    seed_upload_lag.set(cursor.saturating_sub(boundary) as i64);
                 }
                 Message::Put(seed) => {
                     self.waiting.remove(&seed.view);
@@ -323,22 +359,31 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
 
                 // Increment uploads outstanding
                 uploads_outstanding += 1;
+                seed_uploads_outstanding.set(uploads_outstanding as i64);
 
                 // Upload seed to indexer
                 self.context.with_label("seed_submit").spawn({
                     let seed = Seed::new(cursor, seed);
                     let indexer = self.config.indexer.clone();
                     let mut channel = self.inbound.clone();
+                    let seed_upload_attempts = seed_upload_attempts.clone();
+                    let seed_upload_failures = seed_upload_failures.clone();
                     move |context| async move {
                         let view = seed.view();
-                        let mut attempts = 1;
+                        let mut attempts = 0u64;
+                        let mut backoff = Duration::from_millis(200);
                         loop {
-                            let Err(e) = indexer.submit_seed(seed.clone()).await else {
-                                break;
-                            };
-                            warn!(?e, attempts, "failed to upload seed");
-                            context.sleep(RETRY_DELAY).await;
-                            attempts += 1;
+                            attempts = attempts.saturating_add(1);
+                            seed_upload_attempts.inc();
+                            match indexer.submit_seed(seed.clone()).await {
+                                Ok(()) => break,
+                                Err(e) => {
+                                    seed_upload_failures.inc();
+                                    warn!(?e, view, attempts, "failed to upload seed");
+                                    context.sleep(backoff).await;
+                                    backoff = backoff.saturating_mul(2).min(RETRY_DELAY);
+                                }
+                            }
                         }
                         debug!(view, attempts, "seed uploaded to indexer");
                         let _ = channel.uploaded(view).await;
@@ -347,6 +392,7 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
 
                 // Increment cursor
                 cursor += 1;
+                seed_upload_lag.set(cursor.saturating_sub(boundary) as i64);
             }
         }
     }

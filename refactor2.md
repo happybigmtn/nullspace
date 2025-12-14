@@ -68,6 +68,9 @@ This is a second-pass review of the current workspace with a focus on idiomatic 
 - [x] `node/src/application/actor.rs`: remove `.expect`/`panic!` in init + steady-state; log fatal errors and exit actor (engine handles crash-fast shutdown).
 - [x] `node/src/seeder/actor.rs`: remove `.expect` on storage ops; log fatal errors and exit actor (crash-fast policy).
 - [x] `node/src/aggregator/actor.rs`: remove `unwrap`/`expect` on storage ops; log fatal errors and exit actor (crash-fast policy).
+- [x] `node/src/engine.rs`: honor runtime stop signal for graceful shutdown (no panic on stop).
+- [x] `node/src/{seeder,aggregator}/actor.rs`: add upload metrics (attempts/failures, outstanding, lag) and exponential backoff for indexer uploads.
+- [x] `node/src/{seeder,aggregator}/actor.rs`: harden `uploads_outstanding` decrement (no underflow on unexpected completion messages).
 
 ---
 
@@ -365,6 +368,7 @@ if !batcher.verify(&mut context) {
 ### Progress (implemented)
 - Proof decode limits are centralized in `types/src/api.rs` and reused by the aggregator.
 - Actor init + steady-state no longer use `unwrap`/`expect`; fatal storage errors are logged and cause the actor to exit (engine is crash-fast).
+- Summary uploads now use exponential backoff and emit metrics (attempts/failures, outstanding uploads, and upload lag).
 
 ### Top Issues (ranked)
 1. **Crash-fast on storage/indexer faults**
@@ -373,7 +377,7 @@ if !batcher.verify(&mut context) {
    - Effort: low (document) → medium (restart/retry design).
    - Location: `node/src/aggregator/actor.rs`; `node/src/engine.rs:526`.
 2. **Infinite retry loop for summary uploads**
-   - Impact: prolonged indexer outages lead to unbounded retries with fixed delay; hard to detect without explicit metrics.
+   - Impact: prolonged indexer outages lead to unbounded retries; now uses exponential backoff + metrics but still has no max-attempt cutover.
    - Risk: medium.
    - Effort: low.
    - Location: `node/src/aggregator/actor.rs:627`.
@@ -413,6 +417,7 @@ if !batcher.verify(&mut context) {
 ### Progress (implemented)
 - `engine::Config` is now grouped into `IdentityConfig`, `StorageConfig`, `ConsensusConfig`, and `ApplicationConfig` (behavior-preserving structural refactor).
 - Engine now terminates the node when any sub-actor exits/fails (abort remaining actors; avoid partial-liveness).
+- Engine now honors the runtime stop signal to allow clean shutdown without reporting it as an actor failure.
 
 ### Top Issues (ranked)
 1. **Large constant block without clear rationale or sizing guidance**
@@ -552,7 +557,7 @@ pub enum TransitionOutcome {
 ### Refactor Plan
 - Phase 1 (**done**): fail on height gaps; keep “already applied” as a no-op.
 - Phase 2 (**done**): remove recovery `encode()` allocations by comparing `Output` values directly.
-- Phase 3: add chaos tests that crash between events/state commits to validate invariants.
+- Phase 3 (**done**): add crash-recovery test that commits `events` but not `state`, then reruns transition (`execution/src/mocks.rs` tests).
 
 ### Open Questions
 - Do any callers rely on “no-op returns valid proof ranges” semantics?
@@ -1762,6 +1767,7 @@ if !(1..=35).contains(&number) || number % 3 == 0 { ... }
 ### Progress (implemented)
 - Listener sends are best-effort (dropped receivers no longer panic the actor).
 - Storage operations no longer use `.expect`; fatal storage errors are logged and cause the actor to exit (engine is crash-fast).
+- Seed uploads now use exponential backoff and emit metrics (attempts/failures, outstanding uploads, and upload lag).
 
 ### Top Issues (ranked)
 1. **Crash-fast on storage/indexer faults**
@@ -1770,7 +1776,7 @@ if !(1..=35).contains(&number) || number % 3 == 0 { ... }
    - Effort: low (document) → medium (restart/retry design).
    - Location: `node/src/seeder/actor.rs`; `node/src/engine.rs:526`.
 2. **Infinite retry loop for seed uploads**
-   - Impact: prolonged indexer outages lead to unbounded retries with fixed delay; hard to detect without explicit metrics.
+   - Impact: prolonged indexer outages lead to unbounded retries; now uses exponential backoff + metrics but still has no max-attempt cutover.
    - Risk: medium.
    - Effort: low.
    - Location: `node/src/seeder/actor.rs` (seed submit task loop).

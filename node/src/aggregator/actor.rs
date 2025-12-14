@@ -38,10 +38,11 @@ use nullspace_types::{
     execution::{Output, Progress, Value},
     genesis_digest,
 };
-use prometheus_client::metrics::gauge::Gauge;
+use prometheus_client::metrics::{counter::Counter, gauge::Gauge};
 use rand::RngCore;
 use std::{
     collections::{BTreeMap, BTreeSet},
+    sync::atomic::AtomicU64,
     time::Duration,
 };
 use tracing::{debug, error, info, warn};
@@ -201,6 +202,32 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
             impl Receiver<PublicKey = PublicKey>,
         ),
     ) {
+        // Metrics
+        let summary_upload_attempts: Counter<u64, AtomicU64> = Counter::default();
+        let summary_upload_failures: Counter<u64, AtomicU64> = Counter::default();
+        let summary_uploads_outstanding: Gauge = Gauge::default();
+        let summary_upload_lag: Gauge = Gauge::default();
+        self.context.register(
+            "summary_upload_attempts_total",
+            "Number of attempts to upload summaries to the indexer",
+            summary_upload_attempts.clone(),
+        );
+        self.context.register(
+            "summary_upload_failures_total",
+            "Number of summary upload failures to the indexer",
+            summary_upload_failures.clone(),
+        );
+        self.context.register(
+            "summary_uploads_outstanding",
+            "Number of concurrent summary uploads in flight",
+            summary_uploads_outstanding.clone(),
+        );
+        self.context.register(
+            "summary_upload_lag",
+            "Difference between next upload cursor and last contiguous uploaded summary",
+            summary_upload_lag.clone(),
+        );
+
         // Create storage
         let mut cache = match cache::Cache::<_, Proofs>::init(
             self.context.with_label("cache"),
@@ -291,6 +318,8 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
         let mut boundary = cursor;
         let mut tracked_uploads = RMap::new();
         info!(cursor, "initial summary cursor");
+        summary_uploads_outstanding.set(0);
+        summary_upload_lag.set(0);
 
         // Track pending aggregation work
         let mut proposal_requests: BTreeMap<u64, oneshot::Sender<Digest>> = BTreeMap::new();
@@ -303,7 +332,12 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
             match message {
                 Message::Uploaded { index } => {
                     // Decrement uploads outstanding
-                    uploads_outstanding -= 1;
+                    if uploads_outstanding == 0 {
+                        warn!(index, "unexpected summary upload completion with no outstanding uploads");
+                    } else {
+                        uploads_outstanding -= 1;
+                    }
+                    summary_uploads_outstanding.set(uploads_outstanding as i64);
 
                     // Track uploaded index
                     tracked_uploads.insert(index);
@@ -320,6 +354,7 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                         boundary = end_region;
                         info!(boundary, "updated summary upload marker");
                     }
+                    summary_upload_lag.set(cursor.saturating_sub(boundary) as i64);
                 }
                 Message::Executed {
                     view,
@@ -570,6 +605,7 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
 
                 // Increment uploads outstanding
                 uploads_outstanding += 1;
+                summary_uploads_outstanding.set(uploads_outstanding as i64);
 
                 // Get certificate
                 let certificate = match certificates.get(cursor).await {
@@ -618,15 +654,23 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                 self.context.with_label("summary_submit").spawn({
                     let indexer = self.config.indexer.clone();
                     let mut channel = self.inbound.clone();
+                    let summary_upload_attempts = summary_upload_attempts.clone();
+                    let summary_upload_failures = summary_upload_failures.clone();
                     move |context| async move {
-                        let mut attempts = 1;
+                        let mut attempts = 0u64;
+                        let mut backoff = Duration::from_millis(200);
                         loop {
-                            let Err(e) = indexer.submit_summary(summary.clone()).await else {
-                                break;
-                            };
-                            warn!(?e, attempts, "failed to upload summary");
-                            context.sleep(RETRY_DELAY).await;
-                            attempts += 1;
+                            attempts = attempts.saturating_add(1);
+                            summary_upload_attempts.inc();
+                            match indexer.submit_summary(summary.clone()).await {
+                                Ok(()) => break,
+                                Err(e) => {
+                                    summary_upload_failures.inc();
+                                    warn!(?e, cursor, attempts, "failed to upload summary");
+                                    context.sleep(backoff).await;
+                                    backoff = backoff.saturating_mul(2).min(RETRY_DELAY);
+                                }
+                            }
                         }
                         debug!(cursor, attempts, "summary uploaded to indexer");
                         channel.uploaded(cursor).await;
@@ -635,6 +679,7 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
 
                 // Increment cursor
                 cursor += 1;
+                summary_upload_lag.set(cursor.saturating_sub(boundary) as i64);
             }
         }
     }

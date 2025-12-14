@@ -21,7 +21,7 @@ use commonware_cryptography::{
     Signer,
 };
 use commonware_p2p::{Blocker, Receiver, Sender};
-use commonware_runtime::{buffer::PoolRef, Clock, Handle, Metrics, Spawner, Storage};
+use commonware_runtime::{buffer::PoolRef, signal::Signal, Clock, Handle, Metrics, Spawner, Storage};
 use commonware_utils::{NZDuration, NZUsize, NZU64};
 use governor::clock::Clock as GClock;
 use governor::Quota;
@@ -57,38 +57,78 @@ const REPLAY_BUFFER: NonZero<usize> = NZUsize!(8 * 1024 * 1024); // 8MB
 const WRITE_BUFFER: NonZero<usize> = NZUsize!(1024 * 1024); // 1MB
 const MAX_REPAIR: u64 = 20;
 
-struct NamedHandle<T>
+enum TaskCompletion<T>
+where
+    T: Send + 'static,
+{
+    Actor {
+        name: &'static str,
+        result: Result<T, commonware_runtime::Error>,
+    },
+    Stop {
+        value: i32,
+    },
+}
+
+enum NamedTaskInner<T>
+where
+    T: Send + 'static,
+{
+    Actor(Handle<T>),
+    Stop(Signal),
+}
+
+struct NamedTask<T>
 where
     T: Send + 'static,
 {
     name: &'static str,
-    handle: Handle<T>,
+    inner: NamedTaskInner<T>,
 }
 
-impl<T> NamedHandle<T>
+impl<T> NamedTask<T>
 where
     T: Send + 'static,
 {
-    fn new(name: &'static str, handle: Handle<T>) -> Self {
-        Self { name, handle }
+    fn actor(name: &'static str, handle: Handle<T>) -> Self {
+        Self {
+            name,
+            inner: NamedTaskInner::Actor(handle),
+        }
+    }
+
+    fn stop(name: &'static str, signal: Signal) -> Self {
+        Self {
+            name,
+            inner: NamedTaskInner::Stop(signal),
+        }
     }
 
     fn abort(&self) {
-        self.handle.abort();
+        if let NamedTaskInner::Actor(handle) = &self.inner {
+            handle.abort();
+        }
     }
 }
 
-impl<T> Future for NamedHandle<T>
+impl<T> Future for NamedTask<T>
 where
     T: Send + 'static,
 {
-    type Output = (&'static str, Result<T, commonware_runtime::Error>);
+    type Output = TaskCompletion<T>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let name = self.name;
-        match Pin::new(&mut self.handle).poll(cx) {
-            Poll::Ready(output) => Poll::Ready((name, output)),
-            Poll::Pending => Poll::Pending,
+        match &mut self.inner {
+            NamedTaskInner::Actor(handle) => match Pin::new(handle).poll(cx) {
+                Poll::Ready(result) => Poll::Ready(TaskCompletion::Actor { name, result }),
+                Poll::Pending => Poll::Pending,
+            },
+            NamedTaskInner::Stop(signal) => match Pin::new(signal).poll(cx) {
+                Poll::Ready(Ok(value)) => Poll::Ready(TaskCompletion::Stop { value }),
+                Poll::Ready(Err(_)) => Poll::Ready(TaskCompletion::Stop { value: 0 }),
+                Poll::Pending => Poll::Pending,
+            },
         }
     }
 }
@@ -506,30 +546,36 @@ impl<
 
         // Stop the node when any actor terminates. If we allowed the engine task to
         // continue, we'd leave the system in a partially alive state.
-        let handles = vec![
-            NamedHandle::new("seeder", seeder_handle),
-            NamedHandle::new("aggregation", aggregation_handle),
-            NamedHandle::new("aggregator", aggregator_handle),
-            NamedHandle::new("buffer", buffer_handle),
-            NamedHandle::new("application", application_handle),
-            NamedHandle::new("marshal", marshal_handle),
-            NamedHandle::new("consensus", consensus_handle),
+        let tasks = vec![
+            NamedTask::actor("seeder", seeder_handle),
+            NamedTask::actor("aggregation", aggregation_handle),
+            NamedTask::actor("aggregator", aggregator_handle),
+            NamedTask::actor("buffer", buffer_handle),
+            NamedTask::actor("application", application_handle),
+            NamedTask::actor("marshal", marshal_handle),
+            NamedTask::actor("consensus", consensus_handle),
+            NamedTask::stop("engine", self.context.stopped()),
         ];
 
-        let ((actor, result), _index, remaining) = futures::future::select_all(handles).await;
-        for handle in remaining {
-            handle.abort();
+        let (completed, _index, remaining) = futures::future::select_all(tasks).await;
+        for task in &remaining {
+            task.abort();
         }
 
-        match result {
-            Ok(()) => {
-                warn!(actor, "engine actor exited");
-                panic!("engine actor exited: {actor}");
+        match completed {
+            TaskCompletion::Stop { value } => {
+                warn!(value, "engine stop signal received");
             }
-            Err(err) => {
-                error!(?err, actor, "engine actor failed");
-                panic!("engine actor failed: {actor}: {err:?}");
-            }
+            TaskCompletion::Actor { name, result } => match result {
+                Ok(()) => {
+                    warn!(actor = name, "engine actor exited");
+                    panic!("engine actor exited: {name}");
+                }
+                Err(err) => {
+                    error!(?err, actor = name, "engine actor failed");
+                    panic!("engine actor failed: {name}: {err:?}");
+                }
+            },
         }
     }
 }
