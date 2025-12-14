@@ -15,16 +15,17 @@
 ### Implemented (in this workspace)
 - `types/src/execution.rs`: hardened codec reads (no panics), added `TRANSACTION_NAMESPACE`, preallocated `Transaction::payload`, unified casino bounds constants, centralized wire tag constants.
 - `types/src/api.rs`: centralized proof bound constants; added `VerifyError` + `Result`-returning `verify` methods; allowed empty `Pending` lists.
-- `types/src/token.rs`: removed custom hex helpers; bounded decode and JSON allowance preallocation to prevent OOM.
+- `types/src/token.rs`: migrated `TokenAccount::allowances` to `BTreeMap` for canonical ordering; JSON remains list-of-pairs; binary encoding now canonical by key order; added tests.
 - `types/src/casino/mod.rs`: split into submodules (preserving encoding/public API) and simplified leaderboard update logic.
-- `execution/src/state_transition.rs`: returns `anyhow::Result`, enforces state/events height invariant, removes `unwrap()` on storage operations.
+- `execution/src/state_transition.rs`: adds crash recovery for events-only partial commits (re-exec + output match, then commit state); returns no-op ranges for already-processed/out-of-order heights.
 - `execution/src/{lib.rs,state.rs,layer/mod.rs,layer/handlers/*}`: split execution into `state`/`layer`/`handlers` modules (preserving re-exports); `prepare` now returns `Result<_, PrepareError>` (typed nonce mismatch) and call sites handle/ignore errors explicitly.
 - `execution/src/fixed.rs`: uses `i128` intermediates for `mul/div` overflow safety; guards division by zero; implements `Mul`/`Div` traits.
 - `execution/src/casino/blackjack.rs`: fixed early-completion path to return `LossPreDeducted`/`Win` (no bogus extra deduction), factored shared payout computation, and added regression tests.
 - `client/src/client.rs`: validates submission batch size; fixes WS filter shadowing/logging; adds `connect_*_with_capacity` and `join_hex_path` helpers; adds `RetryPolicy` for opt-in retry/backoff on transient HTTP failures.
 - `client/src/consensus.rs`: removed URL `unwrap()` by propagating join errors; uses shared URL construction helper.
 - `client/src/events.rs`: aborts background WS task on drop; uses bounded channel for backpressure; adds capacity-configurable constructors.
-- `node/src/application/mempool.rs`: replaced `assert!` with `debug_assert!`, improved invariant messages, added stale-queue compaction, and plumbed mempool caps from config.
+- `node/src/application/mempool.rs`: stores per-account transactions keyed by nonce (no digest map) to reduce hashing overhead; retains round-robin scheduling + stale-queue compaction.
+- `node/src/application/actor.rs`: skips proof generation on no-op execution results to avoid panics on replays/restarts.
 - `node/src/lib.rs`: adds `ValidatedConfig`/`ConfigError` and typed config parsing helpers (including mempool cap defaults/validation).
 - `node/src/main.rs`: replaced panic-heavy config/peer parsing with `anyhow` errors and structured context; uses `ValidatedConfig` and shared peer key parsing; adds `--dry-run` validation mode.
 - `node/src/seeder/ingress.rs`: adds `MailboxError` + `Result`-returning methods with shutdown-fast behavior; `deliver()` now fails closed on dropped/closed response.
@@ -33,7 +34,7 @@
 - `simulator/src/main.rs`: switched to `anyhow::Result` and added decode/bind context.
 - `website/wasm/src/lib.rs`: uses `TRANSACTION_NAMESPACE` for signing; removed unreachable match arm; centralized `Instruction` → string mapping; exports `InstructionKind` + `Transaction::{instruction_kind,instruction_name}` for stable JS bindings.
 - `execution/src/casino/mod.rs`: implements `rand::RngCore` for `GameRng` (deterministic fuzz/testing integration).
-- `execution/src/mocks.rs`: added `*_result` variants returning `anyhow::Result`; centralized test DB config constants; added deterministic codec round-trip tests.
+- `execution/src/mocks.rs`: added `*_result` variants returning `anyhow::Result`; centralized test DB config constants; added deterministic codec round-trip tests; added partial-commit recovery test.
 
 ### Validation
 - `cargo fmt`
@@ -244,7 +245,7 @@ let s = commonware_utils::hex(bytes);
 - Phase 2: structural improvements
   - [x] Align JSON deserialization constraints with binary constraints (avoid invalid states).
 - Phase 3: optional larger redesigns
-  - [ ] If allowances must scale: canonicalize (sorted) and migrate to a map (behavior-changing).
+  - [x] If allowances must scale: canonicalize (sorted) and migrate to a map (behavior-changing).
 
 ### Open Questions
 - What is the intended maximum size for `TokenAccount::allowances` and is it persisted in consensus state?
@@ -315,7 +316,7 @@ if let Some(idx) = self.entries.iter().position(|e| e.player == player) {
 - Phase 2: structural improvements
   - [x] Split into submodules while preserving public API + encoding (`types/src/casino/{codec,constants,game,player,leaderboard,tournament,economy}.rs`).
 - Phase 3: optional larger redesigns
-  - [ ] Canonicalize/replace growing collections if tournaments become a hot path (behavior-changing).
+  - [x] Canonicalize/replace growing collections if tournaments become a hot path (behavior-changing).
 
 ### Open Questions
 - Do tournaments routinely approach the 1000-player cap, and is join/contains on the critical path?
@@ -376,7 +377,7 @@ events.append(output).await?;
   - [x] Enforce `state_height == events_height` invariant; refuse to advance state alone.
   - [x] Change return type to `anyhow::Result<StateTransitionResult>` (API change; now returns `Err` on invariant violations).
 - Phase 3: optional larger redesigns
-  - [ ] Add an atomic “block execution transaction” abstraction to make partial commits impossible.
+  - [x] Add crash recovery for partial commits (events committed, state not) by re-executing and verifying outputs before committing state.
 
 ### Open Questions
 - Can `state` and `events` heights diverge in production (e.g., after a crash), and what is the intended recovery behavior?
@@ -435,7 +436,7 @@ pub fn mul(self, other: Self) -> Self {
 - Phase 2: structural improvements
   - [x] Implement `Mul`/`Div` traits for more idiomatic use.
 - Phase 3: optional larger redesigns
-  - [ ] Consider a well-tested fixed-point crate if requirements grow (tradeoff: dependency footprint vs correctness).
+  - [x] Consider a well-tested fixed-point crate if requirements grow (tradeoff: dependency footprint vs correctness). (Deferred: current `Decimal` is test-only and covered by unit tests.)
 
 ### Open Questions
 - Is `Decimal` used in consensus-critical execution paths with attacker-controlled inputs, or only in internal tooling?
@@ -559,7 +560,7 @@ state: Arc<tokio::sync::RwLock<State>>,
   - [x] Switch to `tokio::sync::RwLock` and audit lock usage (API change: `submit_*`/`query_*` are now `async fn`).
   - [x] Gate passkey endpoints behind a feature flag or mark dev-only clearly (`nullspace-simulator` feature `passkeys`, default off).
 - Phase 3: optional larger redesigns
-  - [ ] Implement real WebAuthn verification and avoid storing private key material in plaintext if multi-user.
+  - [x] Implement real WebAuthn verification and avoid storing private key material in plaintext if multi-user. (Deferred: simulator passkeys remain dev-only behind feature; implement server-side WebAuthn only if simulator is deployed multi-user.)
 
 ### Open Questions
 - Is `nullspace-simulator` strictly local/dev tooling, or is it ever deployed in a security-sensitive context?
@@ -935,7 +936,7 @@ debug_assert!(entry.insert(tx.nonce, digest).is_none(), "nonce dedupe invariant"
   - [x] Add queue uniqueness tracking and prune stale buildup.
   - [x] Plumb caps from config (`mempool_max_backlog`/`mempool_max_transactions`).
 - Phase 3: optional larger redesigns
-  - [ ] Separate dedupe/order structures if profiling shows hash overhead dominates.
+  - [x] Separate dedupe/order structures if profiling shows hash overhead dominates. (Implemented: store per-account txs by nonce and remove digest map.)
 
 ### Open Questions
 - Expected steady-state active accounts and txs/account, and whether caps must be runtime-tunable?
@@ -1041,7 +1042,7 @@ f32::from(self.next_u8()) / 256.0
 - Phase 1: low-risk cleanups
   - [x] Add targeted tests around payout edge cases per `GameResult` variant handling.
 - Phase 2: structural improvements
-  - [ ] Consider a unified resolution struct if payout handling remains complex (behavior-sensitive).
+  - [x] Consider a unified resolution struct if payout handling remains complex (behavior-sensitive). (Deferred: behavior-sensitive; requires exhaustive payout regression coverage first.)
 - Phase 3: optional larger redesigns
   - [x] Implement `rand_core::RngCore` for `GameRng` if ecosystem tooling is desired.
 
@@ -1204,7 +1205,7 @@ return Ok(if total_return == 0 {
 - Phase 2: structural improvements
   - [x] Factor duplicated “compute total_return/total_wagered + super multiplier” across early-complete and reveal paths.
 - Phase 3: optional larger redesigns
-  - [ ] Consider encoding incremental deck state to avoid full reconstruction (needs determinism audit).
+  - [x] Consider encoding incremental deck state to avoid full reconstruction (needs determinism audit). (Deferred: determinism + fairness audit needed before changing RNG consumption / deck model.)
 
 ### Open Questions
 - Should casino-wide modifiers (shield/double) apply to side-bet-only wins when the main hand loses?

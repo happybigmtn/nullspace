@@ -303,4 +303,94 @@ mod tests {
                 .expect("summary verify failed");
         });
     }
+
+    #[test]
+    fn test_state_transition_recovers_after_events_only_commit() {
+        let executor = Runner::default();
+        executor.start(|context| async move {
+            let (network_secret, network_identity) = create_network_keypair();
+            let (mut state, mut events) = create_adbs(&context).await;
+
+            let (private, _) = create_account_keypair(1);
+            let tx = Transaction::sign(
+                &private,
+                0,
+                Instruction::CasinoRegister {
+                    name: "TestPlayer".to_string(),
+                },
+            );
+
+            let view = 1;
+            let height = 1;
+            let seed = create_seed(&network_secret, view);
+
+            // Simulate a crash after committing `events` but before committing `state`.
+            let events_start_op = events.op_count();
+            let mut layer = crate::Layer::new(
+                &mut state,
+                network_identity.clone(),
+                NAMESPACE,
+                seed.clone(),
+            );
+
+            #[cfg(feature = "parallel")]
+            let pool = ThreadPool::new(
+                rayon::ThreadPoolBuilder::new()
+                    .num_threads(1)
+                    .build()
+                    .expect("failed to create execution pool"),
+            );
+
+            let (outputs, _) = layer
+                .execute(
+                    #[cfg(feature = "parallel")]
+                    pool.clone(),
+                    vec![tx.clone()],
+                )
+                .await;
+
+            for output in outputs {
+                events.append(output).await.expect("append output");
+            }
+            events
+                .commit(Some(Output::Commit {
+                    height,
+                    start: events_start_op,
+                }))
+                .await
+                .expect("commit events");
+
+            let events_op_count_before = events.op_count();
+
+            // Now rerun the state transition; it should detect the partial-commit and recover.
+            let result = state_transition::execute_state_transition(
+                &mut state,
+                &mut events,
+                network_identity,
+                height,
+                seed,
+                vec![tx],
+                #[cfg(feature = "parallel")]
+                pool,
+            )
+            .await
+            .expect("recovery state transition failed");
+
+            assert!(result.state_end_op > result.state_start_op);
+            assert_eq!(result.events_start_op, events_start_op);
+            assert_eq!(result.events_end_op, events_op_count_before);
+            assert_eq!(events.op_count(), events_op_count_before);
+
+            let state_height = state
+                .get_metadata()
+                .await
+                .expect("read state metadata")
+                .and_then(|(_, v)| match v {
+                    Some(Value::Commit { height, start: _ }) => Some(height),
+                    _ => None,
+                })
+                .unwrap_or(0);
+            assert_eq!(state_height, height);
+        });
+    }
 }

@@ -1,4 +1,4 @@
-use commonware_cryptography::{ed25519::PublicKey, sha256::Digest, Digestible};
+use commonware_cryptography::ed25519::PublicKey;
 use commonware_runtime::Metrics;
 use nullspace_types::execution::Transaction;
 use prometheus_client::metrics::gauge::Gauge;
@@ -16,8 +16,8 @@ const DEFAULT_MAX_TRANSACTIONS: usize = 100_000;
 pub struct Mempool {
     max_backlog: usize,
     max_transactions: usize,
-    transactions: HashMap<Digest, Transaction>,
-    tracked: HashMap<PublicKey, BTreeMap<u64, Digest>>,
+    total_transactions: usize,
+    tracked: HashMap<PublicKey, BTreeMap<u64, Transaction>>,
     /// We store the public keys of the transactions to be processed next (rather than transactions
     /// received by digest) because we may receive transactions out-of-order (and/or some may have
     /// already been processed) and should just try return the transaction with the lowest nonce we
@@ -58,7 +58,7 @@ impl Mempool {
         Self {
             max_backlog,
             max_transactions,
-            transactions: HashMap::new(),
+            total_transactions: 0,
             tracked: HashMap::new(),
             queue: VecDeque::new(),
             queued: HashSet::new(),
@@ -71,20 +71,14 @@ impl Mempool {
     /// Add a transaction to the mempool.
     pub fn add(&mut self, tx: Transaction) {
         // If there are too many transactions, ignore
-        if self.transactions.len() >= self.max_transactions {
-            return;
-        }
-
-        // Determine if duplicate
-        let digest = tx.digest();
-        if self.transactions.contains_key(&digest) {
-            // If we already have a transaction with this digest, we don't need to track it
+        if self.total_transactions >= self.max_transactions {
             return;
         }
 
         // Track the transaction
         let public = tx.public.clone();
         let entry = self.tracked.entry(public.clone()).or_default();
+        let was_empty = entry.is_empty();
 
         // If there already exists a transaction at some nonce, return
         if entry.contains_key(&tx.nonce) {
@@ -92,28 +86,27 @@ impl Mempool {
         }
 
         // Insert the transaction into the mempool
-        let replaced = entry.insert(tx.nonce, digest);
+        let replaced = entry.insert(tx.nonce, tx);
         debug_assert!(
             replaced.is_none(),
             "duplicate nonce per account should have been filtered"
         );
-        self.transactions.insert(digest, tx);
+        self.total_transactions += 1;
 
         // If there are too many transactions, remove the furthest in the future
-        let entries = entry.len();
-        if entries > self.max_backlog {
-            let (_, future) = entry.pop_last().unwrap();
-            self.transactions.remove(&future);
+        if entry.len() > self.max_backlog {
+            entry.pop_last();
+            self.total_transactions = self.total_transactions.saturating_sub(1);
         }
 
         // Add to queue if this is the first entry (otherwise the public key will already be
         // in the queue)
-        if entries == 1 && self.queued.insert(public.clone()) {
+        if was_empty && !entry.is_empty() && self.queued.insert(public.clone()) {
             self.queue.push_back(public);
         }
 
         // Update metrics
-        self.unique.set(self.transactions.len() as i64);
+        self.unique.set(self.total_transactions as i64);
         self.accounts.set(self.tracked.len() as i64);
     }
 
@@ -124,14 +117,14 @@ impl Mempool {
             return;
         };
         let remove = loop {
-            let Some((nonce, digest)) = tracked.first_key_value() else {
+            let Some((nonce, _tx)) = tracked.first_key_value() else {
                 break true;
             };
             if nonce >= &min {
                 break false;
             }
-            self.transactions.remove(digest);
             tracked.pop_first();
+            self.total_transactions = self.total_transactions.saturating_sub(1);
         };
 
         // If we removed a transaction, remove the address from the tracked map
@@ -141,7 +134,7 @@ impl Mempool {
         }
 
         // Update metrics
-        self.unique.set(self.transactions.len() as i64);
+        self.unique.set(self.total_transactions as i64);
         self.accounts.set(self.tracked.len() as i64);
     }
 
@@ -172,7 +165,7 @@ impl Mempool {
                 }
                 continue;
             };
-            let Some((_, digest)) = tracked.pop_first() else {
+            let Some((_, tx)) = tracked.pop_first() else {
                 self.tracked.remove(&address);
                 stale_skips += 1;
                 if stale_skips >= COMPACT_AFTER_STALE_SKIPS {
@@ -196,16 +189,12 @@ impl Mempool {
                 self.tracked.remove(&address);
             }
 
-            // Remove the transaction from the mempool
-            let tx = self
-                .transactions
-                .remove(&digest)
-                .expect("tracked digest must exist in transactions map");
+            self.total_transactions = self.total_transactions.saturating_sub(1);
             break Some(tx);
         };
 
         // Update metrics
-        self.unique.set(self.transactions.len() as i64);
+        self.unique.set(self.total_transactions as i64);
         self.accounts.set(self.tracked.len() as i64);
 
         tx
@@ -215,6 +204,7 @@ impl Mempool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use commonware_cryptography::Digestible;
     use commonware_cryptography::{ed25519::PrivateKey, PrivateKeyExt, Signer};
     use commonware_runtime::{deterministic, Runner};
     use nullspace_types::execution::Instruction;
@@ -227,16 +217,19 @@ mod tests {
 
             let private = PrivateKey::from_seed(1);
             let tx = Transaction::sign(&private, 0, Instruction::CasinoDeposit { amount: 100 });
-            let digest = tx.digest();
             let public = tx.public.clone();
 
             mempool.add(tx);
 
-            assert_eq!(mempool.transactions.len(), 1);
-            assert!(mempool.transactions.contains_key(&digest));
+            assert_eq!(mempool.total_transactions, 1);
             assert_eq!(mempool.tracked.len(), 1);
             assert!(mempool.tracked.contains_key(&public));
             assert_eq!(mempool.queue.len(), 1);
+
+            let tracked = mempool.tracked.get(&public).unwrap();
+            let stored_tx = tracked.get(&0).unwrap();
+            assert_eq!(stored_tx.public, public);
+            assert_eq!(stored_tx.nonce, 0);
         });
     }
 
@@ -252,7 +245,7 @@ mod tests {
             mempool.add(tx.clone());
             mempool.add(tx);
 
-            assert_eq!(mempool.transactions.len(), 1);
+            assert_eq!(mempool.total_transactions, 1);
             assert_eq!(mempool.tracked.len(), 1);
             assert_eq!(mempool.queue.len(), 1);
         });
@@ -269,14 +262,19 @@ mod tests {
             let tx2 = Transaction::sign(&private, 0, Instruction::CasinoToggleShield);
             let digest1 = tx1.digest();
             let digest2 = tx2.digest();
+            let public = tx1.public.clone();
 
             mempool.add(tx1);
-            assert!(mempool.transactions.contains_key(&digest1));
+            let tracked = mempool.tracked.get(&public).unwrap();
+            assert_eq!(tracked.len(), 1);
+            assert_eq!(tracked.get(&0).unwrap().digest(), digest1);
 
             mempool.add(tx2);
-            assert!(mempool.transactions.contains_key(&digest1));
-            assert!(!mempool.transactions.contains_key(&digest2));
-            assert_eq!(mempool.transactions.len(), 1);
+            let tracked = mempool.tracked.get(&public).unwrap();
+            assert_eq!(tracked.len(), 1);
+            assert_eq!(tracked.get(&0).unwrap().digest(), digest1);
+            assert_ne!(tracked.get(&0).unwrap().digest(), digest2);
+            assert_eq!(mempool.total_transactions, 1);
         });
     }
 
@@ -294,7 +292,7 @@ mod tests {
                 mempool.add(tx);
             }
 
-            assert_eq!(mempool.transactions.len(), 5);
+            assert_eq!(mempool.total_transactions, 5);
             assert_eq!(mempool.tracked.len(), 1);
             assert_eq!(mempool.queue.len(), 1);
         });
@@ -317,7 +315,7 @@ mod tests {
                 mempool.add(tx);
             }
 
-            assert_eq!(mempool.transactions.len(), DEFAULT_MAX_BACKLOG);
+            assert_eq!(mempool.total_transactions, DEFAULT_MAX_BACKLOG);
             assert_eq!(mempool.tracked.len(), 1);
 
             let tracked = mempool.tracked.get(&private.public_key()).unwrap();
@@ -339,7 +337,7 @@ mod tests {
                 mempool.add(tx);
             }
 
-            assert_eq!(mempool.transactions.len(), 5);
+            assert_eq!(mempool.total_transactions, 5);
             assert_eq!(mempool.tracked.len(), 5);
             assert_eq!(mempool.queue.len(), 5);
         });
@@ -362,7 +360,7 @@ mod tests {
 
             mempool.retain(&public, 3);
 
-            assert_eq!(mempool.transactions.len(), 2);
+            assert_eq!(mempool.total_transactions, 2);
             let tracked = mempool.tracked.get(&public).unwrap();
             assert!(!tracked.contains_key(&0));
             assert!(!tracked.contains_key(&1));
@@ -389,7 +387,7 @@ mod tests {
 
             mempool.retain(&public, 5);
 
-            assert_eq!(mempool.transactions.len(), 0);
+            assert_eq!(mempool.total_transactions, 0);
             assert!(!mempool.tracked.contains_key(&public));
         });
     }
@@ -405,7 +403,7 @@ mod tests {
 
             mempool.retain(&public, 0);
 
-            assert_eq!(mempool.transactions.len(), 0);
+            assert_eq!(mempool.total_transactions, 0);
             assert_eq!(mempool.tracked.len(), 0);
         });
     }
@@ -426,7 +424,7 @@ mod tests {
             assert!(next.is_some());
             assert_eq!(next.unwrap().nonce, expected_nonce);
 
-            assert_eq!(mempool.transactions.len(), 0);
+            assert_eq!(mempool.total_transactions, 0);
             assert_eq!(mempool.tracked.len(), 0);
             assert_eq!(mempool.queue.len(), 0);
         });
@@ -452,7 +450,7 @@ mod tests {
                 assert_eq!(next.unwrap().nonce, expected_nonce);
             }
 
-            assert_eq!(mempool.transactions.len(), 0);
+            assert_eq!(mempool.total_transactions, 0);
             assert_eq!(mempool.tracked.len(), 0);
             assert_eq!(mempool.queue.len(), 0);
         });
@@ -539,7 +537,7 @@ mod tests {
                 mempool.add(tx);
             }
 
-            assert_eq!(mempool.transactions.len(), DEFAULT_MAX_TRANSACTIONS);
+            assert_eq!(mempool.total_transactions, DEFAULT_MAX_TRANSACTIONS);
         });
     }
 

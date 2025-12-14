@@ -7,7 +7,7 @@ use serde::{
     ser::SerializeStruct,
     Deserialize, Deserializer, Serialize, Serializer,
 };
-use std::fmt;
+use std::{collections::BTreeMap, fmt};
 
 /// Commonware Token Interface (CTI-20)
 /// A standard for fungible assets on the Commonware chain.
@@ -291,26 +291,16 @@ pub struct TokenAccount {
     pub balance: u64,
     pub frozen: bool,
     // simplistic allowance map: spender -> amount
-    pub allowances: Vec<(PublicKey, u64)>,
+    pub allowances: BTreeMap<PublicKey, u64>,
 }
-
-const MAX_ALLOWANCES_JSON_PREALLOC: usize = 1024;
 
 impl TokenAccount {
     pub fn allowance(&self, spender: &PublicKey) -> u64 {
-        self.allowances
-            .iter()
-            .find(|(pk, _)| pk == spender)
-            .map(|(_, amt)| *amt)
-            .unwrap_or(0)
+        self.allowances.get(spender).copied().unwrap_or(0)
     }
 
     pub fn set_allowance(&mut self, spender: PublicKey, amount: u64) {
-        if let Some(pos) = self.allowances.iter().position(|(pk, _)| pk == &spender) {
-            self.allowances[pos].1 = amount;
-        } else {
-            self.allowances.push((spender, amount));
-        }
+        self.allowances.insert(spender, amount);
     }
 }
 
@@ -392,14 +382,13 @@ impl<'de> Deserialize<'de> for TokenAccount {
                     .next_element()?
                     .ok_or_else(|| de::Error::invalid_length(2, &self))?;
 
-                let mut allowances =
-                    Vec::with_capacity(allowances_raw.len().min(MAX_ALLOWANCES_JSON_PREALLOC));
+                let mut allowances = BTreeMap::new();
                 for (s, amt) in allowances_raw {
                     let bytes = hex_decode(&s).map_err(de::Error::custom)?;
                     let mut reader = &bytes[..];
                     let pk = PublicKey::read(&mut reader)
                         .map_err(|_| de::Error::custom("invalid public key"))?;
-                    allowances.push((pk, amt));
+                    allowances.insert(pk, amt);
                 }
                 Ok(TokenAccount {
                     balance,
@@ -434,15 +423,13 @@ impl<'de> Deserialize<'de> for TokenAccount {
                                 return Err(de::Error::duplicate_field("allowances"));
                             }
                             let allowances_raw: Vec<(String, u64)> = map.next_value()?;
-                            let mut list = Vec::with_capacity(
-                                allowances_raw.len().min(MAX_ALLOWANCES_JSON_PREALLOC),
-                            );
+                            let mut list = BTreeMap::new();
                             for (s, amt) in allowances_raw {
                                 let bytes = hex_decode(&s).map_err(de::Error::custom)?;
                                 let mut reader = &bytes[..];
                                 let pk = PublicKey::read(&mut reader)
                                     .map_err(|_| de::Error::custom("invalid public key"))?;
-                                list.push((pk, amt));
+                                list.insert(pk, amt);
                             }
                             allowances = Some(list);
                         }
@@ -550,14 +537,11 @@ impl Read for TokenAccount {
         let balance = u64::read(reader)?;
         let frozen = bool::read(reader)?;
         let allowance_count = u32::read(reader)?;
-        let entry_size = PublicKey::SIZE + u64::SIZE;
-        let max_possible = reader.remaining() / entry_size;
-        let initial_capacity = (allowance_count as usize).min(max_possible);
-        let mut allowances = Vec::with_capacity(initial_capacity);
+        let mut allowances = BTreeMap::new();
         for _ in 0..allowance_count {
             let spender = PublicKey::read(reader)?;
             let amount = u64::read(reader)?;
-            allowances.push((spender, amount));
+            allowances.insert(spender, amount);
         }
         Ok(Self {
             balance,
@@ -570,5 +554,72 @@ impl Read for TokenAccount {
 impl EncodeSize for TokenAccount {
     fn encode_size(&self) -> usize {
         u64::SIZE + bool::SIZE + u32::SIZE + self.allowances.len() * (PublicKey::SIZE + u64::SIZE)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bytes::BytesMut;
+    use commonware_codec::DecodeExt as _;
+    use commonware_cryptography::{ed25519::PrivateKey, PrivateKeyExt, Signer};
+    use serde_json::json;
+
+    #[test]
+    fn token_account_json_serializes_allowances_canonically() {
+        let pk1 = PrivateKey::from_seed(1).public_key();
+        let pk2 = PrivateKey::from_seed(2).public_key();
+
+        let raw = json!({
+            "balance": 123,
+            "frozen": false,
+            "allowances": [
+                (hex_encode(pk2.as_ref()), 2),
+                (hex_encode(pk1.as_ref()), 1),
+                (hex_encode(pk1.as_ref()), 9)
+            ]
+        });
+
+        let decoded: TokenAccount = serde_json::from_value(raw).expect("deserialize TokenAccount");
+        assert_eq!(decoded.allowances.len(), 2);
+        assert_eq!(decoded.allowance(&pk1), 9);
+        assert_eq!(decoded.allowance(&pk2), 2);
+
+        let serialized = serde_json::to_value(&decoded).expect("serialize TokenAccount");
+        let allowances = serialized
+            .get("allowances")
+            .and_then(|v| v.as_array())
+            .expect("allowances array");
+        assert_eq!(allowances.len(), 2);
+
+        let k0 = allowances[0][0].as_str().unwrap();
+        let k1 = allowances[1][0].as_str().unwrap();
+        assert!(k0 <= k1, "allowances should be sorted by key");
+    }
+
+    #[test]
+    fn token_account_binary_encoding_is_canonical_over_allowance_order() {
+        let pk1 = PrivateKey::from_seed(1).public_key();
+        let pk2 = PrivateKey::from_seed(2).public_key();
+
+        let mut a = TokenAccount::default();
+        a.balance = 1;
+        a.set_allowance(pk2.clone(), 2);
+        a.set_allowance(pk1.clone(), 1);
+
+        let mut b = TokenAccount::default();
+        b.balance = 1;
+        b.set_allowance(pk1.clone(), 1);
+        b.set_allowance(pk2.clone(), 2);
+
+        let mut buf_a = BytesMut::new();
+        a.write(&mut buf_a);
+        let mut buf_b = BytesMut::new();
+        b.write(&mut buf_b);
+        assert_eq!(buf_a.as_ref(), buf_b.as_ref());
+
+        let decoded = TokenAccount::decode(buf_a.as_ref()).expect("decode TokenAccount");
+        assert_eq!(decoded.allowance(&pk1), 1);
+        assert_eq!(decoded.allowance(&pk2), 2);
     }
 }

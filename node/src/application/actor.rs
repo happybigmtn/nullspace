@@ -607,6 +607,12 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                                 let state_proof_ops = result.state_end_op - result.state_start_op;
                                 let events_start_op = result.events_start_op;
                                 let events_proof_ops = result.events_end_op - events_start_op;
+                                if state_proof_ops == 0 && events_proof_ops == 0 {
+                                    // No-op execution (already processed or out-of-order); skip proof generation.
+                                    let _ = response.send(());
+                                    drop(timer);
+                                    continue;
+                                }
                                 let ((state_proof, state_proof_ops), (events_proof, events_proof_ops)) = try_join(
                                     state.historical_proof(result.state_end_op, result.state_start_op, state_proof_ops),
                                     events.historical_proof(result.events_end_op, events_start_op, NZU64!(events_proof_ops)),

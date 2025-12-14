@@ -75,18 +75,34 @@ impl Read for Tournament {
     type Cfg = ();
 
     fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
+        let id = u64::read(reader)?;
+        let phase = TournamentPhase::read(reader)?;
+        let start_block = u64::read(reader)?;
+        let start_time_ms = u64::read(reader)?;
+        let end_time_ms = u64::read(reader)?;
+
+        let mut players = Vec::<PublicKey>::read_range(reader, 0..=1000)?;
+        players.sort_unstable();
+        players.dedup();
+
+        let prize_pool = u64::read(reader)?;
+        let starting_chips = u64::read(reader)?;
+        let starting_shields = u32::read(reader)?;
+        let starting_doubles = u32::read(reader)?;
+        let leaderboard = CasinoLeaderboard::read(reader)?;
+
         Ok(Self {
-            id: u64::read(reader)?,
-            phase: TournamentPhase::read(reader)?,
-            start_block: u64::read(reader)?,
-            start_time_ms: u64::read(reader)?,
-            end_time_ms: u64::read(reader)?,
-            players: Vec::<PublicKey>::read_range(reader, 0..=1000)?,
-            prize_pool: u64::read(reader)?,
-            starting_chips: u64::read(reader)?,
-            starting_shields: u32::read(reader)?,
-            starting_doubles: u32::read(reader)?,
-            leaderboard: CasinoLeaderboard::read(reader)?,
+            id,
+            phase,
+            start_block,
+            start_time_ms,
+            end_time_ms,
+            players,
+            prize_pool,
+            starting_chips,
+            starting_shields,
+            starting_doubles,
+            leaderboard,
         })
     }
 }
@@ -109,18 +125,20 @@ impl EncodeSize for Tournament {
 
 impl Tournament {
     /// Check if a player is already in the tournament.
-    /// Currently O(n), prepared for future HashSet optimization.
+    /// Uses `O(log n)` binary search because `players` is kept sorted+deduped.
     pub fn contains_player(&self, player: &PublicKey) -> bool {
-        self.players.contains(player)
+        self.players.binary_search(player).is_ok()
     }
 
     /// Add a player to the tournament.
     /// Returns true if the player was added, false if they were already present.
     pub fn add_player(&mut self, player: PublicKey) -> bool {
-        if self.contains_player(&player) {
-            return false;
+        match self.players.binary_search(&player) {
+            Ok(_) => false,
+            Err(pos) => {
+                self.players.insert(pos, player);
+                true
+            }
         }
-        self.players.push(player);
-        true
     }
 }

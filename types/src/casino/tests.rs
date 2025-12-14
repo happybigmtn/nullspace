@@ -56,3 +56,32 @@ fn test_leaderboard_update() {
         assert_eq!(entry.rank, (i + 1) as u32);
     }
 }
+
+#[test]
+fn test_tournament_players_canonicalized_on_decode() {
+    let pk1 = PrivateKey::from_seed(1).public_key();
+    let pk2 = PrivateKey::from_seed(2).public_key();
+
+    let mut tournament = Tournament::default();
+    tournament.players = vec![pk2.clone(), pk1.clone(), pk1.clone()];
+
+    let encoded = tournament.encode();
+    let decoded = Tournament::read(&mut &encoded[..]).unwrap();
+
+    assert_eq!(decoded.players, vec![pk1, pk2]);
+}
+
+#[test]
+fn test_tournament_add_player_keeps_sorted_unique() {
+    let pk1 = PrivateKey::from_seed(1).public_key();
+    let pk2 = PrivateKey::from_seed(2).public_key();
+    let pk3 = PrivateKey::from_seed(3).public_key();
+
+    let mut tournament = Tournament::default();
+    assert!(tournament.add_player(pk2.clone()));
+    assert!(tournament.add_player(pk1.clone()));
+    assert!(tournament.add_player(pk3.clone()));
+    assert!(!tournament.add_player(pk2.clone()));
+
+    assert_eq!(tournament.players, vec![pk1, pk2, pk3]);
+}
