@@ -66,6 +66,8 @@ This is a second-pass review of the current workspace with a focus on idiomatic 
 - [x] `node/src/{engine.rs,main.rs,tests.rs}`: refactor `engine::Config` into nested structs (`IdentityConfig`, `StorageConfig`, `ConsensusConfig`, `ApplicationConfig`) to reduce parameter soup.
 - [x] `node/src/engine.rs`: stop the node when any sub-actor terminates; abort remaining actors and propagate failure (avoid partial-liveness).
 - [x] `node/src/application/actor.rs`: remove `.expect`/`panic!` in init + steady-state; log fatal errors and exit actor (engine handles crash-fast shutdown).
+- [x] `node/src/seeder/actor.rs`: remove `.expect` on storage ops; log fatal errors and exit actor (crash-fast policy).
+- [x] `node/src/aggregator/actor.rs`: remove `unwrap`/`expect` on storage ops; log fatal errors and exit actor (crash-fast policy).
 
 ---
 
@@ -360,32 +362,24 @@ if !batcher.verify(&mut context) {
 - Maintains aggregator storage (cache/results/certificates), handles backfill via resolver, and participates in aggregation consensus.
 - Produces and stores proof objects used by clients/validators.
 
+### Progress (implemented)
+- Proof decode limits are centralized in `types/src/api.rs` and reused by the aggregator.
+- Actor init + steady-state no longer use `unwrap`/`expect`; fatal storage errors are logged and cause the actor to exit (engine is crash-fast).
+
 ### Top Issues (ranked)
-1. **Widespread `unwrap`/`expect` in long-running actor**
-   - Impact: a transient storage/network error can crash the actor and potentially stall the node.
-   - Risk: high.
-   - Effort: medium.
-   - Location: many sites, e.g. `node/src/aggregator/actor.rs:205`+ (initialization expects) and `~328`+ (storage ops unwraps).
-2. **Hard-coded proof limits duplicated across codebase**
-   - Impact: inconsistent limits between aggregator proof codec and `nullspace-types` verification can cause false negatives/DoS.
+1. **Crash-fast on storage/indexer faults**
+   - Impact: any storage/IO failure (or invariant break) halts the node (safety > availability).
+   - Risk: medium (availability).
+   - Effort: low (document) → medium (restart/retry design).
+   - Location: `node/src/aggregator/actor.rs`; `node/src/engine.rs:526`.
+2. **Infinite retry loop for summary uploads**
+   - Impact: prolonged indexer outages lead to unbounded retries with fixed delay; hard to detect without explicit metrics.
    - Risk: medium.
-   - Effort: medium.
-   - Location: `node/src/aggregator/actor.rs:45`–`70` (`read_cfg` uses 3000/2000), vs `types/src/api.rs` limits.
+   - Effort: low.
+   - Location: `node/src/aggregator/actor.rs:627`.
 
 ### Idiomatic Rust Improvements
-- Make the actor return `anyhow::Result<()>` from `run` and have the engine decide restart policy; avoid panics.
-
-**Before:**
-```rust
-let mut cache = cache::Cache::init(...).await.expect("failed to initialize cache");
-cache.put(height, proofs).await.unwrap();
-```
-
-**After (pseudocode):**
-```rust
-let mut cache = cache::Cache::init(...).await.context("init cache")?;
-cache.put(height, proofs).await.context("cache put")?;
-```
+- (optional) Split into `run_inner(...) -> anyhow::Result<()>` to reduce boilerplate and add richer context via `anyhow::Context` while keeping the engine’s crash-fast policy explicit.
 
 ### Data Structure & Algorithm Changes
 - Unify proof limits into a shared constant module (preferably in `nullspace-types` because clients verify proofs).
@@ -401,12 +395,12 @@ cache.put(height, proofs).await.context("cache put")?;
   - cache hit ratio during backfill
 
 ### Refactor Plan
-- Phase 1: replace unwrap/expect with `?` + context; decide fault policy at engine level.
-- Phase 2: centralize proof limits and codec config; ensure producer and verifier agree.
+- Phase 1 (**done**): replace `unwrap`/`expect` in init + steady-state with logged errors and actor exit (crash-fast policy).
+- Phase 2 (**done**): centralize proof limits and codec config; ensure producer and verifier agree.
 - Phase 3: add metrics for proof sizes and cache effectiveness.
 
 ### Open Questions
-- Is actor crash acceptable (supervised restart), or must it stay alive and retry?
+- Should the engine restart the aggregator actor on transient failures, or is crash-fast acceptable?
 
 ---
 
@@ -1765,17 +1759,21 @@ if !(1..=35).contains(&number) || number % 3 == 0 { ... }
 - Maintains and backfills the seed chain, serves seeds to other components, and uploads seeds to the indexer.
 - Runs continuously and interacts with storage, p2p resolver, and external indexer APIs.
 
+### Progress (implemented)
+- Listener sends are best-effort (dropped receivers no longer panic the actor).
+- Storage operations no longer use `.expect`; fatal storage errors are logged and cause the actor to exit (engine is crash-fast).
+
 ### Top Issues (ranked)
-1. **Widespread `expect` in a long-running actor**
-   - Impact: transient storage/indexer failures can crash the seeder; reduces availability.
-   - Risk: high.
-   - Effort: medium.
-   - Location: e.g. `node/src/seeder/actor.rs:84`–`110` (storage init), `:167`–`180` (sync/put expects), `:209`+ (get expects), `:186`/`:256` (listener send expects).
-2. **Listener notification panics if receiver is dropped**
-   - Impact: seed waiters dropping (normal) can crash the actor.
-   - Risk: high.
+1. **Crash-fast on storage/indexer faults**
+   - Impact: any storage/IO failure halts the node (safety > availability).
+   - Risk: medium (availability).
+   - Effort: low (document) → medium (restart/retry design).
+   - Location: `node/src/seeder/actor.rs`; `node/src/engine.rs:526`.
+2. **Infinite retry loop for seed uploads**
+   - Impact: prolonged indexer outages lead to unbounded retries with fixed delay; hard to detect without explicit metrics.
+   - Risk: medium.
    - Effort: low.
-   - Location: `node/src/seeder/actor.rs:186`, `:256` (`listener.send(...).expect(...)`).
+   - Location: `node/src/seeder/actor.rs` (seed submit task loop).
 
 ### Idiomatic Rust Improvements
 - Treat listener send failure as non-fatal; drop disconnected listeners.
@@ -1800,8 +1798,8 @@ let _ = listener.send(seed.clone());
 - Seed upload loop retries forever; add metrics for retry counts and upload lag (`cursor - boundary`) to detect indexer outages.
 
 ### Refactor Plan
-- Phase 1: remove `expect` for listener sends and replace with best-effort.
-- Phase 2: convert storage operations to `Result` with context and decide fault policy (retry vs crash-fast) at engine level.
+- Phase 1 (**done**): remove `expect` for listener sends and replace with best-effort.
+- Phase 2 (**done**): convert storage operations to logged failures and actor exit; crash-fast fault policy at engine level.
 - Phase 3: add backpressure/bounds for listener accumulation and upload concurrency.
 
 ### Open Questions

@@ -44,7 +44,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     time::Duration,
 };
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
 const BATCH_ENQUEUE: usize = 20;
 const RETRY_DELAY: Duration = Duration::from_secs(10);
@@ -202,7 +202,7 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
         ),
     ) {
         // Create storage
-        let mut cache = cache::Cache::<_, Proofs>::init(
+        let mut cache = match cache::Cache::<_, Proofs>::init(
             self.context.with_label("cache"),
             cache::Config {
                 partition: format!("{}-cache", self.config.partition),
@@ -214,9 +214,14 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                 buffer_pool: self.config.buffer_pool.clone(),
             },
         )
-        .await
-        .expect("failed to initialize cache");
-        let mut results = fixed::Journal::init(
+        .await {
+            Ok(cache) => cache,
+            Err(err) => {
+                error!(?err, "failed to initialize cache");
+                return;
+            }
+        };
+        let mut results = match fixed::Journal::init(
             self.context.with_label("results"),
             fixed::Config {
                 partition: format!("{}-results", self.config.partition),
@@ -225,9 +230,14 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                 buffer_pool: self.config.buffer_pool,
             },
         )
-        .await
-        .expect("failed to initialize results storage");
-        let mut certificates = Ordinal::<_, FixedCertificate>::init(
+        .await {
+            Ok(results) => results,
+            Err(err) => {
+                error!(?err, "failed to initialize results storage");
+                return;
+            }
+        };
+        let mut certificates = match Ordinal::<_, FixedCertificate>::init(
             self.context.with_label("certificates"),
             ordinal::Config {
                 partition: format!("{}-certificates", self.config.partition),
@@ -236,8 +246,13 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                 replay_buffer: self.config.replay_buffer,
             },
         )
-        .await
-        .expect("failed to initialize certificate storage");
+        .await {
+            Ok(certificates) => certificates,
+            Err(err) => {
+                error!(?err, "failed to initialize certificate storage");
+                return;
+            }
+        };
 
         // Create resolver
         let (resolver_engine, mut resolver) = p2p::Engine::new(
@@ -298,10 +313,10 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                         continue;
                     };
                     if end_region > boundary {
-                        cache
-                            .prune(end_region)
-                            .await
-                            .expect("failed to prune cache");
+                        if let Err(err) = cache.prune(end_region).await {
+                            error!(?err, end_region, "failed to prune cache");
+                            return;
+                        }
                         boundary = end_region;
                         info!(boundary, "updated summary upload marker");
                     }
@@ -325,8 +340,15 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                             events_proof,
                             events_proof_ops,
                         };
-                        cache.put(height, proofs).await.unwrap(); // ok to call put multiple times
-                        cache.sync().await.unwrap();
+                        if let Err(err) = cache.put(height, proofs).await {
+                            error!(?err, height, "failed to store proofs");
+                            return Err(());
+                        }
+                        if let Err(err) = cache.sync().await {
+                            error!(?err, height, "failed to sync proofs");
+                            return Err(());
+                        }
+                        Ok(())
                     };
 
                     // Persist progress
@@ -346,14 +368,31 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                         // Size is the next item to store and the height-th value will be stored at height - 1,
                         // so comparing size() to height is equivalent to checking if the next item stored will be
                         // at height + 1 (i.e. this height has already been processed).
-                        if results.size().await.unwrap() == height {
+                        let size = match results.size().await {
+                            Ok(size) => size,
+                            Err(err) => {
+                                error!(?err, height, "failed to read results size");
+                                return Err(());
+                            }
+                        };
+                        if size == height {
                             warn!(height, "already processed results");
-                            return;
+                            return Ok(());
                         }
-                        results.append(result).await.unwrap();
-                        results.sync().await.unwrap();
+                        if let Err(err) = results.append(result).await {
+                            error!(?err, height, "failed to append result");
+                            return Err(());
+                        }
+                        if let Err(err) = results.sync().await {
+                            error!(?err, height, "failed to sync results");
+                            return Err(());
+                        }
+                        Ok(())
                     };
-                    join!(cache_task, progress_task);
+                    let (cache_res, progress_res) = join!(cache_task, progress_task);
+                    if cache_res.is_err() || progress_res.is_err() {
+                        return;
+                    }
                     info!(
                         height,
                         view,
@@ -438,11 +477,14 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                     );
 
                     // Store in certificates
-                    certificates
-                        .put(height, certificate.clone().into())
-                        .await
-                        .unwrap();
-                    certificates.sync().await.unwrap();
+                    if let Err(err) = certificates.put(height, certificate.clone().into()).await {
+                        error!(?err, height, "failed to store certificate");
+                        return;
+                    }
+                    if let Err(err) = certificates.sync().await {
+                        error!(?err, height, "failed to sync certificates");
+                        return;
+                    }
 
                     // Cancel resolver
                     if let Some(current_end) = certificates.next_gap(1).0 {
@@ -488,11 +530,14 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
 
                     // Store in certificates
                     self.waiting.remove(&index);
-                    certificates
-                        .put(index, certificate.clone().into())
-                        .await
-                        .unwrap();
-                    certificates.sync().await.unwrap();
+                    if let Err(err) = certificates.put(index, certificate.clone().into()).await {
+                        error!(?err, index, "failed to store certificate");
+                        return;
+                    }
+                    if let Err(err) = certificates.sync().await {
+                        error!(?err, index, "failed to sync certificates");
+                        return;
+                    }
 
                     // Enqueue missing seeds
                     let missing = certificates.missing_items(1, BATCH_ENQUEUE);
@@ -527,24 +572,39 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                 uploads_outstanding += 1;
 
                 // Get certificate
-                let certificate = certificates
-                    .get(cursor)
-                    .await
-                    .unwrap()
-                    .expect("failed to fetch certificate");
+                let certificate = match certificates.get(cursor).await {
+                    Ok(Some(certificate)) => certificate,
+                    Ok(None) => {
+                        error!(cursor, "certificate missing");
+                        return;
+                    }
+                    Err(err) => {
+                        error!(?err, cursor, "failed to fetch certificate");
+                        return;
+                    }
+                };
 
                 // Get result
-                let result = results
-                    .read(cursor - 1)
-                    .await
-                    .expect("failed to fetch result"); // offset by 1 because stored by 0th offset
+                let result = match results.read(cursor - 1).await {
+                    Ok(result) => result,
+                    Err(err) => {
+                        error!(?err, cursor, "failed to fetch result");
+                        return;
+                    }
+                };
 
                 // Get proofs
-                let proofs = cache
-                    .get(cursor)
-                    .await
-                    .unwrap()
-                    .expect("failed to fetch proofs");
+                let proofs = match cache.get(cursor).await {
+                    Ok(Some(proofs)) => proofs,
+                    Ok(None) => {
+                        error!(cursor, "proofs missing");
+                        return;
+                    }
+                    Err(err) => {
+                        error!(?err, cursor, "failed to fetch proofs");
+                        return;
+                    }
+                };
 
                 // Upload the summary to the indexer
                 let summary = Summary {
