@@ -137,6 +137,7 @@ impl Simulator {
     ) {
         let event_name = match event {
             Event::CasinoPlayerRegistered { .. } => "CasinoPlayerRegistered",
+            Event::CasinoDeposited { .. } => "CasinoDeposited",
             Event::CasinoGameStarted { .. } => "CasinoGameStarted",
             Event::CasinoGameMoved { .. } => "CasinoGameMoved",
             Event::CasinoGameCompleted { .. } => "CasinoGameCompleted",
@@ -172,6 +173,7 @@ impl Simulator {
 
         match event {
             Event::CasinoPlayerRegistered { player, .. } => touch_account(player),
+            Event::CasinoDeposited { player, .. } => touch_account(player),
             Event::CasinoGameStarted { player, .. } => touch_account(player),
             Event::CasinoGameMoved { .. } => {} // broadcasted; not account-specific
             Event::CasinoGameCompleted { player, .. } => touch_account(player),

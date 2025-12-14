@@ -103,13 +103,14 @@ mod tags {
     }
 
     pub mod event {
-        // Casino events (20-24), plus error (29)
+        // Casino events (20-24), plus error (29) and deposit (41)
         pub const CASINO_PLAYER_REGISTERED: u8 = 20;
         pub const CASINO_GAME_STARTED: u8 = 21;
         pub const CASINO_GAME_MOVED: u8 = 22;
         pub const CASINO_GAME_COMPLETED: u8 = 23;
         pub const CASINO_LEADERBOARD_UPDATED: u8 = 24;
         pub const CASINO_ERROR: u8 = 29;
+        pub const CASINO_DEPOSITED: u8 = 41;
 
         // Tournament events (25-28)
         pub const TOURNAMENT_STARTED: u8 = 25;
@@ -1174,6 +1175,11 @@ pub enum Event {
         player: PublicKey,
         name: String,
     },
+    CasinoDeposited {
+        player: PublicKey,
+        amount: u64,
+        new_chips: u64,
+    },
     CasinoGameStarted {
         session_id: u64,
         player: PublicKey,
@@ -1306,6 +1312,16 @@ impl Write for Event {
                 player.write(writer);
                 (name.len() as u32).write(writer);
                 writer.put_slice(name.as_bytes());
+            }
+            Self::CasinoDeposited {
+                player,
+                amount,
+                new_chips,
+            } => {
+                tags::event::CASINO_DEPOSITED.write(writer);
+                player.write(writer);
+                amount.write(writer);
+                new_chips.write(writer);
             }
             Self::CasinoGameStarted {
                 session_id,
@@ -1545,6 +1561,11 @@ impl Read for Event {
                     .map_err(|_| Error::Invalid("Event", "invalid UTF-8 in casino name"))?;
                 Self::CasinoPlayerRegistered { player, name }
             }
+            tags::event::CASINO_DEPOSITED => Self::CasinoDeposited {
+                player: PublicKey::read(reader)?,
+                amount: u64::read(reader)?,
+                new_chips: u64::read(reader)?,
+            },
             tags::event::CASINO_GAME_STARTED => Self::CasinoGameStarted {
                 session_id: u64::read(reader)?,
                 player: PublicKey::read(reader)?,
@@ -1695,6 +1716,11 @@ impl EncodeSize for Event {
                 Self::CasinoPlayerRegistered { player, name } => {
                     player.encode_size() + 4 + name.len()
                 }
+                Self::CasinoDeposited {
+                    player,
+                    amount,
+                    new_chips,
+                } => player.encode_size() + amount.encode_size() + new_chips.encode_size(),
                 Self::CasinoGameStarted {
                     session_id,
                     player,

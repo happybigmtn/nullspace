@@ -55,10 +55,11 @@ This is a second-pass review of the current workspace with a focus on idiomatic 
 - [x] `simulator/src/{lib,api/*}.rs`: move `Api` router + HTTP + websocket handlers into dedicated modules.
 - [x] `simulator/src/{lib,state}.rs`: move core `State`/`InternalUpdate` + proof/query logic into a dedicated module.
 - [x] `simulator/src/{lib,explorer,state,main}.rs`: add configurable explorer retention limits (opt-in) to bound memory growth.
+- [x] (**behavior-changing**) `types/src/execution.rs` + `execution/src/layer/handlers/casino.rs`: add `Event::CasinoDeposited` and emit it for `CasinoDeposit`; update simulator/wasm decoders.
 - [x] `website/wasm/src/lib.rs`: gate private-key exports behind `private-key-export` feature.
 - [x] `website/wasm/Cargo.toml`: make `private-key-export` default-off.
 - [x] `node/src/application/actor.rs`: replace metadata `.unwrap()` with logged fallback; add retry/backoff for proof generation; make prune failures non-fatal.
-- [ ] Deferred (larger and/or behavior-changing): fallible `State` plumbing and event schema changes (e.g. `CasinoDeposit` event).
+- [ ] Deferred (larger and/or behavior-changing): fallible `State` plumbing.
 
 ---
 
@@ -616,13 +617,11 @@ let progressive_bet = match version {
 - Implements casino-related state transitions (register, faucet deposit, start/move/complete games, tournaments, super mode).
 - Emits `Event`s that clients consume for UI/analytics.
 
+### Progress (implemented)
+- `CasinoDeposit` now emits `Event::CasinoDeposited` (**behavior-changing**).
+
 ### Top Issues (ranked)
-1. **`CasinoDeposit` emits `CasinoPlayerRegistered` event**
-   - Impact: event semantics are confusing; downstream consumers may mis-handle deposits.
-   - Risk: medium–high (API/event-stream contract).
-   - Effort: low.
-   - Location: `execution/src/layer/handlers/casino.rs:39`–`86`.
-2. **Repeated boilerplate for “get player or error” and error construction**
+1. **Repeated boilerplate for “get player or error” and error construction**
    - Impact: slows iteration; increases chances of inconsistent error codes/messages.
    - Risk: medium.
    - Effort: medium.
@@ -654,8 +653,7 @@ fn casino_error(player: &PublicKey, session_id: Option<u64>, code: u32, msg: imp
 
 ### Refactor Plan
 - Phase 1: add helpers for error construction and player/session retrieval.
-- Phase 2 (**behavior-changing**): introduce a dedicated deposit/faucet event, or reuse an existing semantically correct event.
-- Phase 3: standardize error codes/messages across handlers.
+- Phase 2: standardize error codes/messages across handlers.
 
 ### Open Questions
 - Is `CasinoDeposit` intended to be a faucet/dev-only instruction, or a real “deposit”?

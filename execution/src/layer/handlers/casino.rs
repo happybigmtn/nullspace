@@ -79,9 +79,10 @@ impl<'a, S: State> Layer<'a, S> {
 
         self.update_casino_leaderboard(public, &player).await;
 
-        vec![Event::CasinoPlayerRegistered {
+        vec![Event::CasinoDeposited {
             player: public.clone(),
-            name: player.name,
+            amount,
+            new_chips: player.chips,
         }]
     }
 
