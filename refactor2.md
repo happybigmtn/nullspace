@@ -51,9 +51,10 @@ This is a second-pass review of the current workspace with a focus on idiomatic 
 - [x] `execution/src/layer/mod.rs`: make progressive-bet parsing fail-closed (no silent `0` on short blobs).
 - [x] `simulator/src/lib.rs`: replace `GovernorConfigBuilder::finish().unwrap()` with safe fallback to defaults.
 - [x] `simulator/src/{lib,explorer}.rs`: split explorer indexing + HTTP handlers into a dedicated module.
+- [x] `simulator/src/{lib,passkeys}.rs`: split passkeys storage + HTTP handlers into a dedicated module (feature-gated).
 - [x] `website/wasm/src/lib.rs`: gate private-key exports behind `private-key-export` feature (default enabled).
 - [x] `node/src/application/actor.rs`: replace metadata `.unwrap()` with logged fallback; add retry/backoff for proof generation; make prune failures non-fatal.
-- [ ] Deferred (larger and/or behavior-changing): fallible `State` plumbing, event schema changes (e.g. `CasinoDeposit` event), simulator retention limits + further modularization, and making wasm key-export default-off.
+- [ ] Deferred (larger and/or behavior-changing): fallible `State` plumbing, event schema changes (e.g. `CasinoDeposit` event), simulator retention limits, remaining simulator module split (HTTP/WS/state), and making wasm key-export default-off.
 
 ---
 
@@ -1124,8 +1125,13 @@ pub(crate) async fn post_bytes_with_retry(&self, url: Url, body: bytes::Bytes) -
 - Implements a local Axum-based backend that mimics the node/indexer API: submissions, queries, websockets, and explorer endpoints.
 - Maintains a large in-memory state guarded by `RwLock`, plus broadcast channels for updates and mempool streams.
 
+### Progress (implemented)
+- Explorer indexing/endpoints moved to `simulator/src/explorer.rs`.
+- Passkeys state + endpoints moved to `simulator/src/passkeys.rs` (feature-gated).
+- Rate limiter config no longer panics on invalid builder output (falls back to defaults).
+
 ### Top Issues (ranked)
-1. **Single giant module (`lib.rs`) mixes HTTP, storage, explorer indexing, and passkeys**
+1. **Large `lib.rs` still mixes HTTP, storage, and websocket handlers**
    - Impact: hard to test and reason about; high change risk.
    - Risk: medium.
    - Effort: medium.
@@ -1134,20 +1140,15 @@ pub(crate) async fn post_bytes_with_retry(&self, url: Url, body: bytes::Bytes) -
    - Impact: simulator may grow without bound (blocks, txs, accounts, explorer indices).
    - Risk: medium (long-running sims).
    - Effort: medium.
-   - Location: `simulator/src/lib.rs` state maps (`ExplorerState`, `State`).
+   - Location: `simulator/src/lib.rs` state maps (`State`); `simulator/src/explorer.rs` (`ExplorerState`).
 3. **`SystemTime` used for timestamps (non-deterministic)**
    - Impact: harder to reproduce runs; undermines deterministic tests if called.
    - Risk: low–medium.
    - Effort: low–medium.
-   - Location: `simulator/src/lib.rs:833`–`840` (`now_ms()`).
-4. **`GovernorConfigBuilder::finish().unwrap()`**
-   - Impact: panic on invalid config.
-   - Risk: low.
-   - Effort: low.
-   - Location: `simulator/src/lib.rs:605`–`614`.
+   - Location: `simulator/src/explorer.rs:70` (`Simulator::now_ms()`).
 
 ### Idiomatic Rust Improvements
-- Split into modules: `api/http.rs`, `api/ws.rs`, `explorer.rs`, `state.rs`, `passkeys.rs` (feature-gated).
+- Complete module split: `api/http.rs`, `api/ws.rs`, `state.rs` (explorer and passkeys are already extracted).
 
 ### Data Structure & Algorithm Changes
 - Add bounded retention (even for simulator):

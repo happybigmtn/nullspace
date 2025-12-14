@@ -1,7 +1,3 @@
-#[cfg(feature = "passkeys")]
-use axum::http::HeaderMap;
-#[cfg(feature = "passkeys")]
-use axum::Json;
 use axum::{
     body::Bytes,
     extract::{ws::WebSocketUpgrade, State as AxumState},
@@ -12,13 +8,9 @@ use axum::{
 };
 use commonware_codec::{DecodeExt, Encode, Read, ReadExt, ReadRangeExt};
 use commonware_consensus::{aggregation::types::Certificate, Viewable};
-#[cfg(feature = "passkeys")]
-use commonware_cryptography::ed25519;
 use commonware_cryptography::{
     bls12381::primitives::variant::MinSig, ed25519::PublicKey, sha256::Digest,
 };
-#[cfg(feature = "passkeys")]
-use commonware_cryptography::{PrivateKeyExt, Signer};
 use commonware_storage::{
     adb::{
         create_multi_proof, create_proof, create_proof_store_from_digests,
@@ -28,16 +20,12 @@ use commonware_storage::{
     store::operation::{Keyless, Variable},
 };
 use commonware_utils::from_hex;
-#[cfg(feature = "passkeys")]
-use commonware_utils::hex;
 use futures::{SinkExt, StreamExt};
 use nullspace_types::{
     api::{Events, FilteredEvents, Lookup, Pending, Submission, Summary, Update, UpdatesFilter},
     execution::{Event, Output, Progress, Seed, Transaction, Value},
     Identity, Query as ChainQuery, NAMESPACE,
 };
-#[cfg(feature = "passkeys")]
-use rand::rngs::OsRng;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     sync::Arc,
@@ -47,51 +35,19 @@ use tower_governor::{
     governor::GovernorConfigBuilder, key_extractor::SmartIpKeyExtractor, GovernorLayer,
 };
 use tower_http::cors::{Any, CorsLayer};
-#[cfg(feature = "passkeys")]
-use uuid::Uuid;
 
 mod explorer;
 pub use explorer::{AccountActivity, ExplorerBlock, ExplorerState, ExplorerTransaction};
+#[cfg(feature = "passkeys")]
+mod passkeys;
+#[cfg(feature = "passkeys")]
+pub use passkeys::{PasskeyChallenge, PasskeyCredential, PasskeySession, PasskeyStore};
 
 #[derive(Clone)]
 #[allow(clippy::large_enum_variant)]
 pub enum InternalUpdate {
     Seed(Seed),
     Events(Events, Vec<(u64, Digest)>),
-}
-
-#[cfg(feature = "passkeys")]
-#[derive(Clone, Serialize, Deserialize)]
-pub struct PasskeyChallenge {
-    challenge: String,
-    issued_at_ms: u64,
-}
-
-#[cfg(feature = "passkeys")]
-#[derive(Clone)]
-pub struct PasskeyCredential {
-    credential_id: String,
-    webauthn_public_key: String,
-    ed25519_public_key: String,
-    ed25519_private_key: ed25519::PrivateKey,
-    created_at_ms: u64,
-}
-
-#[cfg(feature = "passkeys")]
-#[derive(Clone)]
-pub struct PasskeySession {
-    token: String,
-    credential_id: String,
-    issued_at_ms: u64,
-    expires_at_ms: u64,
-}
-
-#[cfg(feature = "passkeys")]
-#[derive(Default)]
-pub struct PasskeyStore {
-    challenges: HashMap<String, PasskeyChallenge>,
-    credentials: HashMap<String, PasskeyCredential>,
-    sessions: HashMap<String, PasskeySession>,
 }
 
 #[derive(Default)]
@@ -217,10 +173,10 @@ impl Simulator {
         // Broadcast events with digests for efficient filtering
         if let Err(e) = self.update_tx.send(InternalUpdate::Events(
             Events {
-                progress: summary.progress.clone(),
-                certificate: summary.certificate.clone(),
-                events_proof: summary.events_proof.clone(),
-                events_proof_ops: summary.events_proof_ops.clone(),
+                progress: summary.progress,
+                certificate: summary.certificate,
+                events_proof: summary.events_proof,
+                events_proof_ops: summary.events_proof_ops,
             },
             events_digests,
         )) {
@@ -354,10 +310,10 @@ impl Api {
 
         #[cfg(feature = "passkeys")]
         let router = router
-            .route("/webauthn/challenge", get(get_passkey_challenge))
-            .route("/webauthn/register", post(register_passkey))
-            .route("/webauthn/login", post(login_passkey))
-            .route("/webauthn/sign", post(sign_with_passkey));
+            .route("/webauthn/challenge", get(passkeys::get_passkey_challenge))
+            .route("/webauthn/register", post(passkeys::register_passkey))
+            .route("/webauthn/login", post(passkeys::login_passkey))
+            .route("/webauthn/sign", post(passkeys::sign_with_passkey));
 
         router
             .layer(cors)
@@ -768,195 +724,6 @@ async fn handle_mempool_ws(socket: axum::extract::ws::WebSocket, simulator: Arc<
     }
     tracing::info!("Mempool WebSocket handler exiting");
     let _ = sender.close().await;
-}
-
-#[cfg(feature = "passkeys")]
-#[derive(Serialize)]
-struct ChallengeResponse {
-    challenge: String,
-}
-
-#[cfg(feature = "passkeys")]
-async fn get_passkey_challenge(
-    AxumState(simulator): AxumState<Arc<Simulator>>,
-) -> impl IntoResponse {
-    let challenge = Uuid::new_v4().to_string().replace('-', "");
-    let issued_at_ms = Simulator::now_ms();
-    let passkey_challenge = PasskeyChallenge {
-        challenge: challenge.clone(),
-        issued_at_ms,
-    };
-
-    let mut state = simulator.state.write().await;
-    state
-        .passkeys
-        .challenges
-        .insert(challenge.clone(), passkey_challenge);
-
-    Json(ChallengeResponse { challenge }).into_response()
-}
-
-#[cfg(feature = "passkeys")]
-#[derive(Deserialize)]
-struct RegisterRequest {
-    credential_id: String,
-    webauthn_public_key: String,
-    challenge: String,
-}
-
-#[cfg(feature = "passkeys")]
-#[derive(Serialize)]
-struct RegisterResponse {
-    credential_id: String,
-    ed25519_public_key: String,
-}
-
-#[cfg(feature = "passkeys")]
-async fn register_passkey(
-    AxumState(simulator): AxumState<Arc<Simulator>>,
-    Json(req): Json<RegisterRequest>,
-) -> impl IntoResponse {
-    let mut state = simulator.state.write().await;
-
-    if state.passkeys.challenges.remove(&req.challenge).is_none() {
-        return StatusCode::BAD_REQUEST.into_response();
-    }
-
-    let mut rng = OsRng;
-    let private = ed25519::PrivateKey::from_rng(&mut rng);
-    let public = private.public_key();
-
-    let cred = PasskeyCredential {
-        credential_id: req.credential_id.clone(),
-        webauthn_public_key: req.webauthn_public_key.clone(),
-        ed25519_public_key: hex(public.as_ref()),
-        ed25519_private_key: private,
-        created_at_ms: Simulator::now_ms(),
-    };
-
-    state
-        .passkeys
-        .credentials
-        .insert(req.credential_id.clone(), cred);
-
-    Json(RegisterResponse {
-        credential_id: req.credential_id,
-        ed25519_public_key: hex(public.as_ref()),
-    })
-    .into_response()
-}
-
-#[cfg(feature = "passkeys")]
-#[derive(Deserialize)]
-struct LoginRequest {
-    credential_id: String,
-    challenge: String,
-}
-
-#[cfg(feature = "passkeys")]
-#[derive(Serialize)]
-struct LoginResponse {
-    session_token: String,
-    credential_id: String,
-    ed25519_public_key: String,
-}
-
-#[cfg(feature = "passkeys")]
-async fn login_passkey(
-    AxumState(simulator): AxumState<Arc<Simulator>>,
-    Json(req): Json<LoginRequest>,
-) -> impl IntoResponse {
-    let mut state = simulator.state.write().await;
-
-    if state.passkeys.challenges.remove(&req.challenge).is_none() {
-        return StatusCode::BAD_REQUEST.into_response();
-    }
-
-    let credential = match state.passkeys.credentials.get(&req.credential_id) {
-        Some(c) => c.clone(),
-        None => return StatusCode::NOT_FOUND.into_response(),
-    };
-
-    let token = Uuid::new_v4().to_string();
-    let now = Simulator::now_ms();
-    let session = PasskeySession {
-        token: token.clone(),
-        credential_id: credential.credential_id.clone(),
-        issued_at_ms: now,
-        expires_at_ms: now + 30 * 60 * 1000, // 30 minutes
-    };
-    state.passkeys.sessions.insert(token.clone(), session);
-
-    Json(LoginResponse {
-        session_token: token,
-        credential_id: credential.credential_id,
-        ed25519_public_key: credential.ed25519_public_key,
-    })
-    .into_response()
-}
-
-#[cfg(feature = "passkeys")]
-#[derive(Deserialize)]
-struct SignRequest {
-    message_hex: String,
-}
-
-#[cfg(feature = "passkeys")]
-#[derive(Serialize)]
-struct SignResponse {
-    signature_hex: String,
-    public_key: String,
-}
-
-#[cfg(feature = "passkeys")]
-async fn sign_with_passkey(
-    AxumState(simulator): AxumState<Arc<Simulator>>,
-    headers: HeaderMap,
-    Json(req): Json<SignRequest>,
-) -> impl IntoResponse {
-    let token = headers
-        .get(header::AUTHORIZATION)
-        .and_then(|h| h.to_str().ok())
-        .and_then(|s| s.strip_prefix("Bearer "))
-        .map(|s| s.to_string());
-
-    let token = match token {
-        Some(t) => t,
-        None => return StatusCode::UNAUTHORIZED.into_response(),
-    };
-
-    let credential = {
-        let mut state = simulator.state.write().await;
-        let session = match state.passkeys.sessions.get(&token) {
-            Some(s) => s.clone(),
-            None => return StatusCode::UNAUTHORIZED.into_response(),
-        };
-
-        if session.expires_at_ms < Simulator::now_ms() {
-            state.passkeys.sessions.remove(&token);
-            return StatusCode::UNAUTHORIZED.into_response();
-        }
-
-        match state.passkeys.credentials.get(&session.credential_id) {
-            Some(c) => c.clone(),
-            None => return StatusCode::UNAUTHORIZED.into_response(),
-        }
-    };
-
-    let raw = match from_hex(&req.message_hex) {
-        Some(raw) => raw,
-        None => return StatusCode::BAD_REQUEST.into_response(),
-    };
-    let signature = credential.ed25519_private_key.sign(
-        Some(nullspace_types::execution::TRANSACTION_NAMESPACE),
-        &raw,
-    );
-
-    Json(SignResponse {
-        signature_hex: hex(signature.as_ref()),
-        public_key: credential.ed25519_public_key,
-    })
-    .into_response()
 }
 
 async fn filter_updates_for_account(
