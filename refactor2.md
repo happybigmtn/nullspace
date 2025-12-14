@@ -54,9 +54,10 @@ This is a second-pass review of the current workspace with a focus on idiomatic 
 - [x] `simulator/src/{lib,passkeys}.rs`: split passkeys storage + HTTP handlers into a dedicated module (feature-gated).
 - [x] `simulator/src/{lib,api/*}.rs`: move `Api` router + HTTP + websocket handlers into dedicated modules.
 - [x] `simulator/src/{lib,state}.rs`: move core `State`/`InternalUpdate` + proof/query logic into a dedicated module.
-- [x] `website/wasm/src/lib.rs`: gate private-key exports behind `private-key-export` feature (default enabled).
+- [x] `website/wasm/src/lib.rs`: gate private-key exports behind `private-key-export` feature.
+- [x] `website/wasm/Cargo.toml`: make `private-key-export` default-off.
 - [x] `node/src/application/actor.rs`: replace metadata `.unwrap()` with logged fallback; add retry/backoff for proof generation; make prune failures non-fatal.
-- [ ] Deferred (larger and/or behavior-changing): fallible `State` plumbing, event schema changes (e.g. `CasinoDeposit` event), simulator retention limits, and making wasm key-export default-off.
+- [ ] Deferred (larger and/or behavior-changing): fallible `State` plumbing, event schema changes (e.g. `CasinoDeposit` event), and simulator retention limits.
 
 ---
 
@@ -1182,6 +1183,9 @@ pub(crate) async fn post_bytes_with_retry(&self, url: Url, body: bytes::Bytes) -
 - Exposes a wasm-bindgen interface for generating keys and building/signing transactions from the browser.
 - Provides instruction helpers and JSON conversion utilities.
 
+### Progress (implemented)
+- Private-key getters are gated behind `private-key-export`, and the feature is now default-off (`website/wasm/Cargo.toml`).
+
 ### Top Issues (ranked)
 1. **WASM `Signer` exposes private key bytes/hex**
    - Impact: easy to leak keys via logs/JS; security footgun.
@@ -1195,7 +1199,7 @@ pub(crate) async fn post_bytes_with_retry(&self, url: Url, body: bytes::Bytes) -
    - Location: `website/wasm/src/lib.rs:33`–`124`.
 
 ### Idiomatic Rust Improvements
-- Gate private-key getters behind a `testing` feature, or remove entirely (**behavior-changing** for JS consumers).
+- Keep private-key exports opt-in only (done) and consider renaming to `testing`/`dev` or removing entirely (**behavior-changing** for JS consumers that relied on exports).
 
 **Before:**
 ```rust
