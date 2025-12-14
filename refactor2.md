@@ -50,9 +50,10 @@ This is a second-pass review of the current workspace with a focus on idiomatic 
 - [x] `execution/src/casino/video_poker.rs`: fix clippy `needless_range_loop` via iterator-based indexing.
 - [x] `execution/src/layer/mod.rs`: make progressive-bet parsing fail-closed (no silent `0` on short blobs).
 - [x] `simulator/src/lib.rs`: replace `GovernorConfigBuilder::finish().unwrap()` with safe fallback to defaults.
+- [x] `simulator/src/{lib,explorer}.rs`: split explorer indexing + HTTP handlers into a dedicated module.
 - [x] `website/wasm/src/lib.rs`: gate private-key exports behind `private-key-export` feature (default enabled).
 - [x] `node/src/application/actor.rs`: replace metadata `.unwrap()` with logged fallback; add retry/backoff for proof generation; make prune failures non-fatal.
-- [ ] Deferred (larger and/or behavior-changing): fallible `State` plumbing, event schema changes (e.g. `CasinoDeposit` event), simulator modularization/retention, and making wasm key-export default-off.
+- [ ] Deferred (larger and/or behavior-changing): fallible `State` plumbing, event schema changes (e.g. `CasinoDeposit` event), simulator retention limits + further modularization, and making wasm key-export default-off.
 
 ---
 
