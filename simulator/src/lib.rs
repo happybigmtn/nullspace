@@ -651,9 +651,6 @@ async fn submit(AxumState(simulator): AxumState<Arc<Simulator>>, body: Bytes) ->
             return;
         }
 
-        const MAX_PROOF_NODES: usize = 500;
-        const MAX_PROOF_OPS: usize = 500;
-
         let mut reader = &bytes[1..];
         let progress = match Progress::read(&mut reader) {
             Ok(p) => p,
@@ -673,7 +670,9 @@ async fn submit(AxumState(simulator): AxumState<Arc<Simulator>>, body: Bytes) ->
             return;
         }
 
-        if let Err(e) = Proof::<Digest>::read_cfg(&mut reader, &MAX_PROOF_NODES) {
+        if let Err(e) =
+            Proof::<Digest>::read_cfg(&mut reader, &nullspace_types::api::MAX_STATE_PROOF_NODES)
+        {
             tracing::warn!(
                 view = progress.view,
                 height = progress.height,
@@ -685,7 +684,7 @@ async fn submit(AxumState(simulator): AxumState<Arc<Simulator>>, body: Bytes) ->
 
         let state_ops_len = match usize::read_cfg(
             &mut reader,
-            &commonware_codec::RangeCfg::from(0..=MAX_PROOF_OPS),
+            &commonware_codec::RangeCfg::from(0..=nullspace_types::api::MAX_STATE_PROOF_OPS),
         ) {
             Ok(v) => v,
             Err(e) => {
@@ -721,7 +720,9 @@ async fn submit(AxumState(simulator): AxumState<Arc<Simulator>>, body: Bytes) ->
             }
         }
 
-        if let Err(e) = Proof::<Digest>::read_cfg(&mut reader, &MAX_PROOF_NODES) {
+        if let Err(e) =
+            Proof::<Digest>::read_cfg(&mut reader, &nullspace_types::api::MAX_EVENTS_PROOF_NODES)
+        {
             tracing::warn!(
                 view = progress.view,
                 height = progress.height,
@@ -732,7 +733,10 @@ async fn submit(AxumState(simulator): AxumState<Arc<Simulator>>, body: Bytes) ->
             return;
         }
 
-        if let Err(e) = Vec::<Keyless<Output>>::read_range(&mut reader, 0..=MAX_PROOF_OPS) {
+        if let Err(e) = Vec::<Keyless<Output>>::read_range(
+            &mut reader,
+            0..=nullspace_types::api::MAX_EVENTS_PROOF_OPS,
+        ) {
             tracing::warn!(
                 view = progress.view,
                 height = progress.height,

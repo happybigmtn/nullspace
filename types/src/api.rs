@@ -1,4 +1,6 @@
-use crate::execution::{Identity, Output, Progress, Seed, Transaction, Value, NAMESPACE};
+use crate::execution::{
+    Identity, Output, Progress, Seed, Transaction, Value, MAX_BLOCK_TRANSACTIONS, NAMESPACE,
+};
 use bytes::{Buf, BufMut};
 use commonware_codec::{EncodeSize, Error, Read, ReadExt, ReadRangeExt, Write};
 use commonware_consensus::aggregation::types::Certificate;
@@ -14,8 +16,23 @@ use commonware_storage::{
 /// Maximum number of transactions that can be submitted in a single submission
 pub const MAX_SUBMISSION_TRANSACTIONS: usize = 128;
 
-const MAX_PROOF_NODES: usize = 500;
-const MAX_PROOF_OPS: usize = 500;
+/// Proof decoding limits for summaries/events.
+///
+/// These limits must be consistent anywhere proofs are produced or verified, otherwise nodes can
+/// create proofs that clients cannot decode (or vice versa).
+///
+/// We scale limits based on `MAX_BLOCK_TRANSACTIONS` (currently 500). In typical execution:
+/// - each transaction generates ~4 state ops (and possibly more in edge cases)
+/// - each transaction generates ~2 event ops (and possibly more in edge cases)
+pub const MAX_STATE_PROOF_OPS: usize = MAX_BLOCK_TRANSACTIONS * 6; // 3_000
+pub const MAX_EVENTS_PROOF_OPS: usize = MAX_BLOCK_TRANSACTIONS * 4; // 2_000
+pub const MAX_STATE_PROOF_NODES: usize = MAX_STATE_PROOF_OPS;
+pub const MAX_EVENTS_PROOF_NODES: usize = MAX_EVENTS_PROOF_OPS;
+
+/// Proof decoding limit for point lookups.
+///
+/// Lookup proofs are for a single operation, so we keep a smaller node cap for DoS resistance.
+pub const MAX_LOOKUP_PROOF_NODES: usize = 500;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[non_exhaustive]
@@ -201,10 +218,10 @@ impl Read for Summary {
     fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
         let progress = Progress::read(reader)?;
         let certificate = Certificate::read(reader)?;
-        let state_proof = Proof::read_cfg(reader, &MAX_PROOF_NODES)?;
-        let state_proof_ops = Vec::read_range(reader, 0..=MAX_PROOF_OPS)?;
-        let events_proof = Proof::read_cfg(reader, &MAX_PROOF_NODES)?;
-        let events_proof_ops = Vec::read_range(reader, 0..=MAX_PROOF_OPS)?;
+        let state_proof = Proof::read_cfg(reader, &MAX_STATE_PROOF_NODES)?;
+        let state_proof_ops = Vec::read_range(reader, 0..=MAX_STATE_PROOF_OPS)?;
+        let events_proof = Proof::read_cfg(reader, &MAX_EVENTS_PROOF_NODES)?;
+        let events_proof_ops = Vec::read_range(reader, 0..=MAX_EVENTS_PROOF_OPS)?;
         Ok(Self {
             progress,
             certificate,
@@ -285,8 +302,8 @@ impl Read for Events {
     fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
         let progress = Progress::read(reader)?;
         let certificate = Certificate::read(reader)?;
-        let events_proof = Proof::read_cfg(reader, &MAX_PROOF_NODES)?;
-        let events_proof_ops = Vec::read_range(reader, 0..=MAX_PROOF_OPS)?;
+        let events_proof = Proof::read_cfg(reader, &MAX_EVENTS_PROOF_NODES)?;
+        let events_proof_ops = Vec::read_range(reader, 0..=MAX_EVENTS_PROOF_OPS)?;
         Ok(Self {
             progress,
             certificate,
@@ -355,7 +372,7 @@ impl Read for Lookup {
     fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
         let progress = Progress::read(reader)?;
         let certificate = Certificate::read(reader)?;
-        let proof = Proof::read_cfg(reader, &MAX_PROOF_NODES)?;
+        let proof = Proof::read_cfg(reader, &MAX_LOOKUP_PROOF_NODES)?;
         let location = u64::read(reader)?;
         let operation = Variable::read(reader)?;
         Ok(Self {
@@ -437,8 +454,8 @@ impl Read for FilteredEvents {
     fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
         let progress = Progress::read(reader)?;
         let certificate = Certificate::read(reader)?;
-        let events_proof = Proof::read_cfg(reader, &MAX_PROOF_NODES)?;
-        let events_proof_ops = Vec::read_range(reader, 0..=MAX_PROOF_OPS)?;
+        let events_proof = Proof::read_cfg(reader, &MAX_EVENTS_PROOF_NODES)?;
+        let events_proof_ops = Vec::read_range(reader, 0..=MAX_EVENTS_PROOF_OPS)?;
         Ok(Self {
             progress,
             certificate,

@@ -32,6 +32,9 @@ use futures::{
 use governor::clock::Clock as GClock;
 use nullspace_types::{
     api::Summary,
+    api::{
+        MAX_EVENTS_PROOF_NODES, MAX_EVENTS_PROOF_OPS, MAX_STATE_PROOF_NODES, MAX_STATE_PROOF_OPS,
+    },
     execution::{Output, Progress, Value},
     genesis_digest,
 };
@@ -66,13 +69,10 @@ impl Read for Proofs {
     type Cfg = ();
 
     fn read_cfg(reader: &mut impl Buf, _: &()) -> Result<Self, commonware_codec::Error> {
-        // Limits scaled for MAX_BLOCK_TRANSACTIONS=500
-        // Each tx can generate ~4 state ops and ~2 events
-        // Using 3000 for state ops and 2000 for event ops to handle edge cases
-        let state_proof = Proof::<Digest>::read_cfg(reader, &3000)?;
-        let state_proof_ops = Vec::read_range(reader, 0..=3000)?;
-        let events_proof = Proof::<Digest>::read_cfg(reader, &2000)?;
-        let events_proof_ops = Vec::read_range(reader, 0..=2000)?;
+        let state_proof = Proof::<Digest>::read_cfg(reader, &MAX_STATE_PROOF_NODES)?;
+        let state_proof_ops = Vec::read_range(reader, 0..=MAX_STATE_PROOF_OPS)?;
+        let events_proof = Proof::<Digest>::read_cfg(reader, &MAX_EVENTS_PROOF_NODES)?;
+        let events_proof_ops = Vec::read_range(reader, 0..=MAX_EVENTS_PROOF_OPS)?;
         Ok(Self {
             state_proof,
             state_proof_ops,
