@@ -60,6 +60,9 @@ This is a second-pass review of the current workspace with a focus on idiomatic 
 - [x] `website/wasm/Cargo.toml`: make `private-key-export` default-off.
 - [x] `node/src/application/actor.rs`: replace metadata `.unwrap()` with logged fallback; add retry/backoff for proof generation; make prune failures non-fatal.
 - [x] (**behavior-changing / API-breaking**) `execution/src/{state,state_transition,layer/*}.rs` + `node/src/application/actor.rs`: make execution `State` operations fallible (`anyhow::Result`) and propagate storage errors instead of logging+continuing.
+- [x] (**behavior-changing**) `execution/src/state_transition.rs`: fail on non-sequential height gaps instead of silently no-op’ing.
+- [x] `execution/src/state_transition.rs`: compare recovery outputs via `Eq` (no `encode()` allocations).
+- [x] `node/src/application/actor.rs`: cache per-account next nonce for inbound tx ingestion (reduces `nonce(&state, ...)` reads).
 
 ---
 
@@ -511,17 +514,16 @@ pub trait State {
 - Executes block transitions by running the `Layer`, writing event outputs, and committing state.
 - Includes recovery logic for partial commits.
 
+### Progress (implemented)
+- Height gaps (`requested != state_height + 1`) now return an error instead of a silent no-op (**behavior-changing**).
+- Recovery compares outputs via `Output: Eq` instead of allocating `encode()` buffers.
+
 ### Top Issues (ranked)
-1. **Height handling returns “no-op” for unexpected heights**
-   - Impact: callers may interpret no-op as successful execution; can hide ordering bugs.
-   - Risk: medium; depends on caller invariants.
-   - Effort: low.
-   - Location: `execution/src/state_transition.rs:52`–`75`.
-2. **Recovery compares outputs by `encode()` allocations**
-   - Impact: extra allocations during recovery; likely rare, but can be optimized.
+1. **No explicit outcome enum (Applied vs AlreadyApplied)**
+   - Impact: callers infer “no-op” from empty proof ranges; workable but indirect.
    - Risk: low.
-   - Effort: low–medium.
-   - Location: `execution/src/state_transition.rs:135`–`158`.
+   - Effort: medium (API change).
+   - Location: `execution/src/state_transition.rs` return type.
 
 ### Idiomatic Rust Improvements
 - Separate “already applied” from “out-of-order” results with an explicit enum, not “empty proof ranges”.
@@ -552,8 +554,8 @@ pub enum TransitionOutcome {
 - Recovery should be extremely rare; optimize only after correctness.
 
 ### Refactor Plan
-- Phase 1: improve the API surface to distinguish no-op reasons.
-- Phase 2: avoid `encode()` allocations by comparing via a stable borrowed representation if available.
+- Phase 1 (**done**): fail on height gaps; keep “already applied” as a no-op.
+- Phase 2 (**done**): remove recovery `encode()` allocations by comparing `Output` values directly.
 - Phase 3: add chaos tests that crash between events/state commits to validate invariants.
 
 ### Open Questions
@@ -1241,6 +1243,9 @@ pub fn private_key_hex(&self) -> String { hex(self.private_key.as_ref()) }
 ### Summary
 - Central application actor: builds proposed blocks from mempool, verifies incoming blocks, executes finalized blocks, generates proofs, and forwards results to aggregator/indexer.
 - One of the highest-risk files: it mixes IO, consensus coordination, storage, and execution; failures here are liveness failures.
+
+### Progress (implemented)
+- Inbound mempool tx ingestion now caches per-account “next nonce” to avoid per-transaction state reads.
 
 ### Top Issues (ranked)
 1. **Panics/unwraps in a long-running async actor**

@@ -1,6 +1,5 @@
 use crate::{Adb, Layer, State};
 use anyhow::{anyhow, Context as _};
-use commonware_codec::Encode as _;
 use commonware_cryptography::{ed25519::PublicKey, sha256::Digest, Sha256};
 #[cfg(feature = "parallel")]
 use commonware_runtime::ThreadPool;
@@ -70,8 +69,9 @@ pub async fn execute_state_transition<S: Spawner + Storage + Clock + Metrics, T:
         }
     };
 
-    // If this is not the next expected height, treat as a no-op (already processed, or too far ahead).
-    if height <= state_height || height > state_height.saturating_add(1) {
+    // If this is not the next expected height, either treat as a no-op (already processed),
+    // or fail (height gap) to avoid silently skipping blocks.
+    if height <= state_height {
         let mut mmr_hasher = Standard::<Sha256>::new();
         let state_op = state.op_count();
         let events_op = events.op_count();
@@ -84,6 +84,13 @@ pub async fn execute_state_transition<S: Spawner + Storage + Clock + Metrics, T:
             events_end_op: events_op,
             processed_nonces: BTreeMap::new(),
         });
+    }
+
+    let expected_next_height = state_height.saturating_add(1);
+    if height != expected_next_height {
+        return Err(anyhow!(
+            "non-sequential height: state_height={state_height}, expected={expected_next_height}, requested={height}"
+        ));
     }
 
     debug_assert_eq!(height, state_height + 1);
@@ -184,7 +191,7 @@ pub async fn execute_state_transition<S: Spawner + Storage + Clock + Metrics, T:
                     .await
                     .with_context(|| format!("read existing events output (loc={loc})"))?
                     .ok_or_else(|| anyhow!("missing existing events output at loc {loc}"))?;
-                if existing.encode() != output.encode() {
+                if existing != *output {
                     return Err(anyhow!(
                         "events output mismatch during recovery at loc {loc}"
                     ));

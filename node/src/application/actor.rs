@@ -37,6 +37,7 @@ use nullspace_types::{
 use prometheus_client::metrics::{counter::Counter, histogram::Histogram};
 use rand::{CryptoRng, Rng};
 use std::{
+    collections::HashMap,
     num::NonZero,
     sync::{atomic::AtomicU64, Arc, Mutex},
     time::Duration,
@@ -316,6 +317,7 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
             self.mempool_max_backlog,
             self.mempool_max_transactions,
         );
+        let mut next_nonce_cache = HashMap::new();
 
         // Use reconnecting indexer wrapper
         let reconnecting_indexer = crate::indexer::ReconnectingIndexer::new(
@@ -635,6 +637,7 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                                 // Update mempool based on processed transactions
                                 for (public, next_nonce) in &result.processed_nonces {
                                     mempool.retain(public, *next_nonce);
+                                    next_nonce_cache.insert(public.clone(), *next_nonce);
                                 }
 
                                 // Generate range proof for changes
@@ -728,12 +731,21 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                     // Process transactions (already verified in indexer client)
                     for tx in pending.transactions {
                         // Check if below next
-                        let next = match nonce(&state, &tx.public).await {
-                            Ok(next) => next,
-                            Err(err) => {
-                                warn!(?err, "failed to read account nonce; dropping transaction");
-                                continue;
-                            }
+                        let next = match next_nonce_cache.get(&tx.public) {
+                            Some(next) => *next,
+                            None => match nonce(&state, &tx.public).await {
+                                Ok(next) => {
+                                    next_nonce_cache.insert(tx.public.clone(), next);
+                                    next
+                                }
+                                Err(err) => {
+                                    warn!(
+                                        ?err,
+                                        "failed to read account nonce; dropping transaction"
+                                    );
+                                    continue;
+                                }
+                            },
                         };
                         if tx.nonce < next {
                             // If below next, we drop the incoming transaction
