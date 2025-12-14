@@ -1,5 +1,48 @@
 use super::super::*;
 
+const BASIS_POINTS_SCALE: u128 = 10_000;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct SwapQuote {
+    amount_out: u64,
+    fee_amount: u64,
+}
+
+fn rng_price_ratio(reserve_rng: u64, reserve_vusdt: u64) -> (u128, u128) {
+    if reserve_rng > 0 {
+        (reserve_vusdt as u128, reserve_rng as u128)
+    } else {
+        // Bootstrap price: 1 RNG = 1 vUSDT.
+        (1, 1)
+    }
+}
+
+fn constant_product_quote(
+    amount_in: u64,
+    reserve_in: u64,
+    reserve_out: u64,
+    fee_basis_points: u16,
+) -> Option<SwapQuote> {
+    let fee_amount =
+        (amount_in as u128).saturating_mul(fee_basis_points as u128) / BASIS_POINTS_SCALE;
+    let net_in = (amount_in as u128).saturating_sub(fee_amount);
+
+    let amount_in_with_fee = net_in.saturating_mul(BASIS_POINTS_SCALE);
+    let numerator = amount_in_with_fee.saturating_mul(reserve_out as u128);
+    let denominator = (reserve_in as u128)
+        .saturating_mul(BASIS_POINTS_SCALE)
+        .saturating_add(amount_in_with_fee);
+
+    if denominator == 0 {
+        return None;
+    }
+
+    Some(SwapQuote {
+        amount_out: (numerator / denominator) as u64,
+        fee_amount: fee_amount as u64,
+    })
+}
+
 impl<'a, S: State> Layer<'a, S> {
     // === Liquidity / Vault Handlers ===
 
@@ -81,18 +124,8 @@ impl<'a, S: State> Layer<'a, S> {
             _ => return Ok(vec![]),
         };
 
-        // Determine Price (RNG price in vUSDT)
         let amm = self.get_or_init_amm().await?;
-        let price_numerator = if amm.reserve_rng > 0 {
-            amm.reserve_vusdt as u128
-        } else {
-            1 // Bootstrap price: 1 RNG = 1 vUSDT
-        };
-        let price_denominator = if amm.reserve_rng > 0 {
-            amm.reserve_rng as u128
-        } else {
-            1
-        };
+        let (price_numerator, price_denominator) = rng_price_ratio(amm.reserve_rng, amm.reserve_vusdt);
 
         // LTV Calculation: Max Debt = (Collateral * Price) * 50%
         // Debt <= (Collateral * P_num / P_den) / 2
@@ -221,29 +254,21 @@ impl<'a, S: State> Layer<'a, S> {
 
         // Reserves (u128 for safety)
         let (reserve_in, reserve_out) = if is_buying_rng {
-            (amm.reserve_vusdt as u128, amm.reserve_rng as u128)
+            (amm.reserve_vusdt, amm.reserve_rng)
         } else {
-            (amm.reserve_rng as u128, amm.reserve_vusdt as u128)
+            (amm.reserve_rng, amm.reserve_vusdt)
         };
 
-        // Fee (30 bps = 0.3%)
-        let fee_bps = amm.fee_basis_points as u128;
-        let fee_amount = ((amount_in as u128) * fee_bps) / 10_000;
-        let net_in = (amount_in as u128).saturating_sub(fee_amount);
-        let amount_in_with_fee = net_in * 10_000;
-        let numerator = amount_in_with_fee.saturating_mul(reserve_out);
-        let denominator = reserve_in
-            .saturating_mul(10_000)
-            .saturating_add(amount_in_with_fee);
-        if denominator == 0 {
+        let Some(SwapQuote { amount_out, fee_amount }) =
+            constant_product_quote(amount_in, reserve_in, reserve_out, amm.fee_basis_points)
+        else {
             return Ok(vec![Event::CasinoError {
                 player: public.clone(),
                 session_id: None,
                 error_code: nullspace_types::casino::ERROR_INVALID_MOVE,
                 message: "Invalid AMM state".to_string(),
             }]);
-        }
-        let amount_out = (numerator / denominator) as u64;
+        };
 
         if amount_out < min_amount_out {
             return Ok(vec![Event::CasinoError {
@@ -293,7 +318,7 @@ impl<'a, S: State> Layer<'a, S> {
         // Book fee to House
         if fee_amount > 0 {
             let mut house = self.get_or_init_house().await?;
-            house.accumulated_fees = house.accumulated_fees.saturating_add(fee_amount as u64);
+            house.accumulated_fees = house.accumulated_fees.saturating_add(fee_amount);
             self.insert(Key::House, Value::House(house));
         }
 
@@ -302,7 +327,7 @@ impl<'a, S: State> Layer<'a, S> {
             is_buying_rng,
             amount_in: original_amount_in,
             amount_out,
-            fee_amount: fee_amount as u64,
+            fee_amount,
             burned_amount,
             reserve_rng: amm.reserve_rng,
             reserve_vusdt: amm.reserve_vusdt,
@@ -492,5 +517,53 @@ impl<'a, S: State> Layer<'a, S> {
         );
 
         Ok(vec![event])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rng_price_ratio_bootstrap_when_no_rng_reserve() {
+        assert_eq!(rng_price_ratio(0, 0), (1, 1));
+        assert_eq!(rng_price_ratio(0, 1_000), (1, 1));
+    }
+
+    #[test]
+    fn rng_price_ratio_tracks_reserve_ratio_when_nonzero_rng_reserve() {
+        assert_eq!(rng_price_ratio(2, 10), (10, 2));
+        assert_eq!(rng_price_ratio(5, 0), (0, 5));
+    }
+
+    #[test]
+    fn constant_product_quote_basic_no_fee_rounding() {
+        let quote = constant_product_quote(100, 1_000, 1_000, 30).expect("quote");
+        assert_eq!(
+            quote,
+            SwapQuote {
+                amount_out: 90,
+                fee_amount: 0
+            }
+        );
+    }
+
+    #[test]
+    fn constant_product_quote_fee_applies_and_rounds_down() {
+        let quote = constant_product_quote(10_000, 1_000_000, 1_000_000, 30).expect("quote");
+        assert_eq!(quote.fee_amount, 30);
+        assert_eq!(quote.amount_out, 9_871);
+    }
+
+    #[test]
+    fn constant_product_quote_all_fee_yields_zero_out() {
+        let quote = constant_product_quote(1_000, 1_000, 1_000, 10_000).expect("quote");
+        assert_eq!(quote.fee_amount, 1_000);
+        assert_eq!(quote.amount_out, 0);
+    }
+
+    #[test]
+    fn constant_product_quote_denominator_zero_returns_none() {
+        assert_eq!(constant_product_quote(0, 0, 0, 0), None);
     }
 }

@@ -49,6 +49,7 @@ This is a second-pass review of the current workspace with a focus on idiomatic 
 - [x] `types/src/execution.rs`: add `Block::try_new` + `BlockBuildError` (checked constructor).
 - [x] `execution/src/casino/video_poker.rs`: fix clippy `needless_range_loop` via iterator-based indexing.
 - [x] `execution/src/layer/mod.rs`: make progressive-bet parsing fail-closed (no silent `0` on short blobs).
+- [x] `execution/src/layer/handlers/liquidity.rs`: extract AMM math into pure helpers and add unit tests (behavior-preserving).
 - [x] `simulator/src/lib.rs`: replace `GovernorConfigBuilder::finish().unwrap()` with safe fallback to defaults.
 - [x] `simulator/src/{lib,explorer}.rs`: split explorer indexing + HTTP handlers into a dedicated module.
 - [x] `simulator/src/{lib,passkeys}.rs`: split passkeys storage + HTTP handlers into a dedicated module (feature-gated).
@@ -716,6 +717,9 @@ fn casino_error(player: &PublicKey, session_id: Option<u64>, code: u32, msg: imp
 - Implements vault creation, collateral deposit, borrow/repay, and AMM operations (swap/add/remove liquidity).
 - Maintains “virtual USDT” accounting and house burn tracking.
 
+### Progress (implemented)
+- Extracted swap quote math (`constant_product_quote`) and borrow price ratio (`rng_price_ratio`) into pure helpers + added unit tests.
+
 ### Top Issues (ranked)
 1. **AMM math and “bootstrap price” are embedded and implicit**
    - Impact: easy to change accidentally; hard to audit; may cause economic bugs.
@@ -760,7 +764,7 @@ fn constant_product_out(reserve_in: u128, reserve_out: u128, amount_in: u128, fe
 - Pure math refactor enables cheap unit/property tests and reduces regression risk.
 
 ### Refactor Plan
-- Phase 1: extract AMM math into pure functions + unit tests.
+- Phase 1 (**done**): extract AMM math into pure functions + unit tests.
 - Phase 2: define explicit invariants and validate them at key transitions (debug asserts or error events).
 - Phase 3 (**behavior-changing**): revisit bootstrap pricing and fee model with economic design review.
 
