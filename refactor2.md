@@ -40,7 +40,8 @@ This is a second-pass review of the current workspace with a focus on idiomatic 
 - [x] `node/src/application/mempool.rs`: remove non-test dead-code warnings by gating test-only defaults/constructor.
 - [x] Idiomatic/clippy cleanups in core games: `execution/src/casino/{baccarat,roulette,blackjack,sic_bo}.rs`.
 - [x] Test hygiene: `types/src/casino/tests.rs`, `types/src/token.rs` clippy warning fixes.
-- [ ] Deferred (larger and/or behavior-changing): fallible `State` plumbing, proof-limit unification, event schema changes (e.g. `CasinoDeposit` event), wasm private-key exposure changes, simulator modularization/retention.
+- [x] Proof limit unification: centralize summary/events decode limits in `types/src/api.rs` and reuse in `node/src/aggregator/actor.rs` + `simulator/src/lib.rs`.
+- [ ] Deferred (larger and/or behavior-changing): fallible `State` plumbing, event schema changes (e.g. `CasinoDeposit` event), wasm private-key exposure changes, simulator modularization/retention.
 
 ---
 
