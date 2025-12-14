@@ -71,6 +71,8 @@ This is a second-pass review of the current workspace with a focus on idiomatic 
 - [x] `node/src/engine.rs`: honor runtime stop signal for graceful shutdown (no panic on stop).
 - [x] `node/src/{seeder,aggregator}/actor.rs`: add upload metrics (attempts/failures, outstanding, lag) and exponential backoff for indexer uploads.
 - [x] `node/src/{seeder,aggregator}/actor.rs`: harden `uploads_outstanding` decrement (no underflow on unexpected completion messages).
+- [x] `node/src/indexer.rs`: preserve mempool websocket error details from `nullspace-client` (stop collapsing to `UnexpectedResponse`).
+- [x] `node/src/indexer.rs`: add mempool stream metrics (connect attempts/failures, invalid batches, forwarded batches) and exponential reconnect backoff.
 
 ---
 
@@ -309,17 +311,17 @@ pub fn new(context: impl Metrics) -> Self {
 - Defines an `Indexer` trait (submit seed, submit summary, and stream mempool).
 - Provides a reconnecting wrapper for the mempool stream that batch-verifies transaction signatures.
 
+### Progress (implemented)
+- Invalid mempool tx batches are now drop+continue (reconnect loop stays alive).
+- `nullspace-client` mempool errors are no longer collapsed to `UnexpectedResponse`.
+- Reconnecting mempool stream now emits metrics and uses exponential reconnect backoff.
+
 ### Top Issues (ranked)
-1. **Reconnect loop aborts permanently on invalid tx batch**
-   - Impact: a single bad payload can stop mempool ingestion until node restart.
-   - Risk: medium (depends on trust boundary; indexer may be remote/untrusted).
-   - Effort: low–medium.
-   - Location: `node/src/indexer.rs:120`–`186` (`if !batcher.verify { return; }`).
-2. **Error mapping loses detail**
-   - Impact: operational debugging is harder; everything becomes `UnexpectedResponse`.
-   - Risk: low.
+1. **Reconnect/backoff policy is still simplistic**
+   - Impact: reconnect behavior may be too aggressive or too slow depending on outage mode; no jitter.
+   - Risk: low–medium.
    - Effort: low.
-   - Location: `node/src/indexer.rs:86`–`108` (`map_err(|_| UnexpectedResponse)`).
+   - Location: `node/src/indexer.rs` (`ReconnectingStream` backoff loop).
 
 ### Idiomatic Rust Improvements
 - Treat invalid tx batches as “drop + continue” unless protocol requires fail-fast.
@@ -350,8 +352,8 @@ if !batcher.verify(&mut context) {
 - Batch verification is good; consider using `pending.transactions.iter().map(...)` with reserve capacity if allocations show up in profiles.
 
 ### Refactor Plan
-- Phase 1: decide fail-fast vs tolerate for invalid txs; implement consistent policy.
-- Phase 2: preserve error details in logs (and/or expose in metrics) for indexer stream failures.
+- Phase 1 (**done**): decide tolerate policy for invalid txs; implement drop+continue.
+- Phase 2 (**done**): preserve error details and add mempool stream metrics + exponential reconnect backoff.
 - Phase 3: add integration tests for reconnect behavior and invalid batches.
 
 ### Open Questions

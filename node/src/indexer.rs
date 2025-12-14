@@ -5,7 +5,7 @@ use commonware_cryptography::BatchVerifier;
 #[cfg(test)]
 use commonware_runtime::RwLock;
 use commonware_runtime::Spawner;
-use commonware_runtime::{Clock, Handle};
+use commonware_runtime::{Clock, Handle, Metrics};
 use futures::channel::mpsc;
 use futures::{SinkExt, Stream, StreamExt};
 use nullspace_types::api::Pending;
@@ -14,6 +14,7 @@ use nullspace_types::execution::Transaction;
 use nullspace_types::{api::Summary, Seed};
 #[cfg(test)]
 use nullspace_types::{Identity, NAMESPACE};
+use prometheus_client::metrics::counter::Counter;
 use rand::{CryptoRng, Rng};
 use std::future::Future;
 #[cfg(test)]
@@ -23,6 +24,7 @@ use std::{
 };
 use std::{
     pin::Pin,
+    sync::atomic::AtomicU64,
     task::{Context, Poll},
     time::Duration,
 };
@@ -134,11 +136,7 @@ impl Indexer for nullspace_client::Client {
     async fn listen_mempool(
         &self,
     ) -> Result<impl Stream<Item = Result<Pending, Self::Error>>, Self::Error> {
-        match self.connect_mempool().await {
-            Ok(stream) => Ok(stream
-                .map(|result| result.map_err(|_| nullspace_client::Error::UnexpectedResponse))),
-            Err(_) => Err(nullspace_client::Error::UnexpectedResponse),
-        }
+        self.connect_mempool().await
     }
 
     async fn submit_summary(&self, summary: Summary) -> Result<(), Self::Error> {
@@ -161,18 +159,60 @@ where
 {
     pub fn new<E>(context: E, indexer: I) -> Self
     where
-        E: Spawner + Clock + Rng + CryptoRng,
+        E: Spawner + Clock + Rng + CryptoRng + Metrics,
     {
+        let context = context.with_label("mempool_stream");
+        let connect_attempts: Counter<u64, AtomicU64> = Counter::default();
+        let connect_failures: Counter<u64, AtomicU64> = Counter::default();
+        let connect_success: Counter<u64, AtomicU64> = Counter::default();
+        let stream_failures: Counter<u64, AtomicU64> = Counter::default();
+        let invalid_batches: Counter<u64, AtomicU64> = Counter::default();
+        let forwarded_batches: Counter<u64, AtomicU64> = Counter::default();
+        context.register(
+            "connect_attempts_total",
+            "Number of attempts to connect to the indexer mempool websocket",
+            connect_attempts.clone(),
+        );
+        context.register(
+            "connect_failures_total",
+            "Number of failures while connecting to the indexer mempool websocket",
+            connect_failures.clone(),
+        );
+        context.register(
+            "connect_success_total",
+            "Number of successful connections to the indexer mempool websocket",
+            connect_success.clone(),
+        );
+        context.register(
+            "stream_failures_total",
+            "Number of websocket read/stream failures on the indexer mempool websocket",
+            stream_failures.clone(),
+        );
+        context.register(
+            "invalid_batches_total",
+            "Number of invalid Pending batches dropped from the indexer mempool stream",
+            invalid_batches.clone(),
+        );
+        context.register(
+            "forwarded_batches_total",
+            "Number of Pending batches forwarded from the indexer mempool stream",
+            forwarded_batches.clone(),
+        );
+
         // Spawn background task that manages connections
         let (mut tx, rx) = mpsc::channel(TX_STREAM_BUFFER_SIZE);
         let handle = context.spawn({
             move |mut context| async move {
+                let mut backoff = Duration::from_millis(200);
                 loop {
                     // Try to connect
+                    connect_attempts.inc();
                     match indexer.listen_mempool().await {
                         Ok(stream) => {
+                            connect_success.inc();
                             info!("connected to mempool stream");
                             let mut stream = Box::pin(stream);
+                            backoff = Duration::from_millis(200);
 
                             // Forward transactions until stream fails
                             while let Some(result) = stream.next().await {
@@ -185,6 +225,7 @@ where
                                         }
                                         if !batcher.verify(&mut context) {
                                             warn!("received invalid transaction from indexer");
+                                            invalid_batches.inc();
                                             continue;
                                         }
 
@@ -193,8 +234,10 @@ where
                                             warn!("receiver dropped");
                                             return;
                                         }
+                                        forwarded_batches.inc();
                                     }
                                     Err(e) => {
+                                        stream_failures.inc();
                                         error!(?e, "mempool stream error");
                                         break;
                                     }
@@ -204,12 +247,14 @@ where
                             warn!("mempool stream ended");
                         }
                         Err(e) => {
+                            connect_failures.inc();
                             error!(?e, "failed to connect mempool stream");
                         }
                     }
 
                     // Wait before reconnecting
-                    context.sleep(TX_STREAM_RECONNECT_DELAY).await;
+                    context.sleep(backoff).await;
+                    backoff = backoff.saturating_mul(2).min(TX_STREAM_RECONNECT_DELAY);
                 }
             }
         });
@@ -237,7 +282,7 @@ where
 pub struct ReconnectingIndexer<I, E>
 where
     I: Indexer,
-    E: Rng + CryptoRng + Spawner + Clock + Clone,
+    E: Rng + CryptoRng + Spawner + Clock + Metrics + Clone,
 {
     inner: I,
     context: E,
@@ -246,7 +291,7 @@ where
 impl<I, E> ReconnectingIndexer<I, E>
 where
     I: Indexer,
-    E: Rng + CryptoRng + Spawner + Clock + Clone,
+    E: Rng + CryptoRng + Spawner + Clock + Metrics + Clone,
 {
     pub fn new(context: E, inner: I) -> Self {
         Self { inner, context }
@@ -256,7 +301,7 @@ where
 impl<I, E> Indexer for ReconnectingIndexer<I, E>
 where
     I: Indexer,
-    E: Rng + CryptoRng + Spawner + Clock + Clone + Send + Sync + 'static,
+    E: Rng + CryptoRng + Spawner + Clock + Metrics + Clone + Send + Sync + 'static,
 {
     type Error = I::Error;
 
