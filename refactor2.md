@@ -52,9 +52,10 @@ This is a second-pass review of the current workspace with a focus on idiomatic 
 - [x] `simulator/src/lib.rs`: replace `GovernorConfigBuilder::finish().unwrap()` with safe fallback to defaults.
 - [x] `simulator/src/{lib,explorer}.rs`: split explorer indexing + HTTP handlers into a dedicated module.
 - [x] `simulator/src/{lib,passkeys}.rs`: split passkeys storage + HTTP handlers into a dedicated module (feature-gated).
+- [x] `simulator/src/{lib,api/*}.rs`: move `Api` router + HTTP + websocket handlers into dedicated modules.
 - [x] `website/wasm/src/lib.rs`: gate private-key exports behind `private-key-export` feature (default enabled).
 - [x] `node/src/application/actor.rs`: replace metadata `.unwrap()` with logged fallback; add retry/backoff for proof generation; make prune failures non-fatal.
-- [ ] Deferred (larger and/or behavior-changing): fallible `State` plumbing, event schema changes (e.g. `CasinoDeposit` event), simulator retention limits, remaining simulator module split (HTTP/WS/state), and making wasm key-export default-off.
+- [ ] Deferred (larger and/or behavior-changing): fallible `State` plumbing, event schema changes (e.g. `CasinoDeposit` event), simulator retention limits, remaining simulator module split (`state.rs`), and making wasm key-export default-off.
 
 ---
 
@@ -1128,14 +1129,15 @@ pub(crate) async fn post_bytes_with_retry(&self, url: Url, body: bytes::Bytes) -
 ### Progress (implemented)
 - Explorer indexing/endpoints moved to `simulator/src/explorer.rs`.
 - Passkeys state + endpoints moved to `simulator/src/passkeys.rs` (feature-gated).
+- API router + HTTP/WS handlers moved to `simulator/src/api/{mod,http,ws}.rs`.
 - Rate limiter config no longer panics on invalid builder output (falls back to defaults).
 
 ### Top Issues (ranked)
-1. **Large `lib.rs` still mixes HTTP, storage, and websocket handlers**
-   - Impact: hard to test and reason about; high change risk.
+1. **Core simulator logic + state still concentrated in `lib.rs`**
+   - Impact: makes core state/proof logic harder to test in isolation; change risk for the “truth” of the simulator.
    - Risk: medium.
    - Effort: medium.
-   - Location: `simulator/src/lib.rs` (module-wide).
+   - Location: `simulator/src/lib.rs` (core types + state/proof query path).
 2. **Unbounded in-memory growth**
    - Impact: simulator may grow without bound (blocks, txs, accounts, explorer indices).
    - Risk: medium (long-running sims).
@@ -1148,7 +1150,7 @@ pub(crate) async fn post_bytes_with_retry(&self, url: Url, body: bytes::Bytes) -
    - Location: `simulator/src/explorer.rs:70` (`Simulator::now_ms()`).
 
 ### Idiomatic Rust Improvements
-- Complete module split: `api/http.rs`, `api/ws.rs`, `state.rs` (explorer and passkeys are already extracted).
+- Finish module split by extracting core state/proof logic into `state.rs` (HTTP/WS, explorer, and passkeys are already extracted).
 
 ### Data Structure & Algorithm Changes
 - Add bounded retention (even for simulator):

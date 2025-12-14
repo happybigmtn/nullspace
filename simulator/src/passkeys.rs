@@ -45,7 +45,7 @@ struct ChallengeResponse {
     challenge: String,
 }
 
-pub(super) async fn get_passkey_challenge(
+pub(crate) async fn get_passkey_challenge(
     AxumState(simulator): AxumState<Arc<Simulator>>,
 ) -> impl IntoResponse {
     let challenge = Uuid::new_v4().to_string().replace('-', "");
@@ -65,7 +65,7 @@ pub(super) async fn get_passkey_challenge(
 }
 
 #[derive(Deserialize)]
-pub(super) struct RegisterRequest {
+pub(crate) struct RegisterRequest {
     credential_id: String,
     webauthn_public_key: String,
     challenge: String,
@@ -77,7 +77,7 @@ struct RegisterResponse {
     ed25519_public_key: String,
 }
 
-pub(super) async fn register_passkey(
+pub(crate) async fn register_passkey(
     AxumState(simulator): AxumState<Arc<Simulator>>,
     Json(req): Json<RegisterRequest>,
 ) -> impl IntoResponse {
@@ -115,7 +115,7 @@ pub(super) async fn register_passkey(
 }
 
 #[derive(Deserialize)]
-pub(super) struct LoginRequest {
+pub(crate) struct LoginRequest {
     credential_id: String,
     challenge: String,
 }
@@ -127,7 +127,7 @@ struct LoginResponse {
     ed25519_public_key: String,
 }
 
-pub(super) async fn login_passkey(
+pub(crate) async fn login_passkey(
     AxumState(simulator): AxumState<Arc<Simulator>>,
     Json(req): Json<LoginRequest>,
 ) -> impl IntoResponse {
@@ -159,7 +159,7 @@ pub(super) async fn login_passkey(
 }
 
 #[derive(Deserialize)]
-pub(super) struct SignRequest {
+pub(crate) struct SignRequest {
     message_hex: String,
 }
 
@@ -169,7 +169,7 @@ struct SignResponse {
     public_key: String,
 }
 
-pub(super) async fn sign_with_passkey(
+pub(crate) async fn sign_with_passkey(
     AxumState(simulator): AxumState<Arc<Simulator>>,
     headers: HeaderMap,
     Json(req): Json<SignRequest>,
