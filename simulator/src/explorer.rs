@@ -316,12 +316,12 @@ impl Simulator {
 }
 
 #[derive(Deserialize)]
-pub(super) struct Pagination {
+pub(crate) struct Pagination {
     offset: Option<usize>,
     limit: Option<usize>,
 }
 
-pub(super) async fn list_blocks(
+pub(crate) async fn list_blocks(
     AxumState(simulator): AxumState<Arc<Simulator>>,
     Query(pagination): Query<Pagination>,
 ) -> impl IntoResponse {
@@ -350,7 +350,7 @@ pub(super) async fn list_blocks(
     Json(json!({ "blocks": blocks, "next_offset": next_offset, "total": total })).into_response()
 }
 
-pub(super) async fn get_block(
+pub(crate) async fn get_block(
     AxumState(simulator): AxumState<Arc<Simulator>>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
@@ -372,7 +372,7 @@ pub(super) async fn get_block(
     }
 }
 
-pub(super) async fn get_transaction(
+pub(crate) async fn get_transaction(
     AxumState(simulator): AxumState<Arc<Simulator>>,
     Path(hash): Path<String>,
 ) -> impl IntoResponse {
@@ -393,7 +393,7 @@ pub(super) async fn get_transaction(
     }
 }
 
-pub(super) async fn get_account_activity(
+pub(crate) async fn get_account_activity(
     AxumState(simulator): AxumState<Arc<Simulator>>,
     Path(pubkey): Path<String>,
 ) -> impl IntoResponse {
@@ -415,11 +415,11 @@ pub(super) async fn get_account_activity(
 }
 
 #[derive(Deserialize)]
-pub(super) struct SearchQuery {
+pub(crate) struct SearchQuery {
     q: String,
 }
 
-pub(super) async fn search_explorer(
+pub(crate) async fn search_explorer(
     AxumState(simulator): AxumState<Arc<Simulator>>,
     Query(params): Query<SearchQuery>,
 ) -> impl IntoResponse {
