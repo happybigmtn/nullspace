@@ -64,6 +64,8 @@ This is a second-pass review of the current workspace with a focus on idiomatic 
 - [x] `execution/src/state_transition.rs`: compare recovery outputs via `Eq` (no `encode()` allocations).
 - [x] `node/src/application/actor.rs`: cache per-account next nonce for inbound tx ingestion (reduces `nonce(&state, ...)` reads).
 - [x] `node/src/{engine.rs,main.rs,tests.rs}`: refactor `engine::Config` into nested structs (`IdentityConfig`, `StorageConfig`, `ConsensusConfig`, `ApplicationConfig`) to reduce parameter soup.
+- [x] `node/src/engine.rs`: stop the node when any sub-actor terminates; abort remaining actors and propagate failure (avoid partial-liveness).
+- [x] `node/src/application/actor.rs`: remove `.expect`/`panic!` in init + steady-state; log fatal errors and exit actor (engine handles crash-fast shutdown).
 
 ---
 
@@ -416,6 +418,7 @@ cache.put(height, proofs).await.context("cache put")?;
 
 ### Progress (implemented)
 - `engine::Config` is now grouped into `IdentityConfig`, `StorageConfig`, `ConsensusConfig`, and `ApplicationConfig` (behavior-preserving structural refactor).
+- Engine now terminates the node when any sub-actor exits/fails (abort remaining actors; avoid partial-liveness).
 
 ### Top Issues (ranked)
 1. **Large constant block without clear rationale or sizing guidance**
@@ -1245,46 +1248,35 @@ pub fn private_key_hex(&self) -> String { hex(self.private_key.as_ref()) }
 
 ### Progress (implemented)
 - Inbound mempool tx ingestion now caches per-account “next nonce” to avoid per-transaction state reads.
+- Actor init + steady-state no longer use `.expect`/`panic!`; fatal errors are logged and cause the actor to exit (engine stops the node to avoid partial-liveness).
 
 ### Top Issues (ranked)
-1. **Panics/unwraps in a long-running async actor**
-   - Impact: node can crash on transient storage/indexer issues; shutdown is brittle; hard to recover gracefully.
-   - Risk: high.
-   - Effort: medium.
-   - Location: examples include `node/src/application/actor.rs:245`–`292` (storage init unwrap), `:327` (tx stream unwrap), `:357`/`:399` (metadata unwrap), `:592`–`:595` (`panic!` on state transition failure), `:619`/`:635` (`expect` on proofs/prune).
-2. **Fatal `panic!` on state transition failure**
-   - Impact: a single execution error can take down the node.
-   - Risk: high; may be correct if “crash-fast” is policy, but should be explicit.
-   - Effort: low (make policy explicit) → medium (recover/retry design).
-   - Location: `node/src/application/actor.rs:592`–`595`.
-3. **Repeated `state.get_metadata()` calls inside hot paths**
+1. **Crash-fast policy on actor failure/exit**
+   - Impact: any fatal execution/storage/proof-gen error halts the node (safer, but reduces availability).
+   - Risk: medium (availability).
+   - Effort: low (document) → medium (actor restart/retry design).
+   - Location: `node/src/application/actor.rs:272`, `node/src/application/actor.rs:650`, `node/src/application/actor.rs:710`; `node/src/engine.rs:526`.
+2. **Repeated `state.get_metadata()` calls inside hot paths**
    - Impact: redundant IO/locking; increases latency during propose.
    - Risk: low–medium.
    - Effort: low.
-   - Location: `node/src/application/actor.rs:357`–`361`, `:399`–`402`.
+   - Location: `node/src/application/actor.rs:384`, `node/src/application/actor.rs:443`.
+3. **Ancestry computation is recomputed**
+   - Impact: avoidable repeated work under repeated propose/verify requests.
+   - Risk: low.
+   - Effort: medium.
+   - Location: `node/src/application/actor.rs:56`.
 
 ### Idiomatic Rust Improvements
-- Make `run()` return `anyhow::Result<()>` and use `?` with context; keep crash policy at engine/supervisor layer.
+- (**implemented**) Replace `unwrap`/`expect`/`panic!` in init and steady-state with logged errors and a clean actor exit; keep crash-fast policy at `node/src/engine.rs`.
+- (optional) Split the body into `run_inner(...) -> anyhow::Result<()>` to reduce boilerplate and add richer context via `anyhow::Context`.
 
-**Before:**
+Example pattern (snippet):
 ```rust
-let mut state = Adb::init(...).await.unwrap();
-// ...
-let result = state_transition::execute_state_transition(...).await.unwrap_or_else(|err| {
-    warn!(?err, height, "state transition failed");
-    panic!("state transition failed: {err:?}");
-});
-```
-
-**After (pseudocode):**
-```rust
-async fn run(...) -> anyhow::Result<()> {
-    let mut state = Adb::init(...).await.context("init state adb")?;
-    // ...
-    let result = state_transition::execute_state_transition(...).await
-        .with_context(|| format!("execute state transition (height={height})"))?;
-    Ok(())
-}
+let mut state = match Adb::init(...).await {
+    Ok(state) => state,
+    Err(err) => { error!(?err, "init failed"); return; }
+};
 ```
 
 ### Data Structure & Algorithm Changes
@@ -1307,12 +1299,12 @@ async fn run(...) -> anyhow::Result<()> {
   - log proof op counts per block to correlate with latency
 
 ### Refactor Plan
-- Phase 1: remove panics/unwraps from the steady-state loop; convert to `Result` + structured logging.
-- Phase 2: implement consistent fault policy (retry, backoff, restart actor, or crash-fast) at the engine level.
+- Phase 1 (**done**): remove `.expect`/`panic!` from init + steady-state; log and exit on fatal errors.
+- Phase 2 (**done**): crash-fast fault policy at the engine level (node terminates when any actor stops/fails).
 - Phase 3: performance work based on profiling (nonce caching, ancestry caching, proof generation batching).
 
 ### Open Questions
-- What is the intended fault policy: crash-fast on any execution/storage error, or tolerate transient failures and retry?
+- Is crash-fast the desired long-term policy, or should the engine restart actors / retry transient failures?
 
 ---
 

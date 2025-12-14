@@ -42,7 +42,7 @@ use std::{
     sync::{atomic::AtomicU64, Arc, Mutex},
     time::Duration,
 };
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
 /// Histogram buckets for application latency.
 const LATENCY: [f64; 20] = [
@@ -244,7 +244,7 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
         );
 
         // Initialize the state
-        let mut state = Adb::init(
+        let mut state = match Adb::init(
             self.context.with_label("state"),
             adb::any::variable::Config {
                 mmr_journal_partition: format!("{}-state-mmr-journal", self.partition_prefix),
@@ -266,9 +266,14 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                 buffer_pool: self.buffer_pool.clone(),
             },
         )
-        .await
-        .expect("failed to initialize state adb");
-        let mut events = keyless::Keyless::<_, Output, Sha256>::init(
+        .await {
+            Ok(state) => state,
+            Err(err) => {
+                error!(?err, "failed to initialize state adb");
+                return;
+            }
+        };
+        let mut events = match keyless::Keyless::<_, Output, Sha256>::init(
             self.context.with_label("events"),
             keyless::Config {
                 mmr_journal_partition: format!("{}-events-mmr-journal", self.partition_prefix),
@@ -290,18 +295,30 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                 buffer_pool: self.buffer_pool.clone(),
             },
         )
-        .await
-        .expect("failed to initialize events log");
+        .await {
+            Ok(events) => events,
+            Err(err) => {
+                error!(?err, "failed to initialize events log");
+                return;
+            }
+        };
 
         // Create the execution pool
         //
         // Note: Using rayon ThreadPool directly. When commonware-runtime::create_pool
         // becomes available (see https://github.com/commonwarexyz/monorepo/issues/1540),
         // consider migrating to it for consistency with the runtime.
-        let execution_pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(self.execution_concurrency)
-            .build()
-            .expect("failed to create execution pool");
+        let execution_pool =
+            match rayon::ThreadPoolBuilder::new()
+                .num_threads(self.execution_concurrency)
+                .build()
+            {
+                Ok(execution_pool) => execution_pool,
+                Err(err) => {
+                    error!(?err, "failed to create execution pool");
+                    return;
+                }
+            };
         let execution_pool = ThreadPool::new(execution_pool);
 
         // Compute genesis digest
@@ -327,12 +344,14 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
 
         // This will never fail and handles reconnection internally
         let mut next_prune = self.context.gen_range(1..=PRUNE_INTERVAL);
-        let mut tx_stream = Box::pin(
-            reconnecting_indexer
-                .listen_mempool()
-                .await
-                .expect("reconnecting indexer listen_mempool is infallible"),
-        );
+        let tx_stream = match reconnecting_indexer.listen_mempool().await {
+            Ok(tx_stream) => tx_stream,
+            Err(err) => {
+                error!(?err, "failed to start indexer mempool stream");
+                return;
+            }
+        };
+        let mut tx_stream = Box::pin(tx_stream);
         loop {
             select! {
                     message =  self.mailbox.next() => {
@@ -624,11 +643,14 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                                     block.transactions,
                                     execution_pool.clone(),
                                 )
-                                .await
-                                .unwrap_or_else(|err| {
-                                    warn!(?err, height, "state transition failed");
-                                    panic!("state transition failed: {err:?}");
-                                });
+                                .await;
+                                let result = match result {
+                                    Ok(result) => result,
+                                    Err(err) => {
+                                        error!(?err, height, "state transition failed");
+                                        return;
+                                    }
+                                };
                                 drop(execute_timer);
 
                                 // Update metrics
@@ -681,13 +703,13 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                                                 .min(Duration::from_secs(2));
                                         }
                                         Err(err) => {
-                                            warn!(
+                                            error!(
                                                 ?err,
                                                 height,
                                                 attempt,
-                                                "failed to generate proofs; aborting"
+                                                "failed to generate proofs; aborting engine"
                                             );
-                                            panic!("failed to generate proofs: {err:?}");
+                                            return;
                                         }
                                     }
                                 };

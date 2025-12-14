@@ -23,13 +23,15 @@ use commonware_cryptography::{
 use commonware_p2p::{Blocker, Receiver, Sender};
 use commonware_runtime::{buffer::PoolRef, Clock, Handle, Metrics, Spawner, Storage};
 use commonware_utils::{NZDuration, NZUsize, NZU64};
-use futures::future::try_join_all;
 use governor::clock::Clock as GClock;
 use governor::Quota;
 use nullspace_types::{Activity, Block, Evaluation, NAMESPACE};
 use rand::{CryptoRng, Rng};
 use std::{
+    future::Future,
     num::{NonZero, NonZeroUsize},
+    pin::Pin,
+    task::{Context, Poll},
     time::Duration,
 };
 use tracing::{error, warn};
@@ -54,6 +56,42 @@ const CACHE_ITEMS_PER_BLOB: NonZero<u64> = NZU64!(256);
 const REPLAY_BUFFER: NonZero<usize> = NZUsize!(8 * 1024 * 1024); // 8MB
 const WRITE_BUFFER: NonZero<usize> = NZUsize!(1024 * 1024); // 1MB
 const MAX_REPAIR: u64 = 20;
+
+struct NamedHandle<T>
+where
+    T: Send + 'static,
+{
+    name: &'static str,
+    handle: Handle<T>,
+}
+
+impl<T> NamedHandle<T>
+where
+    T: Send + 'static,
+{
+    fn new(name: &'static str, handle: Handle<T>) -> Self {
+        Self { name, handle }
+    }
+
+    fn abort(&self) {
+        self.handle.abort();
+    }
+}
+
+impl<T> Future for NamedHandle<T>
+where
+    T: Send + 'static,
+{
+    type Output = (&'static str, Result<T, commonware_runtime::Error>);
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let name = self.name;
+        match Pin::new(&mut self.handle).poll(cx) {
+            Poll::Ready(output) => Poll::Ready((name, output)),
+            Poll::Pending => Poll::Pending,
+        }
+    }
+}
 
 /// Configuration for the [Engine].
 pub struct IdentityConfig {
@@ -466,21 +504,32 @@ impl<
             self.consensus
                 .start(pending_network, recovered_network, resolver_network);
 
-        // Wait for any actor to finish
-        if let Err(e) = try_join_all(vec![
-            seeder_handle,
-            aggregation_handle,
-            aggregator_handle,
-            buffer_handle,
-            application_handle,
-            marshal_handle,
-            consensus_handle,
-        ])
-        .await
-        {
-            error!(?e, "engine failed");
-        } else {
-            warn!("engine stopped");
+        // Stop the node when any actor terminates. If we allowed the engine task to
+        // continue, we'd leave the system in a partially alive state.
+        let handles = vec![
+            NamedHandle::new("seeder", seeder_handle),
+            NamedHandle::new("aggregation", aggregation_handle),
+            NamedHandle::new("aggregator", aggregator_handle),
+            NamedHandle::new("buffer", buffer_handle),
+            NamedHandle::new("application", application_handle),
+            NamedHandle::new("marshal", marshal_handle),
+            NamedHandle::new("consensus", consensus_handle),
+        ];
+
+        let ((actor, result), _index, remaining) = futures::future::select_all(handles).await;
+        for handle in remaining {
+            handle.abort();
+        }
+
+        match result {
+            Ok(()) => {
+                warn!(actor, "engine actor exited");
+                panic!("engine actor exited: {actor}");
+            }
+            Err(err) => {
+                error!(?err, actor, "engine actor failed");
+                panic!("engine actor failed: {actor}: {err:?}");
+            }
         }
     }
 }
