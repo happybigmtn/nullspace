@@ -157,8 +157,8 @@ fn bet_wins(bet_type: BetType, bet_number: u8, result: u8) -> bool {
         BetType::Black => !is_red(result),
         BetType::Even => result % 2 == 0,
         BetType::Odd => result % 2 == 1,
-        BetType::Low => result >= 1 && result <= 18,
-        BetType::High => result >= 19 && result <= 36,
+        BetType::Low => (1..=18).contains(&result),
+        BetType::High => (19..=36).contains(&result),
         BetType::Dozen => {
             let dozen = (result - 1) / 12; // 0, 1, or 2
             dozen == bet_number
@@ -429,31 +429,31 @@ impl CasinoGame for Roulette {
                     }
                     BetType::SplitH => {
                         // Horizontal split: (n, n+1) within a row -> n is 1-35 and not rightmost.
-                        if number < 1 || number > 35 || number % 3 == 0 {
+                        if !(1..=35).contains(&number) || number % 3 == 0 {
                             return Err(GameError::InvalidPayload);
                         }
                     }
                     BetType::SplitV => {
                         // Vertical split: (n, n+3) within a column -> n is 1-33.
-                        if number < 1 || number > 33 {
+                        if !(1..=33).contains(&number) {
                             return Err(GameError::InvalidPayload);
                         }
                     }
                     BetType::Street => {
                         // Street: (n, n+1, n+2) row -> n is 1,4,...,34.
-                        if number < 1 || number > 34 || (number - 1) % 3 != 0 {
+                        if !(1..=34).contains(&number) || (number - 1) % 3 != 0 {
                             return Err(GameError::InvalidPayload);
                         }
                     }
                     BetType::Corner => {
                         // Corner: (n, n+1, n+3, n+4) -> n is 1-32 and not rightmost.
-                        if number < 1 || number > 32 || number % 3 == 0 {
+                        if !(1..=32).contains(&number) || number % 3 == 0 {
                             return Err(GameError::InvalidPayload);
                         }
                     }
                     BetType::SixLine => {
                         // Six-line: (n..n+5) two adjacent rows -> n is 1,4,...,31.
-                        if number < 1 || number > 31 || (number - 1) % 3 != 0 {
+                        if !(1..=31).contains(&number) || (number - 1) % 3 != 0 {
                             return Err(GameError::InvalidPayload);
                         }
                     }

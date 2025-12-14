@@ -229,14 +229,14 @@ fn banker_draws(banker_total: u8, player_third_card: Option<u8>) -> bool {
             None => true,
             Some(c) => {
                 let v = card_value(c);
-                v >= 2 && v <= 7
+                (2..=7).contains(&v)
             }
         },
         5 => match player_third_card {
             None => true,
             Some(c) => {
                 let v = card_value(c);
-                v >= 4 && v <= 7
+                (4..=7).contains(&v)
             }
         },
         6 => match player_third_card {

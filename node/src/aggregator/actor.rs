@@ -472,17 +472,17 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                     let Ok(certificate) =
                         Certificate::<MinSig, Digest>::decode(&mut certificate.as_ref())
                     else {
-                        response.send(false).expect("failed to send false");
+                        let _ = response.send(false);
                         continue;
                     };
                     if certificate.item.index != index {
-                        response.send(false).expect("failed to send false");
+                        let _ = response.send(false);
                         continue;
                     }
 
                     // Verify certificate
                     if !certificate.verify(&self.config.namespace, &self.config.identity) {
-                        response.send(false).expect("failed to send false");
+                        let _ = response.send(false);
                         continue;
                     }
 
@@ -509,9 +509,7 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                         continue;
                     };
                     let certificate: Certificate<MinSig, Digest> = fixed_certificate.into();
-                    response
-                        .send(certificate.encode().into())
-                        .expect("failed to send certificate");
+                    let _ = response.send(certificate.encode().into());
                 }
             }
 

@@ -216,14 +216,14 @@ fn calculate_bet_payout(bet: &SicBoBet, dice: &[u8; 3]) -> u64 {
 
     match bet.bet_type {
         BetType::Small => {
-            if !triple && total >= 4 && total <= 10 {
+            if !triple && (4..=10).contains(&total) {
                 bet.amount.saturating_mul(2) // 1:1 -> 2x
             } else {
                 0
             }
         }
         BetType::Big => {
-            if !triple && total >= 11 && total <= 17 {
+            if !triple && (11..=17).contains(&total) {
                 bet.amount.saturating_mul(2)
             } else {
                 0
@@ -283,7 +283,7 @@ fn calculate_bet_payout(bet: &SicBoBet, dice: &[u8; 3]) -> u64 {
         BetType::Domino => {
             let min = (bet.number >> 4) & 0x0f;
             let max = bet.number & 0x0f;
-            if min < 1 || min > 6 || max < 1 || max > 6 || min >= max {
+            if !(1..=6).contains(&min) || !(1..=6).contains(&max) || min >= max {
                 return 0;
             }
             if count_number(dice, min) >= 1 && count_number(dice, max) >= 1 {
@@ -310,7 +310,7 @@ fn calculate_bet_payout(bet: &SicBoBet, dice: &[u8; 3]) -> u64 {
             // number encodes (double<<4)|single.
             let double = (bet.number >> 4) & 0x0F;
             let single = bet.number & 0x0F;
-            if double < 1 || double > 6 || single < 1 || single > 6 || double == single {
+            if !(1..=6).contains(&double) || !(1..=6).contains(&single) || double == single {
                 return 0;
             }
             if count_number(dice, double) == 2 && count_number(dice, single) == 1 {
@@ -380,19 +380,19 @@ impl CasinoGame for SicBo {
                 // Validate number for bet types that need it
                 match bet_type {
                     BetType::SpecificTriple | BetType::SpecificDouble | BetType::Single => {
-                        if number < 1 || number > 6 {
+                        if !(1..=6).contains(&number) {
                             return Err(GameError::InvalidPayload);
                         }
                     }
                     BetType::Total => {
-                        if number < 3 || number > 18 {
+                        if !(3..=18).contains(&number) {
                             return Err(GameError::InvalidPayload);
                         }
                     }
                     BetType::Domino => {
                         let min = (number >> 4) & 0x0f;
                         let max = number & 0x0f;
-                        if min < 1 || min > 6 || max < 1 || max > 6 || min >= max {
+                        if !(1..=6).contains(&min) || !(1..=6).contains(&max) || min >= max {
                             return Err(GameError::InvalidPayload);
                         }
                     }
@@ -404,7 +404,9 @@ impl CasinoGame for SicBo {
                     BetType::ThreeNumberHardHop => {
                         let double = (number >> 4) & 0x0f;
                         let single = number & 0x0f;
-                        if double < 1 || double > 6 || single < 1 || single > 6 || double == single
+                        if !(1..=6).contains(&double)
+                            || !(1..=6).contains(&single)
+                            || double == single
                         {
                             return Err(GameError::InvalidPayload);
                         }

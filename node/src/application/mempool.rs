@@ -6,10 +6,12 @@ use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 
 /// The maximum number of transactions a single account can have in the mempool.
 // Increased for higher transaction throughput per account
+#[cfg(test)]
 const DEFAULT_MAX_BACKLOG: usize = 64;
 
 /// The maximum number of transactions in the mempool.
 // Scaled for 1000+ concurrent players
+#[cfg(test)]
 const DEFAULT_MAX_TRANSACTIONS: usize = 100_000;
 
 /// A mempool for transactions.
@@ -31,6 +33,7 @@ pub struct Mempool {
 
 impl Mempool {
     /// Create a new mempool.
+    #[cfg(test)]
     pub fn new(context: impl Metrics) -> Self {
         Self::new_with_limits(context, DEFAULT_MAX_BACKLOG, DEFAULT_MAX_TRANSACTIONS)
     }

@@ -185,7 +185,7 @@ where
                                         }
                                         if !batcher.verify(&mut context) {
                                             warn!("received invalid transaction from indexer");
-                                            return;
+                                            continue;
                                         }
 
                                         // Pass to receiver

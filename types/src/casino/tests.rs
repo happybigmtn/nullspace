@@ -62,8 +62,10 @@ fn test_tournament_players_canonicalized_on_decode() {
     let pk1 = PrivateKey::from_seed(1).public_key();
     let pk2 = PrivateKey::from_seed(2).public_key();
 
-    let mut tournament = Tournament::default();
-    tournament.players = vec![pk2.clone(), pk1.clone(), pk1.clone()];
+    let tournament = Tournament {
+        players: vec![pk2.clone(), pk1.clone(), pk1.clone()],
+        ..Default::default()
+    };
 
     let encoded = tournament.encode();
     let decoded = Tournament::read(&mut &encoded[..]).unwrap();

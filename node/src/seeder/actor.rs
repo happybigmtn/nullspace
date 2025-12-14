@@ -183,7 +183,7 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                     // If there were any listeners, send them the seed
                     if let Some(listeners) = listeners.remove(&seed.view) {
                         for listener in listeners {
-                            listener.send(seed.clone()).expect("failed to send seed");
+                            let _ = listener.send(seed.clone());
                         }
                     }
 
@@ -214,9 +214,7 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                         listeners.entry(view).or_default().push(response);
                         continue;
                     };
-                    response
-                        .send(Seed { view, signature })
-                        .expect("failed to send seed");
+                    let _ = response.send(Seed { view, signature });
                 }
                 Message::Deliver {
                     view,
@@ -227,19 +225,19 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                     let Ok(signature) =
                         <<MinSig as Variant>::Signature>::decode(&mut signature.as_ref())
                     else {
-                        response.send(false).expect("failed to send none");
+                        let _ = response.send(false);
                         continue;
                     };
                     let seed = Seed::new(view, signature);
                     if !seed.verify(&self.config.namespace, &self.config.identity) {
-                        response.send(false).expect("failed to send false");
+                        let _ = response.send(false);
                         continue;
                     }
 
                     self.waiting.remove(&view);
 
                     // Notify resolver
-                    response.send(true).expect("failed to send true");
+                    let _ = response.send(true);
 
                     // Store seed
                     if !storage.has(view) {
@@ -253,7 +251,7 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                     // Notify listeners
                     if let Some(listeners) = listeners.remove(&view) {
                         for listener in listeners {
-                            listener.send(seed.clone()).expect("failed to send seed");
+                            let _ = listener.send(seed.clone());
                         }
                     }
 
@@ -277,9 +275,7 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                     let Some(encoded) = storage.get(view).await.expect("failed to get seed") else {
                         continue;
                     };
-                    response
-                        .send(encoded.encode().into())
-                        .expect("failed to send seed");
+                    let _ = response.send(encoded.encode().into());
                 }
             }
 

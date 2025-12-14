@@ -500,8 +500,11 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                                             try_join(parent_request, marshal.subscribe(None, payload).await);
                                         select! {
                                             result = requester => {
-                                                // Unwrap the results
-                                                let (parent, block) = result.unwrap();
+                                                let Ok((parent, block)) = result else {
+                                                    warn!(view, ?payload, "verify aborted: missing blocks");
+                                                    let _ = response.send(false);
+                                                    return;
+                                                };
 
                                                 // Verify the block
                                                 if block.view != view {

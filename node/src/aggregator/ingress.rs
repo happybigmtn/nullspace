@@ -16,7 +16,11 @@ use futures::{
     SinkExt,
 };
 use nullspace_execution::state_transition::StateTransitionResult;
-use nullspace_types::execution::{Output, Value};
+use nullspace_types::{
+    execution::{Output, Value},
+    genesis_digest,
+};
+use tracing::warn;
 
 pub enum Message {
     Executed {
@@ -73,10 +77,9 @@ impl Mailbox {
     }
 
     pub(super) async fn uploaded(&mut self, index: Index) {
-        self.sender
-            .send(Message::Uploaded { index })
-            .await
-            .expect("failed to send uploaded");
+        if self.sender.send(Message::Uploaded { index }).await.is_err() {
+            warn!(index, "aggregator mailbox closed; uploaded dropped");
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -92,7 +95,8 @@ impl Mailbox {
         events_proof_ops: Vec<Keyless<Output>>,
         response: oneshot::Sender<()>,
     ) {
-        self.sender
+        if self
+            .sender
             .send(Message::Executed {
                 view,
                 height,
@@ -105,7 +109,10 @@ impl Mailbox {
                 response,
             })
             .await
-            .expect("failed to send executed");
+            .is_err()
+        {
+            warn!(view, height, "aggregator mailbox closed; executed dropped");
+        }
     }
 }
 
@@ -115,24 +122,40 @@ impl Automaton for Mailbox {
 
     async fn genesis(&mut self) -> Self::Digest {
         let (response, receiver) = oneshot::channel();
-        self.sender
+        if self
+            .sender
             .send(Message::Genesis { response })
             .await
-            .expect("Failed to send aggregation genesis");
-        receiver
-            .await
-            .expect("Failed to receive aggregation genesis")
+            .is_err()
+        {
+            warn!("aggregator mailbox closed; returning genesis digest");
+            return genesis_digest();
+        }
+        receiver.await.unwrap_or_else(|_| {
+            warn!("aggregator actor dropped genesis response; returning genesis digest");
+            genesis_digest()
+        })
     }
 
     async fn propose(&mut self, context: Self::Context) -> oneshot::Receiver<Self::Digest> {
         let (response, receiver) = oneshot::channel();
-        self.sender
+        if self
+            .sender
             .send(Message::Propose {
                 index: context,
                 response,
             })
             .await
-            .expect("Failed to send aggregation propose");
+            .is_err()
+        {
+            warn!(
+                index = context,
+                "aggregator mailbox closed; propose returns genesis digest"
+            );
+            let (fallback_tx, fallback_rx) = oneshot::channel();
+            let _ = fallback_tx.send(genesis_digest());
+            return fallback_rx;
+        }
         receiver
     }
 
@@ -142,14 +165,25 @@ impl Automaton for Mailbox {
         payload: Self::Digest,
     ) -> oneshot::Receiver<bool> {
         let (response, receiver) = oneshot::channel();
-        self.sender
+        if self
+            .sender
             .send(Message::Verify {
                 index: context,
                 payload,
                 response,
             })
             .await
-            .expect("Failed to send aggregation verify");
+            .is_err()
+        {
+            warn!(
+                index = context,
+                ?payload,
+                "aggregator mailbox closed; verify returns false"
+            );
+            let (fallback_tx, fallback_rx) = oneshot::channel();
+            let _ = fallback_tx.send(false);
+            return fallback_rx;
+        }
         receiver
     }
 }
@@ -160,16 +194,19 @@ impl Reporter for Mailbox {
     async fn report(&mut self, activity: Self::Activity) {
         match activity {
             Activity::Certified(certificate) => {
-                self.sender
+                if self
+                    .sender
                     .send(Message::Certified { certificate })
                     .await
-                    .expect("Failed to send aggregation certified");
+                    .is_err()
+                {
+                    warn!("aggregator mailbox closed; certified dropped");
+                }
             }
             Activity::Tip(index) => {
-                self.sender
-                    .send(Message::Tip { index })
-                    .await
-                    .expect("Failed to send aggregation tip");
+                if self.sender.send(Message::Tip { index }).await.is_err() {
+                    warn!(index, "aggregator mailbox closed; tip dropped");
+                }
             }
             _ => {}
         }
@@ -183,14 +220,19 @@ impl Consumer for Mailbox {
 
     async fn deliver(&mut self, key: Self::Key, value: Self::Value) -> bool {
         let (sender, receiver) = oneshot::channel();
-        self.sender
+        if self
+            .sender
             .send(Message::Deliver {
                 index: key.into(),
                 certificate: value,
                 response: sender,
             })
             .await
-            .expect("failed to send deliver");
+            .is_err()
+        {
+            warn!("aggregator mailbox closed; deliver failed");
+            return true; // default to true to avoid blocking
+        }
         receiver.await.unwrap_or(true) // default to true to avoid blocking
     }
 
@@ -204,13 +246,17 @@ impl Producer for Mailbox {
 
     async fn produce(&mut self, key: Self::Key) -> oneshot::Receiver<Bytes> {
         let (sender, receiver) = oneshot::channel();
-        self.sender
+        if self
+            .sender
             .send(Message::Produce {
                 index: key.into(),
                 response: sender,
             })
             .await
-            .expect("failed to send produce");
+            .is_err()
+        {
+            warn!("aggregator mailbox closed; produce dropped");
+        }
         receiver
     }
 }

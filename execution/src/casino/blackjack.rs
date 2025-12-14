@@ -699,9 +699,7 @@ impl CasinoGame for Blackjack {
                             total_return = total_return.saturating_add(bet.saturating_mul(5) / 2);
                         } else if d_bj {
                             // Lose.
-                        } else if d_val > 21 {
-                            total_return = total_return.saturating_add(bet.saturating_mul(2));
-                        } else if p_val > d_val {
+                        } else if d_val > 21 || p_val > d_val {
                             total_return = total_return.saturating_add(bet.saturating_mul(2));
                         } else if p_val == d_val {
                             total_return = total_return.saturating_add(bet);

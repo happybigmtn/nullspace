@@ -602,13 +602,17 @@ mod tests {
         let pk1 = PrivateKey::from_seed(1).public_key();
         let pk2 = PrivateKey::from_seed(2).public_key();
 
-        let mut a = TokenAccount::default();
-        a.balance = 1;
+        let mut a = TokenAccount {
+            balance: 1,
+            ..Default::default()
+        };
         a.set_allowance(pk2.clone(), 2);
         a.set_allowance(pk1.clone(), 1);
 
-        let mut b = TokenAccount::default();
-        b.balance = 1;
+        let mut b = TokenAccount {
+            balance: 1,
+            ..Default::default()
+        };
         b.set_allowance(pk1.clone(), 1);
         b.set_allowance(pk2.clone(), 2);
 

@@ -18,7 +18,13 @@ use commonware_resolver::p2p;
 use commonware_runtime::RwLock;
 use futures::{channel::mpsc, SinkExt};
 use nullspace_types::{leader_index, Evaluation, Identity, Signature};
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
+};
 
 /// Manages epoch state and subscribers.
 struct EpochManager {
@@ -55,10 +61,6 @@ impl EpochManager {
         self.subscribers.push(tx);
         (self.epoch, rx)
     }
-
-    fn current(&self) -> Epoch {
-        self.epoch
-    }
 }
 
 /// Core supervisor data shared between View and Epoch supervisors.
@@ -68,6 +70,7 @@ pub struct Supervisor {
     participants: Vec<ed25519::PublicKey>,
     participants_map: HashMap<ed25519::PublicKey, u32>,
     share: group::Share,
+    epoch: AtomicU64,
     epoch_manager: RwLock<EpochManager>,
 }
 
@@ -94,6 +97,7 @@ impl Supervisor {
             participants,
             participants_map,
             share,
+            epoch: AtomicU64::new(0),
             epoch_manager: RwLock::new(EpochManager::new()),
         })
     }
@@ -119,8 +123,7 @@ impl p2p::Coordinator for ViewSupervisor {
     }
 
     fn peer_set_id(&self) -> u64 {
-        // Block on getting the current epoch
-        futures::executor::block_on(async { self.inner.epoch_manager.read().await.current() })
+        self.inner.epoch.load(Ordering::Acquire)
     }
 }
 
@@ -129,7 +132,9 @@ impl Su for ViewSupervisor {
     type PublicKey = ed25519::PublicKey;
 
     fn leader(&self, _: Self::Index) -> Option<Self::PublicKey> {
-        unimplemented!("only defined in supertrait")
+        // ThresholdSimplex uses `ThresholdSupervisor::leader(index, seed)`.
+        // Return `None` so accidental calls don't panic.
+        None
     }
 
     fn participants(&self, _: Self::Index) -> Option<&Vec<Self::PublicKey>> {
@@ -178,6 +183,7 @@ impl EpochSupervisor {
     }
 
     pub async fn update(&self, epoch: Epoch) {
+        self.inner.epoch.store(epoch, Ordering::Release);
         self.inner.epoch_manager.write().await.update(epoch).await;
     }
 }
@@ -187,7 +193,9 @@ impl Su for EpochSupervisor {
     type PublicKey = ed25519::PublicKey;
 
     fn leader(&self, _: Self::Index) -> Option<Self::PublicKey> {
-        unimplemented!("only defined in supertrait")
+        // Aggregation uses `ThresholdSupervisor::leader(index, seed)`.
+        // Return `None` so accidental calls don't panic.
+        None
     }
 
     fn participants(&self, _: Self::Index) -> Option<&Vec<Self::PublicKey>> {
