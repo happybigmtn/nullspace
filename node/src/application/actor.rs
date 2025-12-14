@@ -39,6 +39,7 @@ use rand::{CryptoRng, Rng};
 use std::{
     num::NonZero,
     sync::{atomic::AtomicU64, Arc, Mutex},
+    time::Duration,
 };
 use tracing::{debug, info, warn};
 
@@ -265,7 +266,7 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
             },
         )
         .await
-        .unwrap();
+        .expect("failed to initialize state adb");
         let mut events = keyless::Keyless::<_, Output, Sha256>::init(
             self.context.with_label("events"),
             keyless::Config {
@@ -289,7 +290,7 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
             },
         )
         .await
-        .unwrap();
+        .expect("failed to initialize events log");
 
         // Create the execution pool
         //
@@ -324,7 +325,12 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
 
         // This will never fail and handles reconnection internally
         let mut next_prune = self.context.gen_range(1..=PRUNE_INTERVAL);
-        let mut tx_stream = Box::pin(reconnecting_indexer.listen_mempool().await.unwrap());
+        let mut tx_stream = Box::pin(
+            reconnecting_indexer
+                .listen_mempool()
+                .await
+                .expect("reconnecting indexer listen_mempool is infallible"),
+        );
         loop {
             select! {
                     message =  self.mailbox.next() => {
@@ -354,10 +360,23 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                                 }
 
                                 // Get the ancestry
-                                let ancestry = ancestry(marshal.clone(), (Some(parent.0), parent.1), state.get_metadata().await.unwrap().and_then(|(_, v)| match v {
-                                    Some(Value::Commit { height, start: _ }) => Some(height),
-                                    _ => None,
-                                }).unwrap_or(0));
+                                let committed_height = match state.get_metadata().await {
+                                    Ok(meta) => meta
+                                        .and_then(|(_, v)| match v {
+                                            Some(Value::Commit { height, start: _ }) => Some(height),
+                                            _ => None,
+                                        })
+                                        .unwrap_or(0),
+                                    Err(err) => {
+                                        warn!(?err, view, "failed to read state metadata for propose; using height=0");
+                                        0
+                                    }
+                                };
+                                let ancestry = ancestry(
+                                    marshal.clone(),
+                                    (Some(parent.0), parent.1),
+                                    committed_height,
+                                );
 
                                 // Wait for the parent block to be available or the request to be cancelled in a separate task (to
                                 // continue processing other messages)
@@ -393,13 +412,25 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                                 response,
                             } => {
                                 // Get parent block
-                                let parent = blocks.last().unwrap();
+                                let Some(parent) = blocks.last() else {
+                                    warn!(view, "missing parent block for propose");
+                                    drop(timer);
+                                    continue;
+                                };
 
                                 // Find first block on top of finalized state (may have increased since we started)
-                                let height = state.get_metadata().await.unwrap().and_then(|(_, v)| match v {
-                                    Some(Value::Commit { height, start: _ }) => Some(height),
-                                    _ => None,
-                                }).unwrap_or(0);
+                                let height = match state.get_metadata().await {
+                                    Ok(meta) => meta
+                                        .and_then(|(_, v)| match v {
+                                            Some(Value::Commit { height, start: _ }) => Some(height),
+                                            _ => None,
+                                        })
+                                        .unwrap_or(0),
+                                    Err(err) => {
+                                        warn!(?err, view, "failed to read state metadata during propose; using height=0");
+                                        0
+                                    }
+                                };
                                 let mut noncer = Noncer::new(&state);
                                 for block in &blocks {
                                     // Skip blocks below our height
@@ -616,10 +647,47 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                                     drop(timer);
                                     continue;
                                 }
-                                let ((state_proof, state_proof_ops), (events_proof, events_proof_ops)) = try_join(
-                                    state.historical_proof(result.state_end_op, result.state_start_op, state_proof_ops),
-                                    events.historical_proof(result.events_end_op, events_start_op, NZU64!(events_proof_ops)),
-                                ).await.expect("failed to generate proofs");
+                                let mut attempt = 0usize;
+                                let mut backoff = Duration::from_millis(50);
+                                let ((state_proof, state_proof_ops), (events_proof, events_proof_ops)) = loop {
+                                    attempt += 1;
+                                    match try_join(
+                                        state.historical_proof(
+                                            result.state_end_op,
+                                            result.state_start_op,
+                                            state_proof_ops,
+                                        ),
+                                        events.historical_proof(
+                                            result.events_end_op,
+                                            events_start_op,
+                                            NZU64!(events_proof_ops),
+                                        ),
+                                    )
+                                    .await
+                                    {
+                                        Ok(proofs) => break proofs,
+                                        Err(err) if attempt < 5 => {
+                                            warn!(
+                                                ?err,
+                                                height,
+                                                attempt,
+                                                "failed to generate proofs; retrying"
+                                            );
+                                            self.context.sleep(backoff).await;
+                                            backoff = (backoff.saturating_mul(2))
+                                                .min(Duration::from_secs(2));
+                                        }
+                                        Err(err) => {
+                                            warn!(
+                                                ?err,
+                                                height,
+                                                attempt,
+                                                "failed to generate proofs; aborting"
+                                            );
+                                            panic!("failed to generate proofs: {err:?}");
+                                        }
+                                    }
+                                };
 
                                 // Send to aggregator
                                 aggregator.executed(block.view, block.height, commitment, result, state_proof, state_proof_ops, events_proof, events_proof_ops, response).await;
@@ -632,10 +700,14 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                                 if next_prune == 0 {
                                     // Prune storage
                                     let timer = prune_latency.timer();
-                                    try_join(
+                                    if let Err(err) = try_join(
                                         state.prune(state.inactivity_floor_loc()),
                                         events.prune(events_start_op),
-                                    ).await.expect("failed to prune storage");
+                                    )
+                                    .await
+                                    {
+                                        warn!(?err, height, "failed to prune storage");
+                                    }
                                     drop(timer);
 
                                     // Reset next prune
