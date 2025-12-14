@@ -1,7 +1,84 @@
 use super::super::*;
 
+fn casino_error(
+    player: &PublicKey,
+    session_id: Option<u64>,
+    error_code: u8,
+    message: impl Into<String>,
+) -> Event {
+    Event::CasinoError {
+        player: player.clone(),
+        session_id,
+        error_code,
+        message: message.into(),
+    }
+}
+
+fn casino_error_vec(
+    player: &PublicKey,
+    session_id: Option<u64>,
+    error_code: u8,
+    message: impl Into<String>,
+) -> Vec<Event> {
+    vec![casino_error(player, session_id, error_code, message)]
+}
+
 impl<'a, S: State> Layer<'a, S> {
     // === Casino Handler Methods ===
+
+    async fn casino_player_or_error(
+        &mut self,
+        public: &PublicKey,
+        session_id: Option<u64>,
+    ) -> anyhow::Result<Result<nullspace_types::casino::Player, Vec<Event>>> {
+        match self.get(&Key::CasinoPlayer(public.clone())).await? {
+            Some(Value::CasinoPlayer(player)) => Ok(Ok(player)),
+            _ => Ok(Err(casino_error_vec(
+                public,
+                session_id,
+                nullspace_types::casino::ERROR_PLAYER_NOT_FOUND,
+                "Player not found",
+            ))),
+        }
+    }
+
+    async fn casino_session_owned_active_or_error(
+        &mut self,
+        public: &PublicKey,
+        session_id: u64,
+    ) -> anyhow::Result<Result<nullspace_types::casino::GameSession, Vec<Event>>> {
+        let session = match self.get(&Key::CasinoSession(session_id)).await? {
+            Some(Value::CasinoSession(session)) => session,
+            _ => {
+                return Ok(Err(casino_error_vec(
+                    public,
+                    Some(session_id),
+                    nullspace_types::casino::ERROR_SESSION_NOT_FOUND,
+                    "Session not found",
+                )))
+            }
+        };
+
+        if session.player != *public {
+            return Ok(Err(casino_error_vec(
+                public,
+                Some(session_id),
+                nullspace_types::casino::ERROR_SESSION_NOT_OWNED,
+                "Session does not belong to this player",
+            )));
+        }
+
+        if session.is_complete {
+            return Ok(Err(casino_error_vec(
+                public,
+                Some(session_id),
+                nullspace_types::casino::ERROR_SESSION_COMPLETE,
+                "Session already complete",
+            )));
+        }
+
+        Ok(Ok(session))
+    }
 
     pub(in crate::layer) async fn handle_casino_register(
         &mut self,
@@ -14,12 +91,12 @@ impl<'a, S: State> Layer<'a, S> {
             .await?
             .is_some()
         {
-            return Ok(vec![Event::CasinoError {
-                player: public.clone(),
-                session_id: None,
-                error_code: nullspace_types::casino::ERROR_PLAYER_ALREADY_REGISTERED,
-                message: "Player already registered".to_string(),
-            }]);
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_PLAYER_ALREADY_REGISTERED,
+                "Player already registered",
+            ));
         }
 
         // Create new player with initial chips and current block for rate limiting
@@ -45,16 +122,9 @@ impl<'a, S: State> Layer<'a, S> {
         public: &PublicKey,
         amount: u64,
     ) -> anyhow::Result<Vec<Event>> {
-        let mut player = match self.get(&Key::CasinoPlayer(public.clone())).await? {
-            Some(Value::CasinoPlayer(p)) => p,
-            _ => {
-                return Ok(vec![Event::CasinoError {
-                    player: public.clone(),
-                    session_id: None,
-                    error_code: nullspace_types::casino::ERROR_PLAYER_NOT_FOUND,
-                    message: "Player not found".to_string(),
-                }])
-            }
+        let mut player = match self.casino_player_or_error(public, None).await? {
+            Ok(player) => player,
+            Err(events) => return Ok(events),
         };
 
         // Daily faucet rate limiting (dev/testing).
@@ -64,12 +134,12 @@ impl<'a, S: State> Layer<'a, S> {
         let last_deposit_day = player.last_deposit_block.saturating_mul(3) / 86_400;
         let is_rate_limited = player.last_deposit_block != 0 && last_deposit_day == current_day;
         if is_rate_limited {
-            return Ok(vec![Event::CasinoError {
-                player: public.clone(),
-                session_id: None,
-                error_code: nullspace_types::casino::ERROR_RATE_LIMITED,
-                message: "Daily faucet already claimed, try again tomorrow".to_string(),
-            }]);
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_RATE_LIMITED,
+                "Daily faucet already claimed, try again tomorrow",
+            ));
         }
 
         // Grant faucet chips
@@ -130,17 +200,9 @@ impl<'a, S: State> Layer<'a, S> {
         bet: u64,
         session_id: u64,
     ) -> anyhow::Result<Vec<Event>> {
-        // Get player
-        let mut player = match self.get(&Key::CasinoPlayer(public.clone())).await? {
-            Some(Value::CasinoPlayer(p)) => p,
-            _ => {
-                return Ok(vec![Event::CasinoError {
-                    player: public.clone(),
-                    session_id: Some(session_id),
-                    error_code: nullspace_types::casino::ERROR_PLAYER_NOT_FOUND,
-                    message: "Player not found".to_string(),
-                }])
-            }
+        let mut player = match self.casino_player_or_error(public, Some(session_id)).await? {
+            Ok(player) => player,
+            Err(events) => return Ok(events),
         };
 
         // Determine play mode (cash vs tournament)
@@ -169,12 +231,12 @@ impl<'a, S: State> Layer<'a, S> {
                 | nullspace_types::casino::GameType::SicBo
         );
         if bet == 0 && !allows_zero_bet {
-            return Ok(vec![Event::CasinoError {
-                player: public.clone(),
-                session_id: Some(session_id),
-                error_code: nullspace_types::casino::ERROR_INVALID_BET,
-                message: "Bet must be greater than zero".to_string(),
-            }]);
+            return Ok(casino_error_vec(
+                public,
+                Some(session_id),
+                nullspace_types::casino::ERROR_INVALID_BET,
+                "Bet must be greater than zero",
+            ));
         }
         let wants_super = player.active_super;
         let super_fee = if wants_super && bet > 0 {
@@ -189,25 +251,25 @@ impl<'a, S: State> Layer<'a, S> {
             player.chips
         };
         if available_stack < required_stack {
-            return Ok(vec![Event::CasinoError {
-                player: public.clone(),
-                session_id: Some(session_id),
-                error_code: nullspace_types::casino::ERROR_INSUFFICIENT_FUNDS,
-                message: format!(
+            return Ok(casino_error_vec(
+                public,
+                Some(session_id),
+                nullspace_types::casino::ERROR_INSUFFICIENT_FUNDS,
+                format!(
                     "Insufficient chips: have {}, need {}",
                     available_stack, required_stack
                 ),
-            }]);
+            ));
         }
 
         // Check for existing session
         if self.get(&Key::CasinoSession(session_id)).await?.is_some() {
-            return Ok(vec![Event::CasinoError {
-                player: public.clone(),
-                session_id: Some(session_id),
-                error_code: nullspace_types::casino::ERROR_SESSION_EXISTS,
-                message: "Session already exists".to_string(),
-            }]);
+            return Ok(casino_error_vec(
+                public,
+                Some(session_id),
+                nullspace_types::casino::ERROR_SESSION_EXISTS,
+                "Session already exists",
+            ));
         }
 
         // Deduct bet (and any upfront super fee) from player
@@ -431,36 +493,13 @@ impl<'a, S: State> Layer<'a, S> {
         session_id: u64,
         payload: &[u8],
     ) -> anyhow::Result<Vec<Event>> {
-        // Get session
-        let mut session = match self.get(&Key::CasinoSession(session_id)).await? {
-            Some(Value::CasinoSession(s)) => s,
-            _ => {
-                return Ok(vec![Event::CasinoError {
-                    player: public.clone(),
-                    session_id: Some(session_id),
-                    error_code: nullspace_types::casino::ERROR_SESSION_NOT_FOUND,
-                    message: "Session not found".to_string(),
-                }])
-            }
+        let mut session = match self
+            .casino_session_owned_active_or_error(public, session_id)
+            .await?
+        {
+            Ok(session) => session,
+            Err(events) => return Ok(events),
         };
-
-        // Verify ownership and not complete
-        if session.player != *public {
-            return Ok(vec![Event::CasinoError {
-                player: public.clone(),
-                session_id: Some(session_id),
-                error_code: nullspace_types::casino::ERROR_SESSION_NOT_OWNED,
-                message: "Session does not belong to this player".to_string(),
-            }]);
-        }
-        if session.is_complete {
-            return Ok(vec![Event::CasinoError {
-                player: public.clone(),
-                session_id: Some(session_id),
-                error_code: nullspace_types::casino::ERROR_SESSION_COMPLETE,
-                message: "Session already complete".to_string(),
-            }]);
-        }
 
         // Process move
         session.move_count += 1;
@@ -469,12 +508,12 @@ impl<'a, S: State> Layer<'a, S> {
         let result = match crate::casino::process_game_move(&mut session, payload, &mut rng) {
             Ok(r) => r,
             Err(_) => {
-                return Ok(vec![Event::CasinoError {
-                    player: public.clone(),
-                    session_id: Some(session_id),
-                    error_code: nullspace_types::casino::ERROR_INVALID_MOVE,
-                    message: "Invalid game move".to_string(),
-                }])
+                return Ok(casino_error_vec(
+                    public,
+                    Some(session_id),
+                    nullspace_types::casino::ERROR_INVALID_MOVE,
+                    "Invalid game move",
+                ))
             }
         };
 
@@ -524,15 +563,15 @@ impl<'a, S: State> Layer<'a, S> {
                         let total_deduction = deduction.saturating_add(super_fee);
                         if deduction == 0 || *stack < total_deduction {
                             // Insufficient funds or overflow - reject the move
-                            return Ok(vec![Event::CasinoError {
-                                player: public.clone(),
-                                session_id: Some(session_id),
-                                error_code: nullspace_types::casino::ERROR_INSUFFICIENT_FUNDS,
-                                message: format!(
+                            return Ok(casino_error_vec(
+                                public,
+                                Some(session_id),
+                                nullspace_types::casino::ERROR_INSUFFICIENT_FUNDS,
+                                format!(
                                     "Insufficient chips for additional bet: have {}, need {}",
                                     *stack, total_deduction
                                 ),
-                            }]);
+                            ));
                         }
                         *stack = stack.saturating_sub(total_deduction);
 
@@ -647,15 +686,15 @@ impl<'a, S: State> Layer<'a, S> {
                             &mut player.chips
                         };
                         if *stack < total_deduction {
-                            return Ok(vec![Event::CasinoError {
-                                player: public.clone(),
-                                session_id: Some(session_id),
-                                error_code: nullspace_types::casino::ERROR_INSUFFICIENT_FUNDS,
-                                message: format!(
+                            return Ok(casino_error_vec(
+                                public,
+                                Some(session_id),
+                                nullspace_types::casino::ERROR_INSUFFICIENT_FUNDS,
+                                format!(
                                     "Insufficient chips for additional bet: have {}, need {}",
                                     *stack, total_deduction
                                 ),
-                            }]);
+                            ));
                         }
                         *stack = stack.saturating_sub(total_deduction);
 
@@ -873,15 +912,15 @@ impl<'a, S: State> Layer<'a, S> {
                             };
                             let total_deduction = extra.saturating_add(super_fee);
                             if *stack < total_deduction {
-                                return Ok(vec![Event::CasinoError {
-                                    player: public.clone(),
-                                    session_id: Some(session_id),
-                                    error_code: nullspace_types::casino::ERROR_INSUFFICIENT_FUNDS,
-                                    message: format!(
+                                return Ok(casino_error_vec(
+                                    public,
+                                    Some(session_id),
+                                    nullspace_types::casino::ERROR_INSUFFICIENT_FUNDS,
+                                    format!(
                                         "Insufficient chips for additional bet: have {}, need {}",
                                         *stack, total_deduction
                                     ),
-                                }]);
+                                ));
                             }
                             *stack = stack.saturating_sub(total_deduction);
 
@@ -1016,15 +1055,15 @@ impl<'a, S: State> Layer<'a, S> {
                             };
                             let total_deduction = extra_deduction.saturating_add(super_fee);
                             if *stack < total_deduction {
-                                return Ok(vec![Event::CasinoError {
-                                    player: public.clone(),
-                                    session_id: Some(session_id),
-                                    error_code: nullspace_types::casino::ERROR_INSUFFICIENT_FUNDS,
-                                    message: format!(
+                                return Ok(casino_error_vec(
+                                    public,
+                                    Some(session_id),
+                                    nullspace_types::casino::ERROR_INSUFFICIENT_FUNDS,
+                                    format!(
                                         "Insufficient chips for additional bet: have {}, need {}",
                                         *stack, total_deduction
                                     ),
-                                }]);
+                                ));
                             }
                             *stack = stack.saturating_sub(total_deduction);
 
@@ -1144,17 +1183,9 @@ impl<'a, S: State> Layer<'a, S> {
         public: &PublicKey,
         tournament_id: u64,
     ) -> anyhow::Result<Vec<Event>> {
-        // Verify player exists
-        let mut player = match self.get(&Key::CasinoPlayer(public.clone())).await? {
-            Some(Value::CasinoPlayer(p)) => p,
-            _ => {
-                return Ok(vec![Event::CasinoError {
-                    player: public.clone(),
-                    session_id: None,
-                    error_code: nullspace_types::casino::ERROR_PLAYER_NOT_FOUND,
-                    message: "Player not found".to_string(),
-                }])
-            }
+        let mut player = match self.casino_player_or_error(public, None).await? {
+            Ok(player) => player,
+            Err(events) => return Ok(events),
         };
 
         // Check tournament limit (5 per day)
@@ -1168,12 +1199,12 @@ impl<'a, S: State> Layer<'a, S> {
         }
 
         if player.tournaments_played_today >= 5 {
-            return Ok(vec![Event::CasinoError {
-                player: public.clone(),
-                session_id: None,
-                error_code: nullspace_types::casino::ERROR_TOURNAMENT_LIMIT_REACHED,
-                message: "Daily tournament limit reached (5/5)".to_string(),
-            }]);
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_TOURNAMENT_LIMIT_REACHED,
+                "Daily tournament limit reached (5/5)",
+            ));
         }
 
         // Get or create tournament
@@ -1199,22 +1230,22 @@ impl<'a, S: State> Layer<'a, S> {
             tournament.phase,
             nullspace_types::casino::TournamentPhase::Registration
         ) {
-            return Ok(vec![Event::CasinoError {
-                player: public.clone(),
-                session_id: None,
-                error_code: nullspace_types::casino::ERROR_TOURNAMENT_NOT_REGISTERING,
-                message: "Tournament is not in registration phase".to_string(),
-            }]);
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_TOURNAMENT_NOT_REGISTERING,
+                "Tournament is not in registration phase",
+            ));
         }
 
         // Add player (check not already joined)
         if !tournament.add_player(public.clone()) {
-            return Ok(vec![Event::CasinoError {
-                player: public.clone(),
-                session_id: None,
-                error_code: nullspace_types::casino::ERROR_ALREADY_IN_TOURNAMENT,
-                message: "Already joined this tournament".to_string(),
-            }]);
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_ALREADY_IN_TOURNAMENT,
+                "Already joined this tournament",
+            ));
         }
 
         // Update player tracking
@@ -1248,20 +1279,20 @@ impl<'a, S: State> Layer<'a, S> {
             Some(Value::Tournament(t)) => {
                 // Prevent double-starts which would double-mint the prize pool.
                 if matches!(t.phase, nullspace_types::casino::TournamentPhase::Active) {
-                    return Ok(vec![Event::CasinoError {
-                        player: public.clone(),
-                        session_id: None,
-                        error_code: nullspace_types::casino::ERROR_INVALID_MOVE,
-                        message: "Tournament already active".to_string(),
-                    }]);
+                    return Ok(casino_error_vec(
+                        public,
+                        None,
+                        nullspace_types::casino::ERROR_INVALID_MOVE,
+                        "Tournament already active",
+                    ));
                 }
                 if matches!(t.phase, nullspace_types::casino::TournamentPhase::Complete) {
-                    return Ok(vec![Event::CasinoError {
-                        player: public.clone(),
-                        session_id: None,
-                        error_code: nullspace_types::casino::ERROR_INVALID_MOVE,
-                        message: "Tournament already complete".to_string(),
-                    }]);
+                    return Ok(casino_error_vec(
+                        public,
+                        None,
+                        nullspace_types::casino::ERROR_INVALID_MOVE,
+                        "Tournament already complete",
+                    ));
                 }
                 t
             }

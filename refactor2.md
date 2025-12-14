@@ -49,6 +49,7 @@ This is a second-pass review of the current workspace with a focus on idiomatic 
 - [x] `types/src/execution.rs`: add `Block::try_new` + `BlockBuildError` (checked constructor).
 - [x] `execution/src/casino/video_poker.rs`: fix clippy `needless_range_loop` via iterator-based indexing.
 - [x] `execution/src/layer/mod.rs`: make progressive-bet parsing fail-closed (no silent `0` on short blobs).
+- [x] `execution/src/layer/handlers/casino.rs`: centralize `CasinoError` construction + add player/session lookup helpers (behavior-preserving).
 - [x] `execution/src/layer/handlers/liquidity.rs`: extract AMM math into pure helpers and add unit tests (behavior-preserving).
 - [x] `simulator/src/lib.rs`: replace `GovernorConfigBuilder::finish().unwrap()` with safe fallback to defaults.
 - [x] `simulator/src/{lib,explorer}.rs`: split explorer indexing + HTTP handlers into a dedicated module.
@@ -630,6 +631,7 @@ let progressive_bet = match version {
 
 ### Progress (implemented)
 - `CasinoDeposit` now emits `Event::CasinoDeposited` (**behavior-changing**).
+- Centralized `CasinoError` construction and added helper lookups for player/session retrieval.
 
 ### Top Issues (ranked)
 1. **Repeated boilerplate for “get player or error” and error construction**
@@ -663,7 +665,7 @@ fn casino_error(player: &PublicKey, session_id: Option<u64>, code: u32, msg: imp
 - Avoid repeated `public.clone()` in hot loops by taking `&PublicKey` and cloning once per event.
 
 ### Refactor Plan
-- Phase 1: add helpers for error construction and player/session retrieval.
+- Phase 1 (**done**): add helpers for error construction and player/session retrieval.
 - Phase 2: standardize error codes/messages across handlers.
 
 ### Open Questions
