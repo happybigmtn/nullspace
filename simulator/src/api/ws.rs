@@ -259,6 +259,7 @@ fn is_event_relevant_to_account(event: &Event, account: &PublicKey) -> bool {
     match event {
         // Casino events - check if player matches
         Event::CasinoPlayerRegistered { player, .. } => player == account,
+        Event::CasinoDeposited { player, .. } => player == account,
         Event::CasinoGameStarted { player, .. } => player == account,
         Event::CasinoGameMoved { .. } => true, // Broadcast all moves - clients filter by session_id
         Event::CasinoGameCompleted { player, .. } => player == account,

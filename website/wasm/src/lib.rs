@@ -875,6 +875,18 @@ fn decode_event(event: &Event) -> Result<serde_json::Value, JsValue> {
                 "name": name
             })
         }
+        Event::CasinoDeposited {
+            player,
+            amount,
+            new_chips,
+        } => {
+            serde_json::json!({
+                "type": "CasinoDeposited",
+                "player": hex(&player.encode()),
+                "amount": amount,
+                "new_chips": new_chips
+            })
+        }
         Event::CasinoGameStarted {
             session_id,
             player,
