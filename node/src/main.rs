@@ -5,7 +5,7 @@ use commonware_cryptography::{ed25519::PublicKey, Signer};
 use commonware_deployer::ec2::Hosts;
 use commonware_p2p::authenticated::discovery as authenticated;
 use commonware_runtime::{tokio, Metrics, Runner};
-use commonware_utils::{from_hex_formatted, union_unique, NZUsize};
+use commonware_utils::{from_hex_formatted, union_unique, NZU32, NZUsize};
 use futures::future::try_join_all;
 use governor::Quota;
 use nullspace_client::Client;
@@ -14,7 +14,7 @@ use nullspace_types::NAMESPACE;
 use std::{
     collections::HashMap,
     net::{IpAddr, Ipv4Addr, SocketAddr},
-    num::{NonZeroU32, NonZeroUsize},
+    num::NonZeroUsize,
     path::PathBuf,
     str::FromStr,
     time::Duration,
@@ -50,65 +50,11 @@ type PeerList = Vec<PublicKey>;
 type BootstrapList = Vec<(PublicKey, SocketAddr)>;
 type PeerConfig = (IpAddr, PeerList, BootstrapList);
 
-fn load_peers(
-    hosts_file: Option<String>,
-    peers_file: Option<String>,
+fn parse_bootstrappers(
+    peers: &HashMap<PublicKey, SocketAddr>,
     bootstrappers: &[String],
-    port: u16,
-    public_key: &PublicKey,
-) -> Result<PeerConfig> {
-    if let Some(hosts_file) = hosts_file {
-        let hosts_file = std::fs::read_to_string(&hosts_file)
-            .with_context(|| format!("Could not read hosts file {hosts_file}"))?;
-        let hosts: Hosts =
-            serde_yaml::from_str(&hosts_file).context("Could not parse hosts file")?;
-        let peers: HashMap<PublicKey, IpAddr> = hosts
-            .hosts
-            .into_iter()
-            .filter_map(|peer| match parse_peer_public_key(&peer.name) {
-                Some(key) => Some((key, peer.ip)),
-                None => {
-                    info!(name = peer.name, "Skipping non-peer host");
-                    None
-                }
-            })
-            .collect();
-
-        let peer_keys = peers.keys().cloned().collect::<Vec<_>>();
-        let mut bootstrap_sockets = Vec::new();
-        for bootstrapper in bootstrappers {
-            let key = from_hex_formatted(bootstrapper)
-                .with_context(|| format!("Could not parse bootstrapper key {bootstrapper}"))?;
-            let key = PublicKey::decode(key.as_ref())
-                .with_context(|| format!("Bootstrapper key is invalid: {bootstrapper}"))?;
-            let ip = peers
-                .get(&key)
-                .with_context(|| format!("Could not find bootstrapper {bootstrapper} in hosts"))?;
-            bootstrap_sockets.push((key, SocketAddr::new(*ip, port)));
-        }
-        let ip = peers
-            .get(public_key)
-            .context("Could not find self in hosts")?;
-        return Ok((*ip, peer_keys, bootstrap_sockets));
-    }
-
-    let peers_file = peers_file.context("missing --peers")?;
-    let peers_file = std::fs::read_to_string(&peers_file)
-        .with_context(|| format!("Could not read peers file {peers_file}"))?;
-    let peers: Peers = serde_yaml::from_str(&peers_file).context("Could not parse peers file")?;
-    let peers: HashMap<PublicKey, SocketAddr> = peers
-        .addresses
-        .into_iter()
-        .filter_map(|peer| match parse_peer_public_key(&peer.0) {
-            Some(key) => Some((key, peer.1)),
-            None => {
-                info!(name = peer.0, "Skipping non-peer address");
-                None
-            }
-        })
-        .collect();
-
-    let peer_keys = peers.keys().cloned().collect::<Vec<_>>();
+    source: &'static str,
+) -> Result<BootstrapList> {
     let mut bootstrap_sockets = Vec::new();
     for bootstrapper in bootstrappers {
         let key = from_hex_formatted(bootstrapper)
@@ -117,12 +63,61 @@ fn load_peers(
             .with_context(|| format!("Bootstrapper key is invalid: {bootstrapper}"))?;
         let socket = peers
             .get(&key)
-            .with_context(|| format!("Could not find bootstrapper {bootstrapper} in peers"))?;
+            .with_context(|| format!("Could not find bootstrapper {bootstrapper} in {source}"))?;
         bootstrap_sockets.push((key, *socket));
     }
+    Ok(bootstrap_sockets)
+}
+
+fn load_peers(
+    hosts_file: Option<String>,
+    peers_file: Option<String>,
+    bootstrappers: &[String],
+    port: u16,
+    public_key: &PublicKey,
+) -> Result<PeerConfig> {
+    let (peers, source) = if let Some(hosts_file) = hosts_file {
+        let hosts_file_contents = std::fs::read_to_string(&hosts_file)
+            .with_context(|| format!("Could not read hosts file {hosts_file}"))?;
+        let hosts: Hosts =
+            serde_yaml::from_str(&hosts_file_contents).context("Could not parse hosts file")?;
+        let peers: HashMap<PublicKey, SocketAddr> = hosts
+            .hosts
+            .into_iter()
+            .filter_map(|peer| match parse_peer_public_key(&peer.name) {
+                Some(key) => Some((key, SocketAddr::new(peer.ip, port))),
+                None => {
+                    info!(name = peer.name, "Skipping non-peer host");
+                    None
+                }
+            })
+            .collect();
+        (peers, "hosts")
+    } else {
+        let peers_file = peers_file.context("missing --peers")?;
+        let peers_file_contents = std::fs::read_to_string(&peers_file)
+            .with_context(|| format!("Could not read peers file {peers_file}"))?;
+        let peers: Peers =
+            serde_yaml::from_str(&peers_file_contents).context("Could not parse peers file")?;
+        let peers: HashMap<PublicKey, SocketAddr> = peers
+            .addresses
+            .into_iter()
+            .filter_map(|peer| match parse_peer_public_key(&peer.0) {
+                Some(key) => Some((key, peer.1)),
+                None => {
+                    info!(name = peer.0, "Skipping non-peer address");
+                    None
+                }
+            })
+            .collect();
+        (peers, "peers")
+    };
+
+    let peer_keys = peers.keys().cloned().collect::<Vec<_>>();
+    let bootstrap_sockets = parse_bootstrappers(&peers, bootstrappers, source)?;
     let ip = peers
         .get(public_key)
-        .context("Could not find self in peers")?
+        .with_context(|| format!("Could not find self in {source}"))?
         .ip();
     Ok((ip, peer_keys, bootstrap_sockets))
 }
@@ -260,21 +255,21 @@ fn main_result() -> Result<()> {
             oracle.register(0, peers.clone()).await;
 
             // Register pending channel
-            let pending_limit = Quota::per_second(NonZeroU32::new(128).unwrap());
+            let pending_limit = Quota::per_second(NZU32!(128));
             let pending = network.register(PENDING_CHANNEL, pending_limit, config.message_backlog);
 
             // Register recovered channel
-            let recovered_limit = Quota::per_second(NonZeroU32::new(128).unwrap());
+            let recovered_limit = Quota::per_second(NZU32!(128));
             let recovered =
                 network.register(RECOVERED_CHANNEL, recovered_limit, config.message_backlog);
 
             // Register resolver channel
-            let resolver_limit = Quota::per_second(NonZeroU32::new(128).unwrap());
+            let resolver_limit = Quota::per_second(NZU32!(128));
             let resolver =
                 network.register(RESOLVER_CHANNEL, resolver_limit, config.message_backlog);
 
             // Register broadcast channel
-            let broadcaster_limit = Quota::per_second(NonZeroU32::new(32).unwrap()); // Increased for faster block propagation
+            let broadcaster_limit = Quota::per_second(NZU32!(32)); // Increased for faster block propagation
             let broadcaster = network.register(
                 BROADCASTER_CHANNEL,
                 broadcaster_limit,
@@ -282,7 +277,7 @@ fn main_result() -> Result<()> {
             );
 
             // Register backfill channel
-            let backfill_quota = Quota::per_second(NonZeroU32::new(8).unwrap());
+            let backfill_quota = Quota::per_second(NZU32!(8));
             let backfill = network.register(
                 BACKFILL_BY_DIGEST_CHANNEL,
                 backfill_quota,
@@ -297,7 +292,7 @@ fn main_result() -> Result<()> {
                 network.register(AGGREGATOR_CHANNEL, backfill_quota, config.message_backlog);
 
             // Register aggregation channel
-            let aggregation_quota = Quota::per_second(NonZeroU32::new(128).unwrap());
+            let aggregation_quota = Quota::per_second(NZU32!(128));
             let aggregation = network.register(
                 AGGREGATION_CHANNEL,
                 aggregation_quota,

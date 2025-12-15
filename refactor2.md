@@ -46,6 +46,7 @@ This is a second-pass review of the current workspace with a focus on idiomatic 
 - [x] `client/src/events.rs`: dedupe websocket reader loop; unify verified/unverified paths.
 - [x] `client/examples/*` + `client/src/bin/stress_test.rs`: remove unused imports/vars to eliminate build warnings.
 - [x] `node/src/lib.rs`: validate additional non-zero config fields (`worker_threads`, `message_backlog`, `mailbox_size`, `deque_size`, `execution_concurrency`).
+- [x] `node/src/main.rs`: dedupe `load_peers` parsing and replace `NonZeroU32::new(...).unwrap()` with `NZU32!` (behavior-preserving).
 - [x] `types/src/api.rs`: derive `thiserror::Error` for `VerifyError` (remove manual `Display` boilerplate).
 - [x] `types/src/execution.rs`: add `Block::try_new` + `BlockBuildError` (checked constructor).
 - [x] `execution/src/casino/video_poker.rs`: fix clippy `needless_range_loop` via iterator-based indexing.
@@ -1362,6 +1363,10 @@ let mut state = match Adb::init(...).await {
 - CLI entrypoint: loads config and peer set, initializes runtime, and boots the engine.
 - Owns operational defaults (quotas, message sizes, buffer sizes).
 
+### Progress (implemented)
+- `load_peers` now shares bootstrapper parsing + address mapping logic between `--hosts` and `--peers`.
+- Replaced `NonZeroU32::new(...).unwrap()` quota construction with `NZU32!`.
+
 ### Top Issues (ranked)
 1. **Duplicated peer-loading logic for `--hosts` vs `--peers`**
    - Impact: harder to maintain; easy to introduce inconsistent behavior.
@@ -1387,7 +1392,7 @@ let mut state = match Adb::init(...).await {
 - Main’s impact is configuration; the key is making tuning observable and safe.
 
 ### Refactor Plan
-- Phase 1: refactor `load_peers` to share parsing logic and reduce duplication.
+- Phase 1 (**done**): refactor `load_peers` to share parsing logic and reduce duplication.
 - Phase 2: move tunables into config with defaults (quotas, sizes) and print them on startup.
 - Phase 3: add a `--dry-run` report that includes derived resource estimates (memory/disk) (**behavior-changing** if you add output formats).
 
