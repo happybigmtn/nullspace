@@ -26,3 +26,42 @@ pub fn read_string(reader: &mut impl Buf, max_len: usize) -> Result<String, Erro
 pub fn string_encode_size(s: &str) -> usize {
     4 + s.len()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bytes::BytesMut;
+
+    #[test]
+    fn read_string_rejects_too_long() {
+        let mut buf = BytesMut::new();
+        (5u32).write(&mut buf);
+        buf.extend_from_slice(b"hello");
+
+        let mut reader = buf.as_ref();
+        let err = read_string(&mut reader, 4).expect_err("should reject too-long string");
+        assert!(matches!(err, Error::Invalid("String", "too long")));
+    }
+
+    #[test]
+    fn read_string_rejects_truncated_buffers() {
+        let mut buf = BytesMut::new();
+        (3u32).write(&mut buf);
+        buf.extend_from_slice(b"ab");
+
+        let mut reader = buf.as_ref();
+        let err = read_string(&mut reader, 10).expect_err("should reject truncated buffer");
+        assert!(matches!(err, Error::EndOfBuffer));
+    }
+
+    #[test]
+    fn read_string_rejects_invalid_utf8() {
+        let mut buf = BytesMut::new();
+        (2u32).write(&mut buf);
+        buf.extend_from_slice(&[0xff, 0xff]);
+
+        let mut reader = buf.as_ref();
+        let err = read_string(&mut reader, 10).expect_err("should reject invalid UTF-8");
+        assert!(matches!(err, Error::Invalid("String", "invalid UTF-8")));
+    }
+}

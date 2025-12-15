@@ -42,6 +42,7 @@ This is a second-pass review of the current workspace with a focus on idiomatic 
 - [x] `node/src/application/mempool.rs`: add regression test for stale-queue compaction under adversarial churn.
 - [x] Idiomatic/clippy cleanups in core games: `execution/src/casino/{baccarat,roulette,blackjack,sic_bo}.rs`.
 - [x] Test hygiene: `types/src/casino/tests.rs`, `types/src/token.rs` clippy warning fixes.
+- [x] `types/src/casino/codec.rs`: add unit tests for string decode bounds (too long, truncated, invalid UTF-8).
 - [x] `types/src/casino/player.rs` + `execution/src/layer/handlers/casino.rs`: stop using `Player::new_with_block`; keep it as a compatibility shim that forwards to `Player::new` (behavior-preserving).
 - [x] Proof limit unification: centralize summary/events decode limits in `types/src/api.rs` and reuse in `node/src/aggregator/actor.rs` + `simulator/src/lib.rs`.
 - [x] `client/src/client.rs`: switch retryable POST bodies to `bytes::Bytes` (avoid per-attempt cloning).
@@ -1674,6 +1675,9 @@ if !(1..=35).contains(&number) || number % 3 == 0 { ... }
 - Provides helpers for length-prefixed string encoding and decoding with max length enforcement.
 - Used by many casino types to keep binary codec consistent.
 
+### Progress (implemented)
+- Added unit tests covering length bounds, truncation, and invalid UTF-8 cases.
+
 ### Top Issues (ranked)
 1. **Decoding allocates a `Vec<u8>` per string**
    - Impact: minor allocation overhead; may matter if strings are decoded frequently.
@@ -1696,7 +1700,7 @@ if !(1..=35).contains(&number) || number % 3 == 0 { ... }
 ### Refactor Plan
 - Phase 1: keep as-is (it’s clear and safe).
 - Phase 2: optimize only if profiling shows string decoding is hot.
-- Phase 3: add fuzz tests for malformed UTF-8 and length overflows.
+- Phase 3 (**partially done**): add fuzz/property coverage for malformed UTF-8 and length overflows (unit tests added; fuzzing optional).
 
 ### Open Questions
 - Are any of these strings user-controlled and potentially adversarial at scale (spam/DoS)?
