@@ -259,10 +259,11 @@ pub async fn execute_block<E: Spawner + Metrics + Storage + Clock>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use commonware_codec::{DecodeExt, Encode};
+    use commonware_codec::{DecodeExt, Encode, EncodeSize, Error};
     use commonware_runtime::deterministic::Runner;
     use commonware_runtime::Runner as _;
     use nullspace_types::execution::Instruction;
+    use nullspace_types::api::{MAX_EVENTS_PROOF_OPS, MAX_STATE_PROOF_OPS};
 
     #[test]
     fn test_seed_codec_roundtrip() {
@@ -306,6 +307,122 @@ mod tests {
             decoded
                 .verify(&network_identity)
                 .expect("summary verify failed");
+        });
+    }
+
+    #[test]
+    fn test_summary_decode_rejects_oversized_state_ops_len() {
+        let executor = Runner::default();
+        executor.start(|context| async move {
+            let (network_secret, network_identity) = create_network_keypair();
+            let (mut state, mut events) = create_adbs(&context).await;
+
+            let (private, _) = create_account_keypair(1);
+            let tx = Transaction::sign(
+                &private,
+                0,
+                Instruction::CasinoRegister {
+                    name: "TestPlayer".to_string(),
+                },
+            );
+            let (_seed, summary) = execute_block(
+                &network_secret,
+                network_identity,
+                &mut state,
+                &mut events,
+                1,
+                vec![tx],
+            )
+            .await;
+
+            let encoded = summary.encode();
+            let state_ops_len_offset = summary.progress.encode_size()
+                + summary.certificate.encode_size()
+                + summary.state_proof.encode_size();
+            let old_len = summary.state_proof_ops.len();
+            let old_len_bytes = old_len.encode();
+            let new_len_bytes = (MAX_STATE_PROOF_OPS + 1).encode();
+
+            assert!(
+                state_ops_len_offset + old_len_bytes.len() <= encoded.len(),
+                "state ops length prefix out of bounds"
+            );
+            assert_eq!(
+                &encoded[state_ops_len_offset..state_ops_len_offset + old_len_bytes.len()],
+                old_len_bytes.as_ref(),
+                "unexpected state ops length encoding"
+            );
+
+            let mut mutated = Vec::with_capacity(
+                encoded.len().saturating_sub(old_len_bytes.len()) + new_len_bytes.len(),
+            );
+            mutated.extend_from_slice(&encoded[..state_ops_len_offset]);
+            mutated.extend_from_slice(new_len_bytes.as_ref());
+            mutated.extend_from_slice(&encoded[state_ops_len_offset + old_len_bytes.len()..]);
+
+            assert!(matches!(
+                Summary::decode(mutated.as_ref()),
+                Err(Error::InvalidLength(_))
+            ));
+        });
+    }
+
+    #[test]
+    fn test_summary_decode_rejects_oversized_events_ops_len() {
+        let executor = Runner::default();
+        executor.start(|context| async move {
+            let (network_secret, network_identity) = create_network_keypair();
+            let (mut state, mut events) = create_adbs(&context).await;
+
+            let (private, _) = create_account_keypair(1);
+            let tx = Transaction::sign(
+                &private,
+                0,
+                Instruction::CasinoRegister {
+                    name: "TestPlayer".to_string(),
+                },
+            );
+            let (_seed, summary) = execute_block(
+                &network_secret,
+                network_identity,
+                &mut state,
+                &mut events,
+                1,
+                vec![tx],
+            )
+            .await;
+
+            let encoded = summary.encode();
+            let events_ops_len_offset = summary.progress.encode_size()
+                + summary.certificate.encode_size()
+                + summary.state_proof.encode_size()
+                + summary.state_proof_ops.encode_size()
+                + summary.events_proof.encode_size();
+            let old_len = summary.events_proof_ops.len();
+            let old_len_bytes = old_len.encode();
+            let new_len_bytes = (MAX_EVENTS_PROOF_OPS + 1).encode();
+
+            assert!(
+                events_ops_len_offset + old_len_bytes.len() <= encoded.len(),
+                "events ops length prefix out of bounds"
+            );
+            assert_eq!(
+                &encoded[events_ops_len_offset..events_ops_len_offset + old_len_bytes.len()],
+                old_len_bytes.as_ref(),
+                "unexpected events ops length encoding"
+            );
+
+            let mut mutated = Vec::with_capacity(
+                encoded.len().saturating_sub(old_len_bytes.len()) + new_len_bytes.len(),
+            );
+            mutated.extend_from_slice(&encoded[..events_ops_len_offset]);
+            mutated.extend_from_slice(new_len_bytes.as_ref());
+            mutated.extend_from_slice(&encoded[events_ops_len_offset + old_len_bytes.len()..]);
+
+            assert!(matches!(
+                Summary::decode(mutated.as_ref()),
+                Err(Error::InvalidLength(_))
+            ));
         });
     }
 

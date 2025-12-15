@@ -37,6 +37,7 @@ use tracing::{debug, error, info, warn};
 const BATCH_ENQUEUE: usize = 20;
 const LAST_UPLOADED_KEY: u64 = 0;
 const RETRY_DELAY: Duration = Duration::from_secs(10);
+const MAX_PENDING_SEED_LISTENERS: usize = 10_000;
 
 pub struct Actor<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> {
     context: R,
@@ -86,6 +87,8 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
         let seed_upload_failures: Counter<u64, AtomicU64> = Counter::default();
         let seed_uploads_outstanding: Gauge = Gauge::default();
         let seed_upload_lag: Gauge = Gauge::default();
+        let seed_listeners_outstanding: Gauge = Gauge::default();
+        let seed_waiting_views: Gauge = Gauge::default();
         self.context.register(
             "seed_upload_attempts_total",
             "Number of attempts to upload seeds to the indexer",
@@ -105,6 +108,16 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
             "seed_upload_lag",
             "Difference between next upload cursor and last contiguous uploaded seed",
             seed_upload_lag.clone(),
+        );
+        self.context.register(
+            "seed_listeners_outstanding",
+            "Number of pending oneshot listeners waiting for missing seeds",
+            seed_listeners_outstanding.clone(),
+        );
+        self.context.register(
+            "seed_waiting_views",
+            "Number of distinct views with one or more pending seed listeners",
+            seed_waiting_views.clone(),
         );
 
         // Create metadata
@@ -166,6 +179,7 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
 
         // Track waiters for each seed
         let mut listeners: HashMap<View, Vec<oneshot::Sender<Seed>>> = HashMap::new();
+        let mut listeners_total: usize = 0;
 
         // Start by fetching the first missing seeds
         let missing = storage.missing_items(1, BATCH_ENQUEUE);
@@ -185,6 +199,8 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
         info!(cursor, "initial seed cursor");
         seed_upload_lag.set(0);
         seed_uploads_outstanding.set(0);
+        seed_listeners_outstanding.set(0);
+        seed_waiting_views.set(0);
 
         // Process messages
         loop {
@@ -239,8 +255,11 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                     }
 
                     // If there were any listeners, send them the seed
-                    if let Some(listeners) = listeners.remove(&seed.view) {
-                        for listener in listeners {
+                    if let Some(listeners_for_view) = listeners.remove(&seed.view) {
+                        listeners_total = listeners_total.saturating_sub(listeners_for_view.len());
+                        seed_listeners_outstanding.set(listeners_total as i64);
+                        seed_waiting_views.set(listeners.len() as i64);
+                        for listener in listeners_for_view {
                             let _ = listener.send(seed.clone());
                         }
                     }
@@ -270,7 +289,22 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                             if self.waiting.insert(view) {
                                 resolver.fetch(view.into()).await;
                             }
-                            listeners.entry(view).or_default().push(response);
+                            let entry = listeners.entry(view).or_default();
+                            let before = entry.len();
+                            entry.retain(|listener| !listener.is_canceled());
+                            listeners_total = listeners_total.saturating_sub(before - entry.len());
+                            if listeners_total.saturating_add(1) > MAX_PENDING_SEED_LISTENERS {
+                                error!(
+                                    view,
+                                    listeners_total,
+                                    "too many pending seed listeners; shutting down"
+                                );
+                                return;
+                            }
+                            entry.push(response);
+                            listeners_total += 1;
+                            seed_listeners_outstanding.set(listeners_total as i64);
+                            seed_waiting_views.set(listeners.len() as i64);
                             continue;
                         }
                         Err(err) => {
@@ -316,8 +350,11 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                     }
 
                     // Notify listeners
-                    if let Some(listeners) = listeners.remove(&view) {
-                        for listener in listeners {
+                    if let Some(listeners_for_view) = listeners.remove(&view) {
+                        listeners_total = listeners_total.saturating_sub(listeners_for_view.len());
+                        seed_listeners_outstanding.set(listeners_total as i64);
+                        seed_waiting_views.set(listeners.len() as i64);
+                        for listener in listeners_for_view {
                             let _ = listener.send(seed.clone());
                         }
                     }

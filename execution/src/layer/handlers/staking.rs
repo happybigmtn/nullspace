@@ -509,4 +509,114 @@ mod tests {
             assert_eq!(staker.voting_power, 0);
         });
     }
+
+    #[test]
+    fn process_epoch_advances_house_epoch_after_threshold() {
+        let executor = Runner::default();
+        executor.start(|context| async move {
+            let (network_secret, network_identity) = create_network_keypair();
+            let (mut state, mut events) = create_adbs(&context).await;
+            let (private, public) = create_account_keypair(3);
+
+            // Initialize house (epoch_start_ts) via stake at view 1.
+            execute_block(
+                &network_secret,
+                network_identity.clone(),
+                &mut state,
+                &mut events,
+                1,
+                vec![
+                    Transaction::sign(
+                        &private,
+                        0,
+                        Instruction::CasinoRegister {
+                            name: "Eve".to_string(),
+                        },
+                    ),
+                    Transaction::sign(&private, 1, Instruction::CasinoDeposit { amount: 100 }),
+                    Transaction::sign(
+                        &private,
+                        2,
+                        Instruction::Stake {
+                            amount: 10,
+                            duration: 10,
+                        },
+                    ),
+                ],
+            )
+            .await;
+
+            let house = match crate::State::get(&state, &Key::House).await.expect("get house") {
+                Some(Value::House(house)) => house,
+                other => panic!("expected house, got {other:?}"),
+            };
+            assert_eq!(house.current_epoch, 0);
+            assert_eq!(house.epoch_start_ts, 1);
+
+            // Calling ProcessEpoch before the threshold is a no-op.
+            execute_block(
+                &network_secret,
+                network_identity.clone(),
+                &mut state,
+                &mut events,
+                50,
+                vec![Transaction::sign(&private, 3, Instruction::ProcessEpoch)],
+            )
+            .await;
+
+            let house = match crate::State::get(&state, &Key::House).await.expect("get house") {
+                Some(Value::House(house)) => house,
+                other => panic!("expected house, got {other:?}"),
+            };
+            assert_eq!(house.current_epoch, 0);
+            assert_eq!(house.epoch_start_ts, 1);
+
+            // At view 101 (= 1 + 100), the epoch is processed.
+            execute_block(
+                &network_secret,
+                network_identity.clone(),
+                &mut state,
+                &mut events,
+                101,
+                vec![Transaction::sign(&private, 4, Instruction::ProcessEpoch)],
+            )
+            .await;
+
+            let house = match crate::State::get(&state, &Key::House).await.expect("get house") {
+                Some(Value::House(house)) => house,
+                other => panic!("expected house, got {other:?}"),
+            };
+            assert_eq!(house.current_epoch, 1);
+            assert_eq!(house.epoch_start_ts, 101);
+            assert_eq!(house.net_pnl, 0);
+
+            // A subsequent call without a full epoch elapsing is a no-op.
+            execute_block(
+                &network_secret,
+                network_identity,
+                &mut state,
+                &mut events,
+                150,
+                vec![Transaction::sign(&private, 5, Instruction::ProcessEpoch)],
+            )
+            .await;
+
+            let house = match crate::State::get(&state, &Key::House).await.expect("get house") {
+                Some(Value::House(house)) => house,
+                other => panic!("expected house, got {other:?}"),
+            };
+            assert_eq!(house.current_epoch, 1);
+            assert_eq!(house.epoch_start_ts, 101);
+
+            // Confirm nonce consumption (prepare step is applied even on no-op ProcessEpoch).
+            let account = match crate::State::get(&state, &Key::Account(public))
+                .await
+                .expect("get account")
+            {
+                Some(Value::Account(account)) => account,
+                other => panic!("expected account, got {other:?}"),
+            };
+            assert_eq!(account.nonce, 6);
+        });
+    }
 }

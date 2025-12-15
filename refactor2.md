@@ -43,6 +43,7 @@ This is a second-pass review of the current workspace with a focus on idiomatic 
 - [x] Idiomatic/clippy cleanups in core games: `execution/src/casino/{baccarat,roulette,blackjack,sic_bo}.rs`.
 - [x] Test hygiene: `types/src/casino/tests.rs`, `types/src/token.rs` clippy warning fixes.
 - [x] `types/src/casino/codec.rs`: add unit tests for string decode bounds (too long, truncated, invalid UTF-8).
+- [x] `execution/src/mocks.rs`: add regression tests that `Summary` decoding rejects oversized proof op vectors (state/events).
 - [x] `types/src/casino/player.rs` + `execution/src/layer/handlers/casino.rs`: stop using `Player::new_with_block`; keep it as a compatibility shim that forwards to `Player::new` (behavior-preserving).
 - [x] Proof limit unification: centralize summary/events decode limits in `types/src/api.rs` and reuse in `node/src/aggregator/actor.rs` + `simulator/src/lib.rs`.
 - [x] `client/src/client.rs`: switch retryable POST bodies to `bytes::Bytes` (avoid per-attempt cloning).
@@ -65,6 +66,7 @@ This is a second-pass review of the current workspace with a focus on idiomatic 
 - [x] `execution/src/layer/handlers/casino.rs`: centralize `CasinoError` construction + add player/session lookup helpers (behavior-preserving).
 - [x] `execution/src/layer/handlers/staking.rs`: clarify dev/demo staking epoch/duration semantics (behavior-preserving).
 - [x] (**behavior-changing**) `execution/src/layer/handlers/staking.rs`: restake no longer shortens unlock; voting power accumulates across stakes + added multi-stake tests.
+- [x] `execution/src/layer/handlers/staking.rs`: add `ProcessEpoch` rollover test coverage.
 - [x] `execution/src/layer/handlers/liquidity.rs`: extract AMM math into pure helpers and add unit tests (behavior-preserving).
 - [x] `simulator/src/lib.rs`: replace `GovernorConfigBuilder::finish().unwrap()` with safe fallback to defaults.
 - [x] `simulator/src/{lib,explorer}.rs`: split explorer indexing + HTTP handlers into a dedicated module.
@@ -91,6 +93,7 @@ This is a second-pass review of the current workspace with a focus on idiomatic 
 - [x] `node/src/{seeder,aggregator}/actor.rs`: add upload metrics (attempts/failures, outstanding, lag) and exponential backoff for indexer uploads.
 - [x] `node/src/{seeder,aggregator}/actor.rs`: add jittered sleep to upload backoff (reduce thundering herd on indexer outages).
 - [x] `node/src/{seeder,aggregator}/actor.rs`: harden `uploads_outstanding` decrement (no underflow on unexpected completion messages).
+- [x] `node/src/seeder/actor.rs`: add metrics for pending seed listeners and prune canceled listeners; crash-fast if pending waiters exceed a hard cap.
 - [x] `node/src/indexer.rs`: preserve mempool websocket error details from `nullspace-client` (stop collapsing to `UnexpectedResponse`).
 - [x] `node/src/indexer.rs`: add mempool stream metrics (connect attempts/failures, invalid batches, forwarded batches) and exponential reconnect backoff (with jitter).
 - [x] `node/src/indexer.rs`: add `ReconnectingStream` tests (drops invalid batches; reconnects after stream end).
@@ -713,6 +716,7 @@ fn casino_error(player: &PublicKey, session_id: Option<u64>, code: u32, msg: imp
 - Clarified dev/demo staking epoch and duration semantics (expressed in consensus views/blocks, not wall-clock time).
 - Added tests covering stake → locked-unstake → unlocked-unstake behavior and house totals invariants.
 - Restaking now uses `max(old_unlock, new_unlock)` and accumulates voting power per stake (fixes comment/intent mismatch).
+- Added tests covering `ProcessEpoch` rollover and nonce consumption semantics.
 
 ### Top Issues (ranked)
 1. **Claim rewards is a placeholder returning `amount: 0`**
@@ -741,7 +745,7 @@ fn casino_error(player: &PublicKey, session_id: Option<u64>, code: u32, msg: imp
 ### Refactor Plan
 - Phase 1 (**done**): clarify whether staking is MVP/demo or production; rename constants/comments accordingly.
 - Phase 2: implement rewards or remove the instruction (**behavior-changing**).
-- Phase 3 (**partially done**): add invariants/tests (stake/unstake + multiple stakes covered; add epoch rollover coverage).
+- Phase 3 (**done**): add invariants/tests (stake/unstake + multiple stakes + epoch rollover covered).
 
 ### Open Questions
 - What is the intended staking economics (reward source, distribution schedule, anti-sybil constraints)?
@@ -929,17 +933,17 @@ pub fn try_new(parent: Digest, view: View, height: u64, transactions: Vec<Transa
 - Defines API wire types (`Summary`, `Events`, `Lookup`, filters) and proof verification logic.
 - Acts as the “client-side verifier” for consensus proofs.
 
+### Progress (implemented)
+- Centralized proof decoding limits in `types/src/api.rs` and reused them across producers/verifiers.
+- Derived `thiserror::Error` for `VerifyError`.
+- Added regression coverage ensuring `Summary` decoding rejects oversized ops vectors (state/events) at the codec boundary.
+
 ### Top Issues (ranked)
-1. **Proof limits duplicated across producer/verifier code**
-   - Impact: mismatch can cause verification failures or DoS vectors.
+1. **Proof decode/verify needs broader malformed-input coverage**
+   - Impact: insufficient coverage around weird/truncated inputs can hide DoS/crash edges.
    - Risk: medium.
    - Effort: medium.
-   - Location: `types/src/api.rs:11`–`18` (`MAX_PROOF_*`) vs `node/src/aggregator/actor.rs` proof limits.
-2. **Custom error type manually implements Display**
-   - Impact: more boilerplate than necessary; easier to make mistakes.
-   - Risk: low.
-   - Effort: low.
-   - Location: `types/src/api.rs:18`–`63`.
+   - Location: `types/src/api.rs` `Read` impls for `Summary`/`Events`/`Lookup`.
 
 ### Idiomatic Rust Improvements
 - Use `thiserror::Error` derives for `VerifyError` for clarity and consistency with the rest of the workspace.
@@ -960,9 +964,9 @@ pub fn try_new(parent: Digest, view: View, height: u64, transactions: Vec<Transa
   - failure rate (invalid signatures/proofs)
 
 ### Refactor Plan
-- Phase 1: introduce shared constants for proof limits.
-- Phase 2: derive `thiserror::Error` for `VerifyError` (no behavior change).
-- Phase 3: add fuzz tests for proof decoding/verification with size bounds.
+- Phase 1 (**done**): introduce shared constants for proof limits.
+- Phase 2 (**done**): derive `thiserror::Error` for `VerifyError` (no behavior change).
+- Phase 3 (**partially done**): add codec-bound regression tests; add fuzz/property tests for malformed proof decoding.
 
 ### Open Questions
 - Are clients expected to handle multiple proof-limit “profiles” (light vs full nodes), or is there one canonical set?
@@ -1834,6 +1838,7 @@ if !(1..=35).contains(&number) || number % 3 == 0 { ... }
 - Listener sends are best-effort (dropped receivers no longer panic the actor).
 - Storage operations no longer use `.expect`; fatal storage errors are logged and cause the actor to exit (engine is crash-fast).
 - Seed uploads now use exponential backoff with jitter and emit metrics (attempts/failures, outstanding uploads, and upload lag).
+- Missing-seed waiters are tracked via metrics; canceled waiters are pruned and a hard cap prevents unbounded growth.
 
 ### Top Issues (ranked)
 1. **Crash-fast on storage/indexer faults**
@@ -1872,7 +1877,7 @@ let _ = listener.send(seed.clone());
 ### Refactor Plan
 - Phase 1 (**done**): remove `expect` for listener sends and replace with best-effort.
 - Phase 2 (**done**): convert storage operations to logged failures and actor exit; crash-fast fault policy at engine level.
-- Phase 3: add backpressure/bounds for listener accumulation and upload concurrency.
+- Phase 3 (**partially done**): add bounds/metrics for listener accumulation; consider making caps configurable and documenting restart semantics.
 
 ### Open Questions
 - Is the indexer always available/required for seeder progress, or can the node operate while indexer is down?
