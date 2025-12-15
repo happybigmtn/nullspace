@@ -261,7 +261,7 @@ mod tests {
 
         // From 2, guessing lower: only 1 win possible (Ace)
         let mult = calculate_multiplier(2, false);
-        assert_eq!(mult, 13 * BASE_MULTIPLIER / 1); // 13x
+        assert_eq!(mult, 13 * BASE_MULTIPLIER); // 13x
     }
 
     #[test]

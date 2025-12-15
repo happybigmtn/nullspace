@@ -524,7 +524,7 @@ mod tests {
         // Test die rolls are in range
         for _ in 0..1000 {
             let roll = rng.roll_die();
-            assert!(roll >= 1 && roll <= 6);
+            assert!((1..=6).contains(&roll));
         }
     }
 

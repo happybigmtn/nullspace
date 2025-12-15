@@ -1,4 +1,4 @@
-# refactor2.md — Rust codebase review (2025-12-14)
+# refactor2.md — Rust codebase review (2025-12-15)
 
 This is a second-pass review of the current workspace with a focus on idiomatic Rust, correctness/safety, and performance/scalability. Recommendations aim to preserve external behavior unless explicitly marked **behavior-changing**.
 
@@ -28,7 +28,7 @@ This is a second-pass review of the current workspace with a focus on idiomatic 
 - Where are the latency/CPU hotspots today (execution, proof generation, networking, storage IO, mempool)?
 - Any known incidents: chain wedged, non-determinism, corrupted stores, memory growth, websocket backpressure?
 
-## Implementation Status (2025-12-14)
+## Implementation Status (2025-12-15)
 
 - [x] `node/src/application/ingress.rs`: remove panic-on-send/receive; return safe defaults on mailbox closure.
 - [x] `node/src/aggregator/ingress.rs`: remove panic-on-send/receive; make `deliver()` fail-closed on mailbox closure/shutdown (avoid acknowledging dropped messages).
@@ -40,10 +40,11 @@ This is a second-pass review of the current workspace with a focus on idiomatic 
 - [x] `node/src/application/actor.rs`: avoid panic on missing blocks during verify join.
 - [x] `node/src/application/mempool.rs`: remove non-test dead-code warnings by gating test-only defaults/constructor.
 - [x] `node/src/application/mempool.rs`: add regression test for stale-queue compaction under adversarial churn.
-- [x] Idiomatic/clippy cleanups in core games: `execution/src/casino/{baccarat,roulette,blackjack,sic_bo}.rs`.
+- [x] Idiomatic/clippy cleanups in casino games/tests: `execution/src/casino/{baccarat,roulette,blackjack,sic_bo,hilo,craps,mod}.rs`.
 - [x] Test hygiene: `types/src/casino/tests.rs`, `types/src/token.rs` clippy warning fixes.
 - [x] `types/src/casino/codec.rs`: add unit tests for string decode bounds (too long, truncated, invalid UTF-8).
 - [x] `execution/src/mocks.rs`: add regression tests that `Summary`/`Events`/`FilteredEvents` decoding rejects oversized proof op vectors (codec bounds).
+- [x] `nullspace-execution` test clippy hygiene: remove clone-on-copy / unnecessary mut / manual range checks in `execution/src/{mocks.rs,layer/handlers/staking.rs,casino/*}` tests.
 - [x] `types/src/casino/player.rs` + `execution/src/layer/handlers/casino.rs`: stop using `Player::new_with_block`; keep it as a compatibility shim that forwards to `Player::new` (behavior-preserving).
 - [x] Proof limit unification: centralize summary/events decode limits in `types/src/api.rs` and reuse in `node/src/aggregator/actor.rs` + `simulator/src/lib.rs`.
 - [x] `client/src/client.rs`: switch retryable POST bodies to `bytes::Bytes` (avoid per-attempt cloning).
@@ -845,7 +846,7 @@ v >= 2 && v <= 7
   - reducing per-move recomputation (cache hand evaluation where possible)
 
 ### Refactor Plan
-- Phase 1: apply clippy-suggested cleanups (low risk).
+- Phase 1 (**done**): apply clippy-suggested cleanups (low risk).
 - Phase 2: extract shared card/deck helpers into a single module to reduce duplication.
 - Phase 3: add property tests (e.g., no negative balances, payout invariants).
 

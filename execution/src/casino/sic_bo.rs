@@ -621,7 +621,7 @@ mod tests {
         let total: u8 = dice.iter().sum();
         let triple = is_triple(&dice);
 
-        assert!(!triple && total >= 4 && total <= 10);
+        assert!(!triple && (4..=10).contains(&total));
     }
 
     #[test]
@@ -631,7 +631,7 @@ mod tests {
         let total: u8 = dice.iter().sum();
         let triple = is_triple(&dice);
 
-        assert!(!triple && total >= 11 && total <= 17);
+        assert!(!triple && (11..=17).contains(&total));
     }
 
     #[test]

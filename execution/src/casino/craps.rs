@@ -1840,7 +1840,7 @@ mod tests {
         Craps::init(&mut session, &mut rng);
 
         // Place multiple bets
-        let bets = vec![(BetType::Pass, 0, 100u64), (BetType::Field, 0, 50u64)];
+        let bets = [(BetType::Pass, 0, 100u64), (BetType::Field, 0, 50u64)];
 
         for (idx, (bet_type, target, amount)) in bets.iter().enumerate() {
             let mut payload = vec![0, *bet_type as u8, *target];

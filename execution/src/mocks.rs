@@ -452,7 +452,7 @@ mod tests {
             .await;
 
             let events = Events {
-                progress: summary.progress.clone(),
+                progress: summary.progress,
                 certificate: summary.certificate.clone(),
                 events_proof: summary.events_proof.clone(),
                 events_proof_ops: summary.events_proof_ops.clone(),
@@ -516,7 +516,7 @@ mod tests {
             .await;
 
             let events = FilteredEvents {
-                progress: summary.progress.clone(),
+                progress: summary.progress,
                 certificate: summary.certificate.clone(),
                 events_proof: summary.events_proof.clone(),
                 events_proof_ops: Vec::new(),
@@ -577,8 +577,8 @@ mod tests {
             // Simulate a crash after committing `events` but before committing `state`.
             let events_start_op = events.op_count();
             let mut layer = crate::Layer::new(
-                &mut state,
-                network_identity.clone(),
+                &state,
+                network_identity,
                 NAMESPACE,
                 seed.clone(),
             );

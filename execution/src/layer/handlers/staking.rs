@@ -209,7 +209,7 @@ mod tests {
             // Register, fund, and stake.
             execute_block(
                 &network_secret,
-                network_identity.clone(),
+                network_identity,
                 &mut state,
                 &mut events,
                 1,
@@ -273,7 +273,7 @@ mod tests {
             // Unstake before unlock should keep stake locked (but consume nonce).
             execute_block(
                 &network_secret,
-                network_identity.clone(),
+                network_identity,
                 &mut state,
                 &mut events,
                 2,
@@ -375,7 +375,7 @@ mod tests {
             // Register and stake 10 for duration 10 at view 1.
             execute_block(
                 &network_secret,
-                network_identity.clone(),
+                network_identity,
                 &mut state,
                 &mut events,
                 1,
@@ -413,7 +413,7 @@ mod tests {
             // Stake again with a shorter duration; unlock should NOT shorten.
             execute_block(
                 &network_secret,
-                network_identity.clone(),
+                network_identity,
                 &mut state,
                 &mut events,
                 2,
@@ -442,7 +442,7 @@ mod tests {
             // Stake again with a longer duration; unlock should extend.
             execute_block(
                 &network_secret,
-                network_identity.clone(),
+                network_identity,
                 &mut state,
                 &mut events,
                 3,
@@ -471,7 +471,7 @@ mod tests {
             // Locked unstake consumes nonce but does not change staker.
             execute_block(
                 &network_secret,
-                network_identity.clone(),
+                network_identity,
                 &mut state,
                 &mut events,
                 22,
@@ -524,7 +524,7 @@ mod tests {
             // Initialize house (epoch_start_ts) via stake at view 1.
             execute_block(
                 &network_secret,
-                network_identity.clone(),
+                network_identity,
                 &mut state,
                 &mut events,
                 1,
@@ -559,7 +559,7 @@ mod tests {
             // Calling ProcessEpoch before the threshold is a no-op.
             execute_block(
                 &network_secret,
-                network_identity.clone(),
+                network_identity,
                 &mut state,
                 &mut events,
                 50,
@@ -577,7 +577,7 @@ mod tests {
             // At view 101 (= 1 + 100), the epoch is processed.
             execute_block(
                 &network_secret,
-                network_identity.clone(),
+                network_identity,
                 &mut state,
                 &mut events,
                 101,
@@ -634,7 +634,7 @@ mod tests {
             // Register, fund, and stake to ensure the staker exists and has balance.
             execute_block(
                 &network_secret,
-                network_identity.clone(),
+                network_identity,
                 &mut state,
                 &mut events,
                 1,
