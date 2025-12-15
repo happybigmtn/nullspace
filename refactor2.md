@@ -73,6 +73,7 @@ This is a second-pass review of the current workspace with a focus on idiomatic 
 - [x] (**behavior-changing**) `execution/src/state_transition.rs`: fail on non-sequential height gaps instead of silently no-op’ing.
 - [x] `execution/src/state_transition.rs`: compare recovery outputs via `Eq` (no `encode()` allocations).
 - [x] `node/src/application/actor.rs`: cache per-account next nonce for inbound tx ingestion (reduces `nonce(&state, ...)` reads).
+- [x] `node/src/application/actor.rs`: cache committed height in-memory to avoid repeated `state.get_metadata()` reads in propose/ancestry paths.
 - [x] `node/src/{engine.rs,main.rs,tests.rs}`: refactor `engine::Config` into nested structs (`IdentityConfig`, `StorageConfig`, `ConsensusConfig`, `ApplicationConfig`) to reduce parameter soup.
 - [x] `node/src/engine.rs`: document storage sizing constants and tradeoffs.
 - [x] `node/src/engine.rs`: stop the node when any sub-actor terminates; abort remaining actors and propagate failure (avoid partial-liveness).
@@ -1283,6 +1284,7 @@ pub fn private_key_hex(&self) -> String { hex(self.private_key.as_ref()) }
 - Inbound mempool tx ingestion now caches per-account “next nonce” to avoid per-transaction state reads.
 - Actor init + steady-state no longer use `.expect`/`panic!`; fatal errors are logged and cause the actor to exit (engine stops the node to avoid partial-liveness).
 - Proof generation retries now use jittered backoff to reduce synchronized retry bursts.
+- Committed height is cached in-memory (initialized from metadata once; updated on applied blocks) to avoid repeated metadata reads on propose paths.
 
 ### Top Issues (ranked)
 1. **Crash-fast policy on actor failure/exit**
@@ -1290,12 +1292,7 @@ pub fn private_key_hex(&self) -> String { hex(self.private_key.as_ref()) }
    - Risk: medium (availability).
    - Effort: low (document) → medium (actor restart/retry design).
    - Location: `node/src/application/actor.rs:272`, `node/src/application/actor.rs:650`, `node/src/application/actor.rs:710`; `node/src/engine.rs:526`.
-2. **Repeated `state.get_metadata()` calls inside hot paths**
-   - Impact: redundant IO/locking; increases latency during propose.
-   - Risk: low–medium.
-   - Effort: low.
-   - Location: `node/src/application/actor.rs:384`, `node/src/application/actor.rs:443`.
-3. **Ancestry computation is recomputed**
+2. **Ancestry computation is recomputed**
    - Impact: avoidable repeated work under repeated propose/verify requests.
    - Risk: low.
    - Effort: medium.
@@ -1314,8 +1311,8 @@ let mut state = match Adb::init(...).await {
 ```
 
 ### Data Structure & Algorithm Changes
-- Cache the finalized height locally to avoid repeated metadata reads.
-  - Complexity: `O(1)` cache read vs repeated async IO.
+- (**implemented**) Cache committed height locally to avoid repeated metadata reads.
+  - Complexity: `O(1)` in-memory read vs repeated async IO.
 - If mempool ingestion is hot: batch nonces per account instead of calling `nonce(&state, &tx.public).await` for every incoming tx.
 
 ### Safety & Concurrency Notes

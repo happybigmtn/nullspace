@@ -326,6 +326,19 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
         // Compute genesis digest
         let genesis_digest = genesis_digest();
 
+        let mut committed_height = match state.get_metadata().await {
+            Ok(meta) => meta
+                .and_then(|(_, v)| match v {
+                    Some(Value::Commit { height, start: _ }) => Some(height),
+                    _ => None,
+                })
+                .unwrap_or(0),
+            Err(err) => {
+                warn!(?err, "failed to read state metadata during init; using height=0");
+                0
+            }
+        };
+
         // Track built blocks
         let built: Option<(View, Block)> = None;
         let built = Arc::new(Mutex::new(built));
@@ -383,22 +396,11 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                                 }
 
                                 // Get the ancestry
-                                let committed_height = match state.get_metadata().await {
-                                    Ok(meta) => meta
-                                        .and_then(|(_, v)| match v {
-                                            Some(Value::Commit { height, start: _ }) => Some(height),
-                                            _ => None,
-                                        })
-                                        .unwrap_or(0),
-                                    Err(err) => {
-                                        warn!(?err, view, "failed to read state metadata for propose; using height=0");
-                                        0
-                                    }
-                                };
+                                let committed_height_snapshot = committed_height;
                                 let ancestry = ancestry(
                                     marshal.clone(),
                                     (Some(parent.0), parent.1),
-                                    committed_height,
+                                    committed_height_snapshot,
                                 );
 
                                 // Wait for the parent block to be available or the request to be cancelled in a separate task (to
@@ -442,18 +444,7 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                                 };
 
                                 // Find first block on top of finalized state (may have increased since we started)
-                                let height = match state.get_metadata().await {
-                                    Ok(meta) => meta
-                                        .and_then(|(_, v)| match v {
-                                            Some(Value::Commit { height, start: _ }) => Some(height),
-                                            _ => None,
-                                        })
-                                        .unwrap_or(0),
-                                    Err(err) => {
-                                        warn!(?err, view, "failed to read state metadata during propose; using height=0");
-                                        0
-                                    }
-                                };
+                                let height = committed_height;
                                 let mut noncer = Noncer::new(&state);
                                 for block in &blocks {
                                     // Skip blocks below our height
@@ -674,6 +665,7 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                                     drop(timer);
                                     continue;
                                 }
+                                committed_height = committed_height.max(height);
                                 let mut attempt = 0usize;
                                 let mut backoff = Duration::from_millis(50);
                                 let ((state_proof, state_proof_ops), (events_proof, events_proof_ops)) = loop {
