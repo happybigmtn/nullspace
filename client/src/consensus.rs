@@ -29,7 +29,10 @@ impl Client {
             Query::Latest => {}
             Query::Index(index) => {
                 if seed.view() != index {
-                    return Err(Error::UnexpectedResponse);
+                    return Err(Error::UnexpectedSeedView {
+                        expected: index,
+                        got: seed.view(),
+                    });
                 }
             }
         }

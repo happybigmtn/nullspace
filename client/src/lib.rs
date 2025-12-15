@@ -29,6 +29,8 @@ pub enum Error {
     InvalidSignature,
     #[error("unexpected response")]
     UnexpectedResponse,
+    #[error("unexpected seed view: expected {expected}, got {got}")]
+    UnexpectedSeedView { expected: u64, got: u64 },
     #[error("connection closed")]
     ConnectionClosed,
     #[error("URL parse error: {0}")]

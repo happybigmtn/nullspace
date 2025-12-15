@@ -46,6 +46,7 @@ This is a second-pass review of the current workspace with a focus on idiomatic 
 - [x] Proof limit unification: centralize summary/events decode limits in `types/src/api.rs` and reuse in `node/src/aggregator/actor.rs` + `simulator/src/lib.rs`.
 - [x] `client/src/client.rs`: switch retryable POST bodies to `bytes::Bytes` (avoid per-attempt cloning).
 - [x] `client/src/{client,consensus}.rs` + `client/src/lib.rs`: include a size-limited response body snippet in HTTP failure errors (`Error::FailedWithBody`).
+- [x] `client/src/consensus.rs`: return a structured mismatch error for `Query::Index` (expected vs got view).
 - [x] `client/src/events.rs`: dedupe websocket reader loop; unify verified/unverified paths.
 - [x] `client/examples/*` + `client/src/bin/stress_test.rs`: remove unused imports/vars to eliminate build warnings.
 - [x] `node/src/lib.rs`: validate additional non-zero config fields (`worker_threads`, `message_backlog`, `mailbox_size`, `deque_size`, `execution_concurrency`).
@@ -1467,12 +1468,15 @@ let mut state = match Adb::init(...).await {
 - Implements consensus-related client helpers (currently seed querying/verification).
 - Ensures returned seeds match the query and verify against the network identity.
 
+### Progress (implemented)
+- `Query::Index` mismatch errors now include expected vs got view (`Error::UnexpectedSeedView`).
+
 ### Top Issues (ranked)
-1. **Minimal context on `UnexpectedResponse`**
-   - Impact: hard to debug mismatched view/index cases.
+1. **Seed mismatch errors should include “expected vs got”**
+   - Impact: without it, bots/debugging have to infer which index was wrong.
    - Risk: low.
    - Effort: low.
-   - Location: `client/src/consensus.rs:20`–`38`.
+   - Location: `client/src/consensus.rs` (returns `Error::UnexpectedSeedView` for `Query::Index` mismatches).
 
 ### Idiomatic Rust Improvements
 - Return an error that carries “expected vs got” when a seed doesn’t match the requested index.
@@ -1487,7 +1491,7 @@ let mut state = match Adb::init(...).await {
 - Not a hotspot.
 
 ### Refactor Plan
-- Phase 1: improve error detail for mismatch cases.
+- Phase 1 (**done**): improve error detail for mismatch cases.
 - Phase 2: add a helper for “wait for latest seed >= X” if bots need it (**behavior-changing** if exposed as new API).
 - Phase 3: unify URL construction helpers across client modules.
 
