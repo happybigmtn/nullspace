@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, net::SocketAddr, path::PathBuf, str::FromStr};
 use thiserror::Error;
 use tracing::Level;
+use url::Url;
 
 use nullspace_types::{Evaluation, Identity};
 
@@ -62,6 +63,12 @@ pub enum ConfigError {
     InvalidLogLevel { value: String },
     #[error("{field} must be > 0 (got {value})")]
     InvalidNonZero { field: &'static str, value: usize },
+    #[error("{field} must be a valid URL: {value}")]
+    InvalidUrl { field: &'static str, value: String },
+    #[error("{field} URL scheme must be http or https: {value}")]
+    InvalidUrlScheme { field: &'static str, value: String },
+    #[error("port and metrics_port must be different (port={port}, metrics_port={metrics_port})")]
+    PortConflict { port: u16, metrics_port: u16 },
 }
 
 pub struct ValidatedConfig {
@@ -121,6 +128,29 @@ fn ensure_nonzero(field: &'static str, value: usize) -> Result<(), ConfigError> 
     Ok(())
 }
 
+fn validate_http_url(field: &'static str, value: &str) -> Result<(), ConfigError> {
+    let url = Url::parse(value).map_err(|_| ConfigError::InvalidUrl {
+        field,
+        value: value.to_string(),
+    })?;
+    match url.scheme() {
+        "http" | "https" => {}
+        _ => {
+            return Err(ConfigError::InvalidUrlScheme {
+                field,
+                value: value.to_string(),
+            })
+        }
+    }
+    if url.host_str().is_none() {
+        return Err(ConfigError::InvalidUrl {
+            field,
+            value: value.to_string(),
+        });
+    }
+    Ok(())
+}
+
 pub fn parse_peer_public_key(name: &str) -> Option<PublicKey> {
     from_hex_formatted(name).and_then(|key| PublicKey::decode(key.as_ref()).ok())
 }
@@ -147,6 +177,15 @@ impl Config {
         ensure_nonzero("mempool_max_backlog", self.mempool_max_backlog)?;
         ensure_nonzero("mempool_max_transactions", self.mempool_max_transactions)?;
         ensure_nonzero("execution_concurrency", self.execution_concurrency)?;
+
+        if self.port == self.metrics_port {
+            return Err(ConfigError::PortConflict {
+                port: self.port,
+                metrics_port: self.metrics_port,
+            });
+        }
+
+        validate_http_url("indexer", &self.indexer)?;
 
         let public_key = signer.public_key();
 

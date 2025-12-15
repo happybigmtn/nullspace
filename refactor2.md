@@ -46,6 +46,7 @@ This is a second-pass review of the current workspace with a focus on idiomatic 
 - [x] `client/src/events.rs`: dedupe websocket reader loop; unify verified/unverified paths.
 - [x] `client/examples/*` + `client/src/bin/stress_test.rs`: remove unused imports/vars to eliminate build warnings.
 - [x] `node/src/lib.rs`: validate additional non-zero config fields (`worker_threads`, `message_backlog`, `mailbox_size`, `deque_size`, `execution_concurrency`).
+- [x] `node/src/lib.rs`: validate indexer URL (http/https with host) and reject `port == metrics_port`.
 - [x] `node/src/main.rs`: dedupe `load_peers` parsing and replace `NonZeroU32::new(...).unwrap()` with `NZU32!` (behavior-preserving).
 - [x] `types/src/api.rs`: derive `thiserror::Error` for `VerifyError` (remove manual `Display` boilerplate).
 - [x] `types/src/execution.rs`: add `Block::try_new` + `BlockBuildError` (checked constructor).
@@ -1337,17 +1338,16 @@ let mut state = match Adb::init(...).await {
 - Defines `Config` and `ValidatedConfig` for the node along with parsing/validation helpers.
 - This is the boundary between operator-provided YAML and strongly typed runtime config.
 
+### Progress (implemented)
+- Added non-zero validation for all required sizing/concurrency fields.
+- Added validation for `indexer` URL (http/https with host) and for `port`/`metrics_port` conflicts.
+
 ### Top Issues (ranked)
-1. **Validation is partial (only some non-zero checks)**
-   - Impact: misconfiguration can lead to confusing runtime failures later (threads=0, mailbox=0, etc).
-   - Risk: medium.
-   - Effort: low.
-   - Location: `node/src/lib.rs:86`–`125` (validation only for mempool limits).
-2. **Stringly-typed keys in config**
+1. **Stringly-typed config fields**
    - Impact: repeated parse/validate logic; error-prone; harder to keep consistent.
    - Risk: low–medium.
    - Effort: medium.
-   - Location: `node/src/lib.rs:18`–`55` (`private_key`, `share`, `polynomial` as `String`).
+   - Location: `node/src/lib.rs` (`private_key`, `share`, `polynomial`, and peer-related lists as `String`/`Vec<String>`).
 
 ### Idiomatic Rust Improvements
 - Prefer `serde` deserialization into strongly typed fields (newtypes) with good errors, instead of parsing post-deserialize.
@@ -1362,7 +1362,7 @@ let mut state = match Adb::init(...).await {
 - Not performance critical.
 
 ### Refactor Plan
-- Phase 1: extend validation to all “must be > 0” fields and to URL/socket formats.
+- Phase 1 (**done**): extend validation to all “must be > 0” fields and to URL/socket formats.
 - Phase 2: introduce newtypes for hex-encoded fields and decode during deserialization.
 - Phase 3: add a `Config::redacted_debug()` helper to avoid accidentally logging secrets.
 

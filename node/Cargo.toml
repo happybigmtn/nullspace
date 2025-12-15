@@ -39,3 +39,4 @@ clap = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_yaml = { workspace = true }
 rayon = { workspace = true }
+url = { workspace = true }
