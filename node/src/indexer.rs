@@ -36,6 +36,18 @@ const TX_STREAM_RECONNECT_DELAY: Duration = Duration::from_secs(10);
 /// Buffer size for the tx_stream channel
 const TX_STREAM_BUFFER_SIZE: usize = 1_024;
 
+fn jittered_backoff(rng: &mut impl Rng, backoff: Duration) -> Duration {
+    let backoff_ms = backoff.as_millis() as u64;
+    if backoff_ms <= 1 {
+        return backoff;
+    }
+
+    // "Equal jitter": delay is in [backoff/2, backoff].
+    let half_ms = backoff_ms / 2;
+    let jitter_ms = rng.gen_range(0..=half_ms);
+    Duration::from_millis(half_ms.saturating_add(jitter_ms))
+}
+
 /// Trait for interacting with an indexer.
 pub trait Indexer: Clone + Send + Sync + 'static {
     type Error: std::error::Error + Send + Sync + 'static;
@@ -253,7 +265,8 @@ where
                     }
 
                     // Wait before reconnecting
-                    context.sleep(backoff).await;
+                    let delay = jittered_backoff(&mut context, backoff);
+                    context.sleep(delay).await;
                     backoff = backoff.saturating_mul(2).min(TX_STREAM_RECONNECT_DELAY);
                 }
             }

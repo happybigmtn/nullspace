@@ -37,6 +37,18 @@ const BATCH_ENQUEUE: usize = 20;
 const LAST_UPLOADED_KEY: u64 = 0;
 const RETRY_DELAY: Duration = Duration::from_secs(10);
 
+fn jittered_backoff(rng: &mut impl RngCore, backoff: Duration) -> Duration {
+    let backoff_ms = backoff.as_millis() as u64;
+    if backoff_ms <= 1 {
+        return backoff;
+    }
+
+    // "Equal jitter": delay is in [backoff/2, backoff].
+    let half_ms = backoff_ms / 2;
+    let jitter_ms = rng.next_u64() % half_ms.saturating_add(1);
+    Duration::from_millis(half_ms.saturating_add(jitter_ms))
+}
+
 pub struct Actor<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> {
     context: R,
     config: Config<I>,
@@ -368,7 +380,7 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                     let mut channel = self.inbound.clone();
                     let seed_upload_attempts = seed_upload_attempts.clone();
                     let seed_upload_failures = seed_upload_failures.clone();
-                    move |context| async move {
+                    move |mut context| async move {
                         let view = seed.view();
                         let mut attempts = 0u64;
                         let mut backoff = Duration::from_millis(200);
@@ -380,7 +392,8 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                                 Err(e) => {
                                     seed_upload_failures.inc();
                                     warn!(?e, view, attempts, "failed to upload seed");
-                                    context.sleep(backoff).await;
+                                    let delay = jittered_backoff(&mut context, backoff);
+                                    context.sleep(delay).await;
                                     backoff = backoff.saturating_mul(2).min(RETRY_DELAY);
                                 }
                             }

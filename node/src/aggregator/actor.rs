@@ -50,6 +50,18 @@ use tracing::{debug, error, info, warn};
 const BATCH_ENQUEUE: usize = 20;
 const RETRY_DELAY: Duration = Duration::from_secs(10);
 
+fn jittered_backoff(rng: &mut impl RngCore, backoff: Duration) -> Duration {
+    let backoff_ms = backoff.as_millis() as u64;
+    if backoff_ms <= 1 {
+        return backoff;
+    }
+
+    // "Equal jitter": delay is in [backoff/2, backoff].
+    let half_ms = backoff_ms / 2;
+    let jitter_ms = rng.next_u64() % half_ms.saturating_add(1);
+    Duration::from_millis(half_ms.saturating_add(jitter_ms))
+}
+
 pub struct Proofs {
     pub state_proof: Proof<Digest>,
     pub state_proof_ops: Vec<Variable<Digest, Value>>,
@@ -656,7 +668,7 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                     let mut channel = self.inbound.clone();
                     let summary_upload_attempts = summary_upload_attempts.clone();
                     let summary_upload_failures = summary_upload_failures.clone();
-                    move |context| async move {
+                    move |mut context| async move {
                         let mut attempts = 0u64;
                         let mut backoff = Duration::from_millis(200);
                         loop {
@@ -667,7 +679,8 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                                 Err(e) => {
                                     summary_upload_failures.inc();
                                     warn!(?e, cursor, attempts, "failed to upload summary");
-                                    context.sleep(backoff).await;
+                                    let delay = jittered_backoff(&mut context, backoff);
+                                    context.sleep(delay).await;
                                     backoff = backoff.saturating_mul(2).min(RETRY_DELAY);
                                 }
                             }

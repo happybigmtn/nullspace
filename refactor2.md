@@ -76,9 +76,10 @@ This is a second-pass review of the current workspace with a focus on idiomatic 
 - [x] `node/src/aggregator/actor.rs`: remove `unwrap`/`expect` on storage ops; log fatal errors and exit actor (crash-fast policy).
 - [x] `node/src/engine.rs`: honor runtime stop signal for graceful shutdown (no panic on stop).
 - [x] `node/src/{seeder,aggregator}/actor.rs`: add upload metrics (attempts/failures, outstanding, lag) and exponential backoff for indexer uploads.
+- [x] `node/src/{seeder,aggregator}/actor.rs`: add jittered sleep to upload backoff (reduce thundering herd on indexer outages).
 - [x] `node/src/{seeder,aggregator}/actor.rs`: harden `uploads_outstanding` decrement (no underflow on unexpected completion messages).
 - [x] `node/src/indexer.rs`: preserve mempool websocket error details from `nullspace-client` (stop collapsing to `UnexpectedResponse`).
-- [x] `node/src/indexer.rs`: add mempool stream metrics (connect attempts/failures, invalid batches, forwarded batches) and exponential reconnect backoff.
+- [x] `node/src/indexer.rs`: add mempool stream metrics (connect attempts/failures, invalid batches, forwarded batches) and exponential reconnect backoff (with jitter).
 
 ---
 
@@ -320,11 +321,11 @@ pub fn new(context: impl Metrics) -> Self {
 ### Progress (implemented)
 - Invalid mempool tx batches are now drop+continue (reconnect loop stays alive).
 - `nullspace-client` mempool errors are no longer collapsed to `UnexpectedResponse`.
-- Reconnecting mempool stream now emits metrics and uses exponential reconnect backoff.
+- Reconnecting mempool stream now emits metrics and uses exponential reconnect backoff with jitter.
 
 ### Top Issues (ranked)
 1. **Reconnect/backoff policy is still simplistic**
-   - Impact: reconnect behavior may be too aggressive or too slow depending on outage mode; no jitter.
+   - Impact: reconnect behavior may be too aggressive or too slow depending on outage mode; no max-attempt cutover.
    - Risk: low–medium.
    - Effort: low.
    - Location: `node/src/indexer.rs` (`ReconnectingStream` backoff loop).
@@ -376,7 +377,7 @@ if !batcher.verify(&mut context) {
 ### Progress (implemented)
 - Proof decode limits are centralized in `types/src/api.rs` and reused by the aggregator.
 - Actor init + steady-state no longer use `unwrap`/`expect`; fatal storage errors are logged and cause the actor to exit (engine is crash-fast).
-- Summary uploads now use exponential backoff and emit metrics (attempts/failures, outstanding uploads, and upload lag).
+- Summary uploads now use exponential backoff with jitter and emit metrics (attempts/failures, outstanding uploads, and upload lag).
 
 ### Top Issues (ranked)
 1. **Crash-fast on storage/indexer faults**
@@ -1789,7 +1790,7 @@ if !(1..=35).contains(&number) || number % 3 == 0 { ... }
 ### Progress (implemented)
 - Listener sends are best-effort (dropped receivers no longer panic the actor).
 - Storage operations no longer use `.expect`; fatal storage errors are logged and cause the actor to exit (engine is crash-fast).
-- Seed uploads now use exponential backoff and emit metrics (attempts/failures, outstanding uploads, and upload lag).
+- Seed uploads now use exponential backoff with jitter and emit metrics (attempts/failures, outstanding uploads, and upload lag).
 
 ### Top Issues (ranked)
 1. **Crash-fast on storage/indexer faults**
