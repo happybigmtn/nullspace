@@ -42,11 +42,25 @@ type Reporter = Reporters<Activity, marshal::Mailbox<MinSig, Block>, seeder::Mai
 /// To better support peers near tip during network instability, we multiply
 /// the consensus activity timeout by this factor.
 const SYNCER_ACTIVITY_TIMEOUT_MULTIPLIER: u64 = 10;
+
+// Storage sizing defaults.
+//
+// These constants tune `commonware-storage` components which segment data into blobs/sections and
+// use in-memory buffers to amortize IO.
+//
+// Tradeoffs:
+// - Larger `*_ITEMS_PER_*` values reduce metadata overhead but increase replay/prune granularity.
+// - Larger `*_BUFFER` values reduce write amplification but increase memory footprint.
+// - Freezer table resize parameters control on-disk hash table growth work per `sync()`.
 const PRUNABLE_ITEMS_PER_SECTION: NonZero<u64> = NZU64!(4_096);
 const IMMUTABLE_ITEMS_PER_SECTION: NonZero<u64> = NZU64!(262_144);
+// Triggers a table resize when 50% of entries have seen this many insertions since the last resize.
 const FREEZER_TABLE_RESIZE_FREQUENCY: u8 = 4;
-const FREEZER_TABLE_RESIZE_CHUNK_SIZE: u32 = 2u32.pow(16); // 3MB
-const FREEZER_JOURNAL_TARGET_SIZE: u64 = 1024 * 1024 * 1024; // 1GB
+// Number of table entries processed per `sync()` during a resize (larger = fewer syncs, more work per sync).
+const FREEZER_TABLE_RESIZE_CHUNK_SIZE: u32 = 2u32.pow(16);
+// Target size of the freezer journal before rotation/compaction.
+const FREEZER_JOURNAL_TARGET_SIZE: u64 = 1024 * 1024 * 1024; // 1 GiB
+// zstd compression level; must remain `Some` if any existing data was written compressed.
 const FREEZER_JOURNAL_COMPRESSION: Option<u8> = Some(3);
 const MMR_ITEMS_PER_BLOB: NonZero<u64> = NZU64!(128_000);
 const LOG_ITEMS_PER_SECTION: NonZero<u64> = NZU64!(64_000);
