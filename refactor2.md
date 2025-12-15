@@ -72,6 +72,7 @@ This is a second-pass review of the current workspace with a focus on idiomatic 
 - [x] `execution/src/state_transition.rs`: compare recovery outputs via `Eq` (no `encode()` allocations).
 - [x] `node/src/application/actor.rs`: cache per-account next nonce for inbound tx ingestion (reduces `nonce(&state, ...)` reads).
 - [x] `node/src/{engine.rs,main.rs,tests.rs}`: refactor `engine::Config` into nested structs (`IdentityConfig`, `StorageConfig`, `ConsensusConfig`, `ApplicationConfig`) to reduce parameter soup.
+- [x] `node/src/engine.rs`: document storage sizing constants and tradeoffs.
 - [x] `node/src/engine.rs`: stop the node when any sub-actor terminates; abort remaining actors and propagate failure (avoid partial-liveness).
 - [x] `node/src/application/actor.rs`: remove `.expect`/`panic!` in init + steady-state; log fatal errors and exit actor (engine handles crash-fast shutdown).
 - [x] `node/src/seeder/actor.rs`: remove `.expect` on storage ops; log fatal errors and exit actor (crash-fast policy).
@@ -429,6 +430,7 @@ if !batcher.verify(&mut context) {
 - `engine::Config` is now grouped into `IdentityConfig`, `StorageConfig`, `ConsensusConfig`, and `ApplicationConfig` (behavior-preserving structural refactor).
 - Engine now terminates the node when any sub-actor exits/fails (abort remaining actors; avoid partial-liveness).
 - Engine now honors the runtime stop signal to allow clean shutdown without reporting it as an actor failure.
+- Documented storage sizing defaults (buffers, freezer table/journal knobs) with units and operational tradeoffs.
 
 ### Top Issues (ranked)
 1. **Large constant block without clear rationale or sizing guidance**
@@ -453,7 +455,7 @@ if !batcher.verify(&mut context) {
   - storage buffers and replay buffers
 
 ### Refactor Plan
-- Phase 1: document constants with concrete sizing math and operational tradeoffs.
+- Phase 1 (**done**): document constants with concrete sizing math and operational tradeoffs.
 - Phase 2 (**done**): refactor config into nested structs; update call sites.
 - Phase 3: add a “dry-run sizing report” mode to print derived resource estimates (**behavior-changing** if you add CLI flags).
 
