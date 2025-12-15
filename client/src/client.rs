@@ -22,6 +22,7 @@ use url::Url;
 const TIMEOUT: Duration = Duration::from_secs(30);
 const MAX_ERROR_BODY_BYTES: usize = 8 * 1024;
 
+#[allow(clippy::result_large_err)]
 pub(crate) fn join_hex_path(base: &Url, prefix: &str, bytes: &[u8]) -> Result<Url> {
     Ok(base.join(&format!("{prefix}/{}", hex(bytes)))?)
 }

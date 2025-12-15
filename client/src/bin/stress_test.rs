@@ -149,11 +149,7 @@ fn generate_move_payload(game_type: GameType, rng: &mut StdRng, move_number: u32
             // Let's assume standard flow: 0=bet, 1=deal?
             // Wait, CasinoWar might be simpler. Let's send empty to be safe or check code.
             // Assuming it needs a move to progress if not auto-resolved.
-            if move_number == 0 {
-                vec![] // No payload needed? Or maybe just 'deal' signal?
-            } else {
-                vec![]
-            }
+            vec![] // No payload needed.
         }
         GameType::Craps => {
             if move_number == 0 {
@@ -235,7 +231,7 @@ async fn flush_batch(
     let num_txs = pending_txs.len();
 
     match client
-        .submit_transactions(pending_txs.drain(..).collect())
+        .submit_transactions(std::mem::take(pending_txs))
         .await
     {
         Ok(_) => {
@@ -377,21 +373,16 @@ async fn monitor_logic(client: Arc<Client>, bots: Vec<Arc<BotState>>, duration: 
         }
 
         // 2. Check a random bot for logic verification
-        if let Some(_) = bots.first() {
+        if !bots.is_empty() {
             let sample_bots = bots.iter().take(5);
             for bot in sample_bots {
-                match client
-                    .query_state(&Key::CasinoPlayer(bot.public_key()))
-                    .await
+                if let Ok(Some(lookup)) = client.query_state(&Key::CasinoPlayer(bot.public_key())).await
                 {
-                    Ok(Some(lookup)) => {
-                        let value = lookup.operation.value();
-                        if let Some(Value::CasinoPlayer(_player)) = value {
-                            // Just checking if we can read state, no specific assertion logs to avoid spam
-                            // unless critical
-                        }
+                    let value = lookup.operation.value();
+                    if let Some(Value::CasinoPlayer(_player)) = value {
+                        // Just checking if we can read state, no specific assertion logs to avoid spam
+                        // unless critical
                     }
-                    _ => {}
                 }
             }
         }
