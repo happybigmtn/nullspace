@@ -49,23 +49,24 @@ impl<'a, S: State> Layer<'a, S> {
             _ => nullspace_types::casino::Staker::default(),
         };
 
-        // Calculate Voting Power: Amount * Duration
-        // If adding to existing stake, we weight-average or just add?
-        // Simple model: New stake resets lockup to max(old_unlock, new_unlock)
+        // Voting power is accumulated per stake: sum(amount_i * duration_i).
+        // Lockup is the max of all stake unlocks (new stake can extend, never shorten).
         let current_block = self.seed.view;
         let new_unlock = current_block + duration;
 
-        // If extending, new VP is total amount * new duration remaining
-        staker.balance += amount;
-        staker.unlock_ts = new_unlock;
-        staker.voting_power = (staker.balance as u128) * (duration as u128);
+        staker.balance = staker.balance.saturating_add(amount);
+        staker.unlock_ts = staker.unlock_ts.max(new_unlock);
+        let added_voting_power = (amount as u128) * (duration as u128);
+        staker.voting_power = staker.voting_power.saturating_add(added_voting_power);
 
         self.insert(Key::Staker(public.clone()), Value::Staker(staker.clone()));
 
         // Update House Total VP
         let mut house = self.get_or_init_house().await?;
-        house.total_staked_amount += amount;
-        house.total_voting_power += (amount as u128) * (duration as u128); // Approximation for new stake
+        house.total_staked_amount = house.total_staked_amount.saturating_add(amount);
+        house.total_voting_power = house
+            .total_voting_power
+            .saturating_add(added_voting_power);
         self.insert(Key::House, Value::House(house));
 
         Ok(vec![Event::Staked {
@@ -357,6 +358,155 @@ mod tests {
                 other => panic!("expected account, got {other:?}"),
             };
             assert_eq!(account.nonce, 5);
+        });
+    }
+
+    #[test]
+    fn restaking_does_not_shorten_unlock_and_accumulates_voting_power() {
+        let executor = Runner::default();
+        executor.start(|context| async move {
+            let (network_secret, network_identity) = create_network_keypair();
+            let (mut state, mut events) = create_adbs(&context).await;
+            let (private, public) = create_account_keypair(2);
+
+            // Register and stake 10 for duration 10 at view 1.
+            execute_block(
+                &network_secret,
+                network_identity.clone(),
+                &mut state,
+                &mut events,
+                1,
+                vec![
+                    Transaction::sign(
+                        &private,
+                        0,
+                        Instruction::CasinoRegister {
+                            name: "Bob".to_string(),
+                        },
+                    ),
+                    Transaction::sign(
+                        &private,
+                        1,
+                        Instruction::Stake {
+                            amount: 10,
+                            duration: 10,
+                        },
+                    ),
+                ],
+            )
+            .await;
+
+            let staker = match crate::State::get(&state, &Key::Staker(public.clone()))
+                .await
+                .expect("get staker")
+            {
+                Some(Value::Staker(staker)) => staker,
+                other => panic!("expected staker, got {other:?}"),
+            };
+            assert_eq!(staker.balance, 10);
+            assert_eq!(staker.unlock_ts, 11);
+            assert_eq!(staker.voting_power, 100);
+
+            // Stake again with a shorter duration; unlock should NOT shorten.
+            execute_block(
+                &network_secret,
+                network_identity.clone(),
+                &mut state,
+                &mut events,
+                2,
+                vec![Transaction::sign(
+                    &private,
+                    2,
+                    Instruction::Stake {
+                        amount: 5,
+                        duration: 1,
+                    },
+                )],
+            )
+            .await;
+
+            let staker = match crate::State::get(&state, &Key::Staker(public.clone()))
+                .await
+                .expect("get staker")
+            {
+                Some(Value::Staker(staker)) => staker,
+                other => panic!("expected staker, got {other:?}"),
+            };
+            assert_eq!(staker.balance, 15);
+            assert_eq!(staker.unlock_ts, 11);
+            assert_eq!(staker.voting_power, 105);
+
+            // Stake again with a longer duration; unlock should extend.
+            execute_block(
+                &network_secret,
+                network_identity.clone(),
+                &mut state,
+                &mut events,
+                3,
+                vec![Transaction::sign(
+                    &private,
+                    3,
+                    Instruction::Stake {
+                        amount: 5,
+                        duration: 20,
+                    },
+                )],
+            )
+            .await;
+
+            let staker = match crate::State::get(&state, &Key::Staker(public.clone()))
+                .await
+                .expect("get staker")
+            {
+                Some(Value::Staker(staker)) => staker,
+                other => panic!("expected staker, got {other:?}"),
+            };
+            assert_eq!(staker.balance, 20);
+            assert_eq!(staker.unlock_ts, 23);
+            assert_eq!(staker.voting_power, 205);
+
+            // Locked unstake consumes nonce but does not change staker.
+            execute_block(
+                &network_secret,
+                network_identity.clone(),
+                &mut state,
+                &mut events,
+                22,
+                vec![Transaction::sign(&private, 4, Instruction::Unstake)],
+            )
+            .await;
+
+            let staker = match crate::State::get(&state, &Key::Staker(public.clone()))
+                .await
+                .expect("get staker")
+            {
+                Some(Value::Staker(staker)) => staker,
+                other => panic!("expected staker, got {other:?}"),
+            };
+            assert_eq!(staker.balance, 20);
+            assert_eq!(staker.unlock_ts, 23);
+            assert_eq!(staker.voting_power, 205);
+
+            // Unstake at unlock clears balance and returns chips.
+            execute_block(
+                &network_secret,
+                network_identity,
+                &mut state,
+                &mut events,
+                23,
+                vec![Transaction::sign(&private, 5, Instruction::Unstake)],
+            )
+            .await;
+
+            let staker = match crate::State::get(&state, &Key::Staker(public.clone()))
+                .await
+                .expect("get staker")
+            {
+                Some(Value::Staker(staker)) => staker,
+                other => panic!("expected staker, got {other:?}"),
+            };
+            assert_eq!(staker.balance, 0);
+            assert_eq!(staker.voting_power, 0);
         });
     }
 }
