@@ -31,12 +31,12 @@ This is a second-pass review of the current workspace with a focus on idiomatic 
 ## Implementation Status (2025-12-14)
 
 - [x] `node/src/application/ingress.rs`: remove panic-on-send/receive; return safe defaults on mailbox closure.
-- [x] `node/src/aggregator/ingress.rs`: remove panic-on-send/receive; keep `deliver()` default-accept behavior to avoid blocking.
+- [x] `node/src/aggregator/ingress.rs`: remove panic-on-send/receive; make `deliver()` fail-closed on mailbox closure/shutdown (avoid acknowledging dropped messages).
 - [x] `node/src/{application,aggregator}/ingress.rs`: add stop-signal aware mailbox sends/awaits to avoid hanging during shutdown.
 - [x] `node/src/supervisor.rs`: remove `block_on` from `peer_set_id()`; avoid `unimplemented!()` panics in `Su::leader()`.
 - [x] `node/src/indexer.rs`: treat invalid tx batches as drop+continue (do not permanently stop mempool ingestion).
 - [x] `node/src/seeder/actor.rs`: do not panic on dropped `oneshot` receivers/listeners.
-- [x] `node/src/aggregator/actor.rs`: do not panic on dropped `oneshot` receivers.
+- [x] `node/src/aggregator/actor.rs`: do not panic on dropped `oneshot` receivers; ensure `Deliver` responds with an explicit boolean ack.
 - [x] `node/src/application/actor.rs`: avoid panic on missing blocks during verify join.
 - [x] `node/src/application/mempool.rs`: remove non-test dead-code warnings by gating test-only defaults/constructor.
 - [x] `node/src/application/mempool.rs`: add regression test for stale-queue compaction under adversarial churn.
@@ -177,13 +177,14 @@ async fn try_send<E: Clock>(
 ### Progress (implemented)
 - Mailbox sends/receives are best-effort (no `.expect` panics); fall back to safe defaults on closure.
 - Mailbox operations are stop-signal aware (abort sends/awaits on shutdown).
+- `Consumer::deliver` now fails closed on mailbox closure/shutdown/response cancellation (no default-accept).
 
 ### Top Issues (ranked)
-1. **`deliver()` defaults to `true` if response channel is dropped**
-   - Impact: can acknowledge delivery even when aggregator didn’t process it; risks masking failures.
-   - Risk: medium (depends on resolver semantics).
-   - Effort: low.
-   - Location: `node/src/aggregator/ingress.rs` (`Consumer::deliver`).
+1. **No typed mailbox error propagation**
+   - Impact: callers can’t distinguish shutdown vs internal failure; logging-only can mask systemic issues.
+   - Risk: low–medium.
+   - Effort: medium.
+   - Location: `node/src/aggregator/ingress.rs` (mailbox send/await paths).
 
 ### Idiomatic Rust Improvements
 - Adopt the seeder ingress’ `Signal`-based shutdown handling and mailbox error enum.
@@ -208,7 +209,7 @@ receiver.await.unwrap_or(false)
 - None.
 
 ### Safety & Concurrency Notes
-- `unwrap_or(true)` in `deliver` is semantically risky: it treats “no response” as success.
+- Keep `deliver` semantics aligned with resolver expectations: “no response” should not be treated as success.
 
 ### Performance & Scaling Notes
 - Avoid panics in control-plane code; it amplifies transient overload into outages.
@@ -216,7 +217,7 @@ receiver.await.unwrap_or(false)
 ### Refactor Plan
 - Phase 1 (**done**): remove `.expect(...)`; replace with early-return + logging.
 - Phase 2 (**done**): add `Signal` to mailbox and bounded waits.
-- Phase 3: decide a consistent “default on drop” policy (`false` is safer than `true`).
+- Phase 3 (**done**): make `deliver` fail-closed on mailbox closure/shutdown/response cancellation.
 
 ### Open Questions
 - What does the resolver expect on mailbox failure: retry, fail-fast, or ignore?
@@ -229,36 +230,19 @@ receiver.await.unwrap_or(false)
 - Implements view/epoch supervisors for threshold consensus and aggregation, including epoch subscription and leader selection (via `ThresholdSupervisor`).
 - Coordinates p2p peer-set identity based on current epoch.
 
+### Progress (implemented)
+- `peer_set_id()` reads from an `AtomicU64` (no `block_on` or async lock in a sync method).
+- `Supervisor::leader()` returns `None` for the non-threshold trait impls (no `unimplemented!()` panics).
+
 ### Top Issues (ranked)
-1. **`futures::executor::block_on` inside `peer_set_id()`**
-   - Impact: can block an executor thread; can deadlock if `RwLock` requires the same executor to make progress.
-   - Risk: high in async runtimes; deadlocks are catastrophic and hard to debug.
-   - Effort: medium.
-   - Location: `node/src/supervisor.rs:121`–`124`.
-2. **`unimplemented!()` in `Supervisor` trait `leader()`**
-   - Impact: runtime panic if upstream code ever calls `Su::leader`.
-   - Risk: medium–high (future refactors can accidentally trigger it).
-   - Effort: medium (needs correct semantics).
-   - Location: `node/src/supervisor.rs:131`–`133`, `189`–`191`.
+1. **`participants_map` is a `HashMap`**
+   - Impact: if iteration order ever matters, outputs can become non-deterministic across builds/platforms.
+   - Risk: low today (only used for membership lookup).
+   - Effort: low.
+   - Location: `node/src/supervisor.rs` (`participants_map`).
 
 ### Idiomatic Rust Improvements
-- Replace `block_on(async { lock.read().await })` with synchronous state.
-
-**Before:**
-```rust
-fn peer_set_id(&self) -> u64 {
-    futures::executor::block_on(async { self.inner.epoch_manager.read().await.current() })
-}
-```
-
-**After (pseudocode; choose one):**
-```rust
-// Option A: store epoch in AtomicU64 for sync reads (preferred).
-use std::sync::atomic::{AtomicU64, Ordering};
-// epoch.store(new_epoch, Ordering::Release); peer_set_id reads Ordering::Acquire.
-
-// Option B: use a std::sync::RwLock for epoch-only reads (no async boundary).
-```
+- Keep the “sync trait method” boundary pure: avoid async locks or `block_on` in methods like `peer_set_id()`.
 
 ### Data Structure & Algorithm Changes
 - Consider replacing `participants_map: HashMap<PublicKey, u32>` with `BTreeMap` if determinism across Rust versions/platforms matters (HashMap iteration order is randomized).
@@ -272,8 +256,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 - Blocking on async locks is one of the fastest ways to create distributed “liveness bugs” under load.
 
 ### Refactor Plan
-- Phase 1: remove `block_on` by maintaining a synchronously readable epoch value (atomic or std lock).
-- Phase 2: eliminate `unimplemented!` by implementing `Su::leader` or proving it unreachable via tests.
+- Phase 1 (**done**): remove `block_on` by maintaining a synchronously readable epoch value (atomic).
+- Phase 2 (**done**): eliminate `unimplemented!` by returning `None` for `Su::leader` (threshold impl provides real leader selection).
 - Phase 3: consolidate supervisor traits if upstream allows (reduce duplicated leader selection logic).
 
 ### Open Questions
@@ -403,6 +387,7 @@ if !batcher.verify(&mut context) {
 - Actor init + steady-state no longer use `unwrap`/`expect`; fatal storage errors are logged and cause the actor to exit (engine is crash-fast).
 - Summary uploads now use exponential backoff with jitter and emit metrics (attempts/failures, outstanding uploads, and upload lag).
 - Added metrics for proof bundle sizes and cache hit/miss/error counts (cache effectiveness).
+- `Deliver` now responds with an explicit boolean ack (avoids peer blocking when ingress fails closed).
 
 ### Top Issues (ranked)
 1. **Crash-fast on storage/indexer faults**

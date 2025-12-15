@@ -251,18 +251,18 @@ impl Consumer for Mailbox {
                 result = mailbox_sender.send(Message::Deliver { index: key.into(), certificate: value, response: sender }) => {
                     if result.is_err() {
                         warn!("aggregator mailbox closed; deliver failed");
-                        return true; // default to true to avoid blocking
+                        return false;
                     }
                 },
                 _ = &mut stopped => {
-                    return true; // default to true to avoid blocking
+                    return false;
                 }
             }
         }
         let mut stopped = self.stopped.clone();
         select! {
-            result = receiver => { result.unwrap_or(true) }, // default to true to avoid blocking
-            _ = &mut stopped => { true }, // default to true to avoid blocking
+            result = receiver => { result.unwrap_or(false) },
+            _ = &mut stopped => { false },
         }
     }
 

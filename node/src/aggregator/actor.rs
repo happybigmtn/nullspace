@@ -653,6 +653,8 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                         }
                         resolver.fetch(next.into()).await;
                     }
+
+                    let _ = response.send(true);
                 }
                 Message::Produce { index, response } => {
                     // Fetch item from certificates
