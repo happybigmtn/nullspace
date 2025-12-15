@@ -13,8 +13,34 @@
 //! `state_transition` must be safe to re-run and must converge to the same output.
 //!
 //! The primary entrypoint is [`Layer`].
+//!
+//! ## Minimal execution pipeline (example)
+//! ```rust,ignore
+//! use nullspace_execution::state_transition::execute_state_transition;
+//! use nullspace_types::{Identity, NAMESPACE};
+//!
+//! # async fn example(
+//! #     state: &mut /* Adb<...> */ (),
+//! #     events: &mut /* keyless::Keyless<...> */ (),
+//! #     identity: Identity,
+//! # ) -> anyhow::Result<()> {
+//! // 1) Load or initialize `state` and `events` storage.
+//! // 2) Execute the next block (height must be exactly `state_height + 1`).
+//! let _result = execute_state_transition(
+//!     state,
+//!     events,
+//!     identity,
+//!     /* height */ 1,
+//!     /* seed */ todo!(),
+//!     /* transactions */ vec![],
+//!     // (optional) thread pool when the `parallel` feature is enabled
+//! )
+//! .await?;
+//! # Ok(())
+//! # }
+//! ```
 
-pub mod casino;
+pub(crate) mod casino;
 pub mod state_transition;
 
 #[cfg(any(test, feature = "mocks"))]
@@ -28,4 +54,7 @@ mod layer;
 mod state;
 
 pub use layer::Layer;
-pub use state::{nonce, Adb, Memory, Noncer, PrepareError, State, Status};
+pub use state::{nonce, Adb, Noncer, PrepareError, State, Status};
+
+#[cfg(any(test, feature = "mocks"))]
+pub use state::Memory;

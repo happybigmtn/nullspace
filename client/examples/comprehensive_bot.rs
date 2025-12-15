@@ -65,7 +65,7 @@ impl Context {
     /// Execute a single instruction as a transaction/block
     async fn execute(&mut self, instruction: Instruction) -> Vec<Event> {
         let seed = create_seed(&self.network_secret, self.view);
-        let mut layer = Layer::new(&self.state, self.network_public.clone(), NAMESPACE, seed);
+        let mut layer = Layer::new(&self.state, self.network_public, NAMESPACE, seed);
 
         let tx = Transaction::sign(&self.player_secret, self.nonce, instruction);
         let (outputs, _) = layer
@@ -300,7 +300,7 @@ async fn test_craps(ctx: &mut Context) {
     ];
 
     for (type_id, name) in bets {
-        let mut payload = vec![0, type_id, if type_id >= 5 && type_id <= 7 { 4 } else { 0 }]; // Target 4 or 7
+        let mut payload = vec![0, type_id, if (5..=7).contains(&type_id) { 4 } else { 0 }]; // Target 4 or 7
         payload.extend_from_slice(&100u64.to_be_bytes());
 
         let events = ctx

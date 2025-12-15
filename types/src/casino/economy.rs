@@ -1,7 +1,11 @@
 use bytes::{Buf, BufMut};
 use commonware_codec::{EncodeSize, Error, FixedSize, Read, ReadExt, Write};
 
-use super::{THREE_CARD_PROGRESSIVE_BASE_JACKPOT, UTH_PROGRESSIVE_BASE_JACKPOT};
+use super::{
+    AMM_BOOTSTRAP_PRICE_RNG_DENOMINATOR, AMM_BOOTSTRAP_PRICE_VUSDT_NUMERATOR,
+    AMM_DEFAULT_SELL_TAX_BASIS_POINTS, THREE_CARD_PROGRESSIVE_BASE_JACKPOT,
+    UTH_PROGRESSIVE_BASE_JACKPOT,
+};
 
 /// House state for the "Central Bank" model
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -16,6 +20,15 @@ pub struct HouseState {
     pub total_issuance: u64,   // Total RNG minted (Inflation)
     pub three_card_progressive_jackpot: u64,
     pub uth_progressive_jackpot: u64,
+
+    // Staking reward accounting.
+    //
+    // `staking_reward_per_voting_power_x18` is an accumulator scaled by
+    // `casino::STAKING_REWARD_SCALE` (1e18), enabling O(1) reward claims without iterating
+    // over all stakers.
+    pub staking_reward_per_voting_power_x18: u128,
+    pub staking_reward_pool: u64,
+    pub staking_reward_carry: u64,
 }
 
 impl HouseState {
@@ -31,6 +44,9 @@ impl HouseState {
             total_issuance: 0,
             three_card_progressive_jackpot: THREE_CARD_PROGRESSIVE_BASE_JACKPOT,
             uth_progressive_jackpot: UTH_PROGRESSIVE_BASE_JACKPOT,
+            staking_reward_per_voting_power_x18: 0,
+            staking_reward_pool: 0,
+            staking_reward_carry: 0,
         }
     }
 }
@@ -47,6 +63,9 @@ impl Write for HouseState {
         self.total_issuance.write(writer);
         self.three_card_progressive_jackpot.write(writer);
         self.uth_progressive_jackpot.write(writer);
+        self.staking_reward_per_voting_power_x18.write(writer);
+        self.staking_reward_pool.write(writer);
+        self.staking_reward_carry.write(writer);
     }
 }
 
@@ -75,6 +94,22 @@ impl Read for HouseState {
             UTH_PROGRESSIVE_BASE_JACKPOT
         };
 
+        let staking_reward_per_voting_power_x18 = if reader.remaining() >= 16 {
+            u128::read(reader)?
+        } else {
+            0
+        };
+        let staking_reward_pool = if reader.remaining() >= u64::SIZE {
+            u64::read(reader)?
+        } else {
+            0
+        };
+        let staking_reward_carry = if reader.remaining() >= u64::SIZE {
+            u64::read(reader)?
+        } else {
+            0
+        };
+
         Ok(Self {
             current_epoch,
             epoch_start_ts,
@@ -86,6 +121,9 @@ impl Read for HouseState {
             total_issuance,
             three_card_progressive_jackpot,
             uth_progressive_jackpot,
+            staking_reward_per_voting_power_x18,
+            staking_reward_pool,
+            staking_reward_carry,
         })
     }
 }
@@ -102,6 +140,9 @@ impl EncodeSize for HouseState {
             + self.total_issuance.encode_size()
             + self.three_card_progressive_jackpot.encode_size()
             + self.uth_progressive_jackpot.encode_size()
+            + self.staking_reward_per_voting_power_x18.encode_size()
+            + self.staking_reward_pool.encode_size()
+            + self.staking_reward_carry.encode_size()
     }
 }
 
@@ -112,6 +153,8 @@ pub struct Staker {
     pub unlock_ts: u64,
     pub last_claim_epoch: u64,
     pub voting_power: u128,
+    pub reward_debt_x18: u128,
+    pub unclaimed_rewards: u64,
 }
 
 impl Write for Staker {
@@ -120,6 +163,8 @@ impl Write for Staker {
         self.unlock_ts.write(writer);
         self.last_claim_epoch.write(writer);
         self.voting_power.write(writer);
+        self.reward_debt_x18.write(writer);
+        self.unclaimed_rewards.write(writer);
     }
 }
 
@@ -127,11 +172,29 @@ impl Read for Staker {
     type Cfg = ();
 
     fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
+        let balance = u64::read(reader)?;
+        let unlock_ts = u64::read(reader)?;
+        let last_claim_epoch = u64::read(reader)?;
+        let voting_power = u128::read(reader)?;
+
+        let reward_debt_x18 = if reader.remaining() >= 16 {
+            u128::read(reader)?
+        } else {
+            0
+        };
+        let unclaimed_rewards = if reader.remaining() >= u64::SIZE {
+            u64::read(reader)?
+        } else {
+            0
+        };
+
         Ok(Self {
-            balance: u64::read(reader)?,
-            unlock_ts: u64::read(reader)?,
-            last_claim_epoch: u64::read(reader)?,
-            voting_power: u128::read(reader)?,
+            balance,
+            unlock_ts,
+            last_claim_epoch,
+            voting_power,
+            reward_debt_x18,
+            unclaimed_rewards,
         })
     }
 }
@@ -142,6 +205,8 @@ impl EncodeSize for Staker {
             + self.unlock_ts.encode_size()
             + self.last_claim_epoch.encode_size()
             + self.voting_power.encode_size()
+            + self.reward_debt_x18.encode_size()
+            + self.unclaimed_rewards.encode_size()
     }
 }
 
@@ -184,6 +249,8 @@ pub struct AmmPool {
     pub total_shares: u64,
     pub fee_basis_points: u16,      // e.g., 30 = 0.3%
     pub sell_tax_basis_points: u16, // e.g., 500 = 5%
+    pub bootstrap_price_vusdt_numerator: u64,
+    pub bootstrap_price_rng_denominator: u64,
 }
 
 impl AmmPool {
@@ -193,7 +260,9 @@ impl AmmPool {
             reserve_vusdt: 0,
             total_shares: 0,
             fee_basis_points: fee_bps,
-            sell_tax_basis_points: 500, // 5% default
+            sell_tax_basis_points: AMM_DEFAULT_SELL_TAX_BASIS_POINTS,
+            bootstrap_price_vusdt_numerator: AMM_BOOTSTRAP_PRICE_VUSDT_NUMERATOR,
+            bootstrap_price_rng_denominator: AMM_BOOTSTRAP_PRICE_RNG_DENOMINATOR,
         }
     }
 }
@@ -205,6 +274,8 @@ impl Write for AmmPool {
         self.total_shares.write(writer);
         self.fee_basis_points.write(writer);
         self.sell_tax_basis_points.write(writer);
+        self.bootstrap_price_vusdt_numerator.write(writer);
+        self.bootstrap_price_rng_denominator.write(writer);
     }
 }
 
@@ -212,12 +283,31 @@ impl Read for AmmPool {
     type Cfg = ();
 
     fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
+        let reserve_rng = u64::read(reader)?;
+        let reserve_vusdt = u64::read(reader)?;
+        let total_shares = u64::read(reader)?;
+        let fee_basis_points = u16::read(reader)?;
+        let sell_tax_basis_points = u16::read(reader)?;
+
+        let bootstrap_price_vusdt_numerator = if reader.remaining() >= u64::SIZE {
+            u64::read(reader)?
+        } else {
+            AMM_BOOTSTRAP_PRICE_VUSDT_NUMERATOR
+        };
+        let bootstrap_price_rng_denominator = if reader.remaining() >= u64::SIZE {
+            u64::read(reader)?
+        } else {
+            AMM_BOOTSTRAP_PRICE_RNG_DENOMINATOR
+        };
+
         Ok(Self {
-            reserve_rng: u64::read(reader)?,
-            reserve_vusdt: u64::read(reader)?,
-            total_shares: u64::read(reader)?,
-            fee_basis_points: u16::read(reader)?,
-            sell_tax_basis_points: u16::read(reader)?,
+            reserve_rng,
+            reserve_vusdt,
+            total_shares,
+            fee_basis_points,
+            sell_tax_basis_points,
+            bootstrap_price_vusdt_numerator,
+            bootstrap_price_rng_denominator,
         })
     }
 }
@@ -229,5 +319,7 @@ impl EncodeSize for AmmPool {
             + self.total_shares.encode_size()
             + self.fee_basis_points.encode_size()
             + self.sell_tax_basis_points.encode_size()
+            + self.bootstrap_price_vusdt_numerator.encode_size()
+            + self.bootstrap_price_rng_denominator.encode_size()
     }
 }

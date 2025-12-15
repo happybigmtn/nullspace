@@ -1,6 +1,46 @@
 use super::super::*;
 use super::casino_error_vec;
 
+const STAKING_REWARD_SCALE: u128 = nullspace_types::casino::STAKING_REWARD_SCALE;
+
+fn settle_staker_rewards(
+    staker: &mut nullspace_types::casino::Staker,
+    reward_per_voting_power_x18: u128,
+) -> Result<(), &'static str> {
+    if staker.voting_power == 0 {
+        staker.reward_debt_x18 = 0;
+        return Ok(());
+    }
+
+    let current_debt = staker
+        .voting_power
+        .checked_mul(reward_per_voting_power_x18)
+        .ok_or("reward debt overflow")?;
+    let pending_x18 = current_debt
+        .checked_sub(staker.reward_debt_x18)
+        .ok_or("reward debt underflow")?;
+    let pending = pending_x18 / STAKING_REWARD_SCALE;
+    let pending: u64 = pending.try_into().map_err(|_| "pending reward overflow")?;
+
+    staker.unclaimed_rewards = staker
+        .unclaimed_rewards
+        .checked_add(pending)
+        .ok_or("unclaimed reward overflow")?;
+    staker.reward_debt_x18 = current_debt;
+    Ok(())
+}
+
+fn sync_staker_reward_debt(
+    staker: &mut nullspace_types::casino::Staker,
+    reward_per_voting_power_x18: u128,
+) -> Result<(), &'static str> {
+    staker.reward_debt_x18 = staker
+        .voting_power
+        .checked_mul(reward_per_voting_power_x18)
+        .ok_or("reward debt overflow")?;
+    Ok(())
+}
+
 impl<'a, S: State> Layer<'a, S> {
     // === Staking Handlers ===
 
@@ -15,7 +55,7 @@ impl<'a, S: State> Layer<'a, S> {
             _ => return Ok(vec![]), // Error handled by checking balance
         };
 
-        if player.chips < amount {
+        if player.balances.chips < amount {
             return Ok(casino_error_vec(
                 public,
                 None,
@@ -38,7 +78,7 @@ impl<'a, S: State> Layer<'a, S> {
         }
 
         // Deduct chips
-        player.chips -= amount;
+        player.balances.chips -= amount;
         self.insert(
             Key::CasinoPlayer(public.clone()),
             Value::CasinoPlayer(player),
@@ -50,6 +90,18 @@ impl<'a, S: State> Layer<'a, S> {
             _ => nullspace_types::casino::Staker::default(),
         };
 
+        let mut house = self.get_or_init_house().await?;
+        if let Err(err) =
+            settle_staker_rewards(&mut staker, house.staking_reward_per_voting_power_x18)
+        {
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_INVALID_MOVE,
+                err,
+            ));
+        }
+
         // Voting power is accumulated per stake: sum(amount_i * duration_i).
         // Lockup is the max of all stake unlocks (new stake can extend, never shorten).
         let current_block = self.seed.view;
@@ -60,14 +112,22 @@ impl<'a, S: State> Layer<'a, S> {
         let added_voting_power = (amount as u128) * (duration as u128);
         staker.voting_power = staker.voting_power.saturating_add(added_voting_power);
 
+        if let Err(err) =
+            sync_staker_reward_debt(&mut staker, house.staking_reward_per_voting_power_x18)
+        {
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_INVALID_MOVE,
+                err,
+            ));
+        }
+
         self.insert(Key::Staker(public.clone()), Value::Staker(staker.clone()));
 
         // Update House Total VP
-        let mut house = self.get_or_init_house().await?;
         house.total_staked_amount = house.total_staked_amount.saturating_add(amount);
-        house.total_voting_power = house
-            .total_voting_power
-            .saturating_add(added_voting_power);
+        house.total_voting_power = house.total_voting_power.saturating_add(added_voting_power);
         self.insert(Key::House, Value::House(house));
 
         Ok(vec![Event::Staked {
@@ -99,16 +159,29 @@ impl<'a, S: State> Layer<'a, S> {
         }
 
         if staker.balance == 0 {
+            // Allow claiming rewards even after full unstake; `Unstake` itself is a no-op.
             return Ok(vec![]);
         }
 
         let unstake_amount = staker.balance;
 
+        let mut house = self.get_or_init_house().await?;
+        if let Err(err) =
+            settle_staker_rewards(&mut staker, house.staking_reward_per_voting_power_x18)
+        {
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_INVALID_MOVE,
+                err,
+            ));
+        }
+
         // Return chips
         if let Some(Value::CasinoPlayer(mut player)) =
             self.get(&Key::CasinoPlayer(public.clone())).await?
         {
-            player.chips += staker.balance;
+            player.balances.chips += staker.balance;
             self.insert(
                 Key::CasinoPlayer(public.clone()),
                 Value::CasinoPlayer(player),
@@ -116,7 +189,6 @@ impl<'a, S: State> Layer<'a, S> {
         }
 
         // Update House
-        let mut house = self.get_or_init_house().await?;
         house.total_staked_amount = house.total_staked_amount.saturating_sub(staker.balance);
         house.total_voting_power = house.total_voting_power.saturating_sub(staker.voting_power);
         self.insert(Key::House, Value::House(house));
@@ -124,6 +196,7 @@ impl<'a, S: State> Layer<'a, S> {
         // Clear Staker
         staker.balance = 0;
         staker.voting_power = 0;
+        staker.reward_debt_x18 = 0;
         self.insert(Key::Staker(public.clone()), Value::Staker(staker));
 
         Ok(vec![Event::Unstaked {
@@ -136,21 +209,85 @@ impl<'a, S: State> Layer<'a, S> {
         &mut self,
         public: &PublicKey,
     ) -> anyhow::Result<Vec<Event>> {
-        let staker = match self.get(&Key::Staker(public.clone())).await? {
+        let mut staker = match self.get(&Key::Staker(public.clone())).await? {
             Some(Value::Staker(s)) => s,
             _ => return Ok(vec![]),
         };
 
-        if staker.balance == 0 {
+        let mut house = self.get_or_init_house().await?;
+        let reward_per_voting_power_x18 = house.staking_reward_per_voting_power_x18;
+
+        let pending = if staker.voting_power == 0 {
+            0
+        } else {
+            let current_debt = staker
+                .voting_power
+                .checked_mul(reward_per_voting_power_x18)
+                .ok_or_else(|| anyhow::anyhow!("reward debt overflow"))?;
+            let pending_x18 = current_debt
+                .checked_sub(staker.reward_debt_x18)
+                .ok_or_else(|| anyhow::anyhow!("reward debt underflow"))?;
+            let pending = pending_x18 / STAKING_REWARD_SCALE;
+            u64::try_from(pending).map_err(|_| anyhow::anyhow!("pending reward overflow"))?
+        };
+        let amount = staker
+            .unclaimed_rewards
+            .checked_add(pending)
+            .ok_or_else(|| anyhow::anyhow!("reward overflow"))?;
+        if amount == 0 {
             return Ok(vec![]);
         }
 
-        Ok(casino_error_vec(
-            public,
-            None,
-            nullspace_types::casino::ERROR_INVALID_MOVE,
-            "Rewards are not implemented",
-        ))
+        let mut player = match self.get(&Key::CasinoPlayer(public.clone())).await? {
+            Some(Value::CasinoPlayer(p)) => p,
+            _ => {
+                return Ok(casino_error_vec(
+                    public,
+                    None,
+                    nullspace_types::casino::ERROR_PLAYER_NOT_FOUND,
+                    "Player not found",
+                ))
+            }
+        };
+
+        if house.staking_reward_pool < amount {
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_INVALID_MOVE,
+                "Insufficient reward pool",
+            ));
+        }
+        house.staking_reward_pool = house.staking_reward_pool.saturating_sub(amount);
+
+        player.balances.chips = player
+            .balances
+            .chips
+            .checked_add(amount)
+            .ok_or_else(|| anyhow::anyhow!("chip overflow"))?;
+
+        staker.unclaimed_rewards = 0;
+        staker.last_claim_epoch = house.current_epoch;
+        if let Err(err) = sync_staker_reward_debt(&mut staker, reward_per_voting_power_x18) {
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_INVALID_MOVE,
+                err,
+            ));
+        }
+
+        self.insert(
+            Key::CasinoPlayer(public.clone()),
+            Value::CasinoPlayer(player),
+        );
+        self.insert(Key::Staker(public.clone()), Value::Staker(staker));
+        self.insert(Key::House, Value::House(house));
+
+        Ok(vec![Event::RewardsClaimed {
+            player: public.clone(),
+            amount,
+        }])
     }
 
     pub(in crate::layer) async fn handle_process_epoch(
@@ -166,13 +303,49 @@ impl<'a, S: State> Layer<'a, S> {
             // End Epoch
 
             // If Net PnL > 0, Surplus!
-            if house.net_pnl > 0 {
-                // In a real system, we'd snapshot this into a "RewardPool"
-                // For now, we just reset PnL and log it (via debug/warn or event)
-                // warn!("Epoch Surplus: {}", house.net_pnl);
+            let epoch_surplus: u64 = if house.net_pnl > 0 && house.total_voting_power > 0 {
+                u64::try_from(house.net_pnl).unwrap_or(u64::MAX)
             } else {
-                // Deficit. Minting happened. Inflation.
-                // warn!("Epoch Deficit: {}", house.net_pnl);
+                0
+            };
+
+            if house.total_voting_power > 0 {
+                let Some(reward_total) = epoch_surplus.checked_add(house.staking_reward_carry)
+                else {
+                    return Ok(casino_error_vec(
+                        _public,
+                        None,
+                        nullspace_types::casino::ERROR_INVALID_MOVE,
+                        "Reward overflow",
+                    ));
+                };
+
+                if reward_total > 0 {
+                    let reward_total_x18 = (reward_total as u128)
+                        .checked_mul(STAKING_REWARD_SCALE)
+                        .ok_or_else(|| anyhow::anyhow!("reward overflow"))?;
+                    let increment_x18 = reward_total_x18
+                        .checked_div(house.total_voting_power)
+                        .ok_or_else(|| anyhow::anyhow!("reward division by zero"))?;
+
+                    let distributed_x18 = increment_x18
+                        .checked_mul(house.total_voting_power)
+                        .ok_or_else(|| anyhow::anyhow!("reward overflow"))?;
+                    let distributed = distributed_x18 / STAKING_REWARD_SCALE;
+                    let distributed: u64 = distributed
+                        .try_into()
+                        .map_err(|_| anyhow::anyhow!("distributed reward overflow"))?;
+
+                    house.staking_reward_per_voting_power_x18 = house
+                        .staking_reward_per_voting_power_x18
+                        .checked_add(increment_x18)
+                        .ok_or_else(|| anyhow::anyhow!("reward accumulator overflow"))?;
+                    house.staking_reward_pool = house
+                        .staking_reward_pool
+                        .checked_add(distributed)
+                        .ok_or_else(|| anyhow::anyhow!("reward pool overflow"))?;
+                    house.staking_reward_carry = reward_total.saturating_sub(distributed);
+                }
             }
 
             house.current_epoch += 1;
@@ -191,13 +364,15 @@ impl<'a, S: State> Layer<'a, S> {
 
 #[cfg(test)]
 mod tests {
-    use crate::mocks::{create_account_keypair, create_adbs, create_network_keypair, execute_block};
+    use crate::mocks::{
+        create_account_keypair, create_adbs, create_network_keypair, execute_block,
+    };
     use commonware_runtime::deterministic::Runner;
     use commonware_runtime::Runner as _;
-    use nullspace_types::execution::{Instruction, Key, Transaction, Value};
-    use nullspace_types::{casino::ERROR_INVALID_MOVE, execution::Output};
     use commonware_storage::store::operation::Keyless;
     use nullspace_types::execution::Event;
+    use nullspace_types::execution::Output;
+    use nullspace_types::execution::{Instruction, Key, Transaction, Value};
 
     #[test]
     fn stake_and_unstake_respects_lockup_and_updates_house() {
@@ -242,7 +417,7 @@ mod tests {
                 Some(Value::CasinoPlayer(player)) => player,
                 other => panic!("expected casino player, got {other:?}"),
             };
-            assert_eq!(player.chips, 1_060);
+            assert_eq!(player.balances.chips, 1_060);
 
             let staker = match crate::State::get(&state, &Key::Staker(public.clone()))
                 .await
@@ -255,7 +430,10 @@ mod tests {
             assert_eq!(staker.unlock_ts, 11);
             assert_eq!(staker.voting_power, 400);
 
-            let house = match crate::State::get(&state, &Key::House).await.expect("get house") {
+            let house = match crate::State::get(&state, &Key::House)
+                .await
+                .expect("get house")
+            {
                 Some(Value::House(house)) => house,
                 other => panic!("expected house, got {other:?}"),
             };
@@ -289,7 +467,7 @@ mod tests {
                 Some(Value::CasinoPlayer(player)) => player,
                 other => panic!("expected casino player, got {other:?}"),
             };
-            assert_eq!(player.chips, 1_060);
+            assert_eq!(player.balances.chips, 1_060);
 
             let staker = match crate::State::get(&state, &Key::Staker(public.clone()))
                 .await
@@ -301,7 +479,10 @@ mod tests {
             assert_eq!(staker.balance, 40);
             assert_eq!(staker.voting_power, 400);
 
-            let house = match crate::State::get(&state, &Key::House).await.expect("get house") {
+            let house = match crate::State::get(&state, &Key::House)
+                .await
+                .expect("get house")
+            {
                 Some(Value::House(house)) => house,
                 other => panic!("expected house, got {other:?}"),
             };
@@ -335,7 +516,7 @@ mod tests {
                 Some(Value::CasinoPlayer(player)) => player,
                 other => panic!("expected casino player, got {other:?}"),
             };
-            assert_eq!(player.chips, 1_100);
+            assert_eq!(player.balances.chips, 1_100);
 
             let staker = match crate::State::get(&state, &Key::Staker(public.clone()))
                 .await
@@ -347,7 +528,10 @@ mod tests {
             assert_eq!(staker.balance, 0);
             assert_eq!(staker.voting_power, 0);
 
-            let house = match crate::State::get(&state, &Key::House).await.expect("get house") {
+            let house = match crate::State::get(&state, &Key::House)
+                .await
+                .expect("get house")
+            {
                 Some(Value::House(house)) => house,
                 other => panic!("expected house, got {other:?}"),
             };
@@ -550,7 +734,10 @@ mod tests {
             )
             .await;
 
-            let house = match crate::State::get(&state, &Key::House).await.expect("get house") {
+            let house = match crate::State::get(&state, &Key::House)
+                .await
+                .expect("get house")
+            {
                 Some(Value::House(house)) => house,
                 other => panic!("expected house, got {other:?}"),
             };
@@ -568,7 +755,10 @@ mod tests {
             )
             .await;
 
-            let house = match crate::State::get(&state, &Key::House).await.expect("get house") {
+            let house = match crate::State::get(&state, &Key::House)
+                .await
+                .expect("get house")
+            {
                 Some(Value::House(house)) => house,
                 other => panic!("expected house, got {other:?}"),
             };
@@ -586,7 +776,10 @@ mod tests {
             )
             .await;
 
-            let house = match crate::State::get(&state, &Key::House).await.expect("get house") {
+            let house = match crate::State::get(&state, &Key::House)
+                .await
+                .expect("get house")
+            {
                 Some(Value::House(house)) => house,
                 other => panic!("expected house, got {other:?}"),
             };
@@ -605,7 +798,10 @@ mod tests {
             )
             .await;
 
-            let house = match crate::State::get(&state, &Key::House).await.expect("get house") {
+            let house = match crate::State::get(&state, &Key::House)
+                .await
+                .expect("get house")
+            {
                 Some(Value::House(house)) => house,
                 other => panic!("expected house, got {other:?}"),
             };
@@ -625,7 +821,7 @@ mod tests {
     }
 
     #[test]
-    fn claim_rewards_is_explicitly_unsupported_until_implemented() {
+    fn claim_rewards_distributes_epoch_surplus_to_staker() {
         let executor = Runner::default();
         executor.start(|context| async move {
             let (network_secret, network_identity) = create_network_keypair();
@@ -660,34 +856,76 @@ mod tests {
             )
             .await;
 
-            // ClaimRewards currently emits a CasinoError instead of a misleading 0-reward success.
-            let (_seed, summary) = execute_block(
+            // Generate a positive house.net_pnl for the epoch by starting a non-tournament game.
+            // `CasinoStartGame` books the bet as income (and payouts later subtract on completion).
+            execute_block(
                 &network_secret,
                 network_identity,
                 &mut state,
                 &mut events,
                 2,
-                vec![Transaction::sign(&private, 3, Instruction::ClaimRewards)],
+                vec![Transaction::sign(
+                    &private,
+                    3,
+                    Instruction::CasinoStartGame {
+                        game_type: nullspace_types::casino::GameType::Roulette,
+                        bet: 7,
+                        session_id: 1,
+                    },
+                )],
             )
             .await;
 
-            let mut saw_error = false;
+            // Process the epoch, distributing rewards from net_pnl to stakers.
+            execute_block(
+                &network_secret,
+                network_identity,
+                &mut state,
+                &mut events,
+                101,
+                vec![Transaction::sign(&private, 4, Instruction::ProcessEpoch)],
+            )
+            .await;
+
+            // Claim rewards.
+            let (_seed, summary) = execute_block(
+                &network_secret,
+                network_identity,
+                &mut state,
+                &mut events,
+                102,
+                vec![Transaction::sign(&private, 5, Instruction::ClaimRewards)],
+            )
+            .await;
+
+            let mut saw_claim = false;
             for op in summary.events_proof_ops {
-                if let Keyless::Append(Output::Event(Event::CasinoError {
-                    player,
-                    session_id,
-                    error_code,
-                    message,
-                })) = op
+                if let Keyless::Append(Output::Event(Event::RewardsClaimed { player, amount })) = op
                 {
                     assert_eq!(player, public);
-                    assert_eq!(session_id, None);
-                    assert_eq!(error_code, ERROR_INVALID_MOVE);
-                    assert_eq!(message, "Rewards are not implemented");
-                    saw_error = true;
+                    assert_eq!(amount, 7);
+                    saw_claim = true;
                 }
             }
-            assert!(saw_error, "expected CasinoError event for ClaimRewards");
+            assert!(saw_claim, "expected RewardsClaimed event for ClaimRewards");
+
+            let house = match crate::State::get(&state, &Key::House)
+                .await
+                .expect("get house")
+            {
+                Some(Value::House(house)) => house,
+                other => panic!("expected house, got {other:?}"),
+            };
+            assert_eq!(house.staking_reward_pool, 0, "pool drained by claim");
+
+            let staker = match crate::State::get(&state, &Key::Staker(public))
+                .await
+                .expect("get staker")
+            {
+                Some(Value::Staker(staker)) => staker,
+                other => panic!("expected staker, got {other:?}"),
+            };
+            assert_eq!(staker.unclaimed_rewards, 0);
         });
     }
 }

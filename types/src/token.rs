@@ -6,17 +6,13 @@ use bytes::{Buf, BufMut};
 use commonware_codec::{EncodeSize, FixedSize, Read, ReadExt, Write};
 use commonware_cryptography::ed25519::PublicKey;
 use commonware_utils::{from_hex, hex};
-use serde::{
-    de::{self, MapAccess, SeqAccess, Visitor},
-    ser::SerializeStruct,
-    Deserialize, Deserializer, Serialize, Serializer,
-};
-use std::{collections::BTreeMap, fmt};
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 /// Commonware Token Interface (CTI-20)
 /// A standard for fungible assets on the Commonware chain.
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TokenMetadata {
     pub name: String,
     pub symbol: String,
@@ -25,6 +21,7 @@ pub struct TokenMetadata {
     pub total_supply: u64,
     pub mintable: bool,
     pub burnable: bool,
+    #[serde(with = "serde_public_key_hex")]
     pub authority: PublicKey,
 }
 
@@ -36,6 +33,68 @@ fn hex_encode(bytes: &[u8]) -> String {
 // Helper to decode hex
 fn hex_decode(s: &str) -> Result<Vec<u8>, String> {
     from_hex(s).ok_or_else(|| "invalid hex string".to_string())
+}
+
+mod serde_public_key_hex {
+    use super::{hex_decode, hex_encode};
+    use commonware_codec::ReadExt;
+    use commonware_cryptography::ed25519::PublicKey;
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S>(public_key: &PublicKey, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&hex_encode(public_key.as_ref()))
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<PublicKey, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        let bytes = hex_decode(&s).map_err(serde::de::Error::custom)?;
+        let mut reader = bytes.as_slice();
+        PublicKey::read(&mut reader).map_err(|_| serde::de::Error::custom("invalid public key"))
+    }
+}
+
+mod serde_allowances {
+    use super::{hex_decode, hex_encode};
+    use commonware_codec::ReadExt;
+    use commonware_cryptography::ed25519::PublicKey;
+    use serde::{Deserialize, Deserializer, Serialize as _, Serializer};
+    use std::collections::BTreeMap;
+
+    pub fn serialize<S>(
+        allowances: &BTreeMap<PublicKey, u64>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let allowances_serializable: Vec<(String, u64)> = allowances
+            .iter()
+            .map(|(pk, amt)| (hex_encode(pk.as_ref()), *amt))
+            .collect();
+        allowances_serializable.serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<BTreeMap<PublicKey, u64>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let allowances_raw = Vec::<(String, u64)>::deserialize(deserializer)?;
+        let mut allowances = BTreeMap::new();
+        for (s, amt) in allowances_raw {
+            let bytes = hex_decode(&s).map_err(serde::de::Error::custom)?;
+            let mut reader = bytes.as_slice();
+            let pk = PublicKey::read(&mut reader)
+                .map_err(|_| serde::de::Error::custom("invalid public key"))?;
+            allowances.insert(pk, amt);
+        }
+        Ok(allowances)
+    }
 }
 
 impl Default for TokenMetadata {
@@ -64,237 +123,13 @@ impl Default for TokenMetadata {
     }
 }
 
-// Manual Serialize/Deserialize for TokenMetadata
-impl Serialize for TokenMetadata {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut state = serializer.serialize_struct("TokenMetadata", 8)?;
-        state.serialize_field("name", &self.name)?;
-        state.serialize_field("symbol", &self.symbol)?;
-        state.serialize_field("decimals", &self.decimals)?;
-        state.serialize_field("icon_url", &self.icon_url)?;
-        state.serialize_field("total_supply", &self.total_supply)?;
-        state.serialize_field("mintable", &self.mintable)?;
-        state.serialize_field("burnable", &self.burnable)?;
-        state.serialize_field("authority", &hex_encode(self.authority.as_ref()))?;
-        state.end()
-    }
-}
-
-impl<'de> Deserialize<'de> for TokenMetadata {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        enum Field {
-            Name,
-            Symbol,
-            Decimals,
-            IconUrl,
-            TotalSupply,
-            Mintable,
-            Burnable,
-            Authority,
-        }
-
-        impl<'de> Deserialize<'de> for Field {
-            fn deserialize<D>(deserializer: D) -> Result<Field, D::Error>
-            where
-                D: Deserializer<'de>,
-            {
-                struct FieldVisitor;
-                impl<'de> Visitor<'de> for FieldVisitor {
-                    type Value = Field;
-                    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                        formatter.write_str("field identifier")
-                    }
-                    fn visit_str<E>(self, value: &str) -> Result<Field, E>
-                    where
-                        E: de::Error,
-                    {
-                        match value {
-                            "name" => Ok(Field::Name),
-                            "symbol" => Ok(Field::Symbol),
-                            "decimals" => Ok(Field::Decimals),
-                            "icon_url" => Ok(Field::IconUrl),
-                            "total_supply" => Ok(Field::TotalSupply),
-                            "mintable" => Ok(Field::Mintable),
-                            "burnable" => Ok(Field::Burnable),
-                            "authority" => Ok(Field::Authority),
-                            _ => Err(de::Error::unknown_field(value, FIELDS)),
-                        }
-                    }
-                }
-                deserializer.deserialize_identifier(FieldVisitor)
-            }
-        }
-
-        struct TokenMetadataVisitor;
-        const FIELDS: &[&str] = &[
-            "name",
-            "symbol",
-            "decimals",
-            "icon_url",
-            "total_supply",
-            "mintable",
-            "burnable",
-            "authority",
-        ];
-
-        impl<'de> Visitor<'de> for TokenMetadataVisitor {
-            type Value = TokenMetadata;
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("struct TokenMetadata")
-            }
-            fn visit_seq<V>(self, mut seq: V) -> Result<TokenMetadata, V::Error>
-            where
-                V: SeqAccess<'de>,
-            {
-                let name = seq
-                    .next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(0, &self))?;
-                let symbol = seq
-                    .next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(1, &self))?;
-                let decimals = seq
-                    .next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(2, &self))?;
-                let icon_url = seq
-                    .next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(3, &self))?;
-                let total_supply = seq
-                    .next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(4, &self))?;
-                let mintable = seq
-                    .next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(5, &self))?;
-                let burnable = seq
-                    .next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(6, &self))?;
-                let auth_hex: String = seq
-                    .next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(7, &self))?;
-                let auth_bytes = hex_decode(&auth_hex).map_err(de::Error::custom)?;
-                let mut reader = &auth_bytes[..];
-                let authority = PublicKey::read(&mut reader)
-                    .map_err(|_| de::Error::custom("invalid public key"))?;
-
-                Ok(TokenMetadata {
-                    name,
-                    symbol,
-                    decimals,
-                    icon_url,
-                    total_supply,
-                    mintable,
-                    burnable,
-                    authority,
-                })
-            }
-
-            fn visit_map<V>(self, mut map: V) -> Result<TokenMetadata, V::Error>
-            where
-                V: MapAccess<'de>,
-            {
-                let mut name = None;
-                let mut symbol = None;
-                let mut decimals = None;
-                let mut icon_url = None;
-                let mut total_supply = None;
-                let mut mintable = None;
-                let mut burnable = None;
-                let mut authority = None;
-
-                while let Some(key) = map.next_key()? {
-                    match key {
-                        Field::Name => {
-                            if name.is_some() {
-                                return Err(de::Error::duplicate_field("name"));
-                            }
-                            name = Some(map.next_value()?);
-                        }
-                        Field::Symbol => {
-                            if symbol.is_some() {
-                                return Err(de::Error::duplicate_field("symbol"));
-                            }
-                            symbol = Some(map.next_value()?);
-                        }
-                        Field::Decimals => {
-                            if decimals.is_some() {
-                                return Err(de::Error::duplicate_field("decimals"));
-                            }
-                            decimals = Some(map.next_value()?);
-                        }
-                        Field::IconUrl => {
-                            if icon_url.is_some() {
-                                return Err(de::Error::duplicate_field("icon_url"));
-                            }
-                            icon_url = Some(map.next_value()?);
-                        }
-                        Field::TotalSupply => {
-                            if total_supply.is_some() {
-                                return Err(de::Error::duplicate_field("total_supply"));
-                            }
-                            total_supply = Some(map.next_value()?);
-                        }
-                        Field::Mintable => {
-                            if mintable.is_some() {
-                                return Err(de::Error::duplicate_field("mintable"));
-                            }
-                            mintable = Some(map.next_value()?);
-                        }
-                        Field::Burnable => {
-                            if burnable.is_some() {
-                                return Err(de::Error::duplicate_field("burnable"));
-                            }
-                            burnable = Some(map.next_value()?);
-                        }
-                        Field::Authority => {
-                            if authority.is_some() {
-                                return Err(de::Error::duplicate_field("authority"));
-                            }
-                            let s: String = map.next_value()?;
-                            let bytes = hex_decode(&s).map_err(de::Error::custom)?;
-                            let mut reader = &bytes[..];
-                            authority = Some(
-                                PublicKey::read(&mut reader)
-                                    .map_err(|_| de::Error::custom("invalid public key"))?,
-                            );
-                        }
-                    }
-                }
-                let name = name.ok_or_else(|| de::Error::missing_field("name"))?;
-                let symbol = symbol.ok_or_else(|| de::Error::missing_field("symbol"))?;
-                let decimals = decimals.ok_or_else(|| de::Error::missing_field("decimals"))?;
-                let total_supply =
-                    total_supply.ok_or_else(|| de::Error::missing_field("total_supply"))?;
-                let mintable = mintable.ok_or_else(|| de::Error::missing_field("mintable"))?;
-                let burnable = burnable.ok_or_else(|| de::Error::missing_field("burnable"))?;
-                let authority = authority.ok_or_else(|| de::Error::missing_field("authority"))?;
-
-                Ok(TokenMetadata {
-                    name,
-                    symbol,
-                    decimals,
-                    icon_url,
-                    total_supply,
-                    mintable,
-                    burnable,
-                    authority,
-                })
-            }
-        }
-        deserializer.deserialize_struct("TokenMetadata", FIELDS, TokenMetadataVisitor)
-    }
-}
-
 /// Represents a token balance and allowances
-#[derive(Clone, Debug, PartialEq, Eq, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct TokenAccount {
     pub balance: u64,
     pub frozen: bool,
     // simplistic allowance map: spender -> amount
+    #[serde(with = "serde_allowances")]
     pub allowances: BTreeMap<PublicKey, u64>,
 }
 
@@ -305,152 +140,6 @@ impl TokenAccount {
 
     pub fn set_allowance(&mut self, spender: PublicKey, amount: u64) {
         self.allowances.insert(spender, amount);
-    }
-}
-
-// Manual Serialize/Deserialize for TokenAccount
-impl Serialize for TokenAccount {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut state = serializer.serialize_struct("TokenAccount", 3)?;
-        state.serialize_field("balance", &self.balance)?;
-        state.serialize_field("frozen", &self.frozen)?;
-
-        let allowances_serializable: Vec<(String, u64)> = self
-            .allowances
-            .iter()
-            .map(|(pk, amt)| (hex_encode(pk.as_ref()), *amt))
-            .collect();
-        state.serialize_field("allowances", &allowances_serializable)?;
-        state.end()
-    }
-}
-
-impl<'de> Deserialize<'de> for TokenAccount {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        enum Field {
-            Balance,
-            Frozen,
-            Allowances,
-        }
-        impl<'de> Deserialize<'de> for Field {
-            fn deserialize<D>(deserializer: D) -> Result<Field, D::Error>
-            where
-                D: Deserializer<'de>,
-            {
-                struct FieldVisitor;
-                impl<'de> Visitor<'de> for FieldVisitor {
-                    type Value = Field;
-                    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                        formatter.write_str("field identifier")
-                    }
-                    fn visit_str<E>(self, value: &str) -> Result<Field, E>
-                    where
-                        E: de::Error,
-                    {
-                        match value {
-                            "balance" => Ok(Field::Balance),
-                            "frozen" => Ok(Field::Frozen),
-                            "allowances" => Ok(Field::Allowances),
-                            _ => Err(de::Error::unknown_field(value, FIELDS)),
-                        }
-                    }
-                }
-                deserializer.deserialize_identifier(FieldVisitor)
-            }
-        }
-        struct TokenAccountVisitor;
-        const FIELDS: &[&str] = &["balance", "frozen", "allowances"];
-
-        impl<'de> Visitor<'de> for TokenAccountVisitor {
-            type Value = TokenAccount;
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("struct TokenAccount")
-            }
-            fn visit_seq<V>(self, mut seq: V) -> Result<TokenAccount, V::Error>
-            where
-                V: SeqAccess<'de>,
-            {
-                let balance = seq
-                    .next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(0, &self))?;
-                let frozen = seq
-                    .next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(1, &self))?;
-                let allowances_raw: Vec<(String, u64)> = seq
-                    .next_element()?
-                    .ok_or_else(|| de::Error::invalid_length(2, &self))?;
-
-                let mut allowances = BTreeMap::new();
-                for (s, amt) in allowances_raw {
-                    let bytes = hex_decode(&s).map_err(de::Error::custom)?;
-                    let mut reader = &bytes[..];
-                    let pk = PublicKey::read(&mut reader)
-                        .map_err(|_| de::Error::custom("invalid public key"))?;
-                    allowances.insert(pk, amt);
-                }
-                Ok(TokenAccount {
-                    balance,
-                    frozen,
-                    allowances,
-                })
-            }
-
-            fn visit_map<V>(self, mut map: V) -> Result<TokenAccount, V::Error>
-            where
-                V: MapAccess<'de>,
-            {
-                let mut balance = None;
-                let mut frozen = None;
-                let mut allowances = None;
-                while let Some(key) = map.next_key()? {
-                    match key {
-                        Field::Balance => {
-                            if balance.is_some() {
-                                return Err(de::Error::duplicate_field("balance"));
-                            }
-                            balance = Some(map.next_value()?);
-                        }
-                        Field::Frozen => {
-                            if frozen.is_some() {
-                                return Err(de::Error::duplicate_field("frozen"));
-                            }
-                            frozen = Some(map.next_value()?);
-                        }
-                        Field::Allowances => {
-                            if allowances.is_some() {
-                                return Err(de::Error::duplicate_field("allowances"));
-                            }
-                            let allowances_raw: Vec<(String, u64)> = map.next_value()?;
-                            let mut list = BTreeMap::new();
-                            for (s, amt) in allowances_raw {
-                                let bytes = hex_decode(&s).map_err(de::Error::custom)?;
-                                let mut reader = &bytes[..];
-                                let pk = PublicKey::read(&mut reader)
-                                    .map_err(|_| de::Error::custom("invalid public key"))?;
-                                list.insert(pk, amt);
-                            }
-                            allowances = Some(list);
-                        }
-                    }
-                }
-                let balance = balance.ok_or_else(|| de::Error::missing_field("balance"))?;
-                let frozen = frozen.ok_or_else(|| de::Error::missing_field("frozen"))?;
-                let allowances =
-                    allowances.ok_or_else(|| de::Error::missing_field("allowances"))?;
-                Ok(TokenAccount {
-                    balance,
-                    frozen,
-                    allowances,
-                })
-            }
-        }
-        deserializer.deserialize_struct("TokenAccount", FIELDS, TokenAccountVisitor)
     }
 }
 
@@ -567,6 +256,7 @@ mod tests {
     use bytes::BytesMut;
     use commonware_codec::DecodeExt as _;
     use commonware_cryptography::{ed25519::PrivateKey, PrivateKeyExt, Signer};
+    use rand::{rngs::StdRng, Rng as _, SeedableRng as _};
     use serde_json::json;
 
     #[test]
@@ -629,5 +319,104 @@ mod tests {
         let decoded = TokenAccount::decode(buf_a.as_ref()).expect("decode TokenAccount");
         assert_eq!(decoded.allowance(&pk1), 1);
         assert_eq!(decoded.allowance(&pk2), 2);
+    }
+
+    fn random_ascii_string(rng: &mut StdRng, max_len: usize) -> String {
+        const CHARSET: &[u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_";
+        let len = rng.gen_range(0..=max_len);
+        (0..len)
+            .map(|_| {
+                let idx = rng.gen_range(0..CHARSET.len());
+                CHARSET[idx] as char
+            })
+            .collect()
+    }
+
+    #[test]
+    fn token_json_binary_roundtrips_preserve_semantics_and_canonical_bytes() {
+        let mut rng = StdRng::seed_from_u64(0);
+
+        for _ in 0..500 {
+            let authority = PrivateKey::from_seed(rng.gen::<u64>()).public_key();
+            let metadata = TokenMetadata {
+                name: random_ascii_string(&mut rng, 32),
+                symbol: random_ascii_string(&mut rng, 8),
+                decimals: rng.gen(),
+                icon_url: rng
+                    .gen_bool(0.5)
+                    .then(|| random_ascii_string(&mut rng, 128)),
+                total_supply: rng.gen(),
+                mintable: rng.gen(),
+                burnable: rng.gen(),
+                authority,
+            };
+
+            let mut allowances = BTreeMap::new();
+            let allowance_count = rng.gen_range(0..=10);
+            for _ in 0..allowance_count {
+                let spender = PrivateKey::from_seed(rng.gen::<u64>()).public_key();
+                allowances.insert(spender, rng.gen());
+            }
+
+            let account = TokenAccount {
+                balance: rng.gen(),
+                frozen: rng.gen(),
+                allowances,
+            };
+
+            // JSON roundtrip preserves semantics.
+            let json_meta = serde_json::to_string(&metadata).expect("serialize TokenMetadata");
+            let decoded_meta: TokenMetadata =
+                serde_json::from_str(&json_meta).expect("deserialize TokenMetadata");
+            assert_eq!(decoded_meta, metadata);
+
+            let json_account = serde_json::to_value(&account).expect("serialize TokenAccount");
+            let decoded_account: TokenAccount =
+                serde_json::from_value(json_account.clone()).expect("deserialize TokenAccount");
+            assert_eq!(decoded_account, account);
+
+            // JSON output keeps allowances canonically sorted by spender key.
+            let allowances_json = json_account
+                .get("allowances")
+                .and_then(|v| v.as_array())
+                .expect("allowances array");
+            let mut prev = None::<&str>;
+            for entry in allowances_json {
+                let key = entry
+                    .get(0)
+                    .and_then(|v| v.as_str())
+                    .expect("allowance key");
+                if let Some(prev) = prev {
+                    assert!(prev <= key);
+                }
+                prev = Some(key);
+            }
+
+            // Binary roundtrip preserves semantics.
+            let mut meta_bytes = BytesMut::new();
+            metadata.write(&mut meta_bytes);
+            let decoded_meta_bin =
+                TokenMetadata::decode(meta_bytes.as_ref()).expect("decode TokenMetadata");
+            assert_eq!(decoded_meta_bin, metadata);
+
+            let mut account_bytes = BytesMut::new();
+            account.write(&mut account_bytes);
+            let decoded_account_bin =
+                TokenAccount::decode(account_bytes.as_ref()).expect("decode TokenAccount");
+            assert_eq!(decoded_account_bin, account);
+
+            // JSON <-> binary conversion yields canonical bytes (stable ordering/format).
+            let json_roundtrip_account: TokenAccount =
+                serde_json::from_str(&serde_json::to_string(&account).unwrap()).unwrap();
+            let mut account_bytes_2 = BytesMut::new();
+            json_roundtrip_account.write(&mut account_bytes_2);
+            assert_eq!(account_bytes.as_ref(), account_bytes_2.as_ref());
+
+            let json_roundtrip_meta: TokenMetadata =
+                serde_json::from_str(&serde_json::to_string(&metadata).unwrap()).unwrap();
+            let mut meta_bytes_2 = BytesMut::new();
+            json_roundtrip_meta.write(&mut meta_bytes_2);
+            assert_eq!(meta_bytes.as_ref(), meta_bytes_2.as_ref());
+        }
     }
 }

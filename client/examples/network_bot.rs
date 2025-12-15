@@ -121,77 +121,66 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         if let Update::FilteredEvents(events) = update {
             for (_, keyless_output) in events.events_proof_ops {
                 // Keyless is an enum
-                if let Keyless::Append(output) = keyless_output {
-                    if let Output::Event(event) = output {
-                        match event {
-                            Event::CasinoGameStarted {
-                                session_id: sid,
-                                initial_state,
-                                ..
-                            } if sid == session_id => {
-                                if let Some(rank) = get_hilo_card_rank(&initial_state) {
-                                    println!("Game Started! Card Rank: {}", rank);
+                if let Keyless::Append(Output::Event(event)) = keyless_output {
+                    match event {
+                        Event::CasinoGameStarted {
+                            session_id: sid,
+                            initial_state,
+                            ..
+                        } if sid == session_id => {
+                            if let Some(rank) = get_hilo_card_rank(&initial_state) {
+                                println!("Game Started! Card Rank: {}", rank);
+                                make_hilo_move(&client, &private_key, nonce, session_id, rank)
+                                    .await?;
+                                nonce += 1;
+                            }
+                        }
+                        Event::CasinoGameMoved {
+                            session_id: sid,
+                            new_state,
+                            move_number,
+                            ..
+                        } if sid == session_id => {
+                            if let Some(rank) = get_hilo_card_rank(&new_state) {
+                                println!("Move {} processed. New Card Rank: {}", move_number, rank);
+
+                                // Cashout strategy after 3 moves
+                                if move_number >= 3 {
+                                    println!("Cashing out...");
+                                    submit_tx(
+                                        &client,
+                                        &private_key,
+                                        nonce,
+                                        Instruction::CasinoGameMove {
+                                            session_id,
+                                            payload: vec![2], // Cashout
+                                        },
+                                    )
+                                    .await?;
+                                } else {
                                     make_hilo_move(&client, &private_key, nonce, session_id, rank)
                                         .await?;
-                                    nonce += 1;
                                 }
+                                nonce += 1;
                             }
-                            Event::CasinoGameMoved {
-                                session_id: sid,
-                                new_state,
-                                move_number,
-                                ..
-                            } if sid == session_id => {
-                                if let Some(rank) = get_hilo_card_rank(&new_state) {
-                                    println!(
-                                        "Move {} processed. New Card Rank: {}",
-                                        move_number, rank
-                                    );
-
-                                    // Cashout strategy after 3 moves
-                                    if move_number >= 3 {
-                                        println!("Cashing out...");
-                                        submit_tx(
-                                            &client,
-                                            &private_key,
-                                            nonce,
-                                            Instruction::CasinoGameMove {
-                                                session_id,
-                                                payload: vec![2], // Cashout
-                                            },
-                                        )
-                                        .await?;
-                                    } else {
-                                        make_hilo_move(
-                                            &client,
-                                            &private_key,
-                                            nonce,
-                                            session_id,
-                                            rank,
-                                        )
-                                        .await?;
-                                    }
-                                    nonce += 1;
-                                }
-                            }
-                            Event::CasinoGameCompleted {
-                                session_id: sid,
-                                payout,
-                                ..
-                            } if sid == session_id => {
-                                println!("Game Completed! Payout: {}", payout);
-                                return Ok(());
-                            }
-                            Event::CasinoError {
-                                session_id: Some(sid),
-                                message,
-                                ..
-                            } if sid == session_id => {
-                                println!("Game Error: {}", message);
-                                return Ok(());
-                            }
-                            _ => {}
                         }
+                        Event::CasinoGameCompleted {
+                            session_id: sid,
+                            payout,
+                            ..
+                        } if sid == session_id => {
+                            println!("Game Completed! Payout: {}", payout);
+                            return Ok(());
+                        }
+                        Event::CasinoError {
+                            session_id: Some(sid),
+                            message,
+                            ..
+                        } if sid == session_id => {
+                            println!("Game Error: {}", message);
+                            return Ok(());
+                        }
+                        _ => {}
                     }
                 }
             }

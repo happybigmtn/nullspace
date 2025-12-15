@@ -10,12 +10,19 @@ struct SwapQuote {
     fee_amount: u64,
 }
 
-fn rng_price_ratio(reserve_rng: u64, reserve_vusdt: u64) -> (u128, u128) {
+fn rng_price_ratio(
+    reserve_rng: u64,
+    reserve_vusdt: u64,
+    bootstrap_price_vusdt_numerator: u64,
+    bootstrap_price_rng_denominator: u64,
+) -> (u128, u128) {
     if reserve_rng > 0 {
         (reserve_vusdt as u128, reserve_rng as u128)
     } else {
-        // Bootstrap price: 1 RNG = 1 vUSDT.
-        (1, 1)
+        (
+            bootstrap_price_vusdt_numerator as u128,
+            bootstrap_price_rng_denominator as u128,
+        )
     }
 }
 
@@ -54,6 +61,9 @@ fn constant_product_quote(
 fn validate_amm_state(amm: &nullspace_types::casino::AmmPool) -> Result<(), &'static str> {
     if amm.fee_basis_points > MAX_BASIS_POINTS || amm.sell_tax_basis_points > MAX_BASIS_POINTS {
         return Err("invalid basis points");
+    }
+    if amm.bootstrap_price_rng_denominator == 0 {
+        return Err("invalid bootstrap price");
     }
 
     match amm.total_shares {
@@ -117,7 +127,7 @@ impl<'a, S: State> Layer<'a, S> {
             _ => return Ok(vec![]),
         };
 
-        if player.chips < amount {
+        if player.balances.chips < amount {
             return Ok(casino_error_vec(
                 public,
                 None,
@@ -147,7 +157,7 @@ impl<'a, S: State> Layer<'a, S> {
             ));
         };
 
-        player.chips -= amount;
+        player.balances.chips -= amount;
         vault.collateral_rng = new_collateral;
 
         self.insert(
@@ -174,8 +184,12 @@ impl<'a, S: State> Layer<'a, S> {
         };
 
         let amm = self.get_or_init_amm().await?;
-        let (price_numerator, price_denominator) =
-            rng_price_ratio(amm.reserve_rng, amm.reserve_vusdt);
+        let (price_numerator, price_denominator) = rng_price_ratio(
+            amm.reserve_rng,
+            amm.reserve_vusdt,
+            amm.bootstrap_price_vusdt_numerator,
+            amm.bootstrap_price_rng_denominator,
+        );
 
         // LTV Calculation: Max Debt = (Collateral * Price) * 50%
         // Debt <= (Collateral * P_num / P_den) / 2
@@ -211,7 +225,7 @@ impl<'a, S: State> Layer<'a, S> {
         if let Some(Value::CasinoPlayer(mut player)) =
             self.get(&Key::CasinoPlayer(public.clone())).await?
         {
-            let Some(new_balance) = player.vusdt_balance.checked_add(amount) else {
+            let Some(new_balance) = player.balances.vusdt_balance.checked_add(amount) else {
                 return Ok(casino_error_vec(
                     public,
                     None,
@@ -219,7 +233,7 @@ impl<'a, S: State> Layer<'a, S> {
                     "vUSDT balance overflow",
                 ));
             };
-            player.vusdt_balance = new_balance;
+            player.balances.vusdt_balance = new_balance;
             updated_player = Some(player);
         }
 
@@ -253,7 +267,7 @@ impl<'a, S: State> Layer<'a, S> {
             _ => return Ok(vec![]),
         };
 
-        if player.vusdt_balance < amount {
+        if player.balances.vusdt_balance < amount {
             return Ok(casino_error_vec(
                 public,
                 None,
@@ -264,7 +278,7 @@ impl<'a, S: State> Layer<'a, S> {
 
         let actual_repay = amount.min(vault.debt_vusdt);
 
-        player.vusdt_balance -= actual_repay;
+        player.balances.vusdt_balance -= actual_repay;
         vault.debt_vusdt -= actual_repay;
         let new_debt = vault.debt_vusdt;
 
@@ -354,7 +368,7 @@ impl<'a, S: State> Layer<'a, S> {
         // Execute Swap
         if is_buying_rng {
             // Player gives vUSDT, gets RNG
-            if player.vusdt_balance < amount_in {
+            if player.balances.vusdt_balance < amount_in {
                 return Ok(casino_error_vec(
                     public,
                     None,
@@ -362,14 +376,14 @@ impl<'a, S: State> Layer<'a, S> {
                     "Insufficient vUSDT",
                 ));
             }
-            let Some(vusdt_balance) = player.vusdt_balance.checked_sub(amount_in) else {
+            let Some(vusdt_balance) = player.balances.vusdt_balance.checked_sub(amount_in) else {
                 return Ok(invalid_amm_state(public));
             };
-            player.vusdt_balance = vusdt_balance;
-            let Some(chips) = player.chips.checked_add(amount_out) else {
+            player.balances.vusdt_balance = vusdt_balance;
+            let Some(chips) = player.balances.chips.checked_add(amount_out) else {
                 return Ok(invalid_amm_state(public));
             };
-            player.chips = chips;
+            player.balances.chips = chips;
 
             let Some(reserve_vusdt) = amm.reserve_vusdt.checked_add(amount_in) else {
                 return Ok(invalid_amm_state(public));
@@ -383,7 +397,7 @@ impl<'a, S: State> Layer<'a, S> {
             // Player gives RNG, gets vUSDT
             // Note: We deduct the FULL amount (incl tax) from player
             let total_deduction = original_amount_in;
-            if player.chips < total_deduction {
+            if player.balances.chips < total_deduction {
                 return Ok(casino_error_vec(
                     public,
                     None,
@@ -392,14 +406,14 @@ impl<'a, S: State> Layer<'a, S> {
                 ));
             }
 
-            let Some(chips) = player.chips.checked_sub(total_deduction) else {
+            let Some(chips) = player.balances.chips.checked_sub(total_deduction) else {
                 return Ok(invalid_amm_state(public));
             };
-            player.chips = chips;
-            let Some(vusdt_balance) = player.vusdt_balance.checked_add(amount_out) else {
+            player.balances.chips = chips;
+            let Some(vusdt_balance) = player.balances.vusdt_balance.checked_add(amount_out) else {
                 return Ok(invalid_amm_state(public));
             };
-            player.vusdt_balance = vusdt_balance;
+            player.balances.vusdt_balance = vusdt_balance;
 
             let Some(reserve_rng) = amm.reserve_rng.checked_add(amount_in) else {
                 return Ok(invalid_amm_state(public));
@@ -474,7 +488,7 @@ impl<'a, S: State> Layer<'a, S> {
             ));
         }
 
-        if player.chips < rng_amount || player.vusdt_balance < usdt_amount {
+        if player.balances.chips < rng_amount || player.balances.vusdt_balance < usdt_amount {
             return Ok(casino_error_vec(
                 public,
                 None,
@@ -532,14 +546,14 @@ impl<'a, S: State> Layer<'a, S> {
             ));
         }
 
-        let Some(chips) = player.chips.checked_sub(rng_amount) else {
+        let Some(chips) = player.balances.chips.checked_sub(rng_amount) else {
             return Ok(invalid_amm_state(public));
         };
-        player.chips = chips;
-        let Some(vusdt_balance) = player.vusdt_balance.checked_sub(usdt_amount) else {
+        player.balances.chips = chips;
+        let Some(vusdt_balance) = player.balances.vusdt_balance.checked_sub(usdt_amount) else {
             return Ok(invalid_amm_state(public));
         };
-        player.vusdt_balance = vusdt_balance;
+        player.balances.vusdt_balance = vusdt_balance;
 
         let Some(reserve_rng) = amm.reserve_rng.checked_add(rng_amount) else {
             return Ok(invalid_amm_state(public));
@@ -633,14 +647,14 @@ impl<'a, S: State> Layer<'a, S> {
         };
         amm.total_shares = total_shares;
 
-        let Some(chips) = player.chips.checked_add(amount_rng) else {
+        let Some(chips) = player.balances.chips.checked_add(amount_rng) else {
             return Ok(invalid_amm_state(public));
         };
-        player.chips = chips;
-        let Some(vusdt_balance) = player.vusdt_balance.checked_add(amount_vusd) else {
+        player.balances.chips = chips;
+        let Some(vusdt_balance) = player.balances.vusdt_balance.checked_add(amount_vusd) else {
             return Ok(invalid_amm_state(public));
         };
-        player.vusdt_balance = vusdt_balance;
+        player.balances.vusdt_balance = vusdt_balance;
 
         let Some(new_lp_balance) = lp_balance.checked_sub(shares) else {
             return Ok(invalid_amm_state(public));
@@ -680,14 +694,71 @@ mod tests {
 
     #[test]
     fn rng_price_ratio_bootstrap_when_no_rng_reserve() {
-        assert_eq!(rng_price_ratio(0, 0), (1, 1));
-        assert_eq!(rng_price_ratio(0, 1_000), (1, 1));
+        assert_eq!(rng_price_ratio(0, 0, 1, 1), (1, 1));
+        assert_eq!(rng_price_ratio(0, 1_000, 1, 1), (1, 1));
+        assert_eq!(rng_price_ratio(0, 0, 2, 3), (2, 3));
+        assert_eq!(rng_price_ratio(0, 1_000, 2, 3), (2, 3));
     }
 
     #[test]
     fn rng_price_ratio_tracks_reserve_ratio_when_nonzero_rng_reserve() {
-        assert_eq!(rng_price_ratio(2, 10), (10, 2));
-        assert_eq!(rng_price_ratio(5, 0), (0, 5));
+        assert_eq!(rng_price_ratio(2, 10, 1, 1), (10, 2));
+        assert_eq!(rng_price_ratio(5, 0, 1, 1), (0, 5));
+    }
+
+    #[test]
+    fn borrow_usdt_uses_bootstrap_price_when_no_reserves() {
+        let executor = Runner::default();
+        executor.start(|_| async move {
+            let (network_secret, master_public) = create_network_keypair();
+            let seed = create_seed(&network_secret, 1);
+
+            let (private, public) = create_account_keypair(1);
+
+            let mut state = MockState::new();
+            state.data.insert(
+                Key::CasinoPlayer(public.clone()),
+                Value::CasinoPlayer(nullspace_types::casino::Player::new("Alice".to_string())),
+            );
+            state.data.insert(
+                Key::Vault(public.clone()),
+                Value::Vault(nullspace_types::casino::Vault {
+                    collateral_rng: 10,
+                    debt_vusdt: 0,
+                }),
+            );
+
+            let mut amm = nullspace_types::casino::AmmPool::new(
+                nullspace_types::casino::AMM_DEFAULT_FEE_BASIS_POINTS,
+            );
+            amm.bootstrap_price_vusdt_numerator = 2;
+            amm.bootstrap_price_rng_denominator = 1;
+            state.data.insert(Key::AmmPool, Value::AmmPool(amm));
+
+            let mut layer = Layer::new(&state, master_public, TEST_NAMESPACE, seed);
+
+            // With a bootstrap price of 2 vUSDT per 1 RNG and 50% LTV, max debt is 10 vUSDT.
+            let tx = Transaction::sign(&private, 0, Instruction::BorrowUSDT { amount: 10 });
+            layer.prepare(&tx).await.expect("prepare");
+            let events = layer.apply(&tx).await.expect("apply");
+            assert!(matches!(
+                events.as_slice(),
+                [Event::VusdtBorrowed {
+                    player,
+                    amount: 10,
+                    new_debt: 10
+                }] if player == &public
+            ));
+
+            // Borrowing any more must fail the LTV check.
+            let tx = Transaction::sign(&private, 1, Instruction::BorrowUSDT { amount: 1 });
+            layer.prepare(&tx).await.expect("prepare");
+            let events = layer.apply(&tx).await.expect("apply");
+            assert!(matches!(
+                events.as_slice(),
+                [Event::CasinoError { message, .. }] if message == "Insufficient collateral (Max 50% LTV)"
+            ));
+        });
     }
 
     #[test]
@@ -776,13 +847,15 @@ mod tests {
             let mut state = MockState::new();
 
             let mut player = nullspace_types::casino::Player::new("Alice".to_string());
-            player.chips = 0;
+            player.balances.chips = 0;
             state.data.insert(
                 Key::CasinoPlayer(public.clone()),
                 Value::CasinoPlayer(player),
             );
 
-            let mut amm = nullspace_types::casino::AmmPool::new(30);
+            let mut amm = nullspace_types::casino::AmmPool::new(
+                nullspace_types::casino::AMM_DEFAULT_FEE_BASIS_POINTS,
+            );
             amm.reserve_rng = 1_000;
             amm.reserve_vusdt = 1_000;
             amm.total_shares = MINIMUM_LIQUIDITY.saturating_add(1_000);
@@ -827,13 +900,15 @@ mod tests {
             let mut state = MockState::new();
 
             let mut player = nullspace_types::casino::Player::new("Alice".to_string());
-            player.chips = 100;
+            player.balances.chips = 100;
             state.data.insert(
                 Key::CasinoPlayer(public.clone()),
                 Value::CasinoPlayer(player),
             );
 
-            let mut amm = nullspace_types::casino::AmmPool::new(30);
+            let mut amm = nullspace_types::casino::AmmPool::new(
+                nullspace_types::casino::AMM_DEFAULT_FEE_BASIS_POINTS,
+            );
             amm.reserve_rng = 1_000;
             amm.reserve_vusdt = 1_000;
             amm.total_shares = MINIMUM_LIQUIDITY.saturating_add(1_000);

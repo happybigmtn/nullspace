@@ -81,6 +81,11 @@ Ensure all three components are running:
 
 All must use the same identity.
 
+## Security note (browser keys)
+
+The browser/WASM `Signer` is intended for local development and testing. It holds raw private key
+material in WASM/JS memory; do not use it as a production wallet or for real funds.
+
 ### WebSocket disconnects
 
 - Verify `VITE_URL` in `.env` matches the simulator address

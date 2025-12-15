@@ -83,7 +83,7 @@ export const useKeyboardControls = ({
         const handleKeyDown = (e: KeyboardEvent) => {
             // Registration Phase
             if (phase === 'REGISTRATION' && playMode !== 'CASH') {
-                if (e.key.toLowerCase() === 'r' && !isRegistered) {
+                if (e.key.toLowerCase() === 'r') {
                     gameActions.registerForTournament();
                 }
                 return;

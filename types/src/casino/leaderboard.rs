@@ -1,6 +1,7 @@
 use bytes::{Buf, BufMut};
 use commonware_codec::{EncodeSize, Error, Read, ReadExt, ReadRangeExt, Write};
 use commonware_cryptography::ed25519::PublicKey;
+use std::cmp::Reverse;
 
 use super::{read_string, string_encode_size, write_string, MAX_NAME_LENGTH};
 
@@ -57,21 +58,23 @@ impl CasinoLeaderboard {
             self.entries.remove(idx);
         }
 
-        // Early exit: if we have 10 entries and new chips is <= lowest, skip
+        let key = (Reverse(chips), &player);
+
+        // Early exit: if we have 10 entries and this entry wouldn't outrank the current last.
+        // Tie-breaker: for equal chips, lower public key sorts ahead deterministically.
         if self.entries.len() >= 10 {
             if let Some(last) = self.entries.last() {
-                if chips <= last.chips {
+                let last_key = (Reverse(last.chips), &last.player);
+                if key >= last_key {
                     return;
                 }
             }
         }
 
         // Find insertion point using binary search (entries sorted descending by chips)
-        // FIXED: Use chips.cmp(&e.chips) for descending order (higher chips first)
-        // This reverses the comparison so higher values come before lower values
         let insert_pos = self
             .entries
-            .binary_search_by(|e| chips.cmp(&e.chips))
+            .binary_search_by(|e| (Reverse(e.chips), &e.player).cmp(&key))
             .unwrap_or_else(|pos| pos);
 
         // Insert at correct position

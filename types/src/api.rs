@@ -624,3 +624,53 @@ impl EncodeSize for Pending {
         self.transactions.encode_size()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand::{rngs::StdRng, Rng, RngCore, SeedableRng};
+
+    #[test]
+    fn api_decoding_handles_malformed_inputs() {
+        let mut rng = StdRng::seed_from_u64(0x0ddc_0ffe_e0dd_f00d);
+
+        let mut lengths = vec![
+            0usize, 1, 2, 3, 4, 7, 8, 15, 16, 31, 32, 63, 64, 127, 128, 255, 256, 512, 1024, 2048,
+        ];
+        for _ in 0..250 {
+            lengths.push(rng.gen_range(0..=4096));
+        }
+
+        for len in lengths {
+            let mut bytes = vec![0u8; len];
+            rng.fill_bytes(&mut bytes);
+
+            let mut reader = bytes.as_slice();
+            let _ = Summary::read(&mut reader);
+
+            let mut reader = bytes.as_slice();
+            let _ = Events::read(&mut reader);
+
+            let mut reader = bytes.as_slice();
+            let _ = Lookup::read(&mut reader);
+
+            let mut reader = bytes.as_slice();
+            let _ = FilteredEvents::read(&mut reader);
+
+            let mut reader = bytes.as_slice();
+            let _ = Update::read(&mut reader);
+
+            let mut reader = bytes.as_slice();
+            let _ = Submission::read(&mut reader);
+
+            let mut reader = bytes.as_slice();
+            let _ = Pending::read(&mut reader);
+
+            let mut reader = bytes.as_slice();
+            let _ = Query::read(&mut reader);
+
+            let mut reader = bytes.as_slice();
+            let _ = UpdatesFilter::read(&mut reader);
+        }
+    }
+}

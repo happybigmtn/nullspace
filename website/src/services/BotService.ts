@@ -28,7 +28,15 @@ interface BotState {
   nonce: number;
   sessionCounter: number;
   isActive: boolean;
+  loopStarted: boolean;
+  profile: BotProfile;
 }
+
+type BotProfile = {
+  baseBet: number;
+  volatility: number; // 0..1 (higher = more aggressive / more sidebets / more multi-bet rounds)
+  favoriteGames: number[];
+};
 
 // Game type enum matching the chain
 const GameType = {
@@ -66,6 +74,8 @@ export class BotService {
   private identityHex: string;
   private onStatusUpdate?: (status: BotServiceStatus) => void;
   private preparedTournamentId: number | null = null;
+  private prepareGeneration = 0;
+  private totalSubmitted = 0;
 
   constructor(baseUrl: string, identityHex: string) {
     this.baseUrl = baseUrl;
@@ -85,7 +95,7 @@ export class BotService {
       this.onStatusUpdate({
         isRunning: this.isRunning,
         activeBots: this.bots.filter(b => b.isActive).length,
-        totalBets: 0,
+        totalBets: this.totalSubmitted,
         ...status,
       });
     }
@@ -98,19 +108,27 @@ export class BotService {
     }
 
     this.stop();
+    const generation = this.prepareGeneration;
     this.preparedTournamentId = tournamentId;
 
     console.log(`[BotService] Preparing ${this.config.numBots} bots for tournament ${tournamentId}...`);
     this.updateStatus({ isRunning: false });
 
     for (let i = 0; i < this.config.numBots; i++) {
+      if (generation !== this.prepareGeneration) break;
       try {
         const bot = await this.createBot(i);
+        if (generation !== this.prepareGeneration) break;
 
         // Join the tournament during registration (or early).
         await this.joinTournament(bot, tournamentId);
+        if (generation !== this.prepareGeneration) break;
 
         this.bots.push(bot);
+        if (this.isRunning && bot.isActive && !bot.loopStarted) {
+          bot.loopStarted = true;
+          this.startBotLoop(bot);
+        }
 
         // Stagger bot creation slightly to avoid overloading the backend.
         await new Promise(r => setTimeout(r, 5));
@@ -125,13 +143,14 @@ export class BotService {
 
   startPlaying(): void {
     if (this.isRunning || !this.config.enabled) return;
-    if (this.bots.length === 0) return;
 
     console.log(`[BotService] Starting bot play loops (${this.bots.length} bots)...`);
     this.isRunning = true;
     this.updateStatus({ isRunning: true });
 
     for (const bot of this.bots) {
+      if (!bot.isActive || bot.loopStarted) continue;
+      bot.loopStarted = true;
       this.startBotLoop(bot);
     }
   }
@@ -141,6 +160,7 @@ export class BotService {
 
     console.log('[BotService] Stopping all bots...');
     this.isRunning = false;
+    this.prepareGeneration++;
 
     // Clear all intervals
     for (const handle of this.intervalHandles) {
@@ -156,6 +176,23 @@ export class BotService {
     this.preparedTournamentId = null;
 
     this.updateStatus({ isRunning: false, activeBots: 0 });
+  }
+
+  private createProfile(id: number): BotProfile {
+    // Weighted base bet sizes (tournament stack starts at 1000).
+    const baseBets = [5, 10, 25, 50];
+    const baseWeights = [0.45, 0.35, 0.15, 0.05];
+    const baseBet = this.weightedChoice(baseBets, baseWeights);
+
+    // Volatility: most bots are conservative, a few are high-variance.
+    const volatility = Math.min(1, Math.max(0, (Math.random() ** 2) * 1.15));
+
+    // Give each bot a small set of favorite games so the table looks less uniform.
+    const favCount = 2 + (id % 2); // 2-3 favorites, deterministic per id
+    const shuffled = [...ALL_GAMES].sort(() => Math.random() - 0.5);
+    const favoriteGames = shuffled.slice(0, favCount);
+
+    return { baseBet, volatility, favoriteGames };
   }
 
   private async createBot(id: number): Promise<BotState> {
@@ -209,18 +246,29 @@ export class BotService {
       nonce: currentNonce,
       sessionCounter: id * 1_000_000,
       isActive: true,
+      loopStarted: false,
+      profile: this.createProfile(id),
     };
   }
 
   private async joinTournament(bot: BotState, tournamentId: number): Promise<void> {
-    const joinNonce = bot.nonce;
-    const joinTx = bot.wasm.createCasinoJoinTournamentTransaction(joinNonce, tournamentId);
-    try {
+    const attempt = async () => {
+      const joinNonce = bot.nonce;
+      const joinTx = bot.wasm.createCasinoJoinTournamentTransaction(joinNonce, tournamentId);
       await this.submitTransaction(bot.wasm, joinTx);
       bot.nonce++;
+    };
+    try {
+      await attempt();
     } catch (e) {
-      // If join fails (already joined / tournament not registering / nonce mismatch), re-sync nonce and continue.
+      // If join fails (already joined / tournament not registering / nonce mismatch), re-sync and retry once.
       await this.resyncNonce(bot);
+      try {
+        await attempt();
+      } catch {
+        // Give up for now; bot can still play cash games, and will re-sync on later failures.
+        await this.resyncNonce(bot);
+      }
     }
   }
 
@@ -283,6 +331,11 @@ export class BotService {
     if (!response.ok) {
       throw new Error(`Server error: ${response.status}`);
     }
+
+    this.totalSubmitted++;
+    if (this.totalSubmitted % 50 === 0) {
+      this.updateStatus({ totalBets: this.totalSubmitted });
+    }
   }
 
   private startBotLoop(bot: BotState): void {
@@ -313,16 +366,16 @@ export class BotService {
   }
 
   private async playRandomGame(bot: BotState): Promise<void> {
-    const gameType = ALL_GAMES[Math.floor(Math.random() * ALL_GAMES.length)];
+    const gameType = this.pickGameForBot(bot);
     const sessionId = BigInt(++bot.sessionCounter);
-    const bet = 10; // Small consistent bet
+    const plan = this.buildGamePlan(bot, gameType);
 
     // Start game - use current nonce, only increment on success
     const startNonce = bot.nonce;
     const startTx = bot.wasm.createCasinoStartGameTransaction(
       startNonce,
       gameType,
-      bet,
+      plan.startBet,
       sessionId
     );
 
@@ -340,8 +393,7 @@ export class BotService {
     await new Promise(r => setTimeout(r, 20));
 
     // Make moves based on game type
-    const moves = this.getGameMoves(gameType);
-    for (const move of moves) {
+    for (const move of plan.moves) {
       const moveNonce = bot.nonce;
       const moveTx = bot.wasm.createCasinoGameMoveTransaction(
         moveNonce,
@@ -372,56 +424,298 @@ export class BotService {
     }
   }
 
-  private getGameMoves(gameType: number): Uint8Array[] {
+  private pickGameForBot(bot: BotState): number {
+    // Favor a bot's preferred games most of the time to create a less-uniform pool.
+    if (bot.profile.favoriteGames.length > 0 && Math.random() < 0.7) {
+      return bot.profile.favoriteGames[Math.floor(Math.random() * bot.profile.favoriteGames.length)];
+    }
+    return ALL_GAMES[Math.floor(Math.random() * ALL_GAMES.length)];
+  }
+
+  private buildGamePlan(bot: BotState, gameType: number): { startBet: number; moves: Uint8Array[] } {
+    const v = bot.profile.volatility;
+    const chipMenu = [1, 5, 10, 25, 50, 100, 200];
+    const around = (target: number, min = 1, max = 200) =>
+      this.pickClosestWeighted(
+        chipMenu.filter(x => x >= min && x <= max),
+        target
+      );
+
+    const base = bot.profile.baseBet;
+    const mainBet = around(base * (0.6 + Math.random() * (1.2 + v)));
+
+    const moves: Uint8Array[] = [];
+
     switch (gameType) {
-      case GameType.Baccarat:
-        // Place bet then deal
-        return [
-          this.serializeBaccaratBet(Math.floor(Math.random() * 3), 10),
-          new Uint8Array([1]), // Deal
-        ];
+      case GameType.Baccarat: {
+        // Start with 0; wagers are placed via moves.
+        const total = Math.max(1, around(mainBet, 1, 100));
+        const mainAmt = Math.max(1, around(total * (0.7 + Math.random() * 0.3), 1, 100));
+        const sideAmt = Math.max(1, around(Math.max(1, Math.floor(total * 0.25)), 1, 25));
 
-      case GameType.Blackjack:
-        // Stand immediately
-        return [new Uint8Array([1])];
+        // Main bet: mostly Player/Banker, occasional Tie.
+        const mainType = this.weightedChoice([0, 1, 2], [0.46, 0.46, 0.08]);
+        moves.push(this.serializeBaccaratBet(mainType, mainAmt));
 
-      case GameType.CasinoWar:
-        return [];
+        // Optional side bets: small and rare (high edge, high variance).
+        if (Math.random() < 0.15 * (0.5 + v)) {
+          const sideType = this.weightedChoice([3, 4, 5], [0.45, 0.45, 0.10]);
+          moves.push(this.serializeBaccaratBet(sideType, sideAmt));
+        }
 
-      case GameType.Craps:
-        // Pass bet then roll
-        return [
-          this.serializeCrapsBet(0, 0, 10),
-          new Uint8Array([2]), // Roll
-        ];
+        moves.push(new Uint8Array([1])); // Deal
+        return { startBet: 0, moves };
+      }
 
-      case GameType.VideoPoker:
-        // Hold all
-        return [new Uint8Array([31])];
+      case GameType.Blackjack: {
+        // Moves: optional 21+3 side bet, Deal, (optional hits), Stand, Reveal.
+        // Side bet: small and occasional.
+        if (Math.random() < 0.12 * (0.7 + v)) {
+          const side = Math.max(1, Math.min(mainBet, around(Math.max(1, Math.floor(mainBet / 5)), 1, 25)));
+          moves.push(this.serializeU64Action(5, side)); // Set 21+3
+        }
 
-      case GameType.HiLo:
-        // Random higher/lower
-        return [new Uint8Array([Math.floor(Math.random() * 2)])];
+        moves.push(new Uint8Array([4])); // Deal
 
-      case GameType.Roulette:
-        // Bet on red
-        return [new Uint8Array([1, 0])];
+        const hits = Math.random() < 0.35 ? (Math.random() < 0.25 ? 2 : 1) : 0;
+        for (let i = 0; i < hits; i++) moves.push(new Uint8Array([0])); // Hit
 
-      case GameType.SicBo:
-        // Bet on small
-        return [new Uint8Array([0, 0])];
+        if (Math.random() < 0.10 * v) moves.push(new Uint8Array([2])); // Try Double sometimes
 
-      case GameType.ThreeCard:
-        // Play
-        return [new Uint8Array([0])];
+        moves.push(new Uint8Array([1])); // Stand (if already awaiting reveal, this is ignored on-chain)
+        moves.push(new Uint8Array([6])); // Reveal
+        return { startBet: mainBet, moves };
+      }
 
-      case GameType.UltimateHoldem:
-        // Check then fold
-        return [new Uint8Array([0]), new Uint8Array([4])];
+      case GameType.CasinoWar: {
+        // Optional tie bet, then Play; if tie, follow with War or Surrender to resolve.
+        if (Math.random() < 0.10 * (0.5 + v)) {
+          const tie = Math.max(1, around(Math.max(1, Math.floor(mainBet / 4)), 1, 25));
+          moves.push(this.serializeU64Action(3, tie)); // SetTieBet
+        }
+        moves.push(new Uint8Array([0])); // Play
+
+        // Always choose a tie resolution action; only applies if the hand was a tie.
+        const resolve = Math.random() < 0.8 ? 1 : 2; // War or Surrender
+        moves.push(new Uint8Array([resolve]));
+        return { startBet: mainBet, moves };
+      }
+
+      case GameType.Craps: {
+        // One-roll bets so sessions complete quickly (Field / Hop).
+        const amount = Math.max(1, around(mainBet, 1, 50));
+        const betType = Math.random() < 0.75 ? 4 : 7; // Field or Next
+        const target = betType === 7 ? this.randInt(2, 12) : 0;
+        moves.push(this.serializeTableBet(betType, target, amount));
+        moves.push(new Uint8Array([2])); // Roll
+        return { startBet: 0, moves };
+      }
+
+      case GameType.VideoPoker: {
+        // Random hold mask (0..31). Holding all (31) is allowed but uncommon.
+        const mask = Math.random() < 0.15 ? 31 : this.randInt(0, 31);
+        moves.push(new Uint8Array([mask]));
+        return { startBet: mainBet, moves };
+      }
+
+      case GameType.HiLo: {
+        // One guess, then cashout (if guess was wrong, cashout is ignored).
+        const guess = Math.random() < 0.5 ? 0 : 1;
+        moves.push(new Uint8Array([guess]));
+        moves.push(new Uint8Array([2])); // Cashout
+        return { startBet: mainBet, moves };
+      }
+
+      case GameType.Roulette: {
+        // Start with 0; place 1-3 bets, then spin.
+        const betCount = this.weightedChoice([1, 2, 3], [0.6, 0.3, 0.1 * (0.7 + v)]);
+        const total = Math.max(1, around(mainBet * betCount, 1, 200));
+        for (let i = 0; i < betCount; i++) {
+          const isInside = Math.random() < 0.12 * (0.5 + v);
+          const isDozenOrColumn = !isInside && Math.random() < 0.25;
+          const amount = Math.max(1, around(Math.max(1, Math.floor(total / betCount)), 1, isInside ? 25 : 100));
+
+          if (isInside) {
+            const betType = this.weightedChoice([0, 9, 10, 11, 12, 13], [0.35, 0.15, 0.15, 0.12, 0.12, 0.11]);
+            const number = this.randomRouletteNumberForBetType(betType);
+            moves.push(this.serializeTableBet(betType, number, amount));
+          } else if (isDozenOrColumn) {
+            const betType = this.weightedChoice([7, 8], [0.6, 0.4]);
+            const number = this.randInt(0, 2);
+            moves.push(this.serializeTableBet(betType, number, amount));
+          } else {
+            const betType = this.weightedChoice([1, 2, 3, 4, 5, 6], [0.22, 0.22, 0.16, 0.16, 0.12, 0.12]);
+            moves.push(this.serializeTableBet(betType, 0, amount));
+          }
+        }
+        moves.push(new Uint8Array([1])); // Spin
+        return { startBet: 0, moves };
+      }
+
+      case GameType.SicBo: {
+        // Start with 0; place 1-2 bets, then roll.
+        const betCount = Math.random() < 0.75 ? 1 : 2;
+        for (let i = 0; i < betCount; i++) {
+          const exotic = Math.random() < 0.10 * (0.6 + v);
+          const amount = Math.max(1, around(mainBet / betCount, 1, exotic ? 10 : 50));
+
+          if (!exotic) {
+            const betType = this.weightedChoice([0, 1, 2, 3, 8, 7], [0.28, 0.28, 0.14, 0.14, 0.10, 0.06]);
+            const number =
+              betType === 8
+                ? this.randInt(1, 6) // Single
+                : betType === 7
+                  ? this.randInt(3, 18) // Total
+                  : 0;
+            moves.push(this.serializeTableBet(betType, number, amount));
+          } else {
+            // Rare, high-variance bets.
+            const betType = this.weightedChoice([4, 5, 9], [0.45, 0.30, 0.25]);
+            const number =
+              betType === 4
+                ? this.randInt(1, 6) // SpecificTriple
+                : betType === 9
+                  ? this.encodeSicBoDomino(this.randInt(1, 6), this.randInt(1, 6))
+                  : 0; // AnyTriple
+            moves.push(this.serializeTableBet(betType, number, amount));
+          }
+        }
+        moves.push(new Uint8Array([1])); // Roll
+        return { startBet: 0, moves };
+      }
+
+      case GameType.ThreeCard: {
+        // Deal first, then decide to play or fold; reveal only after playing.
+        const pairPlus = Math.random() < 0.18 * (0.6 + v) ? Math.max(1, around(Math.floor(mainBet / 4), 1, 25)) : 0;
+        if (pairPlus > 0) moves.push(this.serializeU64Action(2, pairPlus)); // Deal + set Pairplus
+        else moves.push(new Uint8Array([2])); // Deal
+
+        const shouldPlay = Math.random() < 0.6 + v * 0.15;
+        if (shouldPlay) {
+          moves.push(new Uint8Array([0])); // Play (deducts Play bet)
+          moves.push(new Uint8Array([4])); // Reveal
+        } else {
+          moves.push(new Uint8Array([1])); // Fold (resolves)
+        }
+        return { startBet: mainBet, moves };
+      }
+
+      case GameType.UltimateHoldem: {
+        // Deal, then pick a line (bet early vs check down), and optionally reveal.
+        const trips = Math.random() < 0.10 * (0.6 + v) ? Math.max(1, around(Math.floor(mainBet / 3), 1, 25)) : 0;
+        if (trips > 0) moves.push(this.serializeU64Action(5, trips)); // Deal + set Trips
+        else moves.push(new Uint8Array([5])); // Deal
+
+        const betPreflop = Math.random() < 0.18 * (0.4 + v);
+        if (betPreflop) {
+          const action = Math.random() < 0.5 ? 1 : 8; // 4x or 3x
+          moves.push(new Uint8Array([action]));
+          moves.push(new Uint8Array([7])); // Reveal
+          return { startBet: mainBet, moves };
+        }
+
+        // Check to flop.
+        moves.push(new Uint8Array([0])); // Check
+
+        const betFlop = Math.random() < 0.25 * (0.5 + v);
+        if (betFlop) {
+          moves.push(new Uint8Array([2])); // Bet 2x
+          moves.push(new Uint8Array([7])); // Reveal
+          return { startBet: mainBet, moves };
+        }
+
+        // Check to river.
+        moves.push(new Uint8Array([0])); // Check
+
+        const betRiver = Math.random() < 0.30 * (0.5 + v);
+        if (betRiver) {
+          moves.push(new Uint8Array([3])); // Bet 1x
+          moves.push(new Uint8Array([7])); // Reveal
+        } else {
+          moves.push(new Uint8Array([4])); // Fold
+        }
+
+        return { startBet: mainBet, moves };
+      }
 
       default:
-        return [];
+        return { startBet: mainBet, moves: [] };
     }
+  }
+
+  private serializeU64Action(action: number, amount: number): Uint8Array {
+    const payload = new Uint8Array(9);
+    payload[0] = action;
+    new DataView(payload.buffer).setBigUint64(1, BigInt(amount), false);
+    return payload;
+  }
+
+  private serializeTableBet(betType: number, number: number, amount: number): Uint8Array {
+    const payload = new Uint8Array(11);
+    payload[0] = 0;
+    payload[1] = betType;
+    payload[2] = number;
+    new DataView(payload.buffer).setBigUint64(3, BigInt(amount), false);
+    return payload;
+  }
+
+  private randomRouletteNumberForBetType(betType: number): number {
+    switch (betType) {
+      case 0: // Straight
+        return this.randInt(0, 36);
+      case 9: // SplitH: 1-35, not rightmost (n % 3 != 0)
+        return this.randIntFrom(() => this.randInt(1, 35), (n) => n % 3 !== 0);
+      case 10: // SplitV: 1-33
+        return this.randInt(1, 33);
+      case 11: // Street: 1,4,...,34
+        return 1 + 3 * this.randInt(0, 11);
+      case 12: // Corner: 1-32, not rightmost (n % 3 != 0)
+        return this.randIntFrom(() => this.randInt(1, 32), (n) => n % 3 !== 0);
+      case 13: // SixLine: 1,4,...,31
+        return 1 + 3 * this.randInt(0, 10);
+      default:
+        return 0;
+    }
+  }
+
+  private encodeSicBoDomino(a: number, b: number): number {
+    const min = Math.min(a, b);
+    const max = Math.max(a, b);
+    if (min === max) {
+      // Force distinct values (domino requires min<max).
+      const alt = min === 6 ? 5 : 6;
+      return (Math.min(min, alt) << 4) | Math.max(min, alt);
+    }
+    return (min << 4) | max;
+  }
+
+  private randInt(minInclusive: number, maxInclusive: number): number {
+    return Math.floor(Math.random() * (maxInclusive - minInclusive + 1)) + minInclusive;
+  }
+
+  private randIntFrom(gen: () => number, pred: (n: number) => boolean, maxTries = 64): number {
+    for (let i = 0; i < maxTries; i++) {
+      const n = gen();
+      if (pred(n)) return n;
+    }
+    return gen();
+  }
+
+  private weightedChoice<T>(items: T[], weights: number[]): T {
+    const total = weights.reduce((a, b) => a + Math.max(0, b), 0);
+    if (total <= 0) return items[0];
+    let r = Math.random() * total;
+    for (let i = 0; i < items.length; i++) {
+      r -= Math.max(0, weights[i] ?? 0);
+      if (r <= 0) return items[i];
+    }
+    return items[items.length - 1];
+  }
+
+  private pickClosestWeighted(options: number[], target: number): number {
+    if (options.length === 0) return Math.max(1, Math.floor(target));
+    const weights = options.map((x) => 1 / (1 + Math.abs(x - target)));
+    return this.weightedChoice(options, weights);
   }
 
   private serializeBaccaratBet(betType: number, amount: number): Uint8Array {

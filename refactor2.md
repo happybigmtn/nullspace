@@ -31,6 +31,7 @@ This is a second-pass review of the current workspace with a focus on idiomatic 
 ## Implementation Status (2025-12-15)
 
 - [x] `node/src/application/ingress.rs`: remove panic-on-send/receive; return safe defaults on mailbox closure.
+- [x] `node/src/application/ingress.rs`: add a typed `MailboxError` and shared `send/receive` helpers; thread errors through internal callers where possible.
 - [x] `node/src/aggregator/ingress.rs`: remove panic-on-send/receive; make `deliver()` fail-closed on mailbox closure/shutdown (avoid acknowledging dropped messages).
 - [x] `node/src/{application,aggregator}/ingress.rs`: add stop-signal aware mailbox sends/awaits to avoid hanging during shutdown.
 - [x] `node/src/supervisor.rs`: remove `block_on` from `peer_set_id()`; avoid `unimplemented!()` panics in `Su::leader()`.
@@ -38,18 +39,28 @@ This is a second-pass review of the current workspace with a focus on idiomatic 
 - [x] `node/src/seeder/actor.rs`: do not panic on dropped `oneshot` receivers/listeners.
 - [x] `node/src/aggregator/actor.rs`: do not panic on dropped `oneshot` receivers; ensure `Deliver` responds with an explicit boolean ack.
 - [x] `node/src/application/actor.rs`: avoid panic on missing blocks during verify join.
+- [x] `node/src/application/actor.rs`: use `Block::try_new` for proposed blocks (avoid panic if tx count invariant is violated).
 - [x] `node/src/application/mempool.rs`: remove non-test dead-code warnings by gating test-only defaults/constructor.
 - [x] `node/src/application/mempool.rs`: add regression test for stale-queue compaction under adversarial churn.
 - [x] Idiomatic/clippy cleanups in casino games/tests: `execution/src/casino/{baccarat,roulette,blackjack,sic_bo,hilo,craps,mod}.rs`.
+- [x] `execution/src/casino/baccarat.rs`: add fuzz-style payout invariant tests (bounds on `calculate_bet_payout`).
 - [x] Test hygiene: `types/src/casino/tests.rs`, `types/src/token.rs` clippy warning fixes.
+- [x] `types/src/token.rs`: replace manual JSON serde with derives + `serde(with = ...)` adapters (preserve JSON shape).
 - [x] `types/src/casino/codec.rs`: add unit tests for string decode bounds (too long, truncated, invalid UTF-8).
+- [x] `types/src/casino/codec.rs`: add fuzz-style tests for malformed string inputs (no panics; bounded allocations).
+- [x] `types/src/casino/leaderboard.rs`: make tie-breaker deterministic (chips desc, pubkey asc) and add equal-chip/top-10 cutoff tests.
+- [x] `types/src/casino/tournament.rs`: add edge-case tests for membership queries and decode bounds (max players).
+- [x] `types/benches/tournament_membership.rs`: add a benchmark harness for tournament membership operations.
 - [x] `execution/src/mocks.rs`: add regression tests that `Summary`/`Events`/`FilteredEvents` decoding rejects oversized proof op vectors (codec bounds).
+- [x] `types/src/api.rs`: add fuzz-style tests ensuring API/proof decoding handles malformed inputs without panicking.
 - [x] `nullspace-execution` test clippy hygiene: remove clone-on-copy / unnecessary mut / manual range checks in `execution/src/{mocks.rs,layer/handlers/staking.rs,casino/*}` tests.
 - [x] `types/src/casino/player.rs` + `execution/src/layer/handlers/casino.rs`: stop using `Player::new_with_block`; keep it as a compatibility shim that forwards to `Player::new` (behavior-preserving).
 - [x] Proof limit unification: centralize summary/events decode limits in `types/src/api.rs` and reuse in `node/src/aggregator/actor.rs` + `simulator/src/lib.rs`.
 - [x] `client/src/client.rs`: switch retryable POST bodies to `bytes::Bytes` (avoid per-attempt cloning).
 - [x] `client/src/{client,consensus}.rs` + `client/src/lib.rs`: include a size-limited response body snippet in HTTP failure errors (`Error::FailedWithBody`).
+- [x] `client/src/client.rs`: include method+URL context in HTTP failure errors (even when response body is empty); add retry behavior tests.
 - [x] `client/src/consensus.rs`: return a structured mismatch error for `Query::Index` (expected vs got view).
+- [x] `client/src/consensus.rs`: add `wait_for_latest_seed_at_least*` helper for bots (polling).
 - [x] `client/src/lib.rs` + `client/src/client.rs`: add `Error::VerificationFailed` and use it for lookup verification failures (preserve reason).
 - [x] `client/src/events.rs`: dedupe websocket reader loop; unify verified/unverified paths.
 - [x] `client/src/events.rs`: add structured websocket decode/verify logging (`len`/`consumed`/`remaining`) for observability.
@@ -62,16 +73,19 @@ This is a second-pass review of the current workspace with a focus on idiomatic 
 - [x] `types/src/execution.rs`: add `Block::try_new` + `BlockBuildError` (checked constructor).
 - [x] `types/src/execution.rs` + `node/src/{indexer.rs,application/actor.rs}`: reduce per-tx allocations in batch signature verification by reusing a payload scratch buffer.
 - [x] `types/src/lib.rs`: add crate-level docs describing stability and consensus-critical encoding.
+- [x] `types/src/compat.rs`: add golden encoding tests for wire-compat (e.g., `Query`, `UpdatesFilter`, `Transaction`).
 - [x] `execution/src/casino/video_poker.rs`: fix clippy `needless_range_loop` via iterator-based indexing.
 - [x] `execution/src/lib.rs`: add crate-level docs describing determinism and recovery invariants.
+- [x] `execution/src/lib.rs`: add a minimal execution pipeline example (rustdoc).
 - [x] `execution/src/layer/mod.rs`: make progressive-bet parsing fail-closed (no silent `0` on short blobs).
 - [x] `execution/src/layer/mod.rs`: split `apply()` dispatch by domain (`casino`, `staking`, `liquidity`) for maintainability (behavior-preserving).
+- [x] `execution/src/layer/mod.rs`: add determinism regression test for identical seed + tx order.
 - [x] `execution/src/layer/handlers/casino.rs`: centralize `CasinoError` construction + add player/session lookup helpers (behavior-preserving).
 - [x] `execution/src/layer/handlers/mod.rs` + `execution/src/layer/handlers/{staking,liquidity}.rs`: reuse a shared `CasinoError` helper to keep error construction consistent across handlers (behavior-preserving).
 - [x] `execution/src/layer/handlers/staking.rs`: clarify dev/demo staking epoch/duration semantics (behavior-preserving).
 - [x] (**behavior-changing**) `execution/src/layer/handlers/staking.rs`: restake no longer shortens unlock; voting power accumulates across stakes + added multi-stake tests.
 - [x] `execution/src/layer/handlers/staking.rs`: add `ProcessEpoch` rollover test coverage.
-- [x] (**behavior-changing**) `execution/src/layer/handlers/staking.rs`: make `ClaimRewards` return an explicit `CasinoError` until rewards economics are implemented (avoid misleading `amount: 0` success).
+- [x] (**behavior-changing**) `execution/src/layer/handlers/staking.rs`: implement staking rewards distribution and enable `ClaimRewards` (epoch surplus → reward accumulator/pool).
 - [x] `execution/src/layer/handlers/liquidity.rs`: harden AMM invariants (state validation + checked math) and add regression tests to ensure failed swaps do not mutate house burn/fees.
 - [x] `simulator/src/lib.rs`: replace `GovernorConfigBuilder::finish().unwrap()` with safe fallback to defaults.
 - [x] `simulator/src/{lib,explorer}.rs`: split explorer indexing + HTTP handlers into a dedicated module.
@@ -99,11 +113,20 @@ This is a second-pass review of the current workspace with a focus on idiomatic 
 - [x] `node/src/{seeder,aggregator}/actor.rs`: add jittered sleep to upload backoff (reduce thundering herd on indexer outages).
 - [x] `node/src/{seeder,aggregator}/actor.rs`: harden `uploads_outstanding` decrement (no underflow on unexpected completion messages).
 - [x] `node/src/seeder/actor.rs`: add metrics for pending seed listeners and prune canceled listeners; crash-fast if pending waiters exceed a hard cap.
+- [x] `node/src/{lib.rs,main.rs,engine.rs}` + `node/src/seeder/actor.rs`: make the pending seed listener cap configurable (`max_pending_seed_listeners`).
 - [x] `node/src/indexer.rs`: preserve mempool websocket error details from `nullspace-client` (stop collapsing to `UnexpectedResponse`).
 - [x] `node/src/indexer.rs`: add mempool stream metrics (connect attempts/failures, invalid batches, forwarded batches) and exponential reconnect backoff (with jitter).
 - [x] `node/src/indexer.rs`: add `ReconnectingStream` tests (drops invalid batches; reconnects after stream end).
 - [x] `node/src/aggregator/actor.rs`: add proof bundle size + cache hit/miss metrics for observability.
 - [x] `node/src/backoff.rs`: centralize jittered backoff helper; reuse across node actors and mempool reconnects.
+- [x] `simulator/src/main.rs`: bind to localhost by default; add `--host` to override.
+- [x] `simulator/src/api/{mod.rs,http.rs}` + `simulator/src/{lib,state}.rs`: add `/healthz` and `/config` endpoints for dev convenience.
+- [x] `types/src/token.rs`: add fuzz-style tests for JSON↔binary roundtrips and canonical binary encoding.
+- [x] `execution/src/casino/mod.rs`: add fuzz-style invariant tests for `apply_modifiers`.
+- [x] `execution/src/casino/blackjack.rs`: add fuzz-style bounds tests for total wagered and total return (no side bet, no super mode).
+- [x] `node/src/main.rs`: extend `--dry-run` to print a sizing/config report (buffer pool memory, consensus timeouts, mempool limits, etc).
+- [x] `execution/src/casino/cards.rs` + callers: centralize card rank/suit helpers and reuse across casino games, super mode, and layer progressive checks.
+- [x] `node/src/{lib.rs,main.rs}`: move network/storage/consensus tunables into YAML config with defaults (quotas, sizes, timeouts) and log a redacted config on startup.
 
 ---
 
@@ -163,7 +186,7 @@ async fn try_send<E: Clock>(
 
 ### Refactor Plan
 - Phase 1 (**done**): replace `.expect("Failed to send ...")` with early-return/logging and safe fallbacks.
-- Phase 2: introduce mailbox error types and thread them through callers if consensus engine supports it.
+- Phase 2 (**done**): introduce mailbox error types and thread them through internal callers (consensus traits still return safe defaults).
 - Phase 3 (**done**): propagate a shutdown `Signal` (like seeder) to allow bounded waits and cancellation.
 
 ### Open Questions
@@ -261,7 +284,7 @@ receiver.await.unwrap_or(false)
 ### Refactor Plan
 - Phase 1 (**done**): remove `block_on` by maintaining a synchronously readable epoch value (atomic).
 - Phase 2 (**done**): eliminate `unimplemented!` by returning `None` for `Su::leader` (threshold impl provides real leader selection).
-- Phase 3: consolidate supervisor traits if upstream allows (reduce duplicated leader selection logic).
+- Phase 3 (**done**): consolidate supervisor traits if upstream allows (reduce duplicated leader selection logic).
 
 ### Open Questions
 - Is `Su::leader` ever invoked by the engines used here, or only the threshold variant (`TSu::leader`)?
@@ -276,14 +299,11 @@ receiver.await.unwrap_or(false)
 
 ### Progress (implemented)
 - Dead-code warnings removed by gating test-only defaults/constructors; production uses `Mempool::new_with_limits(...)`.
-- Added regression coverage for stale queue compaction (`COMPACT_AFTER_STALE_SKIPS`).
+- Switched the scheduling queue to a round-robin ring with `O(1)` removals (no stale-entry compaction scans); updated regression coverage to ensure no stale queue entries remain after `retain(...)`.
 
 ### Top Issues (ranked)
 1. **Queue compaction strategy is coarse**
-   - Impact: potential `O(n)` retains on large queues; potential memory churn if many stale keys accumulate.
-   - Risk: low–medium; depends on churn.
-   - Effort: medium.
-   - Location: `node/src/application/mempool.rs:122`–`190`.
+   - Status: addressed by using a queue structure that avoids stale entries.
 
 ### Idiomatic Rust Improvements
 - Prefer removing unused public constructors/constants rather than `#[allow(dead_code)]` unless you need API stability.
@@ -302,8 +322,7 @@ pub fn new(context: impl Metrics) -> Self {
 ```
 
 ### Data Structure & Algorithm Changes
-- If queue staleness becomes common, switch `queued`/`queue` to a single structure that avoids duplicates by construction (e.g., `indexmap::IndexSet`), or maintain a per-key “generation” counter to lazily drop stale entries.
-  - Complexity: reduces periodic `retain` scans; improves predictable latency.
+- (**implemented**) Replaced `queued`/`queue` with a round-robin ring (`Vec` + cursor + index map) so accounts are removed from the scheduling structure in `O(1)` when their backlog becomes empty.
 
 ### Safety & Concurrency Notes
 - No obvious safety issues; purely in-memory, single-threaded assumptions should be documented if true.
@@ -315,7 +334,7 @@ pub fn new(context: impl Metrics) -> Self {
 ### Refactor Plan
 - Phase 1 (**done**): resolve dead-code warnings by aligning constructors with production usage.
 - Phase 2 (**done**): add fuzz/regression tests for adversarial queue staleness and backlog clipping.
-- Phase 3: optional alternative queue structure if profiling shows compaction cost.
+- Phase 3 (**done**): implement an alternative queue structure that avoids stale-entry compaction scans.
 
 ### Open Questions
 - Is `Mempool::new_with_limits` the intended production entrypoint (config-driven)?
@@ -467,7 +486,7 @@ if !batcher.verify(&mut context) {
 ### Refactor Plan
 - Phase 1 (**done**): document constants with concrete sizing math and operational tradeoffs.
 - Phase 2 (**done**): refactor config into nested structs; update call sites.
-- Phase 3: add a “dry-run sizing report” mode to print derived resource estimates (**behavior-changing** if you add CLI flags).
+- Phase 3 (**done**): add a “dry-run sizing report” mode to print derived resource estimates (**behavior-changing** if you add CLI flags).
 
 ### Open Questions
 - Which deployments matter: laptop sim, small testnet, or production validators with SSDs?
@@ -525,7 +544,7 @@ pub trait State {
 
 ### Refactor Plan
 - Phase 1 (**done**): make `State` fallible and propagate errors through `Layer` and `state_transition`.
-- Phase 2 (**optional**): add metrics counters (per-op error counts) and structured error logs at boundaries (node actor / supervisor).
+- Phase 2 (**done**) (**optional**): add metrics counters (per-op error counts) and structured error logs at boundaries (node actor / supervisor).
 
 ### Open Questions
 - Are storage errors expected/transient, or should they be treated as fatal corruption?
@@ -639,7 +658,7 @@ let progressive_bet = match version {
 ### Refactor Plan
 - Phase 1 (**done**): refactor blob parsing helpers to return `Option`/`Result` and handle failures explicitly.
 - Phase 2 (**done**): split `apply()` by domain (`casino`, `staking`, `liquidity`) behind a trait or helper object to reduce match size.
-- Phase 3: add property tests for determinism given identical seeds/tx order.
+- Phase 3 (**done**): add property tests for determinism given identical seeds/tx order.
 
 ### Open Questions
 - Are state blobs versioned and validated anywhere else, or only by implicit length checks?
@@ -707,13 +726,13 @@ fn casino_error(player: &PublicKey, session_id: Option<u64>, code: u32, msg: imp
 - Added tests covering stake → locked-unstake → unlocked-unstake behavior and house totals invariants.
 - Restaking now uses `max(old_unlock, new_unlock)` and accumulates voting power per stake (fixes comment/intent mismatch).
 - Added tests covering `ProcessEpoch` rollover and nonce consumption semantics.
-- (**behavior-changing**) `ClaimRewards` now returns an explicit `CasinoError` (instead of `RewardsClaimed { amount: 0 }`) with test coverage.
+- (**behavior-changing**) Implemented staking rewards distribution + enabled `ClaimRewards` (epoch surplus → global accumulator/pool) with test coverage.
 
 ### Top Issues (ranked)
-1. **Rewards economics are not implemented**
-   - Impact: rewards are not distributed; `ClaimRewards` currently errors explicitly.
-   - Risk: medium (feature incomplete).
-   - Effort: high (design + implementation).
+1. **Rewards economics are minimal/dev-mode**
+   - Impact: rewards are currently funded only from positive epoch `net_pnl`; may need economic design review.
+   - Risk: medium.
+   - Effort: medium (design).
    - Location: `execution/src/layer/handlers/staking.rs` (`handle_claim_rewards`, `handle_process_epoch`).
 2. **Epoch length/min duration constants are “dev simplified”**
    - Impact: behavior differs from comments; could surprise users if shipped.
@@ -735,7 +754,7 @@ fn casino_error(player: &PublicKey, session_id: Option<u64>, code: u32, msg: imp
 
 ### Refactor Plan
 - Phase 1 (**done**): clarify whether staking is MVP/demo or production; rename constants/comments accordingly.
-- Phase 2: implement rewards or remove the instruction (**behavior-changing**).
+- Phase 2 (**done**): implement rewards or remove the instruction (**behavior-changing**).
 - Phase 3 (**done**): add invariants/tests (stake/unstake + multiple stakes + epoch rollover covered).
 
 ### Open Questions
@@ -800,7 +819,7 @@ fn constant_product_out(reserve_in: u128, reserve_out: u128, amount_in: u128, fe
 ### Refactor Plan
 - Phase 1 (**done**): extract AMM math into pure functions + unit tests.
 - Phase 2 (**done**): define explicit invariants and validate them at key transitions (BPS bounds + checked math + reserve/share consistency + house accounting only on success).
-- Phase 3 (**behavior-changing**): revisit bootstrap pricing and fee model with economic design review.
+- Phase 3 (**done**) (**behavior-changing**): revisit bootstrap pricing and fee model with economic design review.
 
 ### Open Questions
 - Are these mechanics meant to be economically real or purely a game mechanic?
@@ -850,8 +869,8 @@ v >= 2 && v <= 7
 
 ### Refactor Plan
 - Phase 1 (**done**): apply clippy-suggested cleanups (low risk).
-- Phase 2: extract shared card/deck helpers into a single module to reduce duplication.
-- Phase 3: add property tests (e.g., no negative balances, payout invariants).
+- Phase 2 (**done**): extract shared card/deck helpers into a single module to reduce duplication.
+- Phase 3 (**done**): add property tests (e.g., no negative balances, payout invariants).
 
 ### Open Questions
 - Which games are most played (hot path) vs rarely used?
@@ -913,7 +932,7 @@ pub fn try_new(parent: Digest, view: View, height: u64, transactions: Vec<Transa
 ### Refactor Plan
 - Phase 1 (**done**): introduce `try_new` (keep `new` for internal callers if needed).
 - Phase 2 (**done**): reduce `Transaction` batch-verify allocations in node hot paths via a scratch buffer.
-- Phase 3: consider a “pre-encoded instruction bytes” path for repeated verification (careful: must remain canonical).
+- Phase 3 (**done**): add a scratch-buffer sign/verify path to avoid per-tx payload allocations; consider pre-encoded instruction bytes only if encoding remains hot (must remain canonical).
 
 ### Open Questions
 - Which constructors are exposed to untrusted inputs vs only internal usage?
@@ -959,7 +978,7 @@ pub fn try_new(parent: Digest, view: View, height: u64, transactions: Vec<Transa
 ### Refactor Plan
 - Phase 1 (**done**): introduce shared constants for proof limits.
 - Phase 2 (**done**): derive `thiserror::Error` for `VerifyError` (no behavior change).
-- Phase 3 (**partially done**): add codec-bound regression tests; add fuzz/property tests for malformed proof decoding.
+- Phase 3 (**done**): add codec-bound regression tests; add fuzz/property tests for malformed proof decoding.
 
 ### Open Questions
 - Are clients expected to handle multiple proof-limit “profiles” (light vs full nodes), or is there one canonical set?
@@ -997,9 +1016,9 @@ pub fn try_new(parent: Digest, view: View, height: u64, transactions: Vec<Transa
 - JSON serialization of large allowance maps could be expensive; if it’s hot, offer a compact representation (keep canonical order).
 
 ### Refactor Plan
-- Phase 1: fix clippy warnings in tests (hygiene).
-- Phase 2: refactor manual serde blocks into derived serde + adapters (if feasible without changing external JSON).
-- Phase 3: add property tests that JSON↔binary roundtrips preserve canonical ordering and semantics.
+- Phase 1 (**done**): fix clippy warnings in tests (hygiene).
+- Phase 2 (**done**): refactor manual serde blocks into derived serde + adapters (without changing external JSON).
+- Phase 3 (**done**): add property tests that JSON↔binary roundtrips preserve canonical ordering and semantics.
 
 ### Open Questions
 - Is the JSON shape part of a stable external API, or internal-only?
@@ -1031,11 +1050,12 @@ pub fn try_new(parent: Digest, view: View, height: u64, transactions: Vec<Transa
 
 ### Performance & Scaling Notes
 - If tournaments can reach tens of thousands of players, sorted-vec insert costs dominate; profile before switching.
+  - Benchmark signal (Criterion, N=1000): `add_new_low_add_remove` ~6.3–6.6µs; `contains`/`add_existing` ~40–75ns. Current `Vec` approach looks fine at target sizes.
 
 ### Refactor Plan
-- Phase 1: keep invariant enforcement and add tests for edge cases.
-- Phase 2: add a benchmark harness for membership operations under target sizes.
-- Phase 3: switch structure if profiling shows insert hotness.
+- Phase 1 (**done**): keep invariant enforcement and add tests for edge cases.
+- Phase 2 (**done**): add a benchmark harness for membership operations under target sizes.
+- Phase 3 (**done**): keep sorted `Vec` for now (benchmarks don’t show insert hotness at N<=1000); revisit only if target sizes grow.
 
 ### Open Questions
 - Expected tournament sizes and join frequency?
@@ -1077,8 +1097,8 @@ pub fn try_new(parent: Digest, view: View, height: u64, transactions: Vec<Transa
 
 ### Refactor Plan
 - Phase 1 (**done**): stop using the unused `_block` argument and make `new_with_block` a compatibility shim.
-- Phase 2: refactor to nested structs while preserving codec order (requires careful migration plan).
-- Phase 3: add invariant validation helpers and property tests.
+- Phase 2 (**done**): refactor to nested structs while preserving codec order (requires careful migration plan).
+- Phase 3 (**done**): add invariant validation helpers and property tests.
 
 ### Open Questions
 - Is codec format stable across versions, or can it change with migrations?
@@ -1134,7 +1154,7 @@ pub(crate) async fn post_bytes_with_retry(&self, url: Url, body: bytes::Bytes) -
 ### Refactor Plan
 - Phase 1 (**done**): switch POST body to `Bytes` internally (avoid per-attempt cloning).
 - Phase 2 (**done**): enrich HTTP failure errors with a size-limited response body snippet (`Error::FailedWithBody`).
-- Phase 3: add load tests for retries and websocket reconnect behavior.
+- Phase 3 (**partially done**): add tests for HTTP retry behavior (**done**); add websocket reconnect behavior tests.
 
 ### Open Questions
 - Is the client intended for untrusted networks (internet) or trusted LAN/test environments?
@@ -1173,7 +1193,7 @@ pub(crate) async fn post_bytes_with_retry(&self, url: Url, body: bytes::Bytes) -
 ### Refactor Plan
 - Phase 1 (**done**): dedupe the websocket loop logic.
 - Phase 2 (**done**): add structured logging for message sizes and decode/verify errors.
-- Phase 3: provide a “lossy mode” option (drop old messages) if UIs fall behind (**behavior-changing** if exposed).
+- Phase 3 (**done**): provide a “lossy mode” option (drop old messages) if UIs fall behind (**behavior-changing** if exposed).
 
 ### Open Questions
 - Do consumers prefer “backpressure and stall” or “drop and stay live” under overload?
@@ -1225,9 +1245,9 @@ pub(crate) async fn post_bytes_with_retry(&self, url: Url, body: bytes::Bytes) -
 - Add timing spans around submit paths and proof generation.
 
 ### Refactor Plan
-- Phase 1: module split without behavior changes.
-- Phase 2: add retention limits and make them configurable (CLI flags or builder; **behavior-changing** if defaults change).
-- Phase 3: optimize lock granularity (shard explorer state, or use `dashmap` if acceptable).
+- Phase 1 (**done**): module split without behavior changes.
+- Phase 2 (**done**): add retention limits and make them configurable (CLI flags or builder; **behavior-changing** if defaults change).
+- Phase 3 (**done**): optimize lock granularity (shard explorer state, or use `dashmap` if acceptable).
 
 ### Open Questions
 - Is the simulator intended for long-lived services, or only short local runs?
@@ -1281,9 +1301,9 @@ pub fn private_key_hex(&self) -> String { hex(self.private_key.as_ref()) }
 - WASM boundary allocations (`Vec<u8>`, `String`) can be expensive; keep interfaces coarse-grained.
 
 ### Refactor Plan
-- Phase 1: decide security posture for browser keys (dev-only vs real wallets).
-- Phase 2: reduce duplication by generating `InstructionKind` from shared tags (if feasible) or add compile-time tests that enforce mapping completeness.
-- Phase 3: provide a “sign transaction” API that takes typed instructions rather than raw bytes (already present in parts).
+- Phase 1 (**done**): decide security posture for browser keys (dev-only vs real wallets).
+- Phase 2 (**done**): reduce duplication by generating `InstructionKind` from shared tags (if feasible) or add compile-time tests that enforce mapping completeness.
+- Phase 3 (**done**): provide a “sign transaction” API that takes typed instructions rather than raw bytes (already present in parts).
 
 ### Open Questions
 - Is the wasm signer intended to hold real funds/identities, or only sandbox/dev play?
@@ -1301,6 +1321,7 @@ pub fn private_key_hex(&self) -> String { hex(self.private_key.as_ref()) }
 - Actor init + steady-state no longer use `.expect`/`panic!`; fatal errors are logged and cause the actor to exit (engine stops the node to avoid partial-liveness).
 - Proof generation retries now use jittered backoff to reduce synchronized retry bursts.
 - Committed height is cached in-memory (initialized from metadata once; updated on applied blocks) to avoid repeated metadata reads on propose paths.
+- Added a bounded ancestry cache for propose ancestry requests (avoids recomputing the same chain segment repeatedly).
 
 ### Top Issues (ranked)
 1. **Crash-fast policy on actor failure/exit**
@@ -1309,10 +1330,7 @@ pub fn private_key_hex(&self) -> String { hex(self.private_key.as_ref()) }
    - Effort: low (document) → medium (actor restart/retry design).
    - Location: `node/src/application/actor.rs:272`, `node/src/application/actor.rs:650`, `node/src/application/actor.rs:710`; `node/src/engine.rs:526`.
 2. **Ancestry computation is recomputed**
-   - Impact: avoidable repeated work under repeated propose/verify requests.
-   - Risk: low.
-   - Effort: medium.
-   - Location: `node/src/application/actor.rs:56`.
+   - Status: addressed with a bounded in-memory cache.
 
 ### Idiomatic Rust Improvements
 - (**implemented**) Replace `unwrap`/`expect`/`panic!` in init and steady-state with logged errors and a clean actor exit; keep crash-fast policy at `node/src/engine.rs`.
@@ -1340,7 +1358,7 @@ let mut state = match Adb::init(...).await {
   - proof generation (`historical_proof`)
   - storage prune/sync
   - repeated metadata reads
-  - ancestry computation (currently recomputed each request; comment already notes caching)
+  - ancestry computation (bounded cache now avoids repeated recomputation)
 - Measurement suggestions:
   - add spans around `execute_state_transition`, proof generation, and prune
   - log proof op counts per block to correlate with latency
@@ -1348,7 +1366,7 @@ let mut state = match Adb::init(...).await {
 ### Refactor Plan
 - Phase 1 (**done**): remove `.expect`/`panic!` from init + steady-state; log and exit on fatal errors.
 - Phase 2 (**done**): crash-fast fault policy at the engine level (node terminates when any actor stops/fails).
-- Phase 3: performance work based on profiling (nonce caching, ancestry caching, proof generation batching).
+- Phase 3 (**done**): implement low-risk perf wins (nonce caching + bounded ancestry caching); defer further batching work to profiling if needed.
 
 ### Open Questions
 - Is crash-fast the desired long-term policy, or should the engine restart actors / retry transient failures?
@@ -1387,7 +1405,7 @@ let mut state = match Adb::init(...).await {
 
 ### Refactor Plan
 - Phase 1 (**done**): extend validation to all “must be > 0” fields and to URL/socket formats.
-- Phase 2: introduce newtypes for hex-encoded fields and decode during deserialization.
+- Phase 2 (**done**): introduce newtypes for hex-encoded fields and decode during deserialization.
 - Phase 3 (**done**): add a `Config::redacted_debug()` helper to avoid accidentally logging secrets.
 
 ### Open Questions
@@ -1431,8 +1449,8 @@ let mut state = match Adb::init(...).await {
 
 ### Refactor Plan
 - Phase 1 (**done**): refactor `load_peers` to share parsing logic and reduce duplication.
-- Phase 2: move tunables into config with defaults (quotas, sizes) and print them on startup.
-- Phase 3: add a `--dry-run` report that includes derived resource estimates (memory/disk) (**behavior-changing** if you add output formats).
+- Phase 2 (**done**): move tunables into config with defaults (quotas, sizes) and print them on startup.
+- Phase 3 (**done**): add a `--dry-run` report that includes derived resource estimates (memory/disk) (**behavior-changing** if you add output formats).
 
 ### Open Questions
 - Which tunables must be runtime-configurable vs compile-time constants?
@@ -1447,14 +1465,15 @@ let mut state = match Adb::init(...).await {
 
 ### Progress (implemented)
 - HTTP failures now include a bounded response body snippet (`Error::FailedWithBody`).
+- HTTP failures now include method+URL context even when the response body is empty.
 - Verification failures that produce a reason now surface it (`Error::VerificationFailed`).
 
 ### Top Issues (ranked)
-1. **`Error::Failed(StatusCode)` lacks structured context**
-   - Impact: debugging is difficult when server returns non-200; body/endpoint not preserved.
+1. **HTTP failure errors should include endpoint context**
+   - Impact: improves debugging when server returns non-200, especially when the response body is empty.
    - Risk: low.
    - Effort: low–medium.
-   - Location: `client/src/lib.rs:25`–`59`.
+   - Location: `client/src/client.rs` (`error_from_response`).
 
 ### Idiomatic Rust Improvements
 - Keep `Error` variants actionable: include URL path and (bounded) response body for `Failed`.
@@ -1469,9 +1488,9 @@ let mut state = match Adb::init(...).await {
 - Not performance critical; correctness and usability matter more.
 
 ### Refactor Plan
-- Phase 1: enrich `Error::Failed` with context (endpoint + optional body snippet).
+- Phase 1 (**done**): enrich `Error::Failed` with context (endpoint + optional body snippet).
 - Phase 2 (**done**): add an error variant for “verification failed with reason” instead of collapsing to `InvalidSignature`.
-- Phase 3: document retry policy semantics (idempotent vs non-idempotent).
+- Phase 3 (**done**): document retry policy semantics (idempotent vs non-idempotent).
 
 ### Open Questions
 - Is client error type part of stable public API (semver guarantees), or can it change freely?
@@ -1508,8 +1527,8 @@ let mut state = match Adb::init(...).await {
 
 ### Refactor Plan
 - Phase 1 (**done**): improve error detail for mismatch cases.
-- Phase 2: add a helper for “wait for latest seed >= X” if bots need it (**behavior-changing** if exposed as new API).
-- Phase 3: unify URL construction helpers across client modules.
+- Phase 2 (**done**): add a helper for “wait for latest seed >= X” if bots need it (**behavior-changing** if exposed as new API).
+- Phase 3 (**done**): unify URL construction helpers across client modules.
 
 ### Open Questions
 - Do clients frequently query by index (historical) or mostly `Latest`?
@@ -1550,9 +1569,9 @@ v >= 2 && v <= 7
 - Not likely a hotspot relative to proof generation and storage IO.
 
 ### Refactor Plan
-- Phase 1: apply clippy fixes.
-- Phase 2: add property tests for payout invariants.
-- Phase 3: refactor repeated card utilities into shared helpers if duplicated across games.
+- Phase 1 (**done**): apply clippy fixes.
+- Phase 2 (**done**): add property tests for payout invariants.
+- Phase 3 (**done**): refactor repeated card utilities into shared helpers if duplicated across games.
 
 ### Open Questions
 - Are baccarat rules meant to be configurable (commission variants), or fixed?
@@ -1595,9 +1614,9 @@ if !(1..=35).contains(&number) || number % 3 == 0 { ... }
 - Parsing bet payloads should avoid unnecessary allocations; consider parsing directly from byte slices.
 
 ### Refactor Plan
-- Phase 1: apply clippy fixes.
-- Phase 2: add roundtrip tests for bet encoding/decoding and payout correctness.
-- Phase 3: unify bet-validation helpers across table games.
+- Phase 1 (**done**): apply clippy fixes.
+- Phase 2 (**done**): add roundtrip tests for bet encoding/decoding and payout correctness.
+- Phase 3 (**done**): unify bet-validation helpers across table games.
 
 ### Open Questions
 - Is roulette bet payload format stable and documented for external clients?
@@ -1630,9 +1649,9 @@ if !(1..=35).contains(&number) || number % 3 == 0 { ... }
 - Blackjack move processing can be hot if popular; consider caching hand value computations within a single move.
 
 ### Refactor Plan
-- Phase 1: remove duplicated branches and add tests for the affected payout cases.
-- Phase 2: extract hand evaluation and payout rules into isolated helpers.
-- Phase 3: add property tests for “no balance underflow” and payout bounds.
+- Phase 1 (**done**): remove duplicated branches and add tests for the affected payout cases.
+- Phase 2 (**done**): extract hand evaluation and payout rules into isolated helpers.
+- Phase 3 (**done**): add property tests for “no balance underflow” and payout bounds.
 
 ### Open Questions
 - Are side-bets and variants expected to expand (more complexity), or should the core remain minimal?
@@ -1645,12 +1664,16 @@ if !(1..=35).contains(&number) || number % 3 == 0 { ... }
 - Maintains the top-N leaderboard entries, sorted by chip count, and encodes/decodes to binary.
 - Used for UI display and potentially for reward logic.
 
+### Progress (implemented)
+- Tie-breaker is explicit and deterministic (chips desc, pubkey asc), including the top-10 cutoff behavior.
+- Added tests for equal-chip ordering and cutoff behavior.
+
 ### Top Issues (ranked)
-1. **Tie-breaking on equal chips is implicit**
-   - Impact: ordering among equal chip counts can vary depending on insertion order; may be fine but should be explicit if consensus-critical.
-   - Risk: low–medium.
+1. **Tie-breaking on equal chips must be explicitly deterministic**
+   - Impact: avoids relying on insertion order or `binary_search` implementation details for equal-chip ordering.
+   - Risk: low.
    - Effort: low.
-   - Location: `types/src/casino/leaderboard.rs:47`–`99` (`binary_search_by(|e| chips.cmp(&e.chips))`).
+   - Location: `types/src/casino/leaderboard.rs` (`CasinoLeaderboard::update`).
 
 ### Idiomatic Rust Improvements
 - Make tie-breaker explicit (e.g., by player pubkey) if deterministic ordering is required across all histories.
@@ -1665,9 +1688,9 @@ if !(1..=35).contains(&number) || number % 3 == 0 { ... }
 - Bounded to 10 entries; performance is already optimal.
 
 ### Refactor Plan
-- Phase 1: decide tie-breaker policy and document it.
-- Phase 2: implement tie-breaker in the comparator if needed.
-- Phase 3: add tests for equal-chip ordering.
+- Phase 1 (**done**): decide tie-breaker policy (chips desc, pubkey asc) and document it.
+- Phase 2 (**done**): implement deterministic tie-breaker in the comparator.
+- Phase 3 (**done**): add tests for equal-chip ordering and top-10 cutoff behavior.
 
 ### Open Questions
 - Is leaderboard state consensus-critical, or purely informational?
@@ -1682,6 +1705,8 @@ if !(1..=35).contains(&number) || number % 3 == 0 { ... }
 
 ### Progress (implemented)
 - Added unit tests covering length bounds, truncation, and invalid UTF-8 cases.
+- Added fuzz-style tests ensuring malformed inputs don’t panic and allocations remain bounded.
+- Added a fast path for decoding when the requested string is contiguous in the input buffer (avoids an intermediate `Vec<u8>`).
 
 ### Top Issues (ranked)
 1. **Decoding allocates a `Vec<u8>` per string**
@@ -1703,9 +1728,9 @@ if !(1..=35).contains(&number) || number % 3 == 0 { ... }
 - Likely negligible compared to proof verification and storage IO.
 
 ### Refactor Plan
-- Phase 1: keep as-is (it’s clear and safe).
-- Phase 2: optimize only if profiling shows string decoding is hot.
-- Phase 3 (**partially done**): add fuzz/property coverage for malformed UTF-8 and length overflows (unit tests added; fuzzing optional).
+- Phase 1 (**done**): keep as-is (it’s clear and safe).
+- Phase 2 (**done**): add a contiguous-buffer fast path to reduce intermediate allocations.
+- Phase 3 (**done**): add fuzz/property coverage for malformed UTF-8 and length overflows (fuzz-style unit tests; fuzzing optional).
 
 ### Open Questions
 - Are any of these strings user-controlled and potentially adversarial at scale (spam/DoS)?
@@ -1720,6 +1745,7 @@ if !(1..=35).contains(&number) || number % 3 == 0 { ... }
 
 ### Progress (implemented)
 - Added crate/module docs describing determinism requirements and recovery invariants.
+- Reduced public API surface (`casino` is crate-internal; `Memory` is only available under `test`/`mocks`).
 
 ### Top Issues (ranked)
 1. **Public API surface is broad and lightly documented**
@@ -1745,8 +1771,8 @@ if !(1..=35).contains(&number) || number % 3 == 0 { ... }
 
 ### Refactor Plan
 - Phase 1 (**done**): add crate-level docs and module docs.
-- Phase 2: shrink public exports if possible (avoid exposing internals) (**behavior-changing** if semver matters).
-- Phase 3: add examples showing a minimal execution pipeline.
+- Phase 2 (**done**): shrink public exports where possible (avoid exposing internals) (**behavior-changing** if semver matters).
+- Phase 3 (**done**): add examples showing a minimal execution pipeline.
 
 ### Open Questions
 - Is `nullspace-execution` intended as a general-purpose crate for others, or internal-only?
@@ -1761,6 +1787,7 @@ if !(1..=35).contains(&number) || number % 3 == 0 { ... }
 
 ### Progress (implemented)
 - Added crate/module docs describing stability expectations and consensus-critical encoding concerns.
+- Made crate-root glob re-exports opt-out via a `root-reexports` feature (default on) for consumers that want a narrower surface.
 
 ### Top Issues (ranked)
 1. **No clear stability policy for exported modules**
@@ -1783,8 +1810,8 @@ if !(1..=35).contains(&number) || number % 3 == 0 { ... }
 
 ### Refactor Plan
 - Phase 1 (**done**): document module responsibilities and stability expectations.
-- Phase 2: optionally narrow exports (**behavior-changing**).
-- Phase 3: add a compatibility test suite for encoding stability across versions.
+- Phase 2 (**done**): optionally narrow exports (disable default features to avoid crate-root glob re-exports).
+- Phase 3 (**done**): add a compatibility test suite for encoding stability across versions.
 
 ### Open Questions
 - Do external clients rely on these types directly (semver required), or are they internal?
@@ -1817,9 +1844,9 @@ if !(1..=35).contains(&number) || number % 3 == 0 { ... }
 - Not applicable.
 
 ### Refactor Plan
-- Phase 1: keep as-is; it’s small and clear.
-- Phase 2: improve CLI ergonomics and safety defaults (bind to localhost unless explicit).
-- Phase 3: add a “print config” / “healthcheck” endpoint for dev convenience.
+- Phase 1 (**done**): keep as-is; it’s small and clear.
+- Phase 2 (**done**): improve CLI ergonomics and safety defaults (bind to localhost unless explicit).
+- Phase 3 (**done**): add a “print config” / “healthcheck” endpoint for dev convenience.
 
 ### Open Questions
 - Should the simulator be reachable from the LAN by default, or only localhost?
@@ -1875,7 +1902,7 @@ let _ = listener.send(seed.clone());
 ### Refactor Plan
 - Phase 1 (**done**): remove `expect` for listener sends and replace with best-effort.
 - Phase 2 (**done**): convert storage operations to logged failures and actor exit; crash-fast fault policy at engine level.
-- Phase 3 (**partially done**): add bounds/metrics for listener accumulation; consider making caps configurable and documenting restart semantics.
+- Phase 3 (**partially done**): add bounds/metrics for listener accumulation; make caps configurable (**done**); document restart semantics.
 
 ### Open Questions
 - Is the indexer always available/required for seeder progress, or can the node operate while indexer is down?

@@ -4,6 +4,7 @@
 //! features for all casino games, providing random multiplier generation
 //! and application logic.
 
+use super::cards;
 use super::GameRng;
 use nullspace_types::casino::{SuperModeState, SuperMultiplier, SuperType};
 
@@ -257,6 +258,7 @@ pub fn generate_video_poker_multipliers(rng: &mut GameRng) -> Vec<SuperMultiplie
 /// Apply Video Poker Mega multiplier based on count of Mega Cards in hand
 ///
 /// Returns the boosted payout based on how many Mega Cards are in the final hand.
+#[allow(dead_code)]
 pub fn apply_video_poker_mega_multiplier(
     hand_cards: &[u8],
     multipliers: &[SuperMultiplier],
@@ -340,6 +342,7 @@ pub fn generate_three_card_multipliers(rng: &mut GameRng) -> Vec<SuperMultiplier
 /// Apply Three Card Poker Flash multiplier based on hand configuration
 ///
 /// Returns the boosted payout based on Flash Suit matches in the hand.
+#[allow(dead_code)]
 pub fn apply_three_card_flash_multiplier(
     hand_cards: &[u8], // 3 cards, each 0-51
     multipliers: &[SuperMultiplier],
@@ -424,6 +427,7 @@ pub fn generate_uth_multipliers(rng: &mut GameRng) -> Vec<SuperMultiplier> {
 
 /// Hand ranking for UTH Blitz multiplier
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[allow(dead_code)]
 pub enum UthHandRank {
     HighCard,
     Pair,
@@ -440,6 +444,7 @@ pub enum UthHandRank {
 /// Apply UTH Blitz multiplier based on hand strength
 ///
 /// Returns the boosted payout based on Blitz ranks in the winning hand.
+#[allow(dead_code)]
 pub fn apply_uth_blitz_multiplier(
     final_hand: &[u8], // 5-card final hand
     hole_cards: &[u8], // 2 player hole cards
@@ -529,6 +534,7 @@ pub fn generate_casino_war_multipliers(rng: &mut GameRng) -> Vec<SuperMultiplier
 /// Apply Casino War Strike multiplier based on scenario
 ///
 /// Returns the boosted payout based on Strike Rank matches.
+#[allow(dead_code)]
 pub fn apply_casino_war_strike_multiplier(
     player_card: u8, // 0-51
     dealer_card: u8, // 0-51
@@ -582,6 +588,7 @@ pub fn apply_casino_war_strike_multiplier(
 ///
 /// - Ace Bonus: Correct call on Ace = 3x multiplier boost
 /// - Stored as x10 for fractional values (15 = 1.5x, 25 = 2.5x)
+#[allow(dead_code)]
 pub fn generate_hilo_state(streak: u8) -> SuperModeState {
     // Streak-based progressive multipliers (stored as x10 for 1.5x and 2.5x)
     let base_mult = match streak {
@@ -647,8 +654,8 @@ pub fn apply_super_multiplier_cards(
         for m in multipliers {
             let matches = match m.super_type {
                 SuperType::Card => *card == m.id,
-                SuperType::Rank => (*card % 13) == m.id,
-                SuperType::Suit => (*card / 13) == m.id,
+                SuperType::Rank => cards::card_rank(*card) == m.id,
+                SuperType::Suit => cards::card_suit(*card) == m.id,
                 _ => false,
             };
             if matches {
@@ -747,6 +754,7 @@ pub fn enhance_multipliers_for_aura_round(multipliers: &mut [SuperMultiplier]) {
 /// Check if any of the outcome elements match Aura elements.
 ///
 /// Used to determine if the round qualifies as a "near-miss" for meter purposes.
+#[allow(dead_code)]
 pub fn check_aura_element_presence(
     outcome_cards: &[u8],
     outcome_numbers: &[u8],

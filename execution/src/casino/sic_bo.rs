@@ -365,17 +365,8 @@ impl CasinoGame for SicBo {
         match action {
             // Action 0: Place bet
             0 => {
-                if payload.len() < 11 {
-                    return Err(GameError::InvalidPayload);
-                }
-
-                let bet_type = BetType::try_from(payload[1])?;
-                let number = payload[2];
-                let amount = u64::from_be_bytes(
-                    payload[3..11]
-                        .try_into()
-                        .map_err(|_| GameError::InvalidPayload)?,
-                );
+                let (bet_type, number, amount) = super::payload::parse_place_bet_payload(payload)?;
+                let bet_type = BetType::try_from(bet_type)?;
 
                 // Validate number for bet types that need it
                 match bet_type {
@@ -419,9 +410,7 @@ impl CasinoGame for SicBo {
                     _ => {}
                 }
 
-                if amount == 0 {
-                    return Err(GameError::InvalidPayload);
-                }
+                super::payload::ensure_nonzero_amount(amount)?;
 
                 state.bets.push(SicBoBet {
                     bet_type,

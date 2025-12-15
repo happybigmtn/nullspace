@@ -8,6 +8,8 @@ use futures::{
     SinkExt,
 };
 use nullspace_types::{genesis_digest, Block, Seed};
+use std::sync::Arc;
+use thiserror::Error;
 use tracing::warn;
 
 /// Messages sent to the application.
@@ -22,7 +24,7 @@ pub enum Message<E: Clock> {
     },
     Ancestry {
         view: View,
-        blocks: Vec<Block>,
+        blocks: Arc<[Block]>,
         timer: histogram::Timer<E>,
         response: oneshot::Sender<Digest>,
     },
@@ -54,30 +56,60 @@ pub struct Mailbox<E: Clock> {
     stopped: Signal,
 }
 
+#[derive(Debug, Error)]
+pub enum MailboxError {
+    #[error("application mailbox closed")]
+    Closed,
+    #[error("application request canceled")]
+    Canceled,
+    #[error("shutdown in progress")]
+    ShuttingDown,
+}
+
 impl<E: Clock> Mailbox<E> {
     pub(super) fn new(sender: mpsc::Sender<Message<E>>, stopped: Signal) -> Self {
         Self { sender, stopped }
     }
 
-    pub(super) async fn ancestry(
-        &mut self,
-        view: View,
-        blocks: Vec<Block>,
-        timer: histogram::Timer<E>,
-        response: oneshot::Sender<Digest>,
-    ) {
+    async fn send(&self, message: Message<E>) -> Result<(), MailboxError> {
         let mut sender = self.sender.clone();
         let mut stopped = self.stopped.clone();
         select! {
-            result = sender.send(Message::Ancestry { view, blocks, timer, response }) => {
-                if result.is_err() {
-                    warn!(view, "application mailbox closed; ancestry dropped");
-                }
+            result = sender.send(message) => {
+                result.map_err(|_| MailboxError::Closed)
             },
             _ = &mut stopped => {
-                warn!(view, "application shutting down; ancestry dropped");
-            }
+                Err(MailboxError::ShuttingDown)
+            },
         }
+    }
+
+    async fn receive<T>(&self, receiver: oneshot::Receiver<T>) -> Result<T, MailboxError> {
+        let mut stopped = self.stopped.clone();
+        select! {
+            result = receiver => {
+                result.map_err(|_| MailboxError::Canceled)
+            },
+            _ = &mut stopped => {
+                Err(MailboxError::ShuttingDown)
+            },
+        }
+    }
+
+    pub(super) async fn ancestry(
+        &mut self,
+        view: View,
+        blocks: Arc<[Block]>,
+        timer: histogram::Timer<E>,
+        response: oneshot::Sender<Digest>,
+    ) -> Result<(), MailboxError> {
+        self.send(Message::Ancestry {
+            view,
+            blocks,
+            timer,
+            response,
+        })
+        .await
     }
 
     pub(super) async fn seeded(
@@ -86,19 +118,14 @@ impl<E: Clock> Mailbox<E> {
         seed: Seed,
         timer: histogram::Timer<E>,
         response: oneshot::Sender<()>,
-    ) {
-        let mut sender = self.sender.clone();
-        let mut stopped = self.stopped.clone();
-        select! {
-            result = sender.send(Message::Seeded { block, seed, timer, response }) => {
-                if result.is_err() {
-                    warn!("application mailbox closed; seeded dropped");
-                }
-            },
-            _ = &mut stopped => {
-                warn!("application shutting down; seeded dropped");
-            }
-        }
+    ) -> Result<(), MailboxError> {
+        self.send(Message::Seeded {
+            block,
+            seed,
+            timer,
+            response,
+        })
+        .await
     }
 }
 
@@ -108,47 +135,42 @@ impl<E: Clock> Automaton for Mailbox<E> {
 
     async fn genesis(&mut self) -> Self::Digest {
         let (response, receiver) = oneshot::channel();
-        let mut sender = self.sender.clone();
-        let mut stopped = self.stopped.clone();
-        select! {
-            result = sender.send(Message::Genesis { response }) => {
-                if result.is_err() {
-                    warn!("application mailbox closed; returning genesis digest");
-                    return genesis_digest();
-                }
-            },
-            _ = &mut stopped => {
-                warn!("application shutting down; returning genesis digest");
-                return genesis_digest();
-            },
+        if let Err(err) = self.send(Message::Genesis { response }).await {
+            warn!(
+                ?err,
+                "application mailbox unavailable; returning genesis digest"
+            );
+            return genesis_digest();
         }
-        receiver.await.unwrap_or_else(|_| {
-            warn!("application actor dropped genesis response; returning genesis digest");
-            genesis_digest()
-        })
+        match self.receive(receiver).await {
+            Ok(digest) => digest,
+            Err(err) => {
+                warn!(?err, "application request failed; returning genesis digest");
+                genesis_digest()
+            }
+        }
     }
 
     async fn propose(&mut self, context: Context<Self::Digest>) -> oneshot::Receiver<Self::Digest> {
         // If we linked payloads to their parent, we would include
         // the parent in the `Context` in the payload.
         let (response, receiver) = oneshot::channel();
-        let mut sender = self.sender.clone();
-        let mut stopped = self.stopped.clone();
-        select! {
-            result = sender.send(Message::Propose { view: context.view, parent: context.parent, response }) => {
-                if result.is_err() {
-                    warn!(view = context.view, "application mailbox closed; proposing parent digest");
-                    let (fallback_tx, fallback_rx) = oneshot::channel();
-                    let _ = fallback_tx.send(context.parent.1);
-                    return fallback_rx;
-                }
-            },
-            _ = &mut stopped => {
-                warn!(view = context.view, "application shutting down; proposing parent digest");
-                let (fallback_tx, fallback_rx) = oneshot::channel();
-                let _ = fallback_tx.send(context.parent.1);
-                return fallback_rx;
-            }
+        if let Err(err) = self
+            .send(Message::Propose {
+                view: context.view,
+                parent: context.parent,
+                response,
+            })
+            .await
+        {
+            warn!(
+                view = context.view,
+                ?err,
+                "application request failed; proposing parent digest"
+            );
+            let (fallback_tx, fallback_rx) = oneshot::channel();
+            let _ = fallback_tx.send(context.parent.1);
+            return fallback_rx;
         }
         receiver
     }
@@ -161,23 +183,24 @@ impl<E: Clock> Automaton for Mailbox<E> {
         // If we linked payloads to their parent, we would verify
         // the parent included in the payload matches the provided `Context`.
         let (response, receiver) = oneshot::channel();
-        let mut sender = self.sender.clone();
-        let mut stopped = self.stopped.clone();
-        select! {
-            result = sender.send(Message::Verify { view: context.view, parent: context.parent, payload, response }) => {
-                if result.is_err() {
-                    warn!(view = context.view, ?payload, "application mailbox closed; verify returns false");
-                    let (fallback_tx, fallback_rx) = oneshot::channel();
-                    let _ = fallback_tx.send(false);
-                    return fallback_rx;
-                }
-            },
-            _ = &mut stopped => {
-                warn!(view = context.view, ?payload, "application shutting down; verify returns false");
-                let (fallback_tx, fallback_rx) = oneshot::channel();
-                let _ = fallback_tx.send(false);
-                return fallback_rx;
-            }
+        if let Err(err) = self
+            .send(Message::Verify {
+                view: context.view,
+                parent: context.parent,
+                payload,
+                response,
+            })
+            .await
+        {
+            warn!(
+                view = context.view,
+                ?payload,
+                ?err,
+                "application request failed; verify returns false"
+            );
+            let (fallback_tx, fallback_rx) = oneshot::channel();
+            let _ = fallback_tx.send(false);
+            return fallback_rx;
         }
         receiver
     }
@@ -187,17 +210,12 @@ impl<E: Clock> Relay for Mailbox<E> {
     type Digest = Digest;
 
     async fn broadcast(&mut self, digest: Self::Digest) {
-        let mut sender = self.sender.clone();
-        let mut stopped = self.stopped.clone();
-        select! {
-            result = sender.send(Message::Broadcast { payload: digest }) => {
-                if result.is_err() {
-                    warn!(?digest, "application mailbox closed; broadcast dropped");
-                }
-            },
-            _ = &mut stopped => {
-                warn!(?digest, "application shutting down; broadcast dropped");
-            }
+        if let Err(err) = self.send(Message::Broadcast { payload: digest }).await {
+            warn!(
+                ?digest,
+                ?err,
+                "application request failed; broadcast dropped"
+            );
         }
     }
 }
@@ -207,29 +225,13 @@ impl<E: Clock> Reporter for Mailbox<E> {
 
     async fn report(&mut self, block: Self::Activity) {
         let (response, receiver) = oneshot::channel();
-        {
-            let mut sender = self.sender.clone();
-            let mut stopped = self.stopped.clone();
-            select! {
-                result = sender.send(Message::Finalized { block, response }) => {
-                    if result.is_err() {
-                        warn!("application mailbox closed; finalized dropped");
-                        return;
-                    }
-                },
-                _ = &mut stopped => {
-                    warn!("application shutting down; finalized dropped");
-                    return;
-                }
-            }
+        if let Err(err) = self.send(Message::Finalized { block, response }).await {
+            warn!(?err, "application request failed; finalized dropped");
+            return;
         }
 
         // Wait for the item to be processed (used to increment "save point" in marshal)
         // Note: Result is ignored as the receiver may fail if the system is shutting down
-        let mut stopped = self.stopped.clone();
-        select! {
-            _ = receiver => {},
-            _ = &mut stopped => {},
-        }
+        let _ = self.receive(receiver).await;
     }
 }

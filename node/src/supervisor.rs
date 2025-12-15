@@ -26,6 +26,54 @@ use std::{
     },
 };
 
+macro_rules! impl_threshold_supervisor_traits {
+    ($ty:ident, $index:ty) => {
+        impl Su for $ty {
+            type Index = $index;
+            type PublicKey = ed25519::PublicKey;
+
+            fn leader(&self, _: Self::Index) -> Option<Self::PublicKey> {
+                // Both ThresholdSimplex and Aggregation use `ThresholdSupervisor::leader(index, seed)`.
+                // Return `None` so accidental calls don't panic.
+                None
+            }
+
+            fn participants(&self, _: Self::Index) -> Option<&Vec<Self::PublicKey>> {
+                Some(&self.inner.participants)
+            }
+
+            fn is_participant(&self, _: Self::Index, candidate: &Self::PublicKey) -> Option<u32> {
+                self.inner.participants_map.get(candidate).cloned()
+            }
+        }
+
+        impl TSu for $ty {
+            type Seed = Signature;
+            type Identity = Identity;
+            type Polynomial = Vec<Evaluation>;
+            type Share = group::Share;
+
+            fn leader(&self, _: Self::Index, seed: Self::Seed) -> Option<Self::PublicKey> {
+                let seed_bytes = seed.encode();
+                let index = leader_index(seed_bytes.as_ref(), self.inner.participants.len());
+                Some(self.inner.participants[index].clone())
+            }
+
+            fn identity(&self) -> &Self::Identity {
+                &self.inner.identity
+            }
+
+            fn polynomial(&self, _: Self::Index) -> Option<&Self::Polynomial> {
+                Some(&self.inner.polynomial)
+            }
+
+            fn share(&self, _: Self::Index) -> Option<&Self::Share> {
+                Some(&self.inner.share)
+            }
+        }
+    };
+}
+
 /// Manages epoch state and subscribers.
 struct EpochManager {
     epoch: Epoch,
@@ -127,49 +175,7 @@ impl p2p::Coordinator for ViewSupervisor {
     }
 }
 
-impl Su for ViewSupervisor {
-    type Index = View;
-    type PublicKey = ed25519::PublicKey;
-
-    fn leader(&self, _: Self::Index) -> Option<Self::PublicKey> {
-        // ThresholdSimplex uses `ThresholdSupervisor::leader(index, seed)`.
-        // Return `None` so accidental calls don't panic.
-        None
-    }
-
-    fn participants(&self, _: Self::Index) -> Option<&Vec<Self::PublicKey>> {
-        Some(&self.inner.participants)
-    }
-
-    fn is_participant(&self, _: Self::Index, candidate: &Self::PublicKey) -> Option<u32> {
-        self.inner.participants_map.get(candidate).cloned()
-    }
-}
-
-impl TSu for ViewSupervisor {
-    type Seed = Signature;
-    type Identity = Identity;
-    type Polynomial = Vec<Evaluation>;
-    type Share = group::Share;
-
-    fn leader(&self, _: Self::Index, seed: Self::Seed) -> Option<Self::PublicKey> {
-        let seed_bytes = seed.encode();
-        let index = leader_index(seed_bytes.as_ref(), self.inner.participants.len());
-        Some(self.inner.participants[index].clone())
-    }
-
-    fn identity(&self) -> &Self::Identity {
-        &self.inner.identity
-    }
-
-    fn polynomial(&self, _: Self::Index) -> Option<&Self::Polynomial> {
-        Some(&self.inner.polynomial)
-    }
-
-    fn share(&self, _: Self::Index) -> Option<&Self::Share> {
-        Some(&self.inner.share)
-    }
-}
+impl_threshold_supervisor_traits!(ViewSupervisor, View);
 
 /// Epoch-based [Supervisor] for [commonware_consensus::aggregation].
 #[derive(Clone)]
@@ -188,49 +194,7 @@ impl EpochSupervisor {
     }
 }
 
-impl Su for EpochSupervisor {
-    type Index = Epoch;
-    type PublicKey = ed25519::PublicKey;
-
-    fn leader(&self, _: Self::Index) -> Option<Self::PublicKey> {
-        // Aggregation uses `ThresholdSupervisor::leader(index, seed)`.
-        // Return `None` so accidental calls don't panic.
-        None
-    }
-
-    fn participants(&self, _: Self::Index) -> Option<&Vec<Self::PublicKey>> {
-        Some(&self.inner.participants)
-    }
-
-    fn is_participant(&self, _: Self::Index, candidate: &Self::PublicKey) -> Option<u32> {
-        self.inner.participants_map.get(candidate).cloned()
-    }
-}
-
-impl TSu for EpochSupervisor {
-    type Identity = Identity;
-    type Polynomial = Vec<Evaluation>;
-    type Seed = Signature;
-    type Share = group::Share;
-
-    fn leader(&self, _: Self::Index, seed: Self::Seed) -> Option<Self::PublicKey> {
-        let seed_bytes = seed.encode();
-        let index = leader_index(seed_bytes.as_ref(), self.inner.participants.len());
-        Some(self.inner.participants[index].clone())
-    }
-
-    fn identity(&self) -> &Self::Identity {
-        &self.inner.identity
-    }
-
-    fn polynomial(&self, _: Self::Index) -> Option<&Self::Polynomial> {
-        Some(&self.inner.polynomial)
-    }
-
-    fn share(&self, _: Self::Index) -> Option<&Self::Share> {
-        Some(&self.inner.share)
-    }
-}
+impl_threshold_supervisor_traits!(EpochSupervisor, Epoch);
 
 impl Monitor for EpochSupervisor {
     type Index = Epoch;

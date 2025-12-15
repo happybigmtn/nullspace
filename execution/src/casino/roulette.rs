@@ -394,26 +394,15 @@ impl CasinoGame for Roulette {
         match payload[0] {
             // [0, bet_type, number, amount_bytes...] - Place bet
             0 => {
-                if payload.len() < 11 {
-                    return Err(GameError::InvalidPayload);
-                }
+                let (bet_type, number, amount) = super::payload::parse_place_bet_payload(payload)?;
 
                 // Bets can only be placed before the first spin.
                 if state.phase != Phase::Betting || state.result.is_some() {
                     return Err(GameError::InvalidMove);
                 }
 
-                let bet_type = BetType::try_from(payload[1])?;
-                let number = payload[2];
-                let amount = u64::from_be_bytes(
-                    payload[3..11]
-                        .try_into()
-                        .map_err(|_| GameError::InvalidPayload)?,
-                );
-
-                if amount == 0 {
-                    return Err(GameError::InvalidPayload);
-                }
+                let bet_type = BetType::try_from(bet_type)?;
+                super::payload::ensure_nonzero_amount(amount)?;
 
                 // Validate bet number
                 match bet_type {
@@ -702,6 +691,30 @@ mod tests {
             is_tournament: false,
             tournament_id: None,
         }
+    }
+
+    #[test]
+    fn test_roulette_bet_bytes_roundtrip() {
+        let bet = RouletteBet {
+            bet_type: BetType::Straight,
+            number: 17,
+            amount: 123_456,
+        };
+
+        let bytes = bet.to_bytes();
+        assert_eq!(bytes.len(), 10);
+
+        let decoded = RouletteBet::from_bytes(&bytes).expect("decode bet");
+        assert_eq!(decoded, bet);
+    }
+
+    #[test]
+    fn test_roulette_bet_from_bytes_rejects_invalid_inputs() {
+        assert!(RouletteBet::from_bytes(&[0u8; 9]).is_none());
+
+        let mut bytes = vec![0u8; 10];
+        bytes[0] = 255; // invalid bet type
+        assert!(RouletteBet::from_bytes(&bytes).is_none());
     }
 
     #[test]

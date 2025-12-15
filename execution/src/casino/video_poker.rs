@@ -10,7 +10,7 @@
 //! bit 0 = hold card 1, bit 1 = hold card 2, etc.
 
 use super::super_mode::apply_super_multiplier_cards;
-use super::{CasinoGame, GameError, GameResult, GameRng};
+use super::{cards, CasinoGame, GameError, GameResult, GameRng};
 use nullspace_types::casino::GameSession;
 
 /// Video Poker stages.
@@ -48,16 +48,6 @@ pub enum Hand {
     RoyalFlush = 9,
 }
 
-/// Get card rank (1-13, Ace = 1).
-fn card_rank(card: u8) -> u8 {
-    (card % 13) + 1
-}
-
-/// Get card suit (0-3).
-fn card_suit(card: u8) -> u8 {
-    card / 13
-}
-
 /// Evaluate a 5-card poker hand.
 /// Optimized to avoid heap allocations.
 pub fn evaluate_hand(cards: &[u8; 5]) -> Hand {
@@ -65,8 +55,8 @@ pub fn evaluate_hand(cards: &[u8; 5]) -> Hand {
     let mut ranks = [0u8; 5];
     let mut suits = [0u8; 5];
     for (i, &card) in cards.iter().enumerate() {
-        ranks[i] = card_rank(card);
-        suits[i] = card_suit(card);
+        ranks[i] = cards::card_rank_one_based(card);
+        suits[i] = cards::card_suit(card);
     }
     ranks.sort_unstable();
 
@@ -289,17 +279,17 @@ mod tests {
 
     #[test]
     fn test_card_rank() {
-        assert_eq!(card_rank(0), 1); // Ace
-        assert_eq!(card_rank(1), 2); // 2
-        assert_eq!(card_rank(12), 13); // King
+        assert_eq!(cards::card_rank_one_based(0), 1); // Ace
+        assert_eq!(cards::card_rank_one_based(1), 2); // 2
+        assert_eq!(cards::card_rank_one_based(12), 13); // King
     }
 
     #[test]
     fn test_card_suit() {
-        assert_eq!(card_suit(0), 0); // Spades
-        assert_eq!(card_suit(13), 1); // Hearts
-        assert_eq!(card_suit(26), 2); // Diamonds
-        assert_eq!(card_suit(39), 3); // Clubs
+        assert_eq!(cards::card_suit(0), 0); // Spades
+        assert_eq!(cards::card_suit(13), 1); // Hearts
+        assert_eq!(cards::card_suit(26), 2); // Diamonds
+        assert_eq!(cards::card_suit(39), 3); // Clubs
     }
 
     #[test]

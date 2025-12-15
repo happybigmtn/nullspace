@@ -20,7 +20,7 @@
 //! 5 = Lucky 6 (banker wins with total 6)
 
 use super::super_mode::apply_super_multiplier_cards;
-use super::{CasinoGame, GameError, GameResult, GameRng};
+use super::{cards, CasinoGame, GameError, GameResult, GameRng};
 use nullspace_types::casino::GameSession;
 
 /// Maximum cards in a Baccarat hand (2-3 cards per hand).
@@ -61,7 +61,7 @@ impl TryFrom<u8> for BetType {
 /// Get card value for Baccarat (0-9).
 /// Face cards and 10s = 0, Ace = 1, others = face value.
 fn card_value(card: u8) -> u8 {
-    let rank = (card % 13) + 1; // 1-13
+    let rank = cards::card_rank_one_based(card); // 1-13
     match rank {
         1 => 1,        // Ace
         2..=9 => rank, // 2-9
@@ -75,13 +75,9 @@ fn hand_total(cards: &[u8]) -> u8 {
 }
 
 /// Get card rank (0-12 for A-K).
-fn card_rank(card: u8) -> u8 {
-    card % 13
-}
-
 /// Check if first two cards are a pair (same rank).
 fn is_pair(cards: &[u8]) -> bool {
-    cards.len() >= 2 && card_rank(cards[0]) == card_rank(cards[1])
+    cards.len() >= 2 && cards::card_rank(cards[0]) == cards::card_rank(cards[1])
 }
 
 /// Individual bet in baccarat.
@@ -554,6 +550,7 @@ mod tests {
     use super::*;
     use crate::mocks::{create_account_keypair, create_network_keypair, create_seed};
     use nullspace_types::casino::GameType;
+    use rand::{rngs::StdRng, Rng, SeedableRng};
 
     fn create_test_seed() -> nullspace_types::Seed {
         let (network_secret, _) = create_network_keypair();
@@ -924,6 +921,51 @@ mod tests {
                 GameResult::Win(_) | GameResult::LossPreDeducted(_) => {}
                 _ => panic!("Unexpected baccarat result"),
             }
+        }
+    }
+
+    #[test]
+    fn test_calculate_bet_payout_invariants() {
+        let mut rng = StdRng::seed_from_u64(0x0005_eedb_acca);
+        let bet_types = [
+            BetType::Player,
+            BetType::Banker,
+            BetType::Tie,
+            BetType::PlayerPair,
+            BetType::BankerPair,
+            BetType::Lucky6,
+        ];
+
+        for _ in 0..2_000 {
+            let bet_type = bet_types[rng.gen_range(0..bet_types.len())];
+            let amount = rng.gen_range(1u64..=1_000_000);
+            let bet = BaccaratBet { bet_type, amount };
+
+            let player_total = rng.gen_range(0u8..=9);
+            let banker_total = rng.gen_range(0u8..=9);
+            let player_has_pair = rng.gen_bool(0.5);
+            let banker_has_pair = rng.gen_bool(0.5);
+            let banker_cards_len = rng.gen_range(0usize..=4);
+
+            let (delta, is_push) = calculate_bet_payout(
+                &bet,
+                player_total,
+                banker_total,
+                player_has_pair,
+                banker_has_pair,
+                banker_cards_len,
+            );
+
+            if is_push {
+                assert_eq!(delta, 0);
+            }
+
+            let min = -(amount as i64);
+            let max = (amount.saturating_mul(23)) as i64;
+            assert!(
+                (min..=max).contains(&delta),
+                "delta out of bounds: {delta} (amount={amount}, bet_type={bet_type:?})"
+            );
         }
     }
 }

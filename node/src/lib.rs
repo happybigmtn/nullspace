@@ -4,9 +4,17 @@ use commonware_cryptography::{
     ed25519::{PrivateKey, PublicKey},
     Signer,
 };
-use commonware_utils::{from_hex_formatted, quorum};
+use commonware_utils::{from_hex_formatted, hex, quorum};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, fmt, net::SocketAddr, path::PathBuf, str::FromStr};
+use std::{
+    collections::HashMap,
+    fmt,
+    net::SocketAddr,
+    num::{NonZeroU32, NonZeroUsize},
+    path::PathBuf,
+    str::FromStr,
+    time::Duration,
+};
 use thiserror::Error;
 use tracing::Level;
 use url::Url;
@@ -21,12 +29,48 @@ pub mod indexer;
 pub mod seeder;
 pub mod supervisor;
 
+#[derive(Clone, PartialEq, Eq)]
+pub struct HexBytes(Vec<u8>);
+
+impl HexBytes {
+    pub fn from_hex_formatted(value: &str) -> Option<Self> {
+        from_hex_formatted(value).map(Self)
+    }
+}
+
+impl AsRef<[u8]> for HexBytes {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl Serialize for HexBytes {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&hex(self.as_ref()))
+    }
+}
+
+impl<'de> Deserialize<'de> for HexBytes {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        let bytes = from_hex_formatted(&value)
+            .ok_or_else(|| serde::de::Error::custom("expected a hex string"))?;
+        Ok(Self(bytes))
+    }
+}
+
 /// Configuration for the [engine::Engine].
 #[derive(Deserialize, Serialize)]
 pub struct Config {
-    pub private_key: String,
-    pub share: String,
-    pub polynomial: String,
+    pub private_key: HexBytes,
+    pub share: HexBytes,
+    pub polynomial: HexBytes,
 
     pub port: u16,
     pub metrics_port: u16,
@@ -44,9 +88,57 @@ pub struct Config {
     pub mempool_max_backlog: usize,
     #[serde(default = "default_mempool_max_transactions")]
     pub mempool_max_transactions: usize,
+    #[serde(default = "default_max_pending_seed_listeners")]
+    pub max_pending_seed_listeners: usize,
 
     pub indexer: String,
     pub execution_concurrency: usize,
+
+    // Tunables (defaults preserve current constants in `node/src/main.rs`).
+    #[serde(default = "default_max_uploads_outstanding")]
+    pub max_uploads_outstanding: usize,
+    #[serde(default = "default_max_message_size")]
+    pub max_message_size: usize,
+    #[serde(default = "default_leader_timeout_ms")]
+    pub leader_timeout_ms: u64,
+    #[serde(default = "default_notarization_timeout_ms")]
+    pub notarization_timeout_ms: u64,
+    #[serde(default = "default_nullify_retry_ms")]
+    pub nullify_retry_ms: u64,
+    #[serde(default = "default_fetch_timeout_ms")]
+    pub fetch_timeout_ms: u64,
+    #[serde(default = "default_activity_timeout")]
+    pub activity_timeout: u64,
+    #[serde(default = "default_skip_timeout")]
+    pub skip_timeout: u64,
+    #[serde(default = "default_fetch_concurrent")]
+    pub fetch_concurrent: usize,
+    #[serde(default = "default_max_fetch_count")]
+    pub max_fetch_count: usize,
+    #[serde(default = "default_max_fetch_size")]
+    pub max_fetch_size: usize,
+    #[serde(default = "default_blocks_freezer_table_initial_size")]
+    pub blocks_freezer_table_initial_size: u32,
+    #[serde(default = "default_finalized_freezer_table_initial_size")]
+    pub finalized_freezer_table_initial_size: u32,
+    #[serde(default = "default_buffer_pool_page_size")]
+    pub buffer_pool_page_size: usize,
+    #[serde(default = "default_buffer_pool_capacity")]
+    pub buffer_pool_capacity: usize,
+    #[serde(default = "default_pending_rate_per_second")]
+    pub pending_rate_per_second: u32,
+    #[serde(default = "default_recovered_rate_per_second")]
+    pub recovered_rate_per_second: u32,
+    #[serde(default = "default_resolver_rate_per_second")]
+    pub resolver_rate_per_second: u32,
+    #[serde(default = "default_broadcaster_rate_per_second")]
+    pub broadcaster_rate_per_second: u32,
+    #[serde(default = "default_backfill_rate_per_second")]
+    pub backfill_rate_per_second: u32,
+    #[serde(default = "default_aggregation_rate_per_second")]
+    pub aggregation_rate_per_second: u32,
+    #[serde(default = "default_fetch_rate_per_peer_per_second")]
+    pub fetch_rate_per_peer_per_second: u32,
 }
 
 #[derive(Debug, Error)]
@@ -93,9 +185,33 @@ pub struct ValidatedConfig {
     pub deque_size: usize,
     pub mempool_max_backlog: usize,
     pub mempool_max_transactions: usize,
+    pub max_pending_seed_listeners: usize,
 
     pub indexer: String,
     pub execution_concurrency: usize,
+
+    pub max_uploads_outstanding: usize,
+    pub max_message_size: usize,
+    pub leader_timeout: Duration,
+    pub notarization_timeout: Duration,
+    pub nullify_retry: Duration,
+    pub fetch_timeout: Duration,
+    pub activity_timeout: u64,
+    pub skip_timeout: u64,
+    pub fetch_concurrent: usize,
+    pub max_fetch_count: usize,
+    pub max_fetch_size: usize,
+    pub blocks_freezer_table_initial_size: u32,
+    pub finalized_freezer_table_initial_size: u32,
+    pub buffer_pool_page_size: NonZeroUsize,
+    pub buffer_pool_capacity: NonZeroUsize,
+    pub pending_rate_per_second: NonZeroU32,
+    pub recovered_rate_per_second: NonZeroU32,
+    pub resolver_rate_per_second: NonZeroU32,
+    pub broadcaster_rate_per_second: NonZeroU32,
+    pub backfill_rate_per_second: NonZeroU32,
+    pub aggregation_rate_per_second: NonZeroU32,
+    pub fetch_rate_per_peer_per_second: NonZeroU32,
 }
 
 struct RedactedConfig<'a>(&'a Config);
@@ -119,8 +235,49 @@ impl fmt::Debug for RedactedConfig<'_> {
             .field("deque_size", &cfg.deque_size)
             .field("mempool_max_backlog", &cfg.mempool_max_backlog)
             .field("mempool_max_transactions", &cfg.mempool_max_transactions)
+            .field(
+                "max_pending_seed_listeners",
+                &cfg.max_pending_seed_listeners,
+            )
             .field("indexer", &cfg.indexer)
             .field("execution_concurrency", &cfg.execution_concurrency)
+            .field("max_uploads_outstanding", &cfg.max_uploads_outstanding)
+            .field("max_message_size", &cfg.max_message_size)
+            .field("leader_timeout_ms", &cfg.leader_timeout_ms)
+            .field("notarization_timeout_ms", &cfg.notarization_timeout_ms)
+            .field("nullify_retry_ms", &cfg.nullify_retry_ms)
+            .field("fetch_timeout_ms", &cfg.fetch_timeout_ms)
+            .field("activity_timeout", &cfg.activity_timeout)
+            .field("skip_timeout", &cfg.skip_timeout)
+            .field("fetch_concurrent", &cfg.fetch_concurrent)
+            .field("max_fetch_count", &cfg.max_fetch_count)
+            .field("max_fetch_size", &cfg.max_fetch_size)
+            .field(
+                "blocks_freezer_table_initial_size",
+                &cfg.blocks_freezer_table_initial_size,
+            )
+            .field(
+                "finalized_freezer_table_initial_size",
+                &cfg.finalized_freezer_table_initial_size,
+            )
+            .field("buffer_pool_page_size", &cfg.buffer_pool_page_size)
+            .field("buffer_pool_capacity", &cfg.buffer_pool_capacity)
+            .field("pending_rate_per_second", &cfg.pending_rate_per_second)
+            .field("recovered_rate_per_second", &cfg.recovered_rate_per_second)
+            .field("resolver_rate_per_second", &cfg.resolver_rate_per_second)
+            .field(
+                "broadcaster_rate_per_second",
+                &cfg.broadcaster_rate_per_second,
+            )
+            .field("backfill_rate_per_second", &cfg.backfill_rate_per_second)
+            .field(
+                "aggregation_rate_per_second",
+                &cfg.aggregation_rate_per_second,
+            )
+            .field(
+                "fetch_rate_per_peer_per_second",
+                &cfg.fetch_rate_per_peer_per_second,
+            )
             .finish()
     }
 }
@@ -133,18 +290,109 @@ fn default_mempool_max_transactions() -> usize {
     100_000
 }
 
-fn parse_hex(field: &'static str, value: &str) -> Result<Vec<u8>, ConfigError> {
-    from_hex_formatted(value).ok_or(ConfigError::InvalidHex {
-        field,
-        value: value.to_string(),
-    })
+fn default_max_pending_seed_listeners() -> usize {
+    10_000
 }
 
-fn decode_hex<T: DecodeExt<()>>(field: &'static str, value: &str) -> Result<T, ConfigError> {
-    let bytes = parse_hex(field, value)?;
-    T::decode(bytes.as_ref()).map_err(|source| ConfigError::InvalidDecode {
+fn default_max_uploads_outstanding() -> usize {
+    4
+}
+
+fn default_max_message_size() -> usize {
+    10 * 1024 * 1024
+}
+
+fn default_leader_timeout_ms() -> u64 {
+    1_000
+}
+
+fn default_notarization_timeout_ms() -> u64 {
+    2_000
+}
+
+fn default_nullify_retry_ms() -> u64 {
+    10_000
+}
+
+fn default_fetch_timeout_ms() -> u64 {
+    2_000
+}
+
+fn default_activity_timeout() -> u64 {
+    256
+}
+
+fn default_skip_timeout() -> u64 {
+    32
+}
+
+fn default_fetch_concurrent() -> usize {
+    16
+}
+
+fn default_max_fetch_count() -> usize {
+    16
+}
+
+fn default_max_fetch_size() -> usize {
+    1024 * 1024
+}
+
+fn default_blocks_freezer_table_initial_size() -> u32 {
+    2u32.pow(21)
+}
+
+fn default_finalized_freezer_table_initial_size() -> u32 {
+    2u32.pow(21)
+}
+
+fn default_buffer_pool_page_size() -> usize {
+    4_096
+}
+
+fn default_buffer_pool_capacity() -> usize {
+    32_768
+}
+
+fn default_pending_rate_per_second() -> u32 {
+    128
+}
+
+fn default_recovered_rate_per_second() -> u32 {
+    128
+}
+
+fn default_resolver_rate_per_second() -> u32 {
+    128
+}
+
+fn default_broadcaster_rate_per_second() -> u32 {
+    32
+}
+
+fn default_backfill_rate_per_second() -> u32 {
+    8
+}
+
+fn default_aggregation_rate_per_second() -> u32 {
+    128
+}
+
+fn default_fetch_rate_per_peer_per_second() -> u32 {
+    128
+}
+
+fn redact_value(field: &'static str, value: String) -> String {
+    match field {
+        "private_key" | "share" => "<redacted>".to_string(),
+        _ => value,
+    }
+}
+
+fn decode_bytes<T: DecodeExt<()>>(field: &'static str, value: &HexBytes) -> Result<T, ConfigError> {
+    T::decode(value.as_ref()).map_err(|source| ConfigError::InvalidDecode {
         field,
-        value: value.to_string(),
+        value: redact_value(field, hex(value.as_ref())),
         source,
     })
 }
@@ -154,6 +402,24 @@ fn ensure_nonzero(field: &'static str, value: usize) -> Result<(), ConfigError> 
         return Err(ConfigError::InvalidNonZero { field, value });
     }
     Ok(())
+}
+
+fn ensure_nonzero_u64(field: &'static str, value: u64) -> Result<(), ConfigError> {
+    if value == 0 {
+        return Err(ConfigError::InvalidNonZero { field, value: 0 });
+    }
+    Ok(())
+}
+
+fn nonzero_usize(field: &'static str, value: usize) -> Result<NonZeroUsize, ConfigError> {
+    NonZeroUsize::new(value).ok_or(ConfigError::InvalidNonZero { field, value })
+}
+
+fn nonzero_u32(field: &'static str, value: u32) -> Result<NonZeroU32, ConfigError> {
+    NonZeroU32::new(value).ok_or(ConfigError::InvalidNonZero {
+        field,
+        value: value as usize,
+    })
 }
 
 fn validate_http_url(field: &'static str, value: &str) -> Result<(), ConfigError> {
@@ -189,7 +455,7 @@ impl Config {
     }
 
     pub fn parse_signer(&self) -> Result<PrivateKey, ConfigError> {
-        decode_hex("private_key", &self.private_key)
+        decode_bytes("private_key", &self.private_key)
     }
 
     pub fn validate(self, peer_count: u32) -> Result<ValidatedConfig, ConfigError> {
@@ -208,7 +474,58 @@ impl Config {
         ensure_nonzero("deque_size", self.deque_size)?;
         ensure_nonzero("mempool_max_backlog", self.mempool_max_backlog)?;
         ensure_nonzero("mempool_max_transactions", self.mempool_max_transactions)?;
+        ensure_nonzero(
+            "max_pending_seed_listeners",
+            self.max_pending_seed_listeners,
+        )?;
         ensure_nonzero("execution_concurrency", self.execution_concurrency)?;
+        ensure_nonzero("max_uploads_outstanding", self.max_uploads_outstanding)?;
+        ensure_nonzero("max_message_size", self.max_message_size)?;
+        ensure_nonzero_u64("leader_timeout_ms", self.leader_timeout_ms)?;
+        ensure_nonzero_u64("notarization_timeout_ms", self.notarization_timeout_ms)?;
+        ensure_nonzero_u64("nullify_retry_ms", self.nullify_retry_ms)?;
+        ensure_nonzero_u64("fetch_timeout_ms", self.fetch_timeout_ms)?;
+        ensure_nonzero_u64("activity_timeout", self.activity_timeout)?;
+        ensure_nonzero_u64("skip_timeout", self.skip_timeout)?;
+        ensure_nonzero("fetch_concurrent", self.fetch_concurrent)?;
+        ensure_nonzero("max_fetch_count", self.max_fetch_count)?;
+        ensure_nonzero("max_fetch_size", self.max_fetch_size)?;
+        if self.blocks_freezer_table_initial_size == 0 {
+            return Err(ConfigError::InvalidNonZero {
+                field: "blocks_freezer_table_initial_size",
+                value: 0,
+            });
+        }
+        if self.finalized_freezer_table_initial_size == 0 {
+            return Err(ConfigError::InvalidNonZero {
+                field: "finalized_freezer_table_initial_size",
+                value: 0,
+            });
+        }
+        let buffer_pool_page_size =
+            nonzero_usize("buffer_pool_page_size", self.buffer_pool_page_size)?;
+        let buffer_pool_capacity =
+            nonzero_usize("buffer_pool_capacity", self.buffer_pool_capacity)?;
+        let pending_rate_per_second =
+            nonzero_u32("pending_rate_per_second", self.pending_rate_per_second)?;
+        let recovered_rate_per_second =
+            nonzero_u32("recovered_rate_per_second", self.recovered_rate_per_second)?;
+        let resolver_rate_per_second =
+            nonzero_u32("resolver_rate_per_second", self.resolver_rate_per_second)?;
+        let broadcaster_rate_per_second = nonzero_u32(
+            "broadcaster_rate_per_second",
+            self.broadcaster_rate_per_second,
+        )?;
+        let backfill_rate_per_second =
+            nonzero_u32("backfill_rate_per_second", self.backfill_rate_per_second)?;
+        let aggregation_rate_per_second = nonzero_u32(
+            "aggregation_rate_per_second",
+            self.aggregation_rate_per_second,
+        )?;
+        let fetch_rate_per_peer_per_second = nonzero_u32(
+            "fetch_rate_per_peer_per_second",
+            self.fetch_rate_per_peer_per_second,
+        )?;
 
         if self.port == self.metrics_port {
             return Err(ConfigError::PortConflict {
@@ -221,15 +538,14 @@ impl Config {
 
         let public_key = signer.public_key();
 
-        let share = decode_hex("share", &self.share)?;
+        let share = decode_bytes("share", &self.share)?;
 
         let threshold = quorum(peer_count);
-        let polynomial_bytes = parse_hex("polynomial", &self.polynomial)?;
         let polynomial =
-            poly::Public::<MinSig>::decode_cfg(polynomial_bytes.as_ref(), &(threshold as usize))
+            poly::Public::<MinSig>::decode_cfg(self.polynomial.as_ref(), &(threshold as usize))
                 .map_err(|source| ConfigError::InvalidDecode {
                     field: "polynomial",
-                    value: self.polynomial.clone(),
+                    value: hex(self.polynomial.as_ref()),
                     source,
                 })?;
         let identity = *poly::public::<MinSig>(&polynomial);
@@ -257,8 +573,31 @@ impl Config {
             deque_size: self.deque_size,
             mempool_max_backlog: self.mempool_max_backlog,
             mempool_max_transactions: self.mempool_max_transactions,
+            max_pending_seed_listeners: self.max_pending_seed_listeners,
             indexer: self.indexer,
             execution_concurrency: self.execution_concurrency,
+            max_uploads_outstanding: self.max_uploads_outstanding,
+            max_message_size: self.max_message_size,
+            leader_timeout: Duration::from_millis(self.leader_timeout_ms),
+            notarization_timeout: Duration::from_millis(self.notarization_timeout_ms),
+            nullify_retry: Duration::from_millis(self.nullify_retry_ms),
+            fetch_timeout: Duration::from_millis(self.fetch_timeout_ms),
+            activity_timeout: self.activity_timeout,
+            skip_timeout: self.skip_timeout,
+            fetch_concurrent: self.fetch_concurrent,
+            max_fetch_count: self.max_fetch_count,
+            max_fetch_size: self.max_fetch_size,
+            blocks_freezer_table_initial_size: self.blocks_freezer_table_initial_size,
+            finalized_freezer_table_initial_size: self.finalized_freezer_table_initial_size,
+            buffer_pool_page_size,
+            buffer_pool_capacity,
+            pending_rate_per_second,
+            recovered_rate_per_second,
+            resolver_rate_per_second,
+            broadcaster_rate_per_second,
+            backfill_rate_per_second,
+            aggregation_rate_per_second,
+            fetch_rate_per_peer_per_second,
         })
     }
 }

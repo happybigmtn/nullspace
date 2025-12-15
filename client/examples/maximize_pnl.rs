@@ -9,10 +9,7 @@
 
 use clap::Parser;
 use commonware_codec::DecodeExt;
-use commonware_cryptography::{
-    ed25519::PrivateKey,
-    PrivateKeyExt, Signer,
-};
+use commonware_cryptography::{ed25519::PrivateKey, PrivateKeyExt, Signer};
 use nullspace_client::Client;
 use nullspace_types::{
     casino::GameType,
@@ -155,7 +152,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .await?
             {
                 if let Some(Value::CasinoPlayer(p)) = lookup.operation.value() {
-                    info!("Current Chips: {}", p.chips);
+                    info!("Current Chips: {}", p.balances.chips);
                 }
             }
         }

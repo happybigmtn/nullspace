@@ -298,15 +298,14 @@ impl Simulator {
         progress: &Progress,
         ops: &[Keyless<Output>],
     ) {
-        let mut state = self.state.write().await;
+        let mut explorer = self.explorer.write().await;
 
-        if state.explorer.indexed_blocks.contains_key(&progress.height) {
+        if explorer.indexed_blocks.contains_key(&progress.height) {
             return;
         }
 
         let parent = progress.height.checked_sub(1).and_then(|h| {
-            state
-                .explorer
+            explorer
                 .indexed_blocks
                 .get(&h)
                 .map(|b| b.block_digest.clone())
@@ -329,26 +328,22 @@ impl Simulator {
                         description: Self::describe_instruction(&tx.instruction),
                         instruction: format!("{:?}", tx.instruction),
                     };
-                    state.explorer.txs_by_hash.insert(digest, entry);
+                    explorer.txs_by_hash.insert(digest, entry);
 
-                    let activity = state
-                        .explorer
-                        .accounts
-                        .entry(tx.public.clone())
-                        .or_insert_with(|| AccountActivity {
-                            public_key: hex(tx.public.as_ref()),
-                            ..Default::default()
-                        });
+                    let activity =
+                        explorer
+                            .accounts
+                            .entry(tx.public.clone())
+                            .or_insert_with(|| AccountActivity {
+                                public_key: hex(tx.public.as_ref()),
+                                ..Default::default()
+                            });
                     activity.txs.push(hash_hex);
                     activity.last_nonce = Some(tx.nonce);
                     activity.last_updated_height = Some(progress.height);
                 }
                 Keyless::Append(Output::Event(evt)) => {
-                    Self::record_event_for_accounts(
-                        &mut state.explorer.accounts,
-                        evt,
-                        progress.height,
-                    );
+                    Self::record_event_for_accounts(&mut explorer.accounts, evt, progress.height);
                 }
                 _ => {}
             }
@@ -365,12 +360,11 @@ impl Simulator {
             indexed_at_ms: Self::now_ms(),
         };
 
-        state
-            .explorer
+        explorer
             .blocks_by_hash
             .insert(progress.block_digest, block.clone());
-        state.explorer.indexed_blocks.insert(progress.height, block);
-        state.explorer.enforce_retention();
+        explorer.indexed_blocks.insert(progress.height, block);
+        explorer.enforce_retention();
     }
 }
 
@@ -387,11 +381,10 @@ pub(crate) async fn list_blocks(
     let offset = pagination.offset.unwrap_or(0);
     let limit = pagination.limit.unwrap_or(20).min(200);
 
-    let state = simulator.state.read().await;
+    let explorer = simulator.explorer.read().await;
 
-    let total = state.explorer.indexed_blocks.len();
-    let blocks: Vec<_> = state
-        .explorer
+    let total = explorer.indexed_blocks.len();
+    let blocks: Vec<_> = explorer
         .indexed_blocks
         .iter()
         .rev()
@@ -413,16 +406,16 @@ pub(crate) async fn get_block(
     AxumState(simulator): AxumState<Arc<Simulator>>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
-    let state = simulator.state.read().await;
+    let explorer = simulator.explorer.read().await;
 
     // Try height first
     let block_opt = if let Ok(height) = id.parse::<u64>() {
-        state.explorer.indexed_blocks.get(&height).cloned()
+        explorer.indexed_blocks.get(&height).cloned()
     } else {
         // Try hash
         from_hex(&id)
             .and_then(|raw| Digest::decode(&mut raw.as_slice()).ok())
-            .and_then(|digest| state.explorer.blocks_by_hash.get(&digest).cloned())
+            .and_then(|digest| explorer.blocks_by_hash.get(&digest).cloned())
     };
 
     match block_opt {
@@ -444,9 +437,9 @@ pub(crate) async fn get_transaction(
         Err(_) => return StatusCode::BAD_REQUEST.into_response(),
     };
 
-    let state = simulator.state.read().await;
+    let explorer = simulator.explorer.read().await;
 
-    match state.explorer.txs_by_hash.get(&digest) {
+    match explorer.txs_by_hash.get(&digest) {
         Some(tx) => Json(tx).into_response(),
         None => StatusCode::NOT_FOUND.into_response(),
     }
@@ -465,9 +458,9 @@ pub(crate) async fn get_account_activity(
         Err(_) => return StatusCode::BAD_REQUEST.into_response(),
     };
 
-    let state = simulator.state.read().await;
+    let explorer = simulator.explorer.read().await;
 
-    match state.explorer.accounts.get(&public_key) {
+    match explorer.accounts.get(&public_key) {
         Some(account) => Json(account).into_response(),
         None => StatusCode::NOT_FOUND.into_response(),
     }
@@ -482,13 +475,13 @@ pub(crate) async fn search_explorer(
     AxumState(simulator): AxumState<Arc<Simulator>>,
     Query(params): Query<SearchQuery>,
 ) -> impl IntoResponse {
-    let state = simulator.state.read().await;
+    let explorer = simulator.explorer.read().await;
 
     let q = params.q.trim();
 
     // Height search
     if let Ok(height) = q.parse::<u64>() {
-        if let Some(block) = state.explorer.indexed_blocks.get(&height) {
+        if let Some(block) = explorer.indexed_blocks.get(&height) {
             return Json(json!({"type": "block", "block": block})).into_response();
         }
     }
@@ -497,10 +490,10 @@ pub(crate) async fn search_explorer(
     if let Some(raw) = from_hex(q) {
         if raw.len() == 32 {
             if let Ok(digest) = Digest::decode(&mut raw.as_slice()) {
-                if let Some(block) = state.explorer.blocks_by_hash.get(&digest) {
+                if let Some(block) = explorer.blocks_by_hash.get(&digest) {
                     return Json(json!({"type": "block", "block": block})).into_response();
                 }
-                if let Some(tx) = state.explorer.txs_by_hash.get(&digest) {
+                if let Some(tx) = explorer.txs_by_hash.get(&digest) {
                     return Json(json!({"type": "transaction", "transaction": tx})).into_response();
                 }
             }
@@ -508,7 +501,7 @@ pub(crate) async fn search_explorer(
 
         // Account search
         if let Ok(pk) = ed25519::PublicKey::read(&mut raw.as_slice()) {
-            if let Some(account) = state.explorer.accounts.get(&pk) {
+            if let Some(account) = explorer.accounts.get(&pk) {
                 return Json(json!({"type": "account", "account": account})).into_response();
             }
         }

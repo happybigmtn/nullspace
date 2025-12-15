@@ -12,7 +12,7 @@
 //! [2] = Cashout - take current pot
 
 use super::super_mode::apply_hilo_streak_multiplier;
-use super::{CasinoGame, GameError, GameResult, GameRng};
+use super::{cards, CasinoGame, GameError, GameResult, GameRng};
 use nullspace_types::casino::GameSession;
 
 /// Base multiplier in basis points (1.0 = 10000)
@@ -43,7 +43,7 @@ impl TryFrom<u8> for Move {
 /// Get the rank of a card for HiLo comparison (1-13).
 /// Ace = 1, 2 = 2, ..., K = 13
 pub fn card_rank(card: u8) -> u8 {
-    (card % 13) + 1
+    cards::card_rank_one_based(card)
 }
 
 /// Calculate the multiplier for a correct guess based on probability.

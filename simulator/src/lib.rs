@@ -18,7 +18,9 @@ pub use state::{InternalUpdate, SimulatorConfig, State};
 #[derive(Clone)]
 pub struct Simulator {
     identity: Identity,
+    config: SimulatorConfig,
     state: Arc<RwLock<State>>,
+    explorer: Arc<RwLock<ExplorerState>>,
     update_tx: broadcast::Sender<InternalUpdate>,
     mempool_tx: broadcast::Sender<Pending>,
 }
@@ -31,16 +33,19 @@ impl Simulator {
     pub fn new_with_config(identity: Identity, config: SimulatorConfig) -> Self {
         let (update_tx, _) = broadcast::channel(1024);
         let (mempool_tx, _) = broadcast::channel(1024);
-        let mut state = State::default();
-        state.explorer.set_retention(
+        let state = Arc::new(RwLock::new(State::default()));
+        let mut explorer = ExplorerState::default();
+        explorer.set_retention(
             config.explorer_max_blocks,
             config.explorer_max_account_entries,
         );
-        let state = Arc::new(RwLock::new(state));
+        let explorer = Arc::new(RwLock::new(explorer));
 
         Self {
             identity,
+            config,
             state,
+            explorer,
             update_tx,
             mempool_tx,
         }

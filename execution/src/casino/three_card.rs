@@ -51,7 +51,7 @@
 //! 6 = Set Progressive bet (u64)
 
 use super::super_mode::apply_super_multiplier_cards;
-use super::{CasinoGame, GameError, GameResult, GameRng};
+use super::{cards, CasinoGame, GameError, GameResult, GameRng};
 use nullspace_types::casino::{GameSession, THREE_CARD_PROGRESSIVE_BASE_JACKPOT};
 
 const STATE_VERSION_V1: u8 = 1;
@@ -129,28 +129,16 @@ pub enum HandRank {
     StraightFlush = 5,
 }
 
-/// Get card rank (2-14, Ace = 14 for comparison).
-fn card_rank(card: u8) -> u8 {
-    let r = (card % 13) + 1;
-    if r == 1 {
-        14
-    } else {
-        r
-    }
-}
-
-/// Get card suit.
-fn card_suit(card: u8) -> u8 {
-    card / 13
-}
-
 /// Evaluate a 3-card hand, returns (HandRank, high cards for tiebreaker).
 pub fn evaluate_hand(cards: &[u8; 3]) -> (HandRank, [u8; 3]) {
-    let mut ranks: Vec<u8> = cards.iter().map(|&c| card_rank(c)).collect();
+    let mut ranks: Vec<u8> = cards
+        .iter()
+        .map(|&c| cards::card_rank_ace_high(c))
+        .collect();
     ranks.sort_unstable_by(|a, b| b.cmp(a)); // Descending
     let high_cards = [ranks[0], ranks[1], ranks[2]];
 
-    let suits: Vec<u8> = cards.iter().map(|&c| card_suit(c)).collect();
+    let suits: Vec<u8> = cards.iter().map(|&c| cards::card_suit(c)).collect();
     let is_flush = suits[0] == suits[1] && suits[1] == suits[2];
 
     // Check straight (including A-2-3)
@@ -290,18 +278,6 @@ fn serialize_state(state: &TcState) -> Vec<u8> {
     out
 }
 
-fn parse_u64_be(payload: &[u8], offset: usize) -> Result<u64, GameError> {
-    let end = offset.saturating_add(8);
-    if payload.len() < end {
-        return Err(GameError::InvalidPayload);
-    }
-    Ok(u64::from_be_bytes(
-        payload[offset..end]
-            .try_into()
-            .map_err(|_| GameError::InvalidPayload)?,
-    ))
-}
-
 fn apply_pairplus_update(state: &mut TcState, new_bet: u64) -> Result<i64, GameError> {
     let old = state.pairplus_bet as i128;
     let new = new_bet as i128;
@@ -336,7 +312,7 @@ fn apply_progressive_update(state: &mut TcState, new_bet: u64) -> Result<i64, Ga
 }
 
 fn is_known_card(card: u8) -> bool {
-    card < 52
+    cards::is_valid_card(card)
 }
 
 fn resolve_pairplus_return(player_cards: &[u8; 3], pairplus_bet: u64) -> u64 {
@@ -368,8 +344,8 @@ fn evaluate_5_card_bonus_rank(cards: &[u8; 5]) -> SixCardBonusRank {
     let mut ranks = [0u8; 5];
     let mut suits = [0u8; 5];
     for i in 0..5 {
-        ranks[i] = card_rank(cards[i]);
-        suits[i] = card_suit(cards[i]);
+        ranks[i] = cards::card_rank_ace_high(cards[i]);
+        suits[i] = cards::card_suit(cards[i]);
     }
 
     ranks.sort_unstable_by(|a, b| b.cmp(a));
@@ -496,7 +472,7 @@ fn resolve_progressive_return(player_cards: &[u8; 3], progressive_bet: u64) -> u
         HandRank::StraightFlush => {
             // Mini-royal is A-K-Q suited.
             if player_hand.1 == [14, 13, 12] {
-                let is_spades = player_cards.iter().all(|&c| card_suit(c) == 0);
+                let is_spades = player_cards.iter().all(|&c| cards::card_suit(c) == 0);
                 if is_spades {
                     progressive_bet.saturating_mul(THREE_CARD_PROGRESSIVE_BASE_JACKPOT)
                 } else {
@@ -547,7 +523,7 @@ impl CasinoGame for ThreeCardPoker {
         match state.stage {
             Stage::Betting => match mv {
                 Move::SetPairPlus => {
-                    let new_bet = parse_u64_be(payload, 1)?;
+                    let new_bet = super::payload::parse_u64_be(payload, 1)?;
                     let payout = apply_pairplus_update(&mut state, new_bet)?;
                     session.state_blob = serialize_state(&state);
                     Ok(if payout == 0 {
@@ -563,7 +539,7 @@ impl CasinoGame for ThreeCardPoker {
 
                     let mut payout_update: i64 = 0;
                     if payload.len() == 9 {
-                        let new_bet = parse_u64_be(payload, 1)?;
+                        let new_bet = super::payload::parse_u64_be(payload, 1)?;
                         payout_update = apply_pairplus_update(&mut state, new_bet)?;
                     } else if payload.len() != 1 {
                         return Err(GameError::InvalidPayload);
@@ -585,7 +561,7 @@ impl CasinoGame for ThreeCardPoker {
                     })
                 }
                 Move::SetSixCardBonus => {
-                    let new_bet = parse_u64_be(payload, 1)?;
+                    let new_bet = super::payload::parse_u64_be(payload, 1)?;
                     let payout = apply_six_card_bonus_update(&mut state, new_bet)?;
                     session.state_blob = serialize_state(&state);
                     Ok(if payout == 0 {
@@ -595,7 +571,7 @@ impl CasinoGame for ThreeCardPoker {
                     })
                 }
                 Move::SetProgressive => {
-                    let new_bet = parse_u64_be(payload, 1)?;
+                    let new_bet = super::payload::parse_u64_be(payload, 1)?;
                     if new_bet != 0 && new_bet != PROGRESSIVE_BET_UNIT {
                         return Err(GameError::InvalidMove);
                     }

@@ -14,11 +14,13 @@
 
 pub mod baccarat;
 pub mod blackjack;
+pub(crate) mod cards;
 pub mod casino_war;
 pub mod craps;
 pub mod hilo;
 #[cfg(test)]
 mod integration_tests;
+pub(crate) mod payload;
 pub mod roulette;
 pub mod sic_bo;
 pub mod super_mode;
@@ -72,13 +74,6 @@ impl GameRng {
     /// Get a random u8 value.
     pub fn next_u8(&mut self) -> u8 {
         self.next_byte()
-    }
-
-    /// Get a random u16 value.
-    pub fn next_u16(&mut self) -> u16 {
-        let a = self.next_byte() as u16;
-        let b = self.next_byte() as u16;
-        (a << 8) | b
     }
 
     /// Get a random u32 value.
@@ -194,11 +189,6 @@ impl GameRng {
         self.next_bounded(6) + 1
     }
 
-    /// Roll multiple dice.
-    pub fn roll_dice(&mut self, count: usize) -> Vec<u8> {
-        (0..count).map(|_| self.roll_die()).collect()
-    }
-
     /// Spin roulette wheel (0-36).
     pub fn spin_roulette(&mut self) -> u8 {
         self.next_bounded(37)
@@ -288,6 +278,7 @@ pub enum GameResult {
     /// charged wagers (e.g. a mid-game bet increase that ends the game immediately).
     /// `payout` is the credited return (stake + profit) and `extra_deduction` is the amount to
     /// deduct from the player's balance.
+    #[allow(dead_code)]
     WinWithExtraDeduction { payout: u64, extra_deduction: u64 },
     /// Game completed with a loss.
     Loss,
@@ -305,11 +296,13 @@ pub enum GameResult {
     /// deduction is still required (e.g. a mid-game bet increase that ends the game immediately).
     /// `total_loss` is the full loss amount for reporting and shield refunds; `extra_deduction`
     /// is the portion still to deduct from the player's balance.
+    #[allow(dead_code)]
     LossPreDeductedWithExtraDeduction {
         total_loss: u64,
         extra_deduction: u64,
     },
     /// Game completed with a push (tie, bet returned).
+    #[allow(dead_code)]
     Push,
 }
 
@@ -382,30 +375,31 @@ pub fn process_game_move(
 }
 
 /// Apply modifiers (shield/double) to a game outcome.
+#[allow(dead_code)]
 pub fn apply_modifiers(player: &mut Player, payout: i64) -> (i64, bool, bool) {
     let mut final_payout = payout;
     let mut was_shielded = false;
     let mut was_doubled = false;
 
     // Shield: converts loss to break-even
-    if payout < 0 && player.active_shield && player.shields > 0 {
-        player.shields -= 1;
-        player.active_shield = false;
+    if payout < 0 && player.modifiers.active_shield && player.modifiers.shields > 0 {
+        player.modifiers.shields -= 1;
+        player.modifiers.active_shield = false;
         final_payout = 0;
         was_shielded = true;
     }
 
     // Double: doubles wins (with overflow protection)
-    if payout > 0 && player.active_double && player.doubles > 0 {
-        player.doubles -= 1;
-        player.active_double = false;
+    if payout > 0 && player.modifiers.active_double && player.modifiers.doubles > 0 {
+        player.modifiers.doubles -= 1;
+        player.modifiers.active_double = false;
         final_payout = payout.saturating_mul(2);
         was_doubled = true;
     }
 
     // Reset modifiers after use
-    player.active_shield = false;
-    player.active_double = false;
+    player.modifiers.active_shield = false;
+    player.modifiers.active_double = false;
 
     (final_payout, was_shielded, was_doubled)
 }
@@ -438,6 +432,7 @@ pub fn generate_super_multipliers(
 mod tests {
     use super::*;
     use crate::mocks::{create_network_keypair, create_seed};
+    use rand::{rngs::StdRng, Rng as _, SeedableRng as _};
 
     fn create_test_seed() -> Seed {
         let (network_secret, _) = create_network_keypair();
@@ -543,53 +538,104 @@ mod tests {
     #[test]
     fn test_apply_modifiers_shield() {
         let mut player = Player::new("Test".to_string());
-        player.shields = 2;
-        player.active_shield = true;
+        player.modifiers.shields = 2;
+        player.modifiers.active_shield = true;
 
         let (payout, was_shielded, was_doubled) = apply_modifiers(&mut player, -100);
 
         assert_eq!(payout, 0); // Loss converted to 0
         assert!(was_shielded);
         assert!(!was_doubled);
-        assert_eq!(player.shields, 1); // Shield consumed
-        assert!(!player.active_shield); // Reset
+        assert_eq!(player.modifiers.shields, 1); // Shield consumed
+        assert!(!player.modifiers.active_shield); // Reset
     }
 
     #[test]
     fn test_apply_modifiers_double() {
         let mut player = Player::new("Test".to_string());
-        player.doubles = 2;
-        player.active_double = true;
+        player.modifiers.doubles = 2;
+        player.modifiers.active_double = true;
 
         let (payout, was_shielded, was_doubled) = apply_modifiers(&mut player, 100);
 
         assert_eq!(payout, 200); // Win doubled
         assert!(!was_shielded);
         assert!(was_doubled);
-        assert_eq!(player.doubles, 1); // Double consumed
-        assert!(!player.active_double); // Reset
+        assert_eq!(player.modifiers.doubles, 1); // Double consumed
+        assert!(!player.modifiers.active_double); // Reset
     }
 
     #[test]
     fn test_apply_modifiers_no_effect_on_opposite() {
         // Shield doesn't affect wins
         let mut player = Player::new("Test".to_string());
-        player.shields = 2;
-        player.active_shield = true;
+        player.modifiers.shields = 2;
+        player.modifiers.active_shield = true;
 
         let (payout, was_shielded, _) = apply_modifiers(&mut player, 100);
         assert_eq!(payout, 100);
         assert!(!was_shielded);
-        assert_eq!(player.shields, 2); // Not consumed
+        assert_eq!(player.modifiers.shields, 2); // Not consumed
 
         // Double doesn't affect losses
         let mut player = Player::new("Test".to_string());
-        player.doubles = 2;
-        player.active_double = true;
+        player.modifiers.doubles = 2;
+        player.modifiers.active_double = true;
 
         let (payout, _, was_doubled) = apply_modifiers(&mut player, -100);
         assert_eq!(payout, -100);
         assert!(!was_doubled);
-        assert_eq!(player.doubles, 2); // Not consumed
+        assert_eq!(player.modifiers.doubles, 2); // Not consumed
+    }
+
+    #[test]
+    fn test_apply_modifiers_invariants_fuzz() {
+        let mut rng = StdRng::seed_from_u64(0);
+
+        for _ in 0..10_000 {
+            let payout = match rng.gen_range(0..100) {
+                0 => i64::MAX,
+                1 => i64::MIN + 1, // avoid edge-case negation overflow in downstream consumers
+                _ => rng.gen_range(-1_000_000i64..=1_000_000i64),
+            };
+
+            let mut player = Player::new("Test".to_string());
+            player.modifiers.shields = rng.gen_range(0..=3);
+            player.modifiers.doubles = rng.gen_range(0..=3);
+            player.modifiers.active_shield = rng.gen();
+            player.modifiers.active_double = rng.gen();
+
+            let original_shields = player.modifiers.shields;
+            let original_doubles = player.modifiers.doubles;
+            let original_active_shield = player.modifiers.active_shield;
+            let original_active_double = player.modifiers.active_double;
+
+            let (final_payout, was_shielded, was_doubled) = apply_modifiers(&mut player, payout);
+
+            assert!(!player.modifiers.active_shield);
+            assert!(!player.modifiers.active_double);
+
+            if payout < 0 && original_active_shield && original_shields > 0 {
+                assert_eq!(final_payout, 0);
+                assert!(was_shielded);
+                assert_eq!(player.modifiers.shields, original_shields - 1);
+            } else {
+                assert_eq!(player.modifiers.shields, original_shields);
+                assert!(!was_shielded);
+            }
+
+            if payout > 0 && original_active_double && original_doubles > 0 {
+                assert_eq!(final_payout, payout.saturating_mul(2));
+                assert!(was_doubled);
+                assert_eq!(player.modifiers.doubles, original_doubles - 1);
+            } else {
+                assert_eq!(player.modifiers.doubles, original_doubles);
+                assert!(!was_doubled);
+            }
+
+            if payout == 0 {
+                assert_eq!(final_payout, 0);
+            }
+        }
     }
 }

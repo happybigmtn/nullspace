@@ -10,7 +10,7 @@ crate-type = ["cdylib"]
 [features]
 default = []
 private-key-export = []
-testing = ["nullspace-execution/mocks"]
+testing = ["nullspace-execution/mocks", "private-key-export"]
 
 [dependencies]
 # WASM specific dependencies

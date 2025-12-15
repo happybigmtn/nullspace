@@ -58,11 +58,11 @@ export const ActiveGame: React.FC<ActiveGameProps> = ({ gameState, deck, numberI
              </div>
          )}
 
-         <BigWinEffect 
-            amount={gameState.lastResult} 
-            show={gameState.stage === 'RESULT' && gameState.lastResult > 0} 
-            durationMs={gameState.type === GameType.BLACKJACK ? 500 : undefined}
-         />
+	         <BigWinEffect 
+	            amount={gameState.lastResult} 
+	            show={gameState.stage === 'RESULT' && gameState.lastResult > 0} 
+	            durationMs={gameState.type === GameType.BLACKJACK ? 1000 : undefined}
+	         />
 
          {gameState.type === GameType.BLACKJACK && <BlackjackView gameState={gameState} actions={actions} />}
          {gameState.type === GameType.CRAPS && <CrapsView gameState={gameState} actions={actions} />}

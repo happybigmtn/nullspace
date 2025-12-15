@@ -42,7 +42,7 @@
 //! 6 = Reveal
 
 use super::super_mode::apply_super_multiplier_cards;
-use super::{CasinoGame, GameError, GameResult, GameRng};
+use super::{cards, CasinoGame, GameError, GameResult, GameRng};
 use nullspace_types::casino::GameSession;
 
 /// Maximum cards in a blackjack hand.
@@ -182,24 +182,6 @@ fn is_natural_blackjack(hand: &HandState) -> bool {
     !hand.was_split && is_blackjack(&hand.cards)
 }
 
-/// Get card rank (0-12).
-fn card_rank(card: u8) -> u8 {
-    card % 13
-}
-
-fn card_rank_ace_high(card: u8) -> u8 {
-    let r = (card % 13) + 1;
-    if r == 1 {
-        14
-    } else {
-        r
-    }
-}
-
-fn card_suit(card: u8) -> u8 {
-    card / 13
-}
-
 fn is_21plus3_straight(ranks: &mut [u8; 3]) -> bool {
     ranks.sort_unstable();
     let is_wheel = *ranks == [2, 3, 14];
@@ -211,21 +193,21 @@ fn eval_21plus3_multiplier(cards: [u8; 3]) -> u64 {
     // WoO 21+3 "Version 4" / "Xtreme" pay table: 30-20-10-5 (to-1).
     // https://wizardofodds.com/games/blackjack/side-bets/21plus3/
     let suits = [
-        card_suit(cards[0]),
-        card_suit(cards[1]),
-        card_suit(cards[2]),
+        cards::card_suit(cards[0]),
+        cards::card_suit(cards[1]),
+        cards::card_suit(cards[2]),
     ];
     let is_flush = suits[0] == suits[1] && suits[1] == suits[2];
 
-    let r1 = card_rank(cards[0]);
-    let r2 = card_rank(cards[1]);
-    let r3 = card_rank(cards[2]);
+    let r1 = cards::card_rank(cards[0]);
+    let r2 = cards::card_rank(cards[1]);
+    let r3 = cards::card_rank(cards[2]);
     let is_trips = r1 == r2 && r2 == r3;
 
     let mut ranks = [
-        card_rank_ace_high(cards[0]),
-        card_rank_ace_high(cards[1]),
-        card_rank_ace_high(cards[2]),
+        cards::card_rank_ace_high(cards[0]),
+        cards::card_rank_ace_high(cards[1]),
+        cards::card_rank_ace_high(cards[2]),
     ];
     let is_straight = is_21plus3_straight(&mut ranks);
 
@@ -261,18 +243,6 @@ fn resolve_21plus3_return(state: &BlackjackState) -> u64 {
     } else {
         bet.saturating_mul(mult.saturating_add(1))
     }
-}
-
-fn parse_u64_be(payload: &[u8], offset: usize) -> Result<u64, GameError> {
-    let end = offset.saturating_add(8);
-    if payload.len() < end {
-        return Err(GameError::InvalidPayload);
-    }
-    Ok(u64::from_be_bytes(
-        payload[offset..end]
-            .try_into()
-            .map_err(|_| GameError::InvalidPayload)?,
-    ))
 }
 
 fn apply_21plus3_update(state: &mut BlackjackState, new_bet: u64) -> Result<i64, GameError> {
@@ -427,7 +397,7 @@ impl CasinoGame for Blackjack {
         match state.stage {
             Stage::Betting => match mv {
                 Move::Set21Plus3 => {
-                    let new_bet = parse_u64_be(payload, 1)?;
+                    let new_bet = super::payload::parse_u64_be(payload, 1)?;
                     let payout = apply_21plus3_update(&mut state, new_bet)?;
                     session.state_blob = serialize_state(&state);
                     Ok(if payout == 0 {
@@ -615,8 +585,8 @@ impl CasinoGame for Blackjack {
                             return Err(GameError::InvalidMove);
                         }
 
-                        let r1 = card_rank(current_hand.cards[0]);
-                        let r2 = card_rank(current_hand.cards[1]);
+                        let r1 = cards::card_rank(current_hand.cards[0]);
+                        let r2 = cards::card_rank(current_hand.cards[1]);
                         if r1 != r2 {
                             return Err(GameError::InvalidMove);
                         }
@@ -680,32 +650,7 @@ impl CasinoGame for Blackjack {
                         }
                     }
 
-                    let (d_val, _) = hand_value(&state.dealer_cards);
-                    let d_bj = is_blackjack(&state.dealer_cards);
-
-                    let mut total_return: u64 = 0;
-                    for hand in &state.hands {
-                        let bet = session.bet.saturating_mul(hand.bet_mult as u64);
-                        if hand.status == HandStatus::Busted {
-                            continue;
-                        }
-
-                        let (p_val, _) = hand_value(&hand.cards);
-                        let p_bj = is_natural_blackjack(hand);
-
-                        if p_bj && d_bj {
-                            total_return = total_return.saturating_add(bet);
-                        } else if p_bj {
-                            total_return = total_return.saturating_add(bet.saturating_mul(5) / 2);
-                        } else if d_bj {
-                            // Lose.
-                        } else if d_val > 21 || p_val > d_val {
-                            total_return = total_return.saturating_add(bet.saturating_mul(2));
-                        } else if p_val == d_val {
-                            total_return = total_return.saturating_add(bet);
-                        }
-                    }
-
+                    let mut total_return = resolve_main_return(session, &state);
                     total_return = total_return.saturating_add(resolve_21plus3_return(&state));
 
                     state.stage = Stage::Complete;
@@ -730,6 +675,52 @@ fn advance_turn(state: &mut BlackjackState) -> bool {
         state.active_hand_idx += 1;
     }
     false
+}
+
+fn resolve_hand_return(
+    bet: u64,
+    hand: &HandState,
+    dealer_value: u8,
+    dealer_blackjack: bool,
+) -> u64 {
+    if hand.status == HandStatus::Busted {
+        return 0;
+    }
+
+    let (player_value, _) = hand_value(&hand.cards);
+    let player_blackjack = is_natural_blackjack(hand);
+
+    if player_blackjack && dealer_blackjack {
+        return bet;
+    }
+    if player_blackjack {
+        return bet.saturating_mul(5) / 2;
+    }
+    if dealer_blackjack {
+        return 0;
+    }
+    if dealer_value > 21 || player_value > dealer_value {
+        return bet.saturating_mul(2);
+    }
+    if player_value == dealer_value {
+        return bet;
+    }
+    0
+}
+
+fn resolve_main_return(session: &GameSession, state: &BlackjackState) -> u64 {
+    let (dealer_value, _) = hand_value(&state.dealer_cards);
+    let dealer_blackjack = is_blackjack(&state.dealer_cards);
+
+    state.hands.iter().fold(0u64, |acc, hand| {
+        let bet = session.bet.saturating_mul(hand.bet_mult as u64);
+        acc.saturating_add(resolve_hand_return(
+            bet,
+            hand,
+            dealer_value,
+            dealer_blackjack,
+        ))
+    })
 }
 
 fn total_wagered(session: &GameSession, state: &BlackjackState) -> u64 {
@@ -770,6 +761,7 @@ mod tests {
     use super::*;
     use nullspace_types::casino::GameType;
     use nullspace_types::casino::SuperModeState;
+    use rand::{rngs::StdRng, Rng as _, SeedableRng as _};
 
     #[test]
     fn test_21plus3_multiplier_table() {
@@ -900,5 +892,116 @@ mod tests {
         }
 
         assert_eq!(found, Some(310));
+    }
+
+    #[test]
+    fn test_blackjack_wager_and_payout_bounds_no_super_no_side_bet() {
+        let (network_secret, _) = crate::mocks::create_network_keypair();
+        let seed = crate::mocks::create_seed(&network_secret, 1);
+        let (_, public) = crate::mocks::create_account_keypair(1);
+
+        let bet = 100u64;
+        let mut chooser = StdRng::seed_from_u64(0);
+
+        for session_id in 0u64..200 {
+            let mut session = GameSession {
+                id: session_id,
+                player: public.clone(),
+                game_type: GameType::Blackjack,
+                bet,
+                state_blob: vec![],
+                move_count: 0,
+                created_at: 0,
+                is_complete: false,
+                super_mode: SuperModeState::default(),
+                is_tournament: false,
+                tournament_id: None,
+            };
+
+            let mut init_rng = GameRng::new(&seed, session_id, 0);
+            assert!(matches!(
+                Blackjack::init(&mut session, &mut init_rng),
+                GameResult::Continue
+            ));
+
+            let mut total_extra_deductions: i64 = 0;
+
+            for _ in 0..64 {
+                if session.is_complete {
+                    break;
+                }
+
+                let state = parse_state(&session.state_blob).expect("valid blackjack state");
+                let payload = match state.stage {
+                    Stage::Betting => vec![Move::Deal as u8],
+                    Stage::AwaitingReveal => vec![Move::Reveal as u8],
+                    Stage::PlayerTurn => {
+                        let Some(hand) = state.hands.get(state.active_hand_idx) else {
+                            panic!("active_hand_idx out of bounds");
+                        };
+                        if hand.status != HandStatus::Playing {
+                            vec![Move::Stand as u8]
+                        } else {
+                            let can_split = state.hands.len() < MAX_HANDS
+                                && hand.cards.len() == 2
+                                && cards::card_rank(hand.cards[0])
+                                    == cards::card_rank(hand.cards[1]);
+                            let can_double = hand.cards.len() == 2 && hand.bet_mult == 1;
+                            let (val, _) = hand_value(&hand.cards);
+
+                            if can_split && chooser.gen_bool(0.35) {
+                                vec![Move::Split as u8]
+                            } else if can_double && chooser.gen_bool(0.35) && val <= 11 {
+                                vec![Move::Double as u8]
+                            } else if val >= 19 || hand.cards.len() >= MAX_HAND_SIZE {
+                                vec![Move::Stand as u8]
+                            } else if chooser.gen_bool(0.60) {
+                                vec![Move::Hit as u8]
+                            } else {
+                                vec![Move::Stand as u8]
+                            }
+                        }
+                    }
+                    Stage::Complete => break,
+                };
+
+                // Mirror the executor behavior: increment move_count before seeding the RNG.
+                session.move_count = session.move_count.saturating_add(1);
+                let mut rng = GameRng::new(&seed, session_id, session.move_count);
+
+                match Blackjack::process_move(&mut session, &payload, &mut rng)
+                    .expect("blackjack move should not error for valid payload")
+                {
+                    GameResult::Continue => {}
+                    GameResult::ContinueWithUpdate { payout } => {
+                        if payout < 0 {
+                            total_extra_deductions = total_extra_deductions.saturating_add(payout);
+                        }
+                    }
+                    GameResult::Win(total_return) => {
+                        let end_state =
+                            parse_state(&session.state_blob).expect("valid final blackjack state");
+                        assert_eq!(end_state.side_bet_21plus3, 0);
+                        assert!(!session.super_mode.is_active);
+
+                        let wagered = total_wagered(&session, &end_state);
+                        assert!(wagered <= bet.saturating_mul(8));
+                        assert!(total_return <= bet.saturating_mul(16));
+                    }
+                    GameResult::LossPreDeducted(total_loss) => {
+                        let end_state =
+                            parse_state(&session.state_blob).expect("valid final blackjack state");
+                        let wagered = total_wagered(&session, &end_state);
+                        assert_eq!(total_loss, wagered);
+                        assert!(wagered <= bet.saturating_mul(8));
+                    }
+                    _ => panic!("unexpected blackjack result variant"),
+                }
+            }
+
+            assert!(session.is_complete, "blackjack fuzz run did not complete");
+            assert!(total_extra_deductions <= 0);
+            assert!(total_extra_deductions >= -(bet as i64).saturating_mul(7));
+        }
     }
 }

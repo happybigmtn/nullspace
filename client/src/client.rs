@@ -28,6 +28,13 @@ pub(crate) fn join_hex_path(base: &Url, prefix: &str, bytes: &[u8]) -> Result<Ur
 }
 
 /// Retry policy for transient HTTP failures.
+///
+/// Notes:
+/// - `GET` requests are treated as idempotent and may be retried up to `max_attempts`.
+/// - Non-idempotent requests (e.g., `POST`) are only retried when `retry_non_idempotent` is
+///   enabled.
+/// - Retries occur on retryable HTTP status codes (see `is_retryable_status`) and on transient
+///   transport errors (see `is_retryable_error`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RetryPolicy {
     /// Total attempts per request (including the first attempt).
@@ -127,12 +134,16 @@ impl Client {
             })
             .await?;
         if !response.status().is_success() {
-            return Err(Self::error_from_response(response).await);
+            return Err(Self::error_from_response(reqwest::Method::POST, &url, response).await);
         }
         Ok(())
     }
 
-    pub(crate) async fn error_from_response(response: reqwest::Response) -> Error {
+    pub(crate) async fn error_from_response(
+        method: reqwest::Method,
+        url: &Url,
+        response: reqwest::Response,
+    ) -> Error {
         let status = response.status();
 
         let mut stream = response.bytes_stream();
@@ -157,13 +168,18 @@ impl Client {
         }
 
         let snippet = String::from_utf8_lossy(&buf).trim().to_string();
-        if snippet.is_empty() {
-            return Error::Failed(status);
-        }
-        let body = if truncated {
+        let snippet = if snippet.is_empty() {
+            String::new()
+        } else if truncated {
             format!("{snippet}\n…(truncated)")
         } else {
             snippet
+        };
+
+        let body = if snippet.is_empty() {
+            format!("{method} {url}")
+        } else {
+            format!("{method} {url}\n{snippet}")
         };
         Error::FailedWithBody { status, body }
     }
@@ -241,14 +257,14 @@ impl Client {
         // Make request
         let key_hash = Sha256::hash(&key.encode());
         let url = join_hex_path(&self.base_url, "state", &key_hash.encode())?;
-        let response = self.get_with_retry(url).await?;
+        let response = self.get_with_retry(url.clone()).await?;
 
         let status = response.status();
         if status == reqwest::StatusCode::NOT_FOUND {
             return Ok(None);
         }
         if status != reqwest::StatusCode::OK {
-            return Err(Self::error_from_response(response).await);
+            return Err(Self::error_from_response(reqwest::Method::GET, &url, response).await);
         }
 
         let buf = response.bytes().await?.to_vec();
@@ -304,6 +320,37 @@ impl Client {
         ))
     }
 
+    /// Connect to the updates stream with a lossy channel.
+    ///
+    /// When the consumer falls behind, old messages are dropped to avoid stalling the reader task.
+    pub async fn connect_updates_lossy(&self, filter: UpdatesFilter) -> Result<Stream<Update>> {
+        self.connect_updates_lossy_with_capacity(filter, 0).await
+    }
+
+    /// Connect to the updates stream with a lossy channel and configurable channel capacity.
+    ///
+    /// A `channel_capacity` of `0` uses the default capacity.
+    pub async fn connect_updates_lossy_with_capacity(
+        &self,
+        filter: UpdatesFilter,
+        channel_capacity: usize,
+    ) -> Result<Stream<Update>> {
+        let encoded_filter = hex(&filter.encode());
+        let ws_url = self.ws_url.join(&format!("updates/{encoded_filter}"))?;
+        info!(ws_url = %ws_url, ?filter, encoded_filter = %encoded_filter, "Connecting to updates WebSocket");
+
+        let (ws_stream, _) = timeout(TIMEOUT, connect_async(ws_url.as_str()))
+            .await
+            .map_err(|_| Error::DialTimeout)??;
+        info!("WebSocket connected");
+
+        Ok(Stream::new_lossy_with_verifier_with_capacity(
+            ws_stream,
+            self.identity,
+            channel_capacity,
+        ))
+    }
+
     /// Connect to the mempool stream (transactions)
     pub async fn connect_mempool(&self) -> Result<Stream<Pending>> {
         let ws_url = self.ws_url.join("mempool")?;
@@ -315,6 +362,31 @@ impl Client {
         info!("WebSocket connected");
 
         Ok(Stream::new(ws_stream))
+    }
+
+    /// Connect to the mempool stream (transactions) with a lossy channel.
+    ///
+    /// When the consumer falls behind, old messages are dropped to avoid stalling the reader task.
+    pub async fn connect_mempool_lossy(&self) -> Result<Stream<Pending>> {
+        self.connect_mempool_lossy_with_capacity(0).await
+    }
+
+    /// Connect to the mempool stream (transactions) with a lossy channel and configurable channel capacity.
+    ///
+    /// A `channel_capacity` of `0` uses the default capacity.
+    pub async fn connect_mempool_lossy_with_capacity(
+        &self,
+        channel_capacity: usize,
+    ) -> Result<Stream<Pending>> {
+        let ws_url = self.ws_url.join("mempool")?;
+        info!("Connecting to WebSocket at {}", ws_url);
+
+        let (ws_stream, _) = timeout(TIMEOUT, connect_async(ws_url.as_str()))
+            .await
+            .map_err(|_| Error::DialTimeout)??;
+        info!("WebSocket connected");
+
+        Ok(Stream::new_lossy_with_capacity(ws_stream, channel_capacity))
     }
 
     /// Connect to the mempool stream (transactions) with a configurable channel capacity.

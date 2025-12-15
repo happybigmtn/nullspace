@@ -12,6 +12,7 @@ use nullspace_types::{
 };
 use std::collections::BTreeMap;
 
+use crate::casino::cards as card_utils;
 use crate::state::{load_account, validate_and_increment_nonce, PrepareError, State, Status};
 
 mod handlers;
@@ -54,17 +55,17 @@ fn parse_three_card_progressive_state(state_blob: &[u8]) -> Option<(u64, [u8; 3]
 }
 
 fn is_three_card_mini_royal_spades(cards: &[u8; 3]) -> bool {
-    if !cards.iter().all(|&c| c < 52) {
+    if !cards.iter().all(|&c| card_utils::is_valid_card(c)) {
         return false;
     }
-    if !cards.iter().all(|&c| card_suit(c) == 0) {
+    if !cards.iter().all(|&c| card_utils::card_suit(c) == 0) {
         return false;
     }
 
     let mut ranks = [
-        card_rank_ace_high(cards[0]),
-        card_rank_ace_high(cards[1]),
-        card_rank_ace_high(cards[2]),
+        card_utils::card_rank_ace_high(cards[0]),
+        card_utils::card_rank_ace_high(cards[1]),
+        card_utils::card_rank_ace_high(cards[2]),
     ];
     ranks.sort_unstable_by(|a, b| b.cmp(a));
 
@@ -95,16 +96,16 @@ fn parse_uth_progressive_state(state_blob: &[u8]) -> Option<(u64, [u8; 2], [u8; 
 
 fn uth_progressive_jackpot_tier(hole: &[u8; 2], flop: &[u8; 3]) -> UthJackpotTier {
     let cards = [hole[0], hole[1], flop[0], flop[1], flop[2]];
-    if !cards.iter().all(|&c| c < 52) {
+    if !cards.iter().all(|&c| card_utils::is_valid_card(c)) {
         return UthJackpotTier::None;
     }
 
     let suits = [
-        card_suit(cards[0]),
-        card_suit(cards[1]),
-        card_suit(cards[2]),
-        card_suit(cards[3]),
-        card_suit(cards[4]),
+        card_utils::card_suit(cards[0]),
+        card_utils::card_suit(cards[1]),
+        card_utils::card_suit(cards[2]),
+        card_utils::card_suit(cards[3]),
+        card_utils::card_suit(cards[4]),
     ];
     let is_flush = suits[0] == suits[1]
         && suits[1] == suits[2]
@@ -112,11 +113,11 @@ fn uth_progressive_jackpot_tier(hole: &[u8; 2], flop: &[u8; 3]) -> UthJackpotTie
         && suits[3] == suits[4];
 
     let mut ranks = [
-        card_rank_ace_high(cards[0]),
-        card_rank_ace_high(cards[1]),
-        card_rank_ace_high(cards[2]),
-        card_rank_ace_high(cards[3]),
-        card_rank_ace_high(cards[4]),
+        card_utils::card_rank_ace_high(cards[0]),
+        card_utils::card_rank_ace_high(cards[1]),
+        card_utils::card_rank_ace_high(cards[2]),
+        card_utils::card_rank_ace_high(cards[3]),
+        card_utils::card_rank_ace_high(cards[4]),
     ];
     ranks.sort_unstable();
 
@@ -143,19 +144,6 @@ fn uth_progressive_jackpot_tier(hole: &[u8; 2], flop: &[u8; 3]) -> UthJackpotTie
     } else {
         UthJackpotTier::None
     }
-}
-
-fn card_rank_ace_high(card: u8) -> u8 {
-    let r = (card % 13) + 1;
-    if r == 1 {
-        14
-    } else {
-        r
-    }
-}
-
-fn card_suit(card: u8) -> u8 {
-    card / 13
 }
 
 pub struct Layer<'a, S: State> {
@@ -214,44 +202,68 @@ impl<'a, S: State> Layer<'a, S> {
         Ok(())
     }
 
-    async fn apply_casino(&mut self, public: &PublicKey, instruction: &Instruction) -> Result<Vec<Event>> {
+    async fn apply_casino(
+        &mut self,
+        public: &PublicKey,
+        instruction: &Instruction,
+    ) -> Result<Vec<Event>> {
         match instruction {
             Instruction::CasinoRegister { name } => self.handle_casino_register(public, name).await,
-            Instruction::CasinoDeposit { amount } => self.handle_casino_deposit(public, *amount).await,
+            Instruction::CasinoDeposit { amount } => {
+                self.handle_casino_deposit(public, *amount).await
+            }
             Instruction::CasinoStartGame {
                 game_type,
                 bet,
                 session_id,
-            } => self
-                .handle_casino_start_game(public, *game_type, *bet, *session_id)
-                .await,
-            Instruction::CasinoGameMove { session_id, payload } => {
-                self.handle_casino_game_move(public, *session_id, payload).await
+            } => {
+                self.handle_casino_start_game(public, *game_type, *bet, *session_id)
+                    .await
+            }
+            Instruction::CasinoGameMove {
+                session_id,
+                payload,
+            } => {
+                self.handle_casino_game_move(public, *session_id, payload)
+                    .await
             }
             Instruction::CasinoToggleShield => self.handle_casino_toggle_shield(public).await,
             Instruction::CasinoToggleDouble => self.handle_casino_toggle_double(public).await,
             Instruction::CasinoToggleSuper => self.handle_casino_toggle_super(public).await,
             Instruction::CasinoJoinTournament { tournament_id } => {
-                self.handle_casino_join_tournament(public, *tournament_id).await
+                self.handle_casino_join_tournament(public, *tournament_id)
+                    .await
             }
             Instruction::CasinoStartTournament {
                 tournament_id,
                 start_time_ms,
                 end_time_ms,
             } => {
-                self.handle_casino_start_tournament(public, *tournament_id, *start_time_ms, *end_time_ms)
-                    .await
+                self.handle_casino_start_tournament(
+                    public,
+                    *tournament_id,
+                    *start_time_ms,
+                    *end_time_ms,
+                )
+                .await
             }
             Instruction::CasinoEndTournament { tournament_id } => {
-                self.handle_casino_end_tournament(public, *tournament_id).await
+                self.handle_casino_end_tournament(public, *tournament_id)
+                    .await
             }
             _ => anyhow::bail!("internal error: apply_casino called with non-casino instruction"),
         }
     }
 
-    async fn apply_staking(&mut self, public: &PublicKey, instruction: &Instruction) -> Result<Vec<Event>> {
+    async fn apply_staking(
+        &mut self,
+        public: &PublicKey,
+        instruction: &Instruction,
+    ) -> Result<Vec<Event>> {
         match instruction {
-            Instruction::Stake { amount, duration } => self.handle_stake(public, *amount, *duration).await,
+            Instruction::Stake { amount, duration } => {
+                self.handle_stake(public, *amount, *duration).await
+            }
             Instruction::Unstake => self.handle_unstake(public).await,
             Instruction::ClaimRewards => self.handle_claim_rewards(public).await,
             Instruction::ProcessEpoch => self.handle_process_epoch(public).await,
@@ -259,23 +271,39 @@ impl<'a, S: State> Layer<'a, S> {
         }
     }
 
-    async fn apply_liquidity(&mut self, public: &PublicKey, instruction: &Instruction) -> Result<Vec<Event>> {
+    async fn apply_liquidity(
+        &mut self,
+        public: &PublicKey,
+        instruction: &Instruction,
+    ) -> Result<Vec<Event>> {
         match instruction {
             Instruction::CreateVault => self.handle_create_vault(public).await,
-            Instruction::DepositCollateral { amount } => self.handle_deposit_collateral(public, *amount).await,
+            Instruction::DepositCollateral { amount } => {
+                self.handle_deposit_collateral(public, *amount).await
+            }
             Instruction::BorrowUSDT { amount } => self.handle_borrow_usdt(public, *amount).await,
             Instruction::RepayUSDT { amount } => self.handle_repay_usdt(public, *amount).await,
             Instruction::Swap {
                 amount_in,
                 min_amount_out,
                 is_buying_rng,
-            } => self.handle_swap(public, *amount_in, *min_amount_out, *is_buying_rng).await,
+            } => {
+                self.handle_swap(public, *amount_in, *min_amount_out, *is_buying_rng)
+                    .await
+            }
             Instruction::AddLiquidity {
                 rng_amount,
                 usdt_amount,
-            } => self.handle_add_liquidity(public, *rng_amount, *usdt_amount).await,
-            Instruction::RemoveLiquidity { shares } => self.handle_remove_liquidity(public, *shares).await,
-            _ => anyhow::bail!("internal error: apply_liquidity called with non-liquidity instruction"),
+            } => {
+                self.handle_add_liquidity(public, *rng_amount, *usdt_amount)
+                    .await
+            }
+            Instruction::RemoveLiquidity { shares } => {
+                self.handle_remove_liquidity(public, *shares).await
+            }
+            _ => anyhow::bail!(
+                "internal error: apply_liquidity called with non-liquidity instruction"
+            ),
         }
     }
 
@@ -293,7 +321,9 @@ impl<'a, S: State> Layer<'a, S> {
             | Instruction::CasinoToggleSuper
             | Instruction::CasinoJoinTournament { .. }
             | Instruction::CasinoStartTournament { .. }
-            | Instruction::CasinoEndTournament { .. } => self.apply_casino(public, instruction).await,
+            | Instruction::CasinoEndTournament { .. } => {
+                self.apply_casino(public, instruction).await
+            }
 
             Instruction::Stake { .. }
             | Instruction::Unstake
@@ -306,7 +336,9 @@ impl<'a, S: State> Layer<'a, S> {
             | Instruction::RepayUSDT { .. }
             | Instruction::Swap { .. }
             | Instruction::AddLiquidity { .. }
-            | Instruction::RemoveLiquidity { .. } => self.apply_liquidity(public, instruction).await,
+            | Instruction::RemoveLiquidity { .. } => {
+                self.apply_liquidity(public, instruction).await
+            }
         }
     }
 
@@ -320,7 +352,9 @@ impl<'a, S: State> Layer<'a, S> {
     async fn get_or_init_amm(&mut self) -> Result<nullspace_types::casino::AmmPool> {
         Ok(match self.get(&Key::AmmPool).await? {
             Some(Value::AmmPool(p)) => p,
-            _ => nullspace_types::casino::AmmPool::new(30), // 0.3% fee
+            _ => nullspace_types::casino::AmmPool::new(
+                nullspace_types::casino::AMM_DEFAULT_FEE_BASIS_POINTS,
+            ),
         })
     }
 
@@ -385,6 +419,7 @@ mod tests {
     use crate::mocks::{create_account_keypair, create_network_keypair, create_seed};
     use commonware_runtime::deterministic::Runner;
     use commonware_runtime::Runner as _;
+    use nullspace_types::casino::GameType;
 
     const TEST_NAMESPACE: &[u8] = b"test-namespace";
 
@@ -485,13 +520,91 @@ mod tests {
             if let Some(Value::CasinoPlayer(player)) =
                 layer.get(&Key::CasinoPlayer(public)).await.unwrap()
             {
-                assert_eq!(player.name, "Alice");
-                assert_eq!(player.chips, 1000); // Initial chips
+                assert_eq!(player.profile.name, "Alice");
+                assert_eq!(player.balances.chips, 1000); // Initial chips
             } else {
                 panic!("Player not found");
             }
 
             let _ = layer.commit();
+        });
+    }
+
+    #[test]
+    fn test_layer_execute_is_deterministic_for_identical_inputs() {
+        let executor = Runner::default();
+        executor.start(|_| async move {
+            let state1 = MockState::new();
+            let state2 = MockState::new();
+
+            let (network_secret, master_public) = create_network_keypair();
+            let seed = create_seed(&network_secret, 1);
+
+            let (signer, _public) = create_account_keypair(1);
+
+            let txs = vec![
+                Transaction::sign(
+                    &signer,
+                    0,
+                    Instruction::CasinoRegister {
+                        name: "Alice".to_string(),
+                    },
+                ),
+                Transaction::sign(
+                    &signer,
+                    1,
+                    Instruction::CasinoStartGame {
+                        game_type: GameType::Roulette,
+                        bet: 100,
+                        session_id: 1,
+                    },
+                ),
+                Transaction::sign(
+                    &signer,
+                    2,
+                    Instruction::CasinoGameMove {
+                        session_id: 1,
+                        payload: {
+                            let mut payload = vec![0u8, 1u8, 0u8]; // place RED bet
+                            payload.extend_from_slice(&100u64.to_be_bytes());
+                            payload
+                        },
+                    },
+                ),
+                Transaction::sign(
+                    &signer,
+                    3,
+                    Instruction::CasinoGameMove {
+                        session_id: 1,
+                        payload: vec![1u8], // spin
+                    },
+                ),
+            ];
+
+            let mut layer1 = Layer::new(&state1, master_public, TEST_NAMESPACE, seed.clone());
+            let mut layer2 = Layer::new(&state2, master_public, TEST_NAMESPACE, seed);
+
+            #[cfg(feature = "parallel")]
+            let pool = ThreadPool::new(
+                rayon::ThreadPoolBuilder::new()
+                    .num_threads(1)
+                    .build()
+                    .expect("failed to create execution pool"),
+            );
+
+            #[cfg(feature = "parallel")]
+            let (outputs1, nonces1) = layer1.execute(pool.clone(), txs.clone()).await.unwrap();
+            #[cfg(not(feature = "parallel"))]
+            let (outputs1, nonces1) = layer1.execute(txs.clone()).await.unwrap();
+
+            #[cfg(feature = "parallel")]
+            let (outputs2, nonces2) = layer2.execute(pool, txs).await.unwrap();
+            #[cfg(not(feature = "parallel"))]
+            let (outputs2, nonces2) = layer2.execute(txs).await.unwrap();
+
+            assert_eq!(outputs1, outputs2);
+            assert_eq!(nonces1, nonces2);
+            assert!(layer1.commit() == layer2.commit());
         });
     }
 }

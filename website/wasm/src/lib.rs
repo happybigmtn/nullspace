@@ -31,99 +31,114 @@ use serde::Serialize;
 use serde_wasm_bindgen::Serializer;
 use wasm_bindgen::prelude::*;
 
-#[wasm_bindgen]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum InstructionKind {
-    // Casino instructions
-    CasinoRegister = 0,
-    CasinoDeposit = 1,
-    CasinoStartGame = 2,
-    CasinoGameMove = 3,
-    CasinoToggleShield = 4,
-    CasinoToggleDouble = 5,
-    CasinoToggleSuper = 6,
-    CasinoJoinTournament = 7,
-    CasinoStartTournament = 8,
-    CasinoEndTournament = 9,
+macro_rules! define_instruction_kinds {
+    (
+        $(
+            $kind:ident = $discriminant:expr
+                => $instruction_pattern:pat
+                => $name:expr
+                => $sample_instruction:expr
+        ),+ $(,)?
+    ) => {
+        #[wasm_bindgen]
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        pub enum InstructionKind {
+            $(
+                $kind = $discriminant,
+            )+
+        }
 
-    // Staking instructions
-    Stake = 10,
-    Unstake = 11,
-    ClaimRewards = 12,
-    ProcessEpoch = 13,
+        impl InstructionKind {
+            fn from_instruction(instruction: &Instruction) -> Self {
+                match instruction {
+                    $(
+                        $instruction_pattern => Self::$kind,
+                    )+
+                }
+            }
 
-    // Vault / AMM instructions
-    CreateVault = 14,
-    DepositCollateral = 15,
-    BorrowUSDT = 16,
-    RepayUSDT = 17,
-    Swap = 18,
-    AddLiquidity = 19,
-    RemoveLiquidity = 20,
+            fn as_str(self) -> &'static str {
+                match self {
+                    $(
+                        Self::$kind => $name,
+                    )+
+                }
+            }
+        }
+
+        #[cfg(test)]
+        mod instruction_kind_tests {
+            use super::*;
+
+            const ALL: &[InstructionKind] = &[
+                $(
+                    InstructionKind::$kind,
+                )+
+            ];
+
+            fn sample_instruction(kind: InstructionKind) -> Instruction {
+                match kind {
+                    $(
+                        InstructionKind::$kind => $sample_instruction,
+                    )+
+                }
+            }
+
+            #[test]
+            fn instruction_kind_discriminants_and_names_are_unique() {
+                use std::collections::HashSet;
+
+                let mut discriminants = HashSet::new();
+                let mut names = HashSet::new();
+                for kind in ALL {
+                    assert!(
+                        discriminants.insert(*kind as u32),
+                        "duplicate discriminant for {:?}",
+                        kind
+                    );
+                    assert!(names.insert(kind.as_str()), "duplicate name for {:?}", kind);
+                }
+            }
+
+            #[test]
+            fn instruction_kind_roundtrips_from_instruction() {
+                for kind in ALL {
+                    let instruction = sample_instruction(*kind);
+                    assert_eq!(InstructionKind::from_instruction(&instruction), *kind);
+                    assert!(!kind.as_str().is_empty());
+                }
+            }
+        }
+    };
 }
 
-impl InstructionKind {
-    fn from_instruction(instruction: &Instruction) -> Self {
-        match instruction {
-            // Casino instructions
-            Instruction::CasinoRegister { .. } => Self::CasinoRegister,
-            Instruction::CasinoDeposit { .. } => Self::CasinoDeposit,
-            Instruction::CasinoStartGame { .. } => Self::CasinoStartGame,
-            Instruction::CasinoGameMove { .. } => Self::CasinoGameMove,
-            Instruction::CasinoToggleShield => Self::CasinoToggleShield,
-            Instruction::CasinoToggleDouble => Self::CasinoToggleDouble,
-            Instruction::CasinoToggleSuper => Self::CasinoToggleSuper,
-            Instruction::CasinoJoinTournament { .. } => Self::CasinoJoinTournament,
-            Instruction::CasinoStartTournament { .. } => Self::CasinoStartTournament,
-            Instruction::CasinoEndTournament { .. } => Self::CasinoEndTournament,
+define_instruction_kinds! {
+    // Casino instructions
+    CasinoRegister = 0 => Instruction::CasinoRegister { .. } => "CasinoRegister" => Instruction::CasinoRegister { name: "alice".to_string() },
+    CasinoDeposit = 1 => Instruction::CasinoDeposit { .. } => "CasinoDeposit" => Instruction::CasinoDeposit { amount: 1 },
+    CasinoStartGame = 2 => Instruction::CasinoStartGame { .. } => "CasinoStartGame" => Instruction::CasinoStartGame { game_type: nullspace_types::casino::GameType::Baccarat, bet: 1, session_id: 1 },
+    CasinoGameMove = 3 => Instruction::CasinoGameMove { .. } => "CasinoGameMove" => Instruction::CasinoGameMove { session_id: 1, payload: vec![0] },
+    CasinoToggleShield = 4 => Instruction::CasinoToggleShield => "CasinoToggleShield" => Instruction::CasinoToggleShield,
+    CasinoToggleDouble = 5 => Instruction::CasinoToggleDouble => "CasinoToggleDouble" => Instruction::CasinoToggleDouble,
+    CasinoToggleSuper = 6 => Instruction::CasinoToggleSuper => "CasinoToggleSuper" => Instruction::CasinoToggleSuper,
+    CasinoJoinTournament = 7 => Instruction::CasinoJoinTournament { .. } => "CasinoJoinTournament" => Instruction::CasinoJoinTournament { tournament_id: 1 },
+    CasinoStartTournament = 8 => Instruction::CasinoStartTournament { .. } => "CasinoStartTournament" => Instruction::CasinoStartTournament { tournament_id: 1, start_time_ms: 0, end_time_ms: 1 },
+    CasinoEndTournament = 9 => Instruction::CasinoEndTournament { .. } => "CasinoEndTournament" => Instruction::CasinoEndTournament { tournament_id: 1 },
 
-            // Staking instructions
-            Instruction::Stake { .. } => Self::Stake,
-            Instruction::Unstake => Self::Unstake,
-            Instruction::ClaimRewards => Self::ClaimRewards,
-            Instruction::ProcessEpoch => Self::ProcessEpoch,
+    // Staking instructions
+    Stake = 10 => Instruction::Stake { .. } => "Stake" => Instruction::Stake { amount: 1, duration: 1 },
+    Unstake = 11 => Instruction::Unstake => "Unstake" => Instruction::Unstake,
+    ClaimRewards = 12 => Instruction::ClaimRewards => "ClaimRewards" => Instruction::ClaimRewards,
+    ProcessEpoch = 13 => Instruction::ProcessEpoch => "ProcessEpoch" => Instruction::ProcessEpoch,
 
-            // Vault / AMM instructions
-            Instruction::CreateVault => Self::CreateVault,
-            Instruction::DepositCollateral { .. } => Self::DepositCollateral,
-            Instruction::BorrowUSDT { .. } => Self::BorrowUSDT,
-            Instruction::RepayUSDT { .. } => Self::RepayUSDT,
-            Instruction::Swap { .. } => Self::Swap,
-            Instruction::AddLiquidity { .. } => Self::AddLiquidity,
-            Instruction::RemoveLiquidity { .. } => Self::RemoveLiquidity,
-        }
-    }
-
-    fn as_str(self) -> &'static str {
-        match self {
-            // Casino instructions
-            Self::CasinoRegister => "CasinoRegister",
-            Self::CasinoDeposit => "CasinoDeposit",
-            Self::CasinoStartGame => "CasinoStartGame",
-            Self::CasinoGameMove => "CasinoGameMove",
-            Self::CasinoToggleShield => "CasinoToggleShield",
-            Self::CasinoToggleDouble => "CasinoToggleDouble",
-            Self::CasinoToggleSuper => "CasinoToggleSuper",
-            Self::CasinoJoinTournament => "CasinoJoinTournament",
-            Self::CasinoStartTournament => "CasinoStartTournament",
-            Self::CasinoEndTournament => "CasinoEndTournament",
-
-            // Staking instructions
-            Self::Stake => "Stake",
-            Self::Unstake => "Unstake",
-            Self::ClaimRewards => "ClaimRewards",
-            Self::ProcessEpoch => "ProcessEpoch",
-
-            // Vault / AMM instructions
-            Self::CreateVault => "CreateVault",
-            Self::DepositCollateral => "DepositCollateral",
-            Self::BorrowUSDT => "BorrowUSDT",
-            Self::RepayUSDT => "RepayUSDT",
-            Self::Swap => "Swap",
-            Self::AddLiquidity => "AddLiquidity",
-            Self::RemoveLiquidity => "RemoveLiquidity",
-        }
-    }
+    // Vault / AMM instructions
+    CreateVault = 14 => Instruction::CreateVault => "CreateVault" => Instruction::CreateVault,
+    DepositCollateral = 15 => Instruction::DepositCollateral { .. } => "DepositCollateral" => Instruction::DepositCollateral { amount: 1 },
+    BorrowUSDT = 16 => Instruction::BorrowUSDT { .. } => "BorrowUSDT" => Instruction::BorrowUSDT { amount: 1 },
+    RepayUSDT = 17 => Instruction::RepayUSDT { .. } => "RepayUSDT" => Instruction::RepayUSDT { amount: 1 },
+    Swap = 18 => Instruction::Swap { .. } => "Swap" => Instruction::Swap { amount_in: 1, min_amount_out: 0, is_buying_rng: true },
+    AddLiquidity = 19 => Instruction::AddLiquidity { .. } => "AddLiquidity" => Instruction::AddLiquidity { rng_amount: 1, usdt_amount: 1 },
+    RemoveLiquidity = 20 => Instruction::RemoveLiquidity { .. } => "RemoveLiquidity" => Instruction::RemoveLiquidity { shares: 1 },
 }
 
 /// Helper to convert serde_json::Value to a plain JavaScript object
@@ -134,6 +149,11 @@ fn to_object(value: &serde_json::Value) -> Result<JsValue, JsValue> {
 }
 
 /// The key to use for signing transactions.
+///
+/// **Security note:** this `Signer` holds raw ed25519 private key material in WASM memory and is
+/// intended for local development/testing. Do not treat it as a production wallet. Keep the
+/// `private-key-export` feature disabled in production builds, and prefer integrating an external
+/// wallet/keystore when real value is at stake.
 #[wasm_bindgen]
 pub struct Signer {
     private_key: ed25519::PrivateKey,
@@ -638,25 +658,25 @@ fn decode_value(value: Value) -> Result<JsValue, JsValue> {
             serde_json::json!({
                 "type": "CasinoPlayer",
                 "nonce": player.nonce,
-                "name": player.name,
-                "chips": player.chips,
-                "vusdt_balance": player.vusdt_balance,
-                "shields": player.shields,
-                "doubles": player.doubles,
-                "tournament_chips": player.tournament_chips,
-                "tournament_shields": player.tournament_shields,
-                "tournament_doubles": player.tournament_doubles,
-                "active_tournament": player.active_tournament,
-                "rank": player.rank,
-                "active_shield": player.active_shield,
-                "active_double": player.active_double,
-                "active_super": player.active_super,
-                "active_session": player.active_session,
-                "last_deposit_block": player.last_deposit_block,
-                "aura_meter": player.aura_meter,
-                "tournaments_played_today": player.tournaments_played_today,
-                "last_tournament_ts": player.last_tournament_ts,
-                "is_kyc_verified": player.is_kyc_verified
+                "name": player.profile.name,
+                "chips": player.balances.chips,
+                "vusdt_balance": player.balances.vusdt_balance,
+                "shields": player.modifiers.shields,
+                "doubles": player.modifiers.doubles,
+                "tournament_chips": player.tournament.chips,
+                "tournament_shields": player.tournament.shields,
+                "tournament_doubles": player.tournament.doubles,
+                "active_tournament": player.tournament.active_tournament,
+                "rank": player.profile.rank,
+                "active_shield": player.modifiers.active_shield,
+                "active_double": player.modifiers.active_double,
+                "active_super": player.modifiers.active_super,
+                "active_session": player.session.active_session,
+                "last_deposit_block": player.session.last_deposit_block,
+                "aura_meter": player.modifiers.aura_meter,
+                "tournaments_played_today": player.tournament.tournaments_played_today,
+                "last_tournament_ts": player.tournament.last_tournament_ts,
+                "is_kyc_verified": player.profile.is_kyc_verified
             })
         }
         Value::CasinoSession(session) => {
@@ -759,7 +779,10 @@ fn decode_value(value: Value) -> Result<JsValue, JsValue> {
                 "total_burned": house.total_burned,
                 "total_issuance": house.total_issuance,
                 "three_card_progressive_jackpot": house.three_card_progressive_jackpot,
-                "uth_progressive_jackpot": house.uth_progressive_jackpot
+                "uth_progressive_jackpot": house.uth_progressive_jackpot,
+                "staking_reward_per_voting_power_x18": house.staking_reward_per_voting_power_x18.to_string(),
+                "staking_reward_pool": house.staking_reward_pool,
+                "staking_reward_carry": house.staking_reward_carry
             })
         }
         Value::Staker(staker) => {
@@ -768,7 +791,9 @@ fn decode_value(value: Value) -> Result<JsValue, JsValue> {
                 "balance": staker.balance,
                 "unlock_ts": staker.unlock_ts,
                 "last_claim_epoch": staker.last_claim_epoch,
-                "voting_power": staker.voting_power.to_string()
+                "voting_power": staker.voting_power.to_string(),
+                "reward_debt_x18": staker.reward_debt_x18.to_string(),
+                "unclaimed_rewards": staker.unclaimed_rewards
             })
         }
         // Virtual Liquidity values
@@ -786,7 +811,9 @@ fn decode_value(value: Value) -> Result<JsValue, JsValue> {
                 "reserve_vusdt": pool.reserve_vusdt,
                 "total_shares": pool.total_shares,
                 "fee_basis_points": pool.fee_basis_points,
-                "sell_tax_basis_points": pool.sell_tax_basis_points
+                "sell_tax_basis_points": pool.sell_tax_basis_points,
+                "bootstrap_price_vusdt_numerator": pool.bootstrap_price_vusdt_numerator,
+                "bootstrap_price_rng_denominator": pool.bootstrap_price_rng_denominator
             })
         }
         Value::LpBalance(bal) => {

@@ -22,4 +22,5 @@ pub struct Config<I: Indexer> {
     pub write_buffer: NonZero<usize>,
     pub replay_buffer: NonZero<usize>,
     pub max_uploads_outstanding: usize,
+    pub max_pending_seed_listeners: usize,
 }

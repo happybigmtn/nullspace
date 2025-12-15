@@ -194,12 +194,14 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
   const [botConfig, setBotConfig] = useState<BotConfig>(DEFAULT_BOT_CONFIG);
   const botServiceRef = useRef<BotService | null>(null);
   const [isTournamentStarting, setIsTournamentStarting] = useState(false);
+  const [isRegisteringOrJoining, setIsRegisteringOrJoining] = useState(false);
   const [isFaucetClaiming, setIsFaucetClaiming] = useState(false);
   const [manualTournamentEndTime, setManualTournamentEndTime] = useState<number | null>(null);
   const [freerollActiveTournamentId, setFreerollActiveTournamentId] = useState<number | null>(null);
   const [freerollActiveTimeLeft, setFreerollActiveTimeLeft] = useState(0);
   const [freerollActivePrizePool, setFreerollActivePrizePool] = useState<number | null>(null);
   const [freerollActivePlayerCount, setFreerollActivePlayerCount] = useState<number | null>(null);
+  const [playerActiveTournamentId, setPlayerActiveTournamentId] = useState<number | null>(null);
   const [freerollNextTournamentId, setFreerollNextTournamentId] = useState<number | null>(null);
   const [freerollNextStartIn, setFreerollNextStartIn] = useState(0);
   const [freerollIsJoinedNext, setFreerollIsJoinedNext] = useState(false);
@@ -628,27 +630,29 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
         let shouldUpdateBalance = true;
         let playerActiveTid: number | null = null;
 
-        if (playerState) {
-          setIsRegistered(true);
-          hasRegisteredRef.current = true;
+	        if (playerState) {
+	          setIsRegistered(true);
+	          hasRegisteredRef.current = true;
 
-          setTournamentsPlayedToday(Number(playerState.tournamentsPlayedToday ?? 0));
+	          setTournamentsPlayedToday(Number(playerState.tournamentsPlayedToday ?? 0));
 
           // Update balances (avoid clobbering fresh WebSocket updates).
           const timeSinceLastUpdate = Date.now() - lastBalanceUpdateRef.current;
           shouldUpdateBalance = timeSinceLastUpdate > BALANCE_UPDATE_COOLDOWN;
 
-          playerActiveTid = playerState.activeTournament != null ? Number(playerState.activeTournament) : null;
+	          playerActiveTid = playerState.activeTournament != null ? Number(playerState.activeTournament) : null;
+	          setPlayerActiveTournamentId(playerActiveTid);
 
-          // Joined status for the next freeroll (registration).
-          if (playMode === 'FREEROLL' && freerollNextTournamentId !== null) {
-            setFreerollIsJoinedNext(playerActiveTid === freerollNextTournamentId);
-          }
-        } else {
-          setIsRegistered(false);
-          hasRegisteredRef.current = false;
-          setTournamentsPlayedToday(0);
-        }
+	          // Joined status for the next freeroll (registration).
+	          if (playMode === 'FREEROLL' && freerollNextTournamentId !== null) {
+	            setFreerollIsJoinedNext(playerActiveTid === freerollNextTournamentId);
+	          }
+	        } else {
+	          setIsRegistered(false);
+	          hasRegisteredRef.current = false;
+	          setTournamentsPlayedToday(0);
+	          setPlayerActiveTournamentId(null);
+	        }
 
         if (playMode !== 'FREEROLL') {
           // Cash mode: keep wallet balances in sync even if we miss WS events.
@@ -696,14 +700,18 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
           return;
         }
 
-        const scheduleNow = getFreerollSchedule(Date.now());
-        const currentSlotTid = scheduleNow.tournamentId;
-        const candidateTids = currentSlotTid > 0 ? [currentSlotTid, currentSlotTid - 1] : [currentSlotTid];
+	        const scheduleNow = getFreerollSchedule(Date.now());
+	        const currentSlotTid = scheduleNow.tournamentId;
+	        const candidateTids = [
+	          ...(playerActiveTid !== null ? [playerActiveTid] : []),
+	          currentSlotTid,
+	          ...(currentSlotTid > 0 ? [currentSlotTid - 1] : []),
+	        ].filter((tid, idx, arr) => arr.indexOf(tid) === idx);
 
-        // Find an active tournament (current or just-finished slot).
-        let activeTournament: { id: number; endTimeMs: number; state: any } | null = null;
-        for (const tid of candidateTids) {
-          try {
+	        // Find an active tournament (current or just-finished slot).
+	        let activeTournament: { id: number; endTimeMs: number; state: any } | null = null;
+	        for (const tid of candidateTids) {
+	          try {
             const t = await client.getCasinoTournament(tid);
             if (t && t.phase === 'Active' && t.endTimeMs) {
               const endMs = Number(t.endTimeMs);
@@ -899,7 +907,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
 
     let summary = resultPart;
 
-    switch (gameType) {
+	    switch (gameType) {
       case GameType.BACCARAT: {
         if (state.playerCards.length === 0 || state.dealerCards.length === 0) return { summary, details };
         const pScore = getBaccaratValue(state.playerCards);
@@ -932,33 +940,39 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
         }
         break;
       }
-      case GameType.BLACKJACK: {
-        if (!state.playerCards?.length || !state.dealerCards?.length) return { summary, details };
-        const pVal = getHandValue(state.playerCards);
-        const dVal = getHandValue(state.dealerCards);
-        const pBust = pVal > 21;
-        const dBust = dVal > 21;
-        
-        if (pVal === 21 && state.playerCards.length === 2) summary = `BLACKJACK! ${resultPart}`;
-        else if (pBust) summary = `Bust (${pVal}). ${resultPart}`;
-        else if (dBust) summary = `Dealer bust (${dVal}). ${resultPart}`;
-        else summary = `${pVal} vs ${dVal}. ${resultPart}`;
-        
-        if (netPnL > 0) details.push(`WIN (+$${netPnL})`);
-        else if (netPnL < 0) details.push(`LOSS (-$${Math.abs(netPnL)})`);
-        else details.push(`PUSH`);
-        break;
-      }
-      case GameType.CASINO_WAR: {
-        const pCard = state.playerCards[0];
-        const dCard = state.dealerCards[0];
-        if (!pCard || !dCard) return { summary, details };
-        summary = `${pCard.rank} vs ${dCard.rank}. ${resultPart}`;
-        if (netPnL > 0) details.push(`WIN (+$${netPnL})`);
-        else if (netPnL < 0) details.push(`LOSS (-$${Math.abs(netPnL)})`);
-        else details.push(`TIE/PUSH`);
-        break;
-      }
+	      case GameType.BLACKJACK: {
+	        if (!state.playerCards?.length || !state.dealerCards?.length) return { summary, details };
+	        const pVal = getHandValue(state.playerCards);
+	        const dVal = getHandValue(state.dealerCards);
+	        const outcome = netPnL > 0 ? 'WIN' : netPnL < 0 ? 'LOSE' : 'PUSH';
+	        summary = `${outcome}: ${pVal} vs. ${dVal}.`;
+	        
+	        if (netPnL > 0) details.push(`WIN (+$${netPnL})`);
+	        else if (netPnL < 0) details.push(`LOSS (-$${Math.abs(netPnL)})`);
+	        else details.push(`PUSH`);
+	        break;
+	      }
+	      case GameType.CASINO_WAR: {
+	        const pCard = state.playerCards[0];
+	        const dCard = state.dealerCards[0];
+	        if (!pCard || !dCard) return { summary, details };
+	        const rankToAceHigh = (rank: string): number => {
+	          if (rank === 'A') return 14;
+	          if (rank === 'K') return 13;
+	          if (rank === 'Q') return 12;
+	          if (rank === 'J') return 11;
+	          const parsed = Number(rank);
+	          return Number.isFinite(parsed) ? parsed : 0;
+	        };
+	        const pScore = rankToAceHigh(pCard.rank);
+	        const dScore = rankToAceHigh(dCard.rank);
+	        const outcome = netPnL > 0 ? 'WIN' : netPnL < 0 ? 'LOSE' : 'PUSH';
+	        summary = `${outcome}: ${pScore} vs. ${dScore}.`;
+	        if (netPnL > 0) details.push(`WIN (+$${netPnL})`);
+	        else if (netPnL < 0) details.push(`LOSS (-$${Math.abs(netPnL)})`);
+	        else details.push(`TIE/PUSH`);
+	        break;
+	      }
       case GameType.HILO: {
         const lastCard = state.playerCards[state.playerCards.length - 1];
         if (!lastCard) return { summary, details };
@@ -1950,14 +1964,14 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
               dealerCards: dealerCard ? [dealerCard] : [],
               casinoWarTieBet: tieBet,
               sessionInterimPayout: stage === 0 ? 0 : tieCredit,
-              stage: (stage === 0 ? 'BETTING' : 'PLAYING') as const,
-              message:
-                stage === 0
-                  ? (tieBet > 0 ? `TIE BET $${tieBet} - SPACE TO DEAL` : 'TIE BET (T) - SPACE TO DEAL')
-                  : stage === 1
-                    ? 'WAR! GO TO WAR (W) / SURRENDER (S)'
-                    : 'DEALT',
-            };
+	              stage: (stage === 0 ? 'BETTING' : 'PLAYING') as const,
+	              message:
+	                stage === 0
+	                  ? 'SPACE TO DEAL'
+	                  : stage === 1
+	                    ? 'WAR! GO TO WAR (W) / SURRENDER (S)'
+	                    : 'DEALT',
+	            };
             gameStateRef.current = newState;
             return newState;
           });
@@ -5528,20 +5542,23 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
       const client: any = clientRef.current;
       if (!client || !client.nonceManager || !publicKeyBytesRef.current) {
         console.warn('[useTerminalGame] Cannot register/join - client not initialized');
+        setGameState(prev => ({ ...prev, message: 'CONNECT WALLET / START dev-executor' }));
         return;
       }
+      if (isRegisteringOrJoining) return;
 
+      setIsRegisteringOrJoining(true);
       try {
         // Ensure player exists on-chain.
-	        if (!hasRegisteredRef.current) {
-	          const playerName = `Player_${Date.now().toString(36)}`;
-	          await client.nonceManager.submitCasinoRegister(playerName);
-	          hasRegisteredRef.current = true;
-	          const keyId = localStorage.getItem('casino_public_key_hex') ?? localStorage.getItem('casino_private_key');
-	          if (keyId) {
-	            localStorage.setItem(`casino_registered_${keyId}`, 'true');
-	          }
-	        }
+		        if (!hasRegisteredRef.current) {
+		          const playerName = `Player_${Date.now().toString(36)}`;
+		          await client.nonceManager.submitCasinoRegister(playerName);
+		          hasRegisteredRef.current = true;
+		          const keyId = localStorage.getItem('casino_public_key_hex') ?? localStorage.getItem('casino_private_key');
+		          if (keyId) {
+		            localStorage.setItem(`casino_registered_${keyId}`, 'true');
+		          }
+		        }
         setIsRegistered(true);
 
         // Freeroll mode: also join the next tournament slot.
@@ -5549,11 +5566,44 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
           const now = Date.now();
           const scheduleNow = getFreerollSchedule(now);
           const defaultNextTid = scheduleNow.isRegistration ? scheduleNow.tournamentId : scheduleNow.tournamentId + 1;
-          const tid = freerollNextTournamentId ?? defaultNextTid;
+          let tid = freerollNextTournamentId ?? defaultNextTid;
 
+          // If the selected tournament is already active/complete (manual start), join the next slot instead.
+          try {
+            const existing = await client.getCasinoTournament(tid);
+            if (existing && existing.phase && existing.phase !== 'Registration') {
+              tid += 1;
+            }
+          } catch {
+            // ignore
+          }
+
+          setGameState(prev => ({ ...prev, message: `JOINING TOURNAMENT ${tid}...` }));
           const result = await client.nonceManager.submitCasinoJoinTournament(tid);
           if (result?.txHash) setLastTxSig(result.txHash);
-          setGameState(prev => ({ ...prev, message: `JOINED TOURNAMENT ${tid}` }));
+
+          // Poll briefly for the join to reflect in player state (otherwise it can look like "nothing happened").
+          let joined = false;
+          for (let attempt = 0; attempt < 10; attempt++) {
+            await new Promise(resolve => setTimeout(resolve, 300));
+            try {
+              const ps = await client.getCasinoPlayer(publicKeyBytesRef.current!);
+              const activeTid = ps?.activeTournament != null ? Number(ps.activeTournament) : null;
+              setPlayerActiveTournamentId(activeTid);
+              if (activeTid === tid) {
+                joined = true;
+                setFreerollIsJoinedNext(true);
+                break;
+              }
+            } catch {
+              // ignore
+            }
+          }
+
+          setGameState(prev => ({
+            ...prev,
+            message: joined ? `JOINED TOURNAMENT ${tid}` : `JOIN SUBMITTED (${tid})`,
+          }));
         } else {
           setGameState(prev => ({ ...prev, message: 'REGISTERED' }));
         }
@@ -5584,6 +5634,8 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
       } catch (e) {
         console.error('[useTerminalGame] Register/join failed:', e);
         setGameState(prev => ({ ...prev, message: 'REGISTER/JOIN FAILED' }));
+      } finally {
+        setIsRegisteringOrJoining(false);
       }
   };
 
@@ -5649,6 +5701,43 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
     console.warn('[useTerminalGame] startTournament() is deprecated; freerolls auto-schedule.');
   };
 
+  const enterTournament = async () => {
+    const client: any = clientRef.current;
+    if (!client || !publicKeyBytesRef.current) return;
+
+    try {
+      const playerState = await client.getCasinoPlayer(publicKeyBytesRef.current);
+      const tidRaw = playerState?.activeTournament ?? null;
+      const tid = tidRaw === null || tidRaw === undefined ? null : Number(tidRaw);
+      if (tid === null || !Number.isFinite(tid)) {
+        setGameState(prev => ({ ...prev, message: 'NOT IN A TOURNAMENT' }));
+        return;
+      }
+
+      const tournament = await client.getCasinoTournament(tid);
+      if (!tournament) {
+        setGameState(prev => ({ ...prev, message: `TOURNAMENT ${tid} NOT FOUND` }));
+        return;
+      }
+
+      if (tournament.phase !== 'Active') {
+        setGameState(prev => ({ ...prev, message: `TOURNAMENT ${tid} NOT ACTIVE` }));
+        return;
+      }
+
+      const endTimeMs = tournament.endTimeMs ? Number(tournament.endTimeMs) : 0;
+      setPhase('ACTIVE');
+      setFreerollActiveTournamentId(tid);
+      setManualTournamentEndTime(endTimeMs > 0 ? endTimeMs : null);
+      const timeLeft = endTimeMs > 0 ? Math.max(0, Math.ceil((endTimeMs - Date.now()) / 1000)) : 0;
+      setTournamentTime(timeLeft);
+      setFreerollActiveTimeLeft(timeLeft);
+    } catch (e) {
+      console.debug('[useTerminalGame] enterTournament failed:', e);
+      setGameState(prev => ({ ...prev, message: 'ENTER TOURNAMENT FAILED' }));
+    }
+  };
+
   const getAdvice = async () => {
       setAiAdvice("Scanning...");
       const advice = await getStrategicAdvice(gameState.type, gameState.playerCards, gameState.dealerCards[0], stats.history);
@@ -5668,17 +5757,19 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
     lastTxSig,
     botConfig,
     setBotConfig,
-    isTournamentStarting,
-    isFaucetClaiming,
-    freerollActiveTournamentId,
-    freerollActiveTimeLeft,
-    freerollActivePrizePool,
-    freerollActivePlayerCount,
-    freerollNextTournamentId,
-    freerollNextStartIn,
-    freerollIsJoinedNext,
-    tournamentsPlayedToday,
-    startTournament,
+	    isTournamentStarting,
+	    isRegisteringOrJoining,
+	    isFaucetClaiming,
+	    freerollActiveTournamentId,
+	    freerollActiveTimeLeft,
+	    freerollActivePrizePool,
+	    freerollActivePlayerCount,
+	    playerActiveTournamentId,
+	    freerollNextTournamentId,
+	    freerollNextStartIn,
+	    freerollIsJoinedNext,
+	    tournamentsPlayedToday,
+	    startTournament,
     actions: {
         startGame,
         setBetAmount,
@@ -5733,10 +5824,11 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
         uhCheck,
         uhBet,
         uhFold,
-        // Misc
-        registerForTournament,
-        claimFaucet,
-        getAdvice
-    }
-  };
+	        // Misc
+	        registerForTournament,
+	        enterTournament,
+	        claimFaucet,
+	        getAdvice
+	    }
+	  };
 };

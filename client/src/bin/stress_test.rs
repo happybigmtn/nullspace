@@ -120,98 +120,126 @@ impl Metrics {
 fn generate_move_payload(game_type: GameType, rng: &mut StdRng, move_number: u32) -> Vec<u8> {
     match game_type {
         GameType::Baccarat => {
-            if move_number == 0 {
-                // Place a bet: [0, bet_type, amount_bytes...]
-                let bet_type = rng.gen_range(0..=2u8); // Player, Banker, or Tie
-                let amount = 10u64;
-                let mut payload = vec![0, bet_type];
-                payload.extend_from_slice(&amount.to_be_bytes());
-                payload
-            } else if move_number == 1 {
-                // Deal: [1]
-                vec![1]
-            } else {
-                vec![]
+            match move_number {
+                0 => {
+                    // Place a bet: [0, bet_type, amount:u64 BE]
+                    // 0=Player, 1=Banker, 2=Tie, 3/4=Pairs, 5=Lucky6.
+                    let bet_type = if rng.gen_bool(0.08) {
+                        2u8 // Tie (rare)
+                    } else if rng.gen_bool(0.5) {
+                        0u8 // Player
+                    } else {
+                        1u8 // Banker
+                    };
+                    let amount = rng.gen_range(5u64..=25u64);
+                    let mut payload = vec![0, bet_type];
+                    payload.extend_from_slice(&amount.to_be_bytes());
+                    payload
+                }
+                1 => vec![1], // Deal
+                _ => vec![],
             }
         }
         GameType::Blackjack => {
-            if move_number == 0 {
-                // Stand to finish quickly: [1]
-                vec![1]
-            } else {
-                vec![]
+            match move_number {
+                0 => vec![4], // Deal
+                1 => vec![1], // Stand
+                2 => vec![6], // Reveal
+                _ => vec![],
             }
         }
         GameType::CasinoWar => {
-            // Just wait for deal - usually immediate resolution?
-            // Actually CasinoWar init() does nothing, process_move handles bet then deal.
-            // If move 0 is bet, move 1 is deal?
-            // Let's assume standard flow: 0=bet, 1=deal?
-            // Wait, CasinoWar might be simpler. Let's send empty to be safe or check code.
-            // Assuming it needs a move to progress if not auto-resolved.
-            vec![] // No payload needed.
+            match move_number {
+                0 => vec![0], // Play
+                1 => vec![1], // War (only applies if tie)
+                _ => vec![],
+            }
         }
         GameType::Craps => {
-            if move_number == 0 {
-                // Place pass bet: [0, 0, 0, amount_bytes...]
-                let mut payload = vec![0, 0, 0];
-                payload.extend_from_slice(&10u64.to_be_bytes());
-                payload
-            } else {
-                // Roll dice: [2]
-                vec![2]
+            match move_number {
+                0 => {
+                    // Place a one-roll bet so the session completes quickly.
+                    // Field bet: [0, bet_type=4, target=0, amount:u64 BE]
+                    let amount = rng.gen_range(5u64..=25u64);
+                    let mut payload = vec![0, 4, 0];
+                    payload.extend_from_slice(&amount.to_be_bytes());
+                    payload
+                }
+                1 => vec![2], // Roll
+                _ => vec![],
             }
         }
         GameType::VideoPoker => {
             if move_number == 0 {
-                // Hold all cards: [0b11111] = 31
-                vec![31]
+                // Random hold mask (0..31)
+                vec![rng.gen_range(0u8..=31u8)]
             } else {
                 vec![]
             }
         }
         GameType::HiLo => {
-            // 0=higher, 1=lower, 2=cashout
-            // If move > 0, 30% chance to cashout to lock in wins
-            if move_number > 0 && rng.gen_bool(0.3) {
-                vec![2]
-            } else {
-                let choice = rng.gen_range(0..=1u8);
-                vec![choice]
+            match move_number {
+                0 => vec![rng.gen_range(0u8..=1u8)], // Higher/Lower
+                1 => vec![2],                         // Cashout
+                _ => vec![],
             }
         }
         GameType::Roulette => {
-            if move_number == 0 {
-                // Bet on red: [1, 0]
-                vec![1, 0]
-            } else {
-                vec![]
+            match move_number {
+                0 => {
+                    // Place bet: [0, bet_type, number, amount:u64 BE]
+                    // Mostly even-money bets, occasionally a straight-up number.
+                    let (bet_type, number) = if rng.gen_bool(0.15) {
+                        (0u8, rng.gen_range(0u8..=36u8)) // Straight
+                    } else {
+                        let bt = if rng.gen_bool(0.5) { 1u8 } else { 2u8 }; // Red/Black
+                        (bt, 0u8)
+                    };
+                    let amount = rng.gen_range(5u64..=25u64);
+                    let mut payload = vec![0, bet_type, number];
+                    payload.extend_from_slice(&amount.to_be_bytes());
+                    payload
+                }
+                1 => vec![1], // Spin
+                _ => vec![],
             }
         }
         GameType::SicBo => {
-            if move_number == 0 {
-                // Bet on small: [0, 0]
-                vec![0, 0]
-            } else {
-                vec![]
+            match move_number {
+                0 => {
+                    // Place bet: [0, bet_type, number, amount:u64 BE]
+                    // 0=Small, 1=Big, 2=Odd, 3=Even, 7=Total, 8=Single
+                    let (bet_type, number) = if rng.gen_bool(0.12) {
+                        (8u8, rng.gen_range(1u8..=6u8)) // Single
+                    } else if rng.gen_bool(0.12) {
+                        (7u8, rng.gen_range(3u8..=18u8)) // Total
+                    } else {
+                        (if rng.gen_bool(0.5) { 0u8 } else { 1u8 }, 0u8) // Small/Big
+                    };
+                    let amount = rng.gen_range(5u64..=25u64);
+                    let mut payload = vec![0, bet_type, number];
+                    payload.extend_from_slice(&amount.to_be_bytes());
+                    payload
+                }
+                1 => vec![1], // Roll
+                _ => vec![],
             }
         }
         GameType::ThreeCard => {
-            if move_number == 0 {
-                // Play: [0]
-                vec![0]
-            } else {
-                vec![]
+            match move_number {
+                0 => vec![2], // Deal
+                1 => vec![0], // Play
+                2 => vec![4], // Reveal
+                _ => vec![],
             }
         }
         GameType::UltimateHoldem => {
-            // Check or fold randomly
-            if move_number < 2 {
-                vec![0] // Check
-            } else if move_number == 2 {
-                vec![4] // Fold
-            } else {
-                vec![]
+            match move_number {
+                0 => vec![5], // Deal
+                1 => vec![0], // Check (to flop)
+                2 => vec![0], // Check (to river)
+                3 => vec![4], // Fold
+                _ => vec![],
             }
         }
     }
@@ -299,7 +327,11 @@ async fn run_bot(
         };
 
         let session_id = bot.next_session_id();
-        let bet = 10;
+        // Table-style games place wagers via moves; start with 0 to avoid double-charging.
+        let bet = match game_type {
+            GameType::Baccarat | GameType::Craps | GameType::Roulette | GameType::SicBo => 0,
+            _ => rng.gen_range(5u64..=25u64),
+        };
 
         // Start game
         let start_tx = Transaction::sign(
@@ -376,7 +408,9 @@ async fn monitor_logic(client: Arc<Client>, bots: Vec<Arc<BotState>>, duration: 
         if !bots.is_empty() {
             let sample_bots = bots.iter().take(5);
             for bot in sample_bots {
-                if let Ok(Some(lookup)) = client.query_state(&Key::CasinoPlayer(bot.public_key())).await
+                if let Ok(Some(lookup)) = client
+                    .query_state(&Key::CasinoPlayer(bot.public_key()))
+                    .await
                 {
                     let value = lookup.operation.value();
                     if let Some(Value::CasinoPlayer(_player)) = value {

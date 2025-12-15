@@ -37,7 +37,6 @@ use tracing::{debug, error, info, warn};
 const BATCH_ENQUEUE: usize = 20;
 const LAST_UPLOADED_KEY: u64 = 0;
 const RETRY_DELAY: Duration = Duration::from_secs(10);
-const MAX_PENDING_SEED_LISTENERS: usize = 10_000;
 
 pub struct Actor<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> {
     context: R,
@@ -293,10 +292,13 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                             let before = entry.len();
                             entry.retain(|listener| !listener.is_canceled());
                             listeners_total = listeners_total.saturating_sub(before - entry.len());
-                            if listeners_total.saturating_add(1) > MAX_PENDING_SEED_LISTENERS {
+                            if listeners_total.saturating_add(1)
+                                > self.config.max_pending_seed_listeners
+                            {
                                 error!(
                                     view,
                                     listeners_total,
+                                    max_pending = self.config.max_pending_seed_listeners,
                                     "too many pending seed listeners; shutting down"
                                 );
                                 return;

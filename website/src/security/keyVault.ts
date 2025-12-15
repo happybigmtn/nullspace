@@ -18,6 +18,24 @@ type VaultRecordV1 = {
   updatedAtMs: number;
 };
 
+// v2: fallback mode for authenticators that don't support PRF/hmac-secret/largeBlob.
+// Uses a non-extractable AES-GCM key stored in IndexedDB (device-local keystore).
+type VaultRecordV2 = {
+  id: VaultId;
+  version: 2;
+  credentialId: string; // base64url
+  keystoreKey: CryptoKey;
+  cipher: {
+    iv: string; // base64url (12 bytes)
+    ciphertext: string; // base64url
+  };
+  nullspacePublicKeyHex: string;
+  createdAtMs: number;
+  updatedAtMs: number;
+};
+
+type VaultRecord = VaultRecordV1 | VaultRecordV2;
+
 type VaultSecretsV1 = {
   version: 1;
   nullspaceEd25519PrivateKey: string; // base64url (32 bytes)
@@ -87,18 +105,18 @@ function openDb(): Promise<IDBDatabase> {
   });
 }
 
-async function idbGetVault(id: VaultId): Promise<VaultRecordV1 | null> {
+async function idbGetVault(id: VaultId): Promise<VaultRecord | null> {
   const db = await openDb();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readonly');
     const store = tx.objectStore(STORE_NAME);
     const req = store.get(id);
-    req.onsuccess = () => resolve((req.result as VaultRecordV1) ?? null);
+    req.onsuccess = () => resolve((req.result as VaultRecord) ?? null);
     req.onerror = () => reject(req.error ?? new Error('Failed to read vault'));
   });
 }
 
-async function idbPutVault(record: VaultRecordV1): Promise<void> {
+async function idbPutVault(record: VaultRecord): Promise<void> {
   const db = await openDb();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite');
@@ -126,7 +144,7 @@ export async function deleteVault(): Promise<void> {
   localStorage.removeItem(LS_CASINO_PUBLIC_KEY_HEX);
 }
 
-export async function getVaultRecord(): Promise<VaultRecordV1 | null> {
+export async function getVaultRecord(): Promise<VaultRecord | null> {
   if (!isPasskeyVaultSupported()) return null;
   return idbGetVault('default');
 }
@@ -179,6 +197,20 @@ async function createPasskeyCredential(): Promise<{ credentialId: string }> {
 
   const credentialId = bytesToBase64Url(new Uint8Array(cred.rawId));
   return { credentialId };
+}
+
+async function assertPasskeyUserVerification(credentialId: string): Promise<void> {
+  if (!isPasskeyVaultSupported()) throw new Error('passkey-vault-unsupported');
+  const challenge = randomBytes(32);
+  const allowCredentials: any[] = [{ type: 'public-key', id: base64UrlToBytes(credentialId) }];
+  const publicKey: any = {
+    challenge,
+    allowCredentials,
+    timeout: 60_000,
+    userVerification: 'required',
+  };
+  const assertion = (await navigator.credentials.get({ publicKey })) as PublicKeyCredential | null;
+  if (!assertion) throw new Error('passkey-get-failed');
 }
 
 async function getPrfOutput(
@@ -249,7 +281,7 @@ async function deriveAesKeyFromPrf(prfOutput: Uint8Array, prfSalt: Uint8Array): 
   );
 }
 
-async function encryptVaultSecrets(aesKey: CryptoKey, vaultId: VaultId, secrets: VaultSecretsV1): Promise<VaultRecordV1['cipher']> {
+async function encryptVaultSecrets(aesKey: CryptoKey, vaultId: VaultId, secrets: VaultSecretsV1): Promise<VaultRecord['cipher']> {
   const iv = randomBytes(12);
   const aad = new TextEncoder().encode(`nullspace:${vaultId}:v1`);
   const plaintext = new TextEncoder().encode(JSON.stringify(secrets));
@@ -260,7 +292,7 @@ async function encryptVaultSecrets(aesKey: CryptoKey, vaultId: VaultId, secrets:
   };
 }
 
-async function decryptVaultSecrets(aesKey: CryptoKey, vault: VaultRecordV1): Promise<VaultSecretsV1> {
+async function decryptVaultSecrets(aesKey: CryptoKey, vault: VaultRecord): Promise<VaultSecretsV1> {
   const iv = base64UrlToBytes(vault.cipher.iv);
   const aad = new TextEncoder().encode(`nullspace:${vault.id}:v1`);
   const ciphertext = base64UrlToBytes(vault.cipher.ciphertext);
@@ -292,21 +324,32 @@ function clearPendingNonceAndTxs() {
   for (const k of keysToRemove) localStorage.removeItem(k);
 }
 
-export async function createPasskeyVault(options?: { migrateExistingCasinoKey?: boolean }): Promise<VaultRecordV1> {
+export async function createPasskeyVault(options?: { migrateExistingCasinoKey?: boolean }): Promise<VaultRecord> {
   if (!isPasskeyVaultSupported()) throw new Error('passkey-vault-unsupported');
   const vaultId: VaultId = 'default';
 
   const { credentialId } = await createPasskeyCredential();
   const prfSalt = randomBytes(32);
-  let prfOutput: Uint8Array;
+
+  // Prefer PRF/hmac-secret/largeBlob when available; otherwise fall back to a local keystore key.
+  let aesKey: CryptoKey;
+  let recordVersion: 1 | 2 = 1;
   try {
-    prfOutput = await getPrfOutput(credentialId, prfSalt);
-  } catch (e: any) {
-    if ((e?.message ?? String(e)) !== 'passkey-prf-unsupported') throw e;
     const largeBlobSeed = randomBytes(32);
-    prfOutput = await getPrfOutput(credentialId, prfSalt, { largeBlobWrite: largeBlobSeed });
+    const prfOutput = await getPrfOutput(credentialId, prfSalt, { largeBlobWrite: largeBlobSeed });
+    aesKey = await deriveAesKeyFromPrf(prfOutput, prfSalt);
+  } catch (e: any) {
+    const msg = e?.message ?? String(e);
+    if (msg !== 'passkey-prf-unsupported') throw e;
+
+    // Fallback: store an AES key in IndexedDB (non-extractable). This supports "camera / hybrid"
+    // passkey flows that do not expose PRF/hmac-secret/largeBlob.
+    aesKey = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, [
+      'encrypt',
+      'decrypt',
+    ]);
+    recordVersion = 2;
   }
-  const aesKey = await deriveAesKeyFromPrf(prfOutput, prfSalt);
 
   // Determine nullspace betting key (ed25519)
   const shouldMigrate = options?.migrateExistingCasinoKey !== false;
@@ -347,16 +390,27 @@ export async function createPasskeyVault(options?: { migrateExistingCasinoKey?: 
   const cipher = await encryptVaultSecrets(aesKey, vaultId, secrets);
   const now = Date.now();
 
-  const record: VaultRecordV1 = {
-    id: vaultId,
-    version: 1,
-    credentialId,
-    prfSalt: bytesToBase64Url(prfSalt),
-    cipher,
-    nullspacePublicKeyHex,
-    createdAtMs: now,
-    updatedAtMs: now,
-  };
+  const record: VaultRecord = recordVersion === 1
+    ? {
+        id: vaultId,
+        version: 1,
+        credentialId,
+        prfSalt: bytesToBase64Url(prfSalt),
+        cipher,
+        nullspacePublicKeyHex,
+        createdAtMs: now,
+        updatedAtMs: now,
+      }
+    : {
+        id: vaultId,
+        version: 2,
+        credentialId,
+        keystoreKey: aesKey,
+        cipher,
+        nullspacePublicKeyHex,
+        createdAtMs: now,
+        updatedAtMs: now,
+      };
 
   await idbPutVault(record);
 
@@ -398,9 +452,19 @@ export async function unlockPasskeyVault(): Promise<UnlockedVault> {
   const record = await idbGetVault('default');
   if (!record) throw new Error('vault-not-found');
 
-  const prfSalt = base64UrlToBytes(record.prfSalt);
-  const prfOutput = await getPrfOutput(record.credentialId, prfSalt, { largeBlobRead: true });
-  const aesKey = await deriveAesKeyFromPrf(prfOutput, prfSalt);
+  let aesKey: CryptoKey;
+  if (record.version === 1) {
+    const prfSalt = base64UrlToBytes(record.prfSalt);
+    const prfOutput = await getPrfOutput(record.credentialId, prfSalt, { largeBlobRead: true });
+    aesKey = await deriveAesKeyFromPrf(prfOutput, prfSalt);
+  } else if (record.version === 2) {
+    if (!record.keystoreKey) throw new Error('vault-keystore-key-missing');
+    // Require UV with the configured passkey, but do not depend on PRF/largeBlob support.
+    await assertPasskeyUserVerification(record.credentialId);
+    aesKey = record.keystoreKey;
+  } else {
+    throw new Error('vault-version-unsupported');
+  }
   const secrets = await decryptVaultSecrets(aesKey, record);
 
   const now = Date.now();

@@ -2,7 +2,7 @@ use commonware_cryptography::ed25519::PublicKey;
 use commonware_runtime::Metrics;
 use nullspace_types::execution::Transaction;
 use prometheus_client::metrics::gauge::Gauge;
-use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, HashMap};
 
 /// The maximum number of transactions a single account can have in the mempool.
 // Increased for higher transaction throughput per account
@@ -24,8 +24,13 @@ pub struct Mempool {
     /// received by digest) because we may receive transactions out-of-order (and/or some may have
     /// already been processed) and should just try return the transaction with the lowest nonce we
     /// are currently tracking.
-    queue: VecDeque<PublicKey>,
-    queued: HashSet<PublicKey>,
+    ///
+    /// This is implemented as a round-robin ring over accounts with pending transactions, backed
+    /// by a `Vec` + cursor. A `HashMap` index allows removing accounts in `O(1)` when their
+    /// backlog becomes empty, avoiding stale entries and periodic compaction scans.
+    queue: Vec<PublicKey>,
+    queue_positions: HashMap<PublicKey, usize>,
+    queue_cursor: usize,
 
     unique: Gauge,
     accounts: Gauge,
@@ -63,11 +68,46 @@ impl Mempool {
             max_transactions,
             total_transactions: 0,
             tracked: HashMap::new(),
-            queue: VecDeque::new(),
-            queued: HashSet::new(),
+            queue: Vec::new(),
+            queue_positions: HashMap::new(),
+            queue_cursor: 0,
 
             unique,
             accounts,
+        }
+    }
+
+    fn remove_from_queue(&mut self, public: &PublicKey) {
+        let Some(idx) = self.queue_positions.remove(public) else {
+            return;
+        };
+
+        let last_index = self.queue.len().saturating_sub(1);
+        let removed = self.queue.swap_remove(idx);
+        debug_assert_eq!(&removed, public);
+
+        // Update position for the element that was moved into `idx`.
+        if idx < self.queue.len() {
+            let moved = self.queue[idx].clone();
+            self.queue_positions.insert(moved, idx);
+        }
+
+        if self.queue.is_empty() {
+            self.queue_cursor = 0;
+            return;
+        }
+
+        // If the cursor pointed at the last element, it either moved to `idx` or was removed.
+        if self.queue_cursor == last_index {
+            if idx < self.queue.len() {
+                self.queue_cursor = idx;
+            } else {
+                self.queue_cursor = 0;
+            }
+        }
+
+        if self.queue_cursor >= self.queue.len() {
+            self.queue_cursor = 0;
         }
     }
 
@@ -78,34 +118,48 @@ impl Mempool {
             return;
         }
 
-        // Track the transaction
+        // Track the transaction.
         let public = tx.public.clone();
-        let entry = self.tracked.entry(public.clone()).or_default();
-        let was_empty = entry.is_empty();
+        let (was_empty, entry_len) = {
+            let entry = self.tracked.entry(public.clone()).or_default();
+            let was_empty = entry.is_empty();
 
-        // If there already exists a transaction at some nonce, return
-        if entry.contains_key(&tx.nonce) {
-            return;
-        }
+            // If there already exists a transaction at some nonce, return.
+            if entry.contains_key(&tx.nonce) {
+                return;
+            }
 
-        // Insert the transaction into the mempool
-        let replaced = entry.insert(tx.nonce, tx);
-        debug_assert!(
-            replaced.is_none(),
-            "duplicate nonce per account should have been filtered"
-        );
-        self.total_transactions += 1;
+            // Insert the transaction into the mempool.
+            let replaced = entry.insert(tx.nonce, tx);
+            debug_assert!(
+                replaced.is_none(),
+                "duplicate nonce per account should have been filtered"
+            );
+            self.total_transactions += 1;
 
-        // If there are too many transactions, remove the furthest in the future
-        if entry.len() > self.max_backlog {
-            entry.pop_last();
-            self.total_transactions = self.total_transactions.saturating_sub(1);
-        }
+            // If there are too many transactions, remove the furthest in the future.
+            if entry.len() > self.max_backlog {
+                entry.pop_last();
+                self.total_transactions = self.total_transactions.saturating_sub(1);
+            }
 
-        // Add to queue if this is the first entry (otherwise the public key will already be
-        // in the queue)
-        if was_empty && !entry.is_empty() && self.queued.insert(public.clone()) {
-            self.queue.push_back(public);
+            (was_empty, entry.len())
+        };
+
+        // Avoid tracking empty per-account entries (can happen if `max_backlog == 0`).
+        if entry_len == 0 {
+            self.tracked.remove(&public);
+            self.remove_from_queue(&public);
+        } else if was_empty {
+            // Add to queue if this is the first entry for this account.
+            if self.queue_positions.contains_key(&public) {
+                // Defensive: `tracked` should not contain empty entries, but avoid duplicating
+                // queue entries if invariants were violated by earlier versions.
+            } else {
+                self.queue_positions
+                    .insert(public.clone(), self.queue.len());
+                self.queue.push(public);
+            }
         }
 
         // Update metrics
@@ -119,7 +173,7 @@ impl Mempool {
         let Some(tracked) = self.tracked.get_mut(public) else {
             return;
         };
-        let remove = loop {
+        let removed_account = loop {
             let Some((nonce, _tx)) = tracked.first_key_value() else {
                 break true;
             };
@@ -130,10 +184,10 @@ impl Mempool {
             self.total_transactions = self.total_transactions.saturating_sub(1);
         };
 
-        // If we removed a transaction, remove the address from the tracked map
-        if remove {
+        // If the account has no remaining transactions, remove it from the mempool.
+        if removed_account {
             self.tracked.remove(public);
-            self.queued.remove(public);
+            self.remove_from_queue(public);
         }
 
         // Update metrics
@@ -143,64 +197,54 @@ impl Mempool {
 
     /// Get the next transaction to process from the mempool.
     pub fn next(&mut self) -> Option<Transaction> {
-        const COMPACT_AFTER_STALE_SKIPS: usize = 1024;
-
-        let mut stale_skips = 0;
-        let tx = loop {
-            // Get the transaction with the lowest nonce
-            let address = self.queue.pop_front()?;
-            if !self.queued.remove(&address) {
-                stale_skips += 1;
-                if stale_skips >= COMPACT_AFTER_STALE_SKIPS {
-                    self.queue.retain(|pk| self.queued.contains(pk));
-                    stale_skips = 0;
-                }
-                continue;
+        loop {
+            // Fast-path for empty mempool.
+            if self.queue.is_empty() {
+                self.unique.set(self.total_transactions as i64);
+                self.accounts.set(self.tracked.len() as i64);
+                return None;
             }
 
-            let Some(tracked) = self.tracked.get_mut(&address) else {
-                // We don't prune the queue when we drop a transaction, so we may need to
-                // read through some untracked addresses.
-                stale_skips += 1;
-                if stale_skips >= COMPACT_AFTER_STALE_SKIPS {
-                    self.queue.retain(|pk| self.queued.contains(pk));
-                    stale_skips = 0;
-                }
-                continue;
-            };
-            let Some((_, tx)) = tracked.pop_first() else {
-                self.tracked.remove(&address);
-                stale_skips += 1;
-                if stale_skips >= COMPACT_AFTER_STALE_SKIPS {
-                    self.queue.retain(|pk| self.queued.contains(pk));
-                    stale_skips = 0;
-                }
+            if self.queue_cursor >= self.queue.len() {
+                self.queue_cursor = 0;
+            }
+
+            // Pick the next account in round-robin order.
+            let public = self.queue[self.queue_cursor].clone();
+
+            let Some(tracked) = self.tracked.get_mut(&public) else {
+                // Stale queue entry (shouldn't happen, but keep defensive hygiene).
+                self.remove_from_queue(&public);
                 continue;
             };
 
-            // If the address still has transactions, add it to the end of the queue (to
-            // ensure everyone gets a chance to process their transactions)
-            if !tracked.is_empty() {
-                let inserted = self.queued.insert(address.clone());
-                debug_assert!(
-                    inserted,
-                    "address should not already be queued after pop_front"
-                );
-                self.queue.push_back(address);
-            } else {
-                // If the address has no transactions, remove it from the tracked map
-                self.tracked.remove(&address);
-            }
+            let (tx, became_empty) = match tracked.pop_first() {
+                Some((_, tx)) => (Some(tx), tracked.is_empty()),
+                None => (None, true),
+            };
+
+            let Some(tx) = tx else {
+                // Account has no transactions; drop it.
+                self.tracked.remove(&public);
+                self.remove_from_queue(&public);
+                continue;
+            };
 
             self.total_transactions = self.total_transactions.saturating_sub(1);
-            break Some(tx);
-        };
+            if became_empty {
+                self.tracked.remove(&public);
+                self.remove_from_queue(&public);
+            } else {
+                // Move to the next account.
+                self.queue_cursor = (self.queue_cursor + 1) % self.queue.len();
+            }
 
-        // Update metrics
-        self.unique.set(self.total_transactions as i64);
-        self.accounts.set(self.tracked.len() as i64);
+            // Update metrics
+            self.unique.set(self.total_transactions as i64);
+            self.accounts.set(self.tracked.len() as i64);
 
-        tx
+            return Some(tx);
+        }
     }
 }
 
@@ -530,13 +574,12 @@ mod tests {
 
     #[test]
     fn test_next_compacts_stale_queue_entries() {
-        // Exercise the COMPACT_AFTER_STALE_SKIPS path: after enough stale queue entries,
-        // the queue should be compacted down to only currently-queued keys.
+        // Regression coverage: removing accounts via `retain` should also remove them
+        // from the scheduling queue (no stale queue entries).
         let runner = deterministic::Runner::default();
         runner.start(|ctx| async move {
             let mut mempool = Mempool::new(ctx);
 
-            // Create > COMPACT_AFTER_STALE_SKIPS accounts so `next()` will hit the compaction branch.
             let account_count = 1_025;
             let mut accounts = Vec::with_capacity(account_count);
             for seed in 0..account_count {
@@ -551,18 +594,18 @@ mod tests {
             }
             assert_eq!(mempool.total_transactions, account_count);
             assert_eq!(mempool.queue.len(), account_count);
-            assert_eq!(mempool.queued.len(), account_count);
+            assert_eq!(mempool.queue_positions.len(), account_count);
 
-            // Remove all transactions without touching the queue: this leaves only stale queue entries.
+            // Remove all transactions; this should also remove all queue entries.
             for public in accounts {
                 mempool.retain(&public, 1);
             }
             assert_eq!(mempool.total_transactions, 0);
             assert_eq!(mempool.tracked.len(), 0);
-            assert_eq!(mempool.queued.len(), 0);
-            assert!(mempool.queue.len() >= account_count);
+            assert_eq!(mempool.queue_positions.len(), 0);
+            assert_eq!(mempool.queue.len(), 0);
 
-            // Calling `next()` should compact and then return `None`.
+            // Calling `next()` should return `None`.
             assert!(mempool.next().is_none());
             assert_eq!(mempool.queue.len(), 0);
         });

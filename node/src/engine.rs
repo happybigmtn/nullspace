@@ -21,7 +21,9 @@ use commonware_cryptography::{
     Signer,
 };
 use commonware_p2p::{Blocker, Receiver, Sender};
-use commonware_runtime::{buffer::PoolRef, signal::Signal, Clock, Handle, Metrics, Spawner, Storage};
+use commonware_runtime::{
+    buffer::PoolRef, signal::Signal, Clock, Handle, Metrics, Spawner, Storage,
+};
 use commonware_utils::{NZDuration, NZUsize, NZU64};
 use governor::clock::Clock as GClock;
 use governor::Quota;
@@ -60,7 +62,7 @@ const FREEZER_TABLE_RESIZE_FREQUENCY: u8 = 4;
 const FREEZER_TABLE_RESIZE_CHUNK_SIZE: u32 = 2u32.pow(16);
 // Target size of the freezer journal before rotation/compaction.
 const FREEZER_JOURNAL_TARGET_SIZE: u64 = 1024 * 1024 * 1024; // 1 GiB
-// zstd compression level; must remain `Some` if any existing data was written compressed.
+                                                             // zstd compression level; must remain `Some` if any existing data was written compressed.
 const FREEZER_JOURNAL_COMPRESSION: Option<u8> = Some(3);
 const MMR_ITEMS_PER_BLOB: NonZero<u64> = NZU64!(128_000);
 const LOG_ITEMS_PER_SECTION: NonZero<u64> = NZU64!(64_000);
@@ -186,6 +188,7 @@ pub struct ApplicationConfig<I: Indexer> {
     pub max_uploads_outstanding: usize,
     pub mempool_max_backlog: usize,
     pub mempool_max_transactions: usize,
+    pub max_pending_seed_listeners: usize,
 }
 
 pub struct Config<B: Blocker<PublicKey = PublicKey>, I: Indexer> {
@@ -294,6 +297,7 @@ impl<
                 write_buffer: WRITE_BUFFER,
                 replay_buffer: REPLAY_BUFFER,
                 max_uploads_outstanding: cfg.application.max_uploads_outstanding,
+                max_pending_seed_listeners: cfg.application.max_pending_seed_listeners,
             },
         );
 

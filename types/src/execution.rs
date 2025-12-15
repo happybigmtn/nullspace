@@ -171,19 +171,19 @@ impl Transaction {
         instruction.write(payload);
     }
 
-    fn payload(nonce: &u64, instruction: &Instruction) -> Vec<u8> {
-        let mut payload = Vec::with_capacity(nonce.encode_size() + instruction.encode_size());
-        nonce.write(&mut payload);
-        instruction.write(&mut payload);
-
-        payload
+    pub fn sign(private: &ed25519::PrivateKey, nonce: u64, instruction: Instruction) -> Self {
+        let mut scratch = Vec::new();
+        Self::sign_with_scratch(private, nonce, instruction, &mut scratch)
     }
 
-    pub fn sign(private: &ed25519::PrivateKey, nonce: u64, instruction: Instruction) -> Self {
-        let signature = private.sign(
-            Some(TRANSACTION_NAMESPACE),
-            &Self::payload(&nonce, &instruction),
-        );
+    pub fn sign_with_scratch(
+        private: &ed25519::PrivateKey,
+        nonce: u64,
+        instruction: Instruction,
+        scratch: &mut Vec<u8>,
+    ) -> Self {
+        Self::write_payload(&nonce, &instruction, scratch);
+        let signature = private.sign(Some(TRANSACTION_NAMESPACE), scratch.as_slice());
 
         Self {
             nonce,
@@ -194,9 +194,15 @@ impl Transaction {
     }
 
     pub fn verify(&self) -> bool {
+        let mut scratch = Vec::new();
+        self.verify_with_scratch(&mut scratch)
+    }
+
+    pub fn verify_with_scratch(&self, scratch: &mut Vec<u8>) -> bool {
+        Self::write_payload(&self.nonce, &self.instruction, scratch);
         self.public.verify(
             Some(TRANSACTION_NAMESPACE),
-            &Self::payload(&self.nonce, &self.instruction),
+            scratch.as_slice(),
             &self.signature,
         )
     }

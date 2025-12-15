@@ -9,14 +9,15 @@ use nullspace_types::{
     execution::{Progress, Seed, Transaction, Value},
     Query as ChainQuery,
 };
+use serde::Serialize;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use tokio::sync::broadcast;
 
 #[cfg(feature = "passkeys")]
 use crate::PasskeyStore;
-use crate::{ExplorerState, Simulator};
+use crate::Simulator;
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, Serialize)]
 pub struct SimulatorConfig {
     pub explorer_max_blocks: Option<usize>,
     pub explorer_max_account_entries: Option<usize>,
@@ -42,7 +43,6 @@ pub struct State {
     submitted_events: HashSet<u64>,
     submitted_state: HashSet<u64>,
 
-    pub(super) explorer: ExplorerState,
     #[cfg(feature = "passkeys")]
     pub(super) passkeys: PasskeyStore,
 }

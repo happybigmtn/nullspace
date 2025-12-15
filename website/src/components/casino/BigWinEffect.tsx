@@ -12,7 +12,7 @@ export const BigWinEffect: React.FC<BigWinEffectProps> = ({ amount, show, durati
     useEffect(() => {
         if (show && amount > 0) {
             setVisible(true);
-            const timer = setTimeout(() => setVisible(false), durationMs ?? 3000);
+            const timer = setTimeout(() => setVisible(false), durationMs ?? 1000);
             return () => clearTimeout(timer);
         } else {
             setVisible(false);

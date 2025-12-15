@@ -14,7 +14,7 @@
 //! [3, tie_bet:u64 BE] = Set tie bet (v1 Betting only)
 
 use super::super_mode::apply_super_multiplier_cards;
-use super::{CasinoGame, GameError, GameResult, GameRng};
+use super::{cards, CasinoGame, GameError, GameResult, GameRng};
 use nullspace_types::casino::GameSession;
 
 const STATE_VERSION_V1: u8 = 1;
@@ -23,16 +23,6 @@ const TIE_BET_PAYOUT_TO_1: u64 = 10;
 const TIE_AFTER_TIE_BONUS_MULTIPLIER: u64 = 1;
 /// WoO: Casino War is played with six decks.
 const CASINO_WAR_DECKS: u8 = 6;
-
-/// Get card rank for war (Ace is high = 14).
-fn card_rank(card: u8) -> u8 {
-    let rank = (card % 13) + 1;
-    if rank == 1 {
-        14
-    } else {
-        rank
-    } // Ace is high
-}
 
 /// Casino War stages.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -221,8 +211,8 @@ impl CasinoGame for CasinoWar {
                         let player_card = rng.draw_card(&mut deck).unwrap_or(0);
                         let dealer_card = rng.draw_card(&mut deck).unwrap_or(1);
 
-                        let player_rank = card_rank(player_card);
-                        let dealer_rank = card_rank(dealer_card);
+                        let player_rank = cards::card_rank_ace_high(player_card);
+                        let dealer_rank = cards::card_rank_ace_high(dealer_card);
 
                         // Tie bet pays on initial tie only.
                         let tie_bet_return: i64 = if state.tie_bet > 0 && player_rank == dealer_rank
@@ -306,8 +296,8 @@ impl CasinoGame for CasinoWar {
                         let new_dealer_card =
                             rng.draw_card(&mut deck).ok_or(GameError::InvalidMove)?;
 
-                        let new_player_rank = card_rank(new_player_card);
-                        let new_dealer_rank = card_rank(new_dealer_card);
+                        let new_player_rank = cards::card_rank_ace_high(new_player_card);
+                        let new_dealer_rank = cards::card_rank_ace_high(new_dealer_card);
 
                         state.stage = StageV1::Complete;
                         state.player_card = new_player_card;
@@ -350,8 +340,8 @@ impl CasinoGame for CasinoWar {
 
             // legacy flow (pre-versioned state)
             Err((player_card, dealer_card, stage)) => {
-                let player_rank = card_rank(player_card);
-                let dealer_rank = card_rank(dealer_card);
+                let player_rank = cards::card_rank_ace_high(player_card);
+                let dealer_rank = cards::card_rank_ace_high(dealer_card);
 
                 match stage {
                     StageV0::Initial => {
@@ -400,8 +390,8 @@ impl CasinoGame for CasinoWar {
                             let new_dealer_card =
                                 rng.draw_card(&mut deck).ok_or(GameError::InvalidMove)?;
 
-                            let new_player_rank = card_rank(new_player_card);
-                            let new_dealer_rank = card_rank(new_dealer_card);
+                            let new_player_rank = cards::card_rank_ace_high(new_player_card);
+                            let new_dealer_rank = cards::card_rank_ace_high(new_dealer_card);
 
                             session.state_blob = serialize_state_legacy(
                                 new_player_card,
@@ -465,12 +455,12 @@ mod tests {
     #[test]
     fn test_card_rank() {
         // Ace is high (14)
-        assert_eq!(card_rank(0), 14); // Ace of spades
-        assert_eq!(card_rank(13), 14); // Ace of hearts
+        assert_eq!(cards::card_rank_ace_high(0), 14); // Ace of spades
+        assert_eq!(cards::card_rank_ace_high(13), 14); // Ace of hearts
 
         // Regular ranks
-        assert_eq!(card_rank(1), 2); // 2 of spades
-        assert_eq!(card_rank(12), 13); // King of spades
+        assert_eq!(cards::card_rank_ace_high(1), 2); // 2 of spades
+        assert_eq!(cards::card_rank_ace_high(12), 13); // King of spades
     }
 
     #[test]
@@ -664,7 +654,10 @@ mod tests {
                 assert_eq!(state.stage, StageV1::War);
                 assert!(state.player_card < 52);
                 assert!(state.dealer_card < 52);
-                assert_eq!(card_rank(state.player_card), card_rank(state.dealer_card));
+                assert_eq!(
+                    cards::card_rank_ace_high(state.player_card),
+                    cards::card_rank_ace_high(state.dealer_card)
+                );
                 return;
             }
         }
@@ -705,7 +698,9 @@ mod tests {
             };
             assert_eq!(final_state.stage, StageV1::Complete);
 
-            if card_rank(final_state.player_card) == card_rank(final_state.dealer_card) {
+            if cards::card_rank_ace_high(final_state.player_card)
+                == cards::card_rank_ace_high(final_state.dealer_card)
+            {
                 // Bonus is equal to the ante, so the win credits 3x the ante in our model.
                 assert!(matches!(result, GameResult::Win(300)));
                 return;

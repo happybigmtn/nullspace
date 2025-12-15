@@ -28,7 +28,10 @@ pub enum Error {
     #[error("invalid signature")]
     InvalidSignature,
     #[error("{context} verification failed: {reason}")]
-    VerificationFailed { context: &'static str, reason: String },
+    VerificationFailed {
+        context: &'static str,
+        reason: String,
+    },
     #[error("unexpected response")]
     UnexpectedResponse,
     #[error("unexpected seed view: expected {expected}, got {got}")]
@@ -49,6 +52,13 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::{
+        extract::State as AxumState,
+        http::StatusCode as AxumStatusCode,
+        routing::{get, post},
+        Router,
+    };
+    use bytes::Bytes;
     use commonware_consensus::Viewable;
     use commonware_cryptography::bls12381::primitives::group::Private;
     use commonware_runtime::{deterministic::Runner, Runner as _};
@@ -62,7 +72,13 @@ mod tests {
         execution::{Instruction, Key, Transaction, Value},
         Identity, Query, Seed,
     };
-    use std::{net::SocketAddr, sync::Arc};
+    use std::{
+        net::SocketAddr,
+        sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc,
+        },
+    };
     use tokio::time::{sleep, Duration};
 
     struct TestContext {
@@ -404,6 +420,28 @@ mod tests {
         assert!(result.is_none());
     }
 
+    #[tokio::test]
+    async fn test_wait_for_latest_seed_at_least() {
+        let ctx = TestContext::new().await;
+        let client = ctx.create_client();
+        let simulator = ctx.simulator.clone();
+        let seed = ctx.create_seed(5);
+
+        tokio::spawn(async move {
+            sleep(Duration::from_millis(50)).await;
+            simulator.submit_seed(seed).await;
+        });
+
+        let seed = tokio::time::timeout(
+            Duration::from_secs(1),
+            client.wait_for_latest_seed_at_least_with_interval(5, Duration::from_millis(10)),
+        )
+        .await
+        .expect("timed out waiting for seed")
+        .expect("wait_for_latest_seed_at_least failed");
+        assert!(seed.view() >= 5);
+    }
+
     #[test]
     fn test_client_invalid_scheme() {
         let (_, network_identity) = create_network_keypair();
@@ -426,5 +464,145 @@ mod tests {
         // Test valid https scheme
         let result = Client::new("https://localhost:8080", network_identity);
         assert!(result.is_ok());
+    }
+
+    async fn serve_router(router: Router) -> (String, tokio::task::JoinHandle<()>) {
+        let addr = SocketAddr::from(([127, 0, 0, 1], 0));
+        let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+        let actual_addr = listener.local_addr().unwrap();
+        let base_url = format!("http://{actual_addr}");
+
+        let handle = tokio::spawn(async move {
+            axum::serve(listener, router.into_make_service())
+                .await
+                .unwrap();
+        });
+
+        sleep(Duration::from_millis(50)).await;
+        (base_url, handle)
+    }
+
+    #[tokio::test]
+    async fn test_get_with_retry_retries_retryable_statuses() {
+        let counter = Arc::new(AtomicUsize::new(0));
+        let router = Router::new()
+            .route(
+                "/flaky",
+                get(
+                    |AxumState(counter): AxumState<Arc<AtomicUsize>>| async move {
+                        let attempt = counter.fetch_add(1, Ordering::SeqCst);
+                        if attempt < 2 {
+                            AxumStatusCode::SERVICE_UNAVAILABLE
+                        } else {
+                            AxumStatusCode::OK
+                        }
+                    },
+                ),
+            )
+            .with_state(counter.clone());
+
+        let (base_url, handle) = serve_router(router).await;
+        let (_, network_identity) = create_network_keypair();
+        let client = Client::new(&base_url, network_identity)
+            .unwrap()
+            .with_retry_policy(RetryPolicy {
+                max_attempts: 3,
+                initial_backoff: Duration::ZERO,
+                max_backoff: Duration::ZERO,
+                retry_non_idempotent: false,
+            });
+
+        let url = client.base_url.join("flaky").unwrap();
+        let response = client.get_with_retry(url).await.unwrap();
+        assert_eq!(response.status(), reqwest::StatusCode::OK);
+        assert_eq!(counter.load(Ordering::SeqCst), 3);
+
+        handle.abort();
+    }
+
+    #[tokio::test]
+    async fn test_post_with_retry_respects_retry_non_idempotent_default() {
+        let counter = Arc::new(AtomicUsize::new(0));
+        let router =
+            Router::new()
+                .route(
+                    "/flaky-post",
+                    post(
+                        |AxumState(counter): AxumState<Arc<AtomicUsize>>,
+                         _body: axum::body::Bytes| async move {
+                            counter.fetch_add(1, Ordering::SeqCst);
+                            AxumStatusCode::SERVICE_UNAVAILABLE
+                        },
+                    ),
+                )
+                .with_state(counter.clone());
+
+        let (base_url, handle) = serve_router(router).await;
+        let (_, network_identity) = create_network_keypair();
+        let client = Client::new(&base_url, network_identity)
+            .unwrap()
+            .with_retry_policy(RetryPolicy {
+                max_attempts: 3,
+                initial_backoff: Duration::ZERO,
+                max_backoff: Duration::ZERO,
+                retry_non_idempotent: false,
+            });
+
+        let url = client.base_url.join("flaky-post").unwrap();
+        let err = client
+            .post_bytes_with_retry(url.clone(), Bytes::from_static(b"hi"))
+            .await
+            .expect_err("POST should not be retried by default");
+        let Error::FailedWithBody { status, body } = err else {
+            panic!("expected FailedWithBody, got {err:?}");
+        };
+        assert_eq!(status, reqwest::StatusCode::SERVICE_UNAVAILABLE);
+        assert!(body.contains("POST"));
+        assert!(body.contains(url.as_str()));
+        assert_eq!(counter.load(Ordering::SeqCst), 1);
+
+        handle.abort();
+    }
+
+    #[tokio::test]
+    async fn test_post_with_retry_retries_when_enabled() {
+        let counter = Arc::new(AtomicUsize::new(0));
+        let router =
+            Router::new()
+                .route(
+                    "/flaky-post",
+                    post(
+                        |AxumState(counter): AxumState<Arc<AtomicUsize>>,
+                         _body: axum::body::Bytes| async move {
+                            let attempt = counter.fetch_add(1, Ordering::SeqCst);
+                            if attempt < 2 {
+                                AxumStatusCode::SERVICE_UNAVAILABLE
+                            } else {
+                                AxumStatusCode::OK
+                            }
+                        },
+                    ),
+                )
+                .with_state(counter.clone());
+
+        let (base_url, handle) = serve_router(router).await;
+        let (_, network_identity) = create_network_keypair();
+        let client = Client::new(&base_url, network_identity)
+            .unwrap()
+            .with_retry_policy(RetryPolicy {
+                max_attempts: 3,
+                initial_backoff: Duration::ZERO,
+                max_backoff: Duration::ZERO,
+                retry_non_idempotent: true,
+            });
+
+        let url = client.base_url.join("flaky-post").unwrap();
+        client
+            .post_bytes_with_retry(url, Bytes::from_static(b"hi"))
+            .await
+            .expect("POST should succeed after retry");
+        assert_eq!(counter.load(Ordering::SeqCst), 3);
+
+        handle.abort();
     }
 }

@@ -51,6 +51,8 @@ impl Api {
         );
 
         let router = Router::new()
+            .route("/healthz", get(http::healthz))
+            .route("/config", get(http::config))
             .route("/submit", post(http::submit))
             .route("/seed/:query", get(http::query_seed))
             .route("/state/:query", get(http::query_state))

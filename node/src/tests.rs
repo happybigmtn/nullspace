@@ -38,10 +38,13 @@ const BUFFER_POOL_CAPACITY: NonZeroUsize = NZUsize!(1024 * 1024);
 
 #[test]
 fn config_redacted_debug_does_not_leak_secrets() {
+    let private_key = HexBytes::from_hex_formatted("deadbeef").expect("valid hex");
+    let share = HexBytes::from_hex_formatted("cafebabe").expect("valid hex");
+    let polynomial = HexBytes::from_hex_formatted("0123456789abcdef").expect("valid hex");
     let config = super::Config {
-        private_key: "deadbeef".to_string(),
-        share: "cafebabe".to_string(),
-        polynomial: "0123456789abcdef".to_string(),
+        private_key,
+        share,
+        polynomial,
         port: 3000,
         metrics_port: 3001,
         directory: "/tmp/nullspace".to_string(),
@@ -54,12 +57,35 @@ fn config_redacted_debug_does_not_leak_secrets() {
         deque_size: 128,
         mempool_max_backlog: 64,
         mempool_max_transactions: 100_000,
+        max_pending_seed_listeners: 10_000,
         indexer: "http://127.0.0.1:8080".to_string(),
         execution_concurrency: 4,
+        max_uploads_outstanding: 4,
+        max_message_size: 10 * 1024 * 1024,
+        leader_timeout_ms: 1_000,
+        notarization_timeout_ms: 2_000,
+        nullify_retry_ms: 10_000,
+        fetch_timeout_ms: 2_000,
+        activity_timeout: 256,
+        skip_timeout: 32,
+        fetch_concurrent: 16,
+        max_fetch_count: 16,
+        max_fetch_size: 1024 * 1024,
+        blocks_freezer_table_initial_size: 2u32.pow(21),
+        finalized_freezer_table_initial_size: 2u32.pow(21),
+        buffer_pool_page_size: 4_096,
+        buffer_pool_capacity: 32_768,
+        pending_rate_per_second: 128,
+        recovered_rate_per_second: 128,
+        resolver_rate_per_second: 128,
+        broadcaster_rate_per_second: 32,
+        backfill_rate_per_second: 8,
+        aggregation_rate_per_second: 128,
+        fetch_rate_per_peer_per_second: 128,
     };
 
     let rendered = format!("{:?}", config.redacted_debug());
-    for secret in [&config.private_key, &config.share, &config.polynomial] {
+    for secret in ["deadbeef", "cafebabe", "0123456789abcdef"] {
         assert!(!rendered.contains(secret), "secret leaked in debug output");
     }
     assert!(rendered.contains("<redacted>"));
@@ -236,6 +262,7 @@ fn all_online(n: u32, seed: u64, link: Link, required: u64) -> String {
                     max_uploads_outstanding: 4,
                     mempool_max_backlog: 64,
                     mempool_max_transactions: 100_000,
+                    max_pending_seed_listeners: 10_000,
                 },
             };
             let engine = Engine::new(context.with_label(&uid), config).await;
@@ -480,6 +507,7 @@ fn test_backfill() {
                     max_uploads_outstanding: 4,
                     mempool_max_backlog: 64,
                     mempool_max_transactions: 100_000,
+                    max_pending_seed_listeners: 10_000,
                 },
             };
             let engine = Engine::new(context.with_label(&uid), config).await;
@@ -598,6 +626,7 @@ fn test_backfill() {
                 max_uploads_outstanding: 4,
                 mempool_max_backlog: 64,
                 mempool_max_transactions: 100_000,
+                max_pending_seed_listeners: 10_000,
             },
         };
         let engine = Engine::new(context.with_label(&uid), config).await;
@@ -761,6 +790,7 @@ fn test_unclean_shutdown() {
                         max_uploads_outstanding: 4,
                         mempool_max_backlog: 64,
                         mempool_max_transactions: 100_000,
+                        max_pending_seed_listeners: 10_000,
                     },
                 };
                 let engine = Engine::new(context.with_label(&uid), config).await;
@@ -994,6 +1024,7 @@ fn test_execution(seed: u64, link: Link) -> String {
                     max_uploads_outstanding: 4,
                     mempool_max_backlog: 64,
                     mempool_max_transactions: 100_000,
+                    max_pending_seed_listeners: 10_000,
                 },
             };
             let engine = Engine::new(context.with_label(&uid), config).await;

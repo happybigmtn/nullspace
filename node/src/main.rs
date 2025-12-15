@@ -5,7 +5,7 @@ use commonware_cryptography::{ed25519::PublicKey, Signer};
 use commonware_deployer::ec2::Hosts;
 use commonware_p2p::authenticated::discovery as authenticated;
 use commonware_runtime::{tokio, Metrics, Runner};
-use commonware_utils::{from_hex_formatted, union_unique, NZU32, NZUsize};
+use commonware_utils::{from_hex_formatted, union_unique};
 use futures::future::try_join_all;
 use governor::Quota;
 use nullspace_client::Client;
@@ -14,10 +14,8 @@ use nullspace_types::NAMESPACE;
 use std::{
     collections::HashMap,
     net::{IpAddr, Ipv4Addr, SocketAddr},
-    num::NonZeroUsize,
     path::PathBuf,
     str::FromStr,
-    time::Duration,
 };
 use tracing::{error, info, Level};
 
@@ -30,25 +28,75 @@ const SEEDER_CHANNEL: u32 = 5;
 const AGGREGATOR_CHANNEL: u32 = 6;
 const AGGREGATION_CHANNEL: u32 = 7;
 
-const LEADER_TIMEOUT: Duration = Duration::from_secs(1);
-const NOTARIZATION_TIMEOUT: Duration = Duration::from_secs(2);
-const NULLIFY_RETRY: Duration = Duration::from_secs(10);
-const ACTIVITY_TIMEOUT: u64 = 256;
-const SKIP_TIMEOUT: u64 = 32;
-const FETCH_TIMEOUT: Duration = Duration::from_secs(2);
-const FETCH_CONCURRENT: usize = 16;
-const MAX_MESSAGE_SIZE: usize = 10 * 1024 * 1024; // 10MB
-const MAX_FETCH_COUNT: usize = 16;
-const MAX_FETCH_SIZE: usize = 1024 * 1024; // 1MB
-const BLOCKS_FREEZER_TABLE_INITIAL_SIZE: u32 = 2u32.pow(21); // 100MB
-const FINALIZED_FREEZER_TABLE_INITIAL_SIZE: u32 = 2u32.pow(21); // 100MB
-const BUFFER_POOL_PAGE_SIZE: NonZeroUsize = NZUsize!(4_096); // 4KB
-const BUFFER_POOL_CAPACITY: NonZeroUsize = NZUsize!(32_768); // 128MB
-const MAX_UPLOADS_OUTSTANDING: usize = 4;
-
 type PeerList = Vec<PublicKey>;
 type BootstrapList = Vec<(PublicKey, SocketAddr)>;
 type PeerConfig = (IpAddr, PeerList, BootstrapList);
+
+fn format_bytes(bytes: u64) -> String {
+    const KIB: u64 = 1024;
+    const MIB: u64 = 1024 * 1024;
+    const GIB: u64 = 1024 * 1024 * 1024;
+
+    if bytes >= GIB {
+        format!("{:.2} GiB", bytes as f64 / GIB as f64)
+    } else if bytes >= MIB {
+        format!("{:.2} MiB", bytes as f64 / MIB as f64)
+    } else if bytes >= KIB {
+        format!("{:.2} KiB", bytes as f64 / KIB as f64)
+    } else {
+        format!("{bytes} B")
+    }
+}
+
+fn print_dry_run_report(config: &nullspace_node::ValidatedConfig, peer_count: usize, ip: IpAddr) {
+    let pool_bytes = (config.buffer_pool_page_size.get() as u64)
+        .saturating_mul(config.buffer_pool_capacity.get() as u64);
+
+    println!("dry-run report");
+    println!("  identity: {:?}", config.identity);
+    println!("  public_key: {:?}", config.public_key);
+    println!("  ip: {ip}");
+    println!("  peers: {peer_count}");
+    println!(
+        "  ports: p2p={} metrics={}",
+        config.port, config.metrics_port
+    );
+    println!("  storage_dir: {}", config.directory.display());
+    println!(
+        "  buffer_pool: page_size={}B capacity={} (~{})",
+        config.buffer_pool_page_size.get(),
+        config.buffer_pool_capacity.get(),
+        format_bytes(pool_bytes)
+    );
+    println!(
+        "  freezer_tables: blocks_init={} finalized_init={}",
+        config.blocks_freezer_table_initial_size, config.finalized_freezer_table_initial_size
+    );
+    println!(
+        "  consensus: leader_timeout={:?} notarization_timeout={:?} fetch_timeout={:?} fetch_concurrent={}",
+        config.leader_timeout, config.notarization_timeout, config.fetch_timeout, config.fetch_concurrent
+    );
+    println!(
+        "  fetch: max_fetch_count={} max_fetch_size={}B fetch_rate_per_peer={} rps",
+        config.max_fetch_count,
+        config.max_fetch_size,
+        config.fetch_rate_per_peer_per_second.get()
+    );
+    println!(
+        "  mempool: max_backlog={} max_transactions={}",
+        config.mempool_max_backlog, config.mempool_max_transactions
+    );
+    println!("  network: max_message_size={}B", config.max_message_size);
+    println!(
+        "  seeder: max_pending_seed_listeners={}",
+        config.max_pending_seed_listeners
+    );
+    println!(
+        "  uploads: max_outstanding={}",
+        config.max_uploads_outstanding
+    );
+    println!("  execution: concurrency={}", config.execution_concurrency);
+}
 
 fn parse_bootstrappers(
     peers: &HashMap<PublicKey, SocketAddr>,
@@ -162,10 +210,12 @@ fn main_result() -> Result<()> {
         serde_yaml::from_str(&config_file).context("Could not parse config file")?;
 
     if dry_run {
+        println!("{:#?}", config.redacted_debug());
+
         let signer = config.parse_signer().context("Private key is invalid")?;
         let public_key = signer.public_key();
 
-        let (_ip, peers, _bootstrappers) = load_peers(
+        let (ip, peers, _bootstrappers) = load_peers(
             hosts_file,
             peers_file,
             &config.bootstrappers,
@@ -178,6 +228,7 @@ fn main_result() -> Result<()> {
         let _indexer = Client::new(&config.indexer, config.identity)
             .context("Failed to create indexer client")?;
 
+        print_dry_run_report(&config, peers.len(), ip);
         println!("config ok");
         return Ok(());
     }
@@ -210,6 +261,7 @@ fn main_result() -> Result<()> {
                 )),
                 None,
             );
+            info!(config = ?config.redacted_debug(), "loaded config file");
 
             let signer = config.parse_signer().context("Private key is invalid")?;
             let public_key = signer.public_key();
@@ -243,7 +295,7 @@ fn main_result() -> Result<()> {
                 SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), config.port),
                 SocketAddr::new(ip, config.port),
                 bootstrappers,
-                MAX_MESSAGE_SIZE,
+                config.max_message_size,
             );
             p2p_cfg.mailbox_size = config.mailbox_size;
 
@@ -255,21 +307,21 @@ fn main_result() -> Result<()> {
             oracle.register(0, peers.clone()).await;
 
             // Register pending channel
-            let pending_limit = Quota::per_second(NZU32!(128));
+            let pending_limit = Quota::per_second(config.pending_rate_per_second);
             let pending = network.register(PENDING_CHANNEL, pending_limit, config.message_backlog);
 
             // Register recovered channel
-            let recovered_limit = Quota::per_second(NZU32!(128));
+            let recovered_limit = Quota::per_second(config.recovered_rate_per_second);
             let recovered =
                 network.register(RECOVERED_CHANNEL, recovered_limit, config.message_backlog);
 
             // Register resolver channel
-            let resolver_limit = Quota::per_second(NZU32!(128));
+            let resolver_limit = Quota::per_second(config.resolver_rate_per_second);
             let resolver =
                 network.register(RESOLVER_CHANNEL, resolver_limit, config.message_backlog);
 
             // Register broadcast channel
-            let broadcaster_limit = Quota::per_second(NZU32!(32)); // Increased for faster block propagation
+            let broadcaster_limit = Quota::per_second(config.broadcaster_rate_per_second);
             let broadcaster = network.register(
                 BROADCASTER_CHANNEL,
                 broadcaster_limit,
@@ -277,7 +329,7 @@ fn main_result() -> Result<()> {
             );
 
             // Register backfill channel
-            let backfill_quota = Quota::per_second(NZU32!(8));
+            let backfill_quota = Quota::per_second(config.backfill_rate_per_second);
             let backfill = network.register(
                 BACKFILL_BY_DIGEST_CHANNEL,
                 backfill_quota,
@@ -292,7 +344,7 @@ fn main_result() -> Result<()> {
                 network.register(AGGREGATOR_CHANNEL, backfill_quota, config.message_backlog);
 
             // Register aggregation channel
-            let aggregation_quota = Quota::per_second(NZU32!(128));
+            let aggregation_quota = Quota::per_second(config.aggregation_rate_per_second);
             let aggregation = network.register(
                 AGGREGATION_CHANNEL,
                 aggregation_quota,
@@ -317,32 +369,34 @@ fn main_result() -> Result<()> {
                 },
                 storage: engine::StorageConfig {
                     partition_prefix: "engine".to_string(),
-                    blocks_freezer_table_initial_size: BLOCKS_FREEZER_TABLE_INITIAL_SIZE,
-                    finalized_freezer_table_initial_size: FINALIZED_FREEZER_TABLE_INITIAL_SIZE,
-                    buffer_pool_page_size: BUFFER_POOL_PAGE_SIZE,
-                    buffer_pool_capacity: BUFFER_POOL_CAPACITY,
+                    blocks_freezer_table_initial_size: config.blocks_freezer_table_initial_size,
+                    finalized_freezer_table_initial_size: config
+                        .finalized_freezer_table_initial_size,
+                    buffer_pool_page_size: config.buffer_pool_page_size,
+                    buffer_pool_capacity: config.buffer_pool_capacity,
                 },
                 consensus: engine::ConsensusConfig {
                     mailbox_size: config.mailbox_size,
                     backfill_quota,
                     deque_size: config.deque_size,
-                    leader_timeout: LEADER_TIMEOUT,
-                    notarization_timeout: NOTARIZATION_TIMEOUT,
-                    nullify_retry: NULLIFY_RETRY,
-                    fetch_timeout: FETCH_TIMEOUT,
-                    activity_timeout: ACTIVITY_TIMEOUT,
-                    skip_timeout: SKIP_TIMEOUT,
-                    max_fetch_count: MAX_FETCH_COUNT,
-                    max_fetch_size: MAX_FETCH_SIZE,
-                    fetch_concurrent: FETCH_CONCURRENT,
-                    fetch_rate_per_peer: resolver_limit,
+                    leader_timeout: config.leader_timeout,
+                    notarization_timeout: config.notarization_timeout,
+                    nullify_retry: config.nullify_retry,
+                    fetch_timeout: config.fetch_timeout,
+                    activity_timeout: config.activity_timeout,
+                    skip_timeout: config.skip_timeout,
+                    max_fetch_count: config.max_fetch_count,
+                    max_fetch_size: config.max_fetch_size,
+                    fetch_concurrent: config.fetch_concurrent,
+                    fetch_rate_per_peer: Quota::per_second(config.fetch_rate_per_peer_per_second),
                 },
                 application: engine::ApplicationConfig {
                     indexer,
                     execution_concurrency: config.execution_concurrency,
-                    max_uploads_outstanding: MAX_UPLOADS_OUTSTANDING,
+                    max_uploads_outstanding: config.max_uploads_outstanding,
                     mempool_max_backlog: config.mempool_max_backlog,
                     mempool_max_transactions: config.mempool_max_transactions,
+                    max_pending_seed_listeners: config.max_pending_seed_listeners,
                 },
             };
             let engine = engine::Engine::new(context.with_label("engine"), config).await;

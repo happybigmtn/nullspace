@@ -2048,6 +2048,7 @@ dependencies = [
  "commonware-cryptography",
  "commonware-storage",
  "commonware-utils",
+ "criterion",
  "rand",
  "serde",
  "serde_json",

@@ -10,10 +10,10 @@ use commonware_runtime::{Clock, Metrics, Spawner, Storage};
 use commonware_storage::adb::any::variable::Any as AnyAdb;
 use commonware_storage::translator::Translator;
 use nullspace_types::execution::{Account, Key, Transaction, Value};
-use std::{
-    collections::{BTreeMap, HashMap},
-    future::Future,
-};
+use std::{collections::BTreeMap, future::Future};
+
+#[cfg(any(test, feature = "mocks"))]
+use std::collections::HashMap;
 
 pub type Adb<E, T> = AnyAdb<E, Digest, Value, Sha256, T>;
 
@@ -60,11 +60,13 @@ impl<E: Spawner + Metrics + Clock + Storage, T: Translator> State for Adb<E, T> 
     }
 }
 
+#[cfg(any(test, feature = "mocks"))]
 #[derive(Default)]
 pub struct Memory {
     state: HashMap<Key, Value>,
 }
 
+#[cfg(any(test, feature = "mocks"))]
 impl State for Memory {
     async fn get(&self, key: &Key) -> Result<Option<Value>> {
         Ok(self.state.get(key).cloned())
@@ -81,7 +83,7 @@ impl State for Memory {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[allow(clippy::large_enum_variant)]
 pub enum Status {
     Update(Value),

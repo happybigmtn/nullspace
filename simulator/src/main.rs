@@ -3,12 +3,17 @@ use clap::Parser;
 use commonware_codec::DecodeExt;
 use nullspace_simulator::{Api, Simulator, SimulatorConfig};
 use nullspace_types::Identity;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 use tracing::info;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
+    /// Host interface to bind (default: localhost).
+    #[arg(long, default_value = "127.0.0.1")]
+    host: IpAddr,
+
     #[arg(short, long, default_value_t = 8080)]
     port: u16,
 
@@ -49,8 +54,8 @@ async fn main() -> anyhow::Result<()> {
     let app = api.router();
 
     // Start server
-    let addr = format!("0.0.0.0:{}", args.port);
-    let listener = tokio::net::TcpListener::bind(&addr)
+    let addr = SocketAddr::new(args.host, args.port);
+    let listener = tokio::net::TcpListener::bind(addr)
         .await
         .with_context(|| format!("failed to bind {addr}"))?;
     info!("Listening on {}", addr);

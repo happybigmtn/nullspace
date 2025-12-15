@@ -18,7 +18,7 @@ export default function CasinoApp() {
   // Mode selection (Cash vs Freeroll)
   const [playMode, setPlayMode] = useState<PlayMode | null>(null);
 
-  const { stats, gameState, setGameState, deck, aiAdvice, tournamentTime, phase, leaderboard, isRegistered, lastTxSig, botConfig, setBotConfig, isFaucetClaiming, freerollActiveTimeLeft, freerollActivePrizePool, freerollActivePlayerCount, freerollNextStartIn, freerollNextTournamentId, freerollIsJoinedNext, tournamentsPlayedToday, actions } = useTerminalGame(playMode);
+  const { stats, gameState, setGameState, deck, aiAdvice, tournamentTime, phase, leaderboard, isRegistered, lastTxSig, botConfig, setBotConfig, isRegisteringOrJoining, isFaucetClaiming, freerollActiveTournamentId, freerollActiveTimeLeft, freerollActivePrizePool, freerollActivePlayerCount, playerActiveTournamentId, freerollNextStartIn, freerollNextTournamentId, freerollIsJoinedNext, tournamentsPlayedToday, actions } = useTerminalGame(playMode);
 
   // UI State
   const [commandOpen, setCommandOpen] = useState(false);
@@ -125,23 +125,29 @@ export default function CasinoApp() {
       return <ModeSelectView onSelect={setPlayMode} />;
   }
 
-  if (playMode === 'FREEROLL' && phase === 'REGISTRATION') {
-      return (
-          <RegistrationView
-              stats={stats}
-              leaderboard={leaderboard}
-              isRegistered={isRegistered}
-              activeTimeLeft={freerollActiveTimeLeft}
-              nextStartIn={freerollNextStartIn}
-              nextTournamentId={freerollNextTournamentId}
-              isJoinedNext={freerollIsJoinedNext}
-              tournamentsPlayedToday={tournamentsPlayedToday}
-              onRegister={actions.registerForTournament}
-              botConfig={botConfig}
-              onBotConfigChange={setBotConfig}
-          />
-      );
-  }
+	  if (playMode === 'FREEROLL' && phase === 'REGISTRATION') {
+	      return (
+	          <RegistrationView
+	              stats={stats}
+	              leaderboard={leaderboard}
+	              isRegistered={isRegistered}
+	              statusMessage={gameState.message}
+	              lastTxSig={lastTxSig ?? undefined}
+	              isSubmitting={isRegisteringOrJoining}
+	              activeTournamentId={freerollActiveTournamentId}
+	              playerActiveTournamentId={playerActiveTournamentId}
+	              activeTimeLeft={freerollActiveTimeLeft}
+	              nextStartIn={freerollNextStartIn}
+	              nextTournamentId={freerollNextTournamentId}
+	              isJoinedNext={freerollIsJoinedNext}
+	              tournamentsPlayedToday={tournamentsPlayedToday}
+	              onRegister={actions.registerForTournament}
+	              onEnterTournament={actions.enterTournament}
+	              botConfig={botConfig}
+	              onBotConfigChange={setBotConfig}
+	          />
+	      );
+	  }
 
   return (
     <div className="flex flex-col h-screen w-screen bg-terminal-black text-white font-mono overflow-hidden select-none" onKeyDown={(e) => {

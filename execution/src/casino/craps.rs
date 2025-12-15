@@ -1179,22 +1179,12 @@ impl CasinoGame for Craps {
         match payload[0] {
             // [0, bet_type, target, amount_bytes...] - Place bet
             0 => {
-                if payload.len() < 11 {
-                    return Err(GameError::InvalidPayload);
-                }
+                let (bet_type, target, amount) = super::payload::parse_place_bet_payload(payload)?;
                 let bet_type =
-                    BetType::try_from(payload[1]).map_err(|_| GameError::InvalidPayload)?;
-                let target = payload[2];
-                let amount = u64::from_be_bytes(
-                    payload[3..11]
-                        .try_into()
-                        .map_err(|_| GameError::InvalidPayload)?,
-                );
+                    BetType::try_from(bet_type).map_err(|_| GameError::InvalidPayload)?;
 
                 // Validate bet
-                if amount == 0 {
-                    return Err(GameError::InvalidPayload);
-                }
+                super::payload::ensure_nonzero_amount(amount)?;
                 if state.bets.len() >= MAX_BETS {
                     return Err(GameError::InvalidMove);
                 }

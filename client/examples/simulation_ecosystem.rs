@@ -191,7 +191,7 @@ async fn flush_batch(client: &Arc<Client>, txs: &mut Vec<Transaction>) {
     if txs.is_empty() {
         return;
     }
-    let batch: Vec<Transaction> = txs.drain(..).collect();
+    let batch = std::mem::take(txs);
     throttle_submissions().await;
     if let Err(e) = client.submit_transactions(batch).await {
         warn!("Batch submission failed: {}", e);
@@ -435,7 +435,7 @@ async fn run_whale(client: Arc<Client>, bot: Arc<Bot>, duration: Duration) {
             1 => {
                 // Dump (Sell)
                 if held_rng > 0 {
-                    let max_sell = held_rng.min(50_000).max(1);
+                    let max_sell = held_rng.clamp(1, 50_000);
                     let amount = rng.gen_range(1..=max_sell);
                     info!("{}: DUMP Selling {} RNG", bot.name, amount);
                     flush_tx(
@@ -1249,8 +1249,8 @@ async fn run_monitor(
                             max_debt = v.debt_vusdt;
                         }
                     }
-                    let vusdt_val = p.vusdt_balance as f64;
-                    let rng_val = (p.chips as f64) * price;
+                    let vusdt_val = p.balances.vusdt_balance as f64;
+                    let rng_val = (p.balances.chips as f64) * price;
                     max_nw = (rng_val + vusdt_val - max_debt as f64).round() as i64;
                 }
             }

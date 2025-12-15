@@ -38,7 +38,7 @@ use nullspace_types::{
 use prometheus_client::metrics::{counter::Counter, histogram::Histogram};
 use rand::{CryptoRng, Rng};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     num::NonZero,
     sync::{atomic::AtomicU64, Arc, Mutex},
     time::Duration,
@@ -54,14 +54,61 @@ const LATENCY: [f64; 20] = [
 /// Attempt to prune the state every 10000 blocks (randomly).
 const PRUNE_INTERVAL: u64 = 10_000;
 
-// OPTIMIZATION: Consider caching ancestry computation results.
-// Currently recomputes ancestry on each call. A LRU cache keyed by (start, end)
-// could significantly reduce computation for repeated queries.
+/// Upper bound on cached ancestry results.
+const ANCESTRY_CACHE_ENTRIES: usize = 64;
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct AncestryCacheKey {
+    start: Digest,
+    end: u64,
+}
+
+struct AncestryCache {
+    capacity: usize,
+    entries: HashMap<AncestryCacheKey, Arc<[Block]>>,
+    lru: VecDeque<AncestryCacheKey>,
+}
+
+impl AncestryCache {
+    fn new(capacity: usize) -> Self {
+        Self {
+            capacity,
+            entries: HashMap::new(),
+            lru: VecDeque::new(),
+        }
+    }
+
+    fn get(&mut self, key: &AncestryCacheKey) -> Option<Arc<[Block]>> {
+        let blocks = self.entries.get(key)?.clone();
+        self.lru.retain(|k| k != key);
+        self.lru.push_back(key.clone());
+        Some(blocks)
+    }
+
+    fn insert(&mut self, key: AncestryCacheKey, blocks: Arc<[Block]>) {
+        if self.entries.contains_key(&key) {
+            self.entries.insert(key.clone(), blocks);
+            self.lru.retain(|k| k != &key);
+            self.lru.push_back(key);
+            return;
+        }
+
+        if self.entries.len() >= self.capacity {
+            if let Some(oldest) = self.lru.pop_front() {
+                self.entries.remove(&oldest);
+            }
+        }
+
+        self.lru.push_back(key.clone());
+        self.entries.insert(key, blocks);
+    }
+}
+
 async fn ancestry(
     mut marshal: marshal::Mailbox<MinSig, Block>,
     start: (Option<View>, Digest),
     end: u64,
-) -> Option<Vec<Block>> {
+) -> Option<Arc<[Block]>> {
     let mut ancestry = Vec::new();
 
     // Get the start block
@@ -82,7 +129,36 @@ async fn ancestry(
     }
 
     // Reverse the ancestry
-    Some(ancestry.into_iter().rev().collect())
+    let blocks: Vec<Block> = ancestry.into_iter().rev().collect();
+    Some(Arc::from(blocks))
+}
+
+async fn ancestry_cached(
+    marshal: marshal::Mailbox<MinSig, Block>,
+    start: (Option<View>, Digest),
+    end: u64,
+    cache: Arc<Mutex<AncestryCache>>,
+) -> Option<Arc<[Block]>> {
+    let key = AncestryCacheKey {
+        start: start.1,
+        end,
+    };
+    {
+        let mut cache = cache
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if let Some(blocks) = cache.get(&key) {
+            return Some(blocks);
+        }
+    }
+
+    let blocks = ancestry(marshal, start, end).await?;
+
+    let mut cache = cache
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    cache.insert(key, blocks.clone());
+    Some(blocks)
 }
 
 /// Application actor.
@@ -163,6 +239,10 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
         // Initialize metrics
         let txs_considered: Counter<u64, AtomicU64> = Counter::default();
         let txs_executed: Counter<u64, AtomicU64> = Counter::default();
+        let state_metadata_read_errors: Counter<u64, AtomicU64> = Counter::default();
+        let nonce_read_errors: Counter<u64, AtomicU64> = Counter::default();
+        let state_transition_errors: Counter<u64, AtomicU64> = Counter::default();
+        let storage_prune_errors: Counter<u64, AtomicU64> = Counter::default();
         let ancestry_latency = Histogram::new(LATENCY.into_iter());
         let propose_latency = Histogram::new(LATENCY.into_iter());
         let verify_latency = Histogram::new(LATENCY.into_iter());
@@ -179,6 +259,26 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
             "txs_executed",
             "Number of transactions executed after finalization",
             txs_executed.clone(),
+        );
+        self.context.register(
+            "state_metadata_read_errors",
+            "Number of state metadata read errors in application actor",
+            state_metadata_read_errors.clone(),
+        );
+        self.context.register(
+            "nonce_read_errors",
+            "Number of account nonce read errors in application actor",
+            nonce_read_errors.clone(),
+        );
+        self.context.register(
+            "state_transition_errors",
+            "Number of state transition execution errors in application actor",
+            state_transition_errors.clone(),
+        );
+        self.context.register(
+            "storage_prune_errors",
+            "Number of storage prune errors in application actor",
+            storage_prune_errors.clone(),
         );
         self.context.register(
             "ancestry_latency",
@@ -334,6 +434,7 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                 })
                 .unwrap_or(0),
             Err(err) => {
+                state_metadata_read_errors.inc();
                 warn!(
                     ?err,
                     "failed to read state metadata during init; using height=0"
@@ -345,6 +446,8 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
         // Track built blocks
         let built: Option<(View, Block)> = None;
         let built = Arc::new(Mutex::new(built));
+
+        let ancestry_cache = Arc::new(Mutex::new(AncestryCache::new(ANCESTRY_CACHE_ENTRIES)));
 
         // Initialize mempool
         let mut mempool = Mempool::new_with_limits(
@@ -394,16 +497,23 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                                 // Immediately send a response for genesis block
                                 if parent.1 == genesis_digest {
                                     drop(ancestry_timer);
-                                    self.inbound.ancestry(view, vec![genesis_block()], propose_timer, response).await;
+                                    if let Err(err) = self
+                                        .inbound
+                                        .ancestry(view, Arc::from(vec![genesis_block()]), propose_timer, response)
+                                        .await
+                                    {
+                                        warn!(view, ?err, "failed to send ancestry response");
+                                    }
                                     continue;
                                 }
 
                                 // Get the ancestry
                                 let committed_height_snapshot = committed_height;
-                                let ancestry = ancestry(
+                                let ancestry = ancestry_cached(
                                     marshal.clone(),
                                     (Some(parent.0), parent.1),
                                     committed_height_snapshot,
+                                    ancestry_cache.clone(),
                                 );
 
                                 // Wait for the parent block to be available or the request to be cancelled in a separate task (to
@@ -422,7 +532,12 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                                                 drop(ancestry_timer);
 
                                                 // Pass back to mailbox
-                                                inbound.ancestry(view, ancestry, propose_timer, response).await;
+                                                if let Err(err) = inbound
+                                                    .ancestry(view, ancestry, propose_timer, response)
+                                                    .await
+                                                {
+                                                    warn!(view, ?err, "failed to send ancestry response");
+                                                }
                                             },
                                             _ = response.closed() => {
                                                 // The response was cancelled
@@ -449,7 +564,7 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                                 // Find first block on top of finalized state (may have increased since we started)
                                 let height = committed_height;
                                 let mut noncer = Noncer::new(&state);
-                                for block in &blocks {
+                                for block in blocks.iter() {
                                     // Skip blocks below our height
                                     if block.height <= height {
                                         debug!(block = block.height, processed = height, "skipping block during propose");
@@ -486,8 +601,30 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                                 // Update metrics
                                 txs_considered.inc_by(considered as u64);
 
-                                // When ancestry for propose is provided, we can attempt to pack a block
-                                let block = Block::new(parent.digest(), view, parent.height+1, transactions);
+                                // When ancestry for propose is provided, we can attempt to pack a block.
+                                //
+                                // This should be infallible because we explicitly bound `transactions` to
+                                // `MAX_BLOCK_TRANSACTIONS`, but use `try_new` to avoid a panic if future
+                                // code changes violate the invariant.
+                                let block = match Block::try_new(
+                                    parent.digest(),
+                                    view,
+                                    parent.height + 1,
+                                    transactions,
+                                ) {
+                                    Ok(block) => block,
+                                    Err(err) => {
+                                        warn!(
+                                            view,
+                                            parent_height = parent.height,
+                                            ?err,
+                                            "failed to build proposed block; proposing parent digest"
+                                        );
+                                        let _ = response.send(parent.digest());
+                                        drop(timer);
+                                        continue;
+                                    }
+                                };
                                 let digest = block.digest();
                                 {
                                     // We may drop the transactions from a block that was never broadcast...users
@@ -618,7 +755,12 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                                             }
                                         };
                                         drop(seeded_timer);
-                                        inbound.seeded(block, seed, finalize_timer, response).await;
+                                        if let Err(err) = inbound
+                                            .seeded(block, seed, finalize_timer, response)
+                                            .await
+                                        {
+                                            warn!(?err, "failed to send seeded response");
+                                        }
                                     }
                                 });
 
@@ -647,6 +789,7 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                                 let result = match result {
                                     Ok(result) => result,
                                     Err(err) => {
+                                        state_transition_errors.inc();
                                         error!(?err, height, "state transition failed");
                                         return;
                                     }
@@ -734,6 +877,7 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                                     )
                                     .await
                                     {
+                                        storage_prune_errors.inc();
                                         warn!(?err, height, "failed to prune storage");
                                     }
                                     drop(timer);
@@ -764,8 +908,10 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                                     next
                                 }
                                 Err(err) => {
+                                    nonce_read_errors.inc();
                                     warn!(
                                         ?err,
+                                        public = ?tx.public,
                                         "failed to read account nonce; dropping transaction"
                                     );
                                     continue;

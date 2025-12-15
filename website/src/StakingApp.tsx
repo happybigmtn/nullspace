@@ -156,8 +156,12 @@ export default function StakingApp() {
     const staked = BigInt(staker?.balance ?? 0);
     const unlockTs = Number(staker?.unlockTs ?? 0);
     const vp = BigInt(staker?.votingPower ?? 0);
+    const unclaimedRewards = BigInt(staker?.unclaimedRewards ?? 0);
+    const rewardDebtX18 = BigInt(staker?.rewardDebtX18 ?? 0);
     const totalVp = BigInt(house?.totalVotingPower ?? 0);
     const totalStaked = BigInt(house?.totalStakedAmount ?? 0);
+    const rewardPerVotingPowerX18 = BigInt(house?.stakingRewardPerVotingPowerX18 ?? 0);
+    const rewardPool = BigInt(house?.stakingRewardPool ?? 0);
 
     const view = currentView ?? 0;
     const locked = unlockTs > 0 && view < unlockTs;
@@ -166,16 +170,31 @@ export default function StakingApp() {
     const shareBps = totalVp > 0n ? Number((vp * 10_000n) / totalVp) : 0;
     const stakedShareBps = totalStaked > 0n ? Number((staked * 10_000n) / totalStaked) : 0;
 
+    const STAKING_REWARD_SCALE = 1_000_000_000_000_000_000n;
+    let pendingRewards = 0n;
+    if (vp > 0n) {
+      const currentDebtX18 = vp * rewardPerVotingPowerX18;
+      pendingRewards =
+        currentDebtX18 > rewardDebtX18
+          ? (currentDebtX18 - rewardDebtX18) / STAKING_REWARD_SCALE
+          : 0n;
+    }
+    const claimableRewards = unclaimedRewards + pendingRewards;
+
     return {
       staked,
       unlockTs,
       vp,
+      unclaimedRewards,
+      pendingRewards,
+      claimableRewards,
       totalVp,
       totalStaked,
       locked,
       remainingBlocks,
       shareBps,
       stakedShareBps,
+      rewardPool,
     };
   }, [staker, house, currentView]);
 
@@ -229,7 +248,7 @@ export default function StakingApp() {
     await ensureRegistered();
     const result = await client.nonceManager.submitClaimRewards();
     if (result?.txHash) setLastTxSig(result.txHash);
-    pushActivity('Submitted claim rewards (MVP placeholder)');
+    pushActivity('Submitted claim rewards');
   };
 
   const processEpoch = async () => {
@@ -302,18 +321,24 @@ export default function StakingApp() {
         <section className="border border-gray-800 rounded p-4 bg-gray-900/30">
           <div className="text-xs text-gray-400 tracking-widest mb-3">STAKE RNG</div>
 
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div className="border border-gray-800 rounded p-3 bg-black/30">
-              <div className="text-[10px] text-gray-500 tracking-widest">YOUR STAKE</div>
-              <div className="text-white mt-1">{staker?.balance ?? 0}</div>
-              <div className="text-[10px] text-gray-600">unlock @ {derived.unlockTs || '—'}</div>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="border border-gray-800 rounded p-3 bg-black/30">
+                <div className="text-[10px] text-gray-500 tracking-widest">YOUR STAKE</div>
+                <div className="text-white mt-1">{staker?.balance ?? 0}</div>
+                <div className="text-[10px] text-gray-600">unlock @ {derived.unlockTs || '—'}</div>
+                <div className="text-[10px] text-gray-600">
+                  unclaimed {derived.unclaimedRewards.toString()}
+                </div>
+              </div>
+              <div className="border border-gray-800 rounded p-3 bg-black/30">
+                <div className="text-[10px] text-gray-500 tracking-widest">VOTING POWER</div>
+                <div className="text-white mt-1">{derived.vp.toString()}</div>
+                <div className="text-[10px] text-gray-600">share ~ {(derived.shareBps / 100).toFixed(2)}%</div>
+                <div className="text-[10px] text-gray-600">
+                  claimable {derived.claimableRewards.toString()}
+                </div>
+              </div>
             </div>
-            <div className="border border-gray-800 rounded p-3 bg-black/30">
-              <div className="text-[10px] text-gray-500 tracking-widest">VOTING POWER</div>
-              <div className="text-white mt-1">{derived.vp.toString()}</div>
-              <div className="text-[10px] text-gray-600">share ~ {(derived.shareBps / 100).toFixed(2)}%</div>
-            </div>
-          </div>
 
           <div className="mt-4 space-y-2">
             <div className="grid grid-cols-2 gap-2">
@@ -350,8 +375,14 @@ export default function StakingApp() {
                 Unstake
               </button>
               <button
-                className="text-xs px-3 py-2 rounded border border-gray-700 text-gray-300 hover:border-gray-500"
+                className={`text-xs px-3 py-2 rounded border ${
+                  derived.claimableRewards === 0n
+                    ? 'border-gray-800 text-gray-600 cursor-not-allowed'
+                    : 'border-gray-700 text-gray-300 hover:border-gray-500'
+                }`}
                 onClick={claimRewards}
+                disabled={derived.claimableRewards === 0n}
+                title={derived.claimableRewards === 0n ? 'No rewards to claim' : 'Claim rewards'}
               >
                 Claim
               </button>
@@ -364,8 +395,8 @@ export default function StakingApp() {
             )}
 
             <div className="text-[10px] text-gray-600 leading-relaxed">
-              Rewards distribution is an MVP placeholder (see `liquidity.md`); staking currently tracks lockups + voting
-              power and will later receive house-edge + fee flow.
+              Rewards are funded from positive epoch net PnL and distributed pro-rata by voting power (amount * duration).
+              Call “Process Epoch” after ~100 blocks to roll the epoch and update the reward pool.
             </div>
           </div>
         </section>
@@ -401,6 +432,14 @@ export default function StakingApp() {
             <div className="flex items-center justify-between">
               <span className="text-gray-500">Total Issuance</span>
               <span className="text-white">{house?.totalIssuance ?? 0}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-500">Reward Pool</span>
+              <span className="text-white">{derived.rewardPool.toString()}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-500">Reward Carry</span>
+              <span className="text-white">{house?.stakingRewardCarry ?? 0}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-gray-500">View</span>

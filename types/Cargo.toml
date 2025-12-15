@@ -10,6 +10,10 @@ homepage = "https://nullspace.xyz"
 repository = "https://github.com/commonwarexyz/nullspace/tree/main/types"
 documentation = "https://docs.rs/nullspace-types"
 
+[features]
+default = ["root-reexports"]
+root-reexports = []
+
 [dependencies]
 commonware-codec = { workspace = true }
 commonware-consensus = { workspace = true }
@@ -23,3 +27,8 @@ thiserror = { workspace = true }
 
 [dev-dependencies]
 rand = "0.8"
+criterion = "0.5"
+
+[[bench]]
+name = "tournament_membership"
+harness = false

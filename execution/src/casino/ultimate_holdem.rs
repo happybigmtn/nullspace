@@ -62,7 +62,7 @@
 //! 10 = Set Progressive bet (u64)
 
 use super::super_mode::apply_super_multiplier_cards;
-use super::{CasinoGame, GameError, GameResult, GameRng};
+use super::{cards, CasinoGame, GameError, GameResult, GameRng};
 use nullspace_types::casino::{GameSession, UTH_PROGRESSIVE_BASE_JACKPOT};
 
 const STATE_VERSION_V1: u8 = 1;
@@ -261,18 +261,6 @@ fn known_cards_in_state(state: &UthState) -> Vec<u8> {
     used
 }
 
-fn parse_u64_be(payload: &[u8], offset: usize) -> Result<u64, GameError> {
-    let end = offset.saturating_add(8);
-    if payload.len() < end {
-        return Err(GameError::InvalidPayload);
-    }
-    Ok(u64::from_be_bytes(
-        payload[offset..end]
-            .try_into()
-            .map_err(|_| GameError::InvalidPayload)?,
-    ))
-}
-
 fn apply_trips_update(state: &mut UthState, new_trips_bet: u64) -> Result<i64, GameError> {
     let old = state.trips_bet as i128;
     let new = new_trips_bet as i128;
@@ -357,21 +345,6 @@ pub enum HandRank {
     RoyalFlush = 9,
 }
 
-/// Get card rank (1-13, but Ace = 14 for comparison).
-fn card_rank(card: u8) -> u8 {
-    let r = (card % 13) + 1;
-    if r == 1 {
-        14
-    } else {
-        r
-    }
-}
-
-/// Get card suit.
-fn card_suit(card: u8) -> u8 {
-    card / 13
-}
-
 /// Evaluate best 5-card hand from 7 cards.
 /// Returns (HandRank, high cards for tiebreaker).
 pub fn evaluate_best_hand(cards: &[u8; 7]) -> (HandRank, [u8; 5]) {
@@ -431,8 +404,8 @@ fn evaluate_5_card_fast(cards: &[u8; 5]) -> (HandRank, [u8; 5]) {
     let mut ranks = [0u8; 5];
     let mut suits = [0u8; 5];
     for i in 0..5 {
-        ranks[i] = card_rank(cards[i]);
-        suits[i] = card_suit(cards[i]);
+        ranks[i] = cards::card_rank_ace_high(cards[i]);
+        suits[i] = cards::card_suit(cards[i]);
     }
 
     // Sort ranks descending for kickers
@@ -755,7 +728,7 @@ impl CasinoGame for UltimateHoldem {
         match state.stage {
             Stage::Betting => match action {
                 Action::SetTrips => {
-                    let new_trips = parse_u64_be(payload, 1)?;
+                    let new_trips = super::payload::parse_u64_be(payload, 1)?;
                     payout_update = apply_trips_update(&mut state, new_trips)?;
                     session.state_blob = serialize_state(&state);
                     Ok(if payout_update == 0 {
@@ -767,7 +740,7 @@ impl CasinoGame for UltimateHoldem {
                     })
                 }
                 Action::SetSixCardBonus => {
-                    let new_bet = parse_u64_be(payload, 1)?;
+                    let new_bet = super::payload::parse_u64_be(payload, 1)?;
                     payout_update = apply_six_card_bonus_update(&mut state, new_bet)?;
                     session.state_blob = serialize_state(&state);
                     Ok(if payout_update == 0 {
@@ -779,7 +752,7 @@ impl CasinoGame for UltimateHoldem {
                     })
                 }
                 Action::SetProgressive => {
-                    let new_bet = parse_u64_be(payload, 1)?;
+                    let new_bet = super::payload::parse_u64_be(payload, 1)?;
                     if new_bet != 0 && new_bet != PROGRESSIVE_BET_UNIT {
                         return Err(GameError::InvalidMove);
                     }
@@ -799,7 +772,7 @@ impl CasinoGame for UltimateHoldem {
                     }
 
                     if payload.len() == 9 {
-                        let new_trips = parse_u64_be(payload, 1)?;
+                        let new_trips = super::payload::parse_u64_be(payload, 1)?;
                         payout_update = apply_trips_update(&mut state, new_trips)?;
                     } else if payload.len() != 1 {
                         return Err(GameError::InvalidPayload);

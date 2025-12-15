@@ -18,10 +18,10 @@ On each tournament start, the executor mints a **per-tournament prize pool**:
 `per_tournament = floor( floor( floor(TOTAL_SUPPLY * 5% / 365) / TOURNAMENTS_PER_DAY ) )`
 
 Current protocol constants:
-- `types/src/casino.rs`: `TOTAL_SUPPLY = 1_000_000_000`
-- `types/src/casino.rs`: `ANNUAL_EMISSION_RATE_BPS = 500` (5%/year)
-- `types/src/casino.rs`: `REWARD_POOL_BPS = 2500` (25% cap)
-- `types/src/casino.rs`: `TOURNAMENTS_PER_DAY = 240` (1m registration + 5m active schedule)
+- `types/src/casino/constants.rs`: `TOTAL_SUPPLY = 1_000_000_000`
+- `types/src/casino/constants.rs`: `ANNUAL_EMISSION_RATE_BPS = 500` (5%/year)
+- `types/src/casino/constants.rs`: `REWARD_POOL_BPS = 2500` (25% cap)
+- `types/src/casino/constants.rs`: `TOURNAMENTS_PER_DAY = 240` (1m registration + 5m active schedule)
 
 This yields approximately:
 - Annual emission target: `50,000,000 RNG/year`
@@ -35,22 +35,22 @@ The executor tracks `HouseState.total_issuance` and caps total freeroll issuance
 The current “economy” lives inside the casino state machine. RNG is represented as the player’s `chips` balance.
 
 ### What exists on the Commonware stack (today)
-- **RNG balance (in-protocol):** `types/src/casino.rs` `Player.chips`
-- **vUSDT (virtual stable):** `types/src/casino.rs` `Player.vusdt_balance`
+- **RNG balance (in-protocol):** `types/src/casino/player.rs` `Player.balances.chips`
+- **vUSDT (virtual stable):** `types/src/casino/player.rs` `Player.balances.vusdt_balance`
 - **CPMM AMM (RNG/vUSDT):**
-  - State: `types/src/casino.rs` `AmmPool { reserve_rng, reserve_vusdt, total_shares, fee_basis_points, sell_tax_basis_points }`
-  - Execution: `execution/src/lib.rs` `handle_swap`, `handle_add_liquidity`, `handle_remove_liquidity`
-  - Defaults: 0.3% LP fee (`fee_basis_points=30`) + 5% sell-tax on RNG→vUSDT (`sell_tax_basis_points=500`)
+  - State: `types/src/casino/economy.rs` `AmmPool { reserve_rng, reserve_vusdt, total_shares, fee_basis_points, sell_tax_basis_points, bootstrap_price_vusdt_numerator, bootstrap_price_rng_denominator }`
+  - Execution: `execution/src/layer/handlers/liquidity.rs` `handle_swap`, `handle_add_liquidity`, `handle_remove_liquidity`
+  - Defaults: 0.3% LP fee (`fee_basis_points=30`) + 5% sell-tax on RNG→vUSDT (`sell_tax_basis_points=500`) + bootstrap price (default: `1 RNG = 1 vUSDT`)
   - Accounting: sell-tax increments `HouseState.total_burned`; LP fee increments `HouseState.accumulated_fees`
-- **CDP/Vault to mint vUSDT:** `execution/src/lib.rs` `handle_create_vault`, `handle_deposit_collateral`, `handle_borrow_usdt`, `handle_repay_usdt`
+- **CDP/Vault to mint vUSDT:** `execution/src/layer/handlers/liquidity.rs` `handle_create_vault`, `handle_deposit_collateral`, `handle_borrow_usdt`, `handle_repay_usdt`
   - LTV: 50% based on AMM spot price (no external oracle)
 - **Freeroll tournaments + payouts (top 15%):**
-  - Join limit: 5/day enforced in `execution/src/lib.rs` `handle_casino_join_tournament`
-  - Start: `execution/src/lib.rs` `handle_casino_start_tournament` (mints prize pool; resets tournament stacks)
-  - End: `execution/src/lib.rs` `handle_casino_end_tournament` (harmonic payout across top 15%)
-- **Staking (very early / incomplete):**
-  - Stake/unstake bookkeeping exists (`execution/src/lib.rs` `handle_stake`, `handle_unstake`)
-  - Rewards distribution is currently a placeholder (`handle_claim_rewards`), and `ProcessEpoch` only resets PnL
+  - Join limit: 5/day enforced in `execution/src/layer/handlers/casino.rs` `handle_casino_join_tournament`
+  - Start: `execution/src/layer/handlers/casino.rs` `handle_casino_start_tournament` (mints prize pool; resets tournament stacks)
+  - End: `execution/src/layer/handlers/casino.rs` `handle_casino_end_tournament` (harmonic payout across top 15%)
+- **Staking (dev / MVP):**
+  - Stake/unstake bookkeeping exists (`execution/src/layer/handlers/staking.rs` `handle_stake`, `handle_unstake`)
+  - Rewards distribution is implemented: positive epoch `HouseState.net_pnl` is allocated to stakers; `ClaimRewards` pays from a tracked reward pool.
 - **Analytics tooling (simulated):**
   - Simulation: `client/examples/simulation_ecosystem.rs` writes `economy_log.json`
   - Dashboard: `website/src/components/EconomyDashboard.jsx` reads `website/public/economy_log.json`
@@ -161,4 +161,3 @@ Then implement a bridge that is **supply-preserving**:
 6. Create an `evm/` workspace (or separate repo) for Ethereum contracts + deployment scripts.
 7. Implement Stage 2 contracts (ERC-20 RNG, CCA, liquidity launcher) and run a full testnet rehearsal.
 8. Design and implement the canonical bridge (Stage 3), starting with an MVP trust model and a path to decentralization.
-

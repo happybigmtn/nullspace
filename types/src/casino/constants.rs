@@ -57,3 +57,13 @@ pub const ERROR_TOURNAMENT_LIMIT_REACHED: u8 = 13;
 
 /// Tournament duration in seconds (5 minutes)
 pub const TOURNAMENT_DURATION_SECS: u64 = 5 * 60;
+
+/// Fixed-point scale used for staking reward accounting (`reward_per_voting_power`).
+pub const STAKING_REWARD_SCALE: u128 = 1_000_000_000_000_000_000;
+
+/// AMM defaults.
+pub const AMM_DEFAULT_FEE_BASIS_POINTS: u16 = 30; // 0.30%
+pub const AMM_DEFAULT_SELL_TAX_BASIS_POINTS: u16 = 500; // 5.00%
+/// Default bootstrap price used when the AMM has no reserves (1 RNG = 1 vUSDT).
+pub const AMM_BOOTSTRAP_PRICE_VUSDT_NUMERATOR: u64 = 1;
+pub const AMM_BOOTSTRAP_PRICE_RNG_DENOMINATOR: u64 = 1;

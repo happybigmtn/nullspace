@@ -1,4 +1,6 @@
-use axum::{body::Bytes, extract::State as AxumState, http::StatusCode, response::IntoResponse};
+use axum::{
+    body::Bytes, extract::State as AxumState, http::StatusCode, response::IntoResponse, Json,
+};
 use commonware_codec::{DecodeExt, Encode, Read, ReadExt, ReadRangeExt};
 use commonware_consensus::aggregation::types::Certificate;
 use commonware_cryptography::{bls12381::primitives::variant::MinSig, sha256::Digest};
@@ -12,9 +14,23 @@ use nullspace_types::{
     execution::{Output, Progress, Value},
     Query as ChainQuery, NAMESPACE,
 };
+use serde::Serialize;
 use std::sync::Arc;
 
 use crate::Simulator;
+
+#[derive(Serialize)]
+struct HealthzResponse {
+    ok: bool,
+}
+
+pub(super) async fn healthz() -> impl IntoResponse {
+    Json(HealthzResponse { ok: true })
+}
+
+pub(super) async fn config(AxumState(simulator): AxumState<Arc<Simulator>>) -> impl IntoResponse {
+    Json(simulator.config)
+}
 
 pub(super) async fn submit(
     AxumState(simulator): AxumState<Arc<Simulator>>,

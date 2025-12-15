@@ -10,12 +10,18 @@ interface RegistrationViewProps {
   stats: PlayerStats;
   leaderboard: LeaderboardEntry[];
   isRegistered: boolean;
+  statusMessage?: string;
+  lastTxSig?: string;
+  isSubmitting?: boolean;
+  activeTournamentId: number | null;
+  playerActiveTournamentId: number | null;
   activeTimeLeft: number;
   nextStartIn: number;
   nextTournamentId: number | null;
   isJoinedNext: boolean;
   tournamentsPlayedToday: number;
   onRegister: () => void;
+  onEnterTournament: () => void;
   botConfig: BotConfig;
   onBotConfigChange: (config: BotConfig) => void;
 }
@@ -24,12 +30,18 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
   stats,
   leaderboard,
   isRegistered,
+  statusMessage,
+  lastTxSig,
+  isSubmitting = false,
+  activeTournamentId,
+  playerActiveTournamentId,
   activeTimeLeft,
   nextStartIn,
   nextTournamentId,
   isJoinedNext,
   tournamentsPlayedToday,
   onRegister,
+  onEnterTournament,
   botConfig,
   onBotConfigChange
 }) => {
@@ -54,6 +66,11 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
 
   const MAX_TOURNAMENTS_PER_DAY = 5;
   const entriesRemaining = Math.max(0, MAX_TOURNAMENTS_PER_DAY - tournamentsPlayedToday);
+  const canEnterTournament =
+    activeTournamentId !== null &&
+    playerActiveTournamentId !== null &&
+    playerActiveTournamentId === activeTournamentId;
+  const showStatus = !!statusMessage && statusMessage !== 'PRESS / FOR COMMANDS';
 
   return (
       <div className="flex flex-col min-h-screen w-screen bg-terminal-black text-white font-mono items-center justify-center p-4 sm:p-6 md:p-8 overflow-auto">
@@ -138,29 +155,47 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
                            </div>
                        </div>
 
-                       <div className="flex-1 flex flex-col items-center justify-center gap-4">
-                           <button
-                              className={`px-8 py-4 font-bold text-lg rounded transition-colors shadow-[0_0_20px_rgba(0,255,65,0.35)] ${
-                                  !isRegistered || (!isJoinedNext && entriesRemaining > 0)
-                                      ? 'bg-terminal-green text-black hover:bg-green-400'
-                                      : 'bg-gray-800 text-gray-500 cursor-not-allowed'
-                              }`}
-                              onClick={onRegister}
-                              disabled={isRegistered && (isJoinedNext || entriesRemaining <= 0)}
-                           >
-                               {!isRegistered
-                                   ? 'PRESS [R] TO REGISTER'
-                                   : isJoinedNext
-                                       ? 'REGISTERED FOR NEXT TOURNAMENT'
-                                       : entriesRemaining <= 0
-                                           ? 'DAILY LIMIT REACHED'
-                                           : 'JOIN NEXT TOURNAMENT'}
-                           </button>
-                           <div className="text-xs text-gray-400 flex flex-col items-center gap-1">
+	                       <div className="flex-1 flex flex-col items-center justify-center gap-4">
+	                           <button
+	                              className={`px-8 py-4 font-bold text-lg rounded transition-colors shadow-[0_0_20px_rgba(0,255,65,0.35)] ${
+	                                  !isRegistered || (!isJoinedNext && entriesRemaining > 0)
+	                                      ? 'bg-terminal-green text-black hover:bg-green-400'
+	                                      : 'bg-gray-800 text-gray-500 cursor-not-allowed'
+	                              }`}
+	                              onClick={onRegister}
+	                              disabled={isSubmitting || (isRegistered && (isJoinedNext || entriesRemaining <= 0))}
+	                           >
+	                               {isSubmitting
+	                                   ? 'SUBMITTING...'
+	                                   : !isRegistered
+	                                       ? 'PRESS [R] TO REGISTER'
+	                                       : isJoinedNext
+	                                           ? 'REGISTERED FOR NEXT TOURNAMENT'
+	                                           : entriesRemaining <= 0
+	                                               ? 'DAILY LIMIT REACHED'
+	                                               : 'JOIN NEXT TOURNAMENT'}
+	                           </button>
+                           {canEnterTournament && (
                                <button
-                                   onClick={registerPasskey}
-                                   disabled={passkeyLoading}
-                                   className="text-terminal-green hover:underline disabled:opacity-50"
+                                   className="px-8 py-3 font-bold text-sm rounded transition-colors border border-terminal-accent/60 text-terminal-accent bg-terminal-accent/10 hover:bg-terminal-accent/20"
+                                   onClick={onEnterTournament}
+                               >
+                                   ENTER TOURNAMENT
+                               </button>
+                           )}
+	                           <div className="text-xs text-gray-400 flex flex-col items-center gap-1">
+	                               {showStatus && (
+	                                   <div className="text-[10px] text-gray-500 tracking-widest text-center">
+	                                       {statusMessage}
+	                                       {lastTxSig ? (
+	                                           <span className="text-gray-600"> · TX {lastTxSig}</span>
+	                                       ) : null}
+	                                   </div>
+	                               )}
+	                               <button
+	                                   onClick={registerPasskey}
+	                                   disabled={passkeyLoading}
+	                                   className="text-terminal-green hover:underline disabled:opacity-50"
                                >
                                    {passkeyLoading ? 'Pairing passkey...' : 'Use passkey (beta)'}
                                </button>

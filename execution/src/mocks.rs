@@ -576,12 +576,7 @@ mod tests {
 
             // Simulate a crash after committing `events` but before committing `state`.
             let events_start_op = events.op_count();
-            let mut layer = crate::Layer::new(
-                &state,
-                network_identity,
-                NAMESPACE,
-                seed.clone(),
-            );
+            let mut layer = crate::Layer::new(&state, network_identity, NAMESPACE, seed.clone());
 
             #[cfg(feature = "parallel")]
             let pool = ThreadPool::new(
