@@ -70,7 +70,7 @@ This is a second-pass review of the current workspace with a focus on idiomatic 
 - [x] (**behavior-changing**) `execution/src/layer/handlers/staking.rs`: restake no longer shortens unlock; voting power accumulates across stakes + added multi-stake tests.
 - [x] `execution/src/layer/handlers/staking.rs`: add `ProcessEpoch` rollover test coverage.
 - [x] (**behavior-changing**) `execution/src/layer/handlers/staking.rs`: make `ClaimRewards` return an explicit `CasinoError` until rewards economics are implemented (avoid misleading `amount: 0` success).
-- [x] `execution/src/layer/handlers/liquidity.rs`: extract AMM math into pure helpers and add unit tests (behavior-preserving).
+- [x] `execution/src/layer/handlers/liquidity.rs`: harden AMM invariants (state validation + checked math) and add regression tests to ensure failed swaps do not mutate house burn/fees.
 - [x] `simulator/src/lib.rs`: replace `GovernorConfigBuilder::finish().unwrap()` with safe fallback to defaults.
 - [x] `simulator/src/{lib,explorer}.rs`: split explorer indexing + HTTP handlers into a dedicated module.
 - [x] `simulator/src/{lib,passkeys}.rs`: split passkeys storage + HTTP handlers into a dedicated module (feature-gated).
@@ -750,6 +750,7 @@ fn casino_error(player: &PublicKey, session_id: Option<u64>, code: u32, msg: imp
 ### Progress (implemented)
 - Extracted swap quote math (`constant_product_quote`) and borrow price ratio (`rng_price_ratio`) into pure helpers + added unit tests.
 - Added basic invariants: reject fee/tax BPS > 10_000 and avoid overflow panics in vault/house accounting (explicit `CasinoError` on overflow).
+- Added AMM invariant validation (shares/reserves/basis points), replaced saturating reserve/LP math with checked arithmetic, and ensured sell-tax burn is only recorded on successful swaps (with regression tests).
 
 ### Top Issues (ranked)
 1. **AMM math and “bootstrap price” are embedded and implicit**
@@ -796,7 +797,7 @@ fn constant_product_out(reserve_in: u128, reserve_out: u128, amount_in: u128, fe
 
 ### Refactor Plan
 - Phase 1 (**done**): extract AMM math into pure functions + unit tests.
-- Phase 2 (**partially done**): define explicit invariants and validate them at key transitions (BPS bounds + overflow hardening done; add reserve/LP consistency checks).
+- Phase 2 (**done**): define explicit invariants and validate them at key transitions (BPS bounds + checked math + reserve/share consistency + house accounting only on success).
 - Phase 3 (**behavior-changing**): revisit bootstrap pricing and fee model with economic design review.
 
 ### Open Questions

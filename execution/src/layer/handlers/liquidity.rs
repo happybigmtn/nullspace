@@ -28,23 +28,67 @@ fn constant_product_quote(
         return None;
     }
     let fee_amount =
-        (amount_in as u128).saturating_mul(fee_basis_points as u128) / BASIS_POINTS_SCALE;
-    let net_in = (amount_in as u128).saturating_sub(fee_amount);
+        (amount_in as u128).checked_mul(fee_basis_points as u128)? / BASIS_POINTS_SCALE;
+    let net_in = (amount_in as u128).checked_sub(fee_amount)?;
 
-    let amount_in_with_fee = net_in.saturating_mul(BASIS_POINTS_SCALE);
-    let numerator = amount_in_with_fee.saturating_mul(reserve_out as u128);
+    let amount_in_with_fee = net_in.checked_mul(BASIS_POINTS_SCALE)?;
+    let numerator = amount_in_with_fee.checked_mul(reserve_out as u128)?;
     let denominator = (reserve_in as u128)
-        .saturating_mul(BASIS_POINTS_SCALE)
-        .saturating_add(amount_in_with_fee);
+        .checked_mul(BASIS_POINTS_SCALE)?
+        .checked_add(amount_in_with_fee)?;
 
     if denominator == 0 {
         return None;
     }
 
+    let amount_out = numerator / denominator;
+    let amount_out: u64 = amount_out.try_into().ok()?;
+
     Some(SwapQuote {
-        amount_out: (numerator / denominator) as u64,
+        amount_out,
         fee_amount: fee_amount as u64,
     })
+}
+
+fn validate_amm_state(amm: &nullspace_types::casino::AmmPool) -> Result<(), &'static str> {
+    if amm.fee_basis_points > MAX_BASIS_POINTS || amm.sell_tax_basis_points > MAX_BASIS_POINTS {
+        return Err("invalid basis points");
+    }
+
+    match amm.total_shares {
+        0 => {
+            if amm.reserve_rng != 0 || amm.reserve_vusdt != 0 {
+                return Err("non-zero reserves with zero shares");
+            }
+        }
+        _ => {
+            if amm.total_shares < MINIMUM_LIQUIDITY {
+                return Err("total_shares below MINIMUM_LIQUIDITY");
+            }
+            if amm.reserve_rng == 0 || amm.reserve_vusdt == 0 {
+                return Err("zero reserves with non-zero shares");
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn casino_error(public: &PublicKey, error_code: u8, message: &str) -> Vec<Event> {
+    vec![Event::CasinoError {
+        player: public.clone(),
+        session_id: None,
+        error_code,
+        message: message.to_string(),
+    }]
+}
+
+fn invalid_amm_state(public: &PublicKey) -> Vec<Event> {
+    casino_error(
+        public,
+        nullspace_types::casino::ERROR_INVALID_MOVE,
+        "Invalid AMM state",
+    )
 }
 
 impl<'a, S: State> Layer<'a, S> {
@@ -137,7 +181,8 @@ impl<'a, S: State> Layer<'a, S> {
         };
 
         let amm = self.get_or_init_amm().await?;
-        let (price_numerator, price_denominator) = rng_price_ratio(amm.reserve_rng, amm.reserve_vusdt);
+        let (price_numerator, price_denominator) =
+            rng_price_ratio(amm.reserve_rng, amm.reserve_vusdt);
 
         // LTV Calculation: Max Debt = (Collateral * Price) * 50%
         // Debt <= (Collateral * P_num / P_den) / 2
@@ -261,6 +306,10 @@ impl<'a, S: State> Layer<'a, S> {
             return Ok(vec![]);
         }
 
+        if validate_amm_state(&amm).is_err() {
+            return Ok(invalid_amm_state(public));
+        }
+
         if amm.reserve_rng == 0 || amm.reserve_vusdt == 0 {
             return Ok(vec![Event::CasinoError {
                 player: public.clone(),
@@ -273,24 +322,15 @@ impl<'a, S: State> Layer<'a, S> {
         // Apply Sell Tax (if Selling RNG)
         let mut burned_amount = 0;
         if !is_buying_rng {
-            if amm.sell_tax_basis_points > MAX_BASIS_POINTS {
-                return Ok(vec![Event::CasinoError {
-                    player: public.clone(),
-                    session_id: None,
-                    error_code: nullspace_types::casino::ERROR_INVALID_MOVE,
-                    message: "Invalid AMM state".to_string(),
-                }]);
-            }
             // Sell Tax: 5% (default)
-            burned_amount = (amount_in as u128 * amm.sell_tax_basis_points as u128 / 10000) as u64;
+            burned_amount =
+                (amount_in as u128 * amm.sell_tax_basis_points as u128 / BASIS_POINTS_SCALE) as u64;
             if burned_amount > 0 {
                 // Deduct tax from input amount
-                amount_in = amount_in.saturating_sub(burned_amount);
-
-                // Track burned amount in House
-                let mut house = self.get_or_init_house().await?;
-                house.total_burned = house.total_burned.saturating_add(burned_amount);
-                self.insert(Key::House, Value::House(house));
+                let Some(net_amount_in) = amount_in.checked_sub(burned_amount) else {
+                    return Ok(invalid_amm_state(public));
+                };
+                amount_in = net_amount_in;
             }
         }
 
@@ -301,8 +341,10 @@ impl<'a, S: State> Layer<'a, S> {
             (amm.reserve_rng, amm.reserve_vusdt)
         };
 
-        let Some(SwapQuote { amount_out, fee_amount }) =
-            constant_product_quote(amount_in, reserve_in, reserve_out, amm.fee_basis_points)
+        let Some(SwapQuote {
+            amount_out,
+            fee_amount,
+        }) = constant_product_quote(amount_in, reserve_in, reserve_out, amm.fee_basis_points)
         else {
             return Ok(vec![Event::CasinoError {
                 player: public.clone(),
@@ -332,11 +374,23 @@ impl<'a, S: State> Layer<'a, S> {
                     message: "Insufficient vUSDT".to_string(),
                 }]);
             }
-            player.vusdt_balance -= amount_in;
-            player.chips = player.chips.saturating_add(amount_out);
+            let Some(vusdt_balance) = player.vusdt_balance.checked_sub(amount_in) else {
+                return Ok(invalid_amm_state(public));
+            };
+            player.vusdt_balance = vusdt_balance;
+            let Some(chips) = player.chips.checked_add(amount_out) else {
+                return Ok(invalid_amm_state(public));
+            };
+            player.chips = chips;
 
-            amm.reserve_vusdt = amm.reserve_vusdt.saturating_add(amount_in);
-            amm.reserve_rng = amm.reserve_rng.saturating_sub(amount_out);
+            let Some(reserve_vusdt) = amm.reserve_vusdt.checked_add(amount_in) else {
+                return Ok(invalid_amm_state(public));
+            };
+            amm.reserve_vusdt = reserve_vusdt;
+            let Some(reserve_rng) = amm.reserve_rng.checked_sub(amount_out) else {
+                return Ok(invalid_amm_state(public));
+            };
+            amm.reserve_rng = reserve_rng;
         } else {
             // Player gives RNG, gets vUSDT
             // Note: We deduct the FULL amount (incl tax) from player
@@ -350,17 +404,41 @@ impl<'a, S: State> Layer<'a, S> {
                 }]);
             }
 
-            player.chips = player.chips.saturating_sub(total_deduction);
-            player.vusdt_balance = player.vusdt_balance.saturating_add(amount_out);
+            let Some(chips) = player.chips.checked_sub(total_deduction) else {
+                return Ok(invalid_amm_state(public));
+            };
+            player.chips = chips;
+            let Some(vusdt_balance) = player.vusdt_balance.checked_add(amount_out) else {
+                return Ok(invalid_amm_state(public));
+            };
+            player.vusdt_balance = vusdt_balance;
 
-            amm.reserve_rng = amm.reserve_rng.saturating_add(amount_in); // Add net amount (after tax) to reserves
-            amm.reserve_vusdt = amm.reserve_vusdt.saturating_sub(amount_out);
+            let Some(reserve_rng) = amm.reserve_rng.checked_add(amount_in) else {
+                return Ok(invalid_amm_state(public));
+            };
+            amm.reserve_rng = reserve_rng; // Add net amount (after tax) to reserves
+            let Some(reserve_vusdt) = amm.reserve_vusdt.checked_sub(amount_out) else {
+                return Ok(invalid_amm_state(public));
+            };
+            amm.reserve_vusdt = reserve_vusdt;
+
+            if burned_amount > 0 {
+                let mut house = self.get_or_init_house().await?;
+                let Some(total_burned) = house.total_burned.checked_add(burned_amount) else {
+                    return Ok(invalid_amm_state(public));
+                };
+                house.total_burned = total_burned;
+                self.insert(Key::House, Value::House(house));
+            }
         }
 
         // Book fee to House
         if fee_amount > 0 {
             let mut house = self.get_or_init_house().await?;
-            house.accumulated_fees = house.accumulated_fees.saturating_add(fee_amount);
+            let Some(accumulated_fees) = house.accumulated_fees.checked_add(fee_amount) else {
+                return Ok(invalid_amm_state(public));
+            };
+            house.accumulated_fees = accumulated_fees;
             self.insert(Key::House, Value::House(house));
         }
 
@@ -391,6 +469,9 @@ impl<'a, S: State> Layer<'a, S> {
         usdt_amount: u64,
     ) -> anyhow::Result<Vec<Event>> {
         let mut amm = self.get_or_init_amm().await?;
+        if validate_amm_state(&amm).is_err() {
+            return Ok(invalid_amm_state(public));
+        }
         let mut player = match self.get(&Key::CasinoPlayer(public.clone())).await? {
             Some(Value::CasinoPlayer(p)) => p,
             _ => return Ok(vec![]),
@@ -447,8 +528,11 @@ impl<'a, S: State> Layer<'a, S> {
                     message: "Initial liquidity too small".to_string(),
                 }]);
             }
-            amm.total_shares = amm.total_shares.saturating_add(MINIMUM_LIQUIDITY);
-            shares_minted = shares_minted.saturating_sub(MINIMUM_LIQUIDITY);
+            amm.total_shares = MINIMUM_LIQUIDITY;
+            let Some(shares) = shares_minted.checked_sub(MINIMUM_LIQUIDITY) else {
+                return Ok(invalid_amm_state(public));
+            };
+            shares_minted = shares;
         }
 
         if shares_minted == 0 {
@@ -460,14 +544,31 @@ impl<'a, S: State> Layer<'a, S> {
             }]);
         }
 
-        player.chips = player.chips.saturating_sub(rng_amount);
-        player.vusdt_balance = player.vusdt_balance.saturating_sub(usdt_amount);
+        let Some(chips) = player.chips.checked_sub(rng_amount) else {
+            return Ok(invalid_amm_state(public));
+        };
+        player.chips = chips;
+        let Some(vusdt_balance) = player.vusdt_balance.checked_sub(usdt_amount) else {
+            return Ok(invalid_amm_state(public));
+        };
+        player.vusdt_balance = vusdt_balance;
 
-        amm.reserve_rng = amm.reserve_rng.saturating_add(rng_amount);
-        amm.reserve_vusdt = amm.reserve_vusdt.saturating_add(usdt_amount);
-        amm.total_shares = amm.total_shares.saturating_add(shares_minted);
+        let Some(reserve_rng) = amm.reserve_rng.checked_add(rng_amount) else {
+            return Ok(invalid_amm_state(public));
+        };
+        amm.reserve_rng = reserve_rng;
+        let Some(reserve_vusdt) = amm.reserve_vusdt.checked_add(usdt_amount) else {
+            return Ok(invalid_amm_state(public));
+        };
+        amm.reserve_vusdt = reserve_vusdt;
+        let Some(total_shares) = amm.total_shares.checked_add(shares_minted) else {
+            return Ok(invalid_amm_state(public));
+        };
+        amm.total_shares = total_shares;
 
-        let new_lp_balance = lp_balance.saturating_add(shares_minted);
+        let Some(new_lp_balance) = lp_balance.checked_add(shares_minted) else {
+            return Ok(invalid_amm_state(public));
+        };
 
         let event = Event::LiquidityAdded {
             player: public.clone(),
@@ -503,6 +604,9 @@ impl<'a, S: State> Layer<'a, S> {
         }
 
         let mut amm = self.get_or_init_amm().await?;
+        if validate_amm_state(&amm).is_err() {
+            return Ok(invalid_amm_state(public));
+        }
         if amm.total_shares == 0 || shares > amm.total_shares {
             return Ok(vec![]);
         }
@@ -528,14 +632,31 @@ impl<'a, S: State> Layer<'a, S> {
         let amount_vusd =
             ((shares as u128 * amm.reserve_vusdt as u128) / amm.total_shares as u128) as u64;
 
-        amm.reserve_rng = amm.reserve_rng.saturating_sub(amount_rng);
-        amm.reserve_vusdt = amm.reserve_vusdt.saturating_sub(amount_vusd);
-        amm.total_shares = amm.total_shares.saturating_sub(shares);
+        let Some(reserve_rng) = amm.reserve_rng.checked_sub(amount_rng) else {
+            return Ok(invalid_amm_state(public));
+        };
+        amm.reserve_rng = reserve_rng;
+        let Some(reserve_vusdt) = amm.reserve_vusdt.checked_sub(amount_vusd) else {
+            return Ok(invalid_amm_state(public));
+        };
+        amm.reserve_vusdt = reserve_vusdt;
+        let Some(total_shares) = amm.total_shares.checked_sub(shares) else {
+            return Ok(invalid_amm_state(public));
+        };
+        amm.total_shares = total_shares;
 
-        player.chips = player.chips.saturating_add(amount_rng);
-        player.vusdt_balance = player.vusdt_balance.saturating_add(amount_vusd);
+        let Some(chips) = player.chips.checked_add(amount_rng) else {
+            return Ok(invalid_amm_state(public));
+        };
+        player.chips = chips;
+        let Some(vusdt_balance) = player.vusdt_balance.checked_add(amount_vusd) else {
+            return Ok(invalid_amm_state(public));
+        };
+        player.vusdt_balance = vusdt_balance;
 
-        let new_lp_balance = lp_balance.saturating_sub(shares);
+        let Some(new_lp_balance) = lp_balance.checked_sub(shares) else {
+            return Ok(invalid_amm_state(public));
+        };
 
         let event = Event::LiquidityRemoved {
             player: public.clone(),
@@ -565,6 +686,9 @@ impl<'a, S: State> Layer<'a, S> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::mocks::{create_account_keypair, create_network_keypair, create_seed};
+    use commonware_runtime::deterministic::Runner;
+    use commonware_runtime::Runner as _;
 
     #[test]
     fn rng_price_ratio_bootstrap_when_no_rng_reserve() {
@@ -612,5 +736,145 @@ mod tests {
     #[test]
     fn constant_product_quote_rejects_fee_bps_over_10000() {
         assert_eq!(constant_product_quote(1, 1, 1, 10_001), None);
+    }
+
+    #[test]
+    fn constant_product_quote_overflow_returns_none() {
+        assert_eq!(
+            constant_product_quote(u64::MAX, u64::MAX, u64::MAX, 0),
+            None
+        );
+    }
+
+    const TEST_NAMESPACE: &[u8] = b"test-namespace";
+
+    struct MockState {
+        data: std::collections::HashMap<Key, Value>,
+    }
+
+    impl MockState {
+        fn new() -> Self {
+            Self {
+                data: std::collections::HashMap::new(),
+            }
+        }
+    }
+
+    impl State for MockState {
+        async fn get(&self, key: &Key) -> Result<Option<Value>> {
+            Ok(self.data.get(key).cloned())
+        }
+
+        async fn insert(&mut self, key: Key, value: Value) -> Result<()> {
+            self.data.insert(key, value);
+            Ok(())
+        }
+
+        async fn delete(&mut self, key: &Key) -> Result<()> {
+            self.data.remove(key);
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn sell_swap_insufficient_funds_does_not_increment_house_burn() {
+        let executor = Runner::default();
+        executor.start(|_| async move {
+            let (network_secret, master_public) = create_network_keypair();
+            let seed = create_seed(&network_secret, 1);
+
+            let (private, public) = create_account_keypair(1);
+
+            let mut state = MockState::new();
+
+            let mut player = nullspace_types::casino::Player::new("Alice".to_string());
+            player.chips = 0;
+            state.data.insert(
+                Key::CasinoPlayer(public.clone()),
+                Value::CasinoPlayer(player),
+            );
+
+            let mut amm = nullspace_types::casino::AmmPool::new(30);
+            amm.reserve_rng = 1_000;
+            amm.reserve_vusdt = 1_000;
+            amm.total_shares = MINIMUM_LIQUIDITY.saturating_add(1_000);
+            state.data.insert(Key::AmmPool, Value::AmmPool(amm));
+
+            let mut layer = Layer::new(&state, master_public, TEST_NAMESPACE, seed);
+
+            let tx = Transaction::sign(
+                &private,
+                0,
+                Instruction::Swap {
+                    amount_in: 20,
+                    min_amount_out: 0,
+                    is_buying_rng: false,
+                },
+            );
+
+            layer.prepare(&tx).await.expect("prepare");
+            let events = layer.apply(&tx).await.expect("apply");
+
+            assert!(matches!(
+                events.as_slice(),
+                [Event::CasinoError { message, .. }] if message == "Insufficient RNG"
+            ));
+
+            assert!(
+                layer.get(&Key::House).await.expect("get house").is_none(),
+                "house state must not be created/mutated on failed swap"
+            );
+        });
+    }
+
+    #[test]
+    fn sell_swap_slippage_does_not_increment_house_burn() {
+        let executor = Runner::default();
+        executor.start(|_| async move {
+            let (network_secret, master_public) = create_network_keypair();
+            let seed = create_seed(&network_secret, 1);
+
+            let (private, public) = create_account_keypair(1);
+
+            let mut state = MockState::new();
+
+            let mut player = nullspace_types::casino::Player::new("Alice".to_string());
+            player.chips = 100;
+            state.data.insert(
+                Key::CasinoPlayer(public.clone()),
+                Value::CasinoPlayer(player),
+            );
+
+            let mut amm = nullspace_types::casino::AmmPool::new(30);
+            amm.reserve_rng = 1_000;
+            amm.reserve_vusdt = 1_000;
+            amm.total_shares = MINIMUM_LIQUIDITY.saturating_add(1_000);
+            state.data.insert(Key::AmmPool, Value::AmmPool(amm));
+
+            let mut layer = Layer::new(&state, master_public, TEST_NAMESPACE, seed);
+
+            let tx = Transaction::sign(
+                &private,
+                0,
+                Instruction::Swap {
+                    amount_in: 20,
+                    min_amount_out: u64::MAX,
+                    is_buying_rng: false,
+                },
+            );
+
+            layer.prepare(&tx).await.expect("prepare");
+            let events = layer.apply(&tx).await.expect("apply");
+
+            assert!(matches!(
+                events.as_slice(),
+                [Event::CasinoError { message, .. }] if message == "Slippage limit exceeded"
+            ));
+
+            assert!(
+                layer.get(&Key::House).await.expect("get house").is_none(),
+                "house state must not be created/mutated on failed swap"
+            );
+        });
     }
 }
