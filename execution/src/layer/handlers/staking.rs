@@ -135,8 +135,6 @@ impl<'a, S: State> Layer<'a, S> {
         &mut self,
         public: &PublicKey,
     ) -> anyhow::Result<Vec<Event>> {
-        // Placeholder for distribution logic
-        // In this MVP, rewards are auto-compounded or we just skip this for now
         let staker = match self.get(&Key::Staker(public.clone())).await? {
             Some(Value::Staker(s)) => s,
             _ => return Ok(vec![]),
@@ -146,9 +144,11 @@ impl<'a, S: State> Layer<'a, S> {
             return Ok(vec![]);
         }
 
-        Ok(vec![Event::RewardsClaimed {
+        Ok(vec![Event::CasinoError {
             player: public.clone(),
-            amount: 0,
+            session_id: None,
+            error_code: nullspace_types::casino::ERROR_INVALID_MOVE,
+            message: "Rewards are not implemented".to_string(),
         }])
     }
 
@@ -194,6 +194,9 @@ mod tests {
     use commonware_runtime::deterministic::Runner;
     use commonware_runtime::Runner as _;
     use nullspace_types::execution::{Instruction, Key, Transaction, Value};
+    use nullspace_types::{casino::ERROR_INVALID_MOVE, execution::Output};
+    use commonware_storage::store::operation::Keyless;
+    use nullspace_types::execution::Event;
 
     #[test]
     fn stake_and_unstake_respects_lockup_and_updates_house() {
@@ -617,6 +620,73 @@ mod tests {
                 other => panic!("expected account, got {other:?}"),
             };
             assert_eq!(account.nonce, 6);
+        });
+    }
+
+    #[test]
+    fn claim_rewards_is_explicitly_unsupported_until_implemented() {
+        let executor = Runner::default();
+        executor.start(|context| async move {
+            let (network_secret, network_identity) = create_network_keypair();
+            let (mut state, mut events) = create_adbs(&context).await;
+            let (private, public) = create_account_keypair(4);
+
+            // Register, fund, and stake to ensure the staker exists and has balance.
+            execute_block(
+                &network_secret,
+                network_identity.clone(),
+                &mut state,
+                &mut events,
+                1,
+                vec![
+                    Transaction::sign(
+                        &private,
+                        0,
+                        Instruction::CasinoRegister {
+                            name: "Frank".to_string(),
+                        },
+                    ),
+                    Transaction::sign(&private, 1, Instruction::CasinoDeposit { amount: 100 }),
+                    Transaction::sign(
+                        &private,
+                        2,
+                        Instruction::Stake {
+                            amount: 10,
+                            duration: 10,
+                        },
+                    ),
+                ],
+            )
+            .await;
+
+            // ClaimRewards currently emits a CasinoError instead of a misleading 0-reward success.
+            let (_seed, summary) = execute_block(
+                &network_secret,
+                network_identity,
+                &mut state,
+                &mut events,
+                2,
+                vec![Transaction::sign(&private, 3, Instruction::ClaimRewards)],
+            )
+            .await;
+
+            let mut saw_error = false;
+            for op in summary.events_proof_ops {
+                if let Keyless::Append(Output::Event(Event::CasinoError {
+                    player,
+                    session_id,
+                    error_code,
+                    message,
+                })) = op
+                {
+                    assert_eq!(player, public);
+                    assert_eq!(session_id, None);
+                    assert_eq!(error_code, ERROR_INVALID_MOVE);
+                    assert_eq!(message, "Rewards are not implemented");
+                    saw_error = true;
+                }
+            }
+            assert!(saw_error, "expected CasinoError event for ClaimRewards");
         });
     }
 }

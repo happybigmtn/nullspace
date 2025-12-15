@@ -67,6 +67,7 @@ This is a second-pass review of the current workspace with a focus on idiomatic 
 - [x] `execution/src/layer/handlers/staking.rs`: clarify dev/demo staking epoch/duration semantics (behavior-preserving).
 - [x] (**behavior-changing**) `execution/src/layer/handlers/staking.rs`: restake no longer shortens unlock; voting power accumulates across stakes + added multi-stake tests.
 - [x] `execution/src/layer/handlers/staking.rs`: add `ProcessEpoch` rollover test coverage.
+- [x] (**behavior-changing**) `execution/src/layer/handlers/staking.rs`: make `ClaimRewards` return an explicit `CasinoError` until rewards economics are implemented (avoid misleading `amount: 0` success).
 - [x] `execution/src/layer/handlers/liquidity.rs`: extract AMM math into pure helpers and add unit tests (behavior-preserving).
 - [x] `simulator/src/lib.rs`: replace `GovernorConfigBuilder::finish().unwrap()` with safe fallback to defaults.
 - [x] `simulator/src/{lib,explorer}.rs`: split explorer indexing + HTTP handlers into a dedicated module.
@@ -717,13 +718,14 @@ fn casino_error(player: &PublicKey, session_id: Option<u64>, code: u32, msg: imp
 - Added tests covering stake → locked-unstake → unlocked-unstake behavior and house totals invariants.
 - Restaking now uses `max(old_unlock, new_unlock)` and accumulates voting power per stake (fixes comment/intent mismatch).
 - Added tests covering `ProcessEpoch` rollover and nonce consumption semantics.
+- (**behavior-changing**) `ClaimRewards` now returns an explicit `CasinoError` (instead of `RewardsClaimed { amount: 0 }`) with test coverage.
 
 ### Top Issues (ranked)
-1. **Claim rewards is a placeholder returning `amount: 0`**
-   - Impact: instruction exists but does nothing; can confuse users and clients.
-   - Risk: medium (API correctness).
-   - Effort: medium–high (design needed).
-   - Location: `execution/src/layer/handlers/staking.rs:101`–`131`.
+1. **Rewards economics are not implemented**
+   - Impact: rewards are not distributed; `ClaimRewards` currently errors explicitly.
+   - Risk: medium (feature incomplete).
+   - Effort: high (design + implementation).
+   - Location: `execution/src/layer/handlers/staking.rs` (`handle_claim_rewards`, `handle_process_epoch`).
 2. **Epoch length/min duration constants are “dev simplified”**
    - Impact: behavior differs from comments; could surprise users if shipped.
    - Risk: medium.
