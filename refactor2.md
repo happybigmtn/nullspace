@@ -39,6 +39,7 @@ This is a second-pass review of the current workspace with a focus on idiomatic 
 - [x] `node/src/aggregator/actor.rs`: do not panic on dropped `oneshot` receivers.
 - [x] `node/src/application/actor.rs`: avoid panic on missing blocks during verify join.
 - [x] `node/src/application/mempool.rs`: remove non-test dead-code warnings by gating test-only defaults/constructor.
+- [x] `node/src/application/mempool.rs`: add regression test for stale-queue compaction under adversarial churn.
 - [x] Idiomatic/clippy cleanups in core games: `execution/src/casino/{baccarat,roulette,blackjack,sic_bo}.rs`.
 - [x] Test hygiene: `types/src/casino/tests.rs`, `types/src/token.rs` clippy warning fixes.
 - [x] `types/src/casino/player.rs` + `execution/src/layer/handlers/casino.rs`: stop using `Player::new_with_block`; keep it as a compatibility shim that forwards to `Player::new` (behavior-preserving).
@@ -276,13 +277,12 @@ use std::sync::atomic::{AtomicU64, Ordering};
 - Maintains per-account pending transactions and selects “next tx” in a round-robin manner.
 - Provides metrics for mempool size and account count.
 
+### Progress (implemented)
+- Dead-code warnings removed by gating test-only defaults/constructors; production uses `Mempool::new_with_limits(...)`.
+- Added regression coverage for stale queue compaction (`COMPACT_AFTER_STALE_SKIPS`).
+
 ### Top Issues (ranked)
-1. **Dead-code warnings in non-test builds**
-   - Impact: noisy CI, hides real warnings; suggests API surface isn’t aligned with production usage.
-   - Risk: low.
-   - Effort: low.
-   - Location: `node/src/application/mempool.rs:9`–`41` (`DEFAULT_*` constants and `Mempool::new` unused outside tests).
-2. **Queue compaction strategy is coarse**
+1. **Queue compaction strategy is coarse**
    - Impact: potential `O(n)` retains on large queues; potential memory churn if many stale keys accumulate.
    - Risk: low–medium; depends on churn.
    - Effort: medium.
@@ -316,8 +316,8 @@ pub fn new(context: impl Metrics) -> Self {
 - Measure under adversarial inputs: many accounts spamming high nonces to trigger `pop_last()` churn.
 
 ### Refactor Plan
-- Phase 1: resolve dead-code warnings by aligning constructors with production usage.
-- Phase 2: add fuzz/regression tests for adversarial queue staleness and backlog clipping.
+- Phase 1 (**done**): resolve dead-code warnings by aligning constructors with production usage.
+- Phase 2 (**done**): add fuzz/regression tests for adversarial queue staleness and backlog clipping.
 - Phase 3: optional alternative queue structure if profiling shows compaction cost.
 
 ### Open Questions

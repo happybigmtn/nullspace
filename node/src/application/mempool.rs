@@ -529,6 +529,46 @@ mod tests {
     }
 
     #[test]
+    fn test_next_compacts_stale_queue_entries() {
+        // Exercise the COMPACT_AFTER_STALE_SKIPS path: after enough stale queue entries,
+        // the queue should be compacted down to only currently-queued keys.
+        let runner = deterministic::Runner::default();
+        runner.start(|ctx| async move {
+            let mut mempool = Mempool::new(ctx);
+
+            // Create > COMPACT_AFTER_STALE_SKIPS accounts so `next()` will hit the compaction branch.
+            let account_count = 1_025;
+            let mut accounts = Vec::with_capacity(account_count);
+            for seed in 0..account_count {
+                let private = PrivateKey::from_seed(seed as u64);
+                let public = private.public_key();
+                accounts.push(public.clone());
+                mempool.add(Transaction::sign(
+                    &private,
+                    0,
+                    Instruction::CasinoDeposit { amount: 1 },
+                ));
+            }
+            assert_eq!(mempool.total_transactions, account_count);
+            assert_eq!(mempool.queue.len(), account_count);
+            assert_eq!(mempool.queued.len(), account_count);
+
+            // Remove all transactions without touching the queue: this leaves only stale queue entries.
+            for public in accounts {
+                mempool.retain(&public, 1);
+            }
+            assert_eq!(mempool.total_transactions, 0);
+            assert_eq!(mempool.tracked.len(), 0);
+            assert_eq!(mempool.queued.len(), 0);
+            assert!(mempool.queue.len() >= account_count);
+
+            // Calling `next()` should compact and then return `None`.
+            assert!(mempool.next().is_none());
+            assert_eq!(mempool.queue.len(), 0);
+        });
+    }
+
+    #[test]
     fn test_max_transactions_limit() {
         let runner = deterministic::Runner::default();
         runner.start(|ctx| async move {
