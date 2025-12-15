@@ -1,4 +1,5 @@
 use super::super::*;
+use super::casino_error_vec;
 
 const BASIS_POINTS_SCALE: u128 = 10_000;
 const MAX_BASIS_POINTS: u16 = 10_000;
@@ -74,18 +75,10 @@ fn validate_amm_state(amm: &nullspace_types::casino::AmmPool) -> Result<(), &'st
     Ok(())
 }
 
-fn casino_error(public: &PublicKey, error_code: u8, message: &str) -> Vec<Event> {
-    vec![Event::CasinoError {
-        player: public.clone(),
-        session_id: None,
-        error_code,
-        message: message.to_string(),
-    }]
-}
-
 fn invalid_amm_state(public: &PublicKey) -> Vec<Event> {
-    casino_error(
+    casino_error_vec(
         public,
+        None,
         nullspace_types::casino::ERROR_INVALID_MOVE,
         "Invalid AMM state",
     )
@@ -99,12 +92,12 @@ impl<'a, S: State> Layer<'a, S> {
         public: &PublicKey,
     ) -> anyhow::Result<Vec<Event>> {
         if self.get(&Key::Vault(public.clone())).await?.is_some() {
-            return Ok(vec![Event::CasinoError {
-                player: public.clone(),
-                session_id: None,
-                error_code: nullspace_types::casino::ERROR_INVALID_MOVE, // Reuse
-                message: "Vault already exists".to_string(),
-            }]);
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_INVALID_MOVE, // Reuse
+                "Vault already exists",
+            ));
         }
 
         let vault = nullspace_types::casino::Vault::default();
@@ -125,33 +118,33 @@ impl<'a, S: State> Layer<'a, S> {
         };
 
         if player.chips < amount {
-            return Ok(vec![Event::CasinoError {
-                player: public.clone(),
-                session_id: None,
-                error_code: nullspace_types::casino::ERROR_INSUFFICIENT_FUNDS,
-                message: "Insufficient chips".to_string(),
-            }]);
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_INSUFFICIENT_FUNDS,
+                "Insufficient chips",
+            ));
         }
 
         let mut vault = match self.get(&Key::Vault(public.clone())).await? {
             Some(Value::Vault(v)) => v,
             _ => {
-                return Ok(vec![Event::CasinoError {
-                    player: public.clone(),
-                    session_id: None,
-                    error_code: nullspace_types::casino::ERROR_INVALID_MOVE,
-                    message: "Vault not found".to_string(),
-                }])
+                return Ok(casino_error_vec(
+                    public,
+                    None,
+                    nullspace_types::casino::ERROR_INVALID_MOVE,
+                    "Vault not found",
+                ))
             }
         };
 
         let Some(new_collateral) = vault.collateral_rng.checked_add(amount) else {
-            return Ok(vec![Event::CasinoError {
-                player: public.clone(),
-                session_id: None,
-                error_code: nullspace_types::casino::ERROR_INVALID_MOVE,
-                message: "Collateral amount overflow".to_string(),
-            }]);
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_INVALID_MOVE,
+                "Collateral amount overflow",
+            ));
         };
 
         player.chips -= amount;
@@ -188,12 +181,12 @@ impl<'a, S: State> Layer<'a, S> {
         // Debt <= (Collateral * P_num / P_den) / 2
         // 2 * Debt * P_den <= Collateral * P_num
         let Some(new_debt) = vault.debt_vusdt.checked_add(amount) else {
-            return Ok(vec![Event::CasinoError {
-                player: public.clone(),
-                session_id: None,
-                error_code: nullspace_types::casino::ERROR_INVALID_MOVE,
-                message: "Debt amount overflow".to_string(),
-            }]);
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_INVALID_MOVE,
+                "Debt amount overflow",
+            ));
         };
 
         let lhs = (new_debt as u128)
@@ -202,12 +195,12 @@ impl<'a, S: State> Layer<'a, S> {
         let rhs = (vault.collateral_rng as u128).saturating_mul(price_numerator);
 
         if lhs > rhs {
-            return Ok(vec![Event::CasinoError {
-                player: public.clone(),
-                session_id: None,
-                error_code: nullspace_types::casino::ERROR_INVALID_MOVE,
-                message: "Insufficient collateral (Max 50% LTV)".to_string(),
-            }]);
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_INVALID_MOVE,
+                "Insufficient collateral (Max 50% LTV)",
+            ));
         }
 
         // Update Vault
@@ -219,12 +212,12 @@ impl<'a, S: State> Layer<'a, S> {
             self.get(&Key::CasinoPlayer(public.clone())).await?
         {
             let Some(new_balance) = player.vusdt_balance.checked_add(amount) else {
-                return Ok(vec![Event::CasinoError {
-                    player: public.clone(),
-                    session_id: None,
-                    error_code: nullspace_types::casino::ERROR_INVALID_MOVE,
-                    message: "vUSDT balance overflow".to_string(),
-                }]);
+                return Ok(casino_error_vec(
+                    public,
+                    None,
+                    nullspace_types::casino::ERROR_INVALID_MOVE,
+                    "vUSDT balance overflow",
+                ));
             };
             player.vusdt_balance = new_balance;
             updated_player = Some(player);
@@ -261,12 +254,12 @@ impl<'a, S: State> Layer<'a, S> {
         };
 
         if player.vusdt_balance < amount {
-            return Ok(vec![Event::CasinoError {
-                player: public.clone(),
-                session_id: None,
-                error_code: nullspace_types::casino::ERROR_INSUFFICIENT_FUNDS,
-                message: "Insufficient vUSDT".to_string(),
-            }]);
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_INSUFFICIENT_FUNDS,
+                "Insufficient vUSDT",
+            ));
         }
 
         let actual_repay = amount.min(vault.debt_vusdt);
@@ -311,12 +304,12 @@ impl<'a, S: State> Layer<'a, S> {
         }
 
         if amm.reserve_rng == 0 || amm.reserve_vusdt == 0 {
-            return Ok(vec![Event::CasinoError {
-                player: public.clone(),
-                session_id: None,
-                error_code: nullspace_types::casino::ERROR_INVALID_MOVE,
-                message: "AMM has zero liquidity".to_string(),
-            }]);
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_INVALID_MOVE,
+                "AMM has zero liquidity",
+            ));
         }
 
         // Apply Sell Tax (if Selling RNG)
@@ -346,33 +339,28 @@ impl<'a, S: State> Layer<'a, S> {
             fee_amount,
         }) = constant_product_quote(amount_in, reserve_in, reserve_out, amm.fee_basis_points)
         else {
-            return Ok(vec![Event::CasinoError {
-                player: public.clone(),
-                session_id: None,
-                error_code: nullspace_types::casino::ERROR_INVALID_MOVE,
-                message: "Invalid AMM state".to_string(),
-            }]);
+            return Ok(invalid_amm_state(public));
         };
 
         if amount_out < min_amount_out {
-            return Ok(vec![Event::CasinoError {
-                player: public.clone(),
-                session_id: None,
-                error_code: nullspace_types::casino::ERROR_INVALID_MOVE, // Slippage
-                message: "Slippage limit exceeded".to_string(),
-            }]);
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_INVALID_MOVE, // Slippage
+                "Slippage limit exceeded",
+            ));
         }
 
         // Execute Swap
         if is_buying_rng {
             // Player gives vUSDT, gets RNG
             if player.vusdt_balance < amount_in {
-                return Ok(vec![Event::CasinoError {
-                    player: public.clone(),
-                    session_id: None,
-                    error_code: nullspace_types::casino::ERROR_INSUFFICIENT_FUNDS,
-                    message: "Insufficient vUSDT".to_string(),
-                }]);
+                return Ok(casino_error_vec(
+                    public,
+                    None,
+                    nullspace_types::casino::ERROR_INSUFFICIENT_FUNDS,
+                    "Insufficient vUSDT",
+                ));
             }
             let Some(vusdt_balance) = player.vusdt_balance.checked_sub(amount_in) else {
                 return Ok(invalid_amm_state(public));
@@ -396,12 +384,12 @@ impl<'a, S: State> Layer<'a, S> {
             // Note: We deduct the FULL amount (incl tax) from player
             let total_deduction = original_amount_in;
             if player.chips < total_deduction {
-                return Ok(vec![Event::CasinoError {
-                    player: public.clone(),
-                    session_id: None,
-                    error_code: nullspace_types::casino::ERROR_INSUFFICIENT_FUNDS,
-                    message: "Insufficient RNG".to_string(),
-                }]);
+                return Ok(casino_error_vec(
+                    public,
+                    None,
+                    nullspace_types::casino::ERROR_INSUFFICIENT_FUNDS,
+                    "Insufficient RNG",
+                ));
             }
 
             let Some(chips) = player.chips.checked_sub(total_deduction) else {
@@ -478,21 +466,21 @@ impl<'a, S: State> Layer<'a, S> {
         };
 
         if rng_amount == 0 || usdt_amount == 0 {
-            return Ok(vec![Event::CasinoError {
-                player: public.clone(),
-                session_id: None,
-                error_code: nullspace_types::casino::ERROR_INVALID_MOVE,
-                message: "Zero liquidity not allowed".to_string(),
-            }]);
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_INVALID_MOVE,
+                "Zero liquidity not allowed",
+            ));
         }
 
         if player.chips < rng_amount || player.vusdt_balance < usdt_amount {
-            return Ok(vec![Event::CasinoError {
-                player: public.clone(),
-                session_id: None,
-                error_code: nullspace_types::casino::ERROR_INSUFFICIENT_FUNDS,
-                message: "Insufficient funds".to_string(),
-            }]);
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_INSUFFICIENT_FUNDS,
+                "Insufficient funds",
+            ));
         }
 
         let lp_balance = self.get_lp_balance(public).await?;
@@ -505,12 +493,12 @@ impl<'a, S: State> Layer<'a, S> {
         } else {
             // Proportional to current reserves
             if amm.reserve_rng == 0 || amm.reserve_vusdt == 0 {
-                return Ok(vec![Event::CasinoError {
-                    player: public.clone(),
-                    session_id: None,
-                    error_code: nullspace_types::casino::ERROR_INVALID_MOVE,
-                    message: "AMM has zero liquidity".to_string(),
-                }]);
+                return Ok(casino_error_vec(
+                    public,
+                    None,
+                    nullspace_types::casino::ERROR_INVALID_MOVE,
+                    "AMM has zero liquidity",
+                ));
             }
             let share_a = (rng_amount as u128 * amm.total_shares as u128) / amm.reserve_rng as u128;
             let share_b =
@@ -521,12 +509,12 @@ impl<'a, S: State> Layer<'a, S> {
         // Lock a minimum amount of LP shares on first deposit so reserves can never be fully drained.
         if amm.total_shares == 0 {
             if shares_minted <= MINIMUM_LIQUIDITY {
-                return Ok(vec![Event::CasinoError {
-                    player: public.clone(),
-                    session_id: None,
-                    error_code: nullspace_types::casino::ERROR_INVALID_MOVE,
-                    message: "Initial liquidity too small".to_string(),
-                }]);
+                return Ok(casino_error_vec(
+                    public,
+                    None,
+                    nullspace_types::casino::ERROR_INVALID_MOVE,
+                    "Initial liquidity too small",
+                ));
             }
             amm.total_shares = MINIMUM_LIQUIDITY;
             let Some(shares) = shares_minted.checked_sub(MINIMUM_LIQUIDITY) else {
@@ -536,12 +524,12 @@ impl<'a, S: State> Layer<'a, S> {
         }
 
         if shares_minted == 0 {
-            return Ok(vec![Event::CasinoError {
-                player: public.clone(),
-                session_id: None,
-                error_code: nullspace_types::casino::ERROR_INVALID_MOVE,
-                message: "Deposit too small".to_string(),
-            }]);
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_INVALID_MOVE,
+                "Deposit too small",
+            ));
         }
 
         let Some(chips) = player.chips.checked_sub(rng_amount) else {
@@ -613,12 +601,12 @@ impl<'a, S: State> Layer<'a, S> {
 
         let lp_balance = self.get_lp_balance(public).await?;
         if shares > lp_balance {
-            return Ok(vec![Event::CasinoError {
-                player: public.clone(),
-                session_id: None,
-                error_code: nullspace_types::casino::ERROR_INSUFFICIENT_FUNDS,
-                message: "Not enough LP shares".to_string(),
-            }]);
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_INSUFFICIENT_FUNDS,
+                "Not enough LP shares",
+            ));
         }
 
         let mut player = match self.get(&Key::CasinoPlayer(public.clone())).await? {

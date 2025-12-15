@@ -66,6 +66,7 @@ This is a second-pass review of the current workspace with a focus on idiomatic 
 - [x] `execution/src/layer/mod.rs`: make progressive-bet parsing fail-closed (no silent `0` on short blobs).
 - [x] `execution/src/layer/mod.rs`: split `apply()` dispatch by domain (`casino`, `staking`, `liquidity`) for maintainability (behavior-preserving).
 - [x] `execution/src/layer/handlers/casino.rs`: centralize `CasinoError` construction + add player/session lookup helpers (behavior-preserving).
+- [x] `execution/src/layer/handlers/mod.rs` + `execution/src/layer/handlers/{staking,liquidity}.rs`: reuse a shared `CasinoError` helper to keep error construction consistent across handlers (behavior-preserving).
 - [x] `execution/src/layer/handlers/staking.rs`: clarify dev/demo staking epoch/duration semantics (behavior-preserving).
 - [x] (**behavior-changing**) `execution/src/layer/handlers/staking.rs`: restake no longer shortens unlock; voting power accumulates across stakes + added multi-stake tests.
 - [x] `execution/src/layer/handlers/staking.rs`: add `ProcessEpoch` rollover test coverage.
@@ -652,7 +653,7 @@ let progressive_bet = match version {
 
 ### Progress (implemented)
 - `CasinoDeposit` now emits `Event::CasinoDeposited` (**behavior-changing**).
-- Centralized `CasinoError` construction and added helper lookups for player/session retrieval.
+- Centralized `CasinoError` construction (shared across handlers) and added helper lookups for player/session retrieval.
 
 ### Top Issues (ranked)
 1. **Repeated boilerplate for “get player or error” and error construction**
@@ -687,7 +688,7 @@ fn casino_error(player: &PublicKey, session_id: Option<u64>, code: u32, msg: imp
 
 ### Refactor Plan
 - Phase 1 (**done**): add helpers for error construction and player/session retrieval.
-- Phase 2: standardize error codes/messages across handlers.
+- Phase 2 (**done**): standardize `CasinoError` construction across handlers (shared helper functions).
 
 ### Open Questions
 - Is `CasinoDeposit` intended to be a faucet/dev-only instruction, or a real “deposit”?

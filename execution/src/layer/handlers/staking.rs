@@ -1,4 +1,5 @@
 use super::super::*;
+use super::casino_error_vec;
 
 impl<'a, S: State> Layer<'a, S> {
     // === Staking Handlers ===
@@ -15,12 +16,12 @@ impl<'a, S: State> Layer<'a, S> {
         };
 
         if player.chips < amount {
-            return Ok(vec![Event::CasinoError {
-                player: public.clone(),
-                session_id: None,
-                error_code: nullspace_types::casino::ERROR_INSUFFICIENT_FUNDS,
-                message: "Insufficient chips to stake".to_string(),
-            }]);
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_INSUFFICIENT_FUNDS,
+                "Insufficient chips to stake",
+            ));
         }
 
         // NOTE: Staking is currently in dev/demo mode: `duration` and `unlock_ts` are expressed in
@@ -28,12 +29,12 @@ impl<'a, S: State> Layer<'a, S> {
         // small to make local testing easier.
         const DEV_MIN_DURATION_BLOCKS: u64 = 1;
         if duration < DEV_MIN_DURATION_BLOCKS {
-            return Ok(vec![Event::CasinoError {
-                player: public.clone(),
-                session_id: None,
-                error_code: nullspace_types::casino::ERROR_INVALID_BET, // Reuse code
-                message: "Duration too short".to_string(),
-            }]);
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_INVALID_BET, // Reuse code
+                "Duration too short",
+            ));
         }
 
         // Deduct chips
@@ -89,12 +90,12 @@ impl<'a, S: State> Layer<'a, S> {
         };
 
         if self.seed.view < staker.unlock_ts {
-            return Ok(vec![Event::CasinoError {
-                player: public.clone(),
-                session_id: None,
-                error_code: nullspace_types::casino::ERROR_INVALID_MOVE,
-                message: "Stake still locked".to_string(),
-            }]);
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_INVALID_MOVE,
+                "Stake still locked",
+            ));
         }
 
         if staker.balance == 0 {
@@ -144,12 +145,12 @@ impl<'a, S: State> Layer<'a, S> {
             return Ok(vec![]);
         }
 
-        Ok(vec![Event::CasinoError {
-            player: public.clone(),
-            session_id: None,
-            error_code: nullspace_types::casino::ERROR_INVALID_MOVE,
-            message: "Rewards are not implemented".to_string(),
-        }])
+        Ok(casino_error_vec(
+            public,
+            None,
+            nullspace_types::casino::ERROR_INVALID_MOVE,
+            "Rewards are not implemented",
+        ))
     }
 
     pub(in crate::layer) async fn handle_process_epoch(
