@@ -1,3 +1,8 @@
+//! Apply a block's transactions to state and events.
+//!
+//! The state transition pipeline is designed to be re-runnable for crash recovery: event logs may
+//! be committed ahead of state, and re-executing should converge to the same result.
+
 use crate::{Adb, Layer, State};
 use anyhow::{anyhow, Context as _};
 use commonware_cryptography::{ed25519::PublicKey, sha256::Digest, Sha256};

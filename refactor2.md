@@ -49,7 +49,9 @@ This is a second-pass review of the current workspace with a focus on idiomatic 
 - [x] `node/src/main.rs`: dedupe `load_peers` parsing and replace `NonZeroU32::new(...).unwrap()` with `NZU32!` (behavior-preserving).
 - [x] `types/src/api.rs`: derive `thiserror::Error` for `VerifyError` (remove manual `Display` boilerplate).
 - [x] `types/src/execution.rs`: add `Block::try_new` + `BlockBuildError` (checked constructor).
+- [x] `types/src/lib.rs`: add crate-level docs describing stability and consensus-critical encoding.
 - [x] `execution/src/casino/video_poker.rs`: fix clippy `needless_range_loop` via iterator-based indexing.
+- [x] `execution/src/lib.rs`: add crate-level docs describing determinism and recovery invariants.
 - [x] `execution/src/layer/mod.rs`: make progressive-bet parsing fail-closed (no silent `0` on short blobs).
 - [x] `execution/src/layer/handlers/casino.rs`: centralize `CasinoError` construction + add player/session lookup helpers (behavior-preserving).
 - [x] `execution/src/layer/handlers/liquidity.rs`: extract AMM math into pure helpers and add unit tests (behavior-preserving).
@@ -1670,6 +1672,9 @@ if !(1..=35).contains(&number) || number % 3 == 0 { ... }
 - Crate root for execution: exposes `casino`, `state_transition`, mocks (feature-gated), and core state abstractions.
 - Defines what `nullspace-execution` exports publicly.
 
+### Progress (implemented)
+- Added crate/module docs describing determinism requirements and recovery invariants.
+
 ### Top Issues (ranked)
 1. **Public API surface is broad and lightly documented**
    - Impact: harder for downstream users to understand stability and intended usage.
@@ -1693,7 +1698,7 @@ if !(1..=35).contains(&number) || number % 3 == 0 { ... }
 - Not applicable.
 
 ### Refactor Plan
-- Phase 1: add crate-level docs and module docs.
+- Phase 1 (**done**): add crate-level docs and module docs.
 - Phase 2: shrink public exports if possible (avoid exposing internals) (**behavior-changing** if semver matters).
 - Phase 3: add examples showing a minimal execution pipeline.
 
@@ -1707,6 +1712,9 @@ if !(1..=35).contains(&number) || number % 3 == 0 { ... }
 ### Summary
 - Re-exports `api`, `casino`, `execution`, and `token` modules as a single types crate.
 - Acts as the shared “wire and state schema” across the workspace.
+
+### Progress (implemented)
+- Added crate/module docs describing stability expectations and consensus-critical encoding concerns.
 
 ### Top Issues (ranked)
 1. **No clear stability policy for exported modules**
@@ -1728,7 +1736,7 @@ if !(1..=35).contains(&number) || number % 3 == 0 { ... }
 - Not applicable.
 
 ### Refactor Plan
-- Phase 1: document module responsibilities and stability expectations.
+- Phase 1 (**done**): document module responsibilities and stability expectations.
 - Phase 2: optionally narrow exports (**behavior-changing**).
 - Phase 3: add a compatibility test suite for encoding stability across versions.
 

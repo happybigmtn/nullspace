@@ -1,3 +1,8 @@
+//! Execution test and simulation helpers.
+//!
+//! This module provides deterministic mocks and storage harnesses used by unit/integration tests
+//! and the simulator. It is feature-gated (`mocks`) and not intended for production use.
+
 use crate::{state_transition, Adb};
 use anyhow::Context;
 use commonware_consensus::{

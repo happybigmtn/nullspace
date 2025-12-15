@@ -1,3 +1,8 @@
+//! Consensus and execution-level types.
+//!
+//! Defines blocks, transactions, seeds, events/outputs, and canonical encoding rules used by the
+//! node, simulator, and clients.
+
 use bytes::{Buf, BufMut};
 use commonware_codec::{
     varint::UInt, Encode, EncodeSize, Error, FixedSize, RangeCfg, Read, ReadExt, ReadRangeExt,

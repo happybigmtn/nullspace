@@ -1,3 +1,8 @@
+//! API-facing types and proof verification helpers.
+//!
+//! This module defines request/response types and proof verification logic used by clients, the
+//! simulator, and the node.
+
 use crate::execution::{
     Identity, Output, Progress, Seed, Transaction, Value, MAX_BLOCK_TRANSACTIONS, NAMESPACE,
 };

@@ -1,3 +1,8 @@
+//! Casino domain types.
+//!
+//! Defines game/session/player/tournament/economy state and constants used by the execution layer
+//! and clients.
+
 mod codec;
 mod constants;
 mod economy;

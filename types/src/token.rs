@@ -1,3 +1,7 @@
+//! Token (CTI-20) types and canonical encodings.
+//!
+//! Defines token metadata/accounts and JSON/binary encoding helpers.
+
 use bytes::{Buf, BufMut};
 use commonware_codec::{EncodeSize, FixedSize, Read, ReadExt, Write};
 use commonware_cryptography::ed25519::PublicKey;
