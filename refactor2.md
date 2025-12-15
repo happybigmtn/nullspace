@@ -43,7 +43,7 @@ This is a second-pass review of the current workspace with a focus on idiomatic 
 - [x] Idiomatic/clippy cleanups in core games: `execution/src/casino/{baccarat,roulette,blackjack,sic_bo}.rs`.
 - [x] Test hygiene: `types/src/casino/tests.rs`, `types/src/token.rs` clippy warning fixes.
 - [x] `types/src/casino/codec.rs`: add unit tests for string decode bounds (too long, truncated, invalid UTF-8).
-- [x] `execution/src/mocks.rs`: add regression tests that `Summary` decoding rejects oversized proof op vectors (state/events).
+- [x] `execution/src/mocks.rs`: add regression tests that `Summary`/`Events`/`FilteredEvents` decoding rejects oversized proof op vectors (codec bounds).
 - [x] `types/src/casino/player.rs` + `execution/src/layer/handlers/casino.rs`: stop using `Player::new_with_block`; keep it as a compatibility shim that forwards to `Player::new` (behavior-preserving).
 - [x] Proof limit unification: centralize summary/events decode limits in `types/src/api.rs` and reuse in `node/src/aggregator/actor.rs` + `simulator/src/lib.rs`.
 - [x] `client/src/client.rs`: switch retryable POST bodies to `bytes::Bytes` (avoid per-attempt cloning).
@@ -925,7 +925,7 @@ pub fn try_new(parent: Digest, view: View, height: u64, transactions: Vec<Transa
 ### Progress (implemented)
 - Centralized proof decoding limits in `types/src/api.rs` and reused them across producers/verifiers.
 - Derived `thiserror::Error` for `VerifyError`.
-- Added regression coverage ensuring `Summary` decoding rejects oversized ops vectors (state/events) at the codec boundary.
+- Added regression coverage ensuring `Summary`/`Events`/`FilteredEvents` decoding rejects oversized ops vectors at the codec boundary.
 
 ### Top Issues (ranked)
 1. **Proof decode/verify needs broader malformed-input coverage**
