@@ -40,6 +40,7 @@ This is a second-pass review of the current workspace with a focus on idiomatic 
 - [x] `node/src/application/mempool.rs`: remove non-test dead-code warnings by gating test-only defaults/constructor.
 - [x] Idiomatic/clippy cleanups in core games: `execution/src/casino/{baccarat,roulette,blackjack,sic_bo}.rs`.
 - [x] Test hygiene: `types/src/casino/tests.rs`, `types/src/token.rs` clippy warning fixes.
+- [x] `types/src/casino/player.rs` + `execution/src/layer/handlers/casino.rs`: stop using `Player::new_with_block`; keep it as a compatibility shim that forwards to `Player::new` (behavior-preserving).
 - [x] Proof limit unification: centralize summary/events decode limits in `types/src/api.rs` and reuse in `node/src/aggregator/actor.rs` + `simulator/src/lib.rs`.
 - [x] `client/src/client.rs`: switch retryable POST bodies to `bytes::Bytes` (avoid per-attempt cloning).
 - [x] `client/src/{client,consensus}.rs` + `client/src/lib.rs`: include a size-limited response body snippet in HTTP failure errors (`Error::FailedWithBody`).
@@ -1029,17 +1030,20 @@ pub fn try_new(parent: Digest, view: View, height: u64, transactions: Vec<Transa
 - Defines the core player and game-session state for casino and other mechanics.
 - Codec implementations define what can be stored on-chain.
 
+### Progress (implemented)
+- `Player::new_with_block` now forwards to `Player::new`, and the executor no longer uses the unused `_block` argument.
+
 ### Top Issues (ranked)
 1. **Player struct is “wide” with many loosely related fields**
    - Impact: harder to maintain invariants; increases accidental coupling.
    - Risk: medium.
    - Effort: medium.
    - Location: `types/src/casino/player.rs:10`–`48`.
-2. **`new_with_block` takes an unused parameter**
-   - Impact: misleading API; suggests intended behavior is missing.
+2. **`new_with_block` is a compatibility shim with an unused parameter**
+   - Impact: mildly confusing API surface; keep call sites on `Player::new`.
    - Risk: low.
    - Effort: low.
-   - Location: `types/src/casino/player.rs:52`–`79`.
+   - Location: `types/src/casino/player.rs`.
 
 ### Idiomatic Rust Improvements
 - Split `Player` into nested structs by domain (`Balances`, `Toggles`, `TournamentState`), keeping codec stable via explicit `Write/Read`.
@@ -1054,7 +1058,7 @@ pub fn try_new(parent: Digest, view: View, height: u64, transactions: Vec<Transa
 - Wide structs increase codec size and disk IO; measure serialized size if storage grows.
 
 ### Refactor Plan
-- Phase 1: remove unused `_block` param or use it as intended (**behavior-changing** if signature changes).
+- Phase 1 (**done**): stop using the unused `_block` argument and make `new_with_block` a compatibility shim.
 - Phase 2: refactor to nested structs while preserving codec order (requires careful migration plan).
 - Phase 3: add invariant validation helpers and property tests.
 

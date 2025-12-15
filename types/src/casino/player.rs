@@ -63,29 +63,9 @@ impl Player {
     }
 
     pub fn new_with_block(name: String, _block: u64) -> Self {
-        Self {
-            nonce: 0,
-            name,
-            chips: INITIAL_CHIPS,
-            vusdt_balance: 0,
-            shields: STARTING_SHIELDS,
-            doubles: STARTING_DOUBLES,
-            tournament_chips: 0,
-            tournament_shields: 0,
-            tournament_doubles: 0,
-            active_tournament: None,
-            rank: 0,
-            active_shield: false,
-            active_double: false,
-            active_super: false,
-            active_session: None,
-            // Allow an immediate first faucet claim (daily limit is enforced by the executor).
-            last_deposit_block: 0,
-            aura_meter: 0,
-            tournaments_played_today: 0,
-            last_tournament_ts: 0,
-            is_kyc_verified: false,
-        }
+        // Backwards-compat shim: the executor enforces faucet/tournament rate limits based on
+        // on-chain state, so the provided block is not needed to construct the initial player.
+        Self::new(name)
     }
 }
 

@@ -100,8 +100,7 @@ impl<'a, S: State> Layer<'a, S> {
         }
 
         // Create new player with initial chips and current block for rate limiting
-        let player =
-            nullspace_types::casino::Player::new_with_block(name.to_string(), self.seed.view);
+        let player = nullspace_types::casino::Player::new(name.to_string());
 
         self.insert(
             Key::CasinoPlayer(public.clone()),
