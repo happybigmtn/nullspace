@@ -52,6 +52,7 @@ This is a second-pass review of the current workspace with a focus on idiomatic 
 - [x] `client/src/consensus.rs`: return a structured mismatch error for `Query::Index` (expected vs got view).
 - [x] `client/src/lib.rs` + `client/src/client.rs`: add `Error::VerificationFailed` and use it for lookup verification failures (preserve reason).
 - [x] `client/src/events.rs`: dedupe websocket reader loop; unify verified/unverified paths.
+- [x] `client/src/events.rs`: add structured websocket decode/verify logging (`len`/`consumed`/`remaining`) for observability.
 - [x] `client/examples/*` + `client/src/bin/stress_test.rs`: remove unused imports/vars to eliminate build warnings.
 - [x] `node/src/lib.rs`: validate additional non-zero config fields (`worker_threads`, `message_backlog`, `mailbox_size`, `deque_size`, `execution_concurrency`).
 - [x] `node/src/lib.rs`: validate indexer URL (http/https with host) and reject `port == metrics_port`.
@@ -1131,8 +1132,8 @@ pub(crate) async fn post_bytes_with_retry(&self, url: Url, body: bytes::Bytes) -
 - For high-throughput bots, connection pooling params are good; verify under load with many concurrent websocket streams.
 
 ### Refactor Plan
-- Phase 1: switch POST body to `Bytes` internally (no external API change if kept private).
-- Phase 2: enrich `Error::Failed` with optional response body snippet (size-limited).
+- Phase 1 (**done**): switch POST body to `Bytes` internally (avoid per-attempt cloning).
+- Phase 2 (**done**): enrich HTTP failure errors with a size-limited response body snippet (`Error::FailedWithBody`).
 - Phase 3: add load tests for retries and websocket reconnect behavior.
 
 ### Open Questions
@@ -1146,12 +1147,16 @@ pub(crate) async fn post_bytes_with_retry(&self, url: Url, body: bytes::Bytes) -
 - Provides a typed stream wrapper around a WebSocket connection and optionally verifies consensus signatures.
 - Exposes both a custom `next()` and `Stream` impl.
 
+### Progress (implemented)
+- Unified verified/unverified reader logic via a shared `spawn_reader`.
+- Added structured logs for message sizes and decode/verify failures (including `len`, `consumed`, and `remaining`).
+
 ### Top Issues (ranked)
-1. **Duplicate decode loop logic between verified/unverified constructors**
-   - Impact: increases maintenance cost; bug fixes must be duplicated.
+1. **No metrics for websocket message sizes and decode/verify failures**
+   - Impact: harder to detect backpressure, oversized messages, and decode regressions.
    - Risk: low.
    - Effort: low–medium.
-   - Location: `client/src/events.rs:49`–`198`.
+   - Location: `client/src/events.rs` (reader loop; add counters/histograms if a metrics backend exists).
 
 ### Idiomatic Rust Improvements
 - Factor the shared websocket loop into a single function parameterized by an optional verifier.
@@ -1166,8 +1171,8 @@ pub(crate) async fn post_bytes_with_retry(&self, url: Url, body: bytes::Bytes) -
 - Bounded channel provides backpressure; choose default capacity based on expected burst size.
 
 ### Refactor Plan
-- Phase 1: dedupe the websocket loop logic.
-- Phase 2: add metrics/logging for message sizes and decode errors.
+- Phase 1 (**done**): dedupe the websocket loop logic.
+- Phase 2 (**done**): add structured logging for message sizes and decode/verify errors.
 - Phase 3: provide a “lossy mode” option (drop old messages) if UIs fall behind (**behavior-changing** if exposed).
 
 ### Open Questions

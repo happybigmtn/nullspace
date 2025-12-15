@@ -7,7 +7,7 @@ use nullspace_types::{
 };
 use tokio::sync::mpsc;
 use tokio_tungstenite::{tungstenite::Message, WebSocketStream};
-use tracing::{debug, error};
+use tracing::{debug, error, trace, warn};
 
 const DEFAULT_CHANNEL_CAPACITY: usize = 1024;
 
@@ -70,15 +70,31 @@ impl<T: ReadExt + Send + Sync + 'static> Stream<T> {
     {
         tokio::spawn(async move {
             let mut ws = ws;
+            let message_type = std::any::type_name::<T>();
             while let Some(msg) = ws.next().await {
                 match msg {
                     Ok(Message::Binary(data)) => {
-                        debug!("Received binary message: {} bytes", data.len());
+                        let initial_len = data.len();
+                        trace!(message_type, len = initial_len, "received websocket message");
                         let mut buf = data.as_slice();
                         match T::read(&mut buf) {
                             Ok(event) => {
+                                let remaining = buf.len();
+                                if remaining != 0 {
+                                    debug!(
+                                        message_type,
+                                        len = initial_len,
+                                        remaining,
+                                        "decoded websocket message with trailing bytes"
+                                    );
+                                }
                                 if let Err(err) = verify(&event) {
-                                    error!(?err, "Failed to verify consensus message");
+                                    warn!(
+                                        message_type,
+                                        len = initial_len,
+                                        error = ?err,
+                                        "failed to verify consensus message"
+                                    );
                                     if tx.send(Err(err)).await.is_err() {
                                         break;
                                     }
@@ -89,7 +105,16 @@ impl<T: ReadExt + Send + Sync + 'static> Stream<T> {
                                 }
                             }
                             Err(e) => {
-                                error!("Failed to decode event: {}", e);
+                                let remaining = buf.len();
+                                let consumed = initial_len.saturating_sub(remaining);
+                                warn!(
+                                    message_type,
+                                    len = initial_len,
+                                    consumed,
+                                    remaining,
+                                    error = %e,
+                                    "failed to decode websocket message"
+                                );
                                 let err = Error::InvalidData(e);
                                 if tx.send(Err(err)).await.is_err() {
                                     break;
