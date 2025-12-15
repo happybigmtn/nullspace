@@ -4,6 +4,7 @@ use std::{
 };
 
 use crate::{
+    backoff::jittered_backoff,
     indexer::Indexer,
     seeder::{ingress::Mailbox, Config, Message},
 };
@@ -36,18 +37,6 @@ use tracing::{debug, error, info, warn};
 const BATCH_ENQUEUE: usize = 20;
 const LAST_UPLOADED_KEY: u64 = 0;
 const RETRY_DELAY: Duration = Duration::from_secs(10);
-
-fn jittered_backoff(rng: &mut impl RngCore, backoff: Duration) -> Duration {
-    let backoff_ms = backoff.as_millis() as u64;
-    if backoff_ms <= 1 {
-        return backoff;
-    }
-
-    // "Equal jitter": delay is in [backoff/2, backoff].
-    let half_ms = backoff_ms / 2;
-    let jitter_ms = rng.next_u64() % half_ms.saturating_add(1);
-    Duration::from_millis(half_ms.saturating_add(jitter_ms))
-}
 
 pub struct Actor<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> {
     context: R,
@@ -126,7 +115,8 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                 codec_config: (),
             },
         )
-        .await {
+        .await
+        {
             Ok(metadata) => metadata,
             Err(err) => {
                 error!(?err, "failed to initialize metadata");
@@ -144,7 +134,8 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                 replay_buffer: self.config.replay_buffer,
             },
         )
-        .await {
+        .await
+        {
             Ok(storage) => storage,
             Err(err) => {
                 error!(?err, "failed to initialize seeder storage");
@@ -205,7 +196,10 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                 Message::Uploaded { view } => {
                     // Decrement uploads outstanding
                     if uploads_outstanding == 0 {
-                        warn!(view, "unexpected seed upload completion with no outstanding uploads");
+                        warn!(
+                            view,
+                            "unexpected seed upload completion with no outstanding uploads"
+                        );
                     } else {
                         uploads_outstanding -= 1;
                     }

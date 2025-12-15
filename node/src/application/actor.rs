@@ -5,6 +5,7 @@ use super::{
 use crate::{
     aggregator,
     application::mempool::Mempool,
+    backoff::jittered_backoff,
     indexer::Indexer,
     seeder,
     supervisor::{EpochSupervisor, Supervisor, ViewSupervisor},
@@ -266,7 +267,8 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                 buffer_pool: self.buffer_pool.clone(),
             },
         )
-        .await {
+        .await
+        {
             Ok(state) => state,
             Err(err) => {
                 error!(?err, "failed to initialize state adb");
@@ -295,7 +297,8 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                 buffer_pool: self.buffer_pool.clone(),
             },
         )
-        .await {
+        .await
+        {
             Ok(events) => events,
             Err(err) => {
                 error!(?err, "failed to initialize events log");
@@ -308,17 +311,16 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
         // Note: Using rayon ThreadPool directly. When commonware-runtime::create_pool
         // becomes available (see https://github.com/commonwarexyz/monorepo/issues/1540),
         // consider migrating to it for consistency with the runtime.
-        let execution_pool =
-            match rayon::ThreadPoolBuilder::new()
-                .num_threads(self.execution_concurrency)
-                .build()
-            {
-                Ok(execution_pool) => execution_pool,
-                Err(err) => {
-                    error!(?err, "failed to create execution pool");
-                    return;
-                }
-            };
+        let execution_pool = match rayon::ThreadPoolBuilder::new()
+            .num_threads(self.execution_concurrency)
+            .build()
+        {
+            Ok(execution_pool) => execution_pool,
+            Err(err) => {
+                error!(?err, "failed to create execution pool");
+                return;
+            }
+        };
         let execution_pool = ThreadPool::new(execution_pool);
 
         // Compute genesis digest
@@ -698,7 +700,9 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                                                 attempt,
                                                 "failed to generate proofs; retrying"
                                             );
-                                            self.context.sleep(backoff).await;
+                                            let delay =
+                                                jittered_backoff(&mut self.context, backoff);
+                                            self.context.sleep(delay).await;
                                             backoff = (backoff.saturating_mul(2))
                                                 .min(Duration::from_secs(2));
                                         }

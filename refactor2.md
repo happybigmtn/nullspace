@@ -85,6 +85,9 @@ This is a second-pass review of the current workspace with a focus on idiomatic 
 - [x] `node/src/{seeder,aggregator}/actor.rs`: harden `uploads_outstanding` decrement (no underflow on unexpected completion messages).
 - [x] `node/src/indexer.rs`: preserve mempool websocket error details from `nullspace-client` (stop collapsing to `UnexpectedResponse`).
 - [x] `node/src/indexer.rs`: add mempool stream metrics (connect attempts/failures, invalid batches, forwarded batches) and exponential reconnect backoff (with jitter).
+- [x] `node/src/indexer.rs`: add `ReconnectingStream` tests (drops invalid batches; reconnects after stream end).
+- [x] `node/src/aggregator/actor.rs`: add proof bundle size + cache hit/miss metrics for observability.
+- [x] `node/src/backoff.rs`: centralize jittered backoff helper; reuse across node actors and mempool reconnects.
 
 ---
 
@@ -327,6 +330,7 @@ pub fn new(context: impl Metrics) -> Self {
 - Invalid mempool tx batches are now drop+continue (reconnect loop stays alive).
 - `nullspace-client` mempool errors are no longer collapsed to `UnexpectedResponse`.
 - Reconnecting mempool stream now emits metrics and uses exponential reconnect backoff with jitter.
+- Added tests for `ReconnectingStream` reconnect and invalid-batch drop behavior.
 
 ### Top Issues (ranked)
 1. **Reconnect/backoff policy is still simplistic**
@@ -366,7 +370,7 @@ if !batcher.verify(&mut context) {
 ### Refactor Plan
 - Phase 1 (**done**): decide tolerate policy for invalid txs; implement drop+continue.
 - Phase 2 (**done**): preserve error details and add mempool stream metrics + exponential reconnect backoff.
-- Phase 3: add integration tests for reconnect behavior and invalid batches.
+- Phase 3 (**done**): add integration tests for reconnect behavior and invalid batches.
 
 ### Open Questions
 - Is the indexer trusted (local) or untrusted (remote)? The policy should differ.
@@ -383,6 +387,7 @@ if !batcher.verify(&mut context) {
 - Proof decode limits are centralized in `types/src/api.rs` and reused by the aggregator.
 - Actor init + steady-state no longer use `unwrap`/`expect`; fatal storage errors are logged and cause the actor to exit (engine is crash-fast).
 - Summary uploads now use exponential backoff with jitter and emit metrics (attempts/failures, outstanding uploads, and upload lag).
+- Added metrics for proof bundle sizes and cache hit/miss/error counts (cache effectiveness).
 
 ### Top Issues (ranked)
 1. **Crash-fast on storage/indexer faults**
@@ -415,7 +420,7 @@ if !batcher.verify(&mut context) {
 ### Refactor Plan
 - Phase 1 (**done**): replace `unwrap`/`expect` in init + steady-state with logged errors and actor exit (crash-fast policy).
 - Phase 2 (**done**): centralize proof limits and codec config; ensure producer and verifier agree.
-- Phase 3: add metrics for proof sizes and cache effectiveness.
+- Phase 3 (**done**): add metrics for proof sizes and cache effectiveness.
 
 ### Open Questions
 - Should the engine restart the aggregator actor on transient failures, or is crash-fast acceptable?
@@ -1277,6 +1282,7 @@ pub fn private_key_hex(&self) -> String { hex(self.private_key.as_ref()) }
 ### Progress (implemented)
 - Inbound mempool tx ingestion now caches per-account “next nonce” to avoid per-transaction state reads.
 - Actor init + steady-state no longer use `.expect`/`panic!`; fatal errors are logged and cause the actor to exit (engine stops the node to avoid partial-liveness).
+- Proof generation retries now use jittered backoff to reduce synchronized retry bursts.
 
 ### Top Issues (ranked)
 1. **Crash-fast policy on actor failure/exit**

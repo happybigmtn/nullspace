@@ -1,3 +1,4 @@
+use crate::backoff::jittered_backoff;
 #[cfg(test)]
 use commonware_consensus::{threshold_simplex::types::View, Viewable};
 use commonware_cryptography::ed25519::Batch;
@@ -35,18 +36,6 @@ const TX_STREAM_RECONNECT_DELAY: Duration = Duration::from_secs(10);
 
 /// Buffer size for the tx_stream channel
 const TX_STREAM_BUFFER_SIZE: usize = 1_024;
-
-fn jittered_backoff(rng: &mut impl Rng, backoff: Duration) -> Duration {
-    let backoff_ms = backoff.as_millis() as u64;
-    if backoff_ms <= 1 {
-        return backoff;
-    }
-
-    // "Equal jitter": delay is in [backoff/2, backoff].
-    let half_ms = backoff_ms / 2;
-    let jitter_ms = rng.gen_range(0..=half_ms);
-    Duration::from_millis(half_ms.saturating_add(jitter_ms))
-}
 
 /// Trait for interacting with an indexer.
 pub trait Indexer: Clone + Send + Sync + 'static {
@@ -333,5 +322,152 @@ where
 
     async fn submit_summary(&self, summary: Summary) -> Result<(), Self::Error> {
         self.inner.submit_summary(summary).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use commonware_cryptography::{ed25519::PrivateKey, PrivateKeyExt, Signer};
+    use commonware_macros::{select, test_traced};
+    use commonware_runtime::{
+        deterministic::{self, Runner},
+        Runner as _,
+    };
+    use nullspace_types::execution::Instruction;
+    use std::{
+        collections::VecDeque,
+        io,
+        sync::{Arc, Mutex},
+        time::Duration,
+    };
+
+    #[derive(Clone)]
+    struct ScriptedIndexer {
+        outcomes: Arc<Mutex<VecDeque<ListenOutcome>>>,
+    }
+
+    enum ListenOutcome {
+        Stream(Vec<Result<Pending, io::Error>>),
+        ConnectError(io::Error),
+    }
+
+    impl ScriptedIndexer {
+        fn new(outcomes: Vec<ListenOutcome>) -> Self {
+            Self {
+                outcomes: Arc::new(Mutex::new(outcomes.into_iter().collect())),
+            }
+        }
+    }
+
+    impl Indexer for ScriptedIndexer {
+        type Error = io::Error;
+
+        async fn submit_seed(&self, _seed: Seed) -> Result<(), Self::Error> {
+            Ok(())
+        }
+
+        async fn listen_mempool(
+            &self,
+        ) -> Result<impl Stream<Item = Result<Pending, Self::Error>> + Send, Self::Error> {
+            let outcome = self
+                .outcomes
+                .lock()
+                .unwrap()
+                .pop_front()
+                .unwrap_or_else(|| {
+                    ListenOutcome::ConnectError(io::Error::new(
+                        io::ErrorKind::ConnectionRefused,
+                        "no scripted mempool outcome available",
+                    ))
+                });
+            match outcome {
+                ListenOutcome::Stream(items) => Ok(futures::stream::iter(items)),
+                ListenOutcome::ConnectError(err) => Err(err),
+            }
+        }
+
+        async fn submit_summary(&self, _summary: Summary) -> Result<(), Self::Error> {
+            Ok(())
+        }
+    }
+
+    #[test_traced]
+    fn reconnecting_stream_drops_invalid_batches_and_continues() {
+        let cfg = deterministic::Config::default().with_seed(1);
+        let executor = Runner::from(cfg);
+        executor.start(|context| async move {
+            let pk1 = PrivateKey::from_seed(1);
+            let pk2 = PrivateKey::from_seed(2);
+
+            let valid_tx = Transaction::sign(&pk1, 0, Instruction::CasinoDeposit { amount: 1 });
+            let mut invalid_tx =
+                Transaction::sign(&pk1, 1, Instruction::CasinoDeposit { amount: 999 });
+            invalid_tx.public = pk2.public_key();
+
+            let items = vec![
+                Ok(Pending {
+                    transactions: vec![invalid_tx],
+                }),
+                Ok(Pending {
+                    transactions: vec![valid_tx.clone()],
+                }),
+            ];
+            let indexer = ScriptedIndexer::new(vec![ListenOutcome::Stream(items)]);
+
+            let mut stream = ReconnectingStream::new(context.with_label("test_mempool"), indexer);
+            let item = select! {
+                item = stream.next() => { item },
+                _ = context.sleep(Duration::from_secs(1)) => {
+                    panic!("timed out waiting for mempool item")
+                },
+            };
+            let pending = item.expect("stream item").expect("pending ok");
+            assert_eq!(pending.transactions.len(), 1);
+            assert_eq!(pending.transactions[0], valid_tx);
+            assert!(pending.transactions[0].verify());
+        });
+    }
+
+    #[test_traced]
+    fn reconnecting_stream_reconnects_after_stream_end() {
+        let cfg = deterministic::Config::default().with_seed(2);
+        let executor = Runner::from(cfg);
+        executor.start(|context| async move {
+            let pk1 = PrivateKey::from_seed(1);
+            let tx1 = Transaction::sign(&pk1, 0, Instruction::CasinoDeposit { amount: 1 });
+            let tx2 = Transaction::sign(&pk1, 1, Instruction::CasinoDeposit { amount: 2 });
+
+            let indexer = ScriptedIndexer::new(vec![
+                ListenOutcome::Stream(vec![Ok(Pending {
+                    transactions: vec![tx1.clone()],
+                })]),
+                ListenOutcome::Stream(vec![Ok(Pending {
+                    transactions: vec![tx2.clone()],
+                })]),
+            ]);
+
+            let mut stream = ReconnectingStream::new(context.with_label("test_mempool"), indexer);
+            let first = select! {
+                item = stream.next() => { item },
+                _ = context.sleep(Duration::from_secs(1)) => {
+                    panic!("timed out waiting for first mempool item")
+                },
+            };
+            let first = first.expect("stream item").expect("pending ok");
+            assert_eq!(first.transactions[0], tx1);
+
+            // Advance time to allow the reconnect backoff delay to elapse.
+            context.sleep(Duration::from_secs(1)).await;
+
+            let second = select! {
+                item = stream.next() => { item },
+                _ = context.sleep(Duration::from_secs(1)) => {
+                    panic!("timed out waiting for second mempool item")
+                },
+            };
+            let second = second.expect("stream item").expect("pending ok");
+            assert_eq!(second.transactions[0], tx2);
+        });
     }
 }

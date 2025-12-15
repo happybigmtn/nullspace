@@ -1,5 +1,6 @@
 use crate::{
     aggregator::{ingress::Mailbox, Config, Message},
+    backoff::jittered_backoff,
     indexer::Indexer,
 };
 use bytes::{Buf, BufMut};
@@ -38,7 +39,7 @@ use nullspace_types::{
     execution::{Output, Progress, Value},
     genesis_digest,
 };
-use prometheus_client::metrics::{counter::Counter, gauge::Gauge};
+use prometheus_client::metrics::{counter::Counter, gauge::Gauge, histogram::Histogram};
 use rand::RngCore;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -50,17 +51,22 @@ use tracing::{debug, error, info, warn};
 const BATCH_ENQUEUE: usize = 20;
 const RETRY_DELAY: Duration = Duration::from_secs(10);
 
-fn jittered_backoff(rng: &mut impl RngCore, backoff: Duration) -> Duration {
-    let backoff_ms = backoff.as_millis() as u64;
-    if backoff_ms <= 1 {
-        return backoff;
-    }
-
-    // "Equal jitter": delay is in [backoff/2, backoff].
-    let half_ms = backoff_ms / 2;
-    let jitter_ms = rng.next_u64() % half_ms.saturating_add(1);
-    Duration::from_millis(half_ms.saturating_add(jitter_ms))
-}
+const PROOFS_ENCODED_BYTES_BUCKETS: [f64; 14] = [
+    1_024.0,     // 1KB
+    2_048.0,     // 2KB
+    4_096.0,     // 4KB
+    8_192.0,     // 8KB
+    16_384.0,    // 16KB
+    32_768.0,    // 32KB
+    65_536.0,    // 64KB
+    131_072.0,   // 128KB
+    262_144.0,   // 256KB
+    524_288.0,   // 512KB
+    1_048_576.0, // 1MB
+    2_097_152.0, // 2MB
+    4_194_304.0, // 4MB
+    8_388_608.0, // 8MB
+];
 
 pub struct Proofs {
     pub state_proof: Proof<Digest>,
@@ -240,6 +246,44 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
             summary_upload_lag.clone(),
         );
 
+        // Proof metrics
+        let proofs_stored: Counter<u64, AtomicU64> = Counter::default();
+        let proofs_stored_bytes: Counter<u64, AtomicU64> = Counter::default();
+        let proofs_encoded_size_bytes = Histogram::new(PROOFS_ENCODED_BYTES_BUCKETS.into_iter());
+        let proofs_fetch_hits: Counter<u64, AtomicU64> = Counter::default();
+        let proofs_fetch_misses: Counter<u64, AtomicU64> = Counter::default();
+        let proofs_fetch_errors: Counter<u64, AtomicU64> = Counter::default();
+        self.context.register(
+            "proofs_stored_total",
+            "Number of per-block proof bundles stored in the local cache",
+            proofs_stored.clone(),
+        );
+        self.context.register(
+            "proofs_stored_bytes_total",
+            "Total encoded bytes of per-block proof bundles stored in the local cache",
+            proofs_stored_bytes.clone(),
+        );
+        self.context.register(
+            "proofs_encoded_size_bytes",
+            "Histogram of encoded per-block proof bundle sizes (bytes)",
+            proofs_encoded_size_bytes.clone(),
+        );
+        self.context.register(
+            "proofs_fetch_hits_total",
+            "Number of proof bundle cache reads that returned a value",
+            proofs_fetch_hits.clone(),
+        );
+        self.context.register(
+            "proofs_fetch_misses_total",
+            "Number of proof bundle cache reads that returned no value (invariant violation)",
+            proofs_fetch_misses.clone(),
+        );
+        self.context.register(
+            "proofs_fetch_errors_total",
+            "Number of proof bundle cache reads that returned an error",
+            proofs_fetch_errors.clone(),
+        );
+
         // Create storage
         let mut cache = match cache::Cache::<_, Proofs>::init(
             self.context.with_label("cache"),
@@ -253,7 +297,8 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                 buffer_pool: self.config.buffer_pool.clone(),
             },
         )
-        .await {
+        .await
+        {
             Ok(cache) => cache,
             Err(err) => {
                 error!(?err, "failed to initialize cache");
@@ -269,7 +314,8 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                 buffer_pool: self.config.buffer_pool,
             },
         )
-        .await {
+        .await
+        {
             Ok(results) => results,
             Err(err) => {
                 error!(?err, "failed to initialize results storage");
@@ -285,7 +331,8 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                 replay_buffer: self.config.replay_buffer,
             },
         )
-        .await {
+        .await
+        {
             Ok(certificates) => certificates,
             Err(err) => {
                 error!(?err, "failed to initialize certificate storage");
@@ -345,7 +392,10 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                 Message::Uploaded { index } => {
                     // Decrement uploads outstanding
                     if uploads_outstanding == 0 {
-                        warn!(index, "unexpected summary upload completion with no outstanding uploads");
+                        warn!(
+                            index,
+                            "unexpected summary upload completion with no outstanding uploads"
+                        );
                     } else {
                         uploads_outstanding -= 1;
                     }
@@ -379,14 +429,20 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                     events_proof_ops,
                     response,
                 } => {
+                    let proofs = Proofs {
+                        state_proof,
+                        state_proof_ops,
+                        events_proof,
+                        events_proof_ops,
+                    };
+                    let encoded_size = proofs.encode_size();
+                    let proofs_stored = proofs_stored.clone();
+                    let proofs_stored_bytes = proofs_stored_bytes.clone();
+                    let proofs_encoded_size_bytes = proofs_encoded_size_bytes.clone();
+                    let cache = &mut cache;
+
                     // Persist proofs
-                    let cache_task = async {
-                        let proofs = Proofs {
-                            state_proof,
-                            state_proof_ops,
-                            events_proof,
-                            events_proof_ops,
-                        };
+                    let cache_task = async move {
                         if let Err(err) = cache.put(height, proofs).await {
                             error!(?err, height, "failed to store proofs");
                             return Err(());
@@ -395,6 +451,9 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                             error!(?err, height, "failed to sync proofs");
                             return Err(());
                         }
+                        proofs_stored.inc();
+                        proofs_stored_bytes.inc_by(encoded_size as u64);
+                        proofs_encoded_size_bytes.observe(encoded_size as f64);
                         Ok(())
                     };
 
@@ -643,12 +702,17 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
 
                 // Get proofs
                 let proofs = match cache.get(cursor).await {
-                    Ok(Some(proofs)) => proofs,
+                    Ok(Some(proofs)) => {
+                        proofs_fetch_hits.inc();
+                        proofs
+                    }
                     Ok(None) => {
+                        proofs_fetch_misses.inc();
                         error!(cursor, "proofs missing");
                         return;
                     }
                     Err(err) => {
+                        proofs_fetch_errors.inc();
                         error!(?err, cursor, "failed to fetch proofs");
                         return;
                     }
