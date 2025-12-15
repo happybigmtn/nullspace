@@ -54,6 +54,7 @@ This is a second-pass review of the current workspace with a focus on idiomatic 
 - [x] `client/examples/*` + `client/src/bin/stress_test.rs`: remove unused imports/vars to eliminate build warnings.
 - [x] `node/src/lib.rs`: validate additional non-zero config fields (`worker_threads`, `message_backlog`, `mailbox_size`, `deque_size`, `execution_concurrency`).
 - [x] `node/src/lib.rs`: validate indexer URL (http/https with host) and reject `port == metrics_port`.
+- [x] `node/src/lib.rs`: add `Config::redacted_debug()` helper (and test) to avoid accidentally logging secrets.
 - [x] `node/src/main.rs`: dedupe `load_peers` parsing and replace `NonZeroU32::new(...).unwrap()` with `NZU32!` (behavior-preserving).
 - [x] `types/src/api.rs`: derive `thiserror::Error` for `VerifyError` (remove manual `Display` boilerplate).
 - [x] `types/src/execution.rs`: add `Block::try_new` + `BlockBuildError` (checked constructor).
@@ -1369,6 +1370,7 @@ let mut state = match Adb::init(...).await {
 ### Progress (implemented)
 - Added non-zero validation for all required sizing/concurrency fields.
 - Added validation for `indexer` URL (http/https with host) and for `port`/`metrics_port` conflicts.
+- Added `Config::redacted_debug()` helper to support safe debug logging without leaking key material.
 
 ### Top Issues (ranked)
 1. **Stringly-typed config fields**
@@ -1392,7 +1394,7 @@ let mut state = match Adb::init(...).await {
 ### Refactor Plan
 - Phase 1 (**done**): extend validation to all “must be > 0” fields and to URL/socket formats.
 - Phase 2: introduce newtypes for hex-encoded fields and decode during deserialization.
-- Phase 3: add a `Config::redacted_debug()` helper to avoid accidentally logging secrets.
+- Phase 3 (**done**): add a `Config::redacted_debug()` helper to avoid accidentally logging secrets.
 
 ### Open Questions
 - Is config format stable and public, or can it change between versions without migration support?

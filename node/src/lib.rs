@@ -6,7 +6,7 @@ use commonware_cryptography::{
 };
 use commonware_utils::{from_hex_formatted, quorum};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, net::SocketAddr, path::PathBuf, str::FromStr};
+use std::{collections::HashMap, fmt, net::SocketAddr, path::PathBuf, str::FromStr};
 use thiserror::Error;
 use tracing::Level;
 use url::Url;
@@ -98,6 +98,33 @@ pub struct ValidatedConfig {
     pub execution_concurrency: usize,
 }
 
+struct RedactedConfig<'a>(&'a Config);
+
+impl fmt::Debug for RedactedConfig<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let cfg = self.0;
+        f.debug_struct("Config")
+            .field("private_key", &"<redacted>")
+            .field("share", &"<redacted>")
+            .field("polynomial", &"<redacted>")
+            .field("port", &cfg.port)
+            .field("metrics_port", &cfg.metrics_port)
+            .field("directory", &cfg.directory)
+            .field("worker_threads", &cfg.worker_threads)
+            .field("log_level", &cfg.log_level)
+            .field("allowed_peers", &cfg.allowed_peers)
+            .field("bootstrappers", &cfg.bootstrappers)
+            .field("message_backlog", &cfg.message_backlog)
+            .field("mailbox_size", &cfg.mailbox_size)
+            .field("deque_size", &cfg.deque_size)
+            .field("mempool_max_backlog", &cfg.mempool_max_backlog)
+            .field("mempool_max_transactions", &cfg.mempool_max_transactions)
+            .field("indexer", &cfg.indexer)
+            .field("execution_concurrency", &cfg.execution_concurrency)
+            .finish()
+    }
+}
+
 fn default_mempool_max_backlog() -> usize {
     64
 }
@@ -157,6 +184,10 @@ pub fn parse_peer_public_key(name: &str) -> Option<PublicKey> {
 }
 
 impl Config {
+    pub fn redacted_debug(&self) -> impl fmt::Debug + '_ {
+        RedactedConfig(self)
+    }
+
     pub fn parse_signer(&self) -> Result<PrivateKey, ConfigError> {
         decode_hex("private_key", &self.private_key)
     }

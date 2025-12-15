@@ -36,6 +36,35 @@ const BUFFER_POOL_PAGE_SIZE: NonZeroUsize = NZUsize!(4_096);
 /// The buffer pool capacity.
 const BUFFER_POOL_CAPACITY: NonZeroUsize = NZUsize!(1024 * 1024);
 
+#[test]
+fn config_redacted_debug_does_not_leak_secrets() {
+    let config = super::Config {
+        private_key: "deadbeef".to_string(),
+        share: "cafebabe".to_string(),
+        polynomial: "0123456789abcdef".to_string(),
+        port: 3000,
+        metrics_port: 3001,
+        directory: "/tmp/nullspace".to_string(),
+        worker_threads: 4,
+        log_level: "info".to_string(),
+        allowed_peers: vec!["peer1".to_string()],
+        bootstrappers: vec!["bootstrap1".to_string()],
+        message_backlog: 128,
+        mailbox_size: 128,
+        deque_size: 128,
+        mempool_max_backlog: 64,
+        mempool_max_transactions: 100_000,
+        indexer: "http://127.0.0.1:8080".to_string(),
+        execution_concurrency: 4,
+    };
+
+    let rendered = format!("{:?}", config.redacted_debug());
+    for secret in [&config.private_key, &config.share, &config.polynomial] {
+        assert!(!rendered.contains(secret), "secret leaked in debug output");
+    }
+    assert!(rendered.contains("<redacted>"));
+}
+
 /// Registers all validators using the oracle.
 async fn register_validators(
     oracle: &mut Oracle<PublicKey>,
