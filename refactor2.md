@@ -64,6 +64,7 @@ This is a second-pass review of the current workspace with a focus on idiomatic 
 - [x] `execution/src/layer/mod.rs`: split `apply()` dispatch by domain (`casino`, `staking`, `liquidity`) for maintainability (behavior-preserving).
 - [x] `execution/src/layer/handlers/casino.rs`: centralize `CasinoError` construction + add player/session lookup helpers (behavior-preserving).
 - [x] `execution/src/layer/handlers/staking.rs`: clarify dev/demo staking epoch/duration semantics (behavior-preserving).
+- [x] `execution/src/layer/handlers/staking.rs`: add stake/unstake lockup invariant tests (house totals + nonce consumption).
 - [x] `execution/src/layer/handlers/liquidity.rs`: extract AMM math into pure helpers and add unit tests (behavior-preserving).
 - [x] `simulator/src/lib.rs`: replace `GovernorConfigBuilder::finish().unwrap()` with safe fallback to defaults.
 - [x] `simulator/src/{lib,explorer}.rs`: split explorer indexing + HTTP handlers into a dedicated module.
@@ -710,6 +711,7 @@ fn casino_error(player: &PublicKey, session_id: Option<u64>, code: u32, msg: imp
 
 ### Progress (implemented)
 - Clarified dev/demo staking epoch and duration semantics (expressed in consensus views/blocks, not wall-clock time).
+- Added tests covering stake → locked-unstake → unlocked-unstake behavior and house totals invariants.
 
 ### Top Issues (ranked)
 1. **Claim rewards is a placeholder returning `amount: 0`**
@@ -738,7 +740,7 @@ fn casino_error(player: &PublicKey, session_id: Option<u64>, code: u32, msg: imp
 ### Refactor Plan
 - Phase 1 (**done**): clarify whether staking is MVP/demo or production; rename constants/comments accordingly.
 - Phase 2: implement rewards or remove the instruction (**behavior-changing**).
-- Phase 3: add invariants/tests (stake/unstake, multiple stakes, epoch rollover).
+- Phase 3 (**partially done**): add invariants/tests (stake/unstake covered; add multiple stakes + epoch rollover).
 
 ### Open Questions
 - What is the intended staking economics (reward source, distribution schedule, anti-sybil constraints)?
