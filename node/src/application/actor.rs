@@ -570,8 +570,12 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
 
                                                 // Batch verify transaction signatures (we don't care if the nonces are valid or not, we'll just skip the ones that are invalid)
                                                 let mut batcher = Batch::new();
+                                                let mut payload_scratch = Vec::new();
                                                 for tx in &block.transactions {
-                                                    tx.verify_batch(&mut batcher);
+                                                    tx.verify_batch_with_scratch(
+                                                        &mut batcher,
+                                                        &mut payload_scratch,
+                                                    );
                                                 }
                                                 if !batcher.verify(&mut context) {
                                                     let _ = response.send(false);

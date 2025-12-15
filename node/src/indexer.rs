@@ -221,8 +221,12 @@ where
                                     Ok(pending) => {
                                         // Batch verify transactions
                                         let mut batcher = Batch::new();
+                                        let mut payload_scratch = Vec::new();
                                         for tx in &pending.transactions {
-                                            tx.verify_batch(&mut batcher);
+                                            tx.verify_batch_with_scratch(
+                                                &mut batcher,
+                                                &mut payload_scratch,
+                                            );
                                         }
                                         if !batcher.verify(&mut context) {
                                             warn!("received invalid transaction from indexer");

@@ -164,6 +164,13 @@ pub struct Transaction {
 }
 
 impl Transaction {
+    fn write_payload(nonce: &u64, instruction: &Instruction, payload: &mut Vec<u8>) {
+        payload.clear();
+        payload.reserve(nonce.encode_size() + instruction.encode_size());
+        nonce.write(payload);
+        instruction.write(payload);
+    }
+
     fn payload(nonce: &u64, instruction: &Instruction) -> Vec<u8> {
         let mut payload = Vec::with_capacity(nonce.encode_size() + instruction.encode_size());
         nonce.write(&mut payload);
@@ -195,9 +202,15 @@ impl Transaction {
     }
 
     pub fn verify_batch(&self, batch: &mut Batch) {
+        let mut scratch = Vec::new();
+        self.verify_batch_with_scratch(batch, &mut scratch);
+    }
+
+    pub fn verify_batch_with_scratch(&self, batch: &mut Batch, scratch: &mut Vec<u8>) {
+        Self::write_payload(&self.nonce, &self.instruction, scratch);
         batch.add(
             Some(TRANSACTION_NAMESPACE),
-            &Self::payload(&self.nonce, &self.instruction),
+            scratch.as_slice(),
             &self.public,
             &self.signature,
         );

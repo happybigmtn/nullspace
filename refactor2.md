@@ -54,6 +54,7 @@ This is a second-pass review of the current workspace with a focus on idiomatic 
 - [x] `node/src/main.rs`: dedupe `load_peers` parsing and replace `NonZeroU32::new(...).unwrap()` with `NZU32!` (behavior-preserving).
 - [x] `types/src/api.rs`: derive `thiserror::Error` for `VerifyError` (remove manual `Display` boilerplate).
 - [x] `types/src/execution.rs`: add `Block::try_new` + `BlockBuildError` (checked constructor).
+- [x] `types/src/execution.rs` + `node/src/{indexer.rs,application/actor.rs}`: reduce per-tx allocations in batch signature verification by reusing a payload scratch buffer.
 - [x] `types/src/lib.rs`: add crate-level docs describing stability and consensus-critical encoding.
 - [x] `execution/src/casino/video_poker.rs`: fix clippy `needless_range_loop` via iterator-based indexing.
 - [x] `execution/src/lib.rs`: add crate-level docs describing determinism and recovery invariants.
@@ -861,6 +862,10 @@ v >= 2 && v <= 7
 - Defines core consensus/execution types: namespaces, transactions, instructions, blocks, notarizations/finalizations, etc.
 - Provides codec and digest implementations; correctness and determinism here are consensus-critical.
 
+### Progress (implemented)
+- Added `Transaction::verify_batch_with_scratch` and used it in node batch verification hot paths to reuse a payload buffer.
+- Added `Block::try_new` + `BlockBuildError` for checked block construction (keeps panicky `new` as internal convenience).
+
 ### Top Issues (ranked)
 1. **`Block::new` uses `assert!` for transaction limit**
    - Impact: panics on invalid input; could be hit by internal misuse.
@@ -904,8 +909,8 @@ pub fn try_new(parent: Digest, view: View, height: u64, transactions: Vec<Transa
   - use `bytes::Bytes`/`BytesMut` to avoid repeated `Vec` allocations
 
 ### Refactor Plan
-- Phase 1: introduce `try_new` (keep `new` for internal callers if needed).
-- Phase 2: optimize `Transaction::payload` allocations; benchmark (criterion) before/after.
+- Phase 1 (**done**): introduce `try_new` (keep `new` for internal callers if needed).
+- Phase 2 (**done**): reduce `Transaction` batch-verify allocations in node hot paths via a scratch buffer.
 - Phase 3: consider a “pre-encoded instruction bytes” path for repeated verification (careful: must remain canonical).
 
 ### Open Questions
