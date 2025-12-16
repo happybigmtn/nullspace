@@ -39,17 +39,15 @@ export const BaccaratView = React.memo<{ gameState: GameState; actions: any }>((
         [allBets]
     );
 
-    const sideBetButtonClass = (active: boolean) =>
-        `flex flex-col items-center border rounded bg-black/50 px-3 py-1 transition-colors ${
-            active ? 'border-terminal-green/70 bg-terminal-green/10' : 'border-gray-700 hover:border-gray-500'
-        }`;
-
-    // Player always GREEN if selected, else RED (because "other side is always red")
-    // Wait, the prompt says "player's selected side is always green, and the other side is always red"
-    // So if Player is selected: Player=Green, Banker=Red.
-    // If Banker is selected: Banker=Green, Player=Red.
-    const playerColor = isPlayerSelected ? 'text-terminal-green' : 'text-terminal-accent';
-    const bankerColor = isBankerSelected ? 'text-terminal-green' : 'text-terminal-accent';
+    const getWinnerClass = (type: string) => {
+        if (gameState.stage !== 'RESULT') return 'border-gray-800 bg-black/40';
+        const p = playerValue;
+        const b = bankerValue;
+        if (type === 'PLAYER' && p > b) return 'border-terminal-green text-terminal-green shadow-[0_0_10px_rgba(74,222,128,0.5)] animate-pulse bg-terminal-green/10';
+        if (type === 'BANKER' && b > p) return 'border-terminal-green text-terminal-green shadow-[0_0_10px_rgba(74,222,128,0.5)] animate-pulse bg-terminal-green/10';
+        if (type === 'TIE' && p === b) return 'border-terminal-green text-terminal-green shadow-[0_0_10px_rgba(74,222,128,0.5)] animate-pulse bg-terminal-green/10';
+        return 'border-gray-800 bg-black/40 text-gray-500';
+    };
 
     return (
         <>
@@ -90,36 +88,32 @@ export const BaccaratView = React.memo<{ gameState: GameState; actions: any }>((
 
                 {/* Center Info */}
                 <div className="text-center space-y-2 relative z-20 py-2 sm:py-4">
-                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded border bg-black/40 text-[10px] tracking-widest uppercase border-gray-800 text-gray-400">
-                        <span className="text-gray-500">{gameState.stage}</span>
-                        <span className="text-gray-700">•</span>
-                        <span className="text-gray-500">TOTAL</span>
-                        <span className="text-terminal-gold">${totalBet.toLocaleString()}</span>
-                    </div>
                     <div className="text-lg sm:text-2xl font-bold text-terminal-gold tracking-widest leading-tight animate-pulse">
                         {gameState.message}
                     </div>
-                    <div className="flex flex-wrap items-center justify-center gap-2 text-[11px] text-gray-500">
-                        <span className="px-2 py-0.5 rounded border border-gray-800 bg-black/40">
-                            MAIN <span className="text-white">{gameState.baccaratSelection}</span> ${gameState.bet.toLocaleString()}
+                    <div className="flex flex-wrap items-center justify-center gap-2 text-[11px]">
+                        <span className={`px-2 py-0.5 rounded border transition-all ${getWinnerClass(gameState.baccaratSelection)}`}>
+                            <span className={gameState.stage === 'RESULT' && getWinnerClass(gameState.baccaratSelection).includes('text-terminal-green') ? 'text-terminal-green' : 'text-white'}>
+                                {gameState.baccaratSelection}
+                            </span> ${gameState.bet.toLocaleString()}
                         </span>
                         {sideBetAmounts.TIE > 0 && (
-                            <span className="px-2 py-0.5 rounded border border-gray-800 bg-black/40">
+                            <span className={`px-2 py-0.5 rounded border transition-all ${getWinnerClass('TIE')}`}>
                                 TIE ${sideBetAmounts.TIE.toLocaleString()}
                             </span>
                         )}
                         {sideBetAmounts.P_PAIR > 0 && (
-                            <span className="px-2 py-0.5 rounded border border-gray-800 bg-black/40">
+                            <span className="px-2 py-0.5 rounded border border-gray-800 bg-black/40 text-gray-500">
                                 P.PAIR ${sideBetAmounts.P_PAIR.toLocaleString()}
                             </span>
                         )}
                         {sideBetAmounts.B_PAIR > 0 && (
-                            <span className="px-2 py-0.5 rounded border border-gray-800 bg-black/40">
+                            <span className="px-2 py-0.5 rounded border border-gray-800 bg-black/40 text-gray-500">
                                 B.PAIR ${sideBetAmounts.B_PAIR.toLocaleString()}
                             </span>
                         )}
                         {sideBetAmounts.LUCKY6 > 0 && (
-                            <span className="px-2 py-0.5 rounded border border-gray-800 bg-black/40">
+                            <span className="px-2 py-0.5 rounded border border-gray-800 bg-black/40 text-gray-500">
                                 LUCKY6 ${sideBetAmounts.LUCKY6.toLocaleString()}
                             </span>
                         )}

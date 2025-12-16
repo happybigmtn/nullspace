@@ -103,7 +103,7 @@ export const BlackjackView = React.memo<{ gameState: GameState; actions: any }>(
                     <div className="flex flex-col items-center gap-2 scale-110 transition-transform">
                         <span className="text-sm font-bold tracking-widest text-white">
                             YOU <span className="text-white">({playerValue})</span>
-                            {gameState.completedHands.length > 0 ? (
+                            {(gameState.completedHands.length > 0 || gameState.blackjackStack.length > 0) ? (
                                 <span className="text-gray-500 text-xs"> · HAND {activeHandNumber}</span>
                             ) : null}
                         </span>
