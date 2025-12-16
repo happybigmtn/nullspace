@@ -33,7 +33,7 @@ export const GameControlBar: React.FC<GameControlBarProps> = ({
     // Desktop base: absolute bottom
     // Mobile base: fixed bottom
     const base =
-        'ns-controlbar fixed bottom-0 left-0 right-0 sm:absolute sm:bottom-[calc(2rem+env(safe-area-inset-bottom))] bg-terminal-black/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)]';
+        'ns-controlbar fixed bottom-0 left-0 right-0 sm:sticky sm:bottom-0 bg-terminal-black/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)] sm:pb-0';
     
     // Layout for standard mode
     const layout =
