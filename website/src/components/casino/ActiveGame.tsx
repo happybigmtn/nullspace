@@ -22,9 +22,10 @@ interface ActiveGameProps {
   actions: any;
   onOpenCommandPalette?: () => void;
   reducedMotion?: boolean;
+  chips?: number;
 }
 
-export const ActiveGame: React.FC<ActiveGameProps> = ({ gameState, deck, numberInput, onToggleHold, aiAdvice, actions, onOpenCommandPalette, reducedMotion = false }) => {
+export const ActiveGame: React.FC<ActiveGameProps> = ({ gameState, deck, numberInput, onToggleHold, aiAdvice, actions, onOpenCommandPalette, reducedMotion = false, chips }) => {
   if (gameState.type === GameType.NONE) {
      const handleOpen = () => onOpenCommandPalette?.();
      return (
@@ -117,10 +118,11 @@ export const ActiveGame: React.FC<ActiveGameProps> = ({ gameState, deck, numberI
          )}
 
 	         <BigWinEffect 
+                key={`${chips}-${gameState.lastResult}-${gameState.stage}`}
 	            amount={gameState.lastResult} 
 	            show={gameState.stage === 'RESULT' && gameState.lastResult > 0} 
 	            durationMs={gameState.type === GameType.BLACKJACK ? 1000 : undefined}
-              reducedMotion={reducedMotion}
+                reducedMotion={reducedMotion}
 	         />
 
          {gameState.type === GameType.BLACKJACK && <BlackjackView gameState={gameState} actions={actions} />}

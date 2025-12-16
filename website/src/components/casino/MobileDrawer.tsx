@@ -30,9 +30,9 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({ label, title, childr
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-[80] md:hidden">
+        <div className="fixed inset-0 z-[100] md:hidden">
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 right-0 bottom-0 max-h-[75vh] bg-terminal-black border-t-2 border-gray-700 rounded-t-xl shadow-2xl overflow-hidden">
+          <div className="absolute left-0 right-0 bottom-0 max-h-[85vh] bg-terminal-black border-t-2 border-gray-700 rounded-t-xl shadow-2xl overflow-hidden pb-[env(safe-area-inset-bottom)]">
             <div className="flex items-center justify-between px-3 py-2 border-b border-gray-800 bg-terminal-black/90">
               <div className="text-[10px] text-gray-500 uppercase tracking-widest">{title}</div>
               <button

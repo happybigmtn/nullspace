@@ -500,6 +500,7 @@ export default function CasinoApp() {
                  <ActiveGame
                     gameState={gameState}
                     deck={deck}
+                    chips={stats.chips}
                     numberInput={numberInputString}
                     onToggleHold={safeActions.toggleHold}
                     aiAdvice={aiAdvice}
