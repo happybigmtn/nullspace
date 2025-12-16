@@ -22,7 +22,7 @@ export const MobileChipSelector: React.FC<MobileChipSelectorProps> = ({ currentB
             <button
                 type="button"
                 onClick={() => setIsOpen(!isOpen)}
-                className="fixed left-4 bottom-24 sm:hidden z-40 flex items-center justify-center w-14 h-14 rounded-full border-2 border-terminal-gold bg-terminal-black/90 shadow-lg backdrop-blur-sm"
+                className="fixed left-4 top-20 sm:hidden z-40 flex items-center justify-center w-14 h-14 rounded-full border-2 border-terminal-gold bg-terminal-black/90 shadow-lg backdrop-blur-sm"
             >
                 <div className="flex flex-col items-center leading-none">
                     <span className="text-[8px] text-terminal-gold uppercase tracking-widest mb-0.5">BET</span>
@@ -36,7 +36,7 @@ export const MobileChipSelector: React.FC<MobileChipSelectorProps> = ({ currentB
             {isOpen && (
                 <>
                     <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm" onClick={() => setIsOpen(false)} />
-                    <div className="fixed left-4 bottom-40 z-50 flex flex-col-reverse gap-3 animate-slide-up origin-bottom">
+                    <div className="fixed left-4 top-36 z-50 flex flex-col gap-3 animate-slide-down origin-top">
                         {CHIPS.map((chip) => (
                             <button
                                 key={chip}

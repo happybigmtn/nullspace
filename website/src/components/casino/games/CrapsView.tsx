@@ -6,7 +6,7 @@ import { MobileDrawer } from '../MobileDrawer';
 import { GameControlBar } from '../GameControlBar';
 import { calculateCrapsExposure } from '../../../utils/gameUtils';
 
-export const CrapsView = React.memo<{ gameState: GameState; actions: any }>(({ gameState, actions }) => {
+export const CrapsView = React.memo<{ gameState: GameState; actions: any; lastWin?: number }>(({ gameState, actions, lastWin }) => {
     // Get current roll (last dice sum)
     const currentRoll = useMemo(() =>
         gameState.dice.length === 2 ? gameState.dice[0] + gameState.dice[1] : null,
@@ -173,7 +173,7 @@ export const CrapsView = React.memo<{ gameState: GameState; actions: any }>(({ g
                 {/* Center Info */}
                 <div className="text-center space-y-3 relative z-20">
                     <div className="text-lg sm:text-2xl font-bold text-terminal-gold tracking-widest leading-tight animate-pulse">
-                        {gameState.message}
+                        {gameState.message}{lastWin && lastWin > 0 ? ` (+$${lastWin})` : ''}
                     </div>
                     {gameState.crapsRollHistory.length > 0 && (
                         <div className="text-[10px] tracking-widest mt-1 flex items-center justify-center gap-1">
@@ -208,7 +208,7 @@ export const CrapsView = React.memo<{ gameState: GameState; actions: any }>(({ g
                     <div className="flex flex-col gap-2">
                         {/* Log */}
                         <div className="h-8 flex items-center justify-center border border-gray-800 rounded bg-black/40 px-2 overflow-hidden">
-                            <span className="text-xs text-terminal-gold truncate font-bold animate-pulse">{gameState.message}</span>
+                            <span className="text-xs text-terminal-gold truncate font-bold animate-pulse">{gameState.message}{lastWin && lastWin > 0 ? ` (+$${lastWin})` : ''}</span>
                         </div>
                         
                         {/* Bets Scroller */}

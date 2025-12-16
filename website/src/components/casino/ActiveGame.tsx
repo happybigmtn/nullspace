@@ -89,6 +89,21 @@ export const ActiveGame: React.FC<ActiveGameProps> = ({ gameState, deck, numberI
     return 'CHOOSE ACTION';
   };
 
+  const prevChipsRef = React.useRef(chips);
+  const [transientWin, setTransientWin] = React.useState(0);
+
+  React.useEffect(() => {
+    if (chips !== undefined && prevChipsRef.current !== undefined) {
+      const diff = chips - prevChipsRef.current;
+      if (diff > 0) {
+        setTransientWin(diff);
+      } else {
+        setTransientWin(0);
+      }
+    }
+    prevChipsRef.current = chips;
+  }, [chips]);
+
   return (
     <>
          <div className="flex justify-center z-30 pointer-events-none select-none mb-2">
@@ -119,14 +134,14 @@ export const ActiveGame: React.FC<ActiveGameProps> = ({ gameState, deck, numberI
 
 	         <BigWinEffect 
                 key={`${chips}-${gameState.lastResult}-${gameState.stage}`}
-	            amount={gameState.lastResult} 
-	            show={gameState.stage === 'RESULT' && gameState.lastResult > 0} 
+	            amount={Math.max(gameState.lastResult, transientWin)} 
+	            show={(gameState.stage === 'RESULT' && gameState.lastResult > 0) || transientWin > 0} 
 	            durationMs={gameState.type === GameType.BLACKJACK ? 1000 : undefined}
                 reducedMotion={reducedMotion}
 	         />
 
          {gameState.type === GameType.BLACKJACK && <BlackjackView gameState={gameState} actions={actions} />}
-         {gameState.type === GameType.CRAPS && <CrapsView gameState={gameState} actions={actions} />}
+         {gameState.type === GameType.CRAPS && <CrapsView gameState={gameState} actions={actions} lastWin={transientWin} />}
          {gameState.type === GameType.BACCARAT && <BaccaratView gameState={gameState} actions={actions} />}
          {gameState.type === GameType.ROULETTE && <RouletteView gameState={gameState} numberInput={numberInput} actions={actions} />}
          {gameState.type === GameType.SIC_BO && <SicBoView gameState={gameState} numberInput={numberInput} actions={actions} />}
