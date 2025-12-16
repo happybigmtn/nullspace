@@ -45,7 +45,7 @@ export const BlackjackView = React.memo<{ gameState: GameState; actions: any }>(
     };
     return (
         <>
-            <div className="flex-1 w-full flex flex-col items-center justify-center gap-8 relative z-10 pb-20">
+            <div className="flex-1 w-full flex flex-col items-center justify-start sm:justify-center gap-4 sm:gap-8 relative z-10 pt-8 sm:pt-10 pb-24 sm:pb-20">
                 <h1 className="absolute top-0 text-xl font-bold text-gray-500 tracking-widest uppercase">BLACKJACK</h1>
                 <div className="absolute top-2 right-2 z-40">
                     <MobileDrawer label="INFO" title="BLACKJACK">
@@ -60,7 +60,7 @@ export const BlackjackView = React.memo<{ gameState: GameState; actions: any }>(
                     </MobileDrawer>
                 </div>
                 {/* Dealer Area */}
-                <div className="min-h-[120px] flex items-center justify-center opacity-75">
+                <div className="min-h-[96px] sm:min-h-[120px] flex items-center justify-center opacity-75">
                     {gameState.dealerCards.length > 0 ? (
                         <div className="flex flex-col items-center gap-2">
                             <span className="text-sm font-bold tracking-widest text-white">DEALER <span className="text-white">({dealerValue})</span></span>
@@ -79,13 +79,13 @@ export const BlackjackView = React.memo<{ gameState: GameState; actions: any }>(
 
                 {/* Center Info */}
                 <div className="text-center space-y-3 relative z-20">
-                        <div className="text-2xl font-bold text-terminal-gold tracking-widest">
+                        <div className="text-lg sm:text-2xl font-bold text-terminal-gold tracking-widest leading-tight">
                             {gameState.message}
                         </div>
                 </div>
 
                 {/* Player Area - Highlighted */}
-                <div className="min-h-[120px] flex gap-8 items-center justify-center">
+                <div className="min-h-[96px] sm:min-h-[120px] flex gap-8 items-center justify-center">
                     {/* Finished Split Hands */}
                     {gameState.completedHands.length > 0 && (
                             <div className="flex gap-2 opacity-50 scale-75 origin-right">

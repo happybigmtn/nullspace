@@ -3,33 +3,21 @@ import { Link } from 'react-router-dom';
 import { PlaySwapStakeTabs } from './components/PlaySwapStakeTabs';
 import { WalletPill } from './components/WalletPill';
 import { PageHeader } from './components/PageHeader';
-import { ConfirmModal } from './components/ui/ConfirmModal';
 import { useSharedCasinoConnection } from './chain/CasinoConnectionContext';
 import { useActivityFeed } from './hooks/useActivityFeed';
 import { parseAmount } from './utils/amounts.js';
 import { track } from './services/telemetry';
 import { logActivity, trackTxConfirmed, trackTxFailed, trackTxSubmitted, type ActivityLevel, type TxKind } from './services/txTracker';
 import { pushToast } from './services/toasts';
-
-function formatApproxTimeFromBlocks(blocks: number, secondsPerBlock = 3): string {
-  if (!Number.isFinite(blocks) || blocks <= 0) return '0s';
-  const totalSeconds = Math.floor(blocks * secondsPerBlock);
-  const minutes = Math.floor(totalSeconds / 60);
-  const hours = Math.floor(minutes / 60);
-  const days = Math.floor(hours / 24);
-  if (days > 0) return `~${days}d`;
-  if (hours > 0) return `~${hours}h`;
-  if (minutes > 0) return `~${minutes}m`;
-  return `~${totalSeconds}s`;
-}
+import { StakingDashboard } from './components/staking/StakingDashboard';
+import { StakeFlow } from './components/staking/StakeFlow';
+import { StakingAdvanced } from './components/staking/StakingAdvanced';
 
 export default function StakingApp() {
   const [lastTxSig, setLastTxSig] = useState<string | null>(null);
   const [lastTxDigest, setLastTxDigest] = useState<string | null>(null);
   const activity = useActivityFeed('staking', 12);
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [stakeConfirmOpen, setStakeConfirmOpen] = useState(false);
-  const [stakeSubmitting, setStakeSubmitting] = useState(false);
 
   const connection = useSharedCasinoConnection();
   const pollRef = useRef<(() => void) | null>(null);
@@ -333,7 +321,7 @@ export default function StakingApp() {
     trackSubmitted('deposit', 'Submitted faucet claim (1000 RNG)', result);
   };
 
-  const stake = async ({ amount, duration }: { amount: bigint; duration: bigint }) => {
+  const stake = async (amount: bigint, duration: bigint) => {
     const client = getReadyClient();
     if (!client) return;
     await ensureRegistered();
@@ -438,356 +426,153 @@ export default function StakingApp() {
       />
 
       <div className="p-4">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Wallet */}
-        <section className="border border-gray-800 rounded p-4 bg-gray-900/30">
-          <div className="text-xs text-gray-400 tracking-widest mb-3">WALLET</div>
-          <div className="space-y-2 text-sm">
-            <div>
-              Registered:{' '}
-              <span className={isRegistered ? 'text-terminal-green' : 'text-terminal-accent'}>
-                {isRegistered ? 'YES' : 'NO'}
-              </span>
-            </div>
-            <div>
-              RNG: <span className="text-white">{player?.chips ?? 0}</span>
-            </div>
-            <div>
-              vUSDT: <span className="text-white">{player?.vusdtBalance ?? 0}</span>
-            </div>
-            <div className="text-[10px] text-gray-600 break-all">PK: {connection.keypair?.publicKeyHex ?? '—'}</div>
-          </div>
-
-          <div className="mt-4 space-y-2">
-            <div className="flex items-center gap-2">
-              <input
-                className="flex-1 bg-gray-950 border border-gray-800 rounded px-2 py-1 text-xs"
-                value={registerName}
-                onChange={(e) => setRegisterName(e.target.value)}
-                placeholder="Name"
-              />
-              <button
-                className="text-xs px-3 py-1 rounded border border-terminal-green text-terminal-green hover:bg-terminal-green/10"
-                onClick={ensureRegistered}
-              >
-                Register
-              </button>
-            </div>
-            <button
-              className="w-full text-xs px-3 py-2 rounded border border-terminal-green text-terminal-green hover:bg-terminal-green/10"
-              onClick={claimFaucet}
-            >
-              Daily Faucet (1000 RNG)
-            </button>
-          </div>
-        </section>
-
-        {/* Stake */}
-        <section className={['border border-gray-800 rounded p-4 bg-gray-900/30', showAdvanced ? '' : 'lg:col-span-2'].join(' ').trim()}>
-          <div className="text-xs text-gray-400 tracking-widest mb-3">STAKE RNG</div>
-
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div className="border border-gray-800 rounded p-3 bg-black/30">
-                <div className="text-[10px] text-gray-500 tracking-widest">YOUR STAKE</div>
-                <div className="text-white mt-1">{staker?.balance ?? 0}</div>
-                <div className="text-[10px] text-gray-600">unlock @ {derived.unlockTs || '—'}</div>
-                <div className="text-[10px] text-gray-600">
-                  unclaimed {derived.unclaimedRewards.toString()}
-                </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {/* Wallet */}
+          <section className="border border-gray-800 rounded p-4 bg-gray-900/30">
+            <div className="text-xs text-gray-400 tracking-widest mb-3">WALLET</div>
+            <div className="space-y-2 text-sm">
+              <div>
+                Registered:{' '}
+                <span className={isRegistered ? 'text-terminal-green' : 'text-terminal-accent'}>
+                  {isRegistered ? 'YES' : 'NO'}
+                </span>
               </div>
-              <div className="border border-gray-800 rounded p-3 bg-black/30">
-                <div className="text-[10px] text-gray-500 tracking-widest">VOTING POWER</div>
-                <div className="text-white mt-1">{derived.vp.toString()}</div>
-                <div className="text-[10px] text-gray-600">share ~ {(derived.shareBps / 100).toFixed(2)}%</div>
-                <div className="text-[10px] text-gray-600">
-                  claimable {derived.claimableRewards.toString()}
-                </div>
+              <div>
+                RNG: <span className="text-white">{player?.chips ?? 0}</span>
               </div>
+              <div>
+                vUSDT: <span className="text-white">{player?.vusdtBalance ?? 0}</span>
+              </div>
+              <div className="text-[10px] text-gray-600 break-all">PK: {connection.keypair?.publicKeyHex ?? '—'}</div>
             </div>
 
-          <div className="mt-4 space-y-2">
-            <div className="flex items-center justify-between gap-2 text-[10px] text-gray-600 tracking-widest uppercase">
-              <span>Amount (RNG)</span>
-              <span>
-                Balance <span className="text-white">{stakeBalance.toString()}</span>
-              </span>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                className="flex-1 min-w-[180px] h-11 bg-gray-950 border border-gray-800 rounded px-2 text-xs"
-                value={stakeAmount}
-                onChange={(e) => setStakeAmount(e.target.value)}
-                placeholder="Amount (RNG)"
-                inputMode="numeric"
-                pattern="[0-9]*"
-              />
-              <button
-                type="button"
-                className="h-11 px-3 rounded border border-gray-800 text-gray-300 text-[10px] tracking-widest uppercase hover:border-gray-600 hover:text-white"
-                onClick={() => setStakeAmount(stakeBalance.toString())}
-                disabled={stakeBalance <= 0n}
-                title="Max"
-              >
-                Max
-              </button>
-              {[25, 50, 75, 100].map((pct) => (
+            <div className="mt-4 space-y-2">
+              <div className="flex items-center gap-2">
+                <input
+                  className="flex-1 bg-gray-950 border border-gray-800 rounded px-2 py-1 text-xs"
+                  value={registerName}
+                  onChange={(e) => setRegisterName(e.target.value)}
+                  placeholder="Name"
+                />
                 <button
-                  key={pct}
-                  type="button"
-                  className="h-11 px-3 rounded border border-gray-800 text-gray-300 text-[10px] tracking-widest uppercase hover:border-gray-600 hover:text-white"
-                  onClick={() => setStakePercent(pct)}
-                  disabled={stakeBalance <= 0n}
-                  title={`${pct}%`}
+                  className="text-xs px-3 py-1 rounded border border-terminal-green text-terminal-green hover:bg-terminal-green/10"
+                  onClick={ensureRegistered}
                 >
-                  {pct}%
+                  Register
                 </button>
-              ))}
-            </div>
-
-            <div className="flex items-center justify-between gap-2 text-[10px] text-gray-600 tracking-widest uppercase">
-              <span>Duration (blocks)</span>
-              <span className="text-gray-500">
-                {stakeDurationParsed && stakeDurationParsed > 0n && stakeDurationParsed < 1_000_000n
-                  ? formatApproxTimeFromBlocks(Number(stakeDurationParsed))
-                  : '—'}
-              </span>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                className="flex-1 min-w-[180px] h-11 bg-gray-950 border border-gray-800 rounded px-2 text-xs"
-                value={stakeDuration}
-                onChange={(e) => setStakeDuration(e.target.value)}
-                placeholder="Duration (blocks)"
-                inputMode="numeric"
-                pattern="[0-9]*"
-              />
-              {[100, 500, 2000, 10000].map((blocks) => (
-                <button
-                  key={blocks}
-                  type="button"
-                  className="h-11 px-3 rounded border border-gray-800 text-gray-300 text-[10px] tracking-widest uppercase hover:border-gray-600 hover:text-white"
-                  onClick={() => setStakeDuration(String(blocks))}
-                  title={`${blocks} blocks`}
-                >
-                  {blocks >= 1000 ? `${blocks / 1000}k` : blocks}
-                </button>
-              ))}
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                className={`flex-1 text-xs px-3 py-2 rounded border ${
-                  canStake
-                    ? 'border-terminal-green text-terminal-green hover:bg-terminal-green/10'
-                    : 'border-gray-800 text-gray-600 cursor-not-allowed'
-                }`}
-                onClick={() => (canStake ? setStakeConfirmOpen(true) : null)}
-                disabled={!canStake}
-              >
-                Stake
-              </button>
-              <button
-                className={`text-xs px-3 py-2 rounded border ${
-                  derived.locked
-                    ? 'border-gray-800 text-gray-600 cursor-not-allowed'
-                    : 'border-gray-700 text-gray-300 hover:border-gray-500'
-                }`}
-                onClick={unstake}
-                disabled={derived.locked}
-                title={derived.locked ? `Locked for ${derived.remainingBlocks} blocks` : 'Unstake'}
-              >
-                Unstake
-              </button>
-              <button
-                className={`text-xs px-3 py-2 rounded border ${
-                  derived.claimableRewards === 0n
-                    ? 'border-gray-800 text-gray-600 cursor-not-allowed'
-                    : 'border-gray-700 text-gray-300 hover:border-gray-500'
-                }`}
-                onClick={claimRewards}
-                disabled={derived.claimableRewards === 0n}
-                title={derived.claimableRewards === 0n ? 'No rewards to claim' : 'Claim rewards'}
-              >
-                Claim
-              </button>
-            </div>
-
-            {derived.locked && (
-              <div className="text-[10px] text-gray-500">
-                Locked: {derived.remainingBlocks} blocks ({formatApproxTimeFromBlocks(derived.remainingBlocks)})
               </div>
-            )}
+              <button
+                className="w-full text-xs px-3 py-2 rounded border border-terminal-green text-terminal-green hover:bg-terminal-green/10"
+                onClick={claimFaucet}
+              >
+                Daily Faucet (1000 RNG)
+              </button>
+            </div>
+          </section>
 
-            {stakeValidationMessage ? <div className="text-[10px] text-terminal-accent">{stakeValidationMessage}</div> : null}
+          {/* Stake */}
+          <section
+            className={[
+              'border border-gray-800 rounded p-4 bg-gray-900/30',
+              showAdvanced ? '' : 'lg:col-span-2',
+            ]
+              .join(' ')
+              .trim()}
+          >
+            <div className="text-xs text-gray-400 tracking-widest mb-3">STAKE RNG</div>
 
-            <div className="text-[10px] text-gray-600 leading-relaxed">
-              Rewards are funded from positive epoch net PnL and distributed pro-rata by voting power (amount * duration).
-              Call “Process Epoch” after ~100 blocks to roll the epoch and update the reward pool.
-            </div>
-          </div>
-        </section>
+            <StakingDashboard staker={staker} derived={derived} />
 
-        {/* House */}
-        {showAdvanced ? (
-        <section className="border border-gray-800 rounded p-4 bg-gray-900/30">
-          <div className="text-xs text-gray-400 tracking-widest mb-3">HOUSE / REWARDS</div>
-          <div className="space-y-2 text-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-gray-500">Epoch</span>
-              <span className="text-white">{house?.currentEpoch ?? 0}</span>
+            <div className="mt-4">
+              <StakeFlow
+                player={player}
+                derived={derived}
+                stakeBalance={stakeBalance}
+                stakeAmount={stakeAmount}
+                stakeDuration={stakeDuration}
+                stakeAmountParsed={stakeAmountParsed}
+                stakeDurationParsed={stakeDurationParsed}
+                canStake={canStake}
+                stakeValidationMessage={stakeValidationMessage}
+                setStakeAmount={setStakeAmount}
+                setStakeDuration={setStakeDuration}
+                setStakePercent={setStakePercent}
+                onStake={stake}
+                onUnstake={unstake}
+                onClaimRewards={claimRewards}
+              />
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-gray-500">Net PnL</span>
-              <span className="text-white">{house?.netPnl ?? '0'}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-gray-500">Total Staked</span>
-              <span className="text-white">{house?.totalStakedAmount ?? 0}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-gray-500">Total Voting Power</span>
-              <span className="text-white">{house?.totalVotingPower ?? '0'}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-gray-500">AMM Fees</span>
-              <span className="text-white">{house?.accumulatedFees ?? 0}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-gray-500">Total Burned</span>
-              <span className="text-white">{house?.totalBurned ?? 0}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-gray-500">Total Issuance</span>
-              <span className="text-white">{house?.totalIssuance ?? 0}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-gray-500">Reward Pool</span>
-              <span className="text-white">{derived.rewardPool.toString()}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-gray-500">Reward Carry</span>
-              <span className="text-white">{house?.stakingRewardCarry ?? 0}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-gray-500">View</span>
-              <span className="text-white">{connection.currentView ?? '—'}</span>
-            </div>
-          </div>
+          </section>
 
-          <div className="mt-4 border-t border-gray-800 pt-4 space-y-2">
-            <button
-              className="w-full text-xs px-3 py-2 rounded border border-gray-700 text-gray-300 hover:border-gray-500"
-              onClick={processEpoch}
-            >
-              Process Epoch (dev)
-            </button>
-            <div className="text-[10px] text-gray-600">
-          Anyone can call this in dev; later it’s a keeper/admin action.
-            </div>
-          </div>
-        </section>
-        ) : null}
-      </div>
-
-      <ConfirmModal
-        open={stakeConfirmOpen}
-        title="Confirm Stake"
-        confirmText="Confirm Stake"
-        loading={stakeSubmitting}
-        onClose={() => (stakeSubmitting ? null : setStakeConfirmOpen(false))}
-        onConfirm={async () => {
-          if (!canStake) return;
-          if (stakeAmountParsed === null || stakeDurationParsed === null) return;
-          setStakeSubmitting(true);
-          try {
-            await stake({ amount: stakeAmountParsed, duration: stakeDurationParsed });
-            setStakeConfirmOpen(false);
-          } finally {
-            setStakeSubmitting(false);
-          }
-        }}
-      >
-        <div className="space-y-3 text-sm">
-          <div className="text-[10px] text-gray-500 tracking-widest uppercase">Summary</div>
-          <div className="grid grid-cols-2 gap-2 text-[11px]">
-            <div className="text-gray-500">Amount</div>
-            <div className="text-white text-right">
-              {stakeAmountParsed === null ? '—' : stakeAmountParsed.toString()} RNG
-            </div>
-            <div className="text-gray-500">Duration</div>
-            <div className="text-white text-right">
-              {stakeDurationParsed === null ? '—' : stakeDurationParsed.toString()} blocks
-            </div>
-            <div className="text-gray-500">Voting power</div>
-            <div className="text-white text-right">
-              {stakeAmountParsed && stakeDurationParsed ? (stakeAmountParsed * stakeDurationParsed).toString() : '—'}
-            </div>
-            <div className="text-gray-500">Unlock ETA</div>
-            <div className="text-white text-right">
-              {stakeDurationParsed && stakeDurationParsed > 0n && stakeDurationParsed < 1_000_000n
-                ? formatApproxTimeFromBlocks(Number(stakeDurationParsed))
-                : '—'}
-            </div>
-          </div>
-          <div className="text-[10px] text-gray-600 leading-relaxed">
-            Voting power = amount × duration. Rewards depend on future epoch net PnL.
-          </div>
+          {/* House */}
+          {showAdvanced ? (
+            <StakingAdvanced
+              house={house}
+              derived={derived}
+              currentView={connection.currentView}
+              onProcessEpoch={processEpoch}
+            />
+          ) : null}
         </div>
-      </ConfirmModal>
 
-      {/* Activity */}
-      <section className="mt-4 border border-gray-800 rounded p-4 bg-gray-900/20">
-        <div className="text-xs text-gray-400 tracking-widest mb-3">ACTIVITY</div>
-        {activity.length === 0 ? (
-          <div className="text-[10px] text-gray-600">No activity yet.</div>
-        ) : (
-          <ul className="space-y-1 text-[10px] text-gray-400">
-            {activity.map((item) => {
-              const isTx = item.type === 'tx';
-              const message = isTx ? item.finalMessage ?? item.message : item.message;
-              const when = new Date(isTx ? item.updatedTs : item.ts).toLocaleTimeString();
-              const label = isTx
-                ? item.status === 'submitted'
-                  ? 'PENDING'
-                  : item.status === 'confirmed'
-                    ? 'OK'
-                    : 'FAIL'
-                : item.level === 'error'
-                  ? 'ERROR'
-                  : item.level === 'success'
-                    ? 'OK'
-                    : 'INFO';
-              const labelClass = isTx
-                ? item.status === 'confirmed'
-                  ? 'text-terminal-green'
-                  : item.status === 'failed'
-                    ? 'text-terminal-accent'
-                    : 'text-gray-500'
-                : item.level === 'error'
-                  ? 'text-terminal-accent'
-                  : item.level === 'success'
+        {/* Activity */}
+        <section className="mt-4 border border-gray-800 rounded p-4 bg-gray-900/20">
+          <div className="text-xs text-gray-400 tracking-widest mb-3">ACTIVITY</div>
+          {activity.length === 0 ? (
+            <div className="text-[10px] text-gray-600">No activity yet.</div>
+          ) : (
+            <ul className="space-y-1 text-[10px] text-gray-400">
+              {activity.map((item) => {
+                const isTx = item.type === 'tx';
+                const message = isTx ? item.finalMessage ?? item.message : item.message;
+                const when = new Date(isTx ? item.updatedTs : item.ts).toLocaleTimeString();
+                const label = isTx
+                  ? item.status === 'submitted'
+                    ? 'PENDING'
+                    : item.status === 'confirmed'
+                      ? 'OK'
+                      : 'FAIL'
+                  : item.level === 'error'
+                    ? 'ERROR'
+                    : item.level === 'success'
+                      ? 'OK'
+                      : 'INFO';
+                const labelClass = isTx
+                  ? item.status === 'confirmed'
                     ? 'text-terminal-green'
-                    : 'text-gray-500';
+                    : item.status === 'failed'
+                      ? 'text-terminal-accent'
+                      : 'text-gray-500'
+                  : item.level === 'error'
+                    ? 'text-terminal-accent'
+                    : item.level === 'success'
+                      ? 'text-terminal-green'
+                      : 'text-gray-500';
 
-              const messageNode =
-                isTx && item.txDigest ? (
-                  <Link to={`/explorer/tx/${item.txDigest}`} className="text-gray-300 hover:underline" title={item.txDigest}>
-                    {message}
-                  </Link>
-                ) : (
-                  <span className="text-gray-300">{message}</span>
+                const messageNode =
+                  isTx && item.txDigest ? (
+                    <Link
+                      to={`/explorer/tx/${item.txDigest}`}
+                      className="text-gray-300 hover:underline"
+                      title={item.txDigest}
+                    >
+                      {message}
+                    </Link>
+                  ) : (
+                    <span className="text-gray-300">{message}</span>
+                  );
+
+                return (
+                  <li key={item.id} className="flex items-start gap-2">
+                    <span className="text-gray-600">{when}</span>
+                    <span className={`text-[10px] tracking-widest ${labelClass}`}>{label}</span>
+                    {messageNode}
+                  </li>
                 );
-
-              return (
-                <li key={item.id} className="flex items-start gap-2">
-                  <span className="text-gray-600">{when}</span>
-                  <span className={`text-[10px] tracking-widest ${labelClass}`}>{label}</span>
-                  {messageNode}
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
+              })}
+            </ul>
+          )}
+        </section>
       </div>
     </div>
   );

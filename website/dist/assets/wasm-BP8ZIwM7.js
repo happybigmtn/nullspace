@@ -208,6 +208,11 @@ export class WasmWrapper {
     return this.wasm.wrap_transaction_submission(transactionBytes);
   }
 
+  // Compute explorer digest for a transaction (signature excluded)
+  digestTransaction(transactionBytes) {
+    return this.wasm.digest_transaction(transactionBytes);
+  }
+
   // Wrap a summary in a Submission enum
   wrapSummarySubmission(summaryBytes) {
     return this.wasm.wrap_summary_submission(summaryBytes);

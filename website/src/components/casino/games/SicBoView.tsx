@@ -159,7 +159,7 @@ export const SicBoView = React.memo<{ gameState: GameState; numberInput?: string
 
     return (
         <>
-            <div className="flex-1 w-full flex flex-col items-center justify-center gap-8 relative z-10 pb-20 md:pl-64 md:pr-60">
+            <div className="flex-1 w-full flex flex-col items-center justify-start sm:justify-center gap-4 sm:gap-8 relative z-10 pt-8 sm:pt-10 pb-24 sm:pb-20 md:pl-64 md:pr-60">
                 <h1 className="absolute top-0 text-xl font-bold text-gray-500 tracking-widest uppercase">SIC BO</h1>
                 <div className="absolute top-2 right-2 z-40">
                     <MobileDrawer label="INFO" title="SIC BO">
@@ -195,7 +195,7 @@ export const SicBoView = React.memo<{ gameState: GameState; numberInput?: string
                     </MobileDrawer>
                 </div>
                 {/* Dice Display */}
-                <div className="min-h-[120px] flex items-center justify-center">
+                <div className="min-h-[96px] sm:min-h-[120px] flex items-center justify-center">
                     {gameState.dice.length === 3 ? (
                         <div className="flex flex-col gap-2 items-center">
                              <span className="text-xs uppercase tracking-widest text-gray-500">ROLL</span>
@@ -209,7 +209,7 @@ export const SicBoView = React.memo<{ gameState: GameState; numberInput?: string
                     ) : (
                         <div className="flex gap-4">
                             {[1,2,3].map(i => (
-                                <div key={i} className="w-16 h-16 border border-dashed border-gray-700 rounded flex items-center justify-center text-gray-700 text-2xl">?</div>
+                                <div key={i} className="w-14 h-14 sm:w-16 sm:h-16 border border-dashed border-gray-700 rounded flex items-center justify-center text-gray-700 text-xl sm:text-2xl">?</div>
                             ))}
                         </div>
                     )}
@@ -217,7 +217,7 @@ export const SicBoView = React.memo<{ gameState: GameState; numberInput?: string
 
                 {/* Center Info */}
                 <div className="text-center space-y-3 relative z-20">
-                    <div className="text-2xl font-bold text-terminal-gold tracking-widest animate-pulse">
+                    <div className="text-lg sm:text-2xl font-bold text-terminal-gold tracking-widest leading-tight animate-pulse">
                         {gameState.message}
                     </div>
                 </div>

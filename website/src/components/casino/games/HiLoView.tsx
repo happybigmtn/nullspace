@@ -42,7 +42,7 @@ export const HiLoView = React.memo<HiLoViewProps>(({ gameState, deck, actions })
 
     return (
         <>
-            <div className="flex-1 w-full flex flex-col items-center justify-center gap-8 relative z-10 pb-32">
+            <div className="flex-1 w-full flex flex-col items-center justify-start sm:justify-center gap-4 sm:gap-8 relative z-10 pt-8 sm:pt-10 pb-32">
                 <h1 className="absolute top-0 text-xl font-bold text-gray-500 tracking-widest uppercase">HILO</h1>
                 <div className="absolute top-2 right-2 z-40">
                     <MobileDrawer label="INFO" title="HILO">
@@ -59,21 +59,21 @@ export const HiLoView = React.memo<HiLoViewProps>(({ gameState, deck, actions })
                 </div>
                 
                 {/* TOP: POT */}
-                <div className="min-h-[80px] flex flex-col items-center justify-center w-full max-w-md">
-                     <div className="text-3xl text-terminal-gold font-bold mb-2 tracking-widest">
+                <div className="min-h-[60px] sm:min-h-[80px] flex flex-col items-center justify-center w-full max-w-md">
+                     <div className="text-2xl sm:text-3xl text-terminal-gold font-bold mb-1 sm:mb-2 tracking-widest">
                          POT: ${gameState.hiloAccumulator.toLocaleString()}
                      </div>
                 </div>
 
                 {/* Center Info */}
                 <div className="text-center space-y-3 relative z-20">
-                        <div className="text-2xl font-bold text-terminal-gold tracking-widest animate-pulse">
+                        <div className="text-lg sm:text-2xl font-bold text-terminal-gold tracking-widest leading-tight animate-pulse">
                             {gameState.message}
                         </div>
                 </div>
 
                 {/* Current Card & Projections */}
-                <div className="min-h-[120px] flex gap-8 items-center justify-center">
+                <div className="min-h-[96px] sm:min-h-[120px] flex gap-8 items-center justify-center">
                     {gameState.playerCards.length > 0 && (
                         <div className="flex flex-col gap-2 items-center">
                             <span className="text-xs uppercase tracking-widest text-gray-500">CURRENT CARD</span>
@@ -101,7 +101,7 @@ export const HiLoView = React.memo<HiLoViewProps>(({ gameState, deck, actions })
                 </div>
 
                 {/* BOTTOM: History */}
-                <div className="min-h-[60px] flex items-center justify-center">
+                <div className="min-h-[48px] sm:min-h-[60px] flex items-center justify-center">
                      {gameState.playerCards.length > 1 && (
                         <div className="flex flex-col items-center gap-2">
                             <span className="text-[10px] uppercase tracking-widest text-gray-600">CARD HISTORY</span>

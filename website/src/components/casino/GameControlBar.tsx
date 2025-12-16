@@ -14,11 +14,11 @@ export const GameControlBar: React.FC<GameControlBarProps> = ({
   ariaLabel = 'Game controls',
 }) => {
   const base =
-    'ns-controlbar absolute bottom-[calc(2rem+env(safe-area-inset-bottom))] left-0 right-0 bg-terminal-black/90 border-t-2 border-gray-700 z-40';
+    'ns-controlbar fixed bottom-0 left-0 right-0 sm:absolute sm:bottom-[calc(2rem+env(safe-area-inset-bottom))] bg-terminal-black/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)]';
   const layout =
     variant === 'stack'
       ? 'p-2'
-      : 'h-16 flex items-center justify-start md:justify-center gap-2 p-2 overflow-x-auto';
+      : 'h-16 flex items-center justify-start md:justify-center gap-2 p-2 overflow-x-auto overflow-y-hidden';
 
   return (
     <div role="group" aria-label={ariaLabel} className={[base, layout, className].filter(Boolean).join(' ')}>
@@ -26,4 +26,3 @@ export const GameControlBar: React.FC<GameControlBarProps> = ({
     </div>
   );
 };
-

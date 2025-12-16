@@ -90,7 +90,7 @@ export const ActiveGame: React.FC<ActiveGameProps> = ({ gameState, deck, numberI
 
   return (
     <>
-         <div className="absolute top-8 left-1/2 -translate-x-1/2 z-30 pointer-events-none select-none">
+         <div className="flex justify-center z-30 pointer-events-none select-none mb-2">
              <div className="px-3 py-1 rounded border border-gray-800 bg-black/60 text-[10px] tracking-widest uppercase text-gray-300">
                  NEXT: <span className="text-white">{nextActionLabel()}</span>
              </div>

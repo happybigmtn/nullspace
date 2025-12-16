@@ -15,7 +15,7 @@ export const GenericGameView = React.memo<{ gameState: GameState; actions: any }
     const casinoWarTieBet = useMemo(() => gameState.casinoWarTieBet || 0, [gameState.casinoWarTieBet]);
     return (
         <>
-            <div className="flex-1 w-full flex flex-col items-center justify-center gap-8 relative z-10 pb-20">
+            <div className="flex-1 w-full flex flex-col items-center justify-start sm:justify-center gap-4 sm:gap-8 relative z-10 pt-8 sm:pt-10 pb-24 sm:pb-20">
                 <h1 className="absolute top-0 text-xl font-bold text-gray-500 tracking-widest uppercase">{gameTitle}</h1>
                 <div className="absolute top-2 right-2 z-40">
                     <MobileDrawer label="INFO" title={gameTitle}>
@@ -30,7 +30,7 @@ export const GenericGameView = React.memo<{ gameState: GameState; actions: any }
                     </MobileDrawer>
                 </div>
                 {/* Dealer/Opponent */}
-                <div className="min-h-[120px] flex items-center justify-center opacity-75">
+                <div className="min-h-[96px] sm:min-h-[120px] flex items-center justify-center opacity-75">
                     {gameState.dealerCards.length > 0 ? (
                         <div className="flex flex-col items-center gap-2">
                             <span className="text-lg font-bold tracking-widest text-terminal-accent">DEALER</span>
@@ -50,13 +50,13 @@ export const GenericGameView = React.memo<{ gameState: GameState; actions: any }
 
                 {/* Center Info */}
                 <div className="text-center space-y-3 relative z-20">
-                    <div className="text-2xl font-bold text-terminal-gold tracking-widest animate-pulse">
+                    <div className="text-lg sm:text-2xl font-bold text-terminal-gold tracking-widest leading-tight animate-pulse">
                         {gameState.message}
                     </div>
                 </div>
 
                 {/* Player */}
-                <div className="min-h-[120px] flex gap-8 items-center justify-center">
+                <div className="min-h-[96px] sm:min-h-[120px] flex gap-8 items-center justify-center">
                      <div className="flex flex-col items-center gap-2 scale-110">
                         <span className="text-lg font-bold tracking-widest text-terminal-green">YOU</span>
                         {gameState.playerCards.length > 0 ? (

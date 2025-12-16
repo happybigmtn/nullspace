@@ -48,7 +48,7 @@ export const CrapsView = React.memo<{ gameState: GameState; actions: any }>(({ g
 
     return (
         <>
-            <div className="flex-1 w-full flex flex-col items-center justify-center gap-6 relative z-10 pb-20">
+            <div className="flex-1 w-full flex flex-col items-center justify-start sm:justify-center gap-4 sm:gap-6 relative z-10 pt-8 sm:pt-10 pb-24 sm:pb-20">
                 <h1 className="absolute top-0 text-xl font-bold text-gray-500 tracking-widest uppercase">CRAPS</h1>
                 <div className="absolute top-2 right-2 z-40">
                     <MobileDrawer label="INFO" title="CRAPS">
@@ -165,14 +165,14 @@ export const CrapsView = React.memo<{ gameState: GameState; actions: any }>(({ g
                 {/* Point Indicator - Centered */}
                 <div className="flex flex-col items-center gap-2">
                     <span className="text-xs uppercase tracking-widest text-gray-500">POINT</span>
-                    <div className={`w-20 h-20 border-2 flex items-center justify-center text-2xl font-bold rounded-full shadow-[0_0_15px_rgba(0,0,0,0.5)] ${gameState.crapsPoint ? pointColor : 'border-gray-700 text-gray-700'}`}>
+                    <div className={`w-16 h-16 sm:w-20 sm:h-20 border-2 flex items-center justify-center text-xl sm:text-2xl font-bold rounded-full shadow-[0_0_15px_rgba(0,0,0,0.5)] ${gameState.crapsPoint ? pointColor : 'border-gray-700 text-gray-700'}`}>
                         {gameState.crapsPoint || "OFF"}
                     </div>
                 </div>
 
                 {/* Center Info */}
                 <div className="text-center space-y-3 relative z-20">
-                    <div className="text-2xl font-bold text-terminal-gold tracking-widest animate-pulse">
+                    <div className="text-lg sm:text-2xl font-bold text-terminal-gold tracking-widest leading-tight animate-pulse">
                         {gameState.message}
                     </div>
                     {gameState.crapsRollHistory.length > 0 && (
@@ -188,7 +188,7 @@ export const CrapsView = React.memo<{ gameState: GameState; actions: any }>(({ g
                 </div>
 
                 {/* Dice Area */}
-                <div className="min-h-[120px] flex gap-8 items-center justify-center">
+                <div className="min-h-[96px] sm:min-h-[120px] flex gap-8 items-center justify-center">
                     {gameState.dice.length > 0 && (
                         <div className="flex flex-col gap-2 items-center">
                             <span className="text-xs uppercase tracking-widest text-gray-500">ROLL</span>

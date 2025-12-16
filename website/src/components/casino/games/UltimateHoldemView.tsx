@@ -41,7 +41,7 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps>(({ gameSta
 
     return (
         <>
-            <div className="flex-1 w-full flex flex-col items-center justify-center gap-6 relative z-10 pb-20">
+            <div className="flex-1 w-full flex flex-col items-center justify-start sm:justify-center gap-4 sm:gap-6 relative z-10 pt-8 sm:pt-10 pb-24 sm:pb-20">
                 <h1 className="absolute top-0 text-xl font-bold text-gray-500 tracking-widest uppercase">ULTIMATE TEXAS HOLD'EM</h1>
                 <div className="absolute top-2 right-2 z-40">
                     <MobileDrawer label="INFO" title="ULTIMATE TEXAS HOLD'EM">
@@ -89,7 +89,7 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps>(({ gameSta
                 </div>
 
                 {/* Dealer Area */}
-                <div className="min-h-[100px] flex items-center justify-center opacity-75">
+                <div className="min-h-[88px] sm:min-h-[100px] flex items-center justify-center opacity-75">
                     {gameState.dealerCards.length > 0 ? (
                         <div className="flex flex-col items-center gap-2">
                             <span className="text-lg font-bold tracking-widest text-terminal-accent">DEALER</span>
@@ -148,7 +148,7 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps>(({ gameSta
                         <span className="text-gray-500">TOTAL</span>
                         <span className="text-terminal-gold">${baseTotalBet.toLocaleString()}</span>
                     </div>
-                    <div className="text-xl font-bold text-terminal-gold tracking-widest animate-pulse">
+                    <div className="text-lg sm:text-xl font-bold text-terminal-gold tracking-widest leading-tight animate-pulse">
                         {gameState.message}
                     </div>
                     <div className="text-xs text-gray-500 flex flex-wrap gap-x-4 gap-y-1 justify-center">
@@ -171,7 +171,7 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps>(({ gameSta
                 </div>
 
                 {/* Player Area */}
-                <div className="min-h-[100px] flex gap-8 items-center justify-center">
+                <div className="min-h-[88px] sm:min-h-[100px] flex gap-8 items-center justify-center">
                     {gameState.playerCards.length > 0 ? (
                         <div className="flex flex-col items-center gap-2 scale-110">
                             <span className="text-lg font-bold tracking-widest text-terminal-green">YOU</span>

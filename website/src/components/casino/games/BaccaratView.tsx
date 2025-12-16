@@ -53,7 +53,7 @@ export const BaccaratView = React.memo<{ gameState: GameState; actions: any }>((
 
     return (
         <>
-            <div className="flex-1 w-full flex flex-col items-center justify-center gap-8 relative z-10 pb-20">
+            <div className="flex-1 w-full flex flex-col items-center justify-start sm:justify-center gap-4 sm:gap-8 relative z-10 pt-8 sm:pt-10 pb-24 sm:pb-20">
                 <h1 className="absolute top-0 text-xl font-bold text-gray-500 tracking-widest uppercase">BACCARAT</h1>
                 <div className="absolute top-2 right-2 z-40">
                     <MobileDrawer label="BETS" title="BACCARAT BETS">
@@ -73,7 +73,7 @@ export const BaccaratView = React.memo<{ gameState: GameState; actions: any }>((
                     </MobileDrawer>
                 </div>
                 {/* Banker Area */}
-                <div className={`min-h-[120px] flex items-center justify-center transition-all duration-300 ${isBankerSelected ? 'scale-110 opacity-100' : 'scale-90 opacity-75'}`}>
+                <div className={`min-h-[96px] sm:min-h-[120px] flex items-center justify-center transition-all duration-300 ${isBankerSelected ? 'scale-110 opacity-100' : 'scale-90 opacity-75'}`}>
                     {gameState.dealerCards.length > 0 ? (
                         <Hand
                             cards={gameState.dealerCards}
@@ -82,21 +82,21 @@ export const BaccaratView = React.memo<{ gameState: GameState; actions: any }>((
                         />
                     ) : (
                         <div className="flex flex-col gap-2 items-center">
-                            <span className={`text-2xl font-bold tracking-widest ${bankerColor}`}>BANKER</span>
+                            <span className={`text-xl sm:text-2xl font-bold tracking-widest ${bankerColor}`}>BANKER</span>
                             <div className={`w-16 h-24 border border-dashed rounded flex items-center justify-center ${bankerColor.replace('text-', 'border-')}`}>?</div>
                         </div>
                     )}
                 </div>
 
                 {/* Center Info */}
-                <div className="text-center space-y-2 relative z-20 py-4">
+                <div className="text-center space-y-2 relative z-20 py-2 sm:py-4">
                     <div className="inline-flex items-center gap-2 px-3 py-1 rounded border bg-black/40 text-[10px] tracking-widest uppercase border-gray-800 text-gray-400">
                         <span className="text-gray-500">{gameState.stage}</span>
                         <span className="text-gray-700">•</span>
                         <span className="text-gray-500">TOTAL</span>
                         <span className="text-terminal-gold">${totalBet.toLocaleString()}</span>
                     </div>
-                    <div className="text-2xl font-bold text-terminal-gold tracking-widest animate-pulse">
+                    <div className="text-lg sm:text-2xl font-bold text-terminal-gold tracking-widest leading-tight animate-pulse">
                         {gameState.message}
                     </div>
                     <div className="flex flex-wrap items-center justify-center gap-2 text-[11px] text-gray-500">
@@ -127,7 +127,7 @@ export const BaccaratView = React.memo<{ gameState: GameState; actions: any }>((
                 </div>
 
                 {/* Player Area */}
-                <div className={`min-h-[120px] flex gap-8 items-center justify-center transition-all duration-300 ${isPlayerSelected ? 'scale-110 opacity-100' : 'scale-90 opacity-75'}`}>
+                <div className={`min-h-[96px] sm:min-h-[120px] flex gap-8 items-center justify-center transition-all duration-300 ${isPlayerSelected ? 'scale-110 opacity-100' : 'scale-90 opacity-75'}`}>
                     {gameState.playerCards.length > 0 ? (
                         <Hand
                             cards={gameState.playerCards}
@@ -136,7 +136,7 @@ export const BaccaratView = React.memo<{ gameState: GameState; actions: any }>((
                         />
                     ) : (
                         <div className="flex flex-col gap-2 items-center">
-                            <span className={`text-2xl font-bold tracking-widest ${playerColor}`}>PLAYER</span>
+                            <span className={`text-xl sm:text-2xl font-bold tracking-widest ${playerColor}`}>PLAYER</span>
                             <div className={`w-16 h-24 border border-dashed rounded flex items-center justify-center ${playerColor.replace('text-', 'border-')}`}>?</div>
                         </div>
                     )}

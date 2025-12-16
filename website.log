@@ -1,0 +1,17 @@
+
+> website@1.0.0 dev
+> npm run copy:data && npm run build:wasm && vite --host 0.0.0.0 --port 3000 --strictPort
+
+
+> website@1.0.0 copy:data
+> mkdir -p public && cp ../economy_log.json public/ || echo 'No economy log found, skipping copy'
+
+
+> website@1.0.0 build:wasm
+> cd wasm && wasm-pack build --target web --out-dir pkg
+
+[INFO]: 🎯  Checking for the Wasm target...
+[INFO]: 🌀  Compiling to Wasm...
+    Finished `release` profile [optimized] target(s) in 0.10s
+[INFO]: ⬇️  Installing wasm-bindgen...
+[INFO]: Optimizing wasm binaries with `wasm-opt`...

@@ -44,7 +44,7 @@ export const VideoPokerView = React.memo<VideoPokerViewProps>(({ gameState, onTo
     const highlightRank = gameState.stage === 'RESULT' ? handEval?.rank ?? null : null;
     return (
         <>
-            <div className="flex-1 w-full flex flex-col items-center justify-center gap-8 relative z-10 pb-20">
+            <div className="flex-1 w-full flex flex-col items-center justify-start sm:justify-center gap-4 sm:gap-8 relative z-10 pt-8 sm:pt-10 pb-24 sm:pb-20">
                 <h1 className="absolute top-0 text-xl font-bold text-gray-500 tracking-widest uppercase">VIDEO POKER</h1>
                 <div className="absolute top-2 right-2 z-40">
                     <MobileDrawer label="INFO" title="VIDEO POKER">
@@ -79,7 +79,7 @@ export const VideoPokerView = React.memo<VideoPokerViewProps>(({ gameState, onTo
                 </div>
                 {/* Center Info */}
                 <div className="text-center space-y-3 relative z-20">
-                    <div className="text-2xl font-bold text-terminal-gold tracking-widest animate-pulse">
+                    <div className="text-lg sm:text-2xl font-bold text-terminal-gold tracking-widest leading-tight animate-pulse">
                         {gameState.message}
                     </div>
                     {handEval && gameState.stage !== 'BETTING' ? (
@@ -96,7 +96,7 @@ export const VideoPokerView = React.memo<VideoPokerViewProps>(({ gameState, onTo
                 </div>
 
                 {/* Hand Area */}
-                <div className="min-h-[120px] flex gap-4 items-center justify-center">
+                <div className="min-h-[96px] sm:min-h-[120px] flex gap-4 items-center justify-center">
                     {gameState.playerCards.length > 0 && gameState.playerCards.map((card, i) => (
                         <button
                             key={i}

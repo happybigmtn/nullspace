@@ -95,7 +95,7 @@ export const RouletteView = React.memo<{ gameState: GameState; numberInput?: str
 
     return (
         <>
-            <div className="flex-1 w-full flex flex-col items-center justify-center gap-8 relative z-10 pb-20">
+            <div className="flex-1 w-full flex flex-col items-center justify-start sm:justify-center gap-4 sm:gap-8 relative z-10 pt-8 sm:pt-10 pb-24 sm:pb-20">
                 <h1 className="absolute top-0 text-xl font-bold text-gray-500 tracking-widest uppercase">ROULETTE</h1>
                 <div className="absolute top-2 right-2 z-40">
                     <MobileDrawer label="INFO" title="ROULETTE">
@@ -136,12 +136,12 @@ export const RouletteView = React.memo<{ gameState: GameState; numberInput?: str
                      {lastNum !== null ? (
                         <div
                             key={spinKey}
-                            className={`w-32 h-32 rounded-full border-4 flex items-center justify-center text-5xl font-bold shadow-[0_0_30px_rgba(0,0,0,0.5)] animate-roulette-spin ${getRouletteColor(lastNum) === 'RED' ? 'border-terminal-accent text-terminal-accent' : getRouletteColor(lastNum) === 'BLACK' ? 'border-gray-500 text-white' : 'border-terminal-green text-terminal-green'}`}
+                            className={`w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 flex items-center justify-center text-4xl sm:text-5xl font-bold shadow-[0_0_30px_rgba(0,0,0,0.5)] animate-roulette-spin ${getRouletteColor(lastNum) === 'RED' ? 'border-terminal-accent text-terminal-accent' : getRouletteColor(lastNum) === 'BLACK' ? 'border-gray-500 text-white' : 'border-terminal-green text-terminal-green'}`}
                         >
                             {lastNum}
                         </div>
                      ) : (
-                        <div className="w-32 h-32 rounded-full border-4 border-gray-800 flex items-center justify-center text-sm text-gray-600 animate-pulse">
+                        <div className="w-24 h-24 sm:w-32 sm:h-32 rounded-full border-4 border-gray-800 flex items-center justify-center text-sm text-gray-600 animate-pulse">
                             SPIN
                         </div>
                      )}
@@ -160,7 +160,7 @@ export const RouletteView = React.memo<{ gameState: GameState; numberInput?: str
 
                 {/* Center Info */}
                 <div className="text-center space-y-3 relative z-20">
-                    <div className="text-2xl font-bold text-terminal-gold tracking-widest animate-pulse">
+                    <div className="text-lg sm:text-2xl font-bold text-terminal-gold tracking-widest leading-tight animate-pulse">
                         {gameState.message}
                     </div>
                     <div className="text-[10px] text-gray-500 uppercase tracking-widest">

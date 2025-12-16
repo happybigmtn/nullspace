@@ -746,6 +746,27 @@ export class CasinoClient {
    *          In production, consider using more secure storage methods.
    */
   getOrCreateKeypair() {
+    const parseStoredPrivateKeyHex = (value) => {
+      if (!value || typeof value !== 'string') return null;
+      let trimmed = value.trim();
+      if (!trimmed || trimmed === 'undefined' || trimmed === 'null') return null;
+      if (trimmed.startsWith('0x') || trimmed.startsWith('0X')) trimmed = trimmed.slice(2);
+
+      if (!/^[0-9a-fA-F]+$/.test(trimmed) || trimmed.length !== 64) return null;
+
+      const bytes = new Uint8Array(trimmed.match(/.{1,2}/g).map((byte) => Number.parseInt(byte, 16)));
+      if (bytes.length !== 32) return null;
+      return bytes;
+    };
+
+    const removeStoredPrivateKey = () => {
+      try {
+        localStorage.removeItem('casino_private_key');
+      } catch {
+        // ignore
+      }
+    };
+
     const vaultEnabled =
       typeof window !== 'undefined' && localStorage.getItem('nullspace_vault_enabled') === 'true';
     const unlockedVault = (() => {
@@ -771,22 +792,54 @@ export class CasinoClient {
         console.warn('WARNING: Private keys are stored in localStorage. This is not secure for production use.');
       }
 
-      // Check if we have a stored private key in localStorage
       const storedPrivateKeyHex = localStorage.getItem('casino_private_key');
+      const storedPrivateKeyBytes = parseStoredPrivateKeyHex(storedPrivateKeyHex);
 
-      if (storedPrivateKeyHex) {
-        // Convert hex string back to bytes
-        const privateKeyBytes = new Uint8Array(storedPrivateKeyHex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
-        this.wasm.createKeypair(privateKeyBytes);
-        console.log('Loaded keypair from storage');
-      } else {
-        // Let WASM generate a new keypair using the browser's crypto API
-        this.wasm.createKeypair();
+      if (storedPrivateKeyBytes) {
+        try {
+          this.wasm.createKeypair(storedPrivateKeyBytes);
+          console.log('Loaded keypair from storage');
+        } catch (e) {
+          console.warn('[CasinoClient] Failed to load stored keypair, regenerating:', e);
+          removeStoredPrivateKey();
+        }
+      } else if (storedPrivateKeyHex) {
+        // Clear invalid values like "undefined" from previous builds.
+        removeStoredPrivateKey();
+      }
 
-        // Store the private key for persistence (Note: In production, consider more secure storage)
-        const privateKeyHex = this.wasm.getPrivateKeyHex();
-        localStorage.setItem('casino_private_key', privateKeyHex);
-        console.log('Generated new keypair using browser crypto API and saved to localStorage');
+      if (!this.wasm.keypair) {
+        const bytes = (() => {
+          try {
+            if (typeof globalThis !== 'undefined' && globalThis.crypto?.getRandomValues) {
+              const raw = new Uint8Array(32);
+              globalThis.crypto.getRandomValues(raw);
+              return raw;
+            }
+          } catch {
+            // ignore
+          }
+          return null;
+        })();
+
+        if (bytes) {
+          try {
+            this.wasm.createKeypair(bytes);
+            localStorage.setItem('casino_private_key', this.wasm.bytesToHex(bytes));
+            console.log('Generated new keypair and saved to localStorage');
+          } catch (e) {
+            console.warn('[CasinoClient] Failed to initialize keypair from bytes, falling back:', e);
+            try {
+              this.wasm.createKeypair();
+            } catch {
+              // ignore
+            }
+          }
+        } else {
+          // Fallback: let WASM generate a keypair (non-persistent).
+          this.wasm.createKeypair();
+          console.log('Generated new keypair (non-persistent)');
+        }
       }
     }
 

@@ -404,7 +404,7 @@ export default function CasinoApp() {
 	  }
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-terminal-black text-white font-mono overflow-hidden select-none" onKeyDown={(e) => {
+    <div className="flex flex-col h-[100dvh] w-screen bg-terminal-black text-white font-mono overflow-hidden select-none" onKeyDown={(e) => {
         if (e.key === 'Enter') {
             if (commandOpen) handleCommandEnter();
             if (customBetOpen) handleCustomBetEnter();
@@ -444,7 +444,7 @@ export default function CasinoApp() {
            >
                Safety
            </button>
-           <div className="flex-1 flex justify-center">
+           <div className="flex-1 min-w-0 flex justify-center">
                <PlaySwapStakeTabs />
            </div>
            <div className="hidden sm:flex items-center">
@@ -459,16 +459,18 @@ export default function CasinoApp() {
            </button>
        </div>
 
-       <div className="flex flex-1 overflow-hidden relative">
-          <main className={`flex-1 flex flex-col relative bg-terminal-black p-4 overflow-y-auto ${gameState.type !== GameType.NONE ? 'pb-20 md:pb-4' : ''}`}>
-             <div className="mb-4 sm:hidden">
-                 <WalletPill rng={walletRng} vusdt={walletVusdt} pubkeyHex={walletPublicKeyHex} className="w-full" />
-             </div>
-             {playMode === 'CASH' && (
-                 <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border border-gray-800 rounded bg-gray-900/30 px-3 py-2">
-                     <div className="text-[10px] text-gray-500 tracking-widest">
-                         MODE: <span className="text-terminal-green">CASH</span>
-                     </div>
+	       <div className="flex flex-1 overflow-hidden relative">
+	          <main className={`flex-1 flex flex-col relative bg-terminal-black p-3 sm:p-4 overflow-y-auto ${gameState.type !== GameType.NONE ? 'pb-24 sm:pb-20 md:pb-4' : ''}`}>
+	             {gameState.type === GameType.NONE ? (
+	               <div className="mb-2 sm:hidden">
+	                 <WalletPill rng={walletRng} vusdt={walletVusdt} pubkeyHex={walletPublicKeyHex} className="w-full" />
+	               </div>
+	             ) : null}
+	             {playMode === 'CASH' && (
+	                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2 border border-gray-800 rounded bg-gray-900/30 px-3 py-1">
+	                     <div className="text-[10px] text-gray-500 tracking-widest">
+	                         MODE: <span className="text-terminal-green">CASH</span>
+	                     </div>
                      <div className="flex items-center gap-2">
                          <button
                              className="text-[10px] border px-2 py-1 rounded bg-gray-900 border-gray-800 text-gray-300 hover:border-gray-600"
@@ -491,19 +493,21 @@ export default function CasinoApp() {
                  </div>
              )}
 
-             {playMode === 'FREEROLL' && <TournamentAlert tournamentTime={tournamentTime} />}
-             <ErrorBoundary>
-               <ActiveGame
-                  gameState={gameState}
-                  deck={deck}
-                  numberInput={numberInputString}
-                  onToggleHold={safeActions.toggleHold}
-                  aiAdvice={aiAdvice}
-                  actions={{ ...safeActions, setGameState }}
-                  onOpenCommandPalette={openCommandPalette}
-                  reducedMotion={reducedMotion}
-               />
-             </ErrorBoundary>
+             <div className="relative flex flex-col flex-1 min-h-0">
+               {playMode === 'FREEROLL' && <TournamentAlert tournamentTime={tournamentTime} />}
+               <ErrorBoundary>
+                 <ActiveGame
+                    gameState={gameState}
+                    deck={deck}
+                    numberInput={numberInputString}
+                    onToggleHold={safeActions.toggleHold}
+                    aiAdvice={aiAdvice}
+                    actions={{ ...safeActions, setGameState }}
+                    onOpenCommandPalette={openCommandPalette}
+                    reducedMotion={reducedMotion}
+                 />
+               </ErrorBoundary>
+             </div>
           </main>
           {!focusMode && (
              <Sidebar
