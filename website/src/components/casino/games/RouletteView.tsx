@@ -207,295 +207,47 @@ export const RouletteView = React.memo<{ gameState: GameState; numberInput?: str
             </div>
 
             {/* CONTROLS */}
-            <GameControlBar>
-                    <div className="flex gap-2">
-	                    <button
-	                        type="button"
-	                        onClick={() => actions?.placeRouletteBet?.('RED')}
-	                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-	                                betTypes.has('RED') ? 'border-terminal-green bg-terminal-green/10' : 'border-terminal-accent'
-	                            }`}
-	                        >
-	                            <span className="ns-keycap text-terminal-accent font-bold text-sm">R</span>
-	                            <span className="ns-action text-[10px] text-gray-500">RED</span>
-	                        </button>
-	                        <button
-	                            type="button"
-	                            onClick={() => actions?.placeRouletteBet?.('BLACK')}
-	                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-	                                betTypes.has('BLACK') ? 'border-terminal-green bg-terminal-green/10' : 'border-gray-500'
-	                            }`}
-	                        >
-	                            <span className="ns-keycap text-white font-bold text-sm">B</span>
-	                            <span className="ns-action text-[10px] text-gray-500">BLACK</span>
-	                        </button>
-	                    </div>
-	                    <div className="w-px h-8 bg-gray-800 mx-2"></div>
-	                    <div className="flex gap-2">
-	                         <button
-	                            type="button"
-	                            onClick={() => actions?.placeRouletteBet?.('EVEN')}
-	                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-	                                betTypes.has('EVEN') ? 'border-terminal-green bg-terminal-green/10' : 'border-terminal-dim'
-	                            }`}
-	                         >
-	                            <span className="ns-keycap text-white font-bold text-sm">E</span>
-	                            <span className="ns-action text-[10px] text-gray-500">EVEN</span>
-	                        </button>
-	                        <button
-	                            type="button"
-	                            onClick={() => actions?.placeRouletteBet?.('ODD')}
-	                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-	                                betTypes.has('ODD') ? 'border-terminal-green bg-terminal-green/10' : 'border-terminal-dim'
-	                            }`}
-	                        >
-	                            <span className="ns-keycap text-white font-bold text-sm">O</span>
-	                            <span className="ns-action text-[10px] text-gray-500">ODD</span>
-	                        </button>
-	                    </div>
-	                    <div className="w-px h-8 bg-gray-800 mx-2"></div>
-	                    <div className="flex gap-2">
-	                         <button
-	                            type="button"
-	                            onClick={() => actions?.placeRouletteBet?.('LOW')}
-	                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-	                                betTypes.has('LOW') ? 'border-terminal-green bg-terminal-green/10' : 'border-terminal-dim'
-	                            }`}
-	                         >
-	                            <span className="ns-keycap text-white font-bold text-sm">L</span>
-	                            <span className="ns-action text-[10px] text-gray-500">1-18</span>
-	                        </button>
-	                        <button
-	                            type="button"
-	                            onClick={() => actions?.placeRouletteBet?.('HIGH')}
-	                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-	                                betTypes.has('HIGH') ? 'border-terminal-green bg-terminal-green/10' : 'border-terminal-dim'
-	                            }`}
-	                        >
-	                            <span className="ns-keycap text-white font-bold text-sm">H</span>
-	                            <span className="ns-action text-[10px] text-gray-500">19-36</span>
-	                        </button>
-	                    </div>
-	                    <div className="w-px h-8 bg-gray-800 mx-2"></div>
-	                    <div className="flex gap-2">
-	                        <button
-	                            type="button"
-	                            onClick={() => actions?.placeRouletteBet?.('DOZEN_1')}
-	                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-	                                betTypes.has('DOZEN_1') ? 'border-terminal-green bg-terminal-green/10' : 'border-terminal-dim'
-	                            }`}
-	                        >
-	                            <span className="ns-keycap text-white font-bold text-sm">1</span>
-	                            <span className="ns-action text-[10px] text-gray-500">1-12</span>
-	                        </button>
-	                        <button
-	                            type="button"
-	                            onClick={() => actions?.placeRouletteBet?.('DOZEN_2')}
-	                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-	                                betTypes.has('DOZEN_2') ? 'border-terminal-green bg-terminal-green/10' : 'border-terminal-dim'
-	                            }`}
-	                        >
-	                            <span className="ns-keycap text-white font-bold text-sm">2</span>
-	                            <span className="ns-action text-[10px] text-gray-500">13-24</span>
-	                        </button>
-	                        <button
-	                            type="button"
-	                            onClick={() => actions?.placeRouletteBet?.('DOZEN_3')}
-	                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-	                                betTypes.has('DOZEN_3') ? 'border-terminal-green bg-terminal-green/10' : 'border-terminal-dim'
-	                            }`}
-	                        >
-	                            <span className="ns-keycap text-white font-bold text-sm">3</span>
-	                            <span className="ns-action text-[10px] text-gray-500">25-36</span>
-	                        </button>
-	                    </div>
-	                    <div className="w-px h-8 bg-gray-800 mx-2"></div>
-	                    <div className="flex gap-2">
-	                        <button
-	                            type="button"
-	                            onClick={() => actions?.placeRouletteBet?.('COL_1')}
-	                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-	                                betTypes.has('COL_1') ? 'border-terminal-green bg-terminal-green/10' : 'border-terminal-dim'
-	                            }`}
-	                        >
-	                            <span className="ns-keycap text-white font-bold text-sm">A</span>
-	                            <span className="ns-action text-[10px] text-gray-500">COL 1</span>
-	                        </button>
-	                        <button
-	                            type="button"
-	                            onClick={() => actions?.placeRouletteBet?.('COL_2')}
-	                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-	                                betTypes.has('COL_2') ? 'border-terminal-green bg-terminal-green/10' : 'border-terminal-dim'
-	                            }`}
-	                        >
-	                            <span className="ns-keycap text-white font-bold text-sm">D</span>
-	                            <span className="ns-action text-[10px] text-gray-500">COL 2</span>
-	                        </button>
-	                        <button
-	                            type="button"
-	                            onClick={() => actions?.placeRouletteBet?.('COL_3')}
-	                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-	                                betTypes.has('COL_3') ? 'border-terminal-green bg-terminal-green/10' : 'border-terminal-dim'
-	                            }`}
-	                        >
-	                            <span className="ns-keycap text-white font-bold text-sm">F</span>
-	                            <span className="ns-action text-[10px] text-gray-500">COL 3</span>
-	                        </button>
-	                    </div>
-	                     <div className="w-px h-8 bg-gray-800 mx-2"></div>
-	                     <div className="flex gap-2">
-	                        <button
-	                            type="button"
-	                            onClick={() => actions?.placeRouletteBet?.('ZERO')}
-	                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-	                                betTypes.has('ZERO') ? 'border-terminal-green bg-terminal-green/10' : 'border-terminal-dim'
-	                            }`}
-	                        >
-	                            <span className={`${betTypes.has('ZERO') ? 'text-terminal-green' : 'text-white'} ns-keycap font-bold text-sm`}>0</span>
-	                            <span className="ns-action text-[10px] text-gray-500">ZERO</span>
-	                        </button>
-	                         <button
-	                            type="button"
-	                            onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'STRAIGHT' }))}
-	                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-	                                gameState.rouletteInputMode === 'STRAIGHT' || betTypes.has('STRAIGHT')
-	                                    ? 'border-terminal-green bg-terminal-green/10'
-	                                    : 'border-terminal-dim'
-	                         }`}
-	                         >
-	                            <span className="ns-keycap text-white font-bold text-sm">N</span>
-	                            <span className="ns-action text-[10px] text-gray-500">STRAIGHT</span>
-	                        </button>
-	                        <button
-	                            type="button"
-	                            onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'SPLIT_H' }))}
-	                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-	                                gameState.rouletteInputMode === 'SPLIT_H' || betTypes.has('SPLIT_H')
-	                                    ? 'border-terminal-green bg-terminal-green/10'
-	                                    : 'border-terminal-dim'
-	                            }`}
-	                        >
-	                            <span className="ns-keycap text-white font-bold text-sm">S</span>
-	                            <span className="ns-action text-[10px] text-gray-500">SPLIT</span>
-	                        </button>
-	                        <button
-	                            type="button"
-	                            onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'SPLIT_V' }))}
-	                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-	                                gameState.rouletteInputMode === 'SPLIT_V' || betTypes.has('SPLIT_V')
-	                                    ? 'border-terminal-green bg-terminal-green/10'
-	                                    : 'border-terminal-dim'
-	                            }`}
-	                        >
-	                            <span className="ns-keycap text-white font-bold text-sm">V</span>
-	                            <span className="ns-action text-[10px] text-gray-500">VSPLIT</span>
-	                        </button>
-	                        <button
-	                            type="button"
-	                            onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'STREET' }))}
-	                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-	                                gameState.rouletteInputMode === 'STREET' || betTypes.has('STREET')
-	                                    ? 'border-terminal-green bg-terminal-green/10'
-	                                    : 'border-terminal-dim'
-	                            }`}
-	                        >
-	                            <span className="ns-keycap text-white font-bold text-sm">W</span>
-	                            <span className="ns-action text-[10px] text-gray-500">STREET</span>
-	                        </button>
-	                        <button
-	                            type="button"
-	                            onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'CORNER' }))}
-	                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-	                                gameState.rouletteInputMode === 'CORNER' || betTypes.has('CORNER')
-	                                    ? 'border-terminal-green bg-terminal-green/10'
-	                                    : 'border-terminal-dim'
-	                            }`}
-	                        >
-	                            <span className="ns-keycap text-white font-bold text-sm">C</span>
-	                            <span className="ns-action text-[10px] text-gray-500">CORNER</span>
-	                        </button>
-	                        <button
-	                            type="button"
-	                            onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'SIX_LINE' }))}
-	                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-	                                gameState.rouletteInputMode === 'SIX_LINE' || betTypes.has('SIX_LINE')
-	                                    ? 'border-terminal-green bg-terminal-green/10'
-	                                    : 'border-terminal-dim'
-	                            }`}
-	                        >
-	                            <span className="ns-keycap text-white font-bold text-sm">6</span>
-	                            <span className="ns-action text-[10px] text-gray-500">SIX</span>
-	                        </button>
-	                     </div>
-	                    <div className="w-px h-8 bg-gray-800 mx-2"></div>
-	                    <div className="flex gap-2">
-	                        <button
-	                            type="button"
-	                            onClick={actions?.rebetRoulette}
-	                            className="flex flex-col items-center border border-gray-700 rounded bg-black/50 px-3 py-1"
-	                        >
-	                            <span className="ns-keycap text-gray-500 font-bold text-sm">T</span>
-	                            <span className="ns-action text-[10px] text-gray-600">REBET</span>
-	                        </button>
-	                        <button
-	                            type="button"
-	                            onClick={actions?.undoRouletteBet}
-	                            className="flex flex-col items-center border border-gray-700 rounded bg-black/50 px-3 py-1"
-	                        >
-	                            <span className="ns-keycap text-gray-500 font-bold text-sm">U</span>
-	                            <span className="ns-action text-[10px] text-gray-600">UNDO</span>
-	                        </button>
-	                    </div>
-	                    <div className="w-px h-8 bg-gray-800 mx-2"></div>
-	                    <button
-	                        type="button"
-	                        onClick={actions?.cycleRouletteZeroRule}
-	                        className="flex flex-col items-center border border-gray-700 rounded bg-black/50 px-3 py-1"
-	                    >
-	                        <span className="ns-keycap text-gray-500 font-bold text-sm">P</span>
-	                        <span className="ns-action text-[10px] text-gray-600">RULE</span>
-	                    </button>
-	                    <div className="w-px h-8 bg-gray-800 mx-2"></div>
-	                    <div className="flex gap-2">
-	                         <button
-	                            type="button"
-	                            onClick={actions?.toggleShield}
-	                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${gameState.activeModifiers.shield ? 'border-cyan-400 text-cyan-400' : 'border-gray-700 text-gray-500'}`}
-	                         >
-	                            <span className="ns-keycap font-bold text-sm">Z</span>
-	                            <span className="ns-action text-[10px]">SHIELD</span>
-	                        </button>
-	                         <button
-	                            type="button"
-	                            onClick={actions?.toggleDouble}
-	                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${gameState.activeModifiers.double ? 'border-purple-400 text-purple-400' : 'border-gray-700 text-gray-500'}`}
-	                         >
-	                            <span className="ns-keycap font-bold text-sm">X</span>
-	                            <span className="ns-action text-[10px]">DOUBLE</span>
-	                        </button>
-	                        <button
-	                            type="button"
-	                            onClick={actions?.toggleSuper}
-	                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-	                                gameState.activeModifiers.super
-	                                    ? 'border-terminal-gold text-terminal-gold'
-	                                    : 'border-gray-700 text-gray-500'
-	                            }`}
-	                        >
-	                            <span className="ns-keycap font-bold text-sm">G</span>
-	                            <span className="ns-action text-[10px]">SUPER</span>
-	                        </button>
-	                    </div>
-	                    <div className="w-px h-8 bg-gray-800 mx-2"></div>
-	                    <button
-	                        type="button"
-	                        onClick={actions?.deal}
-	                        className="flex flex-col items-center border border-terminal-green/50 rounded bg-black/50 px-3 py-1 w-24"
-	                    >
-	                        <span className="ns-keycap text-terminal-green font-bold text-sm">SPACE</span>
-	                        <span className="ns-action text-[10px] text-gray-500">SPIN</span>
-	                    </button>
-	            </GameControlBar>
+            <GameControlBar
+                primaryAction={{
+                    label: 'SPIN',
+                    onClick: actions?.deal,
+                    className: 'w-full sm:w-auto',
+                }}
+                secondaryActions={[
+                    // Outside Bets
+                    { label: 'RED', onClick: () => actions?.placeRouletteBet?.('RED'), active: betTypes.has('RED'), className: 'text-terminal-accent border-terminal-accent' },
+                    { label: 'BLACK', onClick: () => actions?.placeRouletteBet?.('BLACK'), active: betTypes.has('BLACK') },
+                    { label: 'EVEN', onClick: () => actions?.placeRouletteBet?.('EVEN'), active: betTypes.has('EVEN') },
+                    { label: 'ODD', onClick: () => actions?.placeRouletteBet?.('ODD'), active: betTypes.has('ODD') },
+                    { label: '1-18', onClick: () => actions?.placeRouletteBet?.('LOW'), active: betTypes.has('LOW') },
+                    { label: '19-36', onClick: () => actions?.placeRouletteBet?.('HIGH'), active: betTypes.has('HIGH') },
+                    // Dozens
+                    { label: '1st 12', onClick: () => actions?.placeRouletteBet?.('DOZEN_1'), active: betTypes.has('DOZEN_1') },
+                    { label: '2nd 12', onClick: () => actions?.placeRouletteBet?.('DOZEN_2'), active: betTypes.has('DOZEN_2') },
+                    { label: '3rd 12', onClick: () => actions?.placeRouletteBet?.('DOZEN_3'), active: betTypes.has('DOZEN_3') },
+                    // Columns
+                    { label: 'COL 1', onClick: () => actions?.placeRouletteBet?.('COL_1'), active: betTypes.has('COL_1') },
+                    { label: 'COL 2', onClick: () => actions?.placeRouletteBet?.('COL_2'), active: betTypes.has('COL_2') },
+                    { label: 'COL 3', onClick: () => actions?.placeRouletteBet?.('COL_3'), active: betTypes.has('COL_3') },
+                    // Zero
+                    { label: 'ZERO', onClick: () => actions?.placeRouletteBet?.('ZERO'), active: betTypes.has('ZERO'), className: 'text-terminal-green border-terminal-green' },
+                    // Inside Bets (Modes)
+                    { label: 'STRAIGHT', onClick: () => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'STRAIGHT' })), active: gameState.rouletteInputMode === 'STRAIGHT' },
+                    { label: 'SPLIT', onClick: () => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'SPLIT_H' })), active: gameState.rouletteInputMode === 'SPLIT_H' },
+                    { label: 'VSPLIT', onClick: () => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'SPLIT_V' })), active: gameState.rouletteInputMode === 'SPLIT_V' },
+                    { label: 'STREET', onClick: () => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'STREET' })), active: gameState.rouletteInputMode === 'STREET' },
+                    { label: 'CORNER', onClick: () => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'CORNER' })), active: gameState.rouletteInputMode === 'CORNER' },
+                    { label: 'SIX LINE', onClick: () => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'SIX_LINE' })), active: gameState.rouletteInputMode === 'SIX_LINE' },
+                    // Actions
+                    { label: 'REBET', onClick: actions?.rebetRoulette },
+                    { label: 'UNDO', onClick: actions?.undoRouletteBet },
+                    { label: 'RULE', onClick: actions?.cycleRouletteZeroRule },
+                    // Modifiers
+                    { label: 'SHIELD', onClick: actions?.toggleShield, active: gameState.activeModifiers.shield },
+                    { label: 'DOUBLE', onClick: actions?.toggleDouble, active: gameState.activeModifiers.double },
+                    { label: 'SUPER', onClick: actions?.toggleSuper, active: gameState.activeModifiers.super },
+                ]}
+            />
 
             {/* NUM INPUT MODAL */}
             {gameState.rouletteInputMode !== 'NONE' && (

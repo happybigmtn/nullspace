@@ -101,99 +101,41 @@ export const GenericGameView = React.memo<{ gameState: GameState; actions: any }
             ) : null}
 
             {/* CONTROLS */}
-             <GameControlBar>
-                 {isWarState ? (
-                    <>
-                        <button
-                            type="button"
-                            onClick={actions?.casinoWarGoToWar}
-                            className="flex flex-col items-center border border-terminal-green/50 rounded bg-black/50 px-3 py-1"
-                        >
-                            <span className="ns-keycap text-terminal-green font-bold text-sm">W</span>
-                            <span className="ns-action text-[10px] text-gray-500">WAR</span>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={actions?.casinoWarSurrender}
-                            className="flex flex-col items-center border border-terminal-accent/50 rounded bg-black/50 px-3 py-1"
-                        >
-                            <span className="ns-keycap text-terminal-accent font-bold text-sm">S</span>
-                            <span className="ns-action text-[10px] text-gray-500">SURRENDER</span>
-                        </button>
-                    </>
-                 ) : (
-                    <>
-                        {isCasinoWarBetting && (
-                            <>
-	                                <button
-	                                    type="button"
-	                                    onClick={actions?.casinoWarToggleTieBet}
-	                                    className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-	                                        casinoWarTieBet > 0
-	                                            ? 'border-terminal-green bg-terminal-green/10 text-terminal-green'
-	                                            : 'border-gray-700 text-gray-500'
-	                                    }`}
-	                                >
-	                                    <span className="ns-keycap font-bold text-sm">T</span>
-	                                    <span className="ns-action text-[10px]">TIE</span>
-	                                </button>
-                                <div className="w-px h-8 bg-gray-800 mx-2"></div>
-                            </>
-                        )}
-
-                        <div className="flex gap-2">
-                            <button
-                                type="button"
-                                onClick={actions?.toggleShield}
-                                className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-                                    gameState.activeModifiers.shield
-                                        ? 'border-cyan-400 text-cyan-400'
-                                        : 'border-gray-700 text-gray-500'
-                                }`}
-                            >
-                                <span className="ns-keycap font-bold text-sm">Z</span>
-                                <span className="ns-action text-[10px]">SHIELD</span>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={actions?.toggleDouble}
-                                className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-                                    gameState.activeModifiers.double
-                                        ? 'border-purple-400 text-purple-400'
-                                        : 'border-gray-700 text-gray-500'
-                                }`}
-                            >
-                                <span className="ns-keycap font-bold text-sm">X</span>
-                                <span className="ns-action text-[10px]">DOUBLE</span>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={actions?.toggleSuper}
-                                className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-                                    gameState.activeModifiers.super
-                                        ? 'border-terminal-gold text-terminal-gold'
-                                        : 'border-gray-700 text-gray-500'
-                                }`}
-                            >
-                                <span className="ns-keycap font-bold text-sm">G</span>
-                                <span className="ns-action text-[10px]">SUPER</span>
-                            </button>
-                        </div>
-
-                        <div className="w-px h-8 bg-gray-800 mx-2"></div>
-                        <button
-                            type="button"
-                            onClick={actions?.deal}
-                            className="flex flex-col items-center border border-terminal-green/50 rounded bg-black/50 px-3 py-1 w-24"
-                        >
-                            <span className="ns-keycap text-terminal-green font-bold text-sm">SPACE</span>
-                            <span className="ns-action text-[10px] text-gray-500">
-                              {gameState.stage === 'RESULT' ? 'NEW HAND' : 'DEAL'}
-                            </span>
-                        </button>
-                    </>
-                 )}
-            </GameControlBar>
+             <GameControlBar
+                 primaryAction={
+                     isWarState
+                         ? { label: 'WAR', onClick: actions?.casinoWarGoToWar, className: 'border-terminal-green bg-terminal-green text-black hover:bg-white' }
+                         : { label: gameState.stage === 'RESULT' ? 'NEW HAND' : 'DEAL', onClick: actions?.deal, className: 'w-full sm:w-auto' }
+                 }
+                 secondaryActions={
+                     isWarState
+                         ? [
+                             { label: 'SURRENDER', onClick: actions?.casinoWarSurrender, className: 'border-terminal-accent text-terminal-accent hover:bg-terminal-accent/10' }
+                         ]
+                         : [
+                             ...(isCasinoWarBetting ? [{
+                                 label: `TIE${casinoWarTieBet > 0 ? ` $${casinoWarTieBet}` : ''}`,
+                                 onClick: actions?.casinoWarToggleTieBet,
+                                 active: casinoWarTieBet > 0,
+                             }] : []),
+                             {
+                                 label: 'SHIELD',
+                                 onClick: actions?.toggleShield,
+                                 active: gameState.activeModifiers.shield,
+                             },
+                             {
+                                 label: 'DOUBLE',
+                                 onClick: actions?.toggleDouble,
+                                 active: gameState.activeModifiers.double,
+                             },
+                             {
+                                 label: 'SUPER',
+                                 onClick: actions?.toggleSuper,
+                                 active: gameState.activeModifiers.super,
+                             },
+                         ]
+                 }
+             />
         </>
     );
 });

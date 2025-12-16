@@ -116,43 +116,22 @@ export const VideoPokerView = React.memo<VideoPokerViewProps>(({ gameState, onTo
             </div>
 
             {/* CONTROLS */}
-            <GameControlBar>
-                    {(gameState.stage === 'BETTING' || gameState.stage === 'RESULT') ? (
-                        <button
-                            type="button"
-                            onClick={actions?.deal}
-                            className="flex flex-col items-center border border-terminal-green/50 rounded bg-black/50 px-3 py-1 w-24"
-                        >
-                            <span className="ns-keycap text-terminal-green font-bold text-sm">SPACE</span>
-                            <span className="ns-action text-[10px] text-gray-500">DEAL</span>
-                        </button>
-                    ) : (
-                        <>
-                            <div className="flex gap-2">
-                                {[1, 2, 3, 4, 5].map((n) => (
-                                    <button
-                                        key={n}
-                                        type="button"
-                                        onClick={() => handleToggleHold(n - 1)}
-                                        className="flex flex-col items-center border border-terminal-dim rounded bg-black/50 px-3 py-1"
-                                    >
-                                        <span className="ns-keycap text-white font-bold text-sm">{n}</span>
-                                        <span className="ns-action text-[10px] text-gray-500">HOLD</span>
-                                    </button>
-                                ))}
-                            </div>
-                            <div className="w-px h-8 bg-gray-800 mx-2"></div>
-                            <button
-                                type="button"
-                                onClick={actions?.drawVideoPoker}
-                                className="flex flex-col items-center border border-terminal-green/50 rounded bg-black/50 px-3 py-1 w-24"
-                            >
-                                <span className="ns-keycap text-terminal-green font-bold text-sm">D</span>
-                                <span className="ns-action text-[10px] text-gray-500">DRAW</span>
-                            </button>
-                        </>
-                    )}
-            </GameControlBar>
+            <GameControlBar
+                primaryAction={
+                    (gameState.stage === 'BETTING' || gameState.stage === 'RESULT')
+                        ? { label: 'DEAL', onClick: actions?.deal, className: 'w-full sm:w-auto' }
+                        : { label: 'DRAW', onClick: actions?.drawVideoPoker, className: 'w-full sm:w-auto' }
+                }
+                secondaryActions={
+                    gameState.stage === 'PLAYING'
+                        ? [1, 2, 3, 4, 5].map((n) => ({
+                            label: `HOLD ${n}`,
+                            onClick: () => handleToggleHold(n - 1),
+                            active: gameState.playerCards[n - 1]?.isHeld,
+                        }))
+                        : []
+                }
+            />
         </>
     );
 });

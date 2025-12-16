@@ -117,37 +117,25 @@ export const HiLoView = React.memo<HiLoViewProps>(({ gameState, deck, actions })
 
             {/* CONTROLS */}
             {(gameState.stage === 'BETTING' || gameState.stage === 'RESULT') ? (
-                <GameControlBar>
-                    <>
-                         <div className="flex gap-2">
-                             <button
-                                 type="button"
-                                 onClick={actions?.toggleShield}
-                                 className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${gameState.activeModifiers.shield ? 'border-cyan-400 text-cyan-400' : 'border-gray-700 text-gray-500'}`}
-                             >
-                                <span className="ns-keycap font-bold text-sm">Z</span>
-                                <span className="ns-action text-[10px]">SHIELD</span>
-                             </button>
-                             <button
-                                 type="button"
-                                 onClick={actions?.toggleDouble}
-                                 className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${gameState.activeModifiers.double ? 'border-purple-400 text-purple-400' : 'border-gray-700 text-gray-500'}`}
-                             >
-                                <span className="ns-keycap font-bold text-sm">X</span>
-                                <span className="ns-action text-[10px]">DOUBLE</span>
-                             </button>
-                        </div>
-                        <div className="w-px h-8 bg-gray-800 mx-2"></div>
-                        <button
-                            type="button"
-                            onClick={actions?.deal}
-                            className="flex flex-col items-center border border-terminal-green/50 rounded bg-black/50 px-3 py-1 w-24"
-                        >
-                            <span className="ns-keycap text-terminal-green font-bold text-sm">SPACE</span>
-                            <span className="ns-action text-[10px] text-gray-500">DEAL</span>
-                        </button>
-                    </>
-                </GameControlBar>
+                <GameControlBar
+                    primaryAction={{
+                        label: 'DEAL',
+                        onClick: actions?.deal,
+                        className: 'w-full sm:w-auto',
+                    }}
+                    secondaryActions={[
+                        {
+                            label: 'SHIELD',
+                            onClick: actions?.toggleShield,
+                            active: gameState.activeModifiers.shield,
+                        },
+                        {
+                            label: 'DOUBLE',
+                            onClick: actions?.toggleDouble,
+                            active: gameState.activeModifiers.double,
+                        },
+                    ]}
+                />
             ) : (
                 <GameControlBar variant="stack">
                     <button

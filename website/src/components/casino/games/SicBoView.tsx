@@ -291,218 +291,39 @@ export const SicBoView = React.memo<{ gameState: GameState; numberInput?: string
             </div>
 
             {/* CONTROLS */}
-            <GameControlBar>
-                    <div className="flex gap-2">
-                        <button
-                            type="button"
-                            onClick={() => actions?.placeSicBoBet?.('SMALL')}
-                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-                                betTypes.has('SMALL') ? 'border-terminal-green bg-terminal-green/10' : 'border-terminal-dim'
-                            }`}
-                        >
-                            <span className="ns-keycap text-white font-bold text-sm">S</span>
-                            <span className="ns-action text-[10px] text-gray-500">SMALL</span>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => actions?.placeSicBoBet?.('BIG')}
-                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-                                betTypes.has('BIG') ? 'border-terminal-green bg-terminal-green/10' : 'border-terminal-dim'
-                            }`}
-                        >
-                            <span className="ns-keycap text-white font-bold text-sm">B</span>
-                            <span className="ns-action text-[10px] text-gray-500">BIG</span>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => actions?.placeSicBoBet?.('ODD')}
-                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-                                betTypes.has('ODD') ? 'border-terminal-green bg-terminal-green/10' : 'border-terminal-dim'
-                            }`}
-                        >
-                            <span className="ns-keycap text-white font-bold text-sm">O</span>
-                            <span className="ns-action text-[10px] text-gray-500">ODD</span>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => actions?.placeSicBoBet?.('EVEN')}
-                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-                                betTypes.has('EVEN') ? 'border-terminal-green bg-terminal-green/10' : 'border-terminal-dim'
-                            }`}
-                        >
-                            <span className="ns-keycap text-white font-bold text-sm">V</span>
-                            <span className="ns-action text-[10px] text-gray-500">EVEN</span>
-                        </button>
-                    </div>
-                    <div className="w-px h-8 bg-gray-800 mx-2"></div>
-                    <div className="flex gap-2">
-                         <button
-                            type="button"
-                            onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, sicBoInputMode: 'SINGLE' }))}
-                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-                                gameState.sicBoInputMode === 'SINGLE' || betTypes.has('SINGLE_DIE')
-                                    ? 'border-terminal-green bg-terminal-green/10'
-                                    : 'border-terminal-dim'
-                            }`}
-	                         >
-                            <span className="ns-keycap text-white font-bold text-sm">N</span>
-                            <span className="ns-action text-[10px] text-gray-500">DIE</span>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, sicBoInputMode: 'DOUBLE' }))}
-                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-                                gameState.sicBoInputMode === 'DOUBLE' || betTypes.has('DOUBLE_SPECIFIC')
-                                    ? 'border-terminal-green bg-terminal-green/10'
-                                    : 'border-terminal-dim'
-                            }`}
-                        >
-                            <span className="ns-keycap text-white font-bold text-sm">D</span>
-                            <span className="ns-action text-[10px] text-gray-500">DOUBLE</span>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, sicBoInputMode: 'TRIPLE' }))}
-                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-                                gameState.sicBoInputMode === 'TRIPLE' || betTypes.has('TRIPLE_SPECIFIC')
-                                    ? 'border-terminal-green bg-terminal-green/10'
-                                    : 'border-terminal-dim'
-                            }`}
-                        >
-                            <span className="ns-keycap text-white font-bold text-sm">T</span>
-                            <span className="ns-action text-[10px] text-gray-500">TRIPLE</span>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, sicBoInputMode: 'DOMINO' }))}
-                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-                                gameState.sicBoInputMode === 'DOMINO' || betTypes.has('DOMINO')
-                                    ? 'border-terminal-green bg-terminal-green/10'
-                                    : 'border-terminal-dim'
-                            }`}
-                        >
-                            <span className="ns-keycap text-white font-bold text-sm">C</span>
-                            <span className="ns-action text-[10px] text-gray-500">DOMINO</span>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, sicBoInputMode: 'HOP3_EASY' }))}
-                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-                                gameState.sicBoInputMode === 'HOP3_EASY' || betTypes.has('HOP3_EASY')
-                                    ? 'border-terminal-green bg-terminal-green/10'
-                                    : 'border-terminal-dim'
-                            }`}
-                        >
-                            <span className="ns-keycap text-white font-bold text-sm">E</span>
-                            <span className="ns-action text-[10px] text-gray-500">3-HOP</span>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, sicBoInputMode: 'HOP3_HARD' }))}
-                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-                                gameState.sicBoInputMode === 'HOP3_HARD' || betTypes.has('HOP3_HARD')
-                                    ? 'border-terminal-green bg-terminal-green/10'
-                                    : 'border-terminal-dim'
-                            }`}
-                        >
-                            <span className="ns-keycap text-white font-bold text-sm">H</span>
-                            <span className="ns-action text-[10px] text-gray-500">HARD</span>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, sicBoInputMode: 'HOP4_EASY' }))}
-                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-                                gameState.sicBoInputMode === 'HOP4_EASY' || betTypes.has('HOP4_EASY')
-                                    ? 'border-terminal-green bg-terminal-green/10'
-                                    : 'border-terminal-dim'
-                            }`}
-                        >
-                            <span className="ns-keycap text-white font-bold text-sm">F</span>
-                            <span className="ns-action text-[10px] text-gray-500">4-HOP</span>
-                        </button>
-                         <button
-                            type="button"
-                            onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, sicBoInputMode: 'SUM' }))}
-                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-                                gameState.sicBoInputMode === 'SUM' || betTypes.has('SUM')
-                                    ? 'border-terminal-green bg-terminal-green/10'
-                                    : 'border-terminal-dim'
-                            }`}
-                        >
-                            <span className="ns-keycap text-white font-bold text-sm">M</span>
-                            <span className="ns-action text-[10px] text-gray-500">SUM</span>
-                        </button>
-                    </div>
-                    <div className="w-px h-8 bg-gray-800 mx-2"></div>
-                    <div className="flex gap-2">
-                        <button
-                            type="button"
-                            onClick={() => actions?.placeSicBoBet?.('TRIPLE_ANY')}
-                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-                                betTypes.has('TRIPLE_ANY') ? 'border-terminal-green bg-terminal-green/10' : 'border-terminal-dim'
-                            }`}
-                        >
-                            <span className="ns-keycap text-white font-bold text-sm">A</span>
-                            <span className="ns-action text-[10px] text-gray-500">ANY 3</span>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={actions?.rebetSicBo}
-                            className="flex flex-col items-center border border-gray-700 rounded bg-black/50 px-3 py-1"
-                        >
-                            <span className="ns-keycap text-gray-500 font-bold text-sm">R</span>
-                            <span className="ns-action text-[10px] text-gray-600">REBET</span>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={actions?.undoSicBoBet}
-                            className="flex flex-col items-center border border-gray-700 rounded bg-black/50 px-3 py-1"
-                        >
-                            <span className="ns-keycap text-gray-500 font-bold text-sm">U</span>
-                            <span className="ns-action text-[10px] text-gray-600">UNDO</span>
-                        </button>
-                    </div>
-                    <div className="w-px h-8 bg-gray-800 mx-2"></div>
-                     <div className="flex gap-2">
-                         <button
-                            type="button"
-                            onClick={actions?.toggleShield}
-                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${gameState.activeModifiers.shield ? 'border-cyan-400 text-cyan-400' : 'border-gray-700 text-gray-500'}`}
-                         >
-                            <span className="ns-keycap font-bold text-sm">Z</span>
-                            <span className="ns-action text-[10px]">SHIELD</span>
-                        </button>
-                         <button
-                            type="button"
-                            onClick={actions?.toggleDouble}
-                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${gameState.activeModifiers.double ? 'border-purple-400 text-purple-400' : 'border-gray-700 text-gray-500'}`}
-                         >
-                            <span className="ns-keycap font-bold text-sm">X</span>
-                            <span className="ns-action text-[10px]">DOUBLE</span>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={actions?.toggleSuper}
-                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-                                gameState.activeModifiers.super
-                                    ? 'border-terminal-gold text-terminal-gold'
-                                    : 'border-gray-700 text-gray-500'
-                            }`}
-                        >
-                            <span className="ns-keycap font-bold text-sm">G</span>
-                            <span className="ns-action text-[10px]">SUPER</span>
-                        </button>
-                    </div>
-                    <div className="w-px h-8 bg-gray-800 mx-2"></div>
-                    <button
-                        type="button"
-                        onClick={actions?.deal}
-                        className="flex flex-col items-center border border-terminal-green/50 rounded bg-black/50 px-3 py-1 w-24"
-                    >
-                        <span className="ns-keycap text-terminal-green font-bold text-sm">SPACE</span>
-                        <span className="ns-action text-[10px] text-gray-500">ROLL</span>
-                    </button>
-            </GameControlBar>
+            <GameControlBar
+                primaryAction={{
+                    label: 'ROLL',
+                    onClick: actions?.deal,
+                    className: 'w-full sm:w-auto',
+                }}
+                secondaryActions={[
+                    // Basic Bets
+                    { label: 'SMALL', onClick: () => actions?.placeSicBoBet?.('SMALL'), active: betTypes.has('SMALL') },
+                    { label: 'BIG', onClick: () => actions?.placeSicBoBet?.('BIG'), active: betTypes.has('BIG') },
+                    { label: 'ODD', onClick: () => actions?.placeSicBoBet?.('ODD'), active: betTypes.has('ODD') },
+                    { label: 'EVEN', onClick: () => actions?.placeSicBoBet?.('EVEN'), active: betTypes.has('EVEN') },
+                    // Specifics (Input Modes)
+                    { label: 'DIE', onClick: () => actions?.setGameState?.((prev: any) => ({ ...prev, sicBoInputMode: 'SINGLE' })), active: gameState.sicBoInputMode === 'SINGLE' || betTypes.has('SINGLE_DIE') },
+                    { label: 'DOUBLE', onClick: () => actions?.setGameState?.((prev: any) => ({ ...prev, sicBoInputMode: 'DOUBLE' })), active: gameState.sicBoInputMode === 'DOUBLE' || betTypes.has('DOUBLE_SPECIFIC') },
+                    { label: 'TRIPLE', onClick: () => actions?.setGameState?.((prev: any) => ({ ...prev, sicBoInputMode: 'TRIPLE' })), active: gameState.sicBoInputMode === 'TRIPLE' || betTypes.has('TRIPLE_SPECIFIC') },
+                    { label: 'DOMINO', onClick: () => actions?.setGameState?.((prev: any) => ({ ...prev, sicBoInputMode: 'DOMINO' })), active: gameState.sicBoInputMode === 'DOMINO' || betTypes.has('DOMINO') },
+                    // Hops & Sums
+                    { label: '3-HOP', onClick: () => actions?.setGameState?.((prev: any) => ({ ...prev, sicBoInputMode: 'HOP3_EASY' })), active: gameState.sicBoInputMode === 'HOP3_EASY' || betTypes.has('HOP3_EASY') },
+                    { label: 'HARD', onClick: () => actions?.setGameState?.((prev: any) => ({ ...prev, sicBoInputMode: 'HOP3_HARD' })), active: gameState.sicBoInputMode === 'HOP3_HARD' || betTypes.has('HOP3_HARD') },
+                    { label: '4-HOP', onClick: () => actions?.setGameState?.((prev: any) => ({ ...prev, sicBoInputMode: 'HOP4_EASY' })), active: gameState.sicBoInputMode === 'HOP4_EASY' || betTypes.has('HOP4_EASY') },
+                    { label: 'SUM', onClick: () => actions?.setGameState?.((prev: any) => ({ ...prev, sicBoInputMode: 'SUM' })), active: gameState.sicBoInputMode === 'SUM' || betTypes.has('SUM') },
+                    // Any Triple
+                    { label: 'ANY 3', onClick: () => actions?.placeSicBoBet?.('TRIPLE_ANY'), active: betTypes.has('TRIPLE_ANY') },
+                    // Actions
+                    { label: 'REBET', onClick: actions?.rebetSicBo },
+                    { label: 'UNDO', onClick: actions?.undoSicBoBet },
+                    // Modifiers
+                    { label: 'SHIELD', onClick: actions?.toggleShield, active: gameState.activeModifiers.shield },
+                    { label: 'DOUBLE', onClick: actions?.toggleDouble, active: gameState.activeModifiers.double },
+                    { label: 'SUPER', onClick: actions?.toggleSuper, active: gameState.activeModifiers.super },
+                ]}
+            />
 
             {/* SIC BO MODAL */}
             {gameState.sicBoInputMode !== 'NONE' && (

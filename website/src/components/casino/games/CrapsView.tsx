@@ -293,221 +293,48 @@ export const CrapsView = React.memo<{ gameState: GameState; actions: any }>(({ g
             </div>
 
             {/* CONTROLS */}
-            <GameControlBar>
-	                    <div className="flex gap-2">
-	                        <button
-	                            type="button"
-	                            onClick={() => actions?.placeCrapsBet?.(gameState.crapsPoint ? 'COME' : 'PASS')}
-	                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-	                                betTypes.has('PASS') || betTypes.has('COME')
-	                                    ? 'border-terminal-green bg-terminal-green/10'
-	                                    : 'border-terminal-dim'
-	                            }`}
-	                        >
-	                            <span className="ns-keycap text-white font-bold text-sm">P</span>
-	                            <span className="ns-action text-[10px] text-gray-500">{gameState.crapsPoint ? 'COME' : 'PASS'}</span>
-	                        </button>
-	                        <button
-	                            type="button"
-	                            onClick={() => actions?.placeCrapsBet?.(gameState.crapsPoint ? 'DONT_COME' : 'DONT_PASS')}
-	                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-	                                betTypes.has('DONT_PASS') || betTypes.has('DONT_COME')
-	                                    ? 'border-terminal-green bg-terminal-green/10'
-	                                    : 'border-terminal-dim'
-	                            }`}
-	                        >
-	                            <span className="ns-keycap text-white font-bold text-sm">D</span>
-	                            <span className="ns-action text-[10px] text-gray-500">DONT</span>
-	                        </button>
-	                        <button
-	                            type="button"
-	                            onClick={() => actions?.placeCrapsBet?.('FIELD')}
-	                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-	                                betTypes.has('FIELD') ? 'border-terminal-green bg-terminal-green/10' : 'border-terminal-dim'
-	                            }`}
-	                        >
-	                            <span className="ns-keycap text-white font-bold text-sm">F</span>
-	                            <span className="ns-action text-[10px] text-gray-500">FIELD</span>
-	                        </button>
-	                        <button
-	                            type="button"
-	                            onClick={() => actions?.placeCrapsBet?.('FIRE')}
-	                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-	                                betTypes.has('FIRE') ? 'border-terminal-green bg-terminal-green/10' : 'border-terminal-dim'
-	                            }`}
-	                        >
-	                            <span className="ns-keycap text-white font-bold text-sm">B</span>
-	                            <span className="ns-action text-[10px] text-gray-500">FIRE</span>
-	                        </button>
-	                        <button
-	                            type="button"
-	                            onClick={() => actions?.addCrapsOdds?.()}
-	                            className="flex flex-col items-center border border-terminal-dim rounded bg-black/50 px-3 py-1"
-	                        >
-	                            <span className="ns-keycap text-white font-bold text-sm">O</span>
-	                            <span className="ns-action text-[10px] text-gray-500">ODDS</span>
-	                        </button>
-	                        <button
-	                            type="button"
-	                            onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, crapsInputMode: 'HARDWAY' }))}
-	                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-	                                gameState.crapsInputMode === 'HARDWAY' || betTypes.has('HARDWAY')
-	                                    ? 'border-terminal-green bg-terminal-green/10'
-	                                    : 'border-terminal-dim'
-	                            }`}
-	                        >
-	                            <span className="ns-keycap text-white font-bold text-sm">H</span>
-	                            <span className="ns-action text-[10px] text-gray-500">HARD</span>
-	                        </button>
-	                        <button
-	                            type="button"
-	                            onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, crapsInputMode: 'BUY' }))}
-	                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-	                                gameState.crapsInputMode === 'BUY' || betTypes.has('BUY')
-	                                    ? 'border-terminal-green bg-terminal-green/10'
-	                                    : 'border-terminal-dim'
-	                            }`}
-	                        >
-	                            <span className="ns-keycap text-white font-bold text-sm">I</span>
-	                            <span className="ns-action text-[10px] text-gray-500">BUY</span>
-	                        </button>
-	                    </div>
-	                    <div className="w-px h-8 bg-gray-800 mx-2"></div>
-	                    <div className="flex gap-2">
-	                        <button
-	                            type="button"
-	                            onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, crapsInputMode: 'YES' }))}
-	                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-	                                gameState.crapsInputMode === 'YES' || betTypes.has('YES')
-	                                    ? 'border-terminal-green bg-terminal-green/10'
-	                                    : 'border-gray-700'
-	                            }`}
-	                        >
-	                            <span className="ns-keycap text-white font-bold text-sm">Y</span>
-	                            <span className="ns-action text-[10px] text-gray-500">YES</span>
-	                        </button>
-	                        <button
-	                            type="button"
-	                            onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, crapsInputMode: 'NO' }))}
-	                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-	                                gameState.crapsInputMode === 'NO' || betTypes.has('NO')
-	                                    ? 'border-terminal-green bg-terminal-green/10'
-	                                    : 'border-gray-700'
-	                            }`}
-	                        >
-	                            <span className="ns-keycap text-white font-bold text-sm">N</span>
-	                            <span className="ns-action text-[10px] text-gray-500">NO</span>
-	                        </button>
-	                        <button
-	                            type="button"
-	                            onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, crapsInputMode: 'NEXT' }))}
-	                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-	                                gameState.crapsInputMode === 'NEXT' || betTypes.has('NEXT')
-	                                    ? 'border-terminal-green bg-terminal-green/10'
-	                                    : 'border-gray-700'
-	                            }`}
-	                        >
-	                            <span className="ns-keycap text-white font-bold text-sm">X</span>
-	                            <span className="ns-action text-[10px] text-gray-500">NEXT</span>
-	                        </button>
-	                    </div>
-	                    <div className="w-px h-8 bg-gray-800 mx-2"></div>
-		                    {canPlaceAts && (
-		                        <>
-		                            <div className="flex gap-2">
-		                                <button
-		                                    type="button"
-		                                    onClick={() => actions?.placeCrapsBet?.('ATS_SMALL')}
-		                                    className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-		                                        atsSelected.small ? 'border-terminal-green bg-terminal-green/10' : 'border-gray-700'
-		                                    }`}
-		                                >
-		                                    <span className="ns-keycap text-white font-bold text-sm">S</span>
-		                                    <span className="ns-action text-[10px] text-gray-500">ATS S</span>
-		                                </button>
-		                                <button
-		                                    type="button"
-		                                    onClick={() => actions?.placeCrapsBet?.('ATS_TALL')}
-		                                    className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-		                                        atsSelected.tall ? 'border-terminal-green bg-terminal-green/10' : 'border-gray-700'
-		                                    }`}
-		                                >
-		                                    <span className="ns-keycap text-white font-bold text-sm">L</span>
-		                                    <span className="ns-action text-[10px] text-gray-500">ATS T</span>
-		                                </button>
-		                                <button
-		                                    type="button"
-		                                    onClick={() => actions?.placeCrapsBet?.('ATS_ALL')}
-		                                    className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-		                                        atsSelected.all ? 'border-terminal-green bg-terminal-green/10' : 'border-gray-700'
-		                                    }`}
-		                                >
-		                                    <span className="ns-keycap text-white font-bold text-sm">A</span>
-		                                    <span className="ns-action text-[10px] text-gray-500">ATS A</span>
-		                                </button>
-		                            </div>
-		                            <div className="w-px h-8 bg-gray-800 mx-2"></div>
-		                        </>
-		                    )}
-	                    <div className="flex gap-2">
-	                        <button
-	                            type="button"
-	                            onClick={actions?.rebetCraps}
-	                            className="flex flex-col items-center border border-gray-700 rounded bg-black/50 px-3 py-1"
-	                        >
-	                            <span className="ns-keycap text-gray-500 font-bold text-sm">T</span>
-	                            <span className="ns-action text-[10px] text-gray-600">REBET</span>
-	                        </button>
-	                        <button
-	                            type="button"
-	                            onClick={actions?.undoCrapsBet}
-	                            className="flex flex-col items-center border border-terminal-accent/50 rounded bg-black/50 px-3 py-1"
-	                        >
-	                            <span className="ns-keycap text-terminal-accent font-bold text-sm">U</span>
-	                            <span className="ns-action text-[10px] text-gray-500">UNDO</span>
-	                        </button>
-	                    </div>
-	                     <div className="w-px h-8 bg-gray-800 mx-2"></div>
-	                    <div className="flex gap-2">
-	                         <button
-	                            type="button"
-	                            onClick={actions?.toggleShield}
-	                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${gameState.activeModifiers.shield ? 'border-cyan-400 text-cyan-400' : 'border-gray-700 text-gray-500'}`}
-	                         >
-	                            <span className="ns-keycap font-bold text-sm">Z</span>
-	                            <span className="ns-action text-[10px]">SHIELD</span>
-	                        </button>
-	                         <button
-	                            type="button"
-	                            onClick={actions?.toggleDouble}
-	                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${gameState.activeModifiers.double ? 'border-purple-400 text-purple-400' : 'border-gray-700 text-gray-500'}`}
-	                         >
-	                            <span className="ns-keycap font-bold text-sm">⇧X</span>
-	                            <span className="ns-action text-[10px]">DOUBLE</span>
-	                        </button>
-	                        <button
-	                            type="button"
-	                            onClick={actions?.toggleSuper}
-	                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-	                                gameState.activeModifiers.super
-	                                    ? 'border-terminal-gold text-terminal-gold'
-	                                    : 'border-gray-700 text-gray-500'
-	                            }`}
-	                        >
-	                            <span className="ns-keycap font-bold text-sm">G</span>
-	                            <span className="ns-action text-[10px]">SUPER</span>
-	                        </button>
-	                    </div>
-	                    <div className="w-px h-8 bg-gray-800 mx-2"></div>
-	                    <button
-	                        type="button"
-	                        onClick={actions?.deal}
-	                        className="flex flex-col items-center border border-terminal-green/50 rounded bg-black/50 px-3 py-1 w-24"
-	                    >
-	                        <span className="ns-keycap text-terminal-green font-bold text-sm">SPACE</span>
-	                        <span className="ns-action text-[10px] text-gray-500">ROLL</span>
-	                    </button>
-	            </GameControlBar>
+            <GameControlBar
+                primaryAction={{
+                    label: 'ROLL',
+                    onClick: actions?.deal,
+                    className: 'w-full sm:w-auto',
+                }}
+                secondaryActions={[
+                    // Main Bets
+                    {
+                        label: gameState.crapsPoint ? 'COME' : 'PASS',
+                        onClick: () => actions?.placeCrapsBet?.(gameState.crapsPoint ? 'COME' : 'PASS'),
+                        active: betTypes.has('PASS') || betTypes.has('COME'),
+                    },
+                    {
+                        label: gameState.crapsPoint ? "DON'T COME" : "DON'T PASS",
+                        onClick: () => actions?.placeCrapsBet?.(gameState.crapsPoint ? 'DONT_COME' : 'DONT_PASS'),
+                        active: betTypes.has('DONT_PASS') || betTypes.has('DONT_COME'),
+                    },
+                    { label: 'FIELD', onClick: () => actions?.placeCrapsBet?.('FIELD'), active: betTypes.has('FIELD') },
+                    { label: 'ODDS', onClick: () => actions?.addCrapsOdds?.() },
+                    { label: 'FIRE', onClick: () => actions?.placeCrapsBet?.('FIRE'), active: betTypes.has('FIRE') },
+                    // ATS (Conditional)
+                    ...(canPlaceAts ? [
+                        { label: 'ATS S', onClick: () => actions?.placeCrapsBet?.('ATS_SMALL'), active: atsSelected.small },
+                        { label: 'ATS T', onClick: () => actions?.placeCrapsBet?.('ATS_TALL'), active: atsSelected.tall },
+                        { label: 'ATS A', onClick: () => actions?.placeCrapsBet?.('ATS_ALL'), active: atsSelected.all },
+                    ] : []),
+                    // Input Modes
+                    { label: 'HARD', onClick: () => actions?.setGameState?.((prev: any) => ({ ...prev, crapsInputMode: 'HARDWAY' })), active: gameState.crapsInputMode === 'HARDWAY' || betTypes.has('HARDWAY') },
+                    { label: 'BUY', onClick: () => actions?.setGameState?.((prev: any) => ({ ...prev, crapsInputMode: 'BUY' })), active: gameState.crapsInputMode === 'BUY' || betTypes.has('BUY') },
+                    { label: 'YES', onClick: () => actions?.setGameState?.((prev: any) => ({ ...prev, crapsInputMode: 'YES' })), active: gameState.crapsInputMode === 'YES' || betTypes.has('YES') },
+                    { label: 'NO', onClick: () => actions?.setGameState?.((prev: any) => ({ ...prev, crapsInputMode: 'NO' })), active: gameState.crapsInputMode === 'NO' || betTypes.has('NO') },
+                    { label: 'NEXT', onClick: () => actions?.setGameState?.((prev: any) => ({ ...prev, crapsInputMode: 'NEXT' })), active: gameState.crapsInputMode === 'NEXT' || betTypes.has('NEXT') },
+                    // Actions
+                    { label: 'REBET', onClick: actions?.rebetCraps },
+                    { label: 'UNDO', onClick: actions?.undoCrapsBet },
+                    // Modifiers
+                    { label: 'SHIELD', onClick: actions?.toggleShield, active: gameState.activeModifiers.shield },
+                    { label: 'DOUBLE', onClick: actions?.toggleDouble, active: gameState.activeModifiers.double },
+                    { label: 'SUPER', onClick: actions?.toggleSuper, active: gameState.activeModifiers.super },
+                ]}
+            />
 
             {/* MODAL */}
             {gameState.crapsInputMode !== 'NONE' && (

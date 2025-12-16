@@ -232,183 +232,68 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps>(({ gameSta
             </div>
 
             {/* Controls */}
-            <GameControlBar>
-                {gameState.stage === 'BETTING' && (
-                    <>
-	                        <button
-	                            type="button"
-	                            onClick={actions?.uthToggleTrips}
-	                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-	                                (gameState.uthTripsBet || 0) > 0
-	                                    ? 'border-terminal-green bg-terminal-green/10 text-terminal-green'
-	                                    : 'border-gray-700 text-gray-500'
-	                            }`}
-	                        >
-                            <span className="ns-keycap font-bold text-sm">T</span>
-                            <span className="ns-action text-[10px]">TRIPS</span>
-                        </button>
-	                        <button
-	                            type="button"
-	                            onClick={actions?.uthToggleSixCardBonus}
-	                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-	                                (gameState.uthSixCardBonusBet || 0) > 0
-	                                    ? 'border-terminal-green bg-terminal-green/10 text-terminal-green'
-	                                    : 'border-gray-700 text-gray-500'
-	                            }`}
-	                        >
-                            <span className="ns-keycap font-bold text-sm">6</span>
-                            <span className="ns-action text-[10px]">6-CARD</span>
-                        </button>
-	                        <button
-	                            type="button"
-	                            onClick={actions?.uthToggleProgressive}
-	                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-	                                (gameState.uthProgressiveBet || 0) > 0
-	                                    ? 'border-terminal-green bg-terminal-green/10 text-terminal-green'
-	                                    : 'border-gray-700 text-gray-500'
-	                            }`}
-	                        >
-                            <span className="ns-keycap font-bold text-sm">J</span>
-                            <span className="ns-action text-[10px]">PROG</span>
-                        </button>
-                        <div className="w-px h-8 bg-gray-800 mx-2"></div>
-                        <div className="flex gap-2">
-                            <button
-                                type="button"
-                                onClick={actions?.toggleShield}
-                                className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-                                    gameState.activeModifiers.shield ? 'border-cyan-400 text-cyan-400' : 'border-gray-700 text-gray-500'
-                                }`}
-                            >
-                                <span className="ns-keycap font-bold text-sm">Z</span>
-                                <span className="ns-action text-[10px]">SHIELD</span>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={actions?.toggleDouble}
-                                className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-                                    gameState.activeModifiers.double ? 'border-purple-400 text-purple-400' : 'border-gray-700 text-gray-500'
-                                }`}
-                            >
-                                <span className="ns-keycap font-bold text-sm">X</span>
-                                <span className="ns-action text-[10px]">DOUBLE</span>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={actions?.toggleSuper}
-                                className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-                                    gameState.activeModifiers.super
-                                        ? 'border-terminal-gold text-terminal-gold'
-                                        : 'border-gray-700 text-gray-500'
-                                    }`}
-                            >
-                                <span className="ns-keycap font-bold text-sm">G</span>
-                                <span className="ns-action text-[10px]">SUPER</span>
-                            </button>
-                        </div>
-                        <div className="w-px h-8 bg-gray-800 mx-2"></div>
-                        <button
-                            type="button"
-                            onClick={actions?.deal}
-                            className="flex flex-col items-center border border-terminal-green/50 rounded bg-black/50 px-3 py-1 w-24"
-                        >
-                            <span className="ns-keycap text-terminal-green font-bold text-sm">SPACE</span>
-                            <span className="ns-action text-[10px] text-gray-500">DEAL</span>
-                        </button>
-                    </>
-                )}
-                {gameState.stage === 'PLAYING' && gameState.communityCards.length === 0 && (
-                    <>
-                        <button
-                            type="button"
-                            onClick={actions?.uhCheck}
-                            className="flex flex-col items-center border border-gray-700 rounded bg-black/50 px-3 py-1"
-                        >
-                            <span className="ns-keycap text-white font-bold text-sm">C</span>
-                            <span className="ns-action text-[10px] text-gray-500">CHECK</span>
-                        </button>
-                        <div className="w-px h-8 bg-gray-800 mx-2"></div>
-                        <button
-                            type="button"
-                            onClick={() => actions?.uhBet?.(4)}
-                            className="flex flex-col items-center border border-terminal-gold rounded bg-black/50 px-3 py-1"
-                        >
-                            <span className="ns-keycap text-terminal-gold font-bold text-sm">4</span>
-                            <span className="ns-action text-[10px] text-gray-500">BET 4X</span>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => actions?.uhBet?.(3)}
-                            className="flex flex-col items-center border border-terminal-gold rounded bg-black/50 px-3 py-1"
-                        >
-                            <span className="ns-keycap text-terminal-gold font-bold text-sm">3</span>
-                            <span className="ns-action text-[10px] text-gray-500">BET 3X</span>
-                        </button>
-                    </>
-                )}
-                {gameState.stage === 'PLAYING' && gameState.communityCards.length === 3 && (
-                    <>
-                        <button
-                            type="button"
-                            onClick={actions?.uhCheck}
-                            className="flex flex-col items-center border border-gray-700 rounded bg-black/50 px-3 py-1"
-                        >
-                            <span className="ns-keycap text-white font-bold text-sm">C</span>
-                            <span className="ns-action text-[10px] text-gray-500">CHECK</span>
-                        </button>
-                        <div className="w-px h-8 bg-gray-800 mx-2"></div>
-                        <button
-                            type="button"
-                            onClick={() => actions?.uhBet?.(2)}
-                            className="flex flex-col items-center border border-terminal-gold rounded bg-black/50 px-3 py-1"
-                        >
-                            <span className="ns-keycap text-terminal-gold font-bold text-sm">2</span>
-                            <span className="ns-action text-[10px] text-gray-500">BET 2X</span>
-                        </button>
-                    </>
-                )}
-                {gameState.stage === 'PLAYING' && gameState.message.includes('REVEAL') && (
-                    <button
-                        type="button"
-                        onClick={actions?.deal}
-                        className="flex flex-col items-center border border-terminal-green/50 rounded bg-black/50 px-3 py-1 w-24"
-                    >
-                        <span className="ns-keycap text-terminal-green font-bold text-sm">SPACE</span>
-                        <span className="ns-action text-[10px] text-gray-500">REVEAL</span>
-                    </button>
-                )}
-                {gameState.stage === 'PLAYING' && gameState.communityCards.length === 5 && !gameState.message.includes('REVEAL') && (
-                    <>
-                        <button
-                            type="button"
-                            onClick={actions?.uhFold}
-                            className="flex flex-col items-center border border-terminal-accent rounded bg-black/50 px-3 py-1"
-                        >
-                            <span className="ns-keycap text-terminal-accent font-bold text-sm">F</span>
-                            <span className="ns-action text-[10px] text-gray-500">FOLD</span>
-                        </button>
-                        <div className="w-px h-8 bg-gray-800 mx-2"></div>
-                        <button
-                            type="button"
-                            onClick={() => actions?.uhBet?.(1)}
-                            className="flex flex-col items-center border border-terminal-gold rounded bg-black/50 px-3 py-1"
-                        >
-                            <span className="ns-keycap text-terminal-gold font-bold text-sm">1</span>
-                            <span className="ns-action text-[10px] text-gray-500">BET 1X</span>
-                        </button>
-                    </>
-                )}
-                {gameState.stage === 'RESULT' && (
-                    <button
-                        type="button"
-                        onClick={actions?.deal}
-                        className="flex flex-col items-center border border-terminal-green/50 rounded bg-black/50 px-3 py-1 w-24"
-                    >
-                        <span className="ns-keycap text-terminal-green font-bold text-sm">SPACE</span>
-                        <span className="ns-action text-[10px] text-gray-500">NEW HAND</span>
-                    </button>
-                )}
-            </GameControlBar>
+            <GameControlBar
+                primaryAction={
+                    gameState.stage === 'BETTING'
+                        ? { label: 'DEAL', onClick: actions?.deal, className: 'w-full sm:w-auto' }
+                        : gameState.stage === 'RESULT'
+                            ? { label: 'NEW HAND', onClick: actions?.deal, className: 'w-full sm:w-auto' }
+                            : gameState.message.includes('REVEAL')
+                                ? { label: 'REVEAL', onClick: actions?.deal, className: 'w-full sm:w-auto' }
+                                : gameState.communityCards.length === 5
+                                    ? { label: 'BET 1X', onClick: () => actions?.uhBet?.(1), className: 'border-terminal-gold bg-terminal-gold text-black hover:bg-white' }
+                                    : { label: 'CHECK', onClick: actions?.uhCheck }
+                }
+                secondaryActions={
+                    gameState.stage === 'BETTING'
+                        ? [
+                            {
+                                label: `TRIPS${(gameState.uthTripsBet || 0) > 0 ? ` $${gameState.uthTripsBet}` : ''}`,
+                                onClick: actions?.uthToggleTrips,
+                                active: (gameState.uthTripsBet || 0) > 0,
+                            },
+                            {
+                                label: `6-CARD${(gameState.uthSixCardBonusBet || 0) > 0 ? ` $${gameState.uthSixCardBonusBet}` : ''}`,
+                                onClick: actions?.uthToggleSixCardBonus,
+                                active: (gameState.uthSixCardBonusBet || 0) > 0,
+                            },
+                            {
+                                label: `PROG${(gameState.uthProgressiveBet || 0) > 0 ? ` $${gameState.uthProgressiveBet}` : ''}`,
+                                onClick: actions?.uthToggleProgressive,
+                                active: (gameState.uthProgressiveBet || 0) > 0,
+                            },
+                            {
+                                label: 'SHIELD',
+                                onClick: actions?.toggleShield,
+                                active: gameState.activeModifiers.shield,
+                            },
+                            {
+                                label: 'DOUBLE',
+                                onClick: actions?.toggleDouble,
+                                active: gameState.activeModifiers.double,
+                            },
+                            {
+                                label: 'SUPER',
+                                onClick: actions?.toggleSuper,
+                                active: gameState.activeModifiers.super,
+                            },
+                        ]
+                        : gameState.communityCards.length === 0
+                            ? [
+                                { label: 'BET 4X', onClick: () => actions?.uhBet?.(4), className: 'text-terminal-gold border-terminal-gold' },
+                                { label: 'BET 3X', onClick: () => actions?.uhBet?.(3), className: 'text-terminal-gold border-terminal-gold' },
+                            ]
+                            : gameState.communityCards.length === 3
+                                ? [
+                                    { label: 'BET 2X', onClick: () => actions?.uhBet?.(2), className: 'text-terminal-gold border-terminal-gold' },
+                                ]
+                                : gameState.communityCards.length === 5 && !gameState.message.includes('REVEAL')
+                                    ? [
+                                        { label: 'FOLD', onClick: actions?.uhFold, className: 'text-terminal-accent border-terminal-accent' },
+                                    ]
+                                    : []
+                }
+            />
         </>
     );
 });

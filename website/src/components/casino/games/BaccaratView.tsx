@@ -157,138 +157,71 @@ export const BaccaratView = React.memo<{ gameState: GameState; actions: any }>((
             </div>
 
             {/* CONTROLS */}
-            <GameControlBar>
-                    <div className="flex gap-2">
-	                        <button
-	                            type="button"
-	                            onClick={() => actions?.baccaratActions?.toggleSelection?.('PLAYER')}
-	                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${isPlayerSelected ? 'border-terminal-green' : 'border-terminal-dim'}`}
-	                        >
-	                            <span className={`ns-keycap font-bold text-sm ${isPlayerSelected ? 'text-terminal-green' : 'text-white'}`}>P</span>
-	                            <span className="ns-action text-[10px] text-gray-500">PLAYER</span>
-                                <span className="text-[9px] text-gray-600">${gameState.bet.toLocaleString()}</span>
-	                        </button>
-	                        <button
-	                            type="button"
-	                            onClick={() => actions?.baccaratActions?.toggleSelection?.('BANKER')}
-	                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${isBankerSelected ? 'border-terminal-green' : 'border-terminal-dim'}`}
-	                        >
-	                            <span className={`ns-keycap font-bold text-sm ${isBankerSelected ? 'text-terminal-green' : 'text-white'}`}>B</span>
-	                            <span className="ns-action text-[10px] text-gray-500">BANKER</span>
-                                <span className="text-[9px] text-gray-600">${gameState.bet.toLocaleString()}</span>
-	                        </button>
-	                    </div>
-	                    <div className="w-px h-8 bg-gray-800 mx-2"></div>
-		                    <div className="flex gap-2">
-		                        <button
-		                            type="button"
-		                            onClick={() => actions?.baccaratActions?.placeBet?.('TIE')}
-		                            className={sideBetButtonClass(hasTie)}
-		                        >
-		                            <span className={`ns-keycap font-bold text-sm ${hasTie ? 'text-terminal-green' : 'text-white'}`}>E</span>
-		                            <span className={`ns-action text-[10px] ${hasTie ? 'text-terminal-green/80' : 'text-gray-500'}`}>TIE</span>
-                                    <span className={`text-[9px] ${hasTie ? 'text-terminal-gold/80' : 'text-gray-800 opacity-0'}`}>
-                                        ${sideBetAmounts.TIE.toLocaleString()}
-                                    </span>
-		                        </button>
-		                        <button
-		                            type="button"
-		                            onClick={() => actions?.baccaratActions?.placeBet?.('P_PAIR')}
-		                            className={sideBetButtonClass(hasPlayerPair)}
-		                        >
-		                            <span className={`ns-keycap font-bold text-sm ${hasPlayerPair ? 'text-terminal-green' : 'text-white'}`}>Q</span>
-		                            <span className={`ns-action text-[10px] ${hasPlayerPair ? 'text-terminal-green/80' : 'text-gray-500'}`}>P.PAIR</span>
-                                    <span
-                                        className={`text-[9px] ${hasPlayerPair ? 'text-terminal-gold/80' : 'text-gray-800 opacity-0'}`}
-                                    >
-                                        ${sideBetAmounts.P_PAIR.toLocaleString()}
-                                    </span>
-		                        </button>
-		                        <button
-		                            type="button"
-		                            onClick={() => actions?.baccaratActions?.placeBet?.('B_PAIR')}
-		                            className={sideBetButtonClass(hasBankerPair)}
-		                        >
-		                            <span className={`ns-keycap font-bold text-sm ${hasBankerPair ? 'text-terminal-green' : 'text-white'}`}>W</span>
-		                            <span className={`ns-action text-[10px] ${hasBankerPair ? 'text-terminal-green/80' : 'text-gray-500'}`}>B.PAIR</span>
-                                    <span
-                                        className={`text-[9px] ${hasBankerPair ? 'text-terminal-gold/80' : 'text-gray-800 opacity-0'}`}
-                                    >
-                                        ${sideBetAmounts.B_PAIR.toLocaleString()}
-                                    </span>
-		                        </button>
-		                        <button
-		                            type="button"
-		                            onClick={() => actions?.baccaratActions?.placeBet?.('LUCKY6')}
-		                            className={sideBetButtonClass(hasLucky6)}
-		                        >
-		                            <span className={`ns-keycap font-bold text-sm ${hasLucky6 ? 'text-terminal-green' : 'text-white'}`}>6</span>
-		                            <span className={`ns-action text-[10px] ${hasLucky6 ? 'text-terminal-green/80' : 'text-gray-500'}`}>LUCKY6</span>
-                                    <span className={`text-[9px] ${hasLucky6 ? 'text-terminal-gold/80' : 'text-gray-800 opacity-0'}`}>
-                                        ${sideBetAmounts.LUCKY6.toLocaleString()}
-                                    </span>
-		                        </button>
-		                    </div>
-                    <div className="w-px h-8 bg-gray-800 mx-2"></div>
-                     <div className="flex gap-2">
-                        <button
-                            type="button"
-                            onClick={actions?.baccaratActions?.rebet}
-                            className="flex flex-col items-center border border-gray-700 rounded bg-black/50 px-3 py-1"
-                        >
-                            <span className="ns-keycap text-gray-500 font-bold text-sm">T</span>
-                            <span className="ns-action text-[10px] text-gray-600">REBET</span>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={actions?.baccaratActions?.undo}
-                            className="flex flex-col items-center border border-gray-700 rounded bg-black/50 px-3 py-1"
-                        >
-                            <span className="ns-keycap text-gray-500 font-bold text-sm">U</span>
-                            <span className="ns-action text-[10px] text-gray-600">UNDO</span>
-                        </button>
-                    </div>
-                    <div className="w-px h-8 bg-gray-800 mx-2"></div>
-                    <div className="flex gap-2">
-                         <button
-                            type="button"
-                            onClick={actions?.toggleShield}
-                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${gameState.activeModifiers.shield ? 'border-cyan-400 text-cyan-400' : 'border-gray-700 text-gray-500'}`}
-                         >
-                            <span className="ns-keycap font-bold text-sm">Z</span>
-                            <span className="ns-action text-[10px]">SHIELD</span>
-                        </button>
-                         <button
-                            type="button"
-                            onClick={actions?.toggleDouble}
-                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${gameState.activeModifiers.double ? 'border-purple-400 text-purple-400' : 'border-gray-700 text-gray-500'}`}
-                         >
-                            <span className="ns-keycap font-bold text-sm">X</span>
-                            <span className="ns-action text-[10px]">DOUBLE</span>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={actions?.toggleSuper}
-                            className={`flex flex-col items-center border rounded bg-black/50 px-3 py-1 ${
-                                gameState.activeModifiers.super
-                                    ? 'border-terminal-gold text-terminal-gold'
-                                    : 'border-gray-700 text-gray-500'
-                            }`}
-                        >
-                            <span className="ns-keycap font-bold text-sm">G</span>
-                            <span className="ns-action text-[10px]">SUPER</span>
-                        </button>
-                    </div>
-                    <div className="w-px h-8 bg-gray-800 mx-2"></div>
-                    <button
-                        type="button"
-                        onClick={actions?.deal}
-                        className="flex flex-col items-center border border-terminal-green/50 rounded bg-black/50 px-3 py-1 w-24"
-                    >
-                        <span className="ns-keycap text-terminal-green font-bold text-sm">SPACE</span>
-                        <span className="ns-action text-[10px] text-gray-500">DEAL</span>
-                    </button>
-            </GameControlBar>
+            <GameControlBar
+                primaryAction={{
+                    label: 'DEAL',
+                    onClick: actions?.deal,
+                    className: 'w-full sm:w-auto',
+                }}
+                secondaryActions={[
+                    {
+                        label: `PLAYER${gameState.bet > 0 ? ` $${gameState.bet}` : ''}`,
+                        onClick: () => actions?.baccaratActions?.toggleSelection?.('PLAYER'),
+                        active: isPlayerSelected,
+                    },
+                    {
+                        label: `BANKER${gameState.bet > 0 ? ` $${gameState.bet}` : ''}`,
+                        onClick: () => actions?.baccaratActions?.toggleSelection?.('BANKER'),
+                        active: isBankerSelected,
+                    },
+                    {
+                        label: `TIE${sideBetAmounts.TIE > 0 ? ` $${sideBetAmounts.TIE}` : ''}`,
+                        onClick: () => actions?.baccaratActions?.placeBet?.('TIE'),
+                        active: sideBetAmounts.TIE > 0,
+                    },
+                    {
+                        label: `P.PAIR${sideBetAmounts.P_PAIR > 0 ? ` $${sideBetAmounts.P_PAIR}` : ''}`,
+                        onClick: () => actions?.baccaratActions?.placeBet?.('P_PAIR'),
+                        active: sideBetAmounts.P_PAIR > 0,
+                    },
+                    {
+                        label: `B.PAIR${sideBetAmounts.B_PAIR > 0 ? ` $${sideBetAmounts.B_PAIR}` : ''}`,
+                        onClick: () => actions?.baccaratActions?.placeBet?.('B_PAIR'),
+                        active: sideBetAmounts.B_PAIR > 0,
+                    },
+                    {
+                        label: `LUCKY6${sideBetAmounts.LUCKY6 > 0 ? ` $${sideBetAmounts.LUCKY6}` : ''}`,
+                        onClick: () => actions?.baccaratActions?.placeBet?.('LUCKY6'),
+                        active: sideBetAmounts.LUCKY6 > 0,
+                    },
+                    {
+                        label: 'REBET',
+                        onClick: actions?.baccaratActions?.rebet,
+                    },
+                    {
+                        label: 'UNDO',
+                        onClick: actions?.baccaratActions?.undo,
+                    },
+                    {
+                        label: 'SHIELD',
+                        onClick: actions?.toggleShield,
+                        active: gameState.activeModifiers.shield,
+                    },
+                    {
+                        label: 'DOUBLE',
+                        onClick: actions?.toggleDouble,
+                        active: gameState.activeModifiers.double,
+                    },
+                    {
+                        label: 'SUPER',
+                        onClick: actions?.toggleSuper,
+                        active: gameState.activeModifiers.super,
+                    },
+                ]}
+            />
+        </>
+    );
+});
         </>
     );
 });
