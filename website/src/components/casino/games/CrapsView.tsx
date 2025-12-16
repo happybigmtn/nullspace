@@ -198,6 +198,35 @@ export const CrapsView = React.memo<{ gameState: GameState; actions: any }>(({ g
                         </div>
                     )}
                 </div>
+
+                {/* Mobile: Active Bets & Live Log */}
+                <div className="w-full mt-4 p-2 border-t border-gray-800 bg-gray-900/20 sm:hidden">
+                    <div className="flex justify-between items-center mb-2">
+                        <span className="text-[10px] text-gray-500 tracking-widest uppercase">ACTIVE BETS</span>
+                        <span className="text-[10px] text-gray-500 tracking-widest uppercase">LOG</span>
+                    </div>
+                    <div className="flex flex-col gap-2">
+                        {/* Log */}
+                        <div className="h-8 flex items-center justify-center border border-gray-800 rounded bg-black/40 px-2 overflow-hidden">
+                            <span className="text-xs text-terminal-gold truncate font-bold animate-pulse">{gameState.message}</span>
+                        </div>
+                        
+                        {/* Bets Scroller */}
+                        {gameState.crapsBets.length > 0 ? (
+                            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
+                                {gameState.crapsBets.map((b, i) => (
+                                    <div key={i} className="flex-none flex flex-col items-center border border-gray-800 bg-black/50 p-1 rounded min-w-[60px]">
+                                        <span className="text-[9px] text-terminal-green font-bold">{b.type}</span>
+                                        <span className="text-[9px] text-white">${b.amount}</span>
+                                        {b.target !== undefined && <span className="text-[8px] text-gray-500">{b.target}</span>}
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-center text-[10px] text-gray-700 italic py-1">NO ACTIVE BETS</div>
+                        )}
+                    </div>
+                </div>
             </div>
 
             {/* EXPOSURE SIDEBAR */}

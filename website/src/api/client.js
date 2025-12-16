@@ -339,6 +339,14 @@ export class CasinoClient {
         if (!candidates.includes(wsUrl)) candidates.push(wsUrl);
       }
 
+      // Fallback: Try standard simulator port 8080 on the same hostname (for LAN access)
+      if (typeof window !== 'undefined') {
+          const fallbackWsUrl = window.location.protocol === 'https:'
+            ? `wss://${window.location.hostname}:8080/updates/${filterHex}`
+            : `ws://${window.location.hostname}:8080/updates/${filterHex}`;
+          if (!candidates.includes(fallbackWsUrl)) candidates.push(fallbackWsUrl);
+      }
+
       if (candidates.length === 0) {
         reject(new Error('No WebSocket URL candidates available'));
         return;

@@ -17,6 +17,7 @@ import {
   ResponsiblePlayOverlay,
   type ResponsiblePlaySettings,
 } from './components/casino/Layout';
+import { MobileChipSelector } from './components/casino/MobileChipSelector';
 import { ModeSelectView, type PlayMode } from './components/casino/ModeSelectView';
 import { RegistrationView } from './components/casino/RegistrationView';
 import { ActiveGame } from './components/casino/ActiveGame';
@@ -522,7 +523,12 @@ export default function CasinoApp() {
           )}
        </div>
 
-       {gameState.type !== GameType.NONE && <Footer currentBet={gameState.bet} />}
+       {gameState.type !== GameType.NONE && (
+           <>
+               <Footer currentBet={gameState.bet} />
+               <MobileChipSelector currentBet={gameState.bet} onSelectBet={safeActions.setBetAmount} />
+           </>
+       )}
 
        {/* MODALS */}
        <CommandPalette
