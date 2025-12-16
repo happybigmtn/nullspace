@@ -1300,12 +1300,12 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
 	          console.log('[useTerminalGame] Empty initial state, setting stage to PLAYING');
 	          // Use game-appropriate message for empty initial state
           const initialMessage = frontendGameType === GameType.CRAPS
-            ? 'PLACE BETS - SPACE TO ROLL'
+            ? 'PLACE BETS & ROLL'
             : frontendGameType === GameType.ROULETTE
-            ? 'PLACE BETS - SPACE TO SPIN'
+            ? 'PLACE BETS & SPIN'
             : frontendGameType === GameType.SIC_BO
-            ? 'PLACE BETS - SPACE TO ROLL'
-            : 'GAME STARTED - SPACE TO DEAL';
+            ? 'PLACE BETS & ROLL'
+            : 'GAME STARTED';
 	          setGameState(prev => ({
 	            ...prev,
 	            stage: 'PLAYING',
@@ -1739,7 +1739,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
 	        const uiStage =
 	          bjStage === 0 ? ('BETTING' as const) : isComplete ? ('RESULT' as const) : ('PLAYING' as const);
 
-        let message = 'SPACE TO DEAL';
+        let message = 'PLACE BETS & DEAL';
         if (bjStage === 1) message = 'Your move';
         else if (bjStage === 2) message = 'REVEAL (SPACE)';
         else if (bjStage === 3) message = 'GAME COMPLETE';
@@ -1838,7 +1838,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
             playerCards: [],
             dealerCards: [],
             stage: 'PLAYING' as const,
-            message: 'PLACE BETS - SPACE TO DEAL',
+            message: 'PLACE BETS & DEAL',
           }));
           return;
         }
@@ -1883,7 +1883,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
             playerCards: [],
             dealerCards: [],
             stage: 'PLAYING' as const,
-            message: 'PLACE BETS - SPACE TO DEAL',
+            message: 'PLACE BETS & DEAL',
           }));
           return;
         }
@@ -1977,7 +1977,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
 	              stage: (stage === 0 ? 'BETTING' : 'PLAYING') as const,
 	              message:
 	                stage === 0
-	                  ? 'SPACE TO DEAL'
+	                  ? 'PLACE BETS & DEAL'
 	                  : stage === 1
 	                    ? 'WAR! GO TO WAR (W) / SURRENDER (S)'
 	                    : 'DEALT',
@@ -2315,8 +2315,8 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
         const uiStage =
           stageVal === 0 ? ('BETTING' as const) : stageVal === 3 ? ('RESULT' as const) : ('PLAYING' as const);
 
-        let message = 'SPACE TO DEAL';
-        if (stageVal === 0) message = 'PAIRPLUS (P), 6-CARD (6), PROG (J), SPACE TO DEAL';
+        let message = 'PLACE BETS & DEAL';
+        if (stageVal === 0) message = 'PAIRPLUS (P), 6-CARD (6), PROG (J), DEAL';
         else if (stageVal === 1) message = 'PLAY (P) OR FOLD (F)';
         else if (stageVal === 2) message = 'REVEAL (SPACE)';
         else if (stageVal === 3) message = 'GAME COMPLETE';
@@ -2393,8 +2393,8 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
         const uiStage =
           stageVal === 0 ? ('BETTING' as const) : stageVal === 5 ? ('RESULT' as const) : ('PLAYING' as const);
 
-        let message = 'SPACE TO DEAL';
-        if (stageVal === 0) message = 'TRIPS (T), 6-CARD (6), PROG (J), SPACE TO DEAL';
+        let message = 'PLACE BETS & DEAL';
+        if (stageVal === 0) message = 'TRIPS (T), 6-CARD (6), PROG (J), DEAL';
         else if (stageVal === 1) message = 'CHECK (C) OR BET 3X/4X';
         else if (stageVal === 2) message = 'CHECK (C) OR BET 2X';
         else if (stageVal === 3) message = playMult > 0 ? 'REVEAL (SPACE)' : 'FOLD (F) OR BET 1X';
@@ -2735,7 +2735,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
       // Fallback to local mode
       setGameState(prev => ({
         ...prev,
-        message: "SPACE TO DEAL",
+        message: "PLACE BETS & DEAL",
         stage: 'BETTING',
       }));
     }

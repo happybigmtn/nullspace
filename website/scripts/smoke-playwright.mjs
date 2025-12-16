@@ -202,7 +202,7 @@ async function run() {
       await page.getByPlaceholder(/type command or game name/i).fill('blackjack');
       await page.keyboard.press('Enter');
       await page.getByRole('heading', { name: /^blackjack$/i }).waitFor();
-      await page.getByText(/space to deal/i).waitFor({ timeout: 60_000 });
+      await page.getByText(/place bets/i).waitFor({ timeout: 60_000 });
 
         await openSafety();
         await page.getByRole('button', { name: /^5m$/i }).click();
