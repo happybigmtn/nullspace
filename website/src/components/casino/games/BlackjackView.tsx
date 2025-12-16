@@ -47,7 +47,7 @@ export const BlackjackView = React.memo<{ gameState: GameState; actions: any; la
         <>
             <div className="flex-1 w-full flex flex-col items-center justify-start sm:justify-center gap-4 sm:gap-8 relative z-10 pt-8 sm:pt-10 pb-24 sm:pb-20">
                 <h1 className="absolute top-0 text-xl font-bold text-gray-500 tracking-widest uppercase">BLACKJACK</h1>
-                <div className="absolute top-2 right-2 z-40">
+                <div className="absolute top-2 left-2 z-40">
                     <MobileDrawer label="INFO" title="BLACKJACK">
                         <div className="space-y-3">
                             <div className="text-[11px] text-gray-300 leading-relaxed">

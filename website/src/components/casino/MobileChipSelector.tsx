@@ -10,7 +10,7 @@ const CHIPS = [1, 5, 25, 100, 500, 1000, 5000, 10000];
 
 export const MobileChipSelector: React.FC<MobileChipSelectorProps> = ({ currentBet, onSelectBet, isCustom }) => {
     const [isOpen, setIsOpen] = useState(false);
-    const [pos, setPos] = useState({ x: 16, y: 80 }); // Default left-4 (16px), top-20 (80px)
+    const [pos, setPos] = useState({ x: typeof window !== 'undefined' ? window.innerWidth - 72 : 300, y: 80 }); // Default right side
     const isDragging = React.useRef(false);
     const dragStart = React.useRef({ x: 0, y: 0 });
     const initialPos = React.useRef({ x: 0, y: 0 });

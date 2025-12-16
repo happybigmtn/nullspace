@@ -43,7 +43,7 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
         <>
             <div className="flex-1 w-full flex flex-col items-center justify-start sm:justify-center gap-4 sm:gap-6 relative z-10 pt-8 sm:pt-10 pb-24 sm:pb-20">
                 <h1 className="absolute top-0 text-xl font-bold text-gray-500 tracking-widest uppercase">ULTIMATE TEXAS HOLD'EM</h1>
-                <div className="absolute top-2 right-2 z-40">
+                <div className="absolute top-2 left-2 z-40">
                     <MobileDrawer label="INFO" title="ULTIMATE TEXAS HOLD'EM">
                         <div className="space-y-3">
                             <div className="border border-gray-800 rounded bg-black/40 p-2">
