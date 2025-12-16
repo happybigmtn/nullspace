@@ -876,6 +876,138 @@ If we have multiple engineers, parallelize by surface area:
 
 ## 11) Appendix — Manual QA Scripts (High Value)
 
+### 11.0) Mobile QA pass (detailed, dev)
+
+This is a **touch-only** QA checklist intended for a real phone browser (Safari iOS / Chrome Android).
+
+#### 0) Prep: run the full stack
+1. Ensure `website/.env` includes:
+   - `VITE_IDENTITY=<96-byte hex>`
+   - `VITE_URL=http://localhost:8080`
+2. Build binaries (once):
+   - `cargo build --release --bin nullspace-simulator -p nullspace-simulator`
+   - `cargo build --release --bin dev-executor -p nullspace-client`
+3. Start backend services (two terminals):
+   - Simulator: `./target/release/nullspace-simulator -i <IDENTITY_HEX> -p 8080`
+   - Dev executor: `./target/release/dev-executor -i <IDENTITY_HEX> -u http://localhost:8080`
+4. Start frontend (LAN-accessible):
+   - `npm -C website run dev -- --host 0.0.0.0 --port 3000 --strictPort`
+
+#### 1) Connect from phone
+1. Find your laptop LAN IP:
+   - `hostname -I | awk '{print $1}'`
+2. On your phone (same Wi‑Fi), open:
+   - `http://<LAN_IP>:3000/`
+
+Notes:
+- Passkeys/WebAuthn generally require a secure context (HTTPS or localhost). On `http://<LAN_IP>:3000`, `/security` may show “Passkeys unavailable” on mobile — that is expected.
+
+#### 2) Global mobile UX smoke
+On `/` (casino), in **portrait** then **landscape**:
+- No clipped UI, no horizontal scroll, no unreadable overlays.
+- Tap targets feel ≥44px for primary actions (especially control bars).
+- `Games` button opens game menu (no keyboard).
+- `Help` button opens/closes Help overlay reliably.
+- `Safety` button opens Responsible Play overlay.
+- Wallet pill renders (mobile in-content; desktop in header; other routes in header).
+
+#### 3) Casino settings + “what next”
+On `/`:
+- Open Settings drawer (`SET`) and toggle:
+  - Sound SFX ON/OFF (deal/win sounds stop when OFF).
+  - Motion LOW/FULL (animations reduce when LOW).
+  - Touch Mode ON/OFF (hides key glyphs but keeps actions tappable).
+- Verify the “NEXT:” prompt appears when you’re expected to act (bet vs play vs result).
+
+#### 4) Per-game touch-only checklist (all 10 games)
+For each game: **select game → place bet (or accept default) → primary action (Deal/Spin/Draw) → make at least one in-round decision → reach RESULT → start next round**.
+
+1. Blackjack
+   - Hit/Stand (and any available decision) works via taps.
+   - Insurance prompt (if shown) has clear tap actions.
+   - Split-hand flow (when it occurs) remains tappable and readable.
+2. Roulette
+   - Place at least one bet without typing.
+   - Spin/deal is tappable.
+   - Rebet/undo (if present) reachable via taps.
+3. Craps
+   - Place at least one core bet via taps (Pass/Field/etc per UI).
+   - Mobile exposure drawer is reachable and scrollable.
+   - Roll/deal is tappable; results don’t overflow.
+4. Sic Bo
+   - Place a bet via tap UI and roll.
+   - Any “sum/target” flows do not require keyboard.
+5. HiLo
+   - HIGHER / LOWER / CASHOUT tappable.
+   - Multiplier projections visible and not clipped.
+6. Video Poker
+   - Tap cards to toggle HOLD works.
+   - DRAW is tappable.
+   - Paytable drawer works; winning rank highlights on RESULT.
+7. Baccarat
+   - Stage badge shows decision point clearly.
+   - Total bet + side bet amounts visible before dealing.
+8. Three Card
+   - Stage badge visible; primary action obvious (bet/check/fold flow via taps).
+9. Ultimate Hold’em
+   - Stage badge visible (street progression).
+   - Total bet shown; bet row wraps cleanly on phone.
+10. Casino War
+   - If a tie occurs, War/Surrender prompt is unmissable and tappable.
+
+#### 5) Responsible play / safety checks
+On `/` → `Safety`:
+- Set Max wager to a low value (e.g. `1`), attempt to bet higher → clamps/blocks with clear message.
+- Set Cooldown (5m), try to start a new round → blocked at round boundary.
+- Set Reality check to `1` minute, play until triggered → overlay interrupts before next round; Continue/Stop works.
+
+#### 6) Economy (Swap/Borrow/Liquidity) mobile pass
+Use bottom nav or open `/swap`, `/borrow`, `/liquidity`.
+
+Swap (`/swap`)
+- Register + Faucet are tappable; numeric inputs bring numeric keyboard.
+- Enter amount (whole number), see quote update; Flip direction; Max/% shortcuts.
+- Confirm modal opens; confirm/cancel works; not clipped on small screens.
+- After submit/confirm:
+  - `LAST TX` becomes a link when digest exists.
+  - Toast appears on confirmation.
+  - Activity shows PENDING → OK and links to explorer receipt.
+
+Borrow (`/borrow`)
+- Create vault → deposit collateral → borrow → repay:
+  - Each action shows pending/confirmed in Activity.
+  - LTV/availability stays readable on mobile.
+
+Liquidity (`/liquidity`)
+- Add/remove liquidity validated and tappable.
+- Ratio helper (if enabled) behaves sensibly on small screens.
+
+#### 7) Staking mobile pass (`/stake`)
+- Stake amount shortcuts work; confirm modal works.
+- After submit:
+  - Toast appears on confirmation.
+  - Activity shows PENDING → OK and links to explorer receipt.
+- Toggle “Advanced” and confirm dev controls are clearly separated.
+
+#### 8) Explorer receipt checks
+From Economy/Staking:
+- Tap an Activity item with a receipt → opens `/explorer/tx/<digest>` and is readable on mobile.
+- Explorer pages scroll correctly and don’t collide with bottom nav.
+
+#### 9) Security page expectations on mobile
+On `/security`:
+- On plain HTTP LAN, passkeys may be unavailable — confirm no crashes and the page renders.
+- In DEV tools:
+  - Export/Clear Telemetry works (clipboard may fail on mobile → download fallback expected).
+  - Export/Clear Activity works.
+
+#### 10) If something fails (what to capture)
+- Screenshot + device + browser version + orientation.
+- `/security` dev tools:
+  - Export Telemetry JSON.
+  - Export Activity JSON.
+- Note route and `LAST TX` digest (if present).
+
 ### 11.1) Casino tap-only checklist
 - Start a game via tap (no keyboard)
 - Place bet size via UI (or ensure default bet is visible/adjustable)
