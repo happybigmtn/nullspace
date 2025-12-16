@@ -222,6 +222,3 @@ export const BaccaratView = React.memo<{ gameState: GameState; actions: any }>((
         </>
     );
 });
-        </>
-    );
-});
