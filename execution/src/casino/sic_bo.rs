@@ -342,7 +342,7 @@ impl CasinoGame for SicBo {
     fn init(session: &mut GameSession, _rng: &mut GameRng) -> GameResult {
         let state = SicBoState::new();
         session.state_blob = state.to_bytes();
-        GameResult::Continue
+        GameResult::Continue(vec![])
     }
 
     fn process_move(
@@ -420,7 +420,7 @@ impl CasinoGame for SicBo {
                 session.state_blob = state.to_bytes();
                 session.move_count += 1;
                 Ok(GameResult::ContinueWithUpdate {
-                    payout: -(amount as i64),
+                    payout: -(amount as i64), logs: vec![],
                 })
             }
 
@@ -460,9 +460,9 @@ impl CasinoGame for SicBo {
                     } else {
                         total_winnings
                     };
-                    Ok(GameResult::Win(final_winnings))
+                    Ok(GameResult::Win(final_winnings, vec![]))
                 } else {
-                    Ok(GameResult::LossPreDeducted(total_bet))
+                    Ok(GameResult::LossPreDeducted(total_bet, vec![]))
                 }
             }
 
@@ -470,7 +470,7 @@ impl CasinoGame for SicBo {
             2 => {
                 state.bets.clear();
                 session.state_blob = state.to_bytes();
-                Ok(GameResult::Continue)
+                Ok(GameResult::Continue(vec![]))
             }
 
             _ => Err(GameError::InvalidPayload),
@@ -817,7 +817,7 @@ mod tests {
             assert!(session.is_complete);
 
             match result.expect("Failed to process move") {
-                GameResult::Win(_) | GameResult::LossPreDeducted(_) => {}
+                GameResult::Win(_, vec![]) | GameResult::LossPreDeducted(_, _) => {}
                 _ => panic!("SicBo should complete with Win or LossPreDeducted"),
             }
         }

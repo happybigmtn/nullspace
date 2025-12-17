@@ -265,7 +265,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ leaderboard, history, viewMode
     };
 
     return (
-        <aside className="w-64 border-l-2 border-gray-700 bg-terminal-black/50 hidden md:flex flex-col">
+        <aside className="w-64 border-l-2 border-gray-700 bg-terminal-black/50 hidden lg:flex flex-col">
             {/* Live Feed Header */}
             <div className="p-4 pb-2 flex-none">
                 <div className="flex justify-between items-center mb-2">
@@ -304,7 +304,7 @@ export const Footer: React.FC<{ currentBet?: number }> = ({ currentBet }) => {
     const isCustom = currentBet && !bets.includes(currentBet);
 
     return (
-        <footer className="hidden sm:flex fixed bottom-0 left-0 right-0 md:right-64 border-t-2 border-gray-700 bg-terminal-black/95 text-[10px] sm:text-xs text-gray-600 pt-1 pb-[calc(0.25rem+env(safe-area-inset-bottom))] px-2 sm:px-4 flex-wrap justify-center gap-2 sm:gap-4 md:gap-6 z-20">
+        <footer className="hidden lg:flex fixed bottom-0 left-0 right-0 lg:right-64 border-t-2 border-gray-700 bg-terminal-black/95 text-[10px] sm:text-xs text-gray-600 pt-1 pb-[calc(0.25rem+env(safe-area-inset-bottom))] px-2 sm:px-4 flex-wrap justify-center gap-2 sm:gap-4 md:gap-6 z-20">
             {bets.map((bet, i) => {
                 const label = bet >= 1000 ? `${bet/1000}K` : `$${bet}`;
                 const isSelected = currentBet === bet;

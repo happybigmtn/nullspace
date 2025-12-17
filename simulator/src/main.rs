@@ -40,8 +40,10 @@ async fn main() -> anyhow::Result<()> {
         .init();
 
     // Parse identity
+    eprintln!("DEBUG: Identity string len: {}", args.identity.len());
     let bytes =
         commonware_utils::from_hex(&args.identity).context("invalid identity hex format")?;
+    eprintln!("DEBUG: Parsed {} bytes from hex identity", bytes.len());
     let identity: Identity =
         Identity::decode(&mut bytes.as_slice()).context("failed to decode identity")?;
 

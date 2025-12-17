@@ -430,7 +430,7 @@ export default function CasinoApp() {
            reducedMotion={reducedMotion}
            onToggleReducedMotion={() => setReducedMotion((v) => !v)}
        >
-           <div className="flex sm:hidden items-center gap-2">
+           <div className="flex lg:hidden items-center gap-2">
                <MobileChipSelector 
                    currentBet={gameState.bet} 
                    onSelectBet={safeActions.setBetAmount} 
@@ -456,21 +456,21 @@ export default function CasinoApp() {
            <button
                type="button"
                onClick={openCommandPalette}
-               className="h-11 px-3 rounded border border-gray-800 text-gray-300 text-[10px] tracking-widest uppercase hover:border-gray-600 hover:text-white flex items-center justify-center w-full sm:w-auto"
+               className="h-11 px-3 rounded border border-gray-800 text-gray-300 text-[10px] tracking-widest uppercase hover:border-gray-600 hover:text-white flex items-center justify-center w-full lg:w-auto"
            >
                Games
            </button>
            <button
                type="button"
                onClick={() => openResponsiblePlay('settings')}
-               className="hidden sm:flex h-11 px-3 rounded border border-gray-800 text-gray-300 text-[10px] tracking-widest uppercase hover:border-gray-600 hover:text-white items-center justify-center"
+               className="hidden lg:flex h-11 px-3 rounded border border-gray-800 text-gray-300 text-[10px] tracking-widest uppercase hover:border-gray-600 hover:text-white items-center justify-center"
            >
                Safety
            </button>
-           <div className="hidden sm:flex flex-1 min-w-0 justify-center">
+           <div className="hidden lg:flex flex-1 min-w-0 justify-center">
                <PlaySwapStakeTabs />
            </div>
-           <div className="hidden sm:flex items-center">
+           <div className="hidden lg:flex items-center">
                <WalletPill rng={walletRng} vusdt={walletVusdt} pubkeyHex={walletPublicKeyHex} />
            </div>
        </div>
@@ -478,7 +478,7 @@ export default function CasinoApp() {
 	       <div className="flex flex-1 overflow-hidden relative">
 	          <main className={`flex-1 flex flex-col relative bg-terminal-black p-3 sm:p-4 overflow-y-auto ${gameState.type !== GameType.NONE ? 'pb-24 sm:pb-20 md:pb-4' : ''}`}>
 	             {gameState.type === GameType.NONE ? (
-	               <div className="mb-2 sm:hidden">
+	               <div className="mb-2 lg:hidden">
 	                 <WalletPill rng={walletRng} vusdt={walletVusdt} pubkeyHex={walletPublicKeyHex} className="w-full" />
 	               </div>
 	             ) : null}

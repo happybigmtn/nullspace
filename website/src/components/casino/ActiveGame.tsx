@@ -105,6 +105,10 @@ export const ActiveGame: React.FC<ActiveGameProps> = ({ gameState, deck, numberI
     prevChipsRef.current = chips;
   }, [chips]);
 
+  React.useEffect(() => {
+    setTransientWin(0);
+  }, [gameState.type]);
+
   const displayWin = gameState.stage === 'RESULT' ? gameState.lastResult : transientWin;
 
   return (
@@ -136,9 +140,8 @@ export const ActiveGame: React.FC<ActiveGameProps> = ({ gameState, deck, numberI
          )}
 
 	         <BigWinEffect 
-                key={`${chips}-${gameState.lastResult}-${gameState.stage}`}
-	            amount={Math.max(gameState.lastResult, transientWin)} 
-	            show={(gameState.stage === 'RESULT' && gameState.lastResult > 0) || transientWin > 0} 
+	            amount={gameState.stage === 'RESULT' ? gameState.lastResult : transientWin} 
+	            show={gameState.stage === 'RESULT' ? gameState.lastResult > 0 : transientWin > 0} 
 	            durationMs={gameState.type === GameType.BLACKJACK ? 1000 : undefined}
                 reducedMotion={reducedMotion}
 	         />

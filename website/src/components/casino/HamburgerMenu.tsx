@@ -39,8 +39,8 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
 
             {isOpen && (
                 <>
-                    <div className="fixed inset-0 z-[90] bg-black/50 backdrop-blur-sm" onClick={close} />
-                    <div className="absolute top-12 right-0 w-64 bg-terminal-black border border-gray-700 rounded-lg shadow-2xl z-[100] p-2 flex flex-col gap-1 animate-in fade-in zoom-in-95 duration-100 origin-top-right">
+                    <div className="fixed inset-0 z-[90] bg-black/90 backdrop-blur-sm" onClick={close} />
+                    <div className="absolute top-12 right-0 w-64 bg-black border border-gray-700 rounded-lg shadow-2xl z-[100] p-2 flex flex-col gap-1 animate-in fade-in zoom-in-95 duration-100 origin-top-right">
                         <div className="px-3 py-2 text-[10px] text-gray-500 uppercase tracking-widest border-b border-gray-800 mb-1">
                             Menu
                         </div>

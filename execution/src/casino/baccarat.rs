@@ -332,7 +332,7 @@ impl CasinoGame for Baccarat {
         // Initialize with empty state
         let state = BaccaratState::new();
         session.state_blob = state.to_blob();
-        GameResult::Continue
+        GameResult::Continue(vec![])
     }
 
     fn process_move(
@@ -388,7 +388,7 @@ impl CasinoGame for Baccarat {
 
                 session.state_blob = state.to_blob();
                 Ok(GameResult::ContinueWithUpdate {
-                    payout: -(amount as i64),
+                    payout: -(amount as i64), logs: vec![],
                 })
             }
 
@@ -474,15 +474,15 @@ impl CasinoGame for Baccarat {
                 // Determine final result
                 let base_result = if all_push && net_payout == 0 {
                     // All wagers push; since wagers were deducted via ContinueWithUpdate at bet time,
-                    // return the full wagered amount here (do not use GameResult::Push, which only
+                    // return the full wagered amount here (do not use GameResult::Push(vec![]), which only
                     // refunds `session.bet`).
-                    GameResult::Win(total_wagered)
+                    GameResult::Win(total_wagered, vec![])
                 } else if net_payout > 0 {
                     // Net win: return total wagered + net winnings
                     // Safe cast: positive i64 fits in u64
                     let winnings = u64::try_from(net_payout).unwrap_or(0);
                     let total_return = total_wagered.saturating_add(winnings);
-                    GameResult::Win(total_return)
+                    GameResult::Win(total_return, vec![])
                 } else if net_payout < 0 {
                     // Net loss
                     // Use checked_neg to safely convert negative i64 to positive value
@@ -493,23 +493,23 @@ impl CasinoGame for Baccarat {
                     if loss_amount == 0 {
                         // Overflow case - treat as total loss
                         // Use LossPreDeducted to report actual loss (chips already deducted via ContinueWithUpdate)
-                        GameResult::LossPreDeducted(total_wagered)
+                        GameResult::LossPreDeducted(total_wagered, vec![])
                     } else if loss_amount >= total_wagered {
                         // Total loss - use LossPreDeducted to report actual amount
-                        GameResult::LossPreDeducted(total_wagered)
+                        GameResult::LossPreDeducted(total_wagered, vec![])
                     } else {
                         // Partial loss - return remaining stake
                         let remaining = total_wagered.saturating_sub(loss_amount);
-                        GameResult::Win(remaining)
+                        GameResult::Win(remaining, vec![])
                     }
                 } else {
                     // Net zero but not all push - mixed results
-                    GameResult::Win(total_wagered)
+                    GameResult::Win(total_wagered, vec![])
                 };
 
                 // Apply super mode multipliers if active and player won
                 if session.super_mode.is_active {
-                    if let GameResult::Win(base_payout) = base_result {
+                    if let GameResult::Win(base_payout, _) = base_result {
                         // Aura Cards: combine player and banker cards for multiplier check
                         let all_cards: Vec<u8> = state
                             .player_cards
@@ -522,7 +522,7 @@ impl CasinoGame for Baccarat {
                             &session.super_mode.multipliers,
                             base_payout,
                         );
-                        return Ok(GameResult::Win(boosted_payout));
+                        return Ok(GameResult::Win(boosted_payout, vec![]));
                     }
                 }
                 Ok(base_result)
@@ -537,7 +537,7 @@ impl CasinoGame for Baccarat {
 
                 state.bets.clear();
                 session.state_blob = state.to_blob();
-                Ok(GameResult::Continue)
+                Ok(GameResult::Continue(vec![]))
             }
 
             _ => Err(GameError::InvalidPayload),
@@ -918,7 +918,7 @@ mod tests {
 
             // Verify result is one of the valid outcomes
             match result.expect("Failed to process move") {
-                GameResult::Win(_) | GameResult::LossPreDeducted(_) => {}
+                GameResult::Win(_, vec![]) | GameResult::LossPreDeducted(_, _) => {}
                 _ => panic!("Unexpected baccarat result"),
             }
         }

@@ -188,7 +188,7 @@ impl CasinoGame for VideoPoker {
         ];
 
         session.state_blob = serialize_state(Stage::Deal, &cards);
-        GameResult::Continue
+        GameResult::Continue(vec![])
     }
 
     fn process_move(
@@ -242,9 +242,9 @@ impl CasinoGame for VideoPoker {
             } else {
                 base_winnings
             };
-            Ok(GameResult::Win(final_winnings))
+            Ok(GameResult::Win(final_winnings, vec![]))
         } else {
-            Ok(GameResult::Loss)
+            Ok(GameResult::Loss(vec![]))
         }
     }
 }
@@ -428,7 +428,7 @@ mod tests {
             .expect("Failed to process move");
 
         // Jacks-or-Better pays 1:1 -> total return 2x bet
-        assert!(matches!(result, GameResult::Win(200)));
+        assert!(matches!(result, GameResult::Win(200, vec![])));
     }
 
     #[test]

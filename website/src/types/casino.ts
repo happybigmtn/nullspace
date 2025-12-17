@@ -97,6 +97,7 @@ export interface CasinoGameMovedEvent {
   sessionId: bigint;
   moveNumber: number;
   newState: Uint8Array;
+  logs?: string[];
 }
 
 /**
@@ -112,4 +113,5 @@ export interface CasinoGameCompletedEvent {
   finalChips: bigint;
   wasShielded: boolean;
   wasDoubled: boolean;
+  logs?: string[];
 }

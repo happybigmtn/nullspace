@@ -268,30 +268,34 @@ impl rand::RngCore for GameRng {
 /// Result of processing a game move.
 pub enum GameResult {
     /// Game is still in progress, state updated.
-    Continue,
+    Continue(Vec<String>),
     /// Game continues, but with a balance update (e.g. intermediate win or new bet).
     /// `payout` is the net change to player balance (positive = add, negative = deduct).
-    ContinueWithUpdate { payout: i64 },
+    ContinueWithUpdate { payout: i64, logs: Vec<String> },
     /// Game completed with a win. Value is chips won (TOTAL RETURN: stake + profit).
-    Win(u64),
+    Win(u64, Vec<String>),
     /// Game completed with a win, but requires an additional deduction beyond any previously
     /// charged wagers (e.g. a mid-game bet increase that ends the game immediately).
     /// `payout` is the credited return (stake + profit) and `extra_deduction` is the amount to
     /// deduct from the player's balance.
     #[allow(dead_code)]
-    WinWithExtraDeduction { payout: u64, extra_deduction: u64 },
+    WinWithExtraDeduction {
+        payout: u64,
+        extra_deduction: u64,
+        logs: Vec<String>,
+    },
     /// Game completed with a loss.
-    Loss,
+    Loss(Vec<String>),
     /// Game completed with a loss AND an additional deduction (for mid-game bet increases).
     /// The value is the extra amount to deduct beyond the initial bet.
     /// Used when games like Blackjack double-down or Casino War go-to-war increase
     /// the bet mid-game and then the player loses.
-    LossWithExtraDeduction(u64),
+    LossWithExtraDeduction(u64, Vec<String>),
     /// Game completed with a loss where chips were already deducted via ContinueWithUpdate.
     /// The value is the total loss amount to report (no additional chip deduction needed).
     /// Used for table games like Baccarat, Craps, Roulette, Sic Bo where bets are placed
     /// incrementally via ContinueWithUpdate before the final resolution.
-    LossPreDeducted(u64),
+    LossPreDeducted(u64, Vec<String>),
     /// Game completed with a loss where most chips were already deducted, but an additional
     /// deduction is still required (e.g. a mid-game bet increase that ends the game immediately).
     /// `total_loss` is the full loss amount for reporting and shield refunds; `extra_deduction`
@@ -300,10 +304,11 @@ pub enum GameResult {
     LossPreDeductedWithExtraDeduction {
         total_loss: u64,
         extra_deduction: u64,
+        logs: Vec<String>,
     },
     /// Game completed with a push (tie, bet returned).
     #[allow(dead_code)]
-    Push,
+    Push(Vec<String>),
 }
 
 /// Error during game execution.

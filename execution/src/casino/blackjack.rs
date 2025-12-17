@@ -372,7 +372,7 @@ impl CasinoGame for Blackjack {
             dealer_cards: Vec::new(),
         };
         session.state_blob = serialize_state(&state);
-        GameResult::Continue
+        GameResult::Continue(vec![])
     }
 
     fn process_move(
@@ -401,9 +401,9 @@ impl CasinoGame for Blackjack {
                     let payout = apply_21plus3_update(&mut state, new_bet)?;
                     session.state_blob = serialize_state(&state);
                     Ok(if payout == 0 {
-                        GameResult::Continue
+                        GameResult::Continue(vec![])
                     } else {
-                        GameResult::ContinueWithUpdate { payout }
+                        GameResult::ContinueWithUpdate { payout, logs: vec![] }
                     })
                 }
                 Move::Deal => {
@@ -448,7 +448,7 @@ impl CasinoGame for Blackjack {
                     }
 
                     session.state_blob = serialize_state(&state);
-                    Ok(GameResult::Continue)
+                    Ok(GameResult::Continue(vec![]))
                 }
                 _ => Err(GameError::InvalidMove),
             },
@@ -502,7 +502,7 @@ impl CasinoGame for Blackjack {
                         }
 
                         session.state_blob = serialize_state(&state);
-                        Ok(GameResult::Continue)
+                        Ok(GameResult::Continue(vec![]))
                     }
                     Move::Stand => {
                         if state.active_hand_idx >= state.hands.len() {
@@ -520,7 +520,7 @@ impl CasinoGame for Blackjack {
                         }
 
                         session.state_blob = serialize_state(&state);
-                        Ok(GameResult::Continue)
+                        Ok(GameResult::Continue(vec![]))
                     }
                     Move::Double => {
                         if state.active_hand_idx >= state.hands.len() {
@@ -567,7 +567,7 @@ impl CasinoGame for Blackjack {
 
                         session.state_blob = serialize_state(&state);
                         Ok(GameResult::ContinueWithUpdate {
-                            payout: -(extra_bet as i64),
+                            payout: -(extra_bet as i64), logs: vec![],
                         })
                     }
                     Move::Split => {
@@ -614,7 +614,7 @@ impl CasinoGame for Blackjack {
                         session.move_count = session.move_count.saturating_add(1);
                         session.state_blob = serialize_state(&state);
                         Ok(GameResult::ContinueWithUpdate {
-                            payout: -(split_bet as i64),
+                            payout: -(split_bet as i64), logs: vec![],
                         })
                     }
                     _ => Err(GameError::InvalidMove),
@@ -750,9 +750,9 @@ fn finalize_game_result(
     let total_wagered = total_wagered(session, state);
     let total_return = apply_super_multiplier(session, state, total_return);
     if total_return == 0 {
-        GameResult::LossPreDeducted(total_wagered)
+        GameResult::LossPreDeducted(total_wagered, vec![])
     } else {
-        GameResult::Win(total_return)
+        GameResult::Win(total_return, vec![])
     }
 }
 
@@ -832,7 +832,7 @@ mod tests {
             session.id = session_id;
             let mut rng = GameRng::new(&seed, session_id, 1);
             match Blackjack::process_move(&mut session, &[Move::Hit as u8], &mut rng).unwrap() {
-                GameResult::LossPreDeducted(total_wagered) => {
+                GameResult::LossPreDeducted(total_wagered, _) => {
                     found = Some(total_wagered);
                     break;
                 }
@@ -883,7 +883,7 @@ mod tests {
             session.id = session_id;
             let mut rng = GameRng::new(&seed, session_id, 1);
             match Blackjack::process_move(&mut session, &[Move::Hit as u8], &mut rng).unwrap() {
-                GameResult::Win(total_return) => {
+                GameResult::Win(total_return, _) => {
                     found = Some(total_return);
                     break;
                 }
@@ -921,7 +921,7 @@ mod tests {
             let mut init_rng = GameRng::new(&seed, session_id, 0);
             assert!(matches!(
                 Blackjack::init(&mut session, &mut init_rng),
-                GameResult::Continue
+                GameResult::Continue(vec![])
             ));
 
             let mut total_extra_deductions: i64 = 0;
@@ -973,12 +973,12 @@ mod tests {
                     .expect("blackjack move should not error for valid payload")
                 {
                     GameResult::Continue => {}
-                    GameResult::ContinueWithUpdate { payout } => {
+                    GameResult::ContinueWithUpdate { payout, logs: vec![] } => {
                         if payout < 0 {
                             total_extra_deductions = total_extra_deductions.saturating_add(payout);
                         }
                     }
-                    GameResult::Win(total_return) => {
+                    GameResult::Win(total_return, _) => {
                         let end_state =
                             parse_state(&session.state_blob).expect("valid final blackjack state");
                         assert_eq!(end_state.side_bet_21plus3, 0);
@@ -988,7 +988,7 @@ mod tests {
                         assert!(wagered <= bet.saturating_mul(8));
                         assert!(total_return <= bet.saturating_mul(16));
                     }
-                    GameResult::LossPreDeducted(total_loss) => {
+                    GameResult::LossPreDeducted(total_loss, _) => {
                         let end_state =
                             parse_state(&session.state_blob).expect("valid final blackjack state");
                         let wagered = total_wagered(&session, &end_state);

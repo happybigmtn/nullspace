@@ -147,7 +147,7 @@ impl CasinoGame for CasinoWar {
             tie_bet: 0,
         };
         session.state_blob = serialize_state_v1(&state);
-        GameResult::Continue
+        GameResult::Continue(vec![])
     }
 
     fn process_move(
@@ -199,7 +199,7 @@ impl CasinoGame for CasinoWar {
 
                         state.tie_bet = new_tie_bet;
                         session.state_blob = serialize_state_v1(&state);
-                        Ok(GameResult::ContinueWithUpdate { payout })
+                        Ok(GameResult::ContinueWithUpdate { payout, logs: vec![] })
                     }
                     Move::Play => {
                         if payload.len() != 1 {
@@ -243,7 +243,7 @@ impl CasinoGame for CasinoWar {
                             } else {
                                 base_winnings
                             };
-                            Ok(GameResult::Win(final_winnings))
+                            Ok(GameResult::Win(final_winnings, vec![]))
                         } else if player_rank < dealer_rank {
                             // Dealer wins.
                             state.stage = StageV1::Complete;
@@ -251,7 +251,7 @@ impl CasinoGame for CasinoWar {
                             state.dealer_card = dealer_card;
                             session.state_blob = serialize_state_v1(&state);
                             session.is_complete = true;
-                            Ok(GameResult::Loss)
+                            Ok(GameResult::Loss(vec![]))
                         } else {
                             // Tie: offer war or surrender, and pay tie bet (if any) immediately.
                             state.stage = StageV1::War;
@@ -260,11 +260,11 @@ impl CasinoGame for CasinoWar {
                             session.state_blob = serialize_state_v1(&state);
 
                             if tie_bet_return != 0 {
-                                Ok(GameResult::ContinueWithUpdate {
-                                    payout: tie_bet_return,
-                                })
+                    Ok(GameResult::ContinueWithUpdate {
+                        payout: tie_bet_return as i64, logs: vec![],
+                    })
                             } else {
-                                Ok(GameResult::Continue)
+                                Ok(GameResult::Continue(vec![]))
                             }
                         }
                     }
@@ -277,7 +277,7 @@ impl CasinoGame for CasinoWar {
                         session.is_complete = true;
                         // CasinoStartGame already deducted the ante, so refund half to realize a
                         // half-loss outcome.
-                        Ok(GameResult::Win(session.bet / 2))
+                        Ok(GameResult::Win(session.bet / 2, vec![]))
                     }
                     Move::War => {
                         let war_bet = session.bet;
@@ -327,10 +327,10 @@ impl CasinoGame for CasinoWar {
                             } else {
                                 base_winnings
                             };
-                            Ok(GameResult::Win(final_winnings))
+                            Ok(GameResult::Win(final_winnings, vec![]))
                         } else {
                             // Lose both bets (ante + war bet).
-                            Ok(GameResult::LossWithExtraDeduction(war_bet))
+                            Ok(GameResult::LossWithExtraDeduction(war_bet, vec![]))
                         }
                     }
                     _ => Err(GameError::InvalidMove),
@@ -361,20 +361,20 @@ impl CasinoGame for CasinoWar {
                             } else {
                                 base_winnings
                             };
-                            Ok(GameResult::Win(final_winnings))
+                            Ok(GameResult::Win(final_winnings, vec![]))
                         } else if player_rank < dealer_rank {
                             session.is_complete = true;
-                            Ok(GameResult::Loss)
+                            Ok(GameResult::Loss(vec![]))
                         } else {
                             session.state_blob =
                                 serialize_state_legacy(player_card, dealer_card, StageV0::War);
-                            Ok(GameResult::Continue)
+                            Ok(GameResult::Continue(vec![]))
                         }
                     }
                     StageV0::War => match mv {
                         Move::Surrender => {
                             session.is_complete = true;
-                            Ok(GameResult::Win(session.bet / 2))
+                            Ok(GameResult::Win(session.bet / 2, vec![]))
                         }
                         Move::War => {
                             let war_bet = session.bet;
@@ -411,9 +411,9 @@ impl CasinoGame for CasinoWar {
                                 } else {
                                     base_winnings
                                 };
-                                Ok(GameResult::Win(final_winnings))
+                                Ok(GameResult::Win(final_winnings, vec![]))
                             } else {
-                                Ok(GameResult::LossWithExtraDeduction(war_bet))
+                                Ok(GameResult::LossWithExtraDeduction(war_bet, vec![]))
                             }
                         }
                         _ => Err(GameError::InvalidMove),
@@ -475,7 +475,7 @@ mod tests {
         let result = CasinoWar::process_move(&mut session, &[0], &mut rng);
 
         // Win(200) = stake(100) + winnings(100) for 1:1 payout
-        assert!(matches!(result, Ok(GameResult::Win(200))));
+        assert!(matches!(result, Ok(GameResult::Win(200, vec![]))));
         assert!(session.is_complete);
     }
 
@@ -490,7 +490,7 @@ mod tests {
         let mut rng = GameRng::new(&seed, session.id, 1);
         let result = CasinoWar::process_move(&mut session, &[0], &mut rng);
 
-        assert!(matches!(result, Ok(GameResult::Loss)));
+        assert!(matches!(result, Ok(GameResult::Loss(vec![]))));
         assert!(session.is_complete);
     }
 
@@ -505,7 +505,7 @@ mod tests {
         let mut rng = GameRng::new(&seed, session.id, 1);
         let result = CasinoWar::process_move(&mut session, &[0], &mut rng);
 
-        assert!(matches!(result, Ok(GameResult::Continue)));
+        assert!(matches!(result, Ok(GameResult::Continue(vec![]))));
         assert!(!session.is_complete);
 
         let parsed = parse_state(&session.state_blob).expect("Failed to parse state");
@@ -527,7 +527,7 @@ mod tests {
         let result = CasinoWar::process_move(&mut session, &[2], &mut rng); // Surrender
 
         // Surrender forfeits half the ante.
-        assert!(matches!(result, Ok(GameResult::Win(50))));
+        assert!(matches!(result, Ok(GameResult::Win(50, vec![]))));
         assert!(session.is_complete);
     }
 
@@ -547,7 +547,7 @@ mod tests {
 
         // Result should be Win, Loss, or LossWithExtraDeduction
         match result.expect("Failed to process war") {
-            GameResult::Win(_) | GameResult::Loss | GameResult::LossWithExtraDeduction(_) => {}
+            GameResult::Win(_, vec![]) | GameResult::Loss | GameResult::LossWithExtraDeduction(_, _) => {}
             _ => panic!("Expected Win, Loss, or LossWithExtraDeduction after war"),
         }
     }
@@ -614,7 +614,7 @@ mod tests {
         let result = CasinoWar::process_move(&mut session, &payload, &mut rng);
         assert!(matches!(
             result,
-            Ok(GameResult::ContinueWithUpdate { payout: -10 })
+            Ok(GameResult::ContinueWithUpdate { payout: -10 }), logs: vec![],
         ));
 
         let parsed = parse_state(&session.state_blob).expect("Failed to parse state");
@@ -702,7 +702,7 @@ mod tests {
                 == cards::card_rank_ace_high(final_state.dealer_card)
             {
                 // Bonus is equal to the ante, so the win credits 3x the ante in our model.
-                assert!(matches!(result, GameResult::Win(300)));
+                assert!(matches!(result, GameResult::Win(300, vec![])));
                 return;
             }
         }

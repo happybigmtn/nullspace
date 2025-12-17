@@ -103,7 +103,7 @@ impl CasinoGame for HiLo {
         let accumulator = BASE_MULTIPLIER;
 
         session.state_blob = serialize_state(card, accumulator);
-        GameResult::Continue
+        GameResult::Continue(vec![])
     }
 
     fn process_move(
@@ -152,10 +152,10 @@ impl CasinoGame for HiLo {
                     } else {
                         payout_u64
                     };
-                    Ok(GameResult::Win(final_payout))
+                    Ok(GameResult::Win(final_payout, vec![]))
                 } else {
                     // Accumulator is 0 or negative (shouldn't happen in normal play)
-                    Ok(GameResult::Loss)
+                    Ok(GameResult::Loss(vec![]))
                 }
             }
             Move::Higher | Move::Lower => {
@@ -190,12 +190,12 @@ impl CasinoGame for HiLo {
                         .ok_or(GameError::InvalidState)?;
 
                     session.state_blob = serialize_state(new_card, new_accumulator);
-                    Ok(GameResult::Continue)
+                    Ok(GameResult::Continue(vec![]))
                 } else {
                     // Wrong guess - lose everything
                     session.state_blob = serialize_state(new_card, 0);
                     session.is_complete = true;
-                    Ok(GameResult::Loss)
+                    Ok(GameResult::Loss(vec![]))
                 }
             }
         }
@@ -316,7 +316,7 @@ mod tests {
 
         // Immediate cashout at 1x returns the bet (stake returned = Win(100))
         match result.expect("Failed to process cashout") {
-            GameResult::Win(amount) => assert_eq!(amount, 100), // Returns the original bet
+            GameResult::Win(amount, _) => assert_eq!(amount, 100), // Returns the original bet
             _ => panic!("Expected Win on immediate cashout"),
         }
     }
@@ -366,13 +366,13 @@ mod tests {
             let result = HiLo::process_move(&mut session, &[0], &mut rng); // Higher
 
             match result {
-                Ok(GameResult::Continue) => {
+                Ok(GameResult::Continue(vec![])) => {
                     streak += 1;
                     let (_, acc) = parse_state(&session.state_blob).expect("Failed to parse state");
                     // Accumulator should be growing
                     assert!(acc > BASE_MULTIPLIER);
                 }
-                Ok(GameResult::Loss) => {
+                Ok(GameResult::Loss(vec![])) => {
                     break;
                 }
                 Err(_) => {

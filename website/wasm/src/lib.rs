@@ -946,12 +946,14 @@ fn decode_event(event: &Event) -> Result<serde_json::Value, JsValue> {
             session_id,
             move_number,
             new_state,
+            logs,
         } => {
             serde_json::json!({
                 "type": "CasinoGameMoved",
                 "session_id": session_id,
                 "move_number": move_number,
-                "new_state": hex(new_state)
+                "new_state": hex(new_state),
+                "logs": logs
             })
         }
         Event::CasinoGameCompleted {
@@ -962,6 +964,7 @@ fn decode_event(event: &Event) -> Result<serde_json::Value, JsValue> {
             final_chips,
             was_shielded,
             was_doubled,
+            logs,
         } => {
             serde_json::json!({
                 "type": "CasinoGameCompleted",
@@ -971,7 +974,8 @@ fn decode_event(event: &Event) -> Result<serde_json::Value, JsValue> {
                 "payout": payout,
                 "final_chips": final_chips,
                 "was_shielded": was_shielded,
-                "was_doubled": was_doubled
+                "was_doubled": was_doubled,
+                "logs": logs
             })
         }
         Event::CasinoLeaderboardUpdated { leaderboard } => {

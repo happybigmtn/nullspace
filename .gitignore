@@ -24,10 +24,14 @@ yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
 .pnpm-debug.log*
+simulator.log
+executor.log
+vite.log
+nohup.out
+*.log
 
 # Runtime artifacts
 *.pid
-simulator.log
 
 # Editor directories and files
 .vscode/*

@@ -318,13 +318,25 @@ impl<'a, S: State> Layer<'a, S> {
             initial_state,
         }];
 
+        let logs = match &result {
+            crate::casino::GameResult::Continue(l) => l.clone(),
+            crate::casino::GameResult::ContinueWithUpdate { logs, .. } => logs.clone(),
+            crate::casino::GameResult::Win(_, l) => l.clone(),
+            crate::casino::GameResult::WinWithExtraDeduction { logs, .. } => logs.clone(),
+            crate::casino::GameResult::Loss(l) => l.clone(),
+            crate::casino::GameResult::LossWithExtraDeduction(_, l) => l.clone(),
+            crate::casino::GameResult::LossPreDeducted(_, l) => l.clone(),
+            crate::casino::GameResult::LossPreDeductedWithExtraDeduction { logs, .. } => logs.clone(),
+            crate::casino::GameResult::Push(l) => l.clone(),
+        };
+
         // Handle immediate result (e.g. Natural Blackjack)
-        if !matches!(result, crate::casino::GameResult::Continue) {
+        if !matches!(result, crate::casino::GameResult::Continue(_)) {
             if let Some(Value::CasinoPlayer(mut player)) =
                 self.get(&Key::CasinoPlayer(public.clone())).await?
             {
                 match result {
-                    crate::casino::GameResult::Win(base_payout) => {
+                    crate::casino::GameResult::Win(base_payout, _) => {
                         let mut payout = base_payout as i64;
                         let was_doubled = player.modifiers.active_double;
                         if was_doubled
@@ -368,17 +380,17 @@ impl<'a, S: State> Layer<'a, S> {
                         self.update_leaderboard_for_session(&session, public, &player)
                             .await?;
 
-                        events.push(Event::CasinoGameCompleted {
-                            session_id,
-                            player: public.clone(),
-                            game_type: session.game_type,
-                            payout,
-                            final_chips,
-                            was_shielded: false,
-                            was_doubled,
-                        });
-                    }
-                    crate::casino::GameResult::Push => {
+                                            events.push(Event::CasinoGameCompleted {
+                                                session_id,
+                                                player: public.clone(),
+                                                game_type: session.game_type,
+                                                payout,
+                                                final_chips,
+                                                was_shielded: false,
+                                                was_doubled,
+                        logs: logs.clone(),
+                                            });                    }
+                    crate::casino::GameResult::Push(_) => {
                         if session.is_tournament {
                             player.tournament.chips =
                                 player.tournament.chips.saturating_add(session.bet);
@@ -413,9 +425,9 @@ impl<'a, S: State> Layer<'a, S> {
                             final_chips,
                             was_shielded: false,
                             was_doubled: false,
-                        });
+                        logs: logs.clone(),});
                     }
-                    crate::casino::GameResult::Loss => {
+                    crate::casino::GameResult::Loss(_) => {
                         let shield_pool = if session.is_tournament {
                             player.tournament.shields
                         } else {
@@ -461,6 +473,7 @@ impl<'a, S: State> Layer<'a, S> {
                             final_chips,
                             was_shielded,
                             was_doubled: false,
+                        logs: logs.clone(),
                         });
                     }
                     _ => {}
@@ -508,21 +521,34 @@ impl<'a, S: State> Layer<'a, S> {
         let move_number = session.move_count;
         let new_state = session.state_blob.clone();
 
+        let logs = match &result {
+            crate::casino::GameResult::Continue(l) => l.clone(),
+            crate::casino::GameResult::ContinueWithUpdate { logs, .. } => logs.clone(),
+            crate::casino::GameResult::Win(_, l) => l.clone(),
+            crate::casino::GameResult::WinWithExtraDeduction { logs, .. } => logs.clone(),
+            crate::casino::GameResult::Loss(l) => l.clone(),
+            crate::casino::GameResult::LossWithExtraDeduction(_, l) => l.clone(),
+            crate::casino::GameResult::LossPreDeducted(_, l) => l.clone(),
+            crate::casino::GameResult::LossPreDeductedWithExtraDeduction { logs, .. } => logs.clone(),
+            crate::casino::GameResult::Push(l) => l.clone(),
+        };
+
         // Handle game result
         let mut events = vec![Event::CasinoGameMoved {
             session_id,
             move_number,
             new_state,
+            logs: logs.clone(),
         }];
 
         match result {
-            crate::casino::GameResult::Continue => {
+            crate::casino::GameResult::Continue(_) => {
                 self.insert(
                     Key::CasinoSession(session_id),
                     Value::CasinoSession(session),
                 );
             }
-            crate::casino::GameResult::ContinueWithUpdate { payout } => {
+            crate::casino::GameResult::ContinueWithUpdate { payout, .. } => {
                 // Handle mid-game balance updates (additional bets or intermediate payouts)
                 if let Some(Value::CasinoPlayer(mut player)) =
                     self.get(&Key::CasinoPlayer(public.clone())).await?
@@ -588,7 +614,7 @@ impl<'a, S: State> Layer<'a, S> {
                     Value::CasinoSession(session),
                 );
             }
-            crate::casino::GameResult::Win(base_payout) => {
+            crate::casino::GameResult::Win(base_payout, _) => {
                 session.is_complete = true;
                 self.insert(
                     Key::CasinoSession(session_id),
@@ -645,12 +671,14 @@ impl<'a, S: State> Layer<'a, S> {
                         final_chips,
                         was_shielded: false,
                         was_doubled,
+                        logs: logs.clone(),
                     });
                 }
             }
             crate::casino::GameResult::WinWithExtraDeduction {
                 payout: base_payout,
                 extra_deduction,
+                ..
             } => {
                 // Completed win that still needs an additional deduction (e.g., immediate terminal state
                 // after a mid-game bet increase).
@@ -743,6 +771,7 @@ impl<'a, S: State> Layer<'a, S> {
                         final_chips,
                         was_shielded: false,
                         was_doubled,
+                        logs: logs.clone(),
                     });
                 } else {
                     // Player not found; still persist completion.
@@ -753,7 +782,7 @@ impl<'a, S: State> Layer<'a, S> {
                     );
                 }
             }
-            crate::casino::GameResult::Push => {
+            crate::casino::GameResult::Push(_) => {
                 session.is_complete = true;
                 self.insert(
                     Key::CasinoSession(session_id),
@@ -800,10 +829,11 @@ impl<'a, S: State> Layer<'a, S> {
                         final_chips,
                         was_shielded: false,
                         was_doubled: false,
+                        logs: logs.clone(),
                     });
                 }
             }
-            crate::casino::GameResult::Loss => {
+            crate::casino::GameResult::Loss(_) => {
                 session.is_complete = true;
                 self.insert(
                     Key::CasinoSession(session_id),
@@ -853,10 +883,10 @@ impl<'a, S: State> Layer<'a, S> {
                         final_chips,
                         was_shielded,
                         was_doubled: false,
-                    });
+                        logs: logs.clone(),});
                 }
             }
-            crate::casino::GameResult::LossWithExtraDeduction(extra) => {
+            crate::casino::GameResult::LossWithExtraDeduction(extra, _) => {
                 // Loss with additional deduction for mid-game bet increases
                 // (e.g., Blackjack double-down, Casino War go-to-war)
                 session.is_complete = true;
@@ -940,10 +970,10 @@ impl<'a, S: State> Layer<'a, S> {
                         final_chips,
                         was_shielded,
                         was_doubled: false,
-                    });
+                        logs: logs.clone(),});
                 }
             }
-            crate::casino::GameResult::LossPreDeducted(total_loss) => {
+            crate::casino::GameResult::LossPreDeducted(total_loss, _) => {
                 // Loss where chips were already deducted via ContinueWithUpdate
                 // (e.g., Baccarat, Craps, Roulette, Sic Bo table games)
                 // No additional chip deduction needed, just report the loss amount
@@ -1008,12 +1038,13 @@ impl<'a, S: State> Layer<'a, S> {
                         final_chips,
                         was_shielded,
                         was_doubled: false,
-                    });
+                        logs: logs.clone(),});
                 }
             }
             crate::casino::GameResult::LossPreDeductedWithExtraDeduction {
                 total_loss,
                 extra_deduction,
+                ..
             } => {
                 // Loss where most chips were already deducted, but an additional deduction is still required.
                 if let Some(Value::CasinoPlayer(mut player)) =
@@ -1100,7 +1131,7 @@ impl<'a, S: State> Layer<'a, S> {
                         final_chips,
                         was_shielded,
                         was_doubled: false,
-                    });
+                        logs: logs.clone(),});
                 } else {
                     session.is_complete = true;
                     self.insert(
@@ -1585,7 +1616,7 @@ impl<'a, S: State> Layer<'a, S> {
         let mut jackpot = house.three_card_progressive_jackpot.max(base);
         jackpot = jackpot.saturating_add(progressive_bet);
 
-        let can_adjust = matches!(result, crate::casino::GameResult::Win(_));
+        let can_adjust = matches!(result, crate::casino::GameResult::Win(..));
         let is_jackpot = can_adjust && is_three_card_mini_royal_spades(&player_cards);
         let delta = if is_jackpot {
             progressive_bet.saturating_mul(jackpot.saturating_sub(base))
@@ -1597,8 +1628,8 @@ impl<'a, S: State> Layer<'a, S> {
         self.insert(Key::House, Value::House(house));
 
         Ok(match result {
-            crate::casino::GameResult::Win(payout) if delta > 0 => {
-                crate::casino::GameResult::Win(payout.saturating_add(delta))
+            crate::casino::GameResult::Win(payout, _) if delta > 0 => {
+                crate::casino::GameResult::Win(payout.saturating_add(delta), vec![])
             }
             other => other,
         })
@@ -1623,7 +1654,7 @@ impl<'a, S: State> Layer<'a, S> {
         let mut jackpot = house.uth_progressive_jackpot.max(base);
         jackpot = jackpot.saturating_add(progressive_bet);
 
-        let can_adjust = matches!(result, crate::casino::GameResult::Win(_));
+        let can_adjust = matches!(result, crate::casino::GameResult::Win(..));
         let tier = if can_adjust {
             uth_progressive_jackpot_tier(&hole, &flop)
         } else {
@@ -1649,8 +1680,8 @@ impl<'a, S: State> Layer<'a, S> {
         self.insert(Key::House, Value::House(house));
 
         Ok(match result {
-            crate::casino::GameResult::Win(payout) if delta > 0 => {
-                crate::casino::GameResult::Win(payout.saturating_add(delta))
+            crate::casino::GameResult::Win(payout, _) if delta > 0 => {
+                crate::casino::GameResult::Win(payout.saturating_add(delta), vec![])
             }
             other => other,
         })

@@ -137,6 +137,7 @@ export interface GameState {
   crapsInputMode: 'NONE' | 'YES' | 'NO' | 'NEXT' | 'HARDWAY' | 'BUY'; // Replaces string buffer
   crapsRollHistory: number[];
   crapsLastRoundBets: CrapsBet[]; // Bets from the previous roll (for rebet)
+  crapsOddsCandidates: number[] | null; // Indices of bets eligible for odds attachment
   
   // Roulette
   rouletteBets: RouletteBet[];

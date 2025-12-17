@@ -15,9 +15,11 @@ export const CrapsView = React.memo<{ gameState: GameState; actions: any; lastWi
 
     // Get established come/don't come bets (status 'ON' with a target)
     const establishedComeBets = useMemo(() =>
-        gameState.crapsBets.filter(b =>
-            (b.type === 'COME' || b.type === 'DONT_COME') && b.status === 'ON' && b.target
-        ),
+        gameState.crapsBets
+            .map((b, i) => ({ ...b, originalIndex: i }))
+            .filter(b =>
+                (b.type === 'COME' || b.type === 'DONT_COME') && b.status === 'ON' && b.target
+            ),
         [gameState.crapsBets]
     );
 
@@ -120,11 +122,14 @@ export const CrapsView = React.memo<{ gameState: GameState; actions: any; lastWi
                                 </div>
                                 <div className="flex flex-col space-y-1">
                                     {gameState.crapsBets.length > 0 ? (
-                                        gameState.crapsBets.map((b, i) => (
-                                                                                        <div key={i} onClick={() => actions?.placeCrapsBet?.(b.type, b.target)} className="flex justify-between items-center text-xs border border-gray-800 p-1 rounded bg-black/50 cursor-pointer hover:bg-gray-800 transition-colors">
+                                        gameState.crapsBets.map((b, i) => {
+                                            const candidateIdx = gameState.crapsOddsCandidates?.indexOf(i);
+                                            const isCandidate = candidateIdx !== undefined && candidateIdx !== -1;
+                                            return (
+                                                <div key={i} onClick={() => isCandidate ? actions?.addCrapsOdds?.(candidateIdx) : actions?.placeCrapsBet?.(b.type, b.target)} className={`flex justify-between items-center text-xs border p-1 rounded cursor-pointer transition-colors ${isCandidate ? 'border-terminal-gold bg-terminal-gold/10' : 'border-gray-800 bg-black/50 hover:bg-gray-800'}`}>
                                                 <div className="flex flex-col">
-                                                    <span className="text-terminal-green font-bold text-[10px]">
-                                                        {b.type}{b.target !== undefined ? ` ${b.target}` : ''}
+                                                    <span className={`font-bold text-[10px] ${isCandidate ? 'text-terminal-gold' : 'text-terminal-green'}`}>
+                                                        {isCandidate ? `[${candidateIdx! + 1}] ` : ''}{b.type}{b.target !== undefined ? ` ${b.target}` : ''}
                                                     </span>
                                                     <span className="text-[9px] text-gray-500">{b.status === 'PENDING' ? 'WAIT' : 'ON'}</span>
                                                 </div>
@@ -133,7 +138,8 @@ export const CrapsView = React.memo<{ gameState: GameState; actions: any; lastWi
                                                     {b.oddsAmount && <div className="text-[9px] text-terminal-gold">+${b.oddsAmount}</div>}
                                                 </div>
                                             </div>
-                                        ))
+                                            );
+                                        })
                                     ) : (
                                         <div className="text-center text-[10px] text-gray-700 italic">NO BETS</div>
                                     )}
@@ -146,19 +152,25 @@ export const CrapsView = React.memo<{ gameState: GameState; actions: any; lastWi
                 {/* Established Come/Don't Come Bets - Above Point, Horizontally Centered */}
                 {establishedComeBets.length > 0 && (
                     <div className="flex items-center justify-center gap-4">
-                        {establishedComeBets.map((bet, i) => (
-                            <div key={i} onClick={() => actions?.placeCrapsBet?.(bet.type, bet.target)} className="flex flex-col items-center gap-1 cursor-pointer hover:scale-105 transition-transform">
-                                <span className={`text-[10px] uppercase tracking-widest ${bet.type === 'COME' ? 'text-terminal-green' : 'text-terminal-accent'}`}>
-                                    {bet.type === 'COME' ? 'COME' : "DON'T"}
+                        {establishedComeBets.map((bet, i) => {
+                            const candidateIdx = gameState.crapsOddsCandidates?.indexOf(bet.originalIndex);
+                            const isCandidate = candidateIdx !== undefined && candidateIdx !== -1;
+                            
+                            return (
+                            <div key={i} onClick={() => isCandidate ? actions?.addCrapsOdds?.(candidateIdx) : actions?.placeCrapsBet?.(bet.type, bet.target)} className="flex flex-col items-center gap-1 cursor-pointer hover:scale-105 transition-transform">
+                                <span className={`text-[10px] uppercase tracking-widest ${isCandidate ? 'text-terminal-gold font-bold' : (bet.type === 'COME' ? 'text-terminal-green' : 'text-terminal-accent')}`}>
+                                    {isCandidate ? `[${candidateIdx! + 1}] ` : ''}{bet.type === 'COME' ? 'COME' : "DON'T"}
                                 </span>
                                 <div className={`w-12 h-12 border-2 flex items-center justify-center text-lg font-bold rounded-full shadow-[0_0_10px_rgba(0,0,0,0.5)] ${
-                                    bet.type === 'COME' ? 'border-terminal-green text-terminal-green' : 'border-terminal-accent text-terminal-accent'
+                                    isCandidate ? 'border-terminal-gold text-terminal-gold bg-terminal-gold/10' :
+                                    (bet.type === 'COME' ? 'border-terminal-green text-terminal-green' : 'border-terminal-accent text-terminal-accent')
                                 }`}>
                                     {bet.target}
                                 </div>
                                 <span className="text-[9px] text-gray-500">${bet.amount + (bet.oddsAmount || 0)}</span>
                             </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
 
@@ -301,11 +313,15 @@ export const CrapsView = React.memo<{ gameState: GameState; actions: any; lastWi
                 <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-2 border-b border-gray-800 pb-1 flex-none text-center">Table Bets</div>
                 <div className="flex-1 overflow-y-auto flex flex-col justify-center space-y-1">
                     {gameState.crapsBets.length > 0 ? (
-                        gameState.crapsBets.map((b, i) => (
-                                                                        <div key={i} onClick={() => actions?.placeCrapsBet?.(b.type, b.target)} className="flex justify-between items-center text-xs border border-gray-800 p-1 rounded bg-black/50 cursor-pointer hover:bg-gray-800 transition-colors">
+                        gameState.crapsBets.map((b, i) => {
+                            const candidateIdx = gameState.crapsOddsCandidates?.indexOf(i);
+                            const isCandidate = candidateIdx !== undefined && candidateIdx !== -1;
+                            
+                            return (
+                                <div key={i} onClick={() => isCandidate ? actions?.addCrapsOdds?.(candidateIdx) : actions?.placeCrapsBet?.(b.type, b.target)} className={`flex justify-between items-center text-xs border border-gray-800 p-1 rounded bg-black/50 cursor-pointer hover:bg-gray-800 transition-colors ${isCandidate ? 'border-terminal-gold bg-terminal-gold/10' : ''}`}>
                                 <div className="flex flex-col">
-                                    <span className="text-terminal-green font-bold text-[10px]">
-                                        {b.type}{b.target !== undefined ? ` ${b.target}` : ''}
+                                    <span className={`font-bold text-[10px] ${isCandidate ? 'text-terminal-gold' : 'text-terminal-green'}`}>
+                                        {isCandidate ? `[${candidateIdx! + 1}] ` : ''}{b.type}{b.target !== undefined ? ` ${b.target}` : ''}
                                     </span>
                                     <span className="text-[9px] text-gray-500">{b.status === 'PENDING' ? 'WAIT' : 'ON'}</span>
                                 </div>
@@ -313,7 +329,8 @@ export const CrapsView = React.memo<{ gameState: GameState; actions: any; lastWi
                                     <div className="text-white text-[10px]">${b.amount + (b.oddsAmount || 0)}</div>
                                 </div>
                             </div>
-                        ))
+                            );
+                        })
                     ) : (
                         <div className="text-center text-[10px] text-gray-700 italic">NO BETS</div>
                     )}

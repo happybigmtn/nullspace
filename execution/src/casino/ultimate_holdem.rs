@@ -679,9 +679,9 @@ fn resolve_showdown(
     session.is_complete = true;
 
     if total_return == 0 {
-        Ok(GameResult::LossPreDeducted(total_wagered))
+        Ok(GameResult::LossPreDeducted(total_wagered, vec![]))
     } else {
-        Ok(GameResult::Win(total_return))
+        Ok(GameResult::Win(total_return, vec![]))
     }
 }
 
@@ -704,7 +704,7 @@ impl CasinoGame for UltimateHoldem {
         };
         session.state_blob = serialize_state(&state);
         GameResult::ContinueWithUpdate {
-            payout: -(session.bet as i64),
+            payout: -(session.bet as i64), logs: vec![],
         }
     }
 
@@ -732,10 +732,10 @@ impl CasinoGame for UltimateHoldem {
                     payout_update = apply_trips_update(&mut state, new_trips)?;
                     session.state_blob = serialize_state(&state);
                     Ok(if payout_update == 0 {
-                        GameResult::Continue
+                        GameResult::Continue(vec![])
                     } else {
                         GameResult::ContinueWithUpdate {
-                            payout: payout_update,
+                            payout: payout_update, logs: vec![],
                         }
                     })
                 }
@@ -744,10 +744,10 @@ impl CasinoGame for UltimateHoldem {
                     payout_update = apply_six_card_bonus_update(&mut state, new_bet)?;
                     session.state_blob = serialize_state(&state);
                     Ok(if payout_update == 0 {
-                        GameResult::Continue
+                        GameResult::Continue(vec![])
                     } else {
                         GameResult::ContinueWithUpdate {
-                            payout: payout_update,
+                            payout: payout_update, logs: vec![],
                         }
                     })
                 }
@@ -759,10 +759,10 @@ impl CasinoGame for UltimateHoldem {
                     payout_update = apply_progressive_update(&mut state, new_bet)?;
                     session.state_blob = serialize_state(&state);
                     Ok(if payout_update == 0 {
-                        GameResult::Continue
+                        GameResult::Continue(vec![])
                     } else {
                         GameResult::ContinueWithUpdate {
-                            payout: payout_update,
+                            payout: payout_update, logs: vec![],
                         }
                     })
                 }
@@ -786,10 +786,10 @@ impl CasinoGame for UltimateHoldem {
 
                     session.state_blob = serialize_state(&state);
                     Ok(if payout_update == 0 {
-                        GameResult::Continue
+                        GameResult::Continue(vec![])
                     } else {
                         GameResult::ContinueWithUpdate {
-                            payout: payout_update,
+                            payout: payout_update, logs: vec![],
                         }
                     })
                 }
@@ -808,7 +808,7 @@ impl CasinoGame for UltimateHoldem {
                     }
                     state.stage = Stage::Flop;
                     session.state_blob = serialize_state(&state);
-                    Ok(GameResult::Continue)
+                    Ok(GameResult::Continue(vec![]))
                 }
                 Action::Bet4x => {
                     if state.play_mult != 0 {
@@ -819,7 +819,7 @@ impl CasinoGame for UltimateHoldem {
                     state.stage = Stage::AwaitingReveal;
                     session.state_blob = serialize_state(&state);
                     Ok(GameResult::ContinueWithUpdate {
-                        payout: -(play_bet as i64),
+                        payout: -(play_bet as i64), logs: vec![],
                     })
                 }
                 Action::Bet3x => {
@@ -831,7 +831,7 @@ impl CasinoGame for UltimateHoldem {
                     state.stage = Stage::AwaitingReveal;
                     session.state_blob = serialize_state(&state);
                     Ok(GameResult::ContinueWithUpdate {
-                        payout: -(play_bet as i64),
+                        payout: -(play_bet as i64), logs: vec![],
                     })
                 }
                 _ => Err(GameError::InvalidMove),
@@ -849,7 +849,7 @@ impl CasinoGame for UltimateHoldem {
                     }
                     state.stage = Stage::River;
                     session.state_blob = serialize_state(&state);
-                    Ok(GameResult::Continue)
+                    Ok(GameResult::Continue(vec![]))
                 }
                 Action::Bet2x => {
                     if state.play_mult != 0 {
@@ -860,7 +860,7 @@ impl CasinoGame for UltimateHoldem {
                     state.stage = Stage::AwaitingReveal;
                     session.state_blob = serialize_state(&state);
                     Ok(GameResult::ContinueWithUpdate {
-                        payout: -(play_bet as i64),
+                        payout: -(play_bet as i64), logs: vec![],
                     })
                 }
                 _ => Err(GameError::InvalidMove),
@@ -875,7 +875,7 @@ impl CasinoGame for UltimateHoldem {
                     state.stage = Stage::AwaitingReveal;
                     session.state_blob = serialize_state(&state);
                     Ok(GameResult::ContinueWithUpdate {
-                        payout: -(play_bet as i64),
+                        payout: -(play_bet as i64), logs: vec![],
                     })
                 }
                 Action::Fold => {
@@ -943,7 +943,7 @@ mod tests {
         let result = UltimateHoldem::init(&mut session, &mut rng);
         assert!(matches!(
             result,
-            GameResult::ContinueWithUpdate { payout: -100 }
+            GameResult::ContinueWithUpdate { payout: -100 }, logs: vec![],
         ));
 
         let state = parse_state(&session.state_blob).expect("Failed to parse state");
@@ -966,14 +966,14 @@ mod tests {
         let res = UltimateHoldem::process_move(&mut session, &payload, &mut rng).unwrap();
         assert!(matches!(
             res,
-            GameResult::ContinueWithUpdate { payout: -25 }
+            GameResult::ContinueWithUpdate { payout: -25 }, logs: vec![],
         ));
 
         // Deal
         let mut rng = GameRng::new(&seed, session.id, 2);
         let res =
             UltimateHoldem::process_move(&mut session, &[Action::Deal as u8], &mut rng).unwrap();
-        assert!(matches!(res, GameResult::Continue));
+        assert!(matches!(res, GameResult::Continue(vec![])));
 
         let state = parse_state(&session.state_blob).expect("Failed to parse state");
         assert_eq!(state.stage, Stage::Preflop);
@@ -996,7 +996,7 @@ mod tests {
         let res = UltimateHoldem::process_move(&mut session, &payload, &mut rng).unwrap();
         assert!(matches!(
             res,
-            GameResult::ContinueWithUpdate { payout: -25 }
+            GameResult::ContinueWithUpdate { payout: -25 }, logs: vec![],
         ));
 
         // Set Trips back to 0 (refund)
@@ -1026,7 +1026,7 @@ mod tests {
         let res = UltimateHoldem::process_move(&mut session, &payload, &mut rng).unwrap();
         assert!(matches!(
             res,
-            GameResult::ContinueWithUpdate { payout: -25 }
+            GameResult::ContinueWithUpdate { payout: -25 }, logs: vec![],
         ));
 
         // Deal
@@ -1065,7 +1065,7 @@ mod tests {
             UltimateHoldem::process_move(&mut session, &[Action::Bet4x as u8], &mut rng).unwrap();
         assert!(matches!(
             res,
-            GameResult::ContinueWithUpdate { payout: -400 }
+            GameResult::ContinueWithUpdate { payout: -400 }, logs: vec![],
         ));
 
         // Reveal resolves
@@ -1074,7 +1074,7 @@ mod tests {
             UltimateHoldem::process_move(&mut session, &[Action::Reveal as u8], &mut rng).unwrap();
         assert!(matches!(
             res,
-            GameResult::Win(_) | GameResult::LossPreDeducted(_)
+            GameResult::Win(_, vec![]) | GameResult::LossPreDeducted(_, vec![])
         ));
         assert!(session.is_complete);
     }
@@ -1098,7 +1098,7 @@ mod tests {
             UltimateHoldem::process_move(&mut session, &[Action::Bet3x as u8], &mut rng).unwrap();
         assert!(matches!(
             res,
-            GameResult::ContinueWithUpdate { payout: -300 }
+            GameResult::ContinueWithUpdate { payout: -300 }, logs: vec![],
         ));
 
         // Reveal resolves
@@ -1107,7 +1107,7 @@ mod tests {
             UltimateHoldem::process_move(&mut session, &[Action::Reveal as u8], &mut rng).unwrap();
         assert!(matches!(
             res,
-            GameResult::Win(_) | GameResult::LossPreDeducted(_)
+            GameResult::Win(_, vec![]) | GameResult::LossPreDeducted(_, vec![])
         ));
         assert!(session.is_complete);
     }
@@ -1139,7 +1139,7 @@ mod tests {
             UltimateHoldem::process_move(&mut session, &[Action::Fold as u8], &mut rng).unwrap();
         assert!(matches!(
             res,
-            GameResult::Win(_) | GameResult::LossPreDeducted(_)
+            GameResult::Win(_, vec![]) | GameResult::LossPreDeducted(_, vec![])
         ));
         assert!(session.is_complete);
     }

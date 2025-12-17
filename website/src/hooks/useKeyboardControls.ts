@@ -313,6 +313,22 @@ export const useKeyboardControls = ({
                     if (e.key === '1') { gameActions.uhBet(1); return; }
                 }
             } else if (gameState.type === GameType.CRAPS) {
+                // Handle Odds Selection Mode
+                if (gameState.crapsOddsCandidates && gameState.crapsOddsCandidates.length > 0) {
+                    const num = parseInt(e.key);
+                    if (!isNaN(num) && num >= 1 && num <= gameState.crapsOddsCandidates.length) {
+                        // User selected 1..N. The hook expects the index into the candidates array.
+                        gameActions.addCrapsOdds(num - 1);
+                        return;
+                    }
+                    if (e.key === 'Escape') {
+                        gameActions.setGameState((prev) => ({ ...prev, crapsOddsCandidates: null, message: 'SELECTION CANCELLED' }));
+                        return;
+                    }
+                    // Block other inputs during selection
+                    return;
+                }
+
                 // Handle input mode first - number selection
                 if (gameState.crapsInputMode !== 'NONE') {
                     const numMap: Record<string, number> = { '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '0': 10, '-': 11, '=': 12 };

@@ -502,7 +502,7 @@ impl CasinoGame for ThreeCardPoker {
             progressive_bet: 0,
         };
         session.state_blob = serialize_state(&state);
-        GameResult::Continue
+        GameResult::Continue(vec![])
     }
 
     fn process_move(
@@ -527,9 +527,9 @@ impl CasinoGame for ThreeCardPoker {
                     let payout = apply_pairplus_update(&mut state, new_bet)?;
                     session.state_blob = serialize_state(&state);
                     Ok(if payout == 0 {
-                        GameResult::Continue
+                        GameResult::Continue(vec![])
                     } else {
-                        GameResult::ContinueWithUpdate { payout }
+                        GameResult::ContinueWithUpdate { payout, logs: vec![] }
                     })
                 }
                 Move::Deal => {
@@ -553,11 +553,11 @@ impl CasinoGame for ThreeCardPoker {
 
                     session.state_blob = serialize_state(&state);
                     Ok(if payout_update == 0 {
-                        GameResult::Continue
+                        GameResult::Continue(vec![])
                     } else {
                         GameResult::ContinueWithUpdate {
-                            payout: payout_update,
-                        }
+                                                payout: payout_update, logs: vec![],
+                                                }
                     })
                 }
                 Move::SetSixCardBonus => {
@@ -565,9 +565,9 @@ impl CasinoGame for ThreeCardPoker {
                     let payout = apply_six_card_bonus_update(&mut state, new_bet)?;
                     session.state_blob = serialize_state(&state);
                     Ok(if payout == 0 {
-                        GameResult::Continue
+                        GameResult::Continue(vec![])
                     } else {
-                        GameResult::ContinueWithUpdate { payout }
+                        GameResult::ContinueWithUpdate { payout, logs: vec![] }
                     })
                 }
                 Move::SetProgressive => {
@@ -578,9 +578,9 @@ impl CasinoGame for ThreeCardPoker {
                     let payout = apply_progressive_update(&mut state, new_bet)?;
                     session.state_blob = serialize_state(&state);
                     Ok(if payout == 0 {
-                        GameResult::Continue
+                        GameResult::Continue(vec![])
                     } else {
-                        GameResult::ContinueWithUpdate { payout }
+                        GameResult::ContinueWithUpdate { payout, logs: vec![] }
                     })
                 }
                 _ => Err(GameError::InvalidMove),
@@ -627,9 +627,9 @@ impl CasinoGame for ThreeCardPoker {
                     session.state_blob = serialize_state(&state);
 
                     if total_return == 0 {
-                        Ok(GameResult::LossPreDeducted(total_wagered))
+                        Ok(GameResult::LossPreDeducted(total_wagered, vec![]))
                     } else {
-                        Ok(GameResult::Win(total_return))
+                        Ok(GameResult::Win(total_return, vec![]))
                     }
                 }
                 Move::Play => {
@@ -637,7 +637,7 @@ impl CasinoGame for ThreeCardPoker {
                     state.stage = Stage::AwaitingReveal;
                     session.state_blob = serialize_state(&state);
                     Ok(GameResult::ContinueWithUpdate {
-                        payout: -(session.bet as i64),
+                        payout: -(session.bet as i64), logs: vec![],
                     })
                 }
                 _ => Err(GameError::InvalidMove),
@@ -721,9 +721,9 @@ impl CasinoGame for ThreeCardPoker {
                     session.state_blob = serialize_state(&state);
 
                     if total_return == 0 {
-                        Ok(GameResult::LossPreDeducted(total_wagered))
+                        Ok(GameResult::LossPreDeducted(total_wagered, vec![]))
                     } else {
-                        Ok(GameResult::Win(total_return))
+                        Ok(GameResult::Win(total_return, vec![]))
                     }
                 }
                 _ => Err(GameError::InvalidMove),
@@ -799,7 +799,7 @@ mod tests {
             ThreeCardPoker::process_move(&mut session, &[Move::Play as u8], &mut rng).unwrap();
         assert!(matches!(
             res,
-            GameResult::ContinueWithUpdate { payout: -100 }
+            GameResult::ContinueWithUpdate { payout: -100 }, logs: vec![],
         ));
 
         // Reveal resolves
@@ -808,7 +808,7 @@ mod tests {
             ThreeCardPoker::process_move(&mut session, &[Move::Reveal as u8], &mut rng).unwrap();
         assert!(matches!(
             res,
-            GameResult::Win(_) | GameResult::LossPreDeducted(_)
+            GameResult::Win(_, vec![]) | GameResult::LossPreDeducted(_, vec![])
         ));
         assert!(session.is_complete);
     }

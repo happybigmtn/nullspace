@@ -1215,6 +1215,7 @@ pub enum Event {
         session_id: u64,
         move_number: u32,
         new_state: Vec<u8>,
+        logs: Vec<String>,
     },
     CasinoGameCompleted {
         session_id: u64,
@@ -1224,6 +1225,7 @@ pub enum Event {
         final_chips: u64,
         was_shielded: bool,
         was_doubled: bool,
+        logs: Vec<String>,
     },
     CasinoLeaderboardUpdated {
         leaderboard: crate::casino::CasinoLeaderboard,
@@ -1365,11 +1367,17 @@ impl Write for Event {
                 session_id,
                 move_number,
                 new_state,
+                logs,
             } => {
                 tags::event::CASINO_GAME_MOVED.write(writer);
                 session_id.write(writer);
                 move_number.write(writer);
                 new_state.write(writer);
+                (logs.len() as u32).write(writer);
+                for log in logs {
+                    (log.len() as u32).write(writer);
+                    writer.put_slice(log.as_bytes());
+                }
             }
             Self::CasinoGameCompleted {
                 session_id,
@@ -1379,6 +1387,7 @@ impl Write for Event {
                 final_chips,
                 was_shielded,
                 was_doubled,
+                logs,
             } => {
                 tags::event::CASINO_GAME_COMPLETED.write(writer);
                 session_id.write(writer);
@@ -1388,6 +1397,11 @@ impl Write for Event {
                 final_chips.write(writer);
                 was_shielded.write(writer);
                 was_doubled.write(writer);
+                (logs.len() as u32).write(writer);
+                for log in logs {
+                    (log.len() as u32).write(writer);
+                    writer.put_slice(log.as_bytes());
+                }
             }
             Self::CasinoLeaderboardUpdated { leaderboard } => {
                 tags::event::CASINO_LEADERBOARD_UPDATED.write(writer);
@@ -1601,6 +1615,18 @@ impl Read for Event {
                 session_id: u64::read(reader)?,
                 move_number: u32::read(reader)?,
                 new_state: Vec::<u8>::read_range(reader, 0..=1024)?,
+                logs: {
+                    let count = u32::read(reader)? as usize;
+                    let mut logs = Vec::with_capacity(count);
+                    for _ in 0..count {
+                        let len = u32::read(reader)? as usize;
+                        if reader.remaining() < len { return Err(Error::EndOfBuffer); }
+                        let mut bytes = vec![0u8; len];
+                        reader.copy_to_slice(&mut bytes);
+                        logs.push(String::from_utf8(bytes).map_err(|_| Error::Invalid("Event", "invalid UTF-8 log"))?);
+                    }
+                    logs
+                },
             },
             tags::event::CASINO_GAME_COMPLETED => Self::CasinoGameCompleted {
                 session_id: u64::read(reader)?,
@@ -1610,6 +1636,18 @@ impl Read for Event {
                 final_chips: u64::read(reader)?,
                 was_shielded: bool::read(reader)?,
                 was_doubled: bool::read(reader)?,
+                logs: {
+                    let count = u32::read(reader)? as usize;
+                    let mut logs = Vec::with_capacity(count);
+                    for _ in 0..count {
+                        let len = u32::read(reader)? as usize;
+                        if reader.remaining() < len { return Err(Error::EndOfBuffer); }
+                        let mut bytes = vec![0u8; len];
+                        reader.copy_to_slice(&mut bytes);
+                        logs.push(String::from_utf8(bytes).map_err(|_| Error::Invalid("Event", "invalid UTF-8 log"))?);
+                    }
+                    logs
+                },
             },
             tags::event::CASINO_LEADERBOARD_UPDATED => Self::CasinoLeaderboardUpdated {
                 leaderboard: crate::casino::CasinoLeaderboard::read(reader)?,
@@ -1762,7 +1800,8 @@ impl EncodeSize for Event {
                     session_id,
                     move_number,
                     new_state,
-                } => session_id.encode_size() + move_number.encode_size() + new_state.encode_size(),
+                    logs,
+                } => session_id.encode_size() + move_number.encode_size() + new_state.encode_size() + 4 + logs.iter().map(|s| 4 + s.len()).sum::<usize>(),
                 Self::CasinoGameCompleted {
                     session_id,
                     player,
@@ -1771,6 +1810,7 @@ impl EncodeSize for Event {
                     final_chips,
                     was_shielded,
                     was_doubled,
+                    logs,
                 } => {
                     session_id.encode_size()
                         + player.encode_size()
@@ -1779,6 +1819,7 @@ impl EncodeSize for Event {
                         + final_chips.encode_size()
                         + was_shielded.encode_size()
                         + was_doubled.encode_size()
+                        + 4 + logs.iter().map(|s| 4 + s.len()).sum::<usize>()
                 }
                 Self::CasinoLeaderboardUpdated { leaderboard } => leaderboard.encode_size(),
                 Self::CasinoError {

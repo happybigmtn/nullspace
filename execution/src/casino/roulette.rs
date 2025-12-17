@@ -371,7 +371,7 @@ impl CasinoGame for Roulette {
         // Initialize with empty state
         let state = RouletteState::new();
         session.state_blob = state.to_blob();
-        GameResult::Continue
+        GameResult::Continue(vec![])
     }
 
     fn process_move(
@@ -464,7 +464,7 @@ impl CasinoGame for Roulette {
 
                 session.state_blob = state.to_blob();
                 Ok(GameResult::ContinueWithUpdate {
-                    payout: -(amount as i64),
+                    payout: -(amount as i64), logs: vec![],
                 })
             }
 
@@ -546,7 +546,7 @@ impl CasinoGame for Roulette {
 
                                         session.state_blob = state.to_blob();
                                         session.move_count += 1;
-                                        return Ok(GameResult::Continue);
+                                        return Ok(GameResult::Continue(vec![]));
                                     }
                                 }
                             }
@@ -581,9 +581,9 @@ impl CasinoGame for Roulette {
                         session.is_complete = true;
 
                         if total_return > 0 {
-                            Ok(GameResult::Win(total_return))
+                            Ok(GameResult::Win(total_return, vec![]))
                         } else {
-                            Ok(GameResult::LossPreDeducted(state.total_wagered))
+                            Ok(GameResult::LossPreDeducted(state.total_wagered, vec![]))
                         }
                     }
                     Phase::Prison => {
@@ -599,7 +599,7 @@ impl CasinoGame for Roulette {
                             // Double-imprisonment variant: a second 0 re-imprisons the bets.
                             session.state_blob = state.to_blob();
                             session.move_count += 1;
-                            return Ok(GameResult::Continue);
+                            return Ok(GameResult::Continue(vec![]));
                         }
 
                         let mut push_return: u64 = 0;
@@ -627,9 +627,9 @@ impl CasinoGame for Roulette {
                         session.is_complete = true;
 
                         if total_return > 0 {
-                            Ok(GameResult::Win(total_return))
+                            Ok(GameResult::Win(total_return, vec![]))
                         } else {
-                            Ok(GameResult::LossPreDeducted(state.total_wagered))
+                            Ok(GameResult::LossPreDeducted(state.total_wagered, vec![]))
                         }
                     }
                 }
@@ -644,7 +644,7 @@ impl CasinoGame for Roulette {
 
                 state.bets.clear();
                 session.state_blob = state.to_blob();
-                Ok(GameResult::Continue)
+                Ok(GameResult::Continue(vec![]))
             }
 
             // [3, zero_rule] - Set even-money-on-zero rule.
@@ -657,7 +657,7 @@ impl CasinoGame for Roulette {
                 }
                 state.zero_rule = ZeroRule::try_from(payload[1])?;
                 session.state_blob = state.to_blob();
-                Ok(GameResult::Continue)
+                Ok(GameResult::Continue(vec![]))
             }
 
             _ => Err(GameError::InvalidPayload),
@@ -1069,7 +1069,7 @@ mod tests {
                 RouletteState::from_blob(&test_session.state_blob).expect("Failed to parse state");
 
             if state.result == Some(0) {
-                assert!(matches!(res, GameResult::Win(50)));
+                assert!(matches!(res, GameResult::Win(50, vec![])));
                 return;
             }
         }
@@ -1109,7 +1109,7 @@ mod tests {
                 continue;
             }
 
-            assert!(matches!(res1, GameResult::Continue));
+            assert!(matches!(res1, GameResult::Continue(vec![])));
             assert!(!test_session.is_complete);
             assert_eq!(state1.phase, Phase::Prison);
 
@@ -1124,9 +1124,9 @@ mod tests {
             assert!(test_session.is_complete);
 
             if result2 != 0 && is_red(result2) {
-                assert!(matches!(res2, GameResult::Win(100)));
+                assert!(matches!(res2, GameResult::Win(100, vec![])));
             } else {
-                assert!(matches!(res2, GameResult::LossPreDeducted(100)));
+                assert!(matches!(res2, GameResult::LossPreDeducted(100, vec![])));
             }
             return;
         }
@@ -1166,7 +1166,7 @@ mod tests {
                 continue;
             }
 
-            assert!(matches!(res1, GameResult::Continue));
+            assert!(matches!(res1, GameResult::Continue(vec![])));
             assert!(!test_session.is_complete);
             assert_eq!(state1.phase, Phase::Prison);
 
@@ -1181,7 +1181,7 @@ mod tests {
                 continue;
             }
 
-            assert!(matches!(res2, GameResult::Continue));
+            assert!(matches!(res2, GameResult::Continue(vec![])));
             assert!(!test_session.is_complete);
             assert_eq!(state2.phase, Phase::Prison);
             return;
@@ -1211,7 +1211,7 @@ mod tests {
             let mut rng = GameRng::new(&seed, session_id, 2);
             let result = Roulette::process_move(&mut test_session, &[1], &mut rng);
 
-            if let Ok(GameResult::Win(amount)) = result {
+            if let Ok(GameResult::Win(amount, vec![])) = result {
                 // Straight bet pays 35:1 plus stake returned = 36x total
                 assert_eq!(amount, 100 * 36);
                 return; // Found a winning case
