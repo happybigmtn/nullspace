@@ -33,6 +33,13 @@ async function run() {
     await page.waitForTimeout(1000);
 
     // Helpers
+    const openHamburger = async () => {
+        const menuBtn = page.getByLabel('Menu');
+        if (await menuBtn.isVisible()) {
+            await menuBtn.click();
+            await page.waitForTimeout(500);
+        }
+    };
     const openBetsMenu = async () => {
         const betsBtn = page.getByLabel('Game controls').getByRole('button', { name: /^BETS$/i });
         if (await betsBtn.isVisible()) {
@@ -177,6 +184,7 @@ async function run() {
     // 11. SWAP
     console.log('');
     console.log('--- Testing Swap ---');
+    await openHamburger();
     await page.getByRole('link', { name: /swap/i }).click();
     await page.waitForTimeout(1000);
     if (await page.getByText(/swap/i).first().isVisible()) {
@@ -188,6 +196,7 @@ async function run() {
     // 12. STAKE
     console.log('');
     console.log('--- Testing Stake ---');
+    await openHamburger();
     await page.getByRole('link', { name: /stake/i }).click();
     await page.waitForTimeout(1000);
     if (await page.getByText(/staking/i).first().isVisible()) {

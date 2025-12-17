@@ -121,7 +121,7 @@ export const CrapsView = React.memo<{ gameState: GameState; actions: any; lastWi
                                 <div className="flex flex-col space-y-1">
                                     {gameState.crapsBets.length > 0 ? (
                                         gameState.crapsBets.map((b, i) => (
-                                            <div key={i} className="flex justify-between items-center text-xs border border-gray-800 p-1 rounded bg-black/50">
+                                                                                        <div key={i} onClick={() => actions?.placeCrapsBet?.(b.type, b.target)} className="flex justify-between items-center text-xs border border-gray-800 p-1 rounded bg-black/50 cursor-pointer hover:bg-gray-800 transition-colors">
                                                 <div className="flex flex-col">
                                                     <span className="text-terminal-green font-bold text-[10px]">
                                                         {b.type}{b.target !== undefined ? ` ${b.target}` : ''}
@@ -147,7 +147,7 @@ export const CrapsView = React.memo<{ gameState: GameState; actions: any; lastWi
                 {establishedComeBets.length > 0 && (
                     <div className="flex items-center justify-center gap-4">
                         {establishedComeBets.map((bet, i) => (
-                            <div key={i} className="flex flex-col items-center gap-1">
+                            <div key={i} onClick={() => actions?.placeCrapsBet?.(bet.type, bet.target)} className="flex flex-col items-center gap-1 cursor-pointer hover:scale-105 transition-transform">
                                 <span className={`text-[10px] uppercase tracking-widest ${bet.type === 'COME' ? 'text-terminal-green' : 'text-terminal-accent'}`}>
                                     {bet.type === 'COME' ? 'COME' : "DON'T"}
                                 </span>
@@ -215,7 +215,7 @@ export const CrapsView = React.memo<{ gameState: GameState; actions: any; lastWi
                         {gameState.crapsBets.length > 0 ? (
                             <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
                                 {gameState.crapsBets.map((b, i) => (
-                                    <div key={i} className="flex-none flex flex-col items-center border border-gray-800 bg-black/50 p-1 rounded min-w-[60px]">
+                                    <div key={i} onClick={() => actions?.placeCrapsBet?.(b.type, b.target)} className="flex-none flex flex-col items-center border border-gray-800 bg-black/50 p-1 rounded min-w-[60px] cursor-pointer hover:bg-gray-800 transition-colors">
                                         <span className="text-[9px] text-terminal-green font-bold">{b.type}</span>
                                         <span className="text-[9px] text-white">${b.amount + (b.oddsAmount || 0)}</span>
                                         {b.target !== undefined && <span className="text-[8px] text-gray-500">{b.target}</span>}
@@ -302,7 +302,7 @@ export const CrapsView = React.memo<{ gameState: GameState; actions: any; lastWi
                 <div className="flex-1 overflow-y-auto flex flex-col justify-center space-y-1">
                     {gameState.crapsBets.length > 0 ? (
                         gameState.crapsBets.map((b, i) => (
-                            <div key={i} className="flex justify-between items-center text-xs border border-gray-800 p-1 rounded bg-black/50">
+                                                                        <div key={i} onClick={() => actions?.placeCrapsBet?.(b.type, b.target)} className="flex justify-between items-center text-xs border border-gray-800 p-1 rounded bg-black/50 cursor-pointer hover:bg-gray-800 transition-colors">
                                 <div className="flex flex-col">
                                     <span className="text-terminal-green font-bold text-[10px]">
                                         {b.type}{b.target !== undefined ? ` ${b.target}` : ''}

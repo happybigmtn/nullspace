@@ -152,7 +152,7 @@ export const BaccaratView = React.memo<{ gameState: GameState; actions: any; las
                 <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-2 border-b border-gray-800 pb-1 flex-none text-center">Bets</div>
                 <div className="flex-1 overflow-y-auto flex flex-col justify-center space-y-1">
                     {allBets.map((b, i) => (
-                        <div key={i} className={`flex justify-between items-center text-xs border p-1 rounded bg-black/50 ${i === 0 ? 'border-terminal-green/30' : 'border-gray-800'}`}>
+                        <div key={i} onClick={() => (b.type !== 'PLAYER' && b.type !== 'BANKER') ? actions?.baccaratActions?.placeBet?.(b.type) : undefined} className={`flex justify-between items-center text-xs border p-1 rounded bg-black/50 ${i === 0 ? 'border-terminal-green/30' : 'border-gray-800'} ${(b.type !== 'PLAYER' && b.type !== 'BANKER') ? 'cursor-pointer hover:bg-gray-800 transition-colors' : ''}`}>
                             <span className={`font-bold text-[10px] ${b.type === 'PLAYER' || b.type === 'BANKER' ? 'text-terminal-green' : 'text-gray-400'}`}>{b.type}</span>
                             <div className="text-white text-[10px]">${b.amount}</div>
                         </div>

@@ -37,7 +37,7 @@ export const SicBoView = React.memo<{ gameState: GameState; numberInput?: string
         })();
 
         return (
-            <div key={i} className="flex justify-between items-center text-xs border border-gray-800 p-1 rounded bg-black/50">
+            <div key={i} onClick={() => actions?.placeSicBoBet?.(bet.type, bet.target)} className="flex justify-between items-center text-xs border border-gray-800 p-1 rounded bg-black/50 cursor-pointer hover:bg-gray-800 transition-colors">
                 <div className="flex flex-col">
                     <span className="text-terminal-green font-bold text-[10px]">{bet.type} {targetLabel}</span>
                 </div>

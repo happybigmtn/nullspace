@@ -1,0 +1,630 @@
+[2m2025-12-17T00:42:06.013286Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Starting dev executor [3murl[0m[2m=[0mhttp://127.0.0.0:8080
+[2m2025-12-17T00:42:06.024942Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m no blobs found
+[2m2025-12-17T00:42:06.025167Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m no blobs found
+[2m2025-12-17T00:42:06.025208Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::any::variable[0m[2m:[0m build_snapshot_from_log complete [3mlog_size[0m[2m=[0m0
+[2m2025-12-17T00:42:06.025224Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m no blobs found
+[2m2025-12-17T00:42:06.025337Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m no blobs found
+[2m2025-12-17T00:42:06.025383Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::keyless[0m[2m:[0m no starting log operation found, returning empty db
+[2m2025-12-17T00:42:06.025428Z[0m [34mDEBUG[0m [2mreqwest::connect[0m[2m:[0m starting new connection: http://127.0.0.0:8080/    
+[2m2025-12-17T00:42:06.025441Z[0m [34mDEBUG[0m [2mhyper::client::connect::http[0m[2m:[0m connecting to 127.0.0.0:8080
+[2m2025-12-17T00:42:06.025561Z[0m [34mDEBUG[0m [2mhyper::client::connect::http[0m[2m:[0m connected to 127.0.0.0:8080
+[2m2025-12-17T00:42:06.025678Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 60 bytes
+[2m2025-12-17T00:42:06.025827Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 5 headers
+[2m2025-12-17T00:42:06.025838Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:06.025867Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:06.025883Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m No existing seed found, submitting genesis block
+[2m2025-12-17T00:42:06.026136Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::keyless[0m[2m:[0m committed db [3msize[0m[2m=[0m1
+[2m2025-12-17T00:42:06.026193Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::any::variable[0m[2m:[0m commit complete [3mlog_size[0m[2m=[0m1
+[2m2025-12-17T00:42:06.026199Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:06.026218Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:06.026266Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:06.026270Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:06.027861Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:06.027879Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:06.027948Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 130 bytes
+[2m2025-12-17T00:42:06.028752Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:06.028761Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:06.028773Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:06.028788Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:06.028795Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:06.028821Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 352 bytes
+[2m2025-12-17T00:42:06.029563Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:06.029569Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:06.029591Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:06.029602Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Genesis block executed and submitted [3mview[0m[2m=[0m1
+[2m2025-12-17T00:42:06.029605Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Connecting to mempool... [3murl[0m[2m=[0mws://127.0.0.0:8080/mempool
+[2m2025-12-17T00:42:06.029821Z[0m [34mDEBUG[0m [2mtungstenite::handshake::client[0m[2m:[0m Client handshake done.    
+[2m2025-12-17T00:42:06.029827Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m WebSocket connected
+[2m2025-12-17T00:42:09.262943Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Adding transactions to pending queue [3mcount[0m[2m=[0m1 [3mtotal_pending[0m[2m=[0m1
+[2m2025-12-17T00:42:09.341186Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Executing block [3mcount[0m[2m=[0m1 [3mview[0m[2m=[0m2 [3melapsed_ms[0m[2m=[0m101
+[2m2025-12-17T00:42:09.341957Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::keyless[0m[2m:[0m committed db [3msize[0m[2m=[0m4
+[2m2025-12-17T00:42:09.342080Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::any::variable[0m[2m:[0m commit complete [3mlog_size[0m[2m=[0m8
+[2m2025-12-17T00:42:09.342100Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:09.342111Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:09.342177Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:09.342191Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:09.344478Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:09.344516Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:09.344775Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 130 bytes
+[2m2025-12-17T00:42:09.347660Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:09.347666Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:09.347838Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:09.347892Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:09.347914Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:09.347982Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 1135 bytes
+[2m2025-12-17T00:42:09.349419Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:09.349426Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:09.349450Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:09.349476Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Block executed and submitted [3mview[0m[2m=[0m2
+[2m2025-12-17T00:42:09.779479Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Adding transactions to pending queue [3mcount[0m[2m=[0m1 [3mtotal_pending[0m[2m=[0m1
+[2m2025-12-17T00:42:09.868231Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Executing block [3mcount[0m[2m=[0m1 [3mview[0m[2m=[0m3 [3melapsed_ms[0m[2m=[0m107
+[2m2025-12-17T00:42:09.868861Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::keyless[0m[2m:[0m committed db [3msize[0m[2m=[0m7
+[2m2025-12-17T00:42:09.869095Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::any::variable[0m[2m:[0m commit complete [3mlog_size[0m[2m=[0m14
+[2m2025-12-17T00:42:09.869121Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:09.869142Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:09.869179Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:09.869188Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:09.870981Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:09.871007Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:09.871125Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 130 bytes
+[2m2025-12-17T00:42:09.873653Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:09.873669Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:09.873690Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:09.873719Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:09.873730Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:09.873792Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 1012 bytes
+[2m2025-12-17T00:42:09.875591Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:09.875598Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:09.875639Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:09.875670Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Block executed and submitted [3mview[0m[2m=[0m3
+[2m2025-12-17T00:42:11.484695Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Adding transactions to pending queue [3mcount[0m[2m=[0m1 [3mtotal_pending[0m[2m=[0m1
+[2m2025-12-17T00:42:11.487826Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Adding transactions to pending queue [3mcount[0m[2m=[0m1 [3mtotal_pending[0m[2m=[0m2
+[2m2025-12-17T00:42:11.521182Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Executing block [3mcount[0m[2m=[0m2 [3mview[0m[2m=[0m4 [3melapsed_ms[0m[2m=[0m102
+[2m2025-12-17T00:42:11.522159Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::keyless[0m[2m:[0m committed db [3msize[0m[2m=[0m13
+[2m2025-12-17T00:42:11.522450Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::any::variable[0m[2m:[0m commit complete [3mlog_size[0m[2m=[0m21
+[2m2025-12-17T00:42:11.522471Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:11.522488Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:11.522510Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:11.522527Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:11.525293Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:11.525317Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:11.525449Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 130 bytes
+[2m2025-12-17T00:42:11.528372Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:11.528384Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:11.528577Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:11.528647Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:11.528662Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:11.528718Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 1507 bytes
+[2m2025-12-17T00:42:11.531724Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:11.531731Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:11.531769Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:11.531820Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Block executed and submitted [3mview[0m[2m=[0m4
+[2m2025-12-17T00:42:13.590925Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Adding transactions to pending queue [3mcount[0m[2m=[0m1 [3mtotal_pending[0m[2m=[0m1
+[2m2025-12-17T00:42:13.669969Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Executing block [3mcount[0m[2m=[0m1 [3mview[0m[2m=[0m5 [3melapsed_ms[0m[2m=[0m101
+[2m2025-12-17T00:42:13.671095Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::keyless[0m[2m:[0m committed db [3msize[0m[2m=[0m16
+[2m2025-12-17T00:42:13.671482Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::any::variable[0m[2m:[0m commit complete [3mlog_size[0m[2m=[0m28
+[2m2025-12-17T00:42:13.671513Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:13.671737Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:13.672228Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:13.672273Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:13.675481Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:13.675532Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:13.675650Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 130 bytes
+[2m2025-12-17T00:42:13.677464Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:13.677476Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:13.677510Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:13.677549Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:13.677561Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:13.677604Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 1403 bytes
+[2m2025-12-17T00:42:13.679146Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:13.679162Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:13.679183Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:13.679199Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Block executed and submitted [3mview[0m[2m=[0m5
+[2m2025-12-17T00:42:14.612647Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Adding transactions to pending queue [3mcount[0m[2m=[0m1 [3mtotal_pending[0m[2m=[0m1
+[2m2025-12-17T00:42:14.623667Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Executing block [3mcount[0m[2m=[0m1 [3mview[0m[2m=[0m6 [3melapsed_ms[0m[2m=[0m110
+[2m2025-12-17T00:42:14.624362Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::keyless[0m[2m:[0m committed db [3msize[0m[2m=[0m19
+[2m2025-12-17T00:42:14.624487Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::any::variable[0m[2m:[0m commit complete [3mlog_size[0m[2m=[0m32
+[2m2025-12-17T00:42:14.624501Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:14.624513Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:14.624540Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:14.624548Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:14.626195Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:14.626225Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:14.626310Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 130 bytes
+[2m2025-12-17T00:42:14.627205Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:14.627211Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:14.627238Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:14.627284Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:14.627305Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:14.627337Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 933 bytes
+[2m2025-12-17T00:42:14.628154Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:14.628162Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:14.628188Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:14.628216Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Block executed and submitted [3mview[0m[2m=[0m6
+[2m2025-12-17T00:42:15.653856Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Adding transactions to pending queue [3mcount[0m[2m=[0m1 [3mtotal_pending[0m[2m=[0m1
+[2m2025-12-17T00:42:15.709323Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Executing block [3mcount[0m[2m=[0m1 [3mview[0m[2m=[0m7 [3melapsed_ms[0m[2m=[0m104
+[2m2025-12-17T00:42:15.710191Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::keyless[0m[2m:[0m committed db [3msize[0m[2m=[0m22
+[2m2025-12-17T00:42:15.710449Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::any::variable[0m[2m:[0m commit complete [3mlog_size[0m[2m=[0m38
+[2m2025-12-17T00:42:15.710468Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:15.710482Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:15.710512Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:15.710523Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:15.712449Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:15.712480Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:15.712590Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 130 bytes
+[2m2025-12-17T00:42:15.714385Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:15.714402Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:15.714439Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:15.714498Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:15.714519Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:15.714573Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 1183 bytes
+[2m2025-12-17T00:42:15.716436Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:15.716455Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:15.716478Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:15.716490Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Block executed and submitted [3mview[0m[2m=[0m7
+[2m2025-12-17T00:42:15.744913Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Adding transactions to pending queue [3mcount[0m[2m=[0m1 [3mtotal_pending[0m[2m=[0m1
+[2m2025-12-17T00:42:15.823365Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Executing block [3mcount[0m[2m=[0m1 [3mview[0m[2m=[0m8 [3melapsed_ms[0m[2m=[0m106
+[2m2025-12-17T00:42:15.824663Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::keyless[0m[2m:[0m committed db [3msize[0m[2m=[0m26
+[2m2025-12-17T00:42:15.825285Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::any::variable[0m[2m:[0m commit complete [3mlog_size[0m[2m=[0m44
+[2m2025-12-17T00:42:15.825322Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:15.825348Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:15.825778Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:15.825804Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:15.828579Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:15.828602Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:15.828779Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 130 bytes
+[2m2025-12-17T00:42:15.832042Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:15.832059Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:15.832161Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:15.832213Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:15.832227Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:15.832367Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 1324 bytes
+[2m2025-12-17T00:42:15.834197Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:15.834226Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:15.834322Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:15.834341Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Block executed and submitted [3mview[0m[2m=[0m8
+[2m2025-12-17T00:42:17.756981Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Adding transactions to pending queue [3mcount[0m[2m=[0m1 [3mtotal_pending[0m[2m=[0m1
+[2m2025-12-17T00:42:17.801386Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Executing block [3mcount[0m[2m=[0m1 [3mview[0m[2m=[0m9 [3melapsed_ms[0m[2m=[0m106
+[2m2025-12-17T00:42:17.801925Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::keyless[0m[2m:[0m committed db [3msize[0m[2m=[0m29
+[2m2025-12-17T00:42:17.802071Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::any::variable[0m[2m:[0m commit complete [3mlog_size[0m[2m=[0m50
+[2m2025-12-17T00:42:17.802088Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:17.802100Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:17.802150Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:17.802159Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:17.803705Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:17.803742Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:17.803866Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 130 bytes
+[2m2025-12-17T00:42:17.806760Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:17.806776Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:17.806811Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:17.806860Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:17.806867Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:17.807078Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 1231 bytes
+[2m2025-12-17T00:42:17.808888Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:17.808897Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:17.808907Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:17.808914Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Block executed and submitted [3mview[0m[2m=[0m9
+[2m2025-12-17T00:42:19.934259Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Adding transactions to pending queue [3mcount[0m[2m=[0m1 [3mtotal_pending[0m[2m=[0m1
+[2m2025-12-17T00:42:19.938965Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Adding transactions to pending queue [3mcount[0m[2m=[0m1 [3mtotal_pending[0m[2m=[0m2
+[2m2025-12-17T00:42:19.994431Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Executing block [3mcount[0m[2m=[0m2 [3mview[0m[2m=[0m10 [3melapsed_ms[0m[2m=[0m100
+[2m2025-12-17T00:42:19.995263Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::keyless[0m[2m:[0m committed db [3msize[0m[2m=[0m34
+[2m2025-12-17T00:42:19.995612Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::any::variable[0m[2m:[0m commit complete [3mlog_size[0m[2m=[0m57
+[2m2025-12-17T00:42:19.995654Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:19.995885Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:19.995941Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:19.995967Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:19.997697Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:19.997722Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:19.997809Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 130 bytes
+[2m2025-12-17T00:42:19.999111Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:19.999127Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:19.999274Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:19.999300Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:19.999307Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:19.999351Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 1605 bytes
+[2m2025-12-17T00:42:20.001334Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:20.001342Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:20.001367Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:20.001387Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Block executed and submitted [3mview[0m[2m=[0m10
+[2m2025-12-17T00:42:22.039984Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Adding transactions to pending queue [3mcount[0m[2m=[0m1 [3mtotal_pending[0m[2m=[0m1
+[2m2025-12-17T00:42:22.128433Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Executing block [3mcount[0m[2m=[0m1 [3mview[0m[2m=[0m11 [3melapsed_ms[0m[2m=[0m103
+[2m2025-12-17T00:42:22.129411Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::keyless[0m[2m:[0m committed db [3msize[0m[2m=[0m37
+[2m2025-12-17T00:42:22.129777Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::any::variable[0m[2m:[0m commit complete [3mlog_size[0m[2m=[0m63
+[2m2025-12-17T00:42:22.129805Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:22.129833Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:22.129856Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:22.129870Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:22.132238Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:22.132295Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:22.132411Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 130 bytes
+[2m2025-12-17T00:42:22.134864Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:22.134875Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:22.134896Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:22.134924Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:22.134932Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:22.134973Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 1249 bytes
+[2m2025-12-17T00:42:22.136703Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:22.136720Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:22.136750Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:22.136767Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Block executed and submitted [3mview[0m[2m=[0m11
+[2m2025-12-17T00:42:24.260181Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Adding transactions to pending queue [3mcount[0m[2m=[0m1 [3mtotal_pending[0m[2m=[0m1
+[2m2025-12-17T00:42:24.263703Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Adding transactions to pending queue [3mcount[0m[2m=[0m1 [3mtotal_pending[0m[2m=[0m2
+[2m2025-12-17T00:42:24.285017Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Adding transactions to pending queue [3mcount[0m[2m=[0m1 [3mtotal_pending[0m[2m=[0m3
+[2m2025-12-17T00:42:24.318494Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Executing block [3mcount[0m[2m=[0m3 [3mview[0m[2m=[0m12 [3melapsed_ms[0m[2m=[0m109
+[2m2025-12-17T00:42:24.319511Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::keyless[0m[2m:[0m committed db [3msize[0m[2m=[0m45
+[2m2025-12-17T00:42:24.319866Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::any::variable[0m[2m:[0m commit complete [3mlog_size[0m[2m=[0m70
+[2m2025-12-17T00:42:24.319886Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:24.319900Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:24.319942Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:24.319962Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:24.322995Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:24.323027Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:24.323098Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 130 bytes
+[2m2025-12-17T00:42:24.324446Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:24.324453Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:24.324477Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:24.324527Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:24.324543Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:24.324576Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 1895 bytes
+[2m2025-12-17T00:42:24.325452Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:24.325460Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:24.325480Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:24.325505Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Block executed and submitted [3mview[0m[2m=[0m12
+[2m2025-12-17T00:42:27.389853Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Adding transactions to pending queue [3mcount[0m[2m=[0m1 [3mtotal_pending[0m[2m=[0m1
+[2m2025-12-17T00:42:27.400979Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Executing block [3mcount[0m[2m=[0m1 [3mview[0m[2m=[0m13 [3melapsed_ms[0m[2m=[0m108
+[2m2025-12-17T00:42:27.401552Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::keyless[0m[2m:[0m committed db [3msize[0m[2m=[0m48
+[2m2025-12-17T00:42:27.401723Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::any::variable[0m[2m:[0m commit complete [3mlog_size[0m[2m=[0m77
+[2m2025-12-17T00:42:27.401748Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:27.401761Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:27.401791Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:27.401803Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:27.404227Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:27.404262Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:27.404356Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 130 bytes
+[2m2025-12-17T00:42:27.406677Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:27.406691Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:27.406722Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:27.406764Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:27.406774Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:27.406832Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 1438 bytes
+[2m2025-12-17T00:42:27.409153Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:27.409169Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:27.409187Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:27.409199Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Block executed and submitted [3mview[0m[2m=[0m13
+[2m2025-12-17T00:42:28.402839Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Adding transactions to pending queue [3mcount[0m[2m=[0m1 [3mtotal_pending[0m[2m=[0m1
+[2m2025-12-17T00:42:28.436170Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Executing block [3mcount[0m[2m=[0m1 [3mview[0m[2m=[0m14 [3melapsed_ms[0m[2m=[0m103
+[2m2025-12-17T00:42:28.436927Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::keyless[0m[2m:[0m committed db [3msize[0m[2m=[0m52
+[2m2025-12-17T00:42:28.437341Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::any::variable[0m[2m:[0m commit complete [3mlog_size[0m[2m=[0m84
+[2m2025-12-17T00:42:28.437367Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:28.437379Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:28.437543Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:28.437557Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:28.440001Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:28.440061Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:28.440260Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 130 bytes
+[2m2025-12-17T00:42:28.443097Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:28.443108Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:28.443142Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:28.443202Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:28.443219Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:28.443260Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 1389 bytes
+[2m2025-12-17T00:42:28.445050Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:28.445069Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:28.445107Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:28.445126Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Block executed and submitted [3mview[0m[2m=[0m14
+[2m2025-12-17T00:42:30.507765Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Adding transactions to pending queue [3mcount[0m[2m=[0m1 [3mtotal_pending[0m[2m=[0m1
+[2m2025-12-17T00:42:30.585452Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Executing block [3mcount[0m[2m=[0m1 [3mview[0m[2m=[0m15 [3melapsed_ms[0m[2m=[0m108
+[2m2025-12-17T00:42:30.586107Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::keyless[0m[2m:[0m committed db [3msize[0m[2m=[0m55
+[2m2025-12-17T00:42:30.586303Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::any::variable[0m[2m:[0m commit complete [3mlog_size[0m[2m=[0m91
+[2m2025-12-17T00:42:30.586322Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:30.586334Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:30.586375Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:30.586385Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:30.588025Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:30.588051Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:30.588148Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 130 bytes
+[2m2025-12-17T00:42:30.589345Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:30.589352Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:30.589382Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:30.589435Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:30.589453Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:30.589479Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 1405 bytes
+[2m2025-12-17T00:42:30.590389Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:30.590401Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:30.590662Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:30.590692Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Block executed and submitted [3mview[0m[2m=[0m15
+[2m2025-12-17T00:42:31.521569Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Adding transactions to pending queue [3mcount[0m[2m=[0m1 [3mtotal_pending[0m[2m=[0m1
+[2m2025-12-17T00:42:31.555012Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Executing block [3mcount[0m[2m=[0m1 [3mview[0m[2m=[0m16 [3melapsed_ms[0m[2m=[0m101
+[2m2025-12-17T00:42:31.555581Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::keyless[0m[2m:[0m committed db [3msize[0m[2m=[0m59
+[2m2025-12-17T00:42:31.555837Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::any::variable[0m[2m:[0m commit complete [3mlog_size[0m[2m=[0m98
+[2m2025-12-17T00:42:31.555864Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:31.555880Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:31.555991Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:31.556005Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:31.557948Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:31.557982Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:31.558194Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 130 bytes
+[2m2025-12-17T00:42:31.560386Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:31.560396Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:31.560413Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:31.560430Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:31.560436Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:31.560471Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 1549 bytes
+[2m2025-12-17T00:42:31.562420Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:31.562425Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:31.562443Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:31.562463Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Block executed and submitted [3mview[0m[2m=[0m16
+[2m2025-12-17T00:42:32.572489Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Adding transactions to pending queue [3mcount[0m[2m=[0m1 [3mtotal_pending[0m[2m=[0m1
+[2m2025-12-17T00:42:32.605812Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Executing block [3mcount[0m[2m=[0m1 [3mview[0m[2m=[0m17 [3melapsed_ms[0m[2m=[0m100
+[2m2025-12-17T00:42:32.606328Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::keyless[0m[2m:[0m committed db [3msize[0m[2m=[0m62
+[2m2025-12-17T00:42:32.606470Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::any::variable[0m[2m:[0m commit complete [3mlog_size[0m[2m=[0m107
+[2m2025-12-17T00:42:32.606490Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:32.606502Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:32.606528Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:32.606537Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:32.608322Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:32.608346Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:32.608475Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 130 bytes
+[2m2025-12-17T00:42:32.610803Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:32.610809Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:32.610837Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:32.610885Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:32.610899Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:32.610931Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 1702 bytes
+[2m2025-12-17T00:42:32.611896Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:32.611913Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:32.611926Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:32.611932Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Block executed and submitted [3mview[0m[2m=[0m17
+[2m2025-12-17T00:42:33.606005Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Adding transactions to pending queue [3mcount[0m[2m=[0m1 [3mtotal_pending[0m[2m=[0m1
+[2m2025-12-17T00:42:33.661768Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Executing block [3mcount[0m[2m=[0m1 [3mview[0m[2m=[0m18 [3melapsed_ms[0m[2m=[0m103
+[2m2025-12-17T00:42:33.662643Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::keyless[0m[2m:[0m committed db [3msize[0m[2m=[0m66
+[2m2025-12-17T00:42:33.662934Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::any::variable[0m[2m:[0m commit complete [3mlog_size[0m[2m=[0m112
+[2m2025-12-17T00:42:33.662956Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:33.662970Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:33.663009Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:33.663023Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:33.665432Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:33.665484Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:33.665696Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 130 bytes
+[2m2025-12-17T00:42:33.668239Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:33.668249Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:33.668359Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:33.668415Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:33.668429Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:33.668474Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 1262 bytes
+[2m2025-12-17T00:42:33.669842Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:33.669850Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:33.669874Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:33.669896Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Block executed and submitted [3mview[0m[2m=[0m18
+[2m2025-12-17T00:42:35.197266Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Adding transactions to pending queue [3mcount[0m[2m=[0m1 [3mtotal_pending[0m[2m=[0m1
+[2m2025-12-17T00:42:35.208345Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Executing block [3mcount[0m[2m=[0m1 [3mview[0m[2m=[0m19 [3melapsed_ms[0m[2m=[0m100
+[2m2025-12-17T00:42:35.208947Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::keyless[0m[2m:[0m committed db [3msize[0m[2m=[0m69
+[2m2025-12-17T00:42:35.209098Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::any::variable[0m[2m:[0m commit complete [3mlog_size[0m[2m=[0m119
+[2m2025-12-17T00:42:35.209115Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:35.209129Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:35.209158Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:35.209169Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:35.211162Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:35.211209Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:35.211324Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 130 bytes
+[2m2025-12-17T00:42:35.213265Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:35.213281Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:35.213303Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:35.213335Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:35.213345Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:35.213507Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 1307 bytes
+[2m2025-12-17T00:42:35.215123Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:35.215128Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:35.215157Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:35.215190Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Block executed and submitted [3mview[0m[2m=[0m19
+[2m2025-12-17T00:42:37.381937Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Adding transactions to pending queue [3mcount[0m[2m=[0m1 [3mtotal_pending[0m[2m=[0m1
+[2m2025-12-17T00:42:37.385420Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Adding transactions to pending queue [3mcount[0m[2m=[0m1 [3mtotal_pending[0m[2m=[0m2
+[2m2025-12-17T00:42:37.463293Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Executing block [3mcount[0m[2m=[0m2 [3mview[0m[2m=[0m20 [3melapsed_ms[0m[2m=[0m102
+[2m2025-12-17T00:42:37.464145Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::keyless[0m[2m:[0m committed db [3msize[0m[2m=[0m75
+[2m2025-12-17T00:42:37.464440Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::any::variable[0m[2m:[0m commit complete [3mlog_size[0m[2m=[0m126
+[2m2025-12-17T00:42:37.464462Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:37.464481Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:37.464863Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:37.464881Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:37.467740Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:37.467764Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:37.467836Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 130 bytes
+[2m2025-12-17T00:42:37.469556Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:37.469562Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:37.469660Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:37.469705Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:37.469735Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:37.469794Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 1685 bytes
+[2m2025-12-17T00:42:37.472188Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:37.472207Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:37.472333Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:37.472389Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Block executed and submitted [3mview[0m[2m=[0m20
+[2m2025-12-17T00:42:39.512569Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Adding transactions to pending queue [3mcount[0m[2m=[0m1 [3mtotal_pending[0m[2m=[0m1
+[2m2025-12-17T00:42:39.567493Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Executing block [3mcount[0m[2m=[0m1 [3mview[0m[2m=[0m21 [3melapsed_ms[0m[2m=[0m102
+[2m2025-12-17T00:42:39.568420Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::keyless[0m[2m:[0m committed db [3msize[0m[2m=[0m78
+[2m2025-12-17T00:42:39.569057Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::any::variable[0m[2m:[0m commit complete [3mlog_size[0m[2m=[0m135
+[2m2025-12-17T00:42:39.569090Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:39.569110Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:39.569241Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:39.569256Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:39.571111Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:39.571148Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:39.571336Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 130 bytes
+[2m2025-12-17T00:42:39.573253Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:39.573270Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:39.573300Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:39.573348Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:39.573364Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:39.573547Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 1813 bytes
+[2m2025-12-17T00:42:39.575098Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:39.575128Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:39.575159Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:39.575181Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Block executed and submitted [3mview[0m[2m=[0m21
+[2m2025-12-17T00:42:40.545327Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Adding transactions to pending queue [3mcount[0m[2m=[0m1 [3mtotal_pending[0m[2m=[0m1
+[2m2025-12-17T00:42:40.601055Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Executing block [3mcount[0m[2m=[0m1 [3mview[0m[2m=[0m22 [3melapsed_ms[0m[2m=[0m100
+[2m2025-12-17T00:42:40.602433Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::keyless[0m[2m:[0m committed db [3msize[0m[2m=[0m81
+[2m2025-12-17T00:42:40.602717Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::any::variable[0m[2m:[0m commit complete [3mlog_size[0m[2m=[0m138
+[2m2025-12-17T00:42:40.602735Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:40.602750Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:40.602794Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:40.602801Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:40.603785Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:40.603806Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:40.603883Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 130 bytes
+[2m2025-12-17T00:42:40.604787Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:40.604795Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:40.604825Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:40.604873Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:40.604892Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:40.604922Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 954 bytes
+[2m2025-12-17T00:42:40.606040Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:40.606058Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:40.606083Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:40.606095Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Block executed and submitted [3mview[0m[2m=[0m22
+[2m2025-12-17T00:42:41.589316Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Adding transactions to pending queue [3mcount[0m[2m=[0m1 [3mtotal_pending[0m[2m=[0m1
+[2m2025-12-17T00:42:41.678204Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Executing block [3mcount[0m[2m=[0m1 [3mview[0m[2m=[0m23 [3melapsed_ms[0m[2m=[0m108
+[2m2025-12-17T00:42:41.679163Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::keyless[0m[2m:[0m committed db [3msize[0m[2m=[0m84
+[2m2025-12-17T00:42:41.679802Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::any::variable[0m[2m:[0m commit complete [3mlog_size[0m[2m=[0m145
+[2m2025-12-17T00:42:41.679838Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:41.679877Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:41.679941Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:41.679959Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:41.683167Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:41.683190Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:41.683349Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 130 bytes
+[2m2025-12-17T00:42:41.685640Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:41.685664Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:41.685853Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:41.685907Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:41.685922Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:41.685956Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 1391 bytes
+[2m2025-12-17T00:42:41.687021Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:41.687039Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:41.687177Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:41.687208Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Block executed and submitted [3mview[0m[2m=[0m23
+[2m2025-12-17T00:42:43.631919Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Adding transactions to pending queue [3mcount[0m[2m=[0m1 [3mtotal_pending[0m[2m=[0m1
+[2m2025-12-17T00:42:43.709776Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Executing block [3mcount[0m[2m=[0m1 [3mview[0m[2m=[0m24 [3melapsed_ms[0m[2m=[0m103
+[2m2025-12-17T00:42:43.710644Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::keyless[0m[2m:[0m committed db [3msize[0m[2m=[0m88
+[2m2025-12-17T00:42:43.710752Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::any::variable[0m[2m:[0m commit complete [3mlog_size[0m[2m=[0m153
+[2m2025-12-17T00:42:43.710763Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:43.710772Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:43.710806Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:43.710812Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:43.711703Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:43.711725Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:43.711789Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 130 bytes
+[2m2025-12-17T00:42:43.713454Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:43.713472Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:43.713499Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:43.713537Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:43.713556Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:43.713612Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 1584 bytes
+[2m2025-12-17T00:42:43.715898Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:43.715918Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:43.715948Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:43.715974Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Block executed and submitted [3mview[0m[2m=[0m24
+[2m2025-12-17T00:42:45.740603Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Adding transactions to pending queue [3mcount[0m[2m=[0m1 [3mtotal_pending[0m[2m=[0m1
+[2m2025-12-17T00:42:45.785190Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Executing block [3mcount[0m[2m=[0m1 [3mview[0m[2m=[0m25 [3melapsed_ms[0m[2m=[0m107
+[2m2025-12-17T00:42:45.785693Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::keyless[0m[2m:[0m committed db [3msize[0m[2m=[0m91
+[2m2025-12-17T00:42:45.785953Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::any::variable[0m[2m:[0m commit complete [3mlog_size[0m[2m=[0m161
+[2m2025-12-17T00:42:45.785973Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:45.785985Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:45.786022Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:45.786031Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:45.787588Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:45.787609Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:45.787757Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 130 bytes
+[2m2025-12-17T00:42:45.789805Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:45.789817Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:45.789837Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:45.789860Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:45.789868Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:45.790096Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 1611 bytes
+[2m2025-12-17T00:42:45.791348Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:45.791356Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:45.791376Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:45.791392Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Block executed and submitted [3mview[0m[2m=[0m25
+[2m2025-12-17T00:42:46.771162Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Adding transactions to pending queue [3mcount[0m[2m=[0m1 [3mtotal_pending[0m[2m=[0m1
+[2m2025-12-17T00:42:46.848090Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Executing block [3mcount[0m[2m=[0m1 [3mview[0m[2m=[0m26 [3melapsed_ms[0m[2m=[0m101
+[2m2025-12-17T00:42:46.849069Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::keyless[0m[2m:[0m committed db [3msize[0m[2m=[0m94
+[2m2025-12-17T00:42:46.849367Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::any::variable[0m[2m:[0m commit complete [3mlog_size[0m[2m=[0m164
+[2m2025-12-17T00:42:46.849394Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:46.849439Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:46.849478Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:46.849489Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:46.851357Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:46.851389Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:46.851510Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 130 bytes
+[2m2025-12-17T00:42:46.852708Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:46.852725Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:46.852751Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:46.852779Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:46.852788Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:46.852836Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 971 bytes
+[2m2025-12-17T00:42:46.853777Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:46.853781Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:46.853794Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:46.853802Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Block executed and submitted [3mview[0m[2m=[0m26
+[2m2025-12-17T00:42:47.802802Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Adding transactions to pending queue [3mcount[0m[2m=[0m1 [3mtotal_pending[0m[2m=[0m1
+[2m2025-12-17T00:42:47.892035Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Executing block [3mcount[0m[2m=[0m1 [3mview[0m[2m=[0m27 [3melapsed_ms[0m[2m=[0m102
+[2m2025-12-17T00:42:47.892999Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::keyless[0m[2m:[0m committed db [3msize[0m[2m=[0m97
+[2m2025-12-17T00:42:47.893188Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::any::variable[0m[2m:[0m commit complete [3mlog_size[0m[2m=[0m169
+[2m2025-12-17T00:42:47.893235Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:47.893252Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:47.893279Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:47.893294Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:47.896091Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:47.896141Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:47.896267Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 130 bytes
+[2m2025-12-17T00:42:47.898389Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:47.898402Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:47.898431Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:47.898475Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:47.898487Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:47.898533Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 1204 bytes
+[2m2025-12-17T00:42:47.900384Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:47.900402Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:47.900429Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:47.900449Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Block executed and submitted [3mview[0m[2m=[0m27
+[2m2025-12-17T00:42:48.888011Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Adding transactions to pending queue [3mcount[0m[2m=[0m1 [3mtotal_pending[0m[2m=[0m1
+[2m2025-12-17T00:42:48.921387Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Executing block [3mcount[0m[2m=[0m1 [3mview[0m[2m=[0m28 [3melapsed_ms[0m[2m=[0m103
+[2m2025-12-17T00:42:48.921952Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::keyless[0m[2m:[0m committed db [3msize[0m[2m=[0m100
+[2m2025-12-17T00:42:48.922089Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::any::variable[0m[2m:[0m commit complete [3mlog_size[0m[2m=[0m176
+[2m2025-12-17T00:42:48.922103Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:48.922117Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:48.922142Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:48.922150Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:48.924255Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:48.924286Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:48.924380Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 130 bytes
+[2m2025-12-17T00:42:48.926449Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:48.926469Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:48.926501Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:48.926544Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:48.926564Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:48.926617Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 1434 bytes
+[2m2025-12-17T00:42:48.928241Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:48.928260Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:48.928291Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:48.928319Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Block executed and submitted [3mview[0m[2m=[0m28
+[2m2025-12-17T00:42:49.922316Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Adding transactions to pending queue [3mcount[0m[2m=[0m1 [3mtotal_pending[0m[2m=[0m1
+[2m2025-12-17T00:42:49.977681Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Executing block [3mcount[0m[2m=[0m1 [3mview[0m[2m=[0m29 [3melapsed_ms[0m[2m=[0m102
+[2m2025-12-17T00:42:49.978708Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::keyless[0m[2m:[0m committed db [3msize[0m[2m=[0m104
+[2m2025-12-17T00:42:49.979118Z[0m [34mDEBUG[0m [2mcommonware_storage::adb::any::variable[0m[2m:[0m commit complete [3mlog_size[0m[2m=[0m182
+[2m2025-12-17T00:42:49.979140Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:49.979157Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:49.979305Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:49.979324Z[0m [34mDEBUG[0m [2mcommonware_storage::journal::fixed[0m[2m:[0m syncing blob [3mblob[0m[2m=[0m0
+[2m2025-12-17T00:42:49.983148Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:49.983192Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:49.983394Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 130 bytes
+[2m2025-12-17T00:42:49.985355Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:49.985388Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:49.985506Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:49.985558Z[0m [34mDEBUG[0m [2mnullspace_client::client[0m[2m:[0m Submitting to http://127.0.0.0:8080/submit
+[2m2025-12-17T00:42:49.985578Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m reuse idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:49.985725Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m flushed 1240 bytes
+[2m2025-12-17T00:42:49.989132Z[0m [34mDEBUG[0m [2mhyper::proto::h1::io[0m[2m:[0m parsed 4 headers
+[2m2025-12-17T00:42:49.989151Z[0m [34mDEBUG[0m [2mhyper::proto::h1::conn[0m[2m:[0m incoming body is empty
+[2m2025-12-17T00:42:49.989277Z[0m [34mDEBUG[0m [2mhyper::client::pool[0m[2m:[0m pooling idle connection for ("http", 127.0.0.0:8080)
+[2m2025-12-17T00:42:49.989298Z[0m [32m INFO[0m [2mdev_executor[0m[2m:[0m Block executed and submitted [3mview[0m[2m=[0m29

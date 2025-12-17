@@ -909,6 +909,7 @@ export const resolveCrapsBets = (
             if (bet.status === 'PENDING' || bet.target === undefined) {
                 if (total === 2 || total === 3) { winAmount = bet.amount; resolved = true; }
                 else if (total === 7 || total === 11) { loseAmount = bet.amount; resolved = true; }
+                else if (total === 12) { resolved = true; } // Push
             } else {
                 if (total === 7) {
                     winAmount = bet.amount;

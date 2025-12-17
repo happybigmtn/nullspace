@@ -3836,6 +3836,21 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
           setGameState(prev => ({ ...prev, message: 'EN PRISON - NO NEW BETS' }));
           return;
       }
+
+      const existing = gameState.rouletteBets.some(b => b.type === type && b.target === target);
+      if (existing) {
+          const newBets = gameState.rouletteBets.filter(b => !(b.type === type && b.target === target));
+          const removedAmount = gameState.rouletteBets.reduce((sum, b) => (b.type === type && b.target === target) ? sum + b.amount : sum, 0);
+          setGameState(prev => ({ 
+              ...prev, 
+              rouletteBets: newBets,
+              message: `REMOVED ${type}`,
+              rouletteInputMode: 'NONE',
+              sessionWager: Math.max(0, prev.sessionWager - removedAmount)
+          }));
+          return;
+      }
+
       if (stats.chips < gameState.bet) return;
       setGameState(prev => ({ 
           ...prev, 
@@ -4137,6 +4152,20 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
 	  };
 
   const placeSicBoBet = (type: SicBoBet['type'], target?: number) => {
+      const existing = gameState.sicBoBets.some(b => b.type === type && b.target === target);
+      if (existing) {
+          const newBets = gameState.sicBoBets.filter(b => !(b.type === type && b.target === target));
+          const removedAmount = gameState.sicBoBets.reduce((sum, b) => (b.type === type && b.target === target) ? sum + b.amount : sum, 0);
+          setGameState(prev => ({
+              ...prev,
+              sicBoBets: newBets,
+              sessionWager: Math.max(0, prev.sessionWager - removedAmount),
+              message: `REMOVED ${type}`,
+              sicBoInputMode: 'NONE'
+          }));
+          return;
+      }
+
       if (stats.chips < gameState.bet) return;
       setGameState(prev => ({ 
           ...prev, 
@@ -4314,6 +4343,23 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
     gameState.crapsBets.reduce((sum, b) => sum + crapsBetCost(b), 0);
 
   const placeCrapsBet = (type: CrapsBet['type'], target?: number) => {
+      // Toggle logic: If identical local bet exists, remove it.
+      const existingIdx = gameState.crapsBets.findIndex(b => b.type === type && b.target === target && b.local);
+      if (existingIdx !== -1) {
+          const betToRemove = gameState.crapsBets[existingIdx];
+          const refund = crapsBetCost(betToRemove);
+          const newBets = [...gameState.crapsBets];
+          newBets.splice(existingIdx, 1);
+          setGameState(prev => ({
+              ...prev,
+              crapsBets: newBets,
+              sessionWager: Math.max(0, prev.sessionWager - refund),
+              message: `REMOVED ${type}`,
+              crapsInputMode: 'NONE'
+          }));
+          return;
+      }
+
       const committed = totalCommittedCraps();
       const betAmount = gameState.bet;
       const placementCost = type === 'BUY' ? betAmount + crapsBuyCommission(betAmount) : betAmount;
