@@ -156,7 +156,7 @@ export const CrapsView = React.memo<{ gameState: GameState; actions: any; lastWi
                                 }`}>
                                     {bet.target}
                                 </div>
-                                <span className="text-[9px] text-gray-500">${bet.amount}{bet.oddsAmount ? `+${bet.oddsAmount}` : ''}</span>
+                                <span className="text-[9px] text-gray-500">${bet.amount + (bet.oddsAmount || 0)}</span>
                             </div>
                         ))}
                     </div>
@@ -217,7 +217,7 @@ export const CrapsView = React.memo<{ gameState: GameState; actions: any; lastWi
                                 {gameState.crapsBets.map((b, i) => (
                                     <div key={i} className="flex-none flex flex-col items-center border border-gray-800 bg-black/50 p-1 rounded min-w-[60px]">
                                         <span className="text-[9px] text-terminal-green font-bold">{b.type}</span>
-                                        <span className="text-[9px] text-white">${b.amount}</span>
+                                        <span className="text-[9px] text-white">${b.amount + (b.oddsAmount || 0)}</span>
                                         {b.target !== undefined && <span className="text-[8px] text-gray-500">{b.target}</span>}
                                     </div>
                                 ))}
@@ -310,8 +310,7 @@ export const CrapsView = React.memo<{ gameState: GameState; actions: any; lastWi
                                     <span className="text-[9px] text-gray-500">{b.status === 'PENDING' ? 'WAIT' : 'ON'}</span>
                                 </div>
                                 <div className="text-right">
-                                    <div className="text-white text-[10px]">${b.amount}</div>
-                                    {b.oddsAmount && <div className="text-[9px] text-terminal-gold">+${b.oddsAmount}</div>}
+                                    <div className="text-white text-[10px]">${b.amount + (b.oddsAmount || 0)}</div>
                                 </div>
                             </div>
                         ))
