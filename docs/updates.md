@@ -2,7 +2,9 @@
 
 ## Pattern Recognition Report (2025-12-17)
 
-Comprehensive pattern analysis of the on-chain casino platform. See full report below.
+Comprehensive pattern analysis of the on-chain casino platform completed.
+
+Full report: [pattern_analysis_2025-12-17.md](./pattern_analysis_2025-12-17.md)
 
 ---
 

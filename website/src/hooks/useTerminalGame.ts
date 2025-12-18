@@ -3338,7 +3338,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
         }
       }
 
-      // Three Card Poker: staged Deal/Reveal protocol
+      // Three Card Poker: staged Deal/Reveal protocol with atomic batch
       if (gameState.type === GameType.THREE_CARD) {
         if (isPendingRef.current) {
           console.log('[useTerminalGame] Three Card deal/reveal blocked - transaction pending');
@@ -3349,7 +3349,26 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
           isPendingRef.current = true;
           try {
             setGameState(prev => ({ ...prev, message: 'DEALING...' }));
-            const result = await chainService.sendMove(sessionId, new Uint8Array([2])); // Move 2: Deal
+
+            // Use atomic batch action 7: [7, pairplus:u64 BE, sixcard:u64 BE, progressive:u64 BE]
+            const pairPlusBet = gameState.threeCardPairPlusBet || 0;
+            const sixCardBet = gameState.threeCardSixCardBonusBet || 0;
+            const progressiveBet = gameState.threeCardProgressiveBet || 0;
+
+            const payload = new Uint8Array(25);
+            payload[0] = 7; // Action 7: Atomic batch deal
+            new DataView(payload.buffer).setBigUint64(1, BigInt(pairPlusBet), false);
+            new DataView(payload.buffer).setBigUint64(9, BigInt(sixCardBet), false);
+            new DataView(payload.buffer).setBigUint64(17, BigInt(progressiveBet), false);
+
+            // Update sessionWager to track all side bets being placed
+            const totalSideBets = pairPlusBet + sixCardBet + progressiveBet;
+            setGameState(prev => ({
+              ...prev,
+              sessionWager: prev.sessionWager + totalSideBets
+            }));
+
+            const result = await chainService.sendMove(sessionId, payload);
             if (result.txHash) setLastTxSig(result.txHash);
             return;
           } catch (error) {
@@ -3387,7 +3406,28 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
           isPendingRef.current = true;
           try {
             setGameState(prev => ({ ...prev, message: 'DEALING...' }));
-            const result = await chainService.sendMove(sessionId, new Uint8Array([5])); // Action 5: Deal
+
+            // Use atomic batch deal (action 11) with all side bets
+            const tripsBet = gameState.uthTripsBet || 0;
+            const sixCardBonusBet = gameState.uthSixCardBonusBet || 0;
+            const progressiveBet = gameState.uthProgressiveBet || 0;
+
+            const payload = new Uint8Array(25);
+            payload[0] = 11; // Action 11: Atomic batch deal
+            const view = new DataView(payload.buffer);
+            view.setBigUint64(1, BigInt(tripsBet), false); // big-endian
+            view.setBigUint64(9, BigInt(sixCardBonusBet), false);
+            view.setBigUint64(17, BigInt(progressiveBet), false);
+
+            // Update sessionWager to include all side bets
+            const totalSideBets = tripsBet + sixCardBonusBet + progressiveBet;
+            setGameState(prev => ({
+              ...prev,
+              sessionWager: totalSideBets,
+            }));
+
+            console.log('[useTerminalGame] Ultimate Holdem atomic batch deal:', { tripsBet, sixCardBonusBet, progressiveBet });
+            const result = await chainService.sendMove(sessionId, payload);
             if (result.txHash) setLastTxSig(result.txHash);
             return;
           } catch (error) {
@@ -4288,10 +4328,16 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
 
       const prevAmount = gameState.uthTripsBet || 0;
       const nextAmount = prevAmount > 0 ? 0 : gameState.bet;
-      const delta = nextAmount - prevAmount;
 
-      // Local mode: track UI state only.
-      if (!isOnChain || !chainService || !currentSessionIdRef.current) {
+      // On-chain mode: only update local state (side bets are sent atomically with Deal)
+      if (isOnChain && chainService && currentSessionIdRef.current) {
+          // Only allow toggling before Deal
+          if (gameState.stage !== 'BETTING') {
+              setGameState(prev => ({ ...prev, message: 'TRIPS CLOSED' }));
+              return;
+          }
+
+          // Update local state only - no transaction
           setGameState(prev => ({
               ...prev,
               uthTripsBet: nextAmount,
@@ -4300,44 +4346,12 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
           return;
       }
 
-      // On-chain: only allow before Deal.
-      if (gameState.stage !== 'BETTING') {
-          setGameState(prev => ({ ...prev, message: 'TRIPS CLOSED' }));
-          return;
-      }
-
-      if (isPendingRef.current) return;
-      if (nextAmount > 0 && stats.chips < nextAmount) {
-          setGameState(prev => ({ ...prev, message: 'INSUFFICIENT FUNDS' }));
-          return;
-      }
-
-      isPendingRef.current = true;
+      // Local mode: track UI state only
       setGameState(prev => ({
           ...prev,
           uthTripsBet: nextAmount,
-          sessionWager: prev.sessionWager + delta,
           message: nextAmount > 0 ? `TRIPS +$${nextAmount}` : 'TRIPS OFF',
       }));
-
-      try {
-          const payload = new Uint8Array(9);
-          payload[0] = 6; // Action 6: Set Trips
-          new DataView(payload.buffer).setBigUint64(1, BigInt(nextAmount), false);
-
-          const result = await chainService.sendMove(currentSessionIdRef.current, payload);
-          if (result.txHash) setLastTxSig(result.txHash);
-          // NOTE: Do NOT clear isPendingRef here - wait for CasinoGameMoved event
-      } catch (error) {
-          console.error('[useTerminalGame] Trips update failed:', error);
-          isPendingRef.current = false;
-          setGameState(prev => ({
-              ...prev,
-              uthTripsBet: prevAmount,
-              sessionWager: prev.sessionWager - delta,
-              message: 'TRIPS FAILED',
-          }));
-      }
   };
 
   const uthToggleSixCardBonus = async () => {
@@ -4345,10 +4359,16 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
 
       const prevAmount = gameState.uthSixCardBonusBet || 0;
       const nextAmount = prevAmount > 0 ? 0 : gameState.bet;
-      const delta = nextAmount - prevAmount;
 
-      // Local mode: track UI state only.
-      if (!isOnChain || !chainService || !currentSessionIdRef.current) {
+      // On-chain mode: only update local state (side bets are sent atomically with Deal)
+      if (isOnChain && chainService && currentSessionIdRef.current) {
+          // Only allow toggling before Deal
+          if (gameState.stage !== 'BETTING') {
+              setGameState(prev => ({ ...prev, message: '6-CARD CLOSED' }));
+              return;
+          }
+
+          // Update local state only - no transaction
           setGameState(prev => ({
               ...prev,
               uthSixCardBonusBet: nextAmount,
@@ -4357,44 +4377,12 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
           return;
       }
 
-      // On-chain: only allow before Deal.
-      if (gameState.stage !== 'BETTING') {
-          setGameState(prev => ({ ...prev, message: '6-CARD CLOSED' }));
-          return;
-      }
-
-      if (isPendingRef.current) return;
-      if (nextAmount > 0 && stats.chips < nextAmount) {
-          setGameState(prev => ({ ...prev, message: 'INSUFFICIENT FUNDS' }));
-          return;
-      }
-
-      isPendingRef.current = true;
+      // Local mode: track UI state only
       setGameState(prev => ({
           ...prev,
           uthSixCardBonusBet: nextAmount,
-          sessionWager: prev.sessionWager + delta,
           message: nextAmount > 0 ? `6-CARD +$${nextAmount}` : '6-CARD OFF',
       }));
-
-      try {
-          const payload = new Uint8Array(9);
-          payload[0] = 9; // Action 9: Set 6-Card Bonus
-          new DataView(payload.buffer).setBigUint64(1, BigInt(nextAmount), false);
-
-          const result = await chainService.sendMove(currentSessionIdRef.current, payload);
-          if (result.txHash) setLastTxSig(result.txHash);
-          // NOTE: Do NOT clear isPendingRef here - wait for CasinoGameMoved event
-      } catch (error) {
-          console.error('[useTerminalGame] 6-card bonus update failed:', error);
-          isPendingRef.current = false;
-          setGameState(prev => ({
-              ...prev,
-              uthSixCardBonusBet: prevAmount,
-              sessionWager: prev.sessionWager - delta,
-              message: '6-CARD FAILED',
-          }));
-      }
   };
 
   const uthToggleProgressive = async () => {
@@ -4402,10 +4390,16 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
 
       const prevAmount = gameState.uthProgressiveBet || 0;
       const nextAmount = prevAmount > 0 ? 0 : 1;
-      const delta = nextAmount - prevAmount;
 
-      // Local mode: track UI state only.
-      if (!isOnChain || !chainService || !currentSessionIdRef.current) {
+      // On-chain mode: only update local state (side bets are sent atomically with Deal)
+      if (isOnChain && chainService && currentSessionIdRef.current) {
+          // Only allow toggling before Deal
+          if (gameState.stage !== 'BETTING') {
+              setGameState(prev => ({ ...prev, message: 'PROG CLOSED' }));
+              return;
+          }
+
+          // Update local state only - no transaction
           setGameState(prev => ({
               ...prev,
               uthProgressiveBet: nextAmount,
@@ -4414,44 +4408,12 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
           return;
       }
 
-      // On-chain: only allow before Deal.
-      if (gameState.stage !== 'BETTING') {
-          setGameState(prev => ({ ...prev, message: 'PROG CLOSED' }));
-          return;
-      }
-
-      if (isPendingRef.current) return;
-      if (nextAmount > 0 && stats.chips < nextAmount) {
-          setGameState(prev => ({ ...prev, message: 'INSUFFICIENT FUNDS' }));
-          return;
-      }
-
-      isPendingRef.current = true;
+      // Local mode: track UI state only
       setGameState(prev => ({
           ...prev,
           uthProgressiveBet: nextAmount,
-          sessionWager: prev.sessionWager + delta,
           message: nextAmount > 0 ? `PROG +$${nextAmount}` : 'PROG OFF',
       }));
-
-      try {
-          const payload = new Uint8Array(9);
-          payload[0] = 10; // Action 10: Set Progressive
-          new DataView(payload.buffer).setBigUint64(1, BigInt(nextAmount), false);
-
-          const result = await chainService.sendMove(currentSessionIdRef.current, payload);
-          if (result.txHash) setLastTxSig(result.txHash);
-          // NOTE: Do NOT clear isPendingRef here - wait for CasinoGameMoved event
-      } catch (error) {
-          console.error('[useTerminalGame] Progressive update failed:', error);
-          isPendingRef.current = false;
-          setGameState(prev => ({
-              ...prev,
-              uthProgressiveBet: prevAmount,
-              sessionWager: prev.sessionWager - delta,
-              message: 'PROG FAILED',
-          }));
-      }
   };
 
   const uhCheck = async () => {
