@@ -1,0 +1,34 @@
+# Build artifacts
+target/
+**/*.rs.bk
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Documentation
+docs/
+*.md
+
+# Website build artifacts (build in separate container if needed)
+website/node_modules/
+website/dist/
+website/.next/
+
+# Test data
+*.test
+**/*_test.rs
+
+# CI/CD
+.github/
+
+# Misc
+.env*
+*.log
+.DS_Store

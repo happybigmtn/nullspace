@@ -58,6 +58,26 @@ jobs:
     - name: Check for unused dependencies
       run: cargo +${{ env.NIGHTLY_VERSION }} udeps --all-targets
 
+  Security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    - name: Run setup
+      uses: ./.github/actions/setup
+    - name: Cache cargo-audit
+      id: cargo-audit-cache
+      uses: actions/cache@v4
+      with:
+        path: ~/.cargo/bin/cargo-audit
+        key: ${{ runner.os }}-cargo-audit-0.21
+    - name: Install cargo-audit
+      if: steps.cargo-audit-cache.outputs.cache-hit != 'true'
+      run: cargo install cargo-audit --version 0.21.0
+    - name: Run security audit
+      run: cargo audit
+
   React:
     runs-on: ubuntu-latest
     steps:

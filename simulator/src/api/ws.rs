@@ -1,5 +1,6 @@
 use axum::{
     extract::{ws::WebSocketUpgrade, State as AxumState},
+    http::{header::ORIGIN, HeaderMap, StatusCode},
     response::IntoResponse,
 };
 use commonware_codec::{DecodeExt, Encode};
@@ -17,19 +18,79 @@ use tokio::sync::broadcast;
 
 use crate::{InternalUpdate, Simulator};
 
+/// Validates the WebSocket Origin header against allowed origins.
+/// Returns true if the origin is allowed, false otherwise.
+///
+/// If ALLOWED_WS_ORIGINS env var is not set, all origins are allowed (dev mode).
+/// If set, it should be a comma-separated list of allowed origins.
+fn validate_origin(headers: &HeaderMap) -> bool {
+    let allowed_origins = std::env::var("ALLOWED_WS_ORIGINS").ok();
+
+    // If no allowed origins configured, allow all (dev mode)
+    let Some(allowed) = allowed_origins else {
+        return true;
+    };
+
+    // If allowed origins is empty string, allow all
+    if allowed.is_empty() {
+        return true;
+    }
+
+    // Get origin from headers
+    let origin = match headers.get(ORIGIN) {
+        Some(o) => match o.to_str() {
+            Ok(s) => s,
+            Err(_) => {
+                tracing::warn!("Invalid Origin header encoding");
+                return false;
+            }
+        },
+        None => {
+            // No origin header - could be same-origin or non-browser client
+            // In production, you might want to reject these
+            tracing::debug!("No Origin header in WebSocket request");
+            return true;
+        }
+    };
+
+    // Check if origin is in allowed list
+    let allowed_list: Vec<&str> = allowed.split(',').map(|s| s.trim()).collect();
+    if allowed_list.contains(&origin) {
+        tracing::debug!("WebSocket origin validated: {}", origin);
+        return true;
+    }
+
+    tracing::warn!("WebSocket origin rejected: {} (allowed: {})", origin, allowed);
+    false
+}
+
 pub(super) async fn updates_ws(
     AxumState(simulator): AxumState<Arc<Simulator>>,
     axum::extract::Path(filter): axum::extract::Path<String>,
+    headers: HeaderMap,
     ws: WebSocketUpgrade,
 ) -> impl IntoResponse {
+    // Validate origin
+    if !validate_origin(&headers) {
+        return (StatusCode::FORBIDDEN, "Origin not allowed").into_response();
+    }
+
     ws.on_upgrade(move |socket| handle_updates_ws(socket, simulator, filter))
+        .into_response()
 }
 
 pub(super) async fn mempool_ws(
     AxumState(simulator): AxumState<Arc<Simulator>>,
+    headers: HeaderMap,
     ws: WebSocketUpgrade,
 ) -> impl IntoResponse {
+    // Validate origin
+    if !validate_origin(&headers) {
+        return (StatusCode::FORBIDDEN, "Origin not allowed").into_response();
+    }
+
     ws.on_upgrade(move |socket| handle_mempool_ws(socket, simulator))
+        .into_response()
 }
 
 async fn handle_updates_ws(
