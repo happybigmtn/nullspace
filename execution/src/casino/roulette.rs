@@ -1,7 +1,6 @@
 //! Roulette game implementation with multi-bet support.
 //!
 //! State blob format:
-//! v2:
 //! [bet_count:u8]
 //! [zero_rule:u8]                 (0=Standard, 1=La Partage, 2=En Prison, 3=En Prison (Double))
 //! [phase:u8]                     (0=Betting, 1=Prison)
@@ -9,9 +8,6 @@
 //! [pendingReturn:u64 BE]         (credited return accumulated before completion; used by En Prison)
 //! [bets:RouletteBet×count]
 //! [result:u8]?                   (last spin result, if any)
-//!
-//! Legacy:
-//! [bet_count:u8] [bets:RouletteBet×count] [result:u8]?
 //!
 //! Each RouletteBet (10 bytes):
 //! [bet_type:u8] [number:u8] [amount:u64 BE]
@@ -48,7 +44,7 @@ use nullspace_types::casino::GameSession;
 /// Maximum number of bets per session.
 const MAX_BETS: usize = 20;
 
-/// v2 header length: bet_count(1) + zero_rule(1) + phase(1) + totalWagered(8) + pendingReturn(8).
+/// State header length: bet_count(1) + zero_rule(1) + phase(1) + totalWagered(8) + pendingReturn(8).
 const STATE_HEADER_V2_LEN: usize = 19;
 
 /// Red numbers on a roulette wheel.
@@ -292,10 +288,18 @@ impl RouletteState {
         blob
     }
 
-    /// Deserialize state from blob
+    /// Deserialize state from blob.
+    ///
+    /// Format: STATE_HEADER_V2_LEN(19) bytes header + bets + optional result.
+    /// Header: [bet_count:u8][zero_rule:u8][phase:u8][totalWagered:u64 BE][pendingReturn:u64 BE]
     fn from_blob(blob: &[u8]) -> Option<Self> {
         if blob.is_empty() {
             return Some(RouletteState::new());
+        }
+
+        // Validate minimum header length
+        if blob.len() < STATE_HEADER_V2_LEN {
+            return None;
         }
 
         let bet_count = blob[0] as usize;
@@ -303,67 +307,39 @@ impl RouletteState {
             return None;
         }
 
-        let legacy_no_result_len = 1 + (bet_count * 10);
-        let legacy_with_result_len = legacy_no_result_len + 1;
+        // Parse header
+        let zero_rule = ZeroRule::try_from(blob[1]).ok()?;
+        let phase = Phase::try_from(blob[2]).ok()?;
+        let total_wagered = u64::from_be_bytes(blob[3..11].try_into().ok()?);
+        let pending_return = u64::from_be_bytes(blob[11..19].try_into().ok()?);
 
-        let v2_no_result_len = STATE_HEADER_V2_LEN + (bet_count * 10);
-        let v2_with_result_len = v2_no_result_len + 1;
-
-        if blob.len() == legacy_no_result_len || blob.len() == legacy_with_result_len {
-            let mut offset = 1;
-            let mut bets = Vec::with_capacity(bet_count);
-            let mut total_wagered: u64 = 0;
-            for _ in 0..bet_count {
-                let bet = RouletteBet::from_bytes(&blob[offset..offset + 10])?;
-                total_wagered = total_wagered.saturating_add(bet.amount);
-                bets.push(bet);
-                offset += 10;
+        // Parse bets
+        let mut offset = STATE_HEADER_V2_LEN;
+        let mut bets = Vec::with_capacity(bet_count);
+        for _ in 0..bet_count {
+            if offset + 10 > blob.len() {
+                return None;
             }
-            let result = if blob.len() == legacy_with_result_len {
-                Some(blob[offset])
-            } else {
-                None
-            };
-            return Some(RouletteState {
-                zero_rule: ZeroRule::Standard,
-                phase: Phase::Betting,
-                total_wagered,
-                pending_return: 0,
-                bets,
-                result,
-            });
+            let bet = RouletteBet::from_bytes(&blob[offset..offset + 10])?;
+            bets.push(bet);
+            offset += 10;
         }
 
-        if blob.len() == v2_no_result_len || blob.len() == v2_with_result_len {
-            let zero_rule = ZeroRule::try_from(blob[1]).ok()?;
-            let phase = Phase::try_from(blob[2]).ok()?;
-            let total_wagered = u64::from_be_bytes(blob[3..11].try_into().ok()?);
-            let pending_return = u64::from_be_bytes(blob[11..19].try_into().ok()?);
+        // Parse optional result
+        let result = if offset < blob.len() {
+            Some(blob[offset])
+        } else {
+            None
+        };
 
-            let mut offset = STATE_HEADER_V2_LEN;
-            let mut bets = Vec::with_capacity(bet_count);
-            for _ in 0..bet_count {
-                let bet = RouletteBet::from_bytes(&blob[offset..offset + 10])?;
-                bets.push(bet);
-                offset += 10;
-            }
-            let result = if blob.len() == v2_with_result_len {
-                Some(blob[offset])
-            } else {
-                None
-            };
-
-            return Some(RouletteState {
-                zero_rule,
-                phase,
-                total_wagered,
-                pending_return,
-                bets,
-                result,
-            });
-        }
-
-        None
+        Some(RouletteState {
+            zero_rule,
+            phase,
+            total_wagered,
+            pending_return,
+            bets,
+            result,
+        })
     }
 }
 

@@ -32,7 +32,6 @@ use super::super_mode::apply_super_multiplier_total;
 use super::{CasinoGame, GameError, GameResult, GameRng};
 use nullspace_types::casino::GameSession;
 
-const STATE_VERSION_V1: u8 = 1;
 const STATE_VERSION: u8 = 2;
 const MAX_BETS: usize = 20;
 const BUY_COMMISSION_BPS: u64 = 500; // 5.00%
@@ -292,69 +291,23 @@ impl CrapsState {
 
     /// Deserialize state from blob
     fn from_blob(blob: &[u8]) -> Option<Self> {
-        if blob.len() < 7 {
+        if blob.len() < 8 {
             return None;
         }
 
         let version = blob[0];
-
-        let (
-            phase,
-            main_point,
-            d1,
-            d2,
-            made_points_mask,
-            epoch_point_established,
-            bet_count,
-            header_len,
-        ) = if version == STATE_VERSION {
-            if blob.len() < 8 {
-                return None;
-            }
-            let phase = Phase::try_from(blob[1]).ok()?;
-            let main_point = blob[2];
-            let d1 = blob[3];
-            let d2 = blob[4];
-            let made_points_mask = blob[5];
-            let epoch_point_established = blob[6] != 0;
-            let bet_count = blob[7] as usize;
-            (
-                phase,
-                main_point,
-                d1,
-                d2,
-                made_points_mask,
-                epoch_point_established,
-                bet_count,
-                8usize,
-            )
-        } else if version == STATE_VERSION_V1 {
-            // v1 header (7 bytes): [v=1][phase][main_point][d1][d2][made_points_mask][bet_count]
-            let phase = Phase::try_from(blob[1]).ok()?;
-            let main_point = blob[2];
-            let d1 = blob[3];
-            let d2 = blob[4];
-            let made_points_mask = blob[5];
-            let bet_count = blob[6] as usize;
-
-            // Best-effort derivation for legacy states: if we're currently in Point phase
-            // or have ever made a point, treat the epoch as having established a point.
-            let epoch_point_established =
-                phase == Phase::Point || main_point != 0 || made_points_mask != 0;
-
-            (
-                phase,
-                main_point,
-                d1,
-                d2,
-                made_points_mask,
-                epoch_point_established,
-                bet_count,
-                7usize,
-            )
-        } else {
+        if version != STATE_VERSION {
             return None;
-        };
+        }
+
+        let phase = Phase::try_from(blob[1]).ok()?;
+        let main_point = blob[2];
+        let d1 = blob[3];
+        let d2 = blob[4];
+        let made_points_mask = blob[5];
+        let epoch_point_established = blob[6] != 0;
+        let bet_count = blob[7] as usize;
+        let header_len = 8usize;
 
         // Validate bet count against maximum to prevent DoS via large allocations
         if bet_count > MAX_BETS {

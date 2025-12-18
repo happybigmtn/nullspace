@@ -9,8 +9,7 @@
 //! - Dealer qualification: Q-6-4 or better (per WoO)
 //! - Ante bonus (pay table #1: SF 5, Trips 4, Straight 1), paid when player plays
 //!
-//! State blob format:
-//! v3 (32 bytes):
+//! State blob format (32 bytes):
 //! [version:u8=3]
 //! [stage:u8]
 //! [playerCard1:u8] [playerCard2:u8] [playerCard3:u8]   (0xFF if not dealt yet)
@@ -18,21 +17,6 @@
 //! [pairplusBetAmount:u64 BE]
 //! [sixCardBonusBetAmount:u64 BE]
 //! [progressiveBetAmount:u64 BE]
-//!
-//! v2 (24 bytes):
-//! [version:u8=2]
-//! [stage:u8]
-//! [playerCard1:u8] [playerCard2:u8] [playerCard3:u8]   (0xFF if not dealt yet)
-//! [dealerCard1:u8] [dealerCard2:u8] [dealerCard3:u8]   (0xFF if unrevealed)
-//! [pairplusBetAmount:u64 BE]
-//! [sixCardBonusBetAmount:u64 BE]
-//!
-//! v1 (legacy, 16 bytes):
-//! [version:u8=1]
-//! [stage:u8]
-//! [playerCard1:u8] [playerCard2:u8] [playerCard3:u8]
-//! [dealerCard1:u8] [dealerCard2:u8] [dealerCard3:u8]
-//! [pairplusBetAmount:u64 BE]
 //!
 //! Stages:
 //! 0 = Betting (optional Pairplus, then Deal)
@@ -54,13 +38,9 @@ use super::super_mode::apply_super_multiplier_cards;
 use super::{cards, CasinoGame, GameError, GameResult, GameRng};
 use nullspace_types::casino::{GameSession, THREE_CARD_PROGRESSIVE_BASE_JACKPOT};
 
-const STATE_VERSION_V1: u8 = 1;
-const STATE_VERSION_V2: u8 = 2;
-const STATE_VERSION_V3: u8 = 3;
+const STATE_VERSION: u8 = 3;
 const CARD_UNKNOWN: u8 = 0xFF;
-const STATE_LEN_V1: usize = 16;
-const STATE_LEN_V2: usize = 24;
-const STATE_LEN_V3: usize = 32;
+const STATE_LEN: usize = 32;
 
 const PROGRESSIVE_BET_UNIT: u64 = 1;
 
@@ -215,60 +195,30 @@ struct TcState {
 }
 
 fn parse_state(state: &[u8]) -> Option<TcState> {
-    if state.len() == STATE_LEN_V1 && state[0] == STATE_VERSION_V1 {
-        let stage = Stage::try_from(state[1]).ok()?;
-        let player = [state[2], state[3], state[4]];
-        let dealer = [state[5], state[6], state[7]];
-        let pairplus_bet = u64::from_be_bytes(state[8..16].try_into().ok()?);
-        return Some(TcState {
-            stage,
-            player,
-            dealer,
-            pairplus_bet,
-            six_card_bonus_bet: 0,
-            progressive_bet: 0,
-        });
+    if state.len() != STATE_LEN || state[0] != STATE_VERSION {
+        return None;
     }
 
-    if state.len() == STATE_LEN_V2 && state[0] == STATE_VERSION_V2 {
-        let stage = Stage::try_from(state[1]).ok()?;
-        let player = [state[2], state[3], state[4]];
-        let dealer = [state[5], state[6], state[7]];
-        let pairplus_bet = u64::from_be_bytes(state[8..16].try_into().ok()?);
-        let six_card_bonus_bet = u64::from_be_bytes(state[16..24].try_into().ok()?);
-        return Some(TcState {
-            stage,
-            player,
-            dealer,
-            pairplus_bet,
-            six_card_bonus_bet,
-            progressive_bet: 0,
-        });
-    }
+    let stage = Stage::try_from(state[1]).ok()?;
+    let player = [state[2], state[3], state[4]];
+    let dealer = [state[5], state[6], state[7]];
+    let pairplus_bet = u64::from_be_bytes(state[8..16].try_into().ok()?);
+    let six_card_bonus_bet = u64::from_be_bytes(state[16..24].try_into().ok()?);
+    let progressive_bet = u64::from_be_bytes(state[24..32].try_into().ok()?);
 
-    if state.len() == STATE_LEN_V3 && state[0] == STATE_VERSION_V3 {
-        let stage = Stage::try_from(state[1]).ok()?;
-        let player = [state[2], state[3], state[4]];
-        let dealer = [state[5], state[6], state[7]];
-        let pairplus_bet = u64::from_be_bytes(state[8..16].try_into().ok()?);
-        let six_card_bonus_bet = u64::from_be_bytes(state[16..24].try_into().ok()?);
-        let progressive_bet = u64::from_be_bytes(state[24..32].try_into().ok()?);
-        return Some(TcState {
-            stage,
-            player,
-            dealer,
-            pairplus_bet,
-            six_card_bonus_bet,
-            progressive_bet,
-        });
-    }
-
-    None
+    Some(TcState {
+        stage,
+        player,
+        dealer,
+        pairplus_bet,
+        six_card_bonus_bet,
+        progressive_bet,
+    })
 }
 
 fn serialize_state(state: &TcState) -> Vec<u8> {
-    let mut out = Vec::with_capacity(STATE_LEN_V3);
-    out.push(STATE_VERSION_V3);
+    let mut out = Vec::with_capacity(STATE_LEN);
+    out.push(STATE_VERSION);
     out.push(state.stage as u8);
     out.extend_from_slice(&state.player);
     out.extend_from_slice(&state.dealer);
