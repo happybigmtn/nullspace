@@ -583,7 +583,56 @@ impl CasinoGame for ThreeCardPoker {
                         GameResult::ContinueWithUpdate { payout, logs: vec![] }
                     })
                 }
-                _ => Err(GameError::InvalidMove),
+                _ => {
+                    // Check for atomic batch action (payload[0] == 7)
+                    // [7, pair_plus: u64 BE, six_card: u64 BE, progressive: u64 BE]
+                    if payload[0] == 7 {
+                        if payload.len() != 25 {
+                            return Err(GameError::InvalidPayload);
+                        }
+                        if is_known_card(state.player[0]) {
+                            return Err(GameError::InvalidMove);
+                        }
+
+                        // Parse side bet amounts
+                        let pair_plus = super::payload::parse_u64_be(payload, 1)?;
+                        let six_card = super::payload::parse_u64_be(payload, 9)?;
+                        let progressive = super::payload::parse_u64_be(payload, 17)?;
+
+                        // Validate progressive bet (must be 0 or 1)
+                        if progressive != 0 && progressive != PROGRESSIVE_BET_UNIT {
+                            return Err(GameError::InvalidMove);
+                        }
+
+                        // Apply all side bets atomically
+                        let mut total_deduction: i64 = 0;
+                        total_deduction = total_deduction
+                            .saturating_add(apply_pairplus_update(&mut state, pair_plus)?);
+                        total_deduction = total_deduction
+                            .saturating_add(apply_six_card_bonus_update(&mut state, six_card)?);
+                        total_deduction = total_deduction
+                            .saturating_add(apply_progressive_update(&mut state, progressive)?);
+
+                        // Deal player cards
+                        let mut deck = rng.create_deck();
+                        state.player[0] = rng.draw_card(&mut deck).ok_or(GameError::DeckExhausted)?;
+                        state.player[1] = rng.draw_card(&mut deck).ok_or(GameError::DeckExhausted)?;
+                        state.player[2] = rng.draw_card(&mut deck).ok_or(GameError::DeckExhausted)?;
+                        state.stage = Stage::Decision;
+
+                        session.state_blob = serialize_state(&state);
+                        Ok(if total_deduction == 0 {
+                            GameResult::Continue(vec![])
+                        } else {
+                            GameResult::ContinueWithUpdate {
+                                payout: total_deduction,
+                                logs: vec![],
+                            }
+                        })
+                    } else {
+                        Err(GameError::InvalidMove)
+                    }
+                }
             },
             Stage::Decision => match mv {
                 Move::Fold => {
@@ -799,7 +848,7 @@ mod tests {
             ThreeCardPoker::process_move(&mut session, &[Move::Play as u8], &mut rng).unwrap();
         assert!(matches!(
             res,
-            GameResult::ContinueWithUpdate { payout: -100 }, logs: vec![],
+            GameResult::ContinueWithUpdate { payout: -100, .. }
         ));
 
         // Reveal resolves
@@ -808,7 +857,7 @@ mod tests {
             ThreeCardPoker::process_move(&mut session, &[Move::Reveal as u8], &mut rng).unwrap();
         assert!(matches!(
             res,
-            GameResult::Win(_, vec![]) | GameResult::LossPreDeducted(_, vec![])
+            GameResult::Win(_, _) | GameResult::LossPreDeducted(_, _)
         ));
         assert!(session.is_complete);
     }

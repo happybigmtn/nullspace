@@ -118,9 +118,7 @@ define_instruction_kinds! {
     CasinoDeposit = 1 => Instruction::CasinoDeposit { .. } => "CasinoDeposit" => Instruction::CasinoDeposit { amount: 1 },
     CasinoStartGame = 2 => Instruction::CasinoStartGame { .. } => "CasinoStartGame" => Instruction::CasinoStartGame { game_type: nullspace_types::casino::GameType::Baccarat, bet: 1, session_id: 1 },
     CasinoGameMove = 3 => Instruction::CasinoGameMove { .. } => "CasinoGameMove" => Instruction::CasinoGameMove { session_id: 1, payload: vec![0] },
-    CasinoToggleShield = 4 => Instruction::CasinoToggleShield => "CasinoToggleShield" => Instruction::CasinoToggleShield,
-    CasinoToggleDouble = 5 => Instruction::CasinoToggleDouble => "CasinoToggleDouble" => Instruction::CasinoToggleDouble,
-    CasinoToggleSuper = 6 => Instruction::CasinoToggleSuper => "CasinoToggleSuper" => Instruction::CasinoToggleSuper,
+    CasinoPlayerAction = 4 => Instruction::CasinoPlayerAction { .. } => "CasinoPlayerAction" => Instruction::CasinoPlayerAction { action: nullspace_types::casino::PlayerAction::ToggleShield },
     CasinoJoinTournament = 7 => Instruction::CasinoJoinTournament { .. } => "CasinoJoinTournament" => Instruction::CasinoJoinTournament { tournament_id: 1 },
     CasinoStartTournament = 8 => Instruction::CasinoStartTournament { .. } => "CasinoStartTournament" => Instruction::CasinoStartTournament { tournament_id: 1, start_time_ms: 0, end_time_ms: 1 },
     CasinoEndTournament = 9 => Instruction::CasinoEndTournament { .. } => "CasinoEndTournament" => Instruction::CasinoEndTournament { tournament_id: 1 },
@@ -304,28 +302,44 @@ impl Transaction {
         Ok(Transaction { inner: tx })
     }
 
-    /// Sign a new casino toggle shield transaction.
+    /// Sign a new casino player action transaction.
+    /// Action values: 0 = ToggleShield (tournament-only), 1 = ToggleDouble (tournament-only), 2 = ToggleSuper
+    #[wasm_bindgen]
+    pub fn casino_player_action(
+        signer: &Signer,
+        nonce: u64,
+        action: u8,
+    ) -> Result<Transaction, JsValue> {
+        let action = match action {
+            0 => nullspace_types::casino::PlayerAction::ToggleShield,
+            1 => nullspace_types::casino::PlayerAction::ToggleDouble,
+            2 => nullspace_types::casino::PlayerAction::ToggleSuper,
+            _ => return Err(JsValue::from_str("Invalid action: must be 0 (shield), 1 (double), or 2 (super)")),
+        };
+        let instruction = Instruction::CasinoPlayerAction { action };
+        let tx = ExecutionTransaction::sign(&signer.private_key, nonce, instruction);
+        Ok(Transaction { inner: tx })
+    }
+
+    /// Sign a new casino toggle shield transaction (convenience wrapper).
+    /// Note: Shield is only valid in tournaments.
     #[wasm_bindgen]
     pub fn casino_toggle_shield(signer: &Signer, nonce: u64) -> Result<Transaction, JsValue> {
-        let instruction = Instruction::CasinoToggleShield;
-        let tx = ExecutionTransaction::sign(&signer.private_key, nonce, instruction);
-        Ok(Transaction { inner: tx })
+        Self::casino_player_action(signer, nonce, 0)
     }
 
-    /// Sign a new casino toggle double transaction.
+    /// Sign a new casino toggle double transaction (convenience wrapper).
+    /// Note: Double is only valid in tournaments.
     #[wasm_bindgen]
     pub fn casino_toggle_double(signer: &Signer, nonce: u64) -> Result<Transaction, JsValue> {
-        let instruction = Instruction::CasinoToggleDouble;
-        let tx = ExecutionTransaction::sign(&signer.private_key, nonce, instruction);
-        Ok(Transaction { inner: tx })
+        Self::casino_player_action(signer, nonce, 1)
     }
 
-    /// Sign a new casino toggle super/aura transaction.
+    /// Sign a new casino toggle super/aura transaction (convenience wrapper).
+    /// Super mode is valid in both cash and tournament games.
     #[wasm_bindgen]
     pub fn casino_toggle_super(signer: &Signer, nonce: u64) -> Result<Transaction, JsValue> {
-        let instruction = Instruction::CasinoToggleSuper;
-        let tx = ExecutionTransaction::sign(&signer.private_key, nonce, instruction);
-        Ok(Transaction { inner: tx })
+        Self::casino_player_action(signer, nonce, 2)
     }
 
     /// Sign a new casino register transaction.
@@ -1007,6 +1021,22 @@ fn decode_event(event: &Event) -> Result<serde_json::Value, JsValue> {
                 "session_id": session_id,
                 "error_code": error_code,
                 "message": message
+            })
+        }
+        Event::PlayerModifierToggled {
+            player,
+            action,
+            active_shield,
+            active_double,
+            active_super,
+        } => {
+            serde_json::json!({
+                "type": "PlayerModifierToggled",
+                "player": hex(&player.encode()),
+                "action": format!("{:?}", action),
+                "active_shield": active_shield,
+                "active_double": active_double,
+                "active_super": active_super
             })
         }
         // Tournament events

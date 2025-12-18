@@ -77,13 +77,13 @@ mod tests {
         // Deal
         let mut rng = GameRng::new(&seed, session.id, 1);
         let result = process_game_move(&mut session, &[4], &mut rng);
-        assert!(matches!(result, Ok(GameResult::Continue)));
+        assert!(matches!(result, Ok(GameResult::Continue(_))));
 
         // If we're still in player turn, stand to end decisions.
         if session.state_blob.get(1).copied() == Some(1) {
             let mut rng = GameRng::new(&seed, session.id, 2);
             let result = process_game_move(&mut session, &[1], &mut rng);
-            assert!(matches!(result, Ok(GameResult::Continue)));
+            assert!(matches!(result, Ok(GameResult::Continue(_))));
         }
 
         // Reveal settles.
@@ -114,8 +114,8 @@ mod tests {
             // Guess higher (0)
             let result = process_game_move(&mut session, &[0], &mut rng);
             match result {
-                Ok(GameResult::Continue) => {}
-                Ok(GameResult::Loss) => break,
+                Ok(GameResult::Continue(_)) => {}
+                Ok(GameResult::Loss(_)) => break,
                 _ => {}
             }
             move_num += 1;
@@ -175,7 +175,7 @@ mod tests {
             let mut rng = GameRng::new(&seed, session_id, 1);
             let result = process_game_move(&mut session, &[0], &mut rng); // Pass line
 
-            if matches!(result, Ok(GameResult::Continue)) {
+            if matches!(result, Ok(GameResult::Continue(_))) {
                 // Point established, keep rolling
                 let mut move_num = 2;
                 while !session.is_complete && move_num < 50 {
@@ -222,24 +222,24 @@ mod tests {
         // Deal
         let mut rng = GameRng::new(&seed, session.id, 1);
         let result = process_game_move(&mut session, &[5], &mut rng);
-        assert!(matches!(result, Ok(GameResult::Continue)));
+        assert!(matches!(result, Ok(GameResult::Continue(_))));
 
         // Check preflop (reveals flop)
         let mut rng = GameRng::new(&seed, session.id, 2);
         let result = process_game_move(&mut session, &[0], &mut rng);
-        assert!(matches!(result, Ok(GameResult::Continue)));
+        assert!(matches!(result, Ok(GameResult::Continue(_))));
 
         // Check flop (reveals turn+river)
         let mut rng = GameRng::new(&seed, session.id, 3);
         let result = process_game_move(&mut session, &[0], &mut rng);
-        assert!(matches!(result, Ok(GameResult::Continue)));
+        assert!(matches!(result, Ok(GameResult::Continue(_))));
 
         // Bet 1x at river (deduct play bet)
         let mut rng = GameRng::new(&seed, session.id, 4);
         let result = process_game_move(&mut session, &[3], &mut rng);
         assert!(matches!(
             result,
-            Ok(GameResult::ContinueWithUpdate { payout: -100 })
+            Ok(GameResult::ContinueWithUpdate { payout: -100, .. })
         ));
 
         // Reveal to resolve
@@ -264,14 +264,14 @@ mod tests {
         // Deal player cards
         let mut rng = GameRng::new(&seed, session.id, 1);
         let result = process_game_move(&mut session, &[2], &mut rng);
-        assert!(matches!(result, Ok(GameResult::Continue)));
+        assert!(matches!(result, Ok(GameResult::Continue(_))));
 
         // Play (deduct play bet)
         let mut rng = GameRng::new(&seed, session.id, 2);
         let result = process_game_move(&mut session, &[0], &mut rng);
         assert!(matches!(
             result,
-            Ok(GameResult::ContinueWithUpdate { payout: -100 })
+            Ok(GameResult::ContinueWithUpdate { payout: -100, .. })
         ));
 
         // Reveal to resolve
@@ -325,7 +325,7 @@ mod tests {
             let mut rng = GameRng::new(&seed, session_id, 1);
             let result = process_game_move(&mut session, &[0], &mut rng); // Play
 
-            if matches!(result, Ok(GameResult::Continue)) {
+            if matches!(result, Ok(GameResult::Continue(_))) {
                 // Tie! Go to war
                 let mut rng = GameRng::new(&seed, session_id, 2);
                 let result = process_game_move(&mut session, &[1], &mut rng); // War

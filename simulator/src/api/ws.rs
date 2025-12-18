@@ -265,6 +265,7 @@ fn is_event_relevant_to_account(event: &Event, account: &PublicKey) -> bool {
         Event::CasinoGameCompleted { player, .. } => player == account,
         Event::CasinoLeaderboardUpdated { .. } => true, // Leaderboard updates are public
         Event::CasinoError { player, .. } => player == account,
+        Event::PlayerModifierToggled { player, .. } => player == account,
         // Tournament events
         Event::TournamentStarted { .. } => true, // Tournament start is public
         Event::PlayerJoined { player, .. } => player == account,

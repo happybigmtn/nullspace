@@ -227,9 +227,9 @@ impl<'a, S: State> Layer<'a, S> {
                 self.handle_casino_game_move(public, *session_id, payload)
                     .await
             }
-            Instruction::CasinoToggleShield => self.handle_casino_toggle_shield(public).await,
-            Instruction::CasinoToggleDouble => self.handle_casino_toggle_double(public).await,
-            Instruction::CasinoToggleSuper => self.handle_casino_toggle_super(public).await,
+            Instruction::CasinoPlayerAction { action } => {
+                self.handle_casino_player_action(public, *action).await
+            }
             Instruction::CasinoJoinTournament { tournament_id } => {
                 self.handle_casino_join_tournament(public, *tournament_id)
                     .await
@@ -316,9 +316,7 @@ impl<'a, S: State> Layer<'a, S> {
             | Instruction::CasinoDeposit { .. }
             | Instruction::CasinoStartGame { .. }
             | Instruction::CasinoGameMove { .. }
-            | Instruction::CasinoToggleShield
-            | Instruction::CasinoToggleDouble
-            | Instruction::CasinoToggleSuper
+            | Instruction::CasinoPlayerAction { .. }
             | Instruction::CasinoJoinTournament { .. }
             | Instruction::CasinoStartTournament { .. }
             | Instruction::CasinoEndTournament { .. } => {

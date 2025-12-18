@@ -128,6 +128,13 @@ impl Player {
         // on-chain state, so the provided block is not needed to construct the initial player.
         Self::new(name)
     }
+
+    /// Clear all active modifiers (shield, double, super) after game completion.
+    pub fn clear_active_modifiers(&mut self) {
+        self.modifiers.active_shield = false;
+        self.modifiers.active_double = false;
+        self.modifiers.active_super = false;
+    }
 }
 
 impl Write for Player {

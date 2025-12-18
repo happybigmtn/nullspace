@@ -86,8 +86,16 @@ impl GameRng {
     }
 
     /// Get a random f32 value in range [0.0, 1.0).
+    ///
+    /// Uses 24 bits of randomness for full mantissa precision.
     pub fn next_f32(&mut self) -> f32 {
-        f32::from(self.next_u8()) / 256.0
+        // Use 24 bits (f32 mantissa is 23 bits + implicit leading 1)
+        // This gives uniform distribution across [0.0, 1.0)
+        let a = self.next_byte() as u32;
+        let b = self.next_byte() as u32;
+        let c = self.next_byte() as u32;
+        let bits = (a << 16) | (b << 8) | c; // 24 bits
+        bits as f32 / 16_777_216.0 // 2^24
     }
 
     /// Get a random value in range [0, max).
@@ -266,6 +274,7 @@ impl rand::RngCore for GameRng {
 }
 
 /// Result of processing a game move.
+#[must_use = "game results must be handled to update player balance and session state"]
 pub enum GameResult {
     /// Game is still in progress, state updated.
     Continue(Vec<String>),
@@ -274,16 +283,6 @@ pub enum GameResult {
     ContinueWithUpdate { payout: i64, logs: Vec<String> },
     /// Game completed with a win. Value is chips won (TOTAL RETURN: stake + profit).
     Win(u64, Vec<String>),
-    /// Game completed with a win, but requires an additional deduction beyond any previously
-    /// charged wagers (e.g. a mid-game bet increase that ends the game immediately).
-    /// `payout` is the credited return (stake + profit) and `extra_deduction` is the amount to
-    /// deduct from the player's balance.
-    #[allow(dead_code)]
-    WinWithExtraDeduction {
-        payout: u64,
-        extra_deduction: u64,
-        logs: Vec<String>,
-    },
     /// Game completed with a loss.
     Loss(Vec<String>),
     /// Game completed with a loss AND an additional deduction (for mid-game bet increases).
@@ -296,19 +295,10 @@ pub enum GameResult {
     /// Used for table games like Baccarat, Craps, Roulette, Sic Bo where bets are placed
     /// incrementally via ContinueWithUpdate before the final resolution.
     LossPreDeducted(u64, Vec<String>),
-    /// Game completed with a loss where most chips were already deducted, but an additional
-    /// deduction is still required (e.g. a mid-game bet increase that ends the game immediately).
-    /// `total_loss` is the full loss amount for reporting and shield refunds; `extra_deduction`
-    /// is the portion still to deduct from the player's balance.
-    #[allow(dead_code)]
-    LossPreDeductedWithExtraDeduction {
-        total_loss: u64,
-        extra_deduction: u64,
-        logs: Vec<String>,
-    },
     /// Game completed with a push (tie, bet returned).
-    #[allow(dead_code)]
-    Push(Vec<String>),
+    /// Value is the amount to refund to the player. Use this for pushes in table games
+    /// where bets were deducted via ContinueWithUpdate.
+    Push(u64, Vec<String>),
 }
 
 /// Error during game execution.
@@ -380,29 +370,35 @@ pub fn process_game_move(
 }
 
 /// Apply modifiers (shield/double) to a game outcome.
+///
+/// Returns `(final_payout, was_shielded, was_doubled)`.
+/// - Shield activates on losses: converts loss to break-even (payout = 0)
+/// - Double activates on wins: doubles the payout (with overflow protection)
+///
+/// Both active flags are always reset after this call, regardless of whether
+/// the modifier was consumed (e.g., shield active but player won).
 #[allow(dead_code)]
 pub fn apply_modifiers(player: &mut Player, payout: i64) -> (i64, bool, bool) {
     let mut final_payout = payout;
     let mut was_shielded = false;
     let mut was_doubled = false;
 
-    // Shield: converts loss to break-even
+    // Shield: converts loss to break-even (only triggers on actual loss)
     if payout < 0 && player.modifiers.active_shield && player.modifiers.shields > 0 {
         player.modifiers.shields -= 1;
-        player.modifiers.active_shield = false;
         final_payout = 0;
         was_shielded = true;
     }
 
-    // Double: doubles wins (with overflow protection)
+    // Double: doubles wins with overflow protection (only triggers on actual win)
     if payout > 0 && player.modifiers.active_double && player.modifiers.doubles > 0 {
         player.modifiers.doubles -= 1;
-        player.modifiers.active_double = false;
         final_payout = payout.saturating_mul(2);
         was_doubled = true;
     }
 
-    // Reset modifiers after use
+    // Always reset active flags - modifiers are "armed" per-game, not persistent.
+    // If the modifier didn't trigger (wrong outcome), it's still disarmed.
     player.modifiers.active_shield = false;
     player.modifiers.active_double = false;
 
@@ -538,6 +534,32 @@ mod tests {
             let spin = rng.spin_roulette();
             assert!(spin <= 36);
         }
+    }
+
+    #[test]
+    fn test_game_rng_f32_precision() {
+        let seed = create_test_seed();
+        let mut rng = GameRng::new(&seed, 1, 0);
+
+        // Test f32 values are in range [0.0, 1.0)
+        for _ in 0..10_000 {
+            let value = rng.next_f32();
+            assert!(value >= 0.0 && value < 1.0, "f32 out of range: {}", value);
+        }
+
+        // Test that we get more than 256 distinct values (proving > 8-bit precision)
+        let mut rng = GameRng::new(&seed, 1, 0);
+        let mut distinct: std::collections::HashSet<u32> = std::collections::HashSet::new();
+        for _ in 0..10_000 {
+            let value = rng.next_f32();
+            distinct.insert(value.to_bits());
+        }
+        // With 24-bit precision and 10k samples, we should get close to 10k distinct values
+        assert!(
+            distinct.len() > 9_000,
+            "Expected high precision, got only {} distinct values",
+            distinct.len()
+        );
     }
 
     #[test]

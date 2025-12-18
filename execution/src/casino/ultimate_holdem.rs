@@ -793,7 +793,55 @@ impl CasinoGame for UltimateHoldem {
                         }
                     })
                 }
-                _ => Err(GameError::InvalidMove),
+                _ => {
+                    // Check for atomic batch action (payload[0] == 11)
+                    // [11, trips: u64 BE, six_card: u64 BE, progressive: u64 BE]
+                    if payload[0] == 11 {
+                        if payload.len() != 25 {
+                            return Err(GameError::InvalidPayload);
+                        }
+                        if is_known_card(state.player[0]) || is_known_card(state.player[1]) {
+                            return Err(GameError::InvalidMove);
+                        }
+
+                        // Parse side bet amounts
+                        let trips = super::payload::parse_u64_be(payload, 1)?;
+                        let six_card = super::payload::parse_u64_be(payload, 9)?;
+                        let progressive = super::payload::parse_u64_be(payload, 17)?;
+
+                        // Validate progressive bet (must be 0 or 1)
+                        if progressive != 0 && progressive != PROGRESSIVE_BET_UNIT {
+                            return Err(GameError::InvalidMove);
+                        }
+
+                        // Apply all side bets atomically
+                        let mut total_deduction: i64 = 0;
+                        total_deduction = total_deduction
+                            .saturating_add(apply_trips_update(&mut state, trips)?);
+                        total_deduction = total_deduction
+                            .saturating_add(apply_six_card_bonus_update(&mut state, six_card)?);
+                        total_deduction = total_deduction
+                            .saturating_add(apply_progressive_update(&mut state, progressive)?);
+
+                        // Deal player hole cards
+                        let mut deck = rng.create_deck();
+                        state.player[0] = rng.draw_card(&mut deck).ok_or(GameError::DeckExhausted)?;
+                        state.player[1] = rng.draw_card(&mut deck).ok_or(GameError::DeckExhausted)?;
+                        state.stage = Stage::Preflop;
+
+                        session.state_blob = serialize_state(&state);
+                        Ok(if total_deduction == 0 {
+                            GameResult::Continue(vec![])
+                        } else {
+                            GameResult::ContinueWithUpdate {
+                                payout: total_deduction,
+                                logs: vec![],
+                            }
+                        })
+                    } else {
+                        Err(GameError::InvalidMove)
+                    }
+                }
             },
             Stage::Preflop => match action {
                 Action::Check => {
@@ -943,7 +991,7 @@ mod tests {
         let result = UltimateHoldem::init(&mut session, &mut rng);
         assert!(matches!(
             result,
-            GameResult::ContinueWithUpdate { payout: -100 }, logs: vec![],
+            GameResult::ContinueWithUpdate { payout: -100, .. }
         ));
 
         let state = parse_state(&session.state_blob).expect("Failed to parse state");
@@ -966,14 +1014,14 @@ mod tests {
         let res = UltimateHoldem::process_move(&mut session, &payload, &mut rng).unwrap();
         assert!(matches!(
             res,
-            GameResult::ContinueWithUpdate { payout: -25 }, logs: vec![],
+            GameResult::ContinueWithUpdate { payout: -25, .. }
         ));
 
         // Deal
         let mut rng = GameRng::new(&seed, session.id, 2);
         let res =
             UltimateHoldem::process_move(&mut session, &[Action::Deal as u8], &mut rng).unwrap();
-        assert!(matches!(res, GameResult::Continue(vec![])));
+        assert!(matches!(res, GameResult::Continue(_)));
 
         let state = parse_state(&session.state_blob).expect("Failed to parse state");
         assert_eq!(state.stage, Stage::Preflop);
@@ -996,7 +1044,7 @@ mod tests {
         let res = UltimateHoldem::process_move(&mut session, &payload, &mut rng).unwrap();
         assert!(matches!(
             res,
-            GameResult::ContinueWithUpdate { payout: -25 }, logs: vec![],
+            GameResult::ContinueWithUpdate { payout: -25, .. }
         ));
 
         // Set Trips back to 0 (refund)
@@ -1004,7 +1052,7 @@ mod tests {
         payload.extend_from_slice(&0u64.to_be_bytes());
         let mut rng = GameRng::new(&seed, session.id, 2);
         let res = UltimateHoldem::process_move(&mut session, &payload, &mut rng).unwrap();
-        assert!(matches!(res, GameResult::ContinueWithUpdate { payout: 25 }));
+        assert!(matches!(res, GameResult::ContinueWithUpdate { payout: 25, .. }));
 
         let state = parse_state(&session.state_blob).expect("Failed to parse state");
         assert_eq!(state.trips_bet, 0);
@@ -1026,7 +1074,7 @@ mod tests {
         let res = UltimateHoldem::process_move(&mut session, &payload, &mut rng).unwrap();
         assert!(matches!(
             res,
-            GameResult::ContinueWithUpdate { payout: -25 }, logs: vec![],
+            GameResult::ContinueWithUpdate { payout: -25, .. }
         ));
 
         // Deal
@@ -1065,7 +1113,7 @@ mod tests {
             UltimateHoldem::process_move(&mut session, &[Action::Bet4x as u8], &mut rng).unwrap();
         assert!(matches!(
             res,
-            GameResult::ContinueWithUpdate { payout: -400 }, logs: vec![],
+            GameResult::ContinueWithUpdate { payout: -400, .. }
         ));
 
         // Reveal resolves
@@ -1074,7 +1122,7 @@ mod tests {
             UltimateHoldem::process_move(&mut session, &[Action::Reveal as u8], &mut rng).unwrap();
         assert!(matches!(
             res,
-            GameResult::Win(_, vec![]) | GameResult::LossPreDeducted(_, vec![])
+            GameResult::Win(_, _) | GameResult::LossPreDeducted(_, _)
         ));
         assert!(session.is_complete);
     }
@@ -1098,7 +1146,7 @@ mod tests {
             UltimateHoldem::process_move(&mut session, &[Action::Bet3x as u8], &mut rng).unwrap();
         assert!(matches!(
             res,
-            GameResult::ContinueWithUpdate { payout: -300 }, logs: vec![],
+            GameResult::ContinueWithUpdate { payout: -300, .. }
         ));
 
         // Reveal resolves
@@ -1107,7 +1155,7 @@ mod tests {
             UltimateHoldem::process_move(&mut session, &[Action::Reveal as u8], &mut rng).unwrap();
         assert!(matches!(
             res,
-            GameResult::Win(_, vec![]) | GameResult::LossPreDeducted(_, vec![])
+            GameResult::Win(_, _) | GameResult::LossPreDeducted(_, _)
         ));
         assert!(session.is_complete);
     }
@@ -1139,7 +1187,7 @@ mod tests {
             UltimateHoldem::process_move(&mut session, &[Action::Fold as u8], &mut rng).unwrap();
         assert!(matches!(
             res,
-            GameResult::Win(_, vec![]) | GameResult::LossPreDeducted(_, vec![])
+            GameResult::Win(_, _) | GameResult::LossPreDeducted(_, _)
         ));
         assert!(session.is_complete);
     }

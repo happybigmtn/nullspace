@@ -24,7 +24,7 @@ use thiserror::Error as ThisError;
 
 pub const NAMESPACE: &[u8] = b"_SUPERSOCIETY";
 pub const TRANSACTION_SUFFIX: &[u8] = b"_TX";
-pub const TRANSACTION_NAMESPACE: &[u8] = b"_SUPERSOCIETY_TX";
+pub const TRANSACTION_NAMESPACE: &[u8] = b"_NULLSPACE_TX";
 // Phase 1 scaling: Increased from 100 to 500 for higher throughput
 pub const MAX_BLOCK_TRANSACTIONS: usize = 500;
 
@@ -35,8 +35,9 @@ mod tags {
         pub const CASINO_DEPOSIT: u8 = 11;
         pub const CASINO_START_GAME: u8 = 12;
         pub const CASINO_GAME_MOVE: u8 = 13;
-        pub const CASINO_TOGGLE_SHIELD: u8 = 14;
-        pub const CASINO_TOGGLE_DOUBLE: u8 = 15;
+        /// Consolidated player action (replaces individual toggle instructions)
+        pub const CASINO_PLAYER_ACTION: u8 = 14;
+        // Tags 15, 30 are now free (previously TOGGLE_DOUBLE, TOGGLE_SUPER)
         pub const CASINO_JOIN_TOURNAMENT: u8 = 16;
         pub const CASINO_START_TOURNAMENT: u8 = 17;
 
@@ -59,9 +60,6 @@ mod tags {
 
         // Tournaments (29)
         pub const CASINO_END_TOURNAMENT: u8 = 29;
-
-        // Super/Aura mode (30)
-        pub const CASINO_TOGGLE_SUPER: u8 = 30;
     }
 
     pub mod key {
@@ -108,7 +106,7 @@ mod tags {
     }
 
     pub mod event {
-        // Casino events (20-24), plus error (29) and deposit (41)
+        // Casino events (20-24), plus error (29), deposit (41), and modifier toggled (42)
         pub const CASINO_PLAYER_REGISTERED: u8 = 20;
         pub const CASINO_GAME_STARTED: u8 = 21;
         pub const CASINO_GAME_MOVED: u8 = 22;
@@ -116,6 +114,7 @@ mod tags {
         pub const CASINO_LEADERBOARD_UPDATED: u8 = 24;
         pub const CASINO_ERROR: u8 = 29;
         pub const CASINO_DEPOSITED: u8 = 41;
+        pub const PLAYER_MODIFIER_TOGGLED: u8 = 42;
 
         // Tournament events (25-28)
         pub const TOURNAMENT_STARTED: u8 = 25;
@@ -297,17 +296,11 @@ pub enum Instruction {
     /// Binary: [13] [sessionId:u64 BE] [payloadLen:u32 BE] [payload...]
     CasinoGameMove { session_id: u64, payload: Vec<u8> },
 
-    /// Toggle shield modifier for next game.
-    /// Binary: [14]
-    CasinoToggleShield,
-
-    /// Toggle double modifier for next game.
-    /// Binary: [15]
-    CasinoToggleDouble,
-
-    /// Toggle super/aura mode for casino games.
-    /// Binary: [30]
-    CasinoToggleSuper,
+    /// Player action to toggle modifiers (shield, double, super).
+    /// Binary: [14] [action:u8]
+    /// - Shield/Double: Tournament-only (validation enforced in handler)
+    /// - Super: Both cash and tournament games
+    CasinoPlayerAction { action: crate::casino::PlayerAction },
 
     /// Join a tournament.
     /// Binary: [16] [tournamentId:u64 BE]
@@ -410,9 +403,10 @@ impl Write for Instruction {
                 (payload.len() as u32).write(writer);
                 writer.put_slice(payload);
             }
-            Self::CasinoToggleShield => tags::instruction::CASINO_TOGGLE_SHIELD.write(writer),
-            Self::CasinoToggleDouble => tags::instruction::CASINO_TOGGLE_DOUBLE.write(writer),
-            Self::CasinoToggleSuper => tags::instruction::CASINO_TOGGLE_SUPER.write(writer),
+            Self::CasinoPlayerAction { action } => {
+                tags::instruction::CASINO_PLAYER_ACTION.write(writer);
+                action.write(writer);
+            }
             Self::CasinoJoinTournament { tournament_id } => {
                 tags::instruction::CASINO_JOIN_TOURNAMENT.write(writer);
                 tournament_id.write(writer);
@@ -535,9 +529,9 @@ impl Read for Instruction {
                     payload,
                 }
             }
-            tags::instruction::CASINO_TOGGLE_SHIELD => Self::CasinoToggleShield,
-            tags::instruction::CASINO_TOGGLE_DOUBLE => Self::CasinoToggleDouble,
-            tags::instruction::CASINO_TOGGLE_SUPER => Self::CasinoToggleSuper,
+            tags::instruction::CASINO_PLAYER_ACTION => Self::CasinoPlayerAction {
+                action: crate::casino::PlayerAction::read(reader)?,
+            },
             tags::instruction::CASINO_JOIN_TOURNAMENT => Self::CasinoJoinTournament {
                 tournament_id: u64::read(reader)?,
             },
@@ -601,7 +595,7 @@ impl EncodeSize for Instruction {
                 Self::CasinoDeposit { .. } => 8,
                 Self::CasinoStartGame { .. } => 1 + 8 + 8,
                 Self::CasinoGameMove { payload, .. } => 8 + 4 + payload.len(),
-                Self::CasinoToggleShield | Self::CasinoToggleDouble | Self::CasinoToggleSuper => 0,
+                Self::CasinoPlayerAction { .. } => 1, // PlayerAction is 1 byte
                 Self::CasinoJoinTournament { .. } => 8,
                 Self::CasinoStartTournament { .. } => 8 + 8 + 8,
 
@@ -1239,6 +1233,15 @@ pub enum Event {
         message: String,
     },
 
+    // Player modifier toggled event (tag 42)
+    PlayerModifierToggled {
+        player: PublicKey,
+        action: crate::casino::PlayerAction,
+        active_shield: bool,
+        active_double: bool,
+        active_super: bool,
+    },
+
     // Tournament events (tags 25-28)
     TournamentStarted {
         id: u64,
@@ -1419,6 +1422,20 @@ impl Write for Event {
                 error_code.write(writer);
                 (message.len() as u32).write(writer);
                 writer.put_slice(message.as_bytes());
+            }
+            Self::PlayerModifierToggled {
+                player,
+                action,
+                active_shield,
+                active_double,
+                active_super,
+            } => {
+                tags::event::PLAYER_MODIFIER_TOGGLED.write(writer);
+                player.write(writer);
+                action.write(writer);
+                active_shield.write(writer);
+                active_double.write(writer);
+                active_super.write(writer);
             }
 
             // Tournament events (tags 25-28)
@@ -1620,10 +1637,15 @@ impl Read for Event {
                     let mut logs = Vec::with_capacity(count);
                     for _ in 0..count {
                         let len = u32::read(reader)? as usize;
-                        if reader.remaining() < len { return Err(Error::EndOfBuffer); }
+                        if reader.remaining() < len {
+                            return Err(Error::EndOfBuffer);
+                        }
                         let mut bytes = vec![0u8; len];
                         reader.copy_to_slice(&mut bytes);
-                        logs.push(String::from_utf8(bytes).map_err(|_| Error::Invalid("Event", "invalid UTF-8 log"))?);
+                        logs.push(
+                            String::from_utf8(bytes)
+                                .map_err(|_| Error::Invalid("Event", "invalid UTF-8 log"))?,
+                        );
                     }
                     logs
                 },
@@ -1641,10 +1663,15 @@ impl Read for Event {
                     let mut logs = Vec::with_capacity(count);
                     for _ in 0..count {
                         let len = u32::read(reader)? as usize;
-                        if reader.remaining() < len { return Err(Error::EndOfBuffer); }
+                        if reader.remaining() < len {
+                            return Err(Error::EndOfBuffer);
+                        }
                         let mut bytes = vec![0u8; len];
                         reader.copy_to_slice(&mut bytes);
-                        logs.push(String::from_utf8(bytes).map_err(|_| Error::Invalid("Event", "invalid UTF-8 log"))?);
+                        logs.push(
+                            String::from_utf8(bytes)
+                                .map_err(|_| Error::Invalid("Event", "invalid UTF-8 log"))?,
+                        );
                     }
                     logs
                 },
@@ -1675,6 +1702,13 @@ impl Read for Event {
                     message,
                 }
             }
+            tags::event::PLAYER_MODIFIER_TOGGLED => Self::PlayerModifierToggled {
+                player: PublicKey::read(reader)?,
+                action: crate::casino::PlayerAction::read(reader)?,
+                active_shield: bool::read(reader)?,
+                active_double: bool::read(reader)?,
+                active_super: bool::read(reader)?,
+            },
 
             // Tournament events (tags 25-28)
             tags::event::TOURNAMENT_STARTED => Self::TournamentStarted {
@@ -1801,7 +1835,13 @@ impl EncodeSize for Event {
                     move_number,
                     new_state,
                     logs,
-                } => session_id.encode_size() + move_number.encode_size() + new_state.encode_size() + 4 + logs.iter().map(|s| 4 + s.len()).sum::<usize>(),
+                } => {
+                    session_id.encode_size()
+                        + move_number.encode_size()
+                        + new_state.encode_size()
+                        + 4
+                        + logs.iter().map(|s| 4 + s.len()).sum::<usize>()
+                }
                 Self::CasinoGameCompleted {
                     session_id,
                     player,
@@ -1819,7 +1859,8 @@ impl EncodeSize for Event {
                         + final_chips.encode_size()
                         + was_shielded.encode_size()
                         + was_doubled.encode_size()
-                        + 4 + logs.iter().map(|s| 4 + s.len()).sum::<usize>()
+                        + 4
+                        + logs.iter().map(|s| 4 + s.len()).sum::<usize>()
                 }
                 Self::CasinoLeaderboardUpdated { leaderboard } => leaderboard.encode_size(),
                 Self::CasinoError {
@@ -1833,6 +1874,19 @@ impl EncodeSize for Event {
                         + error_code.encode_size()
                         + 4
                         + message.len()
+                }
+                Self::PlayerModifierToggled {
+                    player,
+                    action,
+                    active_shield,
+                    active_double,
+                    active_super,
+                } => {
+                    player.encode_size()
+                        + action.encode_size()
+                        + active_shield.encode_size()
+                        + active_double.encode_size()
+                        + active_super.encode_size()
                 }
 
                 // Tournament events (tags 25-28)

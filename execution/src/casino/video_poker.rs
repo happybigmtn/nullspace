@@ -428,7 +428,7 @@ mod tests {
             .expect("Failed to process move");
 
         // Jacks-or-Better pays 1:1 -> total return 2x bet
-        assert!(matches!(result, GameResult::Win(200, vec![])));
+        assert!(matches!(result, GameResult::Win(200, _)));
     }
 
     #[test]

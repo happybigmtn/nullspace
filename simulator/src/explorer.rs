@@ -143,6 +143,7 @@ impl Simulator {
             Event::CasinoGameCompleted { .. } => "CasinoGameCompleted",
             Event::CasinoLeaderboardUpdated { .. } => "CasinoLeaderboardUpdated",
             Event::CasinoError { .. } => "CasinoError",
+            Event::PlayerModifierToggled { .. } => "PlayerModifierToggled",
             Event::TournamentStarted { .. } => "TournamentStarted",
             Event::PlayerJoined { .. } => "PlayerJoined",
             Event::TournamentPhaseChanged { .. } => "TournamentPhaseChanged",
@@ -179,6 +180,7 @@ impl Simulator {
             Event::CasinoGameCompleted { player, .. } => touch_account(player),
             Event::CasinoLeaderboardUpdated { .. } => {}
             Event::CasinoError { player, .. } => touch_account(player),
+            Event::PlayerModifierToggled { player, .. } => touch_account(player),
             Event::TournamentStarted { .. } => {}
             Event::PlayerJoined { player, .. } => touch_account(player),
             Event::TournamentPhaseChanged { .. } => {}
@@ -241,9 +243,14 @@ impl Simulator {
                     format!("Casino game move (session {session_id}, {bytes} bytes)")
                 }
             }
-            Instruction::CasinoToggleShield => "Toggle shield modifier".to_string(),
-            Instruction::CasinoToggleDouble => "Toggle double modifier".to_string(),
-            Instruction::CasinoToggleSuper => "Toggle super mode".to_string(),
+            Instruction::CasinoPlayerAction { action } => {
+                use nullspace_types::casino::PlayerAction;
+                match action {
+                    PlayerAction::ToggleShield => "Toggle shield modifier".to_string(),
+                    PlayerAction::ToggleDouble => "Toggle double modifier".to_string(),
+                    PlayerAction::ToggleSuper => "Toggle super mode".to_string(),
+                }
+            }
             Instruction::CasinoJoinTournament { tournament_id } => {
                 format!("Join tournament {tournament_id}")
             }

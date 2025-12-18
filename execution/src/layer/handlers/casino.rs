@@ -322,12 +322,10 @@ impl<'a, S: State> Layer<'a, S> {
             crate::casino::GameResult::Continue(l) => l.clone(),
             crate::casino::GameResult::ContinueWithUpdate { logs, .. } => logs.clone(),
             crate::casino::GameResult::Win(_, l) => l.clone(),
-            crate::casino::GameResult::WinWithExtraDeduction { logs, .. } => logs.clone(),
             crate::casino::GameResult::Loss(l) => l.clone(),
             crate::casino::GameResult::LossWithExtraDeduction(_, l) => l.clone(),
             crate::casino::GameResult::LossPreDeducted(_, l) => l.clone(),
-            crate::casino::GameResult::LossPreDeductedWithExtraDeduction { logs, .. } => logs.clone(),
-            crate::casino::GameResult::Push(l) => l.clone(),
+            crate::casino::GameResult::Push(_, l) => l.clone(),
         };
 
         // Handle immediate result (e.g. Natural Blackjack)
@@ -358,9 +356,7 @@ impl<'a, S: State> Layer<'a, S> {
                         } else {
                             player.balances.chips = player.balances.chips.saturating_add(addition);
                         }
-                        player.modifiers.active_shield = false;
-                        player.modifiers.active_double = false;
-                        player.modifiers.active_super = false;
+                        player.clear_active_modifiers();
                         Self::update_aura_meter_for_completion(&mut player, &session, true);
 
                         // Update House PnL (Payout)
@@ -390,17 +386,15 @@ impl<'a, S: State> Layer<'a, S> {
                                                 was_doubled,
                         logs: logs.clone(),
                                             });                    }
-                    crate::casino::GameResult::Push(_) => {
+                    crate::casino::GameResult::Push(refund, _) => {
                         if session.is_tournament {
                             player.tournament.chips =
-                                player.tournament.chips.saturating_add(session.bet);
+                                player.tournament.chips.saturating_add(refund);
                         } else {
                             player.balances.chips =
-                                player.balances.chips.saturating_add(session.bet);
+                                player.balances.chips.saturating_add(refund);
                         }
-                        player.modifiers.active_shield = false;
-                        player.modifiers.active_double = false;
-                        player.modifiers.active_super = false;
+                        player.clear_active_modifiers();
                         Self::consume_aura_round_on_push(&mut player, &session);
 
                         let final_chips = if session.is_tournament {
@@ -421,11 +415,12 @@ impl<'a, S: State> Layer<'a, S> {
                             session_id,
                             player: public.clone(),
                             game_type: session.game_type,
-                            payout: session.bet as i64,
+                            payout: refund as i64,
                             final_chips,
                             was_shielded: false,
                             was_doubled: false,
-                        logs: logs.clone(),});
+                            logs: logs.clone(),
+                        });
                     }
                     crate::casino::GameResult::Loss(_) => {
                         let shield_pool = if session.is_tournament {
@@ -446,9 +441,7 @@ impl<'a, S: State> Layer<'a, S> {
                         } else {
                             -(session.bet as i64)
                         };
-                        player.modifiers.active_shield = false;
-                        player.modifiers.active_double = false;
-                        player.modifiers.active_super = false;
+                        player.clear_active_modifiers();
                         Self::update_aura_meter_for_completion(&mut player, &session, false);
 
                         let final_chips = if session.is_tournament {
@@ -525,12 +518,10 @@ impl<'a, S: State> Layer<'a, S> {
             crate::casino::GameResult::Continue(l) => l.clone(),
             crate::casino::GameResult::ContinueWithUpdate { logs, .. } => logs.clone(),
             crate::casino::GameResult::Win(_, l) => l.clone(),
-            crate::casino::GameResult::WinWithExtraDeduction { logs, .. } => logs.clone(),
             crate::casino::GameResult::Loss(l) => l.clone(),
             crate::casino::GameResult::LossWithExtraDeduction(_, l) => l.clone(),
             crate::casino::GameResult::LossPreDeducted(_, l) => l.clone(),
-            crate::casino::GameResult::LossPreDeductedWithExtraDeduction { logs, .. } => logs.clone(),
-            crate::casino::GameResult::Push(l) => l.clone(),
+            crate::casino::GameResult::Push(_, l) => l.clone(),
         };
 
         // Handle game result
@@ -647,9 +638,7 @@ impl<'a, S: State> Layer<'a, S> {
                         *stack = stack.saturating_add(addition);
                         *stack
                     };
-                    player.modifiers.active_shield = false;
-                    player.modifiers.active_double = false;
-                    player.modifiers.active_super = false;
+                    player.clear_active_modifiers();
                     Self::update_aura_meter_for_completion(&mut player, &session, true);
 
                     if !session.is_tournament {
@@ -675,114 +664,7 @@ impl<'a, S: State> Layer<'a, S> {
                     });
                 }
             }
-            crate::casino::GameResult::WinWithExtraDeduction {
-                payout: base_payout,
-                extra_deduction,
-                ..
-            } => {
-                // Completed win that still needs an additional deduction (e.g., immediate terminal state
-                // after a mid-game bet increase).
-                if let Some(Value::CasinoPlayer(mut player)) =
-                    self.get(&Key::CasinoPlayer(public.clone())).await?
-                {
-                    if extra_deduction > 0 {
-                        let super_fee = if session.super_mode.is_active {
-                            crate::casino::get_super_mode_fee(extra_deduction)
-                        } else {
-                            0
-                        };
-                        let total_deduction = extra_deduction.saturating_add(super_fee);
-                        let stack = if session.is_tournament {
-                            &mut player.tournament.chips
-                        } else {
-                            &mut player.balances.chips
-                        };
-                        if *stack < total_deduction {
-                            return Ok(casino_error_vec(
-                                public,
-                                Some(session_id),
-                                nullspace_types::casino::ERROR_INSUFFICIENT_FUNDS,
-                                format!(
-                                    "Insufficient chips for additional bet: have {}, need {}",
-                                    *stack, total_deduction
-                                ),
-                            ));
-                        }
-                        *stack = stack.saturating_sub(total_deduction);
-
-                        // Update House PnL for cash games only (income from the extra wager).
-                        if !session.is_tournament && total_deduction > 0 {
-                            self.update_house_pnl(total_deduction as i128).await?;
-                        }
-                    }
-
-                    session.is_complete = true;
-                    self.insert(
-                        Key::CasinoSession(session_id),
-                        Value::CasinoSession(session.clone()),
-                    );
-
-                    let mut payout = base_payout as i64;
-                    let was_doubled = player.modifiers.active_double;
-                    let doubles_pool = if session.is_tournament {
-                        &mut player.tournament.doubles
-                    } else {
-                        &mut player.modifiers.doubles
-                    };
-                    if was_doubled && *doubles_pool > 0 {
-                        payout *= 2;
-                        *doubles_pool -= 1;
-                    }
-
-                    // Safe cast: payout should always be positive for win result.
-                    let addition = u64::try_from(payout).unwrap_or(0);
-                    let final_chips = {
-                        let stack = if session.is_tournament {
-                            &mut player.tournament.chips
-                        } else {
-                            &mut player.balances.chips
-                        };
-                        *stack = stack.saturating_add(addition);
-                        *stack
-                    };
-
-                    player.modifiers.active_shield = false;
-                    player.modifiers.active_double = false;
-                    player.modifiers.active_super = false;
-                    Self::update_aura_meter_for_completion(&mut player, &session, true);
-
-                    // Update House PnL for cash games only (payout outflow).
-                    if !session.is_tournament {
-                        self.update_house_pnl(-(payout as i128)).await?;
-                    }
-
-                    self.insert(
-                        Key::CasinoPlayer(public.clone()),
-                        Value::CasinoPlayer(player.clone()),
-                    );
-                    self.update_leaderboard_for_session(&session, public, &player)
-                        .await?;
-
-                    events.push(Event::CasinoGameCompleted {
-                        session_id,
-                        player: public.clone(),
-                        game_type: session.game_type,
-                        payout,
-                        final_chips,
-                        was_shielded: false,
-                        was_doubled,
-                        logs: logs.clone(),
-                    });
-                } else {
-                    // Player not found; still persist completion.
-                    session.is_complete = true;
-                    self.insert(
-                        Key::CasinoSession(session_id),
-                        Value::CasinoSession(session.clone()),
-                    );
-                }
-            }
-            crate::casino::GameResult::Push(_) => {
+            crate::casino::GameResult::Push(refund, _) => {
                 session.is_complete = true;
                 self.insert(
                     Key::CasinoSession(session_id),
@@ -792,24 +674,22 @@ impl<'a, S: State> Layer<'a, S> {
                 if let Some(Value::CasinoPlayer(mut player)) =
                     self.get(&Key::CasinoPlayer(public.clone())).await?
                 {
-                    // Return bet on push
+                    // Return specified refund amount on push
                     let final_chips = {
                         let stack = if session.is_tournament {
                             &mut player.tournament.chips
                         } else {
                             &mut player.balances.chips
                         };
-                        *stack = stack.saturating_add(session.bet);
+                        *stack = stack.saturating_add(refund);
                         *stack
                     };
-                    player.modifiers.active_shield = false;
-                    player.modifiers.active_double = false;
-                    player.modifiers.active_super = false;
+                    player.clear_active_modifiers();
                     Self::consume_aura_round_on_push(&mut player, &session);
 
                     // Update House PnL (Refund)
                     if !session.is_tournament {
-                        self.update_house_pnl(-(session.bet as i128)).await?;
+                        self.update_house_pnl(-(refund as i128)).await?;
                     }
 
                     self.insert(
@@ -825,7 +705,7 @@ impl<'a, S: State> Layer<'a, S> {
                         session_id,
                         player: public.clone(),
                         game_type: session.game_type,
-                        payout: session.bet as i64,
+                        payout: refund as i64,
                         final_chips,
                         was_shielded: false,
                         was_doubled: false,
@@ -855,9 +735,7 @@ impl<'a, S: State> Layer<'a, S> {
                     } else {
                         -(session.bet as i64)
                     };
-                    player.modifiers.active_shield = false;
-                    player.modifiers.active_double = false;
-                    player.modifiers.active_super = false;
+                    player.clear_active_modifiers();
                     Self::update_aura_meter_for_completion(&mut player, &session, false);
 
                     let stack = if session.is_tournament {
@@ -948,9 +826,7 @@ impl<'a, S: State> Layer<'a, S> {
                         (was_shielded, payout, *stack)
                     };
 
-                    player.modifiers.active_shield = false;
-                    player.modifiers.active_double = false;
-                    player.modifiers.active_super = false;
+                    player.clear_active_modifiers();
                     Self::update_aura_meter_for_completion(&mut player, &session, false);
 
                     self.insert(
@@ -1016,9 +892,7 @@ impl<'a, S: State> Layer<'a, S> {
                         (was_shielded, payout, *stack)
                     };
 
-                    player.modifiers.active_shield = false;
-                    player.modifiers.active_double = false;
-                    player.modifiers.active_super = false;
+                    player.clear_active_modifiers();
                     Self::update_aura_meter_for_completion(&mut player, &session, false);
 
                     self.insert(
@@ -1041,156 +915,79 @@ impl<'a, S: State> Layer<'a, S> {
                         logs: logs.clone(),});
                 }
             }
-            crate::casino::GameResult::LossPreDeductedWithExtraDeduction {
-                total_loss,
-                extra_deduction,
-                ..
-            } => {
-                // Loss where most chips were already deducted, but an additional deduction is still required.
-                if let Some(Value::CasinoPlayer(mut player)) =
-                    self.get(&Key::CasinoPlayer(public.clone())).await?
-                {
-                    let (was_shielded, payout, final_chips) = {
-                        let shields_pool = if session.is_tournament {
-                            &mut player.tournament.shields
-                        } else {
-                            &mut player.modifiers.shields
-                        };
-                        let stack = if session.is_tournament {
-                            &mut player.tournament.chips
-                        } else {
-                            &mut player.balances.chips
-                        };
-
-                        if extra_deduction > 0 {
-                            let super_fee = if session.super_mode.is_active {
-                                crate::casino::get_super_mode_fee(extra_deduction)
-                            } else {
-                                0
-                            };
-                            let total_deduction = extra_deduction.saturating_add(super_fee);
-                            if *stack < total_deduction {
-                                return Ok(casino_error_vec(
-                                    public,
-                                    Some(session_id),
-                                    nullspace_types::casino::ERROR_INSUFFICIENT_FUNDS,
-                                    format!(
-                                        "Insufficient chips for additional bet: have {}, need {}",
-                                        *stack, total_deduction
-                                    ),
-                                ));
-                            }
-                            *stack = stack.saturating_sub(total_deduction);
-
-                            // Update House PnL for cash games only (income from the extra wager).
-                            if !session.is_tournament && total_deduction > 0 {
-                                self.update_house_pnl(total_deduction as i128).await?;
-                            }
-                        }
-
-                        session.is_complete = true;
-                        self.insert(
-                            Key::CasinoSession(session_id),
-                            Value::CasinoSession(session.clone()),
-                        );
-
-                        let was_shielded = player.modifiers.active_shield && *shields_pool > 0;
-                        let payout = if was_shielded {
-                            // Shield prevents loss - refund the full loss amount (including the extra deduction).
-                            *shields_pool = shields_pool.saturating_sub(1);
-                            *stack = stack.saturating_add(total_loss);
-
-                            if !session.is_tournament {
-                                self.update_house_pnl(-(total_loss as i128)).await?;
-                            }
-                            0
-                        } else {
-                            -(total_loss as i64)
-                        };
-
-                        (was_shielded, payout, *stack)
-                    };
-
-                    player.modifiers.active_shield = false;
-                    player.modifiers.active_double = false;
-                    player.modifiers.active_super = false;
-                    Self::update_aura_meter_for_completion(&mut player, &session, false);
-
-                    self.insert(
-                        Key::CasinoPlayer(public.clone()),
-                        Value::CasinoPlayer(player.clone()),
-                    );
-                    self.update_leaderboard_for_session(&session, public, &player)
-                        .await?;
-
-                    events.push(Event::CasinoGameCompleted {
-                        session_id,
-                        player: public.clone(),
-                        game_type: session.game_type,
-                        payout,
-                        final_chips,
-                        was_shielded,
-                        was_doubled: false,
-                        logs: logs.clone(),});
-                } else {
-                    session.is_complete = true;
-                    self.insert(
-                        Key::CasinoSession(session_id),
-                        Value::CasinoSession(session.clone()),
-                    );
-                }
-            }
         }
 
         Ok(events)
     }
 
-    pub(in crate::layer) async fn handle_casino_toggle_shield(
+    /// Handle player actions (toggle shield/double/super modifiers).
+    ///
+    /// Validation rules:
+    /// - Shield/Double: Only allowed when player is in an ACTIVE tournament (not Registration/Complete)
+    /// - Super: Allowed in both cash and tournament games
+    pub(in crate::layer) async fn handle_casino_player_action(
         &mut self,
         public: &PublicKey,
+        action: nullspace_types::casino::PlayerAction,
     ) -> anyhow::Result<Vec<Event>> {
-        if let Some(Value::CasinoPlayer(mut player)) =
-            self.get(&Key::CasinoPlayer(public.clone())).await?
-        {
-            player.modifiers.active_shield = !player.modifiers.active_shield;
-            self.insert(
-                Key::CasinoPlayer(public.clone()),
-                Value::CasinoPlayer(player),
-            );
-        }
-        Ok(vec![])
-    }
+        use nullspace_types::casino::PlayerAction;
 
-    pub(in crate::layer) async fn handle_casino_toggle_double(
-        &mut self,
-        public: &PublicKey,
-    ) -> anyhow::Result<Vec<Event>> {
-        if let Some(Value::CasinoPlayer(mut player)) =
-            self.get(&Key::CasinoPlayer(public.clone())).await?
-        {
-            player.modifiers.active_double = !player.modifiers.active_double;
-            self.insert(
-                Key::CasinoPlayer(public.clone()),
-                Value::CasinoPlayer(player),
-            );
-        }
-        Ok(vec![])
-    }
+        let mut player = match self.casino_player_or_error(public, None).await? {
+            Ok(player) => player,
+            Err(events) => return Ok(events),
+        };
 
-    pub(in crate::layer) async fn handle_casino_toggle_super(
-        &mut self,
-        public: &PublicKey,
-    ) -> anyhow::Result<Vec<Event>> {
-        if let Some(Value::CasinoPlayer(mut player)) =
-            self.get(&Key::CasinoPlayer(public.clone())).await?
-        {
-            player.modifiers.active_super = !player.modifiers.active_super;
-            self.insert(
-                Key::CasinoPlayer(public.clone()),
-                Value::CasinoPlayer(player),
-            );
+        // Validate and apply action in single match
+        match action {
+            PlayerAction::ToggleShield | PlayerAction::ToggleDouble => {
+                // Shield and Double require player to be in an ACTIVE tournament
+                let is_in_active_tournament = match player.tournament.active_tournament {
+                    Some(tid) => {
+                        match self.get(&Key::Tournament(tid)).await? {
+                            Some(Value::Tournament(t)) => {
+                                t.phase == nullspace_types::casino::TournamentPhase::Active
+                            }
+                            _ => false, // Tournament doesn't exist (stale reference)
+                        }
+                    }
+                    None => false,
+                };
+
+                if !is_in_active_tournament {
+                    return Ok(casino_error_vec(
+                        public,
+                        None,
+                        nullspace_types::casino::ERROR_NOT_IN_TOURNAMENT,
+                        "Shield/Double modifiers are only available in active tournaments",
+                    ));
+                }
+
+                // Apply toggle
+                if matches!(action, PlayerAction::ToggleShield) {
+                    player.modifiers.active_shield = !player.modifiers.active_shield;
+                } else {
+                    player.modifiers.active_double = !player.modifiers.active_double;
+                }
+            }
+            PlayerAction::ToggleSuper => {
+                // Super mode is available in both cash and tournament games
+                player.modifiers.active_super = !player.modifiers.active_super;
+            }
         }
-        Ok(vec![])
+
+        self.insert(
+            Key::CasinoPlayer(public.clone()),
+            Value::CasinoPlayer(player.clone()),
+        );
+
+        // Emit event for observability
+        Ok(vec![Event::PlayerModifierToggled {
+            player: public.clone(),
+            action,
+            active_shield: player.modifiers.active_shield,
+            active_double: player.modifiers.active_double,
+            active_super: player.modifiers.active_super,
+        }])
     }
 
     pub(in crate::layer) async fn handle_casino_join_tournament(
@@ -1389,9 +1186,7 @@ impl<'a, S: State> Layer<'a, S> {
                 player.tournament.shields = tournament.starting_shields;
                 player.tournament.doubles = tournament.starting_doubles;
                 player.tournament.active_tournament = Some(tournament_id);
-                player.modifiers.active_shield = false;
-                player.modifiers.active_double = false;
-                player.modifiers.active_super = false;
+                player.clear_active_modifiers();
                 player.session.active_session = None;
                 player.modifiers.aura_meter = 0;
 
@@ -1496,9 +1291,7 @@ impl<'a, S: State> Layer<'a, S> {
                     player.tournament.chips = 0;
                     player.tournament.shields = 0;
                     player.tournament.doubles = 0;
-                    player.modifiers.active_shield = false;
-                    player.modifiers.active_double = false;
-                    player.modifiers.active_super = false;
+                    player.clear_active_modifiers();
                     player.session.active_session = None;
                     self.insert(
                         Key::CasinoPlayer(player_pk.clone()),

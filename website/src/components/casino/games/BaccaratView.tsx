@@ -31,6 +31,11 @@ export const BaccaratView = React.memo<{ gameState: GameState; actions: any; las
             P_PAIR: amt('P_PAIR'),
             B_PAIR: amt('B_PAIR'),
             LUCKY6: amt('LUCKY6'),
+            P_DRAGON: amt('P_DRAGON'),
+            B_DRAGON: amt('B_DRAGON'),
+            PANDA8: amt('PANDA8'),
+            P_PERFECT_PAIR: amt('P_PERFECT_PAIR'),
+            B_PERFECT_PAIR: amt('B_PERFECT_PAIR'),
         };
     }, [gameState.baccaratBets]);
 
@@ -46,6 +51,9 @@ export const BaccaratView = React.memo<{ gameState: GameState; actions: any; las
         if (gameState.stage !== 'RESULT') return 'border-gray-800 bg-black/40';
         const p = playerValue;
         const b = bankerValue;
+        const margin = Math.abs(p - b);
+        const pNatural = p >= 8;
+        const bNatural = b >= 8;
         let won = false;
 
         if (type === 'PLAYER') won = p > b;
@@ -54,6 +62,14 @@ export const BaccaratView = React.memo<{ gameState: GameState; actions: any; las
         else if (type === 'P_PAIR') won = gameState.playerCards.length >= 2 && gameState.playerCards[0].rank === gameState.playerCards[1].rank;
         else if (type === 'B_PAIR') won = gameState.dealerCards.length >= 2 && gameState.dealerCards[0].rank === gameState.dealerCards[1].rank;
         else if (type === 'LUCKY6') won = b === 6 && b > p;
+        // Dragon Bonus
+        else if (type === 'P_DRAGON') won = p > b && (pNatural || margin >= 4);
+        else if (type === 'B_DRAGON') won = b > p && (bNatural || margin >= 4);
+        // Panda 8: Player wins with 3-card total of 8
+        else if (type === 'PANDA8') won = p > b && p === 8 && gameState.playerCards.length === 3;
+        // Perfect Pairs (same rank AND same suit)
+        else if (type === 'P_PERFECT_PAIR') won = gameState.playerCards.length >= 2 && gameState.playerCards[0].rank === gameState.playerCards[1].rank && gameState.playerCards[0].suit === gameState.playerCards[1].suit;
+        else if (type === 'B_PERFECT_PAIR') won = gameState.dealerCards.length >= 2 && gameState.dealerCards[0].rank === gameState.dealerCards[1].rank && gameState.dealerCards[0].suit === gameState.dealerCards[1].suit;
 
         if (won) return 'border-terminal-green text-terminal-green shadow-[0_0_10px_rgba(74,222,128,0.5)] animate-pulse bg-terminal-green/10';
         return 'border-gray-800 bg-black/40 text-gray-500';
@@ -127,6 +143,31 @@ export const BaccaratView = React.memo<{ gameState: GameState; actions: any; las
                                 LUCKY6 ${sideBetAmounts.LUCKY6.toLocaleString()}
                             </span>
                         )}
+                        {sideBetAmounts.P_DRAGON > 0 && (
+                            <span className={`px-2 py-0.5 rounded border transition-all ${getWinnerClass('P_DRAGON')}`}>
+                                P.DRAGON ${sideBetAmounts.P_DRAGON.toLocaleString()}
+                            </span>
+                        )}
+                        {sideBetAmounts.B_DRAGON > 0 && (
+                            <span className={`px-2 py-0.5 rounded border transition-all ${getWinnerClass('B_DRAGON')}`}>
+                                B.DRAGON ${sideBetAmounts.B_DRAGON.toLocaleString()}
+                            </span>
+                        )}
+                        {sideBetAmounts.PANDA8 > 0 && (
+                            <span className={`px-2 py-0.5 rounded border transition-all ${getWinnerClass('PANDA8')}`}>
+                                PANDA8 ${sideBetAmounts.PANDA8.toLocaleString()}
+                            </span>
+                        )}
+                        {sideBetAmounts.P_PERFECT_PAIR > 0 && (
+                            <span className={`px-2 py-0.5 rounded border transition-all ${getWinnerClass('P_PERFECT_PAIR')}`}>
+                                P.PP ${sideBetAmounts.P_PERFECT_PAIR.toLocaleString()}
+                            </span>
+                        )}
+                        {sideBetAmounts.B_PERFECT_PAIR > 0 && (
+                            <span className={`px-2 py-0.5 rounded border transition-all ${getWinnerClass('B_PERFECT_PAIR')}`}>
+                                B.PP ${sideBetAmounts.B_PERFECT_PAIR.toLocaleString()}
+                            </span>
+                        )}
                     </div>
                 </div>
 
@@ -197,6 +238,31 @@ export const BaccaratView = React.memo<{ gameState: GameState; actions: any; las
                         label: `LUCKY6${sideBetAmounts.LUCKY6 > 0 ? ` $${sideBetAmounts.LUCKY6}` : ''}`,
                         onClick: () => actions?.baccaratActions?.placeBet?.('LUCKY6'),
                         active: sideBetAmounts.LUCKY6 > 0,
+                    },
+                    {
+                        label: `P.DRAG${sideBetAmounts.P_DRAGON > 0 ? ` $${sideBetAmounts.P_DRAGON}` : ''}`,
+                        onClick: () => actions?.baccaratActions?.placeBet?.('P_DRAGON'),
+                        active: sideBetAmounts.P_DRAGON > 0,
+                    },
+                    {
+                        label: `B.DRAG${sideBetAmounts.B_DRAGON > 0 ? ` $${sideBetAmounts.B_DRAGON}` : ''}`,
+                        onClick: () => actions?.baccaratActions?.placeBet?.('B_DRAGON'),
+                        active: sideBetAmounts.B_DRAGON > 0,
+                    },
+                    {
+                        label: `PANDA8${sideBetAmounts.PANDA8 > 0 ? ` $${sideBetAmounts.PANDA8}` : ''}`,
+                        onClick: () => actions?.baccaratActions?.placeBet?.('PANDA8'),
+                        active: sideBetAmounts.PANDA8 > 0,
+                    },
+                    {
+                        label: `P.PP${sideBetAmounts.P_PERFECT_PAIR > 0 ? ` $${sideBetAmounts.P_PERFECT_PAIR}` : ''}`,
+                        onClick: () => actions?.baccaratActions?.placeBet?.('P_PERFECT_PAIR'),
+                        active: sideBetAmounts.P_PERFECT_PAIR > 0,
+                    },
+                    {
+                        label: `B.PP${sideBetAmounts.B_PERFECT_PAIR > 0 ? ` $${sideBetAmounts.B_PERFECT_PAIR}` : ''}`,
+                        onClick: () => actions?.baccaratActions?.placeBet?.('B_PERFECT_PAIR'),
+                        active: sideBetAmounts.B_PERFECT_PAIR > 0,
                     },
                     {
                         label: 'REBET',

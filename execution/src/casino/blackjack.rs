@@ -450,7 +450,66 @@ impl CasinoGame for Blackjack {
                     session.state_blob = serialize_state(&state);
                     Ok(GameResult::Continue(vec![]))
                 }
-                _ => Err(GameError::InvalidMove),
+                _ => {
+                    // Check for atomic batch action (payload[0] == 7)
+                    // [7, sidebet_21plus3: u64 BE]
+                    if payload[0] == 7 {
+                        if payload.len() != 9 {
+                            return Err(GameError::InvalidPayload);
+                        }
+                        if !state.hands.is_empty() || !state.dealer_cards.is_empty() {
+                            return Err(GameError::InvalidMove);
+                        }
+
+                        // Parse and apply 21+3 side bet
+                        let side_bet = super::payload::parse_u64_be(payload, 1)?;
+                        let payout_update = apply_21plus3_update(&mut state, side_bet)?;
+
+                        // Deal cards
+                        let mut deck = rng.create_shoe(BLACKJACK_DECKS);
+                        let p1 = rng.draw_card(&mut deck).ok_or(GameError::DeckExhausted)?;
+                        let p2 = rng.draw_card(&mut deck).ok_or(GameError::DeckExhausted)?;
+                        let dealer_up = rng.draw_card(&mut deck).ok_or(GameError::DeckExhausted)?;
+
+                        state.initial_player_cards = [p1, p2];
+                        let player_cards = vec![p1, p2];
+                        let player_bj = is_blackjack(&player_cards);
+
+                        state.hands = vec![HandState {
+                            cards: player_cards,
+                            bet_mult: 1,
+                            status: if player_bj {
+                                HandStatus::Blackjack
+                            } else {
+                                HandStatus::Playing
+                            },
+                            was_split: false,
+                        }];
+                        state.dealer_cards = vec![dealer_up];
+                        state.active_hand_idx = 0;
+                        state.stage = if player_bj {
+                            Stage::AwaitingReveal
+                        } else {
+                            Stage::PlayerTurn
+                        };
+
+                        if state.stage == Stage::PlayerTurn && !advance_turn(&mut state) {
+                            state.stage = Stage::AwaitingReveal;
+                        }
+
+                        session.state_blob = serialize_state(&state);
+                        Ok(if payout_update == 0 {
+                            GameResult::Continue(vec![])
+                        } else {
+                            GameResult::ContinueWithUpdate {
+                                payout: payout_update,
+                                logs: vec![],
+                            }
+                        })
+                    } else {
+                        Err(GameError::InvalidMove)
+                    }
+                }
             },
             Stage::PlayerTurn => {
                 // Reconstruct deck (excludes only visible/known cards).
@@ -921,7 +980,7 @@ mod tests {
             let mut init_rng = GameRng::new(&seed, session_id, 0);
             assert!(matches!(
                 Blackjack::init(&mut session, &mut init_rng),
-                GameResult::Continue(vec![])
+                GameResult::Continue(_)
             ));
 
             let mut total_extra_deductions: i64 = 0;
@@ -972,8 +1031,8 @@ mod tests {
                 match Blackjack::process_move(&mut session, &payload, &mut rng)
                     .expect("blackjack move should not error for valid payload")
                 {
-                    GameResult::Continue => {}
-                    GameResult::ContinueWithUpdate { payout, logs: vec![] } => {
+                    GameResult::Continue(_) => {}
+                    GameResult::ContinueWithUpdate { payout, .. } => {
                         if payout < 0 {
                             total_extra_deductions = total_extra_deductions.saturating_add(payout);
                         }

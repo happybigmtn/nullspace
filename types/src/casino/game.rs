@@ -154,3 +154,43 @@ impl EncodeSize for SuperModeState {
             + self.streak_level.encode_size()
     }
 }
+
+/// Player actions for toggling modifiers.
+///
+/// These are player-level state changes (not game session moves):
+/// - Shield/Double: Tournament-only modifiers that protect/amplify bet outcomes
+/// - Super: Bet variant that applies to both cash and tournament games
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum PlayerAction {
+    /// Toggle shield modifier (tournament-only, protects against losses)
+    ToggleShield = 0,
+    /// Toggle double modifier (tournament-only, doubles win/loss)
+    ToggleDouble = 1,
+    /// Toggle super/aura mode (both cash and tournament, high-risk multiplier bet)
+    ToggleSuper = 2,
+}
+
+impl Write for PlayerAction {
+    fn write(&self, writer: &mut impl BufMut) {
+        (*self as u8).write(writer);
+    }
+}
+
+impl Read for PlayerAction {
+    type Cfg = ();
+
+    fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
+        let value = u8::read(reader)?;
+        match value {
+            0 => Ok(Self::ToggleShield),
+            1 => Ok(Self::ToggleDouble),
+            2 => Ok(Self::ToggleSuper),
+            i => Err(Error::InvalidEnum(i)),
+        }
+    }
+}
+
+impl FixedSize for PlayerAction {
+    const SIZE: usize = 1;
+}

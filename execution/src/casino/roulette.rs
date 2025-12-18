@@ -19,8 +19,11 @@
 //! Payload format:
 //! [0, bet_type, number, amount_bytes...] - Place bet (adds to pending bets)
 //! [1] - Spin wheel and resolve all bets
-//! [2] - Clear all pending bets
+//! [2] - Clear all pending bets (with refund)
 //! [3, zero_rule] - Set even-money-on-zero rule
+//! [4, bet_count, bets...] - Atomic batch: place all bets + spin in one transaction
+//!                          Each bet is 10 bytes: [bet_type:u8, number:u8, amount:u64 BE]
+//!                          Uses standard zero rule (no En Prison in atomic batch)
 //!
 //! Bet types:
 //! 0 = Straight (single number, 35:1)
@@ -460,7 +463,12 @@ impl CasinoGame for Roulette {
                     number,
                     amount,
                 });
-                state.total_wagered = state.total_wagered.saturating_add(amount);
+                // Use checked_add to prevent overflow - reject bet if it would overflow
+                // (otherwise player gets charged but wager total doesn't increase)
+                state.total_wagered = state
+                    .total_wagered
+                    .checked_add(amount)
+                    .ok_or(GameError::InvalidPayload)?;
 
                 session.state_blob = state.to_blob();
                 Ok(GameResult::ContinueWithUpdate {
@@ -635,16 +643,28 @@ impl CasinoGame for Roulette {
                 }
             }
 
-            // [2] - Clear all pending bets
+            // [2] - Clear all pending bets (with refund)
             2 => {
                 // Can't clear after wheel spun or during En Prison.
                 if state.phase != Phase::Betting || state.result.is_some() {
                     return Err(GameError::InvalidMove);
                 }
 
+                // Calculate total to refund (bets were deducted via ContinueWithUpdate)
+                let refund = state.total_wagered;
                 state.bets.clear();
+                state.total_wagered = 0;
                 session.state_blob = state.to_blob();
-                Ok(GameResult::Continue(vec![]))
+
+                if refund > 0 {
+                    // Positive payout = credit chips back to player
+                    Ok(GameResult::ContinueWithUpdate {
+                        payout: refund as i64,
+                        logs: vec![],
+                    })
+                } else {
+                    Ok(GameResult::Continue(vec![]))
+                }
             }
 
             // [3, zero_rule] - Set even-money-on-zero rule.
@@ -658,6 +678,106 @@ impl CasinoGame for Roulette {
                 state.zero_rule = ZeroRule::try_from(payload[1])?;
                 session.state_blob = state.to_blob();
                 Ok(GameResult::Continue(vec![]))
+            }
+
+            // [4, bet_count, bets...] - Atomic batch: place all bets + spin in one transaction
+            // Each bet is 10 bytes: [bet_type:u8, number:u8, amount:u64 BE]
+            // This ensures all-or-nothing semantics - no partial bet states
+            // Uses standard zero rule (no En Prison in atomic batch)
+            4 => {
+                // Can't batch if wheel already spun or in prison
+                if state.phase != Phase::Betting || state.result.is_some() {
+                    return Err(GameError::InvalidMove);
+                }
+
+                // Must have existing bets cleared first (fresh round)
+                if !state.bets.is_empty() {
+                    return Err(GameError::InvalidMove);
+                }
+
+                if payload.len() < 2 {
+                    return Err(GameError::InvalidPayload);
+                }
+
+                let bet_count = payload[1] as usize;
+                if bet_count == 0 || bet_count > MAX_BETS {
+                    return Err(GameError::InvalidPayload);
+                }
+
+                // Expected payload size: 2 (action + count) + bet_count * 10 (type + number + amount)
+                let expected_len = 2 + bet_count * 10;
+                if payload.len() < expected_len {
+                    return Err(GameError::InvalidPayload);
+                }
+
+                // Parse and validate all bets first (before any state changes)
+                let mut bets_to_place: Vec<RouletteBet> = Vec::with_capacity(bet_count);
+                let mut total_wager: u64 = 0;
+                let mut offset = 2;
+
+                for _ in 0..bet_count {
+                    let bet_type = BetType::try_from(payload[offset])?;
+                    let number = payload[offset + 1];
+                    let amount = u64::from_be_bytes(
+                        payload[offset + 2..offset + 10]
+                            .try_into()
+                            .map_err(|_| GameError::InvalidPayload)?,
+                    );
+
+                    if amount == 0 {
+                        return Err(GameError::InvalidPayload);
+                    }
+
+                    // Check for overflow in total wager
+                    total_wager = total_wager
+                        .checked_add(amount)
+                        .ok_or(GameError::InvalidPayload)?;
+
+                    bets_to_place.push(RouletteBet {
+                        bet_type,
+                        number,
+                        amount,
+                    });
+
+                    offset += 10;
+                }
+
+                // All validation passed - now execute atomically
+                state.bets = bets_to_place;
+                state.total_wagered = total_wager;
+
+                // Spin the wheel
+                let result = rng.spin_roulette();
+                state.result = Some(result);
+
+                // Calculate total return (standard rules - no En Prison for atomic batch)
+                let mut total_return: u64 = 0;
+                for bet in &state.bets {
+                    if bet_wins(bet.bet_type, bet.number, result) {
+                        let multiplier = payout_multiplier(bet.bet_type).saturating_add(1);
+                        total_return =
+                            total_return.saturating_add(bet.amount.saturating_mul(multiplier));
+                    }
+                }
+
+                // Apply super mode multipliers
+                if session.super_mode.is_active && total_return > 0 {
+                    total_return = apply_super_multiplier_number(
+                        result,
+                        &session.super_mode.multipliers,
+                        total_return,
+                    );
+                }
+
+                session.state_blob = state.to_blob();
+                session.move_count += 1;
+                session.is_complete = true;
+
+                if total_return > 0 {
+                    Ok(GameResult::Win(total_return, vec![]))
+                } else {
+                    Ok(GameResult::Loss(vec![]))
+                }
             }
 
             _ => Err(GameError::InvalidPayload),
@@ -1069,7 +1189,7 @@ mod tests {
                 RouletteState::from_blob(&test_session.state_blob).expect("Failed to parse state");
 
             if state.result == Some(0) {
-                assert!(matches!(res, GameResult::Win(50, vec![])));
+                assert!(matches!(res, GameResult::Win(50, _)));
                 return;
             }
         }
@@ -1109,7 +1229,7 @@ mod tests {
                 continue;
             }
 
-            assert!(matches!(res1, GameResult::Continue(vec![])));
+            assert!(matches!(res1, GameResult::Continue(_)));
             assert!(!test_session.is_complete);
             assert_eq!(state1.phase, Phase::Prison);
 
@@ -1124,9 +1244,9 @@ mod tests {
             assert!(test_session.is_complete);
 
             if result2 != 0 && is_red(result2) {
-                assert!(matches!(res2, GameResult::Win(100, vec![])));
+                assert!(matches!(res2, GameResult::Win(100, _)));
             } else {
-                assert!(matches!(res2, GameResult::LossPreDeducted(100, vec![])));
+                assert!(matches!(res2, GameResult::LossPreDeducted(100, _)));
             }
             return;
         }
@@ -1166,7 +1286,7 @@ mod tests {
                 continue;
             }
 
-            assert!(matches!(res1, GameResult::Continue(vec![])));
+            assert!(matches!(res1, GameResult::Continue(_)));
             assert!(!test_session.is_complete);
             assert_eq!(state1.phase, Phase::Prison);
 
@@ -1181,7 +1301,7 @@ mod tests {
                 continue;
             }
 
-            assert!(matches!(res2, GameResult::Continue(vec![])));
+            assert!(matches!(res2, GameResult::Continue(_)));
             assert!(!test_session.is_complete);
             assert_eq!(state2.phase, Phase::Prison);
             return;
@@ -1211,7 +1331,7 @@ mod tests {
             let mut rng = GameRng::new(&seed, session_id, 2);
             let result = Roulette::process_move(&mut test_session, &[1], &mut rng);
 
-            if let Ok(GameResult::Win(amount, vec![])) = result {
+            if let Ok(GameResult::Win(amount, _)) = result {
                 // Straight bet pays 35:1 plus stake returned = 36x total
                 assert_eq!(amount, 100 * 36);
                 return; // Found a winning case

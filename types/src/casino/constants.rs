@@ -54,6 +54,8 @@ pub const ERROR_RATE_LIMITED: u8 = 10;
 pub const ERROR_TOURNAMENT_NOT_REGISTERING: u8 = 11;
 pub const ERROR_ALREADY_IN_TOURNAMENT: u8 = 12;
 pub const ERROR_TOURNAMENT_LIMIT_REACHED: u8 = 13;
+/// Error when trying to use tournament-only features (shield/double) outside a tournament
+pub const ERROR_NOT_IN_TOURNAMENT: u8 = 14;
 
 /// Tournament duration in seconds (5 minutes)
 pub const TOURNAMENT_DURATION_SECS: u64 = 5 * 60;

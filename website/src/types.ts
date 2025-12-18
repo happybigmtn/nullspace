@@ -1,4 +1,3 @@
-
 export type Suit = '♠' | '♥' | '♦' | '♣';
 export type Rank = 'A' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '10' | 'J' | 'Q' | 'K';
 
@@ -71,7 +70,7 @@ export interface CrapsBet {
 }
 
 export interface BaccaratBet {
-    type: 'TIE' | 'P_PAIR' | 'B_PAIR' | 'LUCKY6';
+    type: 'TIE' | 'P_PAIR' | 'B_PAIR' | 'LUCKY6' | 'P_DRAGON' | 'B_DRAGON' | 'PANDA8' | 'P_PERFECT_PAIR' | 'B_PERFECT_PAIR';
     amount: number;
 }
 
@@ -220,3 +219,26 @@ export interface LeaderboardEntry {
   chips: number;
   status: 'ALIVE' | 'ELIMINATED';
 }
+
+export type AutoPlayDraft =
+  | {
+      type: GameType.BACCARAT;
+      baccaratSelection: 'PLAYER' | 'BANKER';
+      baccaratSideBets: BaccaratBet[];
+      mainBetAmount: number;
+    }
+  | {
+      type: GameType.CRAPS;
+      crapsBets: CrapsBet[];
+    }
+  | {
+      type: GameType.ROULETTE;
+      rouletteBets: RouletteBet[];
+      rouletteZeroRule: GameState['rouletteZeroRule'];
+    }
+  | {
+      type: GameType.SIC_BO;
+      sicBoBets: SicBoBet[];
+    };
+
+export type AutoPlayPlan = AutoPlayDraft & { sessionId: bigint };

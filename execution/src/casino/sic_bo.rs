@@ -9,7 +9,10 @@
 //! Payload format:
 //! Action 0: Place bet - [0, bet_type, number, amount_bytes...]
 //! Action 1: Roll dice and resolve - [1]
-//! Action 2: Clear bets - [2]
+//! Action 2: Clear bets (with refund) - [2]
+//! Action 3: Atomic batch - [3, bet_count, bets...]
+//!           Each bet is 10 bytes: [bet_type:u8, number:u8, amount:u64 BE]
+//!           Ensures all-or-nothing semantics - no partial bet states
 //!
 //! Bet types:
 //! 0 = Small (4-10, 1:1) - loses on triple
@@ -29,6 +32,9 @@
 use super::super_mode::apply_super_multiplier_total;
 use super::{CasinoGame, GameError, GameResult, GameRng};
 use nullspace_types::casino::GameSession;
+
+/// Maximum number of bets per session.
+const MAX_BETS: usize = 20;
 
 /// Sic Bo bet types.
 #[repr(u8)]
@@ -466,11 +472,114 @@ impl CasinoGame for SicBo {
                 }
             }
 
-            // Action 2: Clear all bets
+            // Action 2: Clear all bets (with refund)
             2 => {
+                // Calculate total to refund (bets were deducted via ContinueWithUpdate)
+                let refund: u64 = state.bets.iter().map(|b| b.amount).sum();
                 state.bets.clear();
                 session.state_blob = state.to_bytes();
-                Ok(GameResult::Continue(vec![]))
+
+                if refund > 0 {
+                    // Positive payout = credit chips back to player
+                    Ok(GameResult::ContinueWithUpdate {
+                        payout: refund as i64,
+                        logs: vec![],
+                    })
+                } else {
+                    Ok(GameResult::Continue(vec![]))
+                }
+            }
+
+            // Action 3: Atomic batch - place all bets + roll in one transaction
+            // Each bet is 10 bytes: [bet_type:u8, number:u8, amount:u64 BE]
+            // This ensures all-or-nothing semantics - no partial bet states
+            3 => {
+                // Must have existing bets cleared first (fresh round)
+                if !state.bets.is_empty() || state.dice.is_some() {
+                    return Err(GameError::InvalidMove);
+                }
+
+                if payload.len() < 2 {
+                    return Err(GameError::InvalidPayload);
+                }
+
+                let bet_count = payload[1] as usize;
+                if bet_count == 0 || bet_count > MAX_BETS {
+                    return Err(GameError::InvalidPayload);
+                }
+
+                // Expected payload size: 2 (action + count) + bet_count * 10 (type + number + amount)
+                let expected_len = 2 + bet_count * 10;
+                if payload.len() < expected_len {
+                    return Err(GameError::InvalidPayload);
+                }
+
+                // Parse and validate all bets first (before any state changes)
+                let mut bets_to_place: Vec<SicBoBet> = Vec::with_capacity(bet_count);
+                let mut total_wager: u64 = 0;
+                let mut offset = 2;
+
+                for _ in 0..bet_count {
+                    let bet_type = BetType::try_from(payload[offset])?;
+                    let number = payload[offset + 1];
+                    let amount = u64::from_be_bytes(
+                        payload[offset + 2..offset + 10]
+                            .try_into()
+                            .map_err(|_| GameError::InvalidPayload)?,
+                    );
+
+                    if amount == 0 {
+                        return Err(GameError::InvalidPayload);
+                    }
+
+                    // Check for overflow in total wager
+                    total_wager = total_wager
+                        .checked_add(amount)
+                        .ok_or(GameError::InvalidPayload)?;
+
+                    bets_to_place.push(SicBoBet {
+                        bet_type,
+                        number,
+                        amount,
+                    });
+
+                    offset += 10;
+                }
+
+                // All validation passed - now execute atomically
+                state.bets = bets_to_place;
+
+                // Roll the dice
+                let dice: [u8; 3] = [rng.roll_die(), rng.roll_die(), rng.roll_die()];
+                state.dice = Some(dice);
+
+                // Calculate total winnings
+                let total_winnings: u64 = state
+                    .bets
+                    .iter()
+                    .map(|bet| calculate_bet_payout(bet, &dice))
+                    .sum();
+
+                session.state_blob = state.to_bytes();
+                session.move_count += 1;
+                session.is_complete = true;
+
+                // Determine result
+                if total_winnings > 0 {
+                    let final_winnings = if session.super_mode.is_active {
+                        let dice_total = dice.iter().sum::<u8>();
+                        apply_super_multiplier_total(
+                            dice_total,
+                            &session.super_mode.multipliers,
+                            total_winnings,
+                        )
+                    } else {
+                        total_winnings
+                    };
+                    Ok(GameResult::Win(final_winnings, vec![]))
+                } else {
+                    Ok(GameResult::Loss(vec![]))
+                }
             }
 
             _ => Err(GameError::InvalidPayload),
@@ -641,7 +750,7 @@ mod tests {
         assert!(!session.is_complete); // Not complete until dice rolled
         assert!(matches!(
             result.expect("Failed to process move"),
-            GameResult::Continue | GameResult::ContinueWithUpdate { .. }
+            GameResult::Continue(_) | GameResult::ContinueWithUpdate { .. }
         ));
 
         // Verify bet was stored
@@ -817,7 +926,7 @@ mod tests {
             assert!(session.is_complete);
 
             match result.expect("Failed to process move") {
-                GameResult::Win(_, vec![]) | GameResult::LossPreDeducted(_, _) => {}
+                GameResult::Win(_, _) | GameResult::LossPreDeducted(_, _) => {}
                 _ => panic!("SicBo should complete with Win or LossPreDeducted"),
             }
         }

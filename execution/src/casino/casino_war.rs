@@ -268,7 +268,124 @@ impl CasinoGame for CasinoWar {
                             }
                         }
                     }
-                    _ => Err(GameError::InvalidMove),
+                    _ => {
+                        // Check for atomic batch action (payload[0] == 4)
+                        // [4, tie_bet: u64 BE]
+                        if payload[0] == 4 {
+                            if payload.len() != 9 {
+                                return Err(GameError::InvalidPayload);
+                            }
+
+                            // Parse tie bet
+                            let next_amount = u64::from_be_bytes(
+                                payload[1..9]
+                                    .try_into()
+                                    .map_err(|_| GameError::InvalidPayload)?,
+                            );
+
+                            // Apply tie bet
+                            let prev_amount = state.tie_bet;
+                            let tie_bet_payout = if next_amount >= prev_amount {
+                                let delta = next_amount - prev_amount;
+                                let delta_i64 =
+                                    i64::try_from(delta).map_err(|_| GameError::InvalidPayload)?;
+                                -(delta_i64)
+                            } else {
+                                let delta = prev_amount - next_amount;
+                                i64::try_from(delta).map_err(|_| GameError::InvalidPayload)?
+                            };
+                            state.tie_bet = next_amount;
+
+                            // Deal one card each
+                            let mut deck = rng.create_shoe(CASINO_WAR_DECKS);
+                            let player_card = rng.draw_card(&mut deck).unwrap_or(0);
+                            let dealer_card = rng.draw_card(&mut deck).unwrap_or(1);
+
+                            let player_rank = cards::card_rank_ace_high(player_card);
+                            let dealer_rank = cards::card_rank_ace_high(dealer_card);
+
+                            // Tie bet pays on initial tie only
+                            let tie_bet_return: i64 = if state.tie_bet > 0 && player_rank == dealer_rank
+                            {
+                                let credited = state
+                                    .tie_bet
+                                    .saturating_mul(TIE_BET_PAYOUT_TO_1.saturating_add(1));
+                                i64::try_from(credited).map_err(|_| GameError::InvalidPayload)?
+                            } else {
+                                0
+                            };
+
+                            state.player_card = player_card;
+                            state.dealer_card = dealer_card;
+
+                            // Total payout is tie bet placement delta + tie bet winnings
+                            let total_payout = tie_bet_payout.saturating_add(tie_bet_return);
+
+                            match player_rank.cmp(&dealer_rank) {
+                                std::cmp::Ordering::Greater => {
+                                    // Player wins
+                                    let final_winnings = session.bet.saturating_mul(2);
+                                    state.stage = StageV1::Complete;
+                                    session.state_blob = serialize_state_v1(&state);
+                                    session.is_complete = true;
+                                    session.move_count += 1;
+
+                                    let base_payout = final_winnings;
+                                    let final_payout = if session.super_mode.is_active {
+                                        apply_super_multiplier_cards(
+                                            &[player_card, dealer_card],
+                                            &session.super_mode.multipliers,
+                                            base_payout,
+                                        )
+                                    } else {
+                                        base_payout
+                                    };
+
+                                    if total_payout != 0 {
+                                        Ok(GameResult::ContinueWithUpdate {
+                                            payout: total_payout + final_payout as i64,
+                                            logs: vec![],
+                                        })
+                                    } else {
+                                        Ok(GameResult::Win(final_payout, vec![]))
+                                    }
+                                }
+                                std::cmp::Ordering::Less => {
+                                    // Dealer wins - player loses ante (already deducted)
+                                    state.stage = StageV1::Complete;
+                                    session.state_blob = serialize_state_v1(&state);
+                                    session.is_complete = true;
+                                    session.move_count += 1;
+
+                                    if total_payout != 0 {
+                                        Ok(GameResult::ContinueWithUpdate {
+                                            payout: total_payout,
+                                            logs: vec![],
+                                        })
+                                    } else {
+                                        Ok(GameResult::Loss(vec![]))
+                                    }
+                                }
+                                std::cmp::Ordering::Equal => {
+                                    // Tie - player must go to war or surrender
+                                    state.stage = StageV1::War;
+                                    session.state_blob = serialize_state_v1(&state);
+                                    session.move_count += 1;
+
+                                    if total_payout != 0 {
+                                        Ok(GameResult::ContinueWithUpdate {
+                                            payout: total_payout,
+                                            logs: vec![],
+                                        })
+                                    } else {
+                                        Ok(GameResult::Continue(vec![]))
+                                    }
+                                }
+                            }
+                        } else {
+                            Err(GameError::InvalidMove)
+                        }
+                    }
                 },
                 StageV1::War => match mv {
                     Move::Surrender => {
@@ -475,7 +592,7 @@ mod tests {
         let result = CasinoWar::process_move(&mut session, &[0], &mut rng);
 
         // Win(200) = stake(100) + winnings(100) for 1:1 payout
-        assert!(matches!(result, Ok(GameResult::Win(200, vec![]))));
+        assert!(matches!(result, Ok(GameResult::Win(200, _))));
         assert!(session.is_complete);
     }
 
@@ -490,7 +607,7 @@ mod tests {
         let mut rng = GameRng::new(&seed, session.id, 1);
         let result = CasinoWar::process_move(&mut session, &[0], &mut rng);
 
-        assert!(matches!(result, Ok(GameResult::Loss(vec![]))));
+        assert!(matches!(result, Ok(GameResult::Loss(_))));
         assert!(session.is_complete);
     }
 
@@ -505,7 +622,7 @@ mod tests {
         let mut rng = GameRng::new(&seed, session.id, 1);
         let result = CasinoWar::process_move(&mut session, &[0], &mut rng);
 
-        assert!(matches!(result, Ok(GameResult::Continue(vec![]))));
+        assert!(matches!(result, Ok(GameResult::Continue(_))));
         assert!(!session.is_complete);
 
         let parsed = parse_state(&session.state_blob).expect("Failed to parse state");
@@ -527,7 +644,7 @@ mod tests {
         let result = CasinoWar::process_move(&mut session, &[2], &mut rng); // Surrender
 
         // Surrender forfeits half the ante.
-        assert!(matches!(result, Ok(GameResult::Win(50, vec![]))));
+        assert!(matches!(result, Ok(GameResult::Win(50, _))));
         assert!(session.is_complete);
     }
 
@@ -547,7 +664,7 @@ mod tests {
 
         // Result should be Win, Loss, or LossWithExtraDeduction
         match result.expect("Failed to process war") {
-            GameResult::Win(_, vec![]) | GameResult::Loss | GameResult::LossWithExtraDeduction(_, _) => {}
+            GameResult::Win(_, _) | GameResult::Loss(_) | GameResult::LossWithExtraDeduction(_, _) => {}
             _ => panic!("Expected Win, Loss, or LossWithExtraDeduction after war"),
         }
     }
@@ -614,7 +731,7 @@ mod tests {
         let result = CasinoWar::process_move(&mut session, &payload, &mut rng);
         assert!(matches!(
             result,
-            Ok(GameResult::ContinueWithUpdate { payout: -10 }), logs: vec![],
+            Ok(GameResult::ContinueWithUpdate { payout: -10, .. })
         ));
 
         let parsed = parse_state(&session.state_blob).expect("Failed to parse state");
@@ -646,7 +763,7 @@ mod tests {
             let mut rng = GameRng::new(&seed, session.id, 2);
             let result = CasinoWar::process_move(&mut session, &[0], &mut rng);
 
-            if matches!(result, Ok(GameResult::ContinueWithUpdate { payout: 110 })) {
+            if matches!(result, Ok(GameResult::ContinueWithUpdate { payout: 110, .. })) {
                 let parsed = parse_state(&session.state_blob).expect("Failed to parse state");
                 let Ok(state) = parsed else {
                     panic!("expected v1 state");
@@ -702,7 +819,7 @@ mod tests {
                 == cards::card_rank_ace_high(final_state.dealer_card)
             {
                 // Bonus is equal to the ante, so the win credits 3x the ante in our model.
-                assert!(matches!(result, GameResult::Win(300, vec![])));
+                assert!(matches!(result, GameResult::Win(300, _)));
                 return;
             }
         }

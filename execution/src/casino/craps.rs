@@ -22,7 +22,11 @@
 //! [0, bet_type, target, amount_bytes...] - Place bet
 //! [1, amount_bytes...] - Add odds to last contract bet
 //! [2] - Roll dice
-//! [3] - Clear all bets (only before first roll)
+//! [3] - Clear all bets (only before first roll, with refund)
+//! [4, bet_count, bets...] - Atomic batch: place all bets + roll in one transaction
+//!                          Each bet is 10 bytes: [bet_type:u8, target:u8, amount:u64 BE]
+//!                          Ensures all-or-nothing semantics (only before first roll)
+//!                          Note: Odds cannot be added in atomic batch
 
 use super::super_mode::apply_super_multiplier_total;
 use super::{CasinoGame, GameError, GameResult, GameRng};
@@ -1317,7 +1321,12 @@ impl CasinoGame for Craps {
                         if ![4u8, 5, 6, 8, 9, 10].contains(&bet.target) {
                             return Err(GameError::InvalidMove);
                         }
-                        bet.odds_amount = bet.odds_amount.saturating_add(odds_amount);
+                        // Use checked_add to prevent overflow - reject if it would overflow
+                        // (otherwise player gets charged but odds amount doesn't increase)
+                        bet.odds_amount = bet
+                            .odds_amount
+                            .checked_add(odds_amount)
+                            .ok_or(GameError::InvalidPayload)?;
                         found = true;
                         break;
                     }
@@ -1347,8 +1356,9 @@ impl CasinoGame for Craps {
                 // Process roll
                 let results = process_roll(&mut state, d1, d2);
 
-                // Calculate credited return and (for completion reporting) loss amount.
+                // Calculate credited return, total wagered, and (for completion reporting) loss amount.
                 let mut total_return: u64 = 0;
+                let mut total_wagered: u64 = 0;
                 let mut total_loss: u64 = 0;
                 let mut resolved_indices = Vec::with_capacity(state.bets.len());
                 let mut logs = Vec::new();
@@ -1356,6 +1366,7 @@ impl CasinoGame for Craps {
                 for result in results {
                     if result.resolved {
                         total_return = total_return.saturating_add(result.return_amount);
+                        total_wagered = total_wagered.saturating_add(result.wagered);
                         if result.return_amount == 0 {
                             total_loss = total_loss.saturating_add(result.wagered);
                         }
@@ -1378,7 +1389,13 @@ impl CasinoGame for Craps {
                 // Check if game is complete (no bets left)
                 if state.bets.is_empty() {
                     session.is_complete = true;
-                    if total_return > 0 {
+                    // Determine if this is a pure push (all bets returned stake, no wins/losses)
+                    let is_pure_push = total_return == total_wagered && total_loss == 0 && total_wagered > 0;
+
+                    if is_pure_push {
+                        // All bets pushed - return stake without double modifier
+                        Ok(GameResult::Push(total_wagered, logs))
+                    } else if total_return > 0 {
                         // Apply super mode multipliers if active
                         let final_return = if session.super_mode.is_active {
                             let dice_total = d1.saturating_add(d2);
@@ -1407,14 +1424,213 @@ impl CasinoGame for Craps {
                 }
             }
 
-            // [3] - Clear all bets (only before first roll)
+            // [3] - Clear all bets (only before first roll, with refund)
             3 => {
                 if state.d1 != 0 || state.d2 != 0 {
                     return Err(GameError::InvalidMove);
                 }
+
+                // Calculate total to refund (bets were deducted via ContinueWithUpdate)
+                // Craps bets have both base amount and odds amount
+                let refund: u64 = state
+                    .bets
+                    .iter()
+                    .map(|b| b.amount.saturating_add(b.odds_amount))
+                    .sum();
                 state.bets.clear();
                 session.state_blob = state.to_blob();
-                Ok(GameResult::Continue(vec![format!("Bets Cleared")]))
+
+                if refund > 0 {
+                    // Positive payout = credit chips back to player
+                    Ok(GameResult::ContinueWithUpdate {
+                        payout: refund as i64,
+                        logs: vec![format!("Bets Cleared (+{} refunded)", refund)],
+                    })
+                } else {
+                    Ok(GameResult::Continue(vec![format!("Bets Cleared")]))
+                }
+            }
+
+            // [4, bet_count, bets...] - Atomic batch: place all bets + roll in one transaction
+            // Each bet is 10 bytes: [bet_type:u8, target:u8, amount:u64 BE]
+            // This ensures all-or-nothing semantics - no partial bet states
+            // Note: Odds cannot be added in atomic batch - use action 1 after if needed
+            4 => {
+                // Only works before first roll
+                if state.d1 != 0 || state.d2 != 0 {
+                    return Err(GameError::InvalidMove);
+                }
+
+                // Must have existing bets cleared first (fresh round)
+                if !state.bets.is_empty() {
+                    return Err(GameError::InvalidMove);
+                }
+
+                if payload.len() < 2 {
+                    return Err(GameError::InvalidPayload);
+                }
+
+                let bet_count = payload[1] as usize;
+                if bet_count == 0 || bet_count > MAX_BETS {
+                    return Err(GameError::InvalidPayload);
+                }
+
+                // Expected payload size: 2 (action + count) + bet_count * 10 (type + target + amount)
+                let expected_len = 2 + bet_count * 10;
+                if payload.len() < expected_len {
+                    return Err(GameError::InvalidPayload);
+                }
+
+                // Parse and validate all bets first (before any state changes)
+                let mut bets_to_place: Vec<CrapsBet> = Vec::with_capacity(bet_count);
+                let mut total_wager: u64 = 0;
+                let mut offset = 2;
+
+                for _ in 0..bet_count {
+                    let bet_type = BetType::try_from(payload[offset])
+                        .map_err(|_| GameError::InvalidPayload)?;
+                    let target = payload[offset + 1];
+                    let amount = u64::from_be_bytes(
+                        payload[offset + 2..offset + 10]
+                            .try_into()
+                            .map_err(|_| GameError::InvalidPayload)?,
+                    );
+
+                    if amount == 0 {
+                        return Err(GameError::InvalidPayload);
+                    }
+
+                    // Validate bet type/target combinations (simplified - full validation in action 0)
+                    // Basic sanity checks: Yes (Place), No (Lay), Buy need point numbers
+                    if matches!(bet_type, BetType::Yes | BetType::Buy | BetType::No)
+                        && ![4u8, 5, 6, 8, 9, 10].contains(&target)
+                    {
+                        return Err(GameError::InvalidPayload);
+                    }
+
+                    // Check for overflow in total wager
+                    let bet_cost = if bet_type == BetType::Buy {
+                        match state.buy_commission_timing {
+                            BuyCommissionTiming::AtPlacement => {
+                                amount.saturating_add(calculate_buy_commission(amount))
+                            }
+                            BuyCommissionTiming::OnWin => amount,
+                        }
+                    } else {
+                        amount
+                    };
+
+                    total_wager = total_wager
+                        .checked_add(bet_cost)
+                        .ok_or(GameError::InvalidPayload)?;
+
+                    // Determine initial status
+                    let status = match bet_type {
+                        BetType::Come | BetType::DontCome => BetStatus::Pending,
+                        _ => BetStatus::On,
+                    };
+
+                    bets_to_place.push(CrapsBet {
+                        bet_type,
+                        target,
+                        status,
+                        amount,
+                        odds_amount: 0,
+                    });
+
+                    offset += 10;
+                }
+
+                // All validation passed - now execute atomically
+                state.bets = bets_to_place;
+
+                // Roll the dice
+                let d1 = rng.roll_die();
+                let d2 = rng.roll_die();
+                state.d1 = d1;
+                state.d2 = d2;
+
+                // Process the roll
+                let results = process_roll(&mut state, d1, d2);
+
+                // Calculate results
+                let mut total_return: u64 = 0;
+                let mut total_resolved_wagered: u64 = 0;
+                let mut total_loss: u64 = 0;
+                let mut resolved_indices = Vec::with_capacity(state.bets.len());
+                let mut logs = Vec::new();
+
+                for result in results {
+                    if result.resolved {
+                        total_return = total_return.saturating_add(result.return_amount);
+                        total_resolved_wagered = total_resolved_wagered.saturating_add(result.wagered);
+                        if result.return_amount == 0 {
+                            total_loss = total_loss.saturating_add(result.wagered);
+                        }
+                        resolved_indices.push(result.bet_idx);
+                        if !result.log.is_empty() {
+                            logs.push(result.log);
+                        }
+                    }
+                }
+
+                // Remove resolved bets
+                resolved_indices.sort_unstable();
+                for idx in resolved_indices.iter().rev() {
+                    state.bets.remove(*idx);
+                }
+
+                session.state_blob = state.to_blob();
+
+                // Check if game is complete
+                if state.bets.is_empty() {
+                    session.is_complete = true;
+                    // Determine if this is a pure push (all bets returned stake, no wins/losses)
+                    let is_pure_push = total_return == total_resolved_wagered && total_loss == 0 && total_resolved_wagered > 0;
+
+                    if is_pure_push {
+                        // All bets pushed - return stake without double modifier
+                        Ok(GameResult::Push(total_wager, logs))
+                    } else if total_return > 0 {
+                        let final_return = if session.super_mode.is_active {
+                            let dice_total = d1.saturating_add(d2);
+                            apply_super_multiplier_total(
+                                dice_total,
+                                &session.super_mode.multipliers,
+                                total_return,
+                            )
+                        } else {
+                            total_return
+                        };
+                        Ok(GameResult::Win(final_return, logs))
+                    } else {
+                        Ok(GameResult::Loss(logs))
+                    }
+                } else {
+                    // Game continues - return net result
+                    // For atomic batch: player paid total_wager, received total_return
+                    // Net = total_return - total_wager (can be negative)
+                    if total_return > total_wager {
+                        // Net win on first roll
+                        let net_win = total_return.saturating_sub(total_wager);
+                        Ok(GameResult::ContinueWithUpdate {
+                            payout: net_win as i64,
+                            logs,
+                        })
+                    } else if total_return < total_wager {
+                        // Net loss on first roll, but game continues
+                        // Player paid total_wager, got back total_return
+                        // Report via ContinueWithUpdate with negative delta
+                        let net_loss = total_wager.saturating_sub(total_return);
+                        Ok(GameResult::ContinueWithUpdate {
+                            payout: -(net_loss as i64),
+                            logs,
+                        })
+                    } else {
+                        // Break-even
+                        Ok(GameResult::Continue(logs))
+                    }
+                }
             }
 
             _ => Err(GameError::InvalidPayload),

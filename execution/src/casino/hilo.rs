@@ -366,13 +366,13 @@ mod tests {
             let result = HiLo::process_move(&mut session, &[0], &mut rng); // Higher
 
             match result {
-                Ok(GameResult::Continue(vec![])) => {
+                Ok(GameResult::Continue(_)) => {
                     streak += 1;
                     let (_, acc) = parse_state(&session.state_blob).expect("Failed to parse state");
                     // Accumulator should be growing
                     assert!(acc > BASE_MULTIPLIER);
                 }
-                Ok(GameResult::Loss(vec![])) => {
+                Ok(GameResult::Loss(_)) => {
                     break;
                 }
                 Err(_) => {

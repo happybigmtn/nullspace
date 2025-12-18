@@ -306,7 +306,9 @@ mod tests {
 
             let private = PrivateKey::from_seed(1);
             let tx1 = Transaction::sign(&private, 0, Instruction::CasinoDeposit { amount: 100 });
-            let tx2 = Transaction::sign(&private, 0, Instruction::CasinoToggleShield);
+            let tx2 = Transaction::sign(&private, 0, Instruction::CasinoPlayerAction {
+                action: nullspace_types::casino::PlayerAction::ToggleShield
+            });
             let digest1 = tx1.digest();
             let digest2 = tx2.digest();
             let public = tx1.public.clone();
