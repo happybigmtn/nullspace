@@ -224,7 +224,7 @@ export class VaultBetBot {
   private getGameMoves(gameType: number): Uint8Array[] {
     switch (gameType) {
       case GameType.Baccarat:
-        return [this.serializeBaccaratBet(Math.floor(Math.random() * 3), this.config.betAmount), new Uint8Array([1])];
+        return [this.serializeBaccaratAtomicBatch([{ betType: Math.floor(Math.random() * 3), amount: this.config.betAmount }])];
       case GameType.Blackjack:
         return [new Uint8Array([1])]; // Stand
       case GameType.CasinoWar:
@@ -254,6 +254,20 @@ export class VaultBetBot {
     payload[0] = 0; // Place bet
     payload[1] = betType;
     new DataView(payload.buffer).setBigUint64(2, BigInt(amount), false);
+    return payload;
+  }
+
+  private serializeBaccaratAtomicBatch(bets: Array<{ betType: number; amount: number }>): Uint8Array {
+    // [action:u8=3] [numBets:u8] [bet1:betType:u8,amount:u64 BE] ...
+    const payload = new Uint8Array(2 + bets.length * 9);
+    payload[0] = 3; // Atomic batch action code
+    payload[1] = bets.length;
+    let offset = 2;
+    for (const bet of bets) {
+      payload[offset] = bet.betType;
+      new DataView(payload.buffer).setBigUint64(offset + 1, BigInt(bet.amount), false);
+      offset += 9;
+    }
     return payload;
   }
 

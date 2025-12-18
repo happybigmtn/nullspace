@@ -1362,25 +1362,19 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
             plan.baccaratSideBets,
             plan.mainBetAmount,
           );
-          pendingMoveCountRef.current = betsToPlace.length + 1;
+          pendingMoveCountRef.current = 1; // Single atomic batch transaction
 
           setGameState(prev => ({
             ...prev,
             baccaratLastRoundBets: plan.baccaratSideBets,
             baccaratUndoStack: [],
             sessionWager: betsToPlace.reduce((s, b) => s + b.amount, 0),
-            message: 'PLACING BETS...',
+            message: 'DEALING...',
           }));
 
-          for (const bet of betsToPlace) {
-            const betPayload = serializeBaccaratBet(bet.betType, bet.amount);
-            const result = await chainService.sendMove(sessionId, betPayload);
-            if (result.txHash) setLastTxSig(result.txHash);
-          }
-
-          setGameState(prev => ({ ...prev, message: 'DEALING...' }));
-          const dealPayload = new Uint8Array([1]);
-          const result = await chainService.sendMove(sessionId, dealPayload);
+          // Use atomic batch: all bets + deal in single transaction
+          const atomicPayload = serializeBaccaratAtomicBatch(betsToPlace);
+          const result = await chainService.sendMove(sessionId, atomicPayload);
           if (result.txHash) setLastTxSig(result.txHash);
           return;
         }
@@ -1394,24 +1388,23 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
                 : plan.rouletteZeroRule === 'EN_PRISON_DOUBLE'
                   ? 3
                   : 0;
-          pendingMoveCountRef.current = 1 + plan.rouletteBets.length + 1;
 
           const totalWager = plan.rouletteBets.reduce((s, b) => s + b.amount, 0);
           setGameState(prev => ({ ...prev, sessionWager: totalWager, message: 'PLACING BETS...' }));
 
-          const rulePayload = new Uint8Array([3, ruleByte]);
-          const ruleRes = await chainService.sendMove(sessionId, rulePayload);
-          if (ruleRes.txHash) setLastTxSig(ruleRes.txHash);
-
-          for (const bet of plan.rouletteBets) {
-            const betPayload = serializeRouletteBet(bet);
-            const result = await chainService.sendMove(sessionId, betPayload);
-            if (result.txHash) setLastTxSig(result.txHash);
+          // Keep zero rule setting if not standard (en prison support)
+          if (ruleByte !== 0) {
+            pendingMoveCountRef.current = 2; // Rule setting + atomic batch
+            const rulePayload = new Uint8Array([3, ruleByte]);
+            const ruleRes = await chainService.sendMove(sessionId, rulePayload);
+            if (ruleRes.txHash) setLastTxSig(ruleRes.txHash);
+          } else {
+            pendingMoveCountRef.current = 1; // Single atomic batch transaction
           }
 
           setGameState(prev => ({ ...prev, message: 'SPINNING ON CHAIN...' }));
-          const spinPayload = new Uint8Array([1]);
-          const result = await chainService.sendMove(sessionId, spinPayload);
+          const atomicPayload = serializeRouletteAtomicBatch(plan.rouletteBets);
+          const result = await chainService.sendMove(sessionId, atomicPayload);
           if (result.txHash) setLastTxSig(result.txHash);
 
           setGameState(prev => ({

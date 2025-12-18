@@ -448,22 +448,26 @@ export class BotService {
 
     switch (gameType) {
       case GameType.Baccarat: {
-        // Start with 0; wagers are placed via moves.
+        // Start with 0; wagers are placed via atomic batch.
         const total = Math.max(1, around(mainBet, 1, 100));
         const mainAmt = Math.max(1, around(total * (0.7 + Math.random() * 0.3), 1, 100));
         const sideAmt = Math.max(1, around(Math.max(1, Math.floor(total * 0.25)), 1, 25));
 
         // Main bet: mostly Player/Banker, occasional Tie.
         const mainType = this.weightedChoice([0, 1, 2], [0.46, 0.46, 0.08]);
-        moves.push(this.serializeBaccaratBet(mainType, mainAmt));
+
+        // Collect all bets for atomic batch
+        const bets: Array<{ betType: number; amount: number }> = [];
+        bets.push({ betType: mainType, amount: mainAmt });
 
         // Optional side bets: small and rare (high edge, high variance).
         if (Math.random() < 0.15 * (0.5 + v)) {
           const sideType = this.weightedChoice([3, 4, 5], [0.45, 0.45, 0.10]);
-          moves.push(this.serializeBaccaratBet(sideType, sideAmt));
+          bets.push({ betType: sideType, amount: sideAmt });
         }
 
-        moves.push(new Uint8Array([1])); // Deal
+        // Create single atomic batch move (action 3: place all bets + deal)
+        moves.push(this.serializeBaccaratAtomicBatch(bets));
         return { startBet: 0, moves };
       }
 
@@ -724,6 +728,21 @@ export class BotService {
     payload[1] = betType;
     const view = new DataView(payload.buffer);
     view.setBigUint64(2, BigInt(amount), false);
+    return payload;
+  }
+
+  private serializeBaccaratAtomicBatch(bets: Array<{ betType: number; amount: number }>): Uint8Array {
+    // Atomic batch format: [action:u8=3] [numBets:u8] [bet1:betType:u8,amount:u64 BE] ...
+    // Each bet is 9 bytes: [betType:u8, amount:u64 BE]
+    const payload = new Uint8Array(2 + bets.length * 9);
+    payload[0] = 3; // Atomic batch action code
+    payload[1] = bets.length;
+    let offset = 2;
+    for (const bet of bets) {
+      payload[offset] = bet.betType;
+      new DataView(payload.buffer).setBigUint64(offset + 1, BigInt(bet.amount), false);
+      offset += 9;
+    }
     return payload;
   }
 
