@@ -1504,14 +1504,34 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
 	        gameTypeRef.current = frontendGameType;
 
 	        // Fetch full session state to get super/aura mode metadata.
+	        // Use retry logic since the chain might not have processed the super mode yet.
 	        (async () => {
-	          try {
-	            const sessionState = await clientRef.current?.getCasinoSession(eventSessionId);
-	            if (sessionState) {
-	              setGameState(prev => ({ ...prev, superMode: sessionState.superMode ?? null }));
+	          const maxRetries = 3;
+	          const retryDelayMs = 200;
+
+	          for (let attempt = 0; attempt < maxRetries; attempt++) {
+	            try {
+	              // Small delay before first fetch to give chain time to process
+	              if (attempt > 0) {
+	                await new Promise(r => setTimeout(r, retryDelayMs));
+	              }
+
+	              const sessionState = await clientRef.current?.getCasinoSession(eventSessionId);
+	              if (sessionState) {
+	                console.log('[useTerminalGame] SuperMode fetch attempt', attempt + 1, ':', sessionState.superMode);
+	                setGameState(prev => ({ ...prev, superMode: sessionState.superMode ?? null }));
+
+	                // If we got valid multipliers, we're done
+	                if (sessionState.superMode?.isActive &&
+	                    Array.isArray(sessionState.superMode.multipliers) &&
+	                    sessionState.superMode.multipliers.length > 0) {
+	                  console.log('[useTerminalGame] SuperMode multipliers loaded:', sessionState.superMode.multipliers.length);
+	                  break;
+	                }
+	              }
+	            } catch (e) {
+	              console.debug('[useTerminalGame] Failed to fetch session state after GameStarted (attempt ' + (attempt + 1) + '):', e);
 	            }
-	          } catch (e) {
-	            console.debug('[useTerminalGame] Failed to fetch session state after GameStarted:', e);
 	          }
 	        })();
 
@@ -1659,6 +1679,27 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
 
         // Parse state and update UI using the tracked game type from ref (not stale closure)
         parseGameState(stateBlob, gameTypeRef.current);
+
+        // Fallback: If superMode is still null but player has super modifier active, try fetching
+        // This handles cases where the initial GameStarted fetch didn't get multipliers yet
+        const currentSuperMode = gameStateRef.current?.superMode;
+        const hasActiveSuper = gameStateRef.current?.activeModifiers?.super;
+        if (hasActiveSuper && (!currentSuperMode || !currentSuperMode.isActive ||
+            !currentSuperMode.multipliers || currentSuperMode.multipliers.length === 0)) {
+          void (async () => {
+            try {
+              const sessionState = await clientRef.current?.getCasinoSession(eventSessionId);
+              if (sessionState?.superMode?.isActive &&
+                  Array.isArray(sessionState.superMode.multipliers) &&
+                  sessionState.superMode.multipliers.length > 0) {
+                console.log('[useTerminalGame] SuperMode fallback fetch succeeded:', sessionState.superMode.multipliers.length, 'multipliers');
+                setGameState(prev => ({ ...prev, superMode: sessionState.superMode ?? null }));
+              }
+            } catch (e) {
+              console.debug('[useTerminalGame] SuperMode fallback fetch failed:', e);
+            }
+          })();
+        }
 
         // Clear pending flag since we received the chain response.
         // If we're awaiting multiple sequential moves (e.g. staged bets + roll), only clear after the final move arrives.
