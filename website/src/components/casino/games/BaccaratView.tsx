@@ -3,6 +3,7 @@ import React, { useMemo } from 'react';
 import { GameState } from '../../../types';
 import { Hand } from '../GameComponents';
 import { getBaccaratValue } from '../../../utils/gameUtils';
+import { cardIdToString } from '../../../utils/gameStateParser';
 import { MobileDrawer } from '../MobileDrawer';
 import { GameControlBar } from '../GameControlBar';
 
@@ -77,7 +78,7 @@ export const BaccaratView = React.memo<{ gameState: GameState; actions: any; las
 
     return (
         <>
-            <div className="flex-1 w-full flex flex-col items-center justify-start sm:justify-center gap-4 sm:gap-8 relative z-10 pt-8 sm:pt-10 pb-24 sm:pb-20">
+            <div className="flex-1 w-full flex flex-col items-center justify-start sm:justify-center gap-4 sm:gap-6 md:gap-8 relative z-10 pt-8 sm:pt-10 pb-24 sm:pb-20">
                 <h1 className="absolute top-0 text-xl font-bold text-gray-500 tracking-widest uppercase">BACCARAT</h1>
                 <div className="absolute top-2 left-2 z-40">
                     <MobileDrawer label="BETS" title="BACCARAT BETS">
@@ -107,7 +108,7 @@ export const BaccaratView = React.memo<{ gameState: GameState; actions: any; las
                     ) : (
                         <div className="flex flex-col gap-2 items-center">
                             <span className={`text-xl sm:text-2xl font-bold tracking-widest ${bankerColor}`}>BANKER</span>
-                            <div className={`w-16 h-24 border border-dashed rounded flex items-center justify-center ${bankerColor.replace('text-', 'border-')}`}>?</div>
+                            <div className={`w-12 h-[4.5rem] sm:w-14 sm:h-20 md:w-16 md:h-24 border border-dashed rounded flex items-center justify-center ${bankerColor.replace('text-', 'border-')}`}>?</div>
                         </div>
                     )}
                 </div>
@@ -115,7 +116,7 @@ export const BaccaratView = React.memo<{ gameState: GameState; actions: any; las
                 {/* Center Info */}
                 <div className="text-center space-y-2 relative z-20 py-2 sm:py-4">
                     <div className="text-lg sm:text-2xl font-bold text-terminal-gold tracking-widest leading-tight animate-pulse">
-                        {gameState.message}{lastWin && lastWin > 0 ? ` (+$${lastWin})` : ''}
+                        {gameState.message}
                     </div>
                     <div className="flex flex-wrap items-center justify-center gap-2 text-[11px]">
                         <span className={`px-2 py-0.5 rounded border transition-all ${getWinnerClass(gameState.baccaratSelection)}`}>
@@ -182,10 +183,33 @@ export const BaccaratView = React.memo<{ gameState: GameState; actions: any; las
                     ) : (
                         <div className="flex flex-col gap-2 items-center">
                             <span className={`text-xl sm:text-2xl font-bold tracking-widest ${playerColor}`}>PLAYER</span>
-                            <div className={`w-16 h-24 border border-dashed rounded flex items-center justify-center ${playerColor.replace('text-', 'border-')}`}>?</div>
+                            <div className={`w-12 h-[4.5rem] sm:w-14 sm:h-20 md:w-16 md:h-24 border border-dashed rounded flex items-center justify-center ${playerColor.replace('text-', 'border-')}`}>?</div>
                         </div>
                     )}
                 </div>
+
+                {/* Super Mode Info */}
+                {gameState.superMode?.isActive && (
+                    <div className="w-full max-w-md mx-auto px-4">
+                        <div className="bg-terminal-black/90 border border-terminal-gold/50 p-2 rounded text-center">
+                            <div className="text-[10px] font-bold text-terminal-gold tracking-widest mb-1">⚡ SUPER MODE</div>
+                            {Array.isArray(gameState.superMode.multipliers) && gameState.superMode.multipliers.length > 0 ? (
+                                <div className="flex flex-wrap gap-1 justify-center">
+                                    {gameState.superMode.multipliers.slice(0, 10).map((m, idx) => (
+                                        <span
+                                            key={idx}
+                                            className="px-2 py-0.5 rounded border border-terminal-gold/30 text-terminal-gold/90 text-[10px]"
+                                        >
+                                            {cardIdToString(m.id)} x{m.multiplier}
+                                        </span>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="text-[9px] text-gray-400">Awaiting multipliers...</div>
+                            )}
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* BETS SIDEBAR */}

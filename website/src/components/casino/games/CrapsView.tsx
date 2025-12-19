@@ -185,7 +185,9 @@ export const CrapsView = React.memo<{ gameState: GameState; actions: any; lastWi
                 {/* Center Info */}
                 <div className="text-center space-y-3 relative z-20">
                     <div className="text-lg sm:text-2xl font-bold text-terminal-gold tracking-widest leading-tight animate-pulse">
-                        {gameState.message}{lastWin && lastWin > 0 ? ` (+$${lastWin})` : ''}
+                        {/* On mobile, replace "SPACE TO ROLL" with "PLACE BETS" */}
+                        <span className="hidden sm:inline">{gameState.message}</span>
+                        <span className="sm:hidden">{gameState.message?.replace(/SPACE TO ROLL/gi, 'PLACE BETS')}</span>
                     </div>
                     {gameState.crapsRollHistory.length > 0 && (
                         <div className="text-[10px] tracking-widest mt-1 flex items-center justify-center gap-1">
@@ -211,20 +213,59 @@ export const CrapsView = React.memo<{ gameState: GameState; actions: any; lastWi
                     )}
                 </div>
 
-                {/* Mobile: Active Bets & Live Log */}
-                <div className="w-full mt-4 p-2 border-t border-gray-800 bg-gray-900/20 sm:hidden">
-                    <div className="flex justify-between items-center mb-2">
-                        <span className="text-[10px] text-gray-500 tracking-widest uppercase">ACTIVE BETS</span>
-                        <span className="text-[10px] text-gray-500 tracking-widest uppercase">LOG</span>
-                    </div>
-                    <div className="flex flex-col gap-2">
-                        {/* Log */}
-                        <div className="h-8 flex items-center justify-center border border-gray-800 rounded bg-black/40 px-2 overflow-hidden">
-                            <span className="text-xs text-terminal-gold truncate font-bold animate-pulse">{gameState.message}{lastWin && lastWin > 0 ? ` (+$${lastWin})` : ''}</span>
+                {/* Super Mode Info */}
+                {gameState.superMode?.isActive && (
+                    <div className="w-full max-w-md mx-auto px-4">
+                        <div className="bg-terminal-black/90 border border-terminal-gold/50 p-2 rounded text-center">
+                            <div className="text-[10px] font-bold text-terminal-gold tracking-widest mb-1">⚡ SUPER MODE</div>
+                            {Array.isArray(gameState.superMode.multipliers) && gameState.superMode.multipliers.length > 0 ? (
+                                <div className="flex flex-wrap gap-1 justify-center">
+                                    {gameState.superMode.multipliers.slice(0, 10).map((m, idx) => (
+                                        <span
+                                            key={idx}
+                                            className="px-2 py-0.5 rounded border border-terminal-gold/30 text-terminal-gold/90 text-[10px]"
+                                        >
+                                            {m.superType}:{m.id} x{m.multiplier}
+                                        </span>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="text-[9px] text-gray-400">Awaiting multipliers...</div>
+                            )}
                         </div>
-                        
-                        {/* Bets Scroller */}
-                        {gameState.crapsBets.length > 0 ? (
+                    </div>
+                )}
+
+                {/* Mobile: Core Bets & Active Bets */}
+                <div className="w-full mt-4 p-2 border-t border-gray-800 bg-gray-900/20 sm:hidden">
+                    {/* Core Betting Buttons - Always visible on mobile */}
+                    <div className="flex gap-2 mb-3">
+                        <button
+                            onClick={() => actions?.placeCrapsBet?.(gameState.crapsPoint ? 'COME' : 'PASS')}
+                            className={`flex-1 py-3 rounded border text-xs font-bold tracking-wider transition-colors ${
+                                betTypes.has('PASS') || betTypes.has('COME')
+                                    ? 'border-terminal-green bg-terminal-green/20 text-terminal-green'
+                                    : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'
+                            }`}
+                        >
+                            {gameState.crapsPoint ? 'COME' : 'PASS'}
+                        </button>
+                        <button
+                            onClick={() => actions?.placeCrapsBet?.(gameState.crapsPoint ? 'DONT_COME' : 'DONT_PASS')}
+                            className={`flex-1 py-3 rounded border text-xs font-bold tracking-wider transition-colors ${
+                                betTypes.has('DONT_PASS') || betTypes.has('DONT_COME')
+                                    ? 'border-terminal-accent bg-terminal-accent/20 text-terminal-accent'
+                                    : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'
+                            }`}
+                        >
+                            {gameState.crapsPoint ? "DON'T" : "DON'T PASS"}
+                        </button>
+                    </div>
+
+                    {/* Active Bets */}
+                    {gameState.crapsBets.length > 0 && (
+                        <div className="mb-2">
+                            <span className="text-[10px] text-gray-500 tracking-widest uppercase mb-1 block">ACTIVE BETS</span>
                             <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
                                 {gameState.crapsBets.map((b, i) => (
                                     <div key={i} onClick={() => actions?.placeCrapsBet?.(b.type, b.target)} className="flex-none flex flex-col items-center border border-gray-800 bg-black/50 p-1 rounded min-w-[60px] cursor-pointer hover:bg-gray-800 transition-colors">
@@ -234,10 +275,8 @@ export const CrapsView = React.memo<{ gameState: GameState; actions: any; lastWi
                                     </div>
                                 ))}
                             </div>
-                        ) : (
-                            <div className="text-center text-[10px] text-gray-700 italic py-1">NO ACTIVE BETS</div>
-                        )}
-                    </div>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -372,7 +411,6 @@ export const CrapsView = React.memo<{ gameState: GameState; actions: any; lastWi
                     { label: 'NO', onClick: () => actions?.setGameState?.((prev: any) => ({ ...prev, crapsInputMode: 'NO' })), active: gameState.crapsInputMode === 'NO' || betTypes.has('NO') },
                     { label: 'NEXT', onClick: () => actions?.setGameState?.((prev: any) => ({ ...prev, crapsInputMode: 'NEXT' })), active: gameState.crapsInputMode === 'NEXT' || betTypes.has('NEXT') },
                     // Actions
-                    { label: 'REBET', onClick: actions?.rebetCraps },
                     { label: 'UNDO', onClick: actions?.undoCrapsBet },
                     // Modifiers
                     ...(playMode !== 'CASH' ? [

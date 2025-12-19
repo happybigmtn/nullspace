@@ -119,25 +119,6 @@ export const ActiveGame: React.FC<ActiveGameProps> = ({ gameState, deck, numberI
              </div>
          </div>
 
-         {gameState.superMode?.isActive && (
-             <div className="absolute top-4 left-4 max-w-sm bg-terminal-black/90 border border-terminal-gold/50 p-3 rounded shadow-lg z-40 text-xs">
-                 <div className="font-bold text-terminal-gold mb-1">SUPER MODE</div>
-                 {Array.isArray(gameState.superMode.multipliers) && gameState.superMode.multipliers.length > 0 ? (
-                     <div className="flex flex-wrap gap-1">
-                         {gameState.superMode.multipliers.slice(0, 10).map((m, idx) => (
-                             <span
-                                 key={idx}
-                                 className="px-2 py-0.5 rounded border border-terminal-gold/30 text-terminal-gold/90"
-                             >
-                                 {m.superType}:{m.id} x{m.multiplier}
-                             </span>
-                         ))}
-                     </div>
-                 ) : (
-                     <div className="text-[10px] text-gray-400">Active</div>
-                 )}
-             </div>
-         )}
 
 	         <BigWinEffect 
 	            amount={gameState.stage === 'RESULT' ? gameState.lastResult : transientWin} 

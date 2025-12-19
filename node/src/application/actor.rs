@@ -578,15 +578,16 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                                     }
                                 }
 
-                                // Select up to max transactions
-                                let mut considered = 0;
+                                // Select up to max transactions using non-destructive peek.
+                                // Transactions remain in mempool until finalized (via retain).
+                                // Peek more than needed to account for nonce validation rejections.
+                                let candidates = mempool.peek_batch(MAX_BLOCK_TRANSACTIONS * 2);
+                                let considered = candidates.len();
                                 let mut transactions = Vec::new();
-                                while transactions.len() < MAX_BLOCK_TRANSACTIONS {
-                                    // Get next transaction
-                                    let Some(tx) = mempool.next() else {
+                                for tx in candidates {
+                                    if transactions.len() >= MAX_BLOCK_TRANSACTIONS {
                                         break;
-                                    };
-                                    considered += 1;
+                                    }
 
                                     // Attempt to apply
                                     if noncer.prepare(&tx).await.is_err() {

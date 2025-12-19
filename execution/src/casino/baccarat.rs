@@ -465,6 +465,81 @@ fn calculate_dragon_bonus_payout(
     }
 }
 
+/// Generate JSON logs for baccarat game completion
+fn generate_baccarat_logs(
+    state: &BaccaratState,
+    outcome: &BaccaratOutcome,
+    total_wagered: u64,
+    total_return: u64,
+) -> Vec<String> {
+    // Determine winner
+    let winner = if outcome.player_total > outcome.banker_total {
+        "PLAYER"
+    } else if outcome.banker_total > outcome.player_total {
+        "BANKER"
+    } else {
+        "TIE"
+    };
+
+    // Build bet results array
+    let bet_results: Vec<String> = state
+        .bets
+        .iter()
+        .map(|bet| {
+            let (payout_delta, is_push) = calculate_bet_payout(bet, outcome);
+            let bet_type_str = match bet.bet_type {
+                BetType::Player => "PLAYER",
+                BetType::Banker => "BANKER",
+                BetType::Tie => "TIE",
+                BetType::PlayerPair => "PLAYER_PAIR",
+                BetType::BankerPair => "BANKER_PAIR",
+                BetType::Lucky6 => "LUCKY_6",
+                BetType::PlayerDragon => "PLAYER_DRAGON",
+                BetType::BankerDragon => "BANKER_DRAGON",
+                BetType::Panda8 => "PANDA_8",
+                BetType::PlayerPerfectPair => "PLAYER_PERFECT_PAIR",
+                BetType::BankerPerfectPair => "BANKER_PERFECT_PAIR",
+            };
+            let result = if is_push {
+                "PUSH"
+            } else if payout_delta > 0 {
+                "WIN"
+            } else {
+                "LOSS"
+            };
+            format!(
+                r#"{{"type":"{}","amount":{},"result":"{}","payout":{}}}"#,
+                bet_type_str, bet.amount, result, payout_delta
+            )
+        })
+        .collect();
+
+    let player_cards_str = state
+        .player_cards
+        .iter()
+        .map(|c| c.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let banker_cards_str = state
+        .banker_cards
+        .iter()
+        .map(|c| c.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+
+    vec![format!(
+        r#"{{"player":{{"cards":[{}],"total":{}}},"banker":{{"cards":[{}],"total":{}}},"winner":"{}","bets":[{}],"totalWagered":{},"totalReturn":{}}}"#,
+        player_cards_str,
+        outcome.player_total,
+        banker_cards_str,
+        outcome.banker_total,
+        winner,
+        bet_results.join(","),
+        total_wagered,
+        total_return
+    )]
+}
+
 pub struct Baccarat;
 
 impl CasinoGame for Baccarat {
@@ -618,59 +693,69 @@ impl CasinoGame for Baccarat {
                 session.move_count += 1;
                 session.is_complete = true;
 
-                // Determine final result
-                let base_result = if all_push && net_payout == 0 {
-                    // All wagers push - return the full wagered amount.
-                    // Push doesn't apply double modifier and has neutral aura effect.
-                    GameResult::Push(total_wagered, vec![])
+                // Calculate total return first so we can include it in logs
+                let total_return = if all_push && net_payout == 0 {
+                    total_wagered // Push returns full wager
                 } else if net_payout > 0 {
-                    // Net win: return total wagered + net winnings
-                    // Safe cast: positive i64 fits in u64
                     let winnings = u64::try_from(net_payout).expect("deck not empty");
-                    let total_return = total_wagered.saturating_add(winnings);
-                    GameResult::Win(total_return, vec![])
+                    total_wagered.saturating_add(winnings)
                 } else if net_payout < 0 {
-                    // Net loss
-                    // Use checked_neg to safely convert negative i64 to positive value
                     let loss_amount = net_payout
                         .checked_neg()
                         .and_then(|v| u64::try_from(v).ok())
                         .expect("deck not empty");
-                    if loss_amount == 0 {
-                        // Overflow case - treat as total loss
-                        // Use LossPreDeducted to report actual loss (chips already deducted via ContinueWithUpdate)
-                        GameResult::LossPreDeducted(total_wagered, vec![])
-                    } else if loss_amount >= total_wagered {
+                    if loss_amount >= total_wagered {
+                        0
+                    } else {
+                        total_wagered.saturating_sub(loss_amount)
+                    }
+                } else {
+                    total_wagered // Net zero
+                };
+
+                // Apply super mode multiplier for final return
+                let final_return = if session.super_mode.is_active && total_return > 0 {
+                    let all_cards: Vec<u8> = state
+                        .player_cards
+                        .iter()
+                        .chain(state.banker_cards.iter())
+                        .cloned()
+                        .collect();
+                    apply_super_multiplier_cards(
+                        &all_cards,
+                        &session.super_mode.multipliers,
+                        total_return,
+                    )
+                } else {
+                    total_return
+                };
+
+                // Generate logs with final return value
+                let logs = generate_baccarat_logs(&state, &outcome, total_wagered, final_return);
+
+                // Determine final result
+                let base_result = if all_push && net_payout == 0 {
+                    // All wagers push - return the full wagered amount.
+                    GameResult::Push(final_return, logs)
+                } else if net_payout > 0 {
+                    GameResult::Win(final_return, logs)
+                } else if net_payout < 0 {
+                    let loss_amount = net_payout
+                        .checked_neg()
+                        .and_then(|v| u64::try_from(v).ok())
+                        .expect("deck not empty");
+                    if loss_amount >= total_wagered {
                         // Total loss - use LossPreDeducted to report actual amount
-                        GameResult::LossPreDeducted(total_wagered, vec![])
+                        GameResult::LossPreDeducted(total_wagered, logs)
                     } else {
                         // Partial loss - return remaining stake
-                        let remaining = total_wagered.saturating_sub(loss_amount);
-                        GameResult::Win(remaining, vec![])
+                        GameResult::Win(final_return, logs)
                     }
                 } else {
                     // Net zero but not all push - mixed results
-                    GameResult::Win(total_wagered, vec![])
+                    GameResult::Win(final_return, logs)
                 };
 
-                // Apply super mode multipliers if active and player won
-                if session.super_mode.is_active {
-                    if let GameResult::Win(base_payout, _) = base_result {
-                        // Aura Cards: combine player and banker cards for multiplier check
-                        let all_cards: Vec<u8> = state
-                            .player_cards
-                            .iter()
-                            .chain(state.banker_cards.iter())
-                            .cloned()
-                            .collect();
-                        let boosted_payout = apply_super_multiplier_cards(
-                            &all_cards,
-                            &session.super_mode.multipliers,
-                            base_payout,
-                        );
-                        return Ok(GameResult::Win(boosted_payout, vec![]));
-                    }
-                }
                 Ok(base_result)
             }
 
@@ -827,58 +912,67 @@ impl CasinoGame for Baccarat {
                 session.move_count += 1;
                 session.is_complete = true;
 
-                // Determine result - for atomic batch, we deduct wager and credit result in one go
-                // net_change = net_payout (which already accounts for wins/losses relative to wager)
-                // If net_payout > 0: player won more than they bet
-                // If net_payout < 0: player lost some/all of their bet
-                // If net_payout == 0: break-even or all push
-
-                let base_result = if all_push && net_payout == 0 {
-                    // All bets pushed - return full wager (no money changes hands)
-                    GameResult::Push(total_wager, vec![])
+                // Calculate total return first so we can include it in logs
+                let total_return = if all_push && net_payout == 0 {
+                    total_wager
                 } else if net_payout > 0 {
-                    // Net win: deduct wager, credit wager + winnings = credit net_payout + wager
-                    // But since this is atomic, we just report the net gain
-                    // Player pays total_wager, receives total_wager + net_payout
-                    // Net effect: +net_payout
                     let winnings = u64::try_from(net_payout).expect("deck not empty");
-                    GameResult::Win(total_wager.saturating_add(winnings), vec![])
+                    total_wager.saturating_add(winnings)
                 } else if net_payout < 0 {
-                    // Net loss
                     let loss = net_payout
                         .checked_neg()
                         .and_then(|v| u64::try_from(v).ok())
                         .unwrap_or(total_wager);
-
                     if loss >= total_wager {
-                        // Total loss
-                        GameResult::Loss(vec![])
+                        0
                     } else {
-                        // Partial loss - return remaining
-                        GameResult::Win(total_wager.saturating_sub(loss), vec![])
+                        total_wager.saturating_sub(loss)
                     }
                 } else {
-                    // Break-even but not all push
-                    GameResult::Win(total_wager, vec![])
+                    total_wager
                 };
 
-                // Apply super mode multipliers
-                if session.super_mode.is_active {
-                    if let GameResult::Win(base_payout, _) = base_result {
-                        let all_cards: Vec<u8> = state
-                            .player_cards
-                            .iter()
-                            .chain(state.banker_cards.iter())
-                            .cloned()
-                            .collect();
-                        let boosted_payout = apply_super_multiplier_cards(
-                            &all_cards,
-                            &session.super_mode.multipliers,
-                            base_payout,
-                        );
-                        return Ok(GameResult::Win(boosted_payout, vec![]));
+                // Apply super mode multiplier for final return
+                let final_return = if session.super_mode.is_active && total_return > 0 {
+                    let all_cards: Vec<u8> = state
+                        .player_cards
+                        .iter()
+                        .chain(state.banker_cards.iter())
+                        .cloned()
+                        .collect();
+                    apply_super_multiplier_cards(
+                        &all_cards,
+                        &session.super_mode.multipliers,
+                        total_return,
+                    )
+                } else {
+                    total_return
+                };
+
+                // Generate logs with final return value
+                let logs = generate_baccarat_logs(&state, &outcome, total_wager, final_return);
+
+                // Determine result
+                // Note: Atomic batch doesn't use ContinueWithUpdate, so bets weren't pre-deducted.
+                // We must use LossWithExtraDeduction so the wager gets deducted from the player's balance.
+                let base_result = if all_push && net_payout == 0 {
+                    GameResult::Push(final_return, logs)
+                } else if net_payout > 0 {
+                    GameResult::Win(final_return, logs)
+                } else if net_payout < 0 {
+                    let loss = net_payout
+                        .checked_neg()
+                        .and_then(|v| u64::try_from(v).ok())
+                        .unwrap_or(total_wager);
+                    if loss >= total_wager {
+                        // Total loss - use LossWithExtraDeduction since bets weren't pre-deducted
+                        GameResult::LossWithExtraDeduction(total_wager, logs)
+                    } else {
+                        GameResult::Win(final_return, logs)
                     }
-                }
+                } else {
+                    GameResult::Win(final_return, logs)
+                };
 
                 Ok(base_result)
             }

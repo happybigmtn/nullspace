@@ -163,11 +163,33 @@ export const RouletteView = React.memo<{ gameState: GameState; numberInput?: str
                 {/* Center Info */}
                 <div className="text-center space-y-3 relative z-20">
                     <div className="text-lg sm:text-2xl font-bold text-terminal-gold tracking-widest leading-tight animate-pulse">
-                        {gameState.message}{lastWin && lastWin > 0 ? ` (+$${lastWin})` : ''}
+                        {gameState.message}
                     </div>
                     <div className="text-[10px] text-gray-500 uppercase tracking-widest">
                         ZERO RULE: {gameState.rouletteZeroRule.split('_').join(' ')}
                     </div>
+                    {/* Current Bets Summary - visible on main screen */}
+                    {gameState.rouletteBets.length > 0 && (
+                        <div className="mt-2 flex flex-wrap justify-center gap-2 max-w-md mx-auto">
+                            <div className="inline-flex items-center gap-2 px-3 py-1 rounded border border-terminal-green/40 bg-black/40 text-[10px] tracking-widest">
+                                <span className="text-gray-500">TOTAL:</span>
+                                <span className="text-terminal-gold">${totalBet.toLocaleString()}</span>
+                                <span className="text-gray-600">({gameState.rouletteBets.length} bets)</span>
+                            </div>
+                            <div className="flex flex-wrap justify-center gap-1">
+                                {gameState.rouletteBets.slice(0, 6).map((bet, i) => (
+                                    <span key={i} className="px-2 py-0.5 text-[9px] rounded border border-gray-700 bg-black/60 text-gray-300">
+                                        {bet.type}{bet.target !== undefined ? `:${bet.target}` : ''}
+                                    </span>
+                                ))}
+                                {gameState.rouletteBets.length > 6 && (
+                                    <span className="px-2 py-0.5 text-[9px] rounded border border-gray-700 bg-black/60 text-gray-500">
+                                        +{gameState.rouletteBets.length - 6} more
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 

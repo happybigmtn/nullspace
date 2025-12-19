@@ -85,9 +85,9 @@ export function useCasinoConnection(baseUrl = '/api'): CasinoConnection {
         setCurrentView(casinoClient.getCurrentView?.() ?? null);
         setStatus('connected');
 
-        unsubscribeSeed = casinoClient.onEvent?.('Seed', () => {
+        unsubscribeSeed = (casinoClient.onEvent?.('Seed', () => {
           setCurrentView(casinoClient.getCurrentView?.() ?? null);
-        });
+        }) ?? null) as (() => void) | null;
       } catch (e: any) {
         if (cancelled) return;
         try {

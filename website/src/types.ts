@@ -242,3 +242,11 @@ export type AutoPlayDraft =
     };
 
 export type AutoPlayPlan = AutoPlayDraft & { sessionId: bigint };
+
+export interface SuperMultiplier {
+  id: string;
+  multiplier: number;
+  type: string;
+  label: string;
+  meta?: Card;
+}

@@ -6,7 +6,7 @@ import { useBaccarat } from './games/useBaccarat';
 import { useCraps } from './games/useCraps';
 import { GameType, PlayerStats, GameState, Card, LeaderboardEntry, TournamentPhase, CompletedHand, CrapsBet, RouletteBet, SicBoBet, BaccaratBet, AutoPlayDraft, AutoPlayPlan } from '../types';
 import { GameType as ChainGameType, CasinoGameStartedEvent, CasinoGameMovedEvent, CasinoGameCompletedEvent } from '../types/casino';
-import { createDeck, rollDie, getHandValue, getBaccaratValue, getHiLoRank, WAYS, getRouletteColor, evaluateVideoPokerHand, calculateCrapsExposure, calculateSicBoOutcomeExposure, getSicBoCombinations, resolveCrapsBets, resolveRouletteBets, resolveSicBoBets, evaluateThreeCardHand } from '../utils/gameUtils';
+import { createDeck, rollDie, getHandValue, getBaccaratValue, getHiLoRank, WAYS, getRouletteColor, evaluateVideoPokerHand, calculateCrapsExposure, calculateSicBoOutcomeExposure, getSicBoCombinations, resolveCrapsBets, resolveRouletteBets, resolveSicBoBets, evaluateThreeCardHand, parseGameLogs } from '../utils/gameUtils';
 import { getStrategicAdvice } from '../services/geminiService';
 import { CasinoChainService } from '../services/CasinoChainService';
 import { CasinoClient } from '../api/client.js';
@@ -333,6 +333,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
 	    crapsInputMode: 'NONE',
     crapsRollHistory: [],
     crapsLastRoundBets: [],
+    crapsOddsCandidates: null,
     rouletteBets: [],
     rouletteUndoStack: [],
     rouletteLastRoundBets: [],
@@ -408,6 +409,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
   const gameStateRef = useRef<GameState | null>(null); // Track game state for event handlers
   const isPendingRef = useRef<boolean>(false); // Prevent double-submits on rapid space key presses
   const pendingMoveCountRef = useRef<number>(0); // Number of CasinoGameMoved events we're still waiting on
+  const uthBackendStageRef = useRef<number>(0); // UTH backend stage (0-5) for action validation
   // Baseline chips at session start (for accurate net PnL via `finalChips - startChips`).
   const sessionStartChipsRef = useRef<Map<bigint, number>>(new Map());
   const crapsPendingRollLogRef = useRef<{
@@ -467,8 +469,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
     toggleSelection: baccaratToggleSelection,
     placeBet: baccaratPlaceBet,
     undo: baccaratUndo,
-    rebet: baccaratRebet,
-    baccaratDeal
+    rebet: baccaratRebet
   } = useBaccarat({
     gameState,
     setGameState,
@@ -1174,7 +1175,9 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
     gameStateRef.current = gameState;
   }, [gameState]);
 
-  // Helper to generate descriptive result messages and detailed logs
+  // FALLBACK: Generate result messages locally when backend logs aren't available.
+  // Primary source of truth is now parseGameLogs() which parses backend JSON logs.
+  // This function duplicates backend logic and should only be used as a fallback.
   const generateGameResult = (gameType: GameType, state: GameState | null, netPnL: number): { summary: string, details: string[] } => {
     // Show net P&L with sign
     const resultPart = netPnL >= 0 ? `+$${netPnL}` : `-$${Math.abs(netPnL)}`;
@@ -1559,6 +1562,27 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
 	            stage: 'PLAYING',
 	            message: initialMessage,
 	          }));
+
+            // Auto-deal for Blackjack when session starts with empty state (stage 0 = Betting)
+            // This allows single-button flow from RESULT -> new hand
+            if (frontendGameType === GameType.BLACKJACK && chainService && currentSessionIdRef.current) {
+              console.log('[useTerminalGame] Auto-dealing Blackjack after session start');
+              (async () => {
+                if (isPendingRef.current) return;
+                isPendingRef.current = true;
+                try {
+                  // Move 0: Deal - triggers initial cards to be dealt
+                  const payload = new Uint8Array([0]);
+                  const result = await chainService.sendMove(currentSessionIdRef.current!, payload);
+                  if (result.txHash) setLastTxSig(result.txHash);
+                  setGameState(prev => ({ ...prev, message: 'DEALING...' }));
+                } catch (error) {
+                  console.error('[useTerminalGame] Blackjack auto-deal failed:', error);
+                  isPendingRef.current = false;
+                  setGameState(prev => ({ ...prev, message: 'DEAL FAILED (SPACE)' }));
+                }
+              })();
+            }
 	        }
 
 	        // If this session was started by a SPACE auto-play request (rebet + play), run it now.
@@ -1726,19 +1750,19 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
             : (payout >= 0 ? (payout + interimPayout - sessionWager) : (payout + interimPayout));
         console.log('[useTerminalGame] PnL Calc:', { payout, interimPayout, sessionWager, startChips, netPnL });
 
-        // Generate descriptive result message using Net PnL
-        const { summary: resultMessage, details } = generateGameResult(gameTypeRef.current, gameStateRef.current, netPnL);
+        // Use backend logs if available, otherwise fall back to local generation
+        const parsed = (event.logs && event.logs.length > 0)
+          ? parseGameLogs(gameTypeRef.current, event.logs, netPnL)
+          : null;
+        const { summary: resultMessage, details } = parsed || generateGameResult(gameTypeRef.current, gameStateRef.current, netPnL);
 
         // Update stats including history and pnlByGame
         setStats(prev => {
           const currentGameType = gameTypeRef.current;
           const pnlEntry = { [currentGameType]: (prev.pnlByGame[currentGameType] || 0) + netPnL };
-          // Format history: Summary line, then detail lines (prefer backend logs if available)
-          const detailLines = (event.logs && event.logs.length > 0) ? event.logs : details;
-          // For Craps legacy, details were handled in Moved, but if backend sends logs in Completed, show them.
-          // Always prepend summary.
-          const newHistory = [resultMessage, ...detailLines];
-          
+          // Use parsed details from backend logs, or fall back to locally computed details
+          const newHistory = [resultMessage, ...details];
+
           return {
             ...prev,
             chips: finalChips,
@@ -1752,11 +1776,15 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
           };
         });
 
-        // Reset active modifiers since they were consumed
+        // Update currentChipsRef immediately to prevent stale closure issues when starting new games
+        // (the useEffect that syncs this ref runs after render, which may be too late)
+        currentChipsRef.current = finalChips;
+
+        // Reset consumed shield/double modifiers but keep super mode sticky
         if (event.wasShielded || event.wasDoubled) {
           setGameState(prev => ({
             ...prev,
-            activeModifiers: { shield: false, double: false, super: false }
+            activeModifiers: { shield: false, double: false, super: prev.activeModifiers.super }
           }));
         }
 
@@ -1768,7 +1796,9 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
           sessionWager: 0,
           sessionInterimPayout: 0,
           rouletteIsPrison: false,
-          casinoWarTieBet: 0 // Reset wager state for next round
+          // Reset superMode since game is complete - new game will fetch fresh multipliers
+          superMode: null,
+          // Keep casinoWarTieBet sticky for next hand
         }));
 
         // Refresh progressive meters after completion (they can change due to the just-finished game).
@@ -2070,7 +2100,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
             hiloAccumulator: actualPot,
             hiloGraphData: [...(prev.hiloGraphData || []), actualPot].slice(-MAX_GRAPH_POINTS),
             stage: 'PLAYING' as const,
-            message: `POT: $${actualPot.toLocaleString()} | HIGHER (H) / LOWER (L)`,
+            message: 'YOUR MOVE',
           };
           // Also update ref inside for consistency
           gameStateRef.current = newState;
@@ -2235,7 +2265,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
               dealerCards: dealerCard ? [dealerCard] : [],
               casinoWarTieBet: tieBet,
               sessionInterimPayout: stage === 0 ? 0 : tieCredit,
-	              stage: (stage === 0 ? 'BETTING' : 'PLAYING') as const,
+	              stage: stage === 0 ? 'BETTING' as const : 'PLAYING' as const,
 	              message:
 	                stage === 0
 	                  ? 'PLACE BETS & DEAL'
@@ -2388,13 +2418,15 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
           }
 
           // Preserve locally-staged bets (not yet submitted to chain) alongside on-chain bets.
+          // Use a lenient key that ignores status (can differ between local staging and chain confirmation)
+          // and ignores oddsAmount (odds can be added separately).
           const localStagedBets = prev.crapsBets.filter((b) => b.local === true);
-          const betKey = (b: CrapsBet) =>
-            `${b.type}|${b.target ?? ''}|${b.status ?? ''}|${b.amount}|${b.oddsAmount ?? 0}|${b.progressMask ?? 0}`;
+          const betKeyLoose = (b: CrapsBet) => `${b.type}|${b.target ?? ''}|${b.amount}`;
           const mergedBets: CrapsBet[] = [...parsedBets];
-          const seen = new Set<string>(parsedBets.map(betKey));
+          const seen = new Set<string>(parsedBets.map(betKeyLoose));
           for (const bet of localStagedBets) {
-            const key = betKey(bet);
+            const key = betKeyLoose(bet);
+            // Only add local bet if no matching chain bet exists
             if (seen.has(key)) continue;
             seen.add(key);
             mergedBets.push(bet);
@@ -2617,6 +2649,8 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
         }
 
         const stageVal = stateBlob[1]; // 0=Betting,1=Preflop,2=Flop,3=River,4=AwaitingReveal,5=Showdown
+        // Update ref synchronously for action validation (before async setGameState)
+        uthBackendStageRef.current = stageVal;
         const pBytes = [stateBlob[2], stateBlob[3]];
         const cBytes = [stateBlob[4], stateBlob[5], stateBlob[6], stateBlob[7], stateBlob[8]];
         const dBytes = [stateBlob[9], stateBlob[10]];
@@ -2745,6 +2779,10 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
     pendingMoveCountRef.current = 0;
     crapsPendingRollLogRef.current = null;
     autoPlayPlanRef.current = null;
+    // Reset UTH stage ref when switching games (will be updated by parseGameState on first state)
+    if (type === GameType.ULTIMATE_HOLDEM) {
+      uthBackendStageRef.current = 0;
+    }
     if (autoPlayDraftRef.current && autoPlayDraftRef.current.type !== type) {
       autoPlayDraftRef.current = null;
     }
@@ -2789,22 +2827,24 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
       baccaratUndoStack: type === GameType.BACCARAT ? prev.baccaratUndoStack : [],
       baccaratLastRoundBets: prev.baccaratLastRoundBets,
       lastResult: 0,
-      activeModifiers: { shield: false, double: false, super: false },
+      // Keep super mode sticky; shield/double reset since they're consumables
+      activeModifiers: { shield: false, double: false, super: prev.activeModifiers.super },
       baccaratSelection: prev.baccaratSelection, // Preserve selection from previous game
       insuranceBet: 0,
       blackjackStack: [],
       completedHands: [],
-      blackjack21Plus3Bet: 0,
-      threeCardPairPlusBet: 0,
-      threeCardSixCardBonusBet: 0,
-      threeCardProgressiveBet: 0,
+      // Keep side bets sticky for their respective games
+      blackjack21Plus3Bet: type === GameType.BLACKJACK ? prev.blackjack21Plus3Bet : 0,
+      threeCardPairPlusBet: type === GameType.THREE_CARD ? prev.threeCardPairPlusBet : 0,
+      threeCardSixCardBonusBet: type === GameType.THREE_CARD ? prev.threeCardSixCardBonusBet : 0,
+      threeCardProgressiveBet: type === GameType.THREE_CARD ? prev.threeCardProgressiveBet : 0,
       threeCardProgressiveJackpot: prev.threeCardProgressiveJackpot,
-      uthTripsBet: 0,
-      uthSixCardBonusBet: 0,
-      uthProgressiveBet: 0,
+      uthTripsBet: type === GameType.ULTIMATE_HOLDEM ? prev.uthTripsBet : 0,
+      uthSixCardBonusBet: type === GameType.ULTIMATE_HOLDEM ? prev.uthSixCardBonusBet : 0,
+      uthProgressiveBet: type === GameType.ULTIMATE_HOLDEM ? prev.uthProgressiveBet : 0,
       uthProgressiveJackpot: prev.uthProgressiveJackpot,
       uthBonusCards: [],
-      casinoWarTieBet: 0,
+      casinoWarTieBet: type === GameType.CASINO_WAR ? prev.casinoWarTieBet : 0,
       hiloAccumulator: 0,
       hiloGraphData: [],
       // Preserve staged table-game wagers if we're restarting the same table game (e.g. CRAPS after a completed session).
@@ -3522,11 +3562,12 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
     if (gameState.type === GameType.BLACKJACK) {
         bjStartGame(newDeck);
     } else if (gameState.type === GameType.HILO) {
-        setGameState(prev => ({ ...prev, stage: 'PLAYING', playerCards: [newDeck.pop()!], hiloAccumulator: gameState.bet, hiloGraphData: [gameState.bet], message: `HIGHER (H) / LOWER (L)? POT: ${gameState.bet}` }));
+        setGameState(prev => ({ ...prev, stage: 'PLAYING', playerCards: [newDeck.pop()!], hiloAccumulator: gameState.bet, hiloGraphData: [gameState.bet], message: 'YOUR MOVE' }));
     } else if (gameState.type === GameType.VIDEO_POKER) {
         setGameState(prev => ({ ...prev, stage: 'PLAYING', playerCards: [newDeck.pop()!, newDeck.pop()!, newDeck.pop()!, newDeck.pop()!, newDeck.pop()!], message: "HOLD (1-5), DRAW (D)" }));
     } else if (gameState.type === GameType.BACCARAT) {
-        baccaratDeal(newDeck);
+        // Baccarat deal is handled on-chain - show offline message for local mode
+        setGameState(prev => ({ ...prev, message: 'OFFLINE - START BACKEND' }));
     } else if (gameState.type === GameType.CASINO_WAR) {
         const p1 = newDeck.pop()!, d1 = newDeck.pop()!;
         let win = p1.value > d1.value ? gameState.bet : p1.value < d1.value ? -gameState.bet : 0;
@@ -3629,7 +3670,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
       setGameState(prev => ({ ...prev, message: multiplier > 0 ? `${rank}!` : "LOST" }));
   };
 
-  const hiloPlay = async (guess: 'HIGHER' | 'LOWER') => {
+  const hiloPlay = async (guess: 'HIGHER' | 'LOWER' | 'SAME') => {
       // Prevent double-submission
       if (isPendingRef.current) {
         console.log('[hiloPlay] Blocked - transaction already pending');
@@ -3641,8 +3682,9 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
         try {
           isPendingRef.current = true;
           console.log('[hiloPlay] Set isPending = true, sending move...');
-          // Payload: [0] for Higher, [1] for Lower
-          const payload = guess === 'HIGHER' ? new Uint8Array([0]) : new Uint8Array([1]);
+          // Payload: [0] for Higher, [1] for Lower, [3] for Same
+          const payloadByte = guess === 'HIGHER' ? 0 : guess === 'LOWER' ? 1 : 3;
+          const payload = new Uint8Array([payloadByte]);
           const result = await chainService.sendMove(currentSessionIdRef.current, payload);
           if (result.txHash) setLastTxSig(result.txHash);
           setGameState(prev => ({ ...prev, message: `GUESSING ${guess}...` }));
@@ -3658,28 +3700,41 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
         }
       }
 
-      // Local mode fallback
+      // Local mode fallback (simplified - real logic is on-chain)
       const next = deck.pop()!;
       const curr = gameState.playerCards[gameState.playerCards.length-1];
       const cVal = getHiLoRank(curr);
       const nVal = getHiLoRank(next);
-      
+
       const summary = `Guess ${guess}: ${next.rank}${next.suit}.`;
-      
-      if (cVal === nVal) {
-          setGameState(prev => ({ ...prev, playerCards: [...prev.playerCards, next], message: "PUSH. POT REMAINS." }));
-          return;
+
+      // Win conditions match on-chain logic:
+      // - SAME: wins if ranks equal
+      // - Higher/Lower: strictly higher/lower wins, same rank = PUSH (continue, no multiplier change)
+      const isPush = (guess === 'HIGHER' || guess === 'LOWER') && nVal === cVal;
+      if (isPush) {
+        setGameState(prev => ({ ...prev, playerCards: [...prev.playerCards, next], message: "PUSH - Same rank! POT unchanged." }));
+        return;
       }
-      const won = (guess === 'HIGHER' && nVal > cVal) || (guess === 'LOWER' && nVal < cVal);
+
+      let won: boolean;
+      if (guess === 'SAME') {
+        won = nVal === cVal;
+      } else if (guess === 'HIGHER') {
+        won = nVal > cVal; // Strictly higher
+      } else {
+        won = nVal < cVal; // Strictly lower
+      }
       if (won) {
           // Simple doubling for demo, real calc is complex
           const newAcc = Math.floor(gameState.hiloAccumulator * 1.5);
-          setGameState(prev => ({ ...prev, playerCards: [...prev.playerCards, next], hiloAccumulator: newAcc, hiloGraphData: [...prev.hiloGraphData, newAcc].slice(-MAX_GRAPH_POINTS), message: `CORRECT! POT: ${newAcc}` }));
+          const change = newAcc - gameState.hiloAccumulator;
+          setGameState(prev => ({ ...prev, playerCards: [...prev.playerCards, next], hiloAccumulator: newAcc, hiloGraphData: [...prev.hiloGraphData, newAcc].slice(-MAX_GRAPH_POINTS), message: `Correct. +$${change}` }));
       } else {
           const pnl = -gameState.bet;
           const fullSummary = `${summary} -$${gameState.bet}`;
           const details = [`LOSS (-$${gameState.bet})`];
-          
+
           setStats(prev => ({
               ...prev,
               chips: prev.chips + pnl,
@@ -3687,9 +3742,8 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
               pnlByGame: { ...prev.pnlByGame, [GameType.HILO]: (prev.pnlByGame[GameType.HILO] || 0) + pnl },
               pnlHistory: [...prev.pnlHistory, (prev.pnlHistory[prev.pnlHistory.length - 1] || 0) + pnl].slice(-MAX_GRAPH_POINTS)
           }));
-          
-          setGameState(prev => ({ ...prev, playerCards: [...prev.playerCards, next], hiloGraphData: [...prev.hiloGraphData, 0].slice(-MAX_GRAPH_POINTS), stage: 'RESULT' }));
-          setGameState(prev => ({ ...prev, message: "WRONG", lastResult: pnl }));
+
+          setGameState(prev => ({ ...prev, playerCards: [...prev.playerCards, next], hiloGraphData: [...prev.hiloGraphData, 0].slice(-MAX_GRAPH_POINTS), stage: 'RESULT', message: `Incorrect. -$${gameState.bet}`, lastResult: pnl }));
       }
   };
   const hiloCashout = async () => {
@@ -3733,7 +3787,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
           pnlHistory: [...prev.pnlHistory, (prev.pnlHistory[prev.pnlHistory.length - 1] || 0) + profit].slice(-MAX_GRAPH_POINTS)
       }));
       
-      setGameState(prev => ({ ...prev, message: "CASHED OUT", lastResult: profit }));
+      setGameState(prev => ({ ...prev, message: `Cashed Out. +$${profit}`, stage: 'RESULT', lastResult: profit }));
   };
 
   // --- ROULETTE / SIC BO / CRAPS / BACCARAT BETTING HELPERS ---
@@ -4427,6 +4481,13 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
           return;
         }
 
+        // Validate backend stage - Check only valid at stage 1 (Preflop) and 2 (Flop)
+        const backendStage = uthBackendStageRef.current;
+        if (backendStage !== 1 && backendStage !== 2) {
+          console.log(`[useTerminalGame] UTH Check blocked - wrong stage (have ${backendStage}, need 1 or 2)`);
+          return;
+        }
+
         isPendingRef.current = true;
         try {
           // Payload: [0] for Check
@@ -4475,6 +4536,15 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
         // Guard against duplicate submissions
         if (isPendingRef.current) {
           console.log('[useTerminalGame] Ultimate Holdem Bet blocked - transaction pending');
+          return;
+        }
+
+        // Validate backend stage matches expected stage for this bet multiplier
+        // Stage: 1=Preflop (4x/3x), 2=Flop (2x), 3=River (1x), 4=AwaitingReveal (no bets)
+        const backendStage = uthBackendStageRef.current;
+        const validStage = (multiplier === 4 || multiplier === 3) ? 1 : multiplier === 2 ? 2 : multiplier === 1 ? 3 : -1;
+        if (backendStage !== validStage) {
+          console.log(`[useTerminalGame] UTH Bet ${multiplier}x blocked - wrong stage (have ${backendStage}, need ${validStage})`);
           return;
         }
 
@@ -4599,6 +4669,12 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
         // Guard against duplicate submissions
         if (isPendingRef.current) {
           console.log('[useTerminalGame] Ultimate Holdem Fold blocked - transaction pending');
+          return;
+        }
+
+        // Validate backend stage - Fold only valid at stage 3 (River)
+        if (uthBackendStageRef.current !== 3) {
+          console.log(`[useTerminalGame] UTH Fold blocked - wrong stage (have ${uthBackendStageRef.current}, need 3)`);
           return;
         }
 
@@ -4849,6 +4925,8 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
   }, [startGame]);
 
   return {
+    stats,
+    gameState,
     setGameState,
     deck,
     aiAdvice,

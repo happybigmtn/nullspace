@@ -7,17 +7,25 @@ import { GameType, CasinoGameStartedEvent, CasinoGameMovedEvent, CasinoGameCompl
 import { CasinoClient } from '../api/client.js';
 import { snakeToCamel } from '../utils/caseNormalizer';
 
-// Extend CasinoClient to include nonceManager property
-interface CasinoClientWithNonceManager extends CasinoClient {
-  nonceManager: {
-    submitCasinoRegister: (name: string) => Promise<{ txHash?: string }>;
-    submitCasinoStartGame: (gameType: GameType, bet: bigint, sessionId: bigint) => Promise<{ txHash?: string }>;
-    submitCasinoGameMove: (sessionId: bigint, payload: Uint8Array) => Promise<{ txHash?: string }>;
-    submitCasinoToggleShield: () => Promise<{ txHash?: string }>;
-    submitCasinoToggleDouble: () => Promise<{ txHash?: string }>;
-    submitCasinoToggleSuper: () => Promise<{ txHash?: string }>;
-  };
+// Type for CasinoClient with nonceManager methods (for runtime type assertions)
+interface NonceManagerResult {
+  txHash?: string;
+  status?: string;
 }
+
+interface NonceManagerMethods {
+  submitCasinoRegister: (name: string) => Promise<NonceManagerResult>;
+  submitCasinoStartGame: (gameType: GameType, bet: bigint, sessionId: bigint) => Promise<NonceManagerResult>;
+  submitCasinoGameMove: (sessionId: bigint, payload: Uint8Array) => Promise<NonceManagerResult>;
+  submitCasinoToggleShield: () => Promise<NonceManagerResult>;
+  submitCasinoToggleDouble: () => Promise<NonceManagerResult>;
+  submitCasinoToggleSuper: () => Promise<NonceManagerResult>;
+}
+
+// Use intersection type instead of extends to avoid strict inheritance issues
+type CasinoClientWithNonceManager = CasinoClient & {
+  nonceManager: NonceManagerMethods;
+};
 
 // Interface for raw events from the chain client
 interface RawCasinoGameStartedEvent {
@@ -115,6 +123,7 @@ function deserializeCasinoGameStarted(data: Uint8Array): CasinoGameStartedEvent 
  */
 function deserializeCasinoGameMoved(data: Uint8Array): CasinoGameMovedEvent {
   const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  const decoder = new TextDecoder();
   let offset = 0;
 
   const tag = data[offset++];
@@ -131,12 +140,29 @@ function deserializeCasinoGameMoved(data: Uint8Array): CasinoGameMovedEvent {
   const { value: stateLen, bytesRead } = readVarint(data, offset);
   offset += bytesRead;
   const newState = data.slice(offset, offset + stateLen);
+  offset += stateLen;
+
+  // Read logs (u32 count, then each log is u32 len + bytes)
+  const logs: string[] = [];
+  if (offset < data.length) {
+    const logsCount = view.getUint32(offset, false);
+    offset += 4;
+
+    for (let i = 0; i < logsCount; i++) {
+      const logLen = view.getUint32(offset, false);
+      offset += 4;
+      const logBytes = data.slice(offset, offset + logLen);
+      offset += logLen;
+      logs.push(decoder.decode(logBytes));
+    }
+  }
 
   return {
     type: 'CasinoGameMoved',
     sessionId,
     moveNumber,
     newState,
+    logs,
   };
 }
 
@@ -145,6 +171,7 @@ function deserializeCasinoGameMoved(data: Uint8Array): CasinoGameMovedEvent {
  */
 function deserializeCasinoGameCompleted(data: Uint8Array): CasinoGameCompletedEvent {
   const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  const decoder = new TextDecoder();
   let offset = 0;
 
   const tag = data[offset++];
@@ -169,6 +196,21 @@ function deserializeCasinoGameCompleted(data: Uint8Array): CasinoGameCompletedEv
   const wasShielded = data[offset++] === 1;
   const wasDoubled = data[offset++] === 1;
 
+  // Read logs (u32 count, then each log is u32 len + bytes)
+  const logs: string[] = [];
+  if (offset < data.length) {
+    const logsCount = view.getUint32(offset, false);
+    offset += 4;
+
+    for (let i = 0; i < logsCount; i++) {
+      const logLen = view.getUint32(offset, false);
+      offset += 4;
+      const logBytes = data.slice(offset, offset + logLen);
+      offset += logLen;
+      logs.push(decoder.decode(logBytes));
+    }
+  }
+
   return {
     type: 'CasinoGameCompleted',
     sessionId,
@@ -178,6 +220,7 @@ function deserializeCasinoGameCompleted(data: Uint8Array): CasinoGameCompletedEv
     finalChips,
     wasShielded,
     wasDoubled,
+    logs,
   };
 }
 

@@ -342,6 +342,56 @@ fn calculate_bet_payout(bet: &SicBoBet, dice: &[u8; 3]) -> u64 {
     }
 }
 
+/// Generate JSON logs for Sic Bo game completion
+fn generate_sicbo_logs(
+    state: &SicBoState,
+    dice: &[u8; 3],
+    total_wagered: u64,
+    total_return: u64,
+) -> Vec<String> {
+    let total: u8 = dice.iter().sum();
+    let is_triple = is_triple(dice);
+
+    // Build bet results array
+    let bet_results: Vec<String> = state
+        .bets
+        .iter()
+        .map(|bet| {
+            let payout = calculate_bet_payout(bet, dice);
+            let won = payout > 0;
+            let bet_type_str = match bet.bet_type {
+                BetType::Small => "SMALL",
+                BetType::Big => "BIG",
+                BetType::Odd => "ODD",
+                BetType::Even => "EVEN",
+                BetType::SpecificTriple => "SPECIFIC_TRIPLE",
+                BetType::AnyTriple => "ANY_TRIPLE",
+                BetType::SpecificDouble => "SPECIFIC_DOUBLE",
+                BetType::Total => "TOTAL",
+                BetType::Single => "SINGLE",
+                BetType::Domino => "DOMINO",
+                BetType::ThreeNumberEasyHop => "THREE_NUMBER_EASY_HOP",
+                BetType::ThreeNumberHardHop => "THREE_NUMBER_HARD_HOP",
+                BetType::FourNumberEasyHop => "FOUR_NUMBER_EASY_HOP",
+            };
+            format!(
+                r#"{{"type":"{}","number":{},"amount":{},"won":{},"payout":{}}}"#,
+                bet_type_str, bet.number, bet.amount, won, payout
+            )
+        })
+        .collect();
+
+    vec![format!(
+        r#"{{"dice":[{},{},{}],"total":{},"isTriple":{},"bets":[{}],"totalWagered":{},"totalReturn":{}}}"#,
+        dice[0], dice[1], dice[2],
+        total,
+        is_triple,
+        bet_results.join(","),
+        total_wagered,
+        total_return
+    )]
+}
+
 pub struct SicBo;
 
 impl CasinoGame for SicBo {
@@ -466,9 +516,11 @@ impl CasinoGame for SicBo {
                     } else {
                         total_winnings
                     };
-                    Ok(GameResult::Win(final_winnings, vec![]))
+                    let logs = generate_sicbo_logs(&state, &dice, total_bet, final_winnings);
+                    Ok(GameResult::Win(final_winnings, logs))
                 } else {
-                    Ok(GameResult::LossPreDeducted(total_bet, vec![]))
+                    let logs = generate_sicbo_logs(&state, &dice, total_bet, 0);
+                    Ok(GameResult::LossPreDeducted(total_bet, logs))
                 }
             }
 
@@ -576,9 +628,13 @@ impl CasinoGame for SicBo {
                     } else {
                         total_winnings
                     };
-                    Ok(GameResult::Win(final_winnings, vec![]))
+                    let logs = generate_sicbo_logs(&state, &dice, total_wager, final_winnings);
+                    Ok(GameResult::Win(final_winnings, logs))
                 } else {
-                    Ok(GameResult::Loss(vec![]))
+                    // Total loss - use LossWithExtraDeduction since atomic batch
+                    // doesn't pre-deduct bets via ContinueWithUpdate
+                    let logs = generate_sicbo_logs(&state, &dice, total_wager, 0);
+                    Ok(GameResult::LossWithExtraDeduction(total_wager, logs))
                 }
             }
 

@@ -466,7 +466,7 @@ export class NonceManager {
   /**
    * Submit a casino register transaction.
    * @param {string} name - The player name
-   * @returns {Promise<{status: string}>} Transaction result
+   * @returns {Promise<{status: string, txHash?: string, txDigest?: string}>} Transaction result
    */
   async submitCasinoRegister(name) {
     return this.submitTransaction(
@@ -480,7 +480,7 @@ export class NonceManager {
    * @param {number} gameType - The game type (0-9)
    * @param {bigint} bet - The bet amount
    * @param {bigint} sessionId - The session ID
-   * @returns {Promise<{status: string}>} Transaction result
+   * @returns {Promise<{status: string, txHash?: string, txDigest?: string}>} Transaction result
    */
   async submitCasinoStartGame(gameType, bet, sessionId) {
     return this.submitTransaction(
@@ -493,7 +493,7 @@ export class NonceManager {
    * Submit a casino game move transaction.
    * @param {bigint} sessionId - The session ID
    * @param {Uint8Array} payload - The move payload
-   * @returns {Promise<{status: string}>} Transaction result
+   * @returns {Promise<{status: string, txHash?: string, txDigest?: string}>} Transaction result
    */
   async submitCasinoGameMove(sessionId, payload) {
     return this.submitTransaction(
@@ -504,7 +504,7 @@ export class NonceManager {
 
   /**
    * Submit a casino toggle shield transaction.
-   * @returns {Promise<{status: string}>} Transaction result
+   * @returns {Promise<{status: string, txHash?: string, txDigest?: string}>} Transaction result
    */
   async submitCasinoToggleShield() {
     return this.submitTransaction(
@@ -515,7 +515,7 @@ export class NonceManager {
 
   /**
    * Submit a casino toggle double transaction.
-   * @returns {Promise<{status: string}>} Transaction result
+   * @returns {Promise<{status: string, txHash?: string, txDigest?: string}>} Transaction result
    */
   async submitCasinoToggleDouble() {
     return this.submitTransaction(
@@ -526,7 +526,7 @@ export class NonceManager {
 
   /**
    * Submit a casino toggle super transaction.
-   * @returns {Promise<{status: string}>} Transaction result
+   * @returns {Promise<{status: string, txHash?: string, txDigest?: string}>} Transaction result
    */
   async submitCasinoToggleSuper() {
     return this.submitTransaction(

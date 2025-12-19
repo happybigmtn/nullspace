@@ -19,7 +19,7 @@ export const CardRender: React.FC<{ card: Card; small?: boolean; forcedColor?: s
     return (
       <div
         className={`${
-          small ? 'w-9 h-[3.25rem] sm:w-10 sm:h-14' : 'w-12 h-[4.5rem] sm:w-16 sm:h-24'
+          small ? 'w-9 h-[3.25rem] sm:w-10 sm:h-14 md:w-11 md:h-[4rem]' : 'w-12 h-[4.5rem] sm:w-14 sm:h-20 md:w-16 md:h-24'
         } bg-terminal-dim border border-gray-600 rounded flex items-center justify-center`}
       >
         <span className="text-gray-500 opacity-50 text-xs">?</span>
@@ -29,7 +29,9 @@ export const CardRender: React.FC<{ card: Card; small?: boolean; forcedColor?: s
 
   const sizeClass = useMemo(
     () =>
-      small ? 'w-9 h-[3.25rem] sm:w-10 sm:h-14 text-sm' : 'w-12 h-[4.5rem] sm:w-16 sm:h-24 text-base sm:text-xl',
+      small
+        ? 'w-9 h-[3.25rem] sm:w-10 sm:h-14 md:w-11 md:h-[4rem] text-sm md:text-base'
+        : 'w-12 h-[4.5rem] sm:w-14 sm:h-20 md:w-16 md:h-24 text-base sm:text-lg md:text-xl',
     [small]
   );
 
@@ -68,7 +70,7 @@ export const CardRender: React.FC<{ card: Card; small?: boolean; forcedColor?: s
 export const Hand: React.FC<{ cards: Card[]; title?: string; forcedColor?: string }> = ({ cards, title, forcedColor }) => (
   <div className="flex flex-col gap-2 items-center">
     {title && <span className={`text-xs uppercase tracking-widest ${forcedColor ? forcedColor : 'text-gray-500'}`}>{title}</span>}
-    <div className="flex flex-wrap justify-center gap-1 sm:gap-2">
+    <div className="flex flex-wrap justify-center gap-1 sm:gap-1.5 md:gap-2">
       {cards.map((c, i) => (
         <CardRender
           key={`${i}-${c?.value ?? 'x'}-${c?.isHidden ? 1 : 0}`}
@@ -79,7 +81,7 @@ export const Hand: React.FC<{ cards: Card[]; title?: string; forcedColor?: strin
       ))}
       {cards.length === 0 && (
         <div
-          className={`w-12 h-[4.5rem] sm:w-16 sm:h-24 border border-dashed rounded ${
+          className={`w-12 h-[4.5rem] sm:w-14 sm:h-20 md:w-16 md:h-24 border border-dashed rounded ${
             forcedColor ? `border-${forcedColor.replace('text-', '')}` : 'border-gray-800'
           }`}
         />

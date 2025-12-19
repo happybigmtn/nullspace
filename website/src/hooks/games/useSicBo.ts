@@ -10,8 +10,8 @@ const MAX_GRAPH_POINTS = 100;
 const sicBoBetToNumeric = (bet: SicBoBet): {betType: number, number: number, amount: number} => {
   const betTypeMap: Record<SicBoBet['type'], number> = {
     'SMALL': 0, 'BIG': 1, 'ODD': 2, 'EVEN': 3,
-    'TOTAL': 4, 'SINGLE': 5, 'DOUBLE': 6, 'TRIPLE': 7, 'ANY_TRIPLE': 8,
-    'TWO_DICE': 9
+    'SUM': 4, 'SINGLE_DIE': 5, 'DOUBLE_SPECIFIC': 6, 'TRIPLE_SPECIFIC': 7, 'TRIPLE_ANY': 8,
+    'DOMINO': 9, 'HOP3_EASY': 10, 'HOP3_HARD': 11, 'HOP4_EASY': 12
   };
   return { betType: betTypeMap[bet.type], number: bet.target ?? 0, amount: bet.amount };
 };

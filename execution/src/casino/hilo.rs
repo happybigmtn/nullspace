@@ -10,6 +10,14 @@
 //! [0] = Higher - guess next card is higher
 //! [1] = Lower - guess next card is lower
 //! [2] = Cashout - take current pot
+//! [3] = Same - guess next card is same rank (only valid at Ace or King)
+//!
+//! Win conditions:
+//! - Normal cards (2-Q): Higher wins on >, Lower wins on <, Same rank = PUSH (continue, no multiplier change)
+//! - Ace (rank 1): Only Higher (>) and Same (=) are valid options
+//! - King (rank 13): Only Lower (<) and Same (=) are valid options
+//!
+//! Draws WITH replacement (always 52 cards in deck).
 
 use super::super_mode::apply_hilo_streak_multiplier;
 use super::{cards, CasinoGame, GameError, GameResult, GameRng};
@@ -25,6 +33,7 @@ pub enum Move {
     Higher = 0,
     Lower = 1,
     Cashout = 2,
+    Same = 3,
 }
 
 impl TryFrom<u8> for Move {
@@ -35,6 +44,7 @@ impl TryFrom<u8> for Move {
             0 => Ok(Move::Higher),
             1 => Ok(Move::Lower),
             2 => Ok(Move::Cashout),
+            3 => Ok(Move::Same),
             _ => Err(GameError::InvalidPayload),
         }
     }
@@ -48,24 +58,41 @@ pub fn card_rank(card: u8) -> u8 {
 
 /// Calculate the multiplier for a correct guess based on probability.
 /// Returns multiplier in basis points.
-fn calculate_multiplier(current_rank: u8, guess_higher: bool) -> i64 {
-    // Cards left that would be wins
-    let wins = if guess_higher {
-        // Higher: cards with rank > current
-        13 - current_rank as i64
-    } else {
-        // Lower: cards with rank < current
-        current_rank as i64 - 1
+///
+/// With 52 cards (draw with replacement):
+/// - Same (at Ace/King only): 1 rank wins → 13x multiplier
+/// - Higher/Lower: strictly higher/lower wins, same = push (no multiplier change)
+fn calculate_multiplier(current_rank: u8, mv: Move) -> i64 {
+    let winning_ranks = match mv {
+        Move::Same => {
+            // Same: only 1 rank wins (4 cards out of 52) = 13x
+            1
+        }
+        Move::Higher => {
+            if current_rank == 13 {
+                // At King: Higher is invalid (should use Same)
+                return 0;
+            }
+            // Strictly higher: ranks above current
+            13 - current_rank as i64
+        }
+        Move::Lower => {
+            if current_rank == 1 {
+                // At Ace: Lower is invalid (should use Same)
+                return 0;
+            }
+            // Strictly lower: ranks below current
+            current_rank as i64 - 1
+        }
+        Move::Cashout => return 0,
     };
 
-    if wins <= 0 {
-        // No possible wins (e.g., guessing higher than King)
+    if winning_ranks <= 0 {
         return 0;
     }
 
-    // Multiplier = 13 / wins (approximate fair odds)
-    // Stored in basis points for precision
-    (13 * BASE_MULTIPLIER) / wins
+    // Multiplier = 13 / winning_ranks (fair odds based on rank distribution)
+    (13 * BASE_MULTIPLIER) / winning_ranks
 }
 
 /// Parse state blob into current card and accumulator.
@@ -152,50 +179,107 @@ impl CasinoGame for HiLo {
                     } else {
                         payout_u64
                     };
-                    Ok(GameResult::Win(final_payout, vec![]))
+                    // Generate completion logs for frontend display
+                    let logs = vec![format!(
+                        r#"{{"card":{},"guess":"CASHOUT","multiplier":{},"streak":{},"payout":{}}}"#,
+                        current_card, accumulator, session.move_count, final_payout
+                    )];
+                    Ok(GameResult::Win(final_payout, logs))
                 } else {
                     // Accumulator is 0 or negative (shouldn't happen in normal play)
-                    Ok(GameResult::Loss(vec![]))
+                    let logs = vec![format!(
+                        r#"{{"card":{},"guess":"CASHOUT","multiplier":0,"streak":{},"payout":0}}"#,
+                        current_card, session.move_count
+                    )];
+                    Ok(GameResult::Loss(logs))
                 }
             }
-            Move::Higher | Move::Lower => {
-                let guess_higher = mv == Move::Higher;
+            Move::Higher | Move::Lower | Move::Same => {
                 let current_rank = card_rank(current_card);
 
-                // Check for impossible guesses
-                if (guess_higher && current_rank == 13) || (!guess_higher && current_rank == 1) {
-                    return Err(GameError::InvalidMove);
+                // Validate move based on current card position
+                match mv {
+                    Move::Same => {
+                        // Same is only valid at Ace or King
+                        if current_rank != 1 && current_rank != 13 {
+                            return Err(GameError::InvalidMove);
+                        }
+                    }
+                    Move::Higher => {
+                        // Higher is invalid at King (use Same instead)
+                        if current_rank == 13 {
+                            return Err(GameError::InvalidMove);
+                        }
+                    }
+                    Move::Lower => {
+                        // Lower is invalid at Ace (use Same instead)
+                        if current_rank == 1 {
+                            return Err(GameError::InvalidMove);
+                        }
+                    }
+                    _ => {}
                 }
 
-                // Draw new card (recreate deck without current card)
-                let mut deck = rng.create_deck_excluding(&[current_card]);
+                // Draw new card WITH REPLACEMENT (full 52-card deck)
+                let mut deck = rng.create_deck();
                 let new_card = rng.draw_card(&mut deck).ok_or(GameError::DeckExhausted)?;
                 let new_rank = card_rank(new_card);
 
                 session.move_count += 1;
 
-                // Check if guess was correct
-                let correct = if guess_higher {
-                    new_rank > current_rank
-                } else {
-                    new_rank < current_rank
+                // Check for push: same rank on Higher/Lower (not Same move)
+                let is_push = (mv == Move::Higher || mv == Move::Lower) && new_rank == current_rank;
+
+                // Determine if guess was correct
+                let correct = match mv {
+                    Move::Same => new_rank == current_rank,
+                    Move::Higher => new_rank > current_rank, // Strictly higher
+                    Move::Lower => new_rank < current_rank,  // Strictly lower
+                    _ => false,
                 };
+
+                let guess_str = match mv {
+                    Move::Higher => "HIGHER",
+                    Move::Lower => "LOWER",
+                    Move::Same => "SAME",
+                    _ => "UNKNOWN",
+                };
+
+                if is_push {
+                    // Push: same rank drawn, game continues with no multiplier change
+                    session.state_blob = serialize_state(new_card, accumulator);
+                    let logs = vec![format!(
+                        r#"{{"previousCard":{},"newCard":{},"guess":"{}","push":true,"multiplier":{},"streak":{}}}"#,
+                        current_card, new_card, guess_str, accumulator, session.move_count
+                    )];
+                    return Ok(GameResult::Continue(logs));
+                }
 
                 if correct {
                     // Calculate new accumulator with overflow protection
-                    let multiplier = calculate_multiplier(current_rank, guess_higher);
+                    let multiplier = calculate_multiplier(current_rank, mv);
                     let new_accumulator = accumulator
                         .checked_mul(multiplier)
                         .and_then(|v| v.checked_div(BASE_MULTIPLIER))
                         .ok_or(GameError::InvalidState)?;
 
                     session.state_blob = serialize_state(new_card, new_accumulator);
-                    Ok(GameResult::Continue(vec![]))
+                    // Generate move logs for frontend display
+                    let logs = vec![format!(
+                        r#"{{"previousCard":{},"newCard":{},"guess":"{}","correct":true,"multiplier":{},"streak":{}}}"#,
+                        current_card, new_card, guess_str, new_accumulator, session.move_count
+                    )];
+                    Ok(GameResult::Continue(logs))
                 } else {
                     // Wrong guess - lose everything
                     session.state_blob = serialize_state(new_card, 0);
                     session.is_complete = true;
-                    Ok(GameResult::Loss(vec![]))
+                    // Generate completion logs for frontend display
+                    let logs = vec![format!(
+                        r#"{{"previousCard":{},"newCard":{},"guess":"{}","correct":false,"multiplier":0,"streak":{},"payout":0}}"#,
+                        current_card, new_card, guess_str, session.move_count
+                    )];
+                    Ok(GameResult::Loss(logs))
                 }
             }
         }
@@ -247,30 +331,44 @@ mod tests {
 
     #[test]
     fn test_calculate_multiplier() {
-        // From Ace (rank 1), guessing higher: 12 wins possible
-        let mult = calculate_multiplier(1, true);
+        // From Ace (rank 1), guessing Higher (strictly): 12 ranks win (2-K)
+        let mult = calculate_multiplier(1, Move::Higher);
         assert_eq!(mult, 13 * BASE_MULTIPLIER / 12); // ~1.08x
 
-        // From King (rank 13), guessing lower: 12 wins possible
-        let mult = calculate_multiplier(13, false);
+        // From King (rank 13), guessing Lower (strictly): 12 ranks win (A-Q)
+        let mult = calculate_multiplier(13, Move::Lower);
         assert_eq!(mult, 13 * BASE_MULTIPLIER / 12); // ~1.08x
 
-        // From 7 (middle), guessing higher: 6 wins possible
-        let mult = calculate_multiplier(7, true);
-        assert_eq!(mult, 13 * BASE_MULTIPLIER / 6); // ~2.16x
+        // From 7 (middle), guessing Higher (strictly): 6 ranks win (8-K)
+        let mult = calculate_multiplier(7, Move::Higher);
+        assert_eq!(mult, 13 * BASE_MULTIPLIER / 6); // ~2.17x
 
-        // From 2, guessing lower: only 1 win possible (Ace)
-        let mult = calculate_multiplier(2, false);
+        // From 7 (middle), guessing Lower (strictly): 6 ranks win (A-6)
+        let mult = calculate_multiplier(7, Move::Lower);
+        assert_eq!(mult, 13 * BASE_MULTIPLIER / 6); // ~2.17x
+
+        // From 2, guessing Lower (strictly): 1 rank wins (A)
+        let mult = calculate_multiplier(2, Move::Lower);
         assert_eq!(mult, 13 * BASE_MULTIPLIER); // 13x
+
+        // Same: always 1 rank wins (4 cards out of 52) = 13x
+        let mult = calculate_multiplier(7, Move::Same);
+        assert_eq!(mult, 13 * BASE_MULTIPLIER); // 13x
+
+        let mult = calculate_multiplier(1, Move::Same);
+        assert_eq!(mult, 13 * BASE_MULTIPLIER); // 13x at Ace
+
+        let mult = calculate_multiplier(13, Move::Same);
+        assert_eq!(mult, 13 * BASE_MULTIPLIER); // 13x at King
     }
 
     #[test]
     fn test_impossible_guess() {
-        // Cannot guess higher than King
-        assert_eq!(calculate_multiplier(13, true), 0);
+        // Cannot guess higher than King (should use Same)
+        assert_eq!(calculate_multiplier(13, Move::Higher), 0);
 
-        // Cannot guess lower than Ace
-        assert_eq!(calculate_multiplier(1, false), 0);
+        // Cannot guess lower than Ace (should use Same)
+        assert_eq!(calculate_multiplier(1, Move::Lower), 0);
     }
 
     #[test]
@@ -382,6 +480,68 @@ mod tests {
                 _ => {}
             }
             move_num += 1;
+        }
+    }
+
+    #[test]
+    fn test_same_only_valid_at_edges() {
+        let seed = create_test_seed();
+
+        // Same should be INVALID at middle card (rank 7)
+        let mut session = create_test_session(100);
+        session.state_blob = serialize_state(6, BASE_MULTIPLIER); // 7 of spades (rank 7)
+        let mut rng = GameRng::new(&seed, session.id, 1);
+        let result = HiLo::process_move(&mut session, &[3], &mut rng); // Same
+        assert!(matches!(result, Err(GameError::InvalidMove)));
+
+        // Same should be VALID at Ace
+        let mut session = create_test_session(100);
+        session.state_blob = serialize_state(0, BASE_MULTIPLIER); // Ace of spades
+        let mut rng = GameRng::new(&seed, session.id, 1);
+        let result = HiLo::process_move(&mut session, &[3], &mut rng); // Same
+        // Either Continue (if drew Ace) or Loss (if drew non-Ace), but not InvalidMove
+        assert!(!matches!(result, Err(GameError::InvalidMove)));
+
+        // Same should be VALID at King
+        let mut session = create_test_session(100);
+        session.state_blob = serialize_state(12, BASE_MULTIPLIER); // King of spades
+        let mut rng = GameRng::new(&seed, session.id, 1);
+        let result = HiLo::process_move(&mut session, &[3], &mut rng); // Same
+        assert!(!matches!(result, Err(GameError::InvalidMove)));
+    }
+
+    #[test]
+    fn test_same_rank_is_push_for_middle_cards() {
+        // At rank 7, if same rank is drawn, it should be a push (continue with no multiplier change)
+        // Higher wins strictly on 8-K (6 ranks), pushes on 7, loses on A-6
+        let mult = calculate_multiplier(7, Move::Higher);
+        assert_eq!(mult, 13 * BASE_MULTIPLIER / 6); // ~2.17x for strictly higher
+
+        // Lower wins strictly on A-6 (6 ranks), pushes on 7, loses on 8-K
+        let mult = calculate_multiplier(7, Move::Lower);
+        assert_eq!(mult, 13 * BASE_MULTIPLIER / 6); // ~2.17x for strictly lower
+    }
+
+    #[test]
+    fn test_draw_with_replacement() {
+        // Verify that drawing with replacement means we can get the exact same card
+        // (This is probabilistic, but the implementation should allow it)
+        let seed = create_test_seed();
+        let mut session = create_test_session(100);
+
+        // Force specific card in state
+        session.state_blob = serialize_state(0, BASE_MULTIPLIER); // Ace of spades
+
+        // Try Higher move multiple times with different RNG states
+        // With replacement, probability of getting any specific card is 1/52
+        // We can't deterministically test this, but we verify no exclusion error
+        for move_num in 1..10 {
+            let mut test_session = session.clone();
+            let mut rng = GameRng::new(&seed, test_session.id, move_num);
+            let result = HiLo::process_move(&mut test_session, &[0], &mut rng); // Higher
+
+            // Should succeed (either Continue or Loss)
+            assert!(result.is_ok());
         }
     }
 }

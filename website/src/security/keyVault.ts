@@ -270,10 +270,10 @@ async function getPrfOutput(
 }
 
 async function deriveAesKeyFromPrf(prfOutput: Uint8Array, prfSalt: Uint8Array): Promise<CryptoKey> {
-  const baseKey = await crypto.subtle.importKey('raw', prfOutput, 'HKDF', false, ['deriveKey']);
+  const baseKey = await crypto.subtle.importKey('raw', prfOutput as BufferSource, 'HKDF', false, ['deriveKey']);
   const info = new TextEncoder().encode('nullspace-vault-v1');
   return crypto.subtle.deriveKey(
-    { name: 'HKDF', hash: 'SHA-256', salt: prfSalt, info },
+    { name: 'HKDF', hash: 'SHA-256', salt: prfSalt as BufferSource, info: info as BufferSource },
     baseKey,
     { name: 'AES-GCM', length: 256 },
     false,
@@ -285,7 +285,7 @@ async function encryptVaultSecrets(aesKey: CryptoKey, vaultId: VaultId, secrets:
   const iv = randomBytes(12);
   const aad = new TextEncoder().encode(`nullspace:${vaultId}:v1`);
   const plaintext = new TextEncoder().encode(JSON.stringify(secrets));
-  const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: aad }, aesKey, plaintext);
+  const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv as BufferSource, additionalData: aad as BufferSource }, aesKey, plaintext as BufferSource);
   return {
     iv: bytesToBase64Url(iv),
     ciphertext: bytesToBase64Url(new Uint8Array(ciphertext)),
@@ -296,7 +296,7 @@ async function decryptVaultSecrets(aesKey: CryptoKey, vault: VaultRecord): Promi
   const iv = base64UrlToBytes(vault.cipher.iv);
   const aad = new TextEncoder().encode(`nullspace:${vault.id}:v1`);
   const ciphertext = base64UrlToBytes(vault.cipher.ciphertext);
-  const plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv, additionalData: aad }, aesKey, ciphertext);
+  const plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: iv as BufferSource, additionalData: aad as BufferSource }, aesKey, ciphertext as BufferSource);
   const decoded = JSON.parse(new TextDecoder().decode(new Uint8Array(plaintext))) as VaultSecretsV1;
   if (decoded?.version !== 1) throw new Error('vault-version-unsupported');
   return decoded;

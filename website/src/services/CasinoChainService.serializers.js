@@ -145,10 +145,11 @@ export function deserializeCasinoGameStarted(data) {
 
 /**
  * Deserialize CasinoGameMoved event (tag 22)
- * Binary: [22] [sessionId:u64 BE] [moveNumber:u32 BE] [stateLen:varint] [state...]
+ * Binary: [22] [sessionId:u64 BE] [moveNumber:u32 BE] [stateLen:varint] [state...] [logsCount:u32 BE] [logs...]
  */
 export function deserializeCasinoGameMoved(data) {
   const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  const decoder = new TextDecoder();
   let offset = 0;
 
   // Tag
@@ -169,21 +170,39 @@ export function deserializeCasinoGameMoved(data) {
   const { value: stateLen, bytesRead } = readVarint(data, offset);
   offset += bytesRead;
   const newState = data.slice(offset, offset + stateLen);
+  offset += stateLen;
+
+  // Logs (u32 count, then each log is u32 len + bytes)
+  const logs = [];
+  if (offset < data.length) {
+    const logsCount = view.getUint32(offset, false);
+    offset += 4;
+
+    for (let i = 0; i < logsCount; i++) {
+      const logLen = view.getUint32(offset, false);
+      offset += 4;
+      const logBytes = data.slice(offset, offset + logLen);
+      offset += logLen;
+      logs.push(decoder.decode(logBytes));
+    }
+  }
 
   return {
     type: 'CasinoGameMoved',
     sessionId,
     moveNumber,
     newState,
+    logs,
   };
 }
 
 /**
  * Deserialize CasinoGameCompleted event (tag 23)
- * Binary: [23] [sessionId:u64 BE] [player:32 bytes] [gameType:u8] [payout:i64 BE] [finalChips:u64 BE] [wasShielded:bool] [wasDoubled:bool]
+ * Binary: [23] [sessionId:u64 BE] [player:32 bytes] [gameType:u8] [payout:i64 BE] [finalChips:u64 BE] [wasShielded:bool] [wasDoubled:bool] [logsCount:u32 BE] [logs...]
  */
 export function deserializeCasinoGameCompleted(data) {
   const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  const decoder = new TextDecoder();
   let offset = 0;
 
   // Tag
@@ -217,6 +236,21 @@ export function deserializeCasinoGameCompleted(data) {
   // Was Doubled (bool)
   const wasDoubled = data[offset++] === 1;
 
+  // Logs (u32 count, then each log is u32 len + bytes)
+  const logs = [];
+  if (offset < data.length) {
+    const logsCount = view.getUint32(offset, false);
+    offset += 4;
+
+    for (let i = 0; i < logsCount; i++) {
+      const logLen = view.getUint32(offset, false);
+      offset += 4;
+      const logBytes = data.slice(offset, offset + logLen);
+      offset += logLen;
+      logs.push(decoder.decode(logBytes));
+    }
+  }
+
   return {
     type: 'CasinoGameCompleted',
     sessionId,
@@ -226,6 +260,7 @@ export function deserializeCasinoGameCompleted(data) {
     finalChips,
     wasShielded,
     wasDoubled,
+    logs,
   };
 }
 

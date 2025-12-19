@@ -1,0 +1,11 @@
+- CasinoTogggleShield an CasinoToggleDouble only apply in tournaments, so maybe they dont need to be their own isntruction variants, but instead can just be a subset of CasinoGameMove.
+-- CasinoSuper is a type of game mode, it also feels like it should be a CasinoGameMove subset. 
+-  
+   1. Zero-Copy Limitations: The code uses Vec<u8> and String
+      heavily in Read implementations.
+       * Critique: Every time a block is parsed, it allocates
+         new memory for every transaction payload and string.
+       * Alternative: Using Cow<'a, [u8]> (Copy-on-Write) could
+         allow the structs to point directly to the raw byte
+         buffer without allocating, speeding up block processing
+         significantly during high load.

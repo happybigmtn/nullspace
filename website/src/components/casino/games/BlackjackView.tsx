@@ -5,6 +5,7 @@ import { Hand } from '../GameComponents';
 import { MobileDrawer } from '../MobileDrawer';
 import { GameControlBar } from '../GameControlBar';
 import { getVisibleHandValue } from '../../../utils/gameUtils';
+import { cardIdToString } from '../../../utils/gameStateParser';
 
 export const BlackjackView = React.memo<{ gameState: GameState; actions: any; lastWin?: number; playMode?: 'CASH' | 'FREEROLL' | null }>(({ gameState, actions, lastWin, playMode }) => {
     const dealerValue = useMemo(() => getVisibleHandValue(gameState.dealerCards), [gameState.dealerCards]);
@@ -45,7 +46,7 @@ export const BlackjackView = React.memo<{ gameState: GameState; actions: any; la
     };
     return (
         <>
-            <div className="flex-1 w-full flex flex-col items-center justify-start sm:justify-center gap-4 sm:gap-8 relative z-10 pt-8 sm:pt-10 pb-24 sm:pb-20">
+            <div className="flex-1 w-full flex flex-col items-center justify-start sm:justify-center gap-4 sm:gap-6 md:gap-8 relative z-10 pt-8 sm:pt-10 pb-24 sm:pb-20">
                 <h1 className="absolute top-0 text-xl font-bold text-gray-500 tracking-widest uppercase">BLACKJACK</h1>
                 <div className="absolute top-2 left-2 z-40">
                     <MobileDrawer label="INFO" title="BLACKJACK">
@@ -72,7 +73,7 @@ export const BlackjackView = React.memo<{ gameState: GameState; actions: any; la
                     ) : (
                         <div className="flex flex-col items-center gap-2">
                              <span className="text-sm font-bold tracking-widest text-white">DEALER</span>
-                             <div className="w-16 h-24 border border-dashed border-terminal-accent rounded" />
+                             <div className="w-12 h-[4.5rem] sm:w-14 sm:h-20 md:w-16 md:h-24 border border-dashed border-terminal-accent rounded" />
                         </div>
                     )}
                 </div>
@@ -80,7 +81,7 @@ export const BlackjackView = React.memo<{ gameState: GameState; actions: any; la
                 {/* Center Info */}
                 <div className="text-center space-y-3 relative z-20">
                         <div className="text-lg sm:text-2xl font-bold text-terminal-gold tracking-widest leading-tight animate-pulse">
-                            {gameState.message}{lastWin && lastWin > 0 ? ` (+$${lastWin})` : ''}
+                            {gameState.message}
                         </div>
                 </div>
 
@@ -113,21 +114,44 @@ export const BlackjackView = React.memo<{ gameState: GameState; actions: any; la
                                 forcedColor="text-terminal-green"
                             />
                         ) : (
-                            <div className="w-16 h-24 border border-dashed border-terminal-green/50 rounded" />
+                            <div className="w-12 h-[4.5rem] sm:w-14 sm:h-20 md:w-16 md:h-24 border border-dashed border-terminal-green/50 rounded" />
                         )}
                     </div>
 
                     {/* Pending Split Hands */}
                     {gameState.blackjackStack.length > 0 && (
-                            <div className="flex gap-2 opacity-50 scale-75 origin-left">
+                            <div className="flex gap-1 sm:gap-1.5 md:gap-2 opacity-50 scale-75 origin-left">
                             {gameState.blackjackStack.map((h, i) => (
-                                <div key={i} className="w-12 h-16 bg-terminal-dim border border-gray-700 rounded flex items-center justify-center">
+                                <div key={i} className="w-12 h-[4.5rem] sm:w-14 sm:h-20 md:w-16 md:h-24 bg-terminal-dim border border-gray-700 rounded flex items-center justify-center">
                                     <span className="text-xs text-gray-500">WAIT</span>
                                 </div>
                             ))}
                             </div>
                     )}
                 </div>
+
+                {/* Super Mode Info */}
+                {gameState.superMode?.isActive && (
+                    <div className="w-full max-w-md mx-auto px-4">
+                        <div className="bg-terminal-black/90 border border-terminal-gold/50 p-2 rounded text-center">
+                            <div className="text-[10px] font-bold text-terminal-gold tracking-widest mb-1">⚡ SUPER MODE</div>
+                            {Array.isArray(gameState.superMode.multipliers) && gameState.superMode.multipliers.length > 0 ? (
+                                <div className="flex flex-wrap gap-1 justify-center">
+                                    {gameState.superMode.multipliers.slice(0, 10).map((m, idx) => (
+                                        <span
+                                            key={idx}
+                                            className="px-2 py-0.5 rounded border border-terminal-gold/30 text-terminal-gold/90 text-[10px]"
+                                        >
+                                            {cardIdToString(m.id)} x{m.multiplier}
+                                        </span>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="text-[9px] text-gray-400">Awaiting multipliers...</div>
+                            )}
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* CONTROLS */}

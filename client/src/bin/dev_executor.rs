@@ -30,7 +30,8 @@ struct Args {
     #[arg(short, long)]
     identity: String,
 
-    #[arg(short, long, default_value = "100")]
+    /// Block interval in milliseconds. Set to 0 for immediate execution.
+    #[arg(short, long, default_value = "50")]
     block_interval_ms: u64,
 }
 

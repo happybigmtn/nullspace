@@ -28,7 +28,7 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
             <button 
                 onClick={toggle} 
                 aria-label="Menu"
-                className="w-10 h-10 flex items-center justify-center rounded border border-gray-800 text-gray-300 bg-gray-900/50 hover:bg-gray-800"
+                className="w-10 h-10 flex items-center justify-center rounded border border-gray-800 text-gray-300 bg-gray-900 hover:bg-gray-800"
             >
                 <div className="flex flex-col gap-1.5">
                     <span className="w-5 h-0.5 bg-current rounded-full" />
