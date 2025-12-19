@@ -60,15 +60,6 @@ export const RouletteView = React.memo<{ gameState: GameState; numberInput?: str
         if (lastNum !== null) setSpinKey((k) => k + 1);
     }, [lastNum]);
 
-    const renderBetItem = useCallback((bet: RouletteBet, i: number) => (
-        <div key={i} onClick={() => actions?.placeRouletteBet?.(bet.type, bet.target)} className="flex justify-between items-center text-xs border border-gray-800 p-1 rounded bg-black/50 cursor-pointer hover:bg-gray-800 transition-colors">
-            <div className="flex flex-col">
-                <span className="text-terminal-green font-bold text-[10px]">{bet.type} {bet.target !== undefined ? bet.target : ''}</span>
-            </div>
-            <div className="text-white text-[10px]">${bet.amount}</div>
-        </div>
-    ), []);
-
     const renderExposureRow = useCallback((num: number) => {
         const pnl = calculateRouletteExposure(num, gameState.rouletteBets);
         const maxScale = Math.max(100, totalBet * 36); 
@@ -122,12 +113,55 @@ export const RouletteView = React.memo<{ gameState: GameState; numberInput?: str
                                 <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-2 border-b border-gray-800 pb-1 text-center">
                                     Table Bets
                                 </div>
-                                <div className="flex flex-col space-y-1">
-                                    {gameState.rouletteBets.length === 0 ? (
-                                        <div className="text-center text-[10px] text-gray-700 italic">NO BETS</div>
-                                    ) : (
-                                        gameState.rouletteBets.map((b, i) => renderBetItem(b, i))
-                                    )}
+                                <div className="flex flex-col space-y-2">
+                                    {(() => {
+                                        const confirmedBets = gameState.rouletteBets.filter(b => b.local !== true);
+                                        const pendingBets = gameState.rouletteBets.filter(b => b.local === true);
+
+                                        const renderMobileBet = (b: RouletteBet, i: number, isPending: boolean) => (
+                                            <div
+                                                key={i}
+                                                onClick={() => actions?.placeRouletteBet?.(b.type, b.target)}
+                                                className={`flex justify-between items-center text-xs border p-1 rounded cursor-pointer hover:bg-gray-800 transition-colors ${
+                                                    isPending
+                                                        ? 'border-dashed border-amber-600/50 bg-amber-900/20 opacity-70'
+                                                        : 'border-gray-800 bg-black/50'
+                                                }`}
+                                            >
+                                                <div className="flex flex-col">
+                                                    <span className={`font-bold text-[10px] ${isPending ? 'text-amber-400' : 'text-terminal-green'}`}>
+                                                        {b.type} {b.target !== undefined ? b.target : ''}
+                                                    </span>
+                                                </div>
+                                                <div className="text-white text-[10px]">${b.amount}</div>
+                                            </div>
+                                        );
+
+                                        if (confirmedBets.length === 0 && pendingBets.length === 0) {
+                                            return <div className="text-center text-[10px] text-gray-700 italic">NO BETS</div>;
+                                        }
+
+                                        return (
+                                            <>
+                                                {confirmedBets.length > 0 && (
+                                                    <div className="space-y-1">
+                                                        <div className="text-[8px] text-terminal-green uppercase tracking-widest font-bold">
+                                                            Confirmed ({confirmedBets.length})
+                                                        </div>
+                                                        {confirmedBets.map((b, i) => renderMobileBet(b, i, false))}
+                                                    </div>
+                                                )}
+                                                {pendingBets.length > 0 && (
+                                                    <div className="space-y-1">
+                                                        <div className="text-[8px] text-amber-400 uppercase tracking-widest font-bold">
+                                                            Pending ({pendingBets.length})
+                                                        </div>
+                                                        {pendingBets.map((b, i) => renderMobileBet(b, i, true))}
+                                                    </div>
+                                                )}
+                                            </>
+                                        );
+                                    })()}
                                 </div>
                             </div>
                         </div>
@@ -221,59 +255,120 @@ export const RouletteView = React.memo<{ gameState: GameState; numberInput?: str
             {/* ACTIVE BETS SIDEBAR */}
             <div className="hidden md:flex absolute top-0 right-0 bottom-24 w-60 bg-terminal-black/80 border-l-2 border-gray-700 p-2 backdrop-blur-sm z-30 flex-col">
                 <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-2 border-b border-gray-800 pb-1 flex-none text-center">Table Bets</div>
-                <div className="flex-1 overflow-y-auto flex flex-col justify-center space-y-1">
-                    {gameState.rouletteBets.length === 0 ? (
-                        <div className="text-center text-[10px] text-gray-700 italic">NO BETS</div>
-                    ) : (
-                        gameState.rouletteBets.map((b, i) => renderBetItem(b, i))
-                    )}
+                <div className="flex-1 overflow-y-auto flex flex-col space-y-2">
+                    {(() => {
+                        const confirmedBets = gameState.rouletteBets.filter(b => b.local !== true);
+                        const pendingBets = gameState.rouletteBets.filter(b => b.local === true);
+
+                        const renderBet = (b: RouletteBet, i: number, isPending: boolean) => (
+                            <div
+                                key={i}
+                                onClick={() => actions?.placeRouletteBet?.(b.type, b.target)}
+                                className={`flex justify-between items-center text-xs border p-1 rounded cursor-pointer hover:bg-gray-800 transition-colors ${
+                                    isPending
+                                        ? 'border-dashed border-amber-600/50 bg-amber-900/20 opacity-70'
+                                        : 'border-gray-800 bg-black/50'
+                                }`}
+                            >
+                                <div className="flex flex-col">
+                                    <span className={`font-bold text-[10px] ${isPending ? 'text-amber-400' : 'text-terminal-green'}`}>
+                                        {b.type} {b.target !== undefined ? b.target : ''}
+                                    </span>
+                                </div>
+                                <div className="text-white text-[10px]">${b.amount}</div>
+                            </div>
+                        );
+
+                        if (confirmedBets.length === 0 && pendingBets.length === 0) {
+                            return <div className="text-center text-[10px] text-gray-700 italic">NO BETS</div>;
+                        }
+
+                        return (
+                            <>
+                                {/* Confirmed (on-chain) bets */}
+                                {confirmedBets.length > 0 && (
+                                    <div className="space-y-1">
+                                        <div className="text-[8px] text-terminal-green uppercase tracking-widest font-bold">
+                                            Confirmed ({confirmedBets.length})
+                                        </div>
+                                        {confirmedBets.map((b, i) => renderBet(b, i, false))}
+                                    </div>
+                                )}
+
+                                {/* Pending (local staged) bets */}
+                                {pendingBets.length > 0 && (
+                                    <div className="space-y-1">
+                                        <div className="text-[8px] text-amber-400 uppercase tracking-widest font-bold">
+                                            Pending ({pendingBets.length})
+                                        </div>
+                                        {pendingBets.map((b, i) => renderBet(b, i, true))}
+                                    </div>
+                                )}
+                            </>
+                        );
+                    })()}
                 </div>
             </div>
 
             {/* CONTROLS */}
-            <GameControlBar
-                primaryAction={{
-                    label: 'SPIN',
-                    onClick: actions?.deal,
-                    className: 'w-full sm:w-auto',
-                }}
-                secondaryActions={[
-                    // Outside Bets
-                    { label: 'RED', onClick: () => actions?.placeRouletteBet?.('RED'), active: betTypes.has('RED'), className: 'text-terminal-accent border-terminal-accent' },
-                    { label: 'BLACK', onClick: () => actions?.placeRouletteBet?.('BLACK'), active: betTypes.has('BLACK') },
-                    { label: 'EVEN', onClick: () => actions?.placeRouletteBet?.('EVEN'), active: betTypes.has('EVEN') },
-                    { label: 'ODD', onClick: () => actions?.placeRouletteBet?.('ODD'), active: betTypes.has('ODD') },
-                    { label: '1-18', onClick: () => actions?.placeRouletteBet?.('LOW'), active: betTypes.has('LOW') },
-                    { label: '19-36', onClick: () => actions?.placeRouletteBet?.('HIGH'), active: betTypes.has('HIGH') },
-                    // Dozens
-                    { label: '1st 12', onClick: () => actions?.placeRouletteBet?.('DOZEN_1'), active: betTypes.has('DOZEN_1') },
-                    { label: '2nd 12', onClick: () => actions?.placeRouletteBet?.('DOZEN_2'), active: betTypes.has('DOZEN_2') },
-                    { label: '3rd 12', onClick: () => actions?.placeRouletteBet?.('DOZEN_3'), active: betTypes.has('DOZEN_3') },
-                    // Columns
-                    { label: 'COL 1', onClick: () => actions?.placeRouletteBet?.('COL_1'), active: betTypes.has('COL_1') },
-                    { label: 'COL 2', onClick: () => actions?.placeRouletteBet?.('COL_2'), active: betTypes.has('COL_2') },
-                    { label: 'COL 3', onClick: () => actions?.placeRouletteBet?.('COL_3'), active: betTypes.has('COL_3') },
-                    // Zero
-                    { label: 'ZERO', onClick: () => actions?.placeRouletteBet?.('ZERO'), active: betTypes.has('ZERO'), className: 'text-terminal-green border-terminal-green' },
-                    // Inside Bets (Modes)
-                    { label: 'STRAIGHT', onClick: () => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'STRAIGHT' })), active: gameState.rouletteInputMode === 'STRAIGHT' },
-                    { label: 'SPLIT', onClick: () => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'SPLIT_H' })), active: gameState.rouletteInputMode === 'SPLIT_H' },
-                    { label: 'VSPLIT', onClick: () => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'SPLIT_V' })), active: gameState.rouletteInputMode === 'SPLIT_V' },
-                    { label: 'STREET', onClick: () => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'STREET' })), active: gameState.rouletteInputMode === 'STREET' },
-                    { label: 'CORNER', onClick: () => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'CORNER' })), active: gameState.rouletteInputMode === 'CORNER' },
-                    { label: 'SIX LINE', onClick: () => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'SIX_LINE' })), active: gameState.rouletteInputMode === 'SIX_LINE' },
-                    // Actions
-                    { label: 'REBET', onClick: actions?.rebetRoulette },
-                    { label: 'UNDO', onClick: actions?.undoRouletteBet },
-                    { label: 'RULE', onClick: actions?.cycleRouletteZeroRule },
-                    // Modifiers
-                    ...(playMode !== 'CASH' ? [
-                    { label: 'SHIELD', onClick: actions?.toggleShield, active: gameState.activeModifiers.shield },
-                    { label: 'DOUBLE', onClick: actions?.toggleDouble, active: gameState.activeModifiers.double },
-                    ] : []),
-                    { label: 'SUPER', onClick: actions?.toggleSuper, active: gameState.activeModifiers.super },
-                ]}
-            />
+            <div className="ns-controlbar fixed bottom-0 left-0 right-0 sm:sticky sm:bottom-0 bg-terminal-black/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)] sm:pb-0">
+                <div className="h-auto sm:h-20 flex flex-col sm:flex-row items-center justify-center gap-2 p-2 sm:px-4">
+                    {/* Outside Bets Group */}
+                    <div className="hidden sm:flex items-center gap-1 px-3 py-2 rounded border border-terminal-green/30 bg-terminal-green/5">
+                        <span className="text-[8px] text-terminal-green font-bold tracking-widest uppercase mr-2">OUTSIDE</span>
+                        <button type="button" onClick={() => actions?.placeRouletteBet?.('RED')} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${betTypes.has('RED') ? 'border-terminal-accent bg-terminal-accent/20 text-terminal-accent' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>RED</button>
+                        <button type="button" onClick={() => actions?.placeRouletteBet?.('BLACK')} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${betTypes.has('BLACK') ? 'border-white bg-white/20 text-white' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>BLACK</button>
+                        <button type="button" onClick={() => actions?.placeRouletteBet?.('ODD')} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${betTypes.has('ODD') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>ODD</button>
+                        <button type="button" onClick={() => actions?.placeRouletteBet?.('EVEN')} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${betTypes.has('EVEN') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>EVEN</button>
+                        <button type="button" onClick={() => actions?.placeRouletteBet?.('LOW')} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${betTypes.has('LOW') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>1-18</button>
+                        <button type="button" onClick={() => actions?.placeRouletteBet?.('HIGH')} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${betTypes.has('HIGH') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>19-36</button>
+                        <div className="w-px h-6 bg-gray-700 mx-1"></div>
+                        <button type="button" onClick={() => actions?.placeRouletteBet?.('DOZEN_1')} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${betTypes.has('DOZEN_1') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>1ST 12</button>
+                        <button type="button" onClick={() => actions?.placeRouletteBet?.('DOZEN_2')} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${betTypes.has('DOZEN_2') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>2ND 12</button>
+                        <button type="button" onClick={() => actions?.placeRouletteBet?.('DOZEN_3')} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${betTypes.has('DOZEN_3') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>3RD 12</button>
+                        <div className="w-px h-6 bg-gray-700 mx-1"></div>
+                        <button type="button" onClick={() => actions?.placeRouletteBet?.('COL_1')} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${betTypes.has('COL_1') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>COL 1</button>
+                        <button type="button" onClick={() => actions?.placeRouletteBet?.('COL_2')} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${betTypes.has('COL_2') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>COL 2</button>
+                        <button type="button" onClick={() => actions?.placeRouletteBet?.('COL_3')} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${betTypes.has('COL_3') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>COL 3</button>
+                        <div className="w-px h-6 bg-gray-700 mx-1"></div>
+                        <button type="button" onClick={() => actions?.placeRouletteBet?.('ZERO')} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${betTypes.has('ZERO') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-terminal-green/30 bg-black/50 text-terminal-green hover:bg-gray-800'}`}>ZERO</button>
+                    </div>
+
+                    {/* Inside Bets Group */}
+                    <div className="hidden sm:flex items-center gap-1 px-3 py-2 rounded border border-terminal-gold/30 bg-terminal-gold/5">
+                        <span className="text-[8px] text-terminal-gold font-bold tracking-widest uppercase mr-2">INSIDE</span>
+                        <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'STRAIGHT' }))} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${gameState.rouletteInputMode === 'STRAIGHT' ? 'border-terminal-gold bg-terminal-gold/20 text-terminal-gold' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>STRAIGHT</button>
+                        <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'SPLIT_H' }))} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${gameState.rouletteInputMode === 'SPLIT_H' ? 'border-terminal-gold bg-terminal-gold/20 text-terminal-gold' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>SPLIT</button>
+                        <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'SPLIT_V' }))} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${gameState.rouletteInputMode === 'SPLIT_V' ? 'border-terminal-gold bg-terminal-gold/20 text-terminal-gold' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>VSPLIT</button>
+                        <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'STREET' }))} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${gameState.rouletteInputMode === 'STREET' ? 'border-terminal-gold bg-terminal-gold/20 text-terminal-gold' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>STREET</button>
+                        <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'CORNER' }))} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${gameState.rouletteInputMode === 'CORNER' ? 'border-terminal-gold bg-terminal-gold/20 text-terminal-gold' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>CORNER</button>
+                        <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'SIX_LINE' }))} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${gameState.rouletteInputMode === 'SIX_LINE' ? 'border-terminal-gold bg-terminal-gold/20 text-terminal-gold' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>SIX LINE</button>
+                    </div>
+
+                    {/* SPIN Button */}
+                    <button
+                        type="button"
+                        onClick={actions?.deal}
+                        className="h-14 px-8 rounded border-2 font-bold text-base tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] border-terminal-green bg-terminal-green text-black hover:bg-white hover:border-white hover:scale-105 active:scale-95"
+                    >
+                        SPIN
+                    </button>
+
+                    {/* Actions Group */}
+                    <div className="hidden sm:flex items-center gap-1">
+                        <button type="button" onClick={actions?.rebetRoulette} className="h-8 px-2 rounded border border-gray-700 bg-black/50 text-gray-300 text-[10px] font-bold tracking-widest uppercase hover:bg-gray-800 transition-all">REBET</button>
+                        <button type="button" onClick={actions?.undoRouletteBet} className="h-8 px-2 rounded border border-gray-700 bg-black/50 text-gray-300 text-[10px] font-bold tracking-widest uppercase hover:bg-gray-800 transition-all">UNDO</button>
+                        <button type="button" onClick={actions?.cycleRouletteZeroRule} className="h-8 px-2 rounded border border-gray-700 bg-black/50 text-gray-300 text-[10px] font-bold tracking-widest uppercase hover:bg-gray-800 transition-all">RULE</button>
+                        {playMode !== 'CASH' && (
+                            <>
+                                <button type="button" onClick={actions?.toggleShield} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${gameState.activeModifiers.shield ? 'border-blue-400 bg-blue-500/20 text-blue-300' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>SHIELD</button>
+                                <button type="button" onClick={actions?.toggleDouble} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${gameState.activeModifiers.double ? 'border-purple-400 bg-purple-500/20 text-purple-300' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>DOUBLE</button>
+                            </>
+                        )}
+                        <button type="button" onClick={actions?.toggleSuper} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${gameState.activeModifiers.super ? 'border-terminal-gold bg-terminal-gold/20 text-terminal-gold' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>SUPER</button>
+                    </div>
+                </div>
+            </div>
 
             {/* NUM INPUT MODAL */}
             {gameState.rouletteInputMode !== 'NONE' && (

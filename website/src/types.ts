@@ -78,6 +78,7 @@ export interface CrapsBet {
 export interface BaccaratBet {
     type: 'TIE' | 'P_PAIR' | 'B_PAIR' | 'LUCKY6' | 'P_DRAGON' | 'B_DRAGON' | 'PANDA8' | 'P_PERFECT_PAIR' | 'B_PERFECT_PAIR';
     amount: number;
+    local?: boolean; // true = locally staged bet not yet sent to chain, undefined/false = on-chain bet
 }
 
 export interface RouletteBet {
@@ -103,6 +104,7 @@ export interface RouletteBet {
       | 'SIX_LINE';
     target?: number;
     amount: number;
+    local?: boolean; // true = locally staged bet not yet sent to chain, undefined/false = on-chain bet
 }
 
 export interface SicBoBet {
@@ -122,6 +124,7 @@ export interface SicBoBet {
       | 'HOP4_EASY';
     target?: number;
     amount: number;
+    local?: boolean; // true = locally staged bet not yet sent to chain, undefined/false = on-chain bet
 }
 
 // Craps event log entry for roll history with PnL

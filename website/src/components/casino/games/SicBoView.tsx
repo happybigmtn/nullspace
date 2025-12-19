@@ -17,7 +17,7 @@ export const SicBoView = React.memo<{ gameState: GameState; numberInput?: string
         setTapPicks([]);
     }, [gameState.sicBoInputMode]);
 
-    const renderBetItem = useCallback((bet: SicBoBet, i: number) => {
+    const renderBetItem = useCallback((bet: SicBoBet, i: number, isPending: boolean) => {
         const targetLabel = (() => {
             if (bet.type === 'DOMINO' && bet.target !== undefined) {
                 const min = (bet.target >> 4) & 0x0f;
@@ -37,9 +37,11 @@ export const SicBoView = React.memo<{ gameState: GameState; numberInput?: string
         })();
 
         return (
-            <div key={i} onClick={() => actions?.placeSicBoBet?.(bet.type, bet.target)} className="flex justify-between items-center text-xs border border-gray-800 p-1 rounded bg-black/50 cursor-pointer hover:bg-gray-800 transition-colors">
+            <div key={i} onClick={() => actions?.placeSicBoBet?.(bet.type, bet.target)} className={`flex justify-between items-center text-xs border p-1 rounded cursor-pointer hover:bg-gray-800 transition-colors ${
+                isPending ? 'border-dashed border-amber-600/50 bg-amber-900/20 opacity-70' : 'border-gray-800 bg-black/50'
+            }`}>
                 <div className="flex flex-col">
-                    <span className="text-terminal-green font-bold text-[10px]">{bet.type} {targetLabel}</span>
+                    <span className={`font-bold text-[10px] ${isPending ? 'text-amber-400' : 'text-terminal-green'}`}>{bet.type} {targetLabel}</span>
                 </div>
                 <div className="text-white text-[10px]">${bet.amount}</div>
             </div>
@@ -184,11 +186,36 @@ export const SicBoView = React.memo<{ gameState: GameState; numberInput?: string
                                     Table Bets
                                 </div>
                                 <div className="flex flex-col space-y-1">
-                                    {gameState.sicBoBets.length > 0 ? (
-                                        gameState.sicBoBets.map((b, i) => renderBetItem(b, i))
-                                    ) : (
-                                        <div className="text-center text-[10px] text-gray-700 italic">NO BETS</div>
-                                    )}
+                                    {(() => {
+                                        const confirmedBets = gameState.sicBoBets.filter(b => b.local !== true);
+                                        const pendingBets = gameState.sicBoBets.filter(b => b.local === true);
+
+                                        if (confirmedBets.length === 0 && pendingBets.length === 0) {
+                                            return <div className="text-center text-[10px] text-gray-700 italic">NO BETS</div>;
+                                        }
+
+                                        return (
+                                            <>
+                                                {confirmedBets.length > 0 && (
+                                                    <div className="space-y-1">
+                                                        <div className="text-[8px] text-terminal-green uppercase tracking-widest font-bold">
+                                                            Confirmed ({confirmedBets.length})
+                                                        </div>
+                                                        {confirmedBets.map((b, i) => renderBetItem(b, i, false))}
+                                                    </div>
+                                                )}
+
+                                                {pendingBets.length > 0 && (
+                                                    <div className="space-y-1">
+                                                        <div className="text-[8px] text-amber-400 uppercase tracking-widest font-bold">
+                                                            Pending ({pendingBets.length})
+                                                        </div>
+                                                        {pendingBets.map((b, i) => renderBetItem(b, i, true))}
+                                                    </div>
+                                                )}
+                                            </>
+                                        );
+                                    })()}
                                 </div>
                             </div>
                         </div>
@@ -303,51 +330,143 @@ export const SicBoView = React.memo<{ gameState: GameState; numberInput?: string
             {/* ACTIVE BETS SIDEBAR - Reduced to w-60 */}
             <div className="hidden md:flex absolute top-0 right-0 bottom-24 w-60 bg-terminal-black/80 border-l-2 border-gray-700 p-2 backdrop-blur-sm z-30 flex-col">
                     <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-2 border-b border-gray-800 pb-1 flex-none text-center">Table Bets</div>
-                    <div className="flex-1 overflow-y-auto flex flex-col justify-center space-y-1">
-                        {gameState.sicBoBets.length > 0 ? (
-                            gameState.sicBoBets.map((b, i) => renderBetItem(b, i))
-                        ) : (
-                            <div className="text-center text-[10px] text-gray-700 italic">NO BETS</div>
-                        )}
+                    <div className="flex-1 overflow-y-auto flex flex-col space-y-2">
+                        {(() => {
+                            const confirmedBets = gameState.sicBoBets.filter(b => b.local !== true);
+                            const pendingBets = gameState.sicBoBets.filter(b => b.local === true);
+
+                            if (confirmedBets.length === 0 && pendingBets.length === 0) {
+                                return <div className="text-center text-[10px] text-gray-700 italic">NO BETS</div>;
+                            }
+
+                            return (
+                                <>
+                                    {confirmedBets.length > 0 && (
+                                        <div className="space-y-1">
+                                            <div className="text-[8px] text-terminal-green uppercase tracking-widest font-bold">
+                                                Confirmed ({confirmedBets.length})
+                                            </div>
+                                            {confirmedBets.map((b, i) => renderBetItem(b, i, false))}
+                                        </div>
+                                    )}
+
+                                    {pendingBets.length > 0 && (
+                                        <div className="space-y-1">
+                                            <div className="text-[8px] text-amber-400 uppercase tracking-widest font-bold">
+                                                Pending ({pendingBets.length})
+                                            </div>
+                                            {pendingBets.map((b, i) => renderBetItem(b, i, true))}
+                                        </div>
+                                    )}
+                                </>
+                            );
+                        })()}
                     </div>
             </div>
 
             {/* CONTROLS */}
-            <GameControlBar
-                primaryAction={{
-                    label: 'ROLL',
-                    onClick: actions?.deal,
-                    className: 'w-full sm:w-auto',
-                }}
-                secondaryActions={[
-                    // Basic Bets
-                    { label: 'SMALL', onClick: () => actions?.placeSicBoBet?.('SMALL'), active: betTypes.has('SMALL') },
-                    { label: 'BIG', onClick: () => actions?.placeSicBoBet?.('BIG'), active: betTypes.has('BIG') },
-                    { label: 'ODD', onClick: () => actions?.placeSicBoBet?.('ODD'), active: betTypes.has('ODD') },
-                    { label: 'EVEN', onClick: () => actions?.placeSicBoBet?.('EVEN'), active: betTypes.has('EVEN') },
-                    // Specifics (Input Modes)
-                    { label: 'DIE', onClick: () => actions?.setGameState?.((prev: any) => ({ ...prev, sicBoInputMode: 'SINGLE' })), active: gameState.sicBoInputMode === 'SINGLE' || betTypes.has('SINGLE_DIE') },
-                    { label: 'DOUBLE', onClick: () => actions?.setGameState?.((prev: any) => ({ ...prev, sicBoInputMode: 'DOUBLE' })), active: gameState.sicBoInputMode === 'DOUBLE' || betTypes.has('DOUBLE_SPECIFIC') },
-                    { label: 'TRIPLE', onClick: () => actions?.setGameState?.((prev: any) => ({ ...prev, sicBoInputMode: 'TRIPLE' })), active: gameState.sicBoInputMode === 'TRIPLE' || betTypes.has('TRIPLE_SPECIFIC') },
-                    { label: 'DOMINO', onClick: () => actions?.setGameState?.((prev: any) => ({ ...prev, sicBoInputMode: 'DOMINO' })), active: gameState.sicBoInputMode === 'DOMINO' || betTypes.has('DOMINO') },
-                    // Hops & Sums
-                    { label: '3-HOP', onClick: () => actions?.setGameState?.((prev: any) => ({ ...prev, sicBoInputMode: 'HOP3_EASY' })), active: gameState.sicBoInputMode === 'HOP3_EASY' || betTypes.has('HOP3_EASY') },
-                    { label: 'HARD', onClick: () => actions?.setGameState?.((prev: any) => ({ ...prev, sicBoInputMode: 'HOP3_HARD' })), active: gameState.sicBoInputMode === 'HOP3_HARD' || betTypes.has('HOP3_HARD') },
-                    { label: '4-HOP', onClick: () => actions?.setGameState?.((prev: any) => ({ ...prev, sicBoInputMode: 'HOP4_EASY' })), active: gameState.sicBoInputMode === 'HOP4_EASY' || betTypes.has('HOP4_EASY') },
-                    { label: 'SUM', onClick: () => actions?.setGameState?.((prev: any) => ({ ...prev, sicBoInputMode: 'SUM' })), active: gameState.sicBoInputMode === 'SUM' || betTypes.has('SUM') },
-                    // Any Triple
-                    { label: 'ANY 3', onClick: () => actions?.placeSicBoBet?.('TRIPLE_ANY'), active: betTypes.has('TRIPLE_ANY') },
-                    // Actions
-                    { label: 'REBET', onClick: actions?.rebetSicBo },
-                    { label: 'UNDO', onClick: actions?.undoSicBoBet },
-                    // Modifiers
-                    ...(playMode !== 'CASH' ? [
-                    { label: 'SHIELD', onClick: actions?.toggleShield, active: gameState.activeModifiers.shield },
-                    { label: 'DOUBLE', onClick: actions?.toggleDouble, active: gameState.activeModifiers.double },
-                    ] : []),
-                    { label: 'SUPER', onClick: actions?.toggleSuper, active: gameState.activeModifiers.super },
-                ]}
-            />
+            <div className="ns-controlbar fixed bottom-0 left-0 right-0 sm:sticky sm:bottom-0 bg-terminal-black/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)] sm:pb-0">
+                <div className="h-auto sm:h-20 flex flex-col sm:flex-row items-stretch sm:items-center justify-between sm:justify-center gap-2 p-2 sm:px-4">
+                    {/* Desktop: Bet controls */}
+                    <div className="hidden sm:flex items-center gap-2 flex-1 flex-wrap">
+                        {/* Basic Bets Group */}
+                        <div className="flex items-center gap-1 px-2 border-l-2 border-terminal-green/30">
+                            <span className="text-[9px] text-terminal-green font-bold tracking-widest mr-1">BASIC</span>
+                            <button type="button" onClick={() => actions?.placeSicBoBet?.('SMALL')} className={`h-8 px-3 rounded border text-xs font-bold tracking-wider transition-all ${betTypes.has('SMALL') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>SMALL</button>
+                            <button type="button" onClick={() => actions?.placeSicBoBet?.('BIG')} className={`h-8 px-3 rounded border text-xs font-bold tracking-wider transition-all ${betTypes.has('BIG') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>BIG</button>
+                            <button type="button" onClick={() => actions?.placeSicBoBet?.('ODD')} className={`h-8 px-3 rounded border text-xs font-bold tracking-wider transition-all ${betTypes.has('ODD') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>ODD</button>
+                            <button type="button" onClick={() => actions?.placeSicBoBet?.('EVEN')} className={`h-8 px-3 rounded border text-xs font-bold tracking-wider transition-all ${betTypes.has('EVEN') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>EVEN</button>
+                        </div>
+
+                        {/* Specific Bets Group */}
+                        <div className="flex items-center gap-1 px-2 border-l-2 border-cyan-400/30">
+                            <span className="text-[9px] text-cyan-400 font-bold tracking-widest mr-1">SPECIFIC</span>
+                            <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, sicBoInputMode: 'SINGLE' }))} className={`h-8 px-3 rounded border text-xs font-bold tracking-wider transition-all ${gameState.sicBoInputMode === 'SINGLE' || betTypes.has('SINGLE_DIE') ? 'border-cyan-400 bg-cyan-400/20 text-cyan-300' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>DIE</button>
+                            <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, sicBoInputMode: 'DOUBLE' }))} className={`h-8 px-3 rounded border text-xs font-bold tracking-wider transition-all ${gameState.sicBoInputMode === 'DOUBLE' || betTypes.has('DOUBLE_SPECIFIC') ? 'border-cyan-400 bg-cyan-400/20 text-cyan-300' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>DOUBLE</button>
+                            <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, sicBoInputMode: 'TRIPLE' }))} className={`h-8 px-3 rounded border text-xs font-bold tracking-wider transition-all ${gameState.sicBoInputMode === 'TRIPLE' || betTypes.has('TRIPLE_SPECIFIC') ? 'border-cyan-400 bg-cyan-400/20 text-cyan-300' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>TRIPLE</button>
+                            <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, sicBoInputMode: 'DOMINO' }))} className={`h-8 px-3 rounded border text-xs font-bold tracking-wider transition-all ${gameState.sicBoInputMode === 'DOMINO' || betTypes.has('DOMINO') ? 'border-cyan-400 bg-cyan-400/20 text-cyan-300' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>DOMINO</button>
+                            <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, sicBoInputMode: 'HOP3_EASY' }))} className={`h-8 px-3 rounded border text-xs font-bold tracking-wider transition-all ${gameState.sicBoInputMode === 'HOP3_EASY' || betTypes.has('HOP3_EASY') ? 'border-cyan-400 bg-cyan-400/20 text-cyan-300' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>3-HOP</button>
+                            <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, sicBoInputMode: 'HOP3_HARD' }))} className={`h-8 px-3 rounded border text-xs font-bold tracking-wider transition-all ${gameState.sicBoInputMode === 'HOP3_HARD' || betTypes.has('HOP3_HARD') ? 'border-cyan-400 bg-cyan-400/20 text-cyan-300' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>HARD</button>
+                            <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, sicBoInputMode: 'HOP4_EASY' }))} className={`h-8 px-3 rounded border text-xs font-bold tracking-wider transition-all ${gameState.sicBoInputMode === 'HOP4_EASY' || betTypes.has('HOP4_EASY') ? 'border-cyan-400 bg-cyan-400/20 text-cyan-300' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>4-HOP</button>
+                            <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, sicBoInputMode: 'SUM' }))} className={`h-8 px-3 rounded border text-xs font-bold tracking-wider transition-all ${gameState.sicBoInputMode === 'SUM' || betTypes.has('SUM') ? 'border-cyan-400 bg-cyan-400/20 text-cyan-300' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>SUM</button>
+                            <button type="button" onClick={() => actions?.placeSicBoBet?.('TRIPLE_ANY')} className={`h-8 px-3 rounded border text-xs font-bold tracking-wider transition-all ${betTypes.has('TRIPLE_ANY') ? 'border-cyan-400 bg-cyan-400/20 text-cyan-300' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>ANY 3</button>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex items-center gap-1 px-2 border-l-2 border-gray-700/30">
+                            <button type="button" onClick={actions?.rebetSicBo} className="h-8 px-3 rounded border border-gray-700 bg-black/50 text-gray-300 text-xs font-bold tracking-wider hover:bg-gray-800 transition-all">REBET</button>
+                            <button type="button" onClick={actions?.undoSicBoBet} className="h-8 px-3 rounded border border-gray-700 bg-black/50 text-gray-300 text-xs font-bold tracking-wider hover:bg-gray-800 transition-all">UNDO</button>
+                        </div>
+
+                        {/* Modifiers */}
+                        <div className="flex items-center gap-1 px-2 border-l-2 border-gray-700/30">
+                            {playMode !== 'CASH' && (
+                                <>
+                                    <button type="button" onClick={actions?.toggleShield} className={`h-8 px-3 rounded border text-xs font-bold tracking-wider transition-all ${gameState.activeModifiers.shield ? 'border-purple-400 bg-purple-400/20 text-purple-300' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>SHIELD</button>
+                                    <button type="button" onClick={actions?.toggleDouble} className={`h-8 px-3 rounded border text-xs font-bold tracking-wider transition-all ${gameState.activeModifiers.double ? 'border-blue-400 bg-blue-400/20 text-blue-300' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>DOUBLE</button>
+                                </>
+                            )}
+                            <button type="button" onClick={actions?.toggleSuper} className={`h-8 px-3 rounded border text-xs font-bold tracking-wider transition-all ${gameState.activeModifiers.super ? 'border-terminal-gold bg-terminal-gold/20 text-terminal-gold' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>SUPER</button>
+                        </div>
+                    </div>
+
+                    {/* Mobile: Simplified button */}
+                    <div className="flex sm:hidden items-center gap-2">
+                        <MobileDrawer label="BETS" title="PLACE BETS">
+                            <div className="space-y-4">
+                                {/* Basic Bets */}
+                                <div>
+                                    <div className="text-[10px] text-terminal-green font-bold tracking-widest mb-2 border-b border-gray-800 pb-1">BASIC BETS</div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <button onClick={() => actions?.placeSicBoBet?.('SMALL')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('SMALL') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>SMALL</button>
+                                        <button onClick={() => actions?.placeSicBoBet?.('BIG')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('BIG') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>BIG</button>
+                                        <button onClick={() => actions?.placeSicBoBet?.('ODD')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('ODD') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>ODD</button>
+                                        <button onClick={() => actions?.placeSicBoBet?.('EVEN')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('EVEN') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>EVEN</button>
+                                    </div>
+                                </div>
+
+                                {/* Specific Bets */}
+                                <div>
+                                    <div className="text-[10px] text-cyan-400 font-bold tracking-widest mb-2 border-b border-gray-800 pb-1">SPECIFIC BETS</div>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        <button onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, sicBoInputMode: 'SINGLE' }))} className={`py-3 rounded border text-xs font-bold ${gameState.sicBoInputMode === 'SINGLE' || betTypes.has('SINGLE_DIE') ? 'border-cyan-400 bg-cyan-400/20 text-cyan-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>DIE</button>
+                                        <button onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, sicBoInputMode: 'DOUBLE' }))} className={`py-3 rounded border text-xs font-bold ${gameState.sicBoInputMode === 'DOUBLE' || betTypes.has('DOUBLE_SPECIFIC') ? 'border-cyan-400 bg-cyan-400/20 text-cyan-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>DOUBLE</button>
+                                        <button onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, sicBoInputMode: 'TRIPLE' }))} className={`py-3 rounded border text-xs font-bold ${gameState.sicBoInputMode === 'TRIPLE' || betTypes.has('TRIPLE_SPECIFIC') ? 'border-cyan-400 bg-cyan-400/20 text-cyan-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>TRIPLE</button>
+                                        <button onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, sicBoInputMode: 'DOMINO' }))} className={`py-3 rounded border text-xs font-bold ${gameState.sicBoInputMode === 'DOMINO' || betTypes.has('DOMINO') ? 'border-cyan-400 bg-cyan-400/20 text-cyan-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>DOMINO</button>
+                                        <button onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, sicBoInputMode: 'HOP3_EASY' }))} className={`py-3 rounded border text-xs font-bold ${gameState.sicBoInputMode === 'HOP3_EASY' || betTypes.has('HOP3_EASY') ? 'border-cyan-400 bg-cyan-400/20 text-cyan-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>3-HOP</button>
+                                        <button onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, sicBoInputMode: 'HOP3_HARD' }))} className={`py-3 rounded border text-xs font-bold ${gameState.sicBoInputMode === 'HOP3_HARD' || betTypes.has('HOP3_HARD') ? 'border-cyan-400 bg-cyan-400/20 text-cyan-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>HARD</button>
+                                        <button onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, sicBoInputMode: 'HOP4_EASY' }))} className={`py-3 rounded border text-xs font-bold ${gameState.sicBoInputMode === 'HOP4_EASY' || betTypes.has('HOP4_EASY') ? 'border-cyan-400 bg-cyan-400/20 text-cyan-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>4-HOP</button>
+                                        <button onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, sicBoInputMode: 'SUM' }))} className={`py-3 rounded border text-xs font-bold ${gameState.sicBoInputMode === 'SUM' || betTypes.has('SUM') ? 'border-cyan-400 bg-cyan-400/20 text-cyan-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>SUM</button>
+                                        <button onClick={() => actions?.placeSicBoBet?.('TRIPLE_ANY')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('TRIPLE_ANY') ? 'border-cyan-400 bg-cyan-400/20 text-cyan-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>ANY 3</button>
+                                    </div>
+                                </div>
+
+                                {/* Actions */}
+                                <div className="flex gap-2">
+                                    <button onClick={actions?.rebetSicBo} className="flex-1 py-3 rounded border border-gray-700 bg-gray-900 text-gray-400 text-xs font-bold">REBET</button>
+                                    <button onClick={actions?.undoSicBoBet} className="flex-1 py-3 rounded border border-gray-700 bg-gray-900 text-gray-400 text-xs font-bold">UNDO</button>
+                                    {playMode !== 'CASH' && (
+                                        <>
+                                            <button onClick={actions?.toggleShield} className={`flex-1 py-3 rounded border text-xs font-bold ${gameState.activeModifiers.shield ? 'border-purple-400 bg-purple-400/20 text-purple-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>SHIELD</button>
+                                            <button onClick={actions?.toggleDouble} className={`flex-1 py-3 rounded border text-xs font-bold ${gameState.activeModifiers.double ? 'border-blue-400 bg-blue-400/20 text-blue-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>DOUBLE</button>
+                                        </>
+                                    )}
+                                    <button onClick={actions?.toggleSuper} className={`flex-1 py-3 rounded border text-xs font-bold ${gameState.activeModifiers.super ? 'border-terminal-gold bg-terminal-gold/20 text-terminal-gold' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>SUPER</button>
+                                </div>
+                            </div>
+                        </MobileDrawer>
+                    </div>
+
+                    {/* ROLL Button */}
+                    <button
+                        type="button"
+                        onClick={actions?.deal}
+                        className="h-12 sm:h-14 px-6 sm:px-8 rounded border-2 font-bold text-sm sm:text-base tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] border-terminal-green bg-terminal-green text-black hover:bg-white hover:border-white hover:scale-105 active:scale-95"
+                    >
+                        ROLL
+                    </button>
+                </div>
+            </div>
 
             {/* SIC BO MODAL */}
             {gameState.sicBoInputMode !== 'NONE' && (
