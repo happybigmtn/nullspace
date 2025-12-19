@@ -2426,7 +2426,13 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
             (dice.length === 2 && (prevDice[0] !== d1 || prevDice[1] !== d2));
 
           // Detect seven-out: point was ON and a 7 was rolled
-          const sevenOut = hasDice && diceChanged && total === 7 && prev.crapsPoint !== null;
+          // Use multiple indicators for reliability:
+          // 1. prev.crapsPoint !== null && total === 7 (point was ON, rolled 7)
+          // 2. prev.crapsEpochPointEstablished && !epochPointEstablished (epoch ended)
+          const sevenOut = hasDice && diceChanged && total === 7 && (
+            prev.crapsPoint !== null ||
+            (prev.crapsEpochPointEstablished && !epochPointEstablished)
+          );
 
           // Reset roll history only on seven-out, otherwise append
           let newHistory = prev.crapsRollHistory;
