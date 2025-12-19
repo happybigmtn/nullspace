@@ -296,25 +296,40 @@ export const BaccaratView = React.memo<{ gameState: GameState; actions: any; las
                     )}
                 </div>
 
-                {/* Super Mode Info */}
+                {/* Super Mode Info - Animated */}
                 {gameState.superMode?.isActive && (
-                    <div className="w-full max-w-md mx-auto px-4">
-                        <div className="bg-terminal-black/90 border border-terminal-gold/50 p-2 rounded text-center">
-                            <div className="text-[10px] font-bold text-terminal-gold tracking-widest mb-1">⚡ SUPER MODE</div>
-                            {Array.isArray(gameState.superMode.multipliers) && gameState.superMode.multipliers.length > 0 ? (
-                                <div className="flex flex-wrap gap-1 justify-center">
-                                    {gameState.superMode.multipliers.slice(0, 10).map((m, idx) => (
-                                        <span
-                                            key={idx}
-                                            className="px-2 py-0.5 rounded border border-terminal-gold/30 text-terminal-gold/90 text-[10px]"
-                                        >
-                                            {cardIdToString(m.id)} x{m.multiplier}
-                                        </span>
-                                    ))}
+                    <div className="w-full max-w-md mx-auto px-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <div className="relative bg-terminal-black/95 border-2 border-terminal-gold rounded text-center overflow-hidden
+                                        shadow-[0_0_20px_rgba(255,215,0,0.3),inset_0_0_30px_rgba(255,215,0,0.05)]
+                                        animate-pulse-glow">
+                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-terminal-gold/10 to-transparent
+                                            animate-shimmer pointer-events-none" />
+                            <div className="relative p-3">
+                                <div className="text-xs font-bold text-terminal-gold tracking-[0.3em] mb-2 font-mono flex items-center justify-center gap-2">
+                                    <span className="animate-pulse">⚡</span>
+                                    <span className="bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-300 bg-clip-text text-transparent">
+                                        SUPER MODE ACTIVE
+                                    </span>
+                                    <span className="animate-pulse">⚡</span>
                                 </div>
-                            ) : (
-                                <div className="text-[9px] text-gray-400">Awaiting multipliers...</div>
-                            )}
+                                {Array.isArray(gameState.superMode.multipliers) && gameState.superMode.multipliers.length > 0 ? (
+                                    <div className="flex flex-wrap gap-1.5 justify-center">
+                                        {gameState.superMode.multipliers.slice(0, 10).map((m, idx) => (
+                                            <span
+                                                key={idx}
+                                                className="px-2.5 py-1 rounded-lg bg-gradient-to-br from-amber-900/50 to-amber-950/50
+                                                           border border-terminal-gold/60 text-terminal-gold text-xs font-mono font-bold
+                                                           shadow-[0_0_8px_rgba(255,215,0,0.2)] hover:shadow-[0_0_12px_rgba(255,215,0,0.4)]
+                                                           transition-all duration-200 hover:scale-105"
+                                            >
+                                                {cardIdToString(m.id)} <span className="text-amber-300">×{m.multiplier}</span>
+                                            </span>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="text-[10px] text-gray-400 font-mono animate-pulse">Loading multipliers...</div>
+                                )}
+                            </div>
                         </div>
                     </div>
                 )}
