@@ -1,5 +1,5 @@
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { GameState } from '../../../types';
 import { Hand } from '../GameComponents';
 import { getBaccaratValue } from '../../../utils/gameUtils';
@@ -7,8 +7,25 @@ import { cardIdToString } from '../../../utils/gameStateParser';
 import { MobileDrawer } from '../MobileDrawer';
 import { GameControlBar } from '../GameControlBar';
 
+type BetGroup = 'NONE' | 'BONUS';
+
+// Bonus bet definitions with shortcuts
+const BONUS_BETS = [
+    { key: '1', action: 'TIE', label: 'TIE' },
+    { key: '2', action: 'P_PAIR', label: 'P.PAIR' },
+    { key: '3', action: 'B_PAIR', label: 'B.PAIR' },
+    { key: '4', action: 'LUCKY6', label: 'LUCKY6' },
+    { key: '5', action: 'P_DRAGON', label: 'P.DRAG' },
+    { key: '6', action: 'B_DRAGON', label: 'B.DRAG' },
+    { key: '7', action: 'PANDA8', label: 'PANDA8' },
+    { key: '8', action: 'P_PERFECT_PAIR', label: 'P.PP' },
+    { key: '9', action: 'B_PERFECT_PAIR', label: 'B.PP' },
+    { key: '0', action: 'ALL_BONUS', label: '$$$$$' },
+];
+
 export const BaccaratView = React.memo<{ gameState: GameState; actions: any; lastWin?: number; playMode?: 'CASH' | 'FREEROLL' | null }>(({ gameState, actions, lastWin, playMode }) => {
     const [leftSidebarView, setLeftSidebarView] = useState<'EXPOSURE' | 'SIDE_BETS'>('EXPOSURE');
+    const [activeGroup, setActiveGroup] = useState<BetGroup>('NONE');
     // Consolidate main bet and side bets for display
     const allBets = useMemo(() => [
         { type: gameState.baccaratSelection, amount: gameState.bet },
@@ -48,6 +65,96 @@ export const BaccaratView = React.memo<{ gameState: GameState; actions: any; las
 
     const playerColor = isPlayerSelected ? 'text-terminal-green' : 'text-terminal-accent';
     const bankerColor = isBankerSelected ? 'text-terminal-green' : 'text-terminal-accent';
+
+    // Check if any bonus bets are placed
+    const anyBonusPlaced = useMemo(() =>
+        gameState.baccaratBets.length > 0,
+        [gameState.baccaratBets]
+    );
+
+    // Execute bet action
+    const executeBetAction = useCallback((action: string) => {
+        if (action === 'ALL_BONUS') {
+            // Place all bonus bets at once
+            const bonusTypes = ['TIE', 'P_PAIR', 'B_PAIR', 'LUCKY6', 'P_DRAGON', 'B_DRAGON', 'PANDA8', 'P_PERFECT_PAIR', 'B_PERFECT_PAIR'];
+            bonusTypes.forEach(type => {
+                const alreadyPlaced = gameState.baccaratBets.some(b => b.type === type);
+                if (!alreadyPlaced) {
+                    actions?.baccaratActions?.placeBet?.(type);
+                }
+            });
+        } else {
+            actions?.baccaratActions?.placeBet?.(action);
+        }
+        setActiveGroup('NONE');
+    }, [actions, gameState.baccaratBets]);
+
+    // Keyboard handler
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            // Ignore if typing in input
+            if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+            // Ignore modifier keys alone
+            if (e.key === 'Shift' || e.key === 'Control' || e.key === 'Alt' || e.key === 'Meta') return;
+
+            const key = e.key.toLowerCase();
+
+            // ESC closes menu
+            if (key === 'escape') {
+                setActiveGroup('NONE');
+                return;
+            }
+
+            // Shift+2 toggles BONUS menu
+            if (e.shiftKey && (key === '2' || key === '@')) {
+                setActiveGroup(activeGroup === 'BONUS' ? 'NONE' : 'BONUS');
+                e.preventDefault();
+                return;
+            }
+
+            // When BONUS group is open, number keys trigger bets
+            if (activeGroup === 'BONUS') {
+                const bet = BONUS_BETS.find(b => b.key === key);
+                if (bet) {
+                    executeBetAction(bet.action);
+                    e.preventDefault();
+                    return;
+                }
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [activeGroup, executeBetAction]);
+
+    // BetButton component for popup
+    const BetButton: React.FC<{
+        bet: { key: string; action: string; label: string };
+    }> = ({ bet }) => {
+        const isActive = sideBetAmounts[bet.action as keyof typeof sideBetAmounts] > 0;
+
+        return (
+            <button
+                type="button"
+                onClick={() => executeBetAction(bet.action)}
+                className={`
+                    relative flex flex-col items-center justify-center
+                    h-14 px-3 min-w-[60px]
+                    border rounded transition-all duration-150
+                    font-mono text-xs tracking-wider
+                    ${isActive
+                        ? 'border-amber-400 bg-amber-500/20 text-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.3)]'
+                        : 'border-gray-700 bg-gray-900/80 text-gray-300 hover:border-amber-600 hover:text-amber-400 hover:bg-amber-900/20'
+                    }
+                `}
+            >
+                <span className="font-bold">{bet.label}</span>
+                <span className={`text-[9px] mt-0.5 ${isActive ? 'text-amber-500' : 'text-gray-600'}`}>
+                    [{bet.key}]
+                </span>
+            </button>
+        );
+    };
 
     const getWinnerClass = (type: string) => {
         if (gameState.stage !== 'RESULT') return 'border-gray-800 bg-black/40';
@@ -390,107 +497,34 @@ export const BaccaratView = React.memo<{ gameState: GameState; actions: any; las
                         </div>
 
                         {/* Bonus Bets */}
-                        <div className="flex items-center gap-2 px-3 py-1 border border-gray-700 rounded bg-black/40">
-                            <span className="text-[9px] text-amber-500 uppercase tracking-widest">BONUS</span>
+                        <div className="relative">
                             <button
                                 type="button"
-                                onClick={() => actions?.baccaratActions?.placeBet?.('TIE')}
-                                className={`px-2 py-1.5 rounded border text-xs font-bold tracking-wider transition-all ${
-                                    sideBetAmounts.TIE > 0
-                                        ? 'border-amber-400 bg-amber-500/20 text-amber-300'
-                                        : 'border-gray-700 bg-black/50 text-gray-400 hover:bg-gray-800'
-                                }`}
+                                onClick={() => setActiveGroup(activeGroup === 'BONUS' ? 'NONE' : 'BONUS')}
+                                className={`
+                                    h-12 px-4 border rounded font-mono text-sm font-bold tracking-wider transition-all
+                                    ${activeGroup === 'BONUS'
+                                        ? 'border-amber-400 bg-amber-500/20 text-amber-300 shadow-[0_0_15px_rgba(251,191,36,0.3)]'
+                                        : anyBonusPlaced
+                                            ? 'border-amber-600/50 bg-amber-900/20 text-amber-400 hover:border-amber-500 animate-pulse'
+                                            : 'border-gray-700 bg-gray-900 text-gray-400 hover:border-amber-600 hover:text-amber-400'
+                                    }
+                                `}
                             >
-                                TIE{sideBetAmounts.TIE > 0 ? ` $${sideBetAmounts.TIE}` : ''}
+                                BONUS
+                                <span className="ml-1 text-[10px] text-gray-600">[⇧2]</span>
+                                {anyBonusPlaced && (
+                                    <span className="absolute -top-1 -right-1 w-2 h-2 bg-amber-500 rounded-full animate-ping" />
+                                )}
                             </button>
-                            <button
-                                type="button"
-                                onClick={() => actions?.baccaratActions?.placeBet?.('P_PAIR')}
-                                className={`px-2 py-1.5 rounded border text-xs font-bold tracking-wider transition-all ${
-                                    sideBetAmounts.P_PAIR > 0
-                                        ? 'border-amber-400 bg-amber-500/20 text-amber-300'
-                                        : 'border-gray-700 bg-black/50 text-gray-400 hover:bg-gray-800'
-                                }`}
-                            >
-                                P.PAIR{sideBetAmounts.P_PAIR > 0 ? ` $${sideBetAmounts.P_PAIR}` : ''}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => actions?.baccaratActions?.placeBet?.('B_PAIR')}
-                                className={`px-2 py-1.5 rounded border text-xs font-bold tracking-wider transition-all ${
-                                    sideBetAmounts.B_PAIR > 0
-                                        ? 'border-amber-400 bg-amber-500/20 text-amber-300'
-                                        : 'border-gray-700 bg-black/50 text-gray-400 hover:bg-gray-800'
-                                }`}
-                            >
-                                B.PAIR{sideBetAmounts.B_PAIR > 0 ? ` $${sideBetAmounts.B_PAIR}` : ''}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => actions?.baccaratActions?.placeBet?.('LUCKY6')}
-                                className={`px-2 py-1.5 rounded border text-xs font-bold tracking-wider transition-all ${
-                                    sideBetAmounts.LUCKY6 > 0
-                                        ? 'border-amber-400 bg-amber-500/20 text-amber-300'
-                                        : 'border-gray-700 bg-black/50 text-gray-400 hover:bg-gray-800'
-                                }`}
-                            >
-                                LUCKY6{sideBetAmounts.LUCKY6 > 0 ? ` $${sideBetAmounts.LUCKY6}` : ''}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => actions?.baccaratActions?.placeBet?.('P_DRAGON')}
-                                className={`px-2 py-1.5 rounded border text-xs font-bold tracking-wider transition-all ${
-                                    sideBetAmounts.P_DRAGON > 0
-                                        ? 'border-amber-400 bg-amber-500/20 text-amber-300'
-                                        : 'border-gray-700 bg-black/50 text-gray-400 hover:bg-gray-800'
-                                }`}
-                            >
-                                P.DRAG{sideBetAmounts.P_DRAGON > 0 ? ` $${sideBetAmounts.P_DRAGON}` : ''}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => actions?.baccaratActions?.placeBet?.('B_DRAGON')}
-                                className={`px-2 py-1.5 rounded border text-xs font-bold tracking-wider transition-all ${
-                                    sideBetAmounts.B_DRAGON > 0
-                                        ? 'border-amber-400 bg-amber-500/20 text-amber-300'
-                                        : 'border-gray-700 bg-black/50 text-gray-400 hover:bg-gray-800'
-                                }`}
-                            >
-                                B.DRAG{sideBetAmounts.B_DRAGON > 0 ? ` $${sideBetAmounts.B_DRAGON}` : ''}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => actions?.baccaratActions?.placeBet?.('PANDA8')}
-                                className={`px-2 py-1.5 rounded border text-xs font-bold tracking-wider transition-all ${
-                                    sideBetAmounts.PANDA8 > 0
-                                        ? 'border-amber-400 bg-amber-500/20 text-amber-300'
-                                        : 'border-gray-700 bg-black/50 text-gray-400 hover:bg-gray-800'
-                                }`}
-                            >
-                                PANDA8{sideBetAmounts.PANDA8 > 0 ? ` $${sideBetAmounts.PANDA8}` : ''}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => actions?.baccaratActions?.placeBet?.('P_PERFECT_PAIR')}
-                                className={`px-2 py-1.5 rounded border text-xs font-bold tracking-wider transition-all ${
-                                    sideBetAmounts.P_PERFECT_PAIR > 0
-                                        ? 'border-amber-400 bg-amber-500/20 text-amber-300'
-                                        : 'border-gray-700 bg-black/50 text-gray-400 hover:bg-gray-800'
-                                }`}
-                            >
-                                P.PP{sideBetAmounts.P_PERFECT_PAIR > 0 ? ` $${sideBetAmounts.P_PERFECT_PAIR}` : ''}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => actions?.baccaratActions?.placeBet?.('B_PERFECT_PAIR')}
-                                className={`px-2 py-1.5 rounded border text-xs font-bold tracking-wider transition-all ${
-                                    sideBetAmounts.B_PERFECT_PAIR > 0
-                                        ? 'border-amber-400 bg-amber-500/20 text-amber-300'
-                                        : 'border-gray-700 bg-black/50 text-gray-400 hover:bg-gray-800'
-                                }`}
-                            >
-                                B.PP{sideBetAmounts.B_PERFECT_PAIR > 0 ? ` $${sideBetAmounts.B_PERFECT_PAIR}` : ''}
-                            </button>
+
+                            {activeGroup === 'BONUS' && (
+                                <div className="absolute bottom-full left-0 mb-2 flex gap-1 p-2 bg-black/95 border border-amber-900/50 rounded-lg backdrop-blur-sm animate-in slide-in-from-bottom-2 duration-150 z-50">
+                                    {BONUS_BETS.map(bet => (
+                                        <BetButton key={bet.action} bet={bet} />
+                                    ))}
+                                </div>
+                            )}
                         </div>
 
                         {/* Actions */}

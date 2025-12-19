@@ -1,5 +1,5 @@
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { GameState } from '../../../types';
 import { Hand } from '../GameComponents';
 import { MobileDrawer } from '../MobileDrawer';
@@ -7,7 +7,59 @@ import { GameControlBar } from '../GameControlBar';
 import { getVisibleHandValue } from '../../../utils/gameUtils';
 import { cardIdToString } from '../../../utils/gameStateParser';
 
-export const BlackjackView = React.memo<{ gameState: GameState; actions: any; lastWin?: number; playMode?: 'CASH' | 'FREEROLL' | null }>(({ gameState, actions, lastWin, playMode }) => {
+const CHIP_VALUES = [1, 5, 25, 100, 500, 1000, 5000, 10000];
+
+// Casino chip colors by denomination
+const CHIP_COLORS: Record<number, { bg: string; border: string; text: string }> = {
+    1: { bg: 'bg-gray-100', border: 'border-gray-300', text: 'text-gray-800' },
+    5: { bg: 'bg-red-600', border: 'border-red-400', text: 'text-white' },
+    25: { bg: 'bg-green-600', border: 'border-green-400', text: 'text-white' },
+    100: { bg: 'bg-gray-900', border: 'border-gray-600', text: 'text-white' },
+    500: { bg: 'bg-purple-600', border: 'border-purple-400', text: 'text-white' },
+    1000: { bg: 'bg-yellow-500', border: 'border-yellow-300', text: 'text-black' },
+    5000: { bg: 'bg-pink-500', border: 'border-pink-300', text: 'text-white' },
+    10000: { bg: 'bg-blue-600', border: 'border-blue-400', text: 'text-white' },
+};
+
+// Chip component for bet size display
+const ChipButton: React.FC<{
+    value: number;
+    selected?: boolean;
+    onClick?: () => void;
+    size?: 'sm' | 'md' | 'lg';
+}> = ({ value, selected, onClick, size = 'lg' }) => {
+    const colors = CHIP_COLORS[value] || CHIP_COLORS[25];
+    const label = value >= 1000 ? `${value / 1000}K` : value.toString();
+    const sizes = { sm: 'w-10 h-10 text-xs', md: 'w-12 h-12 text-sm', lg: 'w-14 h-14 text-base' };
+
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            className={`
+                ${sizes[size]} relative rounded-full font-bold font-mono
+                ${colors.bg} ${colors.text} border-4 ${colors.border}
+                flex items-center justify-center transition-all duration-150
+                ${onClick ? 'cursor-pointer hover:scale-110 active:scale-95' : ''}
+                ${selected ? 'ring-2 ring-white ring-offset-2 ring-offset-black shadow-lg' : ''}
+            `}
+            style={{ boxShadow: `inset 0 2px 4px rgba(255,255,255,0.3), inset 0 -2px 4px rgba(0,0,0,0.3)` }}
+        >
+            <div className="absolute inset-0.5 rounded-full border-2 border-dashed border-white/30" />
+            <span className="relative z-10 drop-shadow-md">{label}</span>
+        </button>
+    );
+};
+
+export const BlackjackView = React.memo<{
+    gameState: GameState;
+    actions: any;
+    lastWin?: number;
+    playMode?: 'CASH' | 'FREEROLL' | null;
+    currentBet?: number;
+    onBetChange?: (bet: number) => void;
+}>(({ gameState, actions, lastWin, playMode, currentBet, onBetChange }) => {
+    const [showChipSelector, setShowChipSelector] = useState(false);
     const dealerValue = useMemo(() => getVisibleHandValue(gameState.dealerCards), [gameState.dealerCards]);
     const playerValue = useMemo(() => getVisibleHandValue(gameState.playerCards), [gameState.playerCards]);
     const showInsurancePrompt = useMemo(() => {
@@ -269,32 +321,78 @@ export const BlackjackView = React.memo<{ gameState: GameState; actions: any; la
                         </div>
                     )}
 
-                    {/* Primary Action */}
-                    <button
-                        type="button"
-                        onClick={
-                            (gameState.stage === 'BETTING' || gameState.stage === 'RESULT')
-                                ? actions?.deal
+                    {/* Primary Action with Chip Selector (Desktop & Mobile) */}
+                    <div className="flex items-center gap-3">
+                        {/* Chip Selector - Only show during BETTING or RESULT stage */}
+                        {(gameState.stage === 'BETTING' || gameState.stage === 'RESULT') && (
+                            <div className="relative">
+                                <ChipButton
+                                    value={currentBet || 25}
+                                    selected={showChipSelector}
+                                    onClick={() => setShowChipSelector(!showChipSelector)}
+                                />
+                                {showChipSelector && (
+                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 p-3 bg-black/95 border border-gray-700 rounded-xl backdrop-blur-sm z-50">
+                                        <div className="flex gap-2 pb-2">
+                                            {CHIP_VALUES.slice(0, 4).map((value) => (
+                                                <ChipButton
+                                                    key={value}
+                                                    value={value}
+                                                    size="md"
+                                                    selected={currentBet === value}
+                                                    onClick={() => {
+                                                        onBetChange?.(value);
+                                                        setShowChipSelector(false);
+                                                    }}
+                                                />
+                                            ))}
+                                        </div>
+                                        <div className="flex gap-2 pt-2 border-t border-gray-800">
+                                            {CHIP_VALUES.slice(4).map((value) => (
+                                                <ChipButton
+                                                    key={value}
+                                                    value={value}
+                                                    size="md"
+                                                    selected={currentBet === value}
+                                                    onClick={() => {
+                                                        onBetChange?.(value);
+                                                        setShowChipSelector(false);
+                                                    }}
+                                                />
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Primary Action Button */}
+                        <button
+                            type="button"
+                            onClick={
+                                (gameState.stage === 'BETTING' || gameState.stage === 'RESULT')
+                                    ? actions?.deal
+                                    : showInsurancePrompt
+                                        ? () => actions?.bjInsurance?.(true)
+                                        : actions?.bjHit
+                            }
+                            disabled={gameState.stage === 'PLAYING' && !showInsurancePrompt && !canHit}
+                            className={`h-12 sm:h-14 px-6 sm:px-8 rounded border-2 font-bold text-sm sm:text-base tracking-widest uppercase font-mono transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] ${
+                                showInsurancePrompt
+                                    ? 'border-terminal-gold bg-terminal-gold text-black hover:bg-white hover:border-white'
+                                    : (gameState.stage === 'PLAYING' && !canHit)
+                                        ? 'opacity-50 cursor-not-allowed border-gray-800 bg-gray-900/50 text-gray-700'
+                                        : 'border-terminal-green bg-terminal-green text-black hover:bg-white hover:border-white hover:scale-105 active:scale-95'
+                            }`}
+                        >
+                            {(gameState.stage === 'BETTING' || gameState.stage === 'RESULT')
+                                ? 'DEAL'
                                 : showInsurancePrompt
-                                    ? () => actions?.bjInsurance?.(true)
-                                    : actions?.bjHit
-                        }
-                        disabled={gameState.stage === 'PLAYING' && !showInsurancePrompt && !canHit}
-                        className={`h-12 sm:h-14 px-6 sm:px-8 rounded border-2 font-bold text-sm sm:text-base tracking-widest uppercase font-mono transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] ${
-                            showInsurancePrompt
-                                ? 'border-terminal-gold bg-terminal-gold text-black hover:bg-white hover:border-white'
-                                : (gameState.stage === 'PLAYING' && !canHit)
-                                    ? 'opacity-50 cursor-not-allowed border-gray-800 bg-gray-900/50 text-gray-700'
-                                    : 'border-terminal-green bg-terminal-green text-black hover:bg-white hover:border-white hover:scale-105 active:scale-95'
-                        }`}
-                    >
-                        {(gameState.stage === 'BETTING' || gameState.stage === 'RESULT')
-                            ? 'DEAL'
-                            : showInsurancePrompt
-                                ? 'INSURE'
-                                : 'HIT'
-                        }
-                    </button>
+                                    ? 'INSURE'
+                                    : 'HIT'
+                            }
+                        </button>
+                    </div>
                 </div>
             </div>
         </>
