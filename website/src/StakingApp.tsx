@@ -30,6 +30,7 @@ export default function StakingApp() {
   const [registerName, setRegisterName] = useState('Staker');
   const [stakeAmount, setStakeAmount] = useState('0');
   const [stakeDuration, setStakeDuration] = useState('100');
+  const [stakeSubmitting, setStakeSubmitting] = useState(false);
 
   const pushActivity = (message: string, level: ActivityLevel = 'info') => {
     logActivity('staking', message, level);

@@ -195,7 +195,9 @@ impl Mempool {
         self.accounts.set(self.tracked.len() as i64);
     }
 
-    /// Get the next transaction to process from the mempool.
+    /// Get the next transaction to process from the mempool (destructive).
+    /// Note: This removes the transaction from the mempool. For non-destructive
+    /// iteration, use `peek_batch` instead.
     pub fn next(&mut self) -> Option<Transaction> {
         loop {
             // Fast-path for empty mempool.
@@ -245,6 +247,39 @@ impl Mempool {
 
             return Some(tx);
         }
+    }
+
+    /// Peek at the lowest-nonce transaction for each account (non-destructive).
+    /// Returns up to `max_count` transactions without removing them from the mempool.
+    /// Transactions are returned in round-robin order across accounts.
+    pub fn peek_batch(&self, max_count: usize) -> Vec<Transaction> {
+        let mut result = Vec::with_capacity(max_count);
+        if self.queue.is_empty() || max_count == 0 {
+            return result;
+        }
+
+        let mut cursor = self.queue_cursor;
+        let mut accounts_visited = 0;
+        let total_accounts = self.queue.len();
+
+        // Visit each account at most once
+        while result.len() < max_count && accounts_visited < total_accounts {
+            if cursor >= self.queue.len() {
+                cursor = 0;
+            }
+
+            let public = &self.queue[cursor];
+            if let Some(tracked) = self.tracked.get(public) {
+                if let Some((_, tx)) = tracked.first_key_value() {
+                    result.push(tx.clone());
+                }
+            }
+
+            cursor = (cursor + 1) % self.queue.len();
+            accounts_visited += 1;
+        }
+
+        result
     }
 }
 

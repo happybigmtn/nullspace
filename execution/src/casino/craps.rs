@@ -247,7 +247,79 @@ struct BetResult {
     /// Total amount wagered on this bet (used to report losses when completing).
     wagered: u64,
     resolved: bool,
-    log: String,
+}
+
+fn bet_type_str(bet_type: BetType) -> &'static str {
+    match bet_type {
+        BetType::Pass => "PASS",
+        BetType::DontPass => "DONT_PASS",
+        BetType::Come => "COME",
+        BetType::DontCome => "DONT_COME",
+        BetType::Field => "FIELD",
+        BetType::Yes => "YES",
+        BetType::No => "NO",
+        BetType::Next => "NEXT",
+        BetType::Hardway4 => "HARDWAY_4",
+        BetType::Hardway6 => "HARDWAY_6",
+        BetType::Hardway8 => "HARDWAY_8",
+        BetType::Hardway10 => "HARDWAY_10",
+        BetType::Fire => "FIRE",
+        BetType::Buy => "BUY",
+        BetType::AtsSmall => "ATS_SMALL",
+        BetType::AtsTall => "ATS_TALL",
+        BetType::AtsAll => "ATS_ALL",
+    }
+}
+
+fn phase_str(phase: Phase) -> &'static str {
+    match phase {
+        Phase::ComeOut => "COME_OUT",
+        Phase::Point => "POINT",
+    }
+}
+
+/// Generate JSON logs for craps game completion
+fn generate_craps_logs(
+    state: &CrapsState,
+    resolved_bets: &[(BetType, u8, u64, u64, u64)], // (bet_type, target, wagered, return_amount, odds_amount)
+    total_wagered: u64,
+    total_return: u64,
+) -> Vec<String> {
+    let d1 = state.d1;
+    let d2 = state.d2;
+    let total = d1.saturating_add(d2);
+
+    // Build bet results array
+    let bet_results: Vec<String> = resolved_bets
+        .iter()
+        .map(|(bet_type, target, wagered, return_amount, odds)| {
+            let outcome = if *return_amount > *wagered {
+                "WIN"
+            } else if *return_amount == *wagered {
+                "PUSH"
+            } else {
+                "LOSS"
+            };
+            if *target > 0 {
+                format!(
+                    r#"{{"type":"{}","target":{},"wagered":{},"odds":{},"return":{},"outcome":"{}"}}"#,
+                    bet_type_str(*bet_type), target, wagered, odds, return_amount, outcome
+                )
+            } else {
+                format!(
+                    r#"{{"type":"{}","wagered":{},"odds":{},"return":{},"outcome":"{}"}}"#,
+                    bet_type_str(*bet_type), wagered, odds, return_amount, outcome
+                )
+            }
+        })
+        .collect();
+
+    let bets_json = bet_results.join(",");
+
+    vec![format!(
+        r#"{{"dice":[{},{}],"total":{},"phase":"{}","point":{},"bets":[{}],"totalWagered":{},"totalReturn":{}}}"#,
+        d1, d2, total, phase_str(state.phase), state.main_point, bets_json, total_wagered, total_return
+    )]
 }
 
 /// Game state.
@@ -585,7 +657,7 @@ fn process_roll(state: &mut CrapsState, d1: u8, d2: u8) -> Vec<BetResult> {
                 bet_idx: idx,
                 return_amount: calculate_field_payout(total, bet.amount, state.field_paytable),
                 wagered: bet.amount,
-                resolved: true, log: String::new(),
+                resolved: true,
             });
         }
         if bet.bet_type == BetType::Next {
@@ -593,7 +665,7 @@ fn process_roll(state: &mut CrapsState, d1: u8, d2: u8) -> Vec<BetResult> {
                 bet_idx: idx,
                 return_amount: calculate_next_payout(bet.target, total, bet.amount),
                 wagered: bet.amount,
-                resolved: true, log: String::new(),
+                resolved: true,
             });
         }
     }
@@ -616,7 +688,7 @@ fn process_roll(state: &mut CrapsState, d1: u8, d2: u8) -> Vec<BetResult> {
                     bet_idx: idx,
                     return_amount: payout,
                     wagered: bet.amount,
-                    resolved: true, log: String::new(),
+                    resolved: true,
                 });
             }
         }
@@ -635,14 +707,14 @@ fn process_roll(state: &mut CrapsState, d1: u8, d2: u8) -> Vec<BetResult> {
                         bet_idx: idx,
                         return_amount: calculate_yes_payout(bet.target, bet.amount, true),
                         wagered: bet.amount,
-                        resolved: true, log: String::new(),
+                        resolved: true,
                     });
                 } else if total == 7 {
                     results.push(BetResult {
                         bet_idx: idx,
                         return_amount: calculate_yes_payout(bet.target, bet.amount, false),
                         wagered: bet.amount,
-                        resolved: true, log: String::new(),
+                        resolved: true,
                     });
                 }
             }
@@ -652,14 +724,14 @@ fn process_roll(state: &mut CrapsState, d1: u8, d2: u8) -> Vec<BetResult> {
                         bet_idx: idx,
                         return_amount: calculate_no_payout(bet.target, bet.amount, true),
                         wagered: bet.amount,
-                        resolved: true, log: String::new(),
+                        resolved: true,
                     });
                 } else if total == bet.target {
                     results.push(BetResult {
                         bet_idx: idx,
                         return_amount: calculate_no_payout(bet.target, bet.amount, false),
                         wagered: bet.amount,
-                        resolved: true, log: String::new(),
+                        resolved: true,
                     });
                 }
             }
@@ -684,7 +756,7 @@ fn process_roll(state: &mut CrapsState, d1: u8, d2: u8) -> Vec<BetResult> {
                         bet_idx: idx,
                         return_amount,
                         wagered,
-                        resolved: true, log: String::new(),
+                        resolved: true,
                     });
                 } else if total == 7 {
                     let commission = calculate_buy_commission(bet.amount);
@@ -696,7 +768,7 @@ fn process_roll(state: &mut CrapsState, d1: u8, d2: u8) -> Vec<BetResult> {
                         bet_idx: idx,
                         return_amount: 0,
                         wagered,
-                        resolved: true, log: String::new(),
+                        resolved: true,
                     });
                 }
             }
@@ -723,7 +795,7 @@ fn process_roll(state: &mut CrapsState, d1: u8, d2: u8) -> Vec<BetResult> {
                     bet_idx: idx,
                     return_amount,
                     wagered: bet.amount,
-                    resolved: true, log: String::new(),
+                    resolved: true,
                 });
             }
         }
@@ -740,7 +812,7 @@ fn process_roll(state: &mut CrapsState, d1: u8, d2: u8) -> Vec<BetResult> {
                             bet_idx: idx,
                             return_amount: bet.amount.saturating_mul(2),
                             wagered: bet.amount,
-                            resolved: true, log: String::new(),
+                            resolved: true,
                         });
                     }
                     2 | 3 | 12 => {
@@ -748,7 +820,7 @@ fn process_roll(state: &mut CrapsState, d1: u8, d2: u8) -> Vec<BetResult> {
                             bet_idx: idx,
                             return_amount: 0,
                             wagered: bet.amount,
-                            resolved: true, log: String::new(),
+                            resolved: true,
                         });
                     }
                     _ => {
@@ -771,7 +843,7 @@ fn process_roll(state: &mut CrapsState, d1: u8, d2: u8) -> Vec<BetResult> {
                         bet_idx: idx,
                         return_amount: total_payout,
                         wagered: bet.amount.saturating_add(bet.odds_amount),
-                        resolved: true, log: String::new(),
+                        resolved: true,
                     });
                 } else if total == 7 {
                     // Lose
@@ -779,7 +851,7 @@ fn process_roll(state: &mut CrapsState, d1: u8, d2: u8) -> Vec<BetResult> {
                         bet_idx: idx,
                         return_amount: 0,
                         wagered: bet.amount.saturating_add(bet.odds_amount),
-                        resolved: true, log: String::new(),
+                        resolved: true,
                     });
                 }
             }
@@ -790,7 +862,7 @@ fn process_roll(state: &mut CrapsState, d1: u8, d2: u8) -> Vec<BetResult> {
                             bet_idx: idx,
                             return_amount: bet.amount.saturating_mul(2),
                             wagered: bet.amount,
-                            resolved: true, log: String::new(),
+                            resolved: true,
                         });
                     }
                     12 => {
@@ -799,7 +871,7 @@ fn process_roll(state: &mut CrapsState, d1: u8, d2: u8) -> Vec<BetResult> {
                             bet_idx: idx,
                             return_amount: bet.amount,
                             wagered: bet.amount,
-                            resolved: true, log: String::new(),
+                            resolved: true,
                         });
                     }
                     7 | 11 => {
@@ -807,7 +879,7 @@ fn process_roll(state: &mut CrapsState, d1: u8, d2: u8) -> Vec<BetResult> {
                             bet_idx: idx,
                             return_amount: 0,
                             wagered: bet.amount,
-                            resolved: true, log: String::new(),
+                            resolved: true,
                         });
                     }
                     _ => {
@@ -829,14 +901,14 @@ fn process_roll(state: &mut CrapsState, d1: u8, d2: u8) -> Vec<BetResult> {
                         bet_idx: idx,
                         return_amount: total_payout,
                         wagered: bet.amount.saturating_add(bet.odds_amount),
-                        resolved: true, log: String::new(),
+                        resolved: true,
                     });
                 } else if total == bet.target {
                     results.push(BetResult {
                         bet_idx: idx,
                         return_amount: 0,
                         wagered: bet.amount.saturating_add(bet.odds_amount),
-                        resolved: true, log: String::new(),
+                        resolved: true,
                     });
                 }
             }
@@ -885,7 +957,7 @@ fn process_roll(state: &mut CrapsState, d1: u8, d2: u8) -> Vec<BetResult> {
                 bet_idx: idx,
                 return_amount,
                 wagered: bet.amount,
-                resolved: true, log: String::new(),
+                resolved: true,
             });
         }
     }
@@ -903,7 +975,7 @@ fn process_roll(state: &mut CrapsState, d1: u8, d2: u8) -> Vec<BetResult> {
                 bet_idx: idx,
                 return_amount: 0,
                 wagered: bet.amount,
-                resolved: true, log: String::new(),
+                resolved: true,
             });
         }
     }
@@ -923,7 +995,7 @@ fn process_pass_bets(state: &CrapsState, total: u8, results: &mut Vec<BetResult>
                             bet_idx: idx,
                             return_amount: bet.amount.saturating_mul(2),
                             wagered: bet.amount,
-                            resolved: true, log: String::new(),
+                            resolved: true,
                         });
                     }
                     2 | 3 | 12 => {
@@ -932,7 +1004,7 @@ fn process_pass_bets(state: &CrapsState, total: u8, results: &mut Vec<BetResult>
                             bet_idx: idx,
                             return_amount: 0,
                             wagered: bet.amount,
-                            resolved: true, log: String::new(),
+                            resolved: true,
                         });
                     }
                     _ => {
@@ -948,7 +1020,7 @@ fn process_pass_bets(state: &CrapsState, total: u8, results: &mut Vec<BetResult>
                         bet_idx: idx,
                         return_amount,
                         wagered: bet.amount.saturating_add(bet.odds_amount),
-                        resolved: true, log: String::new(),
+                        resolved: true,
                     });
                 } else if total == 7 {
                     // Seven out - lose
@@ -956,7 +1028,7 @@ fn process_pass_bets(state: &CrapsState, total: u8, results: &mut Vec<BetResult>
                         bet_idx: idx,
                         return_amount: 0,
                         wagered: bet.amount.saturating_add(bet.odds_amount),
-                        resolved: true, log: String::new(),
+                        resolved: true,
                     });
                 }
             }
@@ -968,7 +1040,7 @@ fn process_pass_bets(state: &CrapsState, total: u8, results: &mut Vec<BetResult>
                             bet_idx: idx,
                             return_amount: 0,
                             wagered: bet.amount,
-                            resolved: true, log: String::new(),
+                            resolved: true,
                         });
                     }
                     2 | 3 => {
@@ -977,7 +1049,7 @@ fn process_pass_bets(state: &CrapsState, total: u8, results: &mut Vec<BetResult>
                             bet_idx: idx,
                             return_amount: bet.amount.saturating_mul(2),
                             wagered: bet.amount,
-                            resolved: true, log: String::new(),
+                            resolved: true,
                         });
                     }
                     12 => {
@@ -986,7 +1058,7 @@ fn process_pass_bets(state: &CrapsState, total: u8, results: &mut Vec<BetResult>
                             bet_idx: idx,
                             return_amount: bet.amount,
                             wagered: bet.amount,
-                            resolved: true, log: String::new(),
+                            resolved: true,
                         });
                     }
                     _ => {
@@ -1002,7 +1074,7 @@ fn process_pass_bets(state: &CrapsState, total: u8, results: &mut Vec<BetResult>
                         bet_idx: idx,
                         return_amount,
                         wagered: bet.amount.saturating_add(bet.odds_amount),
-                        resolved: true, log: String::new(),
+                        resolved: true,
                     });
                 } else if total == state.main_point {
                     // Hit the point - lose for don't pass
@@ -1010,7 +1082,7 @@ fn process_pass_bets(state: &CrapsState, total: u8, results: &mut Vec<BetResult>
                         bet_idx: idx,
                         return_amount: 0,
                         wagered: bet.amount.saturating_add(bet.odds_amount),
-                        resolved: true, log: String::new(),
+                        resolved: true,
                     });
                 }
             }
@@ -1306,6 +1378,13 @@ impl CasinoGame for Craps {
                 state.d1 = d1;
                 state.d2 = d2;
 
+                // Capture bet info before processing (for logs)
+                let bets_snapshot: Vec<(BetType, u8, u64, u64)> = state
+                    .bets
+                    .iter()
+                    .map(|b| (b.bet_type, b.target, b.amount, b.odds_amount))
+                    .collect();
+
                 // Process roll
                 let results = process_roll(&mut state, d1, d2);
 
@@ -1314,7 +1393,7 @@ impl CasinoGame for Craps {
                 let mut total_wagered: u64 = 0;
                 let mut total_loss: u64 = 0;
                 let mut resolved_indices = Vec::with_capacity(state.bets.len());
-                let mut logs = Vec::new();
+                let mut resolved_bets: Vec<(BetType, u8, u64, u64, u64)> = Vec::new();
 
                 for result in results {
                     if result.resolved {
@@ -1323,10 +1402,10 @@ impl CasinoGame for Craps {
                         if result.return_amount == 0 {
                             total_loss = total_loss.saturating_add(result.wagered);
                         }
+                        // Capture resolved bet info for logs
+                        let (bet_type, target, _, odds) = bets_snapshot[result.bet_idx];
+                        resolved_bets.push((bet_type, target, result.wagered, result.return_amount, odds));
                         resolved_indices.push(result.bet_idx);
-                        if !result.log.is_empty() {
-                            logs.push(result.log);
-                        }
                     }
                 }
 
@@ -1344,6 +1423,9 @@ impl CasinoGame for Craps {
                     session.is_complete = true;
                     // Determine if this is a pure push (all bets returned stake, no wins/losses)
                     let is_pure_push = total_return == total_wagered && total_loss == 0 && total_wagered > 0;
+
+                    // Generate logs for completed game
+                    let logs = generate_craps_logs(&state, &resolved_bets, total_wagered, total_return);
 
                     if is_pure_push {
                         // All bets pushed - return stake without double modifier
@@ -1367,6 +1449,8 @@ impl CasinoGame for Craps {
                 } else {
                     // Game continues with active bets
                     // Credit any wins/pushes this roll; losses were already deducted at placement.
+                    // Generate logs showing this roll's results
+                    let logs = generate_craps_logs(&state, &resolved_bets, total_wagered, total_return);
                     if total_return > 0 {
                         let payout =
                             i64::try_from(total_return).map_err(|_| GameError::InvalidMove)?;
@@ -1503,6 +1587,13 @@ impl CasinoGame for Craps {
                 state.d1 = d1;
                 state.d2 = d2;
 
+                // Capture bet info before processing (for logs)
+                let bets_snapshot: Vec<(BetType, u8, u64, u64)> = state
+                    .bets
+                    .iter()
+                    .map(|b| (b.bet_type, b.target, b.amount, b.odds_amount))
+                    .collect();
+
                 // Process the roll
                 let results = process_roll(&mut state, d1, d2);
 
@@ -1511,7 +1602,7 @@ impl CasinoGame for Craps {
                 let mut total_resolved_wagered: u64 = 0;
                 let mut total_loss: u64 = 0;
                 let mut resolved_indices = Vec::with_capacity(state.bets.len());
-                let mut logs = Vec::new();
+                let mut resolved_bets: Vec<(BetType, u8, u64, u64, u64)> = Vec::new();
 
                 for result in results {
                     if result.resolved {
@@ -1520,10 +1611,10 @@ impl CasinoGame for Craps {
                         if result.return_amount == 0 {
                             total_loss = total_loss.saturating_add(result.wagered);
                         }
+                        // Capture resolved bet info for logs
+                        let (bet_type, target, _, odds) = bets_snapshot[result.bet_idx];
+                        resolved_bets.push((bet_type, target, result.wagered, result.return_amount, odds));
                         resolved_indices.push(result.bet_idx);
-                        if !result.log.is_empty() {
-                            logs.push(result.log);
-                        }
                     }
                 }
 
@@ -1541,6 +1632,9 @@ impl CasinoGame for Craps {
                     // Determine if this is a pure push (all bets returned stake, no wins/losses)
                     let is_pure_push = total_return == total_resolved_wagered && total_loss == 0 && total_resolved_wagered > 0;
 
+                    // Generate logs for completed game
+                    let logs = generate_craps_logs(&state, &resolved_bets, total_resolved_wagered, total_return);
+
                     if is_pure_push {
                         // All bets pushed - return stake without double modifier
                         Ok(GameResult::Push(total_wager, logs))
@@ -1557,12 +1651,16 @@ impl CasinoGame for Craps {
                         };
                         Ok(GameResult::Win(final_return, logs))
                     } else {
-                        Ok(GameResult::Loss(logs))
+                        // Total loss - use LossWithExtraDeduction since atomic batch
+                        // doesn't pre-deduct bets via ContinueWithUpdate
+                        Ok(GameResult::LossWithExtraDeduction(total_wager, logs))
                     }
                 } else {
                     // Game continues - return net result
                     // For atomic batch: player paid total_wager, received total_return
                     // Net = total_return - total_wager (can be negative)
+                    // Generate logs showing this roll's results
+                    let logs = generate_craps_logs(&state, &resolved_bets, total_resolved_wagered, total_return);
                     if total_return > total_wager {
                         // Net win on first roll
                         let net_win = total_return.saturating_sub(total_wager);

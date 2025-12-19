@@ -208,7 +208,11 @@ impl CasinoGame for CasinoWar {
                         } else {
                             base_winnings
                         };
-                        Ok(GameResult::Win(final_winnings, vec![]))
+                        let logs = vec![format!(
+                            r#"{{"stage":"DEAL","playerCard":{},"dealerCard":{},"outcome":"PLAYER_WIN","tieBet":{},"payout":{}}}"#,
+                            player_card, dealer_card, state.tie_bet, final_winnings
+                        )];
+                        Ok(GameResult::Win(final_winnings, logs))
                     } else if player_rank < dealer_rank {
                         // Dealer wins.
                         state.stage = Stage::Complete;
@@ -216,7 +220,11 @@ impl CasinoGame for CasinoWar {
                         state.dealer_card = dealer_card;
                         session.state_blob = serialize_state(&state);
                         session.is_complete = true;
-                        Ok(GameResult::Loss(vec![]))
+                        let logs = vec![format!(
+                            r#"{{"stage":"DEAL","playerCard":{},"dealerCard":{},"outcome":"DEALER_WIN","tieBet":{},"payout":0}}"#,
+                            player_card, dealer_card, state.tie_bet
+                        )];
+                        Ok(GameResult::Loss(logs))
                     } else {
                         // Tie: offer war or surrender, and pay tie bet (if any) immediately.
                         state.stage = Stage::War;
@@ -224,13 +232,17 @@ impl CasinoGame for CasinoWar {
                         state.dealer_card = dealer_card;
                         session.state_blob = serialize_state(&state);
 
+                        let logs = vec![format!(
+                            r#"{{"stage":"DEAL","playerCard":{},"dealerCard":{},"outcome":"TIE","tieBet":{},"tieBetPayout":{}}}"#,
+                            player_card, dealer_card, state.tie_bet, tie_bet_return
+                        )];
                         if tie_bet_return != 0 {
                             Ok(GameResult::ContinueWithUpdate {
                                 payout: tie_bet_return as i64,
-                                logs: vec![],
+                                logs,
                             })
                         } else {
-                            Ok(GameResult::Continue(vec![]))
+                            Ok(GameResult::Continue(logs))
                         }
                     }
                 }
@@ -307,13 +319,17 @@ impl CasinoGame for CasinoWar {
                                     base_payout
                                 };
 
+                                let logs = vec![format!(
+                                    r#"{{"stage":"DEAL","playerCard":{},"dealerCard":{},"outcome":"PLAYER_WIN","tieBet":{},"payout":{}}}"#,
+                                    player_card, dealer_card, state.tie_bet, final_payout
+                                )];
                                 if total_payout != 0 {
                                     Ok(GameResult::ContinueWithUpdate {
                                         payout: total_payout + final_payout as i64,
-                                        logs: vec![],
+                                        logs,
                                     })
                                 } else {
-                                    Ok(GameResult::Win(final_payout, vec![]))
+                                    Ok(GameResult::Win(final_payout, logs))
                                 }
                             }
                             std::cmp::Ordering::Less => {
@@ -323,13 +339,17 @@ impl CasinoGame for CasinoWar {
                                 session.is_complete = true;
                                 session.move_count += 1;
 
+                                let logs = vec![format!(
+                                    r#"{{"stage":"DEAL","playerCard":{},"dealerCard":{},"outcome":"DEALER_WIN","tieBet":{},"payout":0}}"#,
+                                    player_card, dealer_card, state.tie_bet
+                                )];
                                 if total_payout != 0 {
                                     Ok(GameResult::ContinueWithUpdate {
                                         payout: total_payout,
-                                        logs: vec![],
+                                        logs,
                                     })
                                 } else {
-                                    Ok(GameResult::Loss(vec![]))
+                                    Ok(GameResult::Loss(logs))
                                 }
                             }
                             std::cmp::Ordering::Equal => {
@@ -338,13 +358,17 @@ impl CasinoGame for CasinoWar {
                                 session.state_blob = serialize_state(&state);
                                 session.move_count += 1;
 
+                                let logs = vec![format!(
+                                    r#"{{"stage":"DEAL","playerCard":{},"dealerCard":{},"outcome":"TIE","tieBet":{},"tieBetPayout":{}}}"#,
+                                    player_card, dealer_card, state.tie_bet, tie_bet_return
+                                )];
                                 if total_payout != 0 {
                                     Ok(GameResult::ContinueWithUpdate {
                                         payout: total_payout,
-                                        logs: vec![],
+                                        logs,
                                     })
                                 } else {
-                                    Ok(GameResult::Continue(vec![]))
+                                    Ok(GameResult::Continue(logs))
                                 }
                             }
                         }
@@ -360,10 +384,17 @@ impl CasinoGame for CasinoWar {
                     session.is_complete = true;
                     // CasinoStartGame already deducted the ante, so refund half to realize a
                     // half-loss outcome.
-                    Ok(GameResult::Win(session.bet / 2, vec![]))
+                    let refund = session.bet / 2;
+                    let logs = vec![format!(
+                        r#"{{"stage":"SURRENDER","playerCard":{},"dealerCard":{},"outcome":"SURRENDER","payout":{}}}"#,
+                        state.player_card, state.dealer_card, refund
+                    )];
+                    Ok(GameResult::Win(refund, logs))
                 }
                 Move::War => {
                     let war_bet = session.bet;
+                    let original_player_card = state.player_card;
+                    let original_dealer_card = state.dealer_card;
 
                     // Burn 3 cards, then deal new cards.
                     let mut deck = rng.create_shoe_excluding(
@@ -394,7 +425,8 @@ impl CasinoGame for CasinoWar {
                         //
                         // Note: We model the raise as a contingent loss (`LossWithExtraDeduction`)
                         // instead of a pre-deducted bet, so we express the bonus via the credited return.
-                        let base_winnings = if new_player_rank == new_dealer_rank {
+                        let is_tie_after_tie = new_player_rank == new_dealer_rank;
+                        let base_winnings = if is_tie_after_tie {
                             session.bet.saturating_mul(2).saturating_add(
                                 session.bet.saturating_mul(TIE_AFTER_TIE_BONUS_MULTIPLIER),
                             )
@@ -410,10 +442,19 @@ impl CasinoGame for CasinoWar {
                         } else {
                             base_winnings
                         };
-                        Ok(GameResult::Win(final_winnings, vec![]))
+                        let outcome = if is_tie_after_tie { "TIE_AFTER_TIE" } else { "PLAYER_WIN" };
+                        let logs = vec![format!(
+                            r#"{{"stage":"WAR","originalPlayerCard":{},"originalDealerCard":{},"warPlayerCard":{},"warDealerCard":{},"outcome":"{}","payout":{}}}"#,
+                            original_player_card, original_dealer_card, new_player_card, new_dealer_card, outcome, final_winnings
+                        )];
+                        Ok(GameResult::Win(final_winnings, logs))
                     } else {
                         // Lose both bets (ante + war bet).
-                        Ok(GameResult::LossWithExtraDeduction(war_bet, vec![]))
+                        let logs = vec![format!(
+                            r#"{{"stage":"WAR","originalPlayerCard":{},"originalDealerCard":{},"warPlayerCard":{},"warDealerCard":{},"outcome":"DEALER_WIN","payout":0}}"#,
+                            original_player_card, original_dealer_card, new_player_card, new_dealer_card
+                        )];
+                        Ok(GameResult::LossWithExtraDeduction(war_bet, logs))
                     }
                 }
                 _ => Err(GameError::InvalidMove),

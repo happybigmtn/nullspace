@@ -538,7 +538,8 @@ export const calculateRouletteExposure = (outcome: number, bets: RouletteBet[]) 
 };
 
 /**
- * Resolves roulette bets after a spin, returning pnl and detailed results
+ * FALLBACK: Resolves roulette bets locally. Backend logs are the primary source of truth.
+ * This duplicates backend logic for use when backend logs aren't available.
  */
 export const resolveRouletteBets = (
     outcome: number,
@@ -745,6 +746,19 @@ const atsPayoutTo1 = (type: CrapsBet['type']): number => {
     return 0;
 };
 
+// Calculate BUY bet commission (5% rounded up)
+export const crapsBuyCommission = (amount: number): number => {
+    return Math.ceil(amount * 0.05);
+};
+
+// Calculate total cost to place a craps bet (includes commission for BUY bets)
+export const crapsBetCost = (bet: CrapsBet): number => {
+    if (bet.type === 'BUY') {
+        return bet.amount + crapsBuyCommission(bet.amount);
+    }
+    return bet.amount + (bet.oddsAmount || 0);
+};
+
 // Overload to optionally specify hard roll explicitly
 export const calculateCrapsExposure = (total: number, point: number | null, bets: CrapsBet[], forceHard?: boolean) => {
     let pnl = 0;
@@ -841,9 +855,9 @@ export const calculateCrapsExposure = (total: number, point: number | null, bets
 };
 
 /**
- * Resolves craps bets after a roll, returning pnl and remaining bets
- * Bets are resolved (removed) when they win or lose
- * Uses the same payout calculations as on-chain craps.rs
+ * FALLBACK: Resolves craps bets locally. Backend logs are the primary source of truth.
+ * Bets are resolved (removed) when they win or lose.
+ * This duplicates backend logic for use when backend logs aren't available.
  */
 export const resolveCrapsBets = (
     totalOrDice: number | [number, number],
@@ -1238,7 +1252,8 @@ export const calculateSicBoOutcomeExposure = (combo: number[], bets: SicBoBet[])
 }
 
 /**
- * Resolves Sic Bo bets after a roll, returning pnl and detailed results
+ * FALLBACK: Resolves Sic Bo bets locally. Backend logs are the primary source of truth.
+ * This duplicates backend logic for use when backend logs aren't available.
  */
 export const resolveSicBoBets = (combo: number[], bets: SicBoBet[]): { pnl: number; results: string[] } => {
     let pnl = 0;
@@ -1345,4 +1360,232 @@ export const calculateHiLoProjection = (cards: Card[], deck: Card[], currentPot:
         high: highWins > 0 ? Math.floor(currentPot * (total / highWins) * 0.95) : 0,
         low: lowWins > 0 ? Math.floor(currentPot * (total / lowWins) * 0.95) : 0
     };
+};
+
+/**
+ * Parse game logs from backend events.
+ * Returns a structured result with summary and details for display.
+ */
+export interface ParsedGameLog {
+  summary: string;
+  details: string[];
+  raw: unknown;
+}
+
+const cardToString = (cardId: number): string => {
+  const suits = ['♠', '♥', '♦', '♣'];
+  const ranks = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+  const suit = suits[Math.floor(cardId / 13)];
+  const rank = ranks[cardId % 13];
+  return `${rank}${suit}`;
+};
+
+/**
+ * PRIMARY SOURCE: Parses JSON logs from backend CasinoGameCompleted events.
+ * Backend logs contain authoritative game outcome data computed on-chain.
+ * Falls back to local generation (generateGameResult) only if logs unavailable.
+ */
+export const parseGameLogs = (gameType: GameType, logs: string[], netPnL: number): ParsedGameLog | null => {
+  if (!logs || logs.length === 0) return null;
+
+  const resultPart = netPnL >= 0 ? `+$${netPnL}` : `-$${Math.abs(netPnL)}`;
+
+  try {
+    // Most games emit a single JSON log string
+    const log = logs[0];
+
+    // Try parsing as JSON
+    let data: any;
+    try {
+      data = JSON.parse(log);
+    } catch {
+      // Not JSON, might be simple text log (Video Poker)
+      return {
+        summary: `${log}. ${resultPart}`,
+        details: logs,
+        raw: log
+      };
+    }
+
+    switch (gameType) {
+      case GameType.BLACKJACK: {
+        // {"hands":[{"cards":[...],"value":...,"outcome":"WIN|LOSS|PUSH|BLACKJACK","return":...}],"dealer":{"cards":[...],"value":...},"sideBet":...,"totalReturn":...}
+        const dealerValue = data.dealer?.value ?? '?';
+        const hands = data.hands || [];
+        const firstHand = hands[0];
+        const playerValue = firstHand?.value ?? '?';
+        const outcome = firstHand?.outcome || (netPnL > 0 ? 'WIN' : netPnL < 0 ? 'LOSS' : 'PUSH');
+
+        const summary = `${outcome}: ${playerValue} vs ${dealerValue}. ${resultPart}`;
+        const details: string[] = [];
+
+        hands.forEach((hand: any, i: number) => {
+          const prefix = hands.length > 1 ? `Hand ${i + 1}: ` : '';
+          const cards = (hand.cards || []).map(cardToString).join(' ');
+          details.push(`${prefix}${cards} (${hand.value}) - ${hand.outcome}`);
+        });
+
+        if (data.dealer?.cards) {
+          details.push(`Dealer: ${data.dealer.cards.map(cardToString).join(' ')} (${dealerValue})`);
+        }
+
+        if (data.sideBet) {
+          const sb = data.sideBet;
+          details.push(`Side Bet (${sb.type}): ${sb.outcome} ${sb.return > 0 ? `+$${sb.return}` : ''}`);
+        }
+
+        return { summary, details, raw: data };
+      }
+
+      case GameType.BACCARAT: {
+        // {"playerCards":[...],"bankerCards":[...],"bets":[...],"winner":"PLAYER|BANKER|TIE","totalReturn":...}
+        const winner = data.winner || 'TIE';
+        const pCards = (data.playerCards || []).map(cardToString).join(' ');
+        const bCards = (data.bankerCards || []).map(cardToString).join(' ');
+
+        const summary = `${winner} wins. ${resultPart}`;
+        const details: string[] = [];
+        details.push(`Player: ${pCards}`);
+        details.push(`Banker: ${bCards}`);
+
+        (data.bets || []).forEach((bet: any) => {
+          const outcome = bet.outcome || (bet.return > bet.wagered ? 'WIN' : bet.return === bet.wagered ? 'PUSH' : 'LOSS');
+          details.push(`${bet.type}: ${outcome} ${bet.return > 0 ? `(+$${bet.return})` : `(-$${bet.wagered})`}`);
+        });
+
+        return { summary, details, raw: data };
+      }
+
+      case GameType.ROULETTE: {
+        // {"result":...,"color":"RED|BLACK|GREEN","bets":[...],"totalWagered":...,"totalReturn":...}
+        const result = data.result;
+        const color = data.color || getRouletteColor(result);
+
+        const summary = `${result} ${color}. ${resultPart}`;
+        const details: string[] = [];
+
+        (data.bets || []).forEach((bet: any) => {
+          const outcome = bet.outcome || (bet.return > 0 ? 'WIN' : 'LOSS');
+          details.push(`${bet.type}${bet.target !== undefined ? ` ${bet.target}` : ''}: ${outcome}`);
+        });
+
+        return { summary, details, raw: data };
+      }
+
+      case GameType.CRAPS: {
+        // {"dice":[d1,d2],"total":...,"phase":"COME_OUT|POINT","point":...,"bets":[...],"totalWagered":...,"totalReturn":...}
+        const dice = data.dice || [];
+        const total = data.total || (dice[0] + dice[1]);
+
+        const summary = `Rolled ${total} (${dice.join('-')}). ${resultPart}`;
+        const details: string[] = [];
+
+        (data.bets || []).forEach((bet: any) => {
+          const target = bet.target ? ` ${bet.target}` : '';
+          details.push(`${bet.type}${target}: ${bet.outcome}`);
+        });
+
+        return { summary, details, raw: data };
+      }
+
+      case GameType.SIC_BO: {
+        // {"dice":[d1,d2,d3],"total":...,"isTriple":...,"bets":[...],"totalWagered":...,"totalReturn":...}
+        const dice = data.dice || [];
+        const total = data.total || dice.reduce((a: number, b: number) => a + b, 0);
+        const tripleNote = data.isTriple ? ' (TRIPLE)' : '';
+
+        const summary = `Rolled ${total}${tripleNote}. ${resultPart}`;
+        const details: string[] = [`Dice: ${dice.join('-')}`];
+
+        (data.bets || []).forEach((bet: any) => {
+          details.push(`${bet.type}: ${bet.outcome}`);
+        });
+
+        return { summary, details, raw: data };
+      }
+
+      case GameType.HILO: {
+        // {"previousCard":...,"newCard":...,"guess":"HIGHER|LOWER|SAME","correct":...,"multiplier":...,"streak":...}
+        const newCard = cardToString(data.newCard);
+        const prevCard = cardToString(data.previousCard);
+        const outcome = data.correct ? 'CORRECT' : 'WRONG';
+
+        const summary = `${outcome}: ${prevCard} → ${newCard}. ${resultPart}`;
+        const details: string[] = [
+          `Guess: ${data.guess}`,
+          `${data.correct ? 'Correct!' : 'Wrong!'} Streak: ${data.streak}`
+        ];
+
+        return { summary, details, raw: data };
+      }
+
+      case GameType.THREE_CARD: {
+        // {"player":{"cards":[...],"rank":"..."},"dealer":{"cards":[...],"rank":"...","qualifies":...},"outcome":"...","bets":{...},"totalReturn":...}
+        const pRank = data.player?.rank || '?';
+        const dRank = data.dealer?.rank || '?';
+        const outcome = data.outcome || (netPnL > 0 ? 'WIN' : netPnL < 0 ? 'LOSS' : 'PUSH');
+
+        const summary = `${outcome}: ${pRank} vs ${dRank}. ${resultPart}`;
+        const details: string[] = [];
+
+        if (data.player?.cards) details.push(`Player: ${data.player.cards.map(cardToString).join(' ')} (${pRank})`);
+        if (data.dealer?.cards) details.push(`Dealer: ${data.dealer.cards.map(cardToString).join(' ')} (${dRank})`);
+        if (!data.dealer?.qualifies) details.push('Dealer does not qualify');
+
+        return { summary, details, raw: data };
+      }
+
+      case GameType.ULTIMATE_HOLDEM: {
+        // {"player":{"cards":[...],"rank":"..."},"dealer":{"cards":[...],"rank":"...","qualifies":...},"community":[...],"outcome":"...","bets":{...},"totalReturn":...}
+        const pRank = data.player?.rank || '?';
+        const dRank = data.dealer?.rank || '?';
+        const outcome = data.outcome || (netPnL > 0 ? 'WIN' : netPnL < 0 ? 'LOSS' : 'PUSH');
+
+        const summary = `${outcome}: ${pRank} vs ${dRank}. ${resultPart}`;
+        const details: string[] = [];
+
+        if (data.player?.cards) details.push(`Player: ${data.player.cards.map(cardToString).join(' ')}`);
+        if (data.community) details.push(`Board: ${data.community.map(cardToString).join(' ')}`);
+        if (data.dealer?.cards) details.push(`Dealer: ${data.dealer.cards.map(cardToString).join(' ')}`);
+        if (!data.dealer?.qualifies) details.push('Dealer does not qualify');
+
+        return { summary, details, raw: data };
+      }
+
+      case GameType.CASINO_WAR: {
+        // {"playerCard":...,"dealerCard":...,"outcome":"PLAYER_WIN|DEALER_WIN|TIE|...","stage":"DEAL|WAR",...}
+        const pCard = cardToString(data.playerCard);
+        const dCard = cardToString(data.dealerCard);
+        const outcome = data.outcome || (netPnL > 0 ? 'WIN' : netPnL < 0 ? 'LOSS' : 'TIE');
+
+        const summary = `${outcome}: ${pCard} vs ${dCard}. ${resultPart}`;
+        const details: string[] = [
+          `Player: ${pCard}`,
+          `Dealer: ${dCard}`,
+          `Stage: ${data.stage || 'DEAL'}`
+        ];
+
+        return { summary, details, raw: data };
+      }
+
+      case GameType.VIDEO_POKER: {
+        // Video Poker uses simple string logs like "JACKS OR BETTER"
+        return {
+          summary: `${log}. ${resultPart}`,
+          details: logs,
+          raw: log
+        };
+      }
+
+      default:
+        return {
+          summary: resultPart,
+          details: logs,
+          raw: data
+        };
+    }
+  } catch (e) {
+    console.warn('[parseGameLogs] Failed to parse logs:', e);
+    return null;
+  }
 };

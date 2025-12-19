@@ -438,6 +438,59 @@ fn resolve_progressive_return(player_cards: &[u8; 3], progressive_bet: u64) -> u
     }
 }
 
+/// Generate JSON logs for Three Card Poker game completion
+fn generate_three_card_logs(
+    state: &TcState,
+    session: &GameSession,
+    is_fold: bool,
+    dealer_qualifies: bool,
+    outcome: &str,
+    total_return: u64,
+) -> Vec<String> {
+    let player_hand = evaluate_hand(&state.player);
+    let dealer_hand = evaluate_hand(&state.dealer);
+
+    let hand_rank_str = |rank: HandRank| -> &'static str {
+        match rank {
+            HandRank::HighCard => "HIGH_CARD",
+            HandRank::Pair => "PAIR",
+            HandRank::Flush => "FLUSH",
+            HandRank::Straight => "STRAIGHT",
+            HandRank::ThreeOfAKind => "THREE_OF_A_KIND",
+            HandRank::StraightFlush => "STRAIGHT_FLUSH",
+        }
+    };
+
+    let player_cards_str = state.player.iter().map(|c| c.to_string()).collect::<Vec<_>>().join(",");
+    let dealer_cards_str = state.dealer.iter().map(|c| c.to_string()).collect::<Vec<_>>().join(",");
+
+    let pairplus_return = resolve_pairplus_return(&state.player, state.pairplus_bet);
+    let six_card_return = resolve_six_card_bonus_return(&state.player, &state.dealer, state.six_card_bonus_bet);
+    let progressive_return = resolve_progressive_return(&state.player, state.progressive_bet);
+    let ante_bonus = if !is_fold { session.bet.saturating_mul(ante_bonus_multiplier(player_hand.0)) } else { 0 };
+
+    vec![format!(
+        r#"{{"player":{{"cards":[{}],"rank":"{}"}},"dealer":{{"cards":[{}],"rank":"{}","qualifies":{}}},"folded":{},"outcome":"{}","anteBet":{},"playBet":{},"pairplusBet":{},"sixCardBet":{},"progressiveBet":{},"pairplusReturn":{},"sixCardReturn":{},"progressiveReturn":{},"anteBonus":{},"totalReturn":{}}}"#,
+        player_cards_str,
+        hand_rank_str(player_hand.0),
+        dealer_cards_str,
+        hand_rank_str(dealer_hand.0),
+        dealer_qualifies,
+        is_fold,
+        outcome,
+        session.bet,
+        if is_fold { 0 } else { session.bet },
+        state.pairplus_bet,
+        state.six_card_bonus_bet,
+        state.progressive_bet,
+        pairplus_return,
+        six_card_return,
+        progressive_return,
+        ante_bonus,
+        total_return
+    )]
+}
+
 pub struct ThreeCardPoker;
 
 impl CasinoGame for ThreeCardPoker {
@@ -625,10 +678,11 @@ impl CasinoGame for ThreeCardPoker {
 
                     session.state_blob = serialize_state(&state);
 
+                    let logs = generate_three_card_logs(&state, session, true, false, "FOLD", total_return);
                     if total_return == 0 {
-                        Ok(GameResult::LossPreDeducted(total_wagered, vec![]))
+                        Ok(GameResult::LossPreDeducted(total_wagered, logs))
                     } else {
-                        Ok(GameResult::Win(total_return, vec![]))
+                        Ok(GameResult::Win(total_return, logs))
                     }
                 }
                 Move::Play => {
@@ -719,10 +773,22 @@ impl CasinoGame for ThreeCardPoker {
 
                     session.state_blob = serialize_state(&state);
 
-                    if total_return == 0 {
-                        Ok(GameResult::LossPreDeducted(total_wagered, vec![]))
+                    // Determine outcome string for logs
+                    let outcome = if !dealer_ok {
+                        "DEALER_NO_QUALIFY"
                     } else {
-                        Ok(GameResult::Win(total_return, vec![]))
+                        match compare_hands(&player_hand, &dealer_hand) {
+                            std::cmp::Ordering::Greater => "WIN",
+                            std::cmp::Ordering::Equal => "PUSH",
+                            std::cmp::Ordering::Less => "LOSS",
+                        }
+                    };
+
+                    let logs = generate_three_card_logs(&state, session, false, dealer_ok, outcome, total_return);
+                    if total_return == 0 {
+                        Ok(GameResult::LossPreDeducted(total_wagered, logs))
+                    } else {
+                        Ok(GameResult::Win(total_return, logs))
                     }
                 }
                 _ => Err(GameError::InvalidMove),

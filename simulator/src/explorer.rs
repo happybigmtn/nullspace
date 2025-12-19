@@ -58,14 +58,30 @@ pub struct AccountActivity {
     last_updated_height: Option<u64>,
 }
 
+/// Indexed game completion event with logs for explorer queries
+#[derive(Clone, Serialize)]
+pub struct IndexedGameEvent {
+    session_id: u64,
+    game_type: String,
+    payout: i64,
+    final_chips: u64,
+    was_shielded: bool,
+    was_doubled: bool,
+    logs: Vec<String>,
+    block_height: u64,
+}
+
 #[derive(Default)]
 pub struct ExplorerState {
     pub(super) indexed_blocks: BTreeMap<u64, ExplorerBlock>,
     pub(super) blocks_by_hash: HashMap<Digest, ExplorerBlock>,
     pub(super) txs_by_hash: HashMap<Digest, ExplorerTransaction>,
     pub(super) accounts: HashMap<PublicKey, AccountActivity>,
+    /// Game completion events indexed by player public key
+    pub(super) game_events: HashMap<PublicKey, Vec<IndexedGameEvent>>,
     max_blocks: Option<usize>,
     max_account_entries: Option<usize>,
+    max_game_events_per_account: Option<usize>,
 }
 
 impl ExplorerState {
@@ -76,6 +92,7 @@ impl ExplorerState {
     ) {
         self.max_blocks = max_blocks;
         self.max_account_entries = max_account_entries;
+        self.max_game_events_per_account = Some(100); // Default limit
     }
 
     fn enforce_retention(&mut self) {
@@ -119,6 +136,16 @@ impl ExplorerState {
                 }
             }
         }
+
+        // Enforce game events retention
+        if let Some(max_events) = self.max_game_events_per_account {
+            for events in self.game_events.values_mut() {
+                if events.len() > max_events {
+                    let excess = events.len() - max_events;
+                    events.drain(0..excess);
+                }
+            }
+        }
     }
 }
 
@@ -130,11 +157,9 @@ impl Simulator {
             .as_millis() as u64
     }
 
-    fn record_event_for_accounts(
-        accounts: &mut HashMap<PublicKey, AccountActivity>,
-        event: &Event,
-        height: u64,
-    ) {
+    fn record_event(explorer: &mut ExplorerState, event: &Event, height: u64) {
+        let accounts = &mut explorer.accounts;
+        let game_events = &mut explorer.game_events;
         let event_name = match event {
             Event::CasinoPlayerRegistered { .. } => "CasinoPlayerRegistered",
             Event::CasinoDeposited { .. } => "CasinoDeposited",
@@ -177,7 +202,33 @@ impl Simulator {
             Event::CasinoDeposited { player, .. } => touch_account(player),
             Event::CasinoGameStarted { player, .. } => touch_account(player),
             Event::CasinoGameMoved { .. } => {} // broadcasted; not account-specific
-            Event::CasinoGameCompleted { player, .. } => touch_account(player),
+            Event::CasinoGameCompleted {
+                session_id,
+                player,
+                game_type,
+                payout,
+                final_chips,
+                was_shielded,
+                was_doubled,
+                logs,
+            } => {
+                touch_account(player);
+                // Index the game event with its logs
+                let indexed_event = IndexedGameEvent {
+                    session_id: *session_id,
+                    game_type: Self::describe_game_type(game_type).to_string(),
+                    payout: *payout,
+                    final_chips: *final_chips,
+                    was_shielded: *was_shielded,
+                    was_doubled: *was_doubled,
+                    logs: logs.clone(),
+                    block_height: height,
+                };
+                game_events
+                    .entry(player.clone())
+                    .or_insert_with(Vec::new)
+                    .push(indexed_event);
+            }
             Event::CasinoLeaderboardUpdated { .. } => {}
             Event::CasinoError { player, .. } => touch_account(player),
             Event::PlayerModifierToggled { player, .. } => touch_account(player),
@@ -350,7 +401,7 @@ impl Simulator {
                     activity.last_updated_height = Some(progress.height);
                 }
                 Keyless::Append(Output::Event(evt)) => {
-                    Self::record_event_for_accounts(&mut explorer.accounts, evt, progress.height);
+                    Self::record_event(&mut explorer, evt, progress.height);
                 }
                 _ => {}
             }
@@ -515,4 +566,52 @@ pub(crate) async fn search_explorer(
     }
 
     StatusCode::NOT_FOUND.into_response()
+}
+
+/// Get game history (completed games with logs) for an account
+pub(crate) async fn get_game_history(
+    AxumState(simulator): AxumState<Arc<Simulator>>,
+    Path(pubkey): Path<String>,
+    Query(pagination): Query<Pagination>,
+) -> impl IntoResponse {
+    let raw = match from_hex(&pubkey) {
+        Some(raw) => raw,
+        None => return StatusCode::BAD_REQUEST.into_response(),
+    };
+    let public_key = match ed25519::PublicKey::read(&mut raw.as_slice()) {
+        Ok(pk) => pk,
+        Err(_) => return StatusCode::BAD_REQUEST.into_response(),
+    };
+
+    let explorer = simulator.explorer.read().await;
+
+    let events = explorer.game_events.get(&public_key);
+    let empty_vec = Vec::new();
+    let events = events.unwrap_or(&empty_vec);
+
+    let offset = pagination.offset.unwrap_or(0);
+    let limit = pagination.limit.unwrap_or(20).min(100);
+    let total = events.len();
+
+    // Return events in reverse order (most recent first)
+    let game_history: Vec<_> = events
+        .iter()
+        .rev()
+        .skip(offset)
+        .take(limit)
+        .cloned()
+        .collect();
+
+    let next_offset = if offset + game_history.len() < total {
+        Some(offset + game_history.len())
+    } else {
+        None
+    };
+
+    Json(json!({
+        "games": game_history,
+        "next_offset": next_offset,
+        "total": total
+    }))
+    .into_response()
 }

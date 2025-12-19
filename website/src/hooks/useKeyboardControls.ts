@@ -33,7 +33,7 @@ interface KeyboardControlsProps {
     bjToggle21Plus3: () => void;
     drawVideoPoker: () => void;
     toggleHold: (index: number) => void;
-    hiloPlay: (choice: 'HIGHER' | 'LOWER') => void;
+    hiloPlay: (choice: 'HIGHER' | 'LOWER' | 'SAME') => void;
     hiloCashout: () => void;
     baccaratActions: {
       toggleSelection: (selection: 'PLAYER' | 'BANKER') => void;
@@ -61,7 +61,7 @@ interface KeyboardControlsProps {
     uthToggleProgressive: () => void;
     placeCrapsBet: (betType: string) => void;
     placeCrapsNumberBet: (inputMode: string, number: number) => void;
-    addCrapsOdds: () => void;
+    addCrapsOdds: (selectionIndex?: number) => void;
     undoCrapsBet: () => void;
     rebetCraps: () => void;
     placeSicBoBet: (betType: string, target?: number) => void;
@@ -215,6 +215,7 @@ export const useKeyboardControls = ({
             } else if (gameState.type === GameType.HILO) {
                 if (k === 'h') gameActions.hiloPlay('HIGHER');
                 if (k === 'l') gameActions.hiloPlay('LOWER');
+                if (k === 's') gameActions.hiloPlay('SAME');
                 if (k === 'c') gameActions.hiloCashout();
             } else if (gameState.type === GameType.BACCARAT) {
                 if (k === 'p') gameActions.baccaratActions.toggleSelection('PLAYER');
@@ -368,7 +369,7 @@ export const useKeyboardControls = ({
                 // Handle Sic Bo input modes (specific dice/combination selection)
                 if (gameState.sicBoInputMode !== 'NONE') {
                     // SUM input uses the global numeric input handler + Enter in CasinoApp.
-                    if (gameState.sicBoInputMode !== 'SUM') {
+                    if ((gameState.sicBoInputMode as string) !== 'SUM') {
                         const digit = parseInt(e.key);
                         if (!isNaN(digit) && digit >= 1 && digit <= 6) {
                             if (gameState.sicBoInputMode === 'SINGLE') {

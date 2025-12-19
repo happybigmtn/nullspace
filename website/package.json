@@ -11,7 +11,9 @@
     "copy:data": "mkdir -p public && cp ../economy_log.json public/ || echo 'No economy log found, skipping copy'",
     "pretest": "cd .. && cargo build --release --bin nullspace-simulator",
     "test": "npm run build:wasm-test && node --test test/*.test.js",
-    "smoke": "node scripts/smoke-playwright.mjs"
+    "smoke": "node scripts/smoke-playwright.mjs",
+    "latency-test": "node scripts/latency-test.mjs",
+    "latency-test:headed": "HEADED=1 node scripts/latency-test.mjs"
   },
   "keywords": [],
   "author": "",

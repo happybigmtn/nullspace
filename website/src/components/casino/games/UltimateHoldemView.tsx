@@ -41,7 +41,7 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
 
     return (
         <>
-            <div className="flex-1 w-full flex flex-col items-center justify-start sm:justify-center gap-4 sm:gap-6 relative z-10 pt-8 sm:pt-10 pb-24 sm:pb-20">
+            <div className="flex-1 w-full flex flex-col items-center justify-start sm:justify-center gap-4 sm:gap-6 md:gap-4 relative z-10 pt-8 sm:pt-10 pb-24 sm:pb-20 md:px-40">
                 <h1 className="absolute top-0 text-xl font-bold text-gray-500 tracking-widest uppercase">ULTIMATE TEXAS HOLD'EM</h1>
                 <div className="absolute top-2 left-2 z-40">
                     <MobileDrawer label="INFO" title="ULTIMATE TEXAS HOLD'EM">
@@ -101,9 +101,9 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
                     ) : (
                         <div className="flex flex-col items-center gap-2">
                             <span className="text-lg font-bold tracking-widest text-terminal-accent">DEALER</span>
-                            <div className="flex gap-2">
+                            <div className="flex gap-1 sm:gap-1.5 md:gap-2">
                                 {[0, 1].map(i => (
-                                    <div key={i} className="w-12 h-16 border border-dashed border-terminal-accent/50 rounded" />
+                                    <div key={i} className="w-12 h-[4.5rem] sm:w-14 sm:h-20 md:w-16 md:h-24 border border-dashed border-terminal-accent/50 rounded" />
                                 ))}
                             </div>
                         </div>
@@ -113,12 +113,12 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
                 {/* Community Cards */}
                 <div className="flex flex-col items-center gap-2">
                     <span className="text-xs uppercase tracking-widest text-gray-500">COMMUNITY</span>
-                    <div className="flex gap-2">
+                    <div className="flex gap-1 sm:gap-1.5 md:gap-2">
                         {gameState.communityCards.length > 0 ? (
                             <Hand cards={gameState.communityCards} />
                         ) : (
                             [0, 1, 2, 3, 4].map(i => (
-                                <div key={i} className="w-12 h-16 border border-dashed border-gray-700 rounded" />
+                                <div key={i} className="w-12 h-[4.5rem] sm:w-14 sm:h-20 md:w-16 md:h-24 border border-dashed border-gray-700 rounded" />
                             ))
                         )}
                     </div>
@@ -149,7 +149,7 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
                         <span className="text-terminal-gold">${baseTotalBet.toLocaleString()}</span>
                     </div>
                     <div className="text-lg sm:text-xl font-bold text-terminal-gold tracking-widest leading-tight animate-pulse">
-                        {gameState.message}{lastWin && lastWin > 0 ? ` (+$${lastWin})` : ''}
+                        {gameState.message}
                     </div>
                     <div className="text-xs text-gray-500 flex flex-wrap gap-x-4 gap-y-1 justify-center">
                         <span>ANTE: ${gameState.bet.toLocaleString()}</span>
@@ -183,9 +183,9 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
                     ) : (
                         <div className="flex flex-col items-center gap-2 scale-110">
                             <span className="text-lg font-bold tracking-widest text-terminal-green">YOU</span>
-                            <div className="flex gap-2">
+                            <div className="flex gap-1 sm:gap-1.5 md:gap-2">
                                 {[0, 1].map(i => (
-                                    <div key={i} className="w-12 h-16 border border-dashed border-terminal-green/50 rounded" />
+                                    <div key={i} className="w-12 h-[4.5rem] sm:w-14 sm:h-20 md:w-16 md:h-24 border border-dashed border-terminal-green/50 rounded" />
                                 ))}
                             </div>
                         </div>

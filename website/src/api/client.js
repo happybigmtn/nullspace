@@ -288,7 +288,6 @@ export class CasinoClient {
    * Connect to the updates WebSocket stream with exponential backoff.
    * @param {Uint8Array|null} publicKey - Public key bytes for account filter, or null for all events
    * @returns {Promise<void>}
-   * @private
    */
   connectUpdates(publicKey = null) {
     return new Promise((resolve, reject) => {
@@ -307,18 +306,12 @@ export class CasinoClient {
       const filterHex = this.wasm.bytesToHex(filterBytes);
 
       // Compute multiple candidate URLs:
-      // - Prefer same-origin proxy (`/api`) so localhost setups and port-forwards work reliably.
-      // - Fall back to VITE_URL direct connection if proxy isn't available.
+      // - Prefer direct connection to VITE_URL (avoids proxy WebSocket issues)
+      // - Fall back to same-origin proxy for production deployments
+      // - Last resort: standard simulator port 8080 on same hostname
       const candidates = [];
 
-      if (typeof window !== 'undefined' && this.baseUrl && !this.baseUrl.startsWith('http://') && !this.baseUrl.startsWith('https://')) {
-        const proxyWsUrl = window.location.protocol === 'https:'
-          ? `wss://${window.location.host}${this.baseUrl}/updates/${filterHex}`
-          : `ws://${window.location.host}${this.baseUrl}/updates/${filterHex}`;
-        candidates.push(proxyWsUrl);
-      }
-
-      // Try to use VITE_URL directly for WebSocket (useful when no proxy is configured).
+      // FIRST: Try direct connection to VITE_URL (most reliable for WebSockets)
       const directUrl = import.meta.env.VITE_URL;
       if (directUrl) {
         try {
@@ -326,7 +319,7 @@ export class CasinoClient {
           const directWsUrl = url.protocol === 'https:'
             ? `wss://${url.host}/updates/${filterHex}`
             : `ws://${url.host}/updates/${filterHex}`;
-          if (!candidates.includes(directWsUrl)) candidates.push(directWsUrl);
+          candidates.push(directWsUrl);
         } catch (e) {
           console.warn('Invalid VITE_URL for WebSocket:', directUrl, e);
         }
@@ -336,10 +329,18 @@ export class CasinoClient {
         const wsUrl = url.protocol === 'https:'
           ? `wss://${url.host}/updates/${filterHex}`
           : `ws://${url.host}/updates/${filterHex}`;
-        if (!candidates.includes(wsUrl)) candidates.push(wsUrl);
+        candidates.push(wsUrl);
       }
 
-      // Fallback: Try standard simulator port 8080 on the same hostname (for LAN access)
+      // SECOND: Try same-origin proxy (for production where direct connection may be blocked)
+      if (typeof window !== 'undefined' && this.baseUrl && !this.baseUrl.startsWith('http://') && !this.baseUrl.startsWith('https://')) {
+        const proxyWsUrl = window.location.protocol === 'https:'
+          ? `wss://${window.location.host}${this.baseUrl}/updates/${filterHex}`
+          : `ws://${window.location.host}${this.baseUrl}/updates/${filterHex}`;
+        if (!candidates.includes(proxyWsUrl)) candidates.push(proxyWsUrl);
+      }
+
+      // THIRD: Fallback to standard simulator port 8080 on the same hostname (for LAN access)
       if (typeof window !== 'undefined') {
           const fallbackWsUrl = window.location.protocol === 'https:'
             ? `wss://${window.location.hostname}:8080/updates/${filterHex}`

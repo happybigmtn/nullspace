@@ -609,10 +609,60 @@ fn resolve_showdown(
     state.stage = Stage::Showdown;
     session.is_complete = true;
 
-    if total_return == 0 {
-        Ok(GameResult::LossPreDeducted(total_wagered, vec![]))
+    // Generate logs for frontend display
+    let hand_rank_str = |rank: HandRank| -> &'static str {
+        match rank {
+            HandRank::HighCard => "HIGH_CARD",
+            HandRank::Pair => "PAIR",
+            HandRank::TwoPair => "TWO_PAIR",
+            HandRank::ThreeOfAKind => "THREE_OF_A_KIND",
+            HandRank::Straight => "STRAIGHT",
+            HandRank::Flush => "FLUSH",
+            HandRank::FullHouse => "FULL_HOUSE",
+            HandRank::FourOfAKind => "FOUR_OF_A_KIND",
+            HandRank::StraightFlush => "STRAIGHT_FLUSH",
+            HandRank::RoyalFlush => "ROYAL_FLUSH",
+        }
+    };
+
+    let outcome = if state.play_mult == 0 {
+        "FOLD"
+    } else if tie {
+        "PUSH"
+    } else if player_wins {
+        "WIN"
     } else {
-        Ok(GameResult::Win(total_return, vec![]))
+        "LOSS"
+    };
+
+    let player_cards_str = state.player.iter().map(|c| c.to_string()).collect::<Vec<_>>().join(",");
+    let dealer_cards_str = state.dealer.iter().map(|c| c.to_string()).collect::<Vec<_>>().join(",");
+    let community_cards_str = state.community.iter().map(|c| c.to_string()).collect::<Vec<_>>().join(",");
+
+    let logs = vec![format!(
+        r#"{{"player":{{"cards":[{}],"rank":"{}"}},"dealer":{{"cards":[{}],"rank":"{}","qualifies":{}}},"community":[{}],"outcome":"{}","anteBet":{},"blindBet":{},"playBet":{},"playMultiplier":{},"tripsBet":{},"sixCardBet":{},"progressiveBet":{},"totalWagered":{},"totalReturn":{}}}"#,
+        player_cards_str,
+        hand_rank_str(player_hand.0),
+        dealer_cards_str,
+        hand_rank_str(dealer_hand.0),
+        dealer_qualifies,
+        community_cards_str,
+        outcome,
+        ante,
+        blind,
+        play_bet,
+        state.play_mult,
+        trips_bet,
+        six_card_bonus_bet,
+        progressive_bet,
+        total_wagered,
+        total_return
+    )];
+
+    if total_return == 0 {
+        Ok(GameResult::LossPreDeducted(total_wagered, logs))
+    } else {
+        Ok(GameResult::Win(total_return, logs))
     }
 }
 

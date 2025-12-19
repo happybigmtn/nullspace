@@ -636,3 +636,20 @@ export function getHiLoRank(card: Card): number {
 export function hiloAccumulatorToMultiplier(accumulator: number): number {
   return accumulator / 10000;
 }
+
+/**
+ * Convert a card ID (0-51) to a human-readable string (e.g., "5♥")
+ * Card encoding: suit = card / 13, rank = (card % 13)
+ * Suits: 0=♠, 1=♥, 2=♦, 3=♣
+ * Ranks: 0=A, 1=2, ..., 12=K
+ */
+export function cardIdToString(cardId: number): string {
+  if (cardId < 0 || cardId >= 52) {
+    return '?';
+  }
+  const suitIndex = Math.floor(cardId / 13);
+  const rankIndex = cardId % 13;
+  const suit = SUITS[suitIndex];
+  const rank = RANKS[rankIndex];
+  return `${rank}${suit}`;
+}

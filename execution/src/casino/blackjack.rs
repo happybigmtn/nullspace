@@ -801,6 +801,59 @@ fn apply_super_multiplier(session: &GameSession, state: &BlackjackState, total_r
     apply_super_multiplier_cards(&hand.cards, &session.super_mode.multipliers, total_return)
 }
 
+/// Generate JSON logs for blackjack game completion
+fn generate_blackjack_logs(session: &GameSession, state: &BlackjackState, total_return: u64) -> Vec<String> {
+    let (dealer_value, _) = hand_value(&state.dealer_cards);
+    let dealer_blackjack = is_blackjack(&state.dealer_cards);
+
+    // Build hands info as JSON array
+    let hands_json: Vec<String> = state
+        .hands
+        .iter()
+        .map(|h| {
+            let (value, is_soft) = hand_value(&h.cards);
+            let cards_str = h
+                .cards
+                .iter()
+                .map(|c| c.to_string())
+                .collect::<Vec<_>>()
+                .join(",");
+            let bet = session.bet.saturating_mul(h.bet_mult as u64);
+            let hand_return = resolve_hand_return(bet, h, dealer_value, dealer_blackjack);
+            let status_str = match h.status {
+                HandStatus::Playing => "PLAYING",
+                HandStatus::Standing => "STANDING",
+                HandStatus::Busted => "BUSTED",
+                HandStatus::Blackjack => "BLACKJACK",
+            };
+            format!(
+                r#"{{"cards":[{}],"value":{},"soft":{},"status":"{}","bet":{},"return":{}}}"#,
+                cards_str, value, is_soft, status_str, bet, hand_return
+            )
+        })
+        .collect();
+
+    let dealer_cards_str = state
+        .dealer_cards
+        .iter()
+        .map(|c| c.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+
+    let side_bet_return = resolve_21plus3_return(state);
+
+    vec![format!(
+        r#"{{"hands":[{}],"dealer":{{"cards":[{}],"value":{},"blackjack":{}}},"sideBet21Plus3":{},"sideBetReturn":{},"totalReturn":{}}}"#,
+        hands_json.join(","),
+        dealer_cards_str,
+        dealer_value,
+        dealer_blackjack,
+        state.side_bet_21plus3,
+        side_bet_return,
+        total_return
+    )]
+}
+
 fn finalize_game_result(
     session: &GameSession,
     state: &BlackjackState,
@@ -808,10 +861,11 @@ fn finalize_game_result(
 ) -> GameResult {
     let total_wagered = total_wagered(session, state);
     let total_return = apply_super_multiplier(session, state, total_return);
+    let logs = generate_blackjack_logs(session, state, total_return);
     if total_return == 0 {
-        GameResult::LossPreDeducted(total_wagered, vec![])
+        GameResult::LossPreDeducted(total_wagered, logs)
     } else {
-        GameResult::Win(total_return, vec![])
+        GameResult::Win(total_return, logs)
     }
 }
 

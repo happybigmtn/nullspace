@@ -65,6 +65,10 @@ impl Api {
                 "/explorer/account/:pubkey",
                 get(crate::explorer::get_account_activity),
             )
+            .route(
+                "/explorer/games/:pubkey",
+                get(crate::explorer::get_game_history),
+            )
             .route("/explorer/search", get(crate::explorer::search_explorer));
 
         #[cfg(feature = "passkeys")]

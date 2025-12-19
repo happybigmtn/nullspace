@@ -343,6 +343,59 @@ impl RouletteState {
     }
 }
 
+/// Generate JSON logs for roulette game completion
+fn generate_roulette_logs(
+    state: &RouletteState,
+    result: u8,
+    total_return: u64,
+) -> Vec<String> {
+    // Build bet results array
+    let bet_results: Vec<String> = state
+        .bets
+        .iter()
+        .map(|bet| {
+            let wins = bet_wins(bet.bet_type, bet.number, result);
+            let bet_type_str = match bet.bet_type {
+                BetType::Straight => "STRAIGHT",
+                BetType::Red => "RED",
+                BetType::Black => "BLACK",
+                BetType::Even => "EVEN",
+                BetType::Odd => "ODD",
+                BetType::Low => "LOW",
+                BetType::High => "HIGH",
+                BetType::Dozen => "DOZEN",
+                BetType::Column => "COLUMN",
+                BetType::SplitH => "SPLIT_H",
+                BetType::SplitV => "SPLIT_V",
+                BetType::Street => "STREET",
+                BetType::Corner => "CORNER",
+                BetType::SixLine => "SIX_LINE",
+            };
+            format!(
+                r#"{{"type":"{}","number":{},"amount":{},"won":{}}}"#,
+                bet_type_str, bet.number, bet.amount, wins
+            )
+        })
+        .collect();
+
+    let color = if result == 0 {
+        "GREEN"
+    } else if is_red(result) {
+        "RED"
+    } else {
+        "BLACK"
+    };
+
+    vec![format!(
+        r#"{{"result":{},"color":"{}","bets":[{}],"totalWagered":{},"totalReturn":{}}}"#,
+        result,
+        color,
+        bet_results.join(","),
+        state.total_wagered,
+        total_return
+    )]
+}
+
 pub struct Roulette;
 
 impl CasinoGame for Roulette {
@@ -564,10 +617,11 @@ impl CasinoGame for Roulette {
                         session.move_count += 1;
                         session.is_complete = true;
 
+                        let logs = generate_roulette_logs(&state, result, total_return);
                         if total_return > 0 {
-                            Ok(GameResult::Win(total_return, vec![]))
+                            Ok(GameResult::Win(total_return, logs))
                         } else {
-                            Ok(GameResult::LossPreDeducted(state.total_wagered, vec![]))
+                            Ok(GameResult::LossPreDeducted(state.total_wagered, logs))
                         }
                     }
                     Phase::Prison => {
@@ -610,10 +664,11 @@ impl CasinoGame for Roulette {
                         session.move_count += 1;
                         session.is_complete = true;
 
+                        let logs = generate_roulette_logs(&state, result, total_return);
                         if total_return > 0 {
-                            Ok(GameResult::Win(total_return, vec![]))
+                            Ok(GameResult::Win(total_return, logs))
                         } else {
-                            Ok(GameResult::LossPreDeducted(state.total_wagered, vec![]))
+                            Ok(GameResult::LossPreDeducted(state.total_wagered, logs))
                         }
                     }
                 }
@@ -749,10 +804,13 @@ impl CasinoGame for Roulette {
                 session.move_count += 1;
                 session.is_complete = true;
 
+                let logs = generate_roulette_logs(&state, result, total_return);
                 if total_return > 0 {
-                    Ok(GameResult::Win(total_return, vec![]))
+                    Ok(GameResult::Win(total_return, logs))
                 } else {
-                    Ok(GameResult::Loss(vec![]))
+                    // Total loss - use LossWithExtraDeduction since atomic batch
+                    // doesn't pre-deduct bets via ContinueWithUpdate
+                    Ok(GameResult::LossWithExtraDeduction(total_wager, logs))
                 }
             }
 

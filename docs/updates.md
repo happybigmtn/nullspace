@@ -1,5 +1,17 @@
 # nullspace Platform Updates
 
+## Mock to Real Consensus Migration Research (2025-12-18)
+
+Completed comprehensive research on best practices for migrating from mock/simulator blockchain environments to real consensus nodes. Research covers:
+- Local development with multi-node BFT consensus (Tendermint, Cosmos, Hyperledger patterns)
+- API compatibility and feature flag strategies for gradual migration
+- Block explorer architecture with WebSocket real-time updates and indexer patterns
+- Testing strategies including deterministic testing, integration testing, and performance benchmarking
+
+Full report: [blockchain_consensus_migration_research.md](./blockchain_consensus_migration_research.md)
+
+---
+
 ## Pattern Recognition Report (2025-12-17)
 
 Comprehensive pattern analysis of the on-chain casino platform completed.

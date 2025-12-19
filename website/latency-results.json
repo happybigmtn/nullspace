@@ -1,0 +1,103 @@
+{
+  "games": {
+    "blackjack": {
+      "bets": {
+        "DEAL": [
+          37.51848600000085
+        ],
+        "STAND": [
+          5.747276000001875
+        ],
+        "HIT": [
+          504.27693799999906
+        ]
+      },
+      "avgLatency": 182.51423333333392,
+      "minLatency": 5.747276000001875,
+      "maxLatency": 504.27693799999906,
+      "measurements": [
+        {
+          "betType": "DEAL",
+          "latencyMs": 37.51848600000085
+        },
+        {
+          "betType": "STAND",
+          "latencyMs": 5.747276000001875
+        },
+        {
+          "betType": "HIT",
+          "latencyMs": 504.27693799999906
+        }
+      ]
+    },
+    "baccarat": {
+      "bets": {
+        "PLAYER_DEAL": [
+          134.97127199999886
+        ]
+      },
+      "avgLatency": 134.97127199999886,
+      "minLatency": 134.97127199999886,
+      "maxLatency": 134.97127199999886,
+      "measurements": [
+        {
+          "betType": "PLAYER_DEAL",
+          "latencyMs": 134.97127199999886
+        }
+      ]
+    },
+    "craps": {
+      "bets": {
+        "PASS_ROLL": [
+          1034.4485489999934
+        ],
+        "FIELD_ROLL": [
+          1056.0159770000027
+        ]
+      },
+      "avgLatency": 1045.232262999998,
+      "minLatency": 1034.4485489999934,
+      "maxLatency": 1056.0159770000027,
+      "measurements": [
+        {
+          "betType": "PASS_ROLL",
+          "latencyMs": 1034.4485489999934
+        },
+        {
+          "betType": "FIELD_ROLL",
+          "latencyMs": 1056.0159770000027
+        }
+      ]
+    },
+    "hilo": {
+      "bets": {
+        "HIGHER": [
+          506.8253960000002
+        ],
+        "LOWER": [
+          503.30146799999056
+        ]
+      },
+      "avgLatency": 505.0634319999954,
+      "minLatency": 503.30146799999056,
+      "maxLatency": 506.8253960000002,
+      "measurements": [
+        {
+          "betType": "HIGHER",
+          "latencyMs": 506.8253960000002
+        },
+        {
+          "betType": "LOWER",
+          "latencyMs": 503.30146799999056
+        }
+      ]
+    }
+  },
+  "summary": {
+    "totalTests": 8,
+    "avgLatency": 472.88817024999844,
+    "minLatency": 5.747276000001875,
+    "maxLatency": 1056.0159770000027,
+    "p95Latency": 1056.0159770000027
+  }
+}

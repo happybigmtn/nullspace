@@ -10,6 +10,14 @@ homepage = "https://nullspace.xyz"
 repository = "https://github.com/commonwarexyz/nullspace/tree/main/node"
 documentation = "https://docs.rs/nullspace-node"
 
+[[bin]]
+name = "generate-keys"
+path = "src/bin/generate_keys.rs"
+
+[[bin]]
+name = "test-transactions"
+path = "src/bin/test_transactions.rs"
+
 [dependencies]
 nullspace-types = { workspace = true }
 nullspace-client = { workspace = true }
@@ -40,3 +48,5 @@ serde = { workspace = true, features = ["derive"] }
 serde_yaml = { workspace = true }
 rayon = { workspace = true }
 url = { workspace = true }
+tokio = { workspace = true }
+reqwest = { workspace = true }

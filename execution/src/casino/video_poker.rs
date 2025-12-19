@@ -233,6 +233,9 @@ impl CasinoGame for VideoPoker {
         let hand = evaluate_hand(&cards);
         let multiplier = payout_multiplier(hand);
 
+        // Generate completion logs for frontend display
+        let logs = vec![format!("RESULT:{}:{}", hand as u8, multiplier)];
+
         if multiplier > 0 {
             // Pay tables are expressed "to 1" (winnings). Our executor expects TOTAL RETURN.
             let base_winnings = session.bet.saturating_mul(multiplier.saturating_add(1));
@@ -242,9 +245,9 @@ impl CasinoGame for VideoPoker {
             } else {
                 base_winnings
             };
-            Ok(GameResult::Win(final_winnings, vec![]))
+            Ok(GameResult::Win(final_winnings, logs))
         } else {
-            Ok(GameResult::Loss(vec![]))
+            Ok(GameResult::Loss(logs))
         }
     }
 }

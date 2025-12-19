@@ -1,9 +1,43 @@
 import { Dispatch, SetStateAction, MutableRefObject, useCallback } from 'react';
 import { GameState, CrapsBet, PlayerStats, GameType, AutoPlayDraft } from '../../types';
-import { crapsBetCost, crapsBuyCommission, rollDie, calculateCrapsExposure, resolveCrapsBets } from '../../utils/gameUtils';
+import { crapsBetCost, crapsBuyCommission, calculateCrapsExposure } from '../../utils/gameUtils';
 import { CasinoChainService } from '../../services/CasinoChainService';
 
-const MAX_GRAPH_POINTS = 100;
+/**
+ * Maps frontend bet type strings to backend numeric values
+ * For HARDWAY, the specific hardway type (8-11) is determined by target
+ */
+const CRAPS_BET_TYPE_MAP: Record<CrapsBet['type'], number> = {
+  'PASS': 0,
+  'DONT_PASS': 1,
+  'COME': 2,
+  'DONT_COME': 3,
+  'FIELD': 4,
+  'YES': 5,
+  'NO': 6,
+  'NEXT': 7,
+  'HARDWAY': 8, // Base value, refined based on target
+  'FIRE': 12,
+  'BUY': 13,
+  'ATS_SMALL': 15,
+  'ATS_TALL': 16,
+  'ATS_ALL': 17,
+};
+
+/**
+ * Get the numeric bet type, handling HARDWAY special case
+ */
+const getBetTypeNum = (bet: CrapsBet): number => {
+  let betTypeValue = CRAPS_BET_TYPE_MAP[bet.type];
+  // For HARDWAY, determine specific type based on target
+  if (bet.type === 'HARDWAY' && bet.target) {
+    if (bet.target === 4) betTypeValue = 8;
+    else if (bet.target === 6) betTypeValue = 9;
+    else if (bet.target === 8) betTypeValue = 10;
+    else if (bet.target === 10) betTypeValue = 11;
+  }
+  return betTypeValue;
+};
 
 interface UseCrapsProps {
   gameState: GameState;
@@ -19,11 +53,10 @@ interface UseCrapsProps {
   autoPlayDraftRef: MutableRefObject<AutoPlayDraft | null>;
 }
 
-export const useCraps = ({ 
-  gameState, 
-  setGameState, 
+export const useCraps = ({
+  gameState,
+  setGameState,
   stats,
-  setStats,
   chainService,
   currentSessionIdRef,
   isPendingRef,
@@ -85,11 +118,11 @@ export const useCraps = ({
       let bets = [...gameState.crapsBets];
       if (type === 'PASS') bets = bets.filter(b => b.type !== 'DONT_PASS' || !b.local);
       if (type === 'DONT_PASS') bets = bets.filter(b => b.type !== 'PASS' || !b.local);
-      setGameState(prev => ({ 
-          ...prev, 
-          crapsUndoStack: [...prev.crapsUndoStack, prev.crapsBets], 
-          crapsBets: [...bets, { type, amount: prev.bet, target, status: (type==='COME'||type==='DONT_COME')?'PENDING':'ON', local: true }], 
-          message: `BET ${type}`, 
+      setGameState(prev => ({
+          ...prev,
+          crapsUndoStack: [...prev.crapsUndoStack, prev.crapsBets],
+          crapsBets: [...bets, { type, amount: prev.bet, target, status: (type==='COME'||type==='DONT_COME')?'PENDING':'ON', local: true }],
+          message: `BET ${type}`,
           crapsInputMode: 'NONE',
           sessionWager: prev.sessionWager + placementCost // Track wager
       }));
@@ -222,7 +255,7 @@ export const useCraps = ({
           if (selectionIndex < 0 || selectionIndex >= gameState.crapsOddsCandidates.length) return;
           const targetBetIndex = gameState.crapsOddsCandidates[selectionIndex];
           setGameState(prev => ({ ...prev, crapsOddsCandidates: null })); // Clear selection mode
-          
+
           await executeAddOdds(targetBetIndex);
           return;
       }
@@ -303,42 +336,47 @@ export const useCraps = ({
          }
 
          autoPlayDraftRef.current = { type: GameType.CRAPS, crapsBets: betsToPlace };
-         console.log('[useTerminalGame] rollCraps - No active session, starting new craps game (auto-roll queued)');
+         console.log('[useCraps] rollCraps - No active session, starting new craps game (auto-roll queued)');
          setGameState(prev => ({ ...prev, message: 'STARTING NEW SESSION...' }));
          startGame(GameType.CRAPS);
          return;
        }
-       
-       // On-chain with session: Send Move 0 (Roll)
+
+       // On-chain with session: Place any new local bets, then roll dice
        if (isOnChain && chainService && hasSession) {
            if (isPendingRef.current) return;
-           
-           // If we have local staged bets to place mid-game, we must send them as Move 2 (PlaceBet) first?
-           // The backend might support bundling, but typically roll is a separate move.
-           // Actually, Craps implementation usually allows placing bets via Move 2, then Roll via Move 0.
-           // But if we have staged bets, we should probably submit them first.
-           // However, the current UI flow assumes "Roll" commits the bets.
-           // Let's assume for now we just Roll, but if we have staged bets, we probably need to handle them.
-           // The previous code in useTerminalGame didn't seem to have complex logic for "Add bets then roll" in one go for existing session.
-           // It probably assumed bets are already on chain or we are just rolling?
-           // Wait, useTerminalGame's `rollCraps` logic:
-           /*
-            if (isOnChain && chainService && currentSessionIdRef.current) {
-                // ...
-                // If we have staged bets, we might need to send them.
-                // The snippet I read earlier was for !hasSession.
-                // For hasSession, check lines 4670+ in useTerminalGame.
-           */
-           // Let's assume simpler logic for now or read file if needed.
-           // The snippet ended before on-chain session logic.
-           // I'll assume standard Roll (Move 0).
-           
+
            try {
              isPendingRef.current = true;
-             // If we have staged bets, we might want to send them? 
-             // Ideally we should warn if user added bets locally but they aren't sent.
-             // But let's just send Roll for now.
-             const result = await chainService.sendMove(currentSessionIdRef.current!, new Uint8Array([0]));
+
+             // First, place any staged local bets on chain (command 0: place bet)
+             // Each bet is: [0, bet_type, target, amount:u64 BE]
+             for (const bet of stagedLocalBets) {
+               const betTypeNum = getBetTypeNum(bet);
+
+               // For HARDWAY bets, target is encoded in bet type, so send 0 as target
+               const targetToSend = bet.type === 'HARDWAY' ? 0 : (bet.target ?? 0);
+
+               const payload = new Uint8Array(11);
+               payload[0] = 0; // Command 0: Place bet
+               payload[1] = betTypeNum;
+               payload[2] = targetToSend;
+               new DataView(payload.buffer).setBigUint64(3, BigInt(bet.amount), false);
+
+               const betResult = await chainService.sendMove(currentSessionIdRef.current!, payload);
+               if (betResult.txHash) setLastTxSig(betResult.txHash);
+             }
+
+             // Mark local bets as committed to chain
+             if (stagedLocalBets.length > 0) {
+               setGameState(prev => ({
+                 ...prev,
+                 crapsBets: prev.crapsBets.map(b => b.local ? { ...b, local: false } : b),
+               }));
+             }
+
+             // Then roll dice (command 2)
+             const result = await chainService.sendMove(currentSessionIdRef.current!, new Uint8Array([2]));
              if (result.txHash) setLastTxSig(result.txHash);
              setGameState(prev => ({ ...prev, message: 'ROLLING...' }));
            } catch (e) {
@@ -349,55 +387,10 @@ export const useCraps = ({
            return;
        }
 
-       // Local Mode
-       const d1 = rollDie();
-       const d2 = rollDie();
-       const total = d1 + d2;
-       
-       // Calculate exposure/pnl
-       const betsToResolve = gameState.crapsBets.length > 0 ? gameState.crapsBets : gameState.crapsLastRoundBets;
-       // Note: we should use the bets we just decided to place (betsToPlace) + existing active bets?
-       // For local mode, `gameState.crapsBets` contains everything "on the table".
-       
-       const { pnl, remainingBets, results } = resolveCrapsBets([d1, d2], gameState.crapsPoint, gameState.crapsBets);
-       
-       let newPoint = gameState.crapsPoint;
-       let epoch = gameState.crapsEpochPointEstablished;
-       
-       if (gameState.crapsPoint === null) {
-           if (total === 4 || total === 5 || total === 6 || total === 8 || total === 9 || total === 10) {
-               newPoint = total;
-               epoch = true;
-           }
-       } else {
-           if (total === gameState.crapsPoint || total === 7) {
-               newPoint = null;
-               epoch = false;
-           }
-       }
-       
-       const summary = `Rolled ${d1}-${d2} (${total}). ${pnl >= 0 ? '+' : '-'}$${Math.abs(pnl)}`;
-       
-       setStats(prev => ({
-          ...prev,
-          chips: prev.chips + pnl,
-          history: [...prev.history, summary, ...results],
-          pnlByGame: { ...prev.pnlByGame, [GameType.CRAPS]: (prev.pnlByGame[GameType.CRAPS] || 0) + pnl },
-          pnlHistory: [...prev.pnlHistory, (prev.pnlHistory[prev.pnlHistory.length - 1] || 0) + pnl].slice(-MAX_GRAPH_POINTS)
-       }));
-       
-       setGameState(prev => ({
-           ...prev,
-           dice: [d1, d2],
-           crapsPoint: newPoint,
-           crapsEpochPointEstablished: epoch,
-           crapsLastRoundBets: betsToPlace.length > 0 ? betsToPlace : prev.crapsLastRoundBets,
-           crapsBets: remainingBets,
-           message: `ROLLED ${total}`,
-           lastResult: pnl
-       }));
-       
-  }, [gameState.crapsBets, gameState.crapsLastRoundBets, gameState.crapsPoint, currentSessionIdRef, chainService, isOnChain, isPendingRef, startGame, setGameState, setStats, stats.chips, totalCommittedCraps, setLastTxSig, autoPlayDraftRef]);
+       // Local mode not supported - require on-chain session
+       setGameState(prev => ({ ...prev, message: 'OFFLINE - START BACKEND' }));
+
+  }, [gameState.crapsBets, gameState.crapsLastRoundBets, gameState.crapsPoint, currentSessionIdRef, chainService, isOnChain, isPendingRef, startGame, setGameState, stats.chips, totalCommittedCraps, setLastTxSig, autoPlayDraftRef]);
 
   return {
     placeCrapsBet,
