@@ -635,9 +635,18 @@ const crapsDontPassOddsPayout = (point: number, oddsAmount: number): number => {
 const applyCrapsCommission1Pct = (winnings: number): number => winnings - Math.floor(winnings / 100);
 
 // YES (Place) bet payout (profit only) with a 1% commission on winnings - matches on-chain rounding
+// Supports all targets 2-12 except 7 (variation from traditional place bets)
 const crapsYesPayout = (target: number, amount: number): number => {
     let trueOdds = 0;
     switch (target) {
+        case 2:
+        case 12:
+            trueOdds = amount * 6; // 6:1
+            break;
+        case 3:
+        case 11:
+            trueOdds = amount * 3; // 3:1
+            break;
         case 4:
         case 10:
             trueOdds = amount * 2; // 2:1
@@ -657,9 +666,18 @@ const crapsYesPayout = (target: number, amount: number): number => {
 };
 
 // NO (Lay) bet payout (profit only) with a 1% commission on winnings - matches on-chain rounding
+// Supports all targets 2-12 except 7 (variation from traditional lay bets)
 const crapsNoPayout = (target: number, amount: number): number => {
     let trueOdds = 0;
     switch (target) {
+        case 2:
+        case 12:
+            trueOdds = Math.floor(amount / 6); // 1:6
+            break;
+        case 3:
+        case 11:
+            trueOdds = Math.floor(amount / 3); // 1:3
+            break;
         case 4:
         case 10:
             trueOdds = Math.floor(amount / 2); // 1:2
@@ -676,16 +694,6 @@ const crapsNoPayout = (target: number, amount: number): number => {
             trueOdds = amount;
     }
     return applyCrapsCommission1Pct(trueOdds);
-};
-
-// BUY bet payout (profit only) - matches on-chain (commission charged separately at placement)
-const crapsBuyPayout = (target: number, amount: number): number => {
-    switch (target) {
-        case 4: case 10: return amount * 2; // 2:1
-        case 5: case 9: return Math.floor((amount * 3) / 2); // 3:2
-        case 6: case 8: return Math.floor((amount * 6) / 5); // 6:5
-        default: return 0;
-    }
 };
 
 // NEXT (Hop) bet payout (profit only) with a 1% commission on winnings - matches on-chain rounding
@@ -746,16 +754,8 @@ const atsPayoutTo1 = (type: CrapsBet['type']): number => {
     return 0;
 };
 
-// Calculate BUY bet commission (5% rounded up)
-export const crapsBuyCommission = (amount: number): number => {
-    return Math.ceil(amount * 0.05);
-};
-
-// Calculate total cost to place a craps bet (includes commission for BUY bets)
+// Calculate total cost to place a craps bet
 export const crapsBetCost = (bet: CrapsBet): number => {
-    if (bet.type === 'BUY') {
-        return bet.amount + crapsBuyCommission(bet.amount);
-    }
     return bet.amount + (bet.oddsAmount || 0);
 };
 
@@ -814,7 +814,9 @@ export const calculateCrapsExposure = (total: number, point: number | null, bets
                    } else if (total === bet.target) loseAmount = bet.amount + (bet.oddsAmount || 0);
                }
          } else if (bet.type === 'FIELD') {
-              if ([2,12].includes(total)) winAmount = bet.amount * 2;
+              // Field pays 2:1 on 2, 3:1 on 12, 1:1 on 3/4/9/10/11
+              if (total === 2) winAmount = bet.amount * 2;
+              else if (total === 12) winAmount = bet.amount * 3;
               else if ([3,4,9,10,11].includes(total)) winAmount = bet.amount;
               else loseAmount = bet.amount;
          } else if (bet.type === 'YES') {
@@ -823,9 +825,6 @@ export const calculateCrapsExposure = (total: number, point: number | null, bets
          } else if (bet.type === 'NO') {
               if (total === 7) winAmount = crapsNoPayout(bet.target!, bet.amount);
               else if (bet.target === total) loseAmount = bet.amount;
-         } else if (bet.type === 'BUY') {
-              if (bet.target === total) winAmount = crapsBuyPayout(bet.target!, bet.amount);
-              else if (total === 7) loseAmount = bet.amount;
          } else if (bet.type === 'NEXT') {
               if (total === bet.target) winAmount = crapsNextPayout(bet.target, bet.amount);
               else loseAmount = bet.amount;
@@ -935,7 +934,9 @@ export const resolveCrapsBets = (
                 }
             }
         } else if (bet.type === 'FIELD') {
-            if ([2, 12].includes(total)) winAmount = bet.amount * 2;
+            // Field pays 2:1 on 2, 3:1 on 12, 1:1 on 3/4/9/10/11
+            if (total === 2) winAmount = bet.amount * 2;
+            else if (total === 12) winAmount = bet.amount * 3;
             else if ([3, 4, 9, 10, 11].includes(total)) winAmount = bet.amount;
             else loseAmount = bet.amount;
             resolved = true;
@@ -945,9 +946,6 @@ export const resolveCrapsBets = (
         } else if (bet.type === 'NO') {
             if (total === 7) { winAmount = crapsNoPayout(bet.target!, bet.amount); resolved = true; }
             else if (bet.target === total) { loseAmount = bet.amount; resolved = true; }
-        } else if (bet.type === 'BUY') {
-            if (bet.target === total) { winAmount = crapsBuyPayout(bet.target!, bet.amount); resolved = true; }
-            else if (total === 7) { loseAmount = bet.amount; resolved = true; }
         } else if (bet.type === 'NEXT') {
             if (total === bet.target) { winAmount = crapsNextPayout(bet.target, bet.amount); resolved = true; }
             else { loseAmount = bet.amount; resolved = true; }
@@ -974,6 +972,17 @@ export const resolveCrapsBets = (
                 } else {
                     remainingBets.push(bet);
                 }
+            }
+        } else if (bet.type === 'FIRE' || bet.type === 'MUGGSY' || bet.type === 'DIFF_DOUBLES' ||
+                   bet.type === 'RIDE_LINE' || bet.type === 'REPLAY' || bet.type === 'HOT_ROLLER' || bet.type === 'REPEATER') {
+            // All epoch bonus bets lose on 7-out (point is ON and 7 is rolled)
+            const sevenOut = total === 7 && point !== null;
+            if (sevenOut) {
+                loseAmount = bet.amount;
+                resolved = true;
+            } else {
+                // Not resolved, keep the bet active
+                remainingBets.push(bet);
             }
         }
 

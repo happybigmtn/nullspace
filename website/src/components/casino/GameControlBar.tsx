@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { MobileDrawer } from './MobileDrawer';
 
 interface Action {
+    type?: 'button' | 'divider';
     label: string;
-    onClick: () => void;
+    onClick?: () => void;
     disabled?: boolean;
     active?: boolean;
     className?: string; // Optional custom class
@@ -91,21 +92,27 @@ export const GameControlBar: React.FC<GameControlBarProps> = ({
             {/* Desktop: Centered Row */}
             <div className="hidden sm:flex items-center gap-4">
                 {children}
-                {secondaryActions.map((action, i) => (
-                    <button
-                        key={i}
-                        type="button"
-                        onClick={action.onClick}
-                        disabled={action.disabled}
-                        className={`h-12 px-4 border rounded text-sm font-bold tracking-widest transition-all ${
-                            action.active
-                                ? 'border-terminal-green bg-terminal-green/20 text-terminal-green shadow-[0_0_10px_rgba(74,222,128,0.2)]'
-                                : 'border-gray-700 bg-gray-900 text-gray-400 hover:border-gray-500 hover:text-white'
-                        } ${action.disabled ? 'opacity-50 cursor-not-allowed' : ''} ${action.className || ''}`}
-                    >
-                        {action.label}
-                    </button>
-                ))}
+                {secondaryActions.map((action, i) =>
+                    action.type === 'divider' ? (
+                        <span key={i} className="text-gray-600 text-xs tracking-widest font-mono px-1">
+                            {action.label}
+                        </span>
+                    ) : (
+                        <button
+                            key={i}
+                            type="button"
+                            onClick={action.onClick}
+                            disabled={action.disabled}
+                            className={`h-12 px-4 border rounded text-sm font-bold tracking-widest transition-all ${
+                                action.active
+                                    ? 'border-terminal-green bg-terminal-green/20 text-terminal-green shadow-[0_0_10px_rgba(74,222,128,0.2)]'
+                                    : 'border-gray-700 bg-gray-900 text-gray-400 hover:border-gray-500 hover:text-white'
+                            } ${action.disabled ? 'opacity-50 cursor-not-allowed' : ''} ${action.className || ''}`}
+                        >
+                            {action.label}
+                        </button>
+                    )
+                )}
             </div>
 
             {/* Primary Action (Always Right on Mobile, Right/End on Desktop) */}
@@ -145,25 +152,29 @@ export const GameControlBar: React.FC<GameControlBarProps> = ({
                             </button>
                         </div>
                         <div className="grid grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto">
-                            {secondaryActions.map((action, i) => (
-                                <button
-                                    key={i}
-                                    type="button"
-                                    onClick={() => {
-                                        action.onClick();
-                                        // Optional: keep open for rapid betting? No, user likely wants to bet then deal.
-                                        // Actually, for Roulette multiple bets are common. Let's keep it open.
-                                    }}
-                                    disabled={action.disabled}
-                                    className={`h-14 border rounded flex flex-col items-center justify-center gap-1 ${
-                                        action.active
-                                            ? 'border-terminal-green bg-terminal-green/10 text-terminal-green'
-                                            : 'border-gray-700 bg-gray-900 text-gray-300 hover:bg-gray-800'
-                                    } ${action.disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                >
-                                    <span className="font-bold text-xs tracking-widest">{action.label}</span>
-                                </button>
-                            ))}
+                            {secondaryActions.map((action, i) =>
+                                action.type === 'divider' ? (
+                                    <div key={i} className="col-span-2 text-gray-500 text-xs tracking-widest font-mono text-center py-1 border-b border-gray-800">
+                                        {action.label}
+                                    </div>
+                                ) : (
+                                    <button
+                                        key={i}
+                                        type="button"
+                                        onClick={() => {
+                                            action.onClick?.();
+                                        }}
+                                        disabled={action.disabled}
+                                        className={`h-14 border rounded flex flex-col items-center justify-center gap-1 ${
+                                            action.active
+                                                ? 'border-terminal-green bg-terminal-green/10 text-terminal-green'
+                                                : 'border-gray-700 bg-gray-900 text-gray-300 hover:bg-gray-800'
+                                        } ${action.disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    >
+                                        <span className="font-bold text-xs tracking-widest">{action.label}</span>
+                                    </button>
+                                )
+                            )}
                         </div>
                     </div>
                 </div>

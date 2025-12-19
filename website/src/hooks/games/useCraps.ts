@@ -1,11 +1,17 @@
 import { Dispatch, SetStateAction, MutableRefObject, useCallback } from 'react';
 import { GameState, CrapsBet, PlayerStats, GameType, AutoPlayDraft } from '../../types';
-import { crapsBetCost, crapsBuyCommission, calculateCrapsExposure } from '../../utils/gameUtils';
+import { crapsBetCost, calculateCrapsExposure } from '../../utils/gameUtils';
 import { CasinoChainService } from '../../services/CasinoChainService';
+
+// ATS subtype values stored in target field
+const ATS_SMALL = 0;
+const ATS_TALL = 1;
+const ATS_ALL = 2;
 
 /**
  * Maps frontend bet type strings to backend numeric values
- * For HARDWAY, the specific hardway type (8-11) is determined by target
+ * HARDWAY uses target for number (4/6/8/10)
+ * ATS uses target for type (0=Small, 1=Tall, 2=All)
  */
 const CRAPS_BET_TYPE_MAP: Record<CrapsBet['type'], number> = {
   'PASS': 0,
@@ -16,27 +22,34 @@ const CRAPS_BET_TYPE_MAP: Record<CrapsBet['type'], number> = {
   'YES': 5,
   'NO': 6,
   'NEXT': 7,
-  'HARDWAY': 8, // Base value, refined based on target
-  'FIRE': 12,
-  'BUY': 13,
-  'ATS_SMALL': 15,
-  'ATS_TALL': 16,
-  'ATS_ALL': 17,
+  'HARDWAY': 8,  // target: 4, 6, 8, or 10
+  'FIRE': 9,
+  'ATS_SMALL': 10, // target: 0
+  'ATS_TALL': 10,  // target: 1
+  'ATS_ALL': 10,   // target: 2
+  'MUGGSY': 11,
+  'DIFF_DOUBLES': 12,
+  'RIDE_LINE': 13,
+  'REPLAY': 14,
+  'HOT_ROLLER': 15,
+  'REPEATER': 16, // target: 2-6 or 8-12
 };
 
 /**
- * Get the numeric bet type, handling HARDWAY special case
+ * Get the numeric bet type and adjust target for ATS bets
  */
 const getBetTypeNum = (bet: CrapsBet): number => {
-  let betTypeValue = CRAPS_BET_TYPE_MAP[bet.type];
-  // For HARDWAY, determine specific type based on target
-  if (bet.type === 'HARDWAY' && bet.target) {
-    if (bet.target === 4) betTypeValue = 8;
-    else if (bet.target === 6) betTypeValue = 9;
-    else if (bet.target === 8) betTypeValue = 10;
-    else if (bet.target === 10) betTypeValue = 11;
-  }
-  return betTypeValue;
+  return CRAPS_BET_TYPE_MAP[bet.type];
+};
+
+/**
+ * Get the target value to send to backend, handling ATS subtypes
+ */
+const getTargetForBackend = (bet: CrapsBet): number => {
+  if (bet.type === 'ATS_SMALL') return ATS_SMALL;
+  if (bet.type === 'ATS_TALL') return ATS_TALL;
+  if (bet.type === 'ATS_ALL') return ATS_ALL;
+  return bet.target ?? 0;
 };
 
 interface UseCrapsProps {
@@ -89,7 +102,7 @@ export const useCraps = ({
 
       const committed = totalCommittedCraps();
       const betAmount = gameState.bet;
-      const placementCost = type === 'BUY' ? betAmount + crapsBuyCommission(betAmount) : betAmount;
+      const placementCost = betAmount;
 
       if (type === 'FIRE' && gameState.crapsRollHistory.length > 0) {
           setGameState(prev => ({ ...prev, message: 'BET ONLY BEFORE FIRST ROLL' }));
@@ -169,8 +182,9 @@ export const useCraps = ({
       // Map input mode to bet type
       const betType = mode as CrapsBet['type'];
       // Validate number for each type
-      if (mode === 'YES' || mode === 'NO' || mode === 'BUY') {
-          if (![4, 5, 6, 8, 9, 10].includes(num)) return;
+      if (mode === 'YES' || mode === 'NO') {
+          // Allow all totals 2-12 except 7 (variation from traditional place/lay)
+          if (num < 2 || num > 12 || num === 7) return;
       } else if (mode === 'NEXT') {
           if (num < 2 || num > 12) return;
       } else if (mode === 'HARDWAY') {
@@ -187,15 +201,18 @@ export const useCraps = ({
           return;
       }
 
-      const currentOdds = targetBet.oddsAmount || 0;
+      // Total odds = confirmed (chain) + pending (local)
+      const confirmedOdds = targetBet.oddsAmount || 0;
+      const pendingOdds = targetBet.localOddsAmount || 0;
+      const totalCurrentOdds = confirmedOdds + pendingOdds;
       const maxOdds = targetBet.amount * 5; // 5x cap
 
-      if (currentOdds >= maxOdds) {
+      if (totalCurrentOdds >= maxOdds) {
           setGameState(prev => ({ ...prev, message: "MAX ODDS REACHED (5X)" }));
           return;
       }
 
-      const oddsToAdd = Math.min(gameState.bet, maxOdds - currentOdds);
+      const oddsToAdd = Math.min(gameState.bet, maxOdds - totalCurrentOdds);
 
       if (oddsToAdd <= 0) {
           setGameState(prev => ({ ...prev, message: "MAX ODDS REACHED" }));
@@ -208,10 +225,11 @@ export const useCraps = ({
           return;
       }
 
-      // Update local state optimistically
+      // Update localOddsAmount (pending) - NOT oddsAmount (confirmed)
+      // The confirmed oddsAmount will be updated from chain state
       setGameState(prev => {
           const bets = [...prev.crapsBets];
-          bets[idx] = { ...bets[idx], oddsAmount: currentOdds + oddsToAdd };
+          bets[idx] = { ...bets[idx], localOddsAmount: pendingOdds + oddsToAdd };
           return {
               ...prev,
               crapsBets: bets,
@@ -232,20 +250,21 @@ export const useCraps = ({
               const result = await chainService.sendMove(currentSessionIdRef.current, payload);
               if (result.txHash) setLastTxSig(result.txHash);
 
-              setGameState(prev => ({ ...prev, message: `ODDS +$${oddsToAdd}` }));
+              // Keep pending until chain confirms - don't update message here
+              // Chain state update will clear localOddsAmount and set oddsAmount
           } catch (e) {
               console.error('[addCrapsOdds] Failed to add odds:', e);
               // Revert local state on failure
               setGameState(prev => {
                   const bets = [...prev.crapsBets];
-                  bets[idx] = { ...bets[idx], oddsAmount: currentOdds };
+                  bets[idx] = { ...bets[idx], localOddsAmount: pendingOdds };
                   return { ...prev, crapsBets: bets, message: "ODDS FAILED" };
               });
           } finally {
               isPendingRef.current = false;
           }
       } else {
-          setGameState(prev => ({ ...prev, message: `ODDS +$${oddsToAdd}` }));
+          setGameState(prev => ({ ...prev, message: `ODDS +$${oddsToAdd} (PENDING)` }));
       }
   }, [gameState.crapsBets, gameState.crapsPoint, gameState.bet, stats.chips, chainService, currentSessionIdRef, isPendingRef, totalCommittedCraps, setGameState, setLastTxSig]);
 
@@ -290,26 +309,13 @@ export const useCraps = ({
        const hasSession = !!currentSessionIdRef.current;
        const stagedLocalBets = gameState.crapsBets.filter(b => b.local === true);
 
-       const normalizeRebetBets = (bets: CrapsBet[]): CrapsBet[] =>
-         bets
-           .filter(b => b.type !== 'COME' && b.type !== 'DONT_COME')
-           .map(b => ({
-             type: b.type,
-             amount: b.amount,
-             target: b.target,
-             status: 'ON' as const,
-             local: true,
-           }));
-
-       const fallbackRebetBets =
-         stagedLocalBets.length > 0 ? [] : normalizeRebetBets(gameState.crapsLastRoundBets);
-
-       const betsToPlace = stagedLocalBets.length > 0 ? stagedLocalBets : (!hasSession ? fallbackRebetBets : []);
+       // No auto-rebet - only use explicitly staged bets
+       const betsToPlace = stagedLocalBets;
 
        const hasOutstandingBets = hasSession && (gameState.crapsBets.some(b => !b.local) || gameState.crapsPoint !== null);
 
        if (betsToPlace.length === 0 && !hasOutstandingBets) {
-         setGameState(prev => ({ ...prev, message: gameState.crapsLastRoundBets.length > 0 ? 'REBET (T) OR PLACE BET' : 'PLACE BET FIRST' }));
+         setGameState(prev => ({ ...prev, message: 'PLACE BET FIRST' }));
          return;
        }
 
@@ -317,22 +323,6 @@ export const useCraps = ({
          if (betsToPlace.length === 0) {
            setGameState(prev => ({ ...prev, message: 'PLACE BET FIRST' }));
            return;
-         }
-
-         if (stagedLocalBets.length === 0 && fallbackRebetBets.length > 0) {
-           const committed = totalCommittedCraps();
-           const totalRequired = fallbackRebetBets.reduce((a, b) => a + crapsBetCost(b), 0);
-           if (stats.chips < committed + totalRequired) {
-             setGameState(prev => ({ ...prev, message: 'INSUFFICIENT FUNDS' }));
-             return;
-           }
-           setGameState(prev => ({
-             ...prev,
-             crapsUndoStack: [...prev.crapsUndoStack, prev.crapsBets],
-             crapsBets: [...prev.crapsBets, ...fallbackRebetBets],
-             sessionWager: prev.sessionWager + totalRequired,
-             message: 'REBET PLACED',
-           }));
          }
 
          autoPlayDraftRef.current = { type: GameType.CRAPS, crapsBets: betsToPlace };
@@ -353,9 +343,7 @@ export const useCraps = ({
              // Each bet is: [0, bet_type, target, amount:u64 BE]
              for (const bet of stagedLocalBets) {
                const betTypeNum = getBetTypeNum(bet);
-
-               // For HARDWAY bets, target is encoded in bet type, so send 0 as target
-               const targetToSend = bet.type === 'HARDWAY' ? 0 : (bet.target ?? 0);
+               const targetToSend = getTargetForBackend(bet);
 
                const payload = new Uint8Array(11);
                payload[0] = 0; // Command 0: Place bet

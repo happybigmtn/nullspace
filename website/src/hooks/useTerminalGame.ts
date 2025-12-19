@@ -253,26 +253,26 @@ const crapsBetToNumeric = (bet: CrapsBet): {betType: number, target: number, amo
     'YES': 5,
     'NO': 6,
     'NEXT': 7,
-    'HARDWAY': 8, // Will be refined based on target
-    'FIRE': 12,
-    'BUY': 13,
-    'ATS_SMALL': 15,
-    'ATS_TALL': 16,
-    'ATS_ALL': 17,
+    'HARDWAY': 8, // target: 4, 6, 8, or 10
+    'FIRE': 9,
+    'ATS_SMALL': 10, // target: 0
+    'ATS_TALL': 10,  // target: 1
+    'ATS_ALL': 10,   // target: 2
+    'MUGGSY': 11,
+    'DIFF_DOUBLES': 12,
+    'RIDE_LINE': 13,
+    'REPLAY': 14,
+    'HOT_ROLLER': 15,
+    'REPEATER': 16, // target: 2-6 or 8-12
   };
 
-  let betTypeValue = BET_TYPE_MAP[bet.type];
+  const betTypeValue = BET_TYPE_MAP[bet.type];
 
-  // For HARDWAY bets, determine specific hardway type based on target
-  if (bet.type === 'HARDWAY' && bet.target) {
-    if (bet.target === 4) betTypeValue = 8;       // Hardway4
-    else if (bet.target === 6) betTypeValue = 9;  // Hardway6
-    else if (bet.target === 8) betTypeValue = 10; // Hardway8
-    else if (bet.target === 10) betTypeValue = 11; // Hardway10
-  }
-
-  // Some bet types encode their target in the bet type value (e.g., hardways).
-  const target = bet.type === 'HARDWAY' ? 0 : (bet.target ?? 0);
+  // Get target for backend - ATS types use special target values
+  let target = bet.target ?? 0;
+  if (bet.type === 'ATS_SMALL') target = 0;
+  else if (bet.type === 'ATS_TALL') target = 1;
+  else if (bet.type === 'ATS_ALL') target = 2;
 
   return { betType: betTypeValue, target, amount: bet.amount };
 };
@@ -328,10 +328,12 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
 	    dice: [],
 	    crapsPoint: null,
 	    crapsEpochPointEstablished: false,
+	    crapsMadePointsMask: 0,
 	    crapsBets: [],
 	    crapsUndoStack: [],
 	    crapsInputMode: 'NONE',
     crapsRollHistory: [],
+    crapsEventLog: [],
     crapsLastRoundBets: [],
     crapsOddsCandidates: null,
     rouletteBets: [],
@@ -2319,6 +2321,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
         let d2: number;
         let mainPoint: number;
         let epochPointEstablished: boolean;
+        let madePointsMask: number;
         let betCount: number;
         let betsOffset: number;
 
@@ -2326,6 +2329,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
           mainPoint = stateBlob[2];
           d1 = stateBlob[3];
           d2 = stateBlob[4];
+          madePointsMask = stateBlob[5] ?? 0;
           epochPointEstablished = stateBlob[6] === 1;
           betCount = stateBlob[7];
           betsOffset = 8;
@@ -2333,15 +2337,16 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
           mainPoint = stateBlob[2];
           d1 = stateBlob[3];
           d2 = stateBlob[4];
-          const madePointsMask = stateBlob[5] ?? 0;
+          madePointsMask = stateBlob[5] ?? 0;
           epochPointEstablished = stateBlob[1] === 1 || mainPoint > 0 || madePointsMask !== 0;
           betCount = stateBlob[6];
           betsOffset = 7;
         } else {
-          // Legacy fallback
+          // Legacy fallback (no madePointsMask field)
           mainPoint = stateBlob[1];
           d1 = stateBlob[2];
           d2 = stateBlob[3];
+          madePointsMask = 0;
           epochPointEstablished = stateBlob[0] === 1 || mainPoint > 0;
           betCount = stateBlob[4];
           betsOffset = 5;
@@ -2355,12 +2360,15 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
         const BET_TYPE_REVERSE: Record<number, CrapsBet['type']> = {
           0: 'PASS', 1: 'DONT_PASS', 2: 'COME', 3: 'DONT_COME',
           4: 'FIELD', 5: 'YES', 6: 'NO', 7: 'NEXT',
-          8: 'HARDWAY', 9: 'HARDWAY', 10: 'HARDWAY', 11: 'HARDWAY',
-          12: 'FIRE',
-          13: 'BUY',
-          15: 'ATS_SMALL',
-          16: 'ATS_TALL',
-          17: 'ATS_ALL',
+          8: 'HARDWAY',
+          9: 'FIRE',
+          10: 'ATS_SMALL', // Will be refined based on target
+          11: 'MUGGSY',
+          12: 'DIFF_DOUBLES',
+          13: 'RIDE_LINE',
+          14: 'REPLAY',
+          15: 'HOT_ROLLER',
+          16: 'REPEATER',
         };
         const parsedBets: CrapsBet[] = [];
         let offset = betsOffset;
@@ -2371,22 +2379,28 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
           const amount = Number(view.getBigUint64(offset + 3, false));
           const oddsAmount = Number(view.getBigUint64(offset + 11, false));
 
-          const betType = BET_TYPE_REVERSE[betTypeVal] || 'PASS';
+          let betType = BET_TYPE_REVERSE[betTypeVal] || 'PASS';
 
-          const isHardway = betTypeVal >= 8 && betTypeVal <= 11;
-          const hardTarget = betTypeVal === 8 ? 4 : betTypeVal === 9 ? 6 : betTypeVal === 10 ? 8 : 10;
+          const isHardway = betTypeVal === 8;
+          const isAts = betTypeVal === 10;
+          // Side bets that use odds_amount for progress tracking
+          const isSideBetWithProgress = [10, 12, 13, 14, 15, 16].includes(betTypeVal);
+          const progressMask = isSideBetWithProgress ? oddsAmount : undefined;
 
-          const isAts = betTypeVal >= 15 && betTypeVal <= 17;
-          const progressMask = isAts ? oddsAmount : undefined;
+          // Refine ATS type based on target
+          if (isAts) {
+            if (target === 0) betType = 'ATS_SMALL';
+            else if (target === 1) betType = 'ATS_TALL';
+            else if (target === 2) betType = 'ATS_ALL';
+          }
 
           parsedBets.push({
             type: betType,
-            target: isHardway
-              ? hardTarget
-              : (target > 0 ? target : undefined),
+            target: (isHardway || betTypeVal === 16) && target > 0 ? target : // HARDWAY and REPEATER use target
+                   (!isSideBetWithProgress && target > 0) ? target : undefined,
             status: statusVal === 1 ? 'PENDING' : 'ON',
             amount,
-            oddsAmount: (!isHardway && !isAts && oddsAmount > 0) ? oddsAmount : undefined,
+            oddsAmount: (!isHardway && !isSideBetWithProgress && oddsAmount > 0) ? oddsAmount : undefined,
             progressMask,
           });
           offset += 19;
@@ -2400,6 +2414,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
             dice,
             crapsPoint: mainPoint > 0 ? mainPoint : null,
             crapsEpochPointEstablished: epochPointEstablished,
+            crapsMadePointsMask: madePointsMask,
           };
         }
 
@@ -2410,27 +2425,72 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
             prevDice.length !== dice.length ||
             (dice.length === 2 && (prevDice[0] !== d1 || prevDice[1] !== d2));
 
-          // Reset roll history only on seven-out (point was ON and a 7 was rolled), otherwise only add if dice changed
+          // Detect seven-out: point was ON and a 7 was rolled
+          const sevenOut = hasDice && diceChanged && total === 7 && prev.crapsPoint !== null;
+
+          // Reset roll history only on seven-out, otherwise append
           let newHistory = prev.crapsRollHistory;
           if (hasDice && diceChanged) {
-            const sevenOut = total === 7 && prev.crapsPoint !== null;
             newHistory = sevenOut ? [total] : [...prev.crapsRollHistory, total].slice(-MAX_GRAPH_POINTS);
           }
 
-          // Preserve locally-staged bets (not yet submitted to chain) alongside on-chain bets.
-          // Use a lenient key that ignores status (can differ between local staging and chain confirmation)
-          // and ignores oddsAmount (odds can be added separately).
-          const localStagedBets = prev.crapsBets.filter((b) => b.local === true);
+          // Calculate per-roll PnL by comparing chain state snapshots
+          // prev.crapsBets (excluding local) = what chain had BEFORE this roll
+          // parsedBets = what chain has AFTER this roll (bets already resolved by chain)
+          // Difference = bets that the chain resolved this roll
+          let newEventLog = prev.crapsEventLog;
+          if (hasDice && diceChanged) {
+            // Get previous chain bets (excluding local staged bets - those aren't on chain yet)
+            const prevChainBets = prev.crapsBets.filter(b => b.local !== true);
+
+            // Find bets that were resolved by the chain (in prev but not in new)
+            const betKey = (b: CrapsBet) => `${b.type}|${b.target ?? ''}|${b.amount}|${b.oddsAmount ?? 0}`;
+            const newBetKeys = new Set(parsedBets.map(betKey));
+            const resolvedBets = prevChainBets.filter(b => !newBetKeys.has(betKey(b)));
+
+            // Calculate PnL only for bets the chain actually resolved
+            // Uses deterministic craps rules (same as chain) to determine payouts
+            const rollResult = resolveCrapsBets([d1, d2], prev.crapsPoint, resolvedBets);
+
+            const newEvent = {
+              dice: [d1, d2] as [number, number],
+              total,
+              pnl: rollResult.pnl,
+              point: prev.crapsPoint,
+              isSevenOut: sevenOut,
+              results: rollResult.results,
+            };
+            newEventLog = sevenOut
+              ? [newEvent] // Reset log on seven-out, start fresh
+              : [...prev.crapsEventLog, newEvent].slice(-MAX_GRAPH_POINTS);
+          }
+
+          // SIMPLE APPROACH: Chain state is the source of truth.
+          // Local bets are only for staging before a roll. Once dice have been rolled,
+          // we just use whatever the chain tells us.
+          // Local bets are only preserved if NO dice have been rolled yet (staging phase).
+          const hasRolledDice = hasDice && (d1 > 0 || d2 > 0);
+          const localStagedBets = hasRolledDice
+            ? [] // Once dice are rolled, chain state is truth - no local bets
+            : prev.crapsBets.filter((b) => b.local === true);
+
+          // Merge: chain bets + any local staged bets (only during staging, before first roll)
           const betKeyLoose = (b: CrapsBet) => `${b.type}|${b.target ?? ''}|${b.amount}`;
           const mergedBets: CrapsBet[] = [...parsedBets];
           const seen = new Set<string>(parsedBets.map(betKeyLoose));
           for (const bet of localStagedBets) {
             const key = betKeyLoose(bet);
-            // Only add local bet if no matching chain bet exists
             if (seen.has(key)) continue;
             seen.add(key);
             mergedBets.push(bet);
           }
+
+          // Save bets for potential rebet on seven-out (before clearing)
+          const savedBetsForRebet = sevenOut
+            ? prev.crapsBets.filter((b) =>
+                !['FIRE', 'ATS_SMALL', 'ATS_TALL', 'ATS_ALL', 'MUGGSY', 'DIFF_DOUBLES', 'RIDE_LINE', 'REPLAY', 'HOT_ROLLER', 'REPEATER'].includes(b.type)
+              )
+            : prev.crapsLastRoundBets;
 
           const newState = {
             ...prev,
@@ -2438,13 +2498,15 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
             dice,
             crapsPoint: mainPoint > 0 ? mainPoint : null,
             crapsEpochPointEstablished: epochPointEstablished,
+            crapsMadePointsMask: madePointsMask,
             crapsBets: mergedBets,
             crapsRollHistory: newHistory,
+            crapsEventLog: newEventLog,
+            crapsLastRoundBets: savedBetsForRebet,
             stage: 'PLAYING' as const,
-            // Only update message if dice changed, otherwise keep existing message (e.g. "ODDS +$X").
-            // If there are bets on the table, don't show "PLACE BETS".
+            // Show 7-OUT message on seven-out, otherwise normal message
             message: hasDice
-              ? (diceChanged ? `ROLLED ${total}` : prev.message)
+              ? (diceChanged ? (sevenOut ? '7-OUT! SHOOTER LOSES' : `ROLLED ${total}`) : prev.message)
               : (isPendingRef.current
                   ? prev.message
                   : (mergedBets.length > 0 ? 'BETS PLACED - SPACE TO ROLL' : 'PLACE BETS - SPACE TO ROLL')),
@@ -2802,11 +2864,13 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
 	      dice: [],
 	      crapsPoint: null,
 	      crapsEpochPointEstablished: false,
-	      // Preserve craps bets when restarting same game type for single-press deal
+	      // Preserve craps state when restarting same game type for single-press deal
+	      crapsMadePointsMask: type === GameType.CRAPS ? prev.crapsMadePointsMask : 0,
 	      crapsBets: type === GameType.CRAPS ? prev.crapsBets : [],
       crapsUndoStack: type === GameType.CRAPS ? prev.crapsUndoStack : [],
       crapsInputMode: 'NONE',
       crapsRollHistory: type === GameType.CRAPS ? prev.crapsRollHistory : [],
+      crapsEventLog: type === GameType.CRAPS ? prev.crapsEventLog : [],
       crapsLastRoundBets: prev.crapsLastRoundBets,
       // Preserve roulette bets when restarting
       rouletteBets: type === GameType.ROULETTE ? prev.rouletteBets : [],
@@ -3222,13 +3286,10 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
 	      if (autoPlayPlanRef.current) return;
 
 	      const makeCrapsRebetDraft = (): AutoPlayDraft | null => {
+	        // No auto-rebet - only use explicitly staged bets
 	        const stagedLocalBets = gameState.crapsBets.filter(b => b.local === true);
 	        if (stagedLocalBets.length > 0) return { type: GameType.CRAPS, crapsBets: stagedLocalBets };
-	        const fallback = gameState.crapsLastRoundBets
-	          .filter(b => b.type !== 'COME' && b.type !== 'DONT_COME')
-	          .map(b => ({ ...b, oddsAmount: undefined, progressMask: undefined, status: 'ON' as const, local: true }));
-	        if (fallback.length === 0) return null;
-	        return { type: GameType.CRAPS, crapsBets: fallback };
+	        return null;
 	      };
 
 	      let draft: AutoPlayDraft | null = null;
@@ -4205,29 +4266,31 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
       'YES': 5,
       'NO': 6,
       'NEXT': 7,
-      'HARDWAY': 8, // Will be refined based on target
-      'FIRE': 12,
-      'BUY': 13,
-      'ATS_SMALL': 15,
-      'ATS_TALL': 16,
-      'ATS_ALL': 17,
+      'HARDWAY': 8, // target: 4, 6, 8, or 10
+      'FIRE': 9,
+      'ATS_SMALL': 10, // target: 0
+      'ATS_TALL': 10,  // target: 1
+      'ATS_ALL': 10,   // target: 2
+      'MUGGSY': 11,
+      'DIFF_DOUBLES': 12,
+      'RIDE_LINE': 13,
+      'REPLAY': 14,
+      'HOT_ROLLER': 15,
+      'REPEATER': 16, // target: 2-6 or 8-12
     };
 
-    let betTypeValue = BET_TYPE_MAP[bet.type];
+    const betTypeValue = BET_TYPE_MAP[bet.type];
 
-    // For HARDWAY bets, determine specific hardway type based on target
-    if (bet.type === 'HARDWAY' && bet.target) {
-      if (bet.target === 4) betTypeValue = 8;       // Hardway4
-      else if (bet.target === 6) betTypeValue = 9;  // Hardway6
-      else if (bet.target === 8) betTypeValue = 10; // Hardway8
-      else if (bet.target === 10) betTypeValue = 11; // Hardway10
-    }
+    // Get target for backend - ATS types use special target values
+    let target = bet.target ?? 0;
+    if (bet.type === 'ATS_SMALL') target = 0;
+    else if (bet.type === 'ATS_TALL') target = 1;
+    else if (bet.type === 'ATS_ALL') target = 2;
 
     const payload = new Uint8Array(11);
     payload[0] = 0; // Command: Place bet
     payload[1] = betTypeValue;
-    // Some bet types encode their target in the bet type value (e.g., hardways).
-    payload[2] = bet.type === 'HARDWAY' ? 0 : (bet.target ?? 0);
+    payload[2] = target;
 
     // Amount as u64 big-endian (8 bytes)
     const amount = BigInt(bet.amount);

@@ -361,7 +361,6 @@ export const useKeyboardControls = ({
                 if (k === 'n') gameActions.setGameState((prev) => ({ ...prev, crapsInputMode: 'NO' }));
                 if (k === 'x' && !e.shiftKey) gameActions.setGameState((prev) => ({ ...prev, crapsInputMode: 'NEXT' }));
                 if (k === 'h') gameActions.setGameState((prev) => ({ ...prev, crapsInputMode: 'HARDWAY' }));
-                if (k === 'i') gameActions.setGameState((prev) => ({ ...prev, crapsInputMode: 'BUY' }));
                 if (k === 's') gameActions.placeCrapsBet('ATS_SMALL');
                 if (k === 'l') gameActions.placeCrapsBet('ATS_TALL');
                 if (k === 'a') gameActions.placeCrapsBet('ATS_ALL');

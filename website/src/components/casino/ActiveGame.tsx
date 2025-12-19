@@ -24,9 +24,11 @@ interface ActiveGameProps {
   reducedMotion?: boolean;
   chips?: number;
   playMode: 'CASH' | 'FREEROLL' | null;
+  currentBet?: number;
+  onBetChange?: (bet: number) => void;
 }
 
-export const ActiveGame: React.FC<ActiveGameProps> = ({ gameState, deck, numberInput, onToggleHold, aiAdvice, actions, onOpenCommandPalette, reducedMotion = false, chips, playMode }) => {
+export const ActiveGame: React.FC<ActiveGameProps> = ({ gameState, deck, numberInput, onToggleHold, aiAdvice, actions, onOpenCommandPalette, reducedMotion = false, chips, playMode, currentBet, onBetChange }) => {
   if (gameState.type === GameType.NONE) {
      const handleOpen = () => onOpenCommandPalette?.();
      return (
@@ -90,26 +92,10 @@ export const ActiveGame: React.FC<ActiveGameProps> = ({ gameState, deck, numberI
     return 'CHOOSE ACTION';
   };
 
-  const prevChipsRef = React.useRef(chips);
-  const [transientWin, setTransientWin] = React.useState(0);
-
-  React.useEffect(() => {
-    if (chips !== undefined && prevChipsRef.current !== undefined) {
-      const diff = chips - prevChipsRef.current;
-      if (diff > 0) {
-        setTransientWin(diff);
-      } else {
-        setTransientWin(0);
-      }
-    }
-    prevChipsRef.current = chips;
-  }, [chips]);
-
-  React.useEffect(() => {
-    setTransientWin(0);
-  }, [gameState.type]);
-
-  const displayWin = gameState.stage === 'RESULT' ? gameState.lastResult : transientWin;
+  // Only show wins from authoritative game completion (CasinoGameCompleted event)
+  // Removed transientWin based on chip changes - this caused false positives
+  // from polling/chain state updates that don't correspond to actual game wins
+  const displayWin = gameState.stage === 'RESULT' ? gameState.lastResult : 0;
 
   return (
     <>
@@ -120,15 +106,15 @@ export const ActiveGame: React.FC<ActiveGameProps> = ({ gameState, deck, numberI
          </div>
 
 
-	         <BigWinEffect 
-	            amount={gameState.stage === 'RESULT' ? gameState.lastResult : transientWin} 
-	            show={gameState.stage === 'RESULT' ? gameState.lastResult > 0 : transientWin > 0} 
+	         <BigWinEffect
+	            amount={displayWin}
+	            show={gameState.stage === 'RESULT' && displayWin > 0}
 	            durationMs={gameState.type === GameType.BLACKJACK ? 1000 : undefined}
                 reducedMotion={reducedMotion}
 	         />
 
          {gameState.type === GameType.BLACKJACK && <BlackjackView gameState={gameState} actions={actions} lastWin={displayWin} playMode={playMode} />}
-         {gameState.type === GameType.CRAPS && <CrapsView gameState={gameState} actions={actions} lastWin={displayWin} playMode={playMode} />}
+         {gameState.type === GameType.CRAPS && <CrapsView gameState={gameState} actions={actions} lastWin={displayWin} playMode={playMode} currentBet={currentBet} onBetChange={onBetChange} />}
          {gameState.type === GameType.BACCARAT && <BaccaratView gameState={gameState} actions={actions} lastWin={displayWin} playMode={playMode} />}
          {gameState.type === GameType.ROULETTE && <RouletteView gameState={gameState} numberInput={numberInput} actions={actions} lastWin={displayWin} playMode={playMode} />}
          {gameState.type === GameType.SIC_BO && <SicBoView gameState={gameState} numberInput={numberInput} actions={actions} lastWin={displayWin} playMode={playMode} />}

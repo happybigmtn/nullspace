@@ -57,14 +57,20 @@ export interface CrapsBet {
     | 'NEXT'
     | 'HARDWAY'
     | 'FIRE'
-    | 'BUY'
     | 'ATS_SMALL'
     | 'ATS_TALL'
-    | 'ATS_ALL';
+    | 'ATS_ALL'
+    | 'MUGGSY'
+    | 'DIFF_DOUBLES'
+    | 'RIDE_LINE'
+    | 'REPLAY'
+    | 'HOT_ROLLER'
+    | 'REPEATER';
   amount: number;
   target?: number; // The number (e.g., 4 for a Place 4, or the Point for a Come bet)
-  oddsAmount?: number; // Attached odds amount
-  progressMask?: number; // ATS progress (bitmask), if applicable
+  oddsAmount?: number; // Attached odds amount (confirmed on-chain)
+  localOddsAmount?: number; // Pending odds amount (staged locally, not yet confirmed)
+  progressMask?: number; // ATS/side bet progress (bitmask), if applicable
   status?: 'PENDING' | 'ON'; // PENDING means Come bet waiting to travel
   local?: boolean; // true = locally staged bet not yet sent to chain, undefined/false = on-chain bet
 }
@@ -118,6 +124,16 @@ export interface SicBoBet {
     amount: number;
 }
 
+// Craps event log entry for roll history with PnL
+export interface CrapsEventLog {
+    dice: [number, number];
+    total: number;
+    pnl: number; // Positive for win, negative for loss, 0 for push
+    point: number | null; // Point at time of roll
+    isSevenOut: boolean;
+    results: string[]; // e.g. ["PASS WIN (+$50)", "YES 4 LOSS (-$25)"]
+}
+
 export interface GameState {
   type: GameType;
   message: string;
@@ -131,10 +147,12 @@ export interface GameState {
   // Craps
   crapsPoint: number | null;
   crapsEpochPointEstablished: boolean;
+  crapsMadePointsMask: number; // Bitmask of unique points made this epoch (bits 0-5 = points 4,5,6,8,9,10)
   crapsBets: CrapsBet[];
   crapsUndoStack: CrapsBet[][]; // History of bet arrays for current turn
-  crapsInputMode: 'NONE' | 'YES' | 'NO' | 'NEXT' | 'HARDWAY' | 'BUY'; // Replaces string buffer
+  crapsInputMode: 'NONE' | 'YES' | 'NO' | 'NEXT' | 'HARDWAY'; // Replaces string buffer
   crapsRollHistory: number[];
+  crapsEventLog: CrapsEventLog[]; // Roll history with PnL for event log display
   crapsLastRoundBets: CrapsBet[]; // Bets from the previous roll (for rebet)
   crapsOddsCandidates: number[] | null; // Indices of bets eligible for odds attachment
   

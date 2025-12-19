@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LeaderboardEntry, PlayerStats, GameType } from '../../types';
+import { LeaderboardEntry, PlayerStats, GameType, CrapsEventLog } from '../../types';
 import { formatTime, HELP_CONTENT } from '../../utils/gameUtils';
 import { MobileDrawer } from './MobileDrawer';
 
@@ -20,6 +20,7 @@ interface HeaderProps {
     onToggleSound?: () => void;
     reducedMotion?: boolean;
     onToggleReducedMotion?: () => void;
+    playMode?: 'CASH' | 'FREEROLL' | null;
     children?: React.ReactNode;
 }
 
@@ -38,6 +39,7 @@ export const Header: React.FC<HeaderProps> = ({
     onToggleSound,
     reducedMotion = false,
     onToggleReducedMotion,
+    playMode,
     children,
 }) => (
     <header className="h-12 border-b-2 border-gray-700 flex items-center justify-between px-2 sm:px-4 z-10 bg-terminal-black/90 backdrop-blur">
@@ -115,60 +117,67 @@ export const Header: React.FC<HeaderProps> = ({
                     <span className={`font-bold ${tournamentTime < 60 ? 'text-terminal-accent animate-pulse' : 'text-white'}`}>{formatTime(tournamentTime)}</span>
                 </div>
             )}
-            <div className="hidden sm:flex items-center gap-2">
-                <span className="text-gray-500">SHIELDS</span>
-                <div className="flex gap-1">
-                    {[...Array(3)].map((_, i) => (
-                        <div key={i} className={`w-2 h-2 rounded-full ${i < stats.shields ? 'bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.8)]' : 'bg-gray-800'}`} />
-                    ))}
+            {/* Desktop shields/doubles/aura - hidden in CASH mode */}
+            {playMode !== 'CASH' && (
+                <>
+                    <div className="hidden sm:flex items-center gap-2">
+                        <span className="text-gray-500">SHIELDS</span>
+                        <div className="flex gap-1">
+                            {[...Array(3)].map((_, i) => (
+                                <div key={i} className={`w-2 h-2 rounded-full ${i < stats.shields ? 'bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.8)]' : 'bg-gray-800'}`} />
+                            ))}
+                        </div>
+                    </div>
+                    <div className="hidden sm:flex items-center gap-2">
+                        <span className="text-gray-500">DOUBLES</span>
+                        <div className="flex gap-1">
+                            {[...Array(3)].map((_, i) => (
+                                <div key={i} className={`w-2 h-2 rounded-full ${i < stats.doubles ? 'bg-purple-400 shadow-[0_0_8px_rgba(192,132,252,0.8)]' : 'bg-gray-800'}`} />
+                            ))}
+                        </div>
+                    </div>
+                    <div className="hidden sm:flex items-center gap-2">
+                        <span className="text-gray-500">AURA</span>
+                        <div className="flex gap-1">
+                            {[...Array(5)].map((_, i) => (
+                                <div
+                                    key={i}
+                                    className={`w-2 h-2 rounded-full ${
+                                        i < (stats.auraMeter ?? 0)
+                                            ? 'bg-terminal-gold shadow-[0_0_8px_rgba(255,215,0,0.7)]'
+                                            : 'bg-gray-800'
+                                    }`}
+                                />
+                            ))}
+                        </div>
+                    </div>
+                </>
+            )}
+            {/* Mobile: Compact shields/doubles/aura indicator - hidden in CASH mode */}
+            {playMode !== 'CASH' && (
+                <div className="flex sm:hidden items-center gap-1">
+                    <div className="flex gap-0.5">
+                        {[...Array(3)].map((_, i) => (
+                            <div key={i} className={`w-1.5 h-1.5 rounded-full ${i < stats.shields ? 'bg-cyan-400' : 'bg-gray-800'}`} />
+                        ))}
+                    </div>
+                    <div className="flex gap-0.5">
+                        {[...Array(3)].map((_, i) => (
+                            <div key={i} className={`w-1.5 h-1.5 rounded-full ${i < stats.doubles ? 'bg-purple-400' : 'bg-gray-800'}`} />
+                        ))}
+                    </div>
+                    <div className="flex gap-0.5">
+                        {[...Array(5)].map((_, i) => (
+                            <div
+                                key={i}
+                                className={`w-1.5 h-1.5 rounded-full ${
+                                    i < (stats.auraMeter ?? 0) ? 'bg-terminal-gold' : 'bg-gray-800'
+                                }`}
+                            />
+                        ))}
+                    </div>
                 </div>
-            </div>
-            <div className="hidden sm:flex items-center gap-2">
-                <span className="text-gray-500">DOUBLES</span>
-                <div className="flex gap-1">
-                    {[...Array(3)].map((_, i) => (
-                        <div key={i} className={`w-2 h-2 rounded-full ${i < stats.doubles ? 'bg-purple-400 shadow-[0_0_8px_rgba(192,132,252,0.8)]' : 'bg-gray-800'}`} />
-                    ))}
-                </div>
-            </div>
-            <div className="hidden sm:flex items-center gap-2">
-                <span className="text-gray-500">AURA</span>
-                <div className="flex gap-1">
-                    {[...Array(5)].map((_, i) => (
-                        <div
-                            key={i}
-                            className={`w-2 h-2 rounded-full ${
-                                i < (stats.auraMeter ?? 0)
-                                    ? 'bg-terminal-gold shadow-[0_0_8px_rgba(255,215,0,0.7)]'
-                                    : 'bg-gray-800'
-                            }`}
-                        />
-                    ))}
-                </div>
-            </div>
-            {/* Mobile: Compact shields/doubles indicator */}
-            <div className="flex sm:hidden items-center gap-1">
-                <div className="flex gap-0.5">
-                    {[...Array(3)].map((_, i) => (
-                        <div key={i} className={`w-1.5 h-1.5 rounded-full ${i < stats.shields ? 'bg-cyan-400' : 'bg-gray-800'}`} />
-                    ))}
-                </div>
-                <div className="flex gap-0.5">
-                    {[...Array(3)].map((_, i) => (
-                        <div key={i} className={`w-1.5 h-1.5 rounded-full ${i < stats.doubles ? 'bg-purple-400' : 'bg-gray-800'}`} />
-                    ))}
-                </div>
-                <div className="flex gap-0.5">
-                    {[...Array(5)].map((_, i) => (
-                        <div
-                            key={i}
-                            className={`w-1.5 h-1.5 rounded-full ${
-                                i < (stats.auraMeter ?? 0) ? 'bg-terminal-gold' : 'bg-gray-800'
-                            }`}
-                        />
-                    ))}
-                </div>
-            </div>
+            )}
             <div className="flex items-center gap-1 sm:gap-2">
                 <span className="text-gray-500 hidden sm:inline">CHIPS</span>
                 <span className="text-white font-bold text-sm sm:text-lg">${stats.chips.toLocaleString()}</span>
@@ -214,12 +223,15 @@ interface SidebarProps {
     prizePool?: number;
     totalPlayers?: number;
     winnersPct?: number;
+    gameType?: GameType;
+    crapsEventLog?: CrapsEventLog[];
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ leaderboard, history, viewMode = 'RANK', currentChips, prizePool, totalPlayers, winnersPct = 0.15 }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ leaderboard, history, viewMode = 'RANK', currentChips, prizePool, totalPlayers, winnersPct = 0.15, gameType, crapsEventLog = [] }) => {
     const effectivePlayerCount = totalPlayers ?? leaderboard.length;
     const bubbleIndex = Math.max(1, Math.min(effectivePlayerCount, Math.ceil(effectivePlayerCount * winnersPct))); // Top 15% by default
     const userEntry = leaderboard.find(e => e.name === 'YOU' || e.name.includes('(YOU)'));
+    const isCraps = gameType === GameType.CRAPS;
 
     const getPayout = (rank: number) => {
         if (!prizePool || effectivePlayerCount <= 0) return "$0";
@@ -264,6 +276,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ leaderboard, history, viewMode
         );
     };
 
+    // Format dice display for craps log
+    const formatDice = (dice: [number, number]) => {
+        const DICE_EMOJI = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+        return `${DICE_EMOJI[dice[0] - 1]}${DICE_EMOJI[dice[1] - 1]}`;
+    };
+
+    // Format PnL for display
+    const formatPnl = (pnl: number) => {
+        if (pnl === 0) return '';
+        if (pnl > 0) return `+$${pnl.toLocaleString()}`;
+        return `-$${Math.abs(pnl).toLocaleString()}`;
+    };
+
     return (
         <aside className="w-64 border-l-2 border-gray-700 bg-terminal-black/50 hidden lg:flex flex-col">
             {/* Live Feed Header */}
@@ -281,18 +306,72 @@ export const Sidebar: React.FC<SidebarProps> = ({ leaderboard, history, viewMode
                 </div>
             )}
 
-            {/* Scrollable Leaderboard */}
-            <div className="flex-1 overflow-y-auto px-4 py-2 space-y-2 min-h-0">
+            {/* Scrollable Leaderboard - takes half space when craps, full otherwise */}
+            <div className={`overflow-y-auto px-4 py-2 space-y-2 min-h-0 ${isCraps ? 'flex-1' : 'flex-1'}`}>
                 {leaderboard.map((entry, i) => renderEntry(entry, i, false))}
             </div>
-            
-            {/* Logs Area */}
-            <div className="flex-none h-48 border-t-2 border-gray-700 p-4 bg-terminal-black/30">
-                <h3 className="text-sm font-bold text-gray-500 mb-2 tracking-widest">LOG</h3>
-                <div className="h-full overflow-y-auto flex flex-col gap-1 text-sm text-gray-400 font-mono scrollbar-thin">
-                    {history.slice(-15).reverse().map((log, i) => (
-                        <div key={i} className="text-gray-300">&gt; {log}</div>
-                    ))}
+
+            {/* Logs Area - shows craps roll log when playing craps */}
+            <div className="flex-1 border-t-2 border-gray-700 p-4 bg-terminal-black/30 flex flex-col min-h-0">
+                <h3 className="text-sm font-bold text-gray-500 mb-2 tracking-widest flex-none">
+                    {isCraps ? 'ROLL LOG' : 'LOG'}
+                </h3>
+                <div className="flex-1 overflow-y-auto flex flex-col gap-1 text-sm font-mono scrollbar-thin min-h-0">
+                    {isCraps ? (
+                        crapsEventLog.length === 0 ? (
+                            <div className="text-gray-600 text-xs">NO ROLLS YET</div>
+                        ) : (
+                            [...crapsEventLog].reverse().slice(0, 20).map((event, i) => {
+                                const pnlColor = event.pnl > 0 ? 'text-terminal-green' : event.pnl < 0 ? 'text-terminal-accent' : 'text-gray-500';
+                                const totalColor = event.isSevenOut
+                                    ? 'text-terminal-accent'
+                                    : event.total === 7 || event.total === 11
+                                    ? 'text-terminal-green'
+                                    : 'text-white';
+                                const hasResults = event.results && event.results.length > 0;
+
+                                return (
+                                    <div key={i} className="flex flex-col gap-0.5">
+                                        <div className="flex items-center justify-between text-xs gap-2">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-lg leading-none">{formatDice(event.dice)}</span>
+                                                <span className={`font-bold ${totalColor}`}>{event.total}</span>
+                                                {event.point !== null && (
+                                                    <span className="text-gray-600 text-[10px]">PT:{event.point}</span>
+                                                )}
+                                                {event.isSevenOut && (
+                                                    <span className="text-terminal-accent text-[10px] font-bold animate-pulse">7-OUT</span>
+                                                )}
+                                            </div>
+                                            {event.pnl !== 0 && (
+                                                <span className={`${pnlColor} font-bold text-[11px] ${event.pnl > 0 ? 'animate-pulse' : ''}`}>
+                                                    {formatPnl(event.pnl)}
+                                                </span>
+                                            )}
+                                        </div>
+                                        {hasResults && (
+                                            <div className="pl-7 flex flex-wrap gap-x-2 gap-y-0.5">
+                                                {event.results.map((result, j) => {
+                                                    const isWin = result.includes('WIN');
+                                                    const isLoss = result.includes('LOSS');
+                                                    const color = isWin ? 'text-green-500' : isLoss ? 'text-red-400' : 'text-gray-500';
+                                                    return (
+                                                        <span key={j} className={`text-[9px] ${color}`}>
+                                                            {result}
+                                                        </span>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })
+                        )
+                    ) : (
+                        history.slice(-15).reverse().map((log, i) => (
+                            <div key={i} className="text-gray-300">&gt; {log}</div>
+                        ))
+                    )}
                 </div>
             </div>
         </aside>

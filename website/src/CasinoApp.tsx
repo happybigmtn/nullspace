@@ -32,7 +32,7 @@ const SORTED_GAMES = Object.values(GameType).filter(g => g !== GameType.NONE).so
 const RESPONSIBLE_PLAY_STORAGE_KEY = 'nullspace_responsible_play_v1';
 
 const DEFAULT_RESPONSIBLE_PLAY: ResponsiblePlaySettings = {
-  realityCheckMinutes: 30,
+  realityCheckMinutes: 0, // Disabled by default - users can enable in settings
   maxWager: 0,
   maxLoss: 0,
   maxSessionMinutes: 0,
@@ -118,7 +118,8 @@ export default function CasinoApp() {
       const raw = localStorage.getItem(RESPONSIBLE_PLAY_STORAGE_KEY);
       if (!raw) return DEFAULT_RESPONSIBLE_PLAY;
       const parsed = JSON.parse(raw);
-      return { ...DEFAULT_RESPONSIBLE_PLAY, ...parsed };
+      // Force disable reality check - always reset to 0
+      return { ...DEFAULT_RESPONSIBLE_PLAY, ...parsed, realityCheckMinutes: 0, nextRealityCheckMs: 0 };
     } catch {
       return DEFAULT_RESPONSIBLE_PLAY;
     }
@@ -429,6 +430,7 @@ export default function CasinoApp() {
            onToggleSound={() => setSoundEnabled((v) => !v)}
            reducedMotion={reducedMotion}
            onToggleReducedMotion={() => setReducedMotion((v) => !v)}
+           playMode={playMode}
        >
            <div className="flex lg:hidden items-center gap-2">
                <MobileChipSelector 
@@ -523,6 +525,8 @@ export default function CasinoApp() {
                     onOpenCommandPalette={openCommandPalette}
                     reducedMotion={reducedMotion}
                     playMode={playMode}
+                    currentBet={gameState.bet}
+                    onBetChange={safeActions.setBetAmount}
                  />
                </ErrorBoundary>
              </div>
@@ -536,6 +540,8 @@ export default function CasinoApp() {
                 prizePool={playMode === 'FREEROLL' ? (freerollActivePrizePool ?? undefined) : undefined}
                 totalPlayers={playMode === 'FREEROLL' ? (freerollActivePlayerCount ?? undefined) : undefined}
                 winnersPct={0.15}
+                gameType={gameState.type}
+                crapsEventLog={gameState.crapsEventLog}
              />
           )}
        </div>

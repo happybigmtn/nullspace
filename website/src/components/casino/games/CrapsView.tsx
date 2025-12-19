@@ -1,12 +1,67 @@
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { GameState } from '../../../types';
 import { DiceRender } from '../GameComponents';
 import { MobileDrawer } from '../MobileDrawer';
-import { GameControlBar } from '../GameControlBar';
 import { calculateCrapsExposure } from '../../../utils/gameUtils';
+import { CrapsBonusDashboard } from './CrapsBonusDashboard';
+import { CrapsBetMenu } from './CrapsBetMenu';
 
-export const CrapsView = React.memo<{ gameState: GameState; actions: any; lastWin?: number; playMode?: 'CASH' | 'FREEROLL' | null }>(({ gameState, actions, lastWin, playMode }) => {
+const CHIP_VALUES = [1, 5, 25, 100, 500, 1000, 5000, 10000];
+
+// Casino chip colors by denomination
+const CHIP_COLORS: Record<number, { bg: string; border: string; text: string }> = {
+    1: { bg: 'bg-gray-100', border: 'border-gray-300', text: 'text-gray-800' },
+    5: { bg: 'bg-red-600', border: 'border-red-400', text: 'text-white' },
+    25: { bg: 'bg-green-600', border: 'border-green-400', text: 'text-white' },
+    100: { bg: 'bg-gray-900', border: 'border-gray-600', text: 'text-white' },
+    500: { bg: 'bg-purple-600', border: 'border-purple-400', text: 'text-white' },
+    1000: { bg: 'bg-yellow-500', border: 'border-yellow-300', text: 'text-black' },
+    5000: { bg: 'bg-pink-500', border: 'border-pink-300', text: 'text-white' },
+    10000: { bg: 'bg-blue-600', border: 'border-blue-400', text: 'text-white' },
+};
+
+// Chip component for bet size display
+const ChipButton: React.FC<{
+    value: number;
+    selected?: boolean;
+    onClick?: () => void;
+    size?: 'sm' | 'md' | 'lg';
+}> = ({ value, selected, onClick, size = 'lg' }) => {
+    const colors = CHIP_COLORS[value] || CHIP_COLORS[25];
+    const label = value >= 1000 ? `${value / 1000}K` : value.toString();
+    const sizes = { sm: 'w-10 h-10 text-xs', md: 'w-12 h-12 text-sm', lg: 'w-14 h-14 text-base' };
+
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            className={`
+                ${sizes[size]} relative rounded-full font-bold font-mono
+                ${colors.bg} ${colors.text} border-4 ${colors.border}
+                flex items-center justify-center transition-all duration-150
+                ${onClick ? 'cursor-pointer hover:scale-110 active:scale-95' : ''}
+                ${selected ? 'ring-2 ring-white ring-offset-2 ring-offset-black shadow-lg' : ''}
+            `}
+            style={{ boxShadow: `inset 0 2px 4px rgba(255,255,255,0.3), inset 0 -2px 4px rgba(0,0,0,0.3)` }}
+        >
+            <div className="absolute inset-0.5 rounded-full border-2 border-dashed border-white/30" />
+            <span className="relative z-10 drop-shadow-md">{label}</span>
+        </button>
+    );
+};
+
+export const CrapsView = React.memo<{
+    gameState: GameState;
+    actions: any;
+    lastWin?: number;
+    playMode?: 'CASH' | 'FREEROLL' | null;
+    currentBet?: number;
+    onBetChange?: (bet: number) => void;
+}>(({ gameState, actions, lastWin, playMode, currentBet, onBetChange }) => {
+    const [showChipSelector, setShowChipSelector] = useState(false);
+    const [leftSidebarView, setLeftSidebarView] = useState<'EXPOSURE' | 'SIDE_BETS'>('EXPOSURE');
+
     // Get current roll (last dice sum)
     const currentRoll = useMemo(() =>
         gameState.dice.length === 2 ? gameState.dice[0] + gameState.dice[1] : null,
@@ -32,17 +87,24 @@ export const CrapsView = React.memo<{ gameState: GameState; actions: any; lastWi
         return 'border-gray-700 text-gray-700';
     }, [gameState.crapsBets]);
 
-    const canPlaceAts = useMemo(
+    // Bonus bets can only be placed before epoch point is established
+    const canPlaceBonus = useMemo(
         () =>
             !gameState.crapsEpochPointEstablished &&
             (currentRoll === null || currentRoll === 7),
         [gameState.crapsEpochPointEstablished, currentRoll]
     );
 
-    const atsSelected = useMemo(() => ({
-        small: gameState.crapsBets.some(b => b.type === 'ATS_SMALL'),
-        tall: gameState.crapsBets.some(b => b.type === 'ATS_TALL'),
-        all: gameState.crapsBets.some(b => b.type === 'ATS_ALL'),
+    const bonusBetsPlaced = useMemo(() => ({
+        fire: gameState.crapsBets.some(b => b.type === 'FIRE'),
+        atsSmall: gameState.crapsBets.some(b => b.type === 'ATS_SMALL'),
+        atsTall: gameState.crapsBets.some(b => b.type === 'ATS_TALL'),
+        atsAll: gameState.crapsBets.some(b => b.type === 'ATS_ALL'),
+        muggsy: gameState.crapsBets.some(b => b.type === 'MUGGSY'),
+        diffDoubles: gameState.crapsBets.some(b => b.type === 'DIFF_DOUBLES'),
+        rideLine: gameState.crapsBets.some(b => b.type === 'RIDE_LINE'),
+        replay: gameState.crapsBets.some(b => b.type === 'REPLAY'),
+        hotRoller: gameState.crapsBets.some(b => b.type === 'HOT_ROLLER'),
     }), [gameState.crapsBets]);
 
     const betTypes = useMemo(() => new Set(gameState.crapsBets.map((b) => b.type)), [gameState.crapsBets]);
@@ -146,6 +208,16 @@ export const CrapsView = React.memo<{ gameState: GameState; actions: any; lastWi
                                 </div>
                             </div>
                         </div>
+                    </MobileDrawer>
+                </div>
+
+                {/* Mobile Bonus Dashboard */}
+                <div className="absolute top-2 right-2 z-40 sm:hidden">
+                    <MobileDrawer label="BONUS" title="SIDE BETS">
+                        <CrapsBonusDashboard
+                            bets={gameState.crapsBets}
+                            madePointsMask={gameState.crapsMadePointsMask}
+                        />
                     </MobileDrawer>
                 </div>
 
@@ -280,146 +352,325 @@ export const CrapsView = React.memo<{ gameState: GameState; actions: any; lastWi
                 </div>
             </div>
 
-            {/* EXPOSURE SIDEBAR */}
-            <div className="hidden md:flex absolute top-0 left-0 bottom-24 w-48 bg-terminal-black/80 border-r-2 border-gray-700 p-2 overflow-y-auto backdrop-blur-sm z-30 flex-col">
-                <h3 className="text-[10px] font-bold text-gray-500 mb-2 tracking-widest text-center border-b border-gray-800 pb-1 flex-none">EXPOSURE</h3>
-                <div className="flex-1 flex flex-col justify-center space-y-1">
-                    {(() => {
-                        // Build list of rows to display
-                        const hardwayTargets = [4, 6, 8, 10];
-                        const activeHardways = gameState.crapsBets
-                            .filter(b => b.type === 'HARDWAY')
-                            .map(b => b.target!);
+            {/* LEFT SIDEBAR - EXPOSURE / SIDE BETS TOGGLE */}
+            <div className="hidden md:flex absolute top-0 left-0 bottom-24 w-56 bg-terminal-black/80 border-r-2 border-gray-700 backdrop-blur-sm z-30 flex-col">
+                {/* Toggle Tabs */}
+                <div className="flex-none flex border-b border-gray-800">
+                    <button
+                        onClick={() => setLeftSidebarView('EXPOSURE')}
+                        className={`flex-1 py-2 text-[10px] font-bold tracking-widest uppercase transition-colors ${
+                            leftSidebarView === 'EXPOSURE'
+                                ? 'text-terminal-green border-b-2 border-terminal-green bg-terminal-green/10'
+                                : 'text-gray-500 hover:text-gray-300'
+                        }`}
+                    >
+                        EXPOSURE
+                    </button>
+                    <button
+                        onClick={() => setLeftSidebarView('SIDE_BETS')}
+                        className={`flex-1 py-2 text-[10px] font-bold tracking-widest uppercase transition-colors ${
+                            leftSidebarView === 'SIDE_BETS'
+                                ? 'text-amber-400 border-b-2 border-amber-400 bg-amber-400/10'
+                                : 'text-gray-500 hover:text-gray-300'
+                        }`}
+                    >
+                        SIDE BETS
+                    </button>
+                </div>
 
-                        const rows: { num: number; label: string; isHard?: boolean }[] = [];
+                {/* Content */}
+                <div className="flex-1 overflow-y-auto p-2">
+                    {leftSidebarView === 'EXPOSURE' ? (
+                        <div className="flex flex-col justify-center space-y-1 h-full">
+                            {(() => {
+                                const hardwayTargets = [4, 6, 8, 10];
+                                const activeHardways = gameState.crapsBets
+                                    .filter(b => b.type === 'HARDWAY')
+                                    .map(b => b.target!);
 
-                        [2,3,4,5,6,7,8,9,10,11,12].forEach(num => {
-                            if (hardwayTargets.includes(num) && activeHardways.includes(num)) {
-                                // Add both hard and easy variants
-                                rows.push({ num, label: `${num}H`, isHard: true });
-                                rows.push({ num, label: `${num}E`, isHard: false });
-                            } else {
-                                rows.push({ num, label: num.toString() });
-                            }
-                        });
+                                const rows: { num: number; label: string; isHard?: boolean }[] = [];
 
-                        return rows.map((row, idx) => {
-                            const pnl = row.isHard !== undefined
-                                ? calculateCrapsExposure(row.num, gameState.crapsPoint, gameState.crapsBets, row.isHard)
-                                : calculateCrapsExposure(row.num, gameState.crapsPoint, gameState.crapsBets);
+                                [2,3,4,5,6,7,8,9,10,11,12].forEach(num => {
+                                    if (hardwayTargets.includes(num) && activeHardways.includes(num)) {
+                                        rows.push({ num, label: `${num}H`, isHard: true });
+                                        rows.push({ num, label: `${num}E`, isHard: false });
+                                    } else {
+                                        rows.push({ num, label: num.toString() });
+                                    }
+                                });
 
-                            const pnlRounded = Math.round(pnl);
-                            const isHighlight = row.num === currentRoll;
+                                return rows.map((row, idx) => {
+                                    const pnl = row.isHard !== undefined
+                                        ? calculateCrapsExposure(row.num, gameState.crapsPoint, gameState.crapsBets, row.isHard)
+                                        : calculateCrapsExposure(row.num, gameState.crapsPoint, gameState.crapsBets);
 
-                            return (
-                                <div key={idx} className="flex items-center h-7 text-base">
-                                    {/* PnL Value - Left side for negative */}
-                                    <div className="flex-1 flex justify-end items-center pr-2">
-                                        {pnlRounded < 0 && (
-                                            <span className="text-terminal-accent font-mono text-sm">
-                                                -{Math.abs(pnlRounded).toLocaleString()}
-                                            </span>
-                                        )}
-                                    </div>
+                                    const pnlRounded = Math.round(pnl);
+                                    const isHighlight = row.num === currentRoll;
 
-                                    {/* Number Label */}
-                                    <div className={`w-10 text-center font-bold relative ${
-                                        isHighlight ? 'text-yellow-400 bg-yellow-400/20 rounded' :
-                                        row.num === 7 ? 'text-terminal-accent' :
-                                        row.isHard === true ? 'text-terminal-gold' :
-                                        row.isHard === false ? 'text-gray-400' : 'text-white'
-                                    }`}>
-                                        {row.label}
-                                    </div>
-
-                                    {/* PnL Value - Right side for positive */}
-                                    <div className="flex-1 flex justify-start items-center pl-2">
-                                        {pnlRounded > 0 && (
-                                            <span className="text-terminal-green font-mono text-sm">
-                                                +{pnlRounded.toLocaleString()}
-                                            </span>
-                                        )}
-                                    </div>
-                                </div>
-                            );
-                        });
-                    })()}
+                                    return (
+                                        <div key={idx} className="flex items-center h-7 text-base">
+                                            <div className="flex-1 flex justify-end items-center pr-2">
+                                                {pnlRounded < 0 && (
+                                                    <span className="text-terminal-accent font-mono text-sm">
+                                                        -{Math.abs(pnlRounded).toLocaleString()}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className={`w-10 text-center font-bold relative ${
+                                                isHighlight ? 'text-yellow-400 bg-yellow-400/20 rounded' :
+                                                row.num === 7 ? 'text-terminal-accent' :
+                                                row.isHard === true ? 'text-terminal-gold' :
+                                                row.isHard === false ? 'text-gray-400' : 'text-white'
+                                            }`}>
+                                                {row.label}
+                                            </div>
+                                            <div className="flex-1 flex justify-start items-center pl-2">
+                                                {pnlRounded > 0 && (
+                                                    <span className="text-terminal-green font-mono text-sm">
+                                                        +{pnlRounded.toLocaleString()}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                });
+                            })()}
+                        </div>
+                    ) : (
+                        <CrapsBonusDashboard
+                            bets={gameState.crapsBets}
+                            madePointsMask={gameState.crapsMadePointsMask}
+                            compact={true}
+                        />
+                    )}
                 </div>
             </div>
 
             {/* ACTIVE BETS SIDEBAR */}
             <div className="hidden md:flex absolute top-0 right-0 bottom-24 w-36 bg-terminal-black/80 border-l-2 border-gray-700 p-2 backdrop-blur-sm z-30 flex-col">
                 <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-2 border-b border-gray-800 pb-1 flex-none text-center">Table Bets</div>
-                <div className="flex-1 overflow-y-auto flex flex-col justify-center space-y-1">
-                    {gameState.crapsBets.length > 0 ? (
-                        gameState.crapsBets.map((b, i) => {
-                            const candidateIdx = gameState.crapsOddsCandidates?.indexOf(i);
+                <div className="flex-1 overflow-y-auto flex flex-col space-y-2">
+                    {(() => {
+                        const confirmedBets = gameState.crapsBets.filter(b => b.local !== true);
+                        const pendingBets = gameState.crapsBets.filter(b => b.local === true);
+
+                        const renderBet = (b: typeof gameState.crapsBets[0], i: number, isPending: boolean) => {
+                            const globalIdx = gameState.crapsBets.indexOf(b);
+                            const candidateIdx = gameState.crapsOddsCandidates?.indexOf(globalIdx);
                             const isCandidate = candidateIdx !== undefined && candidateIdx !== -1;
-                            
+
                             return (
-                                <div key={i} onClick={() => isCandidate ? actions?.addCrapsOdds?.(candidateIdx) : actions?.placeCrapsBet?.(b.type, b.target)} className={`flex justify-between items-center text-xs border border-gray-800 p-1 rounded bg-black/50 cursor-pointer hover:bg-gray-800 transition-colors ${isCandidate ? 'border-terminal-gold bg-terminal-gold/10' : ''}`}>
-                                <div className="flex flex-col">
-                                    <span className={`font-bold text-[10px] ${isCandidate ? 'text-terminal-gold' : 'text-terminal-green'}`}>
-                                        {isCandidate ? `[${candidateIdx! + 1}] ` : ''}{b.type}{b.target !== undefined ? ` ${b.target}` : ''}
-                                    </span>
-                                    <span className="text-[9px] text-gray-500">{b.status === 'PENDING' ? 'WAIT' : 'ON'}</span>
+                                <div
+                                    key={i}
+                                    onClick={() => isCandidate ? actions?.addCrapsOdds?.(candidateIdx) : actions?.placeCrapsBet?.(b.type, b.target)}
+                                    className={`flex justify-between items-center text-xs border p-1 rounded cursor-pointer hover:bg-gray-800 transition-colors ${
+                                        isCandidate
+                                            ? 'border-terminal-gold bg-terminal-gold/10'
+                                            : isPending
+                                                ? 'border-amber-600/50 bg-amber-900/20'
+                                                : 'border-gray-800 bg-black/50'
+                                    }`}
+                                >
+                                    <div className="flex flex-col">
+                                        <span className={`font-bold text-[10px] ${
+                                            isCandidate ? 'text-terminal-gold' : isPending ? 'text-amber-400' : 'text-terminal-green'
+                                        }`}>
+                                            {isCandidate ? `[${candidateIdx! + 1}] ` : ''}{b.type}{b.target !== undefined ? ` ${b.target}` : ''}
+                                        </span>
+                                        <span className="text-[9px] text-gray-500">{b.status === 'PENDING' ? 'WAIT' : 'ON'}</span>
+                                    </div>
+                                    <div className="text-right">
+                                        <div className="text-white text-[10px]">${b.amount + (b.oddsAmount || 0)}</div>
+                                        {b.localOddsAmount && b.localOddsAmount > 0 && (
+                                            <div className="text-[9px] text-amber-400">+${b.localOddsAmount} odds pending</div>
+                                        )}
+                                    </div>
                                 </div>
-                                <div className="text-right">
-                                    <div className="text-white text-[10px]">${b.amount + (b.oddsAmount || 0)}</div>
-                                </div>
-                            </div>
                             );
-                        })
-                    ) : (
-                        <div className="text-center text-[10px] text-gray-700 italic">NO BETS</div>
-                    )}
+                        };
+
+                        if (confirmedBets.length === 0 && pendingBets.length === 0) {
+                            return <div className="text-center text-[10px] text-gray-700 italic">NO BETS</div>;
+                        }
+
+                        return (
+                            <>
+                                {/* Confirmed (on-chain) bets */}
+                                {confirmedBets.length > 0 && (
+                                    <div className="space-y-1">
+                                        <div className="text-[8px] text-terminal-green uppercase tracking-widest font-bold">
+                                            Confirmed ({confirmedBets.length})
+                                        </div>
+                                        {confirmedBets.map((b, i) => renderBet(b, i, false))}
+                                    </div>
+                                )}
+
+                                {/* Pending (local staged) bets */}
+                                {pendingBets.length > 0 && (
+                                    <div className="space-y-1">
+                                        <div className="text-[8px] text-amber-400 uppercase tracking-widest font-bold">
+                                            Pending ({pendingBets.length})
+                                        </div>
+                                        {pendingBets.map((b, i) => renderBet(b, i, true))}
+                                    </div>
+                                )}
+                            </>
+                        );
+                    })()}
                 </div>
             </div>
 
+
             {/* CONTROLS */}
-            <GameControlBar
-                primaryAction={{
-                    label: 'ROLL',
-                    onClick: actions?.deal,
-                    className: 'w-full sm:w-auto',
-                }}
-                secondaryActions={[
-                    // Main Bets
-                    {
-                        label: gameState.crapsPoint ? 'COME' : 'PASS',
-                        onClick: () => actions?.placeCrapsBet?.(gameState.crapsPoint ? 'COME' : 'PASS'),
-                        active: betTypes.has('PASS') || betTypes.has('COME'),
-                    },
-                    {
-                        label: gameState.crapsPoint ? "DON'T COME" : "DON'T PASS",
-                        onClick: () => actions?.placeCrapsBet?.(gameState.crapsPoint ? 'DONT_COME' : 'DONT_PASS'),
-                        active: betTypes.has('DONT_PASS') || betTypes.has('DONT_COME'),
-                    },
-                    { label: 'FIELD', onClick: () => actions?.placeCrapsBet?.('FIELD'), active: betTypes.has('FIELD') },
-                    { label: 'ODDS', onClick: () => actions?.addCrapsOdds?.() },
-                    { label: 'FIRE', onClick: () => actions?.placeCrapsBet?.('FIRE'), active: betTypes.has('FIRE') },
-                    // ATS (Conditional)
-                    ...(canPlaceAts ? [
-                        { label: 'ATS S', onClick: () => actions?.placeCrapsBet?.('ATS_SMALL'), active: atsSelected.small },
-                        { label: 'ATS T', onClick: () => actions?.placeCrapsBet?.('ATS_TALL'), active: atsSelected.tall },
-                        { label: 'ATS A', onClick: () => actions?.placeCrapsBet?.('ATS_ALL'), active: atsSelected.all },
-                    ] : []),
-                    // Input Modes
-                    { label: 'HARD', onClick: () => actions?.setGameState?.((prev: any) => ({ ...prev, crapsInputMode: 'HARDWAY' })), active: gameState.crapsInputMode === 'HARDWAY' || betTypes.has('HARDWAY') },
-                    { label: 'BUY', onClick: () => actions?.setGameState?.((prev: any) => ({ ...prev, crapsInputMode: 'BUY' })), active: gameState.crapsInputMode === 'BUY' || betTypes.has('BUY') },
-                    { label: 'YES', onClick: () => actions?.setGameState?.((prev: any) => ({ ...prev, crapsInputMode: 'YES' })), active: gameState.crapsInputMode === 'YES' || betTypes.has('YES') },
-                    { label: 'NO', onClick: () => actions?.setGameState?.((prev: any) => ({ ...prev, crapsInputMode: 'NO' })), active: gameState.crapsInputMode === 'NO' || betTypes.has('NO') },
-                    { label: 'NEXT', onClick: () => actions?.setGameState?.((prev: any) => ({ ...prev, crapsInputMode: 'NEXT' })), active: gameState.crapsInputMode === 'NEXT' || betTypes.has('NEXT') },
-                    // Actions
-                    { label: 'UNDO', onClick: actions?.undoCrapsBet },
-                    // Modifiers
-                    ...(playMode !== 'CASH' ? [
-                    { label: 'SHIELD', onClick: actions?.toggleShield, active: gameState.activeModifiers.shield },
-                    { label: 'DOUBLE', onClick: actions?.toggleDouble, active: gameState.activeModifiers.double },
-                    ] : []),
-                    { label: 'SUPER', onClick: actions?.toggleSuper, active: gameState.activeModifiers.super },
-                ]}
-            />
+            <div className="ns-controlbar fixed bottom-0 left-0 right-0 sm:sticky sm:bottom-0 bg-terminal-black/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)] sm:pb-0">
+                <div className="h-16 sm:h-20 flex items-center justify-between sm:justify-center gap-2 p-2 sm:px-4">
+                    {/* Bet Menu */}
+                    <div className="hidden sm:flex items-center gap-2 flex-1">
+                        <CrapsBetMenu
+                            gameState={gameState}
+                            actions={actions}
+                            canPlaceBonus={canPlaceBonus}
+                            playMode={playMode}
+                        />
+                    </div>
+
+                    {/* Desktop: Chip + ROLL Button */}
+                    <div className="hidden sm:flex items-center gap-3">
+                        {/* Chip Selector */}
+                        <div className="relative">
+                            <ChipButton
+                                value={currentBet || 25}
+                                selected={showChipSelector}
+                                onClick={() => setShowChipSelector(!showChipSelector)}
+                            />
+                            {showChipSelector && (
+                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 p-3 bg-black/95 border border-gray-700 rounded-xl backdrop-blur-sm z-50">
+                                    <div className="flex gap-2 pb-2">
+                                        {CHIP_VALUES.slice(0, 4).map((value) => (
+                                            <ChipButton
+                                                key={value}
+                                                value={value}
+                                                size="md"
+                                                selected={currentBet === value}
+                                                onClick={() => {
+                                                    onBetChange?.(value);
+                                                    setShowChipSelector(false);
+                                                }}
+                                            />
+                                        ))}
+                                    </div>
+                                    <div className="flex gap-2 pt-2 border-t border-gray-800">
+                                        {CHIP_VALUES.slice(4).map((value) => (
+                                            <ChipButton
+                                                key={value}
+                                                value={value}
+                                                size="md"
+                                                selected={currentBet === value}
+                                                onClick={() => {
+                                                    onBetChange?.(value);
+                                                    setShowChipSelector(false);
+                                                }}
+                                            />
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* ROLL Button */}
+                        <button
+                            type="button"
+                            onClick={actions?.deal}
+                            className="h-14 px-8 rounded border-2 font-bold text-base tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] border-terminal-green bg-terminal-green text-black hover:bg-white hover:border-white hover:scale-105 active:scale-95"
+                        >
+                            ROLL
+                        </button>
+                    </div>
+
+                    {/* Mobile: Simplified buttons */}
+                    <div className="flex sm:hidden items-center gap-2 flex-1">
+                        <MobileDrawer label="BETS" title="PLACE BETS">
+                            <div className="space-y-4">
+                                {/* Normal Bets */}
+                                <div>
+                                    <div className="text-[10px] text-green-500 font-bold tracking-widest mb-2 border-b border-gray-800 pb-1">NORMAL BETS</div>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        <button onClick={() => actions?.placeCrapsBet?.(gameState.crapsPoint ? 'COME' : 'PASS')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('PASS') || betTypes.has('COME') ? 'border-green-400 bg-green-500/20 text-green-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>
+                                            {gameState.crapsPoint ? 'COME' : 'PASS'}
+                                        </button>
+                                        <button onClick={() => actions?.placeCrapsBet?.(gameState.crapsPoint ? 'DONT_COME' : 'DONT_PASS')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('DONT_PASS') || betTypes.has('DONT_COME') ? 'border-green-400 bg-green-500/20 text-green-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>
+                                            {gameState.crapsPoint ? "DON'T" : "D.PASS"}
+                                        </button>
+                                        <button onClick={() => actions?.placeCrapsBet?.('FIELD')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('FIELD') ? 'border-green-400 bg-green-500/20 text-green-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>FIELD</button>
+                                        <button onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, crapsInputMode: 'HARDWAY' }))} className={`py-3 rounded border text-xs font-bold ${betTypes.has('HARDWAY') ? 'border-green-400 bg-green-500/20 text-green-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>HARD</button>
+                                        <button onClick={() => actions?.addCrapsOdds?.()} className="py-3 rounded border text-xs font-bold border-gray-700 bg-gray-900 text-gray-400">ODDS</button>
+                                    </div>
+                                </div>
+
+                                {/* Modern Bets */}
+                                <div>
+                                    <div className="text-[10px] text-cyan-500 font-bold tracking-widest mb-2 border-b border-gray-800 pb-1">MODERN BETS</div>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        <button onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, crapsInputMode: 'YES' }))} className={`py-3 rounded border text-xs font-bold ${betTypes.has('YES') ? 'border-cyan-400 bg-cyan-500/20 text-cyan-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>YES</button>
+                                        <button onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, crapsInputMode: 'NO' }))} className={`py-3 rounded border text-xs font-bold ${betTypes.has('NO') ? 'border-cyan-400 bg-cyan-500/20 text-cyan-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>NO</button>
+                                        <button onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, crapsInputMode: 'NEXT' }))} className={`py-3 rounded border text-xs font-bold ${betTypes.has('NEXT') ? 'border-cyan-400 bg-cyan-500/20 text-cyan-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>NEXT</button>
+                                    </div>
+                                </div>
+
+                                {/* Bonus Bets */}
+                                {(canPlaceBonus || Object.values(bonusBetsPlaced).some(v => v)) && (
+                                    <div>
+                                        <div className="text-[10px] text-amber-500 font-bold tracking-widest mb-2 border-b border-gray-800 pb-1">BONUS BETS</div>
+                                        <div className="grid grid-cols-3 gap-2">
+                                            {[
+                                                { key: 'FIRE', label: 'FIRE', placed: bonusBetsPlaced.fire },
+                                                { key: 'ATS_SMALL', label: 'ATS-S', placed: bonusBetsPlaced.atsSmall },
+                                                { key: 'ATS_TALL', label: 'ATS-T', placed: bonusBetsPlaced.atsTall },
+                                                { key: 'ATS_ALL', label: 'ATS-A', placed: bonusBetsPlaced.atsAll },
+                                                { key: 'MUGGSY', label: 'MUGGSY', placed: bonusBetsPlaced.muggsy },
+                                                { key: 'DIFF_DOUBLES', label: 'DBLS', placed: bonusBetsPlaced.diffDoubles },
+                                                { key: 'RIDE_LINE', label: 'RIDE', placed: bonusBetsPlaced.rideLine },
+                                                { key: 'REPLAY', label: 'REPLAY', placed: bonusBetsPlaced.replay },
+                                                { key: 'HOT_ROLLER', label: 'HOT', placed: bonusBetsPlaced.hotRoller },
+                                            ].map(bet => (
+                                                <button
+                                                    key={bet.key}
+                                                    onClick={() => actions?.placeCrapsBet?.(bet.key)}
+                                                    disabled={!canPlaceBonus && !bet.placed}
+                                                    className={`py-3 rounded border text-xs font-bold transition-all ${
+                                                        bet.placed
+                                                            ? 'border-amber-400 bg-amber-500/20 text-amber-300'
+                                                            : !canPlaceBonus
+                                                                ? 'border-gray-800 bg-gray-900/50 text-gray-700 cursor-not-allowed'
+                                                                : 'border-gray-700 bg-gray-900 text-gray-400'
+                                                    }`}
+                                                >
+                                                    {bet.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Actions */}
+                                <div className="flex gap-2">
+                                    <button onClick={actions?.undoCrapsBet} className="flex-1 py-3 rounded border border-gray-700 bg-gray-900 text-gray-400 text-xs font-bold">UNDO</button>
+                                    <button onClick={actions?.toggleSuper} className={`flex-1 py-3 rounded border text-xs font-bold ${gameState.activeModifiers.super ? 'border-yellow-400 bg-yellow-500/20 text-yellow-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>SUPER</button>
+                                </div>
+                            </div>
+                        </MobileDrawer>
+                    </div>
+
+                    {/* Mobile ROLL Button */}
+                    <button
+                        type="button"
+                        onClick={actions?.deal}
+                        className="sm:hidden h-12 px-6 rounded border-2 font-bold text-sm tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] border-terminal-green bg-terminal-green text-black hover:bg-white hover:border-white hover:scale-105 active:scale-95"
+                    >
+                        ROLL
+                    </button>
+                </div>
+            </div>
 
             {/* MODAL */}
             {gameState.crapsInputMode !== 'NONE' && (
@@ -440,10 +691,14 @@ export const CrapsView = React.memo<{ gameState: GameState; actions: any; lastWi
                                              if (n === 6 || n === 8) return "6.2x";
                                              if (n === 7) return "5x";
                                          } else if (type === 'YES') {
-                                             if (n === 4 || n === 10) return "2.0x";
+                                             if (n === 2 || n === 12) return "6x";
+                                             if (n === 3 || n === 11) return "3x";
+                                             if (n === 4 || n === 10) return "2x";
                                              if (n === 5 || n === 9) return "1.5x";
                                              if (n === 6 || n === 8) return "1.2x";
                                          } else if (type === 'NO') {
+                                             if (n === 2 || n === 12) return "1/6";
+                                             if (n === 3 || n === 11) return "1/3";
                                              if (n === 4 || n === 10) return "0.5x";
                                              if (n === 5 || n === 9) return "0.7x";
                                              if (n === 6 || n === 8) return "0.8x";
@@ -451,9 +706,10 @@ export const CrapsView = React.memo<{ gameState: GameState; actions: any; lastWi
                                          return "";
                                      };
                                     
-                                     if (gameState.crapsInputMode === 'YES' || gameState.crapsInputMode === 'NO' || gameState.crapsInputMode === 'BUY') {
-                                         [4,5,6,8,9,10].forEach(n => {
-                                            numbersToRender.push({ num: n, label: n.toString(), payout: getProfit(gameState.crapsInputMode, n) });
+                                     if (gameState.crapsInputMode === 'YES' || gameState.crapsInputMode === 'NO') {
+                                         // All totals 2-12 except 7
+                                         [2,3,4,5,6,8,9,10,11,12].forEach(n => {
+                                            numbersToRender.push({ num: n, label: n === 10 ? '0' : n === 11 ? '-' : n === 12 ? '=' : n.toString(), payout: getProfit(gameState.crapsInputMode, n) });
                                          });
                                      } else if (gameState.crapsInputMode === 'NEXT') {
                                          [2,3,4,5,6,7,8,9,10,11,12].forEach(n => {
