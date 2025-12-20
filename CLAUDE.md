@@ -15,15 +15,37 @@ nullspace is a casino platform with BLS threshold-signed randomness. The archite
 ### Quick Start
 
 ```bash
-# 1. Generate keys (4-node network with 3-of-4 threshold)
+# 1. First-time setup: Generate keys (4-node network with 3-of-4 threshold)
 cargo run --release --bin generate-keys -- --nodes 4 --output configs/local --seed 0
 
-# 2. Start network (simulator + 4 nodes)
-./scripts/start-local-network.sh configs/local 4
+# 2. Start network with fresh data (recommended)
+./scripts/start-local-network.sh configs/local 4 --fresh
 
-# 3. Start frontend
+# 3. Start frontend (in separate terminal)
 cp configs/local/.env.local website/.env.local
-cd website && pnpm install && pnpm dev
+cd website && npm install && npm run dev
+```
+
+### Fast Restart (after first build)
+
+```bash
+# Skip cargo build, use existing binaries, fresh data
+./scripts/start-local-network.sh configs/local 4 --fresh --no-build
+```
+
+### Script Options
+
+| Flag | Description |
+|------|-------------|
+| `--fresh` | Clean data/node* before starting (prevents stale state crashes) |
+| `--no-build` | Skip cargo build, use existing binaries (saves ~1min) |
+
+### Troubleshooting
+
+If the network crashes with "Address already in use":
+```bash
+pkill -9 -f nullspace && rm -rf data/node*
+./scripts/start-local-network.sh configs/local 4 --fresh
 ```
 
 ### Key Endpoints
