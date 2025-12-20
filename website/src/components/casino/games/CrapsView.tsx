@@ -1,11 +1,24 @@
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { GameState } from '../../../types';
 import { DiceRender } from '../GameComponents';
 import { MobileDrawer } from '../MobileDrawer';
 import { calculateCrapsExposure } from '../../../utils/gameUtils';
 import { CrapsBonusDashboard } from './CrapsBonusDashboard';
 import { CrapsBetMenu } from './CrapsBetMenu';
+import { CrapsDice3DWrapper } from '../3d/CrapsDice3DWrapper';
+
+// Simple mobile detection hook
+const useIsMobile = () => {
+    const [isMobile, setIsMobile] = useState(false);
+    useEffect(() => {
+        const check = () => setIsMobile(window.innerWidth < 640);
+        check();
+        window.addEventListener('resize', check);
+        return () => window.removeEventListener('resize', check);
+    }, []);
+    return isMobile;
+};
 
 const CHIP_VALUES = [1, 5, 25, 100, 500, 1000, 5000, 10000];
 
@@ -61,6 +74,7 @@ export const CrapsView = React.memo<{
 }>(({ gameState, actions, lastWin, playMode, currentBet, onBetChange }) => {
     const [showChipSelector, setShowChipSelector] = useState(false);
     const [leftSidebarView, setLeftSidebarView] = useState<'EXPOSURE' | 'SIDE_BETS'>('EXPOSURE');
+    const isMobile = useIsMobile();
 
     // Get current roll (last dice sum)
     const currentRoll = useMemo(() =>
@@ -273,17 +287,13 @@ export const CrapsView = React.memo<{
                     )}
                 </div>
 
-                {/* Dice Area */}
-                <div className="min-h-[96px] sm:min-h-[120px] flex gap-8 items-center justify-center">
-                    {gameState.dice.length > 0 && (
-                        <div className="flex flex-col gap-2 items-center">
-                            <span className="text-xs uppercase tracking-widest text-gray-500">ROLL</span>
-                            <div className="flex gap-4">
-                                {gameState.dice.map((d, i) => <DiceRender key={i} value={d} delayMs={i * 60} />)}
-                            </div>
-                        </div>
-                    )}
-                </div>
+                {/* Dice Area - 3D/2D Toggle */}
+                <CrapsDice3DWrapper
+                    diceValues={gameState.dice}
+                    isRolling={gameState.message === 'ROLLING...'}
+                    onRoll={() => actions?.rollCraps?.()}
+                    isMobile={isMobile}
+                />
 
                 {/* Super Mode Info - Animated */}
                 {gameState.superMode?.isActive && (
