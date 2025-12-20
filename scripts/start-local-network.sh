@@ -2,13 +2,40 @@
 #
 # Start a local consensus network with simulator as indexer.
 #
-# Usage: ./scripts/start-local-network.sh [CONFIG_DIR] [NODES]
+# Usage: ./scripts/start-local-network.sh [CONFIG_DIR] [NODES] [OPTIONS]
+#
+# Options:
+#   --fresh    Clean data directory before starting (recommended for dev)
+#   --no-build Skip cargo build (use existing binaries)
 #
 # Prerequisites:
 #   1. Generate keys: cargo run --bin generate-keys -- --nodes 4 --output configs/local
 #   2. Copy env to frontend: cp configs/local/.env.local website/.env.local
 #
 set -euo pipefail
+
+# Parse options
+FRESH=false
+NO_BUILD=false
+POSITIONAL=()
+
+for arg in "$@"; do
+    case $arg in
+        --fresh)
+            FRESH=true
+            shift
+            ;;
+        --no-build)
+            NO_BUILD=true
+            shift
+            ;;
+        *)
+            POSITIONAL+=("$arg")
+            ;;
+    esac
+done
+
+set -- "${POSITIONAL[@]:-}"
 
 # Colors for output
 RED='\033[0;31m'
@@ -73,18 +100,33 @@ cleanup() {
 
 trap cleanup EXIT INT TERM
 
-# Build everything first (in release mode for performance)
-echo -e "${CYAN}Building binaries...${NC}"
-cargo build --release -p nullspace-simulator -p nullspace-node 2>&1 | tail -5
+# Clean data if --fresh flag is set
+if [ "$FRESH" = true ]; then
+    echo -e "${YELLOW}Cleaning node data directories...${NC}"
+    rm -rf ./data/node* 2>/dev/null || true
+fi
+
+# Build if not skipped
+if [ "$NO_BUILD" = true ]; then
+    echo -e "${CYAN}Skipping build (--no-build)${NC}"
+    # Verify binaries exist
+    if [ ! -f "target/release/nullspace-simulator" ] || [ ! -f "target/release/nullspace-node" ]; then
+        echo -e "${RED}Error: Binaries not found. Run without --no-build first.${NC}"
+        exit 1
+    fi
+else
+    echo -e "${CYAN}Building binaries...${NC}"
+    cargo build --release -p nullspace-simulator -p nullspace-node 2>&1 | tail -5
+fi
 
 # Create data directories
 for i in $(seq 0 $((NODES - 1))); do
     mkdir -p "./data/node$i"
 done
 
-# Start simulator/indexer
+# Start simulator/indexer (use binary directly for speed)
 echo -e "${GREEN}Starting simulator (indexer mode)...${NC}"
-cargo run --release -p nullspace-simulator -- \
+./target/release/nullspace-simulator \
     --host 0.0.0.0 \
     --port 8080 \
     --identity "$IDENTITY" &
@@ -104,14 +146,14 @@ for i in {1..30}; do
     sleep 1
 done
 
-# Start nodes
+# Start nodes (use binary directly for speed, reduced stagger)
 for i in $(seq 0 $((NODES - 1))); do
     echo -e "${GREEN}Starting node $i...${NC}"
-    cargo run --release -p nullspace-node --bin nullspace-node -- \
+    ./target/release/nullspace-node \
         --config "$CONFIG_DIR/node$i.yaml" \
         --peers "$CONFIG_DIR/peers.yaml" &
     PIDS+=($!)
-    sleep 2  # Stagger startup to allow peer discovery
+    sleep 0.5  # Brief stagger for peer discovery
 done
 
 echo
