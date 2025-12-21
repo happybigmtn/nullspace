@@ -32,6 +32,8 @@ nohup.out
 
 # Runtime artifacts
 *.pid
+data/
+website/dist/
 
 # Editor directories and files
 .vscode/*
