@@ -7,7 +7,7 @@
  * - Throw impulse based on power/direction
  * - Rest detection for animation completion
  */
-import React, { useRef, useEffect, useImperativeHandle, forwardRef, useState } from 'react';
+import React, { useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { RigidBody, RapierRigidBody } from '@react-three/rapier';
 import * as THREE from 'three';
@@ -54,12 +54,19 @@ interface PhysicsDiceProps {
 export const PhysicsDice = forwardRef<PhysicsDiceRef, PhysicsDiceProps>(
   ({ position = [0, 2, 0], targetValue, onRest, size = 0.8, index = 0, settleBounds, collisionGroups }, ref) => {
     const rigidBodyRef = useRef<RapierRigidBody>(null);
-    const [isThrown, setIsThrown] = useState(false);
-    const [hasRested, setHasRested] = useState(false);
+    const isThrownRef = useRef(false);
+    const hasRestedRef = useRef(false);
     const restCheckCountRef = useRef(0);
-    const correctionAppliedRef = useRef(false);
     const throwStartRef = useRef<number | null>(null);
     const forcedSettleRef = useRef(false);
+    const targetQuatRef = useRef<THREE.Quaternion | null>(null);
+    const linVelRef = useRef(new THREE.Vector3());
+    const angVelRef = useRef(new THREE.Vector3());
+    const currentEulerRef = useRef(new THREE.Euler());
+    const currentQuatRef = useRef(new THREE.Quaternion());
+    const correctionQuatRef = useRef(new THREE.Quaternion());
+    const inverseQuatRef = useRef(new THREE.Quaternion());
+    const axisRef = useRef(new THREE.Vector3());
     const smoothSettleRef = useRef<{
       startMs: number;
       durationMs: number;
@@ -112,7 +119,7 @@ export const PhysicsDice = forwardRef<PhysicsDiceRef, PhysicsDiceProps>(
       rigidBodyRef.current.setEnabledTranslations(false, false, false, true);
       rigidBodyRef.current.setEnabledRotations(false, false, false, true);
       forcedSettleRef.current = true;
-      setHasRested(true);
+      hasRestedRef.current = true;
       onRest?.(value);
     };
 
@@ -139,10 +146,10 @@ export const PhysicsDice = forwardRef<PhysicsDiceRef, PhysicsDiceProps>(
 
     // Reset state when target changes (new roll)
     useEffect(() => {
-      setHasRested(false);
-      correctionAppliedRef.current = false;
+      hasRestedRef.current = false;
       restCheckCountRef.current = 0;
       smoothSettleRef.current = null;
+      targetQuatRef.current = targetValue ? getTargetQuaternion(targetValue) : null;
     }, [targetValue]);
 
     // Expose throw and reset methods
@@ -150,9 +157,8 @@ export const PhysicsDice = forwardRef<PhysicsDiceRef, PhysicsDiceProps>(
       throw: (power: number, direction: { x: number; z: number }, verticalImpulse?: number) => {
         if (!rigidBodyRef.current) return;
 
-        setIsThrown(true);
-        setHasRested(false);
-        correctionAppliedRef.current = false;
+        isThrownRef.current = true;
+        hasRestedRef.current = false;
         restCheckCountRef.current = 0;
         throwStartRef.current = Date.now();
         forcedSettleRef.current = false;
@@ -189,9 +195,8 @@ export const PhysicsDice = forwardRef<PhysicsDiceRef, PhysicsDiceProps>(
       reset: () => {
         if (!rigidBodyRef.current) return;
 
-        setIsThrown(false);
-        setHasRested(false);
-        correctionAppliedRef.current = false;
+        isThrownRef.current = false;
+        hasRestedRef.current = false;
         throwStartRef.current = null;
         forcedSettleRef.current = false;
         smoothSettleRef.current = null;
@@ -253,12 +258,12 @@ export const PhysicsDice = forwardRef<PhysicsDiceRef, PhysicsDiceProps>(
         }
         return;
       }
-      if (!isThrown || hasRested) return;
+      if (!isThrownRef.current || hasRestedRef.current) return;
 
       const linVel = rigidBodyRef.current.linvel();
       const angVel = rigidBodyRef.current.angvel();
-      const linVelVec = new THREE.Vector3(linVel.x, linVel.y, linVel.z);
-      const angVelVec = new THREE.Vector3(angVel.x, angVel.y, angVel.z);
+      const linVelVec = linVelRef.current.set(linVel.x, linVel.y, linVel.z);
+      const angVelVec = angVelRef.current.set(angVel.x, angVel.y, angVel.z);
 
       const speed = linVelVec.length();
       const angSpeed = angVelVec.length();
@@ -269,22 +274,23 @@ export const PhysicsDice = forwardRef<PhysicsDiceRef, PhysicsDiceProps>(
 
       // Get current rotation state
       const rot = rigidBodyRef.current.rotation();
-      const currentEuler = new THREE.Euler().setFromQuaternion(
-        new THREE.Quaternion(rot.x, rot.y, rot.z, rot.w)
-      );
+      const currentQuat = currentQuatRef.current.set(rot.x, rot.y, rot.z, rot.w);
+      const currentEuler = currentEulerRef.current.setFromQuaternion(currentQuat);
       const currentTop = getCurrentTopFace(currentEuler);
 
       // Apply gentle correction when dice is slow and not showing target face
       if (speed < 4.6 && angSpeed < 7.5 && targetValue && currentTop !== targetValue) {
-        const targetQuat = getTargetQuaternion(targetValue);
-        const currentQuat = new THREE.Quaternion(rot.x, rot.y, rot.z, rot.w);
-
+        const targetQuat = targetQuatRef.current;
+        if (!targetQuat) {
+          // Target quaternion not ready yet; skip correction this frame.
+        } else {
         // Calculate correction needed
-        const correctionQuat = targetQuat.clone().multiply(currentQuat.clone().invert());
+        const inverseQuat = inverseQuatRef.current.copy(currentQuat).invert();
+        const correctionQuat = correctionQuatRef.current.copy(targetQuat).multiply(inverseQuat);
         const angle = 2 * Math.acos(Math.min(1, Math.abs(correctionQuat.w)));
 
         if (angle > 0.1) {
-          const axis = new THREE.Vector3(
+          const axis = axisRef.current.set(
             correctionQuat.x,
             correctionQuat.y,
             correctionQuat.z
@@ -302,9 +308,10 @@ export const PhysicsDice = forwardRef<PhysicsDiceRef, PhysicsDiceProps>(
             true
           );
         }
+        }
       }
 
-      if (forcedSettleRef.current && targetValue && !hasRested) {
+      if (forcedSettleRef.current && targetValue && !hasRestedRef.current) {
         beginSmoothSettle(targetValue, translation);
         return;
       }
@@ -347,7 +354,6 @@ export const PhysicsDice = forwardRef<PhysicsDiceRef, PhysicsDiceProps>(
         restCheckCountRef.current++;
         // Settle faster - 8 frames (~0.13 seconds at 60fps)
         if (restCheckCountRef.current > 8) {
-          console.log(`[PhysicsDice ${index}] Settled on face ${currentTop} (target: ${targetValue})`);
           beginSmoothSettle(targetValue, translation);
         }
       } else if (isAtRest && !showingCorrectFace) {

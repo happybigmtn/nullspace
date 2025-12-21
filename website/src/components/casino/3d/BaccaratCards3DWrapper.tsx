@@ -6,6 +6,7 @@
 import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { Card } from '../../../types';
 import { Hand } from '../GameComponents';
+import { COLLAPSE_DELAY_MS, getMinRemainingMs, MIN_ANIMATION_MS } from './sceneTiming';
 
 const BaccaratScene3D = lazy(() =>
   import('./BaccaratScene3D').then((mod) => ({ default: mod.BaccaratScene3D }))
@@ -69,6 +70,13 @@ export const BaccaratCards3DWrapper: React.FC<BaccaratCards3DWrapperProps> = ({
   const [skipRequested, setSkipRequested] = useState(false);
   const wasDealingRef = useRef(false);
   const collapseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const completionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const animationStartMsRef = useRef<number | null>(null);
+  const skipRequestedRef = useRef(false);
+
+  useEffect(() => {
+    skipRequestedRef.current = skipRequested;
+  }, [skipRequested]);
 
   useEffect(() => {
     if (isDealing) {
@@ -87,10 +95,15 @@ export const BaccaratCards3DWrapper: React.FC<BaccaratCards3DWrapperProps> = ({
     if (started && is3DMode) {
       setIsAnimating(true);
       setIsExpanded(true);
+      animationStartMsRef.current = performance.now();
       onAnimationBlockingChange?.(true);
       if (collapseTimeoutRef.current) {
         clearTimeout(collapseTimeoutRef.current);
         collapseTimeoutRef.current = null;
+      }
+      if (completionTimeoutRef.current) {
+        clearTimeout(completionTimeoutRef.current);
+        completionTimeoutRef.current = null;
       }
     }
 
@@ -101,10 +114,15 @@ export const BaccaratCards3DWrapper: React.FC<BaccaratCards3DWrapperProps> = ({
     if (!is3DMode || !isDealing || isAnimating) return;
     setIsAnimating(true);
     setIsExpanded(true);
+    animationStartMsRef.current = performance.now();
     onAnimationBlockingChange?.(true);
     if (collapseTimeoutRef.current) {
       clearTimeout(collapseTimeoutRef.current);
       collapseTimeoutRef.current = null;
+    }
+    if (completionTimeoutRef.current) {
+      clearTimeout(completionTimeoutRef.current);
+      completionTimeoutRef.current = null;
     }
   }, [is3DMode, isDealing, isAnimating, onAnimationBlockingChange]);
 
@@ -121,19 +139,37 @@ export const BaccaratCards3DWrapper: React.FC<BaccaratCards3DWrapperProps> = ({
     });
   }, [onAnimationBlockingChange]);
 
-  const handleAnimationComplete = useCallback(() => {
+  const finishAnimation = useCallback(() => {
     setIsAnimating(false);
     collapseTimeoutRef.current = setTimeout(() => {
       setIsExpanded(false);
       onAnimationBlockingChange?.(false);
       collapseTimeoutRef.current = null;
-    }, 1000);
+    }, COLLAPSE_DELAY_MS);
   }, [onAnimationBlockingChange]);
+
+  const handleAnimationComplete = useCallback(() => {
+    const remainingMs = skipRequestedRef.current ? 0 : getMinRemainingMs(animationStartMsRef.current, MIN_ANIMATION_MS);
+    if (remainingMs <= 0) {
+      finishAnimation();
+      return;
+    }
+    if (completionTimeoutRef.current) {
+      clearTimeout(completionTimeoutRef.current);
+    }
+    completionTimeoutRef.current = setTimeout(() => {
+      finishAnimation();
+      completionTimeoutRef.current = null;
+    }, remainingMs);
+  }, [finishAnimation]);
 
   useEffect(() => {
     return () => {
       if (collapseTimeoutRef.current) {
         clearTimeout(collapseTimeoutRef.current);
+      }
+      if (completionTimeoutRef.current) {
+        clearTimeout(completionTimeoutRef.current);
       }
     };
   }, []);

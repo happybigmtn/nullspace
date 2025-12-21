@@ -7,6 +7,7 @@
 import React, { Suspense, lazy, useState, useCallback, useEffect, useRef } from 'react';
 import { DiceRender } from '../GameComponents';
 import { playSfx } from '../../../services/sfx';
+import { COLLAPSE_DELAY_MS, getMinRemainingMs, MIN_ANIMATION_MS } from './sceneTiming';
 
 // Lazy load the 3D scene
 const CrapsScene3D = lazy(() =>
@@ -68,11 +69,17 @@ export const CrapsDice3DWrapper: React.FC<CrapsDice3DWrapperProps> = ({
   const wasRollingRef = useRef(false);
   const rollSoundPlayedRef = useRef(false);
   const collapseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const completionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const animationStartMsRef = useRef<number | null>(null);
+  const skipRequestedRef = useRef(false);
+
+  useEffect(() => {
+    skipRequestedRef.current = skipRequested;
+  }, [skipRequested]);
 
   // Sync animation state with parent's isRolling prop
   // This handles rolls triggered from game controls (not the 3D button)
   useEffect(() => {
-    console.log('[CrapsDice3DWrapper] isRolling changed:', isRolling, 'isAnimating:', isAnimating, 'is3DMode:', is3DMode);
     if (isRolling && !wasRollingRef.current) {
       if (!rollSoundPlayedRef.current) {
         void playSfx('dice');
@@ -84,14 +91,18 @@ export const CrapsDice3DWrapper: React.FC<CrapsDice3DWrapperProps> = ({
     }
     if (isRolling && !wasRollingRef.current && is3DMode) {
       // Parent started a roll - begin animation and expand viewport
-      console.log('[CrapsDice3DWrapper] Starting animation from parent roll');
       setIsAnimating(true);
       setIsExpanded(true);
+      animationStartMsRef.current = performance.now();
       onAnimationBlockingChange?.(true);
       // Clear any pending collapse
       if (collapseTimeoutRef.current) {
         clearTimeout(collapseTimeoutRef.current);
         collapseTimeoutRef.current = null;
+      }
+      if (completionTimeoutRef.current) {
+        clearTimeout(completionTimeoutRef.current);
+        completionTimeoutRef.current = null;
       }
     }
     wasRollingRef.current = isRolling;
@@ -99,12 +110,10 @@ export const CrapsDice3DWrapper: React.FC<CrapsDice3DWrapperProps> = ({
 
   // Update targets when chain responds
   useEffect(() => {
-    console.log('[CrapsDice3DWrapper] diceValues changed:', diceValues, 'isAnimating:', isAnimating);
     if (diceValues.length === 2) {
       const key = `${diceValues[0]}-${diceValues[1]}`;
       if (key !== prevDiceRef.current) {
         prevDiceRef.current = key;
-        console.log('[CrapsDice3DWrapper] Setting targetValues:', [diceValues[0], diceValues[1]]);
         setTargetValues([diceValues[0], diceValues[1]]);
       }
     }
@@ -122,6 +131,7 @@ export const CrapsDice3DWrapper: React.FC<CrapsDice3DWrapperProps> = ({
     if (isAnimating) return;
     setIsAnimating(true);
     setIsExpanded(true);
+    animationStartMsRef.current = performance.now();
     onAnimationBlockingChange?.(true);
     if (!rollSoundPlayedRef.current) {
       void playSfx('dice');
@@ -132,10 +142,14 @@ export const CrapsDice3DWrapper: React.FC<CrapsDice3DWrapperProps> = ({
       clearTimeout(collapseTimeoutRef.current);
       collapseTimeoutRef.current = null;
     }
+    if (completionTimeoutRef.current) {
+      clearTimeout(completionTimeoutRef.current);
+      completionTimeoutRef.current = null;
+    }
     onRoll();
   }, [isAnimating, onRoll, onAnimationBlockingChange]);
 
-  const handleAnimationComplete = useCallback(() => {
+  const finishAnimation = useCallback(() => {
     setIsAnimating(false);
     rollSoundPlayedRef.current = false;
     // Collapse viewport 1 second after animation completes
@@ -143,14 +157,32 @@ export const CrapsDice3DWrapper: React.FC<CrapsDice3DWrapperProps> = ({
       setIsExpanded(false);
       onAnimationBlockingChange?.(false);
       collapseTimeoutRef.current = null;
-    }, 1000);
+    }, COLLAPSE_DELAY_MS);
   }, [onAnimationBlockingChange]);
+
+  const handleAnimationComplete = useCallback(() => {
+    const remainingMs = skipRequestedRef.current ? 0 : getMinRemainingMs(animationStartMsRef.current, MIN_ANIMATION_MS);
+    if (remainingMs <= 0) {
+      finishAnimation();
+      return;
+    }
+    if (completionTimeoutRef.current) {
+      clearTimeout(completionTimeoutRef.current);
+    }
+    completionTimeoutRef.current = setTimeout(() => {
+      finishAnimation();
+      completionTimeoutRef.current = null;
+    }, remainingMs);
+  }, [finishAnimation]);
 
   // Cleanup timeout on unmount
   useEffect(() => {
     return () => {
       if (collapseTimeoutRef.current) {
         clearTimeout(collapseTimeoutRef.current);
+      }
+      if (completionTimeoutRef.current) {
+        clearTimeout(completionTimeoutRef.current);
       }
     };
   }, []);

@@ -6,6 +6,7 @@
 import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Card } from '../../../types';
 import { CardSlotConfig } from './cardLayouts';
+import { COLLAPSE_DELAY_MS, getMinRemainingMs, MIN_ANIMATION_MS } from './sceneTiming';
 
 const CardTableScene3D = lazy(() =>
   import('./CardTableScene3D').then((mod) => ({ default: mod.CardTableScene3D }))
@@ -61,8 +62,15 @@ export const CardAnimationOverlay: React.FC<CardAnimationOverlayProps> = ({
   const [revealSlots, setRevealSlots] = useState<string[]>([]);
   const [skipRequested, setSkipRequested] = useState(false);
   const collapseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const completionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const animationStartMsRef = useRef<number | null>(null);
+  const skipRequestedRef = useRef(false);
   const prevKeysRef = useRef<Record<string, string>>({});
   const didInitRef = useRef(false);
+
+  useEffect(() => {
+    skipRequestedRef.current = skipRequested;
+  }, [skipRequested]);
 
   const toggle3DMode = useCallback(() => {
     setIs3DMode((prev) => {
@@ -81,10 +89,15 @@ export const CardAnimationOverlay: React.FC<CardAnimationOverlayProps> = ({
     if (isActionActive && is3DMode) {
       setIsAnimating(true);
       setIsExpanded(true);
+      animationStartMsRef.current = performance.now();
       onAnimationBlockingChange?.(true);
       if (collapseTimeoutRef.current) {
         clearTimeout(collapseTimeoutRef.current);
         collapseTimeoutRef.current = null;
+      }
+      if (completionTimeoutRef.current) {
+        clearTimeout(completionTimeoutRef.current);
+        completionTimeoutRef.current = null;
       }
     }
   }, [isActionActive, is3DMode, onAnimationBlockingChange]);
@@ -130,27 +143,50 @@ export const CardAnimationOverlay: React.FC<CardAnimationOverlayProps> = ({
       setDealId((prev) => prev + 1);
       setIsAnimating(true);
       setIsExpanded(true);
+      animationStartMsRef.current = performance.now();
       onAnimationBlockingChange?.(true);
       if (collapseTimeoutRef.current) {
         clearTimeout(collapseTimeoutRef.current);
         collapseTimeoutRef.current = null;
       }
+      if (completionTimeoutRef.current) {
+        clearTimeout(completionTimeoutRef.current);
+        completionTimeoutRef.current = null;
+      }
     }
   }, [cardsById, slots, is3DMode, onAnimationBlockingChange]);
 
-  const handleAnimationComplete = useCallback(() => {
+  const finishAnimation = useCallback(() => {
     setIsAnimating(false);
     collapseTimeoutRef.current = setTimeout(() => {
       setIsExpanded(false);
       onAnimationBlockingChange?.(false);
       collapseTimeoutRef.current = null;
-    }, 1000);
+    }, COLLAPSE_DELAY_MS);
   }, [onAnimationBlockingChange]);
+
+  const handleAnimationComplete = useCallback(() => {
+    const remainingMs = skipRequestedRef.current ? 0 : getMinRemainingMs(animationStartMsRef.current, MIN_ANIMATION_MS);
+    if (remainingMs <= 0) {
+      finishAnimation();
+      return;
+    }
+    if (completionTimeoutRef.current) {
+      clearTimeout(completionTimeoutRef.current);
+    }
+    completionTimeoutRef.current = setTimeout(() => {
+      finishAnimation();
+      completionTimeoutRef.current = null;
+    }, remainingMs);
+  }, [finishAnimation]);
 
   useEffect(() => {
     return () => {
       if (collapseTimeoutRef.current) {
         clearTimeout(collapseTimeoutRef.current);
+      }
+      if (completionTimeoutRef.current) {
+        clearTimeout(completionTimeoutRef.current);
       }
     };
   }, []);

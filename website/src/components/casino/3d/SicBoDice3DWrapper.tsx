@@ -4,6 +4,7 @@
 import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { DiceRender } from '../GameComponents';
 import { playSfx } from '../../../services/sfx';
+import { COLLAPSE_DELAY_MS, getMinRemainingMs, MIN_ANIMATION_MS } from './sceneTiming';
 
 const SicBoScene3D = lazy(() =>
   import('./SicBoScene3D').then((mod) => ({ default: mod.SicBoScene3D }))
@@ -62,6 +63,13 @@ export const SicBoDice3DWrapper: React.FC<SicBoDice3DWrapperProps> = ({
   const wasRollingRef = useRef(false);
   const rollSoundPlayedRef = useRef(false);
   const collapseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const completionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const animationStartMsRef = useRef<number | null>(null);
+  const skipRequestedRef = useRef(false);
+
+  useEffect(() => {
+    skipRequestedRef.current = skipRequested;
+  }, [skipRequested]);
 
   useEffect(() => {
     if (isRolling && !wasRollingRef.current) {
@@ -76,10 +84,15 @@ export const SicBoDice3DWrapper: React.FC<SicBoDice3DWrapperProps> = ({
     if (isRolling && !wasRollingRef.current && is3DMode) {
       setIsAnimating(true);
       setIsExpanded(true);
+      animationStartMsRef.current = performance.now();
       onAnimationBlockingChange?.(true);
       if (collapseTimeoutRef.current) {
         clearTimeout(collapseTimeoutRef.current);
         collapseTimeoutRef.current = null;
+      }
+      if (completionTimeoutRef.current) {
+        clearTimeout(completionTimeoutRef.current);
+        completionTimeoutRef.current = null;
       }
     }
     wasRollingRef.current = isRolling;
@@ -112,6 +125,7 @@ export const SicBoDice3DWrapper: React.FC<SicBoDice3DWrapperProps> = ({
     if (isAnimating) return;
     setIsAnimating(true);
     setIsExpanded(true);
+    animationStartMsRef.current = performance.now();
     onAnimationBlockingChange?.(true);
     if (!rollSoundPlayedRef.current) {
       void playSfx('dice');
@@ -121,22 +135,44 @@ export const SicBoDice3DWrapper: React.FC<SicBoDice3DWrapperProps> = ({
       clearTimeout(collapseTimeoutRef.current);
       collapseTimeoutRef.current = null;
     }
+    if (completionTimeoutRef.current) {
+      clearTimeout(completionTimeoutRef.current);
+      completionTimeoutRef.current = null;
+    }
     onRoll();
   }, [isAnimating, onRoll, onAnimationBlockingChange]);
 
-  const handleAnimationComplete = useCallback(() => {
+  const finishAnimation = useCallback(() => {
     setIsAnimating(false);
     collapseTimeoutRef.current = setTimeout(() => {
       setIsExpanded(false);
       onAnimationBlockingChange?.(false);
       collapseTimeoutRef.current = null;
-    }, 1000);
+    }, COLLAPSE_DELAY_MS);
   }, [onAnimationBlockingChange]);
+
+  const handleAnimationComplete = useCallback(() => {
+    const remainingMs = skipRequestedRef.current ? 0 : getMinRemainingMs(animationStartMsRef.current, MIN_ANIMATION_MS);
+    if (remainingMs <= 0) {
+      finishAnimation();
+      return;
+    }
+    if (completionTimeoutRef.current) {
+      clearTimeout(completionTimeoutRef.current);
+    }
+    completionTimeoutRef.current = setTimeout(() => {
+      finishAnimation();
+      completionTimeoutRef.current = null;
+    }, remainingMs);
+  }, [finishAnimation]);
 
   useEffect(() => {
     return () => {
       if (collapseTimeoutRef.current) {
         clearTimeout(collapseTimeoutRef.current);
+      }
+      if (completionTimeoutRef.current) {
+        clearTimeout(completionTimeoutRef.current);
       }
     };
   }, []);

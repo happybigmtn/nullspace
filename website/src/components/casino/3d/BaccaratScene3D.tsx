@@ -74,6 +74,10 @@ type CardRig = {
   flipProgress: number;
   hasTarget: boolean;
   sfxPlayed: boolean;
+  startPos: THREE.Vector3;
+  startRot: THREE.Euler;
+  workPos: THREE.Vector3;
+  workRot: THREE.Euler;
 };
 
 const buildSlots = (): SlotInfo[] => {
@@ -149,6 +153,18 @@ function BaccaratTableScene({
         flipProgress: 0,
         hasTarget: false,
         sfxPlayed: false,
+        startPos: new THREE.Vector3(
+          SHOE_POSITION.x,
+          SHOE_POSITION.y + sequenceIndex * 0.02,
+          SHOE_POSITION.z
+        ),
+        startRot: new THREE.Euler(
+          SHOE_ROTATION.x,
+          SHOE_ROTATION.y,
+          SHOE_ROTATION.z + sequenceIndex * 0.05
+        ),
+        workPos: new THREE.Vector3(),
+        workRot: new THREE.Euler(),
       };
     });
   }
@@ -300,13 +316,8 @@ function BaccaratTableScene({
       anyActive = true;
       rig.ref.current.visible = true;
 
-      const startPos = new THREE.Vector3().copy(SHOE_POSITION);
-      startPos.y += rig.sequenceIndex * 0.02;
-      const startRot = new THREE.Euler(
-        SHOE_ROTATION.x,
-        SHOE_ROTATION.y,
-        SHOE_ROTATION.z + rig.sequenceIndex * 0.05
-      );
+      const startPos = rig.startPos;
+      const startRot = rig.startRot;
 
       let dealProgress = 0;
       if (rig.dealStartMs !== null) {
@@ -321,10 +332,10 @@ function BaccaratTableScene({
       const easedDeal = easeOutCubic(dealProgress);
       const arc = Math.sin(dealProgress * Math.PI) * DEAL_ARC_HEIGHT;
       const targetPos = rig.slot.position;
-      const pos = new THREE.Vector3().lerpVectors(startPos, targetPos, easedDeal);
+      const pos = rig.workPos.lerpVectors(startPos, targetPos, easedDeal);
       pos.y += arc;
 
-      const rot = new THREE.Euler(
+      const rot = rig.workRot.set(
         THREE.MathUtils.lerp(startRot.x, rig.slot.rotation.x, easedDeal),
         THREE.MathUtils.lerp(startRot.y, rig.slot.rotation.y, easedDeal),
         THREE.MathUtils.lerp(startRot.z, rig.slot.rotation.z, easedDeal)

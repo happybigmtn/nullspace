@@ -37,6 +37,10 @@ type CardRig = {
   dealt: boolean;
   flipProgress: number;
   sfxPlayed: boolean;
+  startPos: THREE.Vector3;
+  startRot: THREE.Euler;
+  workPos: THREE.Vector3;
+  workRot: THREE.Euler;
 };
 
 interface CardTableScene3DProps {
@@ -102,17 +106,32 @@ function CardTableScene({
   const resolvedCardSize = cardSize ?? CARD_SCENE_CONFIG.cardSize;
 
   if (rigsRef.current.length === 0) {
-    rigsRef.current = slotInfos.map((slot, index) => ({
-      slot,
-      sequenceIndex: orderMap.get(slot.id) ?? index,
-      ref: cardRefs[index],
-      mode: 'static',
-      dealStartMs: null,
-      flipStartMs: null,
-      dealt: false,
-      flipProgress: 0,
-      sfxPlayed: false,
-    }));
+    rigsRef.current = slotInfos.map((slot, index) => {
+      const sequenceIndex = orderMap.get(slot.id) ?? index;
+      return {
+        slot,
+        sequenceIndex,
+        ref: cardRefs[index],
+        mode: 'static',
+        dealStartMs: null,
+        flipStartMs: null,
+        dealt: false,
+        flipProgress: 0,
+        sfxPlayed: false,
+        startPos: new THREE.Vector3(
+          SHOE_POSITION.x,
+          SHOE_POSITION.y + sequenceIndex * 0.02,
+          SHOE_POSITION.z
+        ),
+        startRot: new THREE.Euler(
+          SHOE_ROTATION.x,
+          SHOE_ROTATION.y,
+          SHOE_ROTATION.z + sequenceIndex * 0.05
+        ),
+        workPos: new THREE.Vector3(),
+        workRot: new THREE.Euler(),
+      };
+    });
   }
 
   useEffect(() => {
@@ -216,13 +235,8 @@ function CardTableScene({
       anyActive = true;
       rig.ref.current.visible = Boolean(card) || rig.mode !== 'static';
 
-      const startPos = new THREE.Vector3().copy(SHOE_POSITION);
-      startPos.y += rig.sequenceIndex * 0.02;
-      const startRot = new THREE.Euler(
-        SHOE_ROTATION.x,
-        SHOE_ROTATION.y,
-        SHOE_ROTATION.z + rig.sequenceIndex * 0.05
-      );
+      const startPos = rig.startPos;
+      const startRot = rig.startRot;
 
       if (rig.mode === 'deal') {
         let dealProgress = 0;
@@ -235,10 +249,10 @@ function CardTableScene({
 
         const eased = easeOutCubic(dealProgress);
         const arc = Math.sin(dealProgress * Math.PI) * DEAL_ARC_HEIGHT;
-        const pos = new THREE.Vector3().lerpVectors(startPos, rig.slot.position, eased);
+        const pos = rig.workPos.lerpVectors(startPos, rig.slot.position, eased);
         pos.y += arc;
 
-        const rot = new THREE.Euler(
+        const rot = rig.workRot.set(
           THREE.MathUtils.lerp(startRot.x, rig.slot.rotation.x, eased),
           THREE.MathUtils.lerp(startRot.y, rig.slot.rotation.y, eased),
           THREE.MathUtils.lerp(startRot.z, rig.slot.rotation.z, eased)

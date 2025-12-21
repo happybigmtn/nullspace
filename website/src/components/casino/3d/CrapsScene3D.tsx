@@ -287,11 +287,6 @@ function DiceScene({
     }, delayMs);
   }, [onAnimationComplete]);
 
-  // Debug: log targetValues changes
-  useEffect(() => {
-    console.log('[CrapsScene3D] targetValues changed:', targetValues);
-  }, [targetValues]);
-
   useEffect(() => {
     const halfOffset = MAGNET_SEPARATION / 2;
     const clampedZ = Math.min(
@@ -301,15 +296,9 @@ function DiceScene({
     magnetAnchor.current.set(0, SETTLE_BOUNDS.settleY, clampedZ);
   }, []);
 
-  // Debug: log settled changes
-  useEffect(() => {
-    console.log('[CrapsScene3D] settled changed:', settled, 'cameraSettled:', cameraSettled);
-  }, [settled, cameraSettled]);
-
   // Throw dice when animation starts
   useEffect(() => {
     if (isAnimating && !hasThrown.current) {
-      console.log('[CrapsScene3D] Starting animation, throwing dice');
       hasThrown.current = true;
       setSettled([false, false]);
       setCameraSettled(false);
@@ -337,20 +326,17 @@ function DiceScene({
 
   }, [isAnimating]);
 
-  const handleDice1Rest = useCallback((value: number) => {
-    console.log('[CrapsScene3D] Dice 1 rested on', value);
+  const handleDice1Rest = useCallback(() => {
     setSettled(prev => [true, prev[1]]);
   }, []);
 
-  const handleDice2Rest = useCallback((value: number) => {
-    console.log('[CrapsScene3D] Dice 2 rested on', value);
+  const handleDice2Rest = useCallback(() => {
     setSettled(prev => [prev[0], true]);
   }, []);
 
   // Complete when both settled and camera has animated
   useEffect(() => {
     if (settled[0] && settled[1] && isAnimating) {
-      console.log('[CrapsScene3D] Both dice settled, starting camera animation');
       // Start camera transition
       setCameraSettled(true);
 
@@ -449,7 +435,14 @@ function DiceScene({
       />
       <pointLight position={[-2, 3, 2]} intensity={0.4} color="#00ff88" />
 
-      <Physics gravity={[0, -25, 0]} timeStep={isMobile ? 1 / 45 : 1 / 60} maxCcdSubsteps={4}>
+      <Physics
+        gravity={[0, -25, 0]}
+        timeStep={isMobile ? 1 / 45 : 1 / 60}
+        maxCcdSubsteps={4}
+        numSolverIterations={8}
+        numInternalPgsIterations={2}
+        updateLoop="independent"
+      >
         <Table />
         <TableCollider />
         <CatchFloor />

@@ -5,6 +5,7 @@
  */
 import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { getRouletteColor } from '../../../utils/gameUtils';
+import { COLLAPSE_DELAY_MS, getMinRemainingMs, MIN_ANIMATION_MS } from './sceneTiming';
 
 const RouletteScene3D = lazy(() =>
   import('./RouletteScene3D').then((mod) => ({ default: mod.RouletteScene3D }))
@@ -72,15 +73,27 @@ export const RouletteWheel3DWrapper: React.FC<RouletteWheel3DWrapperProps> = ({
   const prevResultRef = useRef<number | null>(null);
   const wasSpinningRef = useRef(false);
   const collapseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const completionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const animationStartMsRef = useRef<number | null>(null);
+  const skipRequestedRef = useRef(false);
+
+  useEffect(() => {
+    skipRequestedRef.current = skipRequested;
+  }, [skipRequested]);
 
   useEffect(() => {
     if (isSpinning && !wasSpinningRef.current && is3DMode) {
       setIsAnimating(true);
       setIsExpanded(true);
+      animationStartMsRef.current = performance.now();
       onAnimationBlockingChange?.(true);
       if (collapseTimeoutRef.current) {
         clearTimeout(collapseTimeoutRef.current);
         collapseTimeoutRef.current = null;
+      }
+      if (completionTimeoutRef.current) {
+        clearTimeout(completionTimeoutRef.current);
+        completionTimeoutRef.current = null;
       }
     }
     wasSpinningRef.current = isSpinning;
@@ -111,27 +124,50 @@ export const RouletteWheel3DWrapper: React.FC<RouletteWheel3DWrapperProps> = ({
     if (isAnimating) return;
     setIsAnimating(true);
     setIsExpanded(true);
+    animationStartMsRef.current = performance.now();
     onAnimationBlockingChange?.(true);
     if (collapseTimeoutRef.current) {
       clearTimeout(collapseTimeoutRef.current);
       collapseTimeoutRef.current = null;
     }
+    if (completionTimeoutRef.current) {
+      clearTimeout(completionTimeoutRef.current);
+      completionTimeoutRef.current = null;
+    }
     onSpin();
   }, [isAnimating, onSpin, onAnimationBlockingChange]);
 
-  const handleAnimationComplete = useCallback(() => {
+  const finishAnimation = useCallback(() => {
     setIsAnimating(false);
     collapseTimeoutRef.current = setTimeout(() => {
       setIsExpanded(false);
       onAnimationBlockingChange?.(false);
       collapseTimeoutRef.current = null;
-    }, 1000);
+    }, COLLAPSE_DELAY_MS);
   }, [onAnimationBlockingChange]);
+
+  const handleAnimationComplete = useCallback(() => {
+    const remainingMs = skipRequestedRef.current ? 0 : getMinRemainingMs(animationStartMsRef.current, MIN_ANIMATION_MS);
+    if (remainingMs <= 0) {
+      finishAnimation();
+      return;
+    }
+    if (completionTimeoutRef.current) {
+      clearTimeout(completionTimeoutRef.current);
+    }
+    completionTimeoutRef.current = setTimeout(() => {
+      finishAnimation();
+      completionTimeoutRef.current = null;
+    }, remainingMs);
+  }, [finishAnimation]);
 
   useEffect(() => {
     return () => {
       if (collapseTimeoutRef.current) {
         clearTimeout(collapseTimeoutRef.current);
+      }
+      if (completionTimeoutRef.current) {
+        clearTimeout(completionTimeoutRef.current);
       }
     };
   }, []);

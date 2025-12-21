@@ -190,7 +190,7 @@ function RouletteWheel({
     if (!isAnimating) return;
     const now = performance.now();
     skipHandledRef.current = false;
-    const baseDuration = 5000 + Math.random() * 5000;
+    const baseDuration = 3800 + Math.random() * 800;
     const wheelDirection: 1 | -1 = 1;
     const ballDirection: 1 | -1 = -1;
     targetRef.current = null;
@@ -206,7 +206,7 @@ function RouletteWheel({
       targetNumber: null,
       targetLocked: false,
       settleStartMs: 0,
-      settleDurationMs: 2000,
+      settleDurationMs: 1200,
       wheelFromAngle: 0,
       wheelToAngle: 0,
       ballFromAngle: 0,

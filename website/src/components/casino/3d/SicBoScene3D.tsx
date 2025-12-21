@@ -242,7 +242,14 @@ function DiceScene({
       />
       <pointLight position={[-2, 3, 2]} intensity={0.35} color="#00ff88" />
 
-      <Physics gravity={[0, -24, 0]} timeStep={isMobile ? 1 / 45 : 1 / 60} maxCcdSubsteps={4}>
+      <Physics
+        gravity={[0, -24, 0]}
+        timeStep={isMobile ? 1 / 45 : 1 / 60}
+        maxCcdSubsteps={4}
+        numSolverIterations={8}
+        numInternalPgsIterations={2}
+        updateLoop="independent"
+      >
         <Table />
         <TableCollider />
         <CatchFloor />
