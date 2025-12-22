@@ -11,9 +11,12 @@ import * as THREE from 'three';
 import { PhysicsDice, PhysicsDiceRef } from './PhysicsDice';
 import { createRoundRng } from './engine';
 import CasinoEnvironment from './CasinoEnvironment';
+import LightingRig from './environments/LightingRig';
+import { LIGHTING_PRESETS } from './materials/MaterialConfig';
 import ResultPulse from './ResultPulse';
 import ShooterArm, { type ShooterArmState } from './ShooterArm';
 import PyramidWallCollider from './PyramidWallCollider';
+import CasinoPostProcessing from './post/CasinoPostProcessing';
 
 const TABLE_CONFIG = {
   width: 5.6,
@@ -505,15 +508,7 @@ function DiceScene({
         yOffset={0.04}
       />
 
-      <ambientLight intensity={0.6} />
-      <directionalLight
-        position={[3, 8, 5]}
-        intensity={1.5}
-        castShadow={!isMobile}
-        shadow-mapSize-width={isMobile ? 512 : 1024}
-        shadow-mapSize-height={isMobile ? 512 : 1024}
-      />
-      <pointLight position={[-2, 3, 2]} intensity={0.4} color="#00ff88" />
+      <LightingRig preset="speakeasy" isMobile={isMobile} />
 
       <Physics
         gravity={[0, -25, 0]}
@@ -568,6 +563,7 @@ export const CrapsScene3D: React.FC<CrapsScene3DProps> = ({
   skipRequested,
 }) => {
   const [sceneReady, setSceneReady] = useState(false);
+  const lightingPreset = LIGHTING_PRESETS.speakeasy;
 
   return (
     <div className="relative w-full h-full min-h-[320px]">
@@ -591,6 +587,12 @@ export const CrapsScene3D: React.FC<CrapsScene3DProps> = ({
             onAnimationComplete={onAnimationComplete}
             isMobile={isMobile}
             skipRequested={skipRequested}
+          />
+          <CasinoPostProcessing
+            enabled={!isMobile}
+            bloomIntensity={lightingPreset.bloomIntensity}
+            bloomThreshold={1.1}
+            toneMappingExposure={lightingPreset.exposure}
           />
         </Suspense>
       </Canvas>

@@ -10,6 +10,8 @@ import * as THREE from 'three';
 import { ROULETTE_NUMBERS, getRouletteColor } from '../../../utils/gameUtils';
 import CasinoEnvironment from './CasinoEnvironment';
 import { createRoundRng, generateRoundSeed } from './engine';
+import LightingRig from './environments/LightingRig';
+import { LIGHTING_PRESETS } from './materials/MaterialConfig';
 import {
   ATTRACTOR_PRESETS,
   ROULETTE_GEOMETRY,
@@ -19,6 +21,7 @@ import {
   getPocketAngle,
 } from './physics';
 import RouletteColliders from './RouletteColliders';
+import CasinoPostProcessing from './post/CasinoPostProcessing';
 
 const TWO_PI = Math.PI * 2;
 const POCKET_COUNT = ROULETTE_NUMBERS.length;
@@ -505,6 +508,7 @@ export const RouletteScene3D: React.FC<RouletteScene3DProps> = ({
   skipRequested,
 }) => {
   const [sceneReady, setSceneReady] = useState(false);
+  const lightingPreset = LIGHTING_PRESETS.casino;
   const spinStateRef = useRef<SpinState>({
     active: false,
     phase: 'idle',
@@ -546,18 +550,13 @@ export const RouletteScene3D: React.FC<RouletteScene3DProps> = ({
           <color attach="background" args={['#030306']} />
           <CasinoEnvironment />
 
-          {/* Terminal-style lighting */}
-          <ambientLight intensity={0.6} />
-          <directionalLight
-            position={[3, 8, 5]}
-            intensity={1.5}
-            castShadow={!isMobile}
-            shadow-mapSize-width={isMobile ? 512 : 1024}
-            shadow-mapSize-height={isMobile ? 512 : 1024}
+          <LightingRig
+            preset="casino"
+            isMobile={isMobile}
+            accentLights={[
+              { position: [2, 3, -2], intensity: lightingPreset.fillLightIntensity * 0.8 },
+            ]}
           />
-          {/* Neon green accent lights */}
-          <pointLight position={[-2, 3, 2]} intensity={0.4} color="#22ff88" />
-          <pointLight position={[2, 3, -2]} intensity={0.2} color="#22ff88" />
 
           {/* Dark floor under wheel */}
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.18, 0]} receiveShadow>
@@ -575,16 +574,23 @@ export const RouletteScene3D: React.FC<RouletteScene3DProps> = ({
             updateLoop="independent"
           >
             <RouletteColliders pocketCount={POCKET_COUNT} />
-            <RouletteWheel
-              targetNumber={targetNumber}
-              resultId={resultId}
-              isAnimating={isAnimating}
-              onAnimationComplete={onAnimationComplete}
-              isMobile={isMobile}
-              spinStateRef={spinStateRef}
-              ballRef={ballRef}
-              skipRequested={skipRequested}
-            />
+            <CasinoPostProcessing
+              enabled={!isMobile}
+              bloomIntensity={lightingPreset.bloomIntensity}
+              bloomThreshold={1.05}
+              toneMappingExposure={lightingPreset.exposure}
+            >
+              <RouletteWheel
+                targetNumber={targetNumber}
+                resultId={resultId}
+                isAnimating={isAnimating}
+                onAnimationComplete={onAnimationComplete}
+                isMobile={isMobile}
+                spinStateRef={spinStateRef}
+                ballRef={ballRef}
+                skipRequested={skipRequested}
+              />
+            </CasinoPostProcessing>
           </Physics>
         </Suspense>
       </Canvas>

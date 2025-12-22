@@ -8,6 +8,7 @@ import { ContactShadows } from '@react-three/drei';
 import * as THREE from 'three';
 import { Card } from '../../../types';
 import CasinoEnvironment from './CasinoEnvironment';
+import LightingRig from './environments/LightingRig';
 import BaccaratDealer, { CardSlot } from './BaccaratDealer';
 
 const TABLE_CONFIG = {
@@ -214,10 +215,12 @@ function BaccaratScene({
       <color attach="background" args={['#000000']} />
       <CasinoEnvironment />
       <TableCamera fullscreen={fullscreen} />
-      {/* Lighting for floating cards */}
-      <ambientLight intensity={0.6} />
-      <directionalLight position={[3, 6, 4]} intensity={1.2} castShadow={false} />
-      <pointLight position={[0, 4, 2]} intensity={0.4} color="#ffffff" />
+      <LightingRig
+        preset="vip"
+        enableShadows={false}
+        keyPosition={[3, 6, 4]}
+        fillPosition={[0, 4, 2]}
+      />
 
       {/* No table - cards float in void, but invisible collider for physics */}
 

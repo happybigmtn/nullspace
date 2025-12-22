@@ -1,5 +1,5 @@
 Goal (incl. success criteria):
-- Proceed with current uncommitted changes, then finish remaining Phase 2 tasks in `4d.md` with deliberate stage tracking; continue to add/run tests along the way.
+- Complete Phase 4 tasks from `4d.md`, then run comprehensive tests across all work to date.
 
 Constraints/Assumptions:
 - Follow `agents.md` guidance: read/update this ledger at start of each turn and whenever goal/state/decisions change; keep it brief and factual.
@@ -21,12 +21,15 @@ Done:
 - Added Vitest runner and guided forces unit tests.
 - Added roulette physics tests and aligned dice guidance with attractor config/physics constants.
 - Added card pool manager, deal/peek animation helpers, integrated into CardTableScene3D with tests.
+- Added lighting rig presets and wired them into casino scenes with post-processing exposure.
+- Added LightningEffect and SqueezeCard shader components.
+- Ran `npm run test:unit` and `npm test`.
 
 Now:
-- Ready to start Phase 4 (shaders/post/lighting) when requested.
+- Phase 4 complete; comprehensive tests executed.
 
 Next:
-- Phase 4: shaders/post-processing/lighting presets.
+- Await further instructions.
 
 Open questions (UNCONFIRMED if needed):
 - None.

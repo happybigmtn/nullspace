@@ -11,6 +11,7 @@ import { playSfx } from '../../../services/sfx';
 import Card3D, { CardHand } from './Card3D';
 import { CardSlotConfig, CARD_SCENE_CONFIG } from './cardLayouts';
 import CasinoEnvironment from './CasinoEnvironment';
+import LightingRig from './environments/LightingRig';
 import { CardDealAnimator, CardPeekAnimator } from './cards';
 
 // Default timing constants
@@ -372,14 +373,12 @@ function CardTableScene({
       {/* Pure black void */}
       <color attach="background" args={['#000000']} />
       <CasinoEnvironment />
-      {/* Lighting for floating cards */}
-      <ambientLight intensity={0.6} />
-      <directionalLight
-        position={[2, 5, 3]}
-        intensity={1.2}
-        castShadow={false}
+      <LightingRig
+        preset="vip"
+        enableShadows={false}
+        keyPosition={[2, 5, 3]}
+        fillPosition={[0, 3, 2]}
       />
-      <pointLight position={[0, 3, 2]} intensity={0.4} color="#ffffff" />
 
       {/* No table - cards float in void */}
 
