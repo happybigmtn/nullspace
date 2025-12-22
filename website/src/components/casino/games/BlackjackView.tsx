@@ -135,6 +135,7 @@ export const BlackjackView = React.memo<{
                 cardsById={cardsById}
                 isActionActive={animationActive}
                 storageKey="blackjack-3d-mode"
+                guidedGameType="blackjack"
                 onAnimationBlockingChange={onAnimationBlockingChange}
                 isMobile={isMobile}
             />

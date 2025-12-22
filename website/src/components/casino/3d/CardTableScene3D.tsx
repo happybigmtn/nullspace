@@ -13,6 +13,7 @@ import { CardSlotConfig, CARD_SCENE_CONFIG } from './cardLayouts';
 import CasinoEnvironment from './CasinoEnvironment';
 import LightingRig from './environments/LightingRig';
 import { CardDealAnimator, CardPeekAnimator } from './cards';
+import PerformanceOverlay from './PerformanceOverlay';
 
 // Default timing constants
 const DEAL_INTERVAL_MS = 130;
@@ -439,6 +440,7 @@ export const CardTableScene3D: React.FC<CardTableScene3DProps> = ({
         camera={{ position: [0, 2.8, 3.5], fov: fullscreen ? 48 : 52 }}
       >
         <Suspense fallback={null}>
+          <PerformanceOverlay />
           <CardTableScene
             slots={slots}
             dealOrder={dealOrder}

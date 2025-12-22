@@ -24,6 +24,7 @@ import RouletteColliders from './RouletteColliders';
 import CasinoPostProcessing from './post/CasinoPostProcessing';
 import AmbientSoundscape from './audio/AmbientSoundscape';
 import PositionalAudioEmitter from './audio/PositionalAudioEmitter';
+import PerformanceOverlay from './PerformanceOverlay';
 
 const TWO_PI = Math.PI * 2;
 const POCKET_COUNT = ROULETTE_NUMBERS.length;
@@ -553,6 +554,7 @@ export const RouletteScene3D: React.FC<RouletteScene3DProps> = ({
         camera={{ position: [0, 4.9, 6.0], fov: 46 }}
       >
         <Suspense fallback={null}>
+          <PerformanceOverlay />
           {/* Dark terminal background */}
           <color attach="background" args={['#030306']} />
           <CasinoEnvironment />
@@ -575,9 +577,9 @@ export const RouletteScene3D: React.FC<RouletteScene3DProps> = ({
           <Physics
             gravity={[0, -9.81, 0]}
             timeStep={isMobile ? 1 / 45 : 1 / 60}
-            maxCcdSubsteps={4}
-            numSolverIterations={8}
-            numInternalPgsIterations={2}
+            maxCcdSubsteps={isMobile ? 2 : 4}
+            numSolverIterations={isMobile ? 6 : 8}
+            numInternalPgsIterations={isMobile ? 1 : 2}
             updateLoop="independent"
           >
             <RouletteColliders pocketCount={POCKET_COUNT} />

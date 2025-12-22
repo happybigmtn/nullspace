@@ -71,6 +71,7 @@ export const BaccaratCards3DWrapper: React.FC<BaccaratCards3DWrapperProps> = ({
         cardsById={cardsById}
         isActionActive={isDealing}
         storageKey="baccarat-3d-mode"
+        guidedGameType="baccarat"
         onAnimationBlockingChange={onAnimationBlockingChange}
         isMobile={isMobile}
         selectedHand={selectedHand}

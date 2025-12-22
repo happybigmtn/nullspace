@@ -15,6 +15,7 @@ import ShooterArm, { type ShooterArmState } from './ShooterArm';
 import PyramidWallCollider from './PyramidWallCollider';
 import CasinoPostProcessing from './post/CasinoPostProcessing';
 import AmbientSoundscape from './audio/AmbientSoundscape';
+import PerformanceOverlay from './PerformanceOverlay';
 
 const TABLE_CONFIG = {
   width: 5.0,
@@ -522,9 +523,9 @@ function DiceScene({
       <Physics
         gravity={[0, -25, 0]}
         timeStep={isMobile ? 1 / 45 : 1 / 60}
-        maxCcdSubsteps={4}
-        numSolverIterations={8}
-        numInternalPgsIterations={2}
+        maxCcdSubsteps={isMobile ? 2 : 4}
+        numSolverIterations={isMobile ? 6 : 8}
+        numInternalPgsIterations={isMobile ? 1 : 2}
         updateLoop="independent"
       >
         <Table />
@@ -607,6 +608,7 @@ export const SicBoScene3D: React.FC<SicBoScene3DProps> = ({
         camera={{ position: [CAMERA_POS.x, CAMERA_POS.y, CAMERA_POS.z], fov: CAMERA_FOV }}
       >
         <Suspense fallback={null}>
+          <PerformanceOverlay />
           <DiceScene
             targetValues={targetValues}
             resultId={resultId}

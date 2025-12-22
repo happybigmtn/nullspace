@@ -10,6 +10,7 @@ import { Card } from '../../../types';
 import CasinoEnvironment from './CasinoEnvironment';
 import LightingRig from './environments/LightingRig';
 import BaccaratDealer, { CardSlot } from './BaccaratDealer';
+import PerformanceOverlay from './PerformanceOverlay';
 
 const TABLE_CONFIG = {
   width: 14,
@@ -270,6 +271,7 @@ export const BaccaratScene3D: React.FC<BaccaratScene3DProps> = ({
         camera={{ position: [0, 5.2, 8.6], fov: fullscreen ? 42 : 46 }}
       >
         <Suspense fallback={null}>
+          <PerformanceOverlay />
           <BaccaratScene
             playerCards={playerCards}
             bankerCards={bankerCards}

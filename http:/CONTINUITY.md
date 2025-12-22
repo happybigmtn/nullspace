@@ -1,5 +1,5 @@
 Goal (incl. success criteria):
-- Begin Phase 6 integration/polish by wiring audio components into scenes and aligning with existing sound settings.
+- Complete Phase 6 integration/polish: performance profiling notes, mobile optimization pass, and broader chain/store wiring.
 
 Constraints/Assumptions:
 - Follow `agents.md` guidance: read/update this ledger at start of each turn and whenever goal/state/decisions change; keep it brief and factual.
@@ -36,12 +36,16 @@ Done:
 - Wired GuidedStore actions for chain outcomes, skip requests, and animation blocking.
 - Ran `npm run test:unit` and `npm test`.
 - Committed and pushed positional audio + guided store wiring.
+- Added dev-only performance overlay for 3D scenes.
+- Tuned mobile physics settings for lighter simulation.
+- Wired GuidedStore for blackjack/baccarat card animations (blocking/skip/outcomes).
+- Ran `npm run test:unit` and `npm test`.
 
 Now:
-- Phase 6 in progress: audio + guided store wiring committed; full tests done.
+- Phase 6 in progress: profiling hooks, mobile optimizations, and card store wiring complete.
 
 Next:
-- Decide on remaining Phase 6 tasks (performance profiling, mobile optimization, full chain store integration).
+- Decide if further Phase 6 polish remains or move to next phase.
 
 Open questions (UNCONFIRMED if needed):
 - None.

@@ -18,6 +18,7 @@ import ShooterArm, { type ShooterArmState } from './ShooterArm';
 import PyramidWallCollider from './PyramidWallCollider';
 import CasinoPostProcessing from './post/CasinoPostProcessing';
 import AmbientSoundscape from './audio/AmbientSoundscape';
+import PerformanceOverlay from './PerformanceOverlay';
 
 const TABLE_CONFIG = {
   width: 5.6,
@@ -514,9 +515,9 @@ function DiceScene({
       <Physics
         gravity={[0, -25, 0]}
         timeStep={isMobile ? 1 / 45 : 1 / 60}
-        maxCcdSubsteps={4}
-        numSolverIterations={8}
-        numInternalPgsIterations={2}
+        maxCcdSubsteps={isMobile ? 2 : 4}
+        numSolverIterations={isMobile ? 6 : 8}
+        numInternalPgsIterations={isMobile ? 1 : 2}
         updateLoop="independent"
       >
         <Table />
@@ -586,6 +587,7 @@ export const CrapsScene3D: React.FC<CrapsScene3DProps> = ({
         camera={{ position: [0, CAMERA_ROLL_HEIGHT, CAMERA_ROLL_RADIUS], fov: CAMERA_ROLL_FOV }}
       >
         <Suspense fallback={null}>
+          <PerformanceOverlay />
           <DiceScene
             targetValues={targetValues}
             resultId={resultId}

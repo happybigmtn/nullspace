@@ -8,6 +8,7 @@ import { Card } from '../../../types';
 import { CardSlotConfig } from './cardLayouts';
 import { COLLAPSE_DELAY_MS, getMinRemainingMs, MIN_ANIMATION_MS } from './sceneTiming';
 import type { CardHand } from './Card3D';
+import { useGuidedStore } from './engine/GuidedStore';
 
 const CardTableScene3D = lazy(() =>
   import('./CardTableScene3D').then((mod) => ({ default: mod.CardTableScene3D }))
@@ -19,6 +20,7 @@ interface CardAnimationOverlayProps {
   cardsById: Record<string, Card | null>;
   isActionActive: boolean;
   storageKey: string;
+  guidedGameType?: 'blackjack' | 'baccarat';
   onAnimationBlockingChange?: (blocking: boolean) => void;
   isMobile?: boolean;
   tableSize?: { width: number; depth: number; y: number };
@@ -47,6 +49,7 @@ export const CardAnimationOverlay: React.FC<CardAnimationOverlayProps> = ({
   cardsById,
   isActionActive,
   storageKey,
+  guidedGameType,
   onAnimationBlockingChange,
   isMobile = false,
   tableSize,
@@ -72,10 +75,41 @@ export const CardAnimationOverlay: React.FC<CardAnimationOverlayProps> = ({
   const skipRequestedRef = useRef(false);
   const prevKeysRef = useRef<Record<string, string>>({});
   const didInitRef = useRef(false);
+  const activeRoundRef = useRef<number | null>(null);
+
+  const startRound = useGuidedStore((s) => s.startRound);
+  const receiveOutcome = useGuidedStore((s) => s.receiveOutcome);
+  const requestSkip = useGuidedStore((s) => s.requestSkip);
+  const setAnimationBlocking = useGuidedStore((s) => s.setAnimationBlocking);
 
   useEffect(() => {
     skipRequestedRef.current = skipRequested;
   }, [skipRequested]);
+
+  const emitOutcome = useCallback((slotId: string) => {
+    if (!guidedGameType) return;
+    const card = cardsById[slotId];
+    if (!card || card.isHidden) return;
+    const [prefix, indexRaw] = slotId.split('-');
+    const index = Number.isFinite(Number(indexRaw)) ? Number(indexRaw) : 0;
+    if (guidedGameType === 'blackjack') {
+      if (prefix !== 'player' && prefix !== 'dealer') return;
+      receiveOutcome('blackjack', {
+        card: { rank: card.rank, suit: card.suit },
+        handType: prefix === 'player' ? 'player' : 'dealer',
+        handIndex: index,
+      });
+      return;
+    }
+    if (guidedGameType === 'baccarat') {
+      if (prefix !== 'player' && prefix !== 'banker') return;
+      receiveOutcome('baccarat', {
+        card: { rank: card.rank, suit: card.suit },
+        handType: prefix === 'player' ? 'player' : 'banker',
+        cardIndex: index,
+      });
+    }
+  }, [cardsById, guidedGameType, receiveOutcome]);
 
   const toggle3DMode = useCallback(() => {
     setIs3DMode((prev) => {
@@ -85,10 +119,13 @@ export const CardAnimationOverlay: React.FC<CardAnimationOverlayProps> = ({
         setIsAnimating(false);
         setIsExpanded(false);
         onAnimationBlockingChange?.(false);
+        if (guidedGameType) {
+          setAnimationBlocking(guidedGameType, false);
+        }
       }
       return next;
     });
-  }, [onAnimationBlockingChange, storageKey]);
+  }, [guidedGameType, onAnimationBlockingChange, setAnimationBlocking, storageKey]);
 
   useEffect(() => {
     if (isActionActive && is3DMode) {
@@ -96,6 +133,14 @@ export const CardAnimationOverlay: React.FC<CardAnimationOverlayProps> = ({
       setIsExpanded(true);
       animationStartMsRef.current = performance.now();
       onAnimationBlockingChange?.(true);
+      if (guidedGameType) {
+        const roundId = dealId + 1;
+        if (activeRoundRef.current !== roundId) {
+          activeRoundRef.current = roundId;
+          startRound(guidedGameType, roundId);
+        }
+        setAnimationBlocking(guidedGameType, true);
+      }
       if (collapseTimeoutRef.current) {
         clearTimeout(collapseTimeoutRef.current);
         collapseTimeoutRef.current = null;
@@ -105,7 +150,7 @@ export const CardAnimationOverlay: React.FC<CardAnimationOverlayProps> = ({
         completionTimeoutRef.current = null;
       }
     }
-  }, [isActionActive, is3DMode, onAnimationBlockingChange]);
+  }, [dealId, guidedGameType, isActionActive, is3DMode, onAnimationBlockingChange, setAnimationBlocking, startRound]);
 
   useEffect(() => {
     const nextKeys: Record<string, string> = {};
@@ -150,6 +195,15 @@ export const CardAnimationOverlay: React.FC<CardAnimationOverlayProps> = ({
       setIsExpanded(true);
       animationStartMsRef.current = performance.now();
       onAnimationBlockingChange?.(true);
+      if (guidedGameType) {
+        const roundId = dealId + 1;
+        if (activeRoundRef.current !== roundId) {
+          activeRoundRef.current = roundId;
+          startRound(guidedGameType, roundId);
+        }
+        setAnimationBlocking(guidedGameType, true);
+        [...newDeals, ...newReveals].forEach(emitOutcome);
+      }
       if (collapseTimeoutRef.current) {
         clearTimeout(collapseTimeoutRef.current);
         collapseTimeoutRef.current = null;
@@ -159,16 +213,19 @@ export const CardAnimationOverlay: React.FC<CardAnimationOverlayProps> = ({
         completionTimeoutRef.current = null;
       }
     }
-  }, [cardsById, slots, is3DMode, onAnimationBlockingChange]);
+  }, [cardsById, dealId, emitOutcome, guidedGameType, is3DMode, onAnimationBlockingChange, setAnimationBlocking, slots, startRound]);
 
   const finishAnimation = useCallback(() => {
     setIsAnimating(false);
     collapseTimeoutRef.current = setTimeout(() => {
       setIsExpanded(false);
       onAnimationBlockingChange?.(false);
+      if (guidedGameType) {
+        setAnimationBlocking(guidedGameType, false);
+      }
       collapseTimeoutRef.current = null;
     }, COLLAPSE_DELAY_MS);
-  }, [onAnimationBlockingChange]);
+  }, [guidedGameType, onAnimationBlockingChange, setAnimationBlocking]);
 
   const handleAnimationComplete = useCallback(() => {
     const remainingMs = skipRequestedRef.current ? 0 : getMinRemainingMs(animationStartMsRef.current, MIN_ANIMATION_MS);
@@ -199,13 +256,21 @@ export const CardAnimationOverlay: React.FC<CardAnimationOverlayProps> = ({
   useEffect(() => {
     if (!is3DMode) {
       onAnimationBlockingChange?.(false);
+      if (guidedGameType) {
+        setAnimationBlocking(guidedGameType, false);
+      }
     }
-  }, [is3DMode, onAnimationBlockingChange]);
+  }, [guidedGameType, is3DMode, onAnimationBlockingChange, setAnimationBlocking]);
 
   useEffect(() => {
     if (!isAnimating) return;
     setSkipRequested(false);
   }, [isAnimating]);
+
+  useEffect(() => {
+    if (!skipRequested || !guidedGameType) return;
+    requestSkip(guidedGameType);
+  }, [guidedGameType, requestSkip, skipRequested]);
 
   useEffect(() => {
     if (!isAnimating || !isExpanded || !is3DMode) return;

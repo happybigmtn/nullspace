@@ -216,7 +216,7 @@ export const SicBoDice3DWrapper: React.FC<SicBoDice3DWrapperProps> = ({
     if (outcomeSentRef.current === resultId) return;
     if (!targetValues.every((die) => die >= 1 && die <= 6)) return;
     outcomeSentRef.current = resultId;
-    receiveOutcome('sicbo', { dice: targetValues });
+    receiveOutcome('sicbo', { dice: targetValues, total: targetValues.reduce((sum, value) => sum + value, 0) });
   }, [receiveOutcome, resultId, targetValues]);
 
   useEffect(() => {
