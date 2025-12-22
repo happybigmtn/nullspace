@@ -24,9 +24,10 @@ Done:
 - Added lighting rig presets and wired them into casino scenes with post-processing exposure.
 - Added LightningEffect and SqueezeCard shader components.
 - Ran `npm run test:unit` and `npm test`.
+- Committed and pushed Phase 4 lighting/shader updates.
 
 Now:
-- Phase 4 complete; comprehensive tests executed.
+- Phase 4 complete; changes committed and pushed.
 
 Next:
 - Await further instructions.
