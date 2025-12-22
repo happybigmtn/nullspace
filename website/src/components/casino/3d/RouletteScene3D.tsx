@@ -5,10 +5,20 @@
  */
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
+import { Physics } from '@react-three/rapier';
 import * as THREE from 'three';
 import { ROULETTE_NUMBERS, getRouletteColor } from '../../../utils/gameUtils';
 import CasinoEnvironment from './CasinoEnvironment';
-import { createRoundRng } from './engine';
+import { createRoundRng, generateRoundSeed } from './engine';
+import {
+  ATTRACTOR_PRESETS,
+  ROULETTE_GEOMETRY,
+  buildRoulettePockets,
+  calculateAttractorForce,
+  computeRouletteLaunch,
+  getPocketAngle,
+} from './physics';
+import RouletteColliders from './RouletteColliders';
 
 const TWO_PI = Math.PI * 2;
 const POCKET_COUNT = ROULETTE_NUMBERS.length;
@@ -47,7 +57,7 @@ const deltaForDirection = (from: number, to: number, direction: 1 | -1) => {
   return delta;
 };
 
-const pocketAngle = (index: number) => (index / POCKET_COUNT) * TWO_PI;
+const pocketAngle = (index: number) => getPocketAngle(index, POCKET_COUNT);
 
 type SpinPhase = 'idle' | 'cruise' | 'settle';
 
@@ -55,6 +65,7 @@ interface SpinState {
   active: boolean;
   phase: SpinPhase;
   startMs: number;
+  seed: number;
   durationMs: number;
   wheelAngle: number;
   ballAngle: number;
@@ -142,25 +153,30 @@ function RouletteWheel({
   const wheelRef = useRef<THREE.Group>(null);
   const targetRef = useRef<number | null>(null);
   const skipHandledRef = useRef(false);
+  const lastBallPos = useRef(new THREE.Vector3());
+  const lastBallVel = useRef(new THREE.Vector3());
+  const currentBallPos = useRef(new THREE.Vector3());
+  const targetBallPos = useRef(new THREE.Vector3());
+  const forceVec = useRef(new THREE.Vector3());
 
   const pocketData = useMemo(() => {
-    return ROULETTE_NUMBERS.map((num, index) => {
-      const angle = pocketAngle(index);
+    const pockets = buildRoulettePockets(
+      ROULETTE_NUMBERS,
+      POCKET_RADIUS,
+      WHEEL_HEIGHT / 2 + POCKET_HEIGHT / 2
+    );
+    return pockets.map((pocket) => {
       // Neon terminal colors - bright accents on dark base
-      const color = num === 0
+      const color = pocket.number === 0
         ? NEON_GREEN
-        : getRouletteColor(num) === 'RED'
+        : getRouletteColor(pocket.number) === 'RED'
           ? NEON_RED
           : POCKET_BLACK;
       return {
-        num,
-        angle,
+        num: pocket.number,
+        angle: pocket.angle,
         color,
-        position: new THREE.Vector3(
-          Math.sin(angle) * POCKET_RADIUS,
-          WHEEL_HEIGHT / 2 + POCKET_HEIGHT / 2,
-          Math.cos(angle) * POCKET_RADIUS
-        ),
+        position: pocket.position,
       };
     });
   }, []);
@@ -204,19 +220,19 @@ function RouletteWheel({
     skipHandledRef.current = false;
     const roundId = typeof resultId === 'number' ? resultId : 0;
     const rng = createRoundRng('roulette', roundId);
-    const baseDuration = 3800 + rng.range(0, 800);
-    const wheelDirection: 1 | -1 = 1;
-    const ballDirection: 1 | -1 = -1;
+    const seed = generateRoundSeed('roulette', roundId);
+    const launch = computeRouletteLaunch(rng);
     targetRef.current = null;
     spinStateRef.current = {
       active: true,
       phase: 'cruise',
       startMs: now,
-      durationMs: baseDuration,
+      seed,
+      durationMs: launch.durationMs,
       wheelAngle: spinStateRef.current.wheelAngle,
       ballAngle: spinStateRef.current.ballAngle,
-      wheelSpeed: (3.2 + rng.range(0, 1.2)) * wheelDirection,
-      ballSpeed: (6.4 + rng.range(0, 1.6)) * ballDirection,
+      wheelSpeed: launch.wheelSpeed,
+      ballSpeed: launch.ballSpeed,
       targetNumber: null,
       targetLocked: false,
       settleStartMs: 0,
@@ -225,8 +241,8 @@ function RouletteWheel({
       wheelToAngle: 0,
       ballFromAngle: 0,
       ballToAngle: 0,
-      extraWheelRevs: 2 + rng.int(0, 1),
-      extraBallRevs: 3 + rng.int(0, 1),
+      extraWheelRevs: launch.extraWheelRevs,
+      extraBallRevs: launch.extraBallRevs,
     };
   }, [isAnimating, resultId]);
 
@@ -306,14 +322,70 @@ function RouletteWheel({
       }
     }
 
+    const x = Math.sin(state.ballAngle) * ballRadius;
+    const z = Math.cos(state.ballAngle) * ballRadius;
+    currentBallPos.current.set(x, ballHeight, z);
+    if (delta > 0) {
+      lastBallVel.current
+        .copy(currentBallPos.current)
+        .sub(lastBallPos.current)
+        .multiplyScalar(1 / delta);
+    }
+    lastBallPos.current.copy(currentBallPos.current);
+
+    if (state.phase === 'settle' && state.targetNumber !== null) {
+      const targetIndex = ROULETTE_NUMBERS.indexOf(state.targetNumber);
+      const targetAngle = pocketAngle(targetIndex < 0 ? 0 : targetIndex);
+      targetBallPos.current.set(
+        Math.sin(targetAngle) * BALL_INNER_RADIUS,
+        ballHeight,
+        Math.cos(targetAngle) * BALL_INNER_RADIUS
+      );
+
+      const guidance = calculateAttractorForce(
+        currentBallPos.current,
+        lastBallVel.current,
+        {
+          targetPosition: targetBallPos.current,
+          phase: 'settle',
+          heightGate: ROULETTE_GEOMETRY.RIM_HEIGHT,
+          noiseOffset: state.seed * 0.001,
+        },
+        ATTRACTOR_PRESETS.ROULETTE_BALL,
+        state.seed,
+        (now - state.startMs) / 1000,
+        forceVec.current
+      );
+
+      if (guidance) {
+        currentBallPos.current.addScaledVector(guidance, delta * 0.02);
+        state.ballAngle = Math.atan2(
+          currentBallPos.current.x,
+          currentBallPos.current.z
+        );
+        ballRadius = Math.max(
+          BALL_INNER_RADIUS,
+          Math.min(
+            BALL_OUTER_RADIUS,
+            Math.sqrt(
+              currentBallPos.current.x * currentBallPos.current.x +
+                currentBallPos.current.z * currentBallPos.current.z
+            )
+          )
+        );
+      }
+    }
+
     if (wheelRef.current) {
       wheelRef.current.rotation.y = state.wheelAngle;
     }
 
     if (ballRef.current) {
-      const x = Math.sin(state.ballAngle) * ballRadius;
-      const z = Math.cos(state.ballAngle) * ballRadius;
-      ballRef.current.position.set(x, ballHeight, z);
+      ballRef.current.position.set(
+        currentBallPos.current.x,
+        currentBallPos.current.y,
+        currentBallPos.current.z
+      );
     }
   });
 
@@ -437,6 +509,7 @@ export const RouletteScene3D: React.FC<RouletteScene3DProps> = ({
     active: false,
     phase: 'idle',
     startMs: 0,
+    seed: 0,
     durationMs: 0,
     wheelAngle: 0,
     ballAngle: 0,
@@ -493,16 +566,26 @@ export const RouletteScene3D: React.FC<RouletteScene3DProps> = ({
           </mesh>
 
           <RouletteCameraRig spinStateRef={spinStateRef} ballRef={ballRef} />
-          <RouletteWheel
-            targetNumber={targetNumber}
-            resultId={resultId}
-            isAnimating={isAnimating}
-            onAnimationComplete={onAnimationComplete}
-            isMobile={isMobile}
-            spinStateRef={spinStateRef}
-            ballRef={ballRef}
-            skipRequested={skipRequested}
-          />
+          <Physics
+            gravity={[0, -9.81, 0]}
+            timeStep={isMobile ? 1 / 45 : 1 / 60}
+            maxCcdSubsteps={4}
+            numSolverIterations={8}
+            numInternalPgsIterations={2}
+            updateLoop="independent"
+          >
+            <RouletteColliders pocketCount={POCKET_COUNT} />
+            <RouletteWheel
+              targetNumber={targetNumber}
+              resultId={resultId}
+              isAnimating={isAnimating}
+              onAnimationComplete={onAnimationComplete}
+              isMobile={isMobile}
+              spinStateRef={spinStateRef}
+              ballRef={ballRef}
+              skipRequested={skipRequested}
+            />
+          </Physics>
         </Suspense>
       </Canvas>
 

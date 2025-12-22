@@ -9,6 +9,8 @@ import { PhysicsDice, PhysicsDiceRef } from './PhysicsDice';
 import { createRoundRng } from './engine';
 import CasinoEnvironment from './CasinoEnvironment';
 import ResultPulse from './ResultPulse';
+import ShooterArm, { type ShooterArmState } from './ShooterArm';
+import PyramidWallCollider from './PyramidWallCollider';
 
 const TABLE_CONFIG = {
   width: 5.0,
@@ -53,6 +55,12 @@ const COMPLETE_DELAY_MS = 600;
 const MAGNET_ANCHOR_Z = 0.85;
 const MAGNET_DURATION_MS = 900;
 const MAGNET_LOCK_EPS = 0.02;
+const SHOOTER_SWING_DURATION_MS = 620;
+const SHOOTER_YAW_RANGE = 0.2;
+const SHOOTER_PITCH_BASE = -0.2;
+const SHOOTER_PITCH_RANGE = 0.08;
+const PYRAMID_SIZE = 0.22;
+const PYRAMID_DEPTH = 0.17;
 const TRIANGLE_OFFSETS: Array<[number, number, number]> = [
   [0, 0, DICE_SIZE * 0.7],
   [-DICE_SIZE * 0.65, 0, -DICE_SIZE * 0.38],
@@ -117,6 +125,7 @@ function CatchFloor() {
 }
 
 function Walls() {
+  const backWallInnerZ = -WALL_Z + TABLE_CONFIG.wallThickness / 2;
   return (
     <>
       <RigidBody type="fixed" position={[0, WALL_Y, -WALL_Z]}>
@@ -127,6 +136,14 @@ function Walls() {
           collisionGroups={DICE_COLLISION_GROUP}
         />
       </RigidBody>
+      <PyramidWallCollider
+        width={TABLE_CONFIG.width}
+        height={TABLE_CONFIG.wallHeight}
+        pyramidSize={PYRAMID_SIZE}
+        pyramidDepth={PYRAMID_DEPTH}
+        position={[0, WALL_Y, backWallInnerZ + PYRAMID_DEPTH / 2]}
+        collisionGroups={DICE_COLLISION_GROUP}
+      />
       <RigidBody type="fixed" position={[-WALL_X, WALL_Y, 0]}>
         <CuboidCollider
           args={[TABLE_CONFIG.wallThickness / 2, TABLE_CONFIG.wallHeight / 2, TABLE_CONFIG.depth / 2]}
@@ -267,6 +284,15 @@ function DiceScene({
   const rngRef = useRef<ReturnType<typeof createRoundRng> | null>(null);
   const diceCenter = useRef(new THREE.Vector3(0, 0, 0));
   const diceCenterTarget = useRef(new THREE.Vector3(0, 0, 0));
+  const armState = useRef<ShooterArmState>({
+    yaw: 0,
+    pitch: SHOOTER_PITCH_BASE,
+    swingStartMs: null,
+  });
+  const shooterOrigin = useMemo(
+    () => [0, DICE_START_Y + 0.1, DICE_START_Z + 0.35] as [number, number, number],
+    []
+  );
 
   const finishAnimation = useCallback((delayMs: number) => {
     if (completionRef.current) return;
@@ -305,10 +331,23 @@ function DiceScene({
       }
       throwTimeoutRef.current = setTimeout(() => {
         const rng = rngRef.current ?? createRoundRng('sicbo', typeof resultId === 'number' ? resultId : 0);
+        const yaw = rng.range(-SHOOTER_YAW_RANGE, SHOOTER_YAW_RANGE);
+        const pitch = SHOOTER_PITCH_BASE - rng.range(0, SHOOTER_PITCH_RANGE);
+        armState.current = {
+          yaw,
+          pitch,
+          swingStartMs: performance.now(),
+        };
+
         const power = 1.45 + rng.next() * 0.35;
+        const baseDir = new THREE.Vector3(Math.sin(yaw), 0, -Math.cos(yaw)).normalize();
+
         diceRefs.forEach((ref, index) => {
-          const dir = { x: (rng.next() - 0.5) * 0.35, z: -1 };
-          const downwardImpulse = -1.0 - rng.next() * 0.35;
+          const dir = {
+            x: baseDir.x + (rng.next() - 0.5) * 0.1,
+            z: baseDir.z + (rng.next() - 0.5) * 0.1,
+          };
+          const downwardImpulse = -1.0 - rng.next() * 0.35 + pitch * 0.6;
           const randomSource = () => rng.next();
           ref.current?.throw(power, dir, downwardImpulse + index * -0.1, randomSource);
         });
@@ -317,6 +356,7 @@ function DiceScene({
 
     if (!isAnimating) {
       hasThrown.current = false;
+      armState.current.swingStartMs = null;
     }
   }, [isAnimating, resultId]);
 
@@ -495,6 +535,12 @@ function DiceScene({
         <TableCollider />
         <CatchFloor />
         <Walls />
+        <ShooterArm
+          origin={shooterOrigin}
+          stateRef={armState}
+          swingDurationMs={SHOOTER_SWING_DURATION_MS}
+          enabled={!isMobile}
+        />
         <PhysicsDice
           ref={diceRefs[0]}
           position={[-DICE_SPREAD_X, DICE_START_Y, DICE_START_Z]}

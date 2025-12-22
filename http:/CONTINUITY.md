@@ -1,5 +1,5 @@
 Goal (incl. success criteria):
-- Commit and push all current changes to GitHub, then continue implementing `4d.md` (Phase 2) with deliberate stage tracking; add a test runner and run tests along the way.
+- Proceed with current uncommitted changes, then finish remaining Phase 2 tasks in `4d.md` with deliberate stage tracking; continue to add/run tests along the way.
 
 Constraints/Assumptions:
 - Follow `agents.md` guidance: read/update this ledger at start of each turn and whenever goal/state/decisions change; keep it brief and factual.
@@ -10,19 +10,22 @@ Key decisions:
 - None yet (pending scope/ordering based on `4d.md` stages).
 
 State:
-- Phase 1 complete; Phase 2 in progress (deterministic RNG wiring for roulette/craps/sic bo).
-- User confirmed committing/pushing all modified/untracked files.
+- Phase 1 complete; Phase 2 complete (roulette/dice physics guidance, colliders, shooter arm, pyramid wall).
+- Uncommitted changes include Phase 2 refinements + new tests.
 
 Done:
 - Read `agents.md` and `4d.md`.
 - Added `zustand` dependency for GuidedStore usage.
 - Seeded RNG for roulette/craps/sic bo launches; passed round IDs through wrappers/views.
+- Committed and pushed all repo changes.
+- Added Vitest runner and guided forces unit tests.
+- Added roulette physics tests and aligned dice guidance with attractor config/physics constants.
 
 Now:
-- Commit/push all changes; add test runner; proceed Phase 2 physics guidance/collider work.
+- Decide whether to commit Phase 2 refinements; ready to start Phase 3 (card system) when requested.
 
 Next:
-- Implement roulette/dice guided physics modules and integrate with scenes; add tests.
+- Phase 3: implement card pool, deal animation, dealer peek.
 
 Open questions (UNCONFIRMED if needed):
 - None.
@@ -32,6 +35,13 @@ Working set (files/ids/commands):
 - 4d.md
 - website/package.json
 - website/package-lock.json
+- website/vitest.config.ts
+- website/src/components/casino/3d/physics/guidedForces.test.ts
+- website/src/components/casino/3d/physics/RoulettePhysics.test.ts
+- website/src/components/casino/3d/physics/RoulettePhysics.ts
+- website/src/components/casino/3d/RouletteColliders.tsx
+- website/src/components/casino/3d/PyramidWallCollider.tsx
+- website/src/components/casino/3d/ShooterArm.tsx
 - website/src/components/casino/3d/CrapsScene3D.tsx
 - website/src/components/casino/3d/SicBoScene3D.tsx
 - website/src/components/casino/3d/RouletteScene3D.tsx

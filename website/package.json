@@ -15,6 +15,8 @@
     "clean:artifacts": "npm run clean:dist && npm run clean:wasm",
     "pretest": "cd .. && cargo build --release --bin nullspace-simulator",
     "test": "npm run build:wasm-test && node --test test/*.test.js",
+    "test:unit": "vitest run",
+    "test:unit:watch": "vitest",
     "smoke": "node scripts/smoke-playwright.mjs",
     "latency-test": "node scripts/latency-test.mjs",
     "latency-test:headed": "HEADED=1 node scripts/latency-test.mjs"
@@ -54,6 +56,7 @@
     "jsdom": "^26.1.0",
     "node-fetch": "^3.3.2",
     "playwright-core": "^1.49.0",
+    "vitest": "^4.0.16",
     "ws": "^8.18.3"
   }
 }

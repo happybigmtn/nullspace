@@ -20,6 +20,7 @@ import {
   isDiceAtRest,
   type RandomSource,
 } from './diceUtils';
+import { ATTRACTOR_PRESETS, calculateAlignmentTorque, DICE_PHYSICS } from './physics';
 
 export interface PhysicsDiceRef {
   throw: (
@@ -80,9 +81,6 @@ export const PhysicsDice = forwardRef<PhysicsDiceRef, PhysicsDiceProps>(
     const wobbleAxisRef = useRef(new THREE.Vector3());
     const localUpRef = useRef(new THREE.Vector3());
     const topFaceInverseQuatRef = useRef(new THREE.Quaternion());
-    const correctionQuatRef = useRef(new THREE.Quaternion());
-    const inverseQuatRef = useRef(new THREE.Quaternion());
-    const axisRef = useRef(new THREE.Vector3());
     const staggerTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const impactParticlesRef = useRef<ImpactParticlesHandle>(null);
     const lastImpactMsRef = useRef(0);
@@ -347,26 +345,21 @@ export const PhysicsDice = forwardRef<PhysicsDiceRef, PhysicsDiceProps>(
       );
 
       // Apply gentle correction when dice is slow and not showing target face
-      if (speed < 4.6 && angSpeed < 7.5 && safeTargetValue && currentTop !== safeTargetValue) {
+      const guidanceConfig = ATTRACTOR_PRESETS.DICE_SETTLE;
+      if (
+        speed < guidanceConfig.velocityGate &&
+        angSpeed < guidanceConfig.velocityGate * 1.7 &&
+        safeTargetValue &&
+        currentTop !== safeTargetValue
+      ) {
         const targetQuat = targetQuatRef.current;
         if (!targetQuat) {
           // Target quaternion not ready yet; skip correction this frame.
         } else {
-          // Calculate correction needed
-          const inverseQuat = inverseQuatRef.current.copy(currentQuat).invert();
-          const correctionQuat = correctionQuatRef.current.copy(targetQuat).multiply(inverseQuat);
-          const angle = 2 * Math.acos(Math.min(1, Math.abs(correctionQuat.w)));
-
+          const { axis, angle } = calculateAlignmentTorque(currentQuat, targetQuat, 0.85);
           if (angle > 0.1) {
-            const axis = axisRef.current.set(
-              correctionQuat.x,
-              correctionQuat.y,
-              correctionQuat.z
-            ).normalize();
-
-            // Gentle nudge - don't overpower physics
-            const speedFactor = Math.min(1, Math.max(0.35, speed / 4.6));
-            const nudgeStrength = Math.min(angle * 0.95 * speedFactor, 2.1);
+            const speedFactor = Math.min(1, Math.max(0.35, speed / guidanceConfig.velocityGate));
+            const nudgeStrength = Math.min(angle * speedFactor, guidanceConfig.forceClamp);
             rigidBodyRef.current.applyTorqueImpulse(
               {
                 x: axis.x * nudgeStrength,
@@ -439,11 +432,11 @@ export const PhysicsDice = forwardRef<PhysicsDiceRef, PhysicsDiceProps>(
           position={position}
           colliders="cuboid"
           collisionGroups={collisionGroups}
-          restitution={0.3}
-          friction={0.25}
-          mass={1}
-          linearDamping={0.45}
-          angularDamping={0.5}
+          restitution={DICE_PHYSICS.RESTITUTION}
+          friction={DICE_PHYSICS.STATIC_FRICTION}
+          mass={DICE_PHYSICS.MASS}
+          linearDamping={DICE_PHYSICS.LINEAR_DAMPING}
+          angularDamping={DICE_PHYSICS.ANGULAR_DAMPING}
           ccd
           onCollisionEnter={handleCollisionEnter}
         >

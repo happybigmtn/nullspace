@@ -4,7 +4,7 @@
  * Covers the entire main sub-window with physics-based dice animation.
  * Dice settle to blockchain-resolved values with camera animation.
  */
-import React, { Suspense, useRef, useState, useCallback, useEffect } from 'react';
+import React, { Suspense, useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Physics, RigidBody, CuboidCollider, interactionGroups } from '@react-three/rapier';
 import * as THREE from 'three';
@@ -12,6 +12,8 @@ import { PhysicsDice, PhysicsDiceRef } from './PhysicsDice';
 import { createRoundRng } from './engine';
 import CasinoEnvironment from './CasinoEnvironment';
 import ResultPulse from './ResultPulse';
+import ShooterArm, { type ShooterArmState } from './ShooterArm';
+import PyramidWallCollider from './PyramidWallCollider';
 
 const TABLE_CONFIG = {
   width: 5.6,
@@ -46,6 +48,12 @@ const SETTLE_BOUNDS = {
 const MAGNET_ANCHOR_Z = 1.1;
 const MAGNET_SEPARATION = DICE_SIZE * 1.15;
 const MAGNET_LOCK_EPS = 0.015;
+const SHOOTER_SWING_DURATION_MS = 650;
+const SHOOTER_YAW_RANGE = 0.18;
+const SHOOTER_PITCH_BASE = -0.18;
+const SHOOTER_PITCH_RANGE = 0.08;
+const PYRAMID_SIZE = 0.24;
+const PYRAMID_DEPTH = 0.18;
 
 const CAMERA_ROLL_RADIUS = WALL_Z + 2.4;
 const CAMERA_ROLL_HEIGHT = 4.3;
@@ -115,6 +123,7 @@ function CatchFloor() {
 
 // Walls to contain dice
 function Walls() {
+  const backWallInnerZ = -WALL_Z + TABLE_CONFIG.wallThickness / 2;
   return (
     <>
       {/* Back wall */}
@@ -126,6 +135,14 @@ function Walls() {
           collisionGroups={DICE_COLLISION_GROUP}
         />
       </RigidBody>
+      <PyramidWallCollider
+        width={TABLE_CONFIG.width}
+        height={TABLE_CONFIG.wallHeight}
+        pyramidSize={PYRAMID_SIZE}
+        pyramidDepth={PYRAMID_DEPTH}
+        position={[0, WALL_Y, backWallInnerZ + PYRAMID_DEPTH / 2]}
+        collisionGroups={DICE_COLLISION_GROUP}
+      />
       {/* Left wall */}
       <RigidBody type="fixed" position={[-WALL_X, WALL_Y, 0]}>
         <CuboidCollider
@@ -282,6 +299,15 @@ function DiceScene({
   const magnetLocked = useRef(false);
   const magnetAnchor = useRef(new THREE.Vector3(0, SETTLE_BOUNDS.settleY, 0));
   const rngRef = useRef<ReturnType<typeof createRoundRng> | null>(null);
+  const armState = useRef<ShooterArmState>({
+    yaw: 0,
+    pitch: SHOOTER_PITCH_BASE,
+    swingStartMs: null,
+  });
+  const shooterOrigin = useMemo(
+    () => [0, DICE_START_Y + 0.15, DICE_START_Z + 0.35] as [number, number, number],
+    []
+  );
 
   useEffect(() => {
     if (!isAnimating) return;
@@ -326,11 +352,23 @@ function DiceScene({
       }
       throwTimeoutRef.current = setTimeout(() => {
         const rng = rngRef.current ?? createRoundRng('craps', typeof resultId === 'number' ? resultId : 0);
+        const yaw = rng.range(-SHOOTER_YAW_RANGE, SHOOTER_YAW_RANGE);
+        const pitch = SHOOTER_PITCH_BASE - rng.range(0, SHOOTER_PITCH_RANGE);
+        armState.current = {
+          yaw,
+          pitch,
+          swingStartMs: performance.now(),
+        };
+
         // Stronger, downward-biased toss from the shooter toward the table
         const power = 1.5 + rng.next() * 0.35;
         // Throw toward back wall (negative Z is away from camera)
-        const dir = { x: (rng.next() - 0.5) * 0.22, z: -1 };
-        const downwardImpulse = -1.1 - rng.next() * 0.35;
+        const baseDir = new THREE.Vector3(Math.sin(yaw), 0, -Math.cos(yaw)).normalize();
+        const dir = {
+          x: baseDir.x + (rng.next() - 0.5) * 0.08,
+          z: baseDir.z + (rng.next() - 0.5) * 0.08,
+        };
+        const downwardImpulse = -1.1 - rng.next() * 0.35 + pitch * 0.6;
         const randomSource = () => rng.next();
         dice1Ref.current?.throw(power, dir, downwardImpulse, randomSource);
         dice2Ref.current?.throw(power, dir, downwardImpulse, randomSource);
@@ -339,6 +377,7 @@ function DiceScene({
 
     if (!isAnimating) {
       hasThrown.current = false;
+      armState.current.swingStartMs = null;
     }
 
   }, [isAnimating, resultId]);
@@ -488,6 +527,12 @@ function DiceScene({
         <TableCollider />
         <CatchFloor />
         <Walls />
+        <ShooterArm
+          origin={shooterOrigin}
+          stateRef={armState}
+          swingDurationMs={SHOOTER_SWING_DURATION_MS}
+          enabled={!isMobile}
+        />
         <PhysicsDice
           ref={dice1Ref}
           position={[-DICE_SPREAD_X, DICE_START_Y, DICE_START_Z]}

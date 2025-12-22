@@ -36,3 +36,14 @@ export {
   ridged3D,
   curlNoise3D,
 } from './noise';
+
+// Roulette helpers
+export {
+  type RoulettePocket,
+  type RouletteLaunchParams,
+  type RouletteLaunchConfig,
+  getPocketAngle,
+  getPocketPosition,
+  buildRoulettePockets,
+  computeRouletteLaunch,
+} from './RoulettePhysics';
