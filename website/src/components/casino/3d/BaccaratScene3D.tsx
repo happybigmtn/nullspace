@@ -11,6 +11,7 @@ import CasinoEnvironment from './CasinoEnvironment';
 import LightingRig from './environments/LightingRig';
 import BaccaratDealer, { CardSlot } from './BaccaratDealer';
 import PerformanceOverlay from './PerformanceOverlay';
+import PerformanceSampler from './PerformanceSampler';
 
 const TABLE_CONFIG = {
   width: 14,
@@ -272,6 +273,7 @@ export const BaccaratScene3D: React.FC<BaccaratScene3DProps> = ({
       >
         <Suspense fallback={null}>
           <PerformanceOverlay />
+          <PerformanceSampler game="baccarat" />
           <BaccaratScene
             playerCards={playerCards}
             bankerCards={bankerCards}

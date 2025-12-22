@@ -7,6 +7,7 @@ import { GameControlBar } from '../GameControlBar';
 import { getHiLoRank } from '../../../utils/gameUtils';
 import { CardAnimationOverlay } from '../3d/CardAnimationOverlay';
 import { buildRowSlots } from '../3d/cardLayouts';
+import { deriveSessionRoundId } from '../3d/engine/GuidedRound';
 
 // Simple mobile detection hook
 const useIsMobile = () => {
@@ -38,6 +39,10 @@ export const HiLoView = React.memo<HiLoViewProps & { lastWin?: number; playMode?
     void deck;
 
     const isMobile = useIsMobile();
+    const roundId = useMemo(() => {
+        if (gameState.sessionId === null || !Number.isFinite(gameState.moveNumber)) return undefined;
+        return deriveSessionRoundId(gameState.sessionId, gameState.moveNumber);
+    }, [gameState.moveNumber, gameState.sessionId]);
     const currentCard = gameState.playerCards[gameState.playerCards.length - 1];
     const currentRank = currentCard ? getHiLoRank(currentCard) : 7; // 1..13, default to middle
     const isAtAce = currentRank === 1;
@@ -87,6 +92,8 @@ export const HiLoView = React.memo<HiLoViewProps & { lastWin?: number; playMode?
                 cardsById={cardsById}
                 isActionActive={animationActive}
                 storageKey="hilo-3d-mode"
+                guidedGameType="hilo"
+                roundId={roundId}
                 onAnimationBlockingChange={onAnimationBlockingChange}
                 isMobile={isMobile}
             />

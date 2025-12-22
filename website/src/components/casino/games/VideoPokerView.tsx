@@ -7,6 +7,7 @@ import { GameControlBar } from '../GameControlBar';
 import { evaluateVideoPokerHand } from '../../../utils/gameUtils';
 import { CardAnimationOverlay } from '../3d/CardAnimationOverlay';
 import { buildCardsById, buildRowSlots } from '../3d/cardLayouts';
+import { deriveSessionRoundId } from '../3d/engine/GuidedRound';
 
 // Simple mobile detection hook
 const useIsMobile = () => {
@@ -46,6 +47,10 @@ export const VideoPokerView = React.memo<VideoPokerViewProps & { lastWin?: numbe
         onToggleHold(index);
     }, [onToggleHold]);
     const isMobile = useIsMobile();
+    const roundId = useMemo(() => {
+        if (gameState.sessionId === null || !Number.isFinite(gameState.moveNumber)) return undefined;
+        return deriveSessionRoundId(gameState.sessionId, gameState.moveNumber);
+    }, [gameState.moveNumber, gameState.sessionId]);
 
     const handEval = useMemo(() => {
         if (gameState.playerCards.length !== 5) return null;
@@ -72,6 +77,8 @@ export const VideoPokerView = React.memo<VideoPokerViewProps & { lastWin?: numbe
                 cardsById={cardsById}
                 isActionActive={animationActive}
                 storageKey="video-poker-3d-mode"
+                guidedGameType="videoPoker"
+                roundId={roundId}
                 onAnimationBlockingChange={onAnimationBlockingChange}
                 isMobile={isMobile}
             />

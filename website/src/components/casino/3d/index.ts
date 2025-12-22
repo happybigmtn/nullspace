@@ -22,6 +22,7 @@ export { PowerMeter } from './PowerMeter';
 export { Slingshot } from './Slingshot';
 export * from './diceUtils';
 export * from './cards';
+export * from './chips';
 export { default as CasinoPostProcessing } from './post/CasinoPostProcessing';
 export { default as LightingRig } from './environments/LightingRig';
 export { default as LightningEffect } from './effects/LightningEffect';

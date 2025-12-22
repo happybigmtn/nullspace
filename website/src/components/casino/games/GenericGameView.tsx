@@ -1,12 +1,14 @@
 
-import React, { useMemo, useEffect, useState } from 'react';
-import { GameState, GameType } from '../../../types';
+import React, { useMemo, useEffect, useState, useRef } from 'react';
+import { Card, GameState, GameType } from '../../../types';
 import { Hand } from '../GameComponents';
 import { MobileDrawer } from '../MobileDrawer';
 import { GameControlBar } from '../GameControlBar';
 import { getVisibleHandValue } from '../../../utils/gameUtils';
 import { CardAnimationOverlay } from '../3d/CardAnimationOverlay';
 import { buildCardsById, buildRowSlots } from '../3d/cardLayouts';
+import { deriveSessionRoundId } from '../3d/engine/GuidedRound';
+import type { ChipStackConfig } from '../3d/chips/ChipStack3D';
 
 // Simple mobile detection hook
 const useIsMobile = () => {
@@ -20,6 +22,16 @@ const useIsMobile = () => {
     return isMobile;
 };
 
+const getWarCardValue = (card?: Card | null) => {
+    if (!card) return 0;
+    if (card.rank === 'A') return 14;
+    if (card.rank === 'K') return 13;
+    if (card.rank === 'Q') return 12;
+    if (card.rank === 'J') return 11;
+    const parsed = Number.parseInt(card.rank, 10);
+    return Number.isFinite(parsed) ? parsed : 0;
+};
+
 export const GenericGameView = React.memo<{ gameState: GameState; actions: any; lastWin?: number; playMode?: 'CASH' | 'FREEROLL' | null; onAnimationBlockingChange?: (blocking: boolean) => void }>(({ gameState, actions, lastWin, playMode, onAnimationBlockingChange }) => {
     const dealerValue = useMemo(() => getVisibleHandValue(gameState.dealerCards), [gameState.dealerCards]);
     const playerValue = useMemo(() => getVisibleHandValue(gameState.playerCards), [gameState.playerCards]);
@@ -28,6 +40,30 @@ export const GenericGameView = React.memo<{ gameState: GameState; actions: any; 
     const isCasinoWarBetting = useMemo(() => gameState.type === GameType.CASINO_WAR && gameState.stage === 'BETTING', [gameState.type, gameState.stage]);
     const casinoWarTieBet = useMemo(() => gameState.casinoWarTieBet || 0, [gameState.casinoWarTieBet]);
     const isMobile = useIsMobile();
+    const isCasinoWar = gameState.type === GameType.CASINO_WAR;
+    const warPlayerCard = gameState.playerCards[0];
+    const warDealerCard = gameState.dealerCards[0];
+    const warOutcome = useMemo(() => {
+        if (!isCasinoWar || !warPlayerCard || !warDealerCard) return null;
+        const playerVal = getWarCardValue(warPlayerCard);
+        const dealerVal = getWarCardValue(warDealerCard);
+        if (playerVal > dealerVal) return 'player';
+        if (dealerVal > playerVal) return 'dealer';
+        return 'tie';
+    }, [isCasinoWar, warPlayerCard, warDealerCard]);
+    const warAccentColor = useMemo(() => {
+        if (!warOutcome) return undefined;
+        if (warOutcome === 'player') return '#22ff88';
+        if (warOutcome === 'dealer') return '#f87171';
+        return '#f4c542';
+    }, [warOutcome]);
+    const warGlow = useMemo(() => (warAccentColor ? `${warAccentColor}33` : undefined), [warAccentColor]);
+    const [warTrend, setWarTrend] = useState<Array<'player' | 'dealer' | 'tie'>>([]);
+    const warTrendKeyRef = useRef<string>('');
+    const roundId = useMemo(() => {
+        if (gameState.sessionId === null || !Number.isFinite(gameState.moveNumber)) return undefined;
+        return deriveSessionRoundId(gameState.sessionId, gameState.moveNumber);
+    }, [gameState.moveNumber, gameState.sessionId]);
     const animationActive = useMemo(
         () => /DEALING|GOING TO WAR|SURRENDERING|WAITING FOR CHAIN/.test(gameState.message),
         [gameState.message]
@@ -40,6 +76,36 @@ export const GenericGameView = React.memo<{ gameState: GameState; actions: any; 
         ...buildCardsById('dealer', gameState.dealerCards, 1),
         ...buildCardsById('player', gameState.playerCards, 1),
     }), [gameState.dealerCards, gameState.playerCards]);
+    const chipStacks = useMemo<ChipStackConfig[] | undefined>(() => {
+        if (!isCasinoWar) return undefined;
+        const stacks: ChipStackConfig[] = [];
+        if (gameState.bet > 0) {
+            stacks.push({
+                id: 'war-main',
+                amount: gameState.bet,
+                position: [0, -0.08, 2.1],
+                seed: roundId ?? 0,
+            });
+        }
+        if (casinoWarTieBet > 0) {
+            stacks.push({
+                id: 'war-tie',
+                amount: casinoWarTieBet,
+                position: [0.6, -0.08, 1.7],
+                seed: (roundId ?? 0) + 11,
+            });
+        }
+        return stacks.length > 0 ? stacks : undefined;
+    }, [casinoWarTieBet, gameState.bet, isCasinoWar, roundId]);
+    useEffect(() => {
+        if (!isCasinoWar || !warOutcome) return;
+        const key = roundId !== undefined
+            ? `round-${roundId}`
+            : `${warPlayerCard?.rank ?? ''}${warPlayerCard?.suit ?? ''}-${warDealerCard?.rank ?? ''}${warDealerCard?.suit ?? ''}`;
+        if (warTrendKeyRef.current === key) return;
+        warTrendKeyRef.current = key;
+        setWarTrend((prev) => [...prev, warOutcome].slice(-10));
+    }, [isCasinoWar, roundId, warOutcome, warPlayerCard, warDealerCard]);
     return (
         <>
             <CardAnimationOverlay
@@ -48,11 +114,35 @@ export const GenericGameView = React.memo<{ gameState: GameState; actions: any; 
                 cardsById={cardsById}
                 isActionActive={animationActive}
                 storageKey="casino-war-3d-mode"
+                guidedGameType="casinoWar"
+                roundId={roundId}
                 onAnimationBlockingChange={onAnimationBlockingChange}
                 isMobile={isMobile}
+                chipStacks={chipStacks}
+                accentColor={warAccentColor}
             />
-            <div className="flex-1 w-full flex flex-col items-center justify-start sm:justify-center gap-4 sm:gap-6 md:gap-8 relative z-10 pt-8 sm:pt-10 pb-24 sm:pb-20">
+            <div
+                className="flex-1 w-full flex flex-col items-center justify-start sm:justify-center gap-4 sm:gap-6 md:gap-8 relative z-10 pt-8 sm:pt-10 pb-24 sm:pb-20"
+                style={warGlow ? { background: `radial-gradient(circle at 50% 20%, ${warGlow}, transparent 65%)` } : undefined}
+            >
                 <h1 className="absolute top-0 text-xl font-bold text-gray-500 tracking-widest uppercase">{gameTitle}</h1>
+                {isCasinoWar && warTrend.length > 0 && (
+                    <div className="absolute top-7 flex items-center gap-2 text-[9px] font-mono tracking-[0.3em] text-gray-500">
+                        <span>TREND</span>
+                        <div className="flex items-center gap-1">
+                            {warTrend.map((outcome, index) => (
+                                <span
+                                    key={`${outcome}-${index}`}
+                                    className="w-2 h-2 rounded-full"
+                                    style={{
+                                        backgroundColor:
+                                            outcome === 'player' ? '#22ff88' : outcome === 'dealer' ? '#f87171' : '#f4c542',
+                                    }}
+                                />
+                            ))}
+                        </div>
+                    </div>
+                )}
                 <div className="absolute top-2 left-2 z-40">
                     <MobileDrawer label="INFO" title={gameTitle}>
                         <div className="space-y-3">

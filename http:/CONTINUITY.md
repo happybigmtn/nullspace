@@ -45,12 +45,19 @@ Done:
 - Wired Lightning Roulette multipliers from `superMode` into roulette 3D scene.
 - Added Lightning Roulette multiplier badges + lightning overlay effect in RouletteScene3D.
 - Ran `npm run test:unit` and `npm test` (from `website/`).
+- Added `sessionId` + `moveNumber` to `GameState`, wired round ID derivation for all card games/overlays.
+- Added baccarat squeeze shader integration and card reveal handling.
+- Added Casino War outcome lighting + trend display and 3D chip stack instancing.
+- Added physics worker scaffold and deterministic replay harness + tests.
+- Added performance sampler, 3D A/B default, and feedback prompts for 3D scenes.
+- Added QA checklist doc for guided 3D regression coverage.
+- Ran `npm run test:unit` and `npm test` (from `website/`).
 
 Now:
-- Phase 7 in progress: Lightning Roulette visuals/data wiring complete.
+- Phase 7 prep complete: 4d.md gap coverage addressed and tests run.
 
 Next:
-- Continue Phase 7 with Football Studio and Dream Catcher scaffolding.
+- Resume Phase 7 with Football Studio and Dream Catcher scaffolding.
 
 Open questions (UNCONFIRMED if needed):
 - None.
@@ -58,26 +65,20 @@ Open questions (UNCONFIRMED if needed):
 Working set (files/ids/commands):
 - http://CONTINUITY.md
 - 4d.md
-- website/package.json
-- website/package-lock.json
-- website/vitest.config.ts
-- website/src/components/casino/3d/physics/guidedForces.test.ts
-- website/src/components/casino/3d/physics/RoulettePhysics.test.ts
-- website/src/components/casino/3d/physics/RoulettePhysics.ts
-- website/src/components/casino/3d/RouletteColliders.tsx
-- website/src/components/casino/3d/PyramidWallCollider.tsx
-- website/src/components/casino/3d/ShooterArm.tsx
-- website/src/components/casino/3d/CrapsScene3D.tsx
-- website/src/components/casino/3d/SicBoScene3D.tsx
-- website/src/components/casino/3d/RouletteScene3D.tsx
-- website/src/components/casino/3d/PhysicsDice.tsx
-- website/src/components/casino/3d/diceUtils.ts
+- website/src/components/casino/3d/CardAnimationOverlay.tsx
+- website/src/components/casino/3d/CardTableScene3D.tsx
+- website/src/components/casino/3d/PerformanceSampler.tsx
+- website/src/components/casino/3d/RouletteWheel3DWrapper.tsx
 - website/src/components/casino/3d/CrapsDice3DWrapper.tsx
 - website/src/components/casino/3d/SicBoDice3DWrapper.tsx
-- website/src/components/casino/games/CrapsView.tsx
-- website/src/components/casino/games/SicBoView.tsx
-- website/src/components/casino/3d/cards/CardDealAnimation.ts
-- website/src/components/casino/3d/cards/CardPeekAnimation.ts
-- website/src/components/casino/3d/cards/CardPoolManager.ts
-- website/src/components/casino/3d/cards/index.ts
-- website/src/components/casino/3d/CardTableScene3D.tsx
+- website/src/components/casino/3d/RouletteScene3D.tsx
+- website/src/components/casino/3d/CrapsScene3D.tsx
+- website/src/components/casino/3d/SicBoScene3D.tsx
+- website/src/components/casino/3d/BaccaratScene3D.tsx
+- website/src/components/casino/3d/cards/SqueezeCard3D.tsx
+- website/src/components/casino/3d/chips/ChipStack3D.tsx
+- website/src/components/casino/3d/physics/PhysicsWorkerBridge.ts
+- website/src/components/casino/3d/engine/replayHarness.ts
+- website/src/components/casino/3d/use3DFeedbackPrompt.ts
+- website/src/components/casino/games/GenericGameView.tsx
+- website/docs/guided-3d-qa.md

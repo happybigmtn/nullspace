@@ -25,6 +25,7 @@ import CasinoPostProcessing from './post/CasinoPostProcessing';
 import AmbientSoundscape from './audio/AmbientSoundscape';
 import PositionalAudioEmitter from './audio/PositionalAudioEmitter';
 import PerformanceOverlay from './PerformanceOverlay';
+import PerformanceSampler from './PerformanceSampler';
 import LightningEffect from './effects/LightningEffect';
 
 const TWO_PI = Math.PI * 2;
@@ -650,6 +651,7 @@ export const RouletteScene3D: React.FC<RouletteScene3DProps> = ({
       >
         <Suspense fallback={null}>
           <PerformanceOverlay />
+          <PerformanceSampler game="roulette" />
           {/* Dark terminal background */}
           <color attach="background" args={['#030306']} />
           <CasinoEnvironment />

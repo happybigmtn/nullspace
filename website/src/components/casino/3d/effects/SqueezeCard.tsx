@@ -17,6 +17,7 @@ interface SqueezeCardProps {
   keyLightColor?: THREE.ColorRepresentation;
   position?: [number, number, number];
   rotation?: [number, number, number];
+  materialRef?: React.MutableRefObject<THREE.ShaderMaterial | null>;
 }
 
 export const SqueezeCard: React.FC<SqueezeCardProps> = ({
@@ -34,6 +35,7 @@ export const SqueezeCard: React.FC<SqueezeCardProps> = ({
   keyLightColor = '#ffffff',
   position = [0, 0, 0],
   rotation = [0, 0, 0],
+  materialRef,
 }) => {
   const geometry = useMemo(
     () => new THREE.PlaneGeometry(size[0], size[1], segments[0], segments[1]),
@@ -42,6 +44,9 @@ export const SqueezeCard: React.FC<SqueezeCardProps> = ({
   const material = useMemo(() => createSqueezeMaterial(), []);
 
   useEffect(() => {
+    if (materialRef) {
+      materialRef.current = material;
+    }
     material.transparent = true;
     material.uniforms.uFaceTexture.value = faceTexture;
     material.uniforms.uBackTexture.value = backTexture;
@@ -55,6 +60,11 @@ export const SqueezeCard: React.FC<SqueezeCardProps> = ({
       .set(keyLightDir[0], keyLightDir[1], keyLightDir[2])
       .normalize();
     material.uniforms.uKeyLightColor.value.set(keyLightColor);
+    return () => {
+      if (materialRef) {
+        materialRef.current = null;
+      }
+    };
   }, [
     ambientLight,
     backTexture,
@@ -62,6 +72,7 @@ export const SqueezeCard: React.FC<SqueezeCardProps> = ({
     faceTexture,
     keyLightColor,
     keyLightDir,
+    materialRef,
     material,
     maxBendAngle,
     pivotPoint,

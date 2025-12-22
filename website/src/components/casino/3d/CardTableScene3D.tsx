@@ -13,7 +13,10 @@ import { CardSlotConfig, CARD_SCENE_CONFIG } from './cardLayouts';
 import CasinoEnvironment from './CasinoEnvironment';
 import LightingRig from './environments/LightingRig';
 import { CardDealAnimator, CardPeekAnimator } from './cards';
+import { SqueezeCard3D } from './cards/SqueezeCard3D';
+import { ChipStack3D, type ChipStackConfig } from './chips/ChipStack3D';
 import PerformanceOverlay from './PerformanceOverlay';
+import PerformanceSampler from './PerformanceSampler';
 
 // Default timing constants
 const DEAL_INTERVAL_MS = 130;
@@ -68,6 +71,10 @@ interface CardTableScene3DProps {
   selectedHand?: CardHand; // Which hand the player bet on - that side gets green, opponent gets red
   revealStaggerMs?: number; // Override for delay between each card flip (default 130ms)
   peekSlots?: string[]; // Slots that should use a corner peek animation
+  squeezeSlots?: string[]; // Slots that should use the baccarat squeeze shader
+  chipStacks?: ChipStackConfig[];
+  accentColor?: string;
+  performanceKey?: string;
 }
 
 const SHOE_POSITION = new THREE.Vector3(2.4, 0.45, 0.15);
@@ -97,6 +104,9 @@ function CardTableScene({
   selectedHand,
   revealStaggerMs,
   peekSlots,
+  squeezeSlots,
+  chipStacks,
+  accentColor,
 }: CardTableScene3DProps) {
   const { camera, invalidate } = useThree();
 
@@ -113,6 +123,19 @@ function CardTableScene({
   const skipHandledRef = useRef(false);
   const peekKey = (peekSlots ?? []).join('|');
   const peekSet = useMemo(() => new Set(peekSlots ?? []), [peekKey]);
+  const squeezeKey = (squeezeSlots ?? []).join('|');
+  const squeezeSet = useMemo(() => new Set(squeezeSlots ?? []), [squeezeKey]);
+  const squeezeProgressRefs = useMemo(
+    () => slotInfos.map(() => ({ current: 0 })),
+    [slotInfos]
+  );
+  const accentLights = useMemo(() => {
+    if (!accentColor) return undefined;
+    return [
+      { position: [2, 2.4, 1.8], color: accentColor, intensity: 0.55 },
+      { position: [-2, 2.4, 1.8], color: accentColor, intensity: 0.45 },
+    ];
+  }, [accentColor]);
 
   useEffect(() => {
     cardsByIdRef.current = cardsById;
@@ -277,7 +300,7 @@ function CardTableScene({
     let allDone = true;
     let anyActive = false;
 
-    rigsRef.current.forEach((rig) => {
+    rigsRef.current.forEach((rig, index) => {
       const card = cardsByIdRef.current[rig.slot.id];
       if (!rig.ref.current) return;
       if (rig.mode === 'static') {
@@ -335,6 +358,9 @@ function CardTableScene({
           rig.workRot.y,
           rig.workRot.z
         );
+        if (squeezeSet.has(rig.slot.id)) {
+          squeezeProgressRefs[index].current = rig.flipProgress;
+        }
         return;
       }
 
@@ -360,6 +386,9 @@ function CardTableScene({
           rig.slot.rotation.y,
           rig.slot.rotation.z
         );
+        if (squeezeSet.has(rig.slot.id)) {
+          squeezeProgressRefs[index].current = rig.flipProgress;
+        }
       }
     });
 
@@ -379,9 +408,14 @@ function CardTableScene({
         enableShadows={false}
         keyPosition={[2, 5, 3]}
         fillPosition={[0, 3, 2]}
+        accentLights={accentLights}
       />
 
       {/* No table - cards float in void */}
+
+      {chipStacks?.map((stack) => (
+        <ChipStack3D key={stack.id} {...stack} />
+      ))}
 
       {slotInfos.map((slot, idx) => {
         // Determine isSelected based on slot prefix and selectedHand
@@ -392,14 +426,25 @@ function CardTableScene({
             isSelected = slotHand === selectedHand;
           }
         }
+        const shouldSqueeze = isAnimating && squeezeSet.has(slot.id);
         return (
-          <Card3D
-            key={slot.id}
-            ref={cardRefs[idx]}
-            card={cardsById[slot.id] ?? null}
-            size={resolvedCardSize}
-            isSelected={isSelected}
-          />
+          shouldSqueeze ? (
+            <SqueezeCard3D
+              key={slot.id}
+              ref={cardRefs[idx]}
+              card={cardsById[slot.id] ?? null}
+              size={resolvedCardSize}
+              progressRef={squeezeProgressRefs[idx]}
+            />
+          ) : (
+            <Card3D
+              key={slot.id}
+              ref={cardRefs[idx]}
+              card={cardsById[slot.id] ?? null}
+              size={resolvedCardSize}
+              isSelected={isSelected}
+            />
+          )
         );
       })}
     </>
@@ -423,6 +468,10 @@ export const CardTableScene3D: React.FC<CardTableScene3DProps> = ({
   selectedHand,
   revealStaggerMs,
   peekSlots,
+  squeezeSlots,
+  chipStacks,
+  accentColor,
+  performanceKey,
 }) => {
   const [sceneReady, setSceneReady] = useState(false);
 
@@ -441,6 +490,7 @@ export const CardTableScene3D: React.FC<CardTableScene3DProps> = ({
       >
         <Suspense fallback={null}>
           <PerformanceOverlay />
+          <PerformanceSampler game={performanceKey} />
           <CardTableScene
             slots={slots}
             dealOrder={dealOrder}
@@ -458,6 +508,9 @@ export const CardTableScene3D: React.FC<CardTableScene3DProps> = ({
             selectedHand={selectedHand}
             revealStaggerMs={revealStaggerMs}
             peekSlots={peekSlots}
+            squeezeSlots={squeezeSlots}
+            chipStacks={chipStacks}
+            accentColor={accentColor}
           />
         </Suspense>
       </Canvas>

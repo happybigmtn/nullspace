@@ -32,6 +32,13 @@ export {
   clearRngCache,
 } from './deterministicRng';
 
+// Deterministic replay harness
+export {
+  buildReplaySample,
+  buildReplayFingerprint,
+  type ReplayHarnessResult,
+} from './replayHarness';
+
 // Time stepping
 export {
   PHYSICS_TIMESTEP,

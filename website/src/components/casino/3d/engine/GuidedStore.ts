@@ -18,6 +18,11 @@ import type {
   SicBoOutcome,
   BlackjackOutcome,
   BaccaratOutcome,
+  CasinoWarOutcome,
+  ThreeCardOutcome,
+  UltimateHoldemOutcome,
+  HiLoOutcome,
+  VideoPokerOutcome,
 } from './GuidedRound';
 import { createIdleRound, transitionPhase } from './GuidedRound';
 import { generateRoundSeed } from './deterministicRng';
@@ -34,6 +39,11 @@ export interface GuidedStoreState {
   sicbo: GuidedRound<SicBoOutcome>;
   blackjack: GuidedRound<BlackjackOutcome>;
   baccarat: GuidedRound<BaccaratOutcome>;
+  casinoWar: GuidedRound<CasinoWarOutcome>;
+  threeCard: GuidedRound<ThreeCardOutcome>;
+  ultimateHoldem: GuidedRound<UltimateHoldemOutcome>;
+  hilo: GuidedRound<HiLoOutcome>;
+  videoPoker: GuidedRound<VideoPokerOutcome>;
 
   // Global state
   globalMuted: boolean;
@@ -77,6 +87,11 @@ type GameRoundTypes = {
   sicbo: SicBoOutcome;
   blackjack: BlackjackOutcome;
   baccarat: BaccaratOutcome;
+  casinoWar: CasinoWarOutcome;
+  threeCard: ThreeCardOutcome;
+  ultimateHoldem: UltimateHoldemOutcome;
+  hilo: HiLoOutcome;
+  videoPoker: VideoPokerOutcome;
 };
 
 export type GuidedStore = GuidedStoreState & GuidedStoreActions;
@@ -91,6 +106,11 @@ const createInitialState = (): GuidedStoreState => ({
   sicbo: createIdleRound<SicBoOutcome>(0, generateRoundSeed('sicbo', 0)),
   blackjack: createIdleRound<BlackjackOutcome>(0, generateRoundSeed('blackjack', 0)),
   baccarat: createIdleRound<BaccaratOutcome>(0, generateRoundSeed('baccarat', 0)),
+  casinoWar: createIdleRound<CasinoWarOutcome>(0, generateRoundSeed('casinoWar', 0)),
+  threeCard: createIdleRound<ThreeCardOutcome>(0, generateRoundSeed('threeCard', 0)),
+  ultimateHoldem: createIdleRound<UltimateHoldemOutcome>(0, generateRoundSeed('ultimateHoldem', 0)),
+  hilo: createIdleRound<HiLoOutcome>(0, generateRoundSeed('hilo', 0)),
+  videoPoker: createIdleRound<VideoPokerOutcome>(0, generateRoundSeed('videoPoker', 0)),
   globalMuted: false,
   debugMode: false,
   transientSubscribers: new Set(),
@@ -233,6 +253,11 @@ export const useCrapsRound = () => useGuidedStore((s) => s.craps);
 export const useSicBoRound = () => useGuidedStore((s) => s.sicbo);
 export const useBlackjackRound = () => useGuidedStore((s) => s.blackjack);
 export const useBaccaratRound = () => useGuidedStore((s) => s.baccarat);
+export const useCasinoWarRound = () => useGuidedStore((s) => s.casinoWar);
+export const useThreeCardRound = () => useGuidedStore((s) => s.threeCard);
+export const useUltimateHoldemRound = () => useGuidedStore((s) => s.ultimateHoldem);
+export const useHiLoRound = () => useGuidedStore((s) => s.hilo);
+export const useVideoPokerRound = () => useGuidedStore((s) => s.videoPoker);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Transient Hook (for useFrame - no React re-renders)

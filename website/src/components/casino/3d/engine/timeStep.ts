@@ -175,6 +175,31 @@ export const PHASE_TIMING: Record<string, PhaseTimingConfig> = {
     maxDuration: 2000,
     defaultDuration: 800,
   },
+  casinowar: {
+    minDuration: 400,
+    maxDuration: 1500,
+    defaultDuration: 700,
+  },
+  threecard: {
+    minDuration: 500,
+    maxDuration: 2000,
+    defaultDuration: 900,
+  },
+  ultimateholdem: {
+    minDuration: 500,
+    maxDuration: 2500,
+    defaultDuration: 1200,
+  },
+  hilo: {
+    minDuration: 400,
+    maxDuration: 1500,
+    defaultDuration: 700,
+  },
+  videopoker: {
+    minDuration: 400,
+    maxDuration: 1500,
+    defaultDuration: 700,
+  },
 };
 
 /**

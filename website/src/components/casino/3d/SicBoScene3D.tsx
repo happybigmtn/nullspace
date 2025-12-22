@@ -16,6 +16,7 @@ import PyramidWallCollider from './PyramidWallCollider';
 import CasinoPostProcessing from './post/CasinoPostProcessing';
 import AmbientSoundscape from './audio/AmbientSoundscape';
 import PerformanceOverlay from './PerformanceOverlay';
+import PerformanceSampler from './PerformanceSampler';
 
 const TABLE_CONFIG = {
   width: 5.0,
@@ -609,6 +610,7 @@ export const SicBoScene3D: React.FC<SicBoScene3DProps> = ({
       >
         <Suspense fallback={null}>
           <PerformanceOverlay />
+          <PerformanceSampler game="sicbo" />
           <DiceScene
             targetValues={targetValues}
             resultId={resultId}

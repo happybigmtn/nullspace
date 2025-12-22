@@ -6,6 +6,7 @@ import { MobileDrawer } from '../MobileDrawer';
 import { GameControlBar } from '../GameControlBar';
 import { CardAnimationOverlay } from '../3d/CardAnimationOverlay';
 import { buildCardsById, buildRowSlots } from '../3d/cardLayouts';
+import { deriveSessionRoundId } from '../3d/engine/GuidedRound';
 
 // Simple mobile detection hook
 const useIsMobile = () => {
@@ -35,6 +36,10 @@ const getStageDescription = (stage: string, communityCards: number): string => {
 
 export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin?: number; playMode?: 'CASH' | 'FREEROLL' | null; onAnimationBlockingChange?: (blocking: boolean) => void }>(({ gameState, actions, lastWin, playMode, onAnimationBlockingChange }) => {
     const isMobile = useIsMobile();
+    const roundId = useMemo(() => {
+        if (gameState.sessionId === null || !Number.isFinite(gameState.moveNumber)) return undefined;
+        return deriveSessionRoundId(gameState.sessionId, gameState.moveNumber);
+    }, [gameState.moveNumber, gameState.sessionId]);
     const stageDesc = useMemo(() =>
         getStageDescription(gameState.stage, gameState.communityCards.length),
         [gameState.stage, gameState.communityCards.length]
@@ -99,6 +104,8 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
                 cardsById={cardsById}
                 isActionActive={animationActive}
                 storageKey="uth-3d-mode"
+                guidedGameType="ultimateHoldem"
+                roundId={roundId}
                 onAnimationBlockingChange={onAnimationBlockingChange}
                 isMobile={isMobile}
             />

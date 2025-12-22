@@ -7,6 +7,7 @@ import { GameControlBar } from '../GameControlBar';
 import { getVisibleHandValue } from '../../../utils/gameUtils';
 import { cardIdToString } from '../../../utils/gameStateParser';
 import { CardAnimationOverlay } from '../3d/CardAnimationOverlay';
+import { deriveSessionRoundId } from '../3d/engine/GuidedRound';
 import { buildCardsById, buildRowSlots } from '../3d/cardLayouts';
 
 // Simple mobile detection hook
@@ -95,6 +96,10 @@ export const BlackjackView = React.memo<{
 
     const activeHandNumber = gameState.completedHands.length + 1;
     const animationActive = useMemo(() => /DEALING|HITTING|STANDING|DOUBLING|SPLITTING|REVEALING/.test(gameState.message), [gameState.message]);
+    const roundId = useMemo(() => {
+        if (gameState.sessionId === null || !Number.isFinite(gameState.moveNumber)) return undefined;
+        return deriveSessionRoundId(gameState.sessionId, gameState.moveNumber);
+    }, [gameState.moveNumber, gameState.sessionId]);
     const dealerSlots = useMemo(() => buildRowSlots('dealer', 6, -1.55, { mirror: true }), []);
     const playerSlots = useMemo(() => buildRowSlots('player', 6, 1.55), []);
     const slots = useMemo(() => [...dealerSlots, ...playerSlots], [dealerSlots, playerSlots]);
@@ -136,6 +141,7 @@ export const BlackjackView = React.memo<{
                 isActionActive={animationActive}
                 storageKey="blackjack-3d-mode"
                 guidedGameType="blackjack"
+                roundId={roundId}
                 onAnimationBlockingChange={onAnimationBlockingChange}
                 isMobile={isMobile}
             />

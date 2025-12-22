@@ -10,6 +10,8 @@ import { playSfx } from '../../../services/sfx';
 import { track } from '../../../services/telemetry';
 import { COLLAPSE_DELAY_MS, getMinRemainingMs, MIN_ANIMATION_MS } from './sceneTiming';
 import { useGuidedStore } from './engine/GuidedStore';
+import { getInitial3DMode, trackAbBucket } from './abDefaults';
+import { use3DFeedbackPrompt } from './use3DFeedbackPrompt';
 
 // Lazy load the 3D scene
 const CrapsScene3D = lazy(() =>
@@ -59,11 +61,7 @@ export const CrapsDice3DWrapper: React.FC<CrapsDice3DWrapperProps> = ({
   isMobile = false,
   onAnimationBlockingChange,
 }) => {
-  const [is3DMode, setIs3DMode] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    const stored = localStorage.getItem('craps-3d-mode');
-    return stored ? stored === 'true' : true;
-  });
+  const [is3DMode, setIs3DMode] = useState(() => getInitial3DMode('craps-3d-mode'));
 
   const [isAnimating, setIsAnimating] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -80,11 +78,16 @@ export const CrapsDice3DWrapper: React.FC<CrapsDice3DWrapperProps> = ({
   const roundStartedRef = useRef<number | null>(null);
   const wasAnimatingRef = useRef(false);
   const startedByRef = useRef<'button' | 'chain' | null>(null);
+  const feedback = use3DFeedbackPrompt('craps', is3DMode && isExpanded && !isAnimating);
 
   const startRound = useGuidedStore((s) => s.startRound);
   const receiveOutcome = useGuidedStore((s) => s.receiveOutcome);
   const requestSkip = useGuidedStore((s) => s.requestSkip);
   const setAnimationBlocking = useGuidedStore((s) => s.setAnimationBlocking);
+
+  useEffect(() => {
+    trackAbBucket('craps');
+  }, []);
 
   useEffect(() => {
     skipRequestedRef.current = skipRequested;
@@ -186,6 +189,7 @@ export const CrapsDice3DWrapper: React.FC<CrapsDice3DWrapperProps> = ({
   }, [onAnimationBlockingChange, setAnimationBlocking]);
 
   const handleAnimationComplete = useCallback(() => {
+    feedback.markAnimationComplete(roundStartedRef.current ?? resultId ?? 0);
     const remainingMs = skipRequestedRef.current ? 0 : getMinRemainingMs(animationStartMsRef.current, MIN_ANIMATION_MS);
     if (remainingMs <= 0) {
       finishAnimation();
@@ -198,7 +202,7 @@ export const CrapsDice3DWrapper: React.FC<CrapsDice3DWrapperProps> = ({
       finishAnimation();
       completionTimeoutRef.current = null;
     }, remainingMs);
-  }, [finishAnimation]);
+  }, [finishAnimation, feedback, resultId]);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -306,6 +310,37 @@ export const CrapsDice3DWrapper: React.FC<CrapsDice3DWrapperProps> = ({
               <span className="px-1.5 py-0.5 text-[9px] font-mono bg-purple-600/80 text-white rounded">
                 BETA
               </span>
+            </div>
+          )}
+
+          {feedback.show && (
+            <div className="absolute bottom-4 left-4 right-4 flex items-center justify-center z-20">
+              <div className="flex flex-col sm:flex-row items-center gap-2 rounded border border-terminal-green/40 bg-black/80 px-3 py-2 text-xs font-mono text-terminal-green shadow-lg">
+                <span>3D feel smooth?</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => feedback.submit('positive')}
+                    className="px-2 py-1 rounded border border-terminal-green/60 hover:bg-terminal-green/20"
+                  >
+                    YES
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => feedback.submit('negative')}
+                    className="px-2 py-1 rounded border border-terminal-accent/60 text-terminal-accent hover:bg-terminal-accent/20"
+                  >
+                    NO
+                  </button>
+                  <button
+                    type="button"
+                    onClick={feedback.dismiss}
+                    className="px-2 py-1 rounded border border-gray-600/60 text-gray-400 hover:bg-gray-600/20"
+                  >
+                    LATER
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>

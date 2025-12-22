@@ -3,13 +3,16 @@
  *
  * Shows a fullscreen 3D deal/reveal scene during action windows.
  */
-import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Card } from '../../../types';
 import { track } from '../../../services/telemetry';
 import { CardSlotConfig } from './cardLayouts';
 import { COLLAPSE_DELAY_MS, getMinRemainingMs, MIN_ANIMATION_MS } from './sceneTiming';
 import type { CardHand } from './Card3D';
 import { useGuidedStore } from './engine/GuidedStore';
+import type { ChipStackConfig } from './chips/ChipStack3D';
+import { getInitial3DMode, trackAbBucket } from './abDefaults';
+import { use3DFeedbackPrompt } from './use3DFeedbackPrompt';
 
 const CardTableScene3D = lazy(() =>
   import('./CardTableScene3D').then((mod) => ({ default: mod.CardTableScene3D }))
@@ -21,13 +24,16 @@ interface CardAnimationOverlayProps {
   cardsById: Record<string, Card | null>;
   isActionActive: boolean;
   storageKey: string;
-  guidedGameType?: 'blackjack' | 'baccarat';
+  guidedGameType?: 'blackjack' | 'baccarat' | 'casinoWar' | 'threeCard' | 'ultimateHoldem' | 'hilo' | 'videoPoker';
+  roundId?: number;
   onAnimationBlockingChange?: (blocking: boolean) => void;
   isMobile?: boolean;
   tableSize?: { width: number; depth: number; y: number };
   cardSize?: [number, number, number];
   selectedHand?: CardHand; // Which hand the player bet on - for card coloring
   revealStaggerMs?: number; // Delay between each card flip (default 130ms)
+  chipStacks?: ChipStackConfig[];
+  accentColor?: string;
 }
 
 const Scene3DLoader: React.FC = () => (
@@ -51,18 +57,17 @@ export const CardAnimationOverlay: React.FC<CardAnimationOverlayProps> = ({
   isActionActive,
   storageKey,
   guidedGameType,
+  roundId,
   onAnimationBlockingChange,
   isMobile = false,
   tableSize,
   cardSize,
   selectedHand,
   revealStaggerMs,
+  chipStacks,
+  accentColor,
 }) => {
-  const [is3DMode, setIs3DMode] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    const stored = localStorage.getItem(storageKey);
-    return stored ? stored === 'true' : true;
-  });
+  const [is3DMode, setIs3DMode] = useState(() => getInitial3DMode(storageKey));
 
   const [isAnimating, setIsAnimating] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -80,11 +85,20 @@ export const CardAnimationOverlay: React.FC<CardAnimationOverlayProps> = ({
   const wasAnimatingRef = useRef(false);
 
   const telemetryGame = guidedGameType ?? storageKey.replace(/-3d-mode$/, '');
+  const squeezeSlots = useMemo(
+    () => (guidedGameType === 'baccarat' ? revealSlots : []),
+    [guidedGameType, revealSlots]
+  );
+  const feedback = use3DFeedbackPrompt(telemetryGame, is3DMode && isExpanded && !isAnimating);
 
   const startRound = useGuidedStore((s) => s.startRound);
   const receiveOutcome = useGuidedStore((s) => s.receiveOutcome);
   const requestSkip = useGuidedStore((s) => s.requestSkip);
   const setAnimationBlocking = useGuidedStore((s) => s.setAnimationBlocking);
+
+  useEffect(() => {
+    trackAbBucket(telemetryGame);
+  }, [telemetryGame]);
 
   useEffect(() => {
     skipRequestedRef.current = skipRequested;
@@ -111,6 +125,13 @@ export const CardAnimationOverlay: React.FC<CardAnimationOverlayProps> = ({
         card: { rank: card.rank, suit: card.suit },
         handType: prefix === 'player' ? 'player' : 'banker',
         cardIndex: index,
+      });
+      return;
+    }
+    if (guidedGameType === 'casinoWar' || guidedGameType === 'threeCard' || guidedGameType === 'ultimateHoldem' || guidedGameType === 'hilo' || guidedGameType === 'videoPoker') {
+      receiveOutcome(guidedGameType, {
+        card: { rank: card.rank, suit: card.suit },
+        slotId,
       });
     }
   }, [cardsById, guidedGameType, receiveOutcome]);
@@ -139,10 +160,10 @@ export const CardAnimationOverlay: React.FC<CardAnimationOverlayProps> = ({
       animationStartMsRef.current = performance.now();
       onAnimationBlockingChange?.(true);
       if (guidedGameType) {
-        const roundId = dealId + 1;
-        if (activeRoundRef.current !== roundId) {
-          activeRoundRef.current = roundId;
-          startRound(guidedGameType, roundId);
+        const nextRoundId = typeof roundId === 'number' ? roundId : dealId + 1;
+        if (activeRoundRef.current !== nextRoundId) {
+          activeRoundRef.current = nextRoundId;
+          startRound(guidedGameType, nextRoundId);
         }
         setAnimationBlocking(guidedGameType, true);
       }
@@ -155,7 +176,7 @@ export const CardAnimationOverlay: React.FC<CardAnimationOverlayProps> = ({
         completionTimeoutRef.current = null;
       }
     }
-  }, [dealId, guidedGameType, isActionActive, is3DMode, onAnimationBlockingChange, setAnimationBlocking, startRound]);
+  }, [dealId, guidedGameType, isActionActive, is3DMode, onAnimationBlockingChange, roundId, setAnimationBlocking, startRound]);
 
   useEffect(() => {
     const nextKeys: Record<string, string> = {};
@@ -201,10 +222,10 @@ export const CardAnimationOverlay: React.FC<CardAnimationOverlayProps> = ({
       animationStartMsRef.current = performance.now();
       onAnimationBlockingChange?.(true);
       if (guidedGameType) {
-        const roundId = dealId + 1;
-        if (activeRoundRef.current !== roundId) {
-          activeRoundRef.current = roundId;
-          startRound(guidedGameType, roundId);
+        const nextRoundId = typeof roundId === 'number' ? roundId : dealId + 1;
+        if (activeRoundRef.current !== nextRoundId) {
+          activeRoundRef.current = nextRoundId;
+          startRound(guidedGameType, nextRoundId);
         }
         setAnimationBlocking(guidedGameType, true);
         [...newDeals, ...newReveals].forEach(emitOutcome);
@@ -218,7 +239,7 @@ export const CardAnimationOverlay: React.FC<CardAnimationOverlayProps> = ({
         completionTimeoutRef.current = null;
       }
     }
-  }, [cardsById, dealId, emitOutcome, guidedGameType, is3DMode, onAnimationBlockingChange, setAnimationBlocking, slots, startRound]);
+  }, [cardsById, dealId, emitOutcome, guidedGameType, is3DMode, onAnimationBlockingChange, roundId, setAnimationBlocking, slots, startRound]);
 
   const finishAnimation = useCallback(() => {
     setIsAnimating(false);
@@ -233,6 +254,7 @@ export const CardAnimationOverlay: React.FC<CardAnimationOverlayProps> = ({
   }, [guidedGameType, onAnimationBlockingChange, setAnimationBlocking]);
 
   const handleAnimationComplete = useCallback(() => {
+    feedback.markAnimationComplete(dealId);
     const remainingMs = skipRequestedRef.current ? 0 : getMinRemainingMs(animationStartMsRef.current, MIN_ANIMATION_MS);
     if (remainingMs <= 0) {
       finishAnimation();
@@ -245,7 +267,7 @@ export const CardAnimationOverlay: React.FC<CardAnimationOverlayProps> = ({
       finishAnimation();
       completionTimeoutRef.current = null;
     }, remainingMs);
-  }, [finishAnimation]);
+  }, [dealId, feedback, finishAnimation]);
 
   useEffect(() => {
     return () => {
@@ -337,6 +359,10 @@ export const CardAnimationOverlay: React.FC<CardAnimationOverlayProps> = ({
                   cardSize={cardSize}
                   selectedHand={selectedHand}
                   revealStaggerMs={revealStaggerMs}
+                  squeezeSlots={squeezeSlots}
+                  chipStacks={chipStacks}
+                  accentColor={accentColor}
+                  performanceKey={telemetryGame}
                 />
               </Suspense>
 
@@ -350,6 +376,36 @@ export const CardAnimationOverlay: React.FC<CardAnimationOverlayProps> = ({
                   <span className="text-xs font-mono text-terminal-green animate-pulse font-bold tracking-wider">
                     WAITING FOR CHAIN...
                   </span>
+                </div>
+              )}
+              {feedback.show && (
+                <div className="absolute bottom-4 left-4 right-4 flex items-center justify-center">
+                  <div className="flex flex-col sm:flex-row items-center gap-2 rounded border border-terminal-green/40 bg-black/80 px-3 py-2 text-xs font-mono text-terminal-green shadow-lg">
+                    <span>3D feel smooth?</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => feedback.submit('positive')}
+                        className="px-2 py-1 rounded border border-terminal-green/60 hover:bg-terminal-green/20"
+                      >
+                        YES
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => feedback.submit('negative')}
+                        className="px-2 py-1 rounded border border-terminal-accent/60 text-terminal-accent hover:bg-terminal-accent/20"
+                      >
+                        NO
+                      </button>
+                      <button
+                        type="button"
+                        onClick={feedback.dismiss}
+                        className="px-2 py-1 rounded border border-gray-600/60 text-gray-400 hover:bg-gray-600/20"
+                      >
+                        LATER
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

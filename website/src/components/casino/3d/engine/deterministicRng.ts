@@ -117,8 +117,10 @@ const GAME_HASHES: Record<string, number> = {
   sicbo: 0x9abc,
   blackjack: 0xdef0,
   baccarat: 0x1357,
+  casinowar: 0x1a2b,
   hilo: 0x2468,
   videopoker: 0x3579,
+  threecard: 0x3b6c,
   threecardpoker: 0x468a,
   ultimateholdem: 0x579b,
 };

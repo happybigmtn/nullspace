@@ -19,6 +19,7 @@ import PyramidWallCollider from './PyramidWallCollider';
 import CasinoPostProcessing from './post/CasinoPostProcessing';
 import AmbientSoundscape from './audio/AmbientSoundscape';
 import PerformanceOverlay from './PerformanceOverlay';
+import PerformanceSampler from './PerformanceSampler';
 
 const TABLE_CONFIG = {
   width: 5.6,
@@ -588,6 +589,7 @@ export const CrapsScene3D: React.FC<CrapsScene3DProps> = ({
       >
         <Suspense fallback={null}>
           <PerformanceOverlay />
+          <PerformanceSampler game="craps" />
           <DiceScene
             targetValues={targetValues}
             resultId={resultId}

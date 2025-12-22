@@ -58,13 +58,29 @@ export interface BaccaratOutcome {
   cardIndex: number;
 }
 
+export interface CardRevealOutcome {
+  card: CardOutcome;
+  slotId: string;
+}
+
+export type CasinoWarOutcome = CardRevealOutcome;
+export type ThreeCardOutcome = CardRevealOutcome;
+export type UltimateHoldemOutcome = CardRevealOutcome;
+export type HiLoOutcome = CardRevealOutcome;
+export type VideoPokerOutcome = CardRevealOutcome;
+
 // Union type for all outcomes
 export type GameOutcome =
   | RouletteOutcome
   | CrapsOutcome
   | SicBoOutcome
   | BlackjackOutcome
-  | BaccaratOutcome;
+  | BaccaratOutcome
+  | CasinoWarOutcome
+  | ThreeCardOutcome
+  | UltimateHoldemOutcome
+  | HiLoOutcome
+  | VideoPokerOutcome;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Guided Round State
@@ -152,6 +168,10 @@ export function deriveBlackjackRoundId(sessionId: number, moveNumber: number): n
 
 export function deriveBaccaratRoundId(sessionId: number, cardNumber: number): number {
   return sessionId * 1000 + cardNumber;
+}
+
+export function deriveSessionRoundId(sessionId: number, moveNumber: number): number {
+  return sessionId * 1000 + moveNumber;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

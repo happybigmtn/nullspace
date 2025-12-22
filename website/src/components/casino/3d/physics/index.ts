@@ -47,3 +47,11 @@ export {
   buildRoulettePockets,
   computeRouletteLaunch,
 } from './RoulettePhysics';
+
+// Worker scaffold
+export {
+  createPhysicsWorker,
+  addPhysicsWorkerListener,
+  type PhysicsWorkerHandle,
+} from './PhysicsWorkerBridge';
+export type { PhysicsWorkerRequest, PhysicsWorkerResponse } from './physicsWorker';

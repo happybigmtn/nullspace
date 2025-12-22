@@ -25,6 +25,7 @@ interface BaccaratCards3DWrapperProps {
   isPlayerSelected: boolean;
   isBankerSelected: boolean;
   isDealing: boolean;
+  roundId?: number;
   superMode?: {
     isActive: boolean;
     multipliers: Array<{ id: number; multiplier: number; superType: string }>;
@@ -44,6 +45,7 @@ export const BaccaratCards3DWrapper: React.FC<BaccaratCards3DWrapperProps> = ({
   isPlayerSelected,
   isBankerSelected,
   isDealing,
+  roundId,
   superMode,
   isMobile = false,
   onAnimationBlockingChange,
@@ -72,6 +74,7 @@ export const BaccaratCards3DWrapper: React.FC<BaccaratCards3DWrapperProps> = ({
         isActionActive={isDealing}
         storageKey="baccarat-3d-mode"
         guidedGameType="baccarat"
+        roundId={roundId}
         onAnimationBlockingChange={onAnimationBlockingChange}
         isMobile={isMobile}
         selectedHand={selectedHand}

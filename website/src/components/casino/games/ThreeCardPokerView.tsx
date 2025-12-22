@@ -7,6 +7,7 @@ import { MobileDrawer } from '../MobileDrawer';
 import { GameControlBar } from '../GameControlBar';
 import { CardAnimationOverlay } from '../3d/CardAnimationOverlay';
 import { buildCardsById, buildRowSlots } from '../3d/cardLayouts';
+import { deriveSessionRoundId } from '../3d/engine/GuidedRound';
 
 // Simple mobile detection hook
 const useIsMobile = () => {
@@ -55,6 +56,10 @@ const getHandRankName = (cards: { rank: string; suit: string }[]): string => {
 
 export const ThreeCardPokerView = React.memo<ThreeCardPokerViewProps & { lastWin?: number; playMode?: 'CASH' | 'FREEROLL' | null; onAnimationBlockingChange?: (blocking: boolean) => void }>(({ gameState, actions, lastWin, playMode, onAnimationBlockingChange }) => {
     const isMobile = useIsMobile();
+    const roundId = useMemo(() => {
+        if (gameState.sessionId === null || !Number.isFinite(gameState.moveNumber)) return undefined;
+        return deriveSessionRoundId(gameState.sessionId, gameState.moveNumber);
+    }, [gameState.moveNumber, gameState.sessionId]);
     const playerRank = useMemo(() =>
         gameState.playerCards.length === 3 ? getHandRankName(gameState.playerCards) : '',
         [gameState.playerCards]
@@ -103,6 +108,8 @@ export const ThreeCardPokerView = React.memo<ThreeCardPokerViewProps & { lastWin
                 cardsById={cardsById}
                 isActionActive={animationActive}
                 storageKey="threecard-3d-mode"
+                guidedGameType="threeCard"
+                roundId={roundId}
                 onAnimationBlockingChange={onAnimationBlockingChange}
                 isMobile={isMobile}
             />

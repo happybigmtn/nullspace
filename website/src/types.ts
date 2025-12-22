@@ -224,6 +224,8 @@ export interface GameState {
   hiloGraphData: number[];
   
   // Session Tracking
+  sessionId: number | null;
+  moveNumber: number;
   sessionWager: number;
   sessionInterimPayout: number; // Mid-game credits not reflected in completion payout
 

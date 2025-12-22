@@ -483,6 +483,8 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
     casinoWarTieBet: 0,
     hiloAccumulator: 0,
     hiloGraphData: [],
+    sessionId: null,
+    moveNumber: 0,
     sessionWager: 0,
     sessionInterimPayout: 0,
     superMode: null
@@ -546,6 +548,19 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
   const autoPlayPlanRef = useRef<AutoPlayPlan | null>(null);
   const [isOnChain, setIsOnChain] = useState(false);
   const [lastTxSig, setLastTxSig] = useState<string | null>(null);
+
+  const applySessionMeta = useCallback((sessionId: bigint | null, moveNumber?: number) => {
+    const sessionValue = sessionId !== null ? Number(sessionId) : null;
+    setGameState(prev => {
+      const next = {
+        ...prev,
+        sessionId: sessionValue,
+        moveNumber: typeof moveNumber === 'number' ? moveNumber : prev.moveNumber,
+      };
+      gameStateRef.current = next;
+      return next;
+    });
+  }, []);
 
   const {
     threeCardPlay,
@@ -863,6 +878,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
                   console.log('[useTerminalGame] Restoring active session:', sessionState);
                   currentSessionIdRef.current = sessionId;
                   setCurrentSessionId(sessionId);
+                  applySessionMeta(sessionId, Number(sessionState.moveCount ?? 0));
                   // Set the game type from the session
                   const frontendGameType = CHAIN_TO_FRONTEND_GAME_TYPE[sessionState.gameType as ChainGameType];
                   if (frontendGameType) {
@@ -1624,6 +1640,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
         // Clear pending flag - session is now active and ready for moves
         isPendingRef.current = false;
         pendingMoveCountRef.current = 0;
+        applySessionMeta(eventSessionId, 0);
 
 	        // Store game type for use in subsequent move events
 	        const frontendGameType = CHAIN_TO_FRONTEND_GAME_TYPE[event.gameType];
@@ -1759,6 +1776,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
 
       // Only process events for our current session
       if (currentSessionId !== null && eventSessionId === currentSessionId) {
+        applySessionMeta(eventSessionId, event.moveNumber);
         const stateBlob = event.newState;
         console.log('[useTerminalGame] Session ID matched! Parsing new state for game type:', gameTypeRef.current);
         // Check for backend-provided logs first (Strategic Solution)
@@ -2003,6 +2021,8 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
           stage: 'RESULT',
           message: resultMessage,
           lastResult: netPnL,
+          sessionId: null,
+          moveNumber: 0,
           sessionWager: 0,
           sessionInterimPayout: 0,
           rouletteIsPrison: false,
@@ -3180,6 +3200,8 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
       casinoWarTieBet: type === GameType.CASINO_WAR ? prev.casinoWarTieBet : 0,
       hiloAccumulator: 0,
       hiloGraphData: [],
+      sessionId: null,
+      moveNumber: 0,
       // Preserve staged table-game wagers if we're restarting the same table game (e.g. CRAPS after a completed session).
       sessionWager: isTableGame && prev.type === type ? prev.sessionWager : 0,
       sessionInterimPayout: 0,

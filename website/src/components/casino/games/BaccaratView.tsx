@@ -5,6 +5,7 @@ import { getBaccaratValue } from '../../../utils/gameUtils';
 import { cardIdToString } from '../../../utils/gameStateParser';
 import { MobileDrawer } from '../MobileDrawer';
 import { BaccaratCards3DWrapper } from '../3d/BaccaratCards3DWrapper';
+import { deriveSessionRoundId } from '../3d/engine/GuidedRound';
 
 // Simple mobile detection hook
 const useIsMobile = () => {
@@ -44,6 +45,10 @@ export const BaccaratView = React.memo<{
     const [leftSidebarView, setLeftSidebarView] = useState<'EXPOSURE' | 'SIDE_BETS'>('EXPOSURE');
     const [activeGroup, setActiveGroup] = useState<BetGroup>('NONE');
     const isMobile = useIsMobile();
+    const roundId = useMemo(() => {
+        if (gameState.sessionId === null || !Number.isFinite(gameState.moveNumber)) return undefined;
+        return deriveSessionRoundId(gameState.sessionId, gameState.moveNumber);
+    }, [gameState.moveNumber, gameState.sessionId]);
     // Consolidate main bet and side bets for display
     const allBets = useMemo(() => [
         { type: gameState.baccaratSelection, amount: gameState.bet },
@@ -243,6 +248,7 @@ export const BaccaratView = React.memo<{
                     isDealing={gameState.message === 'DEALING...'}
                     superMode={gameState.superMode}
                     isMobile={isMobile}
+                    roundId={roundId}
                     onAnimationBlockingChange={onAnimationBlockingChange}
                 >
                     {/* Center Info */}
