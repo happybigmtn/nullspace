@@ -1,5 +1,5 @@
 Goal (incl. success criteria):
-- Complete Phase 4 tasks from `4d.md`, then run comprehensive tests across all work to date.
+- Complete Phase 5 audio system tasks from `4d.md` and verify core behaviors where feasible.
 
 Constraints/Assumptions:
 - Follow `agents.md` guidance: read/update this ledger at start of each turn and whenever goal/state/decisions change; keep it brief and factual.
@@ -25,9 +25,12 @@ Done:
 - Added LightningEffect and SqueezeCard shader components.
 - Ran `npm run test:unit` and `npm test`.
 - Committed and pushed Phase 4 lighting/shader updates.
+- Created AudioManager and procedural sound generators.
+- Added CollisionSound, PositionalAudioEmitter, and AmbientSoundscape components.
+- Ran `npm run test:unit`.
 
 Now:
-- Phase 4 complete; changes committed and pushed.
+- Phase 5 complete; audio system implemented and unit tests run.
 
 Next:
 - Await further instructions.

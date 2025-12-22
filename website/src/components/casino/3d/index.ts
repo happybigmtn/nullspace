@@ -26,3 +26,7 @@ export { default as CasinoPostProcessing } from './post/CasinoPostProcessing';
 export { default as LightingRig } from './environments/LightingRig';
 export { default as LightningEffect } from './effects/LightningEffect';
 export { default as SqueezeCard } from './effects/SqueezeCard';
+export { default as AudioManager } from './audio/AudioManager';
+export { default as AmbientSoundscape } from './audio/AmbientSoundscape';
+export { default as CollisionSound } from './audio/CollisionSound';
+export { default as PositionalAudioEmitter } from './audio/PositionalAudioEmitter';
