@@ -19,6 +19,7 @@ interface RouletteWheel3DWrapperProps {
   isSpinning?: boolean;
   onSpin: () => void;
   isMobile?: boolean;
+  lightningMultipliers?: Array<{ number: number; multiplier: number }>;
   onAnimationBlockingChange?: (blocking: boolean) => void;
 }
 
@@ -60,6 +61,7 @@ export const RouletteWheel3DWrapper: React.FC<RouletteWheel3DWrapperProps> = ({
   isSpinning = false,
   onSpin,
   isMobile = false,
+  lightningMultipliers,
   onAnimationBlockingChange,
 }) => {
   const [is3DMode, setIs3DMode] = useState(() => {
@@ -276,6 +278,7 @@ export const RouletteWheel3DWrapper: React.FC<RouletteWheel3DWrapperProps> = ({
               isMobile={isMobile}
               fullscreen={isExpanded}
               skipRequested={skipRequested}
+              lightningMultipliers={lightningMultipliers}
             />
           </Suspense>
 

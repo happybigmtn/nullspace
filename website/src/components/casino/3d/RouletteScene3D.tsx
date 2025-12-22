@@ -25,6 +25,7 @@ import CasinoPostProcessing from './post/CasinoPostProcessing';
 import AmbientSoundscape from './audio/AmbientSoundscape';
 import PositionalAudioEmitter from './audio/PositionalAudioEmitter';
 import PerformanceOverlay from './PerformanceOverlay';
+import LightningEffect from './effects/LightningEffect';
 
 const TWO_PI = Math.PI * 2;
 const POCKET_COUNT = ROULETTE_NUMBERS.length;
@@ -37,6 +38,8 @@ const POCKET_DEPTH = 0.18;
 const POCKET_HEIGHT = 0.09;
 const NUMBER_RING_RADIUS = 1.52;
 const NUMBER_HEIGHT = 0.3;
+const MULTIPLIER_RING_RADIUS = NUMBER_RING_RADIUS + 0.3;
+const MULTIPLIER_HEIGHT = NUMBER_HEIGHT + 0.45;
 const BALL_OUTER_RADIUS = 2.5;
 const BALL_INNER_RADIUS = 1.95;
 const BALL_HEIGHT_START = 0.32;
@@ -98,6 +101,7 @@ interface RouletteScene3DProps {
   isMobile?: boolean;
   fullscreen?: boolean;
   skipRequested?: boolean;
+  lightningMultipliers?: Array<{ number: number; multiplier: number }>;
 }
 
 const createNumberTexture = (value: number, size: number) => {
@@ -137,6 +141,43 @@ const createNumberTexture = (value: number, size: number) => {
   return texture;
 };
 
+const createMultiplierTexture = (multiplier: number, size: number) => {
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return new THREE.CanvasTexture(canvas);
+
+  const center = size / 2;
+  ctx.clearRect(0, 0, size, size);
+
+  ctx.fillStyle = 'rgba(255, 215, 102, 0.12)';
+  ctx.beginPath();
+  ctx.arc(center, center, size * 0.45, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = 'rgba(255, 215, 102, 0.65)';
+  ctx.lineWidth = Math.max(2, size * 0.06);
+  ctx.beginPath();
+  ctx.arc(center, center, size * 0.45, 0, Math.PI * 2);
+  ctx.stroke();
+
+  const label = `x${Math.round(multiplier)}`;
+  ctx.font = `700 ${Math.floor(size * 0.34)}px "Courier New", monospace`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.shadowColor = 'rgba(255, 232, 168, 0.95)';
+  ctx.shadowBlur = size * 0.2;
+  ctx.fillStyle = '#fff1b6';
+  ctx.fillText(label, center, center);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.needsUpdate = true;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  return texture;
+};
+
 function RouletteWheel({
   targetNumber,
   resultId,
@@ -147,6 +188,7 @@ function RouletteWheel({
   ballRef,
   ballVelocityRef,
   skipRequested,
+  lightningMultipliers,
 }: {
   targetNumber?: number | null;
   resultId?: number;
@@ -157,6 +199,7 @@ function RouletteWheel({
   ballRef: React.MutableRefObject<THREE.Mesh | null>;
   ballVelocityRef: React.MutableRefObject<THREE.Vector3>;
   skipRequested?: boolean;
+  lightningMultipliers?: Array<{ number: number; multiplier: number }>;
 }) {
   const wheelRef = useRef<THREE.Group>(null);
   const targetRef = useRef<number | null>(null);
@@ -194,11 +237,42 @@ function RouletteWheel({
     return ROULETTE_NUMBERS.map((num) => createNumberTexture(num, size));
   }, [isMobile]);
 
+  const lightningMap = useMemo(() => {
+    const map = new Map<number, number>();
+    (lightningMultipliers ?? []).forEach((entry) => {
+      const id = Number(entry?.number);
+      const multiplier = Number(entry?.multiplier);
+      if (!Number.isFinite(id) || !Number.isFinite(multiplier)) return;
+      if (id < 0 || id > 36) return;
+      const prev = map.get(id) ?? 0;
+      if (multiplier > prev) {
+        map.set(id, multiplier);
+      }
+    });
+    return map;
+  }, [lightningMultipliers]);
+
+  const multiplierTextures = useMemo(() => {
+    if (lightningMap.size === 0) return new Map<number, THREE.Texture>();
+    const size = isMobile ? 92 : 120;
+    const map = new Map<number, THREE.Texture>();
+    lightningMap.forEach((multiplier, number) => {
+      map.set(number, createMultiplierTexture(multiplier, size));
+    });
+    return map;
+  }, [isMobile, lightningMap]);
+
   useEffect(() => {
     return () => {
       numberTextures.forEach((texture) => texture.dispose());
     };
   }, [numberTextures]);
+
+  useEffect(() => {
+    return () => {
+      multiplierTextures.forEach((texture) => texture.dispose());
+    };
+  }, [multiplierTextures]);
 
   useEffect(() => {
     if (typeof targetNumber === 'number') {
@@ -441,6 +515,25 @@ function RouletteWheel({
             />
           </sprite>
         ))}
+        {pocketData.map((pocket) => {
+          const multiplier = lightningMap.get(pocket.num);
+          if (!multiplier) return null;
+          const texture = multiplierTextures.get(pocket.num);
+          if (!texture) return null;
+          return (
+            <sprite
+              key={`lightning-${pocket.num}`}
+              position={[
+                Math.sin(pocket.angle) * MULTIPLIER_RING_RADIUS,
+                MULTIPLIER_HEIGHT,
+                Math.cos(pocket.angle) * MULTIPLIER_RING_RADIUS,
+              ]}
+              scale={[0.46, 0.46, 1]}
+            >
+              <spriteMaterial map={texture} transparent depthWrite={false} />
+            </sprite>
+          );
+        })}
         <mesh ref={ballRef} castShadow={!isMobile}>
           <sphereGeometry args={[0.1, isMobile ? 12 : 18, isMobile ? 12 : 18]} />
           <meshStandardMaterial color="#f8fafc" roughness={0.2} metalness={0.1} />
@@ -512,9 +605,11 @@ export const RouletteScene3D: React.FC<RouletteScene3DProps> = ({
   onAnimationComplete,
   isMobile = false,
   skipRequested,
+  lightningMultipliers,
 }) => {
   const [sceneReady, setSceneReady] = useState(false);
   const lightingPreset = LIGHTING_PRESETS.casino;
+  const lightningActive = (lightningMultipliers ?? []).length > 0;
   const spinStateRef = useRef<SpinState>({
     active: false,
     phase: 'idle',
@@ -599,7 +694,19 @@ export const RouletteScene3D: React.FC<RouletteScene3DProps> = ({
                 ballRef={ballRef}
                 ballVelocityRef={ballVelocityRef}
                 skipRequested={skipRequested}
+                lightningMultipliers={lightningMultipliers}
               />
+              {!isMobile && lightningActive && (
+                <LightningEffect
+                  active={lightningActive}
+                  color="#ffd86b"
+                  intensity={1.1}
+                  boltCount={2}
+                  branchiness={0.6}
+                  size={[5.8, 5.8]}
+                  position={[0, 0.55, 0]}
+                />
+              )}
             </CasinoPostProcessing>
             <PositionalAudioEmitter
               soundType="roll"

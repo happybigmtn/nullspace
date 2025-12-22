@@ -32,6 +32,21 @@ export const RouletteView = React.memo<{
     );
     const isSpinning = gameState.message === 'SPINNING ON CHAIN...';
     const betTypes = useMemo(() => new Set(gameState.rouletteBets.map((b) => b.type)), [gameState.rouletteBets]);
+    const lightningMultipliers = useMemo(() => {
+        if (!gameState.superMode?.isActive || !Array.isArray(gameState.superMode.multipliers)) return [];
+        const deduped = new Map<number, number>();
+        gameState.superMode.multipliers.forEach((entry) => {
+            const id = Number(entry?.id);
+            const multiplier = Number(entry?.multiplier);
+            if (!Number.isFinite(id) || !Number.isFinite(multiplier)) return;
+            if (id < 0 || id > 36) return;
+            const prev = deduped.get(id) ?? 0;
+            if (multiplier > prev) {
+                deduped.set(id, multiplier);
+            }
+        });
+        return Array.from(deduped.entries()).map(([number, multiplier]) => ({ number, multiplier }));
+    }, [gameState.superMode]);
 
     const totalBet = useMemo(() => gameState.rouletteBets.reduce((acc, b) => acc + b.amount, 0), [gameState.rouletteBets]);
 
@@ -191,6 +206,7 @@ export const RouletteView = React.memo<{
                          isSpinning={isSpinning}
                          onSpin={() => actions?.deal?.()}
                          isMobile={isMobile}
+                         lightningMultipliers={lightningMultipliers}
                          onAnimationBlockingChange={onAnimationBlockingChange}
                      />
                      

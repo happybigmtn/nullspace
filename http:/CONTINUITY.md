@@ -1,5 +1,5 @@
 Goal (incl. success criteria):
-- Complete Phase 6 integration/polish: performance profiling notes, mobile optimization pass, and broader chain/store wiring.
+- Start Phase 7 (Game Shows) by shipping Lightning Roulette visuals + data wiring; then proceed to Football Studio and Dream Catcher.
 
 Constraints/Assumptions:
 - Follow `agents.md` guidance: read/update this ledger at start of each turn and whenever goal/state/decisions change; keep it brief and factual.
@@ -42,12 +42,15 @@ Done:
 - Ran `npm run test:unit` and `npm test`.
 - Added telemetry tracking for 3D toggles/animation starts/skips.
 - Ran `npm run test:unit` and `npm test` (from `website/`).
+- Wired Lightning Roulette multipliers from `superMode` into roulette 3D scene.
+- Added Lightning Roulette multiplier badges + lightning overlay effect in RouletteScene3D.
+- Ran `npm run test:unit` and `npm test` (from `website/`).
 
 Now:
-- Phase 6 complete: integration/polish + telemetry for 3D engagement tracking.
+- Phase 7 in progress: Lightning Roulette visuals/data wiring complete.
 
 Next:
-- Await direction on next phase (Phase 7+) or additional polish.
+- Continue Phase 7 with Football Studio and Dream Catcher scaffolding.
 
 Open questions (UNCONFIRMED if needed):
 - None.
