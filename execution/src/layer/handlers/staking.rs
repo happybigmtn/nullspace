@@ -79,6 +79,8 @@ impl<'a, S: State> Layer<'a, S> {
 
         // Deduct chips
         player.balances.chips -= amount;
+        let player_balances =
+            nullspace_types::casino::PlayerBalanceSnapshot::from_player(&player);
         self.insert(
             Key::CasinoPlayer(public.clone()),
             Value::CasinoPlayer(player),
@@ -128,6 +130,7 @@ impl<'a, S: State> Layer<'a, S> {
         // Update House Total VP
         house.total_staked_amount = house.total_staked_amount.saturating_add(amount);
         house.total_voting_power = house.total_voting_power.saturating_add(added_voting_power);
+        let house_snapshot = house.clone();
         self.insert(Key::House, Value::House(house));
 
         Ok(vec![Event::Staked {
@@ -137,6 +140,9 @@ impl<'a, S: State> Layer<'a, S> {
             new_balance: staker.balance,
             unlock_ts: staker.unlock_ts,
             voting_power: staker.voting_power,
+            staker: staker.clone(),
+            house: house_snapshot,
+            player_balances,
         }])
     }
 
@@ -178,10 +184,15 @@ impl<'a, S: State> Layer<'a, S> {
         }
 
         // Return chips
+        let mut player_balances = None;
         if let Some(Value::CasinoPlayer(mut player)) =
             self.get(&Key::CasinoPlayer(public.clone())).await?
         {
             player.balances.chips += staker.balance;
+            player_balances =
+                Some(nullspace_types::casino::PlayerBalanceSnapshot::from_player(
+                    &player,
+                ));
             self.insert(
                 Key::CasinoPlayer(public.clone()),
                 Value::CasinoPlayer(player),
@@ -191,17 +202,22 @@ impl<'a, S: State> Layer<'a, S> {
         // Update House
         house.total_staked_amount = house.total_staked_amount.saturating_sub(staker.balance);
         house.total_voting_power = house.total_voting_power.saturating_sub(staker.voting_power);
+        let house_snapshot = house.clone();
         self.insert(Key::House, Value::House(house));
 
         // Clear Staker
         staker.balance = 0;
         staker.voting_power = 0;
         staker.reward_debt_x18 = 0;
+        let staker_snapshot = staker.clone();
         self.insert(Key::Staker(public.clone()), Value::Staker(staker));
 
         Ok(vec![Event::Unstaked {
             player: public.clone(),
             amount: unstake_amount,
+            staker: staker_snapshot,
+            house: house_snapshot,
+            player_balances: player_balances.unwrap_or_default(),
         }])
     }
 
@@ -277,6 +293,10 @@ impl<'a, S: State> Layer<'a, S> {
             ));
         }
 
+        let player_balances =
+            nullspace_types::casino::PlayerBalanceSnapshot::from_player(&player);
+        let staker_snapshot = staker.clone();
+        let house_snapshot = house.clone();
         self.insert(
             Key::CasinoPlayer(public.clone()),
             Value::CasinoPlayer(player),
@@ -287,6 +307,9 @@ impl<'a, S: State> Layer<'a, S> {
         Ok(vec![Event::RewardsClaimed {
             player: public.clone(),
             amount,
+            staker: staker_snapshot,
+            house: house_snapshot,
+            player_balances,
         }])
     }
 
@@ -353,9 +376,13 @@ impl<'a, S: State> Layer<'a, S> {
             house.net_pnl = 0; // Reset for next week
 
             let epoch = house.current_epoch;
+            let house_snapshot = house.clone();
             self.insert(Key::House, Value::House(house));
 
-            return Ok(vec![Event::EpochProcessed { epoch }]);
+            return Ok(vec![Event::EpochProcessed {
+                epoch,
+                house: house_snapshot,
+            }]);
         }
 
         Ok(vec![])
@@ -900,7 +927,7 @@ mod tests {
 
             let mut saw_claim = false;
             for op in summary.events_proof_ops {
-                if let Keyless::Append(Output::Event(Event::RewardsClaimed { player, amount })) = op
+                if let Keyless::Append(Output::Event(Event::RewardsClaimed { player, amount, .. })) = op
                 {
                     assert_eq!(player, public);
                     assert_eq!(amount, 7);

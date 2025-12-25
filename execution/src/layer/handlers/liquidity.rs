@@ -111,9 +111,10 @@ impl<'a, S: State> Layer<'a, S> {
         }
 
         let vault = nullspace_types::casino::Vault::default();
-        self.insert(Key::Vault(public.clone()), Value::Vault(vault));
+        self.insert(Key::Vault(public.clone()), Value::Vault(vault.clone()));
         Ok(vec![Event::VaultCreated {
             player: public.clone(),
+            vault,
         }])
     }
 
@@ -160,6 +161,9 @@ impl<'a, S: State> Layer<'a, S> {
         player.balances.chips -= amount;
         vault.collateral_rng = new_collateral;
 
+        let player_balances =
+            nullspace_types::casino::PlayerBalanceSnapshot::from_player(&player);
+        let vault_snapshot = vault.clone();
         self.insert(
             Key::CasinoPlayer(public.clone()),
             Value::CasinoPlayer(player),
@@ -170,6 +174,8 @@ impl<'a, S: State> Layer<'a, S> {
             player: public.clone(),
             amount,
             new_collateral,
+            vault: vault_snapshot,
+            player_balances,
         }])
     }
 
@@ -237,6 +243,11 @@ impl<'a, S: State> Layer<'a, S> {
             updated_player = Some(player);
         }
 
+        let player_balances = updated_player
+            .as_ref()
+            .map(nullspace_types::casino::PlayerBalanceSnapshot::from_player)
+            .unwrap_or_default();
+        let vault_snapshot = vault.clone();
         self.insert(Key::Vault(public.clone()), Value::Vault(vault));
         if let Some(player) = updated_player {
             self.insert(
@@ -244,11 +255,12 @@ impl<'a, S: State> Layer<'a, S> {
                 Value::CasinoPlayer(player),
             );
         }
-
         Ok(vec![Event::VusdtBorrowed {
             player: public.clone(),
             amount,
             new_debt,
+            vault: vault_snapshot,
+            player_balances,
         }])
     }
 
@@ -282,6 +294,9 @@ impl<'a, S: State> Layer<'a, S> {
         vault.debt_vusdt -= actual_repay;
         let new_debt = vault.debt_vusdt;
 
+        let player_balances =
+            nullspace_types::casino::PlayerBalanceSnapshot::from_player(&player);
+        let vault_snapshot = vault.clone();
         self.insert(
             Key::CasinoPlayer(public.clone()),
             Value::CasinoPlayer(player),
@@ -292,6 +307,8 @@ impl<'a, S: State> Layer<'a, S> {
             player: public.clone(),
             amount: actual_repay,
             new_debt,
+            vault: vault_snapshot,
+            player_balances,
         }])
     }
 
@@ -424,26 +441,27 @@ impl<'a, S: State> Layer<'a, S> {
             };
             amm.reserve_vusdt = reserve_vusdt;
 
-            if burned_amount > 0 {
-                let mut house = self.get_or_init_house().await?;
-                let Some(total_burned) = house.total_burned.checked_add(burned_amount) else {
-                    return Ok(invalid_amm_state(public));
-                };
-                house.total_burned = total_burned;
-                self.insert(Key::House, Value::House(house));
-            }
         }
 
-        // Book fee to House
+        let mut house = self.get_or_init_house().await?;
+        if burned_amount > 0 {
+            let Some(total_burned) = house.total_burned.checked_add(burned_amount) else {
+                return Ok(invalid_amm_state(public));
+            };
+            house.total_burned = total_burned;
+        }
         if fee_amount > 0 {
-            let mut house = self.get_or_init_house().await?;
             let Some(accumulated_fees) = house.accumulated_fees.checked_add(fee_amount) else {
                 return Ok(invalid_amm_state(public));
             };
             house.accumulated_fees = accumulated_fees;
-            self.insert(Key::House, Value::House(house));
         }
+        let house_snapshot = house.clone();
+        self.insert(Key::House, Value::House(house));
 
+        let player_balances =
+            nullspace_types::casino::PlayerBalanceSnapshot::from_player(&player);
+        let amm_snapshot = amm.clone();
         let event = Event::AmmSwapped {
             player: public.clone(),
             is_buying_rng,
@@ -453,6 +471,9 @@ impl<'a, S: State> Layer<'a, S> {
             burned_amount,
             reserve_rng: amm.reserve_rng,
             reserve_vusdt: amm.reserve_vusdt,
+            amm: amm_snapshot,
+            player_balances,
+            house: house_snapshot,
         };
 
         self.insert(
@@ -572,6 +593,9 @@ impl<'a, S: State> Layer<'a, S> {
             return Ok(invalid_amm_state(public));
         };
 
+        let player_balances =
+            nullspace_types::casino::PlayerBalanceSnapshot::from_player(&player);
+        let amm_snapshot = amm.clone();
         let event = Event::LiquidityAdded {
             player: public.clone(),
             rng_amount,
@@ -581,6 +605,8 @@ impl<'a, S: State> Layer<'a, S> {
             reserve_rng: amm.reserve_rng,
             reserve_vusdt: amm.reserve_vusdt,
             lp_balance: new_lp_balance,
+            amm: amm_snapshot,
+            player_balances,
         };
 
         self.insert(
@@ -660,6 +686,9 @@ impl<'a, S: State> Layer<'a, S> {
             return Ok(invalid_amm_state(public));
         };
 
+        let player_balances =
+            nullspace_types::casino::PlayerBalanceSnapshot::from_player(&player);
+        let amm_snapshot = amm.clone();
         let event = Event::LiquidityRemoved {
             player: public.clone(),
             rng_amount: amount_rng,
@@ -669,6 +698,8 @@ impl<'a, S: State> Layer<'a, S> {
             reserve_rng: amm.reserve_rng,
             reserve_vusdt: amm.reserve_vusdt,
             lp_balance: new_lp_balance,
+            amm: amm_snapshot,
+            player_balances,
         };
 
         self.insert(
@@ -746,7 +777,8 @@ mod tests {
                 [Event::VusdtBorrowed {
                     player,
                     amount: 10,
-                    new_debt: 10
+                    new_debt: 10,
+                    ..
                 }] if player == &public
             ));
 

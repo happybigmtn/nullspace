@@ -142,7 +142,7 @@ export const HiLoView = React.memo<HiLoViewProps & { lastWin?: number; playMode?
                     primaryAction={{
                         label: 'DEAL',
                         onClick: actions?.deal,
-                        className: 'w-full sm:w-auto',
+                        className: 'w-full md:w-auto',
                     }}
                     secondaryActions={playMode !== 'CASH' ? [
                         {

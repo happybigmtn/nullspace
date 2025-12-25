@@ -1,7 +1,7 @@
 
 import React, { useMemo, useCallback } from 'react';
 import { GameState, RouletteBet } from '../../../types';
-import { getRouletteColor, calculateRouletteExposure } from '../../../utils/gameUtils';
+import { getRouletteColor, calculateRouletteExposure, formatRouletteNumber } from '../../../utils/gameUtils';
 import { MobileDrawer } from '../MobileDrawer';
 
 export const RouletteView = React.memo<{
@@ -28,8 +28,10 @@ export const RouletteView = React.memo<{
         const targets: number[] = [];
 
         if (mode === 'STRAIGHT') {
-            betType = 'STRAIGHT'; label = 'STRAIGHT (0–36)';
+            betType = 'STRAIGHT';
+            label = gameState.rouletteZeroRule === 'AMERICAN' ? 'STRAIGHT (0–36, 00)' : 'STRAIGHT (0–36)';
             for (let n = 0; n <= 36; n++) targets.push(n);
+            if (gameState.rouletteZeroRule === 'AMERICAN') targets.push(37);
         } else if (mode === 'SPLIT_H') {
             betType = 'SPLIT_H'; label = 'SPLIT H (left #)';
             for (let n = 1; n <= 35; n++) if (n % 3 !== 0) targets.push(n);
@@ -49,7 +51,7 @@ export const RouletteView = React.memo<{
 
         if (!betType) return null;
         return { betType, targets, label };
-    }, [actions.placeRouletteBet, gameState.rouletteInputMode]);
+    }, [actions.placeRouletteBet, gameState.rouletteInputMode, gameState.rouletteZeroRule]);
 
     const closeInsideBet = useCallback(() => {
         actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'NONE' }));
@@ -75,7 +77,7 @@ export const RouletteView = React.memo<{
                         <div className="bg-terminal-accent/80 h-3 rounded-l" style={{ width: `${barPercent}%` }} />
                     )}
                 </div>
-                <div className={`w-7 text-center font-bold ${colorClass} flex-shrink-0`}>{num}</div>
+                <div className={`w-7 text-center font-bold ${colorClass} flex-shrink-0`}>{formatRouletteNumber(num)}</div>
                 <div className="flex-1 flex justify-start items-center pl-1 gap-1 min-w-0">
                     {pnl > 0 && (
                         <div className="bg-terminal-green/80 h-3 rounded-r" style={{ width: `${barPercent}%` }} />
@@ -98,6 +100,7 @@ export const RouletteView = React.memo<{
                                     Exposure
                                 </div>
                                 <div className="space-y-1">
+                                    {gameState.rouletteZeroRule === 'AMERICAN' && <div>{renderExposureRow(37)}</div>}
                                     <div>{renderExposureRow(0)}</div>
                                     <div className="grid grid-cols-2 gap-2">
                                         <div className="space-y-0.5">
@@ -181,7 +184,7 @@ export const RouletteView = React.memo<{
                          } ${isSpinning ? 'animate-roulette-spin' : ''}`}
                          aria-label="Spin roulette"
                      >
-                         {lastNum ?? '--'}
+                         {lastNum === null ? '--' : formatRouletteNumber(lastNum)}
                      </button>
                      {isSpinning && (
                          <div className="text-[10px] tracking-[0.4em] uppercase text-gray-500">
@@ -194,7 +197,7 @@ export const RouletteView = React.memo<{
                          <div className="flex gap-2 opacity-75">
                              {gameState.rouletteHistory.slice(-8).reverse().map((num, i) => (
                                  <div key={i} className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border ${getRouletteColor(num) === 'RED' ? 'border-terminal-accent text-terminal-accent' : getRouletteColor(num) === 'BLACK' ? 'border-gray-500 text-white' : 'border-terminal-green text-terminal-green'}`}>
-                                     {num}
+                                     {formatRouletteNumber(num)}
                                  </div>
                              ))}
                          </div>
@@ -235,7 +238,7 @@ export const RouletteView = React.memo<{
             </div>
 
             {/* EXPOSURE SIDEBAR */}
-            <div className="hidden md:flex absolute top-0 left-0 bottom-24 w-60 bg-terminal-black/80 border-r-2 border-gray-700 p-2 overflow-hidden backdrop-blur-sm z-30 flex-col">
+            <div className="hidden lg:flex absolute top-0 left-0 bottom-24 w-60 bg-terminal-black/80 border-r-2 border-gray-700 p-2 overflow-hidden backdrop-blur-sm z-30 flex-col">
                 <h3 className="text-[10px] font-bold text-gray-500 mb-2 tracking-widest text-center border-b border-gray-800 pb-1 flex-none">EXPOSURE</h3>
                 
                 {/* 0 Row */}
@@ -260,7 +263,7 @@ export const RouletteView = React.memo<{
             </div>
 
             {/* ACTIVE BETS SIDEBAR */}
-            <div className="hidden md:flex absolute top-0 right-0 bottom-24 w-60 bg-terminal-black/80 border-l-2 border-gray-700 p-2 backdrop-blur-sm z-30 flex-col">
+            <div className="hidden lg:flex absolute top-0 right-0 bottom-24 w-60 bg-terminal-black/80 border-l-2 border-gray-700 p-2 backdrop-blur-sm z-30 flex-col">
                 <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-2 border-b border-gray-800 pb-1 flex-none text-center">Table Bets</div>
                 <div className="flex-1 overflow-y-auto flex flex-col space-y-2">
                     {(() => {
@@ -318,10 +321,81 @@ export const RouletteView = React.memo<{
             </div>
 
             {/* CONTROLS */}
-            <div className="ns-controlbar fixed bottom-0 left-0 right-0 sm:sticky sm:bottom-0 bg-terminal-black/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)] sm:pb-0">
-                <div className="h-auto sm:h-20 flex flex-col sm:flex-row items-center justify-center gap-2 p-2 sm:px-4">
+            <div className="ns-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-terminal-black/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
+                <div className="h-auto md:h-20 flex flex-col md:flex-row items-center justify-center gap-2 p-2 md:px-4">
+                    <div className="flex md:hidden items-center gap-2">
+                        <MobileDrawer label="BETS" title="ROULETTE BETS">
+                            <div className="space-y-4">
+                                <div className="rounded border border-gray-800 bg-black/40 p-2 space-y-2">
+                                    <div className="text-[10px] text-terminal-green font-bold tracking-widest border-b border-gray-800 pb-1">OUTSIDE</div>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                        <button type="button" onClick={() => actions?.placeRouletteBet?.('RED')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('RED') ? 'border-terminal-accent bg-terminal-accent/20 text-terminal-accent' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>RED</button>
+                                        <button type="button" onClick={() => actions?.placeRouletteBet?.('BLACK')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('BLACK') ? 'border-white bg-white/20 text-white' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>BLACK</button>
+                                        <button type="button" onClick={() => actions?.placeRouletteBet?.('ODD')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('ODD') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>ODD</button>
+                                        <button type="button" onClick={() => actions?.placeRouletteBet?.('EVEN')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('EVEN') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>EVEN</button>
+                                        <button type="button" onClick={() => actions?.placeRouletteBet?.('LOW')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('LOW') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>1-18</button>
+                                        <button type="button" onClick={() => actions?.placeRouletteBet?.('HIGH')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('HIGH') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>19-36</button>
+                                    </div>
+                                </div>
+
+                                <div className="rounded border border-gray-800 bg-black/40 p-2 space-y-2">
+                                    <div className="text-[10px] text-terminal-green font-bold tracking-widest border-b border-gray-800 pb-1">DOZENS</div>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                        <button type="button" onClick={() => actions?.placeRouletteBet?.('DOZEN_1')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('DOZEN_1') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>1ST 12</button>
+                                        <button type="button" onClick={() => actions?.placeRouletteBet?.('DOZEN_2')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('DOZEN_2') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>2ND 12</button>
+                                        <button type="button" onClick={() => actions?.placeRouletteBet?.('DOZEN_3')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('DOZEN_3') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>3RD 12</button>
+                                    </div>
+                                </div>
+
+                                <div className="rounded border border-gray-800 bg-black/40 p-2 space-y-2">
+                                    <div className="text-[10px] text-terminal-green font-bold tracking-widest border-b border-gray-800 pb-1">COLUMNS</div>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                        <button type="button" onClick={() => actions?.placeRouletteBet?.('COL_1')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('COL_1') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>COL 1</button>
+                                        <button type="button" onClick={() => actions?.placeRouletteBet?.('COL_2')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('COL_2') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>COL 2</button>
+                                        <button type="button" onClick={() => actions?.placeRouletteBet?.('COL_3')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('COL_3') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>COL 3</button>
+                                    </div>
+                                </div>
+
+                                <div className="rounded border border-gray-800 bg-black/40 p-2 space-y-2">
+                                    <div className="text-[10px] text-terminal-green font-bold tracking-widest border-b border-gray-800 pb-1">ZERO</div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <button type="button" onClick={() => actions?.placeRouletteBet?.('ZERO')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('ZERO') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-terminal-green/30 bg-gray-900 text-terminal-green'}`}>ZERO</button>
+                                    </div>
+                                </div>
+
+                                <div className="rounded border border-gray-800 bg-black/40 p-2 space-y-2">
+                                    <div className="text-[10px] text-terminal-gold font-bold tracking-widest border-b border-gray-800 pb-1">INSIDE</div>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                        <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'STRAIGHT' }))} className={`py-3 rounded border text-xs font-bold ${gameState.rouletteInputMode === 'STRAIGHT' ? 'border-terminal-gold bg-terminal-gold/20 text-terminal-gold' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>STRAIGHT</button>
+                                        <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'SPLIT_H' }))} className={`py-3 rounded border text-xs font-bold ${gameState.rouletteInputMode === 'SPLIT_H' ? 'border-terminal-gold bg-terminal-gold/20 text-terminal-gold' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>SPLIT</button>
+                                        <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'SPLIT_V' }))} className={`py-3 rounded border text-xs font-bold ${gameState.rouletteInputMode === 'SPLIT_V' ? 'border-terminal-gold bg-terminal-gold/20 text-terminal-gold' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>VSPLIT</button>
+                                        <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'STREET' }))} className={`py-3 rounded border text-xs font-bold ${gameState.rouletteInputMode === 'STREET' ? 'border-terminal-gold bg-terminal-gold/20 text-terminal-gold' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>STREET</button>
+                                        <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'CORNER' }))} className={`py-3 rounded border text-xs font-bold ${gameState.rouletteInputMode === 'CORNER' ? 'border-terminal-gold bg-terminal-gold/20 text-terminal-gold' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>CORNER</button>
+                                        <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'SIX_LINE' }))} className={`py-3 rounded border text-xs font-bold ${gameState.rouletteInputMode === 'SIX_LINE' ? 'border-terminal-gold bg-terminal-gold/20 text-terminal-gold' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>SIX LINE</button>
+                                    </div>
+                                </div>
+
+                                <div className="rounded border border-gray-800 bg-black/40 p-2 space-y-2">
+                                    <div className="text-[10px] text-gray-400 font-bold tracking-widest border-b border-gray-800 pb-1">ACTIONS</div>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                        <button type="button" onClick={actions?.rebetRoulette} className="py-3 rounded border border-gray-700 bg-gray-900 text-gray-400 text-xs font-bold">REBET</button>
+                                        <button type="button" onClick={actions?.undoRouletteBet} className="py-3 rounded border border-gray-700 bg-gray-900 text-gray-400 text-xs font-bold">UNDO</button>
+                                        <button type="button" onClick={actions?.cycleRouletteZeroRule} className="py-3 rounded border border-gray-700 bg-gray-900 text-gray-400 text-xs font-bold">RULE</button>
+                                        {playMode !== 'CASH' && (
+                                            <>
+                                                <button type="button" onClick={actions?.toggleShield} className={`py-3 rounded border text-xs font-bold ${gameState.activeModifiers.shield ? 'border-blue-400 bg-blue-500/20 text-blue-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>SHIELD</button>
+                                                <button type="button" onClick={actions?.toggleDouble} className={`py-3 rounded border text-xs font-bold ${gameState.activeModifiers.double ? 'border-purple-400 bg-purple-500/20 text-purple-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>DOUBLE</button>
+                                            </>
+                                        )}
+                                        <button type="button" onClick={actions?.toggleSuper} className={`py-3 rounded border text-xs font-bold ${gameState.activeModifiers.super ? 'border-terminal-gold bg-terminal-gold/20 text-terminal-gold' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>SUPER</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </MobileDrawer>
+                    </div>
+
                     {/* Outside Bets Group */}
-                    <div className="hidden sm:flex items-center gap-1 px-3 py-2 rounded border border-terminal-green/30 bg-terminal-green/5">
+                    <div className="hidden md:flex items-center gap-1 px-3 py-2 rounded border border-terminal-green/30 bg-terminal-green/5">
                         <span className="text-[8px] text-terminal-green font-bold tracking-widest uppercase mr-2">OUTSIDE</span>
                         <button type="button" onClick={() => actions?.placeRouletteBet?.('RED')} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${betTypes.has('RED') ? 'border-terminal-accent bg-terminal-accent/20 text-terminal-accent' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>RED</button>
                         <button type="button" onClick={() => actions?.placeRouletteBet?.('BLACK')} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${betTypes.has('BLACK') ? 'border-white bg-white/20 text-white' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>BLACK</button>
@@ -342,7 +416,7 @@ export const RouletteView = React.memo<{
                     </div>
 
                     {/* Inside Bets Group */}
-                    <div className="hidden sm:flex items-center gap-1 px-3 py-2 rounded border border-terminal-gold/30 bg-terminal-gold/5">
+                    <div className="hidden md:flex items-center gap-1 px-3 py-2 rounded border border-terminal-gold/30 bg-terminal-gold/5">
                         <span className="text-[8px] text-terminal-gold font-bold tracking-widest uppercase mr-2">INSIDE</span>
                         <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'STRAIGHT' }))} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${gameState.rouletteInputMode === 'STRAIGHT' ? 'border-terminal-gold bg-terminal-gold/20 text-terminal-gold' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>STRAIGHT</button>
                         <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'SPLIT_H' }))} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${gameState.rouletteInputMode === 'SPLIT_H' ? 'border-terminal-gold bg-terminal-gold/20 text-terminal-gold' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>SPLIT</button>
@@ -362,7 +436,7 @@ export const RouletteView = React.memo<{
                     </button>
 
                     {/* Actions Group */}
-                    <div className="hidden sm:flex items-center gap-1">
+                    <div className="hidden md:flex items-center gap-1">
                         <button type="button" onClick={actions?.rebetRoulette} className="h-8 px-2 rounded border border-gray-700 bg-black/50 text-gray-300 text-[10px] font-bold tracking-widest uppercase hover:bg-gray-800 transition-all">REBET</button>
                         <button type="button" onClick={actions?.undoRouletteBet} className="h-8 px-2 rounded border border-gray-700 bg-black/50 text-gray-300 text-[10px] font-bold tracking-widest uppercase hover:bg-gray-800 transition-all">UNDO</button>
                         <button type="button" onClick={actions?.cycleRouletteZeroRule} className="h-8 px-2 rounded border border-gray-700 bg-black/50 text-gray-300 text-[10px] font-bold tracking-widest uppercase hover:bg-gray-800 transition-all">RULE</button>
@@ -408,7 +482,7 @@ export const RouletteView = React.memo<{
                                      onClick={() => placeInsideBet(n)}
                                      className="h-11 rounded border border-gray-800 bg-gray-900/50 text-white text-sm font-bold hover:border-gray-600"
                                  >
-                                     {n}
+                                     {formatRouletteNumber(n)}
                                  </button>
                              ))}
                          </div>

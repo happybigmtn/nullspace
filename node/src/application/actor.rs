@@ -19,16 +19,19 @@ use commonware_cryptography::{
 };
 use commonware_macros::select;
 use commonware_runtime::{
-    buffer::PoolRef, telemetry::metrics::histogram, Clock, Handle, Metrics, Spawner, Storage,
-    ThreadPool,
+    buffer::PoolRef, telemetry::metrics::histogram, Clock, Handle, Metrics, RwLock, Spawner,
+    Storage, ThreadPool,
 };
 use commonware_storage::{
     adb::{self, keyless},
     translator::EightCap,
 };
 use commonware_utils::{futures::ClosedExt, NZU64};
-use futures::StreamExt;
-use futures::{channel::mpsc, future::try_join};
+use futures::{SinkExt, StreamExt};
+use futures::{
+    channel::{mpsc, oneshot},
+    future::try_join,
+};
 use futures::{future, future::Either};
 use nullspace_execution::{nonce, state_transition, Adb, Noncer};
 use nullspace_types::{
@@ -41,7 +44,7 @@ use std::{
     collections::{HashMap, VecDeque},
     num::NonZero,
     sync::{atomic::AtomicU64, Arc, Mutex},
-    time::Duration,
+    time::{Duration, SystemTime},
 };
 use tracing::{debug, error, info, warn};
 
@@ -56,6 +59,7 @@ const PRUNE_INTERVAL: u64 = 10_000;
 
 /// Upper bound on cached ancestry results.
 const ANCESTRY_CACHE_ENTRIES: usize = 64;
+const PROOF_QUEUE_SIZE: usize = 64;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 struct AncestryCacheKey {
@@ -67,6 +71,106 @@ struct AncestryCache {
     capacity: usize,
     entries: HashMap<AncestryCacheKey, Arc<[Block]>>,
     lru: VecDeque<AncestryCacheKey>,
+}
+
+struct NonceCacheEntry {
+    next_nonce: u64,
+    last_seen: SystemTime,
+}
+
+struct NonceCache {
+    entries: HashMap<PublicKey, NonceCacheEntry>,
+    lru: VecDeque<PublicKey>,
+    capacity: usize,
+    ttl: Duration,
+}
+
+impl NonceCache {
+    fn new(capacity: usize, ttl: Duration) -> Self {
+        Self {
+            entries: HashMap::new(),
+            lru: VecDeque::new(),
+            capacity,
+            ttl,
+        }
+    }
+
+    fn get(&mut self, now: SystemTime, public: &PublicKey) -> Option<u64> {
+        self.evict_expired(now);
+        let entry = self.entries.get_mut(public)?;
+        if self.is_expired(entry, now) {
+            self.remove(public);
+            return None;
+        }
+        entry.last_seen = now;
+        self.touch(public);
+        Some(entry.next_nonce)
+    }
+
+    fn insert(&mut self, now: SystemTime, public: PublicKey, next_nonce: u64) {
+        self.evict_expired(now);
+        self.entries.insert(
+            public.clone(),
+            NonceCacheEntry {
+                next_nonce,
+                last_seen: now,
+            },
+        );
+        self.touch(&public);
+        self.evict_capacity();
+    }
+
+    fn touch(&mut self, public: &PublicKey) {
+        self.lru.retain(|key| key != public);
+        self.lru.push_back(public.clone());
+    }
+
+    fn remove(&mut self, public: &PublicKey) {
+        self.entries.remove(public);
+        self.lru.retain(|key| key != public);
+    }
+
+    fn evict_expired(&mut self, now: SystemTime) {
+        loop {
+            let Some(oldest) = self.lru.front().cloned() else {
+                break;
+            };
+            let expired = match self.entries.get(&oldest) {
+                Some(entry) => self.is_expired(entry, now),
+                None => true,
+            };
+            if !expired {
+                break;
+            }
+            self.lru.pop_front();
+            self.entries.remove(&oldest);
+        }
+    }
+
+    fn evict_capacity(&mut self) {
+        while self.entries.len() > self.capacity {
+            let Some(oldest) = self.lru.pop_front() else {
+                break;
+            };
+            self.entries.remove(&oldest);
+        }
+    }
+
+    fn is_expired(&self, entry: &NonceCacheEntry, now: SystemTime) -> bool {
+        match now.duration_since(entry.last_seen) {
+            Ok(elapsed) => elapsed > self.ttl,
+            Err(_) => false,
+        }
+    }
+}
+
+struct ProofJob<R: Clock> {
+    view: View,
+    height: u64,
+    commitment: Digest,
+    result: state_transition::StateTransitionResult,
+    finalize_timer: histogram::Timer<R>,
+    response: oneshot::Sender<()>,
 }
 
 impl AncestryCache {
@@ -178,6 +282,9 @@ pub struct Actor<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: In
     execution_concurrency: usize,
     mempool_max_backlog: usize,
     mempool_max_transactions: usize,
+    mempool_stream_buffer_size: usize,
+    nonce_cache_capacity: usize,
+    nonce_cache_ttl: Duration,
 }
 
 impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor<R, I> {
@@ -213,6 +320,9 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                 execution_concurrency: config.execution_concurrency,
                 mempool_max_backlog: config.mempool_max_backlog,
                 mempool_max_transactions: config.mempool_max_transactions,
+                mempool_stream_buffer_size: config.mempool_stream_buffer_size,
+                nonce_cache_capacity: config.nonce_cache_capacity,
+                nonce_cache_ttl: config.nonce_cache_ttl,
             },
             view_supervisor,
             epoch_supervisor,
@@ -234,7 +344,7 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
         mut self,
         mut marshal: marshal::Mailbox<MinSig, Block>,
         seeder: seeder::Mailbox,
-        mut aggregator: aggregator::Mailbox,
+        aggregator: aggregator::Mailbox,
     ) {
         // Initialize metrics
         let txs_considered: Counter<u64, AtomicU64> = Counter::default();
@@ -345,7 +455,7 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
         );
 
         // Initialize the state
-        let mut state = match Adb::init(
+        let state = match Adb::init(
             self.context.with_label("state"),
             adb::any::variable::Config {
                 mmr_journal_partition: format!("{}-state-mmr-journal", self.partition_prefix),
@@ -375,7 +485,7 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                 return;
             }
         };
-        let mut events = match keyless::Keyless::<_, Output, Sha256>::init(
+        let events = match keyless::Keyless::<_, Output, Sha256>::init(
             self.context.with_label("events"),
             keyless::Config {
                 mmr_journal_partition: format!("{}-events-mmr-journal", self.partition_prefix),
@@ -405,6 +515,8 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                 return;
             }
         };
+        let state = Arc::new(RwLock::new(state));
+        let events = Arc::new(RwLock::new(events));
 
         // Create the execution pool
         //
@@ -426,20 +538,23 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
         // Compute genesis digest
         let genesis_digest = genesis_digest();
 
-        let mut committed_height = match state.get_metadata().await {
-            Ok(meta) => meta
-                .and_then(|(_, v)| match v {
-                    Some(Value::Commit { height, start: _ }) => Some(height),
-                    _ => None,
-                })
-                .unwrap_or(0),
-            Err(err) => {
-                state_metadata_read_errors.inc();
-                warn!(
-                    ?err,
-                    "failed to read state metadata during init; using height=0"
-                );
-                0
+        let mut committed_height = {
+            let state_guard = state.read().await;
+            match state_guard.get_metadata().await {
+                Ok(meta) => meta
+                    .and_then(|(_, v)| match v {
+                        Some(Value::Commit { height, start: _ }) => Some(height),
+                        _ => None,
+                    })
+                    .unwrap_or(0),
+                Err(err) => {
+                    state_metadata_read_errors.inc();
+                    warn!(
+                        ?err,
+                        "failed to read state metadata during init; using height=0"
+                    );
+                    0
+                }
             }
         };
 
@@ -455,16 +570,131 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
             self.mempool_max_backlog,
             self.mempool_max_transactions,
         );
-        let mut next_nonce_cache = HashMap::new();
+        let mut next_nonce_cache =
+            NonceCache::new(self.nonce_cache_capacity, self.nonce_cache_ttl);
+
+        let (mut proof_tx, mut proof_rx) = mpsc::channel(PROOF_QUEUE_SIZE);
+        let (proof_err_tx, mut proof_err_rx) = oneshot::channel::<()>();
+        let proof_state = state.clone();
+        let proof_events = events.clone();
+        let mut proof_aggregator = aggregator.clone();
+        let proof_prune_latency = prune_latency.clone();
+        let proof_storage_prune_errors = storage_prune_errors.clone();
+        let _proof_handle = self.context.with_label("proofs").spawn({
+            move |mut context| async move {
+                let mut next_prune = context.gen_range(1..=PRUNE_INTERVAL);
+                while let Some(job) = proof_rx.next().await {
+                    let ProofJob {
+                        view,
+                        height,
+                        commitment,
+                        result,
+                        finalize_timer,
+                        response,
+                    } = job;
+                    let state_op_count = result.state_end_op - result.state_start_op;
+                    let events_start_op = result.events_start_op;
+                    let events_op_count = result.events_end_op - events_start_op;
+                    if state_op_count == 0 && events_op_count == 0 {
+                        let _ = response.send(());
+                        drop(finalize_timer);
+                        continue;
+                    }
+
+                    let mut attempt = 0usize;
+                    let mut backoff = Duration::from_millis(50);
+                    let ((state_proof, state_proof_ops), (events_proof, events_proof_ops)) = loop {
+                        attempt += 1;
+                        let proofs = {
+                            let state_guard = proof_state.read().await;
+                            let events_guard = proof_events.read().await;
+                            try_join(
+                                state_guard.historical_proof(
+                                    result.state_end_op,
+                                    result.state_start_op,
+                                    state_op_count,
+                                ),
+                                events_guard.historical_proof(
+                                    result.events_end_op,
+                                    events_start_op,
+                                    NZU64!(events_op_count),
+                                ),
+                            )
+                            .await
+                        };
+                        match proofs {
+                            Ok(proofs) => break proofs,
+                            Err(err) if attempt < 5 => {
+                                warn!(
+                                    ?err,
+                                    height,
+                                    attempt,
+                                    "failed to generate proofs; retrying"
+                                );
+                                let delay = jittered_backoff(&mut context, backoff);
+                                context.sleep(delay).await;
+                                backoff = (backoff.saturating_mul(2)).min(Duration::from_secs(2));
+                            }
+                            Err(err) => {
+                                error!(
+                                    ?err,
+                                    height,
+                                    attempt,
+                                    "failed to generate proofs; aborting engine"
+                                );
+                                let _ = proof_err_tx.send(());
+                                let _ = response.send(());
+                                drop(finalize_timer);
+                                return;
+                            }
+                        }
+                    };
+
+                    proof_aggregator
+                        .executed(
+                            view,
+                            height,
+                            commitment,
+                            result,
+                            state_proof,
+                            state_proof_ops,
+                            events_proof,
+                            events_proof_ops,
+                            response,
+                        )
+                        .await;
+                    drop(finalize_timer);
+
+                    next_prune = next_prune.saturating_sub(1);
+                    if next_prune == 0 {
+                        let timer = proof_prune_latency.timer();
+                        let mut state_guard = proof_state.write().await;
+                        let mut events_guard = proof_events.write().await;
+                        let inactivity_floor = state_guard.inactivity_floor_loc();
+                        if let Err(err) = try_join(
+                            state_guard.prune(inactivity_floor),
+                            events_guard.prune(events_start_op),
+                        )
+                        .await
+                        {
+                            proof_storage_prune_errors.inc();
+                            warn!(?err, height, "failed to prune storage");
+                        }
+                        drop(timer);
+                        next_prune = context.gen_range(1..=PRUNE_INTERVAL);
+                    }
+                }
+            }
+        });
 
         // Use reconnecting indexer wrapper
         let reconnecting_indexer = crate::indexer::ReconnectingIndexer::new(
             self.context.with_label("indexer"),
             self.indexer,
+            self.mempool_stream_buffer_size,
         );
 
         // This will never fail and handles reconnection internally
-        let mut next_prune = self.context.gen_range(1..=PRUNE_INTERVAL);
         let tx_stream = match reconnecting_indexer.listen_mempool().await {
             Ok(tx_stream) => tx_stream,
             Err(err) => {
@@ -563,7 +793,8 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
 
                                 // Find first block on top of finalized state (may have increased since we started)
                                 let height = committed_height;
-                                let mut noncer = Noncer::new(&state);
+                                let state_guard = state.read().await;
+                                let mut noncer = Noncer::new(&*state_guard);
                                 for block in blocks.iter() {
                                     // Skip blocks below our height
                                     if block.height <= height {
@@ -777,16 +1008,20 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                                 // otherwise we will not be able to match players or compute attack strength.
                                 let execute_timer = execute_latency.timer();
                                 let tx_count = block.transactions.len();
-                                let result = state_transition::execute_state_transition(
-                                    &mut state,
-                                    &mut events,
-                                    self.identity,
-                                    height,
-                                    seed,
-                                    block.transactions,
-                                    execution_pool.clone(),
-                                )
-                                .await;
+                                let result = {
+                                    let mut state_guard = state.write().await;
+                                    let mut events_guard = events.write().await;
+                                    state_transition::execute_state_transition(
+                                        &mut *state_guard,
+                                        &mut *events_guard,
+                                        self.identity,
+                                        height,
+                                        seed,
+                                        block.transactions,
+                                        execution_pool.clone(),
+                                    )
+                                    .await
+                                };
                                 let result = match result {
                                     Ok(result) => result,
                                     Err(err) => {
@@ -801,93 +1036,53 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                                 txs_executed.inc_by(tx_count as u64);
 
                                 // Update mempool based on processed transactions
+                                let now = self.context.current();
                                 for (public, next_nonce) in &result.processed_nonces {
                                     mempool.retain(public, *next_nonce);
-                                    next_nonce_cache.insert(public.clone(), *next_nonce);
+                                    next_nonce_cache.insert(now, public.clone(), *next_nonce);
                                 }
 
-                                // Generate range proof for changes
-                                let state_proof_ops = result.state_end_op - result.state_start_op;
-                                let events_start_op = result.events_start_op;
-                                let events_proof_ops = result.events_end_op - events_start_op;
-                                if state_proof_ops == 0 && events_proof_ops == 0 {
+                                // Queue proof generation for changes
+                                let state_op_count = result.state_end_op - result.state_start_op;
+                                let events_op_count = result.events_end_op - result.events_start_op;
+                                if state_op_count == 0 && events_op_count == 0 {
                                     // No-op execution (already processed or out-of-order); skip proof generation.
                                     let _ = response.send(());
                                     drop(timer);
                                     continue;
                                 }
                                 committed_height = committed_height.max(height);
-                                let mut attempt = 0usize;
-                                let mut backoff = Duration::from_millis(50);
-                                let ((state_proof, state_proof_ops), (events_proof, events_proof_ops)) = loop {
-                                    attempt += 1;
-                                    match try_join(
-                                        state.historical_proof(
-                                            result.state_end_op,
-                                            result.state_start_op,
-                                            state_proof_ops,
-                                        ),
-                                        events.historical_proof(
-                                            result.events_end_op,
-                                            events_start_op,
-                                            NZU64!(events_proof_ops),
-                                        ),
-                                    )
-                                    .await
-                                    {
-                                        Ok(proofs) => break proofs,
-                                        Err(err) if attempt < 5 => {
-                                            warn!(
-                                                ?err,
-                                                height,
-                                                attempt,
-                                                "failed to generate proofs; retrying"
-                                            );
-                                            let delay =
-                                                jittered_backoff(&mut self.context, backoff);
-                                            self.context.sleep(delay).await;
-                                            backoff = (backoff.saturating_mul(2))
-                                                .min(Duration::from_secs(2));
-                                        }
-                                        Err(err) => {
-                                            error!(
-                                                ?err,
-                                                height,
-                                                attempt,
-                                                "failed to generate proofs; aborting engine"
-                                            );
+                                let job = ProofJob {
+                                    view: block.view,
+                                    height: block.height,
+                                    commitment,
+                                    result,
+                                    finalize_timer: timer,
+                                    response,
+                                };
+                                match proof_tx.try_send(job) {
+                                    Ok(()) => {}
+                                    Err(err) if err.is_full() => {
+                                        let job = err.into_inner();
+                                        if proof_tx.send(job).await.is_err() {
+                                            warn!(height, "proof queue closed; stopping application");
                                             return;
                                         }
                                     }
-                                };
-
-                                // Send to aggregator
-                                aggregator.executed(block.view, block.height, commitment, result, state_proof, state_proof_ops, events_proof, events_proof_ops, response).await;
-
-                                // Stop the timer
-                                drop(timer);
-
-                                // Attempt to prune (this syncs data prior to prune, so we don't need to call separately)
-                                next_prune -= 1;
-                                if next_prune == 0 {
-                                    // Prune storage
-                                    let timer = prune_latency.timer();
-                                    if let Err(err) = try_join(
-                                        state.prune(state.inactivity_floor_loc()),
-                                        events.prune(events_start_op),
-                                    )
-                                    .await
-                                    {
-                                        storage_prune_errors.inc();
-                                        warn!(?err, height, "failed to prune storage");
+                                    Err(err) => {
+                                        let job = err.into_inner();
+                                        warn!(height, "proof queue closed; stopping application");
+                                        let _ = job.response.send(());
+                                        drop(job.finalize_timer);
+                                        return;
                                     }
-                                    drop(timer);
-
-                                    // Reset next prune
-                                    next_prune = self.context.gen_range(1..=PRUNE_INTERVAL);
                                 }
                             },
                         }
+                },
+                fatal = &mut proof_err_rx => {
+                    warn!(?fatal, "proof worker stopped; stopping application");
+                    return;
                 },
                 pending = tx_stream.next() => {
                     // The reconnecting wrapper handles all connection issues internally
@@ -901,23 +1096,27 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                     // Process transactions (already verified in indexer client)
                     for tx in pending.transactions {
                         // Check if below next
-                        let next = match next_nonce_cache.get(&tx.public) {
-                            Some(next) => *next,
-                            None => match nonce(&state, &tx.public).await {
-                                Ok(next) => {
-                                    next_nonce_cache.insert(tx.public.clone(), next);
-                                    next
+                        let now = self.context.current();
+                        let next = match next_nonce_cache.get(now, &tx.public) {
+                            Some(next) => next,
+                            None => {
+                                let state_guard = state.read().await;
+                                match nonce(&*state_guard, &tx.public).await {
+                                    Ok(next) => {
+                                        next_nonce_cache.insert(now, tx.public.clone(), next);
+                                        next
+                                    }
+                                    Err(err) => {
+                                        nonce_read_errors.inc();
+                                        warn!(
+                                            ?err,
+                                            public = ?tx.public,
+                                            "failed to read account nonce; dropping transaction"
+                                        );
+                                        continue;
+                                    }
                                 }
-                                Err(err) => {
-                                    nonce_read_errors.inc();
-                                    warn!(
-                                        ?err,
-                                        public = ?tx.public,
-                                        "failed to read account nonce; dropping transaction"
-                                    );
-                                    continue;
-                                }
-                            },
+                            }
                         };
                         if tx.nonce < next {
                             // If below next, we drop the incoming transaction

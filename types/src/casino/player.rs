@@ -4,8 +4,8 @@ use commonware_cryptography::ed25519::PublicKey;
 use thiserror::Error as ThisError;
 
 use super::{
-    read_string, string_encode_size, write_string, GameType, SuperModeState, INITIAL_CHIPS,
-    MAX_NAME_LENGTH, STARTING_DOUBLES, STARTING_SHIELDS,
+    read_string, string_encode_size, write_string, GameType, SuperModeState,
+    FREEROLL_DAILY_LIMIT_FREE, INITIAL_CHIPS, MAX_NAME_LENGTH, STARTING_DOUBLES, STARTING_SHIELDS,
 };
 
 const MAX_AURA_METER: u8 = 5;
@@ -51,12 +51,25 @@ pub struct PlayerTournamentState {
     pub active_tournament: Option<u64>,
     pub tournaments_played_today: u8,
     pub last_tournament_ts: u64,
+    pub daily_limit: u8,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct PlayerSessionState {
     pub active_session: Option<u64>,
     pub last_deposit_block: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct PlayerBalanceSnapshot {
+    pub chips: u64,
+    pub vusdt_balance: u64,
+    pub shields: u32,
+    pub doubles: u32,
+    pub tournament_chips: u64,
+    pub tournament_shields: u32,
+    pub tournament_doubles: u32,
+    pub active_tournament: Option<u64>,
 }
 
 /// Player state for casino games.
@@ -98,6 +111,7 @@ impl Player {
                 active_tournament: None,
                 tournaments_played_today: 0,
                 last_tournament_ts: 0,
+                daily_limit: FREEROLL_DAILY_LIMIT_FREE,
             },
             session: PlayerSessionState {
                 active_session: None,
@@ -137,6 +151,64 @@ impl Player {
     }
 }
 
+impl PlayerBalanceSnapshot {
+    pub fn from_player(player: &Player) -> Self {
+        Self {
+            chips: player.balances.chips,
+            vusdt_balance: player.balances.vusdt_balance,
+            shields: player.modifiers.shields,
+            doubles: player.modifiers.doubles,
+            tournament_chips: player.tournament.chips,
+            tournament_shields: player.tournament.shields,
+            tournament_doubles: player.tournament.doubles,
+            active_tournament: player.tournament.active_tournament,
+        }
+    }
+}
+
+impl Write for PlayerBalanceSnapshot {
+    fn write(&self, writer: &mut impl BufMut) {
+        self.chips.write(writer);
+        self.vusdt_balance.write(writer);
+        self.shields.write(writer);
+        self.doubles.write(writer);
+        self.tournament_chips.write(writer);
+        self.tournament_shields.write(writer);
+        self.tournament_doubles.write(writer);
+        self.active_tournament.write(writer);
+    }
+}
+
+impl Read for PlayerBalanceSnapshot {
+    type Cfg = ();
+
+    fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
+        Ok(Self {
+            chips: u64::read(reader)?,
+            vusdt_balance: u64::read(reader)?,
+            shields: u32::read(reader)?,
+            doubles: u32::read(reader)?,
+            tournament_chips: u64::read(reader)?,
+            tournament_shields: u32::read(reader)?,
+            tournament_doubles: u32::read(reader)?,
+            active_tournament: Option::<u64>::read(reader)?,
+        })
+    }
+}
+
+impl EncodeSize for PlayerBalanceSnapshot {
+    fn encode_size(&self) -> usize {
+        self.chips.encode_size()
+            + self.vusdt_balance.encode_size()
+            + self.shields.encode_size()
+            + self.doubles.encode_size()
+            + self.tournament_chips.encode_size()
+            + self.tournament_shields.encode_size()
+            + self.tournament_doubles.encode_size()
+            + self.active_tournament.encode_size()
+    }
+}
+
 impl Write for Player {
     fn write(&self, writer: &mut impl BufMut) {
         self.nonce.write(writer);
@@ -159,6 +231,7 @@ impl Write for Player {
         self.tournament.tournaments_played_today.write(writer);
         self.tournament.last_tournament_ts.write(writer);
         self.profile.is_kyc_verified.write(writer);
+        self.tournament.daily_limit.write(writer);
     }
 }
 
@@ -186,6 +259,11 @@ impl Read for Player {
         let tournaments_played_today = u8::read(reader)?;
         let last_tournament_ts = u64::read(reader)?;
         let is_kyc_verified = bool::read(reader)?;
+        let daily_limit = if reader.remaining() > 0 {
+            u8::read(reader)?
+        } else {
+            FREEROLL_DAILY_LIMIT_FREE
+        };
 
         Ok(Self {
             nonce,
@@ -213,6 +291,7 @@ impl Read for Player {
                 active_tournament,
                 tournaments_played_today,
                 last_tournament_ts,
+                daily_limit,
             },
             session: PlayerSessionState {
                 active_session,
@@ -244,6 +323,7 @@ impl EncodeSize for Player {
             + self.tournament.tournaments_played_today.encode_size()
             + self.tournament.last_tournament_ts.encode_size()
             + self.profile.is_kyc_verified.encode_size()
+            + self.tournament.daily_limit.encode_size()
     }
 }
 

@@ -3,6 +3,7 @@ import { Link, NavLink, useLocation } from 'react-router-dom';
 import { PlaySwapStakeTabs } from './components/PlaySwapStakeTabs';
 import { WalletPill } from './components/WalletPill';
 import { PageHeader } from './components/PageHeader';
+import { AuthStatusPill } from './components/AuthStatusPill';
 import { SwapPanel } from './components/economy/SwapPanel';
 import { useSharedCasinoConnection } from './chain/CasinoConnectionContext';
 import { useActivityFeed } from './hooks/useActivityFeed';
@@ -35,6 +36,7 @@ export default function EconomyApp() {
 
   const connection = useSharedCasinoConnection();
   const pollRef = useRef<(() => void) | null>(null);
+  const lastPollAtRef = useRef(0);
 
   const [isRegistered, setIsRegistered] = useState(false);
   const [player, setPlayer] = useState<any | null>(null);
@@ -42,6 +44,10 @@ export default function EconomyApp() {
   const [amm, setAmm] = useState<any | null>(null);
   const [lpBalance, setLpBalance] = useState<any | null>(null);
   const [house, setHouse] = useState<any | null>(null);
+  const POLL_TICK_MS = 5000;
+  const POLL_VISIBLE_MS = 15000;
+  const POLL_HIDDEN_MS = 60000;
+  const WS_IDLE_MS = 15000;
 
   // Forms
   const [registerName, setRegisterName] = useState('Trader');
@@ -125,6 +131,34 @@ export default function EconomyApp() {
     if (connection.status !== 'connected' || !connection.keypair) return;
     const pkHex = connection.keypair.publicKeyHex;
     const pkHexLower = pkHex.toLowerCase();
+    const applyPlayerBalances = (balances: any) => {
+      if (!balances) return;
+      setPlayer(prev => prev ? ({
+        ...prev,
+        chips: Number(balances.chips ?? prev.chips ?? 0),
+        vusdtBalance: Number(balances.vusdtBalance ?? prev.vusdtBalance ?? 0),
+        shields: Number(balances.shields ?? prev.shields ?? 0),
+        doubles: Number(balances.doubles ?? prev.doubles ?? 0),
+        tournamentChips: Number(balances.tournamentChips ?? prev.tournamentChips ?? 0),
+        tournamentShields: Number(balances.tournamentShields ?? prev.tournamentShields ?? 0),
+        tournamentDoubles: Number(balances.tournamentDoubles ?? prev.tournamentDoubles ?? 0),
+        activeTournament: balances.activeTournament ?? prev.activeTournament ?? null,
+      }) : prev);
+    };
+    const applyVault = (vault: any) => {
+      if (vault) setVault(vault);
+    };
+    const applyAmm = (amm: any) => {
+      if (amm) setAmm(amm);
+    };
+    const applyHouse = (house: any) => {
+      if (house) setHouse(house);
+    };
+    const applyLpBalance = (balance: any) => {
+      if (balance !== undefined && balance !== null) {
+        setLpBalance({ balance });
+      }
+    };
 
     const unsubError = connection.onEvent('CasinoError', (e: any) => {
       if (e?.player?.toLowerCase?.() !== pkHexLower) return;
@@ -161,7 +195,7 @@ export default function EconomyApp() {
       if (e?.player?.toLowerCase?.() !== pkHexLower) return;
       trackTxConfirmed({ surface: 'economy', kind: 'create_vault', finalMessage: 'Vault created', pubkeyHex: pkHex });
       pushToast('success', 'Vault created');
-      pollRef.current?.();
+      applyVault(e?.vault);
       track('economy.vault.created');
     });
     const unsubCollateral = connection.onEvent('CollateralDeposited', (e: any) => {
@@ -175,7 +209,8 @@ export default function EconomyApp() {
         pubkeyHex: pkHex,
       });
       pushToast('success', msg);
-      pollRef.current?.();
+      applyVault(e?.vault);
+      applyPlayerBalances(e?.playerBalances);
       track('economy.vault.collateral_deposited', { amount });
     });
     const unsubBorrow = connection.onEvent('VusdtBorrowed', (e: any) => {
@@ -184,7 +219,8 @@ export default function EconomyApp() {
       const msg = `Borrowed vUSDT: ${amount}`;
       trackTxConfirmed({ surface: 'economy', kind: 'borrow', finalMessage: msg, pubkeyHex: pkHex });
       pushToast('success', msg);
-      pollRef.current?.();
+      applyVault(e?.vault);
+      applyPlayerBalances(e?.playerBalances);
       track('economy.vault.borrowed', { amount });
     });
     const unsubRepay = connection.onEvent('VusdtRepaid', (e: any) => {
@@ -193,7 +229,8 @@ export default function EconomyApp() {
       const msg = `Repaid vUSDT: ${amount}`;
       trackTxConfirmed({ surface: 'economy', kind: 'repay', finalMessage: msg, pubkeyHex: pkHex });
       pushToast('success', msg);
-      pollRef.current?.();
+      applyVault(e?.vault);
+      applyPlayerBalances(e?.playerBalances);
       track('economy.vault.repaid', { amount });
     });
     const unsubSwap = connection.onEvent('AmmSwapped', (e: any) => {
@@ -202,7 +239,9 @@ export default function EconomyApp() {
       const msg = `Swap executed: out=${amountOut}`;
       trackTxConfirmed({ surface: 'economy', kind: 'swap', finalMessage: msg, pubkeyHex: pkHex });
       pushToast('success', msg);
-      pollRef.current?.();
+      applyAmm(e?.amm);
+      applyHouse(e?.house);
+      applyPlayerBalances(e?.playerBalances);
       track('economy.swap.confirmed', { amountOut });
     });
     const unsubLiqAdd = connection.onEvent('LiquidityAdded', (e: any) => {
@@ -216,7 +255,9 @@ export default function EconomyApp() {
         pubkeyHex: pkHex,
       });
       pushToast('success', msg);
-      pollRef.current?.();
+      applyAmm(e?.amm);
+      applyLpBalance(e?.lpBalance);
+      applyPlayerBalances(e?.playerBalances);
       track('economy.liquidity.added', { sharesMinted });
     });
     const unsubLiqRemove = connection.onEvent('LiquidityRemoved', (e: any) => {
@@ -230,7 +271,9 @@ export default function EconomyApp() {
         pubkeyHex: pkHex,
       });
       pushToast('success', msg);
-      pollRef.current?.();
+      applyAmm(e?.amm);
+      applyLpBalance(e?.lpBalance);
+      applyPlayerBalances(e?.playerBalances);
       track('economy.liquidity.removed', { sharesBurned });
     });
 
@@ -260,9 +303,17 @@ export default function EconomyApp() {
 
     let cancelled = false;
     let inFlight = false;
-    const poll = async () => {
+    const poll = async (force = false) => {
       if (cancelled || inFlight) return;
-      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      const now = Date.now();
+      const isHidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
+      const updatesStatus = client.getUpdatesStatus?.();
+      const wsConnected = Boolean(updatesStatus?.connected);
+      const wsIdle = !updatesStatus?.lastEventAt || now - updatesStatus.lastEventAt > WS_IDLE_MS;
+      if (!force && wsConnected && !wsIdle) return;
+      const pollInterval = isHidden ? POLL_HIDDEN_MS : POLL_VISIBLE_MS;
+      if (!force && now - lastPollAtRef.current < pollInterval) return;
+      lastPollAtRef.current = now;
       inFlight = true;
       try {
         const [p, v, a, lp, h] = await Promise.all([
@@ -285,11 +336,13 @@ export default function EconomyApp() {
       }
     };
 
-    void poll();
+    void poll(true);
     pollRef.current = () => {
-      void poll();
+      void poll(true);
     };
-    const interval = setInterval(poll, 3000);
+    const interval = setInterval(() => {
+      void poll(false);
+    }, POLL_TICK_MS);
 
     return () => {
       cancelled = true;
@@ -611,6 +664,7 @@ export default function EconomyApp() {
         leading={<PlaySwapStakeTabs />}
         right={
           <>
+            <AuthStatusPill publicKeyHex={connection.keypair?.publicKeyHex ?? null} />
             <WalletPill rng={player?.chips} vusdt={player?.vusdtBalance} pubkeyHex={connection.keypair?.publicKeyHex} />
             {lastTxSig ? (
               lastTxDigest ? (

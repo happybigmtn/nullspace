@@ -1,7 +1,7 @@
 //! Baccarat game implementation with multi-bet support.
 //!
 //! State blob format:
-//! [bet_count:u8] [bets:BaccaratBet×count] [playerHandLen:u8] [playerCards:u8×n] [bankerHandLen:u8] [bankerCards:u8×n]
+//! [bet_count:u8] [bets:BaccaratBet×count] [playerHandLen:u8] [playerCards:u8×n] [bankerHandLen:u8] [bankerCards:u8×n] [rules:u8]
 //!
 //! Each BaccaratBet (9 bytes):
 //! [bet_type:u8] [amount:u64 BE]
@@ -13,6 +13,7 @@
 //! [3, bet_count, bets...] - Atomic batch: place all bets + deal in one transaction
 //!                          Each bet is 9 bytes: [bet_type:u8, amount:u64 BE]
 //!                          Ensures all-or-nothing semantics - no partial bet states
+//! [4, rules:u8] - Set rules (betting stage only)
 //!
 //! Bet types:
 //! 0 = Player (1:1)
@@ -37,6 +38,84 @@ const MAX_HAND_SIZE: usize = 3;
 const MAX_BETS: usize = 11;
 /// WoO notes Baccarat is usually dealt from eight decks.
 const BACCARAT_DECKS: u8 = 8;
+
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum BankerPayout {
+    Commission = 0,
+    NoCommission = 1,
+}
+
+impl Default for BankerPayout {
+    fn default() -> Self {
+        BankerPayout::Commission
+    }
+}
+
+impl TryFrom<u8> for BankerPayout {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(BankerPayout::Commission),
+            1 => Ok(BankerPayout::NoCommission),
+            _ => Err(()),
+        }
+    }
+}
+
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum TiePayout {
+    EightToOne = 0,
+    NineToOne = 1,
+}
+
+impl Default for TiePayout {
+    fn default() -> Self {
+        TiePayout::EightToOne
+    }
+}
+
+impl TryFrom<u8> for TiePayout {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(TiePayout::EightToOne),
+            1 => Ok(TiePayout::NineToOne),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct BaccaratRules {
+    banker_payout: BankerPayout,
+    tie_payout: TiePayout,
+}
+
+impl Default for BaccaratRules {
+    fn default() -> Self {
+        Self {
+            banker_payout: BankerPayout::default(),
+            tie_payout: TiePayout::default(),
+        }
+    }
+}
+
+impl BaccaratRules {
+    fn from_byte(value: u8) -> Option<Self> {
+        Some(Self {
+            banker_payout: BankerPayout::try_from(value & 0x01).ok()?,
+            tie_payout: TiePayout::try_from((value >> 1) & 0x01).ok()?,
+        })
+    }
+
+    fn to_byte(self) -> u8 {
+        (self.banker_payout as u8) | ((self.tie_payout as u8) << 1)
+    }
+}
 
 /// Bet types in Baccarat.
 #[repr(u8)]
@@ -140,6 +219,7 @@ struct BaccaratState {
     bets: Vec<BaccaratBet>,
     player_cards: Vec<u8>,
     banker_cards: Vec<u8>,
+    rules: BaccaratRules,
 }
 
 impl BaccaratState {
@@ -148,14 +228,15 @@ impl BaccaratState {
             bets: Vec::new(),
             player_cards: Vec::new(),
             banker_cards: Vec::new(),
+            rules: BaccaratRules::default(),
         }
     }
 
     /// Serialize state to blob
     fn to_blob(&self) -> Vec<u8> {
-        // Capacity: 1 (bet count) + bets (9 bytes each) + 1 (player len) + player cards + 1 (banker len) + banker cards
+        // Capacity: 1 (bet count) + bets (9 bytes each) + 1 (player len) + player cards + 1 (banker len) + banker cards + 1 (rules)
         let capacity =
-            1 + (self.bets.len() * 9) + 1 + self.player_cards.len() + 1 + self.banker_cards.len();
+            1 + (self.bets.len() * 9) + 1 + self.player_cards.len() + 1 + self.banker_cards.len() + 1;
         let mut blob = Vec::with_capacity(capacity);
         blob.push(self.bets.len() as u8);
         for bet in &self.bets {
@@ -165,6 +246,7 @@ impl BaccaratState {
         blob.extend_from_slice(&self.player_cards);
         blob.push(self.banker_cards.len() as u8);
         blob.extend_from_slice(&self.banker_cards);
+        blob.push(self.rules.to_byte());
         blob
     }
 
@@ -205,6 +287,7 @@ impl BaccaratState {
                 bets,
                 player_cards: Vec::new(),
                 banker_cards: Vec::new(),
+                rules: BaccaratRules::default(),
             });
         }
         let player_len = blob[offset] as usize;
@@ -225,11 +308,19 @@ impl BaccaratState {
             return None;
         }
         let banker_cards = blob[offset..offset + banker_len].to_vec();
+        offset += banker_len;
+
+        let rules = if offset < blob.len() {
+            BaccaratRules::from_byte(blob[offset])?
+        } else {
+            BaccaratRules::default()
+        };
 
         Some(BaccaratState {
             bets,
             player_cards,
             banker_cards,
+            rules,
         })
     }
 }
@@ -288,7 +379,11 @@ struct BaccaratOutcome {
 
 /// Calculate payout for a single bet based on game outcome.
 /// Returns total payout (stake + winnings) for wins, 0 for losses, stake for push.
-fn calculate_bet_payout(bet: &BaccaratBet, outcome: &BaccaratOutcome) -> (i64, bool) {
+fn calculate_bet_payout(
+    bet: &BaccaratBet,
+    outcome: &BaccaratOutcome,
+    rules: BaccaratRules,
+) -> (i64, bool) {
     // Returns (payout_delta, is_push)
     // payout_delta: positive for win (winnings only), negative for loss (amount lost), 0 for push
     match bet.bet_type {
@@ -310,8 +405,11 @@ fn calculate_bet_payout(bet: &BaccaratBet, outcome: &BaccaratOutcome) -> (i64, b
         }
         BetType::Tie => {
             if outcome.player_total == outcome.banker_total {
-                // 8:1 payout = winnings of 8x
-                (bet.amount.saturating_mul(8) as i64, false)
+                let multiplier = match rules.tie_payout {
+                    TiePayout::EightToOne => 8,
+                    TiePayout::NineToOne => 9,
+                };
+                (bet.amount.saturating_mul(multiplier) as i64, false)
             } else {
                 (-(bet.amount as i64), false)
             }
@@ -330,8 +428,16 @@ fn calculate_bet_payout(bet: &BaccaratBet, outcome: &BaccaratOutcome) -> (i64, b
             if outcome.player_total == outcome.banker_total {
                 (0, true) // Push on tie
             } else if outcome.banker_total > outcome.player_total {
-                // 5% commission - win 95% of bet
-                let winnings = bet.amount.saturating_mul(95) / 100;
+                let winnings = match rules.banker_payout {
+                    BankerPayout::Commission => bet.amount.saturating_mul(95) / 100,
+                    BankerPayout::NoCommission => {
+                        if outcome.banker_total == 6 {
+                            bet.amount / 2
+                        } else {
+                            bet.amount
+                        }
+                    }
+                };
                 if winnings > 0 {
                     (winnings as i64, false)
                 } else {
@@ -486,7 +592,7 @@ fn generate_baccarat_logs(
         .bets
         .iter()
         .map(|bet| {
-            let (payout_delta, is_push) = calculate_bet_payout(bet, outcome);
+            let (payout_delta, is_push) = calculate_bet_payout(bet, outcome, state.rules);
             let bet_type_str = match bet.bet_type {
                 BetType::Player => "PLAYER",
                 BetType::Banker => "BANKER",
@@ -682,7 +788,7 @@ impl CasinoGame for Baccarat {
 
                 for bet in &state.bets {
                     total_wagered = total_wagered.saturating_add(bet.amount);
-                    let (payout_delta, is_push) = calculate_bet_payout(bet, &outcome);
+                    let (payout_delta, is_push) = calculate_bet_payout(bet, &outcome, state.rules);
                     net_payout = net_payout.saturating_add(payout_delta);
                     if !is_push {
                         all_push = false;
@@ -903,7 +1009,7 @@ impl CasinoGame for Baccarat {
                 let mut all_push = true;
 
                 for bet in &state.bets {
-                    let (payout_delta, is_push) = calculate_bet_payout(bet, &outcome);
+                    let (payout_delta, is_push) = calculate_bet_payout(bet, &outcome, state.rules);
                     net_payout = net_payout.saturating_add(payout_delta);
                     if !is_push {
                         all_push = false;
@@ -1089,6 +1195,7 @@ mod tests {
             ],
             player_cards: vec![1, 2, 3],
             banker_cards: vec![4, 5],
+            rules: BaccaratRules::default(),
         };
 
         let blob = state.to_blob();
@@ -1316,9 +1423,33 @@ mod tests {
         };
         // Banker wins with 9 vs 4
         let outcome = make_outcome(4, 9, false, false, false, false, 2, 2);
-        let (payout, is_push) = calculate_bet_payout(&bet, &outcome);
+        let (payout, is_push) = calculate_bet_payout(&bet, &outcome, BaccaratRules::default());
         assert!(!is_push);
         assert_eq!(payout, 95); // 95% of 100
+    }
+
+    #[test]
+    fn test_no_commission_banker_six_payout() {
+        let bet = BaccaratBet {
+            bet_type: BetType::Banker,
+            amount: 100,
+        };
+        let rules = BaccaratRules {
+            banker_payout: BankerPayout::NoCommission,
+            tie_payout: TiePayout::EightToOne,
+        };
+
+        // Banker wins with 6 pays half.
+        let outcome = make_outcome(4, 6, false, false, false, false, 2, 3);
+        let (payout, is_push) = calculate_bet_payout(&bet, &outcome, rules);
+        assert!(!is_push);
+        assert_eq!(payout, 50);
+
+        // Banker wins with 7 pays even money.
+        let outcome = make_outcome(4, 7, false, false, false, false, 2, 2);
+        let (payout, is_push) = calculate_bet_payout(&bet, &outcome, rules);
+        assert!(!is_push);
+        assert_eq!(payout, 100);
     }
 
     #[test]
@@ -1329,9 +1460,25 @@ mod tests {
             amount: 100,
         };
         let outcome = make_outcome(5, 5, false, false, false, false, 2, 2);
-        let (payout, is_push) = calculate_bet_payout(&bet, &outcome);
+        let (payout, is_push) = calculate_bet_payout(&bet, &outcome, BaccaratRules::default());
         assert!(!is_push);
         assert_eq!(payout, 800); // 8x winnings
+    }
+
+    #[test]
+    fn test_tie_payout_nine_to_one() {
+        let bet = BaccaratBet {
+            bet_type: BetType::Tie,
+            amount: 100,
+        };
+        let rules = BaccaratRules {
+            banker_payout: BankerPayout::Commission,
+            tie_payout: TiePayout::NineToOne,
+        };
+        let outcome = make_outcome(5, 5, false, false, false, false, 2, 2);
+        let (payout, is_push) = calculate_bet_payout(&bet, &outcome, rules);
+        assert!(!is_push);
+        assert_eq!(payout, 900);
     }
 
     #[test]
@@ -1342,7 +1489,7 @@ mod tests {
             amount: 100,
         };
         let outcome = make_outcome(5, 7, true, false, false, false, 2, 2);
-        let (payout, _) = calculate_bet_payout(&bet, &outcome);
+        let (payout, _) = calculate_bet_payout(&bet, &outcome, BaccaratRules::default());
         assert_eq!(payout, 1100); // 11x winnings
     }
 
@@ -1355,19 +1502,19 @@ mod tests {
 
         // Banker wins with a 2-card 6
         let outcome = make_outcome(1, 6, false, false, false, false, 2, 2);
-        let (payout, is_push) = calculate_bet_payout(&bet, &outcome);
+        let (payout, is_push) = calculate_bet_payout(&bet, &outcome, BaccaratRules::default());
         assert!(!is_push);
         assert_eq!(payout, 1200); // 12x winnings
 
         // Banker wins with a 3-card 6
         let outcome = make_outcome(1, 6, false, false, false, false, 2, 3);
-        let (payout, is_push) = calculate_bet_payout(&bet, &outcome);
+        let (payout, is_push) = calculate_bet_payout(&bet, &outcome, BaccaratRules::default());
         assert!(!is_push);
         assert_eq!(payout, 2300); // 23x winnings
 
         // Banker loses (no payout)
         let outcome = make_outcome(7, 6, false, false, false, false, 2, 2);
-        let (payout, _) = calculate_bet_payout(&bet, &outcome);
+        let (payout, _) = calculate_bet_payout(&bet, &outcome, BaccaratRules::default());
         assert_eq!(payout, -100);
     }
 
@@ -1439,7 +1586,7 @@ mod tests {
                 banker_cards_len: rng.gen_range(2usize..=3),
             };
 
-            let (delta, is_push) = calculate_bet_payout(&bet, &outcome);
+            let (delta, is_push) = calculate_bet_payout(&bet, &outcome, BaccaratRules::default());
 
             if is_push {
                 assert_eq!(delta, 0);

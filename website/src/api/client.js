@@ -5,6 +5,12 @@ import { getUnlockedVault } from '../security/vaultRuntime';
 
 // Delay between fetch retries
 const FETCH_RETRY_DELAY_MS = 1000;
+const makeRequestId = () => {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+};
 
 /**
  * Client for communicating with the Casino chain.
@@ -18,16 +24,40 @@ export class CasinoClient {
     this.baseUrl = baseUrl;
     this.wasm = wasm;
     this.updatesWs = null;
+    this.sessionWs = null;
     this.eventHandlers = new Map();
     this.nonceManager = new NonceManager(this, wasm);
     this.masterPublic = wasm.identityBytes;
     this.latestSeed = null;
+    this.currentSessionFilter = null;
+    this.updatesStatus = {
+      connected: false,
+      lastMessageAt: 0,
+      lastEventAt: 0,
+      lastSeedAt: 0,
+      lastOpenAt: 0,
+      lastCloseAt: 0
+    };
+    this.sessionStatus = {
+      connected: false,
+      lastMessageAt: 0,
+      lastEventAt: 0,
+      lastOpenAt: 0,
+      lastCloseAt: 0
+    };
 
     // Reconnection configuration
     this.reconnectConfig = {
       attempts: 0,
       baseDelay: 1000,
       maxDelay: 30000, // Cap at 30 seconds
+      reconnecting: false,
+      timer: null
+    };
+    this.sessionReconnectConfig = {
+      attempts: 0,
+      baseDelay: 1000,
+      maxDelay: 30000,
       reconnecting: false,
       timer: null
     };
@@ -59,12 +89,31 @@ export class CasinoClient {
     // Stop any pending reconnection attempts
     this.reconnectConfig.reconnecting = false;
     this.reconnectConfig.attempts = 0;
+    this.sessionReconnectConfig.reconnecting = false;
+    this.sessionReconnectConfig.attempts = 0;
 
     // Clear any pending reconnection timers
     if (this.reconnectConfig.timer) {
       clearTimeout(this.reconnectConfig.timer);
       this.reconnectConfig.timer = null;
     }
+    if (this.sessionReconnectConfig.timer) {
+      clearTimeout(this.sessionReconnectConfig.timer);
+      this.sessionReconnectConfig.timer = null;
+    }
+
+    const now = Date.now();
+    this.updatesStatus.connected = false;
+    this.updatesStatus.lastCloseAt = now;
+    this.updatesStatus.lastMessageAt = 0;
+    this.updatesStatus.lastEventAt = 0;
+    this.updatesStatus.lastSeedAt = 0;
+    this.updatesStatus.lastOpenAt = 0;
+    this.sessionStatus.connected = false;
+    this.sessionStatus.lastCloseAt = now;
+    this.sessionStatus.lastMessageAt = 0;
+    this.sessionStatus.lastEventAt = 0;
+    this.sessionStatus.lastOpenAt = 0;
 
     // Close WebSocket connections without triggering reconnect
     if (this.updatesWs) {
@@ -72,6 +121,11 @@ export class CasinoClient {
       this.updatesWs.onclose = null;
       this.updatesWs.close();
       this.updatesWs = null;
+    }
+    if (this.sessionWs) {
+      this.sessionWs.onclose = null;
+      this.sessionWs.close();
+      this.sessionWs = null;
     }
 
     // Clear event handlers to prevent memory leaks
@@ -98,10 +152,59 @@ export class CasinoClient {
       this.updatesWs.onclose = null;
       this.updatesWs.close();
       this.updatesWs = null;
+      this.updatesStatus.connected = false;
+      this.updatesStatus.lastCloseAt = Date.now();
+      this.updatesStatus.lastMessageAt = 0;
+      this.updatesStatus.lastEventAt = 0;
+      this.updatesStatus.lastSeedAt = 0;
+      this.updatesStatus.lastOpenAt = 0;
     }
 
     // Connect with new filter
     await this.connectUpdates(publicKey);
+  }
+
+  buildUpdatesCandidates(filterHex) {
+    const candidates = [];
+
+    // FIRST: Try direct connection to VITE_URL (most reliable for WebSockets)
+    const directUrl = import.meta.env.VITE_URL;
+    if (directUrl) {
+      try {
+        const url = new URL(directUrl);
+        const directWsUrl = url.protocol === 'https:'
+          ? `wss://${url.host}/updates/${filterHex}`
+          : `ws://${url.host}/updates/${filterHex}`;
+        candidates.push(directWsUrl);
+      } catch (e) {
+        console.warn('Invalid VITE_URL for WebSocket:', directUrl, e);
+      }
+    } else if (this.baseUrl.startsWith('http://') || this.baseUrl.startsWith('https://')) {
+      // Full URL provided, convert to WebSocket URL
+      const url = new URL(this.baseUrl);
+      const wsUrl = url.protocol === 'https:'
+        ? `wss://${url.host}/updates/${filterHex}`
+        : `ws://${url.host}/updates/${filterHex}`;
+      candidates.push(wsUrl);
+    }
+
+    // SECOND: Try same-origin proxy (for production where direct connection may be blocked)
+    if (typeof window !== 'undefined' && this.baseUrl && !this.baseUrl.startsWith('http://') && !this.baseUrl.startsWith('https://')) {
+      const proxyWsUrl = window.location.protocol === 'https:'
+        ? `wss://${window.location.host}${this.baseUrl}/updates/${filterHex}`
+        : `ws://${window.location.host}${this.baseUrl}/updates/${filterHex}`;
+      if (!candidates.includes(proxyWsUrl)) candidates.push(proxyWsUrl);
+    }
+
+    // THIRD: Fallback to standard simulator port 8080 on the same hostname (for LAN access)
+    if (typeof window !== 'undefined') {
+      const fallbackWsUrl = window.location.protocol === 'https:'
+        ? `wss://${window.location.hostname}:8080/updates/${filterHex}`
+        : `ws://${window.location.hostname}:8080/updates/${filterHex}`;
+      if (!candidates.includes(fallbackWsUrl)) candidates.push(fallbackWsUrl);
+    }
+
+    return candidates;
   }
 
 
@@ -118,7 +221,8 @@ export class CasinoClient {
     const response = await fetch(`${this.baseUrl}/submit`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/octet-stream'
+        'Content-Type': 'application/octet-stream',
+        'x-request-id': makeRequestId()
       },
       body: submission
     });
@@ -185,7 +289,11 @@ export class CasinoClient {
 
     let response;
     while (true) {
-      response = await fetch(`${this.baseUrl}/state/${hexKey}`);
+      response = await fetch(`${this.baseUrl}/state/${hexKey}`, {
+        headers: {
+          'x-request-id': makeRequestId()
+        }
+      });
 
       if (response.status === 404) {
         return { found: false, value: null };
@@ -232,7 +340,11 @@ export class CasinoClient {
 
     let response;
     while (true) {
-      response = await fetch(`${this.baseUrl}/seed/${hexQuery}`);
+      response = await fetch(`${this.baseUrl}/seed/${hexQuery}`, {
+        headers: {
+          'x-request-id': makeRequestId()
+        }
+      });
 
       if (response.status === 404) {
         return { found: false };
@@ -262,7 +374,11 @@ export class CasinoClient {
     const queryBytes = this.wasm.encodeQuery('latest');
     const hexQuery = this.wasm.bytesToHex(queryBytes);
 
-    const response = await fetch(`${this.baseUrl}/seed/${hexQuery}`);
+    const response = await fetch(`${this.baseUrl}/seed/${hexQuery}`, {
+      headers: {
+        'x-request-id': makeRequestId()
+      }
+    });
 
     if (response.status === 404) {
       return { found: false };
@@ -305,48 +421,7 @@ export class CasinoClient {
       }
       const filterHex = this.wasm.bytesToHex(filterBytes);
 
-      // Compute multiple candidate URLs:
-      // - Prefer direct connection to VITE_URL (avoids proxy WebSocket issues)
-      // - Fall back to same-origin proxy for production deployments
-      // - Last resort: standard simulator port 8080 on same hostname
-      const candidates = [];
-
-      // FIRST: Try direct connection to VITE_URL (most reliable for WebSockets)
-      const directUrl = import.meta.env.VITE_URL;
-      if (directUrl) {
-        try {
-          const url = new URL(directUrl);
-          const directWsUrl = url.protocol === 'https:'
-            ? `wss://${url.host}/updates/${filterHex}`
-            : `ws://${url.host}/updates/${filterHex}`;
-          candidates.push(directWsUrl);
-        } catch (e) {
-          console.warn('Invalid VITE_URL for WebSocket:', directUrl, e);
-        }
-      } else if (this.baseUrl.startsWith('http://') || this.baseUrl.startsWith('https://')) {
-        // Full URL provided, convert to WebSocket URL
-        const url = new URL(this.baseUrl);
-        const wsUrl = url.protocol === 'https:'
-          ? `wss://${url.host}/updates/${filterHex}`
-          : `ws://${url.host}/updates/${filterHex}`;
-        candidates.push(wsUrl);
-      }
-
-      // SECOND: Try same-origin proxy (for production where direct connection may be blocked)
-      if (typeof window !== 'undefined' && this.baseUrl && !this.baseUrl.startsWith('http://') && !this.baseUrl.startsWith('https://')) {
-        const proxyWsUrl = window.location.protocol === 'https:'
-          ? `wss://${window.location.host}${this.baseUrl}/updates/${filterHex}`
-          : `ws://${window.location.host}${this.baseUrl}/updates/${filterHex}`;
-        if (!candidates.includes(proxyWsUrl)) candidates.push(proxyWsUrl);
-      }
-
-      // THIRD: Fallback to standard simulator port 8080 on the same hostname (for LAN access)
-      if (typeof window !== 'undefined') {
-          const fallbackWsUrl = window.location.protocol === 'https:'
-            ? `wss://${window.location.hostname}:8080/updates/${filterHex}`
-            : `ws://${window.location.hostname}:8080/updates/${filterHex}`;
-          if (!candidates.includes(fallbackWsUrl)) candidates.push(fallbackWsUrl);
-      }
+      const candidates = this.buildUpdatesCandidates(filterHex);
 
       if (candidates.length === 0) {
         reject(new Error('No WebSocket URL candidates available'));
@@ -361,6 +436,8 @@ export class CasinoClient {
 
         ws.onopen = () => {
           console.log('Updates WebSocket connected successfully');
+          this.updatesStatus.connected = true;
+          this.updatesStatus.lastOpenAt = Date.now();
           resolve();
         };
 
@@ -386,63 +463,211 @@ export class CasinoClient {
           reject(new Error(`WebSocket connection failed to ${wsUrl}`));
         };
 
-      this.updatesWs.onmessage = async (event) => {
-        console.log('[WebSocket] Received message, data type:', typeof event.data, event.data instanceof Blob ? 'Blob' : 'not Blob');
-        try {
-          let bytes;
-          if (event.data instanceof Blob) {
-            // Browser environment - convert blob to array buffer
-            const arrayBuffer = await event.data.arrayBuffer();
-            bytes = new Uint8Array(arrayBuffer);
-          } else if (event.data instanceof ArrayBuffer) {
-            // ArrayBuffer - convert directly
-            bytes = new Uint8Array(event.data);
-          } else if (Buffer.isBuffer(event.data)) {
-            // Node.js environment - Buffer is already a Uint8Array
-            bytes = new Uint8Array(event.data);
-          } else {
-            console.warn('Unknown WebSocket message type:', typeof event.data);
+        this.updatesWs.onmessage = async (event) => {
+          console.log('[WebSocket] Received message, data type:', typeof event.data, event.data instanceof Blob ? 'Blob' : 'not Blob');
+          try {
+            const now = Date.now();
+            this.updatesStatus.lastMessageAt = now;
+            let bytes;
+            if (event.data instanceof Blob) {
+              // Browser environment - convert blob to array buffer
+              const arrayBuffer = await event.data.arrayBuffer();
+              bytes = new Uint8Array(arrayBuffer);
+            } else if (event.data instanceof ArrayBuffer) {
+              // ArrayBuffer - convert directly
+              bytes = new Uint8Array(event.data);
+            } else if (Buffer.isBuffer(event.data)) {
+              // Node.js environment - Buffer is already a Uint8Array
+              bytes = new Uint8Array(event.data);
+            } else {
+              console.warn('Unknown WebSocket message type:', typeof event.data);
+              return;
+            }
+
+            // Now we have binary data in bytes, decode it
+            try {
+              const decodedUpdate = this.wasm.decodeUpdate(bytes);
+              console.log('[WebSocket] Decoded update type:', decodedUpdate.type, decodedUpdate.type === 'Events' ? `(${decodedUpdate.events?.length} events)` : '');
+
+              // Check if it's a Seed or Events/FilteredEvents update
+              if (decodedUpdate.type === 'Seed') {
+                this.latestSeed = decodedUpdate;
+                this.updatesStatus.lastSeedAt = now;
+                this.handleEvent(decodedUpdate);
+              } else if (decodedUpdate.type === 'Events') {
+                this.updatesStatus.lastEventAt = now;
+                // Process each event from the array - treat FilteredEvents the same as Events
+                for (const eventData of decodedUpdate.events) {
+                  console.log('[WebSocket] Event type:', eventData.type, 'data:', eventData);
+                  // Normalize snake_case to camelCase
+                  const normalizedEvent = snakeToCamel(eventData);
+                  // Check if this is a transaction from our account
+                  if (normalizedEvent.type === 'Transaction') {
+                    if (this.nonceManager.publicKeyHex &&
+                      normalizedEvent.public.toLowerCase() === this.nonceManager.publicKeyHex.toLowerCase()) {
+                      this.nonceManager.updateNonceFromTransaction(normalizedEvent.nonce);
+                    }
+                  }
+                  this.handleEvent(normalizedEvent);
+                }
+              }
+            } catch (decodeError) {
+              console.error('Failed to decode update:', decodeError);
+              console.log('Full raw bytes:', this.wasm.bytesToHex(bytes).match(/.{2}/g).join(' '));
+            }
+          } catch (e) {
+            console.error('Failed to process WebSocket message:', e);
+          }
+        };
+
+        this.updatesWs.onclose = (event) => {
+          console.log('Updates WebSocket disconnected, code:', event.code, 'reason:', event.reason);
+          this.updatesStatus.connected = false;
+          this.updatesStatus.lastCloseAt = Date.now();
+          this.handleReconnect('updatesWs', () => this.connectUpdates(this.currentUpdateFilter));
+        };
+      };
+
+      connectAt(0);
+    });
+  }
+
+  async switchSessionUpdates(sessionId = null) {
+    this.sessionReconnectConfig.reconnecting = false;
+    this.sessionReconnectConfig.attempts = 0;
+    if (this.sessionReconnectConfig.timer) {
+      clearTimeout(this.sessionReconnectConfig.timer);
+      this.sessionReconnectConfig.timer = null;
+    }
+
+    this.currentSessionFilter = sessionId;
+
+    if (this.sessionWs) {
+      this.sessionWs.onclose = null;
+      this.sessionWs.close();
+      this.sessionWs = null;
+      this.sessionStatus.connected = false;
+      this.sessionStatus.lastCloseAt = Date.now();
+      this.sessionStatus.lastMessageAt = 0;
+      this.sessionStatus.lastEventAt = 0;
+      this.sessionStatus.lastOpenAt = 0;
+    }
+
+    if (sessionId === null || sessionId === undefined) {
+      return;
+    }
+
+    await this.connectSessionUpdates(sessionId);
+  }
+
+  disconnectSessionUpdates() {
+    return this.switchSessionUpdates(null);
+  }
+
+  connectSessionUpdates(sessionId) {
+    return new Promise((resolve, reject) => {
+      if (sessionId === null || sessionId === undefined) {
+        resolve();
+        return;
+      }
+
+      let sessionValue;
+      try {
+        sessionValue = typeof sessionId === 'bigint' ? sessionId : BigInt(sessionId);
+      } catch (e) {
+        reject(new Error(`Invalid session id: ${sessionId}`));
+        return;
+      }
+
+      const filterBytes = this.wasm.encodeUpdatesFilterSession(sessionValue);
+      const filterHex = this.wasm.bytesToHex(filterBytes);
+      const candidates = this.buildUpdatesCandidates(filterHex);
+
+      if (candidates.length === 0) {
+        reject(new Error('No WebSocket URL candidates available'));
+        return;
+      }
+
+      const connectAt = (index) => {
+        const wsUrl = candidates[index];
+        console.log('Connecting to Session Updates WebSocket at:', wsUrl, 'session:', sessionValue.toString());
+        const ws = new WebSocket(wsUrl);
+        this.sessionWs = ws;
+
+        ws.onopen = () => {
+          console.log('Session Updates WebSocket connected successfully');
+          this.sessionStatus.connected = true;
+          this.sessionStatus.lastOpenAt = Date.now();
+          resolve();
+        };
+
+        ws.onerror = (error) => {
+          console.error('Session Updates WebSocket error:', error);
+          console.error('WebSocket URL was:', wsUrl);
+          console.error('WebSocket readyState:', ws.readyState);
+
+          try {
+            ws.onclose = null;
+            ws.close();
+          } catch {
+            // ignore
+          }
+
+          if (index + 1 < candidates.length) {
+            console.warn('Falling back to next Session WebSocket candidate...');
+            connectAt(index + 1);
             return;
           }
 
-          // Now we have binary data in bytes, decode it
-          try {
-            const decodedUpdate = this.wasm.decodeUpdate(bytes);
-            console.log('[WebSocket] Decoded update type:', decodedUpdate.type, decodedUpdate.type === 'Events' ? `(${decodedUpdate.events?.length} events)` : '');
+          reject(new Error(`Session WebSocket connection failed to ${wsUrl}`));
+        };
 
-            // Check if it's a Seed or Events/FilteredEvents update
-            if (decodedUpdate.type === 'Seed') {
-              this.latestSeed = decodedUpdate;
-              this.handleEvent(decodedUpdate);
-            } else if (decodedUpdate.type === 'Events') {
-              // Process each event from the array - treat FilteredEvents the same as Events
+        this.sessionWs.onmessage = async (event) => {
+          try {
+            const now = Date.now();
+            this.sessionStatus.lastMessageAt = now;
+            let bytes;
+            if (event.data instanceof Blob) {
+              const arrayBuffer = await event.data.arrayBuffer();
+              bytes = new Uint8Array(arrayBuffer);
+            } else if (event.data instanceof ArrayBuffer) {
+              bytes = new Uint8Array(event.data);
+            } else if (Buffer.isBuffer(event.data)) {
+              bytes = new Uint8Array(event.data);
+            } else {
+              console.warn('Unknown WebSocket message type:', typeof event.data);
+              return;
+            }
+
+            try {
+              const decodedUpdate = this.wasm.decodeUpdate(bytes);
+              if (decodedUpdate.type !== 'Events') return;
+              this.sessionStatus.lastEventAt = now;
               for (const eventData of decodedUpdate.events) {
-                console.log('[WebSocket] Event type:', eventData.type, 'data:', eventData);
-                // Normalize snake_case to camelCase
                 const normalizedEvent = snakeToCamel(eventData);
-                // Check if this is a transaction from our account
-                if (normalizedEvent.type === 'Transaction') {
-                  if (this.nonceManager.publicKeyHex &&
-                    normalizedEvent.public.toLowerCase() === this.nonceManager.publicKeyHex.toLowerCase()) {
-                    this.nonceManager.updateNonceFromTransaction(normalizedEvent.nonce);
-                  }
-                }
                 this.handleEvent(normalizedEvent);
               }
+            } catch (decodeError) {
+              console.error('Failed to decode session update:', decodeError);
             }
-          } catch (decodeError) {
-            console.error('Failed to decode update:', decodeError);
-            console.log('Full raw bytes:', this.wasm.bytesToHex(bytes).match(/.{2}/g).join(' '));
+          } catch (e) {
+            console.error('Failed to process session WebSocket message:', e);
           }
-        } catch (e) {
-          console.error('Failed to process WebSocket message:', e);
-        }
-      };
+        };
 
-      this.updatesWs.onclose = (event) => {
-        console.log('Updates WebSocket disconnected, code:', event.code, 'reason:', event.reason);
-        this.handleReconnect('updatesWs', () => this.connectUpdates(this.currentUpdateFilter));
-      };
+        this.sessionWs.onclose = (event) => {
+          console.log('Session Updates WebSocket disconnected, code:', event.code, 'reason:', event.reason);
+          this.sessionStatus.connected = false;
+          this.sessionStatus.lastCloseAt = Date.now();
+          if (this.currentSessionFilter === null || this.currentSessionFilter === undefined) {
+            return;
+          }
+          this.handleReconnect(
+            'sessionWs',
+            () => this.connectSessionUpdates(this.currentSessionFilter),
+            this.sessionReconnectConfig
+          );
+        };
       };
 
       connectAt(0);
@@ -478,6 +703,20 @@ export class CasinoClient {
     };
   }
 
+  getUpdatesStatus() {
+    return {
+      ...this.updatesStatus,
+      readyState: this.updatesWs?.readyState ?? null,
+    };
+  }
+
+  getSessionStatus() {
+    return {
+      ...this.sessionStatus,
+      readyState: this.sessionWs?.readyState ?? null,
+    };
+  }
+
   /**
    * Handle incoming events from WebSocket.
    * @param {Object} event - Event data object
@@ -498,8 +737,7 @@ export class CasinoClient {
    * @param {Function} connectFn - Function to call for reconnection
    * @private
    */
-  handleReconnect(wsType, connectFn) {
-    const config = this.reconnectConfig;
+  handleReconnect(wsType, connectFn, config = this.reconnectConfig) {
 
     if (config.reconnecting) {
       return;

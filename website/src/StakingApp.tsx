@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { PlaySwapStakeTabs } from './components/PlaySwapStakeTabs';
 import { WalletPill } from './components/WalletPill';
 import { PageHeader } from './components/PageHeader';
+import { AuthStatusPill } from './components/AuthStatusPill';
 import { useSharedCasinoConnection } from './chain/CasinoConnectionContext';
 import { useActivityFeed } from './hooks/useActivityFeed';
 import { parseAmount } from './utils/amounts.js';
@@ -21,11 +22,16 @@ export default function StakingApp() {
 
   const connection = useSharedCasinoConnection();
   const pollRef = useRef<(() => void) | null>(null);
+  const lastPollAtRef = useRef(0);
 
   const [isRegistered, setIsRegistered] = useState(false);
   const [player, setPlayer] = useState<any | null>(null);
   const [staker, setStaker] = useState<any | null>(null);
   const [house, setHouse] = useState<any | null>(null);
+  const POLL_TICK_MS = 5000;
+  const POLL_VISIBLE_MS = 15000;
+  const POLL_HIDDEN_MS = 60000;
+  const WS_IDLE_MS = 15000;
 
   const [registerName, setRegisterName] = useState('Staker');
   const [stakeAmount, setStakeAmount] = useState('0');
@@ -94,6 +100,26 @@ export default function StakingApp() {
     if (connection.status !== 'connected' || !connection.keypair) return;
     const pkHex = connection.keypair.publicKeyHex;
     const pkHexLower = pkHex.toLowerCase();
+    const applyPlayerBalances = (balances: any) => {
+      if (!balances) return;
+      setPlayer(prev => prev ? ({
+        ...prev,
+        chips: Number(balances.chips ?? prev.chips ?? 0),
+        vusdtBalance: Number(balances.vusdtBalance ?? prev.vusdtBalance ?? 0),
+        shields: Number(balances.shields ?? prev.shields ?? 0),
+        doubles: Number(balances.doubles ?? prev.doubles ?? 0),
+        tournamentChips: Number(balances.tournamentChips ?? prev.tournamentChips ?? 0),
+        tournamentShields: Number(balances.tournamentShields ?? prev.tournamentShields ?? 0),
+        tournamentDoubles: Number(balances.tournamentDoubles ?? prev.tournamentDoubles ?? 0),
+        activeTournament: balances.activeTournament ?? prev.activeTournament ?? null,
+      }) : prev);
+    };
+    const applyStaker = (next: any) => {
+      if (next) setStaker(next);
+    };
+    const applyHouse = (next: any) => {
+      if (next) setHouse(next);
+    };
 
     const unsubError = connection.onEvent('CasinoError', (e: any) => {
       if (e?.player?.toLowerCase?.() !== pkHexLower) return;
@@ -138,7 +164,9 @@ export default function StakingApp() {
         pubkeyHex: pkHex,
       });
       pushToast('success', msg);
-      pollRef.current?.();
+      applyStaker(e?.staker);
+      applyHouse(e?.house);
+      applyPlayerBalances(e?.playerBalances);
       track('staking.stake.confirmed', { amount, unlockTs });
     });
     const unsubUnstaked = connection.onEvent('Unstaked', (e: any) => {
@@ -147,7 +175,9 @@ export default function StakingApp() {
       const msg = `Unstaked: ${amount}`;
       trackTxConfirmed({ surface: 'staking', kind: 'unstake', finalMessage: msg, pubkeyHex: pkHex });
       pushToast('success', msg);
-      pollRef.current?.();
+      applyStaker(e?.staker);
+      applyHouse(e?.house);
+      applyPlayerBalances(e?.playerBalances);
       track('staking.unstake.confirmed', { amount });
     });
     const unsubClaimed = connection.onEvent('RewardsClaimed', (e: any) => {
@@ -161,7 +191,9 @@ export default function StakingApp() {
         pubkeyHex: pkHex,
       });
       pushToast('success', msg);
-      pollRef.current?.();
+      applyStaker(e?.staker);
+      applyHouse(e?.house);
+      applyPlayerBalances(e?.playerBalances);
       track('staking.claim.confirmed', { amount });
     });
     const unsubEpoch = connection.onEvent('EpochProcessed', (e: any) => {
@@ -170,6 +202,7 @@ export default function StakingApp() {
       trackTxConfirmed({ surface: 'staking', kind: 'process_epoch', finalMessage: msg });
       pushToast('success', msg);
       track('staking.epoch.processed', { epoch });
+      applyHouse(e?.house);
     });
 
     return () => {
@@ -195,9 +228,17 @@ export default function StakingApp() {
 
     let cancelled = false;
     let inFlight = false;
-    const poll = async () => {
+    const poll = async (force = false) => {
       if (cancelled || inFlight) return;
-      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      const now = Date.now();
+      const isHidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
+      const updatesStatus = client.getUpdatesStatus?.();
+      const wsConnected = Boolean(updatesStatus?.connected);
+      const wsIdle = !updatesStatus?.lastEventAt || now - updatesStatus.lastEventAt > WS_IDLE_MS;
+      if (!force && wsConnected && !wsIdle) return;
+      const pollInterval = isHidden ? POLL_HIDDEN_MS : POLL_VISIBLE_MS;
+      if (!force && now - lastPollAtRef.current < pollInterval) return;
+      lastPollAtRef.current = now;
       inFlight = true;
       try {
         const [p, s, h] = await Promise.all([
@@ -216,11 +257,13 @@ export default function StakingApp() {
       }
     };
 
-    void poll();
+    void poll(true);
     pollRef.current = () => {
-      void poll();
+      void poll(true);
     };
-    const interval = setInterval(poll, 3000);
+    const interval = setInterval(() => {
+      void poll(false);
+    }, POLL_TICK_MS);
 
     return () => {
       cancelled = true;
@@ -395,6 +438,7 @@ export default function StakingApp() {
         leading={<PlaySwapStakeTabs />}
         right={
           <>
+            <AuthStatusPill publicKeyHex={connection.keypair?.publicKeyHex ?? null} />
             <WalletPill rng={player?.chips} vusdt={player?.vusdtBalance} pubkeyHex={connection.keypair?.publicKeyHex} />
             <button
               type="button"

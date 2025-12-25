@@ -6,18 +6,20 @@ import { useBaccarat } from './games/useBaccarat';
 import { useCraps } from './games/useCraps';
 import { GameType, PlayerStats, GameState, Card, LeaderboardEntry, TournamentPhase, CompletedHand, CrapsBet, RouletteBet, SicBoBet, BaccaratBet, AutoPlayDraft, AutoPlayPlan } from '../types';
 import { GameType as ChainGameType, CasinoGameStartedEvent, CasinoGameMovedEvent, CasinoGameCompletedEvent } from '../types/casino';
-import { createDeck, rollDie, getHandValue, getBaccaratValue, getHiLoRank, WAYS, getRouletteColor, evaluateVideoPokerHand, calculateCrapsExposure, calculateSicBoOutcomeExposure, getSicBoCombinations, resolveCrapsBets, resolveRouletteBets, resolveSicBoBets, evaluateThreeCardHand, parseGameLogs } from '../utils/gameUtils';
+import { createDeck, rollDie, getHandValue, getBaccaratValue, getHiLoRank, WAYS, getRouletteColor, formatRouletteNumber, evaluateVideoPokerHand, calculateCrapsExposure, calculateSicBoOutcomeExposure, getSicBoCombinations, resolveCrapsBets, resolveRouletteBets, resolveSicBoBets, evaluateThreeCardHand, parseGameLogs } from '../utils/gameUtils';
 import { getStrategicAdvice } from '../services/geminiService';
 import { CasinoChainService } from '../services/CasinoChainService';
 import { CasinoClient } from '../api/client.js';
 import { WasmWrapper } from '../api/wasm.js';
 import { BotConfig, DEFAULT_BOT_CONFIG, BotService } from '../services/BotService';
 import { playSfx } from '../services/sfx';
+import { syncFreerollLimit } from '../services/authClient';
 
 const INITIAL_CHIPS = 1000;
 const INITIAL_SHIELDS = 3;
 const INITIAL_DOUBLES = 3;
 const MAX_GRAPH_POINTS = 100; // Limit for graph/history arrays to prevent memory leaks
+const FREEROLL_DAILY_LIMIT_FREE = 1;
 
 // Freeroll schedule: 60s registration + 5m active
 const FREEROLL_REGISTRATION_MS = 60_000;
@@ -515,6 +517,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
   const [freerollNextStartIn, setFreerollNextStartIn] = useState(0);
   const [freerollIsJoinedNext, setFreerollIsJoinedNext] = useState(false);
   const [tournamentsPlayedToday, setTournamentsPlayedToday] = useState(0);
+  const [tournamentDailyLimit, setTournamentDailyLimit] = useState(FREEROLL_DAILY_LIMIT_FREE);
   const playModeRef = useRef(playMode);
 
   // Chain service integration
@@ -966,6 +969,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
 
             newBoard.sort((a, b) => b.chips - a.chips);
             setLeaderboard(newBoard);
+            lastLeaderboardUpdateRef.current = Date.now();
             console.log('[useTerminalGame] Initial leaderboard loaded:', newBoard.length, 'entries');
           }
         } catch (leaderboardError) {
@@ -981,11 +985,20 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
     initChain();
   }, []);
 
-  // Track tick counter for leaderboard polling (every 3 ticks = 3 seconds)
-  const tickCounterRef = useRef(0);
-
   // Track current chips with a ref to avoid stale closure in polling interval
   const currentChipsRef = useRef(stats.chips);
+  const lastNetworkPollRef = useRef(0);
+  const lastLeaderboardUpdateRef = useRef(0);
+  const lastPlayerSyncRef = useRef(0);
+
+  const NETWORK_POLL_FAST_MS = 2000;
+  const NETWORK_POLL_IDLE_MS = 8000;
+  const NETWORK_POLL_HIDDEN_MS = 30000;
+  const WS_IDLE_FAST_MS = 4000;
+  const WS_IDLE_SLOW_MS = 15000;
+  const WS_IDLE_HIDDEN_MS = 60000;
+  const LEADERBOARD_POLL_MIN_MS = 15000;
+  const PLAYER_SYNC_MIN_INTERVAL_MS = 2000;
 
   // Keep chips ref in sync with stats
   useEffect(() => {
@@ -1023,10 +1036,28 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
         }
       }
 
-      tickCounterRef.current++;
-      if (!clientRef.current || !publicKeyBytesRef.current || tickCounterRef.current % 2 !== 0) {
+      if (!clientRef.current || !publicKeyBytesRef.current) {
         return;
       }
+      const isHidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
+      const updatesStatus = clientRef.current?.getUpdatesStatus?.();
+      const sessionStatus = clientRef.current?.getSessionStatus?.();
+      const lastEventAt = Math.max(updatesStatus?.lastEventAt ?? 0, sessionStatus?.lastEventAt ?? 0);
+      const wsConnected = Boolean(updatesStatus?.connected || sessionStatus?.connected);
+      const idleThreshold = isHidden
+        ? WS_IDLE_HIDDEN_MS
+        : (awaitingChainResponseRef.current || isPendingRef.current ? WS_IDLE_FAST_MS : WS_IDLE_SLOW_MS);
+      const wsIdle = !lastEventAt || now - lastEventAt > idleThreshold;
+      if (wsConnected && !wsIdle) {
+        return;
+      }
+      const pollInterval = isHidden
+        ? NETWORK_POLL_HIDDEN_MS
+        : (awaitingChainResponseRef.current || isPendingRef.current ? NETWORK_POLL_FAST_MS : NETWORK_POLL_IDLE_MS);
+      if (now - lastNetworkPollRef.current < pollInterval) {
+        return;
+      }
+      lastNetworkPollRef.current = now;
 
       (async () => {
         const client: any = clientRef.current;
@@ -1051,7 +1082,11 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
 	          setIsRegistered(true);
 	          hasRegisteredRef.current = true;
 
-	          setTournamentsPlayedToday(Number(playerState.tournamentsPlayedToday ?? 0));
+          setTournamentsPlayedToday(Number(playerState.tournamentsPlayedToday ?? 0));
+          const chainLimit = Number(playerState.tournamentDailyLimit ?? 0);
+          setTournamentDailyLimit(
+            chainLimit > 0 ? chainLimit : FREEROLL_DAILY_LIMIT_FREE
+          );
 
           // Update balances (avoid clobbering fresh WebSocket updates).
           const timeSinceLastUpdate = Date.now() - lastBalanceUpdateRef.current;
@@ -1067,9 +1102,10 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
 	        } else {
 	          setIsRegistered(false);
 	          hasRegisteredRef.current = false;
-	          setTournamentsPlayedToday(0);
-	          setPlayerActiveTournamentId(null);
-	        }
+          setTournamentsPlayedToday(0);
+          setTournamentDailyLimit(FREEROLL_DAILY_LIMIT_FREE);
+          setPlayerActiveTournamentId(null);
+        }
 
         if (playMode !== 'FREEROLL') {
           // Cash mode: keep wallet balances in sync even if we miss WS events.
@@ -1084,37 +1120,41 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
             setWalletVusdt(Number(playerState.vusdtBalance ?? 0));
           }
 
-          // Cash leaderboard
-          try {
-            const leaderboardData = await client.getCasinoLeaderboard();
-            if (leaderboardData && leaderboardData.entries) {
-              const newBoard: LeaderboardEntry[] = leaderboardData.entries.map((entry: { player?: string; name?: string; chips: bigint | number }) => {
-                const name = entry.name || `Player_${entry.player?.substring(0, 8)}`;
-                const isYou = !!myPublicKeyHex && !!entry.player && entry.player.toLowerCase() === myPublicKeyHex.toLowerCase();
-                return {
-                  name: isYou ? `${name} (YOU)` : name,
-                  chips: Number(entry.chips),
-                  status: 'ALIVE' as const
-                };
-              });
+          const shouldPollLeaderboard =
+            now - lastLeaderboardUpdateRef.current >= LEADERBOARD_POLL_MIN_MS;
+          if (shouldPollLeaderboard) {
+            try {
+              const leaderboardData = await client.getCasinoLeaderboard();
+              lastLeaderboardUpdateRef.current = now;
+              if (leaderboardData && leaderboardData.entries) {
+                const newBoard: LeaderboardEntry[] = leaderboardData.entries.map((entry: { player?: string; name?: string; chips: bigint | number }) => {
+                  const name = entry.name || `Player_${entry.player?.substring(0, 8)}`;
+                  const isYou = !!myPublicKeyHex && !!entry.player && entry.player.toLowerCase() === myPublicKeyHex.toLowerCase();
+                  return {
+                    name: isYou ? `${name} (YOU)` : name,
+                    chips: Number(entry.chips),
+                    status: 'ALIVE' as const
+                  };
+                });
 
-              const isPlayerInBoard = !!myPublicKeyHex && leaderboardData.entries.some(
-                (entry: { player?: string }) => entry.player?.toLowerCase() === myPublicKeyHex.toLowerCase()
-              );
-              if (!isPlayerInBoard && isRegistered) {
-                newBoard.push({ name: 'YOU', chips: currentChipsRef.current, status: 'ALIVE' as const });
+                const isPlayerInBoard = !!myPublicKeyHex && leaderboardData.entries.some(
+                  (entry: { player?: string }) => entry.player?.toLowerCase() === myPublicKeyHex.toLowerCase()
+                );
+                if (!isPlayerInBoard && isRegistered) {
+                  newBoard.push({ name: 'YOU', chips: currentChipsRef.current, status: 'ALIVE' as const });
+                }
+
+                newBoard.sort((a, b) => b.chips - a.chips);
+                setLeaderboard(newBoard);
+
+                const myRank = newBoard.findIndex(p => p.name.includes("YOU")) + 1;
+                if (myRank > 0) {
+                  setStats(s => ({ ...s, rank: myRank }));
+                }
               }
-
-              newBoard.sort((a, b) => b.chips - a.chips);
-              setLeaderboard(newBoard);
-
-              const myRank = newBoard.findIndex(p => p.name.includes("YOU")) + 1;
-              if (myRank > 0) {
-                setStats(s => ({ ...s, rank: myRank }));
-              }
+            } catch (e) {
+              console.debug('[useTerminalGame] Failed to fetch cash leaderboard:', e);
             }
-          } catch (e) {
-            console.debug('[useTerminalGame] Failed to fetch cash leaderboard:', e);
           }
           return;
         }
@@ -1222,6 +1262,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
 
         // Tournament leaderboard (preferred) while a tournament is active.
         if (activeTournament?.state?.leaderboard?.entries) {
+          lastLeaderboardUpdateRef.current = now;
           const entries = activeTournament.state.leaderboard.entries;
           const newBoard: LeaderboardEntry[] = entries.map((entry: { player?: string; name?: string; chips: bigint | number }) => {
             const name = entry.name || `Player_${entry.player?.substring(0, 8)}`;
@@ -1245,19 +1286,24 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
           }
         } else {
           // Fallback: show the cash leaderboard in the freeroll lobby when no active tournament board is available.
-          try {
-            const leaderboardData = await client.getCasinoLeaderboard();
-            if (leaderboardData && leaderboardData.entries) {
-              const newBoard: LeaderboardEntry[] = leaderboardData.entries.map((entry: { player?: string; name?: string; chips: bigint | number }) => {
-                const name = entry.name || `Player_${entry.player?.substring(0, 8)}`;
-                const isYou = !!myPublicKeyHex && !!entry.player && entry.player.toLowerCase() === myPublicKeyHex.toLowerCase();
-                return { name: isYou ? `${name} (YOU)` : name, chips: Number(entry.chips), status: 'ALIVE' as const };
-              });
-              newBoard.sort((a, b) => b.chips - a.chips);
-              setLeaderboard(newBoard);
+          const shouldPollLeaderboard =
+            now - lastLeaderboardUpdateRef.current >= LEADERBOARD_POLL_MIN_MS;
+          if (shouldPollLeaderboard) {
+            try {
+              const leaderboardData = await client.getCasinoLeaderboard();
+              lastLeaderboardUpdateRef.current = now;
+              if (leaderboardData && leaderboardData.entries) {
+                const newBoard: LeaderboardEntry[] = leaderboardData.entries.map((entry: { player?: string; name?: string; chips: bigint | number }) => {
+                  const name = entry.name || `Player_${entry.player?.substring(0, 8)}`;
+                  const isYou = !!myPublicKeyHex && !!entry.player && entry.player.toLowerCase() === myPublicKeyHex.toLowerCase();
+                  return { name: isYou ? `${name} (YOU)` : name, chips: Number(entry.chips), status: 'ALIVE' as const };
+                });
+                newBoard.sort((a, b) => b.chips - a.chips);
+                setLeaderboard(newBoard);
+              }
+            } catch (e) {
+              console.debug('[useTerminalGame] Failed to fetch lobby leaderboard:', e);
             }
-          } catch (e) {
-            console.debug('[useTerminalGame] Failed to fetch lobby leaderboard:', e);
           }
         }
       })();
@@ -1533,7 +1579,9 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
                 ? 2
                 : plan.rouletteZeroRule === 'EN_PRISON_DOUBLE'
                   ? 3
-                  : 0;
+                  : plan.rouletteZeroRule === 'AMERICAN'
+                    ? 4
+                    : 0;
 
           const totalWager = plan.rouletteBets.reduce((s, b) => s + b.amount, 0);
           setGameState(prev => ({ ...prev, sessionWager: totalWager, message: 'PLACING BETS...' }));
@@ -1836,10 +1884,33 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
         // Parse state and update UI using the tracked game type from ref (not stale closure)
         parseGameState(stateBlob, gameTypeRef.current);
 
-        // Refresh player balance after each move so chip display matches on-chain deductions.
-        if (clientRef.current && publicKeyBytesRef.current) {
+        if (event.playerBalances) {
+          const balances = event.playerBalances;
+          const showTournamentStack =
+            playModeRef.current === 'FREEROLL' && balances.activeTournament != null;
+          const nextChips = Number(showTournamentStack ? balances.tournamentChips : balances.chips);
+          const nextShields = Number(showTournamentStack ? balances.tournamentShields : balances.shields);
+          const nextDoubles = Number(showTournamentStack ? balances.tournamentDoubles : balances.doubles);
+
+          setStats(prev => ({
+            ...prev,
+            chips: nextChips,
+            shields: nextShields,
+            doubles: nextDoubles,
+          }));
+          setWalletRng(Number(balances.chips));
+          setWalletVusdt(Number(balances.vusdtBalance ?? 0));
+          lastBalanceUpdateRef.current = Date.now();
+          currentChipsRef.current = nextChips;
+        } else if (clientRef.current && publicKeyBytesRef.current) {
+          // Backwards-compatible fallback for older event payloads.
           void (async () => {
             try {
+              const now = Date.now();
+              if (now - lastPlayerSyncRef.current < PLAYER_SYNC_MIN_INTERVAL_MS) {
+                return;
+              }
+              lastPlayerSyncRef.current = now;
               const playerState = await clientRef.current!.getCasinoPlayer(publicKeyBytesRef.current!);
               if (!playerState) return;
 
@@ -1961,6 +2032,18 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
         clearChainResponseTimeout();
         const payout = Number(event.payout);
         const finalChips = Number(event.finalChips);
+        const balances = event.playerBalances;
+        const showTournamentStack =
+          balances && playModeRef.current === 'FREEROLL' && balances.activeTournament != null;
+        const nextChips = balances
+          ? Number(showTournamentStack ? balances.tournamentChips : balances.chips)
+          : finalChips;
+        const nextShields = balances
+          ? Number(showTournamentStack ? balances.tournamentShields : balances.shields)
+          : null;
+        const nextDoubles = balances
+          ? Number(showTournamentStack ? balances.tournamentDoubles : balances.doubles)
+          : null;
         console.log('[useTerminalGame] Session ID matched! Updating chips to:', finalChips);
 
         // Mark the time of this WebSocket balance update to prevent polling from overwriting
@@ -1993,10 +2076,10 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
 
           return {
             ...prev,
-            chips: finalChips,
-            // Decrement shields/doubles if they were used in this game
-            shields: event.wasShielded ? prev.shields - 1 : prev.shields,
-            doubles: event.wasDoubled ? prev.doubles - 1 : prev.doubles,
+            chips: nextChips,
+            // Use on-chain balances when available; otherwise decrement locally.
+            shields: nextShields !== null ? nextShields : (event.wasShielded ? prev.shields - 1 : prev.shields),
+            doubles: nextDoubles !== null ? nextDoubles : (event.wasDoubled ? prev.doubles - 1 : prev.doubles),
             // Add to history log
             history: [...prev.history, historyEntry],
             pnlByGame: { ...prev.pnlByGame, ...pnlEntry },
@@ -2006,7 +2089,11 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
 
         // Update currentChipsRef immediately to prevent stale closure issues when starting new games
         // (the useEffect that syncs this ref runs after render, which may be too late)
-        currentChipsRef.current = finalChips;
+        currentChipsRef.current = nextChips;
+        if (balances) {
+          setWalletRng(Number(balances.chips));
+          setWalletVusdt(Number(balances.vusdtBalance ?? 0));
+        }
 
         // Reset consumed shield/double modifiers but keep super mode sticky
         if (event.wasShielded || event.wasDoubled) {
@@ -2061,6 +2148,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
 
     const unsubLeaderboard = chainService.onLeaderboardUpdated((leaderboardData: any) => {
       console.log('[useTerminalGame] Leaderboard updated event:', leaderboardData);
+      lastLeaderboardUpdateRef.current = Date.now();
       try {
         if (leaderboardData && leaderboardData.entries) {
           const myPublicKeyHex = publicKeyBytesRef.current
@@ -2170,6 +2258,35 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
     };
   }, [chainService, isOnChain]);
 
+  useEffect(() => {
+    const client = clientRef.current as any;
+    if (!client) return;
+
+    void (async () => {
+      try {
+        if (!isOnChain) {
+          await client.disconnectSessionUpdates?.();
+          return;
+        }
+        if (currentSessionId) {
+          await client.switchSessionUpdates(currentSessionId);
+        } else {
+          await client.disconnectSessionUpdates?.();
+        }
+      } catch (e) {
+        console.debug('[useTerminalGame] Session updates sync failed:', e);
+      }
+    })();
+
+    return () => {
+      try {
+        client.disconnectSessionUpdates?.();
+      } catch {
+        // ignore
+      }
+    };
+  }, [currentSessionId, isOnChain]);
+
   // Blackjack auto-reveal: if we ever land in AwaitingReveal (e.g. restore from chain),
   // submit Reveal automatically instead of requiring a manual SPACE press.
   useEffect(() => {
@@ -2271,6 +2388,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
             if (status === 2) msg = 'BUST';
             else if (status === 3) msg = 'BLACKJACK';
             else if (status === 1) msg = 'STAND';
+            else if (status === 4) msg = 'SURRENDER';
             finishedHands.push({ cards: handCards, bet: handBet, isDoubled, message: msg });
           }
         }
@@ -2843,7 +2961,9 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
               ? 'EN_PRISON'
               : zeroRuleByte === 3
                 ? 'EN_PRISON_DOUBLE'
-                : 'STANDARD';
+                : zeroRuleByte === 4
+                  ? 'AMERICAN'
+                  : 'STANDARD';
         const rouletteIsPrison = phaseByte === 1;
 
         console.log('[parseGameState] Roulette: betCount=' + betCount + ', betsSize=' + betsSize + ', resultOffset=' + resultOffset + ', totalLen=' + stateBlob.length);
@@ -2868,7 +2988,9 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
             rouletteIsPrison,
             rouletteHistory: [...prev.rouletteHistory, result].slice(-MAX_GRAPH_POINTS),
             stage: rouletteIsPrison && result === 0 ? 'PLAYING' : 'RESULT',
-            message: rouletteIsPrison && result === 0 ? 'EN PRISON - SPACE TO SPIN' : `LANDED ON ${result}`,
+            message: rouletteIsPrison && result === 0
+              ? 'EN PRISON - SPACE TO SPIN'
+              : `LANDED ON ${formatRouletteNumber(result)}`,
           }));
         } else {
           // Betting stage - no result yet
@@ -4194,7 +4316,9 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
             ? 'EN_PRISON'
             : gameState.rouletteZeroRule === 'EN_PRISON'
               ? 'EN_PRISON_DOUBLE'
-              : 'STANDARD';
+              : gameState.rouletteZeroRule === 'EN_PRISON_DOUBLE'
+                ? 'AMERICAN'
+                : 'STANDARD';
 
       setGameState(prev => ({
           ...prev,
@@ -4214,7 +4338,9 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
                     ? 2
                     : nextRule === 'EN_PRISON_DOUBLE'
                       ? 3
-                      : 0;
+                      : nextRule === 'AMERICAN'
+                        ? 4
+                        : 0;
               const payload = new Uint8Array([3, ruleByte]);
               const result = await chainService.sendMove(currentSessionIdRef.current, payload);
               if (result.txHash) setLastTxSig(result.txHash);
@@ -5118,9 +5244,33 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
 		          }
 		        }
         setIsRegistered(true);
+        const syncFreerollLimitWithRetry = async () => {
+          for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+              const result = await syncFreerollLimit();
+              if (result.status !== 'player_not_found') {
+                return;
+              }
+            } catch (error) {
+              console.debug('[useTerminalGame] Freeroll limit sync failed:', error);
+              return;
+            }
+            await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+          }
+        };
+        void syncFreerollLimitWithRetry();
 
         // Freeroll mode: also join the next tournament slot.
         if (playMode === 'FREEROLL') {
+          const maxEntries =
+            tournamentDailyLimit > 0 ? tournamentDailyLimit : FREEROLL_DAILY_LIMIT_FREE;
+          if (tournamentsPlayedToday >= maxEntries) {
+            setGameState((prev) => ({
+              ...prev,
+              message: `DAILY LIMIT REACHED (${tournamentsPlayedToday}/${maxEntries})`,
+            }));
+            return;
+          }
           const now = Date.now();
           const scheduleNow = getFreerollSchedule(now);
           const defaultNextTid = scheduleNow.isRegistration ? scheduleNow.tournamentId : scheduleNow.tournamentId + 1;
@@ -5334,6 +5484,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
 	    freerollNextStartIn,
 	    freerollIsJoinedNext,
 	    tournamentsPlayedToday,
+	    tournamentDailyLimit,
 	    startTournament,
     actions: {
         startGame,

@@ -54,3 +54,4 @@ rayon = { workspace = true }
 url = { workspace = true }
 tokio = { workspace = true }
 reqwest = { workspace = true }
+sysinfo = { workspace = true }

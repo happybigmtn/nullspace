@@ -563,6 +563,8 @@ pub enum UpdatesFilter {
     All,
     /// Subscribe to events for a specific account
     Account(PublicKey),
+    /// Subscribe to move events for a specific session
+    Session(u64),
 }
 
 impl Write for UpdatesFilter {
@@ -572,6 +574,10 @@ impl Write for UpdatesFilter {
             UpdatesFilter::Account(key) => {
                 1u8.write(writer);
                 key.write(writer);
+            }
+            UpdatesFilter::Session(session_id) => {
+                2u8.write(writer);
+                session_id.write(writer);
             }
         }
     }
@@ -585,6 +591,7 @@ impl Read for UpdatesFilter {
         match kind {
             0 => Ok(UpdatesFilter::All),
             1 => Ok(UpdatesFilter::Account(PublicKey::read(reader)?)),
+            2 => Ok(UpdatesFilter::Session(u64::read(reader)?)),
             _ => Err(Error::InvalidEnum(kind)),
         }
     }
@@ -595,6 +602,7 @@ impl EncodeSize for UpdatesFilter {
         1 + match self {
             UpdatesFilter::All => 0,
             UpdatesFilter::Account(key) => key.encode_size(),
+            UpdatesFilter::Session(session_id) => session_id.encode_size(),
         }
     }
 }

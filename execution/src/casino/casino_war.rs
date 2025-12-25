@@ -1,7 +1,7 @@
 //! Casino War game implementation.
 //!
 //! State blob format:
-//! [version:u8=1] [stage:u8] [playerCard:u8] [dealerCard:u8] [tie_bet:u64 BE]
+//! [version:u8=1] [stage:u8] [playerCard:u8] [dealerCard:u8] [tie_bet:u64 BE] [rules:u8]
 //!
 //! Stage: 0 = Betting (pre-deal), 1 = War (after tie), 2 = Complete
 //!
@@ -10,6 +10,7 @@
 //! [1] = War (after tie, go to war)
 //! [2] = Surrender (after tie, forfeit half bet)
 //! [3, tie_bet:u64 BE] = Set tie bet (Betting stage only)
+//! [5, rules:u8] = Set rules (Betting stage only)
 
 use super::super_mode::apply_super_multiplier_cards;
 use super::{cards, CasinoGame, GameError, GameResult, GameRng};
@@ -17,10 +18,68 @@ use nullspace_types::casino::GameSession;
 
 const STATE_VERSION: u8 = 1;
 const HIDDEN_CARD: u8 = 0xFF;
-const TIE_BET_PAYOUT_TO_1: u64 = 10;
-const TIE_AFTER_TIE_BONUS_MULTIPLIER: u64 = 1;
 /// WoO: Casino War is played with six decks.
 const CASINO_WAR_DECKS: u8 = 6;
+
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum TieBetPayout {
+    TenToOne = 0,
+    ElevenToOne = 1,
+}
+
+impl Default for TieBetPayout {
+    fn default() -> Self {
+        TieBetPayout::TenToOne
+    }
+}
+
+impl TryFrom<u8> for TieBetPayout {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(TieBetPayout::TenToOne),
+            1 => Ok(TieBetPayout::ElevenToOne),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct CasinoWarRules {
+    tie_bet_payout: TieBetPayout,
+    tie_after_tie_bonus: bool,
+}
+
+impl Default for CasinoWarRules {
+    fn default() -> Self {
+        Self {
+            tie_bet_payout: TieBetPayout::default(),
+            tie_after_tie_bonus: true,
+        }
+    }
+}
+
+impl CasinoWarRules {
+    fn from_byte(value: u8) -> Option<Self> {
+        Some(Self {
+            tie_bet_payout: TieBetPayout::try_from(value & 0x01).ok()?,
+            tie_after_tie_bonus: value & 0x02 != 0,
+        })
+    }
+
+    fn to_byte(self) -> u8 {
+        (self.tie_bet_payout as u8) | if self.tie_after_tie_bonus { 0x02 } else { 0x00 }
+    }
+
+    fn tie_bet_multiplier(self) -> u64 {
+        match self.tie_bet_payout {
+            TieBetPayout::TenToOne => 10,
+            TieBetPayout::ElevenToOne => 11,
+        }
+    }
+}
 
 /// Casino War stages.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -52,6 +111,7 @@ pub enum Move {
     War = 1,       // Go to war (on tie)
     Surrender = 2, // Surrender on tie
     SetTieBet = 3, // Set optional tie bet (betting stage only)
+    SetRules = 5,  // Set rules (betting stage only)
 }
 
 impl TryFrom<u8> for Move {
@@ -63,6 +123,7 @@ impl TryFrom<u8> for Move {
             1 => Ok(Move::War),
             2 => Ok(Move::Surrender),
             3 => Ok(Move::SetTieBet),
+            5 => Ok(Move::SetRules),
             _ => Err(GameError::InvalidPayload),
         }
     }
@@ -74,6 +135,7 @@ struct CasinoWarState {
     dealer_card: u8,
     stage: Stage,
     tie_bet: u64,
+    rules: CasinoWarRules,
 }
 
 fn parse_state(state: &[u8]) -> Option<CasinoWarState> {
@@ -84,21 +146,28 @@ fn parse_state(state: &[u8]) -> Option<CasinoWarState> {
     let player_card = state[2];
     let dealer_card = state[3];
     let tie_bet = u64::from_be_bytes(state[4..12].try_into().ok()?);
+    let rules = if state.len() > 12 {
+        CasinoWarRules::from_byte(state[12])?
+    } else {
+        CasinoWarRules::default()
+    };
     Some(CasinoWarState {
         player_card,
         dealer_card,
         stage,
         tie_bet,
+        rules,
     })
 }
 
 fn serialize_state(state: &CasinoWarState) -> Vec<u8> {
-    let mut out = Vec::with_capacity(12);
+    let mut out = Vec::with_capacity(13);
     out.push(STATE_VERSION);
     out.push(state.stage as u8);
     out.push(state.player_card);
     out.push(state.dealer_card);
     out.extend_from_slice(&state.tie_bet.to_be_bytes());
+    out.push(state.rules.to_byte());
     out
 }
 
@@ -112,6 +181,7 @@ impl CasinoGame for CasinoWar {
             dealer_card: HIDDEN_CARD,
             stage: Stage::Betting,
             tie_bet: 0,
+            rules: CasinoWarRules::default(),
         };
         session.state_blob = serialize_state(&state);
         GameResult::Continue(vec![])
@@ -137,6 +207,16 @@ impl CasinoGame for CasinoWar {
 
         match state.stage {
             Stage::Betting => match mv {
+                Move::SetRules => {
+                    if payload.len() != 2 {
+                        return Err(GameError::InvalidPayload);
+                    }
+                    let rules = CasinoWarRules::from_byte(payload[1])
+                        .ok_or(GameError::InvalidPayload)?;
+                    state.rules = rules;
+                    session.state_blob = serialize_state(&state);
+                    Ok(GameResult::Continue(vec![]))
+                }
                 Move::SetTieBet => {
                     if payload.len() != 9 {
                         return Err(GameError::InvalidPayload);
@@ -180,11 +260,10 @@ impl CasinoGame for CasinoWar {
                     let dealer_rank = cards::card_rank_ace_high(dealer_card);
 
                     // Tie bet pays on initial tie only.
-                    let tie_bet_return: i64 = if state.tie_bet > 0 && player_rank == dealer_rank
-                    {
+                    let tie_bet_return: i64 = if state.tie_bet > 0 && player_rank == dealer_rank {
                         let credited = state
                             .tie_bet
-                            .saturating_mul(TIE_BET_PAYOUT_TO_1.saturating_add(1));
+                            .saturating_mul(state.rules.tie_bet_multiplier().saturating_add(1));
                         i64::try_from(credited).map_err(|_| GameError::InvalidPayload)?
                     } else {
                         0
@@ -283,11 +362,10 @@ impl CasinoGame for CasinoWar {
                         let dealer_rank = cards::card_rank_ace_high(dealer_card);
 
                         // Tie bet pays on initial tie only
-                        let tie_bet_return: i64 = if state.tie_bet > 0 && player_rank == dealer_rank
-                        {
+                        let tie_bet_return: i64 = if state.tie_bet > 0 && player_rank == dealer_rank {
                             let credited = state
                                 .tie_bet
-                                .saturating_mul(TIE_BET_PAYOUT_TO_1.saturating_add(1));
+                                .saturating_mul(state.rules.tie_bet_multiplier().saturating_add(1));
                             i64::try_from(credited).map_err(|_| GameError::InvalidPayload)?
                         } else {
                             0
@@ -426,13 +504,12 @@ impl CasinoGame for CasinoWar {
                         // Note: We model the raise as a contingent loss (`LossWithExtraDeduction`)
                         // instead of a pre-deducted bet, so we express the bonus via the credited return.
                         let is_tie_after_tie = new_player_rank == new_dealer_rank;
-                        let base_winnings = if is_tie_after_tie {
-                            session.bet.saturating_mul(2).saturating_add(
-                                session.bet.saturating_mul(TIE_AFTER_TIE_BONUS_MULTIPLIER),
-                            )
+                        let bonus = if is_tie_after_tie && state.rules.tie_after_tie_bonus {
+                            session.bet
                         } else {
-                            session.bet.saturating_mul(2)
+                            0
                         };
+                        let base_winnings = session.bet.saturating_mul(2).saturating_add(bonus);
                         let final_winnings = if session.super_mode.is_active {
                             apply_super_multiplier_cards(
                                 &[new_player_card],

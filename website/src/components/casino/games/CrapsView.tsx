@@ -210,7 +210,7 @@ export const CrapsView = React.memo<{
                 </div>
 
                 {/* Mobile Bonus Dashboard */}
-                <div className="absolute top-2 right-2 z-40 sm:hidden">
+                <div className="absolute top-2 right-2 z-40 md:hidden">
                     <MobileDrawer label="BONUS" title="SIDE BETS">
                         <CrapsBonusDashboard
                             bets={gameState.crapsBets}
@@ -247,7 +247,7 @@ export const CrapsView = React.memo<{
                 {/* Point Indicator - Centered */}
                 <div className="flex flex-col items-center gap-2">
                     <span className="text-xs uppercase tracking-widest text-gray-500">POINT</span>
-                    <div className={`w-16 h-16 sm:w-20 sm:h-20 border-2 flex items-center justify-center text-xl sm:text-2xl font-bold rounded-full shadow-[0_0_15px_rgba(0,0,0,0.5)] ${gameState.crapsPoint ? pointColor : 'border-gray-700 text-gray-700'}`}>
+                    <div className={`w-16 h-16 md:w-20 md:h-20 border-2 flex items-center justify-center text-xl sm:text-2xl font-bold rounded-full shadow-[0_0_15px_rgba(0,0,0,0.5)] ${gameState.crapsPoint ? pointColor : 'border-gray-700 text-gray-700'}`}>
                         {gameState.crapsPoint || "OFF"}
                     </div>
                 </div>
@@ -257,7 +257,7 @@ export const CrapsView = React.memo<{
                     <div className="text-lg sm:text-2xl font-bold text-terminal-gold tracking-widest leading-tight animate-pulse">
                         {/* On mobile, replace "SPACE TO ROLL" with "PLACE BETS" */}
                         <span className="hidden sm:inline">{gameState.message}</span>
-                        <span className="sm:hidden">{gameState.message?.replace(/SPACE TO ROLL/gi, 'PLACE BETS')}</span>
+                        <span className="md:hidden">{gameState.message?.replace(/SPACE TO ROLL/gi, 'PLACE BETS')}</span>
                     </div>
                     {gameState.crapsRollHistory.length > 0 && (
                         <div className="text-[10px] tracking-widest mt-1 flex items-center justify-center gap-1">
@@ -324,7 +324,7 @@ export const CrapsView = React.memo<{
                 )}
 
                 {/* Mobile: Core Bets & Active Bets */}
-                <div className="w-full mt-4 p-2 border-t border-gray-800 bg-gray-900/20 sm:hidden">
+                <div className="w-full mt-4 p-2 border-t border-gray-800 bg-gray-900/20 md:hidden">
                     {/* Core Betting Buttons - Always visible on mobile */}
                     <div className="flex gap-2 mb-3">
                         <button
@@ -368,7 +368,7 @@ export const CrapsView = React.memo<{
             </div>
 
             {/* LEFT SIDEBAR - EXPOSURE / SIDE BETS TOGGLE */}
-            <div className="hidden md:flex absolute top-0 left-0 bottom-24 w-56 bg-terminal-black/80 border-r-2 border-gray-700 backdrop-blur-sm z-30 flex-col">
+            <div className="hidden lg:flex absolute top-0 left-0 bottom-24 w-56 bg-terminal-black/80 border-r-2 border-gray-700 backdrop-blur-sm z-30 flex-col">
                 {/* Toggle Tabs */}
                 <div className="flex-none flex border-b border-gray-800">
                     <button
@@ -462,7 +462,7 @@ export const CrapsView = React.memo<{
             </div>
 
             {/* ACTIVE BETS SIDEBAR */}
-            <div className="hidden md:flex absolute top-0 right-0 bottom-24 w-36 bg-terminal-black/80 border-l-2 border-gray-700 p-2 backdrop-blur-sm z-30 flex-col">
+            <div className="hidden lg:flex absolute top-0 right-0 bottom-24 w-36 bg-terminal-black/80 border-l-2 border-gray-700 p-2 backdrop-blur-sm z-30 flex-col">
                 <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-2 border-b border-gray-800 pb-1 flex-none text-center">Table Bets</div>
                 <div className="flex-1 overflow-y-auto flex flex-col space-y-2">
                     {(() => {
@@ -537,10 +537,10 @@ export const CrapsView = React.memo<{
 
 
             {/* CONTROLS */}
-            <div className="ns-controlbar fixed bottom-0 left-0 right-0 sm:sticky sm:bottom-0 bg-terminal-black/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)] sm:pb-0">
-                <div className="h-16 sm:h-20 flex items-center justify-between sm:justify-center gap-2 p-2 sm:px-4">
+            <div className="ns-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-terminal-black/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
+                <div className="h-16 md:h-20 flex items-center justify-between md:justify-center gap-2 p-2 md:px-4">
                     {/* Bet Menu */}
-                    <div className="hidden sm:flex items-center gap-2 flex-1">
+                    <div className="hidden md:flex items-center gap-2 flex-1">
                         <CrapsBetMenu
                             gameState={gameState}
                             actions={actions}
@@ -550,7 +550,7 @@ export const CrapsView = React.memo<{
                     </div>
 
                     {/* Desktop: Chip + ROLL Button */}
-                    <div className="hidden sm:flex items-center gap-3">
+                    <div className="hidden md:flex items-center gap-3">
                         {/* Chip Selector */}
                         <div className="relative">
                             <ChipButton
@@ -603,13 +603,13 @@ export const CrapsView = React.memo<{
                     </div>
 
                     {/* Mobile: Simplified buttons */}
-                    <div className="flex sm:hidden items-center gap-2 flex-1">
+                    <div className="flex md:hidden items-center gap-2 flex-1">
                         <MobileDrawer label="BETS" title="PLACE BETS">
                             <div className="space-y-4">
                                 {/* Normal Bets */}
-                                <div>
-                                    <div className="text-[10px] text-green-500 font-bold tracking-widest mb-2 border-b border-gray-800 pb-1">NORMAL BETS</div>
-                                    <div className="grid grid-cols-3 gap-2">
+                                <div className="rounded border border-gray-800 bg-black/40 p-2 space-y-2">
+                                    <div className="text-[10px] text-green-500 font-bold tracking-widest border-b border-gray-800 pb-1">NORMAL BETS</div>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                         <button onClick={() => actions?.placeCrapsBet?.(gameState.crapsPoint ? 'COME' : 'PASS')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('PASS') || betTypes.has('COME') ? 'border-green-400 bg-green-500/20 text-green-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>
                                             {gameState.crapsPoint ? 'COME' : 'PASS'}
                                         </button>
@@ -623,9 +623,9 @@ export const CrapsView = React.memo<{
                                 </div>
 
                                 {/* Modern Bets */}
-                                <div>
-                                    <div className="text-[10px] text-cyan-500 font-bold tracking-widest mb-2 border-b border-gray-800 pb-1">MODERN BETS</div>
-                                    <div className="grid grid-cols-3 gap-2">
+                                <div className="rounded border border-gray-800 bg-black/40 p-2 space-y-2">
+                                    <div className="text-[10px] text-cyan-500 font-bold tracking-widest border-b border-gray-800 pb-1">MODERN BETS</div>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                         <button onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, crapsInputMode: 'YES' }))} className={`py-3 rounded border text-xs font-bold ${betTypes.has('YES') ? 'border-cyan-400 bg-cyan-500/20 text-cyan-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>YES</button>
                                         <button onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, crapsInputMode: 'NO' }))} className={`py-3 rounded border text-xs font-bold ${betTypes.has('NO') ? 'border-cyan-400 bg-cyan-500/20 text-cyan-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>NO</button>
                                         <button onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, crapsInputMode: 'NEXT' }))} className={`py-3 rounded border text-xs font-bold ${betTypes.has('NEXT') ? 'border-cyan-400 bg-cyan-500/20 text-cyan-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>NEXT</button>
@@ -634,9 +634,9 @@ export const CrapsView = React.memo<{
 
                                 {/* Bonus Bets */}
                                 {(canPlaceBonus || Object.values(bonusBetsPlaced).some(v => v)) && (
-                                    <div>
-                                        <div className="text-[10px] text-amber-500 font-bold tracking-widest mb-2 border-b border-gray-800 pb-1">BONUS BETS</div>
-                                        <div className="grid grid-cols-3 gap-2">
+                                    <div className="rounded border border-gray-800 bg-black/40 p-2 space-y-2">
+                                        <div className="text-[10px] text-amber-500 font-bold tracking-widest border-b border-gray-800 pb-1">BONUS BETS</div>
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                             {[
                                                 { key: 'FIRE', label: 'FIRE', placed: bonusBetsPlaced.fire },
                                                 { key: 'ATS_SMALL', label: 'ATS-S', placed: bonusBetsPlaced.atsSmall },
@@ -668,9 +668,11 @@ export const CrapsView = React.memo<{
                                 )}
 
                                 {/* Actions */}
-                                <div className="flex gap-2">
-                                    <button onClick={actions?.undoCrapsBet} className="flex-1 py-3 rounded border border-gray-700 bg-gray-900 text-gray-400 text-xs font-bold">UNDO</button>
-                                    <button onClick={actions?.toggleSuper} className={`flex-1 py-3 rounded border text-xs font-bold ${gameState.activeModifiers.super ? 'border-yellow-400 bg-yellow-500/20 text-yellow-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>SUPER</button>
+                                <div className="rounded border border-gray-800 bg-black/40 p-2">
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <button onClick={actions?.undoCrapsBet} className="flex-1 py-3 rounded border border-gray-700 bg-gray-900 text-gray-400 text-xs font-bold">UNDO</button>
+                                        <button onClick={actions?.toggleSuper} className={`flex-1 py-3 rounded border text-xs font-bold ${gameState.activeModifiers.super ? 'border-yellow-400 bg-yellow-500/20 text-yellow-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>SUPER</button>
+                                    </div>
                                 </div>
                             </div>
                         </MobileDrawer>
@@ -680,7 +682,7 @@ export const CrapsView = React.memo<{
                     <button
                         type="button"
                         onClick={actions?.deal}
-                        className="sm:hidden h-12 px-6 rounded border-2 font-bold text-sm tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] border-terminal-green bg-terminal-green text-black hover:bg-white hover:border-white hover:scale-105 active:scale-95"
+                        className="md:hidden h-12 px-6 rounded border-2 font-bold text-sm tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] border-terminal-green bg-terminal-green text-black hover:bg-white hover:border-white hover:scale-105 active:scale-95"
                     >
                         ROLL
                     </button>

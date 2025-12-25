@@ -36,6 +36,10 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
 anyhow = { workspace = true }
+sysinfo = { workspace = true }
+rusqlite = { version = "0.32.1", features = ["bundled"] }
+postgres = "0.19"
+url = { workspace = true }
 
 [dev-dependencies]
 nullspace-execution = { workspace = true, features = ["mocks"] }

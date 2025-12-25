@@ -11,6 +11,7 @@ export const ROULETTE_NUMBERS = [
   0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26
 ];
 export const RED_NUMBERS = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
+export const ROULETTE_DOUBLE_ZERO = 37;
 
 interface HelpContent {
   title: string;
@@ -485,21 +486,28 @@ export const formatTime = (seconds: number) => {
 };
 
 // --- ROULETTE LOGIC ---
+export const isRouletteZero = (num: number): boolean =>
+    num === 0 || num === ROULETTE_DOUBLE_ZERO;
+
+export const formatRouletteNumber = (num: number): string =>
+    num === ROULETTE_DOUBLE_ZERO ? '00' : String(num);
+
 export const getRouletteColor = (num: number): 'RED' | 'BLACK' | 'GREEN' => {
-    if (num === 0) return 'GREEN';
+    if (isRouletteZero(num)) return 'GREEN';
     return RED_NUMBERS.includes(num) ? 'RED' : 'BLACK';
 };
 
 export const getRouletteColumn = (num: number): number => {
-    if (num === 0) return 0;
+    if (isRouletteZero(num)) return 0;
     return (num - 1) % 3 + 1;
 };
 
 export const calculateRouletteExposure = (outcome: number, bets: RouletteBet[]) => {
     let pnl = 0;
     const color = getRouletteColor(outcome);
-    const column = outcome === 0 ? -1 : (outcome - 1) % 3; // 0, 1, 2 for columns
-    const dozen = outcome === 0 ? -1 : Math.floor((outcome - 1) / 12); // 0, 1, 2 for dozens
+    const isZero = isRouletteZero(outcome);
+    const column = isZero ? -1 : (outcome - 1) % 3; // 0, 1, 2 for columns
+    const dozen = isZero ? -1 : Math.floor((outcome - 1) / 12); // 0, 1, 2 for dozens
 
     bets.forEach(bet => {
         let payoutMult = 0;
@@ -507,8 +515,8 @@ export const calculateRouletteExposure = (outcome: number, bets: RouletteBet[]) 
         if (bet.type === 'STRAIGHT' && bet.target === outcome) payoutMult = 35;
         else if (bet.type === 'RED' && color === 'RED') payoutMult = 1;
         else if (bet.type === 'BLACK' && color === 'BLACK') payoutMult = 1;
-        else if (bet.type === 'ODD' && outcome !== 0 && outcome % 2 !== 0) payoutMult = 1;
-        else if (bet.type === 'EVEN' && outcome !== 0 && outcome % 2 === 0) payoutMult = 1;
+        else if (bet.type === 'ODD' && !isZero && outcome % 2 !== 0) payoutMult = 1;
+        else if (bet.type === 'EVEN' && !isZero && outcome % 2 === 0) payoutMult = 1;
         else if (bet.type === 'LOW' && outcome >= 1 && outcome <= 18) payoutMult = 1;
         else if (bet.type === 'HIGH' && outcome >= 19 && outcome <= 36) payoutMult = 1;
         else if (bet.type === 'ZERO' && outcome === 0) payoutMult = 35;
@@ -521,11 +529,11 @@ export const calculateRouletteExposure = (outcome: number, bets: RouletteBet[]) 
         else if (bet.type === 'COL_2' && column === 1) payoutMult = 2;
         else if (bet.type === 'COL_3' && column === 2) payoutMult = 2;
         // Inside bets
-        else if (bet.type === 'SPLIT_H' && outcome !== 0 && bet.target !== undefined && (outcome === bet.target || outcome === bet.target + 1)) payoutMult = 17;
-        else if (bet.type === 'SPLIT_V' && outcome !== 0 && bet.target !== undefined && (outcome === bet.target || outcome === bet.target + 3)) payoutMult = 17;
-        else if (bet.type === 'STREET' && outcome !== 0 && bet.target !== undefined && outcome >= bet.target && outcome <= bet.target + 2) payoutMult = 11;
-        else if (bet.type === 'CORNER' && outcome !== 0 && bet.target !== undefined && [bet.target, bet.target + 1, bet.target + 3, bet.target + 4].includes(outcome)) payoutMult = 8;
-        else if (bet.type === 'SIX_LINE' && outcome !== 0 && bet.target !== undefined && outcome >= bet.target && outcome <= bet.target + 5) payoutMult = 5;
+        else if (bet.type === 'SPLIT_H' && !isZero && bet.target !== undefined && (outcome === bet.target || outcome === bet.target + 1)) payoutMult = 17;
+        else if (bet.type === 'SPLIT_V' && !isZero && bet.target !== undefined && (outcome === bet.target || outcome === bet.target + 3)) payoutMult = 17;
+        else if (bet.type === 'STREET' && !isZero && bet.target !== undefined && outcome >= bet.target && outcome <= bet.target + 2) payoutMult = 11;
+        else if (bet.type === 'CORNER' && !isZero && bet.target !== undefined && [bet.target, bet.target + 1, bet.target + 3, bet.target + 4].includes(outcome)) payoutMult = 8;
+        else if (bet.type === 'SIX_LINE' && !isZero && bet.target !== undefined && outcome >= bet.target && outcome <= bet.target + 5) payoutMult = 5;
 
         if (payoutMult > 0) {
             pnl += bet.amount * payoutMult;
@@ -544,13 +552,14 @@ export const calculateRouletteExposure = (outcome: number, bets: RouletteBet[]) 
 export const resolveRouletteBets = (
     outcome: number,
     bets: RouletteBet[],
-    zeroRule: 'STANDARD' | 'LA_PARTAGE' | 'EN_PRISON' | 'EN_PRISON_DOUBLE' = 'STANDARD'
+    zeroRule: 'STANDARD' | 'LA_PARTAGE' | 'EN_PRISON' | 'EN_PRISON_DOUBLE' | 'AMERICAN' = 'STANDARD'
 ): { pnl: number; results: string[] } => {
     let pnl = 0;
     const results: string[] = [];
     const color = getRouletteColor(outcome);
-    const column = outcome === 0 ? -1 : (outcome - 1) % 3;
-    const dozen = outcome === 0 ? -1 : Math.floor((outcome - 1) / 12);
+    const isZero = isRouletteZero(outcome);
+    const column = isZero ? -1 : (outcome - 1) % 3;
+    const dozen = isZero ? -1 : Math.floor((outcome - 1) / 12);
 
     bets.forEach(bet => {
         let payoutMult = 0;
@@ -560,8 +569,8 @@ export const resolveRouletteBets = (
         if (bet.type === 'STRAIGHT' && bet.target === outcome) payoutMult = 35;
         else if (bet.type === 'RED' && color === 'RED') payoutMult = 1;
         else if (bet.type === 'BLACK' && color === 'BLACK') payoutMult = 1;
-        else if (bet.type === 'ODD' && outcome !== 0 && outcome % 2 !== 0) payoutMult = 1;
-        else if (bet.type === 'EVEN' && outcome !== 0 && outcome % 2 === 0) payoutMult = 1;
+        else if (bet.type === 'ODD' && !isZero && outcome % 2 !== 0) payoutMult = 1;
+        else if (bet.type === 'EVEN' && !isZero && outcome % 2 === 0) payoutMult = 1;
         else if (bet.type === 'LOW' && outcome >= 1 && outcome <= 18) payoutMult = 1;
         else if (bet.type === 'HIGH' && outcome >= 19 && outcome <= 36) payoutMult = 1;
         else if (bet.type === 'ZERO' && outcome === 0) payoutMult = 35;
@@ -571,14 +580,14 @@ export const resolveRouletteBets = (
         else if (bet.type === 'COL_1' && column === 0) payoutMult = 2;
         else if (bet.type === 'COL_2' && column === 1) payoutMult = 2;
         else if (bet.type === 'COL_3' && column === 2) payoutMult = 2;
-        else if (bet.type === 'SPLIT_H' && outcome !== 0 && bet.target !== undefined && (outcome === bet.target || outcome === bet.target + 1)) payoutMult = 17;
-        else if (bet.type === 'SPLIT_V' && outcome !== 0 && bet.target !== undefined && (outcome === bet.target || outcome === bet.target + 3)) payoutMult = 17;
-        else if (bet.type === 'STREET' && outcome !== 0 && bet.target !== undefined && outcome >= bet.target && outcome <= bet.target + 2) payoutMult = 11;
-        else if (bet.type === 'CORNER' && outcome !== 0 && bet.target !== undefined && [bet.target, bet.target + 1, bet.target + 3, bet.target + 4].includes(outcome)) payoutMult = 8;
-        else if (bet.type === 'SIX_LINE' && outcome !== 0 && bet.target !== undefined && outcome >= bet.target && outcome <= bet.target + 5) payoutMult = 5;
+        else if (bet.type === 'SPLIT_H' && !isZero && bet.target !== undefined && (outcome === bet.target || outcome === bet.target + 1)) payoutMult = 17;
+        else if (bet.type === 'SPLIT_V' && !isZero && bet.target !== undefined && (outcome === bet.target || outcome === bet.target + 3)) payoutMult = 17;
+        else if (bet.type === 'STREET' && !isZero && bet.target !== undefined && outcome >= bet.target && outcome <= bet.target + 2) payoutMult = 11;
+        else if (bet.type === 'CORNER' && !isZero && bet.target !== undefined && [bet.target, bet.target + 1, bet.target + 3, bet.target + 4].includes(outcome)) payoutMult = 8;
+        else if (bet.type === 'SIX_LINE' && !isZero && bet.target !== undefined && outcome >= bet.target && outcome <= bet.target + 5) payoutMult = 5;
 
         // French La Partage: half-back on zero for even-money bets.
-        if (outcome === 0 && isEvenMoney) {
+        if (isZero && isEvenMoney) {
             const loss = zeroRule === 'LA_PARTAGE' ? Math.floor(bet.amount / 2) : bet.amount;
             pnl -= loss;
             results.push(`${bet.type} ${zeroRule === 'LA_PARTAGE' ? 'HALF' : 'LOSS'} (-$${loss})`);

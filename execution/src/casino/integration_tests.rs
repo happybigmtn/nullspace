@@ -200,7 +200,7 @@ mod tests {
         init_game(&mut session, &mut rng);
 
         // Verify 5 cards dealt
-        assert_eq!(session.state_blob.len(), 6); // stage + 5 cards
+        assert_eq!(session.state_blob.len(), 7); // stage + 5 cards + rules
 
         let mut rng = GameRng::new(&seed, session.id, 1);
         // Hold all cards (0b11111)
@@ -259,7 +259,7 @@ mod tests {
         init_game(&mut session, &mut rng);
 
         // Verify fixed-size versioned state
-        assert_eq!(session.state_blob.len(), 32);
+        assert_eq!(session.state_blob.len(), 33);
 
         // Deal player cards
         let mut rng = GameRng::new(&seed, session.id, 1);

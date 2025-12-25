@@ -234,6 +234,13 @@ impl<'a, S: State> Layer<'a, S> {
                 self.handle_casino_join_tournament(public, *tournament_id)
                     .await
             }
+            Instruction::CasinoSetTournamentLimit {
+                player,
+                daily_limit,
+            } => {
+                self.handle_casino_set_tournament_limit(public, player, *daily_limit)
+                    .await
+            }
             Instruction::CasinoStartTournament {
                 tournament_id,
                 start_time_ms,
@@ -318,6 +325,7 @@ impl<'a, S: State> Layer<'a, S> {
             | Instruction::CasinoGameMove { .. }
             | Instruction::CasinoPlayerAction { .. }
             | Instruction::CasinoJoinTournament { .. }
+            | Instruction::CasinoSetTournamentLimit { .. }
             | Instruction::CasinoStartTournament { .. }
             | Instruction::CasinoEndTournament { .. } => {
                 self.apply_casino(public, instruction).await

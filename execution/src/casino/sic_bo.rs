@@ -1,7 +1,7 @@
 //! Sic Bo game implementation with multi-bet support.
 //!
 //! State blob format:
-//! [bet_count:u8] [bets:SicBoBet×count] [die1:u8]? [die2:u8]? [die3:u8]?
+//! [bet_count:u8] [bets:SicBoBet×count] [die1:u8]? [die2:u8]? [die3:u8]? [rules:u8]
 //!
 //! Each SicBoBet (10 bytes):
 //! [bet_type:u8] [number:u8] [amount:u64 BE]
@@ -13,6 +13,7 @@
 //! Action 3: Atomic batch - [3, bet_count, bets...]
 //!           Each bet is 10 bytes: [bet_type:u8, number:u8, amount:u64 BE]
 //!           Ensures all-or-nothing semantics - no partial bet states
+//! Action 4: Set rules - [4, rules:u8]
 //!
 //! Bet types:
 //! 0 = Small (4-10, 1:1) - loses on triple
@@ -35,6 +36,56 @@ use nullspace_types::casino::GameSession;
 
 /// Maximum number of bets per session.
 const MAX_BETS: usize = 20;
+
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SicBoPaytable {
+    Macau = 0,
+    AtlanticCity = 1,
+}
+
+impl Default for SicBoPaytable {
+    fn default() -> Self {
+        SicBoPaytable::Macau
+    }
+}
+
+impl TryFrom<u8> for SicBoPaytable {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(SicBoPaytable::Macau),
+            1 => Ok(SicBoPaytable::AtlanticCity),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct SicBoRules {
+    paytable: SicBoPaytable,
+}
+
+impl Default for SicBoRules {
+    fn default() -> Self {
+        Self {
+            paytable: SicBoPaytable::default(),
+        }
+    }
+}
+
+impl SicBoRules {
+    fn from_byte(value: u8) -> Option<Self> {
+        Some(Self {
+            paytable: SicBoPaytable::try_from(value & 0x01).ok()?,
+        })
+    }
+
+    fn to_byte(self) -> u8 {
+        self.paytable as u8
+    }
+}
 
 /// Sic Bo bet types.
 #[repr(u8)]
@@ -114,6 +165,7 @@ impl SicBoBet {
 struct SicBoState {
     bets: Vec<SicBoBet>,
     dice: Option<[u8; 3]>,
+    rules: SicBoRules,
 }
 
 impl SicBoState {
@@ -121,6 +173,7 @@ impl SicBoState {
         Self {
             bets: Vec::new(),
             dice: None,
+            rules: SicBoRules::default(),
         }
     }
 
@@ -158,12 +211,20 @@ impl SicBoState {
             None
         };
 
-        Some(Self { bets, dice })
+        let rules_offset = offset + if dice.is_some() { 3 } else { 0 };
+        let rules = if bytes.len() > rules_offset {
+            SicBoRules::from_byte(bytes[rules_offset])?
+        } else {
+            SicBoRules::default()
+        };
+
+        Some(Self { bets, dice, rules })
     }
 
     fn to_bytes(&self) -> Vec<u8> {
-        // Capacity: 1 (bet count) + bets (10 bytes each) + 3 (optional dice)
-        let capacity = 1 + (self.bets.len() * 10) + if self.dice.is_some() { 3 } else { 0 };
+        // Capacity: 1 (bet count) + bets (10 bytes each) + 3 (optional dice) + 1 (rules)
+        let capacity =
+            1 + (self.bets.len() * 10) + if self.dice.is_some() { 3 } else { 0 } + 1;
         let mut bytes = Vec::with_capacity(capacity);
         bytes.push(self.bets.len() as u8);
         for bet in &self.bets {
@@ -172,22 +233,36 @@ impl SicBoState {
         if let Some(dice) = self.dice {
             bytes.extend_from_slice(&dice);
         }
+        bytes.push(self.rules.to_byte());
         bytes
     }
 }
 
 /// Payout table for total bets.
-fn total_payout(total: u8) -> u64 {
-    match total {
-        3 | 18 => 180,
-        4 | 17 => 50,
-        5 | 16 => 18,
-        6 | 15 => 14,
-        7 | 14 => 12,
-        8 | 13 => 8,
-        9 | 12 => 6,
-        10 | 11 => 6,
-        _ => 0,
+fn total_payout(total: u8, paytable: SicBoPaytable) -> u64 {
+    match paytable {
+        SicBoPaytable::Macau => match total {
+            3 | 18 => 180,
+            4 | 17 => 50,
+            5 | 16 => 18,
+            6 | 15 => 14,
+            7 | 14 => 12,
+            8 | 13 => 8,
+            9 | 12 => 6,
+            10 | 11 => 6,
+            _ => 0,
+        },
+        SicBoPaytable::AtlanticCity => match total {
+            3 | 18 => 180,
+            4 | 17 => 60,
+            5 | 16 => 30,
+            6 | 15 => 17,
+            7 | 14 => 12,
+            8 | 13 => 8,
+            9 | 12 => 6,
+            10 | 11 => 6,
+            _ => 0,
+        },
     }
 }
 
@@ -216,7 +291,7 @@ fn dice_mask(dice: &[u8; 3]) -> u8 {
 }
 
 /// Calculate payout for a single bet given the dice result.
-fn calculate_bet_payout(bet: &SicBoBet, dice: &[u8; 3]) -> u64 {
+fn calculate_bet_payout(bet: &SicBoBet, dice: &[u8; 3], rules: SicBoRules) -> u64 {
     let total: u8 = dice.iter().sum();
     let triple = is_triple(dice);
 
@@ -251,28 +326,40 @@ fn calculate_bet_payout(bet: &SicBoBet, dice: &[u8; 3]) -> u64 {
         }
         BetType::SpecificTriple => {
             if triple && dice[0] == bet.number {
-                bet.amount.saturating_mul(151) // 150:1 -> 151x
+                let payout: u64 = match rules.paytable {
+                    SicBoPaytable::Macau => 150,
+                    SicBoPaytable::AtlanticCity => 180,
+                };
+                bet.amount.saturating_mul(payout.saturating_add(1))
             } else {
                 0
             }
         }
         BetType::AnyTriple => {
             if triple {
-                bet.amount.saturating_mul(25) // 24:1 -> 25x
+                let payout: u64 = match rules.paytable {
+                    SicBoPaytable::Macau => 24,
+                    SicBoPaytable::AtlanticCity => 30,
+                };
+                bet.amount.saturating_mul(payout.saturating_add(1))
             } else {
                 0
             }
         }
         BetType::SpecificDouble => {
             if count_number(dice, bet.number) >= 2 {
-                bet.amount.saturating_mul(9) // 8:1 -> 9x
+                let payout: u64 = match rules.paytable {
+                    SicBoPaytable::Macau => 8,
+                    SicBoPaytable::AtlanticCity => 10,
+                };
+                bet.amount.saturating_mul(payout.saturating_add(1))
             } else {
                 0
             }
         }
         BetType::Total => {
             if total == bet.number {
-                bet.amount.saturating_mul(total_payout(bet.number) + 1)
+                bet.amount.saturating_mul(total_payout(bet.number, rules.paytable) + 1)
             } else {
                 0
             }
@@ -357,7 +444,7 @@ fn generate_sicbo_logs(
         .bets
         .iter()
         .map(|bet| {
-            let payout = calculate_bet_payout(bet, dice);
+            let payout = calculate_bet_payout(bet, dice, state.rules);
             let won = payout > 0;
             let bet_type_str = match bet.bet_type {
                 BetType::Small => "SMALL",
@@ -480,6 +567,20 @@ impl CasinoGame for SicBo {
                 })
             }
 
+            // Action 4: Set rules
+            4 => {
+                if payload.len() != 2 {
+                    return Err(GameError::InvalidPayload);
+                }
+                if state.dice.is_some() {
+                    return Err(GameError::InvalidMove);
+                }
+                let rules = SicBoRules::from_byte(payload[1]).ok_or(GameError::InvalidPayload)?;
+                state.rules = rules;
+                session.state_blob = state.to_bytes();
+                Ok(GameResult::Continue(vec![]))
+            }
+
             // Action 1: Roll dice and resolve all bets
             1 => {
                 if state.bets.is_empty() {
@@ -495,7 +596,7 @@ impl CasinoGame for SicBo {
                 let total_winnings: u64 = state
                     .bets
                     .iter()
-                    .map(|bet| calculate_bet_payout(bet, &dice))
+                    .map(|bet| calculate_bet_payout(bet, &dice, state.rules))
                     .sum();
 
                 session.state_blob = state.to_bytes();
@@ -611,7 +712,7 @@ impl CasinoGame for SicBo {
                 let total_winnings: u64 = state
                     .bets
                     .iter()
-                    .map(|bet| calculate_bet_payout(bet, &dice))
+                    .map(|bet| calculate_bet_payout(bet, &dice, state.rules))
                     .sum();
 
                 session.state_blob = state.to_bytes();
@@ -697,13 +798,31 @@ mod tests {
 
     #[test]
     fn test_total_payout() {
-        assert_eq!(total_payout(3), 180);
-        assert_eq!(total_payout(4), 50);
-        assert_eq!(total_payout(17), 50);
-        assert_eq!(total_payout(18), 180);
-        assert_eq!(total_payout(5), 18);
-        assert_eq!(total_payout(10), 6);
-        assert_eq!(total_payout(11), 6);
+        assert_eq!(total_payout(3, SicBoPaytable::Macau), 180);
+        assert_eq!(total_payout(4, SicBoPaytable::Macau), 50);
+        assert_eq!(total_payout(17, SicBoPaytable::Macau), 50);
+        assert_eq!(total_payout(18, SicBoPaytable::Macau), 180);
+        assert_eq!(total_payout(5, SicBoPaytable::Macau), 18);
+        assert_eq!(total_payout(10, SicBoPaytable::Macau), 6);
+        assert_eq!(total_payout(11, SicBoPaytable::Macau), 6);
+        assert_eq!(total_payout(4, SicBoPaytable::AtlanticCity), 60);
+        assert_eq!(total_payout(6, SicBoPaytable::AtlanticCity), 17);
+    }
+
+    #[test]
+    fn test_atlantic_city_triple_payouts() {
+        let rules = SicBoRules {
+            paytable: SicBoPaytable::AtlanticCity,
+        };
+        let bet = SicBoBet {
+            bet_type: BetType::AnyTriple,
+            number: 0,
+            amount: 10,
+        };
+        assert_eq!(
+            calculate_bet_payout(&bet, &[3, 3, 3], rules),
+            10 * 31
+        );
     }
 
     #[test]
@@ -716,14 +835,32 @@ mod tests {
             amount: 10,
         };
 
-        assert_eq!(calculate_bet_payout(&bet, &[1, 2, 5]), 10 * 6);
-        assert_eq!(calculate_bet_payout(&bet, &[2, 2, 5]), 10 * 6);
-        assert_eq!(calculate_bet_payout(&bet, &[2, 5, 5]), 10 * 6);
+        assert_eq!(
+            calculate_bet_payout(&bet, &[1, 2, 5], SicBoRules::default()),
+            10 * 6
+        );
+        assert_eq!(
+            calculate_bet_payout(&bet, &[2, 2, 5], SicBoRules::default()),
+            10 * 6
+        );
+        assert_eq!(
+            calculate_bet_payout(&bet, &[2, 5, 5], SicBoRules::default()),
+            10 * 6
+        );
 
         // Missing one of the faces loses.
-        assert_eq!(calculate_bet_payout(&bet, &[2, 2, 2]), 0);
-        assert_eq!(calculate_bet_payout(&bet, &[5, 5, 5]), 0);
-        assert_eq!(calculate_bet_payout(&bet, &[1, 3, 4]), 0);
+        assert_eq!(
+            calculate_bet_payout(&bet, &[2, 2, 2], SicBoRules::default()),
+            0
+        );
+        assert_eq!(
+            calculate_bet_payout(&bet, &[5, 5, 5], SicBoRules::default()),
+            0
+        );
+        assert_eq!(
+            calculate_bet_payout(&bet, &[1, 3, 4], SicBoRules::default()),
+            0
+        );
     }
 
     #[test]
@@ -734,10 +871,22 @@ mod tests {
             amount: 10,
         };
 
-        assert_eq!(calculate_bet_payout(&bet, &[1, 3, 5]), 10 * 31);
-        assert_eq!(calculate_bet_payout(&bet, &[5, 1, 3]), 10 * 31);
-        assert_eq!(calculate_bet_payout(&bet, &[1, 1, 5]), 0);
-        assert_eq!(calculate_bet_payout(&bet, &[1, 3, 6]), 0);
+        assert_eq!(
+            calculate_bet_payout(&bet, &[1, 3, 5], SicBoRules::default()),
+            10 * 31
+        );
+        assert_eq!(
+            calculate_bet_payout(&bet, &[5, 1, 3], SicBoRules::default()),
+            10 * 31
+        );
+        assert_eq!(
+            calculate_bet_payout(&bet, &[1, 1, 5], SicBoRules::default()),
+            0
+        );
+        assert_eq!(
+            calculate_bet_payout(&bet, &[1, 3, 6], SicBoRules::default()),
+            0
+        );
     }
 
     #[test]
@@ -748,10 +897,22 @@ mod tests {
             amount: 10,
         };
 
-        assert_eq!(calculate_bet_payout(&bet, &[2, 2, 4]), 10 * 51);
-        assert_eq!(calculate_bet_payout(&bet, &[2, 4, 2]), 10 * 51);
-        assert_eq!(calculate_bet_payout(&bet, &[2, 4, 4]), 0);
-        assert_eq!(calculate_bet_payout(&bet, &[2, 2, 2]), 0);
+        assert_eq!(
+            calculate_bet_payout(&bet, &[2, 2, 4], SicBoRules::default()),
+            10 * 51
+        );
+        assert_eq!(
+            calculate_bet_payout(&bet, &[2, 4, 2], SicBoRules::default()),
+            10 * 51
+        );
+        assert_eq!(
+            calculate_bet_payout(&bet, &[2, 4, 4], SicBoRules::default()),
+            0
+        );
+        assert_eq!(
+            calculate_bet_payout(&bet, &[2, 2, 2], SicBoRules::default()),
+            0
+        );
     }
 
     #[test]
@@ -762,10 +923,22 @@ mod tests {
             amount: 10,
         };
 
-        assert_eq!(calculate_bet_payout(&bet, &[1, 3, 4]), 10 * 8);
-        assert_eq!(calculate_bet_payout(&bet, &[6, 4, 3]), 10 * 8);
-        assert_eq!(calculate_bet_payout(&bet, &[1, 3, 5]), 0);
-        assert_eq!(calculate_bet_payout(&bet, &[1, 1, 4]), 0);
+        assert_eq!(
+            calculate_bet_payout(&bet, &[1, 3, 4], SicBoRules::default()),
+            10 * 8
+        );
+        assert_eq!(
+            calculate_bet_payout(&bet, &[6, 4, 3], SicBoRules::default()),
+            10 * 8
+        );
+        assert_eq!(
+            calculate_bet_payout(&bet, &[1, 3, 5], SicBoRules::default()),
+            0
+        );
+        assert_eq!(
+            calculate_bet_payout(&bet, &[1, 1, 4], SicBoRules::default()),
+            0
+        );
     }
 
     #[test]

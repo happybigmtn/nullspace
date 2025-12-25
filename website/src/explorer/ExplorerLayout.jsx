@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, Outlet, useNavigate } from 'react-router-dom';
 import { searchExplorer } from '../api/explorerClient';
+import { AuthStatusPill } from '../components/AuthStatusPill';
 
 export default function ExplorerLayout() {
   const [query, setQuery] = useState('');
@@ -31,7 +32,7 @@ export default function ExplorerLayout() {
 
   return (
     <div className="min-h-screen bg-terminal-black text-white">
-      <header className="border-b border-gray-800 px-4 py-3 flex items-center justify-between">
+      <header className="border-b border-gray-800 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <Link to="/" className="text-sm text-terminal-green hover:underline">
             ← Casino
@@ -48,7 +49,9 @@ export default function ExplorerLayout() {
             </Link>
           </nav>
         </div>
-        <form onSubmit={onSubmit} className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-3 justify-end">
+          <AuthStatusPill className="w-full sm:w-auto" />
+          <form onSubmit={onSubmit} className="flex items-center gap-2">
           <input
             type="text"
             value={query}
@@ -64,7 +67,8 @@ export default function ExplorerLayout() {
             {isSearching ? 'Searching...' : 'Search'}
           </button>
           {error && <span className="text-red-400 text-xs ml-2">{error}</span>}
-        </form>
+          </form>
+        </div>
       </header>
       <main className="p-4">
         <Outlet />

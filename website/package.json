@@ -7,6 +7,7 @@
     "build": "npm run copy:data && npm run build:wasm && vite build",
     "build:tmp": "npm run copy:data && npm run build:wasm && vite build --outDir /tmp/nullsociety-dist",
     "preview": "npm run build && vite preview",
+    "convex:dev": "convex dev",
     "build:wasm": "cd wasm && wasm-pack build --target web --out-dir pkg",
     "build:wasm-test": "cd wasm && wasm-pack build --target web --out-dir pkg -- --features testing",
     "copy:data": "mkdir -p public && cp ../economy_log.json public/ || echo 'No economy log found, skipping copy'",
@@ -18,6 +19,8 @@
     "test:unit": "vitest run",
     "test:unit:watch": "vitest",
     "smoke": "node scripts/smoke-playwright.mjs",
+    "e2e:auth": "node scripts/e2e-auth-billing.mjs",
+    "e2e:layout": "node scripts/layout-smoke.mjs",
     "latency-test": "node scripts/latency-test.mjs",
     "latency-test:headed": "HEADED=1 node scripts/latency-test.mjs"
   },
@@ -50,7 +53,9 @@
     "three": "^0.182.0",
     "typescript": "^5.0.0",
     "vite": "^6.3.5",
-    "zustand": "^5.0.9"
+    "zustand": "^5.0.9",
+    "convex": "^1.31.2",
+    "stripe": "^14.0.0"
   },
   "devDependencies": {
     "jsdom": "^26.1.0",

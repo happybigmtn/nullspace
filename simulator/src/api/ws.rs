@@ -1,40 +1,54 @@
 use axum::{
-    extract::{ws::WebSocketUpgrade, State as AxumState},
+    extract::{
+        ws::Message, ws::WebSocketUpgrade, ConnectInfo, State as AxumState,
+    },
     http::{header::ORIGIN, HeaderMap, StatusCode},
     response::IntoResponse,
 };
 use commonware_codec::{DecodeExt, Encode};
-use commonware_cryptography::{ed25519::PublicKey, sha256::Digest};
-use commonware_storage::adb::{create_multi_proof, create_proof_store_from_digests};
-use commonware_storage::store::operation::Keyless;
 use commonware_utils::from_hex;
 use futures::{SinkExt, StreamExt};
 use nullspace_types::{
-    api::{Events, FilteredEvents, Update, UpdatesFilter},
-    execution::{Event, Output},
+    api::{Update, UpdatesFilter},
 };
 use std::sync::Arc;
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, mpsc};
+use tokio::time::{timeout, Duration};
 
-use crate::{InternalUpdate, Simulator};
+use crate::{InternalUpdate, Simulator, WsConnectionGuard, WsConnectionRejection};
+use crate::state::EncodedUpdate;
+
+const WS_SEND_TIMEOUT: Duration = Duration::from_secs(2);
+
+#[derive(Clone, Copy)]
+enum WsStreamKind {
+    Updates,
+    Mempool,
+}
+
+type OutboundSender = mpsc::Sender<Message>;
+type OutboundReceiver = mpsc::Receiver<Message>;
+
+enum OutboundSendError {
+    Closed,
+    Full,
+}
+
+fn outbound_channel(capacity: usize) -> (OutboundSender, OutboundReceiver) {
+    mpsc::channel(capacity)
+}
 
 /// Validates the WebSocket Origin header against allowed origins.
 /// Returns true if the origin is allowed, false otherwise.
 ///
-/// If ALLOWED_WS_ORIGINS env var is not set, all origins are allowed (dev mode).
-/// If set, it should be a comma-separated list of allowed origins.
+/// When `ALLOWED_WS_ORIGINS` is empty, all browser origins are rejected.
+/// `ALLOW_WS_NO_ORIGIN` can be set to permit non-browser clients.
 fn validate_origin(headers: &HeaderMap) -> bool {
-    let allowed_origins = std::env::var("ALLOWED_WS_ORIGINS").ok();
-
-    // If no allowed origins configured, allow all (dev mode)
-    let Some(allowed) = allowed_origins else {
-        return true;
-    };
-
-    // If allowed origins is empty string, allow all
-    if allowed.is_empty() {
-        return true;
-    }
+    let allowed = std::env::var("ALLOWED_WS_ORIGINS").unwrap_or_default();
+    let allow_no_origin = matches!(
+        std::env::var("ALLOW_WS_NO_ORIGIN").as_deref(),
+        Ok("1") | Ok("true") | Ok("TRUE") | Ok("yes") | Ok("YES")
+    );
 
     // Get origin from headers
     let origin = match headers.get(ORIGIN) {
@@ -47,14 +61,17 @@ fn validate_origin(headers: &HeaderMap) -> bool {
         },
         None => {
             // No origin header - could be same-origin or non-browser client
-            // In production, you might want to reject these
             tracing::debug!("No Origin header in WebSocket request");
-            return true;
+            return allow_no_origin;
         }
     };
 
     // Check if origin is in allowed list
-    let allowed_list: Vec<&str> = allowed.split(',').map(|s| s.trim()).collect();
+    let allowed_list: Vec<&str> = allowed
+        .split(',')
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .collect();
     if allowed_list.contains(&origin) {
         tracing::debug!("WebSocket origin validated: {}", origin);
         return true;
@@ -68,6 +85,7 @@ pub(super) async fn updates_ws(
     AxumState(simulator): AxumState<Arc<Simulator>>,
     axum::extract::Path(filter): axum::extract::Path<String>,
     headers: HeaderMap,
+    ConnectInfo(addr): ConnectInfo<std::net::SocketAddr>,
     ws: WebSocketUpgrade,
 ) -> impl IntoResponse {
     // Validate origin
@@ -75,13 +93,28 @@ pub(super) async fn updates_ws(
         return (StatusCode::FORBIDDEN, "Origin not allowed").into_response();
     }
 
-    ws.on_upgrade(move |socket| handle_updates_ws(socket, simulator, filter))
+    let guard = match simulator.try_acquire_ws_connection(addr.ip()) {
+        Ok(guard) => guard,
+        Err(reason) => {
+            let message = match reason {
+                WsConnectionRejection::GlobalLimit => "WebSocket connection limit reached",
+                WsConnectionRejection::PerIpLimit => "WebSocket per-IP limit reached",
+            };
+            return (StatusCode::TOO_MANY_REQUESTS, message).into_response();
+        }
+    };
+
+    let max_message_bytes = simulator.config.ws_max_message_bytes();
+    ws.max_message_size(max_message_bytes)
+        .max_frame_size(max_message_bytes)
+        .on_upgrade(move |socket| handle_updates_ws(socket, simulator, filter, guard))
         .into_response()
 }
 
 pub(super) async fn mempool_ws(
     AxumState(simulator): AxumState<Arc<Simulator>>,
     headers: HeaderMap,
+    ConnectInfo(addr): ConnectInfo<std::net::SocketAddr>,
     ws: WebSocketUpgrade,
 ) -> impl IntoResponse {
     // Validate origin
@@ -89,7 +122,21 @@ pub(super) async fn mempool_ws(
         return (StatusCode::FORBIDDEN, "Origin not allowed").into_response();
     }
 
-    ws.on_upgrade(move |socket| handle_mempool_ws(socket, simulator))
+    let guard = match simulator.try_acquire_ws_connection(addr.ip()) {
+        Ok(guard) => guard,
+        Err(reason) => {
+            let message = match reason {
+                WsConnectionRejection::GlobalLimit => "WebSocket connection limit reached",
+                WsConnectionRejection::PerIpLimit => "WebSocket per-IP limit reached",
+            };
+            return (StatusCode::TOO_MANY_REQUESTS, message).into_response();
+        }
+    };
+
+    let max_message_bytes = simulator.config.ws_max_message_bytes();
+    ws.max_message_size(max_message_bytes)
+        .max_frame_size(max_message_bytes)
+        .on_upgrade(move |socket| handle_mempool_ws(socket, simulator, guard))
         .into_response()
 }
 
@@ -97,17 +144,16 @@ async fn handle_updates_ws(
     socket: axum::extract::ws::WebSocket,
     simulator: Arc<Simulator>,
     filter: String,
+    _guard: WsConnectionGuard,
 ) {
     tracing::info!("Updates WebSocket connected, filter: {}", filter);
     let (mut sender, mut receiver) = socket.split();
-    let mut updates = simulator.update_subscriber();
 
     // Parse filter from URL path using UpdatesFilter
     let filter = match from_hex(&filter) {
         Some(filter) => filter,
         None => {
             tracing::warn!("Failed to parse filter hex");
-            let _ = sender.close().await;
             return;
         }
     };
@@ -115,11 +161,33 @@ async fn handle_updates_ws(
         Ok(subscription) => subscription,
         Err(e) => {
             tracing::warn!("Failed to decode UpdatesFilter: {:?}", e);
-            let _ = sender.close().await;
             return;
         }
     };
     tracing::info!("UpdatesFilter parsed successfully: {:?}", subscription);
+
+    let (mut updates, _subscription_guard) =
+        simulator.tracked_update_subscriber(subscription.clone());
+    let (out_tx, mut out_rx) = outbound_channel(simulator.config.ws_outbound_capacity());
+    let writer_simulator = simulator.clone();
+    let writer_handle = tokio::spawn(async move {
+        while let Some(msg) = out_rx.recv().await {
+            match timeout(WS_SEND_TIMEOUT, sender.send(msg)).await {
+                Ok(Ok(())) => {}
+                Ok(Err(_)) => {
+                    record_send_error(&writer_simulator, WsStreamKind::Updates);
+                    tracing::warn!("Failed to send update, client disconnected");
+                    break;
+                }
+                Err(_) => {
+                    record_send_timeout(&writer_simulator, WsStreamKind::Updates);
+                    tracing::warn!("WebSocket send timed out, closing connection");
+                    break;
+                }
+            }
+        }
+        let _ = sender.close().await;
+    });
 
     // Send updates based on subscription
     loop {
@@ -132,8 +200,14 @@ async fn handle_updates_ws(
                         break;
                     }
                     Some(Ok(axum::extract::ws::Message::Ping(data))) => {
-                        if sender.send(axum::extract::ws::Message::Pong(data)).await.is_err() {
-                            tracing::warn!("Failed to send pong, client disconnected");
+                        let result = enqueue_message(
+                            &out_tx,
+                            Message::Pong(data),
+                            &simulator,
+                            WsStreamKind::Updates,
+                        );
+                        if result.is_err() {
+                            tracing::warn!("Failed to enqueue pong, closing connection");
                             break;
                         }
                     }
@@ -157,16 +231,30 @@ async fn handle_updates_ws(
                         let update = match internal_update {
                             InternalUpdate::Seed(seed) => {
                                 tracing::debug!("Broadcasting Seed update");
-                                Some(Update::Seed(seed))
+                                match &subscription {
+                                    UpdatesFilter::Session(_) => None,
+                                    _ => Some(EncodedUpdate::new(Update::Seed(seed))),
+                                }
                             }
-                            InternalUpdate::Events(events, digests) => match &subscription {
+                            InternalUpdate::Events(indexed) => match &subscription {
                                 UpdatesFilter::All => {
                                     tracing::debug!("Broadcasting Events update (All filter)");
-                                    Some(Update::Events(events))
+                                    indexed
+                                        .full_update
+                                        .clone()
+                                        .or_else(|| {
+                                            Some(EncodedUpdate::new(Update::Events(
+                                                indexed.events.as_ref().clone(),
+                                            )))
+                                        })
                                 }
                                 UpdatesFilter::Account(account) => {
-                                    tracing::debug!("Filtering Events for account");
-                                    filter_updates_for_account(events, digests, account).await
+                                    tracing::debug!("Fetching indexed events for account");
+                                    indexed.update_for_account(account)
+                                }
+                                UpdatesFilter::Session(session_id) => {
+                                    tracing::debug!("Fetching indexed events for session");
+                                    indexed.update_for_session(*session_id)
                                 }
                             },
                         };
@@ -177,12 +265,14 @@ async fn handle_updates_ws(
 
                         // Send update
                         tracing::info!("Sending update to WebSocket client");
-                        if sender
-                            .send(axum::extract::ws::Message::Binary(update.encode().to_vec()))
-                            .await
-                            .is_err()
-                        {
-                            tracing::warn!("Failed to send update, client disconnected");
+                        let result = enqueue_message(
+                            &out_tx,
+                            Message::Binary(update.bytes.as_ref().clone()),
+                            &simulator,
+                            WsStreamKind::Updates,
+                        );
+                        if result.is_err() {
+                            tracing::warn!("Failed to enqueue update, closing connection");
                             break;
                         }
                     }
@@ -191,6 +281,7 @@ async fn handle_updates_ws(
                             "WebSocket client lagged behind, skipped {} messages. Consider increasing buffer size.",
                             skipped
                         );
+                        record_lagged(&simulator, WsStreamKind::Updates, skipped as u64);
                         // Continue receiving - client may catch up
                     }
                     Err(broadcast::error::RecvError::Closed) => {
@@ -202,13 +293,38 @@ async fn handle_updates_ws(
         }
     }
     tracing::info!("Updates WebSocket handler exiting");
-    let _ = sender.close().await;
+    drop(out_tx);
+    let _ = writer_handle.await;
 }
 
-async fn handle_mempool_ws(socket: axum::extract::ws::WebSocket, simulator: Arc<Simulator>) {
+async fn handle_mempool_ws(
+    socket: axum::extract::ws::WebSocket,
+    simulator: Arc<Simulator>,
+    _guard: WsConnectionGuard,
+) {
     tracing::info!("Mempool WebSocket connected");
     let (mut sender, mut receiver) = socket.split();
     let mut txs = simulator.mempool_subscriber();
+    let (out_tx, mut out_rx) = outbound_channel(simulator.config.ws_outbound_capacity());
+    let writer_simulator = simulator.clone();
+    let writer_handle = tokio::spawn(async move {
+        while let Some(msg) = out_rx.recv().await {
+            match timeout(WS_SEND_TIMEOUT, sender.send(msg)).await {
+                Ok(Ok(())) => {}
+                Ok(Err(_)) => {
+                    record_send_error(&writer_simulator, WsStreamKind::Mempool);
+                    tracing::warn!("Failed to send mempool update, client disconnected");
+                    break;
+                }
+                Err(_) => {
+                    record_send_timeout(&writer_simulator, WsStreamKind::Mempool);
+                    tracing::warn!("Mempool WebSocket send timed out, closing connection");
+                    break;
+                }
+            }
+        }
+        let _ = sender.close().await;
+    });
 
     loop {
         tokio::select! {
@@ -220,8 +336,14 @@ async fn handle_mempool_ws(socket: axum::extract::ws::WebSocket, simulator: Arc<
                         break;
                     }
                     Some(Ok(axum::extract::ws::Message::Ping(data))) => {
-                        if sender.send(axum::extract::ws::Message::Pong(data)).await.is_err() {
-                            tracing::warn!("Failed to send pong, client disconnected");
+                        let result = enqueue_message(
+                            &out_tx,
+                            Message::Pong(data),
+                            &simulator,
+                            WsStreamKind::Mempool,
+                        );
+                        if result.is_err() {
+                            tracing::warn!("Failed to enqueue pong, closing connection");
                             break;
                         }
                     }
@@ -240,12 +362,14 @@ async fn handle_mempool_ws(socket: axum::extract::ws::WebSocket, simulator: Arc<
             tx_result = txs.recv() => {
                 match tx_result {
                     Ok(tx) => {
-                        if sender
-                            .send(axum::extract::ws::Message::Binary(tx.encode().to_vec()))
-                            .await
-                            .is_err()
-                        {
-                            tracing::warn!("Failed to send mempool update, client disconnected");
+                        let result = enqueue_message(
+                            &out_tx,
+                            Message::Binary(tx.encode().to_vec()),
+                            &simulator,
+                            WsStreamKind::Mempool,
+                        );
+                        if result.is_err() {
+                            tracing::warn!("Failed to enqueue mempool update, closing connection");
                             break;
                         }
                     }
@@ -254,6 +378,7 @@ async fn handle_mempool_ws(socket: axum::extract::ws::WebSocket, simulator: Arc<
                             "Mempool WebSocket client lagged behind, skipped {} messages. Consider increasing buffer size.",
                             skipped
                         );
+                        record_lagged(&simulator, WsStreamKind::Mempool, skipped as u64);
                         // Continue receiving - client may catch up
                     }
                     Err(broadcast::error::RecvError::Closed) => {
@@ -265,88 +390,50 @@ async fn handle_mempool_ws(socket: axum::extract::ws::WebSocket, simulator: Arc<
         }
     }
     tracing::info!("Mempool WebSocket handler exiting");
-    let _ = sender.close().await;
+    drop(out_tx);
+    let _ = writer_handle.await;
 }
 
-pub(crate) async fn filter_updates_for_account(
-    events: Events,
-    digests: Vec<(u64, Digest)>,
-    account: &PublicKey,
-) -> Option<Update> {
-    // Determine which operations to include
-    let mut filtered_ops = Vec::new();
-    for (i, op) in events.events_proof_ops.into_iter().enumerate() {
-        let should_include = match &op {
-            Keyless::Append(output) => match output {
-                Output::Event(event) => is_event_relevant_to_account(event, account),
-                Output::Transaction(tx) => tx.public == *account,
-                _ => false,
-            },
-            Keyless::Commit(_) => false,
-        };
-        if should_include {
-            // Convert index to absolute location
-            filtered_ops.push((events.progress.events_start_op + i as u64, op));
-        }
+fn record_lagged(simulator: &Simulator, kind: WsStreamKind, skipped: u64) {
+    match kind {
+        WsStreamKind::Updates => simulator.ws_metrics().add_updates_lagged(skipped),
+        WsStreamKind::Mempool => simulator.ws_metrics().add_mempool_lagged(skipped),
     }
-
-    // If no relevant events, skip this update entirely
-    if filtered_ops.is_empty() {
-        return None;
-    }
-
-    // Create a ProofStore directly from the pre-verified digests
-    // Use the size from the original proof, not the operation count
-    let proof_store = create_proof_store_from_digests(&events.events_proof, digests);
-
-    // Generate a filtered proof for only the relevant locations
-    let locations_to_include = filtered_ops.iter().map(|(loc, _)| *loc).collect::<Vec<_>>();
-    let filtered_proof = match create_multi_proof(&proof_store, &locations_to_include).await {
-        Ok(proof) => proof,
-        Err(e) => {
-            tracing::error!("Failed to generate filtered proof: {:?}", e);
-            return None;
-        }
-    };
-    Some(Update::FilteredEvents(FilteredEvents {
-        progress: events.progress,
-        certificate: events.certificate,
-        events_proof: filtered_proof,
-        events_proof_ops: filtered_ops,
-    }))
 }
 
-fn is_event_relevant_to_account(event: &Event, account: &PublicKey) -> bool {
-    match event {
-        // Casino events - check if player matches
-        Event::CasinoPlayerRegistered { player, .. } => player == account,
-        Event::CasinoDeposited { player, .. } => player == account,
-        Event::CasinoGameStarted { player, .. } => player == account,
-        Event::CasinoGameMoved { .. } => true, // Broadcast all moves - clients filter by session_id
-        Event::CasinoGameCompleted { player, .. } => player == account,
-        Event::CasinoLeaderboardUpdated { .. } => true, // Leaderboard updates are public
-        Event::CasinoError { player, .. } => player == account,
-        Event::PlayerModifierToggled { player, .. } => player == account,
-        // Tournament events
-        Event::TournamentStarted { .. } => true, // Tournament start is public
-        Event::PlayerJoined { player, .. } => player == account,
-        Event::TournamentPhaseChanged { .. } => true, // Phase changes are public
-        Event::TournamentEnded { rankings, .. } => {
-            // Check if account is in the rankings
-            rankings.iter().any(|(player, _)| player == account)
+fn record_queue_full(simulator: &Simulator, kind: WsStreamKind) {
+    match kind {
+        WsStreamKind::Updates => simulator.ws_metrics().inc_updates_queue_full(),
+        WsStreamKind::Mempool => simulator.ws_metrics().inc_mempool_queue_full(),
+    }
+}
+
+fn record_send_error(simulator: &Simulator, kind: WsStreamKind) {
+    match kind {
+        WsStreamKind::Updates => simulator.ws_metrics().inc_updates_send_error(),
+        WsStreamKind::Mempool => simulator.ws_metrics().inc_mempool_send_error(),
+    }
+}
+
+fn record_send_timeout(simulator: &Simulator, kind: WsStreamKind) {
+    match kind {
+        WsStreamKind::Updates => simulator.ws_metrics().inc_updates_send_timeout(),
+        WsStreamKind::Mempool => simulator.ws_metrics().inc_mempool_send_timeout(),
+    }
+}
+
+fn enqueue_message(
+    sender: &OutboundSender,
+    message: Message,
+    simulator: &Simulator,
+    kind: WsStreamKind,
+) -> Result<(), OutboundSendError> {
+    match sender.try_send(message) {
+        Ok(()) => Ok(()),
+        Err(mpsc::error::TrySendError::Full(_)) => {
+            record_queue_full(simulator, kind);
+            Err(OutboundSendError::Full)
         }
-        // Liquidity / Vault events
-        Event::VaultCreated { player } => player == account,
-        Event::CollateralDeposited { player, .. } => player == account,
-        Event::VusdtBorrowed { player, .. } => player == account,
-        Event::VusdtRepaid { player, .. } => player == account,
-        Event::AmmSwapped { player, .. } => player == account,
-        Event::LiquidityAdded { player, .. } => player == account,
-        Event::LiquidityRemoved { player, .. } => player == account,
-        // Staking events
-        Event::Staked { player, .. } => player == account,
-        Event::Unstaked { player, .. } => player == account,
-        Event::RewardsClaimed { player, .. } => player == account,
-        Event::EpochProcessed { .. } => true,
+        Err(mpsc::error::TrySendError::Closed(_)) => Err(OutboundSendError::Closed),
     }
 }

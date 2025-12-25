@@ -125,6 +125,11 @@ export class WasmWrapper {
     return this.wasm.encode_updates_filter_account(publicKeyBytes);
   }
 
+  // Encode UpdatesFilter for a specific session
+  encodeUpdatesFilterSession(sessionId) {
+    return this.wasm.encode_updates_filter_session(sessionId);
+  }
+
   // Hash a key for state queries
   hashKey(keyBytes) {
     return this.wasm.hash_key(keyBytes);
@@ -345,6 +350,20 @@ export class WasmWrapper {
       this.keypair,
       BigInt(nonce),
       BigInt(tournamentId)
+    );
+    return tx.encode();
+  }
+
+  // Admin: create a casino set tournament limit transaction
+  createCasinoSetTournamentLimitTransaction(nonce, playerPublicKeyBytes, dailyLimit) {
+    if (!this.keypair) {
+      throw new Error('Keypair not initialized');
+    }
+    const tx = this.wasm.Transaction.casino_set_tournament_limit(
+      this.keypair,
+      BigInt(nonce),
+      playerPublicKeyBytes,
+      dailyLimit
     );
     return tx.encode();
   }

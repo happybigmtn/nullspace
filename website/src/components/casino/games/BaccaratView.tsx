@@ -5,6 +5,7 @@ import { getBaccaratValue } from '../../../utils/gameUtils';
 import { Hand } from '../GameComponents';
 import { cardIdToString } from '../../../utils/gameStateParser';
 import { MobileDrawer } from '../MobileDrawer';
+import { SideBetMenu } from './SideBetMenu';
 
 type BetGroup = 'NONE' | 'BONUS';
 
@@ -78,10 +79,9 @@ export const BaccaratView = React.memo<{
     const playerColor = isPlayerSelected ? 'text-terminal-green' : 'text-terminal-accent';
     const bankerColor = isBankerSelected ? 'text-terminal-green' : 'text-terminal-accent';
 
-    // Check if any bonus bets are placed
-    const anyBonusPlaced = useMemo(() =>
-        gameState.baccaratBets.length > 0,
-        [gameState.baccaratBets]
+    const allBonusPlaced = useMemo(
+        () => Object.values(sideBetAmounts).every(amount => amount > 0),
+        [sideBetAmounts]
     );
 
     // Execute bet action
@@ -139,34 +139,11 @@ export const BaccaratView = React.memo<{
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [activeGroup, executeBetAction]);
 
-    // BetButton component for popup
-    const BetButton: React.FC<{
-        bet: { key: string; action: string; label: string };
-    }> = ({ bet }) => {
-        const isActive = sideBetAmounts[bet.action as keyof typeof sideBetAmounts] > 0;
-
-        return (
-            <button
-                type="button"
-                onClick={() => executeBetAction(bet.action)}
-                className={`
-                    relative flex flex-col items-center justify-center
-                    h-14 px-3 min-w-[60px]
-                    border rounded transition-all duration-150
-                    font-mono text-xs tracking-wider
-                    ${isActive
-                        ? 'border-amber-400 bg-amber-500/20 text-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.3)]'
-                        : 'border-gray-700 bg-gray-900/80 text-gray-300 hover:border-amber-600 hover:text-amber-400 hover:bg-amber-900/20'
-                    }
-                `}
-            >
-                <span className="font-bold">{bet.label}</span>
-                <span className={`text-[9px] mt-0.5 ${isActive ? 'text-amber-500' : 'text-gray-600'}`}>
-                    [{bet.key}]
-                </span>
-            </button>
-        );
-    };
+    const isBonusActive = useCallback((action: string) => {
+        if (action === 'ALL_BONUS') return allBonusPlaced;
+        const key = action as keyof typeof sideBetAmounts;
+        return (sideBetAmounts[key] ?? 0) > 0;
+    }, [allBonusPlaced, sideBetAmounts]);
 
     const getWinnerClass = (type: string) => {
         if (gameState.stage !== 'RESULT') return 'border-gray-800 bg-black/40';
@@ -198,7 +175,7 @@ export const BaccaratView = React.memo<{
 
     return (
         <>
-            <div className="flex-1 w-full flex flex-col items-center justify-start sm:justify-center gap-4 sm:gap-6 md:gap-8 relative pt-8 sm:pt-10 pb-24 sm:pb-20 md:pl-64">
+            <div className="flex-1 w-full flex flex-col items-center justify-start sm:justify-center gap-4 sm:gap-6 md:gap-8 relative pt-8 sm:pt-10 pb-24 sm:pb-20 lg:pl-64">
                 <h1 className="absolute top-0 text-xl font-bold text-gray-500 tracking-widest uppercase">BACCARAT</h1>
                 <div className="absolute top-2 left-2 z-40">
                     <MobileDrawer label="BETS" title="BACCARAT BETS">
@@ -326,7 +303,7 @@ export const BaccaratView = React.memo<{
             </div>
 
             {/* LEFT SIDEBAR - EXPOSURE / SIDE BETS TOGGLE */}
-            <div className="hidden md:flex absolute top-0 left-0 bottom-24 w-56 bg-terminal-black/80 border-r-2 border-gray-700 backdrop-blur-sm z-30 flex-col">
+            <div className="hidden lg:flex absolute top-0 left-0 bottom-24 w-56 bg-terminal-black/80 border-r-2 border-gray-700 backdrop-blur-sm z-30 flex-col">
                 {/* Toggle Tabs */}
                 <div className="flex-none flex border-b border-gray-800">
                     <button
@@ -405,7 +382,7 @@ export const BaccaratView = React.memo<{
             </div>
 
             {/* BETS SIDEBAR - Split Confirmed/Pending */}
-            <div className="hidden md:flex absolute top-0 right-0 bottom-24 w-40 bg-terminal-black/80 border-l-2 border-gray-700 p-2 backdrop-blur-sm z-30 flex-col">
+            <div className="hidden lg:flex absolute top-0 right-0 bottom-24 w-40 bg-terminal-black/80 border-l-2 border-gray-700 p-2 backdrop-blur-sm z-30 flex-col">
                 <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-2 border-b border-gray-800 pb-1 flex-none text-center">Bets</div>
                 <div className="flex-1 overflow-y-auto flex flex-col space-y-2">
                     {(() => {
@@ -470,10 +447,10 @@ export const BaccaratView = React.memo<{
             </div>
 
             {/* CONTROLS - Grouped by Normal/Bonus */}
-            <div className="ns-controlbar fixed bottom-0 left-0 right-0 sm:sticky sm:bottom-0 bg-terminal-black/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)] sm:pb-0">
-                <div className="h-auto sm:h-20 flex flex-col sm:flex-row items-stretch sm:items-center justify-between sm:justify-center gap-2 p-2 sm:px-4">
+            <div className="ns-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-terminal-black/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
+                <div className="h-auto md:h-20 flex flex-col md:flex-row items-stretch md:items-center justify-between md:justify-center gap-2 p-2 md:px-4">
                     {/* Desktop: Bet Groups */}
-                    <div className="hidden sm:flex items-center gap-3 flex-1">
+                    <div className="hidden md:flex items-center gap-3 flex-1">
                         {/* Normal Bets */}
                         <div className="flex items-center gap-2 px-3 py-1 border border-gray-700 rounded bg-black/40">
                             <span className="text-[9px] text-gray-500 uppercase tracking-widest">NORMAL</span>
@@ -501,36 +478,14 @@ export const BaccaratView = React.memo<{
                             </button>
                         </div>
 
-                        {/* Bonus Bets */}
-                        <div className="relative">
-                            <button
-                                type="button"
-                                onClick={() => setActiveGroup(activeGroup === 'BONUS' ? 'NONE' : 'BONUS')}
-                                className={`
-                                    h-12 px-4 border rounded font-mono text-sm font-bold tracking-wider transition-all
-                                    ${activeGroup === 'BONUS'
-                                        ? 'border-amber-400 bg-amber-500/20 text-amber-300 shadow-[0_0_15px_rgba(251,191,36,0.3)]'
-                                        : anyBonusPlaced
-                                            ? 'border-amber-600/50 bg-amber-900/20 text-amber-400 hover:border-amber-500 animate-pulse'
-                                            : 'border-gray-700 bg-gray-900 text-gray-400 hover:border-amber-600 hover:text-amber-400'
-                                    }
-                                `}
-                            >
-                                BONUS
-                                <span className="ml-1 text-[10px] text-gray-600">[⇧2]</span>
-                                {anyBonusPlaced && (
-                                    <span className="absolute -top-1 -right-1 w-2 h-2 bg-amber-500 rounded-full animate-ping" />
-                                )}
-                            </button>
-
-                            {activeGroup === 'BONUS' && (
-                                <div className="absolute bottom-full left-0 mb-2 flex gap-1 p-2 bg-black/95 border border-amber-900/50 rounded-lg backdrop-blur-sm animate-in slide-in-from-bottom-2 duration-150 z-50">
-                                    {BONUS_BETS.map(bet => (
-                                        <BetButton key={bet.action} bet={bet} />
-                                    ))}
-                                </div>
-                            )}
-                        </div>
+                        <SideBetMenu
+                            bets={BONUS_BETS}
+                            isActive={isBonusActive}
+                            onSelect={executeBetAction}
+                            open={activeGroup === 'BONUS'}
+                            onOpenChange={(open) => setActiveGroup(open ? 'BONUS' : 'NONE')}
+                            shortcutHint="SHIFT+2"
+                        />
 
                         {/* Actions */}
                         <div className="flex items-center gap-2">
@@ -598,12 +553,12 @@ export const BaccaratView = React.memo<{
                     </button>
 
                     {/* Mobile: Simplified controls */}
-                    <div className="flex sm:hidden gap-2">
+                    <div className="flex md:hidden gap-2">
                         <MobileDrawer label="BETS" title="PLACE BETS">
                             <div className="space-y-4">
                                 {/* Normal Bets */}
-                                <div>
-                                    <div className="text-[10px] text-green-500 font-bold tracking-widest mb-2 border-b border-gray-800 pb-1">NORMAL BETS</div>
+                                <div className="rounded border border-gray-800 bg-black/40 p-2 space-y-2">
+                                    <div className="text-[10px] text-green-500 font-bold tracking-widest border-b border-gray-800 pb-1">NORMAL BETS</div>
                                     <div className="grid grid-cols-2 gap-2">
                                         <button
                                             onClick={() => actions?.baccaratActions?.toggleSelection?.('PLAYER')}
@@ -629,9 +584,9 @@ export const BaccaratView = React.memo<{
                                 </div>
 
                                 {/* Bonus Bets */}
-                                <div>
-                                    <div className="text-[10px] text-amber-500 font-bold tracking-widest mb-2 border-b border-gray-800 pb-1">BONUS BETS</div>
-                                    <div className="grid grid-cols-3 gap-2">
+                                <div className="rounded border border-gray-800 bg-black/40 p-2 space-y-2">
+                                    <div className="text-[10px] text-amber-500 font-bold tracking-widest border-b border-gray-800 pb-1">BONUS BETS</div>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                         <button onClick={() => actions?.baccaratActions?.placeBet?.('TIE')} className={`py-3 rounded border text-xs font-bold ${sideBetAmounts.TIE > 0 ? 'border-amber-400 bg-amber-500/20 text-amber-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>
                                             TIE
                                         </button>
@@ -663,16 +618,18 @@ export const BaccaratView = React.memo<{
                                 </div>
 
                                 {/* Actions */}
-                                <div className="flex gap-2">
-                                    <button onClick={actions?.baccaratActions?.rebet} className="flex-1 py-3 rounded border border-gray-700 bg-gray-900 text-gray-400 text-xs font-bold">
-                                        REBET
-                                    </button>
-                                    <button onClick={actions?.baccaratActions?.undo} className="flex-1 py-3 rounded border border-gray-700 bg-gray-900 text-gray-400 text-xs font-bold">
-                                        UNDO
-                                    </button>
-                                    <button onClick={actions?.toggleSuper} className={`flex-1 py-3 rounded border text-xs font-bold ${gameState.activeModifiers.super ? 'border-yellow-400 bg-yellow-500/20 text-yellow-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>
-                                        SUPER
-                                    </button>
+                                <div className="rounded border border-gray-800 bg-black/40 p-2">
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                        <button onClick={actions?.baccaratActions?.rebet} className="flex-1 py-3 rounded border border-gray-700 bg-gray-900 text-gray-400 text-xs font-bold">
+                                            REBET
+                                        </button>
+                                        <button onClick={actions?.baccaratActions?.undo} className="flex-1 py-3 rounded border border-gray-700 bg-gray-900 text-gray-400 text-xs font-bold">
+                                            UNDO
+                                        </button>
+                                        <button onClick={actions?.toggleSuper} className={`flex-1 py-3 rounded border text-xs font-bold ${gameState.activeModifiers.super ? 'border-yellow-400 bg-yellow-500/20 text-yellow-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>
+                                            SUPER
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </MobileDrawer>

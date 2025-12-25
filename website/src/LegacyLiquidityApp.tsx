@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { WasmWrapper } from './api/wasm.js';
 import { CasinoClient } from './api/client.js';
 import { PlaySwapStakeTabs } from './components/PlaySwapStakeTabs';
+import { AuthStatusPill } from './components/AuthStatusPill';
 
 type ActivityItem = { ts: number; message: string };
 
@@ -54,6 +55,8 @@ export default function LegacyLiquidityApp() {
   const clientRef = useRef<CasinoClient | null>(null);
   const publicKeyBytesRef = useRef<Uint8Array | null>(null);
   const publicKeyHexRef = useRef<string | null>(null);
+  const pollRef = useRef<(() => void) | null>(null);
+  const lastPollAtRef = useRef(0);
 
   const [isRegistered, setIsRegistered] = useState(false);
   const [player, setPlayer] = useState<any | null>(null);
@@ -61,6 +64,10 @@ export default function LegacyLiquidityApp() {
   const [amm, setAmm] = useState<any | null>(null);
   const [lpBalance, setLpBalance] = useState<any | null>(null);
   const [house, setHouse] = useState<any | null>(null);
+  const POLL_TICK_MS = 5000;
+  const POLL_VISIBLE_MS = 15000;
+  const POLL_HIDDEN_MS = 60000;
+  const WS_IDLE_MS = 15000;
 
   // Forms
   const [registerName, setRegisterName] = useState('Trader');
@@ -112,6 +119,34 @@ export default function LegacyLiquidityApp() {
 
         // Event toasts
         const pkHexLower = keypair.publicKeyHex.toLowerCase();
+        const applyPlayerBalances = (balances: any) => {
+          if (!balances) return;
+          setPlayer(prev => prev ? ({
+            ...prev,
+            chips: Number(balances.chips ?? prev.chips ?? 0),
+            vusdtBalance: Number(balances.vusdtBalance ?? prev.vusdtBalance ?? 0),
+            shields: Number(balances.shields ?? prev.shields ?? 0),
+            doubles: Number(balances.doubles ?? prev.doubles ?? 0),
+            tournamentChips: Number(balances.tournamentChips ?? prev.tournamentChips ?? 0),
+            tournamentShields: Number(balances.tournamentShields ?? prev.tournamentShields ?? 0),
+            tournamentDoubles: Number(balances.tournamentDoubles ?? prev.tournamentDoubles ?? 0),
+            activeTournament: balances.activeTournament ?? prev.activeTournament ?? null,
+          }) : prev);
+        };
+        const applyVault = (next: any) => {
+          if (next) setVault(next);
+        };
+        const applyAmm = (next: any) => {
+          if (next) setAmm(next);
+        };
+        const applyHouse = (next: any) => {
+          if (next) setHouse(next);
+        };
+        const applyLpBalance = (balance: any) => {
+          if (balance !== undefined && balance !== null) {
+            setLpBalance({ balance });
+          }
+        };
         client.onEvent('CasinoError', (e: any) => {
           if (e?.player?.toLowerCase?.() !== pkHexLower) return;
           pushActivity(`ERROR: ${e.message ?? 'Unknown error'}`);
@@ -119,30 +154,46 @@ export default function LegacyLiquidityApp() {
         client.onEvent('VaultCreated', (e: any) => {
           if (e?.player?.toLowerCase?.() !== pkHexLower) return;
           pushActivity('Vault created');
+          applyVault(e?.vault);
         });
         client.onEvent('CollateralDeposited', (e: any) => {
           if (e?.player?.toLowerCase?.() !== pkHexLower) return;
           pushActivity(`Collateral deposited: ${e.amount}`);
+          applyVault(e?.vault);
+          applyPlayerBalances(e?.playerBalances);
         });
         client.onEvent('VusdtBorrowed', (e: any) => {
           if (e?.player?.toLowerCase?.() !== pkHexLower) return;
           pushActivity(`Borrowed vUSDT: ${e.amount}`);
+          applyVault(e?.vault);
+          applyPlayerBalances(e?.playerBalances);
         });
         client.onEvent('VusdtRepaid', (e: any) => {
           if (e?.player?.toLowerCase?.() !== pkHexLower) return;
           pushActivity(`Repaid vUSDT: ${e.amount}`);
+          applyVault(e?.vault);
+          applyPlayerBalances(e?.playerBalances);
         });
         client.onEvent('AmmSwapped', (e: any) => {
           if (e?.player?.toLowerCase?.() !== pkHexLower) return;
           pushActivity(`Swap executed: out=${e.amountOut}`);
+          applyAmm(e?.amm);
+          applyHouse(e?.house);
+          applyPlayerBalances(e?.playerBalances);
         });
         client.onEvent('LiquidityAdded', (e: any) => {
           if (e?.player?.toLowerCase?.() !== pkHexLower) return;
           pushActivity(`Liquidity added: shares=${e.sharesMinted}`);
+          applyAmm(e?.amm);
+          applyLpBalance(e?.lpBalance);
+          applyPlayerBalances(e?.playerBalances);
         });
         client.onEvent('LiquidityRemoved', (e: any) => {
           if (e?.player?.toLowerCase?.() !== pkHexLower) return;
           pushActivity(`Liquidity removed: shares=${e.sharesBurned}`);
+          applyAmm(e?.amm);
+          applyLpBalance(e?.lpBalance);
+          applyPlayerBalances(e?.playerBalances);
         });
 
         setStatus('Connected');
@@ -171,10 +222,23 @@ export default function LegacyLiquidityApp() {
 
   // Poll state
   useEffect(() => {
-    const interval = setInterval(async () => {
+    let cancelled = false;
+    let inFlight = false;
+    const poll = async (force = false) => {
+      if (cancelled || inFlight) return;
       const client = clientRef.current as any;
       const pk = publicKeyBytesRef.current;
       if (!client || !pk) return;
+      const now = Date.now();
+      const isHidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
+      const updatesStatus = client.getUpdatesStatus?.();
+      const wsConnected = Boolean(updatesStatus?.connected);
+      const wsIdle = !updatesStatus?.lastEventAt || now - updatesStatus.lastEventAt > WS_IDLE_MS;
+      if (!force && wsConnected && !wsIdle) return;
+      const pollInterval = isHidden ? POLL_HIDDEN_MS : POLL_VISIBLE_MS;
+      if (!force && now - lastPollAtRef.current < pollInterval) return;
+      lastPollAtRef.current = now;
+      inFlight = true;
 
       try {
         const [p, v, a, lp, h] = await Promise.all([
@@ -192,10 +256,24 @@ export default function LegacyLiquidityApp() {
         setHouse(h);
       } catch (e) {
         // Ignore transient errors during startup
+      } finally {
+        inFlight = false;
       }
-    }, 1000);
+    };
 
-    return () => clearInterval(interval);
+    void poll(true);
+    pollRef.current = () => {
+      void poll(true);
+    };
+    const interval = setInterval(() => {
+      void poll(false);
+    }, POLL_TICK_MS);
+
+    return () => {
+      cancelled = true;
+      pollRef.current = null;
+      clearInterval(interval);
+    };
   }, []);
 
   const derived = useMemo(() => {
@@ -354,8 +432,11 @@ export default function LegacyLiquidityApp() {
           <div className="text-lg font-bold tracking-widest">Liquidity / AMM</div>
           <div className="text-[10px] text-gray-500 tracking-widest">{status}</div>
         </div>
-        <div className="text-[10px] text-gray-500 tracking-widest">
-          {lastTxSig ? `LAST TX: ${lastTxSig}` : null}
+        <div className="flex flex-wrap items-center gap-2 justify-end">
+          <AuthStatusPill publicKeyHex={publicKeyHexRef.current} className="w-full sm:w-auto" />
+          {lastTxSig ? (
+            <div className="text-[10px] text-gray-500 tracking-widest">LAST TX: {lastTxSig}</div>
+          ) : null}
         </div>
       </header>
 

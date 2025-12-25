@@ -1,50 +1,828 @@
+use commonware_codec::Encode;
 use commonware_consensus::{aggregation::types::Certificate, Viewable};
 use commonware_cryptography::{bls12381::primitives::variant::MinSig, sha256::Digest};
+use commonware_cryptography::ed25519::PublicKey;
 use commonware_storage::{
-    adb::{create_proof, digests_required_for_proof},
-    store::operation::Variable,
+    adb::{
+        create_multi_proof, create_proof, create_proof_store_from_digests,
+        digests_required_for_proof,
+    },
+    store::operation::{Keyless, Variable},
 };
+use futures::stream::{FuturesUnordered, StreamExt};
 use nullspace_types::{
-    api::{Events, Lookup, Pending, Summary},
-    execution::{Progress, Seed, Transaction, Value},
+    api::{Events, FilteredEvents, Lookup, Pending, Summary, Update, UpdatesFilter},
+    execution::{Event, Output, Progress, Seed, Transaction, Value},
     Query as ChainQuery,
 };
 use serde::Serialize;
-use std::collections::{BTreeMap, HashMap, HashSet};
-use tokio::sync::broadcast;
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
+use std::time::Instant;
+use tokio::sync::{broadcast, Semaphore};
+use commonware_storage::mmr::verification::ProofStore;
 
 #[cfg(feature = "passkeys")]
 use crate::PasskeyStore;
+use crate::metrics::UpdateIndexMetrics;
 use crate::Simulator;
 
-#[derive(Clone, Copy, Debug, Default, Serialize)]
+const DEFAULT_EXPLORER_MAX_BLOCKS: usize = 10_000;
+const DEFAULT_EXPLORER_MAX_ACCOUNT_ENTRIES: usize = 2_000;
+const DEFAULT_EXPLORER_MAX_ACCOUNTS: usize = 10_000;
+const DEFAULT_EXPLORER_MAX_GAME_EVENT_ACCOUNTS: usize = 10_000;
+const DEFAULT_EXPLORER_PERSISTENCE_BUFFER: usize = 1_024;
+const DEFAULT_EXPLORER_PERSISTENCE_BATCH_SIZE: usize = 64;
+const DEFAULT_STATE_MAX_KEY_VERSIONS: usize = 1;
+const DEFAULT_STATE_MAX_PROGRESS_ENTRIES: usize = 10_000;
+const DEFAULT_SUBMISSION_HISTORY_LIMIT: usize = 10_000;
+const DEFAULT_SEED_HISTORY_LIMIT: usize = 10_000;
+const DEFAULT_HTTP_RATE_LIMIT_PER_SECOND: u64 = 1_000;
+const DEFAULT_HTTP_RATE_LIMIT_BURST: u32 = 5_000;
+const DEFAULT_HTTP_BODY_LIMIT_BYTES: usize = 8 * 1024 * 1024;
+const DEFAULT_WS_OUTBOUND_BUFFER: usize = 256;
+const DEFAULT_WS_MAX_CONNECTIONS: usize = 20_000;
+const DEFAULT_WS_MAX_CONNECTIONS_PER_IP: usize = 200;
+const DEFAULT_WS_MAX_MESSAGE_BYTES: usize = 4 * 1024 * 1024;
+const DEFAULT_UPDATES_BROADCAST_BUFFER: usize = 1_024;
+const DEFAULT_MEMPOOL_BROADCAST_BUFFER: usize = 1_024;
+const DEFAULT_UPDATES_INDEX_CONCURRENCY: usize = 8;
+
+#[derive(Clone, Copy, Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExplorerPersistenceBackpressure {
+    Block,
+    Drop,
+}
+
+impl std::str::FromStr for ExplorerPersistenceBackpressure {
+    type Err = &'static str;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value.to_ascii_lowercase().as_str() {
+            "block" => Ok(Self::Block),
+            "drop" => Ok(Self::Drop),
+            _ => Err("valid values: block, drop"),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize)]
 pub struct SimulatorConfig {
     pub explorer_max_blocks: Option<usize>,
     pub explorer_max_account_entries: Option<usize>,
+    pub explorer_max_accounts: Option<usize>,
+    pub explorer_max_game_event_accounts: Option<usize>,
+    pub explorer_persistence_path: Option<PathBuf>,
+    pub explorer_persistence_url: Option<String>,
+    pub explorer_persistence_buffer: Option<usize>,
+    pub explorer_persistence_batch_size: Option<usize>,
+    pub explorer_persistence_backpressure: Option<ExplorerPersistenceBackpressure>,
+    pub state_max_key_versions: Option<usize>,
+    pub state_max_progress_entries: Option<usize>,
+    pub submission_history_limit: Option<usize>,
+    pub seed_history_limit: Option<usize>,
+    pub http_rate_limit_per_second: Option<u64>,
+    pub http_rate_limit_burst: Option<u32>,
+    pub http_body_limit_bytes: Option<usize>,
+    pub ws_outbound_buffer: Option<usize>,
+    pub ws_max_connections: Option<usize>,
+    pub ws_max_connections_per_ip: Option<usize>,
+    pub ws_max_message_bytes: Option<usize>,
+    pub updates_broadcast_buffer: Option<usize>,
+    pub mempool_broadcast_buffer: Option<usize>,
+    pub updates_index_concurrency: Option<usize>,
+}
+
+impl Default for SimulatorConfig {
+    fn default() -> Self {
+        Self {
+            explorer_max_blocks: Some(DEFAULT_EXPLORER_MAX_BLOCKS),
+            explorer_max_account_entries: Some(DEFAULT_EXPLORER_MAX_ACCOUNT_ENTRIES),
+            explorer_max_accounts: Some(DEFAULT_EXPLORER_MAX_ACCOUNTS),
+            explorer_max_game_event_accounts: Some(DEFAULT_EXPLORER_MAX_GAME_EVENT_ACCOUNTS),
+            explorer_persistence_path: None,
+            explorer_persistence_url: None,
+            explorer_persistence_buffer: Some(DEFAULT_EXPLORER_PERSISTENCE_BUFFER),
+            explorer_persistence_batch_size: Some(DEFAULT_EXPLORER_PERSISTENCE_BATCH_SIZE),
+            explorer_persistence_backpressure: Some(ExplorerPersistenceBackpressure::Block),
+            state_max_key_versions: Some(DEFAULT_STATE_MAX_KEY_VERSIONS),
+            state_max_progress_entries: Some(DEFAULT_STATE_MAX_PROGRESS_ENTRIES),
+            submission_history_limit: Some(DEFAULT_SUBMISSION_HISTORY_LIMIT),
+            seed_history_limit: Some(DEFAULT_SEED_HISTORY_LIMIT),
+            http_rate_limit_per_second: Some(DEFAULT_HTTP_RATE_LIMIT_PER_SECOND),
+            http_rate_limit_burst: Some(DEFAULT_HTTP_RATE_LIMIT_BURST),
+            http_body_limit_bytes: Some(DEFAULT_HTTP_BODY_LIMIT_BYTES),
+            ws_outbound_buffer: Some(DEFAULT_WS_OUTBOUND_BUFFER),
+            ws_max_connections: Some(DEFAULT_WS_MAX_CONNECTIONS),
+            ws_max_connections_per_ip: Some(DEFAULT_WS_MAX_CONNECTIONS_PER_IP),
+            ws_max_message_bytes: Some(DEFAULT_WS_MAX_MESSAGE_BYTES),
+            updates_broadcast_buffer: Some(DEFAULT_UPDATES_BROADCAST_BUFFER),
+            mempool_broadcast_buffer: Some(DEFAULT_MEMPOOL_BROADCAST_BUFFER),
+            updates_index_concurrency: Some(DEFAULT_UPDATES_INDEX_CONCURRENCY),
+        }
+    }
+}
+
+impl SimulatorConfig {
+    pub fn ws_outbound_capacity(&self) -> usize {
+        self.ws_outbound_buffer.unwrap_or(DEFAULT_WS_OUTBOUND_BUFFER).max(1)
+    }
+
+    pub fn ws_max_message_bytes(&self) -> usize {
+        self.ws_max_message_bytes
+            .unwrap_or(DEFAULT_WS_MAX_MESSAGE_BYTES)
+            .max(1)
+    }
+
+    pub fn updates_broadcast_capacity(&self) -> usize {
+        self.updates_broadcast_buffer
+            .unwrap_or(DEFAULT_UPDATES_BROADCAST_BUFFER)
+            .max(1)
+    }
+
+    pub fn mempool_broadcast_capacity(&self) -> usize {
+        self.mempool_broadcast_buffer
+            .unwrap_or(DEFAULT_MEMPOOL_BROADCAST_BUFFER)
+            .max(1)
+    }
+
+    pub fn explorer_persistence_buffer_capacity(&self) -> usize {
+        self.explorer_persistence_buffer
+            .unwrap_or(DEFAULT_EXPLORER_PERSISTENCE_BUFFER)
+            .max(1)
+    }
+
+    pub fn explorer_persistence_batch_size(&self) -> usize {
+        self.explorer_persistence_batch_size
+            .unwrap_or(DEFAULT_EXPLORER_PERSISTENCE_BATCH_SIZE)
+            .max(1)
+    }
+
+    pub fn explorer_persistence_backpressure_policy(&self) -> ExplorerPersistenceBackpressure {
+        self.explorer_persistence_backpressure
+            .unwrap_or(ExplorerPersistenceBackpressure::Block)
+    }
+
+    pub fn updates_index_concurrency(&self) -> usize {
+        self.updates_index_concurrency
+            .unwrap_or(DEFAULT_UPDATES_INDEX_CONCURRENCY)
+            .max(1)
+    }
 }
 
 #[derive(Clone)]
 #[allow(clippy::large_enum_variant)]
 pub enum InternalUpdate {
     Seed(Seed),
-    Events(Events, Vec<(u64, Digest)>),
+    Events(Arc<IndexedEvents>),
+}
+
+#[derive(Clone)]
+pub struct EncodedUpdate {
+    pub update: Arc<Update>,
+    pub bytes: Arc<Vec<u8>>,
+}
+
+impl EncodedUpdate {
+    pub(crate) fn new(update: Update) -> Self {
+        let update = Arc::new(update);
+        let bytes = Arc::new(update.as_ref().encode().to_vec());
+        Self { update, bytes }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SubscriptionSnapshot {
+    pub all: bool,
+    pub accounts: Option<HashSet<PublicKey>>,
+    pub sessions: Option<HashSet<u64>>,
 }
 
 #[derive(Default)]
+pub struct SubscriptionTracker {
+    all_count: usize,
+    accounts: HashMap<PublicKey, usize>,
+    sessions: HashMap<u64, usize>,
+}
+
+impl SubscriptionTracker {
+    fn register(&mut self, filter: &UpdatesFilter) {
+        match filter {
+            UpdatesFilter::All => {
+                self.all_count = self.all_count.saturating_add(1);
+            }
+            UpdatesFilter::Account(account) => {
+                *self.accounts.entry(account.clone()).or_insert(0) += 1;
+            }
+            UpdatesFilter::Session(session_id) => {
+                *self.sessions.entry(*session_id).or_insert(0) += 1;
+            }
+        }
+    }
+
+    fn unregister(&mut self, filter: &UpdatesFilter) {
+        match filter {
+            UpdatesFilter::All => {
+                self.all_count = self.all_count.saturating_sub(1);
+            }
+            UpdatesFilter::Account(account) => {
+                if let Some(count) = self.accounts.get_mut(account) {
+                    if *count > 1 {
+                        *count -= 1;
+                    } else {
+                        self.accounts.remove(account);
+                    }
+                }
+            }
+            UpdatesFilter::Session(session_id) => {
+                if let Some(count) = self.sessions.get_mut(session_id) {
+                    if *count > 1 {
+                        *count -= 1;
+                    } else {
+                        self.sessions.remove(session_id);
+                    }
+                }
+            }
+        }
+    }
+
+    fn total_count(&self) -> usize {
+        let account_total: usize = self.accounts.values().sum();
+        let session_total: usize = self.sessions.values().sum();
+        self.all_count + account_total + session_total
+    }
+
+    fn snapshot(&self, include_all_accounts: bool, include_all_sessions: bool) -> SubscriptionSnapshot {
+        SubscriptionSnapshot {
+            all: self.all_count > 0,
+            accounts: if include_all_accounts {
+                None
+            } else {
+                Some(self.accounts.keys().cloned().collect())
+            },
+            sessions: if include_all_sessions {
+                None
+            } else {
+                Some(self.sessions.keys().cloned().collect())
+            },
+        }
+    }
+}
+
+pub struct SubscriptionGuard {
+    tracker: Arc<Mutex<SubscriptionTracker>>,
+    filter: UpdatesFilter,
+}
+
+impl Drop for SubscriptionGuard {
+    fn drop(&mut self) {
+        let mut tracker = self.tracker.lock().unwrap();
+        tracker.unregister(&self.filter);
+    }
+}
+
+pub struct IndexedEvents {
+    pub events: Arc<Events>,
+    pub proof_store: Arc<ProofStore<Digest>>,
+    pub full_update: Option<EncodedUpdate>,
+    pub public_update: Option<EncodedUpdate>,
+    pub account_updates: HashMap<PublicKey, EncodedUpdate>,
+    pub session_updates: HashMap<u64, EncodedUpdate>,
+}
+
+impl IndexedEvents {
+    pub fn update_for_account(&self, account: &PublicKey) -> Option<EncodedUpdate> {
+        if let Some(update) = self.account_updates.get(account) {
+            Some(update.clone())
+        } else {
+            self.public_update.clone()
+        }
+    }
+
+    pub fn update_for_session(&self, session_id: u64) -> Option<EncodedUpdate> {
+        self.session_updates.get(&session_id).cloned()
+    }
+}
+
+fn merge_ops(
+    public_ops: &[(u64, Keyless<Output>)],
+    account_ops: &[(u64, Keyless<Output>)],
+) -> Vec<(u64, Keyless<Output>)> {
+    let mut merged = Vec::with_capacity(public_ops.len() + account_ops.len());
+    let mut i = 0;
+    let mut j = 0;
+    while i < public_ops.len() && j < account_ops.len() {
+        if public_ops[i].0 <= account_ops[j].0 {
+            merged.push(public_ops[i].clone());
+            i += 1;
+        } else {
+            merged.push(account_ops[j].clone());
+            j += 1;
+        }
+    }
+    while i < public_ops.len() {
+        merged.push(public_ops[i].clone());
+        i += 1;
+    }
+    while j < account_ops.len() {
+        merged.push(account_ops[j].clone());
+        j += 1;
+    }
+    merged
+}
+
+async fn build_filtered_update(
+    events: &Events,
+    proof_store: &ProofStore<Digest>,
+    filtered_ops: Vec<(u64, Keyless<Output>)>,
+) -> Option<EncodedUpdate> {
+    if filtered_ops.is_empty() {
+        return None;
+    }
+
+    let locations_to_include = filtered_ops
+        .iter()
+        .map(|(loc, _)| *loc)
+        .collect::<Vec<_>>();
+    let filtered_proof = match create_multi_proof(proof_store, &locations_to_include).await {
+        Ok(proof) => proof,
+        Err(e) => {
+            tracing::error!("Failed to generate filtered proof: {:?}", e);
+            return None;
+        }
+    };
+
+    Some(EncodedUpdate::new(Update::FilteredEvents(FilteredEvents {
+        progress: events.progress,
+        certificate: events.certificate.clone(),
+        events_proof: filtered_proof,
+        events_proof_ops: filtered_ops,
+    })))
+}
+
+pub(crate) async fn index_events(
+    events: Arc<Events>,
+    proof_store: Arc<ProofStore<Digest>>,
+    subscriptions: Option<&SubscriptionSnapshot>,
+    max_concurrent_proofs: usize,
+    index_metrics: Arc<UpdateIndexMetrics>,
+) -> IndexedEvents {
+    let accounts_filter = subscriptions.and_then(|snapshot| snapshot.accounts.as_ref());
+    let sessions_filter = subscriptions.and_then(|snapshot| snapshot.sessions.as_ref());
+    let include_all_accounts = subscriptions.map_or(true, |snapshot| snapshot.accounts.is_none());
+    let include_all_sessions = subscriptions.map_or(true, |snapshot| snapshot.sessions.is_none());
+    let has_account_subs = include_all_accounts || accounts_filter.map_or(false, |set| !set.is_empty());
+    let has_session_subs = include_all_sessions || sessions_filter.map_or(false, |set| !set.is_empty());
+    let needs_public_ops = has_account_subs;
+    let include_full_update = subscriptions.map_or(true, |snapshot| snapshot.all);
+
+    let mut public_ops: Vec<(u64, Keyless<Output>)> = Vec::new();
+    let mut account_ops: HashMap<PublicKey, Vec<(u64, Keyless<Output>)>> = HashMap::new();
+    let mut session_ops: HashMap<u64, Vec<(u64, Keyless<Output>)>> = HashMap::new();
+
+    for (i, op) in events.events_proof_ops.iter().enumerate() {
+        let loc = events.progress.events_start_op + i as u64;
+        match op {
+            Keyless::Append(output) => match output {
+                Output::Event(event) => match event {
+                    Event::CasinoPlayerRegistered { player, .. } => {
+                        if has_account_subs
+                            && (include_all_accounts
+                                || accounts_filter
+                                    .map(|set| set.contains(player))
+                                    .unwrap_or(true))
+                        {
+                            account_ops
+                                .entry(player.clone())
+                                .or_default()
+                                .push((loc, op.clone()));
+                        }
+                    }
+                    Event::CasinoDeposited { player, .. } => {
+                        if has_account_subs
+                            && (include_all_accounts
+                                || accounts_filter
+                                    .map(|set| set.contains(player))
+                                    .unwrap_or(true))
+                        {
+                            account_ops
+                                .entry(player.clone())
+                                .or_default()
+                                .push((loc, op.clone()));
+                        }
+                    }
+                    Event::CasinoGameStarted { player, .. } => {
+                        if has_account_subs
+                            && (include_all_accounts
+                                || accounts_filter
+                                    .map(|set| set.contains(player))
+                                    .unwrap_or(true))
+                        {
+                            account_ops
+                                .entry(player.clone())
+                                .or_default()
+                                .push((loc, op.clone()));
+                        }
+                    }
+                    Event::CasinoGameMoved { session_id, .. } => {
+                        if has_session_subs
+                            && (include_all_sessions
+                                || sessions_filter
+                                    .map(|set| set.contains(session_id))
+                                    .unwrap_or(true))
+                        {
+                            session_ops
+                                .entry(*session_id)
+                                .or_default()
+                                .push((loc, op.clone()));
+                        }
+                    }
+                    Event::CasinoGameCompleted { player, .. } => {
+                        if has_account_subs
+                            && (include_all_accounts
+                                || accounts_filter
+                                    .map(|set| set.contains(player))
+                                    .unwrap_or(true))
+                        {
+                            account_ops
+                                .entry(player.clone())
+                                .or_default()
+                                .push((loc, op.clone()));
+                        }
+                    }
+                    Event::CasinoLeaderboardUpdated { .. } => {
+                        if needs_public_ops {
+                            public_ops.push((loc, op.clone()));
+                        }
+                    }
+                    Event::CasinoError { player, .. } => {
+                        if has_account_subs
+                            && (include_all_accounts
+                                || accounts_filter
+                                    .map(|set| set.contains(player))
+                                    .unwrap_or(true))
+                        {
+                            account_ops
+                                .entry(player.clone())
+                                .or_default()
+                                .push((loc, op.clone()));
+                        }
+                    }
+                    Event::PlayerModifierToggled { player, .. } => {
+                        if has_account_subs
+                            && (include_all_accounts
+                                || accounts_filter
+                                    .map(|set| set.contains(player))
+                                    .unwrap_or(true))
+                        {
+                            account_ops
+                                .entry(player.clone())
+                                .or_default()
+                                .push((loc, op.clone()));
+                        }
+                    }
+                    Event::TournamentStarted { .. } => {
+                        if needs_public_ops {
+                            public_ops.push((loc, op.clone()));
+                        }
+                    }
+                    Event::PlayerJoined { player, .. } => {
+                        if has_account_subs
+                            && (include_all_accounts
+                                || accounts_filter
+                                    .map(|set| set.contains(player))
+                                    .unwrap_or(true))
+                        {
+                            account_ops
+                                .entry(player.clone())
+                                .or_default()
+                                .push((loc, op.clone()));
+                        }
+                    }
+                    Event::TournamentPhaseChanged { .. } => {
+                        if needs_public_ops {
+                            public_ops.push((loc, op.clone()));
+                        }
+                    }
+                    Event::TournamentEnded { rankings, .. } => {
+                        if has_account_subs {
+                            for (player, _) in rankings {
+                                if include_all_accounts
+                                    || accounts_filter
+                                        .map(|set| set.contains(player))
+                                        .unwrap_or(true)
+                                {
+                                    account_ops
+                                        .entry(player.clone())
+                                        .or_default()
+                                        .push((loc, op.clone()));
+                                }
+                            }
+                        }
+                    }
+                    Event::VaultCreated { player, .. } => {
+                        if has_account_subs
+                            && (include_all_accounts
+                                || accounts_filter
+                                    .map(|set| set.contains(player))
+                                    .unwrap_or(true))
+                        {
+                            account_ops
+                                .entry(player.clone())
+                                .or_default()
+                                .push((loc, op.clone()));
+                        }
+                    }
+                    Event::CollateralDeposited { player, .. } => {
+                        if has_account_subs
+                            && (include_all_accounts
+                                || accounts_filter
+                                    .map(|set| set.contains(player))
+                                    .unwrap_or(true))
+                        {
+                            account_ops
+                                .entry(player.clone())
+                                .or_default()
+                                .push((loc, op.clone()));
+                        }
+                    }
+                    Event::VusdtBorrowed { player, .. } => {
+                        if has_account_subs
+                            && (include_all_accounts
+                                || accounts_filter
+                                    .map(|set| set.contains(player))
+                                    .unwrap_or(true))
+                        {
+                            account_ops
+                                .entry(player.clone())
+                                .or_default()
+                                .push((loc, op.clone()));
+                        }
+                    }
+                    Event::VusdtRepaid { player, .. } => {
+                        if has_account_subs
+                            && (include_all_accounts
+                                || accounts_filter
+                                    .map(|set| set.contains(player))
+                                    .unwrap_or(true))
+                        {
+                            account_ops
+                                .entry(player.clone())
+                                .or_default()
+                                .push((loc, op.clone()));
+                        }
+                    }
+                    Event::AmmSwapped { player, .. } => {
+                        if has_account_subs
+                            && (include_all_accounts
+                                || accounts_filter
+                                    .map(|set| set.contains(player))
+                                    .unwrap_or(true))
+                        {
+                            account_ops
+                                .entry(player.clone())
+                                .or_default()
+                                .push((loc, op.clone()));
+                        }
+                    }
+                    Event::LiquidityAdded { player, .. } => {
+                        if has_account_subs
+                            && (include_all_accounts
+                                || accounts_filter
+                                    .map(|set| set.contains(player))
+                                    .unwrap_or(true))
+                        {
+                            account_ops
+                                .entry(player.clone())
+                                .or_default()
+                                .push((loc, op.clone()));
+                        }
+                    }
+                    Event::LiquidityRemoved { player, .. } => {
+                        if has_account_subs
+                            && (include_all_accounts
+                                || accounts_filter
+                                    .map(|set| set.contains(player))
+                                    .unwrap_or(true))
+                        {
+                            account_ops
+                                .entry(player.clone())
+                                .or_default()
+                                .push((loc, op.clone()));
+                        }
+                    }
+                    Event::Staked { player, .. } => {
+                        if has_account_subs
+                            && (include_all_accounts
+                                || accounts_filter
+                                    .map(|set| set.contains(player))
+                                    .unwrap_or(true))
+                        {
+                            account_ops
+                                .entry(player.clone())
+                                .or_default()
+                                .push((loc, op.clone()));
+                        }
+                    }
+                    Event::Unstaked { player, .. } => {
+                        if has_account_subs
+                            && (include_all_accounts
+                                || accounts_filter
+                                    .map(|set| set.contains(player))
+                                    .unwrap_or(true))
+                        {
+                            account_ops
+                                .entry(player.clone())
+                                .or_default()
+                                .push((loc, op.clone()));
+                        }
+                    }
+                    Event::RewardsClaimed { player, .. } => {
+                        if has_account_subs
+                            && (include_all_accounts
+                                || accounts_filter
+                                    .map(|set| set.contains(player))
+                                    .unwrap_or(true))
+                        {
+                            account_ops
+                                .entry(player.clone())
+                                .or_default()
+                                .push((loc, op.clone()));
+                        }
+                    }
+                    Event::EpochProcessed { .. } => {
+                        if needs_public_ops {
+                            public_ops.push((loc, op.clone()));
+                        }
+                    }
+                },
+                Output::Transaction(tx) => {
+                    if has_account_subs
+                        && (include_all_accounts
+                            || accounts_filter
+                                .map(|set| set.contains(&tx.public))
+                                .unwrap_or(true))
+                    {
+                        account_ops
+                            .entry(tx.public.clone())
+                            .or_default()
+                            .push((loc, op.clone()));
+                    }
+                }
+                Output::Commit { .. } => {}
+            },
+            Keyless::Commit(_) => {}
+        }
+    }
+
+    let public_update = if needs_public_ops {
+        index_metrics.inc_in_flight();
+        let start = Instant::now();
+        let update =
+            build_filtered_update(events.as_ref(), proof_store.as_ref(), public_ops.clone()).await;
+        index_metrics.dec_in_flight();
+        index_metrics.record_proof_latency(start.elapsed());
+        if update.is_none() {
+            index_metrics.inc_failure();
+        }
+        update
+    } else {
+        None
+    };
+
+    let public_ops = Arc::new(public_ops);
+    let semaphore = Arc::new(Semaphore::new(max_concurrent_proofs.max(1)));
+
+    let mut account_updates = HashMap::new();
+    if has_account_subs {
+        let mut tasks = FuturesUnordered::new();
+        for (account, ops) in account_ops {
+            let permit = semaphore.clone().acquire_owned().await.expect("semaphore open");
+            let events = Arc::clone(&events);
+            let proof_store = Arc::clone(&proof_store);
+            let public_ops = Arc::clone(&public_ops);
+            let index_metrics = Arc::clone(&index_metrics);
+            tasks.push(tokio::spawn(async move {
+                index_metrics.inc_in_flight();
+                let start = Instant::now();
+                let merged_ops = if public_ops.is_empty() {
+                    ops
+                } else {
+                    merge_ops(public_ops.as_slice(), &ops)
+                };
+                let update =
+                    build_filtered_update(events.as_ref(), proof_store.as_ref(), merged_ops).await;
+                index_metrics.dec_in_flight();
+                index_metrics.record_proof_latency(start.elapsed());
+                if update.is_none() {
+                    index_metrics.inc_failure();
+                }
+                drop(permit);
+                update.map(|update| (account, update))
+            }));
+        }
+        while let Some(result) = tasks.next().await {
+            match result {
+                Ok(Some((account, update))) => {
+                    account_updates.insert(account, update);
+                }
+                Ok(None) => {}
+                Err(err) => {
+                    tracing::warn!("Account update indexing task failed: {err}");
+                }
+            }
+        }
+    }
+
+    let mut session_updates = HashMap::new();
+    if has_session_subs {
+        let mut tasks = FuturesUnordered::new();
+        for (session_id, ops) in session_ops {
+            let permit = semaphore.clone().acquire_owned().await.expect("semaphore open");
+            let events = Arc::clone(&events);
+            let proof_store = Arc::clone(&proof_store);
+            let index_metrics = Arc::clone(&index_metrics);
+            tasks.push(tokio::spawn(async move {
+                index_metrics.inc_in_flight();
+                let start = Instant::now();
+                let update =
+                    build_filtered_update(events.as_ref(), proof_store.as_ref(), ops).await;
+                index_metrics.dec_in_flight();
+                index_metrics.record_proof_latency(start.elapsed());
+                if update.is_none() {
+                    index_metrics.inc_failure();
+                }
+                drop(permit);
+                update.map(|update| (session_id, update))
+            }));
+        }
+        while let Some(result) = tasks.next().await {
+            match result {
+                Ok(Some((session_id, update))) => {
+                    session_updates.insert(session_id, update);
+                }
+                Ok(None) => {}
+                Err(err) => {
+                    tracing::warn!("Session update indexing task failed: {err}");
+                }
+            }
+        }
+    }
+
+    let full_update = if include_full_update {
+        Some(EncodedUpdate::new(Update::Events(events.as_ref().clone())))
+    } else {
+        None
+    };
+
+    IndexedEvents {
+        events,
+        proof_store,
+        full_update,
+        public_update,
+        account_updates,
+        session_updates,
+    }
+}
+
 pub struct State {
     seeds: BTreeMap<u64, Seed>,
 
     nodes: BTreeMap<u64, Digest>,
-    leaves: BTreeMap<u64, Variable<Digest, Value>>,
+    node_ref_counts: HashMap<u64, usize>,
     #[allow(clippy::type_complexity)]
     keys: HashMap<Digest, BTreeMap<u64, (u64, Variable<Digest, Value>)>>,
     progress: BTreeMap<u64, (Progress, Certificate<MinSig, Digest>)>,
+    progress_nodes: BTreeMap<u64, Vec<u64>>,
 
     submitted_events: HashSet<u64>,
     submitted_state: HashSet<u64>,
+    submitted_events_order: VecDeque<u64>,
+    submitted_state_order: VecDeque<u64>,
 
     #[cfg(feature = "passkeys")]
     pub(super) passkeys: PasskeyStore,
+}
+
+impl Default for State {
+    fn default() -> Self {
+        Self {
+            seeds: BTreeMap::new(),
+            nodes: BTreeMap::new(),
+            node_ref_counts: HashMap::new(),
+            keys: HashMap::new(),
+            progress: BTreeMap::new(),
+            progress_nodes: BTreeMap::new(),
+            submitted_events: HashSet::new(),
+            submitted_state: HashSet::new(),
+            submitted_events_order: VecDeque::new(),
+            submitted_state_order: VecDeque::new(),
+            #[cfg(feature = "passkeys")]
+            passkeys: PasskeyStore::default(),
+        }
+    }
 }
 
 impl Simulator {
@@ -53,6 +831,11 @@ impl Simulator {
             let mut state = self.state.write().await;
             if state.seeds.insert(seed.view(), seed.clone()).is_some() {
                 return;
+            }
+            if let Some(limit) = self.config.seed_history_limit {
+                while state.seeds.len() > limit {
+                    state.seeds.pop_first();
+                }
             }
         } // Release lock before broadcasting
         if let Err(e) = self.update_tx.send(InternalUpdate::Seed(seed)) {
@@ -68,47 +851,93 @@ impl Simulator {
 
     pub async fn submit_state(&self, summary: Summary, inner: Vec<(u64, Digest)>) {
         let mut state = self.state.write().await;
-        if !state.submitted_state.insert(summary.progress.height) {
+        let height = summary.progress.height;
+        if !state.submitted_state.insert(height) {
             return;
         }
-
-        // Store node digests
-        for (pos, digest) in inner {
-            state.nodes.insert(pos, digest);
+        if let Some(limit) = self.config.submission_history_limit {
+            state.submitted_state_order.push_back(height);
+            while state.submitted_state_order.len() > limit {
+                if let Some(oldest) = state.submitted_state_order.pop_front() {
+                    state.submitted_state.remove(&oldest);
+                }
+            }
         }
 
-        // Store leaves
+        let mut node_positions = Vec::with_capacity(inner.len());
+        for (pos, digest) in inner {
+            state.nodes.insert(pos, digest);
+            node_positions.push(pos);
+            *state.node_ref_counts.entry(pos).or_insert(0) += 1;
+        }
+        if !node_positions.is_empty() {
+            state.progress_nodes.insert(height, node_positions);
+        }
+
+        let max_versions = self.config.state_max_key_versions;
         let start_loc = summary.progress.state_start_op;
         for (i, value) in summary.state_proof_ops.into_iter().enumerate() {
-            // Store in leaves
-            let loc = start_loc + i as u64;
-            state.leaves.insert(loc, value.clone());
-
             // Store in keys
+            let loc = start_loc + i as u64;
             match value {
                 Variable::Update(key, value) => {
-                    state
-                        .keys
-                        .entry(key)
-                        .or_default()
-                        .insert(summary.progress.height, (loc, Variable::Update(key, value)));
+                    let remove_key = {
+                        let history = state.keys.entry(key).or_default();
+                        history.insert(height, (loc, Variable::Update(key, value)));
+                        if let Some(limit) = max_versions {
+                            while history.len() > limit {
+                                history.pop_first();
+                            }
+                        }
+                        history.is_empty()
+                    };
+                    if remove_key {
+                        state.keys.remove(&key);
+                    }
                 }
                 Variable::Delete(key) => {
-                    state
-                        .keys
-                        .entry(key)
-                        .or_default()
-                        .insert(summary.progress.height, (loc, Variable::Delete(key)));
+                    let remove_key = {
+                        let history = state.keys.entry(key).or_default();
+                        history.insert(height, (loc, Variable::Delete(key)));
+                        if let Some(limit) = max_versions {
+                            while history.len() > limit {
+                                history.pop_first();
+                            }
+                        }
+                        history.is_empty()
+                    };
+                    if remove_key {
+                        state.keys.remove(&key);
+                    }
                 }
                 _ => {}
             }
         }
 
         // Store progress at height to build proofs
-        state.progress.insert(
-            summary.progress.height,
-            (summary.progress, summary.certificate),
-        );
+        state.progress.insert(height, (summary.progress, summary.certificate));
+
+        if let Some(limit) = self.config.state_max_progress_entries {
+            while state.progress.len() > limit {
+                let Some((oldest_height, _)) = state.progress.pop_first() else {
+                    break;
+                };
+                if let Some(positions) = state.progress_nodes.remove(&oldest_height) {
+                    for pos in positions {
+                        match state.node_ref_counts.get_mut(&pos) {
+                            Some(count) if *count > 1 => {
+                                *count -= 1;
+                            }
+                            Some(_) => {
+                                state.node_ref_counts.remove(&pos);
+                                state.nodes.remove(&pos);
+                            }
+                            None => {}
+                        }
+                    }
+                }
+            }
+        }
     }
 
     pub async fn submit_events(&self, summary: Summary, events_digests: Vec<(u64, Digest)>) {
@@ -120,22 +949,50 @@ impl Simulator {
             if !state.submitted_events.insert(height) {
                 return;
             }
+            if let Some(limit) = self.config.submission_history_limit {
+                state.submitted_events_order.push_back(height);
+                while state.submitted_events_order.len() > limit {
+                    if let Some(oldest) = state.submitted_events_order.pop_front() {
+                        state.submitted_events.remove(&oldest);
+                    }
+                }
+            }
         } // Release lock before broadcasting
 
         // Index blocks/transactions for explorer consumers
         self.index_block_from_summary(&summary.progress, &summary.events_proof_ops)
             .await;
 
+        let receiver_count = self.update_tx.receiver_count();
+        if receiver_count == 0 {
+            return;
+        }
+
+        let subscriptions = self.subscription_snapshot(receiver_count);
+
         // Broadcast events with digests for efficient filtering
-        if let Err(e) = self.update_tx.send(InternalUpdate::Events(
-            Events {
-                progress: summary.progress,
-                certificate: summary.certificate,
-                events_proof: summary.events_proof,
-                events_proof_ops: summary.events_proof_ops,
-            },
+        let events = Arc::new(Events {
+            progress: summary.progress,
+            certificate: summary.certificate,
+            events_proof: summary.events_proof,
+            events_proof_ops: summary.events_proof_ops,
+        });
+        let proof_store = Arc::new(create_proof_store_from_digests(
+            &events.events_proof,
             events_digests,
-        )) {
+        ));
+        let indexed = index_events(
+            events,
+            proof_store,
+            Some(&subscriptions),
+            self.config.updates_index_concurrency(),
+            Arc::clone(&self.update_index_metrics),
+        )
+        .await;
+        if let Err(e) = self
+            .update_tx
+            .send(InternalUpdate::Events(Arc::new(indexed)))
+        {
             tracing::warn!("Failed to broadcast events update (no subscribers): {}", e);
         }
     }
@@ -145,53 +1002,70 @@ impl Simulator {
     }
 
     async fn try_query_state(&self, key: &Digest) -> Option<Lookup> {
-        let state = self.state.read().await;
+        let (progress, certificate, location, value, required_digests) = {
+            let state = self.state.read().await;
 
-        let key_history = match state.keys.get(key) {
-            Some(key_history) => key_history,
-            None => return None,
+            let key_history = match state.keys.get(key) {
+                Some(key_history) => key_history,
+                None => return None,
+            };
+            let (height, operation) = match key_history.last_key_value() {
+                Some((height, operation)) => (height, operation),
+                None => return None,
+            };
+            let (loc, Variable::Update(_, value)) = operation else {
+                return None;
+            };
+
+            // Get progress and certificate
+            let (progress, certificate) = match state.progress.get(height) {
+                Some(value) => value,
+                None => return None,
+            };
+
+            // Get required nodes
+            let required_digest_positions =
+                digests_required_for_proof::<Digest>(progress.state_end_op, *loc, *loc);
+            let required_digests = required_digest_positions
+                .iter()
+                .filter_map(|pos| state.nodes.get(pos).cloned())
+                .collect::<Vec<_>>();
+
+            // Verify we got all required digests
+            if required_digests.len() != required_digest_positions.len() {
+                tracing::error!(
+                    "Missing node digests: expected {}, got {}",
+                    required_digest_positions.len(),
+                    required_digests.len()
+                );
+                return None;
+            }
+
+            (*progress, certificate.clone(), *loc, value.clone(), required_digests)
         };
-        let (height, operation) = match key_history.last_key_value() {
-            Some((height, operation)) => (height, operation),
-            None => return None,
+
+        // Construct proof outside the lock on a blocking thread.
+        let proof = {
+            let required_digests_clone = required_digests.clone();
+            match tokio::task::spawn_blocking(move || {
+                create_proof(progress.state_end_op, required_digests_clone)
+            })
+            .await
+            {
+                Ok(proof) => proof,
+                Err(err) => {
+                    tracing::warn!("Proof build task failed; retrying inline: {err}");
+                    create_proof(progress.state_end_op, required_digests)
+                }
+            }
         };
-        let (loc, Variable::Update(_, value)) = operation else {
-            return None;
-        };
-
-        // Get progress and certificate
-        let (progress, certificate) = match state.progress.get(height) {
-            Some(value) => value,
-            None => return None,
-        };
-
-        // Get required nodes
-        let required_digest_positions =
-            digests_required_for_proof::<Digest>(progress.state_end_op, *loc, *loc);
-        let required_digests = required_digest_positions
-            .iter()
-            .filter_map(|pos| state.nodes.get(pos).cloned())
-            .collect::<Vec<_>>();
-
-        // Verify we got all required digests
-        if required_digests.len() != required_digest_positions.len() {
-            tracing::error!(
-                "Missing node digests: expected {}, got {}",
-                required_digest_positions.len(),
-                required_digests.len()
-            );
-            return None;
-        }
-
-        // Construct proof
-        let proof = create_proof(progress.state_end_op, required_digests);
 
         Some(Lookup {
-            progress: *progress,
-            certificate: certificate.clone(),
+            progress,
+            certificate,
             proof,
-            location: *loc,
-            operation: Variable::Update(*key, value.clone()),
+            location,
+            operation: Variable::Update(*key, value),
         })
     }
 
@@ -207,11 +1081,36 @@ impl Simulator {
         }
     }
 
+    #[deprecated(note = "Use tracked_update_subscriber to register filters for update indexing")]
     pub fn update_subscriber(&self) -> broadcast::Receiver<crate::InternalUpdate> {
         self.update_tx.subscribe()
     }
 
+    pub fn tracked_update_subscriber(
+        &self,
+        filter: UpdatesFilter,
+    ) -> (broadcast::Receiver<crate::InternalUpdate>, SubscriptionGuard) {
+        let guard = self.register_subscription(&filter);
+        (self.update_tx.subscribe(), guard)
+    }
+
     pub fn mempool_subscriber(&self) -> broadcast::Receiver<Pending> {
         self.mempool_tx.subscribe()
+    }
+
+    pub fn register_subscription(&self, filter: &UpdatesFilter) -> SubscriptionGuard {
+        let mut tracker = self.subscriptions.lock().unwrap();
+        tracker.register(filter);
+        SubscriptionGuard {
+            tracker: Arc::clone(&self.subscriptions),
+            filter: filter.clone(),
+        }
+    }
+
+    fn subscription_snapshot(&self, receiver_count: usize) -> SubscriptionSnapshot {
+        let tracker = self.subscriptions.lock().unwrap();
+        let tracked = tracker.total_count();
+        let has_untracked = receiver_count > tracked;
+        tracker.snapshot(has_untracked, has_untracked)
     }
 }

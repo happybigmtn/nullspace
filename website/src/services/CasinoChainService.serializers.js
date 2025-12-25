@@ -61,27 +61,24 @@ export function serializeCasinoGameMove(sessionId, payload) {
 }
 
 /**
- * Tag 14: CasinoToggleShield
- * Binary: [14]
+ * Tag 14: CasinoPlayerAction
+ * Binary: [14] [action:u8]
+ * Action values: 0 = ToggleShield, 1 = ToggleDouble, 2 = ToggleSuper
  */
+export function serializeCasinoPlayerAction(action) {
+  return new Uint8Array([14, action]);
+}
+
 export function serializeCasinoToggleShield() {
-  return new Uint8Array([14]);
+  return serializeCasinoPlayerAction(0);
 }
 
-/**
- * Tag 15: CasinoToggleDouble
- * Binary: [15]
- */
 export function serializeCasinoToggleDouble() {
-  return new Uint8Array([15]);
+  return serializeCasinoPlayerAction(1);
 }
 
-/**
- * Tag 30: CasinoToggleSuper
- * Binary: [30]
- */
 export function serializeCasinoToggleSuper() {
-  return new Uint8Array([30]);
+  return serializeCasinoPlayerAction(2);
 }
 
 /**
@@ -187,12 +184,20 @@ export function deserializeCasinoGameMoved(data) {
     }
   }
 
+  let playerBalances = null;
+  if (offset < data.length) {
+    const parsed = readPlayerBalances(view, data, offset);
+    playerBalances = parsed.balances;
+    offset = parsed.offset;
+  }
+
   return {
     type: 'CasinoGameMoved',
     sessionId,
     moveNumber,
     newState,
     logs,
+    playerBalances,
   };
 }
 
@@ -251,6 +256,13 @@ export function deserializeCasinoGameCompleted(data) {
     }
   }
 
+  let playerBalances = null;
+  if (offset < data.length) {
+    const parsed = readPlayerBalances(view, data, offset);
+    playerBalances = parsed.balances;
+    offset = parsed.offset;
+  }
+
   return {
     type: 'CasinoGameCompleted',
     sessionId,
@@ -261,6 +273,52 @@ export function deserializeCasinoGameCompleted(data) {
     wasShielded,
     wasDoubled,
     logs,
+    playerBalances,
+  };
+}
+
+function readPlayerBalances(view, data, offset) {
+  const minBytes = 8 + 8 + 4 + 4 + 8 + 4 + 4 + 1;
+  if (data.length - offset < minBytes) {
+    return { balances: null, offset };
+  }
+
+  const chips = view.getBigUint64(offset, false);
+  offset += 8;
+  const vusdtBalance = view.getBigUint64(offset, false);
+  offset += 8;
+  const shields = view.getUint32(offset, false);
+  offset += 4;
+  const doubles = view.getUint32(offset, false);
+  offset += 4;
+  const tournamentChips = view.getBigUint64(offset, false);
+  offset += 8;
+  const tournamentShields = view.getUint32(offset, false);
+  offset += 4;
+  const tournamentDoubles = view.getUint32(offset, false);
+  offset += 4;
+  const hasActiveTournament = data[offset++] === 1;
+  let activeTournament = null;
+  if (hasActiveTournament) {
+    if (data.length - offset < 8) {
+      throw new Error('Player balances truncated at active tournament');
+    }
+    activeTournament = view.getBigUint64(offset, false);
+    offset += 8;
+  }
+
+  return {
+    balances: {
+      chips,
+      vusdtBalance,
+      shields,
+      doubles,
+      tournamentChips,
+      tournamentShields,
+      tournamentDoubles,
+      activeTournament,
+    },
+    offset,
   };
 }
 

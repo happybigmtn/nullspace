@@ -1,13 +1,14 @@
 //! Video Poker (Jacks or Better) implementation.
 //!
 //! State blob format:
-//! [stage:u8] [card1:u8] [card2:u8] [card3:u8] [card4:u8] [card5:u8]
+//! [stage:u8] [card1:u8] [card2:u8] [card3:u8] [card4:u8] [card5:u8] [rules:u8]
 //!
 //! Stage: 0 = Deal (initial), 1 = Draw (after hold selection)
 //!
 //! Payload format:
 //! [holdMask:u8] - bits indicate which cards to hold
 //! bit 0 = hold card 1, bit 1 = hold card 2, etc.
+//! [0xFF, rules:u8] - set paytable rules (Deal stage only)
 
 use super::super_mode::apply_super_multiplier_cards;
 use super::{cards, CasinoGame, GameError, GameResult, GameRng};
@@ -46,6 +47,62 @@ pub enum Hand {
     FourOfAKind = 7,
     StraightFlush = 8,
     RoyalFlush = 9,
+}
+
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum VideoPokerPaytable {
+    NineSix = 0,
+    EightFive = 1,
+}
+
+impl Default for VideoPokerPaytable {
+    fn default() -> Self {
+        VideoPokerPaytable::NineSix
+    }
+}
+
+impl TryFrom<u8> for VideoPokerPaytable {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(VideoPokerPaytable::NineSix),
+            1 => Ok(VideoPokerPaytable::EightFive),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct VideoPokerRules {
+    paytable: VideoPokerPaytable,
+}
+
+impl Default for VideoPokerRules {
+    fn default() -> Self {
+        Self {
+            paytable: VideoPokerPaytable::default(),
+        }
+    }
+}
+
+impl VideoPokerRules {
+    fn from_byte(value: u8) -> Option<Self> {
+        Some(Self {
+            paytable: VideoPokerPaytable::try_from(value & 0x01).ok()?,
+        })
+    }
+
+    fn to_byte(self) -> u8 {
+        self.paytable as u8
+    }
+}
+
+struct VideoPokerState {
+    stage: Stage,
+    cards: [u8; 5],
+    rules: VideoPokerRules,
 }
 
 /// Evaluate a 5-card poker hand.
@@ -138,31 +195,50 @@ pub fn evaluate_hand(cards: &[u8; 5]) -> Hand {
 }
 
 /// Payout multiplier for each hand (Jacks or Better paytable).
-fn payout_multiplier(hand: Hand) -> u64 {
-    match hand {
-        Hand::HighCard => 0,
-        Hand::JacksOrBetter => 1,
-        Hand::TwoPair => 2,
-        Hand::ThreeOfAKind => 3,
-        Hand::Straight => 4,
-        Hand::Flush => 6,
-        Hand::FullHouse => 9,
-        Hand::FourOfAKind => 25,
-        Hand::StraightFlush => 50,
-        Hand::RoyalFlush => 800,
+fn payout_multiplier(hand: Hand, paytable: VideoPokerPaytable) -> u64 {
+    match paytable {
+        VideoPokerPaytable::NineSix => match hand {
+            Hand::HighCard => 0,
+            Hand::JacksOrBetter => 1,
+            Hand::TwoPair => 2,
+            Hand::ThreeOfAKind => 3,
+            Hand::Straight => 4,
+            Hand::Flush => 6,
+            Hand::FullHouse => 9,
+            Hand::FourOfAKind => 25,
+            Hand::StraightFlush => 50,
+            Hand::RoyalFlush => 800,
+        },
+        VideoPokerPaytable::EightFive => match hand {
+            Hand::HighCard => 0,
+            Hand::JacksOrBetter => 1,
+            Hand::TwoPair => 2,
+            Hand::ThreeOfAKind => 3,
+            Hand::Straight => 4,
+            Hand::Flush => 5,
+            Hand::FullHouse => 8,
+            Hand::FourOfAKind => 25,
+            Hand::StraightFlush => 50,
+            Hand::RoyalFlush => 800,
+        },
     }
 }
 
-fn parse_state(state: &[u8]) -> Option<(Stage, [u8; 5])> {
+fn parse_state(state: &[u8]) -> Option<VideoPokerState> {
     if state.len() < 6 {
         return None;
     }
     let stage = Stage::try_from(state[0]).ok()?;
     let cards = [state[1], state[2], state[3], state[4], state[5]];
-    Some((stage, cards))
+    let rules = if state.len() >= 7 {
+        VideoPokerRules::from_byte(state[6])?
+    } else {
+        VideoPokerRules::default()
+    };
+    Some(VideoPokerState { stage, cards, rules })
 }
 
-fn serialize_state(stage: Stage, cards: &[u8; 5]) -> Vec<u8> {
+fn serialize_state(stage: Stage, cards: &[u8; 5], rules: VideoPokerRules) -> Vec<u8> {
     vec![
         stage as u8,
         cards[0],
@@ -170,6 +246,7 @@ fn serialize_state(stage: Stage, cards: &[u8; 5]) -> Vec<u8> {
         cards[2],
         cards[3],
         cards[4],
+        rules.to_byte(),
     ]
 }
 
@@ -187,7 +264,7 @@ impl CasinoGame for VideoPoker {
             rng.draw_card(&mut deck).unwrap_or(4),
         ];
 
-        session.state_blob = serialize_state(Stage::Deal, &cards);
+        session.state_blob = serialize_state(Stage::Deal, &cards, VideoPokerRules::default());
         GameResult::Continue(vec![])
     }
 
@@ -204,11 +281,21 @@ impl CasinoGame for VideoPoker {
             return Err(GameError::InvalidPayload);
         }
 
-        let (stage, mut cards) =
-            parse_state(&session.state_blob).ok_or(GameError::InvalidPayload)?;
+        let mut state = parse_state(&session.state_blob).ok_or(GameError::InvalidPayload)?;
 
-        if stage != Stage::Deal {
+        if state.stage != Stage::Deal {
             return Err(GameError::GameAlreadyComplete);
+        }
+
+        if payload.len() == 2 && payload[0] == 0xFF {
+            let rules = VideoPokerRules::from_byte(payload[1]).ok_or(GameError::InvalidPayload)?;
+            state.rules = rules;
+            session.state_blob = serialize_state(state.stage, &state.cards, state.rules);
+            return Ok(GameResult::Continue(vec![]));
+        }
+
+        if payload.len() != 1 {
+            return Err(GameError::InvalidPayload);
         }
 
         let hold_mask = payload[0];
@@ -216,22 +303,22 @@ impl CasinoGame for VideoPoker {
 
         // Build the draw deck from the remaining cards in the pack.
         // All 5 originally-dealt cards are removed from the deck (even discards cannot be re-drawn).
-        let original_cards = cards;
+        let original_cards = state.cards;
         let mut deck = rng.create_deck_excluding(&original_cards);
 
         // Replace non-held cards
-        for (i, card) in cards.iter_mut().enumerate() {
+        for (i, card) in state.cards.iter_mut().enumerate() {
             if hold_mask & (1 << i) == 0 {
                 *card = rng.draw_card(&mut deck).ok_or(GameError::InvalidMove)?;
             }
         }
 
-        session.state_blob = serialize_state(Stage::Draw, &cards);
+        session.state_blob = serialize_state(Stage::Draw, &state.cards, state.rules);
         session.is_complete = true;
 
         // Evaluate final hand
-        let hand = evaluate_hand(&cards);
-        let multiplier = payout_multiplier(hand);
+        let hand = evaluate_hand(&state.cards);
+        let multiplier = payout_multiplier(hand, state.rules.paytable);
 
         // Generate completion logs for frontend display
         let logs = vec![format!("RESULT:{}:{}", hand as u8, multiplier)];
@@ -241,7 +328,11 @@ impl CasinoGame for VideoPoker {
             let base_winnings = session.bet.saturating_mul(multiplier.saturating_add(1));
             // Apply super mode multipliers if active
             let final_winnings = if session.super_mode.is_active {
-                apply_super_multiplier_cards(&cards, &session.super_mode.multipliers, base_winnings)
+                apply_super_multiplier_cards(
+                    &state.cards,
+                    &session.super_mode.multipliers,
+                    base_winnings,
+                )
             } else {
                 base_winnings
             };
@@ -364,10 +455,26 @@ mod tests {
 
     #[test]
     fn test_payout_multipliers() {
-        assert_eq!(payout_multiplier(Hand::HighCard), 0);
-        assert_eq!(payout_multiplier(Hand::JacksOrBetter), 1);
-        assert_eq!(payout_multiplier(Hand::TwoPair), 2);
-        assert_eq!(payout_multiplier(Hand::RoyalFlush), 800);
+        assert_eq!(
+            payout_multiplier(Hand::HighCard, VideoPokerPaytable::NineSix),
+            0
+        );
+        assert_eq!(
+            payout_multiplier(Hand::JacksOrBetter, VideoPokerPaytable::NineSix),
+            1
+        );
+        assert_eq!(
+            payout_multiplier(Hand::TwoPair, VideoPokerPaytable::NineSix),
+            2
+        );
+        assert_eq!(
+            payout_multiplier(Hand::RoyalFlush, VideoPokerPaytable::NineSix),
+            800
+        );
+        assert_eq!(
+            payout_multiplier(Hand::Flush, VideoPokerPaytable::EightFive),
+            5
+        );
     }
 
     #[test]
@@ -379,9 +486,9 @@ mod tests {
         VideoPoker::init(&mut session, &mut rng);
         assert!(!session.is_complete);
 
-        let (stage, cards) = parse_state(&session.state_blob).expect("Failed to parse state");
-        assert_eq!(stage, Stage::Deal);
-        for card in cards {
+        let parsed = parse_state(&session.state_blob).expect("Failed to parse state");
+        assert_eq!(parsed.stage, Stage::Deal);
+        for card in parsed.cards {
             assert!(card < 52);
         }
 
@@ -400,14 +507,18 @@ mod tests {
         let mut rng = GameRng::new(&seed, session.id, 0);
 
         VideoPoker::init(&mut session, &mut rng);
-        let (_, original_cards) = parse_state(&session.state_blob).expect("Failed to parse state");
+        let original_cards = parse_state(&session.state_blob)
+            .expect("Failed to parse state")
+            .cards;
 
         // Discard all cards (hold none)
         let mut rng = GameRng::new(&seed, session.id, 1);
         let result = VideoPoker::process_move(&mut session, &[0], &mut rng);
 
         assert!(result.is_ok());
-        let (_, new_cards) = parse_state(&session.state_blob).expect("Failed to parse state");
+        let new_cards = parse_state(&session.state_blob)
+            .expect("Failed to parse state")
+            .cards;
 
         // None of the original 5 cards may be re-drawn in the same hand.
         let same_count = original_cards
@@ -425,7 +536,7 @@ mod tests {
 
         // Force a known Jacks-or-Better hand and hold all cards so no draw occurs.
         let cards = [10, 23, 1, 2, 3]; // J-J-2-3-4
-        session.state_blob = serialize_state(Stage::Deal, &cards);
+        session.state_blob = serialize_state(Stage::Deal, &cards, VideoPokerRules::default());
 
         let result = VideoPoker::process_move(&mut session, &[0b11111], &mut rng)
             .expect("Failed to process move");

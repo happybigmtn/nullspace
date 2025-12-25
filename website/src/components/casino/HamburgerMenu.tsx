@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
+import { AuthStatusPill } from '../AuthStatusPill';
 
 interface HamburgerMenuProps {
     playMode: 'CASH' | 'FREEROLL' | null;
@@ -12,11 +13,13 @@ interface HamburgerMenuProps {
     onToggleTouchMode: () => void;
     reducedMotion: boolean;
     onToggleReducedMotion: () => void;
+    publicKeyHex?: string | null;
 }
 
 export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
     playMode, onSetPlayMode, onOpenSafety, onToggleHelp,
-    soundEnabled, onToggleSound, touchMode, onToggleTouchMode, reducedMotion, onToggleReducedMotion
+    soundEnabled, onToggleSound, touchMode, onToggleTouchMode, reducedMotion, onToggleReducedMotion,
+    publicKeyHex
 }) => {
     const [isOpen, setIsOpen] = useState(false);
 
@@ -43,6 +46,10 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
                     <div className="absolute top-12 right-0 w-64 bg-black border border-gray-700 rounded-lg shadow-2xl z-[100] p-2 flex flex-col gap-1 animate-in fade-in zoom-in-95 duration-100 origin-top-right">
                         <div className="px-3 py-2 text-[10px] text-gray-500 uppercase tracking-widest border-b border-gray-800 mb-1">
                             Menu
+                        </div>
+
+                        <div className="px-2">
+                            <AuthStatusPill publicKeyHex={publicKeyHex} className="w-full" />
                         </div>
                         
                         <NavLink to="/" onClick={close} className={({ isActive }) => `px-3 py-3 rounded text-sm font-bold tracking-widest ${isActive ? 'bg-terminal-green/10 text-terminal-green' : 'text-gray-300 hover:bg-gray-800'}`}>

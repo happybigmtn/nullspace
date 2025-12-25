@@ -119,6 +119,7 @@ define_instruction_kinds! {
     CasinoStartGame = 2 => Instruction::CasinoStartGame { .. } => "CasinoStartGame" => Instruction::CasinoStartGame { game_type: nullspace_types::casino::GameType::Baccarat, bet: 1, session_id: 1 },
     CasinoGameMove = 3 => Instruction::CasinoGameMove { .. } => "CasinoGameMove" => Instruction::CasinoGameMove { session_id: 1, payload: vec![0] },
     CasinoPlayerAction = 4 => Instruction::CasinoPlayerAction { .. } => "CasinoPlayerAction" => Instruction::CasinoPlayerAction { action: nullspace_types::casino::PlayerAction::ToggleShield },
+    CasinoSetTournamentLimit = 5 => Instruction::CasinoSetTournamentLimit { .. } => "CasinoSetTournamentLimit" => Instruction::CasinoSetTournamentLimit { player: ed25519::PrivateKey::from_seed(1).public_key(), daily_limit: 1 },
     CasinoJoinTournament = 7 => Instruction::CasinoJoinTournament { .. } => "CasinoJoinTournament" => Instruction::CasinoJoinTournament { tournament_id: 1 },
     CasinoStartTournament = 8 => Instruction::CasinoStartTournament { .. } => "CasinoStartTournament" => Instruction::CasinoStartTournament { tournament_id: 1, start_time_ms: 0, end_time_ms: 1 },
     CasinoEndTournament = 9 => Instruction::CasinoEndTournament { .. } => "CasinoEndTournament" => Instruction::CasinoEndTournament { tournament_id: 1 },
@@ -364,6 +365,25 @@ impl Transaction {
         tournament_id: u64,
     ) -> Result<Transaction, JsValue> {
         let instruction = Instruction::CasinoJoinTournament { tournament_id };
+        let tx = ExecutionTransaction::sign(&signer.private_key, nonce, instruction);
+        Ok(Transaction { inner: tx })
+    }
+
+    /// Admin: set a player's daily tournament limit.
+    #[wasm_bindgen]
+    pub fn casino_set_tournament_limit(
+        signer: &Signer,
+        nonce: u64,
+        player_public_key: &[u8],
+        daily_limit: u8,
+    ) -> Result<Transaction, JsValue> {
+        let mut buf = player_public_key;
+        let player = ed25519::PublicKey::read(&mut buf)
+            .map_err(|e| JsValue::from_str(&format!("Invalid public key: {e:?}")))?;
+        if !buf.is_empty() {
+            return Err(JsValue::from_str("Invalid public key length"));
+        }
+        let instruction = Instruction::CasinoSetTournamentLimit { player, daily_limit };
         let tx = ExecutionTransaction::sign(&signer.private_key, nonce, instruction);
         Ok(Transaction { inner: tx })
     }
@@ -642,6 +662,12 @@ pub fn encode_updates_filter_account(public_key: &[u8]) -> Result<Vec<u8>, JsVal
     Ok(UpdatesFilter::Account(pk).encode().to_vec())
 }
 
+/// Encode UpdatesFilter::Session
+#[wasm_bindgen]
+pub fn encode_updates_filter_session(session_id: u64) -> Vec<u8> {
+    UpdatesFilter::Session(session_id).encode().to_vec()
+}
+
 /// Hash a key for state queries.
 #[wasm_bindgen]
 pub fn hash_key(key: &[u8]) -> Vec<u8> {
@@ -702,6 +728,7 @@ fn decode_value(value: Value) -> Result<JsValue, JsValue> {
                 "aura_meter": player.modifiers.aura_meter,
                 "tournaments_played_today": player.tournament.tournaments_played_today,
                 "last_tournament_ts": player.tournament.last_tournament_ts,
+                "tournament_daily_limit": player.tournament.daily_limit,
                 "is_kyc_verified": player.profile.is_kyc_verified
             })
         }
@@ -961,13 +988,24 @@ fn decode_event(event: &Event) -> Result<serde_json::Value, JsValue> {
             move_number,
             new_state,
             logs,
+            player_balances,
         } => {
             serde_json::json!({
                 "type": "CasinoGameMoved",
                 "session_id": session_id,
                 "move_number": move_number,
                 "new_state": hex(new_state),
-                "logs": logs
+                "logs": logs,
+                "player_balances": {
+                    "chips": player_balances.chips,
+                    "vusdt_balance": player_balances.vusdt_balance,
+                    "shields": player_balances.shields,
+                    "doubles": player_balances.doubles,
+                    "tournament_chips": player_balances.tournament_chips,
+                    "tournament_shields": player_balances.tournament_shields,
+                    "tournament_doubles": player_balances.tournament_doubles,
+                    "active_tournament": player_balances.active_tournament
+                }
             })
         }
         Event::CasinoGameCompleted {
@@ -979,6 +1017,7 @@ fn decode_event(event: &Event) -> Result<serde_json::Value, JsValue> {
             was_shielded,
             was_doubled,
             logs,
+            player_balances,
         } => {
             serde_json::json!({
                 "type": "CasinoGameCompleted",
@@ -989,7 +1028,17 @@ fn decode_event(event: &Event) -> Result<serde_json::Value, JsValue> {
                 "final_chips": final_chips,
                 "was_shielded": was_shielded,
                 "was_doubled": was_doubled,
-                "logs": logs
+                "logs": logs,
+                "player_balances": {
+                    "chips": player_balances.chips,
+                    "vusdt_balance": player_balances.vusdt_balance,
+                    "shields": player_balances.shields,
+                    "doubles": player_balances.doubles,
+                    "tournament_chips": player_balances.tournament_chips,
+                    "tournament_shields": player_balances.tournament_shields,
+                    "tournament_doubles": player_balances.tournament_doubles,
+                    "active_tournament": player_balances.active_tournament
+                }
             })
         }
         Event::CasinoLeaderboardUpdated { leaderboard } => {
@@ -1087,46 +1136,98 @@ fn decode_event(event: &Event) -> Result<serde_json::Value, JsValue> {
         }
 
         // Vault & AMM events
-        Event::VaultCreated { player } => {
+        Event::VaultCreated { player, vault } => {
             serde_json::json!({
                 "type": "VaultCreated",
-                "player": hex(&player.encode())
+                "player": hex(&player.encode()),
+                "vault": {
+                    "collateral_rng": vault.collateral_rng,
+                    "debt_vusdt": vault.debt_vusdt
+                }
             })
         }
         Event::CollateralDeposited {
             player,
             amount,
             new_collateral,
+            vault,
+            player_balances,
         } => {
             serde_json::json!({
                 "type": "CollateralDeposited",
                 "player": hex(&player.encode()),
                 "amount": amount,
-                "new_collateral": new_collateral
+                "new_collateral": new_collateral,
+                "vault": {
+                    "collateral_rng": vault.collateral_rng,
+                    "debt_vusdt": vault.debt_vusdt
+                },
+                "player_balances": {
+                    "chips": player_balances.chips,
+                    "vusdt_balance": player_balances.vusdt_balance,
+                    "shields": player_balances.shields,
+                    "doubles": player_balances.doubles,
+                    "tournament_chips": player_balances.tournament_chips,
+                    "tournament_shields": player_balances.tournament_shields,
+                    "tournament_doubles": player_balances.tournament_doubles,
+                    "active_tournament": player_balances.active_tournament
+                }
             })
         }
         Event::VusdtBorrowed {
             player,
             amount,
             new_debt,
+            vault,
+            player_balances,
         } => {
             serde_json::json!({
                 "type": "VusdtBorrowed",
                 "player": hex(&player.encode()),
                 "amount": amount,
-                "new_debt": new_debt
+                "new_debt": new_debt,
+                "vault": {
+                    "collateral_rng": vault.collateral_rng,
+                    "debt_vusdt": vault.debt_vusdt
+                },
+                "player_balances": {
+                    "chips": player_balances.chips,
+                    "vusdt_balance": player_balances.vusdt_balance,
+                    "shields": player_balances.shields,
+                    "doubles": player_balances.doubles,
+                    "tournament_chips": player_balances.tournament_chips,
+                    "tournament_shields": player_balances.tournament_shields,
+                    "tournament_doubles": player_balances.tournament_doubles,
+                    "active_tournament": player_balances.active_tournament
+                }
             })
         }
         Event::VusdtRepaid {
             player,
             amount,
             new_debt,
+            vault,
+            player_balances,
         } => {
             serde_json::json!({
                 "type": "VusdtRepaid",
                 "player": hex(&player.encode()),
                 "amount": amount,
-                "new_debt": new_debt
+                "new_debt": new_debt,
+                "vault": {
+                    "collateral_rng": vault.collateral_rng,
+                    "debt_vusdt": vault.debt_vusdt
+                },
+                "player_balances": {
+                    "chips": player_balances.chips,
+                    "vusdt_balance": player_balances.vusdt_balance,
+                    "shields": player_balances.shields,
+                    "doubles": player_balances.doubles,
+                    "tournament_chips": player_balances.tournament_chips,
+                    "tournament_shields": player_balances.tournament_shields,
+                    "tournament_doubles": player_balances.tournament_doubles,
+                    "active_tournament": player_balances.active_tournament
+                }
             })
         }
         Event::AmmSwapped {
@@ -1138,6 +1239,9 @@ fn decode_event(event: &Event) -> Result<serde_json::Value, JsValue> {
             burned_amount,
             reserve_rng,
             reserve_vusdt,
+            amm,
+            player_balances,
+            house,
         } => {
             serde_json::json!({
                 "type": "AmmSwapped",
@@ -1148,7 +1252,41 @@ fn decode_event(event: &Event) -> Result<serde_json::Value, JsValue> {
                 "fee_amount": fee_amount,
                 "burned_amount": burned_amount,
                 "reserve_rng": reserve_rng,
-                "reserve_vusdt": reserve_vusdt
+                "reserve_vusdt": reserve_vusdt,
+                "amm": {
+                    "reserve_rng": amm.reserve_rng,
+                    "reserve_vusdt": amm.reserve_vusdt,
+                    "total_shares": amm.total_shares,
+                    "fee_basis_points": amm.fee_basis_points,
+                    "sell_tax_basis_points": amm.sell_tax_basis_points,
+                    "bootstrap_price_vusdt_numerator": amm.bootstrap_price_vusdt_numerator,
+                    "bootstrap_price_rng_denominator": amm.bootstrap_price_rng_denominator
+                },
+                "player_balances": {
+                    "chips": player_balances.chips,
+                    "vusdt_balance": player_balances.vusdt_balance,
+                    "shields": player_balances.shields,
+                    "doubles": player_balances.doubles,
+                    "tournament_chips": player_balances.tournament_chips,
+                    "tournament_shields": player_balances.tournament_shields,
+                    "tournament_doubles": player_balances.tournament_doubles,
+                    "active_tournament": player_balances.active_tournament
+                },
+                "house": {
+                    "current_epoch": house.current_epoch,
+                    "epoch_start_ts": house.epoch_start_ts,
+                    "net_pnl": house.net_pnl.to_string(),
+                    "total_staked_amount": house.total_staked_amount,
+                    "total_voting_power": house.total_voting_power.to_string(),
+                    "accumulated_fees": house.accumulated_fees,
+                    "total_burned": house.total_burned,
+                    "total_issuance": house.total_issuance,
+                    "three_card_progressive_jackpot": house.three_card_progressive_jackpot,
+                    "uth_progressive_jackpot": house.uth_progressive_jackpot,
+                    "staking_reward_per_voting_power_x18": house.staking_reward_per_voting_power_x18.to_string(),
+                    "staking_reward_pool": house.staking_reward_pool,
+                    "staking_reward_carry": house.staking_reward_carry
+                }
             })
         }
         Event::LiquidityAdded {
@@ -1160,6 +1298,8 @@ fn decode_event(event: &Event) -> Result<serde_json::Value, JsValue> {
             reserve_rng,
             reserve_vusdt,
             lp_balance,
+            amm,
+            player_balances,
         } => {
             serde_json::json!({
                 "type": "LiquidityAdded",
@@ -1170,7 +1310,26 @@ fn decode_event(event: &Event) -> Result<serde_json::Value, JsValue> {
                 "total_shares": total_shares,
                 "reserve_rng": reserve_rng,
                 "reserve_vusdt": reserve_vusdt,
-                "lp_balance": lp_balance
+                "lp_balance": lp_balance,
+                "amm": {
+                    "reserve_rng": amm.reserve_rng,
+                    "reserve_vusdt": amm.reserve_vusdt,
+                    "total_shares": amm.total_shares,
+                    "fee_basis_points": amm.fee_basis_points,
+                    "sell_tax_basis_points": amm.sell_tax_basis_points,
+                    "bootstrap_price_vusdt_numerator": amm.bootstrap_price_vusdt_numerator,
+                    "bootstrap_price_rng_denominator": amm.bootstrap_price_rng_denominator
+                },
+                "player_balances": {
+                    "chips": player_balances.chips,
+                    "vusdt_balance": player_balances.vusdt_balance,
+                    "shields": player_balances.shields,
+                    "doubles": player_balances.doubles,
+                    "tournament_chips": player_balances.tournament_chips,
+                    "tournament_shields": player_balances.tournament_shields,
+                    "tournament_doubles": player_balances.tournament_doubles,
+                    "active_tournament": player_balances.active_tournament
+                }
             })
         }
         Event::LiquidityRemoved {
@@ -1182,6 +1341,8 @@ fn decode_event(event: &Event) -> Result<serde_json::Value, JsValue> {
             reserve_rng,
             reserve_vusdt,
             lp_balance,
+            amm,
+            player_balances,
         } => {
             serde_json::json!({
                 "type": "LiquidityRemoved",
@@ -1192,7 +1353,26 @@ fn decode_event(event: &Event) -> Result<serde_json::Value, JsValue> {
                 "total_shares": total_shares,
                 "reserve_rng": reserve_rng,
                 "reserve_vusdt": reserve_vusdt,
-                "lp_balance": lp_balance
+                "lp_balance": lp_balance,
+                "amm": {
+                    "reserve_rng": amm.reserve_rng,
+                    "reserve_vusdt": amm.reserve_vusdt,
+                    "total_shares": amm.total_shares,
+                    "fee_basis_points": amm.fee_basis_points,
+                    "sell_tax_basis_points": amm.sell_tax_basis_points,
+                    "bootstrap_price_vusdt_numerator": amm.bootstrap_price_vusdt_numerator,
+                    "bootstrap_price_rng_denominator": amm.bootstrap_price_rng_denominator
+                },
+                "player_balances": {
+                    "chips": player_balances.chips,
+                    "vusdt_balance": player_balances.vusdt_balance,
+                    "shields": player_balances.shields,
+                    "doubles": player_balances.doubles,
+                    "tournament_chips": player_balances.tournament_chips,
+                    "tournament_shields": player_balances.tournament_shields,
+                    "tournament_doubles": player_balances.tournament_doubles,
+                    "active_tournament": player_balances.active_tournament
+                }
             })
         }
 
@@ -1204,6 +1384,9 @@ fn decode_event(event: &Event) -> Result<serde_json::Value, JsValue> {
             new_balance,
             unlock_ts,
             voting_power,
+            staker,
+            house,
+            player_balances,
         } => {
             serde_json::json!({
                 "type": "Staked",
@@ -1212,27 +1395,153 @@ fn decode_event(event: &Event) -> Result<serde_json::Value, JsValue> {
                 "duration": duration,
                 "new_balance": new_balance,
                 "unlock_ts": unlock_ts,
-                "voting_power": voting_power.to_string()
+                "voting_power": voting_power.to_string(),
+                "staker": {
+                    "balance": staker.balance,
+                    "unlock_ts": staker.unlock_ts,
+                    "last_claim_epoch": staker.last_claim_epoch,
+                    "voting_power": staker.voting_power.to_string(),
+                    "reward_debt_x18": staker.reward_debt_x18.to_string(),
+                    "unclaimed_rewards": staker.unclaimed_rewards
+                },
+                "house": {
+                    "current_epoch": house.current_epoch,
+                    "epoch_start_ts": house.epoch_start_ts,
+                    "net_pnl": house.net_pnl.to_string(),
+                    "total_staked_amount": house.total_staked_amount,
+                    "total_voting_power": house.total_voting_power.to_string(),
+                    "accumulated_fees": house.accumulated_fees,
+                    "total_burned": house.total_burned,
+                    "total_issuance": house.total_issuance,
+                    "three_card_progressive_jackpot": house.three_card_progressive_jackpot,
+                    "uth_progressive_jackpot": house.uth_progressive_jackpot,
+                    "staking_reward_per_voting_power_x18": house.staking_reward_per_voting_power_x18.to_string(),
+                    "staking_reward_pool": house.staking_reward_pool,
+                    "staking_reward_carry": house.staking_reward_carry
+                },
+                "player_balances": {
+                    "chips": player_balances.chips,
+                    "vusdt_balance": player_balances.vusdt_balance,
+                    "shields": player_balances.shields,
+                    "doubles": player_balances.doubles,
+                    "tournament_chips": player_balances.tournament_chips,
+                    "tournament_shields": player_balances.tournament_shields,
+                    "tournament_doubles": player_balances.tournament_doubles,
+                    "active_tournament": player_balances.active_tournament
+                }
             })
         }
-        Event::Unstaked { player, amount } => {
+        Event::Unstaked {
+            player,
+            amount,
+            staker,
+            house,
+            player_balances,
+        } => {
             serde_json::json!({
                 "type": "Unstaked",
                 "player": hex(&player.encode()),
-                "amount": amount
+                "amount": amount,
+                "staker": {
+                    "balance": staker.balance,
+                    "unlock_ts": staker.unlock_ts,
+                    "last_claim_epoch": staker.last_claim_epoch,
+                    "voting_power": staker.voting_power.to_string(),
+                    "reward_debt_x18": staker.reward_debt_x18.to_string(),
+                    "unclaimed_rewards": staker.unclaimed_rewards
+                },
+                "house": {
+                    "current_epoch": house.current_epoch,
+                    "epoch_start_ts": house.epoch_start_ts,
+                    "net_pnl": house.net_pnl.to_string(),
+                    "total_staked_amount": house.total_staked_amount,
+                    "total_voting_power": house.total_voting_power.to_string(),
+                    "accumulated_fees": house.accumulated_fees,
+                    "total_burned": house.total_burned,
+                    "total_issuance": house.total_issuance,
+                    "three_card_progressive_jackpot": house.three_card_progressive_jackpot,
+                    "uth_progressive_jackpot": house.uth_progressive_jackpot,
+                    "staking_reward_per_voting_power_x18": house.staking_reward_per_voting_power_x18.to_string(),
+                    "staking_reward_pool": house.staking_reward_pool,
+                    "staking_reward_carry": house.staking_reward_carry
+                },
+                "player_balances": {
+                    "chips": player_balances.chips,
+                    "vusdt_balance": player_balances.vusdt_balance,
+                    "shields": player_balances.shields,
+                    "doubles": player_balances.doubles,
+                    "tournament_chips": player_balances.tournament_chips,
+                    "tournament_shields": player_balances.tournament_shields,
+                    "tournament_doubles": player_balances.tournament_doubles,
+                    "active_tournament": player_balances.active_tournament
+                }
             })
         }
-        Event::EpochProcessed { epoch } => {
+        Event::EpochProcessed { epoch, house } => {
             serde_json::json!({
                 "type": "EpochProcessed",
-                "epoch": epoch
+                "epoch": epoch,
+                "house": {
+                    "current_epoch": house.current_epoch,
+                    "epoch_start_ts": house.epoch_start_ts,
+                    "net_pnl": house.net_pnl.to_string(),
+                    "total_staked_amount": house.total_staked_amount,
+                    "total_voting_power": house.total_voting_power.to_string(),
+                    "accumulated_fees": house.accumulated_fees,
+                    "total_burned": house.total_burned,
+                    "total_issuance": house.total_issuance,
+                    "three_card_progressive_jackpot": house.three_card_progressive_jackpot,
+                    "uth_progressive_jackpot": house.uth_progressive_jackpot,
+                    "staking_reward_per_voting_power_x18": house.staking_reward_per_voting_power_x18.to_string(),
+                    "staking_reward_pool": house.staking_reward_pool,
+                    "staking_reward_carry": house.staking_reward_carry
+                }
             })
         }
-        Event::RewardsClaimed { player, amount } => {
+        Event::RewardsClaimed {
+            player,
+            amount,
+            staker,
+            house,
+            player_balances,
+        } => {
             serde_json::json!({
                 "type": "RewardsClaimed",
                 "player": hex(&player.encode()),
-                "amount": amount
+                "amount": amount,
+                "staker": {
+                    "balance": staker.balance,
+                    "unlock_ts": staker.unlock_ts,
+                    "last_claim_epoch": staker.last_claim_epoch,
+                    "voting_power": staker.voting_power.to_string(),
+                    "reward_debt_x18": staker.reward_debt_x18.to_string(),
+                    "unclaimed_rewards": staker.unclaimed_rewards
+                },
+                "house": {
+                    "current_epoch": house.current_epoch,
+                    "epoch_start_ts": house.epoch_start_ts,
+                    "net_pnl": house.net_pnl.to_string(),
+                    "total_staked_amount": house.total_staked_amount,
+                    "total_voting_power": house.total_voting_power.to_string(),
+                    "accumulated_fees": house.accumulated_fees,
+                    "total_burned": house.total_burned,
+                    "total_issuance": house.total_issuance,
+                    "three_card_progressive_jackpot": house.three_card_progressive_jackpot,
+                    "uth_progressive_jackpot": house.uth_progressive_jackpot,
+                    "staking_reward_per_voting_power_x18": house.staking_reward_per_voting_power_x18.to_string(),
+                    "staking_reward_pool": house.staking_reward_pool,
+                    "staking_reward_carry": house.staking_reward_carry
+                },
+                "player_balances": {
+                    "chips": player_balances.chips,
+                    "vusdt_balance": player_balances.vusdt_balance,
+                    "shields": player_balances.shields,
+                    "doubles": player_balances.doubles,
+                    "tournament_chips": player_balances.tournament_chips,
+                    "tournament_shields": player_balances.tournament_shields,
+                    "tournament_doubles": player_balances.tournament_doubles,
+                    "active_tournament": player_balances.active_tournament
+                }
             })
         }
     };

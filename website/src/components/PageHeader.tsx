@@ -23,8 +23,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({ title, status, leading, 
         <div className="text-lg font-bold tracking-widest">{title}</div>
         {status ? <div className="text-[10px] text-gray-500 tracking-widest">{status}</div> : null}
       </div>
-      {right ? <div className="flex items-center gap-3">{right}</div> : null}
+      {right ? <div className="flex items-center gap-3 flex-wrap">{right}</div> : null}
     </header>
   );
 };
-

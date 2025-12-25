@@ -165,7 +165,7 @@ export interface GameState {
   rouletteLastRoundBets: RouletteBet[]; // Bets from the previous spin (for rebet)
   rouletteHistory: number[];
   rouletteInputMode: 'NONE' | 'STRAIGHT' | 'SPLIT_H' | 'SPLIT_V' | 'STREET' | 'CORNER' | 'SIX_LINE';
-  rouletteZeroRule: 'STANDARD' | 'LA_PARTAGE' | 'EN_PRISON' | 'EN_PRISON_DOUBLE';
+  rouletteZeroRule: 'STANDARD' | 'LA_PARTAGE' | 'EN_PRISON' | 'EN_PRISON_DOUBLE' | 'AMERICAN';
   rouletteIsPrison: boolean;
 
   // Sic Bo

@@ -34,13 +34,13 @@ export const GameControlBar: React.FC<GameControlBarProps> = ({
     // Desktop base: absolute bottom
     // Mobile base: fixed bottom
     const base =
-        'ns-controlbar fixed bottom-0 left-0 right-0 sm:sticky sm:bottom-0 bg-terminal-black/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)] sm:pb-0';
+        'ns-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-terminal-black/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)] md:pb-0';
     
     // Layout for standard mode
     const layout =
         variant === 'stack'
             ? 'p-2'
-            : 'h-16 sm:h-20 flex items-center justify-between sm:justify-center gap-2 p-2 sm:px-4';
+            : 'h-16 md:h-20 flex items-center justify-between md:justify-center gap-2 p-2 md:px-4';
 
     // If no new props are used, render children directly (legacy/custom mode)
     if (!primaryAction && secondaryActions.length === 0) {
@@ -57,7 +57,7 @@ export const GameControlBar: React.FC<GameControlBarProps> = ({
     return (
         <div role="group" aria-label={ariaLabel} className={[base, layout, className].filter(Boolean).join(' ')}>
             {/* Mobile: Left Actions (Menu or Direct) */}
-            <div className="flex sm:hidden flex-1 justify-start gap-2">
+            <div className="flex md:hidden flex-1 justify-start gap-2">
                 {children} {/* Render custom children (like modifiers) on left */}
                 
                 {hasSecondary && (
@@ -90,7 +90,7 @@ export const GameControlBar: React.FC<GameControlBarProps> = ({
             </div>
 
             {/* Desktop: Centered Row */}
-            <div className="hidden sm:flex items-center gap-4">
+            <div className="hidden md:flex items-center gap-4">
                 {children}
                 {secondaryActions.map((action, i) =>
                     action.type === 'divider' ? (
@@ -121,7 +121,7 @@ export const GameControlBar: React.FC<GameControlBarProps> = ({
                     type="button"
                     onClick={primaryAction.onClick}
                     disabled={primaryAction.disabled}
-                    className={`h-12 sm:h-14 px-6 sm:px-8 rounded border-2 font-bold text-sm sm:text-base tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] ${
+                    className={`h-12 md:h-14 px-6 md:px-8 rounded border-2 font-bold text-sm md:text-base tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] ${
                         primaryAction.disabled
                             ? 'border-gray-800 bg-gray-900 text-gray-600 cursor-not-allowed'
                             : 'border-terminal-green bg-terminal-green text-black hover:bg-white hover:border-white hover:scale-105 active:scale-95'

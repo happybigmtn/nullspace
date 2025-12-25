@@ -3,6 +3,7 @@ use crate::{
     indexer::Indexer,
     seeder,
     supervisor::{EpochSupervisor, ViewSupervisor},
+    system_metrics,
 };
 use commonware_broadcast::buffered;
 use commonware_consensus::{
@@ -189,6 +190,9 @@ pub struct ApplicationConfig<I: Indexer> {
     pub mempool_max_backlog: usize,
     pub mempool_max_transactions: usize,
     pub max_pending_seed_listeners: usize,
+    pub mempool_stream_buffer_size: usize,
+    pub nonce_cache_capacity: usize,
+    pub nonce_cache_ttl: Duration,
 }
 
 pub struct Config<B: Blocker<PublicKey = PublicKey>, I: Indexer> {
@@ -278,6 +282,9 @@ impl<
                     execution_concurrency: cfg.application.execution_concurrency,
                     mempool_max_backlog: cfg.application.mempool_max_backlog,
                     mempool_max_transactions: cfg.application.mempool_max_transactions,
+                    mempool_stream_buffer_size: cfg.application.mempool_stream_buffer_size,
+                    nonce_cache_capacity: cfg.application.nonce_cache_capacity,
+                    nonce_cache_ttl: cfg.application.nonce_cache_ttl,
                 },
             );
 
@@ -531,6 +538,8 @@ impl<
         // that restart could block (as the upstream actor may fill the downstream actor's mailbox with items during initialization,
         // potentially blocking if not read).
 
+        let system_metrics_handle = system_metrics::spawn_process_metrics(self.context.clone());
+
         // Start the seeder
         let seeder_handle = self.seeder.start(seeder_network);
 
@@ -565,6 +574,7 @@ impl<
         // Stop the node when any actor terminates. If we allowed the engine task to
         // continue, we'd leave the system in a partially alive state.
         let tasks = vec![
+            NamedTask::actor("system_metrics", system_metrics_handle),
             NamedTask::actor("seeder", seeder_handle),
             NamedTask::actor("aggregation", aggregation_handle),
             NamedTask::actor("aggregator", aggregator_handle),

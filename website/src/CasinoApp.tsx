@@ -4,6 +4,7 @@ import { useTerminalGame } from './hooks/useTerminalGame';
 import { useKeyboardControls } from './hooks/useKeyboardControls';
 import { PlaySwapStakeTabs } from './components/PlaySwapStakeTabs';
 import { WalletPill } from './components/WalletPill';
+import { AuthStatusPill } from './components/AuthStatusPill';
 
 // Components
 import {
@@ -46,7 +47,7 @@ export default function CasinoApp() {
   // Mode selection (Cash vs Freeroll)
   const [playMode, setPlayMode] = useState<PlayMode | null>(null);
 
-  const { stats, gameState, setGameState, deck, aiAdvice, tournamentTime, phase, leaderboard, isRegistered, walletRng, walletVusdt, walletPublicKeyHex, lastTxSig, botConfig, setBotConfig, isRegisteringOrJoining, isFaucetClaiming, freerollActiveTournamentId, freerollActiveTimeLeft, freerollActivePrizePool, freerollActivePlayerCount, playerActiveTournamentId, freerollNextStartIn, freerollNextTournamentId, freerollIsJoinedNext, tournamentsPlayedToday, actions } = useTerminalGame(playMode);
+  const { stats, gameState, setGameState, deck, aiAdvice, tournamentTime, phase, leaderboard, isRegistered, walletRng, walletVusdt, walletPublicKeyHex, lastTxSig, botConfig, setBotConfig, isRegisteringOrJoining, isFaucetClaiming, freerollActiveTournamentId, freerollActiveTimeLeft, freerollActivePrizePool, freerollActivePlayerCount, playerActiveTournamentId, freerollNextStartIn, freerollNextTournamentId, freerollIsJoinedNext, tournamentsPlayedToday, tournamentDailyLimit, actions } = useTerminalGame(playMode);
 
   // UI State
   const [commandOpen, setCommandOpen] = useState(false);
@@ -400,6 +401,7 @@ export default function CasinoApp() {
 	              nextTournamentId={freerollNextTournamentId}
 	              isJoinedNext={freerollIsJoinedNext}
 	              tournamentsPlayedToday={tournamentsPlayedToday}
+	              dailyLimit={tournamentDailyLimit}
 	              onRegister={actions.registerForTournament}
 	              onEnterTournament={actions.enterTournament}
 	              botConfig={botConfig}
@@ -441,18 +443,19 @@ export default function CasinoApp() {
                    fixedMode 
                    className="border-none bg-transparent"
                />
-               <HamburgerMenu
-                   playMode={playMode}
-                   onSetPlayMode={setPlayMode}
-                   onOpenSafety={() => openResponsiblePlay('settings')}
-                   onToggleHelp={toggleHelp}
-                   soundEnabled={soundEnabled}
-                   onToggleSound={() => setSoundEnabled((v) => !v)}
-                   touchMode={touchMode}
-                   onToggleTouchMode={() => setTouchMode((v) => !v)}
-                   reducedMotion={reducedMotion}
-                   onToggleReducedMotion={() => setReducedMotion((v) => !v)}
-               />
+                   <HamburgerMenu
+                       playMode={playMode}
+                       onSetPlayMode={setPlayMode}
+                       onOpenSafety={() => openResponsiblePlay('settings')}
+                       onToggleHelp={toggleHelp}
+                       soundEnabled={soundEnabled}
+                       onToggleSound={() => setSoundEnabled((v) => !v)}
+                       touchMode={touchMode}
+                       onToggleTouchMode={() => setTouchMode((v) => !v)}
+                       reducedMotion={reducedMotion}
+                       onToggleReducedMotion={() => setReducedMotion((v) => !v)}
+                       publicKeyHex={walletPublicKeyHex}
+                   />
            </div>
        </Header>
 
@@ -474,7 +477,8 @@ export default function CasinoApp() {
            <div className="hidden lg:flex flex-1 min-w-0 justify-center">
                <PlaySwapStakeTabs />
            </div>
-           <div className="hidden lg:flex items-center">
+           <div className="hidden lg:flex items-center gap-2">
+               <AuthStatusPill publicKeyHex={walletPublicKeyHex} />
                <WalletPill rng={walletRng} vusdt={walletVusdt} pubkeyHex={walletPublicKeyHex} />
            </div>
        </div>
@@ -482,7 +486,8 @@ export default function CasinoApp() {
 	       <div className="flex flex-1 overflow-hidden relative">
 	          <main className={`flex-1 flex flex-col relative bg-terminal-black p-3 sm:p-4 overflow-y-auto ${gameState.type !== GameType.NONE ? 'pb-24 sm:pb-20 md:pb-4' : ''}`}>
 	             {gameState.type === GameType.NONE ? (
-	               <div className="mb-2 lg:hidden">
+	               <div className="mb-2 lg:hidden space-y-2">
+	                 <AuthStatusPill publicKeyHex={walletPublicKeyHex} className="w-full" />
 	                 <WalletPill rng={walletRng} vusdt={walletVusdt} pubkeyHex={walletPublicKeyHex} className="w-full" />
 	               </div>
 	             ) : null}

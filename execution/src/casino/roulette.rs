@@ -2,7 +2,7 @@
 //!
 //! State blob format:
 //! [bet_count:u8]
-//! [zero_rule:u8]                 (0=Standard, 1=La Partage, 2=En Prison, 3=En Prison (Double))
+//! [zero_rule:u8]                 (0=Standard, 1=La Partage, 2=En Prison, 3=En Prison (Double), 4=American)
 //! [phase:u8]                     (0=Betting, 1=Prison)
 //! [totalWagered:u64 BE]          (sum of all placed bet amounts)
 //! [pendingReturn:u64 BE]         (credited return accumulated before completion; used by En Prison)
@@ -16,7 +16,7 @@
 //! [0, bet_type, number, amount_bytes...] - Place bet (adds to pending bets)
 //! [1] - Spin wheel and resolve all bets
 //! [2] - Clear all pending bets (with refund)
-//! [3, zero_rule] - Set even-money-on-zero rule
+//! [3, zero_rule] - Set zero rule / wheel (0-3 European, 4 American)
 //! [4, bet_count, bets...] - Atomic batch: place all bets + spin in one transaction
 //!                          Each bet is 10 bytes: [bet_type:u8, number:u8, amount:u64 BE]
 //!                          Uses standard zero rule (no En Prison in atomic batch)
@@ -51,6 +51,22 @@ const STATE_HEADER_V2_LEN: usize = 19;
 const RED_NUMBERS: [u8; 18] = [
     1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36,
 ];
+const DOUBLE_ZERO: u8 = 37;
+
+fn is_zero_result(zero_rule: ZeroRule, result: u8) -> bool {
+    match zero_rule {
+        ZeroRule::American => result == 0 || result == DOUBLE_ZERO,
+        _ => result == 0,
+    }
+}
+
+fn spin_result(rng: &mut GameRng, zero_rule: ZeroRule) -> u8 {
+    if matches!(zero_rule, ZeroRule::American) {
+        rng.next_bounded(38)
+    } else {
+        rng.spin_roulette()
+    }
+}
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -59,6 +75,7 @@ enum ZeroRule {
     LaPartage = 1,
     EnPrison = 2,
     EnPrisonDouble = 3,
+    American = 4,
 }
 
 impl TryFrom<u8> for ZeroRule {
@@ -70,6 +87,7 @@ impl TryFrom<u8> for ZeroRule {
             1 => Ok(ZeroRule::LaPartage),
             2 => Ok(ZeroRule::EnPrison),
             3 => Ok(ZeroRule::EnPrisonDouble),
+            4 => Ok(ZeroRule::American),
             _ => Err(GameError::InvalidPayload),
         }
     }
@@ -145,9 +163,9 @@ fn is_red(number: u8) -> bool {
 
 /// Check if a bet wins for a given result.
 fn bet_wins(bet_type: BetType, bet_number: u8, result: u8) -> bool {
-    // Zero loses all except straight bet on 0
-    if result == 0 {
-        return bet_type == BetType::Straight && bet_number == 0;
+    // Zero loses all except straight bet on the matching zero (0 or 00).
+    if result == 0 || result == DOUBLE_ZERO {
+        return bet_type == BetType::Straight && bet_number == result;
     }
 
     match bet_type {
@@ -378,7 +396,7 @@ fn generate_roulette_logs(
         })
         .collect();
 
-    let color = if result == 0 {
+    let color = if is_zero_result(state.zero_rule, result) {
         "GREEN"
     } else if is_red(result) {
         "RED"
@@ -439,7 +457,12 @@ impl CasinoGame for Roulette {
                 // Validate bet number
                 match bet_type {
                     BetType::Straight => {
-                        if number > 36 {
+                        let max_straight = if matches!(state.zero_rule, ZeroRule::American) {
+                            DOUBLE_ZERO
+                        } else {
+                            36
+                        };
+                        if number > max_straight {
                             return Err(GameError::InvalidPayload);
                         }
                     }
@@ -519,15 +542,15 @@ impl CasinoGame for Roulette {
                             return Err(GameError::InvalidMove);
                         }
 
-                        let result = rng.spin_roulette();
+                        let result = spin_result(rng, state.zero_rule);
                         state.result = Some(result);
 
                         // Standard single-spin settlement unless En Prison triggers.
                         let mut total_return: u64 = 0;
 
-                        if result == 0 {
+                        if is_zero_result(state.zero_rule, result) {
                             match state.zero_rule {
-                                ZeroRule::Standard => {
+                                ZeroRule::Standard | ZeroRule::American => {
                                     for bet in &state.bets {
                                         if bet_wins(bet.bet_type, bet.number, result) {
                                             let multiplier =
@@ -603,7 +626,7 @@ impl CasinoGame for Roulette {
                             if !(matches!(
                                 state.zero_rule,
                                 ZeroRule::EnPrison | ZeroRule::EnPrisonDouble
-                            ) && result == 0)
+                            ) && is_zero_result(state.zero_rule, result))
                             {
                                 total_return = apply_super_multiplier_number(
                                     result,
@@ -630,10 +653,12 @@ impl CasinoGame for Roulette {
                             return Err(GameError::InvalidMove);
                         }
 
-                        let result = rng.spin_roulette();
+                        let result = spin_result(rng, state.zero_rule);
                         state.result = Some(result);
 
-                        if result == 0 && state.zero_rule == ZeroRule::EnPrisonDouble {
+                        if is_zero_result(state.zero_rule, result)
+                            && state.zero_rule == ZeroRule::EnPrisonDouble
+                        {
                             // Double-imprisonment variant: a second 0 re-imprisons the bets.
                             session.state_blob = state.to_blob();
                             session.move_count += 1;
@@ -641,7 +666,7 @@ impl CasinoGame for Roulette {
                         }
 
                         let mut push_return: u64 = 0;
-                        if result != 0 {
+                        if !is_zero_result(state.zero_rule, result) {
                             for bet in &state.bets {
                                 if bet_wins(bet.bet_type, bet.number, result) {
                                     // Winning imprisoned bets push (stake returned, no winnings).
@@ -780,7 +805,7 @@ impl CasinoGame for Roulette {
                 state.total_wagered = total_wager;
 
                 // Spin the wheel
-                let result = rng.spin_roulette();
+                let result = spin_result(rng, state.zero_rule);
                 state.result = Some(result);
 
                 // Calculate total return (standard rules - no En Prison for atomic batch)
@@ -888,6 +913,8 @@ mod tests {
         assert!(!bet_wins(BetType::Straight, 17, 18));
         assert!(bet_wins(BetType::Straight, 0, 0));
         assert!(!bet_wins(BetType::Straight, 1, 0)); // 0 loses non-zero straight
+        assert!(bet_wins(BetType::Straight, DOUBLE_ZERO, DOUBLE_ZERO));
+        assert!(!bet_wins(BetType::Straight, 0, DOUBLE_ZERO));
     }
 
     #[test]
@@ -897,12 +924,14 @@ mod tests {
         assert!(bet_wins(BetType::Red, 0, 3));
         assert!(!bet_wins(BetType::Red, 0, 2));
         assert!(!bet_wins(BetType::Red, 0, 0)); // Zero loses
+        assert!(!bet_wins(BetType::Red, 0, DOUBLE_ZERO));
 
         // Black numbers
         assert!(bet_wins(BetType::Black, 0, 2));
         assert!(bet_wins(BetType::Black, 0, 4));
         assert!(!bet_wins(BetType::Black, 0, 1));
         assert!(!bet_wins(BetType::Black, 0, 0)); // Zero loses
+        assert!(!bet_wins(BetType::Black, 0, DOUBLE_ZERO));
     }
 
     #[test]

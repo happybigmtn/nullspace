@@ -1,24 +1,33 @@
 use axum::{
-    http::{header, Method},
+    extract::{DefaultBodyLimit, Request},
+    http::{header, HeaderValue, Method, StatusCode},
+    middleware::{self, Next},
+    response::{IntoResponse, Response},
     routing::{get, post},
     Router,
 };
+use std::collections::HashSet;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use tower_governor::{
     governor::GovernorConfigBuilder, key_extractor::SmartIpKeyExtractor, GovernorLayer,
 };
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::{AllowOrigin, CorsLayer};
+use uuid::Uuid;
 
 use crate::Simulator;
 
 mod http;
 mod ws;
 
-#[cfg(test)]
-pub(super) use ws::filter_updates_for_account;
-
 pub struct Api {
     simulator: Arc<Simulator>,
+}
+
+#[derive(Clone)]
+struct OriginConfig {
+    allowed_origins: Arc<HashSet<String>>,
+    allow_no_origin: bool,
 }
 
 impl Api {
@@ -27,32 +36,74 @@ impl Api {
     }
 
     pub fn router(&self) -> Router {
+        let allowed_origins = parse_allowed_origins("ALLOWED_HTTP_ORIGINS");
+        let allow_no_origin = parse_allow_no_origin("ALLOW_HTTP_NO_ORIGIN");
+        if allowed_origins.is_empty() {
+            tracing::warn!("ALLOWED_HTTP_ORIGINS is empty; all browser origins will be rejected");
+        }
+        let cors_origins = allowed_origins
+            .iter()
+            .filter_map(|origin| match HeaderValue::from_str(origin) {
+                Ok(value) => Some(value),
+                Err(_) => {
+                    tracing::warn!("Invalid origin in ALLOWED_HTTP_ORIGINS: {}", origin);
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        let origin_config = OriginConfig {
+            allowed_origins: Arc::new(allowed_origins),
+            allow_no_origin,
+        };
+
         // Configure CORS
         let cors = CorsLayer::new()
-            .allow_origin(Any)
+            .allow_origin(AllowOrigin::list(cors_origins))
             .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
-            .allow_headers([header::CONTENT_TYPE]);
+            .allow_headers([
+                header::CONTENT_TYPE,
+                header::HeaderName::from_static("x-request-id"),
+            ])
+            .expose_headers([header::HeaderName::from_static("x-request-id")]);
 
         // Configure Rate Limiting
-        // Maximize throughput for local sims: allow ~1M req/s with a large burst
-        let governor_conf = Arc::new(
-            GovernorConfigBuilder::default()
-                .per_nanosecond(1) // effectively unlimited for local sims (~1B req/s)
-                .burst_size(2_000_000)
-                .key_extractor(SmartIpKeyExtractor)
-                .finish()
-                .unwrap_or_else(|| {
-                    tracing::warn!("invalid rate-limit config; falling back to defaults");
+        let governor_conf = match (
+            self.simulator.config.http_rate_limit_per_second,
+            self.simulator.config.http_rate_limit_burst,
+        ) {
+            (Some(rate_per_second), Some(burst_size))
+                if rate_per_second > 0 && burst_size > 0 =>
+            {
+                let nanos_per_request = (1_000_000_000u64 / rate_per_second).max(1);
+                let period = Duration::from_nanos(nanos_per_request);
+                Some(Arc::new(
                     GovernorConfigBuilder::default()
+                        .period(period)
+                        .burst_size(burst_size)
                         .key_extractor(SmartIpKeyExtractor)
                         .finish()
-                        .expect("default governor config is valid")
-                }),
-        );
+                        .unwrap_or_else(|| {
+                            tracing::warn!(
+                                "invalid rate-limit config; falling back to defaults"
+                            );
+                            GovernorConfigBuilder::default()
+                                .key_extractor(SmartIpKeyExtractor)
+                                .finish()
+                                .expect("default governor config is valid")
+                        }),
+                ))
+            }
+            _ => None,
+        };
 
         let router = Router::new()
             .route("/healthz", get(http::healthz))
             .route("/config", get(http::config))
+            .route("/metrics/ws", get(http::ws_metrics))
+            .route("/metrics/http", get(http::http_metrics))
+            .route("/metrics/system", get(http::system_metrics))
+            .route("/metrics/explorer", get(http::explorer_metrics))
+            .route("/metrics/updates", get(http::update_index_metrics))
             .route("/submit", post(http::submit))
             .route("/seed/:query", get(http::query_seed))
             .route("/state/:query", get(http::query_state))
@@ -84,11 +135,84 @@ impl Api {
             .route("/webauthn/login", post(crate::passkeys::login_passkey))
             .route("/webauthn/sign", post(crate::passkeys::sign_with_passkey));
 
-        router
-            .layer(cors)
-            .layer(GovernorLayer {
-                config: governor_conf,
-            })
-            .with_state(self.simulator.clone())
+        let router = router.layer(cors);
+        let router = router.layer(middleware::from_fn(move |req, next| {
+            let origin_config = origin_config.clone();
+            async move { enforce_origin(origin_config, req, next).await }
+        }));
+        let router = match governor_conf {
+            Some(config) => router.layer(GovernorLayer { config }),
+            None => router,
+        };
+        let router = match self.simulator.config.http_body_limit_bytes {
+            Some(limit) if limit > 0 => router.layer(DefaultBodyLimit::max(limit)),
+            _ => router,
+        };
+        let router = router.layer(middleware::from_fn(request_id_middleware));
+
+        router.with_state(self.simulator.clone())
     }
+}
+
+fn parse_allowed_origins(var: &str) -> HashSet<String> {
+    std::env::var(var)
+        .unwrap_or_default()
+        .split(',')
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .collect()
+}
+
+fn parse_allow_no_origin(var: &str) -> bool {
+    matches!(
+        std::env::var(var).as_deref(),
+        Ok("1") | Ok("true") | Ok("TRUE") | Ok("yes") | Ok("YES")
+    )
+}
+
+async fn enforce_origin(
+    config: OriginConfig,
+    req: Request,
+    next: Next,
+) -> axum::response::Response {
+    let origin = req
+        .headers()
+        .get(header::ORIGIN)
+        .and_then(|value| value.to_str().ok());
+    if let Some(origin) = origin {
+        if !config.allowed_origins.contains(origin) {
+            return (StatusCode::FORBIDDEN, "Origin not allowed").into_response();
+        }
+    } else if !config.allow_no_origin {
+        return (StatusCode::FORBIDDEN, "Origin required").into_response();
+    }
+    next.run(req).await
+}
+
+async fn request_id_middleware(req: Request, next: Next) -> Response {
+    let request_id = req
+        .headers()
+        .get(header::HeaderName::from_static("x-request-id"))
+        .and_then(|value| value.to_str().ok())
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| Uuid::new_v4().to_string());
+    let method = req.method().clone();
+    let path = req.uri().path().to_string();
+    let start = Instant::now();
+    let mut response = next.run(req).await;
+    if let Ok(header_value) = HeaderValue::from_str(&request_id) {
+        response.headers_mut().insert(
+            header::HeaderName::from_static("x-request-id"),
+            header_value,
+        );
+    }
+    tracing::info!(
+        request_id = %request_id,
+        method = %method,
+        path = %path,
+        status = response.status().as_u16(),
+        elapsed_ms = start.elapsed().as_millis() as u64,
+        "http.request"
+    );
+    response
 }

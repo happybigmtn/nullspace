@@ -25,6 +25,10 @@ pub const FAUCET_RATE_LIMIT: u64 = 100;
 /// Initial chips granted on registration
 pub const INITIAL_CHIPS: u64 = 1_000;
 
+/// Daily freeroll entry limits.
+pub const FREEROLL_DAILY_LIMIT_FREE: u8 = 1;
+pub const FREEROLL_DAILY_LIMIT_MEMBER: u8 = 10;
+
 /// Tokenomics Constants
 pub const TOTAL_SUPPLY: u64 = 1_000_000_000;
 /// Annual emission rate (basis points) used for freeroll tournament prizes.
@@ -56,6 +60,8 @@ pub const ERROR_ALREADY_IN_TOURNAMENT: u8 = 12;
 pub const ERROR_TOURNAMENT_LIMIT_REACHED: u8 = 13;
 /// Error when trying to use tournament-only features (shield/double) outside a tournament
 pub const ERROR_NOT_IN_TOURNAMENT: u8 = 14;
+/// Error for unauthorized admin instructions.
+pub const ERROR_UNAUTHORIZED: u8 = 15;
 
 /// Tournament duration in seconds (5 minutes)
 pub const TOURNAMENT_DURATION_SECS: u64 = 5 * 60;

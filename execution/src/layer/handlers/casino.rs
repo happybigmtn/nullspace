@@ -1,5 +1,25 @@
 use super::super::*;
 use super::casino_error_vec;
+use commonware_codec::ReadExt;
+use commonware_utils::from_hex;
+use std::sync::OnceLock;
+
+fn admin_public_key() -> Option<PublicKey> {
+    static ADMIN_KEY: OnceLock<Option<PublicKey>> = OnceLock::new();
+    ADMIN_KEY
+        .get_or_init(|| {
+            let raw = std::env::var("CASINO_ADMIN_PUBLIC_KEY_HEX").ok()?;
+            let trimmed = raw.trim_start_matches("0x");
+            let bytes = from_hex(trimmed)?;
+            let mut buf = bytes.as_slice();
+            let key = PublicKey::read(&mut buf).ok()?;
+            if !buf.is_empty() {
+                return None;
+            }
+            Some(key)
+        })
+        .clone()
+}
 
 impl<'a, S: State> Layer<'a, S> {
     // === Casino Handler Methods ===
@@ -376,16 +396,20 @@ impl<'a, S: State> Layer<'a, S> {
                         self.update_leaderboard_for_session(&session, public, &player)
                             .await?;
 
-                                            events.push(Event::CasinoGameCompleted {
-                                                session_id,
-                                                player: public.clone(),
-                                                game_type: session.game_type,
-                                                payout,
-                                                final_chips,
-                                                was_shielded: false,
-                                                was_doubled,
-                        logs: logs.clone(),
-                                            });                    }
+                        let balances =
+                            nullspace_types::casino::PlayerBalanceSnapshot::from_player(&player);
+                        events.push(Event::CasinoGameCompleted {
+                            session_id,
+                            player: public.clone(),
+                            game_type: session.game_type,
+                            payout,
+                            final_chips,
+                            was_shielded: false,
+                            was_doubled,
+                            logs: logs.clone(),
+                            player_balances: balances,
+                        });
+                    }
                     crate::casino::GameResult::Push(refund, _) => {
                         if session.is_tournament {
                             player.tournament.chips =
@@ -411,6 +435,8 @@ impl<'a, S: State> Layer<'a, S> {
                         self.update_leaderboard_for_session(&session, public, &player)
                             .await?;
 
+                        let balances =
+                            nullspace_types::casino::PlayerBalanceSnapshot::from_player(&player);
                         events.push(Event::CasinoGameCompleted {
                             session_id,
                             player: public.clone(),
@@ -420,6 +446,7 @@ impl<'a, S: State> Layer<'a, S> {
                             was_shielded: false,
                             was_doubled: false,
                             logs: logs.clone(),
+                            player_balances: balances,
                         });
                     }
                     crate::casino::GameResult::Loss(_) => {
@@ -458,6 +485,8 @@ impl<'a, S: State> Layer<'a, S> {
                         self.update_leaderboard_for_session(&session, public, &player)
                             .await?;
 
+                        let balances =
+                            nullspace_types::casino::PlayerBalanceSnapshot::from_player(&player);
                         events.push(Event::CasinoGameCompleted {
                             session_id,
                             player: public.clone(),
@@ -466,7 +495,8 @@ impl<'a, S: State> Layer<'a, S> {
                             final_chips,
                             was_shielded,
                             was_doubled: false,
-                        logs: logs.clone(),
+                            logs: logs.clone(),
+                            player_balances: balances,
                         });
                     }
                     _ => {}
@@ -525,12 +555,8 @@ impl<'a, S: State> Layer<'a, S> {
         };
 
         // Handle game result
-        let mut events = vec![Event::CasinoGameMoved {
-            session_id,
-            move_number,
-            new_state,
-            logs: logs.clone(),
-        }];
+        let mut events = Vec::new();
+        let mut move_balances: Option<nullspace_types::casino::PlayerBalanceSnapshot> = None;
 
         let atomic_wager = if session.move_count == 1
             && matches!(
@@ -557,6 +583,14 @@ impl<'a, S: State> Layer<'a, S> {
                     Key::CasinoSession(session_id),
                     Value::CasinoSession(session),
                 );
+                if let Some(Value::CasinoPlayer(player)) =
+                    self.get(&Key::CasinoPlayer(public.clone())).await?
+                {
+                    move_balances =
+                        Some(nullspace_types::casino::PlayerBalanceSnapshot::from_player(
+                            &player,
+                        ));
+                }
             }
             crate::casino::GameResult::ContinueWithUpdate { payout, .. } => {
                 // Handle mid-game balance updates (additional bets or intermediate payouts)
@@ -619,6 +653,10 @@ impl<'a, S: State> Layer<'a, S> {
                         Key::CasinoPlayer(public.clone()),
                         Value::CasinoPlayer(player.clone()),
                     );
+                    move_balances =
+                        Some(nullspace_types::casino::PlayerBalanceSnapshot::from_player(
+                            &player,
+                        ));
 
                     // Update leaderboard after mid-game balance change
                     self.update_leaderboard_for_session(&session, public, &player)
@@ -693,6 +731,9 @@ impl<'a, S: State> Layer<'a, S> {
                     self.update_leaderboard_for_session(&session, public, &player)
                         .await?;
 
+                    let balances =
+                        nullspace_types::casino::PlayerBalanceSnapshot::from_player(&player);
+                    move_balances = Some(balances.clone());
                     events.push(Event::CasinoGameCompleted {
                         session_id,
                         player: public.clone(),
@@ -702,6 +743,7 @@ impl<'a, S: State> Layer<'a, S> {
                         was_shielded: false,
                         was_doubled,
                         logs: logs.clone(),
+                        player_balances: balances,
                     });
                 }
             }
@@ -759,6 +801,9 @@ impl<'a, S: State> Layer<'a, S> {
                     self.update_leaderboard_for_session(&session, public, &player)
                         .await?;
 
+                    let balances =
+                        nullspace_types::casino::PlayerBalanceSnapshot::from_player(&player);
+                    move_balances = Some(balances.clone());
                     events.push(Event::CasinoGameCompleted {
                         session_id,
                         player: public.clone(),
@@ -768,6 +813,7 @@ impl<'a, S: State> Layer<'a, S> {
                         was_shielded: false,
                         was_doubled: false,
                         logs: logs.clone(),
+                        player_balances: balances,
                     });
                 }
             }
@@ -828,6 +874,9 @@ impl<'a, S: State> Layer<'a, S> {
                     self.update_leaderboard_for_session(&session, public, &player)
                         .await?;
 
+                    let balances =
+                        nullspace_types::casino::PlayerBalanceSnapshot::from_player(&player);
+                    move_balances = Some(balances.clone());
                     events.push(Event::CasinoGameCompleted {
                         session_id,
                         player: public.clone(),
@@ -836,7 +885,9 @@ impl<'a, S: State> Layer<'a, S> {
                         final_chips,
                         was_shielded,
                         was_doubled: false,
-                        logs: logs.clone(),});
+                        logs: logs.clone(),
+                        player_balances: balances,
+                    });
                 }
             }
             crate::casino::GameResult::LossWithExtraDeduction(extra, _) => {
@@ -913,6 +964,9 @@ impl<'a, S: State> Layer<'a, S> {
                     self.update_leaderboard_for_session(&session, public, &player)
                         .await?;
 
+                    let balances =
+                        nullspace_types::casino::PlayerBalanceSnapshot::from_player(&player);
+                    move_balances = Some(balances.clone());
                     events.push(Event::CasinoGameCompleted {
                         session_id,
                         player: public.clone(),
@@ -921,7 +975,9 @@ impl<'a, S: State> Layer<'a, S> {
                         final_chips,
                         was_shielded,
                         was_doubled: false,
-                        logs: logs.clone(),});
+                        logs: logs.clone(),
+                        player_balances: balances,
+                    });
                 }
             }
             crate::casino::GameResult::LossPreDeducted(total_loss, _) => {
@@ -979,6 +1035,9 @@ impl<'a, S: State> Layer<'a, S> {
                     self.update_leaderboard_for_session(&session, public, &player)
                         .await?;
 
+                    let balances =
+                        nullspace_types::casino::PlayerBalanceSnapshot::from_player(&player);
+                    move_balances = Some(balances.clone());
                     events.push(Event::CasinoGameCompleted {
                         session_id,
                         player: public.clone(),
@@ -987,10 +1046,34 @@ impl<'a, S: State> Layer<'a, S> {
                         final_chips,
                         was_shielded,
                         was_doubled: false,
-                        logs: logs.clone(),});
+                        logs: logs.clone(),
+                        player_balances: balances,
+                    });
                 }
             }
         }
+
+        if move_balances.is_none() {
+            if let Some(Value::CasinoPlayer(player)) =
+                self.get(&Key::CasinoPlayer(public.clone())).await?
+            {
+                move_balances =
+                    Some(nullspace_types::casino::PlayerBalanceSnapshot::from_player(
+                        &player,
+                    ));
+            }
+        }
+        let move_balances = move_balances.unwrap_or_default();
+        events.insert(
+            0,
+            Event::CasinoGameMoved {
+                session_id,
+                move_number,
+                new_state,
+                logs: logs.clone(),
+                player_balances: move_balances,
+            },
+        );
 
         Ok(events)
     }
@@ -1075,7 +1158,7 @@ impl<'a, S: State> Layer<'a, S> {
             Err(events) => return Ok(events),
         };
 
-        // Check tournament limit (5 per day)
+        // Check tournament limit (per-player daily limit).
         // Approximate time from view (3s per block)
         let current_time_sec = self.seed.view * 3;
         let current_day = current_time_sec / 86400;
@@ -1085,12 +1168,21 @@ impl<'a, S: State> Layer<'a, S> {
             player.tournament.tournaments_played_today = 0;
         }
 
-        if player.tournament.tournaments_played_today >= 5 {
+        let daily_limit = if player.tournament.daily_limit > 0 {
+            player.tournament.daily_limit
+        } else {
+            nullspace_types::casino::FREEROLL_DAILY_LIMIT_FREE
+        };
+        if player.tournament.tournaments_played_today >= daily_limit {
+            let message = format!(
+                "Daily tournament limit reached ({}/{})",
+                player.tournament.tournaments_played_today, daily_limit
+            );
             return Ok(casino_error_vec(
                 public,
                 None,
                 nullspace_types::casino::ERROR_TOURNAMENT_LIMIT_REACHED,
-                "Daily tournament limit reached (5/5)",
+                &message,
             ));
         }
 
@@ -1153,6 +1245,53 @@ impl<'a, S: State> Layer<'a, S> {
             tournament_id,
             player: public.clone(),
         }])
+    }
+
+    pub(in crate::layer) async fn handle_casino_set_tournament_limit(
+        &mut self,
+        public: &PublicKey,
+        player_key: &PublicKey,
+        daily_limit: u8,
+    ) -> anyhow::Result<Vec<Event>> {
+        match admin_public_key() {
+            Some(admin_key) if *public == admin_key => {}
+            _ => {
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_UNAUTHORIZED,
+                "Unauthorized admin instruction",
+            ));
+            }
+        }
+        if daily_limit == 0 {
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_INVALID_BET,
+                "Daily tournament limit must be at least 1",
+            ));
+        }
+
+        let mut player = match self.get(&Key::CasinoPlayer(player_key.clone())).await? {
+            Some(Value::CasinoPlayer(player)) => player,
+            _ => {
+                return Ok(casino_error_vec(
+                    public,
+                    None,
+                    nullspace_types::casino::ERROR_PLAYER_NOT_FOUND,
+                    "Player not found",
+                ))
+            }
+        };
+
+        player.tournament.daily_limit = daily_limit;
+        self.insert(
+            Key::CasinoPlayer(player_key.clone()),
+            Value::CasinoPlayer(player),
+        );
+
+        Ok(Vec::new())
     }
 
     pub(in crate::layer) async fn handle_casino_start_tournament(

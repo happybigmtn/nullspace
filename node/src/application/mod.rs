@@ -1,4 +1,4 @@
-use std::num::NonZero;
+use std::{num::NonZero, time::Duration};
 
 use crate::indexer::Indexer;
 use commonware_cryptography::{
@@ -61,4 +61,13 @@ pub struct Config<I: Indexer> {
 
     /// The maximum number of transactions in the mempool.
     pub mempool_max_transactions: usize,
+
+    /// Buffer size for the mempool stream channel.
+    pub mempool_stream_buffer_size: usize,
+
+    /// Maximum number of entries to retain in the nonce cache.
+    pub nonce_cache_capacity: usize,
+
+    /// Maximum age for nonce cache entries.
+    pub nonce_cache_ttl: Duration,
 }

@@ -75,6 +75,7 @@ export const BlackjackView = React.memo<{
         !showInsurancePrompt &&
         gameState.playerCards.length === 2 &&
         gameState.playerCards[0]?.rank === gameState.playerCards[1]?.rank;
+    const isBettingStage = gameState.stage === 'BETTING' || gameState.stage === 'RESULT';
 
     const activeHandNumber = gameState.completedHands.length + 1;
 
@@ -224,118 +225,257 @@ export const BlackjackView = React.memo<{
             </div>
 
             {/* CONTROLS */}
-            <div className="ns-controlbar fixed bottom-0 left-0 right-0 sm:sticky sm:bottom-0 bg-terminal-black/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)] sm:pb-0">
-                <div className="h-16 sm:h-20 flex items-center justify-between sm:justify-center gap-2 p-2 sm:px-4">
+            <div className="ns-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-terminal-black/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
+                <div className="h-16 md:h-20 flex items-center justify-between md:justify-center gap-2 p-2 md:px-4">
                     {/* Secondary Actions - Main Actions */}
-                    {(gameState.stage === 'BETTING' || gameState.stage === 'RESULT') ? (
-                        <div className="flex items-center gap-2">
-                            {/* Side Bets Group */}
-                            {gameState.stage === 'BETTING' && (
-                                <div className="hidden sm:flex items-center gap-2 border-r-2 border-gray-700 pr-3">
-                                    <button
-                                        type="button"
-                                        onClick={actions?.bjToggle21Plus3}
-                                        className={`h-12 px-4 rounded border-2 font-bold text-sm tracking-widest uppercase font-mono transition-all ${
-                                            (gameState.blackjack21Plus3Bet || 0) > 0
-                                                ? 'border-amber-400 bg-amber-400/20 text-amber-400'
-                                                : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'
-                                        }`}
-                                    >
-                                        21+3{(gameState.blackjack21Plus3Bet || 0) > 0 ? ` $${gameState.blackjack21Plus3Bet}` : ''}
-                                    </button>
-                                </div>
-                            )}
+                    {isBettingStage ? (
+                        <>
+                            <div className="flex md:hidden items-center gap-2">
+                                <MobileDrawer label="BETS" title="BLACKJACK BETS">
+                                    <div className="space-y-4">
+                                        {gameState.stage === 'BETTING' && (
+                                            <div className="rounded border border-gray-800 bg-black/40 p-2 space-y-2">
+                                                <div className="text-[10px] text-amber-500 font-bold tracking-widest border-b border-gray-800 pb-1">SIDE BETS</div>
+                                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={actions?.bjToggle21Plus3}
+                                                        className={`py-3 rounded border text-xs font-bold ${
+                                                            (gameState.blackjack21Plus3Bet || 0) > 0
+                                                                ? 'border-amber-400 bg-amber-400/20 text-amber-400'
+                                                                : 'border-gray-700 bg-gray-900 text-gray-400'
+                                                        }`}
+                                                    >
+                                                        21+3
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                        <div className="rounded border border-gray-800 bg-black/40 p-2 space-y-2">
+                                            <div className="text-[10px] text-cyan-500 font-bold tracking-widest border-b border-gray-800 pb-1">MODIFIERS</div>
+                                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                                {playMode !== 'CASH' && (
+                                                    <>
+                                                        <button
+                                                            type="button"
+                                                            onClick={actions?.toggleShield}
+                                                            className={`py-3 rounded border text-xs font-bold ${
+                                                                gameState.activeModifiers.shield
+                                                                    ? 'border-terminal-green bg-terminal-green/20 text-terminal-green'
+                                                                    : 'border-gray-700 bg-gray-900 text-gray-400'
+                                                            }`}
+                                                        >
+                                                            SHIELD
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={actions?.toggleDouble}
+                                                            className={`py-3 rounded border text-xs font-bold ${
+                                                                gameState.activeModifiers.double
+                                                                    ? 'border-terminal-green bg-terminal-green/20 text-terminal-green'
+                                                                    : 'border-gray-700 bg-gray-900 text-gray-400'
+                                                            }`}
+                                                        >
+                                                            DOUBLE
+                                                        </button>
+                                                    </>
+                                                )}
+                                                <button
+                                                    type="button"
+                                                    onClick={actions?.toggleSuper}
+                                                    className={`py-3 rounded border text-xs font-bold ${
+                                                        gameState.activeModifiers.super
+                                                            ? 'border-terminal-gold bg-terminal-gold/20 text-terminal-gold'
+                                                            : 'border-gray-700 bg-gray-900 text-gray-400'
+                                                    }`}
+                                                >
+                                                    SUPER
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </MobileDrawer>
+                            </div>
 
-                            {/* Modifiers Group */}
-                            <div className="hidden sm:flex items-center gap-2">
-                                {playMode !== 'CASH' && (
-                                    <>
+                            <div className="hidden md:flex items-center gap-2">
+                                {/* Side Bets Group */}
+                                {gameState.stage === 'BETTING' && (
+                                    <div className="flex items-center gap-2 border-r-2 border-gray-700 pr-3">
                                         <button
                                             type="button"
-                                            onClick={actions?.toggleShield}
+                                            onClick={actions?.bjToggle21Plus3}
                                             className={`h-12 px-4 rounded border-2 font-bold text-sm tracking-widest uppercase font-mono transition-all ${
-                                                gameState.activeModifiers.shield
-                                                    ? 'border-terminal-green bg-terminal-green/20 text-terminal-green'
+                                                (gameState.blackjack21Plus3Bet || 0) > 0
+                                                    ? 'border-amber-400 bg-amber-400/20 text-amber-400'
                                                     : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'
                                             }`}
                                         >
-                                            SHIELD
+                                            21+3{(gameState.blackjack21Plus3Bet || 0) > 0 ? ` $${gameState.blackjack21Plus3Bet}` : ''}
+                                        </button>
+                                    </div>
+                                )}
+
+                                {/* Modifiers Group */}
+                                <div className="flex items-center gap-2">
+                                    {playMode !== 'CASH' && (
+                                        <>
+                                            <button
+                                                type="button"
+                                                onClick={actions?.toggleShield}
+                                                className={`h-12 px-4 rounded border-2 font-bold text-sm tracking-widest uppercase font-mono transition-all ${
+                                                    gameState.activeModifiers.shield
+                                                        ? 'border-terminal-green bg-terminal-green/20 text-terminal-green'
+                                                        : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'
+                                                }`}
+                                            >
+                                                SHIELD
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={actions?.toggleDouble}
+                                                className={`h-12 px-4 rounded border-2 font-bold text-sm tracking-widest uppercase font-mono transition-all ${
+                                                    gameState.activeModifiers.double
+                                                        ? 'border-terminal-green bg-terminal-green/20 text-terminal-green'
+                                                        : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'
+                                                }`}
+                                            >
+                                                DOUBLE
+                                            </button>
+                                        </>
+                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={actions?.toggleSuper}
+                                        className={`h-12 px-4 rounded border-2 font-bold text-sm tracking-widest uppercase font-mono transition-all ${
+                                            gameState.activeModifiers.super
+                                                ? 'border-terminal-gold bg-terminal-gold/20 text-terminal-gold'
+                                                : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'
+                                        }`}
+                                    >
+                                        SUPER
+                                    </button>
+                                </div>
+                            </div>
+                        </>
+                    ) : showInsurancePrompt ? (
+                        <>
+                            <div className="flex md:hidden items-center gap-2">
+                                <MobileDrawer label="INSURE" title="INSURANCE">
+                                    <div className="rounded border border-gray-800 bg-black/40 p-2">
+                                        <div className="grid grid-cols-2 gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => actions?.bjInsurance?.(true)}
+                                            className="py-3 rounded border border-terminal-gold bg-terminal-gold/20 text-terminal-gold text-xs font-bold"
+                                        >
+                                            YES
                                         </button>
                                         <button
                                             type="button"
-                                            onClick={actions?.toggleDouble}
-                                            className={`h-12 px-4 rounded border-2 font-bold text-sm tracking-widest uppercase font-mono transition-all ${
-                                                gameState.activeModifiers.double
-                                                    ? 'border-terminal-green bg-terminal-green/20 text-terminal-green'
-                                                    : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'
+                                            onClick={() => actions?.bjInsurance?.(false)}
+                                            className="py-3 rounded border border-gray-700 bg-gray-900 text-gray-400 text-xs font-bold"
+                                        >
+                                            NO
+                                        </button>
+                                        </div>
+                                    </div>
+                                </MobileDrawer>
+                            </div>
+                            <div className="hidden md:flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => actions?.bjInsurance?.(false)}
+                                    className="h-12 px-6 rounded border-2 font-bold text-sm tracking-widest uppercase font-mono transition-all border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800"
+                                >
+                                    NO
+                                </button>
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <div className="flex md:hidden items-center gap-2">
+                                <MobileDrawer label="ACTIONS" title="BLACKJACK ACTIONS">
+                                    <div className="rounded border border-gray-800 bg-black/40 p-2">
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={actions?.bjStand}
+                                            disabled={!canStand}
+                                            className={`py-3 rounded border text-xs font-bold ${
+                                                canStand
+                                                    ? 'border-gray-700 bg-gray-900 text-gray-300'
+                                                    : 'opacity-50 cursor-not-allowed border-gray-800 bg-gray-900/50 text-gray-700'
+                                            }`}
+                                        >
+                                            STAND
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={actions?.bjDouble}
+                                            disabled={!canDouble}
+                                            className={`py-3 rounded border text-xs font-bold ${
+                                                canDouble
+                                                    ? 'border-gray-700 bg-gray-900 text-gray-300'
+                                                    : 'opacity-50 cursor-not-allowed border-gray-800 bg-gray-900/50 text-gray-700'
                                             }`}
                                         >
                                             DOUBLE
                                         </button>
-                                    </>
-                                )}
+                                        <button
+                                            type="button"
+                                            onClick={actions?.bjSplit}
+                                            disabled={!canSplit}
+                                            className={`py-3 rounded border text-xs font-bold ${
+                                                canSplit
+                                                    ? 'border-gray-700 bg-gray-900 text-gray-300'
+                                                    : 'opacity-50 cursor-not-allowed border-gray-800 bg-gray-900/50 text-gray-700'
+                                            }`}
+                                        >
+                                            SPLIT
+                                        </button>
+                                        </div>
+                                    </div>
+                                </MobileDrawer>
+                            </div>
+                            <div className="hidden md:flex items-center gap-2">
                                 <button
                                     type="button"
-                                    onClick={actions?.toggleSuper}
-                                    className={`h-12 px-4 rounded border-2 font-bold text-sm tracking-widest uppercase font-mono transition-all ${
-                                        gameState.activeModifiers.super
-                                            ? 'border-terminal-gold bg-terminal-gold/20 text-terminal-gold'
-                                            : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'
+                                    onClick={actions?.bjStand}
+                                    disabled={!canStand}
+                                    className={`h-12 px-6 rounded border-2 font-bold text-sm tracking-widest uppercase font-mono transition-all ${
+                                        canStand
+                                            ? 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'
+                                            : 'opacity-50 cursor-not-allowed border-gray-800 bg-gray-900/50 text-gray-700'
                                     }`}
                                 >
-                                    SUPER
+                                    STAND
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={actions?.bjDouble}
+                                    disabled={!canDouble}
+                                    className={`h-12 px-6 rounded border-2 font-bold text-sm tracking-widest uppercase font-mono transition-all ${
+                                        canDouble
+                                            ? 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'
+                                            : 'opacity-50 cursor-not-allowed border-gray-800 bg-gray-900/50 text-gray-700'
+                                    }`}
+                                >
+                                    DOUBLE
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={actions?.bjSplit}
+                                    disabled={!canSplit}
+                                    className={`h-12 px-6 rounded border-2 font-bold text-sm tracking-widest uppercase font-mono transition-all ${
+                                        canSplit
+                                            ? 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'
+                                            : 'opacity-50 cursor-not-allowed border-gray-800 bg-gray-900/50 text-gray-700'
+                                    }`}
+                                >
+                                    SPLIT
                                 </button>
                             </div>
-                        </div>
-                    ) : showInsurancePrompt ? (
-                        <div className="hidden sm:flex items-center gap-2">
-                            <button
-                                type="button"
-                                onClick={() => actions?.bjInsurance?.(false)}
-                                className="h-12 px-6 rounded border-2 font-bold text-sm tracking-widest uppercase font-mono transition-all border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800"
-                            >
-                                NO
-                            </button>
-                        </div>
-                    ) : (
-                        <div className="hidden sm:flex items-center gap-2">
-                            <button
-                                type="button"
-                                onClick={actions?.bjStand}
-                                disabled={!canStand}
-                                className={`h-12 px-6 rounded border-2 font-bold text-sm tracking-widest uppercase font-mono transition-all ${
-                                    canStand
-                                        ? 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'
-                                        : 'opacity-50 cursor-not-allowed border-gray-800 bg-gray-900/50 text-gray-700'
-                                }`}
-                            >
-                                STAND
-                            </button>
-                            <button
-                                type="button"
-                                onClick={actions?.bjDouble}
-                                disabled={!canDouble}
-                                className={`h-12 px-6 rounded border-2 font-bold text-sm tracking-widest uppercase font-mono transition-all ${
-                                    canDouble
-                                        ? 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'
-                                        : 'opacity-50 cursor-not-allowed border-gray-800 bg-gray-900/50 text-gray-700'
-                                }`}
-                            >
-                                DOUBLE
-                            </button>
-                            <button
-                                type="button"
-                                onClick={actions?.bjSplit}
-                                disabled={!canSplit}
-                                className={`h-12 px-6 rounded border-2 font-bold text-sm tracking-widest uppercase font-mono transition-all ${
-                                    canSplit
-                                        ? 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'
-                                        : 'opacity-50 cursor-not-allowed border-gray-800 bg-gray-900/50 text-gray-700'
-                                }`}
-                            >
-                                SPLIT
-                            </button>
-                        </div>
+                        </>
                     )}
 
                     {/* Primary Action with Chip Selector (Desktop & Mobile) */}
@@ -394,7 +534,7 @@ export const BlackjackView = React.memo<{
                                         : actions?.bjHit
                             }
                             disabled={gameState.stage === 'PLAYING' && !showInsurancePrompt && !canHit}
-                            className={`h-12 sm:h-14 px-6 sm:px-8 rounded border-2 font-bold text-sm sm:text-base tracking-widest uppercase font-mono transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] ${
+                            className={`h-12 md:h-14 px-6 md:px-8 rounded border-2 font-bold text-sm md:text-base tracking-widest uppercase font-mono transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] ${
                                 showInsurancePrompt
                                     ? 'border-terminal-gold bg-terminal-gold text-black hover:bg-white hover:border-white'
                                     : (gameState.stage === 'PLAYING' && !canHit)

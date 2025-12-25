@@ -54,6 +54,7 @@ tokio = { version = "1.43.0", features = ["full"] }
 rayon = "1.10.0"
 rand_chacha = "0.3.1"
 uuid = "1.15.1"
+sysinfo = "0.33.1"
 
 # Web/API dependencies
 axum = { version = "0.7.9", features = ["ws"] }

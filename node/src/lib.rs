@@ -28,6 +28,7 @@ pub mod engine;
 pub mod indexer;
 pub mod seeder;
 pub mod supervisor;
+mod system_metrics;
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct HexBytes(Vec<u8>);
@@ -88,6 +89,12 @@ pub struct Config {
     pub mempool_max_backlog: usize,
     #[serde(default = "default_mempool_max_transactions")]
     pub mempool_max_transactions: usize,
+    #[serde(default = "default_mempool_stream_buffer_size")]
+    pub mempool_stream_buffer_size: usize,
+    #[serde(default = "default_nonce_cache_capacity")]
+    pub nonce_cache_capacity: usize,
+    #[serde(default = "default_nonce_cache_ttl_seconds")]
+    pub nonce_cache_ttl_seconds: u64,
     #[serde(default = "default_max_pending_seed_listeners")]
     pub max_pending_seed_listeners: usize,
 
@@ -185,6 +192,9 @@ pub struct ValidatedConfig {
     pub deque_size: usize,
     pub mempool_max_backlog: usize,
     pub mempool_max_transactions: usize,
+    pub mempool_stream_buffer_size: usize,
+    pub nonce_cache_capacity: usize,
+    pub nonce_cache_ttl: Duration,
     pub max_pending_seed_listeners: usize,
 
     pub indexer: String,
@@ -235,6 +245,12 @@ impl fmt::Debug for RedactedConfig<'_> {
             .field("deque_size", &cfg.deque_size)
             .field("mempool_max_backlog", &cfg.mempool_max_backlog)
             .field("mempool_max_transactions", &cfg.mempool_max_transactions)
+            .field(
+                "mempool_stream_buffer_size",
+                &cfg.mempool_stream_buffer_size,
+            )
+            .field("nonce_cache_capacity", &cfg.nonce_cache_capacity)
+            .field("nonce_cache_ttl_seconds", &cfg.nonce_cache_ttl_seconds)
             .field(
                 "max_pending_seed_listeners",
                 &cfg.max_pending_seed_listeners,
@@ -288,6 +304,18 @@ fn default_mempool_max_backlog() -> usize {
 
 fn default_mempool_max_transactions() -> usize {
     100_000
+}
+
+fn default_mempool_stream_buffer_size() -> usize {
+    4_096
+}
+
+fn default_nonce_cache_capacity() -> usize {
+    100_000
+}
+
+fn default_nonce_cache_ttl_seconds() -> u64 {
+    600
 }
 
 fn default_max_pending_seed_listeners() -> usize {
@@ -474,6 +502,9 @@ impl Config {
         ensure_nonzero("deque_size", self.deque_size)?;
         ensure_nonzero("mempool_max_backlog", self.mempool_max_backlog)?;
         ensure_nonzero("mempool_max_transactions", self.mempool_max_transactions)?;
+        ensure_nonzero("mempool_stream_buffer_size", self.mempool_stream_buffer_size)?;
+        ensure_nonzero("nonce_cache_capacity", self.nonce_cache_capacity)?;
+        ensure_nonzero_u64("nonce_cache_ttl_seconds", self.nonce_cache_ttl_seconds)?;
         ensure_nonzero(
             "max_pending_seed_listeners",
             self.max_pending_seed_listeners,
@@ -573,6 +604,9 @@ impl Config {
             deque_size: self.deque_size,
             mempool_max_backlog: self.mempool_max_backlog,
             mempool_max_transactions: self.mempool_max_transactions,
+            mempool_stream_buffer_size: self.mempool_stream_buffer_size,
+            nonce_cache_capacity: self.nonce_cache_capacity,
+            nonce_cache_ttl: Duration::from_secs(self.nonce_cache_ttl_seconds),
             max_pending_seed_listeners: self.max_pending_seed_listeners,
             indexer: self.indexer,
             execution_concurrency: self.execution_concurrency,

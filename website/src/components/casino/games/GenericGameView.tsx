@@ -168,7 +168,7 @@ export const GenericGameView = React.memo<{ gameState: GameState; actions: any; 
                  primaryAction={
                      isWarState
                          ? { label: 'WAR', onClick: actions?.casinoWarGoToWar, className: 'border-2 border-terminal-green bg-terminal-green text-black hover:bg-white' }
-                         : { label: gameState.stage === 'RESULT' ? 'NEW HAND' : 'DEAL', onClick: actions?.deal, className: 'w-full sm:w-auto' }
+                         : { label: gameState.stage === 'RESULT' ? 'NEW HAND' : 'DEAL', onClick: actions?.deal, className: 'w-full md:w-auto' }
                  }
                  secondaryActions={
                      isWarState

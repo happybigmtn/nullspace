@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { PlaySwapStakeTabs } from './components/PlaySwapStakeTabs';
 import { PageHeader } from './components/PageHeader';
+import { AuthStatusPill } from './components/AuthStatusPill';
 import { createPasskeyVault, deleteVault, getVaultRecord, getVaultStatusSync, lockPasskeyVault, unlockPasskeyVault } from './security/keyVault';
 import { getUnlockedVault, subscribeVault } from './security/vaultRuntime';
 import { VaultBetBot } from './security/VaultBetBot';
@@ -278,7 +279,12 @@ export default function SecurityApp() {
 
   return (
     <div className="min-h-screen w-screen bg-terminal-black text-white font-mono">
-      <PageHeader title="Passkey Vault" status={status} leading={<PlaySwapStakeTabs />} />
+      <PageHeader
+        title="Passkey Vault"
+        status={status}
+        leading={<PlaySwapStakeTabs />}
+        right={<AuthStatusPill publicKeyHex={publicKeyHex} />}
+      />
 
       <div className="max-w-4xl mx-auto p-4 space-y-4">
         <div className="border border-gray-800 rounded bg-gray-900/30 p-4">

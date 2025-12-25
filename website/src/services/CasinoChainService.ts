@@ -3,7 +3,7 @@
  * TypeScript class that wraps casino serialization and integrates with CasinoClient
  */
 
-import { GameType, CasinoGameStartedEvent, CasinoGameMovedEvent, CasinoGameCompletedEvent } from '../types/casino';
+import { GameType, CasinoGameStartedEvent, CasinoGameMovedEvent, CasinoGameCompletedEvent, PlayerBalanceSnapshot } from '../types/casino';
 import { CasinoClient } from '../api/client.js';
 import { snakeToCamel } from '../utils/caseNormalizer';
 
@@ -39,6 +39,16 @@ interface RawCasinoGameMovedEvent {
   session_id: string | number | bigint;
   move_number: number;
   new_state: string;
+  player_balances?: {
+    chips?: string | number | bigint;
+    vusdt_balance?: string | number | bigint;
+    shields?: string | number;
+    doubles?: string | number;
+    tournament_chips?: string | number | bigint;
+    tournament_shields?: string | number;
+    tournament_doubles?: string | number;
+    active_tournament?: string | number | bigint | null;
+  };
 }
 
 interface RawCasinoGameCompletedEvent {
@@ -48,6 +58,16 @@ interface RawCasinoGameCompletedEvent {
   final_chips: string | number | bigint;
   was_shielded: boolean;
   was_doubled: boolean;
+  player_balances?: {
+    chips?: string | number | bigint;
+    vusdt_balance?: string | number | bigint;
+    shields?: string | number;
+    doubles?: string | number;
+    tournament_chips?: string | number | bigint;
+    tournament_shields?: string | number;
+    tournament_doubles?: string | number;
+    active_tournament?: string | number | bigint | null;
+  };
 }
 
 // Session ID counter for generating unique session IDs
@@ -79,6 +99,31 @@ function readVarint(data: Uint8Array, offset: number): { value: number; bytesRea
   }
 
   throw new Error('Varint too long');
+}
+
+function toBigInt(value: string | number | bigint): bigint {
+  if (typeof value === 'bigint') return value;
+  if (typeof value === 'number') return BigInt(value);
+  return BigInt(value);
+}
+
+function toOptionalBigInt(value: string | number | bigint | null | undefined): bigint | null {
+  if (value === null || value === undefined) return null;
+  return toBigInt(value);
+}
+
+function parsePlayerBalances(raw: any): PlayerBalanceSnapshot {
+  const source = raw ?? {};
+  return {
+    chips: toBigInt(source.chips ?? 0),
+    vusdtBalance: toBigInt(source.vusdtBalance ?? 0),
+    shields: Number(source.shields ?? 0),
+    doubles: Number(source.doubles ?? 0),
+    tournamentChips: toBigInt(source.tournamentChips ?? 0),
+    tournamentShields: Number(source.tournamentShields ?? 0),
+    tournamentDoubles: Number(source.tournamentDoubles ?? 0),
+    activeTournament: toOptionalBigInt(source.activeTournament),
+  };
 }
 
 /**
@@ -291,6 +336,7 @@ export class CasinoChainService {
           sessionId: BigInt(normalized.sessionId),
           moveNumber: normalized.moveNumber,
           newState: this.hexToBytes(normalized.newState),
+          playerBalances: parsePlayerBalances(normalized.playerBalances),
         };
         console.log('[CasinoChainService] Parsed CasinoGameMoved:', {
           sessionId: parsed.sessionId.toString(),
@@ -328,6 +374,7 @@ export class CasinoChainService {
           finalChips: BigInt(normalized.finalChips),
           wasShielded: normalized.wasShielded,
           wasDoubled: normalized.wasDoubled,
+          playerBalances: parsePlayerBalances(normalized.playerBalances),
         };
         console.log('[CasinoChainService] Parsed sessionId:', parsed.sessionId.toString(), 'type:', typeof parsed.sessionId);
         this.gameCompletedHandlers.forEach(h => h(parsed));

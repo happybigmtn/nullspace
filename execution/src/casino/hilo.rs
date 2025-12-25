@@ -1,7 +1,7 @@
 //! HiLo game implementation.
 //!
 //! State blob format:
-//! [currentCard:u8] [accumulator:i64 BE]
+//! [currentCard:u8] [accumulator:i64 BE] [rules:u8]
 //!
 //! The accumulator stores the current pot multiplier in basis points (1/10000).
 //! For example, 15000 = 1.5x multiplier.
@@ -25,6 +25,41 @@ use nullspace_types::casino::GameSession;
 
 /// Base multiplier in basis points (1.0 = 10000)
 const BASE_MULTIPLIER: i64 = 10_000;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct HiLoRules {
+    allow_same_any: bool,
+    tie_push: bool,
+}
+
+impl Default for HiLoRules {
+    fn default() -> Self {
+        Self {
+            allow_same_any: false,
+            tie_push: true,
+        }
+    }
+}
+
+impl HiLoRules {
+    fn from_byte(value: u8) -> Self {
+        Self {
+            allow_same_any: value & 0x01 != 0,
+            tie_push: value & 0x02 != 0,
+        }
+    }
+
+    fn to_byte(self) -> u8 {
+        (if self.allow_same_any { 0x01 } else { 0x00 })
+            | if self.tie_push { 0x02 } else { 0x00 }
+    }
+}
+
+struct HiLoState {
+    current_card: u8,
+    accumulator: i64,
+    rules: HiLoRules,
+}
 
 /// HiLo move types
 #[repr(u8)]
@@ -95,8 +130,8 @@ fn calculate_multiplier(current_rank: u8, mv: Move) -> i64 {
     (13 * BASE_MULTIPLIER) / winning_ranks
 }
 
-/// Parse state blob into current card and accumulator.
-fn parse_state(state: &[u8]) -> Option<(u8, i64)> {
+/// Parse state blob into current card, accumulator, and rules.
+fn parse_state(state: &[u8]) -> Option<HiLoState> {
     if state.len() < 9 {
         return None;
     }
@@ -105,15 +140,25 @@ fn parse_state(state: &[u8]) -> Option<(u8, i64)> {
     let accumulator = i64::from_be_bytes([
         state[1], state[2], state[3], state[4], state[5], state[6], state[7], state[8],
     ]);
+    let rules = if state.len() >= 10 {
+        HiLoRules::from_byte(state[9])
+    } else {
+        HiLoRules::default()
+    };
 
-    Some((current_card, accumulator))
+    Some(HiLoState {
+        current_card,
+        accumulator,
+        rules,
+    })
 }
 
 /// Serialize state to blob.
-fn serialize_state(current_card: u8, accumulator: i64) -> Vec<u8> {
-    let mut state = Vec::with_capacity(9);
+fn serialize_state(current_card: u8, accumulator: i64, rules: HiLoRules) -> Vec<u8> {
+    let mut state = Vec::with_capacity(10);
     state.push(current_card);
     state.extend_from_slice(&accumulator.to_be_bytes());
+    state.push(rules.to_byte());
     state
 }
 
@@ -129,7 +174,7 @@ impl CasinoGame for HiLo {
         // Initial accumulator = bet amount in basis points (1x)
         let accumulator = BASE_MULTIPLIER;
 
-        session.state_blob = serialize_state(card, accumulator);
+        session.state_blob = serialize_state(card, accumulator, HiLoRules::default());
         GameResult::Continue(vec![])
     }
 
@@ -147,8 +192,10 @@ impl CasinoGame for HiLo {
         }
 
         let mv = Move::try_from(payload[0])?;
-        let (current_card, accumulator) =
-            parse_state(&session.state_blob).ok_or(GameError::InvalidPayload)?;
+        let state = parse_state(&session.state_blob).ok_or(GameError::InvalidPayload)?;
+        let current_card = state.current_card;
+        let accumulator = state.accumulator;
+        let rules = state.rules;
 
         match mv {
             Move::Cashout => {
@@ -200,8 +247,8 @@ impl CasinoGame for HiLo {
                 // Validate move based on current card position
                 match mv {
                     Move::Same => {
-                        // Same is only valid at Ace or King
-                        if current_rank != 1 && current_rank != 13 {
+                        // Same is only valid at Ace or King unless rules allow any rank.
+                        if !rules.allow_same_any && current_rank != 1 && current_rank != 13 {
                             return Err(GameError::InvalidMove);
                         }
                     }
@@ -228,7 +275,9 @@ impl CasinoGame for HiLo {
                 session.move_count += 1;
 
                 // Check for push: same rank on Higher/Lower (not Same move)
-                let is_push = (mv == Move::Higher || mv == Move::Lower) && new_rank == current_rank;
+                let is_push = rules.tie_push
+                    && (mv == Move::Higher || mv == Move::Lower)
+                    && new_rank == current_rank;
 
                 // Determine if guess was correct
                 let correct = match mv {
@@ -247,7 +296,7 @@ impl CasinoGame for HiLo {
 
                 if is_push {
                     // Push: same rank drawn, game continues with no multiplier change
-                    session.state_blob = serialize_state(new_card, accumulator);
+                    session.state_blob = serialize_state(new_card, accumulator, rules);
                     let logs = vec![format!(
                         r#"{{"previousCard":{},"newCard":{},"guess":"{}","push":true,"multiplier":{},"streak":{}}}"#,
                         current_card, new_card, guess_str, accumulator, session.move_count
@@ -263,7 +312,7 @@ impl CasinoGame for HiLo {
                         .and_then(|v| v.checked_div(BASE_MULTIPLIER))
                         .ok_or(GameError::InvalidState)?;
 
-                    session.state_blob = serialize_state(new_card, new_accumulator);
+                    session.state_blob = serialize_state(new_card, new_accumulator, rules);
                     // Generate move logs for frontend display
                     let logs = vec![format!(
                         r#"{{"previousCard":{},"newCard":{},"guess":"{}","correct":true,"multiplier":{},"streak":{}}}"#,
@@ -272,7 +321,7 @@ impl CasinoGame for HiLo {
                     Ok(GameResult::Continue(logs))
                 } else {
                     // Wrong guess - lose everything
-                    session.state_blob = serialize_state(new_card, 0);
+                    session.state_blob = serialize_state(new_card, 0, rules);
                     session.is_complete = true;
                     // Generate completion logs for frontend display
                     let logs = vec![format!(
@@ -376,11 +425,11 @@ mod tests {
         let card = 25; // Queen of diamonds
         let accumulator = 15_000; // 1.5x
 
-        let state = serialize_state(card, accumulator);
-        let (c, a) = parse_state(&state).expect("Failed to parse state");
+        let state = serialize_state(card, accumulator, HiLoRules::default());
+        let parsed = parse_state(&state).expect("Failed to parse state");
 
-        assert_eq!(c, card);
-        assert_eq!(a, accumulator);
+        assert_eq!(parsed.current_card, card);
+        assert_eq!(parsed.accumulator, accumulator);
     }
 
     #[test]
@@ -391,10 +440,10 @@ mod tests {
 
         HiLo::init(&mut session, &mut rng);
 
-        let (card, accumulator) = parse_state(&session.state_blob).expect("Failed to parse state");
+        let parsed = parse_state(&session.state_blob).expect("Failed to parse state");
 
-        assert!(card < 52);
-        assert_eq!(accumulator, BASE_MULTIPLIER);
+        assert!(parsed.current_card < 52);
+        assert_eq!(parsed.accumulator, BASE_MULTIPLIER);
         assert!(!session.is_complete);
     }
 
@@ -425,7 +474,7 @@ mod tests {
         let mut session = create_test_session(100);
 
         // Force a King in state
-        session.state_blob = serialize_state(12, BASE_MULTIPLIER); // King
+        session.state_blob = serialize_state(12, BASE_MULTIPLIER, HiLoRules::default()); // King
 
         let mut rng = GameRng::new(&seed, session.id, 1);
         let result = HiLo::process_move(&mut session, &[0], &mut rng); // Higher
@@ -439,7 +488,7 @@ mod tests {
         let mut session = create_test_session(100);
 
         // Force an Ace in state
-        session.state_blob = serialize_state(0, BASE_MULTIPLIER); // Ace
+        session.state_blob = serialize_state(0, BASE_MULTIPLIER, HiLoRules::default()); // Ace
 
         let mut rng = GameRng::new(&seed, session.id, 1);
         let result = HiLo::process_move(&mut session, &[1], &mut rng); // Lower
@@ -453,7 +502,7 @@ mod tests {
         let mut session = create_test_session(100);
 
         // Start with a 2 (lots of room to go higher)
-        session.state_blob = serialize_state(1, BASE_MULTIPLIER); // 2 of spades
+        session.state_blob = serialize_state(1, BASE_MULTIPLIER, HiLoRules::default()); // 2 of spades
 
         let mut move_num = 1;
         let mut streak = 0;
@@ -466,9 +515,9 @@ mod tests {
             match result {
                 Ok(GameResult::Continue(_)) => {
                     streak += 1;
-                    let (_, acc) = parse_state(&session.state_blob).expect("Failed to parse state");
+                    let parsed = parse_state(&session.state_blob).expect("Failed to parse state");
                     // Accumulator should be growing
-                    assert!(acc > BASE_MULTIPLIER);
+                    assert!(parsed.accumulator > BASE_MULTIPLIER);
                 }
                 Ok(GameResult::Loss(_)) => {
                     break;
@@ -489,14 +538,14 @@ mod tests {
 
         // Same should be INVALID at middle card (rank 7)
         let mut session = create_test_session(100);
-        session.state_blob = serialize_state(6, BASE_MULTIPLIER); // 7 of spades (rank 7)
+        session.state_blob = serialize_state(6, BASE_MULTIPLIER, HiLoRules::default()); // 7 of spades (rank 7)
         let mut rng = GameRng::new(&seed, session.id, 1);
         let result = HiLo::process_move(&mut session, &[3], &mut rng); // Same
         assert!(matches!(result, Err(GameError::InvalidMove)));
 
         // Same should be VALID at Ace
         let mut session = create_test_session(100);
-        session.state_blob = serialize_state(0, BASE_MULTIPLIER); // Ace of spades
+        session.state_blob = serialize_state(0, BASE_MULTIPLIER, HiLoRules::default()); // Ace of spades
         let mut rng = GameRng::new(&seed, session.id, 1);
         let result = HiLo::process_move(&mut session, &[3], &mut rng); // Same
         // Either Continue (if drew Ace) or Loss (if drew non-Ace), but not InvalidMove
@@ -504,7 +553,23 @@ mod tests {
 
         // Same should be VALID at King
         let mut session = create_test_session(100);
-        session.state_blob = serialize_state(12, BASE_MULTIPLIER); // King of spades
+        session.state_blob = serialize_state(12, BASE_MULTIPLIER, HiLoRules::default()); // King of spades
+        let mut rng = GameRng::new(&seed, session.id, 1);
+        let result = HiLo::process_move(&mut session, &[3], &mut rng); // Same
+        assert!(!matches!(result, Err(GameError::InvalidMove)));
+    }
+
+    #[test]
+    fn test_same_allowed_any_rank_variant() {
+        let seed = create_test_seed();
+        let mut session = create_test_session(100);
+        let rules = HiLoRules {
+            allow_same_any: true,
+            tie_push: true,
+        };
+
+        // Middle card should allow SAME when variant is enabled.
+        session.state_blob = serialize_state(6, BASE_MULTIPLIER, rules); // 7 of spades (rank 7)
         let mut rng = GameRng::new(&seed, session.id, 1);
         let result = HiLo::process_move(&mut session, &[3], &mut rng); // Same
         assert!(!matches!(result, Err(GameError::InvalidMove)));
@@ -530,7 +595,7 @@ mod tests {
         let mut session = create_test_session(100);
 
         // Force specific card in state
-        session.state_blob = serialize_state(0, BASE_MULTIPLIER); // Ace of spades
+        session.state_blob = serialize_state(0, BASE_MULTIPLIER, HiLoRules::default()); // Ace of spades
 
         // Try Higher move multiple times with different RNG states
         // With replacement, probability of getting any specific card is 1/52

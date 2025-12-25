@@ -86,6 +86,15 @@ fn print_dry_run_report(config: &nullspace_node::ValidatedConfig, peer_count: us
         "  mempool: max_backlog={} max_transactions={}",
         config.mempool_max_backlog, config.mempool_max_transactions
     );
+    println!(
+        "  mempool_stream: buffer_size={}",
+        config.mempool_stream_buffer_size
+    );
+    println!(
+        "  nonce_cache: capacity={} ttl_seconds={}",
+        config.nonce_cache_capacity,
+        config.nonce_cache_ttl.as_secs()
+    );
     println!("  network: max_message_size={}B", config.max_message_size);
     println!(
         "  seeder: max_pending_seed_listeners={}",
@@ -397,6 +406,9 @@ fn main_result() -> Result<()> {
                     mempool_max_backlog: config.mempool_max_backlog,
                     mempool_max_transactions: config.mempool_max_transactions,
                     max_pending_seed_listeners: config.max_pending_seed_listeners,
+                    mempool_stream_buffer_size: config.mempool_stream_buffer_size,
+                    nonce_cache_capacity: config.nonce_cache_capacity,
+                    nonce_cache_ttl: config.nonce_cache_ttl,
                 },
             };
             let engine = engine::Engine::new(context.with_label("engine"), config).await;

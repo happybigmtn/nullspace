@@ -1,5 +1,9 @@
 use nullspace_types::{api::Pending, Identity};
-use std::sync::Arc;
+use serde::Serialize;
+use std::collections::HashMap;
+use std::net::IpAddr;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 use tokio::sync::{broadcast, RwLock};
 
 mod api;
@@ -7,22 +11,217 @@ pub use api::Api;
 
 mod explorer;
 pub use explorer::{AccountActivity, ExplorerBlock, ExplorerState, ExplorerTransaction};
+mod explorer_persistence;
+use explorer_persistence::ExplorerPersistence;
+mod metrics;
 #[cfg(feature = "passkeys")]
 mod passkeys;
 #[cfg(feature = "passkeys")]
 pub use passkeys::{PasskeyChallenge, PasskeyCredential, PasskeySession, PasskeyStore};
 
 mod state;
-pub use state::{InternalUpdate, SimulatorConfig, State};
+pub use state::{ExplorerPersistenceBackpressure, InternalUpdate, SimulatorConfig, State};
+use state::SubscriptionTracker;
 
-#[derive(Clone)]
+use metrics::{
+    HttpMetrics, HttpMetricsSnapshot, SystemMetrics, SystemMetricsSnapshot, UpdateIndexMetrics,
+    UpdateIndexMetricsSnapshot,
+};
+
+#[derive(Default)]
+pub struct WsMetrics {
+    updates_lagged: AtomicU64,
+    mempool_lagged: AtomicU64,
+    updates_queue_full: AtomicU64,
+    mempool_queue_full: AtomicU64,
+    updates_send_errors: AtomicU64,
+    mempool_send_errors: AtomicU64,
+    updates_send_timeouts: AtomicU64,
+    mempool_send_timeouts: AtomicU64,
+}
+
+#[derive(Default)]
+struct WsConnectionTracker {
+    total: usize,
+    per_ip: HashMap<IpAddr, usize>,
+}
+
+#[derive(Clone, Copy, Debug, Serialize)]
+pub struct WsMetricsSnapshot {
+    pub updates_lagged: u64,
+    pub mempool_lagged: u64,
+    pub updates_queue_full: u64,
+    pub mempool_queue_full: u64,
+    pub updates_send_errors: u64,
+    pub mempool_send_errors: u64,
+    pub updates_send_timeouts: u64,
+    pub mempool_send_timeouts: u64,
+}
+
+impl WsMetrics {
+    pub fn snapshot(&self) -> WsMetricsSnapshot {
+        WsMetricsSnapshot {
+            updates_lagged: self.updates_lagged.load(Ordering::Relaxed),
+            mempool_lagged: self.mempool_lagged.load(Ordering::Relaxed),
+            updates_queue_full: self.updates_queue_full.load(Ordering::Relaxed),
+            mempool_queue_full: self.mempool_queue_full.load(Ordering::Relaxed),
+            updates_send_errors: self.updates_send_errors.load(Ordering::Relaxed),
+            mempool_send_errors: self.mempool_send_errors.load(Ordering::Relaxed),
+            updates_send_timeouts: self.updates_send_timeouts.load(Ordering::Relaxed),
+            mempool_send_timeouts: self.mempool_send_timeouts.load(Ordering::Relaxed),
+        }
+    }
+
+    pub fn add_updates_lagged(&self, skipped: u64) {
+        self.updates_lagged.fetch_add(skipped, Ordering::Relaxed);
+    }
+
+    pub fn add_mempool_lagged(&self, skipped: u64) {
+        self.mempool_lagged.fetch_add(skipped, Ordering::Relaxed);
+    }
+
+    pub fn inc_updates_queue_full(&self) {
+        self.updates_queue_full.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn inc_mempool_queue_full(&self) {
+        self.mempool_queue_full.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn inc_updates_send_error(&self) {
+        self.updates_send_errors.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn inc_mempool_send_error(&self) {
+        self.mempool_send_errors.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn inc_updates_send_timeout(&self) {
+        self.updates_send_timeouts.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn inc_mempool_send_timeout(&self) {
+        self.mempool_send_timeouts.fetch_add(1, Ordering::Relaxed);
+    }
+}
+
+#[derive(Default)]
+pub struct ExplorerMetrics {
+    persistence_queue_depth: AtomicU64,
+    persistence_queue_high_water: AtomicU64,
+    persistence_queue_backpressure: AtomicU64,
+    persistence_queue_dropped: AtomicU64,
+    persistence_write_errors: AtomicU64,
+    persistence_prune_errors: AtomicU64,
+}
+
+#[derive(Clone, Copy, Debug, Serialize)]
+pub struct ExplorerMetricsSnapshot {
+    pub persistence_queue_depth: u64,
+    pub persistence_queue_high_water: u64,
+    pub persistence_queue_backpressure: u64,
+    pub persistence_queue_dropped: u64,
+    pub persistence_write_errors: u64,
+    pub persistence_prune_errors: u64,
+}
+
+impl ExplorerMetrics {
+    pub fn snapshot(&self) -> ExplorerMetricsSnapshot {
+        ExplorerMetricsSnapshot {
+            persistence_queue_depth: self.persistence_queue_depth.load(Ordering::Relaxed),
+            persistence_queue_high_water: self
+                .persistence_queue_high_water
+                .load(Ordering::Relaxed),
+            persistence_queue_backpressure: self
+                .persistence_queue_backpressure
+                .load(Ordering::Relaxed),
+            persistence_queue_dropped: self.persistence_queue_dropped.load(Ordering::Relaxed),
+            persistence_write_errors: self.persistence_write_errors.load(Ordering::Relaxed),
+            persistence_prune_errors: self.persistence_prune_errors.load(Ordering::Relaxed),
+        }
+    }
+
+    pub fn inc_queue_depth(&self) {
+        let depth = self.persistence_queue_depth.fetch_add(1, Ordering::Relaxed) + 1;
+        let mut current = self.persistence_queue_high_water.load(Ordering::Relaxed);
+        while depth > current {
+            match self.persistence_queue_high_water.compare_exchange_weak(
+                current,
+                depth,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            ) {
+                Ok(_) => break,
+                Err(next) => current = next,
+            }
+        }
+    }
+
+    pub fn dec_queue_depth(&self) {
+        let mut current = self.persistence_queue_depth.load(Ordering::Relaxed);
+        while current > 0 {
+            match self.persistence_queue_depth.compare_exchange_weak(
+                current,
+                current - 1,
+                Ordering::Relaxed,
+                Ordering::Relaxed,
+            ) {
+                Ok(_) => break,
+                Err(next) => current = next,
+            }
+        }
+    }
+
+    pub fn inc_queue_backpressure(&self) {
+        self.persistence_queue_backpressure
+            .fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn inc_queue_dropped(&self) {
+        self.persistence_queue_dropped
+            .fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn inc_write_error(&self) {
+        self.persistence_write_errors.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn inc_prune_error(&self) {
+        self.persistence_prune_errors.fetch_add(1, Ordering::Relaxed);
+    }
+}
+
 pub struct Simulator {
     identity: Identity,
     config: SimulatorConfig,
     state: Arc<RwLock<State>>,
     explorer: Arc<RwLock<ExplorerState>>,
+    explorer_persistence: Option<ExplorerPersistence>,
+    subscriptions: Arc<Mutex<SubscriptionTracker>>,
     update_tx: broadcast::Sender<InternalUpdate>,
     mempool_tx: broadcast::Sender<Pending>,
+    ws_metrics: WsMetrics,
+    explorer_metrics: Arc<ExplorerMetrics>,
+    update_index_metrics: Arc<UpdateIndexMetrics>,
+    http_metrics: HttpMetrics,
+    system_metrics: SystemMetrics,
+    ws_connections: Mutex<WsConnectionTracker>,
+}
+
+pub enum WsConnectionRejection {
+    GlobalLimit,
+    PerIpLimit,
+}
+
+pub struct WsConnectionGuard {
+    simulator: Arc<Simulator>,
+    ip: IpAddr,
+}
+
+impl Drop for WsConnectionGuard {
+    fn drop(&mut self) {
+        self.simulator.release_ws_connection(self.ip);
+    }
 }
 
 impl Simulator {
@@ -31,14 +230,57 @@ impl Simulator {
     }
 
     pub fn new_with_config(identity: Identity, config: SimulatorConfig) -> Self {
-        let (update_tx, _) = broadcast::channel(1024);
-        let (mempool_tx, _) = broadcast::channel(1024);
+        let (update_tx, _) = broadcast::channel(config.updates_broadcast_capacity());
+        let (mempool_tx, _) = broadcast::channel(config.mempool_broadcast_capacity());
         let state = Arc::new(RwLock::new(State::default()));
         let mut explorer = ExplorerState::default();
         explorer.set_retention(
             config.explorer_max_blocks,
             config.explorer_max_account_entries,
+            config.explorer_max_accounts,
+            config.explorer_max_game_event_accounts,
         );
+        let explorer_metrics = Arc::new(ExplorerMetrics::default());
+        let update_index_metrics = Arc::new(UpdateIndexMetrics::default());
+        let explorer_persistence = if let Some(url) = config.explorer_persistence_url.as_deref() {
+            if config.explorer_persistence_path.is_some() {
+                tracing::warn!("Explorer persistence URL set; ignoring SQLite path.");
+            }
+            match ExplorerPersistence::load_and_start_postgres(
+                url,
+                &mut explorer,
+                config.explorer_max_blocks,
+                config.explorer_persistence_buffer_capacity(),
+                config.explorer_persistence_batch_size(),
+                config.explorer_persistence_backpressure_policy(),
+                Arc::clone(&explorer_metrics),
+            ) {
+                Ok(persistence) => Some(persistence),
+                Err(err) => {
+                    tracing::warn!("Explorer persistence disabled: {err}");
+                    None
+                }
+            }
+        } else {
+            match config.explorer_persistence_path.as_ref() {
+                Some(path) => match ExplorerPersistence::load_and_start_sqlite(
+                    path,
+                    &mut explorer,
+                    config.explorer_max_blocks,
+                    config.explorer_persistence_buffer_capacity(),
+                    config.explorer_persistence_batch_size(),
+                    config.explorer_persistence_backpressure_policy(),
+                    Arc::clone(&explorer_metrics),
+                ) {
+                    Ok(persistence) => Some(persistence),
+                    Err(err) => {
+                        tracing::warn!("Explorer persistence disabled: {err}");
+                        None
+                    }
+                },
+                None => None,
+            }
+        };
         let explorer = Arc::new(RwLock::new(explorer));
 
         Self {
@@ -46,8 +288,87 @@ impl Simulator {
             config,
             state,
             explorer,
+            explorer_persistence,
+            subscriptions: Arc::new(Mutex::new(SubscriptionTracker::default())),
             update_tx,
             mempool_tx,
+            ws_metrics: WsMetrics::default(),
+            explorer_metrics,
+            update_index_metrics,
+            http_metrics: HttpMetrics::default(),
+            system_metrics: SystemMetrics::new(),
+            ws_connections: Mutex::new(WsConnectionTracker::default()),
+        }
+    }
+
+    pub(crate) fn ws_metrics(&self) -> &WsMetrics {
+        &self.ws_metrics
+    }
+
+    pub(crate) fn ws_metrics_snapshot(&self) -> WsMetricsSnapshot {
+        self.ws_metrics.snapshot()
+    }
+
+    pub(crate) fn explorer_metrics_snapshot(&self) -> ExplorerMetricsSnapshot {
+        self.explorer_metrics.snapshot()
+    }
+
+    pub(crate) fn update_index_metrics_snapshot(&self) -> UpdateIndexMetricsSnapshot {
+        self.update_index_metrics.snapshot()
+    }
+
+    pub(crate) fn http_metrics(&self) -> &HttpMetrics {
+        &self.http_metrics
+    }
+
+    pub(crate) fn http_metrics_snapshot(&self) -> HttpMetricsSnapshot {
+        self.http_metrics.snapshot()
+    }
+
+    pub(crate) fn system_metrics_snapshot(&self) -> SystemMetricsSnapshot {
+        self.system_metrics.snapshot()
+    }
+
+    pub(crate) fn try_acquire_ws_connection(
+        self: &Arc<Self>,
+        ip: IpAddr,
+    ) -> Result<WsConnectionGuard, WsConnectionRejection> {
+        let max_total = self.config.ws_max_connections;
+        let max_per_ip = self.config.ws_max_connections_per_ip;
+        let mut tracker = self.ws_connections.lock().unwrap();
+
+        if let Some(limit) = max_total {
+            if tracker.total >= limit {
+                return Err(WsConnectionRejection::GlobalLimit);
+            }
+        }
+
+        let current_ip = tracker.per_ip.get(&ip).copied().unwrap_or(0);
+        if let Some(limit) = max_per_ip {
+            if current_ip >= limit {
+                return Err(WsConnectionRejection::PerIpLimit);
+            }
+        }
+
+        tracker.total = tracker.total.saturating_add(1);
+        tracker.per_ip.insert(ip, current_ip.saturating_add(1));
+        Ok(WsConnectionGuard {
+            simulator: Arc::clone(self),
+            ip,
+        })
+    }
+
+    fn release_ws_connection(&self, ip: IpAddr) {
+        let mut tracker = self.ws_connections.lock().unwrap();
+        tracker.total = tracker.total.saturating_sub(1);
+        match tracker.per_ip.get_mut(&ip) {
+            Some(count) if *count > 1 => {
+                *count -= 1;
+            }
+            Some(_) => {
+                tracker.per_ip.remove(&ip);
+            }
+            None => {}
         }
     }
 }
@@ -58,21 +379,24 @@ mod tests {
     use commonware_codec::Encode;
     use commonware_cryptography::{Hasher, Sha256};
     use commonware_runtime::{deterministic::Runner, Runner as _};
+    use commonware_storage::adb::create_proof_store_from_digests;
     use commonware_storage::store::operation::{Keyless, Variable};
     use nullspace_execution::mocks::{
         create_account_keypair, create_adbs, create_network_keypair, create_seed, execute_block,
     };
     use nullspace_types::{
-        api::{Events, Update},
+        api::{Events, Update, UpdatesFilter},
         execution::{Event, Instruction, Key, Output, Transaction, Value},
         Query as ChainQuery,
     };
+    use std::sync::Arc;
 
     #[tokio::test]
     async fn test_submit_seed() {
         let (network_secret, network_identity) = create_network_keypair();
         let simulator = Simulator::new(network_identity);
-        let mut update_stream = simulator.update_subscriber();
+        let (mut update_stream, _guard) =
+            simulator.tracked_update_subscriber(UpdatesFilter::All);
 
         // Submit seed
         let seed = create_seed(&network_secret, 1);
@@ -170,7 +494,8 @@ mod tests {
                 .expect("Summary verification failed");
 
             // Submit events
-            let mut update_stream = simulator.update_subscriber();
+            let (mut update_stream, _guard) =
+                simulator.tracked_update_subscriber(UpdatesFilter::All);
             simulator
                 .submit_events(summary.clone(), events_digests)
                 .await;
@@ -178,7 +503,8 @@ mod tests {
             // Wait for events
             let update_recv = update_stream.recv().await.unwrap();
             match update_recv {
-                InternalUpdate::Events(events_recv, _) => {
+                InternalUpdate::Events(indexed) => {
+                    let events_recv = indexed.events.as_ref();
                     events_recv.verify(&network_identity).unwrap();
                     assert_eq!(events_recv.events_proof, summary.events_proof);
                     assert_eq!(events_recv.events_proof_ops, summary.events_proof_ops);
@@ -265,20 +591,28 @@ mod tests {
             // Store original count before moving
             let original_ops_count = summary.events_proof_ops.len();
 
-            let events = Events {
+            let events = Arc::new(Events {
                 progress: summary.progress,
                 certificate: summary.certificate,
                 events_proof: summary.events_proof,
                 events_proof_ops: summary.events_proof_ops,
-            };
+            });
+            let proof_store =
+                Arc::new(create_proof_store_from_digests(&events.events_proof, events_digests));
 
             // Apply filter
-            let filtered = crate::api::filter_updates_for_account(events, events_digests, &public1)
-                .await
-                .unwrap();
+            let indexed = crate::state::index_events(
+                events,
+                proof_store,
+                None,
+                SimulatorConfig::default().updates_index_concurrency(),
+                Arc::new(UpdateIndexMetrics::default()),
+            )
+            .await;
+            let filtered = indexed.update_for_account(&public1).unwrap();
 
             // Verify filtered events
-            match filtered {
+            match filtered.update.as_ref() {
                 Update::FilteredEvents(filtered_events) => {
                     // Count how many events are included
                     let included_count = filtered_events.events_proof_ops.len();

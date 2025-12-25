@@ -20,6 +20,7 @@ interface RegistrationViewProps {
   nextTournamentId: number | null;
   isJoinedNext: boolean;
   tournamentsPlayedToday: number;
+  dailyLimit: number;
   onRegister: () => void;
   onEnterTournament: () => void;
   botConfig: BotConfig;
@@ -40,6 +41,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
   nextTournamentId,
   isJoinedNext,
   tournamentsPlayedToday,
+  dailyLimit,
   onRegister,
   onEnterTournament,
   botConfig,
@@ -64,8 +66,8 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
        return `${x},${y}`;
   }).join(' ');
 
-  const MAX_TOURNAMENTS_PER_DAY = 5;
-  const entriesRemaining = Math.max(0, MAX_TOURNAMENTS_PER_DAY - tournamentsPlayedToday);
+  const maxEntries = Number.isFinite(dailyLimit) ? Math.max(1, dailyLimit) : 1;
+  const entriesRemaining = Math.max(0, maxEntries - tournamentsPlayedToday);
   const canEnterTournament =
     activeTournamentId !== null &&
     playerActiveTournamentId !== null &&
@@ -102,7 +104,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
                               {formatTime(nextStartIn)}
                           </div>
                           <div className="mt-2 text-[10px] text-gray-600 tracking-widest">
-                              ENTRIES LEFT TODAY: <span className={entriesRemaining > 0 ? 'text-terminal-green' : 'text-terminal-accent'}>{entriesRemaining}/{MAX_TOURNAMENTS_PER_DAY}</span>
+                              ENTRIES LEFT TODAY: <span className={entriesRemaining > 0 ? 'text-terminal-green' : 'text-terminal-accent'}>{entriesRemaining}/{maxEntries}</span>
                           </div>
                       </div>
                   </div>

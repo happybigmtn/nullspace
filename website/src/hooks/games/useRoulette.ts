@@ -114,7 +114,9 @@ export const useRoulette = ({
           ? 'EN_PRISON'
           : gameState.rouletteZeroRule === 'EN_PRISON'
             ? 'EN_PRISON_DOUBLE'
-            : 'STANDARD';
+            : gameState.rouletteZeroRule === 'EN_PRISON_DOUBLE'
+              ? 'AMERICAN'
+              : 'STANDARD';
 
     setGameState(prev => ({
       ...prev,
@@ -134,7 +136,9 @@ export const useRoulette = ({
               ? 2
               : nextRule === 'EN_PRISON_DOUBLE'
                 ? 3
-                : 0;
+                : nextRule === 'AMERICAN'
+                  ? 4
+                  : 0;
         const payload = new Uint8Array([3, ruleByte]);
         const result = await chainService.sendMove(currentSessionIdRef.current, payload);
         if (result.txHash) setLastTxSig(result.txHash);

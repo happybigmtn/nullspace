@@ -35,6 +35,20 @@ export interface Player {
   activeSession: bigint | null;
   lastDepositBlock: bigint;
   auraMeter?: number;
+  tournamentsPlayedToday?: number;
+  lastTournamentTs?: bigint;
+  tournamentDailyLimit?: number;
+}
+
+export interface PlayerBalanceSnapshot {
+  chips: bigint;
+  vusdtBalance: bigint;
+  shields: number;
+  doubles: number;
+  tournamentChips: bigint;
+  tournamentShields: number;
+  tournamentDoubles: number;
+  activeTournament: bigint | null;
 }
 
 /**
@@ -98,6 +112,7 @@ export interface CasinoGameMovedEvent {
   moveNumber: number;
   newState: Uint8Array;
   logs?: string[];
+  playerBalances: PlayerBalanceSnapshot;
 }
 
 /**
@@ -114,4 +129,5 @@ export interface CasinoGameCompletedEvent {
   wasShielded: boolean;
   wasDoubled: boolean;
   logs?: string[];
+  playerBalances: PlayerBalanceSnapshot;
 }

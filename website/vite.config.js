@@ -4,6 +4,7 @@ import { copyFileSync } from 'fs'
 import { resolve } from 'path'
 
 const backendUrl = process.env.VITE_URL || 'http://localhost:8080';
+const authProxyUrl = process.env.VITE_AUTH_PROXY_URL || 'http://localhost:4000';
 let backendOrigin = '';
 try {
   const url = new URL(backendUrl);
@@ -59,6 +60,18 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
         ws: true
+      },
+      '/auth': {
+        target: authProxyUrl,
+        changeOrigin: true,
+      },
+      '/profile': {
+        target: authProxyUrl,
+        changeOrigin: true,
+      },
+      '/billing': {
+        target: authProxyUrl,
+        changeOrigin: true,
       }
     }
   },

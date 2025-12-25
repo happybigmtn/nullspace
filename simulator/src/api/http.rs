@@ -16,6 +16,7 @@ use nullspace_types::{
 };
 use serde::Serialize;
 use std::sync::Arc;
+use std::time::Instant;
 
 use crate::Simulator;
 
@@ -29,7 +30,37 @@ pub(super) async fn healthz() -> impl IntoResponse {
 }
 
 pub(super) async fn config(AxumState(simulator): AxumState<Arc<Simulator>>) -> impl IntoResponse {
-    Json(simulator.config)
+    Json(simulator.config.clone())
+}
+
+pub(super) async fn ws_metrics(
+    AxumState(simulator): AxumState<Arc<Simulator>>,
+) -> impl IntoResponse {
+    Json(simulator.ws_metrics_snapshot())
+}
+
+pub(super) async fn http_metrics(
+    AxumState(simulator): AxumState<Arc<Simulator>>,
+) -> impl IntoResponse {
+    Json(simulator.http_metrics_snapshot())
+}
+
+pub(super) async fn system_metrics(
+    AxumState(simulator): AxumState<Arc<Simulator>>,
+) -> impl IntoResponse {
+    Json(simulator.system_metrics_snapshot())
+}
+
+pub(super) async fn explorer_metrics(
+    AxumState(simulator): AxumState<Arc<Simulator>>,
+) -> impl IntoResponse {
+    Json(simulator.explorer_metrics_snapshot())
+}
+
+pub(super) async fn update_index_metrics(
+    AxumState(simulator): AxumState<Arc<Simulator>>,
+) -> impl IntoResponse {
+    Json(simulator.update_index_metrics_snapshot())
 }
 
 pub(super) async fn submit(
@@ -159,8 +190,24 @@ pub(super) async fn submit(
         }
     }
 
-    let submission = match Submission::decode(&mut body.as_ref()) {
-        Ok(submission) => submission,
+    let start = Instant::now();
+    let status = match Submission::decode(&mut body.as_ref()) {
+        Ok(submission) => match submission {
+            Submission::Seed(seed) => {
+                if !seed.verify(NAMESPACE, &simulator.identity) {
+                    tracing::warn!("Seed verification failed (bad identity or corrupted seed)");
+                    StatusCode::BAD_REQUEST
+                } else {
+                    simulator.submit_seed(seed).await;
+                    StatusCode::OK
+                }
+            }
+            Submission::Transactions(txs) => {
+                simulator.submit_transactions(txs);
+                StatusCode::OK
+            }
+            Submission::Summary(summary) => submit_summary(simulator.clone(), summary).await,
+        },
         Err(e) => {
             let preview_len = std::cmp::min(32, body.len());
             log_summary_decode_stages(body.as_ref());
@@ -170,25 +217,12 @@ pub(super) async fn submit(
                 "Failed to decode submission: {:?}",
                 e
             );
-            return StatusCode::BAD_REQUEST;
+            StatusCode::BAD_REQUEST
         }
     };
 
-    match submission {
-        Submission::Seed(seed) => {
-            if !seed.verify(NAMESPACE, &simulator.identity) {
-                tracing::warn!("Seed verification failed (bad identity or corrupted seed)");
-                return StatusCode::BAD_REQUEST;
-            }
-            simulator.submit_seed(seed).await;
-            StatusCode::OK
-        }
-        Submission::Transactions(txs) => {
-            simulator.submit_transactions(txs);
-            StatusCode::OK
-        }
-        Submission::Summary(summary) => submit_summary(simulator, summary).await,
-    }
+    simulator.http_metrics().record_submit(start.elapsed());
+    status
 }
 
 async fn submit_summary(simulator: Arc<Simulator>, summary: Summary) -> StatusCode {
@@ -218,34 +252,38 @@ pub(super) async fn query_state(
     AxumState(simulator): AxumState<Arc<Simulator>>,
     axum::extract::Path(query): axum::extract::Path<String>,
 ) -> impl IntoResponse {
-    let raw = match from_hex(&query) {
-        Some(raw) => raw,
-        None => return StatusCode::BAD_REQUEST.into_response(),
+    let start = Instant::now();
+    let response = match from_hex(&query) {
+        Some(raw) => match Digest::decode(&mut raw.as_slice()) {
+            Ok(key) => match simulator.query_state(&key).await {
+                Some(value) => (StatusCode::OK, value.encode().to_vec()).into_response(),
+                None => (StatusCode::NOT_FOUND, vec![]).into_response(),
+            },
+            Err(_) => StatusCode::BAD_REQUEST.into_response(),
+        },
+        None => StatusCode::BAD_REQUEST.into_response(),
     };
-    let key = match Digest::decode(&mut raw.as_slice()) {
-        Ok(key) => key,
-        Err(_) => return StatusCode::BAD_REQUEST.into_response(),
-    };
-    match simulator.query_state(&key).await {
-        Some(value) => (StatusCode::OK, value.encode().to_vec()).into_response(),
-        None => (StatusCode::NOT_FOUND, vec![]).into_response(),
-    }
+
+    simulator.http_metrics().record_query_state(start.elapsed());
+    response
 }
 
 pub(super) async fn query_seed(
     AxumState(simulator): AxumState<Arc<Simulator>>,
     axum::extract::Path(query): axum::extract::Path<String>,
 ) -> impl IntoResponse {
-    let raw = match from_hex(&query) {
-        Some(raw) => raw,
-        None => return StatusCode::BAD_REQUEST.into_response(),
+    let start = Instant::now();
+    let response = match from_hex(&query) {
+        Some(raw) => match ChainQuery::decode(&mut raw.as_slice()) {
+            Ok(query) => match simulator.query_seed(&query).await {
+                Some(seed) => (StatusCode::OK, seed.encode().to_vec()).into_response(),
+                None => (StatusCode::NOT_FOUND, vec![]).into_response(),
+            },
+            Err(_) => StatusCode::BAD_REQUEST.into_response(),
+        },
+        None => StatusCode::BAD_REQUEST.into_response(),
     };
-    let query = match ChainQuery::decode(&mut raw.as_slice()) {
-        Ok(query) => query,
-        Err(_) => return StatusCode::BAD_REQUEST.into_response(),
-    };
-    match simulator.query_seed(&query).await {
-        Some(seed) => (StatusCode::OK, seed.encode().to_vec()).into_response(),
-        None => (StatusCode::NOT_FOUND, vec![]).into_response(),
-    }
+
+    simulator.http_metrics().record_query_seed(start.elapsed());
+    response
 }

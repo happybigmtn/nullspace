@@ -166,7 +166,7 @@ export const SicBoView = React.memo<{
 
     return (
         <>
-            <div className="flex-1 w-full flex flex-col items-center justify-start sm:justify-center gap-4 sm:gap-8 relative pt-8 sm:pt-10 pb-24 sm:pb-20 md:pl-64 md:pr-60">
+            <div className="flex-1 w-full flex flex-col items-center justify-start sm:justify-center gap-4 sm:gap-8 relative pt-8 sm:pt-10 pb-24 sm:pb-20 lg:pl-64 lg:pr-60">
                 <h1 className="absolute top-0 text-xl font-bold text-gray-500 tracking-widest uppercase">SIC BO</h1>
                 <div className="absolute top-2 left-2 z-40">
                     <MobileDrawer label="INFO" title="SIC BO">
@@ -285,7 +285,7 @@ export const SicBoView = React.memo<{
             </div>
 
              {/* EXPOSURE SIDEBAR - Two Columns: Totals | Combinations */}
-             <div className="hidden md:flex absolute top-0 left-0 bottom-24 w-64 bg-terminal-black/80 border-r-2 border-gray-700 p-2 overflow-hidden backdrop-blur-sm z-30 flex-col">
+             <div className="hidden lg:flex absolute top-0 left-0 bottom-24 w-64 bg-terminal-black/80 border-r-2 border-gray-700 p-2 overflow-hidden backdrop-blur-sm z-30 flex-col">
                 {/* Two-column header */}
                 <div className="flex-none flex border-b border-gray-800 pb-1 mb-1">
                     <div className="flex-1 text-center">
@@ -326,7 +326,7 @@ export const SicBoView = React.memo<{
             </div>
 
             {/* ACTIVE BETS SIDEBAR - Reduced to w-60 */}
-            <div className="hidden md:flex absolute top-0 right-0 bottom-24 w-60 bg-terminal-black/80 border-l-2 border-gray-700 p-2 backdrop-blur-sm z-30 flex-col">
+            <div className="hidden lg:flex absolute top-0 right-0 bottom-24 w-60 bg-terminal-black/80 border-l-2 border-gray-700 p-2 backdrop-blur-sm z-30 flex-col">
                     <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-2 border-b border-gray-800 pb-1 flex-none text-center">Table Bets</div>
                     <div className="flex-1 overflow-y-auto flex flex-col space-y-2">
                         {(() => {
@@ -363,10 +363,10 @@ export const SicBoView = React.memo<{
             </div>
 
             {/* CONTROLS */}
-            <div className="ns-controlbar fixed bottom-0 left-0 right-0 sm:sticky sm:bottom-0 bg-terminal-black/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)] sm:pb-0">
-                <div className="h-auto sm:h-20 flex flex-col sm:flex-row items-stretch sm:items-center justify-between sm:justify-center gap-2 p-2 sm:px-4">
+            <div className="ns-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-terminal-black/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
+                <div className="h-auto md:h-20 flex flex-col md:flex-row items-stretch md:items-center justify-between md:justify-center gap-2 p-2 md:px-4">
                     {/* Desktop: Bet controls */}
-                    <div className="hidden sm:flex items-center gap-2 flex-1 flex-wrap">
+                    <div className="hidden md:flex items-center gap-2 flex-1 flex-wrap">
                         {/* Basic Bets Group */}
                         <div className="flex items-center gap-1 px-2 border-l-2 border-terminal-green/30">
                             <span className="text-[9px] text-terminal-green font-bold tracking-widest mr-1">BASIC</span>
@@ -409,12 +409,12 @@ export const SicBoView = React.memo<{
                     </div>
 
                     {/* Mobile: Simplified button */}
-                    <div className="flex sm:hidden items-center gap-2">
+                    <div className="flex md:hidden items-center gap-2">
                         <MobileDrawer label="BETS" title="PLACE BETS">
                             <div className="space-y-4">
                                 {/* Basic Bets */}
-                                <div>
-                                    <div className="text-[10px] text-terminal-green font-bold tracking-widest mb-2 border-b border-gray-800 pb-1">BASIC BETS</div>
+                                <div className="rounded border border-gray-800 bg-black/40 p-2 space-y-2">
+                                    <div className="text-[10px] text-terminal-green font-bold tracking-widest border-b border-gray-800 pb-1">BASIC BETS</div>
                                     <div className="grid grid-cols-2 gap-2">
                                         <button onClick={() => actions?.placeSicBoBet?.('SMALL')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('SMALL') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>SMALL</button>
                                         <button onClick={() => actions?.placeSicBoBet?.('BIG')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('BIG') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>BIG</button>
@@ -424,9 +424,9 @@ export const SicBoView = React.memo<{
                                 </div>
 
                                 {/* Specific Bets */}
-                                <div>
-                                    <div className="text-[10px] text-cyan-400 font-bold tracking-widest mb-2 border-b border-gray-800 pb-1">SPECIFIC BETS</div>
-                                    <div className="grid grid-cols-3 gap-2">
+                                <div className="rounded border border-gray-800 bg-black/40 p-2 space-y-2">
+                                    <div className="text-[10px] text-cyan-400 font-bold tracking-widest border-b border-gray-800 pb-1">SPECIFIC BETS</div>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                         <button onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, sicBoInputMode: 'SINGLE' }))} className={`py-3 rounded border text-xs font-bold ${gameState.sicBoInputMode === 'SINGLE' || betTypes.has('SINGLE_DIE') ? 'border-cyan-400 bg-cyan-400/20 text-cyan-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>DIE</button>
                                         <button onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, sicBoInputMode: 'DOUBLE' }))} className={`py-3 rounded border text-xs font-bold ${gameState.sicBoInputMode === 'DOUBLE' || betTypes.has('DOUBLE_SPECIFIC') ? 'border-cyan-400 bg-cyan-400/20 text-cyan-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>DOUBLE</button>
                                         <button onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, sicBoInputMode: 'TRIPLE' }))} className={`py-3 rounded border text-xs font-bold ${gameState.sicBoInputMode === 'TRIPLE' || betTypes.has('TRIPLE_SPECIFIC') ? 'border-cyan-400 bg-cyan-400/20 text-cyan-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>TRIPLE</button>
@@ -440,16 +440,18 @@ export const SicBoView = React.memo<{
                                 </div>
 
                                 {/* Actions */}
-                                <div className="flex gap-2">
-                                    <button onClick={actions?.rebetSicBo} className="flex-1 py-3 rounded border border-gray-700 bg-gray-900 text-gray-400 text-xs font-bold">REBET</button>
-                                    <button onClick={actions?.undoSicBoBet} className="flex-1 py-3 rounded border border-gray-700 bg-gray-900 text-gray-400 text-xs font-bold">UNDO</button>
-                                    {playMode !== 'CASH' && (
-                                        <>
-                                            <button onClick={actions?.toggleShield} className={`flex-1 py-3 rounded border text-xs font-bold ${gameState.activeModifiers.shield ? 'border-purple-400 bg-purple-400/20 text-purple-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>SHIELD</button>
-                                            <button onClick={actions?.toggleDouble} className={`flex-1 py-3 rounded border text-xs font-bold ${gameState.activeModifiers.double ? 'border-blue-400 bg-blue-400/20 text-blue-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>DOUBLE</button>
-                                        </>
-                                    )}
-                                    <button onClick={actions?.toggleSuper} className={`flex-1 py-3 rounded border text-xs font-bold ${gameState.activeModifiers.super ? 'border-terminal-gold bg-terminal-gold/20 text-terminal-gold' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>SUPER</button>
+                                <div className="rounded border border-gray-800 bg-black/40 p-2">
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                        <button onClick={actions?.rebetSicBo} className="flex-1 py-3 rounded border border-gray-700 bg-gray-900 text-gray-400 text-xs font-bold">REBET</button>
+                                        <button onClick={actions?.undoSicBoBet} className="flex-1 py-3 rounded border border-gray-700 bg-gray-900 text-gray-400 text-xs font-bold">UNDO</button>
+                                        {playMode !== 'CASH' && (
+                                            <>
+                                                <button onClick={actions?.toggleShield} className={`flex-1 py-3 rounded border text-xs font-bold ${gameState.activeModifiers.shield ? 'border-purple-400 bg-purple-400/20 text-purple-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>SHIELD</button>
+                                                <button onClick={actions?.toggleDouble} className={`flex-1 py-3 rounded border text-xs font-bold ${gameState.activeModifiers.double ? 'border-blue-400 bg-blue-400/20 text-blue-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>DOUBLE</button>
+                                            </>
+                                        )}
+                                        <button onClick={actions?.toggleSuper} className={`flex-1 py-3 rounded border text-xs font-bold ${gameState.activeModifiers.super ? 'border-terminal-gold bg-terminal-gold/20 text-terminal-gold' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>SUPER</button>
+                                    </div>
                                 </div>
                             </div>
                         </MobileDrawer>
@@ -459,7 +461,7 @@ export const SicBoView = React.memo<{
                     <button
                         type="button"
                         onClick={actions?.deal}
-                        className="h-12 sm:h-14 px-6 sm:px-8 rounded border-2 font-bold text-sm sm:text-base tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] border-terminal-green bg-terminal-green text-black hover:bg-white hover:border-white hover:scale-105 active:scale-95"
+                        className="h-12 md:h-14 px-6 md:px-8 rounded border-2 font-bold text-sm md:text-base tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] border-terminal-green bg-terminal-green text-black hover:bg-white hover:border-white hover:scale-105 active:scale-95"
                     >
                         ROLL
                     </button>

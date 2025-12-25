@@ -230,50 +230,53 @@ describe('Instruction Serialization', () => {
   });
 
   describe('serializeCasinoToggleShield', () => {
-    test('should serialize with just tag 14', () => {
+    test('should serialize with player action tag 14 + shield action', () => {
       const result = serializeCasinoToggleShield();
 
-      const expected = new Uint8Array([14]);
+      const expected = new Uint8Array([14, 0]);
 
       assertBytesEqual(result, expected, 'CasinoToggleShield serialization');
     });
 
-    test('should always produce single byte', () => {
+    test('should always produce two bytes', () => {
       const result = serializeCasinoToggleShield();
-      assert.strictEqual(result.length, 1, 'Should be 1 byte');
+      assert.strictEqual(result.length, 2, 'Should be 2 bytes');
       assert.strictEqual(result[0], 14, 'Should be tag 14');
+      assert.strictEqual(result[1], 0, 'Should be shield action');
     });
   });
 
   describe('serializeCasinoToggleDouble', () => {
-    test('should serialize with just tag 15', () => {
+    test('should serialize with player action tag 14 + double action', () => {
       const result = serializeCasinoToggleDouble();
 
-      const expected = new Uint8Array([15]);
+      const expected = new Uint8Array([14, 1]);
 
       assertBytesEqual(result, expected, 'CasinoToggleDouble serialization');
     });
 
-    test('should always produce single byte', () => {
+    test('should always produce two bytes', () => {
       const result = serializeCasinoToggleDouble();
-      assert.strictEqual(result.length, 1, 'Should be 1 byte');
-      assert.strictEqual(result[0], 15, 'Should be tag 15');
+      assert.strictEqual(result.length, 2, 'Should be 2 bytes');
+      assert.strictEqual(result[0], 14, 'Should be tag 14');
+      assert.strictEqual(result[1], 1, 'Should be double action');
     });
   });
 
   describe('serializeCasinoToggleSuper', () => {
-    test('should serialize with just tag 30', () => {
+    test('should serialize with player action tag 14 + super action', () => {
       const result = serializeCasinoToggleSuper();
 
-      const expected = new Uint8Array([30]);
+      const expected = new Uint8Array([14, 2]);
 
       assertBytesEqual(result, expected, 'CasinoToggleSuper serialization');
     });
 
-    test('should always produce single byte', () => {
+    test('should always produce two bytes', () => {
       const result = serializeCasinoToggleSuper();
-      assert.strictEqual(result.length, 1, 'Should be 1 byte');
-      assert.strictEqual(result[0], 30, 'Should be tag 30');
+      assert.strictEqual(result.length, 2, 'Should be 2 bytes');
+      assert.strictEqual(result[0], 14, 'Should be tag 14');
+      assert.strictEqual(result[1], 2, 'Should be super action');
     });
   });
 

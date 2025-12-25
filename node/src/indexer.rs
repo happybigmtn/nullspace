@@ -15,7 +15,7 @@ use nullspace_types::execution::Transaction;
 use nullspace_types::{api::Summary, Seed};
 #[cfg(test)]
 use nullspace_types::{Identity, NAMESPACE};
-use prometheus_client::metrics::counter::Counter;
+use prometheus_client::metrics::{counter::Counter, gauge::Gauge};
 use rand::{CryptoRng, Rng};
 use std::future::Future;
 #[cfg(test)]
@@ -34,8 +34,8 @@ use tracing::{error, info, warn};
 /// Delay between reconnection attempts when tx_stream fails
 const TX_STREAM_RECONNECT_DELAY: Duration = Duration::from_secs(10);
 
-/// Buffer size for the tx_stream channel
-const TX_STREAM_BUFFER_SIZE: usize = 1_024;
+/// Default buffer size for the tx_stream channel
+const DEFAULT_TX_STREAM_BUFFER_SIZE: usize = 4_096;
 
 /// Trait for interacting with an indexer.
 pub trait Indexer: Clone + Send + Sync + 'static {
@@ -152,13 +152,14 @@ where
 {
     rx: mpsc::Receiver<Result<Pending, I::Error>>,
     _handle: Handle<()>,
+    queue_depth: Gauge,
 }
 
 impl<I> ReconnectingStream<I>
 where
     I: Indexer,
 {
-    pub fn new<E>(context: E, indexer: I) -> Self
+    pub fn new<E>(context: E, indexer: I, buffer_size: usize) -> Self
     where
         E: Spawner + Clock + Rng + CryptoRng + Metrics,
     {
@@ -169,6 +170,8 @@ where
         let stream_failures: Counter<u64, AtomicU64> = Counter::default();
         let invalid_batches: Counter<u64, AtomicU64> = Counter::default();
         let forwarded_batches: Counter<u64, AtomicU64> = Counter::default();
+        let queue_backpressure: Counter<u64, AtomicU64> = Counter::default();
+        let queue_depth: Gauge = Gauge::default();
         context.register(
             "connect_attempts_total",
             "Number of attempts to connect to the indexer mempool websocket",
@@ -199,9 +202,24 @@ where
             "Number of Pending batches forwarded from the indexer mempool stream",
             forwarded_batches.clone(),
         );
+        context.register(
+            "queue_backpressure_total",
+            "Number of mempool batches that hit a full queue before enqueueing",
+            queue_backpressure.clone(),
+        );
+        context.register(
+            "queue_depth",
+            "Approximate number of mempool batches queued for processing",
+            queue_depth.clone(),
+        );
 
         // Spawn background task that manages connections
-        let (mut tx, rx) = mpsc::channel(TX_STREAM_BUFFER_SIZE);
+        let buffer_size = if buffer_size == 0 {
+            DEFAULT_TX_STREAM_BUFFER_SIZE
+        } else {
+            buffer_size
+        };
+        let (mut tx, rx) = mpsc::channel(buffer_size);
         let handle = context.spawn({
             move |mut context| async move {
                 let mut backoff = Duration::from_millis(200);
@@ -235,11 +253,27 @@ where
                                         }
 
                                         // Pass to receiver
-                                        if tx.send(Ok(pending)).await.is_err() {
-                                            warn!("receiver dropped");
-                                            return;
+                                        let send_result = tx.try_send(Ok(pending));
+                                        match send_result {
+                                            Ok(()) => {
+                                                queue_depth.inc();
+                                                forwarded_batches.inc();
+                                            }
+                                            Err(err) if err.is_full() => {
+                                                queue_backpressure.inc();
+                                                let pending = err.into_inner();
+                                                if tx.send(pending).await.is_err() {
+                                                    warn!("receiver dropped");
+                                                    return;
+                                                }
+                                                queue_depth.inc();
+                                                forwarded_batches.inc();
+                                            }
+                                            Err(_) => {
+                                                warn!("receiver dropped");
+                                                return;
+                                            }
                                         }
-                                        forwarded_batches.inc();
                                     }
                                     Err(e) => {
                                         stream_failures.inc();
@@ -268,6 +302,7 @@ where
         Self {
             rx,
             _handle: handle,
+            queue_depth,
         }
     }
 }
@@ -279,7 +314,13 @@ where
     type Item = Result<Pending, I::Error>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        Pin::new(&mut self.rx).poll_next(cx)
+        match Pin::new(&mut self.rx).poll_next(cx) {
+            Poll::Ready(Some(item)) => {
+                self.queue_depth.dec();
+                Poll::Ready(Some(item))
+            }
+            other => other,
+        }
     }
 }
 
@@ -292,6 +333,7 @@ where
 {
     inner: I,
     context: E,
+    mempool_stream_buffer_size: usize,
 }
 
 impl<I, E> ReconnectingIndexer<I, E>
@@ -299,8 +341,12 @@ where
     I: Indexer,
     E: Rng + CryptoRng + Spawner + Clock + Metrics + Clone,
 {
-    pub fn new(context: E, inner: I) -> Self {
-        Self { inner, context }
+    pub fn new(context: E, inner: I, mempool_stream_buffer_size: usize) -> Self {
+        Self {
+            inner,
+            context,
+            mempool_stream_buffer_size,
+        }
     }
 }
 
@@ -321,6 +367,7 @@ where
         Ok(ReconnectingStream::new(
             self.context.clone(),
             self.inner.clone(),
+            self.mempool_stream_buffer_size,
         ))
     }
 
@@ -419,7 +466,11 @@ mod tests {
             ];
             let indexer = ScriptedIndexer::new(vec![ListenOutcome::Stream(items)]);
 
-            let mut stream = ReconnectingStream::new(context.with_label("test_mempool"), indexer);
+            let mut stream = ReconnectingStream::new(
+                context.with_label("test_mempool"),
+                indexer,
+                DEFAULT_TX_STREAM_BUFFER_SIZE,
+            );
             let item = select! {
                 item = stream.next() => { item },
                 _ = context.sleep(Duration::from_secs(1)) => {
@@ -451,7 +502,11 @@ mod tests {
                 })]),
             ]);
 
-            let mut stream = ReconnectingStream::new(context.with_label("test_mempool"), indexer);
+            let mut stream = ReconnectingStream::new(
+                context.with_label("test_mempool"),
+                indexer,
+                DEFAULT_TX_STREAM_BUFFER_SIZE,
+            );
             let first = select! {
                 item = stream.next() => { item },
                 _ = context.sleep(Duration::from_secs(1)) => {

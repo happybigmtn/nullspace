@@ -37,7 +37,9 @@ mod tags {
         pub const CASINO_GAME_MOVE: u8 = 13;
         /// Consolidated player action (replaces individual toggle instructions)
         pub const CASINO_PLAYER_ACTION: u8 = 14;
-        // Tags 15, 30 are now free (previously TOGGLE_DOUBLE, TOGGLE_SUPER)
+        /// Admin instruction to set a player's daily tournament limit.
+        pub const CASINO_SET_TOURNAMENT_LIMIT: u8 = 15;
+        // Tag 30 is now free (previously TOGGLE_SUPER)
         pub const CASINO_JOIN_TOURNAMENT: u8 = 16;
         pub const CASINO_START_TOURNAMENT: u8 = 17;
 
@@ -302,6 +304,13 @@ pub enum Instruction {
     /// - Super: Both cash and tournament games
     CasinoPlayerAction { action: crate::casino::PlayerAction },
 
+    /// Admin: Set a player's daily tournament limit.
+    /// Binary: [15] [player:PublicKey] [dailyLimit:u8]
+    CasinoSetTournamentLimit {
+        player: PublicKey,
+        daily_limit: u8,
+    },
+
     /// Join a tournament.
     /// Binary: [16] [tournamentId:u64 BE]
     CasinoJoinTournament { tournament_id: u64 },
@@ -406,6 +415,14 @@ impl Write for Instruction {
             Self::CasinoPlayerAction { action } => {
                 tags::instruction::CASINO_PLAYER_ACTION.write(writer);
                 action.write(writer);
+            }
+            Self::CasinoSetTournamentLimit {
+                player,
+                daily_limit,
+            } => {
+                tags::instruction::CASINO_SET_TOURNAMENT_LIMIT.write(writer);
+                player.write(writer);
+                daily_limit.write(writer);
             }
             Self::CasinoJoinTournament { tournament_id } => {
                 tags::instruction::CASINO_JOIN_TOURNAMENT.write(writer);
@@ -532,6 +549,10 @@ impl Read for Instruction {
             tags::instruction::CASINO_PLAYER_ACTION => Self::CasinoPlayerAction {
                 action: crate::casino::PlayerAction::read(reader)?,
             },
+            tags::instruction::CASINO_SET_TOURNAMENT_LIMIT => Self::CasinoSetTournamentLimit {
+                player: PublicKey::read(reader)?,
+                daily_limit: u8::read(reader)?,
+            },
             tags::instruction::CASINO_JOIN_TOURNAMENT => Self::CasinoJoinTournament {
                 tournament_id: u64::read(reader)?,
             },
@@ -596,6 +617,9 @@ impl EncodeSize for Instruction {
                 Self::CasinoStartGame { .. } => 1 + 8 + 8,
                 Self::CasinoGameMove { payload, .. } => 8 + 4 + payload.len(),
                 Self::CasinoPlayerAction { .. } => 1, // PlayerAction is 1 byte
+                Self::CasinoSetTournamentLimit { player, daily_limit } => {
+                    player.encode_size() + daily_limit.encode_size()
+                }
                 Self::CasinoJoinTournament { .. } => 8,
                 Self::CasinoStartTournament { .. } => 8 + 8 + 8,
 
@@ -1210,6 +1234,7 @@ pub enum Event {
         move_number: u32,
         new_state: Vec<u8>,
         logs: Vec<String>,
+        player_balances: crate::casino::PlayerBalanceSnapshot,
     },
     CasinoGameCompleted {
         session_id: u64,
@@ -1220,6 +1245,7 @@ pub enum Event {
         was_shielded: bool,
         was_doubled: bool,
         logs: Vec<String>,
+        player_balances: crate::casino::PlayerBalanceSnapshot,
     },
     CasinoLeaderboardUpdated {
         leaderboard: crate::casino::CasinoLeaderboard,
@@ -1263,21 +1289,28 @@ pub enum Event {
     // Vault & AMM events (tags 30-36)
     VaultCreated {
         player: PublicKey,
+        vault: crate::casino::Vault,
     },
     CollateralDeposited {
         player: PublicKey,
         amount: u64,
         new_collateral: u64,
+        vault: crate::casino::Vault,
+        player_balances: crate::casino::PlayerBalanceSnapshot,
     },
     VusdtBorrowed {
         player: PublicKey,
         amount: u64,
         new_debt: u64,
+        vault: crate::casino::Vault,
+        player_balances: crate::casino::PlayerBalanceSnapshot,
     },
     VusdtRepaid {
         player: PublicKey,
         amount: u64,
         new_debt: u64,
+        vault: crate::casino::Vault,
+        player_balances: crate::casino::PlayerBalanceSnapshot,
     },
     AmmSwapped {
         player: PublicKey,
@@ -1288,6 +1321,9 @@ pub enum Event {
         burned_amount: u64,
         reserve_rng: u64,
         reserve_vusdt: u64,
+        amm: crate::casino::AmmPool,
+        player_balances: crate::casino::PlayerBalanceSnapshot,
+        house: crate::casino::HouseState,
     },
     LiquidityAdded {
         player: PublicKey,
@@ -1298,6 +1334,8 @@ pub enum Event {
         reserve_rng: u64,
         reserve_vusdt: u64,
         lp_balance: u64,
+        amm: crate::casino::AmmPool,
+        player_balances: crate::casino::PlayerBalanceSnapshot,
     },
     LiquidityRemoved {
         player: PublicKey,
@@ -1308,6 +1346,8 @@ pub enum Event {
         reserve_rng: u64,
         reserve_vusdt: u64,
         lp_balance: u64,
+        amm: crate::casino::AmmPool,
+        player_balances: crate::casino::PlayerBalanceSnapshot,
     },
 
     // Staking events (tags 37-40)
@@ -1318,17 +1358,27 @@ pub enum Event {
         new_balance: u64,
         unlock_ts: u64,
         voting_power: u128,
+        staker: crate::casino::Staker,
+        house: crate::casino::HouseState,
+        player_balances: crate::casino::PlayerBalanceSnapshot,
     },
     Unstaked {
         player: PublicKey,
         amount: u64,
+        staker: crate::casino::Staker,
+        house: crate::casino::HouseState,
+        player_balances: crate::casino::PlayerBalanceSnapshot,
     },
     EpochProcessed {
         epoch: u64,
+        house: crate::casino::HouseState,
     },
     RewardsClaimed {
         player: PublicKey,
         amount: u64,
+        staker: crate::casino::Staker,
+        house: crate::casino::HouseState,
+        player_balances: crate::casino::PlayerBalanceSnapshot,
     },
 }
 
@@ -1371,6 +1421,7 @@ impl Write for Event {
                 move_number,
                 new_state,
                 logs,
+                player_balances,
             } => {
                 tags::event::CASINO_GAME_MOVED.write(writer);
                 session_id.write(writer);
@@ -1381,6 +1432,7 @@ impl Write for Event {
                     (log.len() as u32).write(writer);
                     writer.put_slice(log.as_bytes());
                 }
+                player_balances.write(writer);
             }
             Self::CasinoGameCompleted {
                 session_id,
@@ -1391,6 +1443,7 @@ impl Write for Event {
                 was_shielded,
                 was_doubled,
                 logs,
+                player_balances,
             } => {
                 tags::event::CASINO_GAME_COMPLETED.write(writer);
                 session_id.write(writer);
@@ -1405,6 +1458,7 @@ impl Write for Event {
                     (log.len() as u32).write(writer);
                     writer.put_slice(log.as_bytes());
                 }
+                player_balances.write(writer);
             }
             Self::CasinoLeaderboardUpdated { leaderboard } => {
                 tags::event::CASINO_LEADERBOARD_UPDATED.write(writer);
@@ -1464,39 +1518,52 @@ impl Write for Event {
             }
 
             // Vault & AMM events (tags 30-36)
-            Self::VaultCreated { player } => {
+            Self::VaultCreated { player, vault } => {
                 tags::event::VAULT_CREATED.write(writer);
                 player.write(writer);
+                vault.write(writer);
             }
             Self::CollateralDeposited {
                 player,
                 amount,
                 new_collateral,
+                vault,
+                player_balances,
             } => {
                 tags::event::COLLATERAL_DEPOSITED.write(writer);
                 player.write(writer);
                 amount.write(writer);
                 new_collateral.write(writer);
+                vault.write(writer);
+                player_balances.write(writer);
             }
             Self::VusdtBorrowed {
                 player,
                 amount,
                 new_debt,
+                vault,
+                player_balances,
             } => {
                 tags::event::VUSDT_BORROWED.write(writer);
                 player.write(writer);
                 amount.write(writer);
                 new_debt.write(writer);
+                vault.write(writer);
+                player_balances.write(writer);
             }
             Self::VusdtRepaid {
                 player,
                 amount,
                 new_debt,
+                vault,
+                player_balances,
             } => {
                 tags::event::VUSDT_REPAID.write(writer);
                 player.write(writer);
                 amount.write(writer);
                 new_debt.write(writer);
+                vault.write(writer);
+                player_balances.write(writer);
             }
             Self::AmmSwapped {
                 player,
@@ -1507,6 +1574,9 @@ impl Write for Event {
                 burned_amount,
                 reserve_rng,
                 reserve_vusdt,
+                amm,
+                player_balances,
+                house,
             } => {
                 tags::event::AMM_SWAPPED.write(writer);
                 player.write(writer);
@@ -1517,6 +1587,9 @@ impl Write for Event {
                 burned_amount.write(writer);
                 reserve_rng.write(writer);
                 reserve_vusdt.write(writer);
+                amm.write(writer);
+                player_balances.write(writer);
+                house.write(writer);
             }
             Self::LiquidityAdded {
                 player,
@@ -1527,6 +1600,8 @@ impl Write for Event {
                 reserve_rng,
                 reserve_vusdt,
                 lp_balance,
+                amm,
+                player_balances,
             } => {
                 tags::event::LIQUIDITY_ADDED.write(writer);
                 player.write(writer);
@@ -1537,6 +1612,8 @@ impl Write for Event {
                 reserve_rng.write(writer);
                 reserve_vusdt.write(writer);
                 lp_balance.write(writer);
+                amm.write(writer);
+                player_balances.write(writer);
             }
             Self::LiquidityRemoved {
                 player,
@@ -1547,6 +1624,8 @@ impl Write for Event {
                 reserve_rng,
                 reserve_vusdt,
                 lp_balance,
+                amm,
+                player_balances,
             } => {
                 tags::event::LIQUIDITY_REMOVED.write(writer);
                 player.write(writer);
@@ -1557,6 +1636,8 @@ impl Write for Event {
                 reserve_rng.write(writer);
                 reserve_vusdt.write(writer);
                 lp_balance.write(writer);
+                amm.write(writer);
+                player_balances.write(writer);
             }
 
             // Staking events (tags 37-40)
@@ -1567,6 +1648,9 @@ impl Write for Event {
                 new_balance,
                 unlock_ts,
                 voting_power,
+                staker,
+                house,
+                player_balances,
             } => {
                 tags::event::STAKED.write(writer);
                 player.write(writer);
@@ -1575,20 +1659,42 @@ impl Write for Event {
                 new_balance.write(writer);
                 unlock_ts.write(writer);
                 voting_power.write(writer);
+                staker.write(writer);
+                house.write(writer);
+                player_balances.write(writer);
             }
-            Self::Unstaked { player, amount } => {
+            Self::Unstaked {
+                player,
+                amount,
+                staker,
+                house,
+                player_balances,
+            } => {
                 tags::event::UNSTAKED.write(writer);
                 player.write(writer);
                 amount.write(writer);
+                staker.write(writer);
+                house.write(writer);
+                player_balances.write(writer);
             }
-            Self::EpochProcessed { epoch } => {
+            Self::EpochProcessed { epoch, house } => {
                 tags::event::EPOCH_PROCESSED.write(writer);
                 epoch.write(writer);
+                house.write(writer);
             }
-            Self::RewardsClaimed { player, amount } => {
+            Self::RewardsClaimed {
+                player,
+                amount,
+                staker,
+                house,
+                player_balances,
+            } => {
                 tags::event::REWARDS_CLAIMED.write(writer);
                 player.write(writer);
                 amount.write(writer);
+                staker.write(writer);
+                house.write(writer);
+                player_balances.write(writer);
             }
         }
     }
@@ -1649,6 +1755,7 @@ impl Read for Event {
                     }
                     logs
                 },
+                player_balances: crate::casino::PlayerBalanceSnapshot::read(reader)?,
             },
             tags::event::CASINO_GAME_COMPLETED => Self::CasinoGameCompleted {
                 session_id: u64::read(reader)?,
@@ -1675,6 +1782,7 @@ impl Read for Event {
                     }
                     logs
                 },
+                player_balances: crate::casino::PlayerBalanceSnapshot::read(reader)?,
             },
             tags::event::CASINO_LEADERBOARD_UPDATED => Self::CasinoLeaderboardUpdated {
                 leaderboard: crate::casino::CasinoLeaderboard::read(reader)?,
@@ -1731,21 +1839,28 @@ impl Read for Event {
             // Vault & AMM events (tags 30-36)
             tags::event::VAULT_CREATED => Self::VaultCreated {
                 player: PublicKey::read(reader)?,
+                vault: crate::casino::Vault::read(reader)?,
             },
             tags::event::COLLATERAL_DEPOSITED => Self::CollateralDeposited {
                 player: PublicKey::read(reader)?,
                 amount: u64::read(reader)?,
                 new_collateral: u64::read(reader)?,
+                vault: crate::casino::Vault::read(reader)?,
+                player_balances: crate::casino::PlayerBalanceSnapshot::read(reader)?,
             },
             tags::event::VUSDT_BORROWED => Self::VusdtBorrowed {
                 player: PublicKey::read(reader)?,
                 amount: u64::read(reader)?,
                 new_debt: u64::read(reader)?,
+                vault: crate::casino::Vault::read(reader)?,
+                player_balances: crate::casino::PlayerBalanceSnapshot::read(reader)?,
             },
             tags::event::VUSDT_REPAID => Self::VusdtRepaid {
                 player: PublicKey::read(reader)?,
                 amount: u64::read(reader)?,
                 new_debt: u64::read(reader)?,
+                vault: crate::casino::Vault::read(reader)?,
+                player_balances: crate::casino::PlayerBalanceSnapshot::read(reader)?,
             },
             tags::event::AMM_SWAPPED => Self::AmmSwapped {
                 player: PublicKey::read(reader)?,
@@ -1756,6 +1871,9 @@ impl Read for Event {
                 burned_amount: u64::read(reader)?,
                 reserve_rng: u64::read(reader)?,
                 reserve_vusdt: u64::read(reader)?,
+                amm: crate::casino::AmmPool::read(reader)?,
+                player_balances: crate::casino::PlayerBalanceSnapshot::read(reader)?,
+                house: crate::casino::HouseState::read(reader)?,
             },
             tags::event::LIQUIDITY_ADDED => Self::LiquidityAdded {
                 player: PublicKey::read(reader)?,
@@ -1766,6 +1884,8 @@ impl Read for Event {
                 reserve_rng: u64::read(reader)?,
                 reserve_vusdt: u64::read(reader)?,
                 lp_balance: u64::read(reader)?,
+                amm: crate::casino::AmmPool::read(reader)?,
+                player_balances: crate::casino::PlayerBalanceSnapshot::read(reader)?,
             },
             tags::event::LIQUIDITY_REMOVED => Self::LiquidityRemoved {
                 player: PublicKey::read(reader)?,
@@ -1776,6 +1896,8 @@ impl Read for Event {
                 reserve_rng: u64::read(reader)?,
                 reserve_vusdt: u64::read(reader)?,
                 lp_balance: u64::read(reader)?,
+                amm: crate::casino::AmmPool::read(reader)?,
+                player_balances: crate::casino::PlayerBalanceSnapshot::read(reader)?,
             },
             tags::event::STAKED => Self::Staked {
                 player: PublicKey::read(reader)?,
@@ -1784,17 +1906,27 @@ impl Read for Event {
                 new_balance: u64::read(reader)?,
                 unlock_ts: u64::read(reader)?,
                 voting_power: u128::read(reader)?,
+                staker: crate::casino::Staker::read(reader)?,
+                house: crate::casino::HouseState::read(reader)?,
+                player_balances: crate::casino::PlayerBalanceSnapshot::read(reader)?,
             },
             tags::event::UNSTAKED => Self::Unstaked {
                 player: PublicKey::read(reader)?,
                 amount: u64::read(reader)?,
+                staker: crate::casino::Staker::read(reader)?,
+                house: crate::casino::HouseState::read(reader)?,
+                player_balances: crate::casino::PlayerBalanceSnapshot::read(reader)?,
             },
             tags::event::EPOCH_PROCESSED => Self::EpochProcessed {
                 epoch: u64::read(reader)?,
+                house: crate::casino::HouseState::read(reader)?,
             },
             tags::event::REWARDS_CLAIMED => Self::RewardsClaimed {
                 player: PublicKey::read(reader)?,
                 amount: u64::read(reader)?,
+                staker: crate::casino::Staker::read(reader)?,
+                house: crate::casino::HouseState::read(reader)?,
+                player_balances: crate::casino::PlayerBalanceSnapshot::read(reader)?,
             },
 
             i => return Err(Error::InvalidEnum(i)),
@@ -1835,12 +1967,14 @@ impl EncodeSize for Event {
                     move_number,
                     new_state,
                     logs,
+                    player_balances,
                 } => {
                     session_id.encode_size()
                         + move_number.encode_size()
                         + new_state.encode_size()
                         + 4
                         + logs.iter().map(|s| 4 + s.len()).sum::<usize>()
+                        + player_balances.encode_size()
                 }
                 Self::CasinoGameCompleted {
                     session_id,
@@ -1851,6 +1985,7 @@ impl EncodeSize for Event {
                     was_shielded,
                     was_doubled,
                     logs,
+                    player_balances,
                 } => {
                     session_id.encode_size()
                         + player.encode_size()
@@ -1861,6 +1996,7 @@ impl EncodeSize for Event {
                         + was_doubled.encode_size()
                         + 4
                         + logs.iter().map(|s| 4 + s.len()).sum::<usize>()
+                        + player_balances.encode_size()
                 }
                 Self::CasinoLeaderboardUpdated { leaderboard } => leaderboard.encode_size(),
                 Self::CasinoError {
@@ -1903,22 +2039,48 @@ impl EncodeSize for Event {
                 Self::TournamentEnded { id, rankings } => id.encode_size() + rankings.encode_size(),
 
                 // Vault & AMM events (tags 30-36)
-                Self::VaultCreated { player } => player.encode_size(),
+                Self::VaultCreated { player, vault } => {
+                    player.encode_size() + vault.encode_size()
+                }
                 Self::CollateralDeposited {
                     player,
                     amount,
                     new_collateral,
-                } => player.encode_size() + amount.encode_size() + new_collateral.encode_size(),
+                    vault,
+                    player_balances,
+                } => {
+                    player.encode_size()
+                        + amount.encode_size()
+                        + new_collateral.encode_size()
+                        + vault.encode_size()
+                        + player_balances.encode_size()
+                }
                 Self::VusdtBorrowed {
                     player,
                     amount,
                     new_debt,
-                } => player.encode_size() + amount.encode_size() + new_debt.encode_size(),
+                    vault,
+                    player_balances,
+                } => {
+                    player.encode_size()
+                        + amount.encode_size()
+                        + new_debt.encode_size()
+                        + vault.encode_size()
+                        + player_balances.encode_size()
+                }
                 Self::VusdtRepaid {
                     player,
                     amount,
                     new_debt,
-                } => player.encode_size() + amount.encode_size() + new_debt.encode_size(),
+                    vault,
+                    player_balances,
+                } => {
+                    player.encode_size()
+                        + amount.encode_size()
+                        + new_debt.encode_size()
+                        + vault.encode_size()
+                        + player_balances.encode_size()
+                }
                 Self::AmmSwapped {
                     player,
                     is_buying_rng,
@@ -1928,6 +2090,9 @@ impl EncodeSize for Event {
                     burned_amount,
                     reserve_rng,
                     reserve_vusdt,
+                    amm,
+                    player_balances,
+                    house,
                 } => {
                     player.encode_size()
                         + is_buying_rng.encode_size()
@@ -1937,6 +2102,9 @@ impl EncodeSize for Event {
                         + burned_amount.encode_size()
                         + reserve_rng.encode_size()
                         + reserve_vusdt.encode_size()
+                        + amm.encode_size()
+                        + player_balances.encode_size()
+                        + house.encode_size()
                 }
                 Self::LiquidityAdded {
                     player,
@@ -1947,6 +2115,8 @@ impl EncodeSize for Event {
                     reserve_rng,
                     reserve_vusdt,
                     lp_balance,
+                    amm,
+                    player_balances,
                 } => {
                     player.encode_size()
                         + rng_amount.encode_size()
@@ -1956,6 +2126,8 @@ impl EncodeSize for Event {
                         + reserve_rng.encode_size()
                         + reserve_vusdt.encode_size()
                         + lp_balance.encode_size()
+                        + amm.encode_size()
+                        + player_balances.encode_size()
                 }
                 Self::LiquidityRemoved {
                     player,
@@ -1966,6 +2138,8 @@ impl EncodeSize for Event {
                     reserve_rng,
                     reserve_vusdt,
                     lp_balance,
+                    amm,
+                    player_balances,
                 } => {
                     player.encode_size()
                         + rng_amount.encode_size()
@@ -1975,6 +2149,8 @@ impl EncodeSize for Event {
                         + reserve_rng.encode_size()
                         + reserve_vusdt.encode_size()
                         + lp_balance.encode_size()
+                        + amm.encode_size()
+                        + player_balances.encode_size()
                 }
                 Self::Staked {
                     player,
@@ -1983,6 +2159,9 @@ impl EncodeSize for Event {
                     new_balance,
                     unlock_ts,
                     voting_power,
+                    staker,
+                    house,
+                    player_balances,
                 } => {
                     player.encode_size()
                         + amount.encode_size()
@@ -1990,11 +2169,36 @@ impl EncodeSize for Event {
                         + new_balance.encode_size()
                         + unlock_ts.encode_size()
                         + voting_power.encode_size()
+                        + staker.encode_size()
+                        + house.encode_size()
+                        + player_balances.encode_size()
                 }
-                Self::Unstaked { player, amount } => player.encode_size() + amount.encode_size(),
-                Self::EpochProcessed { epoch } => epoch.encode_size(),
-                Self::RewardsClaimed { player, amount } => {
-                    player.encode_size() + amount.encode_size()
+                Self::Unstaked {
+                    player,
+                    amount,
+                    staker,
+                    house,
+                    player_balances,
+                } => {
+                    player.encode_size()
+                        + amount.encode_size()
+                        + staker.encode_size()
+                        + house.encode_size()
+                        + player_balances.encode_size()
+                }
+                Self::EpochProcessed { epoch, house } => epoch.encode_size() + house.encode_size(),
+                Self::RewardsClaimed {
+                    player,
+                    amount,
+                    staker,
+                    house,
+                    player_balances,
+                } => {
+                    player.encode_size()
+                        + amount.encode_size()
+                        + staker.encode_size()
+                        + house.encode_size()
+                        + player_balances.encode_size()
                 }
             }
     }

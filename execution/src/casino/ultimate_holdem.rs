@@ -6,7 +6,7 @@
 //! - Optional Progressive side bet (WoO "Common Progressive", for-one; based on hole cards + flop)
 //! - Progressive reveal of community/dealer cards (no hidden cards stored before reveal)
 //!
-//! State blob format (40 bytes):
+//! State blob format (40 bytes + optional rules byte):
 //! [version:u8=3]
 //! [stage:u8]
 //! [playerCard1:u8] [playerCard2:u8]                   (0xFF if not dealt yet)
@@ -17,6 +17,7 @@
 //! [tripsBetAmount:u64 BE]
 //! [sixCardBonusBetAmount:u64 BE]
 //! [progressiveBetAmount:u64 BE]
+//! [rules:u8] (optional; dealer qualification + preflop 3x)
 //!
 //! Stages:
 //! 0 = Betting (optional Trips, then Deal)
@@ -39,6 +40,7 @@
 //! 7 = Reveal (resolve showdown)
 //! 9 = Set 6-Card Bonus bet (u64)
 //! 10 = Set Progressive bet (u64)
+//! 12 = Set rules (u8)
 
 use super::super_mode::apply_super_multiplier_cards;
 use super::{cards, CasinoGame, GameError, GameResult, GameRng};
@@ -46,9 +48,64 @@ use nullspace_types::casino::{GameSession, UTH_PROGRESSIVE_BASE_JACKPOT};
 
 const STATE_VERSION: u8 = 3;
 const CARD_UNKNOWN: u8 = 0xFF;
-const STATE_LEN: usize = 40;
+const STATE_LEN_BASE: usize = 40;
+const STATE_LEN_WITH_RULES: usize = 41;
 
 const PROGRESSIVE_BET_UNIT: u64 = 1;
+
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DealerQualification {
+    None = 0,
+    PairPlus = 1,
+}
+
+impl Default for DealerQualification {
+    fn default() -> Self {
+        DealerQualification::None
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+// Rules byte: bit0=dealer qualifies pair+, bit1=allow preflop 3x, bit2=disable preflop 4x.
+struct UthRules {
+    dealer_qualification: DealerQualification,
+    allow_preflop_3x: bool,
+    allow_preflop_4x: bool,
+}
+
+impl Default for UthRules {
+    fn default() -> Self {
+        Self {
+            dealer_qualification: DealerQualification::default(),
+            allow_preflop_3x: true,
+            allow_preflop_4x: true,
+        }
+    }
+}
+
+impl UthRules {
+    fn from_byte(value: u8) -> Self {
+        Self {
+            dealer_qualification: if value & 0x01 != 0 {
+                DealerQualification::PairPlus
+            } else {
+                DealerQualification::None
+            },
+            allow_preflop_3x: value & 0x02 != 0,
+            allow_preflop_4x: value & 0x04 == 0,
+        }
+    }
+
+    fn to_byte(self) -> u8 {
+        (if matches!(self.dealer_qualification, DealerQualification::PairPlus) {
+            0x01
+        } else {
+            0x00
+        }) | if self.allow_preflop_3x { 0x02 } else { 0x00 }
+            | if self.allow_preflop_4x { 0x00 } else { 0x04 }
+    }
+}
 
 /// Game stages.
 #[repr(u8)]
@@ -94,6 +151,7 @@ pub enum Action {
     SetSixCardBonus = 9,
     SetProgressive = 10,
     AtomicDeal = 11,
+    SetRules = 12,
 }
 
 impl TryFrom<u8> for Action {
@@ -113,6 +171,7 @@ impl TryFrom<u8> for Action {
             9 => Ok(Action::SetSixCardBonus),
             10 => Ok(Action::SetProgressive),
             11 => Ok(Action::AtomicDeal),
+            12 => Ok(Action::SetRules),
             _ => Err(GameError::InvalidPayload),
         }
     }
@@ -129,10 +188,11 @@ struct UthState {
     bonus: [u8; 4],
     six_card_bonus_bet: u64,
     progressive_bet: u64,
+    rules: UthRules,
 }
 
 fn parse_state(state: &[u8]) -> Option<UthState> {
-    if state.len() != STATE_LEN || state[0] != STATE_VERSION {
+    if state.len() < STATE_LEN_BASE || state[0] != STATE_VERSION {
         return None;
     }
 
@@ -145,6 +205,11 @@ fn parse_state(state: &[u8]) -> Option<UthState> {
     let trips_bet = u64::from_be_bytes(state[16..24].try_into().ok()?);
     let six_card_bonus_bet = u64::from_be_bytes(state[24..32].try_into().ok()?);
     let progressive_bet = u64::from_be_bytes(state[32..40].try_into().ok()?);
+    let rules = if state.len() >= STATE_LEN_WITH_RULES {
+        UthRules::from_byte(state[40])
+    } else {
+        UthRules::default()
+    };
 
     Some(UthState {
         stage,
@@ -156,11 +221,12 @@ fn parse_state(state: &[u8]) -> Option<UthState> {
         bonus,
         six_card_bonus_bet,
         progressive_bet,
+        rules,
     })
 }
 
 fn serialize_state(state: &UthState) -> Vec<u8> {
-    let mut out = Vec::with_capacity(STATE_LEN);
+    let mut out = Vec::with_capacity(STATE_LEN_WITH_RULES);
     out.push(STATE_VERSION);
     out.push(state.stage as u8);
     out.extend_from_slice(&state.player);
@@ -171,6 +237,7 @@ fn serialize_state(state: &UthState) -> Vec<u8> {
     out.extend_from_slice(&state.trips_bet.to_be_bytes());
     out.extend_from_slice(&state.six_card_bonus_bet.to_be_bytes());
     out.extend_from_slice(&state.progressive_bet.to_be_bytes());
+    out.push(state.rules.to_byte());
     out
 }
 
@@ -341,64 +408,69 @@ fn evaluate_5_card_fast(cards: &[u8; 5]) -> (HandRank, [u8; 5]) {
         suits[i] = cards::card_suit(cards[i]);
     }
 
-    // Sort ranks descending for kickers
-    ranks.sort_unstable_by(|a, b| b.cmp(a));
+    let mut desc = ranks;
+    desc.sort_unstable_by(|a, b| b.cmp(a));
 
-    // Flush?
     let is_flush = suits[0] == suits[1]
         && suits[1] == suits[2]
         && suits[2] == suits[3]
         && suits[3] == suits[4];
 
-    // Straight?
     let mut sorted = ranks;
     sorted.sort_unstable();
     let has_duplicates = sorted[0] == sorted[1]
         || sorted[1] == sorted[2]
         || sorted[2] == sorted[3]
         || sorted[3] == sorted[4];
-    let is_straight = if has_duplicates {
-        false
-    } else if sorted[4] - sorted[0] == 4 {
-        true
-    } else {
-        // Wheel A-2-3-4-5
-        sorted == [2, 3, 4, 5, 14]
-    };
+    let is_wheel = sorted == [2, 3, 4, 5, 14];
+    let is_straight = !has_duplicates && (is_wheel || sorted[4] - sorted[0] == 4);
+    let straight_high = if is_wheel { 5 } else { sorted[4] };
 
-    let is_royal = sorted == [10, 11, 12, 13, 14];
+    let is_royal = is_flush && sorted == [10, 11, 12, 13, 14];
 
-    // Count ranks
     let mut counts = [0u8; 15];
     for &r in &ranks {
         counts[r as usize] += 1;
     }
 
-    let mut pair_count = 0u8;
-    let mut has_trips = false;
-    let mut has_quads = false;
-    for &count in &counts {
-        match count {
-            2 => pair_count += 1,
-            3 => has_trips = true,
-            4 => has_quads = true,
+    let mut pair_ranks = [0u8; 2];
+    let mut pair_count = 0usize;
+    let mut trip_rank = 0u8;
+    let mut quad_rank = 0u8;
+    let mut singles = [0u8; 5];
+    let mut single_count = 0usize;
+
+    for r in (2..=14).rev() {
+        match counts[r as usize] {
+            4 => quad_rank = r as u8,
+            3 => trip_rank = r as u8,
+            2 => {
+                if pair_count < pair_ranks.len() {
+                    pair_ranks[pair_count] = r as u8;
+                }
+                pair_count += 1;
+            }
+            1 => {
+                singles[single_count] = r as u8;
+                single_count += 1;
+            }
             _ => {}
         }
     }
 
-    let hand_rank = if is_royal && is_flush {
+    let hand_rank = if is_royal {
         HandRank::RoyalFlush
     } else if is_straight && is_flush {
         HandRank::StraightFlush
-    } else if has_quads {
+    } else if quad_rank > 0 {
         HandRank::FourOfAKind
-    } else if has_trips && pair_count >= 1 {
+    } else if trip_rank > 0 && pair_count >= 1 {
         HandRank::FullHouse
     } else if is_flush {
         HandRank::Flush
     } else if is_straight {
         HandRank::Straight
-    } else if has_trips {
+    } else if trip_rank > 0 {
         HandRank::ThreeOfAKind
     } else if pair_count >= 2 {
         HandRank::TwoPair
@@ -408,7 +480,24 @@ fn evaluate_5_card_fast(cards: &[u8; 5]) -> (HandRank, [u8; 5]) {
         HandRank::HighCard
     };
 
-    (hand_rank, ranks)
+    let kickers = match hand_rank {
+        HandRank::RoyalFlush => [14, 0, 0, 0, 0],
+        HandRank::StraightFlush | HandRank::Straight => [straight_high, 0, 0, 0, 0],
+        HandRank::FourOfAKind => [quad_rank, singles[0], 0, 0, 0],
+        HandRank::FullHouse => [trip_rank, pair_ranks[0], 0, 0, 0],
+        HandRank::Flush | HandRank::HighCard => desc,
+        HandRank::ThreeOfAKind => [trip_rank, singles[0], singles[1], 0, 0],
+        HandRank::TwoPair => [pair_ranks[0], pair_ranks[1], singles[0], 0, 0],
+        HandRank::Pair => [
+            pair_ranks[0],
+            singles[0],
+            singles[1],
+            singles[2],
+            0,
+        ],
+    };
+
+    (hand_rank, kickers)
 }
 
 fn blind_bonus_winnings(ante: u64, player_rank: HandRank) -> u64 {
@@ -522,7 +611,10 @@ fn resolve_showdown(
 
     let player_hand = evaluate_best_hand(&player_cards);
     let dealer_hand = evaluate_best_hand(&dealer_cards);
-    let dealer_qualifies = dealer_hand.0 >= HandRank::Pair;
+    let dealer_qualifies = match state.rules.dealer_qualification {
+        DealerQualification::None => true,
+        DealerQualification::PairPlus => dealer_hand.0 >= HandRank::Pair,
+    };
 
     let player_wins = player_hand.0 > dealer_hand.0
         || (player_hand.0 == dealer_hand.0 && player_hand.1 > dealer_hand.1);
@@ -684,6 +776,7 @@ impl CasinoGame for UltimateHoldem {
             bonus: [CARD_UNKNOWN; 4],
             six_card_bonus_bet: 0,
             progressive_bet: 0,
+            rules: UthRules::default(),
         };
         session.state_blob = serialize_state(&state);
         GameResult::ContinueWithUpdate {
@@ -710,6 +803,15 @@ impl CasinoGame for UltimateHoldem {
 
         match state.stage {
             Stage::Betting => match action {
+                Action::SetRules => {
+                    if payload.len() != 2 {
+                        return Err(GameError::InvalidPayload);
+                    }
+                    let rules = UthRules::from_byte(payload[1]);
+                    state.rules = rules;
+                    session.state_blob = serialize_state(&state);
+                    Ok(GameResult::Continue(vec![]))
+                }
                 Action::SetTrips => {
                     let new_trips = super::payload::parse_u64_be(payload, 1)?;
                     payout_update = apply_trips_update(&mut state, new_trips)?;
@@ -842,6 +944,9 @@ impl CasinoGame for UltimateHoldem {
                     Ok(GameResult::Continue(vec![]))
                 }
                 Action::Bet4x => {
+                    if !state.rules.allow_preflop_4x {
+                        return Err(GameError::InvalidMove);
+                    }
                     if state.play_mult != 0 {
                         return Err(GameError::InvalidMove);
                     }
@@ -854,6 +959,9 @@ impl CasinoGame for UltimateHoldem {
                     })
                 }
                 Action::Bet3x => {
+                    if !state.rules.allow_preflop_3x {
+                        return Err(GameError::InvalidMove);
+                    }
                     if state.play_mult != 0 {
                         return Err(GameError::InvalidMove);
                     }
@@ -963,6 +1071,23 @@ mod tests {
             is_tournament: false,
             tournament_id: None,
         }
+    }
+
+    #[test]
+    fn test_five_card_tiebreakers() {
+        // Pair with ace kicker beats pair with king kicker.
+        let pair_ace = evaluate_5_card_fast(&[8u8, 21u8, 26u8, 43u8, 40u8]);
+        let pair_king = evaluate_5_card_fast(&[8u8, 34u8, 51u8, 43u8, 40u8]);
+        assert_eq!(pair_ace.0, HandRank::Pair);
+        assert_eq!(pair_king.0, HandRank::Pair);
+        assert!(pair_ace.1 > pair_king.1);
+
+        // Wheel straight should be lowest straight.
+        let wheel = evaluate_5_card_fast(&[0u8, 14u8, 28u8, 42u8, 4u8]);
+        let higher = evaluate_5_card_fast(&[1u8, 15u8, 29u8, 43u8, 5u8]);
+        assert_eq!(wheel.0, HandRank::Straight);
+        assert_eq!(higher.0, HandRank::Straight);
+        assert!(higher.1 > wheel.1);
     }
 
     #[test]

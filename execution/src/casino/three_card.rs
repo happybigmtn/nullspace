@@ -6,10 +6,10 @@
 //! - Optional 6-card bonus side bet (placed before deal)
 //! - Optional Progressive side bet (placed before deal; WoO Progressive v2A, for-one)
 //! - Play/Fold decision (Play bet equals Ante; charged before reveal)
-//! - Dealer qualification: Q-6-4 or better (per WoO)
+//! - Dealer qualification: Q-high or better (WoO), with optional Q-6-4 variant
 //! - Ante bonus (pay table #1: SF 5, Trips 4, Straight 1), paid when player plays
 //!
-//! State blob format (32 bytes):
+//! State blob format (32 bytes + optional rules byte):
 //! [version:u8=3]
 //! [stage:u8]
 //! [playerCard1:u8] [playerCard2:u8] [playerCard3:u8]   (0xFF if not dealt yet)
@@ -17,6 +17,7 @@
 //! [pairplusBetAmount:u64 BE]
 //! [sixCardBonusBetAmount:u64 BE]
 //! [progressiveBetAmount:u64 BE]
+//! [rules:u8] (optional; dealer qualifier)
 //!
 //! Stages:
 //! 0 = Betting (optional Pairplus, then Deal)
@@ -33,6 +34,7 @@
 //! 4 = Reveal
 //! 5 = Set 6-Card Bonus bet (u64)
 //! 6 = Set Progressive bet (u64)
+//! 8 = Set rules (u8)
 
 use super::super_mode::apply_super_multiplier_cards;
 use super::{cards, CasinoGame, GameError, GameResult, GameRng};
@@ -40,9 +42,60 @@ use nullspace_types::casino::{GameSession, THREE_CARD_PROGRESSIVE_BASE_JACKPOT};
 
 const STATE_VERSION: u8 = 3;
 const CARD_UNKNOWN: u8 = 0xFF;
-const STATE_LEN: usize = 32;
+const STATE_LEN_BASE: usize = 32;
+const STATE_LEN_WITH_RULES: usize = 33;
 
 const PROGRESSIVE_BET_UNIT: u64 = 1;
+
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DealerQualifier {
+    QHigh = 0,
+    Q64 = 1,
+}
+
+impl Default for DealerQualifier {
+    fn default() -> Self {
+        DealerQualifier::QHigh
+    }
+}
+
+impl TryFrom<u8> for DealerQualifier {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(DealerQualifier::QHigh),
+            1 => Ok(DealerQualifier::Q64),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct ThreeCardRules {
+    dealer_qualifier: DealerQualifier,
+}
+
+impl Default for ThreeCardRules {
+    fn default() -> Self {
+        Self {
+            dealer_qualifier: DealerQualifier::default(),
+        }
+    }
+}
+
+impl ThreeCardRules {
+    fn from_byte(value: u8) -> Option<Self> {
+        Some(Self {
+            dealer_qualifier: DealerQualifier::try_from(value & 0x01).ok()?,
+        })
+    }
+
+    fn to_byte(self) -> u8 {
+        self.dealer_qualifier as u8
+    }
+}
 
 /// Three Card Poker stages.
 #[repr(u8)]
@@ -80,6 +133,7 @@ pub enum Move {
     SetSixCardBonus = 5,
     SetProgressive = 6,
     AtomicDeal = 7,
+    SetRules = 8,
 }
 
 impl TryFrom<u8> for Move {
@@ -95,6 +149,7 @@ impl TryFrom<u8> for Move {
             5 => Ok(Move::SetSixCardBonus),
             6 => Ok(Move::SetProgressive),
             7 => Ok(Move::AtomicDeal),
+            8 => Ok(Move::SetRules),
             _ => Err(GameError::InvalidPayload),
         }
     }
@@ -111,44 +166,69 @@ pub enum HandRank {
     StraightFlush = 5,
 }
 
-/// Evaluate a 3-card hand, returns (HandRank, high cards for tiebreaker).
+/// Evaluate a 3-card hand, returns (HandRank, tiebreak kickers).
 pub fn evaluate_hand(cards: &[u8; 3]) -> (HandRank, [u8; 3]) {
-    let mut ranks: Vec<u8> = cards
-        .iter()
-        .map(|&c| cards::card_rank_ace_high(c))
-        .collect();
-    ranks.sort_unstable_by(|a, b| b.cmp(a)); // Descending
-    let high_cards = [ranks[0], ranks[1], ranks[2]];
+    let mut ranks = [0u8; 3];
+    let mut suits = [0u8; 3];
+    for i in 0..3 {
+        ranks[i] = cards::card_rank_ace_high(cards[i]);
+        suits[i] = cards::card_suit(cards[i]);
+    }
 
-    let suits: Vec<u8> = cards.iter().map(|&c| cards::card_suit(c)).collect();
     let is_flush = suits[0] == suits[1] && suits[1] == suits[2];
 
-    // Check straight (including A-2-3)
-    let mut sorted_ranks = ranks.clone();
-    sorted_ranks.sort_unstable();
-    let is_straight = {
-        let r = &sorted_ranks;
-        (r[2] - r[0] == 2 && r[1] - r[0] == 1) || (sorted_ranks == vec![2, 3, 14])
-    };
+    let mut sorted = ranks;
+    sorted.sort_unstable();
+    let is_wheel = sorted == [2, 3, 14];
+    let is_straight = is_wheel || (sorted[2] - sorted[0] == 2 && sorted[1] - sorted[0] == 1);
+    let straight_high = if is_wheel { 3 } else { sorted[2] };
 
-    let is_trips = ranks[0] == ranks[1] && ranks[1] == ranks[2];
-    let is_pair = ranks[0] == ranks[1] || ranks[1] == ranks[2] || ranks[0] == ranks[2];
+    let mut counts = [0u8; 15];
+    for &r in &ranks {
+        counts[r as usize] += 1;
+    }
+
+    let mut trip_rank = 0u8;
+    let mut pair_rank = 0u8;
+    let mut kicker_rank = 0u8;
+    for r in (2..=14).rev() {
+        match counts[r as usize] {
+            3 => trip_rank = r as u8,
+            2 => pair_rank = r as u8,
+            1 => {
+                if kicker_rank == 0 {
+                    kicker_rank = r as u8;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let mut desc = ranks;
+    desc.sort_unstable_by(|a, b| b.cmp(a));
 
     let hand_rank = if is_straight && is_flush {
         HandRank::StraightFlush
-    } else if is_trips {
+    } else if trip_rank > 0 {
         HandRank::ThreeOfAKind
     } else if is_straight {
         HandRank::Straight
     } else if is_flush {
         HandRank::Flush
-    } else if is_pair {
+    } else if pair_rank > 0 {
         HandRank::Pair
     } else {
         HandRank::HighCard
     };
 
-    (hand_rank, high_cards)
+    let kickers = match hand_rank {
+        HandRank::StraightFlush | HandRank::Straight => [straight_high, 0, 0],
+        HandRank::ThreeOfAKind => [trip_rank, 0, 0],
+        HandRank::Pair => [pair_rank, kicker_rank, 0],
+        HandRank::Flush | HandRank::HighCard => desc,
+    };
+
+    (hand_rank, kickers)
 }
 
 fn compare_hands(h1: &(HandRank, [u8; 3]), h2: &(HandRank, [u8; 3])) -> std::cmp::Ordering {
@@ -178,12 +258,14 @@ fn pairplus_multiplier(hand_rank: HandRank) -> u64 {
     }
 }
 
-fn dealer_qualifies(dealer_hand: &(HandRank, [u8; 3])) -> bool {
+fn dealer_qualifies(dealer_hand: &(HandRank, [u8; 3]), rules: ThreeCardRules) -> bool {
     if dealer_hand.0 >= HandRank::Pair {
         return true;
     }
-    // High-card qualification threshold: Q-6-4.
-    dealer_hand.1 >= [12, 6, 4]
+    match rules.dealer_qualifier {
+        DealerQualifier::QHigh => dealer_hand.1[0] >= 12,
+        DealerQualifier::Q64 => dealer_hand.1 >= [12, 6, 4],
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -194,10 +276,11 @@ struct TcState {
     pairplus_bet: u64,
     six_card_bonus_bet: u64,
     progressive_bet: u64,
+    rules: ThreeCardRules,
 }
 
 fn parse_state(state: &[u8]) -> Option<TcState> {
-    if state.len() != STATE_LEN || state[0] != STATE_VERSION {
+    if state.len() < STATE_LEN_BASE || state[0] != STATE_VERSION {
         return None;
     }
 
@@ -207,6 +290,11 @@ fn parse_state(state: &[u8]) -> Option<TcState> {
     let pairplus_bet = u64::from_be_bytes(state[8..16].try_into().ok()?);
     let six_card_bonus_bet = u64::from_be_bytes(state[16..24].try_into().ok()?);
     let progressive_bet = u64::from_be_bytes(state[24..32].try_into().ok()?);
+    let rules = if state.len() >= STATE_LEN_WITH_RULES {
+        ThreeCardRules::from_byte(state[32])?
+    } else {
+        ThreeCardRules::default()
+    };
 
     Some(TcState {
         stage,
@@ -215,11 +303,12 @@ fn parse_state(state: &[u8]) -> Option<TcState> {
         pairplus_bet,
         six_card_bonus_bet,
         progressive_bet,
+        rules,
     })
 }
 
 fn serialize_state(state: &TcState) -> Vec<u8> {
-    let mut out = Vec::with_capacity(STATE_LEN);
+    let mut out = Vec::with_capacity(STATE_LEN_WITH_RULES);
     out.push(STATE_VERSION);
     out.push(state.stage as u8);
     out.extend_from_slice(&state.player);
@@ -227,6 +316,7 @@ fn serialize_state(state: &TcState) -> Vec<u8> {
     out.extend_from_slice(&state.pairplus_bet.to_be_bytes());
     out.extend_from_slice(&state.six_card_bonus_bet.to_be_bytes());
     out.extend_from_slice(&state.progressive_bet.to_be_bytes());
+    out.push(state.rules.to_byte());
     out
 }
 
@@ -423,7 +513,7 @@ fn resolve_progressive_return(player_cards: &[u8; 3], progressive_bet: u64) -> u
     match player_hand.0 {
         HandRank::StraightFlush => {
             // Mini-royal is A-K-Q suited.
-            if player_hand.1 == [14, 13, 12] {
+            if is_mini_royal(player_cards) {
                 let is_spades = player_cards.iter().all(|&c| cards::card_suit(c) == 0);
                 if is_spades {
                     progressive_bet.saturating_mul(THREE_CARD_PROGRESSIVE_BASE_JACKPOT)
@@ -438,6 +528,19 @@ fn resolve_progressive_return(player_cards: &[u8; 3], progressive_bet: u64) -> u
         HandRank::Straight => progressive_bet.saturating_mul(6),
         _ => 0,
     }
+}
+
+fn is_mini_royal(cards: &[u8; 3]) -> bool {
+    let mut ranks = [0u8; 3];
+    for (i, &card) in cards.iter().enumerate() {
+        ranks[i] = cards::card_rank_ace_high(card);
+    }
+    ranks.sort_unstable();
+    if ranks != [12, 13, 14] {
+        return false;
+    }
+    let suit = cards::card_suit(cards[0]);
+    cards.iter().all(|&card| cards::card_suit(card) == suit)
 }
 
 /// Generate JSON logs for Three Card Poker game completion
@@ -505,6 +608,7 @@ impl CasinoGame for ThreeCardPoker {
             pairplus_bet: 0,
             six_card_bonus_bet: 0,
             progressive_bet: 0,
+            rules: ThreeCardRules::default(),
         };
         session.state_blob = serialize_state(&state);
         GameResult::Continue(vec![])
@@ -527,6 +631,16 @@ impl CasinoGame for ThreeCardPoker {
 
         match state.stage {
             Stage::Betting => match mv {
+                Move::SetRules => {
+                    if payload.len() != 2 {
+                        return Err(GameError::InvalidPayload);
+                    }
+                    let rules =
+                        ThreeCardRules::from_byte(payload[1]).ok_or(GameError::InvalidPayload)?;
+                    state.rules = rules;
+                    session.state_blob = serialize_state(&state);
+                    Ok(GameResult::Continue(vec![]))
+                }
                 Move::SetPairPlus => {
                     let new_bet = super::payload::parse_u64_be(payload, 1)?;
                     let payout = apply_pairplus_update(&mut state, new_bet)?;
@@ -710,7 +824,7 @@ impl CasinoGame for ThreeCardPoker {
 
                     let player_hand = evaluate_hand(&state.player);
                     let dealer_hand = evaluate_hand(&state.dealer);
-                    let dealer_ok = dealer_qualifies(&dealer_hand);
+                    let dealer_ok = dealer_qualifies(&dealer_hand, state.rules);
 
                     let pairplus_return =
                         resolve_pairplus_return(&state.player, state.pairplus_bet);
@@ -830,10 +944,20 @@ mod tests {
 
     #[test]
     fn test_dealer_qualification_threshold() {
-        // Q-6-4 qualifies; Q-6-3 does not.
-        let qualifies = dealer_qualifies(&(HandRank::HighCard, [12, 6, 4]));
+        // Q-high qualifies; J-high does not.
+        let rules = ThreeCardRules::default();
+        let qualifies = dealer_qualifies(&(HandRank::HighCard, [12, 5, 4]), rules);
         assert!(qualifies);
-        let qualifies = dealer_qualifies(&(HandRank::HighCard, [12, 6, 3]));
+        let qualifies = dealer_qualifies(&(HandRank::HighCard, [11, 9, 8]), rules);
+        assert!(!qualifies);
+
+        // Q-6-4 qualifier variant.
+        let rules = ThreeCardRules {
+            dealer_qualifier: DealerQualifier::Q64,
+        };
+        let qualifies = dealer_qualifies(&(HandRank::HighCard, [12, 6, 4]), rules);
+        assert!(qualifies);
+        let qualifies = dealer_qualifies(&(HandRank::HighCard, [12, 6, 3]), rules);
         assert!(!qualifies);
     }
 
@@ -845,6 +969,19 @@ mod tests {
         assert_eq!(pairplus_multiplier(HandRank::Flush), 3);
         assert_eq!(pairplus_multiplier(HandRank::Pair), 1);
         assert_eq!(pairplus_multiplier(HandRank::HighCard), 0);
+    }
+
+    #[test]
+    fn test_three_card_tiebreakers() {
+        // Pair kicker comparison.
+        let pair_ace = evaluate_hand(&[4u8, 17u8, 26u8]); // 5♠ 5♥ A♦
+        let pair_king = evaluate_hand(&[4u8, 30u8, 51u8]); // 5♠ 5♦ K♣
+        assert!(compare_hands(&pair_ace, &pair_king).is_gt());
+
+        // Wheel straight should be lowest straight.
+        let wheel = evaluate_hand(&[0u8, 14u8, 28u8]); // A♠ 2♥ 3♦
+        let higher = evaluate_hand(&[1u8, 15u8, 29u8]); // 2♠ 3♥ 4♦
+        assert!(compare_hands(&higher, &wheel).is_gt());
     }
 
     #[test]
