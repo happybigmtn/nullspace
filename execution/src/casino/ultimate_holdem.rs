@@ -780,7 +780,8 @@ impl CasinoGame for UltimateHoldem {
         };
         session.state_blob = serialize_state(&state);
         GameResult::ContinueWithUpdate {
-            payout: -(session.bet as i64), logs: vec![],
+            payout: -(session.bet as i64),
+            logs: vec![],
         }
     }
 
@@ -820,7 +821,8 @@ impl CasinoGame for UltimateHoldem {
                         GameResult::Continue(vec![])
                     } else {
                         GameResult::ContinueWithUpdate {
-                            payout: payout_update, logs: vec![],
+                            payout: payout_update,
+                            logs: vec![],
                         }
                     })
                 }
@@ -832,7 +834,8 @@ impl CasinoGame for UltimateHoldem {
                         GameResult::Continue(vec![])
                     } else {
                         GameResult::ContinueWithUpdate {
-                            payout: payout_update, logs: vec![],
+                            payout: payout_update,
+                            logs: vec![],
                         }
                     })
                 }
@@ -847,7 +850,8 @@ impl CasinoGame for UltimateHoldem {
                         GameResult::Continue(vec![])
                     } else {
                         GameResult::ContinueWithUpdate {
-                            payout: payout_update, logs: vec![],
+                            payout: payout_update,
+                            logs: vec![],
                         }
                     })
                 }
@@ -874,7 +878,8 @@ impl CasinoGame for UltimateHoldem {
                         GameResult::Continue(vec![])
                     } else {
                         GameResult::ContinueWithUpdate {
-                            payout: payout_update, logs: vec![],
+                            payout: payout_update,
+                            logs: vec![],
                         }
                     })
                 }
@@ -955,7 +960,8 @@ impl CasinoGame for UltimateHoldem {
                     state.stage = Stage::AwaitingReveal;
                     session.state_blob = serialize_state(&state);
                     Ok(GameResult::ContinueWithUpdate {
-                        payout: -(play_bet as i64), logs: vec![],
+                        payout: -(play_bet as i64),
+                        logs: vec![],
                     })
                 }
                 Action::Bet3x => {
@@ -970,7 +976,8 @@ impl CasinoGame for UltimateHoldem {
                     state.stage = Stage::AwaitingReveal;
                     session.state_blob = serialize_state(&state);
                     Ok(GameResult::ContinueWithUpdate {
-                        payout: -(play_bet as i64), logs: vec![],
+                        payout: -(play_bet as i64),
+                        logs: vec![],
                     })
                 }
                 _ => Err(GameError::InvalidMove),
@@ -999,7 +1006,8 @@ impl CasinoGame for UltimateHoldem {
                     state.stage = Stage::AwaitingReveal;
                     session.state_blob = serialize_state(&state);
                     Ok(GameResult::ContinueWithUpdate {
-                        payout: -(play_bet as i64), logs: vec![],
+                        payout: -(play_bet as i64),
+                        logs: vec![],
                     })
                 }
                 _ => Err(GameError::InvalidMove),
@@ -1014,7 +1022,8 @@ impl CasinoGame for UltimateHoldem {
                     state.stage = Stage::AwaitingReveal;
                     session.state_blob = serialize_state(&state);
                     Ok(GameResult::ContinueWithUpdate {
-                        payout: -(play_bet as i64), logs: vec![],
+                        payout: -(play_bet as i64),
+                        logs: vec![],
                     })
                 }
                 Action::Fold => {

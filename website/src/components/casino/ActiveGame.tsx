@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { GameState, GameType, Card } from '../../types';
 import { BlackjackView } from './games/BlackjackView';
 import { CrapsView } from './games/CrapsView';
@@ -12,6 +12,127 @@ import { ThreeCardPokerView } from './games/ThreeCardPokerView';
 import { UltimateHoldemView } from './games/UltimateHoldemView';
 import { GenericGameView } from './games/GenericGameView';
 import { BigWinEffect } from './BigWinEffect';
+
+// Helper functions for formatting multipliers
+const cardRankName = (id: number): string => {
+  const rank = id % 13;
+  const ranks = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+  return ranks[rank];
+};
+
+const cardSuitSymbol = (id: number): string => {
+  const suit = Math.floor(id / 13);
+  const suits = ['♠', '♥', '♦', '♣'];
+  return suits[suit];
+};
+
+const formatMultiplier = (m: { id: number; multiplier: number; superType: string }): string => {
+  switch (m.superType) {
+    case 'Card':
+      return `${cardRankName(m.id)}${cardSuitSymbol(m.id)} x${m.multiplier}`;
+    case 'Number':
+      return `#${m.id} x${m.multiplier}`;
+    case 'Total':
+      return `Σ${m.id} x${m.multiplier}`;
+    case 'Rank':
+      return `${cardRankName(m.id)} x${m.multiplier}`;
+    case 'Suit':
+      return `${cardSuitSymbol(m.id * 13)} x${m.multiplier}`;
+    default:
+      return `${m.id} x${m.multiplier}`;
+  }
+};
+
+// Staged reveal display component
+interface SuperModeDisplayProps {
+  multipliers: Array<{ id: number; multiplier: number; superType: string }>;
+  reducedMotion: boolean;
+}
+
+const SuperModeDisplay: React.FC<SuperModeDisplayProps> = ({ multipliers, reducedMotion }) => {
+  const [revealedCount, setRevealedCount] = useState(0);
+  const [skipped, setSkipped] = useState(false);
+  const [multipliersKey, setMultipliersKey] = useState('');
+
+  // Reset state when multipliers change
+  useEffect(() => {
+    const newKey = multipliers.map(m => `${m.id}-${m.multiplier}-${m.superType}`).join(',');
+    if (newKey !== multipliersKey) {
+      setMultipliersKey(newKey);
+      setRevealedCount(0);
+      setSkipped(false);
+    }
+  }, [multipliers, multipliersKey]);
+
+  // Skip handler (SPACE or ESC)
+  const handleSkip = useCallback((e: KeyboardEvent) => {
+    if (e.key === ' ' || e.key === 'Escape') {
+      // Only skip if we're still revealing
+      if (revealedCount < multipliers.length && !skipped) {
+        e.preventDefault();
+        setSkipped(true);
+        setRevealedCount(multipliers.length);
+      }
+    }
+  }, [multipliers.length, revealedCount, skipped]);
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleSkip);
+    return () => window.removeEventListener('keydown', handleSkip);
+  }, [handleSkip]);
+
+  // Staged reveal effect
+  useEffect(() => {
+    if (reducedMotion || skipped) {
+      setRevealedCount(multipliers.length);
+      return;
+    }
+
+    if (revealedCount < multipliers.length) {
+      const timer = setTimeout(() => {
+        setRevealedCount(prev => prev + 1);
+      }, 400); // 400ms per element
+      return () => clearTimeout(timer);
+    }
+  }, [revealedCount, multipliers.length, reducedMotion, skipped]);
+
+  const visibleMultipliers = multipliers.slice(0, revealedCount);
+  const isRevealing = revealedCount < multipliers.length && !skipped;
+
+  if (multipliers.length === 0) {
+    return (
+      <div className="absolute top-4 left-4 max-w-sm bg-terminal-black/90 border border-terminal-gold/50 p-3 rounded shadow-lg z-40 text-xs">
+        <div className="font-bold text-terminal-gold mb-1">SUPER MODE</div>
+        <div className="text-[10px] text-gray-400">Active</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="absolute top-4 left-4 max-w-sm bg-terminal-black/90 border border-terminal-gold/50 p-3 rounded shadow-lg z-40 text-xs">
+      <div className="font-bold text-terminal-gold mb-1">
+        SUPER MODE {isRevealing && <span className="text-gray-400 font-normal">(SPACE to skip)</span>}
+      </div>
+      <div className="flex flex-wrap gap-1">
+        {visibleMultipliers.map((m, idx) => (
+          <span
+            key={`${m.id}-${m.superType}-${idx}`}
+            className={`px-2 py-0.5 rounded border border-terminal-gold/30 text-terminal-gold/90 ${
+              !reducedMotion && idx === revealedCount - 1 && !skipped ? 'animate-pulse' : ''
+            }`}
+            style={{
+              animation: !reducedMotion && idx === revealedCount - 1 && !skipped
+                ? 'fadeIn 200ms ease-out'
+                : undefined
+            }}
+          >
+            {formatMultiplier(m)}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+};
 
 interface ActiveGameProps {
   gameState: GameState;
@@ -105,6 +226,12 @@ export const ActiveGame: React.FC<ActiveGameProps> = ({ gameState, deck, numberI
              </div>
          </div>
 
+         {gameState.superMode?.isActive && (
+             <SuperModeDisplay
+               multipliers={gameState.superMode.multipliers || []}
+               reducedMotion={reducedMotion}
+             />
+         )}
 
          <BigWinEffect
             amount={displayWin}

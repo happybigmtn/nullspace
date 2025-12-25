@@ -3,7 +3,7 @@
     "playwright": {
       "command": "node",
       "args": [
-        "/home/r/Coding/supersociety-battleware/.playwright-mcp/microsoft-playwright-mcp/cli.js"
+        "/home/r/Coding/nullsociety/.playwright-mcp/microsoft-playwright-mcp/cli.js"
       ]
     }
   }

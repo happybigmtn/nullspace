@@ -32,6 +32,42 @@ use super::super_mode::apply_super_multiplier_cards;
 use super::{cards, CasinoGame, GameError, GameResult, GameRng};
 use nullspace_types::casino::GameSession;
 
+/// Payout multipliers for Baccarat (per Wizard of Odds standard paytables).
+/// All values represent "X:1" payouts (winnings only, not including original stake).
+mod payouts {
+    /// Player Pair: 11:1 (player's first two cards are same rank)
+    pub const PLAYER_PAIR: u64 = 11;
+    /// Banker Pair: 11:1 (banker's first two cards are same rank)
+    pub const BANKER_PAIR: u64 = 11;
+    /// Tie: 8:1 (player and banker have same total)
+    pub const TIE: u64 = 8;
+    /// Banker win commission: 5% (pays 95/100 of bet)
+    pub const BANKER_COMMISSION_NUMERATOR: u64 = 95;
+    pub const BANKER_COMMISSION_DENOMINATOR: u64 = 100;
+    /// Lucky 6 (2-card banker win): 12:1
+    pub const LUCKY_6_TWO_CARD: u64 = 12;
+    /// Lucky 6 (3-card banker win): 23:1 (some casinos use 20:1)
+    pub const LUCKY_6_THREE_CARD: u64 = 23;
+    /// Dragon Bonus: Win by margin of 9 points: 30:1
+    pub const DRAGON_MARGIN_9: u64 = 30;
+    /// Dragon Bonus: Win by margin of 8 points: 10:1
+    pub const DRAGON_MARGIN_8: u64 = 10;
+    /// Dragon Bonus: Win by margin of 7 points: 6:1
+    pub const DRAGON_MARGIN_7: u64 = 6;
+    /// Dragon Bonus: Win by margin of 6 points: 4:1
+    pub const DRAGON_MARGIN_6: u64 = 4;
+    /// Dragon Bonus: Win by margin of 5 points: 2:1
+    pub const DRAGON_MARGIN_5: u64 = 2;
+    /// Dragon Bonus: Win by margin of 4 points: 1:1
+    pub const DRAGON_MARGIN_4: u64 = 1;
+    /// Dragon Bonus: Natural win (any margin): 1:1
+    pub const DRAGON_NATURAL_WIN: u64 = 1;
+    /// Panda 8: Player wins with 3-card total of 8: 25:1
+    pub const PANDA_8: u64 = 25;
+    /// Perfect Pair: First two cards are suited pair: 25:1
+    pub const PERFECT_PAIR: u64 = 25;
+}
+
 /// Maximum cards in a Baccarat hand (2-3 cards per hand).
 const MAX_HAND_SIZE: usize = 3;
 /// Maximum number of bets per session (one of each type).
@@ -389,16 +425,14 @@ fn calculate_bet_payout(
     match bet.bet_type {
         BetType::PlayerPair => {
             if outcome.player_has_pair {
-                // 11:1 payout = winnings of 11x
-                (bet.amount.saturating_mul(11) as i64, false)
+                (bet.amount.saturating_mul(payouts::PLAYER_PAIR) as i64, false)
             } else {
                 (-(bet.amount as i64), false)
             }
         }
         BetType::BankerPair => {
             if outcome.banker_has_pair {
-                // 11:1 payout = winnings of 11x
-                (bet.amount.saturating_mul(11) as i64, false)
+                (bet.amount.saturating_mul(payouts::BANKER_PAIR) as i64, false)
             } else {
                 (-(bet.amount as i64), false)
             }
@@ -418,8 +452,7 @@ fn calculate_bet_payout(
             if outcome.player_total == outcome.banker_total {
                 (0, true) // Push on tie
             } else if outcome.player_total > outcome.banker_total {
-                // 1:1 payout = winnings of 1x
-                (bet.amount as i64, false)
+                (bet.amount as i64, false) // 1:1 payout
             } else {
                 (-(bet.amount as i64), false)
             }
@@ -450,10 +483,9 @@ fn calculate_bet_payout(
         BetType::Lucky6 => {
             // Lucky 6 wins when Banker wins with a final total of 6.
             if outcome.banker_total == 6 && outcome.banker_total > outcome.player_total {
-                // WoO "liberal pay table": 2-card 6 pays 12:1, 3-card 6 pays 23:1 (to 1).
                 let winnings_multiplier = match outcome.banker_cards_len {
-                    2 => 12u64,
-                    3 => 23u64,
+                    2 => payouts::LUCKY_6_TWO_CARD,
+                    3 => payouts::LUCKY_6_THREE_CARD,
                     _ => 0u64,
                 };
                 (bet.amount.saturating_mul(winnings_multiplier) as i64, false)
@@ -462,50 +494,45 @@ fn calculate_bet_payout(
             }
         }
         BetType::PlayerDragon => {
-            // Dragon Bonus on Player side (WoO pay table)
             calculate_dragon_bonus_payout(
                 bet.amount,
                 outcome.player_total,
                 outcome.banker_total,
                 outcome.player_cards_len,
                 outcome.banker_cards_len,
-                true, // is_player_side
+                true,
             )
         }
         BetType::BankerDragon => {
-            // Dragon Bonus on Banker side (WoO pay table)
             calculate_dragon_bonus_payout(
                 bet.amount,
                 outcome.player_total,
                 outcome.banker_total,
                 outcome.player_cards_len,
                 outcome.banker_cards_len,
-                false, // is_player_side
+                false,
             )
         }
         BetType::Panda8 => {
-            // Panda 8: Player wins with a 3-card total of 8 (25:1)
             if outcome.player_total == 8
                 && outcome.player_cards_len == 3
                 && outcome.player_total > outcome.banker_total
             {
-                (bet.amount.saturating_mul(25) as i64, false)
+                (bet.amount.saturating_mul(payouts::PANDA_8) as i64, false)
             } else {
                 (-(bet.amount as i64), false)
             }
         }
         BetType::PlayerPerfectPair => {
-            // Player Perfect Pair: Player's first two cards are suited pair (25:1)
             if outcome.player_suited_pair {
-                (bet.amount.saturating_mul(25) as i64, false)
+                (bet.amount.saturating_mul(payouts::PERFECT_PAIR) as i64, false)
             } else {
                 (-(bet.amount as i64), false)
             }
         }
         BetType::BankerPerfectPair => {
-            // Banker Perfect Pair: Banker's first two cards are suited pair (25:1)
             if outcome.banker_suited_pair {
-                (bet.amount.saturating_mul(25) as i64, false)
+                (bet.amount.saturating_mul(payouts::PERFECT_PAIR) as i64, false)
             } else {
                 (-(bet.amount as i64), false)
             }
@@ -545,17 +572,17 @@ fn calculate_dragon_bonus_payout(
 
         // Natural win pays 1:1 regardless of margin
         if my_natural {
-            return (amount as i64, false);
+            return (amount.saturating_mul(payouts::DRAGON_NATURAL_WIN) as i64, false);
         }
 
         // Non-natural win: payout based on margin
         let multiplier: u64 = match margin {
-            9 => 30,
-            8 => 10,
-            7 => 6,
-            6 => 4,
-            5 => 2,
-            4 => 1,
+            9 => payouts::DRAGON_MARGIN_9,
+            8 => payouts::DRAGON_MARGIN_8,
+            7 => payouts::DRAGON_MARGIN_7,
+            6 => payouts::DRAGON_MARGIN_6,
+            5 => payouts::DRAGON_MARGIN_5,
+            4 => payouts::DRAGON_MARGIN_4,
             _ => 0, // Margin 0-3 loses (but we already know we won, so margin >= 1)
         };
 

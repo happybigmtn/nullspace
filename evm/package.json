@@ -1,0 +1,32 @@
+{
+  "name": "nullspace-evm",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "build": "hardhat compile",
+    "test": "hardhat test",
+    "deploy:sepolia": "hardhat run scripts/deployPhase2.js --network sepolia",
+    "deploy:anvil": "hardhat run scripts/deployPhase2.js --network anvil",
+    "simulate:cca:sepolia": "hardhat run scripts/simulateCcaBids.js --network sepolia",
+    "simulate:cca:anvil": "hardhat run scripts/simulateCcaBids.js --network anvil",
+    "snapshot:eligibility": "node scripts/buildEligibilitySnapshot.mjs",
+    "finalize:cca:sepolia": "hardhat run scripts/finalizeCca.js --network sepolia",
+    "finalize:cca:anvil": "hardhat run scripts/finalizeCca.js --network anvil",
+    "bidders:generate": "node scripts/generateBidders.mjs"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.0.2",
+    "dotenv": "^16.4.5",
+    "ethers": "^6.13.4",
+    "merkletreejs": "^0.4.0",
+    "keccak256": "^1.0.6"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-chai-matchers": "^2.0.8",
+    "@nomicfoundation/hardhat-ethers": "^3.0.8",
+    "@nomicfoundation/hardhat-verify": "^2.0.11",
+    "@types/chai": "^4.3.11",
+    "chai": "^4.4.1",
+    "hardhat": "^2.22.10"
+  }
+}

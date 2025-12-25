@@ -14,6 +14,7 @@ import { WasmWrapper } from '../api/wasm.js';
 import { BotConfig, DEFAULT_BOT_CONFIG, BotService } from '../services/BotService';
 import { playSfx } from '../services/sfx';
 import { syncFreerollLimit } from '../services/authClient';
+import { track } from '../services/telemetry';
 
 const INITIAL_CHIPS = 1000;
 const INITIAL_SHIELDS = 3;
@@ -2077,6 +2078,19 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
           : null;
         const { summary: resultMessage, details } = parsed || generateGameResult(gameTypeRef.current, gameStateRef.current, netPnL);
 
+        // Track Super Mode round completion (Phase 2 metrics)
+        const wasSuperRound = gameStateRef.current?.superMode?.isActive || gameStateRef.current?.activeModifiers?.super;
+        if (wasSuperRound) {
+          track('casino.super.round_completed', {
+            game: gameTypeRef.current,
+            mode: playMode,
+            netPnL,
+            wager: sessionWager,
+            multipliers: gameStateRef.current?.superMode?.multipliers?.length ?? 0,
+            auraMeter: stats.auraMeter,
+          });
+        }
+
         // Update stats including history and pnlByGame
         setStats(prev => {
           const currentGameType = gameTypeRef.current;
@@ -3628,6 +3642,14 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
 
     const current = Boolean(gameState.activeModifiers.super);
     const next = !current;
+
+    // Track Super Mode toggle (Phase 2 metrics)
+    track('casino.super.toggled', {
+      enabled: next,
+      game: gameState.type,
+      mode: playMode,
+      auraMeter: stats.auraMeter,
+    });
 
     // Optimistic update
     setGameState(prev => ({ ...prev, activeModifiers: { ...prev.activeModifiers, super: next } }));

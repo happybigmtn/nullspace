@@ -525,7 +525,10 @@ impl CasinoGame for Blackjack {
                     Ok(if payout == 0 {
                         GameResult::Continue(vec![])
                     } else {
-                        GameResult::ContinueWithUpdate { payout, logs: vec![] }
+                        GameResult::ContinueWithUpdate {
+                            payout,
+                            logs: vec![],
+                        }
                     })
                 }
                 Move::SetRules => {
@@ -761,7 +764,8 @@ impl CasinoGame for Blackjack {
 
                         session.state_blob = serialize_state(&state);
                         Ok(GameResult::ContinueWithUpdate {
-                            payout: -(extra_bet as i64), logs: vec![],
+                            payout: -(extra_bet as i64),
+                            logs: vec![],
                         })
                     }
                     Move::Split => {
@@ -829,7 +833,8 @@ impl CasinoGame for Blackjack {
                         }
                         session.state_blob = serialize_state(&state);
                         Ok(GameResult::ContinueWithUpdate {
-                            payout: -(split_bet as i64), logs: vec![],
+                            payout: -(split_bet as i64),
+                            logs: vec![],
                         })
                     }
                     Move::Surrender => {

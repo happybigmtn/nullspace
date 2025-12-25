@@ -138,17 +138,22 @@ export const Header: React.FC<HeaderProps> = ({
                     </div>
                     <div className="hidden sm:flex items-center gap-2">
                         <span className="text-gray-500">AURA</span>
-                        <div className="flex gap-1">
+                        <div className="flex gap-1 items-center">
                             {[...Array(5)].map((_, i) => (
                                 <div
                                     key={i}
-                                    className={`w-2 h-2 rounded-full ${
+                                    className={`w-2 h-4 rounded-sm transition-all duration-300 ${
                                         i < (stats.auraMeter ?? 0)
-                                            ? 'bg-terminal-gold shadow-[0_0_8px_rgba(255,215,0,0.7)]'
-                                            : 'bg-gray-800'
+                                            ? 'bg-terminal-gold shadow-[0_0_8px_rgba(255,215,0,0.6)]'
+                                            : 'bg-terminal-gold/20'
                                     }`}
                                 />
                             ))}
+                            {(stats.auraMeter ?? 0) >= 5 && (
+                                <span className="text-[10px] text-terminal-gold animate-pulse ml-1 font-bold">
+                                    SUPER!
+                                </span>
+                            )}
                         </div>
                     </div>
                 </>
@@ -166,12 +171,14 @@ export const Header: React.FC<HeaderProps> = ({
                             <div key={i} className={`w-1.5 h-1.5 rounded-full ${i < stats.doubles ? 'bg-purple-400' : 'bg-gray-800'}`} />
                         ))}
                     </div>
-                    <div className="flex gap-0.5">
+                    <div className="flex gap-0.5 items-center">
                         {[...Array(5)].map((_, i) => (
                             <div
                                 key={i}
-                                className={`w-1.5 h-1.5 rounded-full ${
-                                    i < (stats.auraMeter ?? 0) ? 'bg-terminal-gold' : 'bg-gray-800'
+                                className={`w-1.5 h-3 rounded-sm transition-all duration-300 ${
+                                    i < (stats.auraMeter ?? 0)
+                                        ? 'bg-terminal-gold shadow-[0_0_4px_rgba(255,215,0,0.5)]'
+                                        : 'bg-terminal-gold/20'
                                 }`}
                             />
                         ))}

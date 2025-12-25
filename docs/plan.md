@@ -199,14 +199,21 @@ Phase 1 (Commonware codebase):
 - [x] UI for credit balances, vesting, debt health, and policy caps.
 
 Phase 2 (EVM + bridge workstream):
-- [ ] New `evm/` workspace or external repo for ERC-20 RNG + CCA integration.
-- [ ] Bonus distribution contract (BOGO) keyed to CCA receipts + credit ledger.
-- [ ] Recovery pool contract + payout tooling (up to 20m USDT).
+- [x] New `evm/` workspace with RNG ERC-20, BOGO distributor, recovery pool, bridge lockbox,
+  and CCA simulation scripts for testnet dry runs.
+- [ ] Wire BOGO distributor to Phase 1 credit ledger snapshots + eligibility pipeline.
+- [ ] Recovery pool payout tooling (funding + redemption flow) and treasury wiring.
 - [ ] Fee distributor routing Uniswap v4 fees to stakers (USDT).
-- [ ] Bridge contracts + relayer/validator service and UI flows.
+- [ ] Bridge relayer/validator service + UI flows (lock/mint or burn/mint).
 - [ ] Oracle feed ingestion for on-chain risk controls.
 
 ## Latest Deliverables
+- [x] GameResult logging pipeline: per-move logs now flow through `GameResult` and into
+  `CasinoGameMoved`/`CasinoGameCompleted` events for UI rendering.
+- [x] Phase 1/2 simulation tooling: `phase_simulation` CLI, `scripts/phase-sim.sh`, and
+  `scripts/phase2-e2e-sim.sh` (100-bot end-to-end flow).
+- [x] Phase 2 EVM workspace with ERC-20 RNG, BOGO distributor, recovery pool, bridge lockbox,
+  plus Hardhat tests and CCA bid/snapshot scripts.
 - [x] Economy UI now surfaces daily caps, sell tax bands, tiered LTV limits, and stability fee hints.
 - [x] Wallet pill includes freeroll credit balances (locked + unlocked).
 - [x] Treasury allocations readable in Economy UI (when configured).

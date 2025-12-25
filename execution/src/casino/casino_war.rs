@@ -244,7 +244,10 @@ impl CasinoGame for CasinoWar {
 
                     state.tie_bet = new_tie_bet;
                     session.state_blob = serialize_state(&state);
-                    Ok(GameResult::ContinueWithUpdate { payout, logs: vec![] })
+                    Ok(GameResult::ContinueWithUpdate {
+                        payout,
+                        logs: vec![],
+                    })
                 }
                 Move::Play => {
                     if payload.len() != 1 {
@@ -674,7 +677,7 @@ mod tests {
                 == cards::card_rank_ace_high(final_state.dealer_card)
             {
                 // Bonus is equal to the ante, so the win credits 3x the ante in our model.
-                assert!(matches!(result, GameResult::Win(300, _)));
+        assert!(matches!(result, GameResult::Win(300, _)));
                 return;
             }
         }

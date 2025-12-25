@@ -32,6 +32,40 @@ use super::super_mode::apply_super_multiplier_total;
 use super::{CasinoGame, GameError, GameResult, GameRng};
 use nullspace_types::casino::GameSession;
 
+/// Payout multipliers for Craps (expressed as "to 1" winnings unless noted).
+mod payouts {
+    // Field bet multipliers (total return multiples, not "to 1")
+    pub const FIELD_2_OR_12_DOUBLE: u64 = 3;  // 2:1 -> 3x total
+    pub const FIELD_12_TRIPLE: u64 = 4;       // 3:1 -> 4x total
+    pub const FIELD_STANDARD: u64 = 2;        // 1:1 -> 2x total
+
+    // Next (Hop) bet multipliers ("to 1" winnings)
+    pub const NEXT_1_WAY: u64 = 35;   // 2 or 12
+    pub const NEXT_2_WAYS: u64 = 17;  // 3 or 11
+    pub const NEXT_3_WAYS: u64 = 11;  // 4 or 10
+    pub const NEXT_4_WAYS: u64 = 8;   // 5 or 9
+    pub const NEXT_5_WAYS: u64 = 6;   // 6 or 8
+    pub const NEXT_6_WAYS: u64 = 5;   // 7
+
+    // Hardway bet multipliers ("to 1" winnings)
+    pub const HARDWAY_4_OR_10: u64 = 7;
+    pub const HARDWAY_6_OR_8: u64 = 9;
+
+    // Fire bet multipliers ("to 1" winnings)
+    pub const FIRE_4_POINTS: u64 = 24;
+    pub const FIRE_5_POINTS: u64 = 249;
+    pub const FIRE_6_POINTS: u64 = 999;
+
+    // All Tall Small (ATS) multipliers ("to 1" winnings)
+    pub const ATS_SMALL: u64 = 34;
+    pub const ATS_TALL: u64 = 34;
+    pub const ATS_ALL: u64 = 175;
+
+    // Commission rates
+    pub const YES_NO_COMMISSION_DIVISOR: u64 = 100;  // 1% commission
+    pub const NEXT_COMMISSION_DIVISOR: u64 = 100;    // 1% commission
+}
+
 const STATE_VERSION: u8 = 2;
 const MAX_BETS: usize = 20;
 const BUY_COMMISSION_BPS: u64 = 500; // 5.00%
@@ -499,14 +533,14 @@ fn calculate_odds_payout(point: u8, odds_amount: u64, is_pass: bool) -> u64 {
 fn calculate_field_payout(total: u8, amount: u64, paytable: FieldPaytable) -> u64 {
     match paytable {
         FieldPaytable::Double2And12 => match total {
-            2 | 12 => amount.saturating_mul(3), // 2:1 -> 3x total
-            3 | 4 | 9 | 10 | 11 => amount.saturating_mul(2), // 1:1 -> 2x total
+            2 | 12 => amount.saturating_mul(payouts::FIELD_2_OR_12_DOUBLE),
+            3 | 4 | 9 | 10 | 11 => amount.saturating_mul(payouts::FIELD_STANDARD),
             _ => 0,
         },
         FieldPaytable::Double2Triple12 => match total {
-            2 => amount.saturating_mul(3),  // 2:1 -> 3x total
-            12 => amount.saturating_mul(4), // 3:1 -> 4x total
-            3 | 4 | 9 | 10 | 11 => amount.saturating_mul(2),
+            2 => amount.saturating_mul(payouts::FIELD_2_OR_12_DOUBLE),
+            12 => amount.saturating_mul(payouts::FIELD_12_TRIPLE),
+            3 | 4 | 9 | 10 | 11 => amount.saturating_mul(payouts::FIELD_STANDARD),
             _ => 0,
         },
     }
@@ -529,7 +563,7 @@ fn calculate_yes_payout(target: u8, amount: u64, hit: bool) -> u64 {
         _ => amount,
     };
 
-    let commission = true_odds.saturating_div(100);
+    let commission = true_odds.saturating_div(payouts::YES_NO_COMMISSION_DIVISOR);
     let winnings = true_odds.saturating_sub(commission);
     amount.saturating_add(winnings)
 }
@@ -551,7 +585,7 @@ fn calculate_no_payout(target: u8, amount: u64, seven_hit: bool) -> u64 {
         _ => amount,
     };
 
-    let commission = true_odds.saturating_div(100);
+    let commission = true_odds.saturating_div(payouts::YES_NO_COMMISSION_DIVISOR);
     let winnings = true_odds.saturating_sub(commission);
     amount.saturating_add(winnings)
 }
@@ -594,17 +628,17 @@ fn calculate_next_payout(target: u8, total: u8, amount: u64) -> u64 {
     // Payout based on probability
     let ways = WAYS[target as usize];
     let multiplier: u64 = match ways {
-        1 => 35, // 2 or 12
-        2 => 17, // 3 or 11
-        3 => 11, // 4 or 10
-        4 => 8,  // 5 or 9
-        5 => 6,  // 6 or 8 (rounded from 6.2)
-        6 => 5,  // 7
+        1 => payouts::NEXT_1_WAY,   // 2 or 12
+        2 => payouts::NEXT_2_WAYS,  // 3 or 11
+        3 => payouts::NEXT_3_WAYS,  // 4 or 10
+        4 => payouts::NEXT_4_WAYS,  // 5 or 9
+        5 => payouts::NEXT_5_WAYS,  // 6 or 8
+        6 => payouts::NEXT_6_WAYS,  // 7
         _ => 1,
     };
 
     let winnings = amount.saturating_mul(multiplier);
-    let commission = winnings.saturating_div(100);
+    let commission = winnings.saturating_div(payouts::NEXT_COMMISSION_DIVISOR);
     let winnings = winnings.saturating_sub(commission);
     amount.saturating_add(winnings)
 }
@@ -636,9 +670,9 @@ fn ats_required_mask(bet_type: BetType) -> u64 {
 
 fn ats_payout_to_1(bet_type: BetType) -> u64 {
     match bet_type {
-        BetType::AtsSmall => ATS_SMALL_PAYOUT_TO_1,
-        BetType::AtsTall => ATS_TALL_PAYOUT_TO_1,
-        BetType::AtsAll => ATS_ALL_PAYOUT_TO_1,
+        BetType::AtsSmall => payouts::ATS_SMALL,
+        BetType::AtsTall => payouts::ATS_TALL,
+        BetType::AtsAll => payouts::ATS_ALL,
         _ => 0,
     }
 }
@@ -773,8 +807,8 @@ fn calculate_hardway_payout(target: u8, d1: u8, d2: u8, total: u8, amount: u64) 
     if is_hard {
         // Win!
         let winnings = match target {
-            4 | 10 => amount.saturating_mul(7), // 7:1
-            6 | 8 => amount.saturating_mul(9),  // 9:1
+            4 | 10 => amount.saturating_mul(payouts::HARDWAY_4_OR_10),
+            6 | 8 => amount.saturating_mul(payouts::HARDWAY_6_OR_8),
             _ => amount,
         };
         Some(amount.saturating_add(winnings))
@@ -1380,9 +1414,9 @@ fn fire_bet_multiplier(points_made: u8) -> u64 {
     // WoO Fire Bet Pay Table A (pays "to 1"): 4->24, 5->249, 6->999.
     // https://wizardofodds.com/games/craps/side-bets/fire-bet/
     match points_made {
-        4 => 24,
-        5 => 249,
-        6 => 999,
+        4 => payouts::FIRE_4_POINTS,
+        5 => payouts::FIRE_5_POINTS,
+        6 => payouts::FIRE_6_POINTS,
         _ => 0,
     }
 }
@@ -1582,7 +1616,7 @@ impl CasinoGame for Craps {
                     i64::try_from(amount).map_err(|_| GameError::InvalidPayload)?;
                 Ok(GameResult::ContinueWithUpdate {
                     payout: -deduction_i64,
-                    logs: vec![format!("Bet Placed")],
+                    logs: vec![],
                 })
             }
 
@@ -1629,7 +1663,7 @@ impl CasinoGame for Craps {
                 session.state_blob = state.to_blob();
                 Ok(GameResult::ContinueWithUpdate {
                     payout: -(odds_amount as i64),
-                    logs: vec![format!("Odds Added")],
+                    logs: vec![],
                 })
             }
 
@@ -1746,10 +1780,10 @@ impl CasinoGame for Craps {
                     // Positive payout = credit chips back to player
                     Ok(GameResult::ContinueWithUpdate {
                         payout: refund as i64,
-                        logs: vec![format!("Bets Cleared (+{} refunded)", refund)],
+                        logs: vec![],
                     })
                 } else {
-                    Ok(GameResult::Continue(vec![format!("Bets Cleared")]))
+                    Ok(GameResult::Continue(vec![]))
                 }
             }
 

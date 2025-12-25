@@ -41,6 +41,18 @@ use super::super_mode::apply_super_multiplier_number;
 use super::{CasinoGame, GameError, GameResult, GameRng};
 use nullspace_types::casino::GameSession;
 
+/// Payout multipliers for Roulette (expressed as "to 1" winnings).
+mod payouts {
+    pub const STRAIGHT: u64 = 35;
+    pub const EVEN_MONEY: u64 = 1; // Red, Black, Even, Odd, Low, High
+    pub const DOZEN: u64 = 2;
+    pub const COLUMN: u64 = 2;
+    pub const SPLIT: u64 = 17;
+    pub const STREET: u64 = 11;
+    pub const CORNER: u64 = 8;
+    pub const SIX_LINE: u64 = 5;
+}
+
 /// Maximum number of bets per session.
 const MAX_BETS: usize = 20;
 
@@ -207,18 +219,19 @@ fn bet_wins(bet_type: BetType, bet_number: u8, result: u8) -> bool {
 /// Get the payout multiplier for a bet type (excludes original bet).
 fn payout_multiplier(bet_type: BetType) -> u64 {
     match bet_type {
-        BetType::Straight => 35,
+        BetType::Straight => payouts::STRAIGHT,
         BetType::Red
         | BetType::Black
         | BetType::Even
         | BetType::Odd
         | BetType::Low
-        | BetType::High => 1,
-        BetType::Dozen | BetType::Column => 2,
-        BetType::SplitH | BetType::SplitV => 17,
-        BetType::Street => 11,
-        BetType::Corner => 8,
-        BetType::SixLine => 5,
+        | BetType::High => payouts::EVEN_MONEY,
+        BetType::Dozen => payouts::DOZEN,
+        BetType::Column => payouts::COLUMN,
+        BetType::SplitH | BetType::SplitV => payouts::SPLIT,
+        BetType::Street => payouts::STREET,
+        BetType::Corner => payouts::CORNER,
+        BetType::SixLine => payouts::SIX_LINE,
     }
 }
 
@@ -524,7 +537,8 @@ impl CasinoGame for Roulette {
 
                 session.state_blob = state.to_blob();
                 Ok(GameResult::ContinueWithUpdate {
-                    payout: -(amount as i64), logs: vec![],
+                    payout: -(amount as i64),
+                    logs: vec![],
                 })
             }
 

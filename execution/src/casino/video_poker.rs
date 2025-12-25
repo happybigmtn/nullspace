@@ -14,6 +14,20 @@ use super::super_mode::apply_super_multiplier_cards;
 use super::{cards, CasinoGame, GameError, GameResult, GameRng};
 use nullspace_types::casino::GameSession;
 
+/// Jacks or Better paytable multipliers (expressed as "to 1" winnings).
+mod payouts {
+    pub const HIGH_CARD: u64 = 0;
+    pub const JACKS_OR_BETTER: u64 = 1;
+    pub const TWO_PAIR: u64 = 2;
+    pub const THREE_OF_A_KIND: u64 = 3;
+    pub const STRAIGHT: u64 = 4;
+    pub const FLUSH: u64 = 6;
+    pub const FULL_HOUSE: u64 = 9;
+    pub const FOUR_OF_A_KIND: u64 = 25;
+    pub const STRAIGHT_FLUSH: u64 = 50;
+    pub const ROYAL_FLUSH: u64 = 800;
+}
+
 /// Video Poker stages.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

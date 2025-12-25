@@ -199,6 +199,18 @@ export default function CasinoApp() {
   };
 
   const stopPlaying = () => {
+    // Track session end with Super Mode metrics (Phase 2)
+    if (rp.sessionStartMs > 0) {
+      const durationMinutes = Math.floor((Date.now() - rp.sessionStartMs) / 60_000);
+      track('casino.session.ended', {
+        mode: playMode,
+        durationMinutes,
+        netPnl,
+        finalChips: stats.chips,
+        auraMeter: stats.auraMeter,
+      });
+    }
+
     setRpOpen(false);
     setRpMode('settings');
     setPlayMode(null);
@@ -257,7 +269,14 @@ export default function CasinoApp() {
       }
     }
 
-    track('casino.deal', { game: gameState.type, mode: playMode, stage: gameState.stage, bet: gameState.bet });
+    track('casino.deal', {
+      game: gameState.type,
+      mode: playMode,
+      stage: gameState.stage,
+      bet: gameState.bet,
+      superMode: gameState.activeModifiers?.super || false,
+      auraMeter: stats.auraMeter,
+    });
     if (gameState.type !== GameType.CRAPS && gameState.type !== GameType.SIC_BO) {
       void playSfx('deal');
     }

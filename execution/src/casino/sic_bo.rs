@@ -34,6 +34,40 @@ use super::super_mode::apply_super_multiplier_total;
 use super::{CasinoGame, GameError, GameResult, GameRng};
 use nullspace_types::casino::GameSession;
 
+/// Payout multipliers for Sic Bo (expressed as "to 1" winnings).
+mod payouts {
+    // Even-money bets (Small, Big, Odd, Even) all pay 1:1
+    pub const EVEN_MONEY: u64 = 1;
+
+    // Triple bets
+    pub const SPECIFIC_TRIPLE: u64 = 150;
+    pub const ANY_TRIPLE: u64 = 24;
+
+    // Double bet
+    pub const SPECIFIC_DOUBLE: u64 = 8;
+
+    // Single number appearances
+    pub const SINGLE_ONE_MATCH: u64 = 1;
+    pub const SINGLE_TWO_MATCH: u64 = 2;
+    pub const SINGLE_THREE_MATCH: u64 = 3;
+
+    // Total bets
+    pub const TOTAL_3_OR_18: u64 = 180;
+    pub const TOTAL_4_OR_17: u64 = 50;
+    pub const TOTAL_5_OR_16: u64 = 18;
+    pub const TOTAL_6_OR_15: u64 = 14;
+    pub const TOTAL_7_OR_14: u64 = 12;
+    pub const TOTAL_8_OR_13: u64 = 8;
+    pub const TOTAL_9_OR_12: u64 = 6;
+    pub const TOTAL_10_OR_11: u64 = 6;
+
+    // Combination bets
+    pub const DOMINO: u64 = 5;
+    pub const THREE_NUMBER_EASY_HOP: u64 = 30;
+    pub const THREE_NUMBER_HARD_HOP: u64 = 50;
+    pub const FOUR_NUMBER_EASY_HOP: u64 = 7;
+}
+
 /// Maximum number of bets per session.
 const MAX_BETS: usize = 20;
 
@@ -298,28 +332,28 @@ fn calculate_bet_payout(bet: &SicBoBet, dice: &[u8; 3], rules: SicBoRules) -> u6
     match bet.bet_type {
         BetType::Small => {
             if !triple && (4..=10).contains(&total) {
-                bet.amount.saturating_mul(2) // 1:1 -> 2x
+                bet.amount.saturating_mul(payouts::EVEN_MONEY + 1)
             } else {
                 0
             }
         }
         BetType::Big => {
             if !triple && (11..=17).contains(&total) {
-                bet.amount.saturating_mul(2)
+                bet.amount.saturating_mul(payouts::EVEN_MONEY + 1)
             } else {
                 0
             }
         }
         BetType::Odd => {
             if total % 2 == 1 && !triple {
-                bet.amount.saturating_mul(2)
+                bet.amount.saturating_mul(payouts::EVEN_MONEY + 1)
             } else {
                 0
             }
         }
         BetType::Even => {
             if total % 2 == 0 && !triple {
-                bet.amount.saturating_mul(2)
+                bet.amount.saturating_mul(payouts::EVEN_MONEY + 1)
             } else {
                 0
             }
@@ -367,9 +401,9 @@ fn calculate_bet_payout(bet: &SicBoBet, dice: &[u8; 3], rules: SicBoRules) -> u6
         BetType::Single => {
             let count = count_number(dice, bet.number);
             match count {
-                1 => bet.amount.saturating_mul(2), // 1:1 -> 2x
-                2 => bet.amount.saturating_mul(3), // 2:1 -> 3x
-                3 => bet.amount.saturating_mul(4), // 3:1 -> 4x
+                1 => bet.amount.saturating_mul(payouts::SINGLE_ONE_MATCH + 1),
+                2 => bet.amount.saturating_mul(payouts::SINGLE_TWO_MATCH + 1),
+                3 => bet.amount.saturating_mul(payouts::SINGLE_THREE_MATCH + 1),
                 _ => 0,
             }
         }
@@ -380,8 +414,7 @@ fn calculate_bet_payout(bet: &SicBoBet, dice: &[u8; 3], rules: SicBoRules) -> u6
                 return 0;
             }
             if count_number(dice, min) >= 1 && count_number(dice, max) >= 1 {
-                // 5:1 -> return 6x (stake + winnings)
-                bet.amount.saturating_mul(6)
+                bet.amount.saturating_mul(payouts::DOMINO + 1)
             } else {
                 0
             }
@@ -393,8 +426,7 @@ fn calculate_bet_payout(bet: &SicBoBet, dice: &[u8; 3], rules: SicBoRules) -> u6
                 return 0;
             }
             if dice_all_distinct(dice) && (dice_mask(dice) & mask) == dice_mask(dice) {
-                // 30:1 -> return 31x
-                bet.amount.saturating_mul(31)
+                bet.amount.saturating_mul(payouts::THREE_NUMBER_EASY_HOP + 1)
             } else {
                 0
             }
@@ -407,8 +439,7 @@ fn calculate_bet_payout(bet: &SicBoBet, dice: &[u8; 3], rules: SicBoRules) -> u6
                 return 0;
             }
             if count_number(dice, double) == 2 && count_number(dice, single) == 1 {
-                // 50:1 -> return 51x
-                bet.amount.saturating_mul(51)
+                bet.amount.saturating_mul(payouts::THREE_NUMBER_HARD_HOP + 1)
             } else {
                 0
             }
@@ -420,8 +451,7 @@ fn calculate_bet_payout(bet: &SicBoBet, dice: &[u8; 3], rules: SicBoRules) -> u6
                 return 0;
             }
             if dice_all_distinct(dice) && (dice_mask(dice) & mask) == dice_mask(dice) {
-                // 7:1 -> return 8x
-                bet.amount.saturating_mul(8)
+                bet.amount.saturating_mul(payouts::FOUR_NUMBER_EASY_HOP + 1)
             } else {
                 0
             }
@@ -563,7 +593,8 @@ impl CasinoGame for SicBo {
                 session.state_blob = state.to_bytes();
                 session.move_count += 1;
                 Ok(GameResult::ContinueWithUpdate {
-                    payout: -(amount as i64), logs: vec![],
+                    payout: -(amount as i64),
+                    logs: vec![],
                 })
             }
 

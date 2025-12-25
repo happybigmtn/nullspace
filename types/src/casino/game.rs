@@ -125,6 +125,7 @@ pub struct SuperModeState {
     pub is_active: bool,
     pub multipliers: Vec<SuperMultiplier>,
     pub streak_level: u8, // For HiLo only
+    pub aura_meter: u8,   // 0-5, triggers Super Aura Round at 5
 }
 
 impl Write for SuperModeState {
@@ -132,6 +133,7 @@ impl Write for SuperModeState {
         self.is_active.write(writer);
         self.multipliers.write(writer);
         self.streak_level.write(writer);
+        self.aura_meter.write(writer);
     }
 }
 
@@ -143,6 +145,7 @@ impl Read for SuperModeState {
             is_active: bool::read(reader)?,
             multipliers: Vec::<SuperMultiplier>::read_range(reader, 0..=10)?,
             streak_level: u8::read(reader)?,
+            aura_meter: u8::read(reader)?,
         })
     }
 }
@@ -152,6 +155,7 @@ impl EncodeSize for SuperModeState {
         self.is_active.encode_size()
             + self.multipliers.encode_size()
             + self.streak_level.encode_size()
+            + self.aura_meter.encode_size()
     }
 }
 

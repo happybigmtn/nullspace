@@ -40,6 +40,36 @@ use super::super_mode::apply_super_multiplier_cards;
 use super::{cards, CasinoGame, GameError, GameResult, GameRng};
 use nullspace_types::casino::{GameSession, THREE_CARD_PROGRESSIVE_BASE_JACKPOT};
 
+/// Payout multipliers for Three Card Poker (expressed as "to 1" winnings).
+mod payouts {
+    // Ante Bonus (pay table #1)
+    pub const ANTE_STRAIGHT_FLUSH: u64 = 5;
+    pub const ANTE_THREE_OF_A_KIND: u64 = 4;
+    pub const ANTE_STRAIGHT: u64 = 1;
+
+    // Pairplus
+    pub const PAIRPLUS_STRAIGHT_FLUSH: u64 = 40;
+    pub const PAIRPLUS_THREE_OF_A_KIND: u64 = 30;
+    pub const PAIRPLUS_STRAIGHT: u64 = 6;
+    pub const PAIRPLUS_FLUSH: u64 = 3;
+    pub const PAIRPLUS_PAIR: u64 = 1;
+
+    // 6-Card Bonus (Version 1-A)
+    pub const SIX_CARD_ROYAL_FLUSH: u64 = 1000;
+    pub const SIX_CARD_STRAIGHT_FLUSH: u64 = 200;
+    pub const SIX_CARD_FOUR_OF_A_KIND: u64 = 100;
+    pub const SIX_CARD_FULL_HOUSE: u64 = 20;
+    pub const SIX_CARD_FLUSH: u64 = 15;
+    pub const SIX_CARD_STRAIGHT: u64 = 10;
+    pub const SIX_CARD_THREE_OF_A_KIND: u64 = 7;
+
+    // Progressive (WoO v2A, for-one)
+    pub const PROGRESSIVE_MINI_ROYAL_OTHER: u64 = 500;
+    pub const PROGRESSIVE_STRAIGHT_FLUSH: u64 = 70;
+    pub const PROGRESSIVE_THREE_OF_A_KIND: u64 = 60;
+    pub const PROGRESSIVE_STRAIGHT: u64 = 6;
+}
+
 const STATE_VERSION: u8 = 3;
 const CARD_UNKNOWN: u8 = 0xFF;
 const STATE_LEN_BASE: usize = 32;
@@ -240,20 +270,20 @@ fn compare_hands(h1: &(HandRank, [u8; 3]), h2: &(HandRank, [u8; 3])) -> std::cmp
 
 fn ante_bonus_multiplier(hand_rank: HandRank) -> u64 {
     match hand_rank {
-        HandRank::StraightFlush => 5,
-        HandRank::ThreeOfAKind => 4,
-        HandRank::Straight => 1,
+        HandRank::StraightFlush => payouts::ANTE_STRAIGHT_FLUSH,
+        HandRank::ThreeOfAKind => payouts::ANTE_THREE_OF_A_KIND,
+        HandRank::Straight => payouts::ANTE_STRAIGHT,
         _ => 0,
     }
 }
 
 fn pairplus_multiplier(hand_rank: HandRank) -> u64 {
     match hand_rank {
-        HandRank::StraightFlush => 40,
-        HandRank::ThreeOfAKind => 30,
-        HandRank::Straight => 6,
-        HandRank::Flush => 3,
-        HandRank::Pair => 1,
+        HandRank::StraightFlush => payouts::PAIRPLUS_STRAIGHT_FLUSH,
+        HandRank::ThreeOfAKind => payouts::PAIRPLUS_THREE_OF_A_KIND,
+        HandRank::Straight => payouts::PAIRPLUS_STRAIGHT,
+        HandRank::Flush => payouts::PAIRPLUS_FLUSH,
+        HandRank::Pair => payouts::PAIRPLUS_PAIR,
         _ => 0,
     }
 }
@@ -473,13 +503,13 @@ fn evaluate_best_5_of_6_bonus_rank(cards: &[u8; 6]) -> SixCardBonusRank {
 fn six_card_bonus_multiplier(rank: SixCardBonusRank) -> u64 {
     // WoO 6-Card Bonus, Version 1-A.
     match rank {
-        SixCardBonusRank::RoyalFlush => 1000,
-        SixCardBonusRank::StraightFlush => 200,
-        SixCardBonusRank::FourOfAKind => 100,
-        SixCardBonusRank::FullHouse => 20,
-        SixCardBonusRank::Flush => 15,
-        SixCardBonusRank::Straight => 10,
-        SixCardBonusRank::ThreeOfAKind => 7,
+        SixCardBonusRank::RoyalFlush => payouts::SIX_CARD_ROYAL_FLUSH,
+        SixCardBonusRank::StraightFlush => payouts::SIX_CARD_STRAIGHT_FLUSH,
+        SixCardBonusRank::FourOfAKind => payouts::SIX_CARD_FOUR_OF_A_KIND,
+        SixCardBonusRank::FullHouse => payouts::SIX_CARD_FULL_HOUSE,
+        SixCardBonusRank::Flush => payouts::SIX_CARD_FLUSH,
+        SixCardBonusRank::Straight => payouts::SIX_CARD_STRAIGHT,
+        SixCardBonusRank::ThreeOfAKind => payouts::SIX_CARD_THREE_OF_A_KIND,
         SixCardBonusRank::None => 0,
     }
 }
@@ -518,14 +548,16 @@ fn resolve_progressive_return(player_cards: &[u8; 3], progressive_bet: u64) -> u
                 if is_spades {
                     progressive_bet.saturating_mul(THREE_CARD_PROGRESSIVE_BASE_JACKPOT)
                 } else {
-                    progressive_bet.saturating_mul(500)
+                    progressive_bet.saturating_mul(payouts::PROGRESSIVE_MINI_ROYAL_OTHER)
                 }
             } else {
-                progressive_bet.saturating_mul(70)
+                progressive_bet.saturating_mul(payouts::PROGRESSIVE_STRAIGHT_FLUSH)
             }
         }
-        HandRank::ThreeOfAKind => progressive_bet.saturating_mul(60),
-        HandRank::Straight => progressive_bet.saturating_mul(6),
+        HandRank::ThreeOfAKind => {
+            progressive_bet.saturating_mul(payouts::PROGRESSIVE_THREE_OF_A_KIND)
+        }
+        HandRank::Straight => progressive_bet.saturating_mul(payouts::PROGRESSIVE_STRAIGHT),
         _ => 0,
     }
 }
@@ -648,7 +680,10 @@ impl CasinoGame for ThreeCardPoker {
                     Ok(if payout == 0 {
                         GameResult::Continue(vec![])
                     } else {
-                        GameResult::ContinueWithUpdate { payout, logs: vec![] }
+                        GameResult::ContinueWithUpdate {
+                            payout,
+                            logs: vec![],
+                        }
                     })
                 }
                 Move::Deal => {
@@ -675,8 +710,9 @@ impl CasinoGame for ThreeCardPoker {
                         GameResult::Continue(vec![])
                     } else {
                         GameResult::ContinueWithUpdate {
-                                                payout: payout_update, logs: vec![],
-                                                }
+                            payout: payout_update,
+                            logs: vec![],
+                        }
                     })
                 }
                 Move::SetSixCardBonus => {
@@ -686,7 +722,10 @@ impl CasinoGame for ThreeCardPoker {
                     Ok(if payout == 0 {
                         GameResult::Continue(vec![])
                     } else {
-                        GameResult::ContinueWithUpdate { payout, logs: vec![] }
+                        GameResult::ContinueWithUpdate {
+                            payout,
+                            logs: vec![],
+                        }
                     })
                 }
                 Move::SetProgressive => {
@@ -699,7 +738,10 @@ impl CasinoGame for ThreeCardPoker {
                     Ok(if payout == 0 {
                         GameResult::Continue(vec![])
                     } else {
-                        GameResult::ContinueWithUpdate { payout, logs: vec![] }
+                        GameResult::ContinueWithUpdate {
+                            payout,
+                            logs: vec![],
+                        }
                     })
                 }
                 _ => {
@@ -806,7 +848,8 @@ impl CasinoGame for ThreeCardPoker {
                     state.stage = Stage::AwaitingReveal;
                     session.state_blob = serialize_state(&state);
                     Ok(GameResult::ContinueWithUpdate {
-                        payout: -(session.bet as i64), logs: vec![],
+                        payout: -(session.bet as i64),
+                        logs: vec![],
                     })
                 }
                 _ => Err(GameError::InvalidMove),
