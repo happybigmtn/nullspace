@@ -120,6 +120,7 @@ Deliverables:
   - accepts USDT/USDC bids over time/tranches,
   - clears at a uniform price per tranche,
   - produces a final clearing price + allocations + refunds.
+  - enforces a minimum raise threshold (liquidity pairing requirement).
 - **Liquidity launcher**:
   - upon auction finalization, seeds a Uniswap pool at the discovered price with
     the 10% RNG liquidity reserve and matching USDT.

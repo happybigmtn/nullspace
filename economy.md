@@ -24,6 +24,8 @@ Related references:
 
 ## Current Primitive Inventory (codebase reality)
 - RNG (internal): `Player.balances.chips`
+- Freeroll credits: not separated from RNG (must be split from chips to avoid
+  accidental supply inflation).
 - vUSDT (internal stable): `Player.balances.vusdt_balance`
 - AMM (RNG/vUSDT): CPMM with fee + sell tax
 - Vault/CDP: borrow vUSDT against RNG collateral (50% LTV)
@@ -304,6 +306,12 @@ Eligibility requirements:
 - Bonus amount capped by each player's accumulated freeroll credits.
 - Bonus tokens vest 180 days to reduce immediate dumping.
 
+Auction success criteria:
+- Minimum raise threshold must cover liquidity pairing for 10% RNG reserve.
+- If the auction fails to sell at least 50% of its allocation, delay
+  convertibility and run a second auction window or reduce the liquidity
+  reserve proportionally.
+
 ### Bridge Architecture (Commonware <-> Ethereum)
 Canonical liquidity is on Ethereum; Commonware remains the fast game chain.
 Two viable models:
@@ -352,6 +360,10 @@ Debt recovery mechanics:
 - Eligibility filters: proof-of-play, account age, and stake lock.
 - Debt retirements at a haircut (e.g., borrower repays 30-50%) to preserve
   incentives and reduce strategic defaults.
+- If recovery pool funding is short of 20m, retire the remainder using
+  stability fees + a fixed share of house edge over a defined window.
+- Priority order: highest-risk (LTV) positions first, then oldest debt, to
+  minimize systemic insolvency.
 
 ### Feasibility and Impact Assessment
 - BOGO constraint: a 15% bonus pool cannot cover a 20% auction at 1:1 for all
@@ -370,11 +382,16 @@ Debt recovery mechanics:
   should be retired via stability fees and treasury buybacks over time.
 - Treasury impact: excess proceeds should prioritize balance sheet strength
   and protocol insurance before discretionary spending.
+- Auction failure risk: if the minimum raise threshold is not met, delay Phase
+  2 convertibility rather than under-seeding liquidity or underfunding debt
+  retirement.
 
 ### Fee Distribution (USDT to stakers)
 Design requirements:
 - Swap fees must flow to RNG stakers in USDT.
 - Distribution should be on-chain and auditable.
+- Treasury custody (LP NFT + fee streams) should live under the DUNA or its
+  governance-controlled multisig until staker governance is activated.
 
 Options:
 - EVM staking contract receives fees directly (stakers stake EVM RNG).
@@ -393,6 +410,8 @@ To prevent immediate dumping:
 - Allocation: 20% of total RNG supply.
 - Liquidity reserve: 10%.
 - Freeroll bonus pool: up to 15% (BOGO via pro-rata or capped tranche).
+- Minimum raise threshold: >= 50% of auction allocation sold (or explicit
+  USDT floor to cover liquidity pairing).
 - Floor price: derived from Phase 1 internal economy valuation + buffer.
 - Min bid: $25 USDT; max bid per wallet per day: $50k USDT (adjustable).
 - Price discovery: CCA clearing price sets initial pool price.

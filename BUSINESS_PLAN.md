@@ -72,6 +72,7 @@ See `economy.md` and `liquidity.md` for full parameters and allocation design.
 Key mechanics:
 - Emissions: freeroll credits capped at 15% of supply, redeemed only via
   Phase 2 auction participation (BOGO bonus).
+- Credits are non-transferable internal points until Phase 2 redemption.
 - Sinks: house edge, sell tax burn, stability fees.
 - Anti-sybil: vesting schedules, account maturity gating, proof-of-play rules.
 - vUSDT stability: interest accrual, liquidation mechanics, and guardrails.
@@ -81,6 +82,8 @@ Phase 2 proceeds policy:
 - Fund a 20m USDT recovery pool to retire vUSDT debt or bad positions.
 - Allocate any remaining proceeds to treasury runway, insurance, and optional
   supplemental liquidity (governance decides).
+- If the minimum raise threshold is not met, delay convertibility and rerun
+  the auction rather than under-seeding liquidity.
 
 ## Marketing Strategy (Simulation-First)
 Phase 1:

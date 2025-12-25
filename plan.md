@@ -123,6 +123,7 @@ Goal: open controlled convertibility using a continuous clearing auction and ext
 - [ ] Integrate Uniswap v4 liquidity-launcher (CCA):
   - deploy on testnet, run dry run, and validate clearing logic
   - set auction parameters (duration, tranches, caps, allowlist policy)
+  - define minimum raise threshold and fallback plan
   - seed Uniswap v4 pool at clearing price with raised stable + RNG
 - [ ] Implement auction bonus + recovery pool:
   - BOGO bonus distribution tied to CCA receipts + Phase 1 freeroll credits
@@ -140,22 +141,29 @@ staker-owned economy.
 
 - [ ] Form a Wyoming Decentralized Unincorporated Nonprofit Association (DUNA):
   - retain Wyoming counsel and a registered agent
-  - file formation documents with the WY Secretary of State
+  - file DUNA formation/qualification documents with the WY Secretary of State
   - adopt a DUNA operating agreement/DAO charter (governance + treasury rules)
   - define member/staker rights and voting procedures
-  - confirm tax posture and reporting obligations
+  - confirm tax posture and reporting obligations (annual filings)
 - [ ] Governance setup:
   - initial multisig for treasury and LP NFT custody
   - transition plan from multisig to staker governance
   - compliance policy for auctions, swaps, and rewards distribution
+- [ ] Gaming compliance:
+  - jurisdictional analysis and geo-fencing plan
+  - responsible gaming policy and age checks
 
 ## Codebase Deliverables (Expanded Scope)
 Phase 1 (Commonware codebase):
 - [ ] Update emission constants to 15% cap and add freeroll credit ledger with
   expiry + Phase 2 eligibility flags.
+- [ ] Split RNG credits from spendable chips (internal points vs supply ledger)
+  to preserve supply accounting and prevent accidental externalization.
 - [ ] Implement stability fees, liquidation path, and a system debt ceiling.
 - [ ] Add treasury + vesting ledger for Phase 2 allocation buckets.
 - [ ] Add recovery-pool debt retirement hooks (vUSDT debt burn + audit trail).
+- [ ] Add recovery-pool payout ordering (LTV risk + debt age) to reduce
+  insolvency risk.
 - [ ] Add policy state + admin updates for caps/fees/tiers.
 - [ ] UI for credit balances, vesting, debt health, and policy caps.
 

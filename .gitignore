@@ -34,6 +34,8 @@ nohup.out
 *.pid
 data/
 website/dist/
+load-test-*/
+services/auth/dist/
 
 # Editor directories and files
 .vscode/*
