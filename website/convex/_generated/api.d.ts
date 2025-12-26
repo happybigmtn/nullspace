@@ -12,6 +12,7 @@ import type * as admin from "../admin.js";
 import type * as auth from "../auth.js";
 import type * as cron from "../cron.js";
 import type * as entitlements from "../entitlements.js";
+import type * as evm from "../evm.js";
 import type * as http from "../http.js";
 import type * as maintenance from "../maintenance.js";
 import type * as serviceAuth from "../serviceAuth.js";
@@ -30,6 +31,7 @@ declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   cron: typeof cron;
   entitlements: typeof entitlements;
+  evm: typeof evm;
   http: typeof http;
   maintenance: typeof maintenance;
   serviceAuth: typeof serviceAuth;

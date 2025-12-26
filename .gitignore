@@ -50,3 +50,9 @@ services/auth/dist/
 Thumbs.db
 reference/
 .playwright-mcp/
+
+# Backups
+backups/
+
+# Website log
+website.log

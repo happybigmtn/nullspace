@@ -43,18 +43,19 @@ export default function SecurityApp() {
   const readActivityCounts = () => {
     try {
       const all = getActivityItems();
-      const counts = { total: all.length, economy: 0, staking: 0, casino: 0, security: 0, system: 0 };
+      const counts = { total: all.length, economy: 0, staking: 0, bridge: 0, casino: 0, security: 0, system: 0 };
       for (const item of all as any[]) {
         const s = item?.surface;
         if (s === 'economy') counts.economy += 1;
         else if (s === 'staking') counts.staking += 1;
+        else if (s === 'bridge') counts.bridge += 1;
         else if (s === 'casino') counts.casino += 1;
         else if (s === 'security') counts.security += 1;
         else counts.system += 1;
       }
       return counts;
     } catch {
-      return { total: 0, economy: 0, staking: 0, casino: 0, security: 0, system: 0 };
+      return { total: 0, economy: 0, staking: 0, bridge: 0, casino: 0, security: 0, system: 0 };
     }
   };
   const [activityCounts, setActivityCounts] = useState(() => readActivityCounts());

@@ -78,6 +78,60 @@ jobs:
     - name: Run security audit
       run: cargo audit
 
+  SecurityNode:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: |
+          services/auth/package-lock.json
+          website/package-lock.json
+    - name: Install auth dependencies
+      run: cd services/auth && npm ci
+    - name: Audit auth dependencies
+      run: cd services/auth && npm audit --omit=dev --audit-level=high
+      continue-on-error: true
+    - name: Install website dependencies
+      run: cd website && npm ci
+    - name: Audit website dependencies
+      run: cd website && npm audit --omit=dev --audit-level=high
+      continue-on-error: true
+
+  SAST:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    - name: Run Semgrep (auto)
+      uses: returntocorp/semgrep-action@v1
+      with:
+        config: p/ci
+      env:
+        SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+
+  ContainerScan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    - name: Trivy filesystem scan
+      uses: aquasecurity/trivy-action@0.28.0
+      with:
+        scan-type: fs
+        ignore-unfixed: true
+        severity: HIGH,CRITICAL
+        exit-code: 0
+
   React:
     runs-on: ubuntu-latest
     steps:

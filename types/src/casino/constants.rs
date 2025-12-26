@@ -31,6 +31,17 @@ pub const FREEROLL_DAILY_LIMIT_MEMBER: u8 = 10;
 /// Trial cap for new accounts before the membership perk fully unlocks.
 pub const FREEROLL_DAILY_LIMIT_TRIAL: u8 = 3;
 
+/// Minimum cooldown between tournament joins (anti-churn).
+pub const TOURNAMENT_JOIN_COOLDOWN_SECS: u64 = 5 * 60;
+
+/// Proof-of-play thresholds for freeroll weighting.
+pub const PROOF_OF_PLAY_MIN_SESSIONS: u64 = 10;
+pub const PROOF_OF_PLAY_MIN_SECONDS: u64 = 30 * 60;
+
+/// Faucet unlock requirements (reduce churn on new accounts).
+pub const FAUCET_MIN_ACCOUNT_AGE_SECS: u64 = 24 * 60 * 60;
+pub const FAUCET_MIN_SESSIONS: u64 = 3;
+
 /// Tokenomics Constants
 pub const TOTAL_SUPPLY: u64 = 1_000_000_000;
 /// Annual emission rate (basis points) used for freeroll credit awards.

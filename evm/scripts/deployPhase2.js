@@ -109,13 +109,21 @@ async function main() {
     ];
   })();
 
-  const [rngTokenFactory, mockUsdtFactory, recoveryPoolFactory, bogoFactory, bridgeFactory] =
+  const [
+    rngTokenFactory,
+    mockUsdtFactory,
+    recoveryPoolFactory,
+    bogoFactory,
+    bridgeFactory,
+    feeDistributorFactory
+  ] =
     await Promise.all([
       ethers.getContractFactory('RNGToken'),
       ethers.getContractFactory('MockUSDT'),
       ethers.getContractFactory('RecoveryPool'),
       ethers.getContractFactory('BogoDistributor'),
-      ethers.getContractFactory('BridgeLockbox')
+      ethers.getContractFactory('BridgeLockbox'),
+      ethers.getContractFactory('FeeDistributor')
     ]);
 
   const rngToken = await rngTokenFactory.deploy('RNG', 'RNG', TOTAL_SUPPLY, deployer.address);
@@ -210,6 +218,9 @@ async function main() {
   const bridgeLockbox = await bridgeFactory.deploy(deployer.address, await rngToken.getAddress());
   await bridgeLockbox.waitForDeployment();
 
+  const feeDistributor = await feeDistributorFactory.deploy(deployer.address, currencyAddress);
+  await feeDistributor.waitForDeployment();
+
   await (await rngToken.mint(deployer.address, TOTAL_SUPPLY)).wait();
 
   const rng = new ethers.Contract(await rngToken.getAddress(), erc20Abi, deployer);
@@ -242,6 +253,7 @@ async function main() {
     recoveryPool: await recoveryPool.getAddress(),
     bogoDistributor: await bogoDistributor.getAddress(),
     bridgeLockbox: await bridgeLockbox.getAddress(),
+    feeDistributor: await feeDistributor.getAddress(),
     distribution: expectedDistribution,
     auction: auctionAddress,
     allocations: {
@@ -287,6 +299,7 @@ async function main() {
   console.log(`RNG token: ${output.rng}`);
   console.log(`Currency: ${output.currency}`);
   console.log(`Distribution: ${output.distribution}`);
+  console.log(`Fee distributor: ${output.feeDistributor}`);
   console.log(`Auction: ${output.auction}`);
   console.log(`Recovery pool target: ${recoveryTarget.toString()}`);
   console.log(`Saved deployment to ${outPath}`);

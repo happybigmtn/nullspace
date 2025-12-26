@@ -37,10 +37,10 @@ export const WalletPill: React.FC<WalletPillProps> = ({ rng, vusdt, credits, cre
 
   const vault = useMemo(() => {
     if (!vaultStatus.supported) {
-      return { label: 'PASSKEY UNSUPPORTED', className: 'text-gray-500 border-gray-800' };
+      return { label: 'PASSKEY UNAVAILABLE', className: 'text-gray-500 border-gray-800' };
     }
     if (!vaultStatus.enabled) {
-      return { label: 'VAULT OFF', className: 'text-gray-400 border-gray-800' };
+      return { label: 'PASSKEY OFF', className: 'text-gray-400 border-gray-800' };
     }
     if (vaultStatus.unlocked) {
       return { label: 'UNLOCKED', className: 'text-terminal-green border-terminal-green/50' };
@@ -68,7 +68,7 @@ export const WalletPill: React.FC<WalletPillProps> = ({ rng, vusdt, credits, cre
               vault.className,
             ].join(' ')}
           >
-            <span className="text-gray-500">Vault</span>
+            <span className="text-gray-500">Passkey</span>
             <span className="font-bold">{vault.label}</span>
           </Link>
 

@@ -1,0 +1,17 @@
+[Unit]
+Description=Nullspace Validator Node
+After=network.target
+
+[Service]
+Type=simple
+User=nullspace
+Group=nullspace
+WorkingDirectory=/opt/nullspace
+EnvironmentFile=/etc/nullspace/node.env
+ExecStart=/usr/local/bin/nullspace-node --config ${NODE_CONFIG}
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=100000
+
+[Install]
+WantedBy=multi-user.target

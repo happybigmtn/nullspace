@@ -147,6 +147,14 @@ define_instruction_kinds! {
     DepositSavings = 27 => Instruction::DepositSavings { .. } => "DepositSavings" => Instruction::DepositSavings { amount: 1 },
     WithdrawSavings = 28 => Instruction::WithdrawSavings { .. } => "WithdrawSavings" => Instruction::WithdrawSavings { amount: 1 },
     ClaimSavingsRewards = 29 => Instruction::ClaimSavingsRewards => "ClaimSavingsRewards" => Instruction::ClaimSavingsRewards,
+    SeedAmm = 30 => Instruction::SeedAmm { .. } => "SeedAmm" => Instruction::SeedAmm { rng_amount: 1, usdt_amount: 1, bootstrap_price_vusdt_numerator: 1, bootstrap_price_rng_denominator: 1 },
+    FinalizeAmmBootstrap = 31 => Instruction::FinalizeAmmBootstrap => "FinalizeAmmBootstrap" => Instruction::FinalizeAmmBootstrap,
+    SetTreasuryVesting = 32 => Instruction::SetTreasuryVesting { .. } => "SetTreasuryVesting" => Instruction::SetTreasuryVesting { vesting: nullspace_types::casino::TreasuryVestingState::default() },
+    ReleaseTreasuryAllocation = 33 => Instruction::ReleaseTreasuryAllocation { .. } => "ReleaseTreasuryAllocation" => Instruction::ReleaseTreasuryAllocation { bucket: nullspace_types::casino::TreasuryBucket::Treasury, amount: 1 },
+    BridgeWithdraw = 34 => Instruction::BridgeWithdraw { .. } => "BridgeWithdraw" => Instruction::BridgeWithdraw { amount: 1, destination: vec![0; 20] },
+    BridgeDeposit = 35 => Instruction::BridgeDeposit { .. } => "BridgeDeposit" => Instruction::BridgeDeposit { recipient: ed25519::PrivateKey::from_seed(4).public_key(), amount: 1, source: vec![0; 32] },
+    FinalizeBridgeWithdrawal = 36 => Instruction::FinalizeBridgeWithdrawal { .. } => "FinalizeBridgeWithdrawal" => Instruction::FinalizeBridgeWithdrawal { withdrawal_id: 1, source: vec![0; 32] },
+    UpdateOracle = 37 => Instruction::UpdateOracle { .. } => "UpdateOracle" => Instruction::UpdateOracle { price_vusdt_numerator: 1, price_rng_denominator: 1, updated_ts: 0, source: vec![0] },
 }
 
 /// Helper to convert serde_json::Value to a plain JavaScript object
@@ -589,6 +597,96 @@ impl Transaction {
         let tx = ExecutionTransaction::sign(&signer.private_key, nonce, instruction);
         Ok(Transaction { inner: tx })
     }
+
+    /// Sign a bridge withdraw transaction.
+    #[wasm_bindgen]
+    pub fn bridge_withdraw(
+        signer: &Signer,
+        nonce: u64,
+        amount: u64,
+        destination: &[u8],
+    ) -> Result<Transaction, JsValue> {
+        if !(destination.len() == 20 || destination.len() == 32) {
+            return Err(JsValue::from_str(
+                "Invalid destination length (expected 20 or 32 bytes)",
+            ));
+        }
+        let instruction = Instruction::BridgeWithdraw {
+            amount,
+            destination: destination.to_vec(),
+        };
+        let tx = ExecutionTransaction::sign(&signer.private_key, nonce, instruction);
+        Ok(Transaction { inner: tx })
+    }
+
+    /// Admin: sign a bridge deposit transaction.
+    #[wasm_bindgen]
+    pub fn bridge_deposit(
+        signer: &Signer,
+        nonce: u64,
+        recipient_public_key: &[u8],
+        amount: u64,
+        source: &[u8],
+    ) -> Result<Transaction, JsValue> {
+        if source.is_empty() || source.len() > 64 {
+            return Err(JsValue::from_str("Invalid source length"));
+        }
+        let mut buf = recipient_public_key;
+        let recipient = ed25519::PublicKey::read(&mut buf)
+            .map_err(|e| JsValue::from_str(&format!("Invalid public key: {e:?}")))?;
+        if !buf.is_empty() {
+            return Err(JsValue::from_str("Invalid public key length"));
+        }
+        let instruction = Instruction::BridgeDeposit {
+            recipient,
+            amount,
+            source: source.to_vec(),
+        };
+        let tx = ExecutionTransaction::sign(&signer.private_key, nonce, instruction);
+        Ok(Transaction { inner: tx })
+    }
+
+    /// Admin: finalize a bridge withdrawal after execution on EVM.
+    #[wasm_bindgen]
+    pub fn finalize_bridge_withdrawal(
+        signer: &Signer,
+        nonce: u64,
+        withdrawal_id: u64,
+        source: &[u8],
+    ) -> Result<Transaction, JsValue> {
+        if source.is_empty() || source.len() > 64 {
+            return Err(JsValue::from_str("Invalid source length"));
+        }
+        let instruction = Instruction::FinalizeBridgeWithdrawal {
+            withdrawal_id,
+            source: source.to_vec(),
+        };
+        let tx = ExecutionTransaction::sign(&signer.private_key, nonce, instruction);
+        Ok(Transaction { inner: tx })
+    }
+
+    /// Admin: update oracle price data.
+    #[wasm_bindgen]
+    pub fn update_oracle(
+        signer: &Signer,
+        nonce: u64,
+        price_vusdt_numerator: u64,
+        price_rng_denominator: u64,
+        updated_ts: u64,
+        source: &[u8],
+    ) -> Result<Transaction, JsValue> {
+        if source.len() > 64 {
+            return Err(JsValue::from_str("Invalid source length"));
+        }
+        let instruction = Instruction::UpdateOracle {
+            price_vusdt_numerator,
+            price_rng_denominator,
+            updated_ts,
+            source: source.to_vec(),
+        };
+        let tx = ExecutionTransaction::sign(&signer.private_key, nonce, instruction);
+        Ok(Transaction { inner: tx })
+    }
 }
 
 /// Compute the explorer transaction digest (signature excluded).
@@ -692,10 +790,24 @@ pub fn encode_treasury_key() -> Vec<u8> {
     key.encode().to_vec()
 }
 
+/// Encode the treasury vesting key.
+#[wasm_bindgen]
+pub fn encode_treasury_vesting_key() -> Vec<u8> {
+    let key = Key::TreasuryVesting;
+    key.encode().to_vec()
+}
+
 /// Encode the vault registry key.
 #[wasm_bindgen]
 pub fn encode_vault_registry_key() -> Vec<u8> {
     let key = Key::VaultRegistry;
+    key.encode().to_vec()
+}
+
+/// Encode the player registry key.
+#[wasm_bindgen]
+pub fn encode_player_registry_key() -> Vec<u8> {
+    let key = Key::PlayerRegistry;
     key.encode().to_vec()
 }
 
@@ -724,6 +836,27 @@ pub fn encode_staker_key(public_key: &[u8]) -> Result<Vec<u8>, JsValue> {
         .map_err(|e| JsValue::from_str(&format!("Invalid public key: {e:?}")))?;
     let key = Key::Staker(pk);
     Ok(key.encode().to_vec())
+}
+
+/// Encode the bridge state key.
+#[wasm_bindgen]
+pub fn encode_bridge_state_key() -> Vec<u8> {
+    let key = Key::BridgeState;
+    key.encode().to_vec()
+}
+
+/// Encode a bridge withdrawal key.
+#[wasm_bindgen]
+pub fn encode_bridge_withdrawal_key(withdrawal_id: u64) -> Vec<u8> {
+    let key = Key::BridgeWithdrawal(withdrawal_id);
+    key.encode().to_vec()
+}
+
+/// Encode the oracle state key.
+#[wasm_bindgen]
+pub fn encode_oracle_state_key() -> Vec<u8> {
+    let key = Key::OracleState;
+    key.encode().to_vec()
 }
 
 /// Encode UpdatesFilter::All
@@ -766,6 +899,19 @@ pub fn encode_query_latest() -> Vec<u8> {
 pub fn encode_query_index(index: u64) -> Vec<u8> {
     let query = Query::Index(index);
     query.encode().to_vec()
+}
+
+fn treasury_bucket_label(bucket: nullspace_types::casino::TreasuryBucket) -> &'static str {
+    use nullspace_types::casino::TreasuryBucket;
+
+    match bucket {
+        TreasuryBucket::Auction => "auction",
+        TreasuryBucket::Liquidity => "liquidity",
+        TreasuryBucket::Bonus => "bonus",
+        TreasuryBucket::Player => "player",
+        TreasuryBucket::Treasury => "treasury",
+        TreasuryBucket::Team => "team",
+    }
 }
 
 // Helper function to convert Value to JSON
@@ -811,6 +957,11 @@ fn decode_value(value: Value) -> Result<JsValue, JsValue> {
                 "last_deposit_block": player.session.last_deposit_block,
                 "daily_net_sell": player.session.daily_net_sell,
                 "daily_net_buy": player.session.daily_net_buy,
+                "sessions_played": player.session.sessions_played,
+                "play_seconds": player.session.play_seconds,
+                "last_session_ts": player.session.last_session_ts,
+                "bridge_daily_day": player.session.bridge_daily_day,
+                "bridge_daily_withdrawn": player.session.bridge_daily_withdrawn,
                 "aura_meter": player.modifiers.aura_meter,
                 "tournaments_played_today": player.tournament.tournaments_played_today,
                 "last_tournament_ts": player.tournament.last_tournament_ts,
@@ -957,7 +1108,11 @@ fn decode_value(value: Value) -> Result<JsValue, JsValue> {
                 "fee_basis_points": pool.fee_basis_points,
                 "sell_tax_basis_points": pool.sell_tax_basis_points,
                 "bootstrap_price_vusdt_numerator": pool.bootstrap_price_vusdt_numerator,
-                "bootstrap_price_rng_denominator": pool.bootstrap_price_rng_denominator
+                "bootstrap_price_rng_denominator": pool.bootstrap_price_rng_denominator,
+                "bootstrap_finalized": pool.bootstrap_finalized,
+                "bootstrap_final_price_vusdt_numerator": pool.bootstrap_final_price_vusdt_numerator,
+                "bootstrap_final_price_rng_denominator": pool.bootstrap_final_price_rng_denominator,
+                "bootstrap_finalized_ts": pool.bootstrap_finalized_ts
             })
         }
         Value::Policy(policy) => {
@@ -983,7 +1138,16 @@ fn decode_value(value: Value) -> Result<JsValue, JsValue> {
                 "debt_ceiling_bps": policy.debt_ceiling_bps,
                 "credit_immediate_bps": policy.credit_immediate_bps,
                 "credit_vest_secs": policy.credit_vest_secs,
-                "credit_expiry_secs": policy.credit_expiry_secs
+                "credit_expiry_secs": policy.credit_expiry_secs,
+                "bridge_paused": policy.bridge_paused,
+                "bridge_daily_limit": policy.bridge_daily_limit,
+                "bridge_daily_limit_per_account": policy.bridge_daily_limit_per_account,
+                "bridge_min_withdraw": policy.bridge_min_withdraw,
+                "bridge_max_withdraw": policy.bridge_max_withdraw,
+                "bridge_delay_secs": policy.bridge_delay_secs,
+                "oracle_enabled": policy.oracle_enabled,
+                "oracle_max_deviation_bps": policy.oracle_max_deviation_bps,
+                "oracle_stale_secs": policy.oracle_stale_secs
             })
         }
         Value::Treasury(treasury) => {
@@ -997,6 +1161,41 @@ fn decode_value(value: Value) -> Result<JsValue, JsValue> {
                 "team_allocation_rng": treasury.team_allocation_rng
             })
         }
+        Value::TreasuryVesting(vesting) => {
+            serde_json::json!({
+                "type": "TreasuryVesting",
+                "auction": {
+                    "start_ts": vesting.auction.start_ts,
+                    "duration_secs": vesting.auction.duration_secs,
+                    "released": vesting.auction.released
+                },
+                "liquidity": {
+                    "start_ts": vesting.liquidity.start_ts,
+                    "duration_secs": vesting.liquidity.duration_secs,
+                    "released": vesting.liquidity.released
+                },
+                "bonus": {
+                    "start_ts": vesting.bonus.start_ts,
+                    "duration_secs": vesting.bonus.duration_secs,
+                    "released": vesting.bonus.released
+                },
+                "player": {
+                    "start_ts": vesting.player.start_ts,
+                    "duration_secs": vesting.player.duration_secs,
+                    "released": vesting.player.released
+                },
+                "treasury": {
+                    "start_ts": vesting.treasury.start_ts,
+                    "duration_secs": vesting.treasury.duration_secs,
+                    "released": vesting.treasury.released
+                },
+                "team": {
+                    "start_ts": vesting.team.start_ts,
+                    "duration_secs": vesting.team.duration_secs,
+                    "released": vesting.team.released
+                }
+            })
+        }
         Value::VaultRegistry(registry) => {
             let vaults: Vec<_> = registry
                 .vaults
@@ -1006,6 +1205,17 @@ fn decode_value(value: Value) -> Result<JsValue, JsValue> {
             serde_json::json!({
                 "type": "VaultRegistry",
                 "vaults": vaults
+            })
+        }
+        Value::PlayerRegistry(registry) => {
+            let players: Vec<_> = registry
+                .players
+                .iter()
+                .map(|pk| hex(&pk.encode()))
+                .collect();
+            serde_json::json!({
+                "type": "PlayerRegistry",
+                "players": players
             })
         }
         Value::SavingsPool(pool) => {
@@ -1024,6 +1234,37 @@ fn decode_value(value: Value) -> Result<JsValue, JsValue> {
                 "deposit_balance": balance.deposit_balance,
                 "reward_debt_x18": balance.reward_debt_x18.to_string(),
                 "unclaimed_rewards": balance.unclaimed_rewards
+            })
+        }
+        Value::BridgeState(state) => {
+            serde_json::json!({
+                "type": "BridgeState",
+                "daily_day": state.daily_day,
+                "daily_withdrawn": state.daily_withdrawn,
+                "total_withdrawn": state.total_withdrawn,
+                "total_deposited": state.total_deposited,
+                "next_withdrawal_id": state.next_withdrawal_id
+            })
+        }
+        Value::BridgeWithdrawal(withdrawal) => {
+            serde_json::json!({
+                "type": "BridgeWithdrawal",
+                "id": withdrawal.id,
+                "player": hex(&withdrawal.player.encode()),
+                "amount": withdrawal.amount,
+                "destination": hex(&withdrawal.destination),
+                "requested_ts": withdrawal.requested_ts,
+                "available_ts": withdrawal.available_ts,
+                "fulfilled": withdrawal.fulfilled
+            })
+        }
+        Value::OracleState(state) => {
+            serde_json::json!({
+                "type": "OracleState",
+                "price_vusdt_numerator": state.price_vusdt_numerator,
+                "price_rng_denominator": state.price_rng_denominator,
+                "updated_ts": state.updated_ts,
+                "source": hex(&state.source)
             })
         }
         Value::LpBalance(bal) => {
@@ -1421,7 +1662,11 @@ fn decode_event(event: &Event) -> Result<serde_json::Value, JsValue> {
                     "fee_basis_points": amm.fee_basis_points,
                     "sell_tax_basis_points": amm.sell_tax_basis_points,
                     "bootstrap_price_vusdt_numerator": amm.bootstrap_price_vusdt_numerator,
-                    "bootstrap_price_rng_denominator": amm.bootstrap_price_rng_denominator
+                    "bootstrap_price_rng_denominator": amm.bootstrap_price_rng_denominator,
+                    "bootstrap_finalized": amm.bootstrap_finalized,
+                    "bootstrap_final_price_vusdt_numerator": amm.bootstrap_final_price_vusdt_numerator,
+                    "bootstrap_final_price_rng_denominator": amm.bootstrap_final_price_rng_denominator,
+                    "bootstrap_finalized_ts": amm.bootstrap_finalized_ts
                 },
                 "player_balances": {
                     "chips": player_balances.chips,
@@ -1483,7 +1728,11 @@ fn decode_event(event: &Event) -> Result<serde_json::Value, JsValue> {
                     "fee_basis_points": amm.fee_basis_points,
                     "sell_tax_basis_points": amm.sell_tax_basis_points,
                     "bootstrap_price_vusdt_numerator": amm.bootstrap_price_vusdt_numerator,
-                    "bootstrap_price_rng_denominator": amm.bootstrap_price_rng_denominator
+                    "bootstrap_price_rng_denominator": amm.bootstrap_price_rng_denominator,
+                    "bootstrap_finalized": amm.bootstrap_finalized,
+                    "bootstrap_final_price_vusdt_numerator": amm.bootstrap_final_price_vusdt_numerator,
+                    "bootstrap_final_price_rng_denominator": amm.bootstrap_final_price_rng_denominator,
+                    "bootstrap_finalized_ts": amm.bootstrap_finalized_ts
                 },
                 "player_balances": {
                     "chips": player_balances.chips,
@@ -1526,7 +1775,11 @@ fn decode_event(event: &Event) -> Result<serde_json::Value, JsValue> {
                     "fee_basis_points": amm.fee_basis_points,
                     "sell_tax_basis_points": amm.sell_tax_basis_points,
                     "bootstrap_price_vusdt_numerator": amm.bootstrap_price_vusdt_numerator,
-                    "bootstrap_price_rng_denominator": amm.bootstrap_price_rng_denominator
+                    "bootstrap_price_rng_denominator": amm.bootstrap_price_rng_denominator,
+                    "bootstrap_finalized": amm.bootstrap_finalized,
+                    "bootstrap_final_price_vusdt_numerator": amm.bootstrap_final_price_vusdt_numerator,
+                    "bootstrap_final_price_rng_denominator": amm.bootstrap_final_price_rng_denominator,
+                    "bootstrap_finalized_ts": amm.bootstrap_finalized_ts
                 },
                 "player_balances": {
                     "chips": player_balances.chips,
@@ -1537,6 +1790,90 @@ fn decode_event(event: &Event) -> Result<serde_json::Value, JsValue> {
                     "tournament_shields": player_balances.tournament_shields,
                     "tournament_doubles": player_balances.tournament_doubles,
                     "active_tournament": player_balances.active_tournament
+                }
+            })
+        }
+        Event::AmmBootstrapped {
+            admin,
+            rng_amount,
+            vusdt_amount,
+            shares_minted,
+            reserve_rng,
+            reserve_vusdt,
+            bootstrap_price_vusdt_numerator,
+            bootstrap_price_rng_denominator,
+            amm,
+            house,
+        } => {
+            serde_json::json!({
+                "type": "AmmBootstrapped",
+                "admin": hex(&admin.encode()),
+                "rng_amount": rng_amount,
+                "vusdt_amount": vusdt_amount,
+                "shares_minted": shares_minted,
+                "reserve_rng": reserve_rng,
+                "reserve_vusdt": reserve_vusdt,
+                "bootstrap_price_vusdt_numerator": bootstrap_price_vusdt_numerator,
+                "bootstrap_price_rng_denominator": bootstrap_price_rng_denominator,
+                "amm": {
+                    "reserve_rng": amm.reserve_rng,
+                    "reserve_vusdt": amm.reserve_vusdt,
+                    "total_shares": amm.total_shares,
+                    "fee_basis_points": amm.fee_basis_points,
+                    "sell_tax_basis_points": amm.sell_tax_basis_points,
+                    "bootstrap_price_vusdt_numerator": amm.bootstrap_price_vusdt_numerator,
+                    "bootstrap_price_rng_denominator": amm.bootstrap_price_rng_denominator,
+                    "bootstrap_finalized": amm.bootstrap_finalized,
+                    "bootstrap_final_price_vusdt_numerator": amm.bootstrap_final_price_vusdt_numerator,
+                    "bootstrap_final_price_rng_denominator": amm.bootstrap_final_price_rng_denominator,
+                    "bootstrap_finalized_ts": amm.bootstrap_finalized_ts
+                },
+                "house": {
+                    "current_epoch": house.current_epoch,
+                    "epoch_start_ts": house.epoch_start_ts,
+                    "net_pnl": house.net_pnl.to_string(),
+                    "total_staked_amount": house.total_staked_amount,
+                    "total_voting_power": house.total_voting_power.to_string(),
+                    "accumulated_fees": house.accumulated_fees,
+                    "total_burned": house.total_burned,
+                    "total_issuance": house.total_issuance,
+                    "total_vusdt_debt": house.total_vusdt_debt,
+                    "stability_fees_accrued": house.stability_fees_accrued,
+                    "recovery_pool_vusdt": house.recovery_pool_vusdt,
+                    "recovery_pool_retired": house.recovery_pool_retired,
+                    "three_card_progressive_jackpot": house.three_card_progressive_jackpot,
+                    "uth_progressive_jackpot": house.uth_progressive_jackpot,
+                    "staking_reward_per_voting_power_x18": house.staking_reward_per_voting_power_x18.to_string(),
+                    "staking_reward_pool": house.staking_reward_pool,
+                    "staking_reward_carry": house.staking_reward_carry
+                }
+            })
+        }
+        Event::AmmBootstrapFinalized {
+            admin,
+            price_vusdt_numerator,
+            price_rng_denominator,
+            finalized_ts,
+            amm,
+        } => {
+            serde_json::json!({
+                "type": "AmmBootstrapFinalized",
+                "admin": hex(&admin.encode()),
+                "price_vusdt_numerator": price_vusdt_numerator,
+                "price_rng_denominator": price_rng_denominator,
+                "finalized_ts": finalized_ts,
+                "amm": {
+                    "reserve_rng": amm.reserve_rng,
+                    "reserve_vusdt": amm.reserve_vusdt,
+                    "total_shares": amm.total_shares,
+                    "fee_basis_points": amm.fee_basis_points,
+                    "sell_tax_basis_points": amm.sell_tax_basis_points,
+                    "bootstrap_price_vusdt_numerator": amm.bootstrap_price_vusdt_numerator,
+                    "bootstrap_price_rng_denominator": amm.bootstrap_price_rng_denominator,
+                    "bootstrap_finalized": amm.bootstrap_finalized,
+                    "bootstrap_final_price_vusdt_numerator": amm.bootstrap_final_price_vusdt_numerator,
+                    "bootstrap_final_price_rng_denominator": amm.bootstrap_final_price_rng_denominator,
+                    "bootstrap_finalized_ts": amm.bootstrap_finalized_ts
                 }
             })
         }
@@ -1566,7 +1903,28 @@ fn decode_event(event: &Event) -> Result<serde_json::Value, JsValue> {
                     "debt_ceiling_bps": policy.debt_ceiling_bps,
                     "credit_immediate_bps": policy.credit_immediate_bps,
                     "credit_vest_secs": policy.credit_vest_secs,
-                    "credit_expiry_secs": policy.credit_expiry_secs
+                    "credit_expiry_secs": policy.credit_expiry_secs,
+                    "bridge_paused": policy.bridge_paused,
+                    "bridge_daily_limit": policy.bridge_daily_limit,
+                    "bridge_daily_limit_per_account": policy.bridge_daily_limit_per_account,
+                    "bridge_min_withdraw": policy.bridge_min_withdraw,
+                    "bridge_max_withdraw": policy.bridge_max_withdraw,
+                    "bridge_delay_secs": policy.bridge_delay_secs,
+                    "oracle_enabled": policy.oracle_enabled,
+                    "oracle_max_deviation_bps": policy.oracle_max_deviation_bps,
+                    "oracle_stale_secs": policy.oracle_stale_secs
+                }
+            })
+        }
+        Event::OracleUpdated { admin, oracle } => {
+            serde_json::json!({
+                "type": "OracleUpdated",
+                "admin": hex(&admin.encode()),
+                "oracle": {
+                    "price_vusdt_numerator": oracle.price_vusdt_numerator,
+                    "price_rng_denominator": oracle.price_rng_denominator,
+                    "updated_ts": oracle.updated_ts,
+                    "source": hex(&oracle.source)
                 }
             })
         }
@@ -1580,6 +1938,158 @@ fn decode_event(event: &Event) -> Result<serde_json::Value, JsValue> {
                     "player_allocation_rng": treasury.player_allocation_rng,
                     "treasury_allocation_rng": treasury.treasury_allocation_rng,
                     "team_allocation_rng": treasury.team_allocation_rng
+                }
+            })
+        }
+        Event::TreasuryVestingUpdated { vesting } => {
+            serde_json::json!({
+                "type": "TreasuryVestingUpdated",
+                "vesting": {
+                    "auction": {
+                        "start_ts": vesting.auction.start_ts,
+                        "duration_secs": vesting.auction.duration_secs,
+                        "released": vesting.auction.released
+                    },
+                    "liquidity": {
+                        "start_ts": vesting.liquidity.start_ts,
+                        "duration_secs": vesting.liquidity.duration_secs,
+                        "released": vesting.liquidity.released
+                    },
+                    "bonus": {
+                        "start_ts": vesting.bonus.start_ts,
+                        "duration_secs": vesting.bonus.duration_secs,
+                        "released": vesting.bonus.released
+                    },
+                    "player": {
+                        "start_ts": vesting.player.start_ts,
+                        "duration_secs": vesting.player.duration_secs,
+                        "released": vesting.player.released
+                    },
+                    "treasury": {
+                        "start_ts": vesting.treasury.start_ts,
+                        "duration_secs": vesting.treasury.duration_secs,
+                        "released": vesting.treasury.released
+                    },
+                    "team": {
+                        "start_ts": vesting.team.start_ts,
+                        "duration_secs": vesting.team.duration_secs,
+                        "released": vesting.team.released
+                    }
+                }
+            })
+        }
+        Event::TreasuryAllocationReleased {
+            admin,
+            bucket,
+            amount,
+            total_released,
+            total_vested,
+            total_allocation,
+        } => {
+            serde_json::json!({
+                "type": "TreasuryAllocationReleased",
+                "admin": hex(&admin.encode()),
+                "bucket": {
+                    "id": (*bucket) as u8,
+                    "label": treasury_bucket_label(*bucket)
+                },
+                "amount": amount,
+                "total_released": total_released,
+                "total_vested": total_vested,
+                "total_allocation": total_allocation
+            })
+        }
+        Event::BridgeWithdrawalRequested {
+            id,
+            player,
+            amount,
+            destination,
+            requested_ts,
+            available_ts,
+            player_balances,
+            bridge,
+        } => {
+            serde_json::json!({
+                "type": "BridgeWithdrawalRequested",
+                "id": id,
+                "player": hex(&player.encode()),
+                "amount": amount,
+                "destination": hex(&destination),
+                "requested_ts": requested_ts,
+                "available_ts": available_ts,
+                "player_balances": {
+                    "chips": player_balances.chips,
+                    "vusdt_balance": player_balances.vusdt_balance,
+                    "shields": player_balances.shields,
+                    "doubles": player_balances.doubles,
+                    "tournament_chips": player_balances.tournament_chips,
+                    "tournament_shields": player_balances.tournament_shields,
+                    "tournament_doubles": player_balances.tournament_doubles,
+                    "active_tournament": player_balances.active_tournament
+                },
+                "bridge": {
+                    "daily_day": bridge.daily_day,
+                    "daily_withdrawn": bridge.daily_withdrawn,
+                    "total_withdrawn": bridge.total_withdrawn,
+                    "total_deposited": bridge.total_deposited,
+                    "next_withdrawal_id": bridge.next_withdrawal_id
+                }
+            })
+        }
+        Event::BridgeWithdrawalFinalized {
+            id,
+            admin,
+            amount,
+            source,
+            fulfilled_ts,
+            bridge,
+        } => {
+            serde_json::json!({
+                "type": "BridgeWithdrawalFinalized",
+                "id": id,
+                "admin": hex(&admin.encode()),
+                "amount": amount,
+                "source": hex(&source),
+                "fulfilled_ts": fulfilled_ts,
+                "bridge": {
+                    "daily_day": bridge.daily_day,
+                    "daily_withdrawn": bridge.daily_withdrawn,
+                    "total_withdrawn": bridge.total_withdrawn,
+                    "total_deposited": bridge.total_deposited,
+                    "next_withdrawal_id": bridge.next_withdrawal_id
+                }
+            })
+        }
+        Event::BridgeDepositCredited {
+            admin,
+            recipient,
+            amount,
+            source,
+            player_balances,
+            bridge,
+        } => {
+            serde_json::json!({
+                "type": "BridgeDepositCredited",
+                "admin": hex(&admin.encode()),
+                "recipient": hex(&recipient.encode()),
+                "amount": amount,
+                "source": hex(&source),
+                "player_balances": {
+                    "chips": player_balances.chips,
+                    "vusdt_balance": player_balances.vusdt_balance,
+                    "shields": player_balances.shields,
+                    "doubles": player_balances.doubles,
+                    "tournament_chips": player_balances.tournament_chips,
+                    "tournament_shields": player_balances.tournament_shields,
+                    "tournament_doubles": player_balances.tournament_doubles,
+                    "active_tournament": player_balances.active_tournament
+                },
+                "bridge": {
+                    "daily_day": bridge.daily_day,
+                    "daily_withdrawn": bridge.daily_withdrawn,
+                    "total_withdrawn": bridge.total_withdrawn,
+                    "total_deposited": bridge.total_deposited,
+                    "next_withdrawal_id": bridge.next_withdrawal_id
                 }
             })
         }

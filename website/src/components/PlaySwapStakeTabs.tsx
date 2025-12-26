@@ -8,6 +8,7 @@ type TabsProps = {
 export const PlaySwapStakeTabs: React.FC<TabsProps> = ({ className }) => {
   const pathname = useLocation().pathname;
   const economyActive = pathname.startsWith('/swap') || pathname.startsWith('/borrow') || pathname.startsWith('/liquidity');
+  const bridgeActive = pathname.startsWith('/bridge');
 
   const tabClass = (active: boolean) =>
     [
@@ -27,6 +28,9 @@ export const PlaySwapStakeTabs: React.FC<TabsProps> = ({ className }) => {
       </Link>
       <Link to="/stake" className={tabClass(pathname.startsWith('/stake'))}>
         Stake
+      </Link>
+      <Link to="/bridge" className={tabClass(bridgeActive)}>
+        Bridge
       </Link>
       <Link to="/security" className={tabClass(pathname.startsWith('/security'))}>
         Vault

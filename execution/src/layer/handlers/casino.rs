@@ -93,6 +93,45 @@ fn award_freeroll_credits(
             player.balances.freeroll_credits_locked.saturating_add(locked);
     }
 }
+
+fn record_play_session(
+    player: &mut nullspace_types::casino::Player,
+    session: &nullspace_types::casino::GameSession,
+    now: u64,
+) {
+    let created_at_secs = session.created_at.saturating_mul(3);
+    let duration_secs = now.saturating_sub(created_at_secs).max(1);
+    player.session.sessions_played = player.session.sessions_played.saturating_add(1);
+    player.session.play_seconds = player.session.play_seconds.saturating_add(duration_secs);
+    player.session.last_session_ts = now;
+}
+
+fn proof_of_play_multiplier(
+    player: &nullspace_types::casino::Player,
+    now: u64,
+) -> f64 {
+    let min_sessions = nullspace_types::casino::PROOF_OF_PLAY_MIN_SESSIONS as f64;
+    let min_seconds = nullspace_types::casino::PROOF_OF_PLAY_MIN_SECONDS as f64;
+    let session_weight = if min_sessions <= 0.0 {
+        1.0
+    } else {
+        (player.session.sessions_played as f64 / min_sessions).min(1.0)
+    };
+    let seconds_weight = if min_seconds <= 0.0 {
+        1.0
+    } else {
+        (player.session.play_seconds as f64 / min_seconds).min(1.0)
+    };
+    let activity_weight = (session_weight + seconds_weight) / 2.0;
+    let age_secs = now.saturating_sub(player.profile.created_ts) as f64;
+    let age_weight = if nullspace_types::casino::ACCOUNT_TIER_NEW_SECS == 0 {
+        1.0
+    } else {
+        (age_secs / nullspace_types::casino::ACCOUNT_TIER_NEW_SECS as f64).min(1.0)
+    };
+    let weight = 0.2 + 0.8 * (activity_weight * age_weight);
+    weight.clamp(0.05, 1.0)
+}
 use commonware_codec::ReadExt;
 use commonware_utils::from_hex;
 use std::sync::OnceLock;
@@ -116,6 +155,18 @@ fn admin_public_key() -> Option<PublicKey> {
 
 impl<'a, S: State> Layer<'a, S> {
     // === Casino Handler Methods ===
+
+    async fn ensure_player_registry(&mut self, public: &PublicKey) -> anyhow::Result<()> {
+        let mut registry = self.get_or_init_player_registry().await?;
+        if registry.players.iter().any(|pk| pk == public) {
+            return Ok(());
+        }
+        registry.players.push(public.clone());
+        registry.players.sort_unstable();
+        registry.players.dedup();
+        self.insert(Key::PlayerRegistry, Value::PlayerRegistry(registry));
+        Ok(())
+    }
 
     async fn casino_player_or_error(
         &mut self,
@@ -199,6 +250,7 @@ impl<'a, S: State> Layer<'a, S> {
             Key::CasinoPlayer(public.clone()),
             Value::CasinoPlayer(player.clone()),
         );
+        self.ensure_player_registry(public).await?;
 
         // Update leaderboard with initial chips
         self.update_casino_leaderboard(public, &player).await?;
@@ -222,6 +274,32 @@ impl<'a, S: State> Layer<'a, S> {
         // Daily faucet rate limiting (dev/testing).
         let current_block = self.seed.view;
         let current_time_sec = current_block.saturating_mul(3);
+        let account_age = if player.profile.created_ts == 0 {
+            0
+        } else {
+            current_time_sec.saturating_sub(player.profile.created_ts)
+        };
+        if account_age < nullspace_types::casino::FAUCET_MIN_ACCOUNT_AGE_SECS
+            && player.session.sessions_played < nullspace_types::casino::FAUCET_MIN_SESSIONS
+        {
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_RATE_LIMITED,
+                "Faucet locked until you have some play time",
+            ));
+        }
+        let block_delta = current_block.saturating_sub(player.session.last_deposit_block);
+        if player.session.last_deposit_block != 0
+            && block_delta < nullspace_types::casino::FAUCET_RATE_LIMIT
+        {
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_RATE_LIMITED,
+                "Faucet cooldown active, try again later",
+            ));
+        }
         let current_day = current_time_sec / 86_400;
         let last_deposit_day = player.session.last_deposit_block.saturating_mul(3) / 86_400;
         let is_rate_limited =
@@ -300,6 +378,7 @@ impl<'a, S: State> Layer<'a, S> {
             Ok(player) => player,
             Err(events) => return Ok(events),
         };
+        self.ensure_player_registry(public).await?;
 
         // Determine play mode (cash vs tournament)
         let mut is_tournament = false;
@@ -435,6 +514,7 @@ impl<'a, S: State> Layer<'a, S> {
 
         // Handle immediate result (e.g. Natural Blackjack)
         if !matches!(result, crate::casino::GameResult::Continue(_)) {
+            let now = self.seed.view.saturating_mul(3);
             if let Some(Value::CasinoPlayer(mut player)) =
                 self.get(&Key::CasinoPlayer(public.clone())).await?
             {
@@ -474,6 +554,7 @@ impl<'a, S: State> Layer<'a, S> {
                         } else {
                             player.balances.chips
                         };
+                        record_play_session(&mut player, &session, now);
                         self.insert(
                             Key::CasinoPlayer(public.clone()),
                             Value::CasinoPlayer(player.clone()),
@@ -511,6 +592,7 @@ impl<'a, S: State> Layer<'a, S> {
                         } else {
                             player.balances.chips
                         };
+                        record_play_session(&mut player, &session, now);
                         self.insert(
                             Key::CasinoPlayer(public.clone()),
                             Value::CasinoPlayer(player.clone()),
@@ -561,6 +643,7 @@ impl<'a, S: State> Layer<'a, S> {
                         } else {
                             player.balances.chips
                         };
+                        record_play_session(&mut player, &session, now);
                         self.insert(
                             Key::CasinoPlayer(public.clone()),
                             Value::CasinoPlayer(player.clone()),
@@ -605,6 +688,7 @@ impl<'a, S: State> Layer<'a, S> {
             Ok(session) => session,
             Err(events) => return Ok(events),
         };
+        let now = self.seed.view.saturating_mul(3);
 
         // Process move
         session.move_count += 1;
@@ -803,6 +887,7 @@ impl<'a, S: State> Layer<'a, S> {
                         self.update_house_pnl(-(payout as i128)).await?;
                     }
 
+                    record_play_session(&mut player, &session, now);
                     self.insert(
                         Key::CasinoPlayer(public.clone()),
                         Value::CasinoPlayer(player.clone()),
@@ -872,6 +957,7 @@ impl<'a, S: State> Layer<'a, S> {
                         self.update_house_pnl(-(refund as i128)).await?;
                     }
 
+                    record_play_session(&mut player, &session, now);
                     self.insert(
                         Key::CasinoPlayer(public.clone()),
                         Value::CasinoPlayer(player.clone()),
@@ -946,6 +1032,7 @@ impl<'a, S: State> Layer<'a, S> {
                         }
                     }
                     let final_chips = *stack;
+                    record_play_session(&mut player, &session, now);
                     self.insert(
                         Key::CasinoPlayer(public.clone()),
                         Value::CasinoPlayer(player.clone()),
@@ -1037,6 +1124,7 @@ impl<'a, S: State> Layer<'a, S> {
                     player.clear_active_modifiers();
                     Self::update_aura_meter_for_completion(&mut player, &session, false);
 
+                    record_play_session(&mut player, &session, now);
                     self.insert(
                         Key::CasinoPlayer(public.clone()),
                         Value::CasinoPlayer(player.clone()),
@@ -1109,6 +1197,7 @@ impl<'a, S: State> Layer<'a, S> {
                     player.clear_active_modifiers();
                     Self::update_aura_meter_for_completion(&mut player, &session, false);
 
+                    record_play_session(&mut player, &session, now);
                     self.insert(
                         Key::CasinoPlayer(public.clone()),
                         Value::CasinoPlayer(player.clone()),
@@ -1249,6 +1338,19 @@ impl<'a, S: State> Layer<'a, S> {
 
         if current_day > last_played_day {
             player.tournament.tournaments_played_today = 0;
+        }
+
+        if player.tournament.last_tournament_ts > 0 {
+            let since_last =
+                current_time_sec.saturating_sub(player.tournament.last_tournament_ts);
+            if since_last < nullspace_types::casino::TOURNAMENT_JOIN_COOLDOWN_SECS {
+                return Ok(casino_error_vec(
+                    public,
+                    None,
+                    nullspace_types::casino::ERROR_TOURNAMENT_LIMIT_REACHED,
+                    "Tournament cooldown active, try again later",
+                ));
+            }
         }
 
         let base_limit = if player.tournament.daily_limit > 0 {
@@ -1545,12 +1647,13 @@ impl<'a, S: State> Layer<'a, S> {
         let policy = self.get_or_init_policy().await?;
 
         // Gather player tournament chips
-        let mut rankings: Vec<(PublicKey, u64)> = Vec::new();
+        let mut rankings: Vec<(PublicKey, u64, f64)> = Vec::new();
         for player_pk in &tournament.players {
             if let Some(Value::CasinoPlayer(p)) =
                 self.get(&Key::CasinoPlayer(player_pk.clone())).await?
             {
-                rankings.push((player_pk.clone(), p.tournament.chips));
+                let proof_weight = proof_of_play_multiplier(&p, now);
+                rankings.push((player_pk.clone(), p.tournament.chips, proof_weight));
             }
         }
 
@@ -1565,8 +1668,10 @@ impl<'a, S: State> Layer<'a, S> {
         // Calculate payout weights (1/rank harmonic distribution)
         let mut weights = Vec::with_capacity(num_winners);
         let mut total_weight = 0.0;
-        for i in 1..=num_winners {
-            let w = 1.0 / (i as f64);
+        for i in 0..num_winners {
+            let base_weight = 1.0 / ((i + 1) as f64);
+            let proof_weight = rankings[i].2;
+            let w = base_weight * proof_weight;
             weights.push(w);
             total_weight += w;
         }
@@ -1574,7 +1679,7 @@ impl<'a, S: State> Layer<'a, S> {
         // Distribute Prize Pool
         if total_weight > 0.0 && tournament.prize_pool > 0 {
             for i in 0..num_winners {
-                let (pk, _) = &rankings[i];
+                let (pk, _, _) = &rankings[i];
                 let weight = weights[i];
                 let share = weight / total_weight;
                 let payout = (share * tournament.prize_pool as f64) as u64;
@@ -1612,6 +1717,10 @@ impl<'a, S: State> Layer<'a, S> {
         }
 
         tournament.phase = nullspace_types::casino::TournamentPhase::Complete;
+        let rankings_summary: Vec<(PublicKey, u64)> = rankings
+            .iter()
+            .map(|(pk, chips, _)| (pk.clone(), *chips))
+            .collect();
         self.insert(
             Key::Tournament(tournament_id),
             Value::Tournament(tournament),
@@ -1619,7 +1728,7 @@ impl<'a, S: State> Layer<'a, S> {
 
         Ok(vec![Event::TournamentEnded {
             id: tournament_id,
-            rankings,
+            rankings: rankings_summary,
         }])
     }
 

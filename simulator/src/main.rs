@@ -112,6 +112,38 @@ struct Args {
     /// Max concurrent proofs built for update filtering (0 uses default).
     #[arg(long)]
     updates_index_concurrency: Option<usize>,
+
+    /// Redis URL for submission fanout (enables pubsub).
+    #[arg(long)]
+    fanout_redis_url: Option<String>,
+
+    /// Redis channel for submission fanout.
+    #[arg(long)]
+    fanout_channel: Option<String>,
+
+    /// Optional fanout origin identifier.
+    #[arg(long)]
+    fanout_origin: Option<String>,
+
+    /// Publish submissions to fanout channel (default: true).
+    #[arg(long, value_parser = clap::value_parser!(bool))]
+    fanout_publish: Option<bool>,
+
+    /// Subscribe to fanout channel (default: true).
+    #[arg(long, value_parser = clap::value_parser!(bool))]
+    fanout_subscribe: Option<bool>,
+
+    /// Redis URL for explorer response caching.
+    #[arg(long)]
+    cache_redis_url: Option<String>,
+
+    /// Redis key prefix for explorer response caching.
+    #[arg(long)]
+    cache_redis_prefix: Option<String>,
+
+    /// Redis cache TTL in seconds (0 disables).
+    #[arg(long)]
+    cache_redis_ttl_seconds: Option<u64>,
 }
 
 #[tokio::main]
@@ -246,8 +278,23 @@ async fn main() -> anyhow::Result<()> {
             Some(value) => Some(value),
             None => defaults.updates_index_concurrency,
         },
+        fanout_redis_url: args.fanout_redis_url,
+        fanout_channel: args.fanout_channel.or_else(|| defaults.fanout_channel.clone()),
+        fanout_origin: args.fanout_origin,
+        fanout_publish: args.fanout_publish.or(defaults.fanout_publish),
+        fanout_subscribe: args.fanout_subscribe.or(defaults.fanout_subscribe),
+        cache_redis_url: args.cache_redis_url,
+        cache_redis_prefix: args
+            .cache_redis_prefix
+            .or_else(|| defaults.cache_redis_prefix.clone()),
+        cache_redis_ttl_seconds: match args.cache_redis_ttl_seconds {
+            Some(0) => None,
+            Some(value) => Some(value),
+            None => defaults.cache_redis_ttl_seconds,
+        },
     };
     let simulator = Arc::new(Simulator::new_with_config(identity, config));
+    simulator.start_fanout();
     let api = Api::new(simulator);
     let app = api.router();
 

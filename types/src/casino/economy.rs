@@ -9,6 +9,8 @@ use super::{
     THREE_CARD_PROGRESSIVE_BASE_JACKPOT, UTH_PROGRESSIVE_BASE_JACKPOT,
 };
 
+const MAX_ORACLE_SOURCE_BYTES: usize = 64;
+
 /// House state for the "Central Bank" model
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HouseState {
@@ -424,6 +426,35 @@ impl EncodeSize for VaultRegistry {
     }
 }
 
+/// Registry of player public keys for Phase 2 snapshots.
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct PlayerRegistry {
+    pub players: Vec<PublicKey>,
+}
+
+impl Write for PlayerRegistry {
+    fn write(&self, writer: &mut impl BufMut) {
+        self.players.write(writer);
+    }
+}
+
+impl Read for PlayerRegistry {
+    type Cfg = ();
+
+    fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
+        let mut players = Vec::<PublicKey>::read_range(reader, 0..=500_000)?;
+        players.sort_unstable();
+        players.dedup();
+        Ok(Self { players })
+    }
+}
+
+impl EncodeSize for PlayerRegistry {
+    fn encode_size(&self) -> usize {
+        self.players.encode_size()
+    }
+}
+
 /// AMM Pool state (Constant Product Market Maker)
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct AmmPool {
@@ -434,6 +465,10 @@ pub struct AmmPool {
     pub sell_tax_basis_points: u16, // e.g., 500 = 5%
     pub bootstrap_price_vusdt_numerator: u64,
     pub bootstrap_price_rng_denominator: u64,
+    pub bootstrap_finalized: bool,
+    pub bootstrap_final_price_vusdt_numerator: u64,
+    pub bootstrap_final_price_rng_denominator: u64,
+    pub bootstrap_finalized_ts: u64,
 }
 
 /// Policy configuration for economy controls.
@@ -460,6 +495,15 @@ pub struct PolicyState {
     pub credit_immediate_bps: u16,
     pub credit_vest_secs: u64,
     pub credit_expiry_secs: u64,
+    pub bridge_paused: bool,
+    pub bridge_daily_limit: u64,
+    pub bridge_daily_limit_per_account: u64,
+    pub bridge_min_withdraw: u64,
+    pub bridge_max_withdraw: u64,
+    pub bridge_delay_secs: u64,
+    pub oracle_enabled: bool,
+    pub oracle_max_deviation_bps: u16,
+    pub oracle_stale_secs: u64,
 }
 
 impl Default for PolicyState {
@@ -486,6 +530,15 @@ impl Default for PolicyState {
             credit_immediate_bps: FREEROLL_CREDIT_IMMEDIATE_BPS,
             credit_vest_secs: FREEROLL_CREDIT_VEST_SECS,
             credit_expiry_secs: FREEROLL_CREDIT_EXPIRY_SECS,
+            bridge_paused: true,
+            bridge_daily_limit: 0,
+            bridge_daily_limit_per_account: 0,
+            bridge_min_withdraw: 0,
+            bridge_max_withdraw: 0,
+            bridge_delay_secs: 0,
+            oracle_enabled: false,
+            oracle_max_deviation_bps: 500,
+            oracle_stale_secs: 900,
         }
     }
 }
@@ -513,6 +566,15 @@ impl Write for PolicyState {
         self.credit_immediate_bps.write(writer);
         self.credit_vest_secs.write(writer);
         self.credit_expiry_secs.write(writer);
+        self.bridge_paused.write(writer);
+        self.bridge_daily_limit.write(writer);
+        self.bridge_daily_limit_per_account.write(writer);
+        self.bridge_min_withdraw.write(writer);
+        self.bridge_max_withdraw.write(writer);
+        self.bridge_delay_secs.write(writer);
+        self.oracle_enabled.write(writer);
+        self.oracle_max_deviation_bps.write(writer);
+        self.oracle_stale_secs.write(writer);
     }
 }
 
@@ -542,6 +604,51 @@ impl Read for PolicyState {
             credit_immediate_bps: u16::read(reader)?,
             credit_vest_secs: u64::read(reader)?,
             credit_expiry_secs: u64::read(reader)?,
+            bridge_paused: if reader.remaining() >= bool::SIZE {
+                bool::read(reader)?
+            } else {
+                true
+            },
+            bridge_daily_limit: if reader.remaining() >= u64::SIZE {
+                u64::read(reader)?
+            } else {
+                0
+            },
+            bridge_daily_limit_per_account: if reader.remaining() >= u64::SIZE {
+                u64::read(reader)?
+            } else {
+                0
+            },
+            bridge_min_withdraw: if reader.remaining() >= u64::SIZE {
+                u64::read(reader)?
+            } else {
+                0
+            },
+            bridge_max_withdraw: if reader.remaining() >= u64::SIZE {
+                u64::read(reader)?
+            } else {
+                0
+            },
+            bridge_delay_secs: if reader.remaining() >= u64::SIZE {
+                u64::read(reader)?
+            } else {
+                0
+            },
+            oracle_enabled: if reader.remaining() >= bool::SIZE {
+                bool::read(reader)?
+            } else {
+                false
+            },
+            oracle_max_deviation_bps: if reader.remaining() >= u16::SIZE {
+                u16::read(reader)?
+            } else {
+                0
+            },
+            oracle_stale_secs: if reader.remaining() >= u64::SIZE {
+                u64::read(reader)?
+            } else {
+                0
+            },
         })
     }
 }
@@ -569,6 +676,15 @@ impl EncodeSize for PolicyState {
             + self.credit_immediate_bps.encode_size()
             + self.credit_vest_secs.encode_size()
             + self.credit_expiry_secs.encode_size()
+            + self.bridge_paused.encode_size()
+            + self.bridge_daily_limit.encode_size()
+            + self.bridge_daily_limit_per_account.encode_size()
+            + self.bridge_min_withdraw.encode_size()
+            + self.bridge_max_withdraw.encode_size()
+            + self.bridge_delay_secs.encode_size()
+            + self.oracle_enabled.encode_size()
+            + self.oracle_max_deviation_bps.encode_size()
+            + self.oracle_stale_secs.encode_size()
     }
 }
 
@@ -581,6 +697,259 @@ pub struct TreasuryState {
     pub player_allocation_rng: u64,
     pub treasury_allocation_rng: u64,
     pub team_allocation_rng: u64,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TreasuryBucket {
+    Auction = 0,
+    Liquidity = 1,
+    Bonus = 2,
+    Player = 3,
+    Treasury = 4,
+    Team = 5,
+}
+
+impl Write for TreasuryBucket {
+    fn write(&self, writer: &mut impl BufMut) {
+        (*self as u8).write(writer);
+    }
+}
+
+impl Read for TreasuryBucket {
+    type Cfg = ();
+
+    fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
+        let value = u8::read(reader)?;
+        let bucket = match value {
+            0 => Self::Auction,
+            1 => Self::Liquidity,
+            2 => Self::Bonus,
+            3 => Self::Player,
+            4 => Self::Treasury,
+            5 => Self::Team,
+            _ => return Err(Error::InvalidEnum(value)),
+        };
+        Ok(bucket)
+    }
+}
+
+impl EncodeSize for TreasuryBucket {
+    fn encode_size(&self) -> usize {
+        u8::SIZE
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct VestingSchedule {
+    pub start_ts: u64,
+    pub duration_secs: u64,
+    pub released: u64,
+}
+
+impl Write for VestingSchedule {
+    fn write(&self, writer: &mut impl BufMut) {
+        self.start_ts.write(writer);
+        self.duration_secs.write(writer);
+        self.released.write(writer);
+    }
+}
+
+impl Read for VestingSchedule {
+    type Cfg = ();
+
+    fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
+        Ok(Self {
+            start_ts: u64::read(reader)?,
+            duration_secs: u64::read(reader)?,
+            released: u64::read(reader)?,
+        })
+    }
+}
+
+impl EncodeSize for VestingSchedule {
+    fn encode_size(&self) -> usize {
+        self.start_ts.encode_size() + self.duration_secs.encode_size() + self.released.encode_size()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct TreasuryVestingState {
+    pub auction: VestingSchedule,
+    pub liquidity: VestingSchedule,
+    pub bonus: VestingSchedule,
+    pub player: VestingSchedule,
+    pub treasury: VestingSchedule,
+    pub team: VestingSchedule,
+}
+
+impl Write for TreasuryVestingState {
+    fn write(&self, writer: &mut impl BufMut) {
+        self.auction.write(writer);
+        self.liquidity.write(writer);
+        self.bonus.write(writer);
+        self.player.write(writer);
+        self.treasury.write(writer);
+        self.team.write(writer);
+    }
+}
+
+impl Read for TreasuryVestingState {
+    type Cfg = ();
+
+    fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
+        Ok(Self {
+            auction: VestingSchedule::read(reader)?,
+            liquidity: VestingSchedule::read(reader)?,
+            bonus: VestingSchedule::read(reader)?,
+            player: VestingSchedule::read(reader)?,
+            treasury: VestingSchedule::read(reader)?,
+            team: VestingSchedule::read(reader)?,
+        })
+    }
+}
+
+impl EncodeSize for TreasuryVestingState {
+    fn encode_size(&self) -> usize {
+        self.auction.encode_size()
+            + self.liquidity.encode_size()
+            + self.bonus.encode_size()
+            + self.player.encode_size()
+            + self.treasury.encode_size()
+            + self.team.encode_size()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct BridgeState {
+    pub daily_day: u64,
+    pub daily_withdrawn: u64,
+    pub total_withdrawn: u64,
+    pub total_deposited: u64,
+    pub next_withdrawal_id: u64,
+}
+
+impl Write for BridgeState {
+    fn write(&self, writer: &mut impl BufMut) {
+        self.daily_day.write(writer);
+        self.daily_withdrawn.write(writer);
+        self.total_withdrawn.write(writer);
+        self.total_deposited.write(writer);
+        self.next_withdrawal_id.write(writer);
+    }
+}
+
+impl Read for BridgeState {
+    type Cfg = ();
+
+    fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
+        Ok(Self {
+            daily_day: u64::read(reader)?,
+            daily_withdrawn: u64::read(reader)?,
+            total_withdrawn: u64::read(reader)?,
+            total_deposited: u64::read(reader)?,
+            next_withdrawal_id: u64::read(reader)?,
+        })
+    }
+}
+
+impl EncodeSize for BridgeState {
+    fn encode_size(&self) -> usize {
+        self.daily_day.encode_size()
+            + self.daily_withdrawn.encode_size()
+            + self.total_withdrawn.encode_size()
+            + self.total_deposited.encode_size()
+            + self.next_withdrawal_id.encode_size()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct OracleState {
+    pub price_vusdt_numerator: u64,
+    pub price_rng_denominator: u64,
+    pub updated_ts: u64,
+    pub source: Vec<u8>,
+}
+
+impl Write for OracleState {
+    fn write(&self, writer: &mut impl BufMut) {
+        self.price_vusdt_numerator.write(writer);
+        self.price_rng_denominator.write(writer);
+        self.updated_ts.write(writer);
+        self.source.write(writer);
+    }
+}
+
+impl Read for OracleState {
+    type Cfg = ();
+
+    fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
+        Ok(Self {
+            price_vusdt_numerator: u64::read(reader)?,
+            price_rng_denominator: u64::read(reader)?,
+            updated_ts: u64::read(reader)?,
+            source: Vec::<u8>::read_range(reader, 0..=MAX_ORACLE_SOURCE_BYTES)?,
+        })
+    }
+}
+
+impl EncodeSize for OracleState {
+    fn encode_size(&self) -> usize {
+        self.price_vusdt_numerator.encode_size()
+            + self.price_rng_denominator.encode_size()
+            + self.updated_ts.encode_size()
+            + self.source.encode_size()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BridgeWithdrawal {
+    pub id: u64,
+    pub player: PublicKey,
+    pub amount: u64,
+    pub destination: Vec<u8>,
+    pub requested_ts: u64,
+    pub available_ts: u64,
+    pub fulfilled: bool,
+}
+
+impl Write for BridgeWithdrawal {
+    fn write(&self, writer: &mut impl BufMut) {
+        self.id.write(writer);
+        self.player.write(writer);
+        self.amount.write(writer);
+        self.destination.write(writer);
+        self.requested_ts.write(writer);
+        self.available_ts.write(writer);
+        self.fulfilled.write(writer);
+    }
+}
+
+impl Read for BridgeWithdrawal {
+    type Cfg = ();
+
+    fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
+        Ok(Self {
+            id: u64::read(reader)?,
+            player: PublicKey::read(reader)?,
+            amount: u64::read(reader)?,
+            destination: Vec::<u8>::read_range(reader, 0..=64)?,
+            requested_ts: u64::read(reader)?,
+            available_ts: u64::read(reader)?,
+            fulfilled: bool::read(reader)?,
+        })
+    }
+}
+
+impl EncodeSize for BridgeWithdrawal {
+    fn encode_size(&self) -> usize {
+        self.id.encode_size()
+            + self.player.encode_size()
+            + self.amount.encode_size()
+            + self.destination.encode_size()
+            + self.requested_ts.encode_size()
+            + self.available_ts.encode_size()
+            + self.fulfilled.encode_size()
+    }
 }
 
 impl Write for TreasuryState {
@@ -630,6 +999,10 @@ impl AmmPool {
             sell_tax_basis_points: AMM_DEFAULT_SELL_TAX_BASIS_POINTS,
             bootstrap_price_vusdt_numerator: AMM_BOOTSTRAP_PRICE_VUSDT_NUMERATOR,
             bootstrap_price_rng_denominator: AMM_BOOTSTRAP_PRICE_RNG_DENOMINATOR,
+            bootstrap_finalized: false,
+            bootstrap_final_price_vusdt_numerator: 0,
+            bootstrap_final_price_rng_denominator: 0,
+            bootstrap_finalized_ts: 0,
         }
     }
 }
@@ -643,6 +1016,10 @@ impl Write for AmmPool {
         self.sell_tax_basis_points.write(writer);
         self.bootstrap_price_vusdt_numerator.write(writer);
         self.bootstrap_price_rng_denominator.write(writer);
+        self.bootstrap_finalized.write(writer);
+        self.bootstrap_final_price_vusdt_numerator.write(writer);
+        self.bootstrap_final_price_rng_denominator.write(writer);
+        self.bootstrap_finalized_ts.write(writer);
     }
 }
 
@@ -667,6 +1044,18 @@ impl Read for AmmPool {
             AMM_BOOTSTRAP_PRICE_RNG_DENOMINATOR
         };
 
+        let (bootstrap_finalized, bootstrap_final_price_vusdt_numerator, bootstrap_final_price_rng_denominator, bootstrap_finalized_ts) =
+            if reader.remaining() >= bool::SIZE + (u64::SIZE * 3) {
+                (
+                    bool::read(reader)?,
+                    u64::read(reader)?,
+                    u64::read(reader)?,
+                    u64::read(reader)?,
+                )
+            } else {
+                (false, 0, 0, 0)
+            };
+
         Ok(Self {
             reserve_rng,
             reserve_vusdt,
@@ -675,6 +1064,10 @@ impl Read for AmmPool {
             sell_tax_basis_points,
             bootstrap_price_vusdt_numerator,
             bootstrap_price_rng_denominator,
+            bootstrap_finalized,
+            bootstrap_final_price_vusdt_numerator,
+            bootstrap_final_price_rng_denominator,
+            bootstrap_finalized_ts,
         })
     }
 }
@@ -688,5 +1081,9 @@ impl EncodeSize for AmmPool {
             + self.sell_tax_basis_points.encode_size()
             + self.bootstrap_price_vusdt_numerator.encode_size()
             + self.bootstrap_price_rng_denominator.encode_size()
+            + self.bootstrap_finalized.encode_size()
+            + self.bootstrap_final_price_vusdt_numerator.encode_size()
+            + self.bootstrap_final_price_rng_denominator.encode_size()
+            + self.bootstrap_finalized_ts.encode_size()
     }
 }

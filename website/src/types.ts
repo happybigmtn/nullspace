@@ -36,6 +36,12 @@ export interface PlayerStats {
   pnlHistory: number[];
 }
 
+export interface ResolvedBet {
+  id: string;
+  label: string;
+  pnl: number;
+}
+
 export interface CompletedHand {
   cards: Card[];
   bet: number;
@@ -134,7 +140,7 @@ export interface CrapsEventLog {
     pnl: number; // Positive for win, negative for loss, 0 for push
     point: number | null; // Point at time of roll
     isSevenOut: boolean;
-    results: string[]; // e.g. ["PASS WIN (+$50)", "YES 4 LOSS (-$25)"]
+    results: string[]; // e.g. ["PASS: WIN", "YES 4: LOSS"]
 }
 
 export interface GameState {
@@ -183,6 +189,9 @@ export interface GameState {
     | 'HOP4_EASY';
   sicBoUndoStack: SicBoBet[][];
   sicBoLastRoundBets: SicBoBet[];
+
+  resolvedBets: ResolvedBet[];
+  resolvedBetsKey: number;
 
   lastResult: number;
   activeModifiers: {

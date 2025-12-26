@@ -333,9 +333,85 @@ impl<'a, S: State> Layer<'a, S> {
                 self.handle_savings_withdraw(public, *amount).await
             }
             Instruction::ClaimSavingsRewards => self.handle_savings_claim(public).await,
+            Instruction::SeedAmm {
+                rng_amount,
+                usdt_amount,
+                bootstrap_price_vusdt_numerator,
+                bootstrap_price_rng_denominator,
+            } => {
+                self.handle_seed_amm(
+                    public,
+                    *rng_amount,
+                    *usdt_amount,
+                    *bootstrap_price_vusdt_numerator,
+                    *bootstrap_price_rng_denominator,
+                )
+                .await
+            }
+            Instruction::FinalizeAmmBootstrap => {
+                self.handle_finalize_amm_bootstrap(public).await
+            }
+            Instruction::SetTreasuryVesting { vesting } => {
+                self.handle_set_treasury_vesting(public, vesting).await
+            }
+            Instruction::ReleaseTreasuryAllocation { bucket, amount } => {
+                self.handle_release_treasury_allocation(public, bucket, *amount)
+                    .await
+            }
+            Instruction::UpdateOracle {
+                price_vusdt_numerator,
+                price_rng_denominator,
+                updated_ts,
+                source,
+            } => {
+                self.handle_update_oracle(
+                    public,
+                    *price_vusdt_numerator,
+                    *price_rng_denominator,
+                    *updated_ts,
+                    source,
+                )
+                .await
+            }
             _ => anyhow::bail!(
                 "internal error: apply_liquidity called with non-liquidity instruction"
             ),
+        }
+    }
+
+    async fn apply_bridge(
+        &mut self,
+        public: &PublicKey,
+        instruction: &Instruction,
+    ) -> Result<Vec<Event>> {
+        match instruction {
+            Instruction::BridgeWithdraw {
+                amount,
+                destination,
+            } => {
+                self.handle_bridge_withdraw(public, *amount, destination.as_slice())
+                    .await
+            }
+            Instruction::BridgeDeposit {
+                recipient,
+                amount,
+                source,
+            } => {
+                self.handle_bridge_deposit(public, recipient, *amount, source.as_slice())
+                    .await
+            }
+            Instruction::FinalizeBridgeWithdrawal {
+                withdrawal_id,
+                source,
+            } => {
+                self.handle_finalize_bridge_withdrawal(
+                    public,
+                    *withdrawal_id,
+                    source.as_slice(),
+                )
+                .await
+            }
+            _ => anyhow::bail!("internal error: apply_bridge called with non-bridge instruction"),
         }
     }
 
@@ -376,8 +452,19 @@ impl<'a, S: State> Layer<'a, S> {
             | Instruction::RetireWorstVaultDebt { .. }
             | Instruction::DepositSavings { .. }
             | Instruction::WithdrawSavings { .. }
-            | Instruction::ClaimSavingsRewards => {
+            | Instruction::ClaimSavingsRewards
+            | Instruction::SeedAmm { .. }
+            | Instruction::FinalizeAmmBootstrap
+            | Instruction::SetTreasuryVesting { .. }
+            | Instruction::ReleaseTreasuryAllocation { .. }
+            | Instruction::UpdateOracle { .. } => {
                 self.apply_liquidity(public, instruction).await
+            }
+
+            Instruction::BridgeWithdraw { .. }
+            | Instruction::BridgeDeposit { .. }
+            | Instruction::FinalizeBridgeWithdrawal { .. } => {
+                self.apply_bridge(public, instruction).await
             }
         }
     }
@@ -405,10 +492,26 @@ impl<'a, S: State> Layer<'a, S> {
         })
     }
 
+    async fn get_or_init_oracle_state(&mut self) -> Result<nullspace_types::casino::OracleState> {
+        Ok(match self.get(&Key::OracleState).await? {
+            Some(Value::OracleState(state)) => state,
+            _ => nullspace_types::casino::OracleState::default(),
+        })
+    }
+
     async fn get_or_init_treasury(&mut self) -> Result<nullspace_types::casino::TreasuryState> {
         Ok(match self.get(&Key::Treasury).await? {
             Some(Value::Treasury(treasury)) => treasury,
             _ => nullspace_types::casino::TreasuryState::default(),
+        })
+    }
+
+    async fn get_or_init_treasury_vesting(
+        &mut self,
+    ) -> Result<nullspace_types::casino::TreasuryVestingState> {
+        Ok(match self.get(&Key::TreasuryVesting).await? {
+            Some(Value::TreasuryVesting(vesting)) => vesting,
+            _ => nullspace_types::casino::TreasuryVestingState::default(),
         })
     }
 
@@ -418,6 +521,15 @@ impl<'a, S: State> Layer<'a, S> {
         Ok(match self.get(&Key::VaultRegistry).await? {
             Some(Value::VaultRegistry(registry)) => registry,
             _ => nullspace_types::casino::VaultRegistry::default(),
+        })
+    }
+
+    async fn get_or_init_player_registry(
+        &mut self,
+    ) -> Result<nullspace_types::casino::PlayerRegistry> {
+        Ok(match self.get(&Key::PlayerRegistry).await? {
+            Some(Value::PlayerRegistry(registry)) => registry,
+            _ => nullspace_types::casino::PlayerRegistry::default(),
         })
     }
 
@@ -435,6 +547,15 @@ impl<'a, S: State> Layer<'a, S> {
         Ok(match self.get(&Key::SavingsBalance(public.clone())).await? {
             Some(Value::SavingsBalance(balance)) => balance,
             _ => nullspace_types::casino::SavingsBalance::default(),
+        })
+    }
+
+    async fn get_or_init_bridge_state(
+        &mut self,
+    ) -> Result<nullspace_types::casino::BridgeState> {
+        Ok(match self.get(&Key::BridgeState).await? {
+            Some(Value::BridgeState(state)) => state,
+            _ => nullspace_types::casino::BridgeState::default(),
         })
     }
 

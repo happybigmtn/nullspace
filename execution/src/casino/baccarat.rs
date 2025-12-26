@@ -440,7 +440,7 @@ fn calculate_bet_payout(
         BetType::Tie => {
             if outcome.player_total == outcome.banker_total {
                 let multiplier = match rules.tie_payout {
-                    TiePayout::EightToOne => 8,
+                    TiePayout::EightToOne => payouts::TIE,
                     TiePayout::NineToOne => 9,
                 };
                 (bet.amount.saturating_mul(multiplier) as i64, false)
@@ -462,7 +462,10 @@ fn calculate_bet_payout(
                 (0, true) // Push on tie
             } else if outcome.banker_total > outcome.player_total {
                 let winnings = match rules.banker_payout {
-                    BankerPayout::Commission => bet.amount.saturating_mul(95) / 100,
+                    BankerPayout::Commission => bet
+                        .amount
+                        .saturating_mul(payouts::BANKER_COMMISSION_NUMERATOR)
+                        .saturating_div(payouts::BANKER_COMMISSION_DENOMINATOR),
                     BankerPayout::NoCommission => {
                         if outcome.banker_total == 6 {
                             bet.amount / 2

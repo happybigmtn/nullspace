@@ -48,6 +48,9 @@ const DEFAULT_WS_MAX_MESSAGE_BYTES: usize = 4 * 1024 * 1024;
 const DEFAULT_UPDATES_BROADCAST_BUFFER: usize = 1_024;
 const DEFAULT_MEMPOOL_BROADCAST_BUFFER: usize = 1_024;
 const DEFAULT_UPDATES_INDEX_CONCURRENCY: usize = 8;
+const DEFAULT_FANOUT_CHANNEL: &str = "nullspace.submissions";
+const DEFAULT_CACHE_REDIS_PREFIX: &str = "nullspace:explorer:";
+const DEFAULT_CACHE_REDIS_TTL_SECONDS: u64 = 2;
 
 #[derive(Clone, Copy, Debug, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -93,6 +96,14 @@ pub struct SimulatorConfig {
     pub updates_broadcast_buffer: Option<usize>,
     pub mempool_broadcast_buffer: Option<usize>,
     pub updates_index_concurrency: Option<usize>,
+    pub fanout_redis_url: Option<String>,
+    pub fanout_channel: Option<String>,
+    pub fanout_origin: Option<String>,
+    pub fanout_publish: Option<bool>,
+    pub fanout_subscribe: Option<bool>,
+    pub cache_redis_url: Option<String>,
+    pub cache_redis_prefix: Option<String>,
+    pub cache_redis_ttl_seconds: Option<u64>,
 }
 
 impl Default for SimulatorConfig {
@@ -121,6 +132,14 @@ impl Default for SimulatorConfig {
             updates_broadcast_buffer: Some(DEFAULT_UPDATES_BROADCAST_BUFFER),
             mempool_broadcast_buffer: Some(DEFAULT_MEMPOOL_BROADCAST_BUFFER),
             updates_index_concurrency: Some(DEFAULT_UPDATES_INDEX_CONCURRENCY),
+            fanout_redis_url: None,
+            fanout_channel: Some(DEFAULT_FANOUT_CHANNEL.to_string()),
+            fanout_origin: None,
+            fanout_publish: Some(true),
+            fanout_subscribe: Some(true),
+            cache_redis_url: None,
+            cache_redis_prefix: Some(DEFAULT_CACHE_REDIS_PREFIX.to_string()),
+            cache_redis_ttl_seconds: Some(DEFAULT_CACHE_REDIS_TTL_SECONDS),
         }
     }
 }
@@ -601,6 +620,101 @@ pub(crate) async fn index_events(
                         }
                     }
                     Event::LiquidityRemoved { player, .. } => {
+                        if has_account_subs
+                            && (include_all_accounts
+                                || accounts_filter
+                                    .map(|set| set.contains(player))
+                                    .unwrap_or(true))
+                        {
+                            account_ops
+                                .entry(player.clone())
+                                .or_default()
+                                .push((loc, op.clone()));
+                        }
+                    }
+                    Event::AmmBootstrapped { .. }
+                    | Event::AmmBootstrapFinalized { .. }
+                    | Event::PolicyUpdated { .. }
+                    | Event::OracleUpdated { .. }
+                    | Event::TreasuryUpdated { .. }
+                    | Event::TreasuryVestingUpdated { .. }
+                    | Event::TreasuryAllocationReleased { .. }
+                    | Event::RecoveryPoolFunded { .. }
+                    | Event::BridgeWithdrawalFinalized { .. } => {
+                        if needs_public_ops {
+                            public_ops.push((loc, op.clone()));
+                        }
+                    }
+                    Event::BridgeWithdrawalRequested { player, .. } => {
+                        if has_account_subs
+                            && (include_all_accounts
+                                || accounts_filter
+                                    .map(|set| set.contains(player))
+                                    .unwrap_or(true))
+                        {
+                            account_ops
+                                .entry(player.clone())
+                                .or_default()
+                                .push((loc, op.clone()));
+                        }
+                    }
+                    Event::BridgeDepositCredited { recipient, .. } => {
+                        if has_account_subs
+                            && (include_all_accounts
+                                || accounts_filter
+                                    .map(|set| set.contains(recipient))
+                                    .unwrap_or(true))
+                        {
+                            account_ops
+                                .entry(recipient.clone())
+                                .or_default()
+                                .push((loc, op.clone()));
+                        }
+                    }
+                    Event::VaultLiquidated {
+                        liquidator,
+                        target,
+                        ..
+                    } => {
+                        if has_account_subs {
+                            if include_all_accounts
+                                || accounts_filter
+                                    .map(|set| set.contains(liquidator))
+                                    .unwrap_or(true)
+                            {
+                                account_ops
+                                    .entry(liquidator.clone())
+                                    .or_default()
+                                    .push((loc, op.clone()));
+                            }
+                            if include_all_accounts
+                                || accounts_filter
+                                    .map(|set| set.contains(target))
+                                    .unwrap_or(true)
+                            {
+                                account_ops
+                                    .entry(target.clone())
+                                    .or_default()
+                                    .push((loc, op.clone()));
+                            }
+                        }
+                    }
+                    Event::RecoveryPoolRetired { target, .. } => {
+                        if has_account_subs
+                            && (include_all_accounts
+                                || accounts_filter
+                                    .map(|set| set.contains(target))
+                                    .unwrap_or(true))
+                        {
+                            account_ops
+                                .entry(target.clone())
+                                .or_default()
+                                .push((loc, op.clone()));
+                        }
+                    }
+                    Event::SavingsDeposited { player, .. }
+                    | Event::SavingsWithdrawn { player, .. }
+                    | Event::SavingsRewardsClaimed { player, .. } => {
                         if has_account_subs
                             && (include_all_accounts
                                 || accounts_filter

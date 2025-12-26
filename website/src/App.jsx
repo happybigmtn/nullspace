@@ -9,6 +9,7 @@ const ChainConnectionLayout = lazy(() => import('./components/ChainConnectionLay
 const EconomyDashboard = lazy(() => import('./components/EconomyDashboard'));
 const EconomyApp = lazy(() => import('./EconomyApp'));
 const StakingApp = lazy(() => import('./StakingApp'));
+const BridgeApp = lazy(() => import('./BridgeApp'));
 const SecurityApp = lazy(() => import('./SecurityApp'));
 
 const LegacyEconomyApp = lazy(() => import('./LegacyLiquidityApp'));
@@ -44,6 +45,7 @@ function App() {
               <Route path="borrow" element={<EconomyRoute />} />
               <Route path="stake" element={<StakingRoute />} />
               <Route path="liquidity" element={<EconomyRoute />} />
+              <Route path="bridge" element={<BridgeApp />} />
             </Route>
             <Route path="security" element={<SecurityApp />} />
             <Route path="explorer" element={<ExplorerLayout />}>

@@ -68,7 +68,9 @@ mod payouts {
 
 const STATE_VERSION: u8 = 2;
 const MAX_BETS: usize = 20;
+#[cfg(test)]
 const BUY_COMMISSION_BPS: u64 = 500; // 5.00%
+#[cfg(test)]
 const BUY_COMMISSION_DENOM: u64 = 10_000;
 
 #[repr(u8)]
@@ -125,10 +127,6 @@ impl TryFrom<u8> for BuyCommissionTiming {
     }
 }
 
-// All Tall Small (ATS) pay table ("to 1").
-const ATS_SMALL_PAYOUT_TO_1: u64 = 34;
-const ATS_TALL_PAYOUT_TO_1: u64 = 34;
-const ATS_ALL_PAYOUT_TO_1: u64 = 175;
 const MUGGSY_COME_OUT_PAYOUT_TO_1: u64 = 2;
 const MUGGSY_POINT_SEVEN_PAYOUT_TO_1: u64 = 3;
 const DIFF_DOUBLES_PAYOUTS_TO_1: [u64; 7] = [0, 0, 0, 4, 8, 15, 100];
@@ -590,6 +588,7 @@ fn calculate_no_payout(target: u8, amount: u64, seven_hit: bool) -> u64 {
     amount.saturating_add(winnings)
 }
 
+#[cfg(test)]
 fn calculate_buy_commission(amount: u64) -> u64 {
     // 5% commission, rounded up to the nearest chip.
     //
@@ -603,6 +602,7 @@ fn calculate_buy_commission(amount: u64) -> u64 {
 }
 
 /// Calculate BUY bet return (TOTAL RETURN: stake + winnings). Commission is charged separately.
+#[cfg(test)]
 fn calculate_buy_payout(target: u8, amount: u64, hit: bool) -> u64 {
     if !hit {
         return 0;

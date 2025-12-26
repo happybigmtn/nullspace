@@ -30,6 +30,8 @@ futures = { workspace = true }
 rand = { workspace = true }
 rayon = { workspace = true }
 serde_json.workspace = true
+anyhow = { workspace = true }
+ethers = { version = "2.0.14", features = ["abigen"] }
 
 [dev-dependencies]
 nullspace-simulator = { workspace = true }
@@ -46,6 +48,21 @@ required-features = []
 [[bin]]
 name = "stress-test"
 path = "src/bin/stress_test.rs"
+required-features = []
+
+[[bin]]
+name = "bridge-relayer"
+path = "src/bin/bridge_relayer.rs"
+required-features = []
+
+[[bin]]
+name = "recovery-pool"
+path = "src/bin/recovery_pool.rs"
+required-features = []
+
+[[bin]]
+name = "sybil-scan"
+path = "src/bin/sybil_scan.rs"
 required-features = []
 
 [dependencies.clap]

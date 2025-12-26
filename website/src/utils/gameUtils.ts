@@ -1,9 +1,10 @@
 
-import { Card, Suit, Rank, CrapsBet, RouletteBet, SicBoBet, GameType, SuperMultiplier } from '../types';
+import { Card, Suit, Rank, CrapsBet, RouletteBet, SicBoBet, GameType, SuperMultiplier, GameState, ResolvedBet } from '../types';
 
 // --- CONSTANTS ---
 export const SUITS: Suit[] = ['♠', '♥', '♦', '♣'];
 export const RANKS: Rank[] = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+const CHAIN_RANKS: Rank[] = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
 export const WAYS: { [key: number]: number } = { 2:1, 3:2, 4:3, 5:4, 6:5, 7:6, 8:5, 9:4, 10:3, 11:2, 12:1 };
 
 // Roulette Constants
@@ -553,9 +554,10 @@ export const resolveRouletteBets = (
     outcome: number,
     bets: RouletteBet[],
     zeroRule: 'STANDARD' | 'LA_PARTAGE' | 'EN_PRISON' | 'EN_PRISON_DOUBLE' | 'AMERICAN' = 'STANDARD'
-): { pnl: number; results: string[] } => {
+): { pnl: number; results: string[]; resolvedBets: ResolvedBet[] } => {
     let pnl = 0;
     const results: string[] = [];
+    const resolvedBets: ResolvedBet[] = [];
     const color = getRouletteColor(outcome);
     const isZero = isRouletteZero(outcome);
     const column = isZero ? -1 : (outcome - 1) % 3;
@@ -591,6 +593,11 @@ export const resolveRouletteBets = (
             const loss = zeroRule === 'LA_PARTAGE' ? Math.floor(bet.amount / 2) : bet.amount;
             pnl -= loss;
             results.push(`${bet.type} ${zeroRule === 'LA_PARTAGE' ? 'HALF' : 'LOSS'} (-$${loss})`);
+            resolvedBets.push({
+                id: `${bet.type.toLowerCase()}-${resolvedBets.length}`,
+                label: `${bet.type}${bet.target !== undefined ? ' ' + bet.target : ''}`,
+                pnl: -loss
+            });
             return;
         }
 
@@ -598,13 +605,23 @@ export const resolveRouletteBets = (
             const win = bet.amount * payoutMult;
             pnl += win;
             results.push(`${bet.type}${bet.target !== undefined ? ' ' + bet.target : ''} WIN (+$${win})`);
+            resolvedBets.push({
+                id: `${bet.type.toLowerCase()}-${resolvedBets.length}`,
+                label: `${bet.type}${bet.target !== undefined ? ' ' + bet.target : ''}`,
+                pnl: win
+            });
         } else {
             pnl -= bet.amount;
             results.push(`${bet.type}${bet.target !== undefined ? ' ' + bet.target : ''} LOSS (-$${bet.amount})`);
+            resolvedBets.push({
+                id: `${bet.type.toLowerCase()}-${resolvedBets.length}`,
+                label: `${bet.type}${bet.target !== undefined ? ' ' + bet.target : ''}`,
+                pnl: -bet.amount
+            });
         }
     });
 
-    return { pnl, results };
+    return { pnl, results, resolvedBets };
 };
 
 // --- CRAPS LOGIC ---
@@ -997,10 +1014,11 @@ export const resolveCrapsBets = (
     totalOrDice: number | [number, number],
     point: number | null,
     bets: CrapsBet[]
-): { pnl: number; remainingBets: CrapsBet[]; results: string[] } => {
+): { pnl: number; remainingBets: CrapsBet[]; results: string[]; resolvedBets: ResolvedBet[] } => {
     let pnl = 0;
     const remainingBets: CrapsBet[] = [];
     const results: string[] = [];
+    const resolvedBets: ResolvedBet[] = [];
     const total = Array.isArray(totalOrDice) ? (totalOrDice[0] + totalOrDice[1]) : totalOrDice;
     const isHard = Array.isArray(totalOrDice) ? (totalOrDice[0] === totalOrDice[1]) : (total % 2 === 0);
     const dice = Array.isArray(totalOrDice) ? totalOrDice : null;
@@ -1215,9 +1233,15 @@ export const resolveCrapsBets = (
         if (loseAmount > 0) pnl -= loseAmount;
 
         if (resolved) {
-            if (winAmount > 0) results.push(`${bet.type}${bet.target ? ' ' + bet.target : ''} WIN (+$${Math.floor(winAmount)})`);
-            else if (loseAmount > 0) results.push(`${bet.type}${bet.target ? ' ' + bet.target : ''} LOSS (-$${loseAmount})`);
-            else results.push(`${bet.type} PUSH`);
+            const label = formatCrapsBetLabel(bet.type, bet.target);
+            if (winAmount > 0) results.push(formatBetResult(label, 'WIN'));
+            else if (loseAmount > 0) results.push(formatBetResult(label, 'LOSS'));
+            else results.push(formatBetResult(label, 'PUSH'));
+            resolvedBets.push({
+                id: `${label.replace(/\s+/g, '_').toLowerCase()}-${resolvedBets.length}`,
+                label,
+                pnl: winAmount - loseAmount
+            });
         } else if (![
             'ATS_SMALL',
             'ATS_TALL',
@@ -1234,7 +1258,7 @@ export const resolveCrapsBets = (
         }
     });
 
-    return { pnl, remainingBets, results };
+    return { pnl, remainingBets, results, resolvedBets };
 };
 
 // Returns total items for Sic Bo exposure (totals 3-18)
@@ -1614,77 +1638,341 @@ export const calculateHiLoProjection = (cards: Card[], deck: Card[], currentPot:
 export interface ParsedGameLog {
   summary: string;
   details: string[];
+  resolvedBets?: ResolvedBet[];
   raw: unknown;
 }
 
+export const formatPnlLabel = (netPnL: number): string => {
+  if (!Number.isFinite(netPnL) || netPnL === 0) return '';
+  const abs = Math.abs(Math.round(netPnL));
+  const formatted = abs.toLocaleString();
+  return `${netPnL >= 0 ? '+$' : '-$'}${formatted}`;
+};
+
+export const formatSummaryLine = (label: string): string => {
+  const trimmed = label.trim().replace(/\.$/, '');
+  return `${trimmed}.`;
+};
+
+export const buildHistoryEntry = (summary: string, details: string[]): string => (
+  [summary, ...details.map(detail => `  ${detail}`)].join('\n')
+);
+
+export const prependPnlLine = (details: string[], netPnL: number): string[] => {
+  const pnlLine = formatPnlLabel(netPnL);
+  return pnlLine ? [pnlLine, ...details] : details;
+};
+
+const formatBetResult = (label: string, result: string): string => `${label}: ${result}`;
+const formatRankLabel = (value: string): string => value.replace(/_/g, ' ').trim();
+
+const parseCardId = (card: unknown): number | null => {
+  if (typeof card === 'number' && Number.isFinite(card)) return card;
+  if (typeof card === 'string') {
+    const parsed = Number(card);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+};
+
+const cardIdToCard = (cardId: number): Card => {
+  const suit = SUITS[Math.floor(cardId / 13)] ?? '♠';
+  const rank = CHAIN_RANKS[cardId % 13] ?? 'A';
+  const value =
+    rank === 'A' ? 11
+      : rank === 'K' || rank === 'Q' || rank === 'J' || rank === '10' ? 10
+        : Number(rank);
+  return { suit, rank, value };
+};
+
 const cardToString = (cardId: number): string => {
-  const suits = ['♠', '♥', '♦', '♣'];
-  const ranks = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
-  const suit = suits[Math.floor(cardId / 13)];
-  const rank = ranks[cardId % 13];
+  const suit = SUITS[Math.floor(cardId / 13)] ?? '♠';
+  const rank = CHAIN_RANKS[cardId % 13] ?? 'A';
   return `${rank}${suit}`;
+};
+
+const formatCrapsBetLabel = (type: string, target?: number): string => {
+  if (type.startsWith('HARDWAY_')) {
+    const hardTarget = Number(type.split('_')[1]);
+    return Number.isFinite(hardTarget) ? `HARDWAY ${hardTarget}` : 'HARDWAY';
+  }
+  const suffix = target && target > 0 ? ` ${target}` : '';
+  return `${type}${suffix}`;
+};
+
+const outcomeFromReturn = (wagered: number, returned: number): string => {
+  if (returned > wagered) return 'WIN';
+  if (returned < wagered) return 'LOSS';
+  return 'PUSH';
+};
+
+const VIDEO_POKER_HAND_NAMES: Record<number, string> = {
+  0: 'HIGH CARD',
+  1: 'JACKS OR BETTER',
+  2: 'TWO PAIR',
+  3: 'THREE OF A KIND',
+  4: 'STRAIGHT',
+  5: 'FLUSH',
+  6: 'FULL HOUSE',
+  7: 'FOUR OF A KIND',
+  8: 'STRAIGHT FLUSH',
+  9: 'ROYAL FLUSH',
+};
+
+const RANK_ORDER = [
+  'HIGH CARD',
+  'PAIR',
+  'TWO PAIR',
+  'THREE OF A KIND',
+  'STRAIGHT',
+  'FLUSH',
+  'FULL HOUSE',
+  'FOUR OF A KIND',
+  'STRAIGHT FLUSH',
+  'ROYAL FLUSH',
+];
+
+const normalizeRank = (rank: string): string => formatRankLabel(rank).toUpperCase();
+const rankIndex = (rank: string): number => RANK_ORDER.indexOf(normalizeRank(rank));
+const isTripsOrBetter = (rank: string): boolean => rankIndex(rank) >= 3;
+const isStraightOrBetter = (rank: string): boolean => rankIndex(rank) >= RANK_ORDER.indexOf('STRAIGHT');
+const UTH_PROGRESSIVE_BASE_JACKPOT = 10000;
+
+const uthBlindBonusWinnings = (ante: number, rank: string): number => {
+  switch (normalizeRank(rank)) {
+    case 'ROYAL FLUSH':
+      return ante * 500;
+    case 'STRAIGHT FLUSH':
+      return ante * 50;
+    case 'FOUR OF A KIND':
+      return ante * 10;
+    case 'FULL HOUSE':
+      return ante * 3;
+    case 'FLUSH':
+      return Math.floor((ante * 3) / 2);
+    case 'STRAIGHT':
+      return ante;
+    default:
+      return 0;
+  }
+};
+
+const uthTripsMultiplier = (rank: string): number => {
+  switch (normalizeRank(rank)) {
+    case 'ROYAL FLUSH':
+      return 50;
+    case 'STRAIGHT FLUSH':
+      return 40;
+    case 'FOUR OF A KIND':
+      return 30;
+    case 'FULL HOUSE':
+      return 9;
+    case 'FLUSH':
+      return 7;
+    case 'STRAIGHT':
+      return 4;
+    case 'THREE OF A KIND':
+      return 3;
+    default:
+      return 0;
+  }
+};
+
+const uthSixCardMultiplier = (rank: string): number => {
+  switch (normalizeRank(rank)) {
+    case 'ROYAL FLUSH':
+      return 1000;
+    case 'STRAIGHT FLUSH':
+      return 200;
+    case 'FOUR OF A KIND':
+      return 100;
+    case 'FULL HOUSE':
+      return 20;
+    case 'FLUSH':
+      return 15;
+    case 'STRAIGHT':
+      return 10;
+    case 'THREE OF A KIND':
+      return 7;
+    default:
+      return 0;
+  }
+};
+
+const uthProgressiveReturn = (hole: Card[], flop: Card[], progressiveBet: number): number => {
+  if (progressiveBet <= 0 || hole.length < 2 || flop.length < 3) return 0;
+  const cards = [...hole.slice(0, 2), ...flop.slice(0, 3)];
+  const rank = evaluatePokerHand(cards).rank;
+  switch (normalizeRank(rank)) {
+    case 'ROYAL FLUSH':
+      return progressiveBet * UTH_PROGRESSIVE_BASE_JACKPOT;
+    case 'STRAIGHT FLUSH':
+      return progressiveBet * (UTH_PROGRESSIVE_BASE_JACKPOT / 10);
+    case 'FOUR OF A KIND':
+      return progressiveBet * 300;
+    case 'FULL HOUSE':
+      return progressiveBet * 50;
+    case 'FLUSH':
+      return progressiveBet * 40;
+    case 'STRAIGHT':
+      return progressiveBet * 30;
+    case 'THREE OF A KIND':
+      return progressiveBet * 9;
+    default:
+      return 0;
+  }
 };
 
 /**
  * PRIMARY SOURCE: Parses JSON logs from backend CasinoGameCompleted events.
  * Backend logs contain authoritative game outcome data computed on-chain.
- * Falls back to local generation (generateGameResult) only if logs unavailable.
  */
-export const parseGameLogs = (gameType: GameType, logs: string[], netPnL: number): ParsedGameLog | null => {
+export const parseGameLogs = (
+  gameType: GameType,
+  logs: string[],
+  netPnL: number,
+  state?: GameState,
+): ParsedGameLog | null => {
   if (!logs || logs.length === 0) return null;
 
-  const resultPart = netPnL >= 0 ? `+$${netPnL}` : `-$${Math.abs(netPnL)}`;
+  const normalizePnl = (value: number): number => (
+    Number.isFinite(value) ? Math.round(value) : 0
+  );
+  const buildResolvedBets = (entries: Array<{ label: string; pnl: number }>): ResolvedBet[] => (
+    entries
+      .map((entry, idx) => ({
+        id: `${entry.label.replace(/\s+/g, '_').toLowerCase()}-${idx}`,
+        label: entry.label,
+        pnl: normalizePnl(entry.pnl),
+      }))
+      .filter((entry) => entry.label.length > 0)
+  );
+
+  const parseVideoPokerLog = (raw: string): ParsedGameLog | null => {
+    if (!raw.startsWith('RESULT:')) return null;
+    const parts = raw.split(':');
+    if (parts.length < 3) return null;
+    const handId = Number(parts[1]);
+    const multiplier = Number(parts[2]);
+    const handName = VIDEO_POKER_HAND_NAMES[handId] ?? 'UNKNOWN';
+    const summary = formatSummaryLine(`Hand: ${handName}`);
+    const details = [formatBetResult('HAND', multiplier > 0 ? 'WIN' : 'LOSS')];
+    const resolvedBets = buildResolvedBets([{ label: 'HAND', pnl: netPnL }]);
+    return { summary, details, resolvedBets, raw };
+  };
+
+  const parseJsonEntry = (raw: string): any | null => {
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+    try {
+      return JSON.parse(trimmed);
+    } catch {
+      const start = trimmed.indexOf('{');
+      const end = trimmed.lastIndexOf('}');
+      if (start >= 0 && end > start) {
+        try {
+          return JSON.parse(trimmed.slice(start, end + 1));
+        } catch {
+          return null;
+        }
+      }
+    }
+    return null;
+  };
 
   try {
-    // Most games emit a single JSON log string
-    const log = logs[0];
+    const rawLogs = logs.filter((entry) => typeof entry === 'string' && entry.trim().length > 0);
+    if (rawLogs.length === 0) return null;
 
-    // Try parsing as JSON
-    let data: any;
-    try {
-      data = JSON.parse(log);
-    } catch {
-      // Not JSON, might be simple text log (Video Poker)
+    let data: any = null;
+    let rawDataLog: string | null = null;
+    for (const entry of rawLogs) {
+      const parsed = parseJsonEntry(entry);
+      if (parsed) {
+        data = parsed;
+        rawDataLog = entry;
+        break;
+      }
+    }
+
+    if (!data) {
+      for (const entry of rawLogs) {
+        const parsed = parseVideoPokerLog(entry);
+        if (parsed) return parsed;
+      }
+      const resolvedBets = buildResolvedBets([{ label: 'ROUND', pnl: netPnL }]);
       return {
-        summary: `${log}. ${resultPart}`,
-        details: logs,
-        raw: log
+        summary: formatSummaryLine(rawLogs[0]),
+        details: [],
+        resolvedBets,
+        raw: rawLogs[0]
       };
     }
 
+    const parseCardList = (raw: unknown): Card[] => {
+      if (!Array.isArray(raw)) return [];
+      return raw
+        .map(parseCardId)
+        .filter((id): id is number => id !== null)
+        .map(cardIdToCard);
+    };
+
+    const normalizedData = Array.isArray(data) ? data[0] : data;
     switch (gameType) {
       case GameType.BLACKJACK: {
-        // {"hands":[{"cards":[...],"value":...,"outcome":"WIN|LOSS|PUSH|BLACKJACK","return":...}],"dealer":{"cards":[...],"value":...},"sideBet":...,"totalReturn":...}
-        const dealerValue = data.dealer?.value ?? '?';
-        const hands = data.hands || [];
-        const firstHand = hands[0];
-        const playerValue = firstHand?.value ?? '?';
-        const outcome = firstHand?.outcome || (netPnL > 0 ? 'WIN' : netPnL < 0 ? 'LOSS' : 'PUSH');
+        // {"hands":[{"cards":[...],"value":...,"status":"...","bet":...,"return":...}],"dealer":{"cards":[...],"value":...},"sideBet21Plus3":...,"sideBetReturn":...}
+        const hands = Array.isArray(normalizedData.hands) ? normalizedData.hands : [];
+        const firstHand = hands[0] ?? {};
+        const dealerValue = Number.isFinite(Number(normalizedData.dealer?.value)) ? Number(normalizedData.dealer.value) : '?';
+        const playerValue = Number.isFinite(Number(firstHand?.value)) ? Number(firstHand.value) : '?';
 
-        const summary = `${outcome}: ${playerValue} vs ${dealerValue}. ${resultPart}`;
-        const details: string[] = [];
-
-        hands.forEach((hand: any, i: number) => {
-          const prefix = hands.length > 1 ? `Hand ${i + 1}: ` : '';
-          const cards = (hand.cards || []).map(cardToString).join(' ');
-          details.push(`${prefix}${cards} (${hand.value}) - ${hand.outcome}`);
+        const handResults = hands.map((hand: any) => {
+          const bet = Number(hand.bet ?? 0);
+          const returned = Number(hand.return ?? 0);
+          const outcome = outcomeFromReturn(bet, returned);
+          const status = typeof hand.status === 'string' ? hand.status : '';
+          let display = outcome;
+          if (status === 'BLACKJACK') display = 'BLACKJACK';
+          else if (status === 'BUSTED') display = 'BUST';
+          else if (status === 'SURRENDERED') display = 'SURRENDER';
+          return { outcome, display };
         });
 
-        if (data.dealer?.cards) {
-          details.push(`Dealer: ${data.dealer.cards.map(cardToString).join(' ')} (${dealerValue})`);
+        const playerValues = hands
+          .map((hand: any) => hand?.value)
+          .filter((val: any) => Number.isFinite(Number(val)))
+          .map((val: any) => Number(val));
+        const playerLabel = playerValues.length > 0 ? playerValues.join('/') : playerValue;
+        const summary = formatSummaryLine(`P: ${playerLabel}, D: ${dealerValue}`);
+
+        const details: string[] = handResults.map((hand, i) => (
+          formatBetResult(handResults.length > 1 ? `Hand ${i + 1}` : 'Hand', hand.display)
+        ));
+        const resolvedBets = buildResolvedBets(
+          hands.map((hand: any, i: number) => {
+            const bet = Number(hand.bet ?? 0);
+            const returned = Number(hand.return ?? 0);
+            const label = handResults.length > 1 ? `Hand ${i + 1}` : 'Hand';
+            return { label, pnl: returned - bet };
+          })
+        );
+
+        const sideBet = Number(normalizedData.sideBet21Plus3 ?? 0);
+        if (sideBet > 0) {
+          const sideReturn = Number(normalizedData.sideBetReturn ?? 0);
+          details.push(formatBetResult('21+3', outcomeFromReturn(sideBet, sideReturn)));
+          resolvedBets.push({
+            id: `21plus3-${resolvedBets.length}`,
+            label: '21+3',
+            pnl: normalizePnl(sideReturn - sideBet),
+          });
         }
 
-        if (data.sideBet) {
-          const sb = data.sideBet;
-          details.push(`Side Bet (${sb.type}): ${sb.outcome} ${sb.return > 0 ? `+$${sb.return}` : ''}`);
-        }
-
-        return { summary, details, raw: data };
+        return { summary, details, resolvedBets, raw: normalizedData };
       }
 
       case GameType.BACCARAT: {
         // {"player":{"cards":[...],"total":..},"banker":{"cards":[...],"total":..},"winner":"PLAYER|BANKER|TIE","bets":[...],"totalWagered":..,"totalReturn":..}
-        const winner = data.winner || 'TIE';
         const betTypeMap: Record<string, string> = {
           PLAYER: 'PLAYER',
           BANKER: 'BANKER',
@@ -1699,58 +1987,75 @@ export const parseGameLogs = (gameType: GameType, logs: string[], netPnL: number
           BANKER_PERFECT_PAIR: 'B_PERFECT_PAIR',
         };
         const formatBetType = (raw: string) => betTypeMap[raw] ?? raw;
-        const formatCard = (card: unknown): string => {
-          if (typeof card === 'number') return cardToString(card);
-          if (typeof card === 'string') {
-            const parsed = Number(card);
-            if (!Number.isNaN(parsed)) return cardToString(parsed);
-            return card;
-          }
-          return '?';
-        };
 
-        const player = data.player || {};
-        const banker = data.banker || {};
+        const player = normalizedData.player || {};
+        const banker = normalizedData.banker || {};
         const pTotal = typeof player.total === 'number' ? player.total : null;
         const bTotal = typeof banker.total === 'number' ? banker.total : null;
-        const pCards = Array.isArray(player.cards) ? player.cards.map(formatCard).join(' ') : '';
-        const bCards = Array.isArray(banker.cards) ? banker.cards.map(formatCard).join(' ') : '';
-
-        const score = pTotal !== null && bTotal !== null ? ` ${pTotal}-${bTotal}` : '';
-        const summary = `${winner} wins${score}. ${resultPart}`;
+        const summary = formatSummaryLine(`P: ${pTotal ?? '?'}, B: ${bTotal ?? '?'}`);
         const details: string[] = [];
-        if (pCards) details.push(`Player: ${pCards}${pTotal !== null ? ` (${pTotal})` : ''}`);
-        if (bCards) details.push(`Banker: ${bCards}${bTotal !== null ? ` (${bTotal})` : ''}`);
+        const resolvedEntries: Array<{ label: string; pnl: number }> = [];
 
-        (data.bets || []).forEach((bet: any) => {
-          const betType = formatBetType(bet.type);
-          const amount = Number(bet.amount ?? 0);
+        (normalizedData.bets || []).forEach((bet: any) => {
+          const betType = formatBetType(String(bet.type ?? ''));
           const payout = Number(bet.payout ?? 0);
-          const outcome = bet.result || (payout > 0 ? 'WIN' : payout < 0 ? 'LOSS' : 'PUSH');
-          if (outcome === 'PUSH') {
-            details.push(`${betType}: PUSH`);
-            return;
-          }
-          if (payout > 0) {
-            details.push(`${betType}: ${outcome} (+$${payout})`);
-            return;
-          }
-          const lossAmount = payout < 0 ? Math.abs(payout) : amount;
-          details.push(`${betType}: ${outcome} (-$${lossAmount})`);
+          const outcome = typeof bet.result === 'string'
+            ? bet.result
+            : (payout > 0 ? 'WIN' : payout < 0 ? 'LOSS' : 'PUSH');
+          details.push(formatBetResult(betType, outcome));
+          const amount = Number(bet.amount ?? 0);
+          const pnl = Number.isFinite(payout) && payout !== 0
+            ? payout
+            : outcome === 'WIN'
+              ? amount
+              : outcome === 'LOSS'
+                ? -amount
+                : 0;
+          resolvedEntries.push({ label: betType, pnl });
         });
 
-        return { summary, details, raw: data };
+        return { summary, details, resolvedBets: buildResolvedBets(resolvedEntries), raw: normalizedData };
       }
 
       case GameType.ROULETTE: {
         // {"result":...,"color":"RED|BLACK|GREEN","bets":[...],"totalWagered":...,"totalReturn":...}
-        const result = data.result;
-        const color = data.color || getRouletteColor(result);
+        const resultValue = Number.isFinite(Number(normalizedData.result)) ? Number(normalizedData.result) : null;
+        const displayNumber = resultValue !== null ? formatRouletteNumber(resultValue) : '?';
+        const color = normalizedData.color || (resultValue !== null ? getRouletteColor(resultValue) : 'GREEN');
 
-        const summary = `${result} ${color}. ${resultPart}`;
+        const summary = formatSummaryLine(`Roll: ${displayNumber} ${color}`);
         const details: string[] = [];
+        const resolvedEntries: Array<{ label: string; pnl: number }> = [];
+        const zeroRule = state?.rouletteZeroRule ?? 'STANDARD';
 
-        (data.bets || []).forEach((bet: any) => {
+        const mapRouletteLogBet = (bet: any): RouletteBet | null => {
+          const rawType = String(bet.type ?? '');
+          const number = typeof bet.number === 'number' ? bet.number : bet.target;
+          const amount = Number(bet.amount ?? 0);
+          if (!rawType) return null;
+          if (rawType === 'DOZEN') {
+            const mapped = number === 0 ? 'DOZEN_1' : number === 1 ? 'DOZEN_2' : 'DOZEN_3';
+            return { type: mapped, amount };
+          }
+          if (rawType === 'COLUMN') {
+            const mapped = number === 0 ? 'COL_1' : number === 1 ? 'COL_2' : 'COL_3';
+            return { type: mapped, amount };
+          }
+          if (rawType === 'STRAIGHT' && Number.isInteger(number)) {
+            return { type: 'STRAIGHT', target: number, amount };
+          }
+          if (rawType === 'SPLIT_H' || rawType === 'SPLIT_V' || rawType === 'STREET' || rawType === 'CORNER' || rawType === 'SIX_LINE') {
+            return Number.isFinite(Number(number))
+              ? { type: rawType as RouletteBet['type'], target: Number(number), amount }
+              : { type: rawType as RouletteBet['type'], amount };
+          }
+          if (rawType === 'RED' || rawType === 'BLACK' || rawType === 'ODD' || rawType === 'EVEN' || rawType === 'LOW' || rawType === 'HIGH') {
+            return { type: rawType as RouletteBet['type'], amount };
+          }
+          return null;
+        };
+
+        (normalizedData.bets || []).forEach((bet: any) => {
           const rawType = String(bet.type ?? '');
           const number = typeof bet.number === 'number' ? bet.number : bet.target;
           const displayType = rawType === 'DOZEN' && Number.isInteger(number)
@@ -1767,66 +2072,65 @@ export const parseGameLogs = (gameType: GameType, logs: string[], netPnL: number
             : bet.outcome
               ? bet.outcome === 'WIN'
               : bet.return > 0;
-          const payoutMult = (() => {
-            switch (rawType) {
-              case 'STRAIGHT': return 35;
-              case 'RED':
-              case 'BLACK':
-              case 'EVEN':
-              case 'ODD':
-              case 'LOW':
-              case 'HIGH':
-                return 1;
-              case 'DOZEN':
-              case 'COLUMN':
-                return 2;
-              case 'SPLIT_H':
-              case 'SPLIT_V':
-                return 17;
-              case 'STREET': return 11;
-              case 'CORNER': return 8;
-              case 'SIX_LINE': return 5;
-              default: return null;
+          details.push(formatBetResult(label, won ? 'WIN' : 'LOSS'));
+
+          if (resultValue !== null) {
+            const mapped = mapRouletteLogBet(bet);
+            if (mapped) {
+              const { pnl } = resolveRouletteBets(resultValue, [mapped], zeroRule);
+              resolvedEntries.push({ label, pnl });
             }
-          })();
-          const amount = Number(bet.amount ?? 0);
-          if (won) {
-            const profit = payoutMult !== null && amount > 0 ? amount * payoutMult : 0;
-            details.push(`${label}: WIN${profit > 0 ? ` (+$${profit})` : ''}`);
-          } else {
-            details.push(`${label}: LOSS${amount > 0 ? ` (-$${amount})` : ''}`);
           }
         });
 
-        return { summary, details, raw: data };
+        return { summary, details, resolvedBets: buildResolvedBets(resolvedEntries), raw: normalizedData };
       }
 
       case GameType.CRAPS: {
         // {"dice":[d1,d2],"total":...,"phase":"COME_OUT|POINT","point":...,"bets":[...],"totalWagered":...,"totalReturn":...}
-        const dice = data.dice || [];
-        const total = data.total || (dice[0] + dice[1]);
+        const dice = Array.isArray(normalizedData.dice) ? normalizedData.dice : [];
+        const totalValue = Number.isFinite(Number(normalizedData.total))
+          ? Number(normalizedData.total)
+          : (dice.length === 2 ? Number(dice[0]) + Number(dice[1]) : 0);
+        const totalLabel = totalValue > 0 ? totalValue : '?';
 
-        const summary = `Rolled ${total} (${dice.join('-')}). ${resultPart}`;
+        const diceLabel = Array.isArray(dice) && dice.length === 2 ? ` (${dice[0]}-${dice[1]})` : '';
+        const summary = formatSummaryLine(`Roll: ${totalLabel}${diceLabel}`);
         const details: string[] = [];
+        const resolvedEntries: Array<{ label: string; pnl: number }> = [];
 
-        (data.bets || []).forEach((bet: any) => {
-          const target = bet.target ? ` ${bet.target}` : '';
-          details.push(`${bet.type}${target}: ${bet.outcome}`);
+        (normalizedData.bets || []).forEach((bet: any) => {
+          const type = typeof bet.type === 'string' ? bet.type : '';
+          if (!type) return;
+          const target = Number.isFinite(Number(bet.target)) ? Number(bet.target) : undefined;
+          const wagered = Number(bet.wagered ?? 0);
+          const returned = Number(bet.return ?? bet.returnAmount ?? 0);
+          const odds = Number(bet.odds ?? 0);
+          const outcome = typeof bet.outcome === 'string'
+            ? bet.outcome
+            : outcomeFromReturn(wagered, returned);
+          const label = formatCrapsBetLabel(type, target);
+          details.push(formatBetResult(label, outcome));
+          resolvedEntries.push({ label, pnl: returned - wagered - odds });
         });
 
-        return { summary, details, raw: data };
+        return { summary, details, resolvedBets: buildResolvedBets(resolvedEntries), raw: normalizedData };
       }
 
       case GameType.SIC_BO: {
         // {"dice":[d1,d2,d3],"total":...,"isTriple":...,"bets":[...],"totalWagered":...,"totalReturn":...}
-        const dice = data.dice || [];
-        const total = data.total || dice.reduce((a: number, b: number) => a + b, 0);
-        const tripleNote = data.isTriple ? ' (TRIPLE)' : '';
+        const dice = Array.isArray(normalizedData.dice) ? normalizedData.dice : [];
+        const total = Number.isFinite(Number(normalizedData.total))
+          ? Number(normalizedData.total)
+          : dice.reduce((a: number, b: number) => a + b, 0);
+        const tripleNote = normalizedData.isTriple ? ' (TRIPLE)' : '';
 
-        const summary = `Rolled ${total}${tripleNote}. ${resultPart}`;
-        const details: string[] = [`Dice: ${dice.join('-')}`];
+        const diceLabel = Array.isArray(dice) && dice.length === 3 ? ` (${dice.join('-')})` : '';
+        const summary = formatSummaryLine(`Roll: ${total}${diceLabel}${tripleNote}`);
+        const details: string[] = [];
+        const resolvedEntries: Array<{ label: string; pnl: number }> = [];
 
-        (data.bets || []).forEach((bet: any) => {
+        (normalizedData.bets || []).forEach((bet: any) => {
           const betTypeMap: Record<string, string> = {
             SPECIFIC_TRIPLE: 'TRIPLE_SPECIFIC',
             ANY_TRIPLE: 'TRIPLE_ANY',
@@ -1841,98 +2145,296 @@ export const parseGameLogs = (gameType: GameType, logs: string[], netPnL: number
           const displayType = betTypeMap[rawType] ?? rawType;
           const number = typeof bet.number === 'number' ? bet.number : undefined;
           const label = `${displayType}${number !== undefined && number > 0 ? ` ${number}` : ''}`;
-          const payout = Number(bet.payout ?? 0);
+          const won = typeof bet.won === 'boolean' ? bet.won : Number(bet.payout ?? 0) > 0;
+          details.push(formatBetResult(label, won ? 'WIN' : 'LOSS'));
           const amount = Number(bet.amount ?? 0);
-          const won = typeof bet.won === 'boolean' ? bet.won : payout > 0;
-          if (won) {
-            const profit = payout > amount ? payout - amount : payout;
-            details.push(`${label}: WIN${profit > 0 ? ` (+$${profit})` : ''}`);
-          } else {
-            details.push(`${label}: LOSS${amount > 0 ? ` (-$${amount})` : ''}`);
-          }
+          const payout = Number(bet.payout ?? 0);
+          resolvedEntries.push({ label, pnl: payout - amount });
         });
 
-        return { summary, details, raw: data };
+        return { summary, details, resolvedBets: buildResolvedBets(resolvedEntries), raw: normalizedData };
       }
 
       case GameType.HILO: {
-        // {"previousCard":...,"newCard":...,"guess":"HIGHER|LOWER|SAME","correct":...,"multiplier":...,"streak":...}
-        const newCard = cardToString(data.newCard);
-        const prevCard = cardToString(data.previousCard);
-        const outcome = data.correct ? 'CORRECT' : 'WRONG';
+        // {"previousCard":...,"newCard":...,"guess":"HIGHER|LOWER|SAME|CASHOUT","correct":...,"push":...}
+        const guess = typeof normalizedData.guess === 'string' ? normalizedData.guess : '';
+        const prevId = parseCardId(normalizedData.previousCard);
+        const nextId = parseCardId(normalizedData.newCard);
+        const prevCard = prevId !== null ? cardToString(prevId) : '?';
+        const nextCard = nextId !== null ? cardToString(nextId) : '?';
+        const isCashout = guess === 'CASHOUT';
 
-        const summary = `${outcome}: ${prevCard} → ${newCard}. ${resultPart}`;
-        const details: string[] = [
-          `Guess: ${data.guess}`,
-          `${data.correct ? 'Correct!' : 'Wrong!'} Streak: ${data.streak}`
-        ];
+        if (isCashout) {
+          const summary = formatSummaryLine(`Cashout: ${prevCard}`);
+          const details = [formatBetResult('CASHOUT', netPnL !== 0 ? 'WIN' : 'COMPLETE')];
+          const resolvedBets = buildResolvedBets([{ label: 'CASHOUT', pnl: netPnL }]);
+          return { summary, details, resolvedBets, raw: data };
+        }
 
-        return { summary, details, raw: data };
+        const result = normalizedData.push ? 'PUSH' : normalizedData.correct ? 'CORRECT' : 'WRONG';
+        const summary = formatSummaryLine(`${prevCard} -> ${nextCard}`);
+        const details = guess ? [formatBetResult(guess, result)] : [];
+        const resolvedBets = guess ? buildResolvedBets([{ label: guess, pnl: netPnL }]) : [];
+        return { summary, details, resolvedBets, raw: normalizedData };
       }
 
       case GameType.THREE_CARD: {
-        // {"player":{"cards":[...],"rank":"..."},"dealer":{"cards":[...],"rank":"...","qualifies":...},"outcome":"...","bets":{...},"totalReturn":...}
-        const pRank = data.player?.rank || '?';
-        const dRank = data.dealer?.rank || '?';
-        const outcome = data.outcome || (netPnL > 0 ? 'WIN' : netPnL < 0 ? 'LOSS' : 'PUSH');
+        // {"player":{"cards":[...],"rank":"..."},"dealer":{"cards":[...],"rank":"...","qualifies":...},"folded":...,"outcome":"...","anteBet":...,"playBet":...,"pairplusBet":...,"sixCardBet":...,"progressiveBet":...,"pairplusReturn":...,"sixCardReturn":...,"progressiveReturn":...}
+        const pRank = typeof normalizedData.player?.rank === 'string' ? formatRankLabel(normalizedData.player.rank) : '?';
+        const dRank = typeof normalizedData.dealer?.rank === 'string' ? formatRankLabel(normalizedData.dealer.rank) : '?';
+        const rawOutcome = typeof normalizedData.outcome === 'string'
+          ? normalizedData.outcome
+          : (netPnL > 0 ? 'WIN' : netPnL < 0 ? 'LOSS' : 'PUSH');
+        const summary = formatSummaryLine(
+          `P: ${pRank}, D: ${dRank}${rawOutcome === 'DEALER_NO_QUALIFY' ? ' (NO QUALIFY)' : ''}`,
+        );
 
-        const summary = `${outcome}: ${pRank} vs ${dRank}. ${resultPart}`;
         const details: string[] = [];
+        const folded = Boolean(normalizedData.folded);
+        const anteBet = Number(normalizedData.anteBet ?? 0);
+        const playBet = Number(normalizedData.playBet ?? 0);
+        const anteBonus = Number(normalizedData.anteBonus ?? 0);
+        const resolvedEntries: Array<{ label: string; pnl: number }> = [];
 
-        if (data.player?.cards) details.push(`Player: ${data.player.cards.map(cardToString).join(' ')} (${pRank})`);
-        if (data.dealer?.cards) details.push(`Dealer: ${data.dealer.cards.map(cardToString).join(' ')} (${dRank})`);
-        if (!data.dealer?.qualifies) details.push('Dealer does not qualify');
+        let anteOutcome = 'PUSH';
+        let playOutcome = 'PUSH';
+        if (folded) {
+          anteOutcome = 'LOSS';
+          playOutcome = 'FOLD';
+        } else if (rawOutcome === 'DEALER_NO_QUALIFY') {
+          anteOutcome = 'WIN';
+          playOutcome = 'PUSH';
+        } else if (rawOutcome === 'WIN') {
+          anteOutcome = 'WIN';
+          playOutcome = 'WIN';
+        } else if (rawOutcome === 'LOSS') {
+          anteOutcome = 'LOSS';
+          playOutcome = 'LOSS';
+        }
 
-        return { summary, details, raw: data };
+        if (anteBet > 0) details.push(formatBetResult('ANTE', anteOutcome));
+        if (playBet > 0 || folded) details.push(formatBetResult('PLAY', playOutcome));
+        if (anteBet > 0) {
+          let antePnl = 0;
+          if (folded) {
+            antePnl = -anteBet;
+          } else if (rawOutcome === 'DEALER_NO_QUALIFY') {
+            antePnl = anteBet + anteBonus;
+          } else if (rawOutcome === 'WIN') {
+            antePnl = anteBet + anteBonus;
+          } else if (rawOutcome === 'LOSS') {
+            antePnl = -anteBet;
+          }
+          resolvedEntries.push({ label: 'ANTE', pnl: antePnl });
+        }
+        if (playBet > 0 || folded) {
+          let playPnl = 0;
+          if (folded) {
+            playPnl = 0;
+          } else if (rawOutcome === 'WIN') {
+            playPnl = playBet;
+          } else if (rawOutcome === 'LOSS') {
+            playPnl = -playBet;
+          }
+          resolvedEntries.push({ label: 'PLAY', pnl: playPnl });
+        }
+
+        const pairplusBet = Number(normalizedData.pairplusBet ?? 0);
+        const pairplusReturn = Number(normalizedData.pairplusReturn ?? 0);
+        if (pairplusBet > 0) {
+          details.push(formatBetResult('PAIR PLUS', outcomeFromReturn(pairplusBet, pairplusReturn)));
+          resolvedEntries.push({ label: 'PAIR PLUS', pnl: pairplusReturn - pairplusBet });
+        }
+
+        const sixCardBet = Number(normalizedData.sixCardBet ?? 0);
+        const sixCardReturn = Number(normalizedData.sixCardReturn ?? 0);
+        if (sixCardBet > 0) {
+          details.push(formatBetResult('SIX CARD', outcomeFromReturn(sixCardBet, sixCardReturn)));
+          resolvedEntries.push({ label: 'SIX CARD', pnl: sixCardReturn - sixCardBet });
+        }
+
+        const progressiveBet = Number(normalizedData.progressiveBet ?? 0);
+        const progressiveReturn = Number(normalizedData.progressiveReturn ?? 0);
+        if (progressiveBet > 0) {
+          details.push(formatBetResult('PROGRESSIVE', outcomeFromReturn(progressiveBet, progressiveReturn)));
+          resolvedEntries.push({ label: 'PROGRESSIVE', pnl: progressiveReturn - progressiveBet });
+        }
+
+        return { summary, details, resolvedBets: buildResolvedBets(resolvedEntries), raw: normalizedData };
       }
 
       case GameType.ULTIMATE_HOLDEM: {
-        // {"player":{"cards":[...],"rank":"..."},"dealer":{"cards":[...],"rank":"...","qualifies":...},"community":[...],"outcome":"...","bets":{...},"totalReturn":...}
-        const pRank = data.player?.rank || '?';
-        const dRank = data.dealer?.rank || '?';
-        const outcome = data.outcome || (netPnL > 0 ? 'WIN' : netPnL < 0 ? 'LOSS' : 'PUSH');
+        // {"player":{"cards":[...],"rank":"..."},"dealer":{"cards":[...],"rank":"...","qualifies":...},"community":[...],"outcome":"...","anteBet":...,"blindBet":...,"playBet":...,"tripsBet":...,"sixCardBet":...,"progressiveBet":...}
+        const playerRankRaw = typeof normalizedData.player?.rank === 'string' ? normalizedData.player.rank : '';
+        const dealerRankRaw = typeof normalizedData.dealer?.rank === 'string' ? normalizedData.dealer.rank : '';
+        const playerRankLabel = playerRankRaw ? formatRankLabel(playerRankRaw) : '?';
+        const dealerRankLabel = dealerRankRaw ? formatRankLabel(dealerRankRaw) : '?';
+        const dealerQualifies = Boolean(normalizedData.dealer?.qualifies);
+        const rawOutcome = typeof normalizedData.outcome === 'string'
+          ? normalizedData.outcome
+          : (netPnL > 0 ? 'WIN' : netPnL < 0 ? 'LOSS' : 'PUSH');
 
-        const summary = `${outcome}: ${pRank} vs ${dRank}. ${resultPart}`;
+        const summary = formatSummaryLine(
+          `P: ${playerRankLabel}, D: ${dealerRankLabel}${!dealerQualifies ? ' (NO QUALIFY)' : ''}${rawOutcome === 'FOLD' ? ' (FOLD)' : ''}`,
+        );
+
         const details: string[] = [];
+        const anteBet = Number(normalizedData.anteBet ?? 0);
+        const blindBet = Number(normalizedData.blindBet ?? 0);
+        const playBet = Number(normalizedData.playBet ?? 0);
+        const resolvedEntries: Array<{ label: string; pnl: number }> = [];
 
-        if (data.player?.cards) details.push(`Player: ${data.player.cards.map(cardToString).join(' ')}`);
-        if (data.community) details.push(`Board: ${data.community.map(cardToString).join(' ')}`);
-        if (data.dealer?.cards) details.push(`Dealer: ${data.dealer.cards.map(cardToString).join(' ')}`);
-        if (!data.dealer?.qualifies) details.push('Dealer does not qualify');
+        let anteOutcome = 'PUSH';
+        let blindOutcome = 'PUSH';
+        let playOutcome = 'PUSH';
+        if (rawOutcome === 'FOLD') {
+          anteOutcome = 'LOSS';
+          blindOutcome = 'LOSS';
+          playOutcome = 'FOLD';
+        } else if (rawOutcome === 'WIN') {
+          if (!dealerQualifies) {
+            anteOutcome = 'WIN';
+            blindOutcome = 'PUSH';
+            playOutcome = 'PUSH';
+          } else {
+            anteOutcome = 'WIN';
+            playOutcome = 'WIN';
+            blindOutcome = isStraightOrBetter(playerRankRaw) ? 'WIN' : 'PUSH';
+          }
+        } else if (rawOutcome === 'LOSS') {
+          if (!dealerQualifies) {
+            anteOutcome = 'PUSH';
+          } else {
+            anteOutcome = 'LOSS';
+          }
+          blindOutcome = 'LOSS';
+          playOutcome = 'LOSS';
+        }
 
-        return { summary, details, raw: data };
+        if (anteBet > 0) details.push(formatBetResult('ANTE', anteOutcome));
+        if (blindBet > 0) details.push(formatBetResult('BLIND', blindOutcome));
+        if (playBet > 0 || rawOutcome === 'FOLD') details.push(formatBetResult('PLAY', playOutcome));
+        if (anteBet > 0) {
+          let antePnl = 0;
+          if (rawOutcome === 'FOLD') {
+            antePnl = -anteBet;
+          } else if (rawOutcome === 'WIN') {
+            antePnl = anteBet;
+          } else if (rawOutcome === 'LOSS') {
+            antePnl = !dealerQualifies ? 0 : -anteBet;
+          }
+          resolvedEntries.push({ label: 'ANTE', pnl: antePnl });
+        }
+        if (blindBet > 0) {
+          let blindPnl = 0;
+          if (rawOutcome === 'FOLD') {
+            blindPnl = -blindBet;
+          } else if (rawOutcome === 'WIN') {
+            blindPnl = dealerQualifies ? uthBlindBonusWinnings(anteBet, playerRankRaw) : 0;
+          } else if (rawOutcome === 'LOSS') {
+            blindPnl = -blindBet;
+          }
+          resolvedEntries.push({ label: 'BLIND', pnl: blindPnl });
+        }
+        if (playBet > 0 || rawOutcome === 'FOLD') {
+          let playPnl = 0;
+          if (rawOutcome === 'WIN') {
+            playPnl = playBet;
+          } else if (rawOutcome === 'LOSS') {
+            playPnl = -playBet;
+          }
+          resolvedEntries.push({ label: 'PLAY', pnl: playPnl });
+        }
+
+        const tripsBet = Number(normalizedData.tripsBet ?? 0);
+        if (tripsBet > 0) {
+          details.push(formatBetResult('TRIPS', isTripsOrBetter(playerRankRaw) ? 'WIN' : 'LOSS'));
+          const mult = uthTripsMultiplier(playerRankRaw);
+          resolvedEntries.push({ label: 'TRIPS', pnl: mult > 0 ? tripsBet * mult : -tripsBet });
+        }
+
+        const progressiveBet = Number(normalizedData.progressiveBet ?? 0);
+        if (progressiveBet > 0) {
+          const holeCards = parseCardList(normalizedData.player?.cards);
+          const communityCards = parseCardList(normalizedData.community);
+          const flopCards = communityCards.slice(0, 3);
+          const progressiveRank = holeCards.length === 2 && flopCards.length === 3
+            ? evaluatePokerHand([...holeCards, ...flopCards]).rank
+            : 'HIGH CARD';
+          details.push(formatBetResult('PROGRESSIVE', isTripsOrBetter(progressiveRank) ? 'WIN' : 'LOSS'));
+          const progressiveReturn = uthProgressiveReturn(holeCards, flopCards, progressiveBet);
+          resolvedEntries.push({
+            label: 'PROGRESSIVE',
+            pnl: progressiveReturn > 0 ? progressiveReturn - progressiveBet : -progressiveBet
+          });
+        }
+
+        const sixCardBet = Number(normalizedData.sixCardBet ?? 0);
+        if (sixCardBet > 0) {
+          const holeCards = parseCardList(normalizedData.player?.cards);
+          const bonusCards = (state?.uthBonusCards ?? []).filter(card => !card.isHidden);
+          const sixCardRank = holeCards.length === 2 && bonusCards.length >= 4
+            ? evaluatePokerHand([...holeCards, ...bonusCards]).rank
+            : 'HIGH CARD';
+          details.push(formatBetResult('SIX CARD', isTripsOrBetter(sixCardRank) ? 'WIN' : 'LOSS'));
+          const mult = uthSixCardMultiplier(sixCardRank);
+          resolvedEntries.push({ label: 'SIX CARD', pnl: mult > 0 ? sixCardBet * mult : -sixCardBet });
+        }
+
+        return { summary, details, resolvedBets: buildResolvedBets(resolvedEntries), raw: normalizedData };
       }
 
       case GameType.CASINO_WAR: {
         // {"playerCard":...,"dealerCard":...,"outcome":"PLAYER_WIN|DEALER_WIN|TIE|...","stage":"DEAL|WAR",...}
-        const pCard = cardToString(data.playerCard);
-        const dCard = cardToString(data.dealerCard);
-        const outcome = data.outcome || (netPnL > 0 ? 'WIN' : netPnL < 0 ? 'LOSS' : 'TIE');
+        const pId = parseCardId(normalizedData.playerCard);
+        const dId = parseCardId(normalizedData.dealerCard);
+        const pCard = pId !== null ? cardToString(pId) : '?';
+        const dCard = dId !== null ? cardToString(dId) : '?';
+        const rawOutcome = typeof normalizedData.outcome === 'string'
+          ? normalizedData.outcome
+          : (netPnL > 0 ? 'PLAYER_WIN' : netPnL < 0 ? 'DEALER_WIN' : 'TIE');
+        const summary = formatSummaryLine(`P: ${pCard}, D: ${dCard}`);
 
-        const summary = `${outcome}: ${pCard} vs ${dCard}. ${resultPart}`;
-        const details: string[] = [
-          `Player: ${pCard}`,
-          `Dealer: ${dCard}`,
-          `Stage: ${data.stage || 'DEAL'}`
-        ];
+        const details: string[] = [];
+        const isPlayerWin = rawOutcome.includes('PLAYER');
+        const isDealerWin = rawOutcome.includes('DEALER');
+        const mainOutcome = isPlayerWin ? 'WIN' : isDealerWin ? 'LOSS' : 'PUSH';
+        details.push(formatBetResult('MAIN', mainOutcome));
+        const resolvedEntries: Array<{ label: string; pnl: number }> = [];
+        const mainBet = Number(state?.bet ?? 0);
+        const payout = Number(normalizedData.payout ?? 0);
+        const mainPnl = payout > 0 ? payout - mainBet : (isPlayerWin ? mainBet : isDealerWin ? -mainBet : 0);
+        if (mainBet > 0 || payout > 0) {
+          resolvedEntries.push({ label: 'MAIN', pnl: mainPnl });
+        }
 
-        return { summary, details, raw: data };
+        const tieBet = Number(normalizedData.tieBet ?? 0);
+        if (tieBet > 0) {
+          const tieReturn = Number(normalizedData.tieBetPayout ?? 0);
+          details.push(formatBetResult('TIE', outcomeFromReturn(tieBet, tieReturn)));
+          resolvedEntries.push({ label: 'TIE', pnl: tieReturn - tieBet });
+        }
+
+        return { summary, details, resolvedBets: buildResolvedBets(resolvedEntries), raw: normalizedData };
       }
 
       case GameType.VIDEO_POKER: {
-        // Video Poker uses simple string logs like "JACKS OR BETTER"
+        const parsed = rawDataLog ? parseVideoPokerLog(rawDataLog) : null;
+        if (parsed) return parsed;
+        const resolvedBets = buildResolvedBets([{ label: 'HAND', pnl: netPnL }]);
         return {
-          summary: `${log}. ${resultPart}`,
-          details: logs,
-          raw: log
+          summary: formatSummaryLine(`Hand: ${rawDataLog ?? rawLogs[0]}`),
+          details: [],
+          resolvedBets,
+          raw: rawDataLog ?? rawLogs[0]
         };
       }
 
       default:
         return {
-          summary: resultPart,
-          details: logs,
-          raw: data
+          summary: formatSummaryLine('OUTCOME PENDING'),
+          details: [],
+          raw: normalizedData
         };
     }
   } catch (e) {

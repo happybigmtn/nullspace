@@ -125,8 +125,7 @@ Down-only mitigation toolkit:
 - Freeroll credits redeemable only via auction, with bonus vesting in Phase 2.
 
 ### Remaining DeFi Gaps (Phase 1)
-1) Treasury vesting enforcement and allocation controls (ledger exists; vesting gates pending).
-2) Optional auction bootstrap finalization (if we want a locked closing price for Phase 2).
+1) Optional auction bootstrap finalization (if we want a locked closing price for Phase 2).
 
 ### Sybil Mitigation Strategy (Phase 1)
 Economic controls:
@@ -227,7 +226,7 @@ process and fee flow back to stakers.
    - Liquidity reserve: 10% of total RNG.
    - Raised USDT seeds a v4 pool at the CCA clearing price.
 3) Convertibility bridge between Commonware and EVM:
-   - Lock/mint or burn/mint model based on canonical domain decision.
+   - Lock/mint model with EVM canonical token (Phase 2 decision).
    - Caps, delays, and emergency pause.
 4) Freeroll bonus pool (Phase 2 only):
    - Up to 15% of total RNG reserved for a "buy 1, get 1 free" bonus tied to
@@ -312,8 +311,8 @@ Two viable models:
 2) Burn/mint (canonical Commonware):
    - Commonware RNG is canonical; EVM RNG is wrapped.
 
-Recommended for Phase 2: canonical EVM token with Commonware as a wrapped
-representation to ensure Uniswap v4 is the source of price truth.
+Decision (locked for Phase 2): canonical EVM token with Commonware as a wrapped
+representation (lock/mint) so Uniswap v4 is the source of price truth.
 
 Bridge rollout options:
 - One-time airdrop claim on EVM based on a Phase 1 snapshot.
@@ -424,7 +423,7 @@ Phase 1 (0-12 months)
 7) Publish economic dashboards and transparency reports.
 
 Phase 2 (convertibility)
-8) Choose canonical RNG domain and bridge model.
+8) Canonical RNG domain chosen: EVM canonical with lock/mint bridge; Commonware bridge module + UI + relayer shipped.
 9) Build ERC-20 RNG + deploy CCA + v4 liquidity launcher.
 10) Implement fee distributor and staking payout (USDT).
 11) Launch convertibility with caps and monitoring.

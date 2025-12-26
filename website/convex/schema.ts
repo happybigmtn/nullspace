@@ -13,6 +13,31 @@ export default defineSchema({
     .index("by_auth_provider_and_subject", ["authProvider", "authSubject"])
     .index("by_stripe_customer_id", ["stripeCustomerId"])
     .index("by_public_key", ["publicKey"]),
+  evm_links: defineTable({
+    userId: v.id("users"),
+    evmAddress: v.string(),
+    chainId: v.number(),
+    status: v.string(),
+    signatureType: v.string(),
+    linkedAtMs: v.number(),
+    lastVerifiedAtMs: v.number(),
+    unlinkedAtMs: v.optional(v.number()),
+  })
+    .index("by_user_id", ["userId"])
+    .index("by_evm_address", ["evmAddress"])
+    .index("by_status", ["status"]),
+  evm_challenges: defineTable({
+    challengeId: v.string(),
+    userId: v.id("users"),
+    evmAddress: v.string(),
+    chainId: v.number(),
+    challenge: v.string(),
+    expiresAtMs: v.number(),
+    usedAtMs: v.optional(v.number()),
+  })
+    .index("by_challenge_id", ["challengeId"])
+    .index("by_user_id", ["userId"])
+    .index("by_evm_address", ["evmAddress"]),
   entitlements: defineTable({
     userId: v.id("users"),
     tier: v.string(),

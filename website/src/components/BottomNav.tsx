@@ -7,6 +7,7 @@ const ITEMS: BottomNavItem[] = [
   { to: '/', label: 'Play', end: true },
   { to: '/swap', label: 'Swap' },
   { to: '/stake', label: 'Stake' },
+  { to: '/bridge', label: 'Bridge' },
   { to: '/security', label: 'Vault' },
   { to: '/explorer', label: 'Explorer' },
 ];
@@ -19,6 +20,7 @@ export const BottomNav: React.FC = () => {
     if (to === '/') return pathname === '/';
     if (to === '/swap') return economyActive;
     if (to === '/stake') return pathname.startsWith('/stake');
+    if (to === '/bridge') return pathname.startsWith('/bridge');
     if (to === '/security') return pathname.startsWith('/security');
     if (to === '/explorer') return pathname.startsWith('/explorer');
     return pathname === to;

@@ -12,7 +12,9 @@
     "snapshot:eligibility": "node scripts/buildEligibilitySnapshot.mjs",
     "finalize:cca:sepolia": "hardhat run scripts/finalizeCca.js --network sepolia",
     "finalize:cca:anvil": "hardhat run scripts/finalizeCca.js --network anvil",
-    "bidders:generate": "node scripts/generateBidders.mjs"
+    "bidders:generate": "node scripts/generateBidders.mjs",
+    "recovery:pool:sepolia": "hardhat run scripts/recoveryPoolActions.js --network sepolia",
+    "recovery:pool:anvil": "hardhat run scripts/recoveryPoolActions.js --network anvil"
   },
   "dependencies": {
     "@openzeppelin/contracts": "^5.0.2",

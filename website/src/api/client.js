@@ -986,6 +986,24 @@ export class CasinoClient {
   }
 
   /**
+   * Get oracle state.
+   * @returns {Promise<Object|null>} Oracle data or null if not found
+   */
+  async getOracleState() {
+    const keyBytes = this.wasm.encodeOracleStateKey();
+    const result = await this.queryState(keyBytes);
+
+    if (result.found && result.value) {
+      if (result.value.type === 'OracleState') {
+        return snakeToCamel(result.value);
+      }
+      return null;
+    }
+
+    return null;
+  }
+
+  /**
    * Get treasury state.
    * @returns {Promise<Object|null>} Treasury data or null if not found
    */
@@ -1004,6 +1022,24 @@ export class CasinoClient {
   }
 
   /**
+   * Get treasury vesting state.
+   * @returns {Promise<Object|null>} TreasuryVesting data or null if not found
+   */
+  async getTreasuryVesting() {
+    const keyBytes = this.wasm.encodeTreasuryVestingKey();
+    const result = await this.queryState(keyBytes);
+
+    if (result.found && result.value) {
+      if (result.value.type === 'TreasuryVesting') {
+        return snakeToCamel(result.value);
+      }
+      return null;
+    }
+
+    return null;
+  }
+
+  /**
    * Get vault registry state.
    * @returns {Promise<Object|null>} VaultRegistry data or null if not found
    */
@@ -1013,6 +1049,24 @@ export class CasinoClient {
 
     if (result.found && result.value) {
       if (result.value.type === 'VaultRegistry') {
+        return snakeToCamel(result.value);
+      }
+      return null;
+    }
+
+    return null;
+  }
+
+  /**
+   * Get player registry state.
+   * @returns {Promise<Object|null>} PlayerRegistry data or null if not found
+   */
+  async getPlayerRegistry() {
+    const keyBytes = this.wasm.encodePlayerRegistryKey();
+    const result = await this.queryState(keyBytes);
+
+    if (result.found && result.value) {
+      if (result.value.type === 'PlayerRegistry') {
         return snakeToCamel(result.value);
       }
       return null;
@@ -1050,6 +1104,43 @@ export class CasinoClient {
 
     if (result.found && result.value) {
       if (result.value.type === 'SavingsBalance') {
+        return snakeToCamel(result.value);
+      }
+      return null;
+    }
+
+    return null;
+  }
+
+  /**
+   * Get bridge state.
+   * @returns {Promise<Object|null>} BridgeState data or null if not found
+   */
+  async getBridgeState() {
+    const keyBytes = this.wasm.encodeBridgeStateKey();
+    const result = await this.queryState(keyBytes);
+
+    if (result.found && result.value) {
+      if (result.value.type === 'BridgeState') {
+        return snakeToCamel(result.value);
+      }
+      return null;
+    }
+
+    return null;
+  }
+
+  /**
+   * Get a bridge withdrawal record.
+   * @param {bigint|number} withdrawalId - Withdrawal ID
+   * @returns {Promise<Object|null>} BridgeWithdrawal data or null if not found
+   */
+  async getBridgeWithdrawal(withdrawalId) {
+    const keyBytes = this.wasm.encodeBridgeWithdrawalKey(withdrawalId);
+    const result = await this.queryState(keyBytes);
+
+    if (result.found && result.value) {
+      if (result.value.type === 'BridgeWithdrawal') {
         return snakeToCamel(result.value);
       }
       return null;
@@ -1105,6 +1196,9 @@ export class CasinoClient {
       }
     };
 
+    const allowLegacyKeys =
+      typeof import.meta !== 'undefined' &&
+      (import.meta.env?.DEV || import.meta.env?.VITE_ALLOW_LEGACY_KEYS === 'true');
     const vaultEnabled =
       typeof window !== 'undefined' && localStorage.getItem('nullspace_vault_enabled') === 'true';
     const unlockedVault = (() => {
@@ -1125,6 +1219,11 @@ export class CasinoClient {
       this.wasm.createKeypair(unlockedVault.nullspaceEd25519PrivateKey);
       console.log('Loaded keypair from passkey vault');
     } else {
+      if (!allowLegacyKeys) {
+        removeStoredPrivateKey();
+        console.warn('[CasinoClient] Legacy browser keys disabled. Unlock passkey vault to continue.');
+        return null;
+      }
       // Security warning for development (legacy mode)
       if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
         console.warn('WARNING: Private keys are stored in localStorage. This is not secure for production use.');

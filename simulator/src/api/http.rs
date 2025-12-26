@@ -1,23 +1,33 @@
 use axum::{
-    body::Bytes, extract::State as AxumState, http::StatusCode, response::IntoResponse, Json,
+    body::Bytes,
+    extract::State as AxumState,
+    http::{header, HeaderValue, StatusCode},
+    response::IntoResponse,
+    Json,
 };
 use commonware_codec::{DecodeExt, Encode, Read, ReadExt, ReadRangeExt};
 use commonware_consensus::aggregation::types::Certificate;
-use commonware_cryptography::{bls12381::primitives::variant::MinSig, sha256::Digest};
+use commonware_cryptography::{
+    bls12381::primitives::variant::MinSig,
+    sha256::Digest,
+};
 use commonware_storage::{
     mmr::verification::Proof,
     store::operation::{Keyless, Variable},
 };
 use commonware_utils::from_hex;
 use nullspace_types::{
-    api::{Submission, Summary},
+    api::Submission,
     execution::{Output, Progress, Value},
-    Query as ChainQuery, NAMESPACE,
+    Query as ChainQuery,
 };
 use serde::Serialize;
+use std::fmt::Write;
 use std::sync::Arc;
 use std::time::Instant;
 
+use crate::metrics::LatencySnapshot;
+use crate::submission::apply_submission;
 use crate::Simulator;
 
 #[derive(Serialize)]
@@ -61,6 +71,181 @@ pub(super) async fn update_index_metrics(
     AxumState(simulator): AxumState<Arc<Simulator>>,
 ) -> impl IntoResponse {
     Json(simulator.update_index_metrics_snapshot())
+}
+
+pub(super) async fn prometheus_metrics(
+    AxumState(simulator): AxumState<Arc<Simulator>>,
+) -> impl IntoResponse {
+    let body = render_prometheus_metrics(&simulator);
+    (
+        StatusCode::OK,
+        [(
+            header::CONTENT_TYPE,
+            HeaderValue::from_static("text/plain; version=0.0.4"),
+        )],
+        body,
+    )
+}
+
+fn render_prometheus_metrics(simulator: &Simulator) -> String {
+    let ws = simulator.ws_metrics_snapshot();
+    let http = simulator.http_metrics_snapshot();
+    let system = simulator.system_metrics_snapshot();
+    let explorer = simulator.explorer_metrics_snapshot();
+    let updates = simulator.update_index_metrics_snapshot();
+
+    let mut out = String::new();
+
+    append_histogram(
+        &mut out,
+        "nullspace_simulator_http_submit_latency_ms",
+        &http.submit,
+    );
+    append_histogram(
+        &mut out,
+        "nullspace_simulator_http_query_state_latency_ms",
+        &http.query_state,
+    );
+    append_histogram(
+        &mut out,
+        "nullspace_simulator_http_query_seed_latency_ms",
+        &http.query_seed,
+    );
+    append_histogram(
+        &mut out,
+        "nullspace_simulator_update_index_proof_latency_ms",
+        &updates.proof_build,
+    );
+
+    append_counter(
+        &mut out,
+        "nullspace_simulator_ws_updates_lagged_total",
+        ws.updates_lagged,
+    );
+    append_counter(
+        &mut out,
+        "nullspace_simulator_ws_mempool_lagged_total",
+        ws.mempool_lagged,
+    );
+    append_counter(
+        &mut out,
+        "nullspace_simulator_ws_updates_queue_full_total",
+        ws.updates_queue_full,
+    );
+    append_counter(
+        &mut out,
+        "nullspace_simulator_ws_mempool_queue_full_total",
+        ws.mempool_queue_full,
+    );
+    append_counter(
+        &mut out,
+        "nullspace_simulator_ws_updates_send_errors_total",
+        ws.updates_send_errors,
+    );
+    append_counter(
+        &mut out,
+        "nullspace_simulator_ws_mempool_send_errors_total",
+        ws.mempool_send_errors,
+    );
+    append_counter(
+        &mut out,
+        "nullspace_simulator_ws_updates_send_timeouts_total",
+        ws.updates_send_timeouts,
+    );
+    append_counter(
+        &mut out,
+        "nullspace_simulator_ws_mempool_send_timeouts_total",
+        ws.mempool_send_timeouts,
+    );
+
+    append_gauge(
+        &mut out,
+        "nullspace_simulator_system_rss_bytes",
+        system.rss_bytes,
+    );
+    append_gauge(
+        &mut out,
+        "nullspace_simulator_system_virtual_bytes",
+        system.virtual_bytes,
+    );
+    append_gauge(
+        &mut out,
+        "nullspace_simulator_system_cpu_usage_percent",
+        system.cpu_usage_percent,
+    );
+
+    append_gauge(
+        &mut out,
+        "nullspace_simulator_explorer_persistence_queue_depth",
+        explorer.persistence_queue_depth,
+    );
+    append_gauge(
+        &mut out,
+        "nullspace_simulator_explorer_persistence_queue_high_water",
+        explorer.persistence_queue_high_water,
+    );
+    append_counter(
+        &mut out,
+        "nullspace_simulator_explorer_persistence_queue_backpressure_total",
+        explorer.persistence_queue_backpressure,
+    );
+    append_counter(
+        &mut out,
+        "nullspace_simulator_explorer_persistence_queue_dropped_total",
+        explorer.persistence_queue_dropped,
+    );
+    append_counter(
+        &mut out,
+        "nullspace_simulator_explorer_persistence_write_errors_total",
+        explorer.persistence_write_errors,
+    );
+    append_counter(
+        &mut out,
+        "nullspace_simulator_explorer_persistence_prune_errors_total",
+        explorer.persistence_prune_errors,
+    );
+
+    append_gauge(
+        &mut out,
+        "nullspace_simulator_update_index_in_flight",
+        updates.in_flight,
+    );
+    append_gauge(
+        &mut out,
+        "nullspace_simulator_update_index_max_in_flight",
+        updates.max_in_flight,
+    );
+    append_counter(
+        &mut out,
+        "nullspace_simulator_update_index_failures_total",
+        updates.failures,
+    );
+
+    out
+}
+
+fn append_counter(out: &mut String, name: &str, value: u64) {
+    let _ = writeln!(out, "# TYPE {name} counter");
+    let _ = writeln!(out, "{name} {value}");
+}
+
+fn append_gauge(out: &mut String, name: &str, value: impl std::fmt::Display) {
+    let _ = writeln!(out, "# TYPE {name} gauge");
+    let _ = writeln!(out, "{name} {value}");
+}
+
+fn append_histogram(out: &mut String, name: &str, snapshot: &LatencySnapshot) {
+    let _ = writeln!(out, "# TYPE {name} histogram");
+    let mut cumulative = 0u64;
+    for (bucket, count) in snapshot.buckets_ms.iter().zip(snapshot.counts.iter()) {
+        cumulative = cumulative.saturating_add(*count);
+        let _ = writeln!(out, "{name}_bucket{{le=\"{bucket}\"}} {cumulative}");
+    }
+    cumulative = cumulative.saturating_add(snapshot.overflow);
+    let _ = writeln!(out, "{name}_bucket{{le=\"+Inf\"}} {cumulative}");
+    let _ = writeln!(out, "{name}_count {}", snapshot.count);
+    let sum = snapshot.avg_ms * snapshot.count as f64;
+    let _ = writeln!(out, "{name}_sum {sum}");
 }
 
 pub(super) async fn submit(
@@ -192,21 +377,12 @@ pub(super) async fn submit(
 
     let start = Instant::now();
     let status = match Submission::decode(&mut body.as_ref()) {
-        Ok(submission) => match submission {
-            Submission::Seed(seed) => {
-                if !seed.verify(NAMESPACE, &simulator.identity) {
-                    tracing::warn!("Seed verification failed (bad identity or corrupted seed)");
-                    StatusCode::BAD_REQUEST
-                } else {
-                    simulator.submit_seed(seed).await;
-                    StatusCode::OK
-                }
-            }
-            Submission::Transactions(txs) => {
-                simulator.submit_transactions(txs);
+        Ok(submission) => match apply_submission(Arc::clone(&simulator), submission, true).await {
+            Ok(()) => {
+                simulator.publish_submission(body.as_ref()).await;
                 StatusCode::OK
             }
-            Submission::Summary(summary) => submit_summary(simulator.clone(), summary).await,
+            Err(_) => StatusCode::BAD_REQUEST,
         },
         Err(e) => {
             let preview_len = std::cmp::min(32, body.len());
@@ -223,29 +399,6 @@ pub(super) async fn submit(
 
     simulator.http_metrics().record_submit(start.elapsed());
     status
-}
-
-async fn submit_summary(simulator: Arc<Simulator>, summary: Summary) -> StatusCode {
-    let (state_digests, events_digests) = match summary.verify(&simulator.identity) {
-        Ok(digests) => digests,
-        Err(err) => {
-            tracing::warn!(
-                ?err,
-                view = summary.progress.view,
-                height = summary.progress.height,
-                state_ops = summary.state_proof_ops.len(),
-                events_ops = summary.events_proof_ops.len(),
-                "Summary verification failed"
-            );
-            return StatusCode::BAD_REQUEST;
-        }
-    };
-
-    simulator
-        .submit_events(summary.clone(), events_digests)
-        .await;
-    simulator.submit_state(summary, state_digests).await;
-    StatusCode::OK
 }
 
 pub(super) async fn query_state(

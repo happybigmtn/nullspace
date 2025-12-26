@@ -384,7 +384,7 @@ fn max_height_postgres(client: &mut Client) -> anyhow::Result<Option<u64>> {
 
 fn prune_to_min_height_postgres(client: &mut Client, min_height: u64) -> anyhow::Result<()> {
     let min_height = to_i64(min_height, "min_height")?;
-    let tx = client.transaction()?;
+    let mut tx = client.transaction()?;
     tx.execute(
         "DELETE FROM explorer_ops WHERE height < $1",
         &[&min_height],

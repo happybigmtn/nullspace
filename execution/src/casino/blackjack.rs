@@ -256,7 +256,7 @@ pub struct BlackjackState {
     pub active_hand_idx: usize,
     pub hands: Vec<HandState>,
     pub dealer_cards: Vec<u8>,
-    pub rules: BlackjackRules,
+    rules: BlackjackRules,
 }
 
 /// Calculate the value of a blackjack hand.

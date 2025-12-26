@@ -4,7 +4,7 @@ import { GameState, SicBoBet } from '../../../types';
 import { MobileDrawer } from '../MobileDrawer';
 import { GameControlBar } from '../GameControlBar';
 import { getSicBoTotalItems, getSicBoCombinationItems, calculateSicBoTotalExposure, calculateSicBoCombinationExposure } from '../../../utils/gameUtils';
-import { DiceRender } from '../GameComponents';
+import { DiceThrow2D } from '../GameComponents';
 
 export const SicBoView = React.memo<{
     gameState: GameState;
@@ -227,17 +227,11 @@ export const SicBoView = React.memo<{
                     </MobileDrawer>
                 </div>
                 {/* Dice Display */}
-                <div className="min-h-[96px] flex gap-8 items-center justify-center">
-                    {gameState.dice.length > 0 && (
-                        <div className="flex flex-col gap-2 items-center">
-                            <span className="text-xs uppercase tracking-widest text-gray-500">ROLL</span>
-                            <div className="flex gap-4">
-                                {gameState.dice.map((d, i) => (
-                                    <DiceRender key={`${gameState.sicBoHistory.length}-${i}`} value={d} delayMs={i * 60} />
-                                ))}
-                            </div>
-                        </div>
-                    )}
+                <div className="min-h-[110px] flex items-center justify-center">
+                    <DiceThrow2D
+                        values={gameState.dice}
+                        rollKey={gameState.sicBoHistory.length}
+                    />
                 </div>
 
                 {/* Center Info */}
@@ -272,11 +266,11 @@ export const SicBoView = React.memo<{
                 {/* History */}
                  {gameState.sicBoHistory.length > 0 && (
                      <div className="flex flex-col items-center gap-1">
-                         <span className="text-[10px] text-gray-600 tracking-widest">HISTORY</span>
-                         <div className="flex gap-2 opacity-50">
+                         <span className="text-[11px] text-gray-400 tracking-widest">HISTORY</span>
+                         <div className="flex gap-2 opacity-80">
                              {gameState.sicBoHistory.slice(-5).reverse().map((roll, i) => (
                                  <div key={i} className="flex gap-0.5 border border-gray-800 p-1 rounded">
-                                     {roll.map((d, j) => <span key={j} className="text-[10px] text-gray-400">{d}</span>)}
+                                     {roll.map((d, j) => <span key={j} className="text-[11px] text-gray-300">{d}</span>)}
                                  </div>
                              ))}
                          </div>

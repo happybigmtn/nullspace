@@ -73,6 +73,14 @@ mod tags {
         pub const DEPOSIT_SAVINGS: u8 = 36;
         pub const WITHDRAW_SAVINGS: u8 = 37;
         pub const CLAIM_SAVINGS_REWARDS: u8 = 38;
+        pub const SEED_AMM: u8 = 39;
+        pub const FINALIZE_AMM_BOOTSTRAP: u8 = 40;
+        pub const SET_TREASURY_VESTING: u8 = 41;
+        pub const RELEASE_TREASURY_ALLOCATION: u8 = 42;
+        pub const BRIDGE_WITHDRAW: u8 = 43;
+        pub const BRIDGE_DEPOSIT: u8 = 44;
+        pub const FINALIZE_BRIDGE_WITHDRAWAL: u8 = 45;
+        pub const UPDATE_ORACLE: u8 = 46;
     }
 
     pub mod key {
@@ -98,12 +106,19 @@ mod tags {
         // Policy + Treasury (19-20)
         pub const POLICY: u8 = 19;
         pub const TREASURY: u8 = 20;
+        pub const TREASURY_VESTING: u8 = 25;
 
-        // Registry (21)
+        // Registry (21, 24)
         pub const VAULT_REGISTRY: u8 = 21;
+        pub const PLAYER_REGISTRY: u8 = 24;
         // Savings (22-23)
         pub const SAVINGS_POOL: u8 = 22;
         pub const SAVINGS_BALANCE: u8 = 23;
+        // Bridge (26-27)
+        pub const BRIDGE_STATE: u8 = 26;
+        pub const BRIDGE_WITHDRAWAL: u8 = 27;
+        // Oracle (28)
+        pub const ORACLE_STATE: u8 = 28;
     }
 
     pub mod value {
@@ -130,12 +145,19 @@ mod tags {
         // Policy + Treasury (19-20)
         pub const POLICY: u8 = 19;
         pub const TREASURY: u8 = 20;
+        pub const TREASURY_VESTING: u8 = 25;
 
-        // Registry (21)
+        // Registry (21, 24)
         pub const VAULT_REGISTRY: u8 = 21;
+        pub const PLAYER_REGISTRY: u8 = 24;
         // Savings (22-23)
         pub const SAVINGS_POOL: u8 = 22;
         pub const SAVINGS_BALANCE: u8 = 23;
+        // Bridge (26-27)
+        pub const BRIDGE_STATE: u8 = 26;
+        pub const BRIDGE_WITHDRAWAL: u8 = 27;
+        // Oracle (28)
+        pub const ORACLE_STATE: u8 = 28;
     }
 
     pub mod event {
@@ -180,6 +202,18 @@ mod tags {
         pub const SAVINGS_DEPOSITED: u8 = 48;
         pub const SAVINGS_WITHDRAWN: u8 = 49;
         pub const SAVINGS_REWARDS_CLAIMED: u8 = 50;
+        // AMM bootstrap events (51-52)
+        pub const AMM_BOOTSTRAPPED: u8 = 51;
+        pub const AMM_BOOTSTRAP_FINALIZED: u8 = 52;
+        // Treasury vesting events (53-54)
+        pub const TREASURY_VESTING_UPDATED: u8 = 53;
+        pub const TREASURY_ALLOCATION_RELEASED: u8 = 54;
+        // Bridge events (55-57)
+        pub const BRIDGE_WITHDRAWAL_REQUESTED: u8 = 55;
+        pub const BRIDGE_WITHDRAWAL_FINALIZED: u8 = 56;
+        pub const BRIDGE_DEPOSIT_CREDITED: u8 = 57;
+        // Oracle events (58)
+        pub const ORACLE_UPDATED: u8 = 58;
     }
 }
 
@@ -456,6 +490,63 @@ pub enum Instruction {
     /// Claim accrued savings rewards.
     /// Binary: [38]
     ClaimSavingsRewards,
+
+    /// Admin: seed the AMM reserves and set a bootstrap price.
+    /// Binary: [39] [rngAmount:u64 BE] [usdtAmount:u64 BE] [bootstrapPriceVusdtNumerator:u64 BE] [bootstrapPriceRngDenominator:u64 BE]
+    SeedAmm {
+        rng_amount: u64,
+        usdt_amount: u64,
+        bootstrap_price_vusdt_numerator: u64,
+        bootstrap_price_rng_denominator: u64,
+    },
+
+    /// Admin: finalize a bootstrap price snapshot for the AMM.
+    /// Binary: [40]
+    FinalizeAmmBootstrap,
+
+    /// Admin: set treasury vesting schedules.
+    /// Binary: [41] [vesting:TreasuryVestingState]
+    SetTreasuryVesting {
+        vesting: crate::casino::TreasuryVestingState,
+    },
+
+    /// Admin: release vested treasury allocation.
+    /// Binary: [42] [bucket:TreasuryBucket] [amount:u64 BE]
+    ReleaseTreasuryAllocation {
+        bucket: crate::casino::TreasuryBucket,
+        amount: u64,
+    },
+
+    /// Bridge: request a withdrawal to EVM.
+    /// Binary: [43] [amount:u64 BE] [destination:bytes]
+    BridgeWithdraw {
+        amount: u64,
+        destination: Vec<u8>,
+    },
+
+    /// Bridge: credit a deposit from EVM (admin-only).
+    /// Binary: [44] [recipient:PublicKey] [amount:u64 BE] [source:bytes]
+    BridgeDeposit {
+        recipient: ed25519::PublicKey,
+        amount: u64,
+        source: Vec<u8>,
+    },
+
+    /// Bridge: finalize a withdrawal after relayer execution (admin-only).
+    /// Binary: [45] [withdrawalId:u64 BE] [source:bytes]
+    FinalizeBridgeWithdrawal {
+        withdrawal_id: u64,
+        source: Vec<u8>,
+    },
+
+    /// Oracle: update price feed (admin-only).
+    /// Binary: [46] [priceVusdtNumerator:u64 BE] [priceRngDenominator:u64 BE] [updatedTs:u64 BE] [source:bytes]
+    UpdateOracle {
+        price_vusdt_numerator: u64,
+        price_rng_denominator: u64,
+        updated_ts: u64,
+        source: Vec<u8>,
+    },
 }
 
 impl Write for Instruction {
@@ -605,6 +696,68 @@ impl Write for Instruction {
             Self::ClaimSavingsRewards => {
                 tags::instruction::CLAIM_SAVINGS_REWARDS.write(writer);
             }
+            Self::SeedAmm {
+                rng_amount,
+                usdt_amount,
+                bootstrap_price_vusdt_numerator,
+                bootstrap_price_rng_denominator,
+            } => {
+                tags::instruction::SEED_AMM.write(writer);
+                rng_amount.write(writer);
+                usdt_amount.write(writer);
+                bootstrap_price_vusdt_numerator.write(writer);
+                bootstrap_price_rng_denominator.write(writer);
+            }
+            Self::FinalizeAmmBootstrap => {
+                tags::instruction::FINALIZE_AMM_BOOTSTRAP.write(writer);
+            }
+            Self::SetTreasuryVesting { vesting } => {
+                tags::instruction::SET_TREASURY_VESTING.write(writer);
+                vesting.write(writer);
+            }
+            Self::ReleaseTreasuryAllocation { bucket, amount } => {
+                tags::instruction::RELEASE_TREASURY_ALLOCATION.write(writer);
+                bucket.write(writer);
+                amount.write(writer);
+            }
+            Self::BridgeWithdraw {
+                amount,
+                destination,
+            } => {
+                tags::instruction::BRIDGE_WITHDRAW.write(writer);
+                amount.write(writer);
+                destination.write(writer);
+            }
+            Self::BridgeDeposit {
+                recipient,
+                amount,
+                source,
+            } => {
+                tags::instruction::BRIDGE_DEPOSIT.write(writer);
+                recipient.write(writer);
+                amount.write(writer);
+                source.write(writer);
+            }
+            Self::FinalizeBridgeWithdrawal {
+                withdrawal_id,
+                source,
+            } => {
+                tags::instruction::FINALIZE_BRIDGE_WITHDRAWAL.write(writer);
+                withdrawal_id.write(writer);
+                source.write(writer);
+            }
+            Self::UpdateOracle {
+                price_vusdt_numerator,
+                price_rng_denominator,
+                updated_ts,
+                source,
+            } => {
+                tags::instruction::UPDATE_ORACLE.write(writer);
+                price_vusdt_numerator.write(writer);
+                price_rng_denominator.write(writer);
+                updated_ts.write(writer);
+                source.write(writer);
+            }
         }
     }
 }
@@ -739,6 +892,39 @@ impl Read for Instruction {
                 amount: u64::read(reader)?,
             },
             tags::instruction::CLAIM_SAVINGS_REWARDS => Self::ClaimSavingsRewards,
+            tags::instruction::SEED_AMM => Self::SeedAmm {
+                rng_amount: u64::read(reader)?,
+                usdt_amount: u64::read(reader)?,
+                bootstrap_price_vusdt_numerator: u64::read(reader)?,
+                bootstrap_price_rng_denominator: u64::read(reader)?,
+            },
+            tags::instruction::FINALIZE_AMM_BOOTSTRAP => Self::FinalizeAmmBootstrap,
+            tags::instruction::SET_TREASURY_VESTING => Self::SetTreasuryVesting {
+                vesting: crate::casino::TreasuryVestingState::read(reader)?,
+            },
+            tags::instruction::RELEASE_TREASURY_ALLOCATION => Self::ReleaseTreasuryAllocation {
+                bucket: crate::casino::TreasuryBucket::read(reader)?,
+                amount: u64::read(reader)?,
+            },
+            tags::instruction::BRIDGE_WITHDRAW => Self::BridgeWithdraw {
+                amount: u64::read(reader)?,
+                destination: Vec::<u8>::read_range(reader, 0..=64)?,
+            },
+            tags::instruction::BRIDGE_DEPOSIT => Self::BridgeDeposit {
+                recipient: PublicKey::read(reader)?,
+                amount: u64::read(reader)?,
+                source: Vec::<u8>::read_range(reader, 0..=64)?,
+            },
+            tags::instruction::FINALIZE_BRIDGE_WITHDRAWAL => Self::FinalizeBridgeWithdrawal {
+                withdrawal_id: u64::read(reader)?,
+                source: Vec::<u8>::read_range(reader, 0..=64)?,
+            },
+            tags::instruction::UPDATE_ORACLE => Self::UpdateOracle {
+                price_vusdt_numerator: u64::read(reader)?,
+                price_rng_denominator: u64::read(reader)?,
+                updated_ts: u64::read(reader)?,
+                source: Vec::<u8>::read_range(reader, 0..=64)?,
+            },
 
             i => return Err(Error::InvalidEnum(i)),
         };
@@ -801,6 +987,46 @@ impl EncodeSize for Instruction {
                     amount.encode_size()
                 }
                 Self::ClaimSavingsRewards => 0,
+                Self::SeedAmm {
+                    rng_amount,
+                    usdt_amount,
+                    bootstrap_price_vusdt_numerator,
+                    bootstrap_price_rng_denominator,
+                } => {
+                    rng_amount.encode_size()
+                        + usdt_amount.encode_size()
+                        + bootstrap_price_vusdt_numerator.encode_size()
+                        + bootstrap_price_rng_denominator.encode_size()
+                }
+                Self::FinalizeAmmBootstrap => 0,
+                Self::SetTreasuryVesting { vesting } => vesting.encode_size(),
+                Self::ReleaseTreasuryAllocation { bucket, amount } => {
+                    bucket.encode_size() + amount.encode_size()
+                }
+                Self::BridgeWithdraw {
+                    amount,
+                    destination,
+                } => amount.encode_size() + destination.encode_size(),
+                Self::BridgeDeposit {
+                    recipient,
+                    amount,
+                    source,
+                } => recipient.encode_size() + amount.encode_size() + source.encode_size(),
+                Self::FinalizeBridgeWithdrawal {
+                    withdrawal_id,
+                    source,
+                } => withdrawal_id.encode_size() + source.encode_size(),
+                Self::UpdateOracle {
+                    price_vusdt_numerator,
+                    price_rng_denominator,
+                    updated_ts,
+                    source,
+                } => {
+                    price_vusdt_numerator.encode_size()
+                        + price_rng_denominator.encode_size()
+                        + updated_ts.encode_size()
+                        + source.encode_size()
+                }
             }
     }
 }
@@ -1102,13 +1328,21 @@ pub enum Key {
     // Policy + Treasury (Tags 19-20)
     Policy,
     Treasury,
+    TreasuryVesting,
 
-    // Registry (Tag 21)
+    // Registry (Tags 21, 24)
     VaultRegistry,
+    PlayerRegistry,
 
     // Savings (Tags 22-23)
     SavingsPool,
     SavingsBalance(PublicKey),
+
+    // Bridge (Tags 26-27)
+    BridgeState,
+    BridgeWithdrawal(u64),
+    // Oracle (Tag 28)
+    OracleState,
 }
 
 impl Write for Key {
@@ -1154,12 +1388,20 @@ impl Write for Key {
             }
             Self::Policy => tags::key::POLICY.write(writer),
             Self::Treasury => tags::key::TREASURY.write(writer),
+            Self::TreasuryVesting => tags::key::TREASURY_VESTING.write(writer),
             Self::VaultRegistry => tags::key::VAULT_REGISTRY.write(writer),
+            Self::PlayerRegistry => tags::key::PLAYER_REGISTRY.write(writer),
             Self::SavingsPool => tags::key::SAVINGS_POOL.write(writer),
             Self::SavingsBalance(pk) => {
                 tags::key::SAVINGS_BALANCE.write(writer);
                 pk.write(writer);
             }
+            Self::BridgeState => tags::key::BRIDGE_STATE.write(writer),
+            Self::BridgeWithdrawal(id) => {
+                tags::key::BRIDGE_WITHDRAWAL.write(writer);
+                id.write(writer);
+            }
+            Self::OracleState => tags::key::ORACLE_STATE.write(writer),
         }
     }
 }
@@ -1189,9 +1431,14 @@ impl Read for Key {
             tags::key::LP_BALANCE => Self::LpBalance(PublicKey::read(reader)?),
             tags::key::POLICY => Self::Policy,
             tags::key::TREASURY => Self::Treasury,
+            tags::key::TREASURY_VESTING => Self::TreasuryVesting,
             tags::key::VAULT_REGISTRY => Self::VaultRegistry,
+            tags::key::PLAYER_REGISTRY => Self::PlayerRegistry,
             tags::key::SAVINGS_POOL => Self::SavingsPool,
             tags::key::SAVINGS_BALANCE => Self::SavingsBalance(PublicKey::read(reader)?),
+            tags::key::BRIDGE_STATE => Self::BridgeState,
+            tags::key::BRIDGE_WITHDRAWAL => Self::BridgeWithdrawal(u64::read(reader)?),
+            tags::key::ORACLE_STATE => Self::OracleState,
 
             i => return Err(Error::InvalidEnum(i)),
         };
@@ -1221,11 +1468,16 @@ impl EncodeSize for Key {
                 Self::Vault(_) => PublicKey::SIZE,
                 Self::AmmPool => 0,
                 Self::LpBalance(_) => PublicKey::SIZE,
-            Self::Policy => 0,
-            Self::Treasury => 0,
-            Self::VaultRegistry => 0,
-            Self::SavingsPool => 0,
-            Self::SavingsBalance(_) => PublicKey::SIZE,
+                Self::Policy => 0,
+                Self::Treasury => 0,
+                Self::TreasuryVesting => 0,
+                Self::VaultRegistry => 0,
+                Self::PlayerRegistry => 0,
+                Self::SavingsPool => 0,
+                Self::SavingsBalance(_) => PublicKey::SIZE,
+                Self::BridgeState => 0,
+                Self::BridgeWithdrawal(_) => u64::SIZE,
+                Self::OracleState => 0,
         }
     }
 }
@@ -1262,13 +1514,21 @@ pub enum Value {
     // Policy + Treasury (Tags 19-20)
     Policy(crate::casino::PolicyState),
     Treasury(crate::casino::TreasuryState),
+    TreasuryVesting(crate::casino::TreasuryVestingState),
 
-    // Registry (Tag 21)
+    // Registry (Tags 21, 24)
     VaultRegistry(crate::casino::VaultRegistry),
+    PlayerRegistry(crate::casino::PlayerRegistry),
 
     // Savings (Tags 22-23)
     SavingsPool(crate::casino::SavingsPool),
     SavingsBalance(crate::casino::SavingsBalance),
+
+    // Bridge (Tags 26-27)
+    BridgeState(crate::casino::BridgeState),
+    BridgeWithdrawal(crate::casino::BridgeWithdrawal),
+    // Oracle (Tag 28)
+    OracleState(crate::casino::OracleState),
 }
 
 impl Write for Value {
@@ -1336,8 +1596,16 @@ impl Write for Value {
                 tags::value::TREASURY.write(writer);
                 treasury.write(writer);
             }
+            Self::TreasuryVesting(vesting) => {
+                tags::value::TREASURY_VESTING.write(writer);
+                vesting.write(writer);
+            }
             Self::VaultRegistry(registry) => {
                 tags::value::VAULT_REGISTRY.write(writer);
+                registry.write(writer);
+            }
+            Self::PlayerRegistry(registry) => {
+                tags::value::PLAYER_REGISTRY.write(writer);
                 registry.write(writer);
             }
             Self::SavingsPool(pool) => {
@@ -1347,6 +1615,18 @@ impl Write for Value {
             Self::SavingsBalance(balance) => {
                 tags::value::SAVINGS_BALANCE.write(writer);
                 balance.write(writer);
+            }
+            Self::BridgeState(state) => {
+                tags::value::BRIDGE_STATE.write(writer);
+                state.write(writer);
+            }
+            Self::BridgeWithdrawal(withdrawal) => {
+                tags::value::BRIDGE_WITHDRAWAL.write(writer);
+                withdrawal.write(writer);
+            }
+            Self::OracleState(state) => {
+                tags::value::ORACLE_STATE.write(writer);
+                state.write(writer);
             }
         }
     }
@@ -1387,14 +1667,29 @@ impl Read for Value {
             tags::value::LP_BALANCE => Self::LpBalance(u64::read(reader)?),
             tags::value::POLICY => Self::Policy(crate::casino::PolicyState::read(reader)?),
             tags::value::TREASURY => Self::Treasury(crate::casino::TreasuryState::read(reader)?),
+            tags::value::TREASURY_VESTING => {
+                Self::TreasuryVesting(crate::casino::TreasuryVestingState::read(reader)?)
+            }
             tags::value::VAULT_REGISTRY => {
                 Self::VaultRegistry(crate::casino::VaultRegistry::read(reader)?)
+            }
+            tags::value::PLAYER_REGISTRY => {
+                Self::PlayerRegistry(crate::casino::PlayerRegistry::read(reader)?)
             }
             tags::value::SAVINGS_POOL => {
                 Self::SavingsPool(crate::casino::SavingsPool::read(reader)?)
             }
             tags::value::SAVINGS_BALANCE => {
                 Self::SavingsBalance(crate::casino::SavingsBalance::read(reader)?)
+            }
+            tags::value::BRIDGE_STATE => {
+                Self::BridgeState(crate::casino::BridgeState::read(reader)?)
+            }
+            tags::value::BRIDGE_WITHDRAWAL => {
+                Self::BridgeWithdrawal(crate::casino::BridgeWithdrawal::read(reader)?)
+            }
+            tags::value::ORACLE_STATE => {
+                Self::OracleState(crate::casino::OracleState::read(reader)?)
             }
 
             i => return Err(Error::InvalidEnum(i)),
@@ -1430,9 +1725,14 @@ impl EncodeSize for Value {
                 Self::LpBalance(bal) => bal.encode_size(),
                 Self::Policy(policy) => policy.encode_size(),
                 Self::Treasury(treasury) => treasury.encode_size(),
+                Self::TreasuryVesting(vesting) => vesting.encode_size(),
                 Self::VaultRegistry(registry) => registry.encode_size(),
+                Self::PlayerRegistry(registry) => registry.encode_size(),
                 Self::SavingsPool(pool) => pool.encode_size(),
                 Self::SavingsBalance(balance) => balance.encode_size(),
+                Self::BridgeState(state) => state.encode_size(),
+                Self::BridgeWithdrawal(withdrawal) => withdrawal.encode_size(),
+                Self::OracleState(state) => state.encode_size(),
             }
     }
 }
@@ -1577,13 +1877,73 @@ pub enum Event {
         amm: crate::casino::AmmPool,
         player_balances: crate::casino::PlayerBalanceSnapshot,
     },
+    AmmBootstrapped {
+        admin: PublicKey,
+        rng_amount: u64,
+        vusdt_amount: u64,
+        shares_minted: u64,
+        reserve_rng: u64,
+        reserve_vusdt: u64,
+        bootstrap_price_vusdt_numerator: u64,
+        bootstrap_price_rng_denominator: u64,
+        amm: crate::casino::AmmPool,
+        house: crate::casino::HouseState,
+    },
+    AmmBootstrapFinalized {
+        admin: PublicKey,
+        price_vusdt_numerator: u64,
+        price_rng_denominator: u64,
+        finalized_ts: u64,
+        amm: crate::casino::AmmPool,
+    },
 
     // Economy admin events (tags 43-47)
     PolicyUpdated {
         policy: crate::casino::PolicyState,
     },
+    OracleUpdated {
+        admin: PublicKey,
+        oracle: crate::casino::OracleState,
+    },
     TreasuryUpdated {
         treasury: crate::casino::TreasuryState,
+    },
+    TreasuryVestingUpdated {
+        vesting: crate::casino::TreasuryVestingState,
+    },
+    TreasuryAllocationReleased {
+        admin: PublicKey,
+        bucket: crate::casino::TreasuryBucket,
+        amount: u64,
+        total_released: u64,
+        total_vested: u64,
+        total_allocation: u64,
+    },
+    BridgeWithdrawalRequested {
+        id: u64,
+        player: PublicKey,
+        amount: u64,
+        destination: Vec<u8>,
+        requested_ts: u64,
+        available_ts: u64,
+        player_balances: crate::casino::PlayerBalanceSnapshot,
+        bridge: crate::casino::BridgeState,
+    },
+    BridgeWithdrawalFinalized {
+        id: u64,
+        admin: PublicKey,
+        amount: u64,
+        source: Vec<u8>,
+        fulfilled_ts: u64,
+        bridge: crate::casino::BridgeState,
+    },
+    BridgeDepositCredited {
+        admin: PublicKey,
+        recipient: PublicKey,
+        amount: u64,
+        source: Vec<u8>,
+        player_balances: crate::casino::PlayerBalanceSnapshot,
+        bridge: crate::casino::BridgeState,
     },
     VaultLiquidated {
         liquidator: PublicKey,
@@ -1919,15 +2279,130 @@ impl Write for Event {
                 amm.write(writer);
                 player_balances.write(writer);
             }
+            Self::AmmBootstrapped {
+                admin,
+                rng_amount,
+                vusdt_amount,
+                shares_minted,
+                reserve_rng,
+                reserve_vusdt,
+                bootstrap_price_vusdt_numerator,
+                bootstrap_price_rng_denominator,
+                amm,
+                house,
+            } => {
+                tags::event::AMM_BOOTSTRAPPED.write(writer);
+                admin.write(writer);
+                rng_amount.write(writer);
+                vusdt_amount.write(writer);
+                shares_minted.write(writer);
+                reserve_rng.write(writer);
+                reserve_vusdt.write(writer);
+                bootstrap_price_vusdt_numerator.write(writer);
+                bootstrap_price_rng_denominator.write(writer);
+                amm.write(writer);
+                house.write(writer);
+            }
+            Self::AmmBootstrapFinalized {
+                admin,
+                price_vusdt_numerator,
+                price_rng_denominator,
+                finalized_ts,
+                amm,
+            } => {
+                tags::event::AMM_BOOTSTRAP_FINALIZED.write(writer);
+                admin.write(writer);
+                price_vusdt_numerator.write(writer);
+                price_rng_denominator.write(writer);
+                finalized_ts.write(writer);
+                amm.write(writer);
+            }
 
             // Economy admin events (tags 43-47)
             Self::PolicyUpdated { policy } => {
                 tags::event::POLICY_UPDATED.write(writer);
                 policy.write(writer);
             }
+            Self::OracleUpdated { admin, oracle } => {
+                tags::event::ORACLE_UPDATED.write(writer);
+                admin.write(writer);
+                oracle.write(writer);
+            }
             Self::TreasuryUpdated { treasury } => {
                 tags::event::TREASURY_UPDATED.write(writer);
                 treasury.write(writer);
+            }
+            Self::TreasuryVestingUpdated { vesting } => {
+                tags::event::TREASURY_VESTING_UPDATED.write(writer);
+                vesting.write(writer);
+            }
+            Self::TreasuryAllocationReleased {
+                admin,
+                bucket,
+                amount,
+                total_released,
+                total_vested,
+                total_allocation,
+            } => {
+                tags::event::TREASURY_ALLOCATION_RELEASED.write(writer);
+                admin.write(writer);
+                bucket.write(writer);
+                amount.write(writer);
+                total_released.write(writer);
+                total_vested.write(writer);
+                total_allocation.write(writer);
+            }
+            Self::BridgeWithdrawalRequested {
+                id,
+                player,
+                amount,
+                destination,
+                requested_ts,
+                available_ts,
+                player_balances,
+                bridge,
+            } => {
+                tags::event::BRIDGE_WITHDRAWAL_REQUESTED.write(writer);
+                id.write(writer);
+                player.write(writer);
+                amount.write(writer);
+                destination.write(writer);
+                requested_ts.write(writer);
+                available_ts.write(writer);
+                player_balances.write(writer);
+                bridge.write(writer);
+            }
+            Self::BridgeWithdrawalFinalized {
+                id,
+                admin,
+                amount,
+                source,
+                fulfilled_ts,
+                bridge,
+            } => {
+                tags::event::BRIDGE_WITHDRAWAL_FINALIZED.write(writer);
+                id.write(writer);
+                admin.write(writer);
+                amount.write(writer);
+                source.write(writer);
+                fulfilled_ts.write(writer);
+                bridge.write(writer);
+            }
+            Self::BridgeDepositCredited {
+                admin,
+                recipient,
+                amount,
+                source,
+                player_balances,
+                bridge,
+            } => {
+                tags::event::BRIDGE_DEPOSIT_CREDITED.write(writer);
+                admin.write(writer);
+                recipient.write(writer);
+                amount.write(writer);
+                source.write(writer);
+                player_balances.write(writer);
+                bridge.write(writer);
             }
             Self::VaultLiquidated {
                 liquidator,
@@ -2270,11 +2745,71 @@ impl Read for Event {
                 amm: crate::casino::AmmPool::read(reader)?,
                 player_balances: crate::casino::PlayerBalanceSnapshot::read(reader)?,
             },
+            tags::event::AMM_BOOTSTRAPPED => Self::AmmBootstrapped {
+                admin: PublicKey::read(reader)?,
+                rng_amount: u64::read(reader)?,
+                vusdt_amount: u64::read(reader)?,
+                shares_minted: u64::read(reader)?,
+                reserve_rng: u64::read(reader)?,
+                reserve_vusdt: u64::read(reader)?,
+                bootstrap_price_vusdt_numerator: u64::read(reader)?,
+                bootstrap_price_rng_denominator: u64::read(reader)?,
+                amm: crate::casino::AmmPool::read(reader)?,
+                house: crate::casino::HouseState::read(reader)?,
+            },
+            tags::event::AMM_BOOTSTRAP_FINALIZED => Self::AmmBootstrapFinalized {
+                admin: PublicKey::read(reader)?,
+                price_vusdt_numerator: u64::read(reader)?,
+                price_rng_denominator: u64::read(reader)?,
+                finalized_ts: u64::read(reader)?,
+                amm: crate::casino::AmmPool::read(reader)?,
+            },
             tags::event::POLICY_UPDATED => Self::PolicyUpdated {
                 policy: crate::casino::PolicyState::read(reader)?,
             },
+            tags::event::ORACLE_UPDATED => Self::OracleUpdated {
+                admin: PublicKey::read(reader)?,
+                oracle: crate::casino::OracleState::read(reader)?,
+            },
             tags::event::TREASURY_UPDATED => Self::TreasuryUpdated {
                 treasury: crate::casino::TreasuryState::read(reader)?,
+            },
+            tags::event::TREASURY_VESTING_UPDATED => Self::TreasuryVestingUpdated {
+                vesting: crate::casino::TreasuryVestingState::read(reader)?,
+            },
+            tags::event::TREASURY_ALLOCATION_RELEASED => Self::TreasuryAllocationReleased {
+                admin: PublicKey::read(reader)?,
+                bucket: crate::casino::TreasuryBucket::read(reader)?,
+                amount: u64::read(reader)?,
+                total_released: u64::read(reader)?,
+                total_vested: u64::read(reader)?,
+                total_allocation: u64::read(reader)?,
+            },
+            tags::event::BRIDGE_WITHDRAWAL_REQUESTED => Self::BridgeWithdrawalRequested {
+                id: u64::read(reader)?,
+                player: PublicKey::read(reader)?,
+                amount: u64::read(reader)?,
+                destination: Vec::<u8>::read_range(reader, 0..=64)?,
+                requested_ts: u64::read(reader)?,
+                available_ts: u64::read(reader)?,
+                player_balances: crate::casino::PlayerBalanceSnapshot::read(reader)?,
+                bridge: crate::casino::BridgeState::read(reader)?,
+            },
+            tags::event::BRIDGE_WITHDRAWAL_FINALIZED => Self::BridgeWithdrawalFinalized {
+                id: u64::read(reader)?,
+                admin: PublicKey::read(reader)?,
+                amount: u64::read(reader)?,
+                source: Vec::<u8>::read_range(reader, 0..=64)?,
+                fulfilled_ts: u64::read(reader)?,
+                bridge: crate::casino::BridgeState::read(reader)?,
+            },
+            tags::event::BRIDGE_DEPOSIT_CREDITED => Self::BridgeDepositCredited {
+                admin: PublicKey::read(reader)?,
+                recipient: PublicKey::read(reader)?,
+                amount: u64::read(reader)?,
+                source: Vec::<u8>::read_range(reader, 0..=64)?,
+                player_balances: crate::casino::PlayerBalanceSnapshot::read(reader)?,
+                bridge: crate::casino::BridgeState::read(reader)?,
             },
             tags::event::VAULT_LIQUIDATED => Self::VaultLiquidated {
                 liquidator: PublicKey::read(reader)?,
@@ -2571,8 +3106,110 @@ impl EncodeSize for Event {
                         + amm.encode_size()
                         + player_balances.encode_size()
                 }
+                Self::AmmBootstrapped {
+                    admin,
+                    rng_amount,
+                    vusdt_amount,
+                    shares_minted,
+                    reserve_rng,
+                    reserve_vusdt,
+                    bootstrap_price_vusdt_numerator,
+                    bootstrap_price_rng_denominator,
+                    amm,
+                    house,
+                } => {
+                    admin.encode_size()
+                        + rng_amount.encode_size()
+                        + vusdt_amount.encode_size()
+                        + shares_minted.encode_size()
+                        + reserve_rng.encode_size()
+                        + reserve_vusdt.encode_size()
+                        + bootstrap_price_vusdt_numerator.encode_size()
+                        + bootstrap_price_rng_denominator.encode_size()
+                        + amm.encode_size()
+                        + house.encode_size()
+                }
+                Self::AmmBootstrapFinalized {
+                    admin,
+                    price_vusdt_numerator,
+                    price_rng_denominator,
+                    finalized_ts,
+                    amm,
+                } => {
+                    admin.encode_size()
+                        + price_vusdt_numerator.encode_size()
+                        + price_rng_denominator.encode_size()
+                        + finalized_ts.encode_size()
+                        + amm.encode_size()
+                }
                 Self::PolicyUpdated { policy } => policy.encode_size(),
+                Self::OracleUpdated { admin, oracle } => admin.encode_size() + oracle.encode_size(),
                 Self::TreasuryUpdated { treasury } => treasury.encode_size(),
+                Self::TreasuryVestingUpdated { vesting } => vesting.encode_size(),
+                Self::TreasuryAllocationReleased {
+                    admin,
+                    bucket,
+                    amount,
+                    total_released,
+                    total_vested,
+                    total_allocation,
+                } => {
+                    admin.encode_size()
+                        + bucket.encode_size()
+                        + amount.encode_size()
+                        + total_released.encode_size()
+                        + total_vested.encode_size()
+                        + total_allocation.encode_size()
+                }
+                Self::BridgeWithdrawalRequested {
+                    id,
+                    player,
+                    amount,
+                    destination,
+                    requested_ts,
+                    available_ts,
+                    player_balances,
+                    bridge,
+                } => {
+                    id.encode_size()
+                        + player.encode_size()
+                        + amount.encode_size()
+                        + destination.encode_size()
+                        + requested_ts.encode_size()
+                        + available_ts.encode_size()
+                        + player_balances.encode_size()
+                        + bridge.encode_size()
+                }
+                Self::BridgeWithdrawalFinalized {
+                    id,
+                    admin,
+                    amount,
+                    source,
+                    fulfilled_ts,
+                    bridge,
+                } => {
+                    id.encode_size()
+                        + admin.encode_size()
+                        + amount.encode_size()
+                        + source.encode_size()
+                        + fulfilled_ts.encode_size()
+                        + bridge.encode_size()
+                }
+                Self::BridgeDepositCredited {
+                    admin,
+                    recipient,
+                    amount,
+                    source,
+                    player_balances,
+                    bridge,
+                } => {
+                    admin.encode_size()
+                        + recipient.encode_size()
+                        + amount.encode_size()
+                        + source.encode_size()
+                        + player_balances.encode_size()
+                        + bridge.encode_size()
+                }
                 Self::VaultLiquidated {
                     liquidator,
                     target,

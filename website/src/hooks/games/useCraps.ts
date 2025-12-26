@@ -507,7 +507,7 @@ export const useCraps = ({
        }
 
        // Local mode not supported - require on-chain session
-       setGameState(prev => ({ ...prev, message: 'OFFLINE - START BACKEND' }));
+       setGameState(prev => ({ ...prev, message: 'OFFLINE - CHECK CONNECTION' }));
 
   }, [gameState.crapsBets, gameState.crapsPoint, currentSessionIdRef, chainService, isOnChain, isPendingRef, startGame, setGameState, setLastTxSig, autoPlayDraftRef]);
 

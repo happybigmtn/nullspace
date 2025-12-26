@@ -1,8 +1,8 @@
 
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { LeaderboardEntry, PlayerStats, GameType, CrapsEventLog } from '../../types';
-import { formatTime, HELP_CONTENT } from '../../utils/gameUtils';
+import { LeaderboardEntry, PlayerStats, GameType, CrapsEventLog, ResolvedBet } from '../../types';
+import { formatTime, HELP_CONTENT, buildHistoryEntry, formatSummaryLine, prependPnlLine, formatPnlLabel } from '../../utils/gameUtils';
 import { MobileDrawer } from './MobileDrawer';
 
 interface HeaderProps {
@@ -232,13 +232,16 @@ interface SidebarProps {
     winnersPct?: number;
     gameType?: GameType;
     crapsEventLog?: CrapsEventLog[];
+    resolvedBets?: ResolvedBet[];
+    resolvedBetsKey?: number;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ leaderboard, history, viewMode = 'RANK', currentChips, prizePool, totalPlayers, winnersPct = 0.15, gameType, crapsEventLog = [] }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ leaderboard, history, viewMode = 'RANK', currentChips, prizePool, totalPlayers, winnersPct = 0.15, gameType, crapsEventLog = [], resolvedBets = [], resolvedBetsKey = 0 }) => {
     const effectivePlayerCount = totalPlayers ?? leaderboard.length;
     const bubbleIndex = Math.max(1, Math.min(effectivePlayerCount, Math.ceil(effectivePlayerCount * winnersPct))); // Top 15% by default
     const userEntry = leaderboard.find(e => e.name === 'YOU' || e.name.includes('(YOU)'));
     const isCraps = gameType === GameType.CRAPS;
+    const resolvedEntries = resolvedBets.filter((bet) => bet && bet.label);
 
     const getPayout = (rank: number) => {
         if (!prizePool || effectivePlayerCount <= 0) return "$0";
@@ -283,17 +286,54 @@ export const Sidebar: React.FC<SidebarProps> = ({ leaderboard, history, viewMode
         );
     };
 
-    // Format dice display for craps log
-    const formatDice = (dice: [number, number]) => {
-        const DICE_EMOJI = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
-        return `${DICE_EMOJI[dice[0] - 1]}${DICE_EMOJI[dice[1] - 1]}`;
+    const renderLogEntry = (entry: string, key: number) => {
+        const lines = entry
+            .split('\n')
+            .map(line => line.trim())
+            .filter(line => line.length > 0);
+        if (lines.length === 0) return null;
+
+        const pnlIndex = lines.findIndex((line, idx) => idx > 0 && /^[+-]\$/.test(line));
+        const pnlLine = pnlIndex > 0 ? lines[pnlIndex] : null;
+        const pnlClass = pnlLine?.startsWith('+$') ? 'text-terminal-green' : 'text-terminal-accent';
+        const detailLines = lines
+            .slice(1)
+            .filter((_, idx) => (pnlIndex < 0 ? true : idx + 1 !== pnlIndex));
+
+        return (
+            <div key={key} className="flex flex-col gap-0.5">
+                <div className="text-gray-300">&gt; {lines[0]}</div>
+                {pnlLine && (
+                    <div className={`${pnlClass} pl-4 font-semibold`}>
+                        {pnlLine}
+                    </div>
+                )}
+                {detailLines.map((line, i) => (
+                    <div key={i} className="text-[10px] text-gray-500 pl-4">
+                        {line}
+                    </div>
+                ))}
+            </div>
+        );
     };
 
-    // Format PnL for display
-    const formatPnl = (pnl: number) => {
-        if (pnl === 0) return '';
-        if (pnl > 0) return `+$${pnl.toLocaleString()}`;
-        return `-$${Math.abs(pnl).toLocaleString()}`;
+    const renderResolvedBet = (bet: ResolvedBet, idx: number) => {
+        const pnlLabel = formatPnlLabel(bet.pnl);
+        const isWin = bet.pnl > 0;
+        const isLoss = bet.pnl < 0;
+        const pnlText = pnlLabel || 'PUSH';
+        const pnlClass = isWin ? 'text-terminal-green' : isLoss ? 'text-terminal-accent' : 'text-gray-500';
+        const flashClass = isWin ? 'bet-flash-win' : isLoss ? 'bet-flash-loss' : 'bet-flash-push';
+
+        return (
+            <div
+                key={`${resolvedBetsKey}-${bet.id}-${idx}`}
+                className={`rounded border border-gray-800 bg-black/40 px-2 py-1 flex flex-col gap-0.5 ${flashClass}`}
+            >
+                <div className="text-[11px] text-gray-200 font-mono">{bet.label}</div>
+                <div className={`text-[10px] font-mono ${pnlClass}`}>{pnlText}</div>
+            </div>
+        );
     };
 
     return (
@@ -318,6 +358,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ leaderboard, history, viewMode
                 {leaderboard.map((entry, i) => renderEntry(entry, i, false))}
             </div>
 
+            {resolvedEntries.length > 0 && (
+                <div className="flex-none border-t-2 border-gray-700 p-3 bg-terminal-black/40">
+                    <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-2 text-center">
+                        Resolved Bets
+                    </div>
+                    <div className="flex flex-col gap-1">
+                        {resolvedEntries.slice(0, 8).map((bet, i) => renderResolvedBet(bet, i))}
+                    </div>
+                </div>
+            )}
+
             {/* Logs Area - shows craps roll log when playing craps */}
             <div className="flex-1 border-t-2 border-gray-700 p-4 bg-terminal-black/30 flex flex-col min-h-0">
                 <h3 className="text-sm font-bold text-gray-500 mb-2 tracking-widest flex-none">
@@ -329,55 +380,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ leaderboard, history, viewMode
                             <div className="text-gray-600 text-xs">NO ROLLS YET</div>
                         ) : (
                             [...crapsEventLog].reverse().slice(0, 20).map((event, i) => {
-                                const pnlColor = event.pnl > 0 ? 'text-terminal-green' : event.pnl < 0 ? 'text-terminal-accent' : 'text-gray-500';
-                                const totalColor = event.isSevenOut
-                                    ? 'text-terminal-accent'
-                                    : event.total === 7 || event.total === 11
-                                    ? 'text-terminal-green'
-                                    : 'text-white';
-                                const hasResults = event.results && event.results.length > 0;
-
-                                return (
-                                    <div key={i} className="flex flex-col gap-0.5">
-                                        <div className="flex items-center justify-between text-xs gap-2">
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-lg leading-none">{formatDice(event.dice)}</span>
-                                                <span className={`font-bold ${totalColor}`}>{event.total}</span>
-                                                {event.point !== null && (
-                                                    <span className="text-gray-600 text-[10px]">PT:{event.point}</span>
-                                                )}
-                                                {event.isSevenOut && (
-                                                    <span className="text-terminal-accent text-[10px] font-bold animate-pulse">7-OUT</span>
-                                                )}
-                                            </div>
-                                            {event.pnl !== 0 && (
-                                                <span className={`${pnlColor} font-bold text-[11px] ${event.pnl > 0 ? 'animate-pulse' : ''}`}>
-                                                    {formatPnl(event.pnl)}
-                                                </span>
-                                            )}
-                                        </div>
-                                        {hasResults && (
-                                            <div className="pl-7 flex flex-wrap gap-x-2 gap-y-0.5">
-                                                {event.results.map((result, j) => {
-                                                    const isWin = result.includes('WIN');
-                                                    const isLoss = result.includes('LOSS');
-                                                    const color = isWin ? 'text-green-500' : isLoss ? 'text-red-400' : 'text-gray-500';
-                                                    return (
-                                                        <span key={j} className={`text-[9px] ${color}`}>
-                                                            {result}
-                                                        </span>
-                                                    );
-                                                })}
-                                            </div>
-                                        )}
-                                    </div>
-                                );
+                                const diceLabel = event.dice?.length === 2 ? ` (${event.dice.join('-')})` : '';
+                                const summary = formatSummaryLine(`Roll: ${event.total}${diceLabel}`);
+                                const details = prependPnlLine([], event.pnl);
+                                const entry = buildHistoryEntry(summary, details);
+                                return renderLogEntry(entry, i);
                             })
                         )
                     ) : (
-                        history.slice(-15).reverse().map((log, i) => (
-                            <div key={i} className="text-gray-300 whitespace-pre-line">&gt; {log}</div>
-                        ))
+                        history.slice(-15).reverse().map((log, i) => renderLogEntry(log, i))
                     )}
                 </div>
             </div>

@@ -27,15 +27,34 @@ export type Entitlement = {
   stripeProductId?: string;
 };
 
+export type EvmLink = {
+  evmAddress: string;
+  chainId: number;
+  status: string;
+  signatureType: string;
+  linkedAtMs: number;
+  lastVerifiedAtMs: number;
+  unlinkedAtMs?: number;
+};
+
 export type AuthProfile = {
   session: AuthSession | null;
   entitlements: Entitlement[];
+  evmLink?: EvmLink | null;
 };
 
 export type AuthChallenge = {
   challengeId: string;
   challenge: string;
   expiresAtMs: number;
+};
+
+export type EvmChallenge = {
+  challengeId: string;
+  message: string;
+  expiresAtMs: number;
+  address: string;
+  chainId: number;
 };
 
 const authPath = (path: string) => `${authBase}${path}`;
@@ -110,6 +129,44 @@ export async function linkPublicKey(input: {
     method: "POST",
     body: JSON.stringify(input),
   });
+  if (!res.ok) {
+    throw new Error(await readError(res));
+  }
+}
+
+export async function requestEvmChallenge(input: {
+  address: string;
+  chainId: number;
+}): Promise<EvmChallenge> {
+  const res = await authFetch("/profile/evm-challenge", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    throw new Error(await readError(res));
+  }
+  return (await res.json()) as EvmChallenge;
+}
+
+export async function linkEvmAddress(input: {
+  address: string;
+  chainId: number;
+  signature: string;
+  challengeId: string;
+}): Promise<EvmLink> {
+  const res = await authFetch("/profile/link-evm", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    throw new Error(await readError(res));
+  }
+  const data = (await res.json()) as { link: EvmLink };
+  return data.link;
+}
+
+export async function unlinkEvmAddress(): Promise<void> {
+  const res = await authFetch("/profile/unlink-evm", { method: "POST" });
   if (!res.ok) {
     throw new Error(await readError(res));
   }

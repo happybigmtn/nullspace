@@ -125,8 +125,8 @@ export const HiLoView = React.memo<HiLoViewProps & { lastWin?: number; playMode?
                 <div className="min-h-[48px] sm:min-h-[60px] flex items-center justify-center">
                      {gameState.playerCards.length > 1 && (
                         <div className="flex flex-col items-center gap-2">
-                            <span className="text-[10px] uppercase tracking-widest text-gray-600">CARD HISTORY</span>
-                            <div className="flex gap-2 opacity-50 scale-75 origin-top">
+                            <span className="text-[11px] uppercase tracking-widest text-gray-400">CARD HISTORY</span>
+                            <div className="flex gap-2 opacity-80 scale-90 origin-top">
                                 {gameState.playerCards.slice(0, -1).slice(-8).map((c, i) => (
                                     <Hand key={i} cards={[c]} />
                                 ))}

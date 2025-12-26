@@ -45,6 +45,14 @@ const BOOTSTRAP_COLLATERAL: u64 =
     (INITIAL_POOL_VUSD * 10_000 + BOOTSTRAP_LTV_BPS - 1) / BOOTSTRAP_LTV_BPS;
 const CLIENT_MAX_RPS: u64 = 50_000;
 static SUBMIT_FAILURES: AtomicU64 = AtomicU64::new(0);
+const BPS_DENOM: u64 = 10_000;
+const PHASE2_TOTAL_SUPPLY: u64 = 1_000_000_000;
+const PHASE2_AUCTION_BPS: u64 = 2_000;
+const PHASE2_LIQUIDITY_BPS: u64 = 1_000;
+const PHASE2_BONUS_BPS: u64 = 1_500;
+const PHASE2_PLAYERS_BPS: u64 = 3_500;
+const PHASE2_TREASURY_BPS: u64 = 1_500;
+const PHASE2_TEAM_BPS: u64 = 500;
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -160,6 +168,31 @@ static SUBMIT_RATE_STATE: OnceLock<Mutex<SubmitRateState>> = OnceLock::new();
 
 fn to_hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{:02x}", b)).collect()
+}
+
+fn allocation_amount(total: u64, bps: u64) -> u64 {
+    let total = total as u128;
+    let bps = bps as u128;
+    ((total * bps) / BPS_DENOM as u128) as u64
+}
+
+fn log_phase2_allocation() {
+    let auction = allocation_amount(PHASE2_TOTAL_SUPPLY, PHASE2_AUCTION_BPS);
+    let liquidity = allocation_amount(PHASE2_TOTAL_SUPPLY, PHASE2_LIQUIDITY_BPS);
+    let bonus = allocation_amount(PHASE2_TOTAL_SUPPLY, PHASE2_BONUS_BPS);
+    let players = allocation_amount(PHASE2_TOTAL_SUPPLY, PHASE2_PLAYERS_BPS);
+    let treasury = allocation_amount(PHASE2_TOTAL_SUPPLY, PHASE2_TREASURY_BPS);
+    let team = allocation_amount(PHASE2_TOTAL_SUPPLY, PHASE2_TEAM_BPS);
+    info!(
+        total = PHASE2_TOTAL_SUPPLY,
+        auction,
+        liquidity,
+        bonus,
+        players,
+        treasury,
+        team,
+        "Phase 2 allocation assumptions"
+    );
 }
 
 async fn throttle_submissions() {
@@ -1364,6 +1397,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut rng = StdRng::from_entropy();
 
     info!("Starting Enhanced Ecosystem Simulation");
+    log_phase2_allocation();
 
     // Agents
     let bootstrapper = Arc::new(Bot::new("Bootstrapper", &mut rng));

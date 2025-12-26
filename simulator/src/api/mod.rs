@@ -104,6 +104,7 @@ impl Api {
             .route("/metrics/system", get(http::system_metrics))
             .route("/metrics/explorer", get(http::explorer_metrics))
             .route("/metrics/updates", get(http::update_index_metrics))
+            .route("/metrics/prometheus", get(http::prometheus_metrics))
             .route("/submit", post(http::submit))
             .route("/seed/:query", get(http::query_seed))
             .route("/state/:query", get(http::query_state))

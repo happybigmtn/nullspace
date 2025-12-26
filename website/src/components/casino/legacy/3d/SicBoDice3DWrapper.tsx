@@ -2,7 +2,7 @@
  * Sic Bo 3D Dice Wrapper - Full Window Animation
  */
 import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
-import { DiceRender } from '../GameComponents';
+import { DiceThrow2D } from '../GameComponents';
 import { playSfx } from '../../../services/sfx';
 import { track } from '../../../services/telemetry';
 import { COLLAPSE_DELAY_MS, getMinRemainingMs, MIN_ANIMATION_MS } from './sceneTiming';
@@ -32,18 +32,9 @@ const Scene3DLoader: React.FC = () => (
   </div>
 );
 
-const Dice2D: React.FC<{ values: number[] }> = ({ values }) => (
-  <div className="min-h-[96px] flex gap-6 items-center justify-center">
-    {values.length === 3 && (
-      <div className="flex flex-col gap-2 items-center">
-        <span className="text-xs uppercase tracking-widest text-gray-500">ROLL</span>
-        <div className="flex gap-4">
-          {values.map((d, i) => (
-            <DiceRender key={i} value={d} delayMs={i * 60} />
-          ))}
-        </div>
-      </div>
-    )}
+const Dice2D: React.FC<{ values: number[]; rollKey?: number }> = ({ values, rollKey }) => (
+  <div className="min-h-[110px] flex items-center justify-center">
+    <DiceThrow2D values={values} rollKey={rollKey} />
   </div>
 );
 
@@ -322,7 +313,7 @@ export const SicBoDice3DWrapper: React.FC<SicBoDice3DWrapperProps> = ({
           )}
         </div>
       ) : (
-        <Dice2D values={diceValues} />
+        <Dice2D values={diceValues} rollKey={resultId} />
       )}
     </div>
   );

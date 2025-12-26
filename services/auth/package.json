@@ -12,6 +12,7 @@
     "convex": "^1.31.2",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
+    "ethers": "^6.15.0",
     "express": "^4.19.2"
   },
   "devDependencies": {

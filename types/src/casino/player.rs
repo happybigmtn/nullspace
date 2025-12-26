@@ -66,6 +66,11 @@ pub struct PlayerSessionState {
     pub daily_flow_day: u64,
     pub daily_net_sell: u64,
     pub daily_net_buy: u64,
+    pub sessions_played: u64,
+    pub play_seconds: u64,
+    pub last_session_ts: u64,
+    pub bridge_daily_day: u64,
+    pub bridge_daily_withdrawn: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
@@ -133,6 +138,11 @@ impl Player {
                 daily_flow_day: 0,
                 daily_net_sell: 0,
                 daily_net_buy: 0,
+                sessions_played: 0,
+                play_seconds: 0,
+                last_session_ts: 0,
+                bridge_daily_day: 0,
+                bridge_daily_withdrawn: 0,
             },
         }
     }
@@ -256,6 +266,11 @@ impl Write for Player {
         self.balances.freeroll_credits_locked.write(writer);
         self.balances.freeroll_credits_unlock_start_ts.write(writer);
         self.balances.freeroll_credits_unlock_end_ts.write(writer);
+        self.session.sessions_played.write(writer);
+        self.session.play_seconds.write(writer);
+        self.session.last_session_ts.write(writer);
+        self.session.bridge_daily_day.write(writer);
+        self.session.bridge_daily_withdrawn.write(writer);
     }
 }
 
@@ -328,6 +343,31 @@ impl Read for Player {
         } else {
             0
         };
+        let sessions_played = if reader.remaining() >= u64::SIZE {
+            u64::read(reader)?
+        } else {
+            0
+        };
+        let play_seconds = if reader.remaining() >= u64::SIZE {
+            u64::read(reader)?
+        } else {
+            0
+        };
+        let last_session_ts = if reader.remaining() >= u64::SIZE {
+            u64::read(reader)?
+        } else {
+            0
+        };
+        let bridge_daily_day = if reader.remaining() >= u64::SIZE {
+            u64::read(reader)?
+        } else {
+            0
+        };
+        let bridge_daily_withdrawn = if reader.remaining() >= u64::SIZE {
+            u64::read(reader)?
+        } else {
+            0
+        };
 
         Ok(Self {
             nonce,
@@ -368,6 +408,11 @@ impl Read for Player {
                 daily_flow_day,
                 daily_net_sell,
                 daily_net_buy,
+                sessions_played,
+                play_seconds,
+                last_session_ts,
+                bridge_daily_day,
+                bridge_daily_withdrawn,
             },
         })
     }
@@ -404,6 +449,11 @@ impl EncodeSize for Player {
             + self.balances.freeroll_credits_locked.encode_size()
             + self.balances.freeroll_credits_unlock_start_ts.encode_size()
             + self.balances.freeroll_credits_unlock_end_ts.encode_size()
+            + self.session.sessions_played.encode_size()
+            + self.session.play_seconds.encode_size()
+            + self.session.last_session_ts.encode_size()
+            + self.session.bridge_daily_day.encode_size()
+            + self.session.bridge_daily_withdrawn.encode_size()
     }
 }
 

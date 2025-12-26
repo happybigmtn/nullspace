@@ -1,6 +1,6 @@
 
 > website@1.0.0 dev
-> npm run copy:data && npm run build:wasm && vite --host 0.0.0.0 --port 3000 --strictPort
+> npm run copy:data && npm run build:wasm && vite --host 127.0.0.1 --port 5173
 
 
 > website@1.0.0 copy:data
@@ -12,6 +12,859 @@
 
 [INFO]: 🎯  Checking for the Wasm target...
 [INFO]: 🌀  Compiling to Wasm...
-    Finished `release` profile [optimized] target(s) in 0.10s
+warning: type `BlackjackRules` is more private than the item `BlackjackState::rules`
+   --> execution/src/casino/blackjack.rs:259:5
+    |
+259 |     pub rules: BlackjackRules,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^ field `BlackjackState::rules` is reachable at visibility `pub(crate)`
+    |
+note: but type `BlackjackRules` is only usable at visibility `pub(self)`
+   --> execution/src/casino/blackjack.rs:101:1
+    |
+101 | struct BlackjackRules {
+    | ^^^^^^^^^^^^^^^^^^^^^
+    = note: `#[warn(private_interfaces)]` on by default
+
+warning: constant `TIE` is never used
+  --> execution/src/casino/baccarat.rs:43:15
+   |
+43 |     pub const TIE: u64 = 8;
+   |               ^^^
+   |
+   = note: `#[warn(dead_code)]` on by default
+
+warning: constant `BANKER_COMMISSION_NUMERATOR` is never used
+  --> execution/src/casino/baccarat.rs:45:15
+   |
+45 |     pub const BANKER_COMMISSION_NUMERATOR: u64 = 95;
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `BANKER_COMMISSION_DENOMINATOR` is never used
+  --> execution/src/casino/baccarat.rs:46:15
+   |
+46 |     pub const BANKER_COMMISSION_DENOMINATOR: u64 = 100;
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `BUY_COMMISSION_BPS` is never used
+  --> execution/src/casino/craps.rs:71:7
+   |
+71 | const BUY_COMMISSION_BPS: u64 = 500; // 5.00%
+   |       ^^^^^^^^^^^^^^^^^^
+
+warning: constant `BUY_COMMISSION_DENOM` is never used
+  --> execution/src/casino/craps.rs:72:7
+   |
+72 | const BUY_COMMISSION_DENOM: u64 = 10_000;
+   |       ^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `ATS_SMALL_PAYOUT_TO_1` is never used
+   --> execution/src/casino/craps.rs:129:7
+    |
+129 | const ATS_SMALL_PAYOUT_TO_1: u64 = 34;
+    |       ^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `ATS_TALL_PAYOUT_TO_1` is never used
+   --> execution/src/casino/craps.rs:130:7
+    |
+130 | const ATS_TALL_PAYOUT_TO_1: u64 = 34;
+    |       ^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `ATS_ALL_PAYOUT_TO_1` is never used
+   --> execution/src/casino/craps.rs:131:7
+    |
+131 | const ATS_ALL_PAYOUT_TO_1: u64 = 175;
+    |       ^^^^^^^^^^^^^^^^^^^
+
+warning: function `calculate_buy_commission` is never used
+   --> execution/src/casino/craps.rs:593:4
+    |
+593 | fn calculate_buy_commission(amount: u64) -> u64 {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `calculate_buy_payout` is never used
+   --> execution/src/casino/craps.rs:606:4
+    |
+606 | fn calculate_buy_payout(target: u8, amount: u64, hit: bool) -> u64 {
+    |    ^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `SPECIFIC_TRIPLE` is never used
+  --> execution/src/casino/sic_bo.rs:43:15
+   |
+43 |     pub const SPECIFIC_TRIPLE: u64 = 150;
+   |               ^^^^^^^^^^^^^^^
+
+warning: constant `ANY_TRIPLE` is never used
+  --> execution/src/casino/sic_bo.rs:44:15
+   |
+44 |     pub const ANY_TRIPLE: u64 = 24;
+   |               ^^^^^^^^^^
+
+warning: constant `SPECIFIC_DOUBLE` is never used
+  --> execution/src/casino/sic_bo.rs:47:15
+   |
+47 |     pub const SPECIFIC_DOUBLE: u64 = 8;
+   |               ^^^^^^^^^^^^^^^
+
+warning: constant `TOTAL_3_OR_18` is never used
+  --> execution/src/casino/sic_bo.rs:55:15
+   |
+55 |     pub const TOTAL_3_OR_18: u64 = 180;
+   |               ^^^^^^^^^^^^^
+
+warning: constant `TOTAL_4_OR_17` is never used
+  --> execution/src/casino/sic_bo.rs:56:15
+   |
+56 |     pub const TOTAL_4_OR_17: u64 = 50;
+   |               ^^^^^^^^^^^^^
+
+warning: constant `TOTAL_5_OR_16` is never used
+  --> execution/src/casino/sic_bo.rs:57:15
+   |
+57 |     pub const TOTAL_5_OR_16: u64 = 18;
+   |               ^^^^^^^^^^^^^
+
+warning: constant `TOTAL_6_OR_15` is never used
+  --> execution/src/casino/sic_bo.rs:58:15
+   |
+58 |     pub const TOTAL_6_OR_15: u64 = 14;
+   |               ^^^^^^^^^^^^^
+
+warning: constant `TOTAL_7_OR_14` is never used
+  --> execution/src/casino/sic_bo.rs:59:15
+   |
+59 |     pub const TOTAL_7_OR_14: u64 = 12;
+   |               ^^^^^^^^^^^^^
+
+warning: constant `TOTAL_8_OR_13` is never used
+  --> execution/src/casino/sic_bo.rs:60:15
+   |
+60 |     pub const TOTAL_8_OR_13: u64 = 8;
+   |               ^^^^^^^^^^^^^
+
+warning: constant `TOTAL_9_OR_12` is never used
+  --> execution/src/casino/sic_bo.rs:61:15
+   |
+61 |     pub const TOTAL_9_OR_12: u64 = 6;
+   |               ^^^^^^^^^^^^^
+
+warning: constant `TOTAL_10_OR_11` is never used
+  --> execution/src/casino/sic_bo.rs:62:15
+   |
+62 |     pub const TOTAL_10_OR_11: u64 = 6;
+   |               ^^^^^^^^^^^^^^
+
+warning: constant `HIGH_CARD` is never used
+  --> execution/src/casino/video_poker.rs:19:15
+   |
+19 |     pub const HIGH_CARD: u64 = 0;
+   |               ^^^^^^^^^
+
+warning: constant `JACKS_OR_BETTER` is never used
+  --> execution/src/casino/video_poker.rs:20:15
+   |
+20 |     pub const JACKS_OR_BETTER: u64 = 1;
+   |               ^^^^^^^^^^^^^^^
+
+warning: constant `TWO_PAIR` is never used
+  --> execution/src/casino/video_poker.rs:21:15
+   |
+21 |     pub const TWO_PAIR: u64 = 2;
+   |               ^^^^^^^^
+
+warning: constant `THREE_OF_A_KIND` is never used
+  --> execution/src/casino/video_poker.rs:22:15
+   |
+22 |     pub const THREE_OF_A_KIND: u64 = 3;
+   |               ^^^^^^^^^^^^^^^
+
+warning: constant `STRAIGHT` is never used
+  --> execution/src/casino/video_poker.rs:23:15
+   |
+23 |     pub const STRAIGHT: u64 = 4;
+   |               ^^^^^^^^
+
+warning: constant `FLUSH` is never used
+  --> execution/src/casino/video_poker.rs:24:15
+   |
+24 |     pub const FLUSH: u64 = 6;
+   |               ^^^^^
+
+warning: constant `FULL_HOUSE` is never used
+  --> execution/src/casino/video_poker.rs:25:15
+   |
+25 |     pub const FULL_HOUSE: u64 = 9;
+   |               ^^^^^^^^^^
+
+warning: constant `FOUR_OF_A_KIND` is never used
+  --> execution/src/casino/video_poker.rs:26:15
+   |
+26 |     pub const FOUR_OF_A_KIND: u64 = 25;
+   |               ^^^^^^^^^^^^^^
+
+warning: constant `STRAIGHT_FLUSH` is never used
+  --> execution/src/casino/video_poker.rs:27:15
+   |
+27 |     pub const STRAIGHT_FLUSH: u64 = 50;
+   |               ^^^^^^^^^^^^^^
+
+warning: constant `ROYAL_FLUSH` is never used
+  --> execution/src/casino/video_poker.rs:28:15
+   |
+28 |     pub const ROYAL_FLUSH: u64 = 800;
+   |               ^^^^^^^^^^^
+
+warning: `nullspace-execution` (lib) generated 32 warnings
+    Finished `release` profile [optimized] target(s) in 0.22s
 [INFO]: ⬇️  Installing wasm-bindgen...
 [INFO]: Optimizing wasm binaries with `wasm-opt`...
+[INFO]: Optional fields missing from Cargo.toml: 'description', 'repository'. These are not necessary, but recommended
+[INFO]: License key is set in Cargo.toml but no LICENSE file(s) were found; Please add the LICENSE file(s) to your project directory
+[INFO]: ✨   Done in 24.72s
+[INFO]: 📦   Your wasm pkg is ready to publish at /home/r/Coding/nullspace/website/wasm/pkg.
+Port 5173 is in use, trying another one...
+
+  VITE v6.3.5  ready in 194 ms
+
+  ➜  Local:   http://127.0.0.1:5174/
+Warning: Could not copy preview.png: ENOENT: no such file or directory, copyfile '/home/r/Coding/nullspace/website/preview.png' -> '/home/r/Coding/nullspace/website/dist/preview.png'
+Warning: Could not copy preview.png: ENOENT: no such file or directory, copyfile '/home/r/Coding/nullspace/website/preview.png' -> '/home/r/Coding/nullspace/website/dist/preview.png'
+age reload wasm/pkg/nullspace_wasm.d.ts
+9:59:49 AM [vite] (client) page reload wasm/pkg/nullspace_wasm_bg.wasm.d.ts
+10:00:13 AM [vite] (client) page reload wasm/pkg/package.json
+10:01:30 AM [vite] (client) page reload public/economy_log.json
+10:01:31 AM [vite] (client) page reload wasm/pkg/package.json
+10:01:31 AM [vite] (client) page reload wasm/pkg/nullspace_wasm.js
+10:01:31 AM [vite] (client) page reload wasm/pkg/nullspace_wasm.d.ts
+10:01:31 AM [vite] (client) page reload wasm/pkg/nullspace_wasm_bg.wasm.d.ts
+10:01:56 AM [vite] (client) page reload wasm/pkg/package.json
+Warning: Could not copy preview.png: ENOENT: no such file or directory, copyfile '/home/r/Coding/nullspace/website/preview.png' -> '/home/r/Coding/nullspace/website/dist/preview.png'
+Warning: Could not copy preview.png: ENOENT: no such file or directory, copyfile '/home/r/Coding/nullspace/website/preview.png' -> '/home/r/Coding/nullspace/website/dist/preview.png'
+on/src/casino/blackjack.rs:101:1
+    |
+101 | struct BlackjackRules {
+    | ^^^^^^^^^^^^^^^^^^^^^
+    = note: `#[warn(private_interfaces)]` on by default
+
+warning: constant `TIE` is never used
+  --> execution/src/casino/baccarat.rs:43:15
+   |
+43 |     pub const TIE: u64 = 8;
+   |               ^^^
+   |
+   = note: `#[warn(dead_code)]` on by default
+
+warning: constant `BANKER_COMMISSION_NUMERATOR` is never used
+  --> execution/src/casino/baccarat.rs:45:15
+   |
+45 |     pub const BANKER_COMMISSION_NUMERATOR: u64 = 95;
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `BANKER_COMMISSION_DENOMINATOR` is never used
+  --> execution/src/casino/baccarat.rs:46:15
+   |
+46 |     pub const BANKER_COMMISSION_DENOMINATOR: u64 = 100;
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `BUY_COMMISSION_BPS` is never used
+  --> execution/src/casino/craps.rs:71:7
+   |
+71 | const BUY_COMMISSION_BPS: u64 = 500; // 5.00%
+   |       ^^^^^^^^^^^^^^^^^^
+
+warning: constant `BUY_COMMISSION_DENOM` is never used
+  --> execution/src/casino/craps.rs:72:7
+   |
+72 | const BUY_COMMISSION_DENOM: u64 = 10_000;
+   |       ^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `ATS_SMALL_PAYOUT_TO_1` is never used
+   --> execution/src/casino/craps.rs:129:7
+    |
+129 | const ATS_SMALL_PAYOUT_TO_1: u64 = 34;
+    |       ^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `ATS_TALL_PAYOUT_TO_1` is never used
+   --> execution/src/casino/craps.rs:130:7
+    |
+130 | const ATS_TALL_PAYOUT_TO_1: u64 = 34;
+    |       ^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `ATS_ALL_PAYOUT_TO_1` is never used
+   --> execution/src/casino/craps.rs:131:7
+    |
+131 | const ATS_ALL_PAYOUT_TO_1: u64 = 175;
+    |       ^^^^^^^^^^^^^^^^^^^
+
+warning: function `calculate_buy_commission` is never used
+   --> execution/src/casino/craps.rs:593:4
+    |
+593 | fn calculate_buy_commission(amount: u64) -> u64 {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `calculate_buy_payout` is never used
+   --> execution/src/casino/craps.rs:606:4
+    |
+606 | fn calculate_buy_payout(target: u8, amount: u64, hit: bool) -> u64 {
+    |    ^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `SPECIFIC_TRIPLE` is never used
+  --> execution/src/casino/sic_bo.rs:43:15
+   |
+43 |     pub const SPECIFIC_TRIPLE: u64 = 150;
+   |               ^^^^^^^^^^^^^^^
+
+warning: constant `ANY_TRIPLE` is never used
+  --> execution/src/casino/sic_bo.rs:44:15
+   |
+44 |     pub const ANY_TRIPLE: u64 = 24;
+   |               ^^^^^^^^^^
+
+warning: constant `SPECIFIC_DOUBLE` is never used
+  --> execution/src/casino/sic_bo.rs:47:15
+   |
+47 |     pub const SPECIFIC_DOUBLE: u64 = 8;
+   |               ^^^^^^^^^^^^^^^
+
+warning: constant `TOTAL_3_OR_18` is never used
+  --> execution/src/casino/sic_bo.rs:55:15
+   |
+55 |     pub const TOTAL_3_OR_18: u64 = 180;
+   |               ^^^^^^^^^^^^^
+
+warning: constant `TOTAL_4_OR_17` is never used
+  --> execution/src/casino/sic_bo.rs:56:15
+   |
+56 |     pub const TOTAL_4_OR_17: u64 = 50;
+   |               ^^^^^^^^^^^^^
+
+warning: constant `TOTAL_5_OR_16` is never used
+  --> execution/src/casino/sic_bo.rs:57:15
+   |
+57 |     pub const TOTAL_5_OR_16: u64 = 18;
+   |               ^^^^^^^^^^^^^
+
+warning: constant `TOTAL_6_OR_15` is never used
+  --> execution/src/casino/sic_bo.rs:58:15
+   |
+58 |     pub const TOTAL_6_OR_15: u64 = 14;
+   |               ^^^^^^^^^^^^^
+
+warning: constant `TOTAL_7_OR_14` is never used
+  --> execution/src/casino/sic_bo.rs:59:15
+   |
+59 |     pub const TOTAL_7_OR_14: u64 = 12;
+   |               ^^^^^^^^^^^^^
+
+warning: constant `TOTAL_8_OR_13` is never used
+  --> execution/src/casino/sic_bo.rs:60:15
+   |
+60 |     pub const TOTAL_8_OR_13: u64 = 8;
+   |               ^^^^^^^^^^^^^
+
+warning: constant `TOTAL_9_OR_12` is never used
+  --> execution/src/casino/sic_bo.rs:61:15
+   |
+61 |     pub const TOTAL_9_OR_12: u64 = 6;
+   |               ^^^^^^^^^^^^^
+
+warning: constant `TOTAL_10_OR_11` is never used
+  --> execution/src/casino/sic_bo.rs:62:15
+   |
+62 |     pub const TOTAL_10_OR_11: u64 = 6;
+   |               ^^^^^^^^^^^^^^
+
+warning: constant `HIGH_CARD` is never used
+  --> execution/src/casino/video_poker.rs:19:15
+   |
+19 |     pub const HIGH_CARD: u64 = 0;
+   |               ^^^^^^^^^
+
+warning: constant `JACKS_OR_BETTER` is never used
+  --> execution/src/casino/video_poker.rs:20:15
+   |
+20 |     pub const JACKS_OR_BETTER: u64 = 1;
+   |               ^^^^^^^^^^^^^^^
+
+warning: constant `TWO_PAIR` is never used
+  --> execution/src/casino/video_poker.rs:21:15
+   |
+21 |     pub const TWO_PAIR: u64 = 2;
+   |               ^^^^^^^^
+
+warning: constant `THREE_OF_A_KIND` is never used
+  --> execution/src/casino/video_poker.rs:22:15
+   |
+22 |     pub const THREE_OF_A_KIND: u64 = 3;
+   |               ^^^^^^^^^^^^^^^
+
+warning: constant `STRAIGHT` is never used
+  --> execution/src/casino/video_poker.rs:23:15
+   |
+23 |     pub const STRAIGHT: u64 = 4;
+   |               ^^^^^^^^
+
+warning: constant `FLUSH` is never used
+  --> execution/src/casino/video_poker.rs:24:15
+   |
+24 |     pub const FLUSH: u64 = 6;
+   |               ^^^^^
+
+warning: constant `FULL_HOUSE` is never used
+  --> execution/src/casino/video_poker.rs:25:15
+   |
+25 |     pub const FULL_HOUSE: u64 = 9;
+   |               ^^^^^^^^^^
+
+warning: constant `FOUR_OF_A_KIND` is never used
+  --> execution/src/casino/video_poker.rs:26:15
+   |
+26 |     pub const FOUR_OF_A_KIND: u64 = 25;
+   |               ^^^^^^^^^^^^^^
+
+warning: constant `STRAIGHT_FLUSH` is never used
+  --> execution/src/casino/video_poker.rs:27:15
+   |
+27 |     pub const STRAIGHT_FLUSH: u64 = 50;
+   |               ^^^^^^^^^^^^^^
+
+warning: constant `ROYAL_FLUSH` is never used
+  --> execution/src/casino/video_poker.rs:28:15
+   |
+28 |     pub const ROYAL_FLUSH: u64 = 800;
+   |               ^^^^^^^^^^^
+
+warning: `nullspace-execution` (lib) generated 32 warnings
+    Finished `release` profile [optimized] target(s) in 0.22s
+[INFO]: ⬇️  Installing wasm-bindgen...
+[INFO]: Optimizing wasm binaries with `wasm-opt`...
+[INFO]: Optional fields missing from Cargo.toml: 'description', 'repository'. These are not necessary, but recommended
+[INFO]: License key is set in Cargo.toml but no LICENSE file(s) were found; Please add the LICENSE file(s) to your project directory
+[INFO]: ✨   Done in 25.30s
+[INFO]: 📦   Your wasm pkg is ready to publish at /home/r/Coding/nullspace/website/wasm/pkg.
+Port 5173 is in use, trying another one...
+Port 5174 is in use, trying another one...
+
+  VITE v6.3.5  ready in 193 ms
+
+  ➜  Local:   http://127.0.0.1:5175/
+  ➜  press h + enter to show help
+Browserslist: browsers data (caniuse-lite) is 6 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+
+> website@1.0.0 dev
+> npm run copy:data && npm run build:wasm && vite --host 127.0.0.1 --port 5173
+
+
+> website@1.0.0 copy:data
+> mkdir -p public && cp ../economy_log.json public/ || echo 'No economy log found, skipping copy'
+
+
+> website@1.0.0 build:wasm
+> cd wasm && wasm-pack build --target web --out-dir pkg
+
+[INFO]: 🎯  Checking for the Wasm target...
+[INFO]: 🌀  Compiling to Wasm...
+warning: type `BlackjackRules` is more private than the item `BlackjackState::rules`
+   --> execution/src/casino/blackjack.rs:259:5
+    |
+259 |     pub rules: BlackjackRules,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^ field `BlackjackState::rules` is reachable at visibility `pub(crate)`
+    |
+note: but type `BlackjackRules` is only usable at visibility `pub(self)`
+   --> execution/src/casino/blackjack.rs:101:1
+    |
+101 | struct BlackjackRules {
+    | ^^^^^^^^^^^^^^^^^^^^^
+    = note: `#[warn(private_interfaces)]` on by default
+
+warning: constant `TIE` is never used
+  --> execution/src/casino/baccarat.rs:43:15
+   |
+43 |     pub const TIE: u64 = 8;
+   |               ^^^
+   |
+   = note: `#[warn(dead_code)]` on by default
+
+warning: constant `BANKER_COMMISSION_NUMERATOR` is never used
+  --> execution/src/casino/baccarat.rs:45:15
+   |
+45 |     pub const BANKER_COMMISSION_NUMERATOR: u64 = 95;
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `BANKER_COMMISSION_DENOMINATOR` is never used
+  --> execution/src/casino/baccarat.rs:46:15
+   |
+46 |     pub const BANKER_COMMISSION_DENOMINATOR: u64 = 100;
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `BUY_COMMISSION_BPS` is never used
+  --> execution/src/casino/craps.rs:71:7
+   |
+71 | const BUY_COMMISSION_BPS: u64 = 500; // 5.00%
+   |       ^^^^^^^^^^^^^^^^^^
+
+warning: constant `BUY_COMMISSION_DENOM` is never used
+  --> execution/src/casino/craps.rs:72:7
+   |
+72 | const BUY_COMMISSION_DENOM: u64 = 10_000;
+   |       ^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `ATS_SMALL_PAYOUT_TO_1` is never used
+   --> execution/src/casino/craps.rs:129:7
+    |
+129 | const ATS_SMALL_PAYOUT_TO_1: u64 = 34;
+    |       ^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `ATS_TALL_PAYOUT_TO_1` is never used
+   --> execution/src/casino/craps.rs:130:7
+    |
+130 | const ATS_TALL_PAYOUT_TO_1: u64 = 34;
+    |       ^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `ATS_ALL_PAYOUT_TO_1` is never used
+   --> execution/src/casino/craps.rs:131:7
+    |
+131 | const ATS_ALL_PAYOUT_TO_1: u64 = 175;
+    |       ^^^^^^^^^^^^^^^^^^^
+
+warning: function `calculate_buy_commission` is never used
+   --> execution/src/casino/craps.rs:593:4
+    |
+593 | fn calculate_buy_commission(amount: u64) -> u64 {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `calculate_buy_payout` is never used
+   --> execution/src/casino/craps.rs:606:4
+    |
+606 | fn calculate_buy_payout(target: u8, amount: u64, hit: bool) -> u64 {
+    |    ^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `SPECIFIC_TRIPLE` is never used
+  --> execution/src/casino/sic_bo.rs:43:15
+   |
+43 |     pub const SPECIFIC_TRIPLE: u64 = 150;
+   |               ^^^^^^^^^^^^^^^
+
+warning: constant `ANY_TRIPLE` is never used
+  --> execution/src/casino/sic_bo.rs:44:15
+   |
+44 |     pub const ANY_TRIPLE: u64 = 24;
+   |               ^^^^^^^^^^
+
+warning: constant `SPECIFIC_DOUBLE` is never used
+  --> execution/src/casino/sic_bo.rs:47:15
+   |
+47 |     pub const SPECIFIC_DOUBLE: u64 = 8;
+   |               ^^^^^^^^^^^^^^^
+
+warning: constant `TOTAL_3_OR_18` is never used
+  --> execution/src/casino/sic_bo.rs:55:15
+   |
+55 |     pub const TOTAL_3_OR_18: u64 = 180;
+   |               ^^^^^^^^^^^^^
+
+warning: constant `TOTAL_4_OR_17` is never used
+  --> execution/src/casino/sic_bo.rs:56:15
+   |
+56 |     pub const TOTAL_4_OR_17: u64 = 50;
+   |               ^^^^^^^^^^^^^
+
+warning: constant `TOTAL_5_OR_16` is never used
+  --> execution/src/casino/sic_bo.rs:57:15
+   |
+57 |     pub const TOTAL_5_OR_16: u64 = 18;
+   |               ^^^^^^^^^^^^^
+
+warning: constant `TOTAL_6_OR_15` is never used
+  --> execution/src/casino/sic_bo.rs:58:15
+   |
+58 |     pub const TOTAL_6_OR_15: u64 = 14;
+   |               ^^^^^^^^^^^^^
+
+warning: constant `TOTAL_7_OR_14` is never used
+  --> execution/src/casino/sic_bo.rs:59:15
+   |
+59 |     pub const TOTAL_7_OR_14: u64 = 12;
+   |               ^^^^^^^^^^^^^
+
+warning: constant `TOTAL_8_OR_13` is never used
+  --> execution/src/casino/sic_bo.rs:60:15
+   |
+60 |     pub const TOTAL_8_OR_13: u64 = 8;
+   |               ^^^^^^^^^^^^^
+
+warning: constant `TOTAL_9_OR_12` is never used
+  --> execution/src/casino/sic_bo.rs:61:15
+   |
+61 |     pub const TOTAL_9_OR_12: u64 = 6;
+   |               ^^^^^^^^^^^^^
+
+warning: constant `TOTAL_10_OR_11` is never used
+  --> execution/src/casino/sic_bo.rs:62:15
+   |
+62 |     pub const TOTAL_10_OR_11: u64 = 6;
+   |               ^^^^^^^^^^^^^^
+
+warning: constant `HIGH_CARD` is never used
+  --> execution/src/casino/video_poker.rs:19:15
+   |
+19 |     pub const HIGH_CARD: u64 = 0;
+   |               ^^^^^^^^^
+
+warning: constant `JACKS_OR_BETTER` is never used
+  --> execution/src/casino/video_poker.rs:20:15
+   |
+20 |     pub const JACKS_OR_BETTER: u64 = 1;
+   |               ^^^^^^^^^^^^^^^
+
+warning: constant `TWO_PAIR` is never used
+  --> execution/src/casino/video_poker.rs:21:15
+   |
+21 |     pub const TWO_PAIR: u64 = 2;
+   |               ^^^^^^^^
+
+warning: constant `THREE_OF_A_KIND` is never used
+  --> execution/src/casino/video_poker.rs:22:15
+   |
+22 |     pub const THREE_OF_A_KIND: u64 = 3;
+   |               ^^^^^^^^^^^^^^^
+
+warning: constant `STRAIGHT` is never used
+  --> execution/src/casino/video_poker.rs:23:15
+   |
+23 |     pub const STRAIGHT: u64 = 4;
+   |               ^^^^^^^^
+
+warning: constant `FLUSH` is never used
+  --> execution/src/casino/video_poker.rs:24:15
+   |
+24 |     pub const FLUSH: u64 = 6;
+   |               ^^^^^
+
+warning: constant `FULL_HOUSE` is never used
+  --> execution/src/casino/video_poker.rs:25:15
+   |
+25 |     pub const FULL_HOUSE: u64 = 9;
+   |               ^^^^^^^^^^
+
+warning: constant `FOUR_OF_A_KIND` is never used
+  --> execution/src/casino/video_poker.rs:26:15
+   |
+26 |     pub const FOUR_OF_A_KIND: u64 = 25;
+   |               ^^^^^^^^^^^^^^
+
+warning: constant `STRAIGHT_FLUSH` is never used
+  --> execution/src/casino/video_poker.rs:27:15
+   |
+27 |     pub const STRAIGHT_FLUSH: u64 = 50;
+   |               ^^^^^^^^^^^^^^
+
+warning: constant `ROYAL_FLUSH` is never used
+  --> execution/src/casino/video_poker.rs:28:15
+   |
+28 |     pub const ROYAL_FLUSH: u64 = 800;
+   |               ^^^^^^^^^^^
+
+warning: `nullspace-execution` (lib) generated 32 warnings
+    Finished `release` profile [optimized] target(s) in 0.22s
+[INFO]: ⬇️  Installing wasm-bindgen...
+[INFO]: Optimizing wasm binaries with `wasm-opt`...
+[INFO]: Optional fields missing from Cargo.toml: 'description', 'repository'. These are not necessary, but recommended
+[INFO]: License key is set in Cargo.toml but no LICENSE file(s) were found; Please add the LICENSE file(s) to your project directory
+[INFO]: ✨   Done in 24.34s
+[INFO]: 📦   Your wasm pkg is ready to publish at /home/r/Coding/nullspace/website/wasm/pkg.
+
+  VITE v6.3.5  ready in 163 ms
+
+  ➜  Local:   http://127.0.0.1:5173/
+  ➜  press h + enter to show help
+Browserslist: browsers data (caniuse-lite) is 6 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+10:14:50 AM [vite] (client) page reload wasm/Cargo.toml
+10:15:16 AM [vite] (client) page reload wasm/pkg/package.json
+10:15:16 AM [vite] (client) page reload wasm/pkg/nullspace_wasm.js
+10:15:16 AM [vite] (client) page reload wasm/pkg/nullspace_wasm.d.ts
+10:15:16 AM [vite] (client) page reload wasm/pkg/nullspace_wasm_bg.wasm.d.ts
+10:15:34 AM [vite] (client) page reload wasm/pkg/package.json
+
+> website@1.0.0 dev
+> npm run copy:data && npm run build:wasm && vite --host 127.0.0.1 --port 5173
+
+
+> website@1.0.0 copy:data
+> mkdir -p public && cp ../economy_log.json public/ || echo 'No economy log found, skipping copy'
+
+
+> website@1.0.0 build:wasm
+> cd wasm && wasm-pack build --target web --out-dir pkg
+
+[INFO]: 🎯  Checking for the Wasm target...
+[INFO]: 🌀  Compiling to Wasm...
+    Finished `release` profile [optimized] target(s) in 0.11s
+[INFO]: ⬇️  Installing wasm-bindgen...
+[INFO]: Optimizing wasm binaries with `wasm-opt`...
+[INFO]: ✨   Done in 21.74s
+[INFO]: 📦   Your wasm pkg is ready to publish at /home/r/Coding/nullspace/website/wasm/pkg.
+
+  VITE v6.3.5  ready in 160 ms
+
+  ➜  Local:   http://127.0.0.1:5173/
+  ➜  press h + enter to show help
+Browserslist: browsers data (caniuse-lite) is 6 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+Warning: Could not copy preview.png: ENOENT: no such file or directory, copyfile '/home/r/Coding/nullspace/website/preview.png' -> '/home/r/Coding/nullspace/website/dist/preview.png'
+Warning: Could not copy preview.png: ENOENT: no such file or directory, copyfile '/home/r/Coding/nullspace/website/preview.png' -> '/home/r/Coding/nullspace/website/dist/preview.png'
+
+> website@1.0.0 dev
+> npm run copy:data && npm run build:wasm && vite --host 127.0.0.1 --port 5173
+
+
+> website@1.0.0 copy:data
+> mkdir -p public && cp ../economy_log.json public/ || echo 'No economy log found, skipping copy'
+
+
+> website@1.0.0 build:wasm
+> cd wasm && wasm-pack build --target web --out-dir pkg
+
+[INFO]: 🎯  Checking for the Wasm target...
+[INFO]: 🌀  Compiling to Wasm...
+    Finished `release` profile [optimized] target(s) in 0.14s
+[INFO]: ⬇️  Installing wasm-bindgen...
+[INFO]: Optimizing wasm binaries with `wasm-opt`...
+[INFO]: ✨   Done in 22.18s
+[INFO]: 📦   Your wasm pkg is ready to publish at /home/r/Coding/nullspace/website/wasm/pkg.
+
+  VITE v6.3.5  ready in 102 ms
+
+  ➜  Local:   http://127.0.0.1:5173/
+  ➜  press h + enter to show help
+Browserslist: browsers data (caniuse-lite) is 6 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+10:51:24 AM [vite] (client) hmr update /src/index.css, /src/components/casino/RegistrationView.tsx, /src/components/casino/Layout.tsx, /src/CasinoApp.tsx, /src/components/casino/games/VideoPokerView.tsx, /src/components/casino/games/HiLoView.tsx, /src/components/casino/games/GenericGameView.tsx, /src/components/casino/games/ThreeCardPokerView.tsx, /src/components/casino/games/BaccaratView.tsx, /src/components/casino/games/BlackjackView.tsx, /src/components/casino/games/SicBoView.tsx, /src/components/casino/games/CrapsView.tsx, /src/components/casino/games/RouletteView.tsx, /src/components/casino/games/CrapsBetMenu.tsx
+10:51:48 AM [vite] (client) hmr update /src/index.css, /src/components/casino/RegistrationView.tsx, /src/components/casino/Layout.tsx, /src/CasinoApp.tsx, /src/components/casino/games/VideoPokerView.tsx, /src/components/casino/games/HiLoView.tsx, /src/components/casino/games/GenericGameView.tsx, /src/components/casino/games/ThreeCardPokerView.tsx, /src/components/casino/games/BaccaratView.tsx, /src/components/casino/games/BlackjackView.tsx, /src/components/casino/games/SicBoView.tsx, /src/components/casino/games/CrapsView.tsx, /src/components/casino/games/RouletteView.tsx, /src/components/casino/games/CrapsBetMenu.tsx
+10:53:19 AM [vite] (client) hmr update /src/index.css, /src/components/casino/RegistrationView.tsx, /src/components/casino/Layout.tsx, /src/CasinoApp.tsx, /src/components/casino/games/VideoPokerView.tsx, /src/components/casino/games/HiLoView.tsx, /src/components/casino/games/GenericGameView.tsx, /src/components/casino/games/ThreeCardPokerView.tsx, /src/components/casino/games/BaccaratView.tsx, /src/components/casino/games/BlackjackView.tsx, /src/components/casino/games/SicBoView.tsx, /src/components/casino/games/CrapsView.tsx, /src/components/casino/games/RouletteView.tsx, /src/components/casino/games/CrapsBetMenu.tsx
+10:56:33 AM [vite] (client) hmr update /src/index.css, /src/components/casino/RegistrationView.tsx, /src/components/casino/Layout.tsx, /src/CasinoApp.tsx, /src/components/casino/games/VideoPokerView.tsx, /src/components/casino/games/HiLoView.tsx, /src/components/casino/games/GenericGameView.tsx, /src/components/casino/games/ThreeCardPokerView.tsx, /src/components/casino/games/BaccaratView.tsx, /src/components/casino/games/BlackjackView.tsx, /src/components/casino/games/SicBoView.tsx, /src/components/casino/games/CrapsView.tsx, /src/components/casino/games/RouletteView.tsx, /src/components/casino/games/CrapsBetMenu.tsx
+10:57:26 AM [vite] (client) hmr update /src/index.css, /src/components/casino/RegistrationView.tsx, /src/components/casino/Layout.tsx, /src/CasinoApp.tsx, /src/components/casino/games/VideoPokerView.tsx, /src/components/casino/games/HiLoView.tsx, /src/components/casino/games/GenericGameView.tsx, /src/components/casino/games/ThreeCardPokerView.tsx, /src/components/casino/games/BaccaratView.tsx, /src/components/casino/games/BlackjackView.tsx, /src/components/casino/games/SicBoView.tsx, /src/components/casino/games/CrapsView.tsx, /src/components/casino/games/RouletteView.tsx, /src/components/casino/games/CrapsBetMenu.tsx
+10:57:33 AM [vite] (client) hmr update /src/index.css, /src/components/casino/RegistrationView.tsx, /src/components/casino/Layout.tsx, /src/CasinoApp.tsx, /src/components/casino/games/VideoPokerView.tsx, /src/components/casino/games/HiLoView.tsx, /src/components/casino/games/GenericGameView.tsx, /src/components/casino/games/ThreeCardPokerView.tsx, /src/components/casino/games/BaccaratView.tsx, /src/components/casino/games/BlackjackView.tsx, /src/components/casino/games/SicBoView.tsx, /src/components/casino/games/CrapsView.tsx, /src/components/casino/games/RouletteView.tsx, /src/components/casino/games/CrapsBetMenu.tsx
+10:57:45 AM [vite] (client) hmr update /src/index.css, /src/components/casino/RegistrationView.tsx, /src/components/casino/Layout.tsx, /src/CasinoApp.tsx, /src/components/casino/games/VideoPokerView.tsx, /src/components/casino/games/HiLoView.tsx, /src/components/casino/games/GenericGameView.tsx, /src/components/casino/games/ThreeCardPokerView.tsx, /src/components/casino/games/BaccaratView.tsx, /src/components/casino/games/BlackjackView.tsx, /src/components/casino/games/SicBoView.tsx, /src/components/casino/games/CrapsView.tsx, /src/components/casino/games/RouletteView.tsx, /src/components/casino/games/CrapsBetMenu.tsx
+10:58:12 AM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+10:58:30 AM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+10:58:41 AM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+10:58:49 AM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+10:59:07 AM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+10:59:15 AM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+10:59:32 AM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+10:59:43 AM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+10:59:58 AM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+11:00:09 AM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+11:00:41 AM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+11:00:51 AM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+11:02:03 AM [vite] (client) hmr update /src/components/casino/Layout.tsx, /src/index.css
+11:02:15 AM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css, /src/components/casino/ActiveGame.tsx, /src/components/casino/Layout.tsx, /src/components/casino/games/GenericGameView.tsx, /src/components/casino/RegistrationView.tsx, /src/components/casino/games/VideoPokerView.tsx, /src/components/casino/games/HiLoView.tsx, /src/components/casino/games/ThreeCardPokerView.tsx, /src/components/casino/games/BaccaratView.tsx, /src/components/casino/games/BlackjackView.tsx, /src/components/casino/games/SicBoView.tsx, /src/components/casino/games/CrapsView.tsx, /src/components/casino/games/RouletteView.tsx, /src/components/casino/games/CrapsBetMenu.tsx
+11:04:10 AM [vite] (client) hmr update /src/components/casino/Layout.tsx, /src/index.css
+11:06:07 AM [vite] (client) hmr update /src/index.css, /src/components/casino/RegistrationView.tsx, /src/components/casino/Layout.tsx, /src/CasinoApp.tsx, /src/components/casino/games/VideoPokerView.tsx, /src/components/casino/games/HiLoView.tsx, /src/components/casino/games/GenericGameView.tsx, /src/components/casino/games/ThreeCardPokerView.tsx, /src/components/casino/games/BaccaratView.tsx, /src/components/casino/games/BlackjackView.tsx, /src/components/casino/games/SicBoView.tsx, /src/components/casino/games/CrapsView.tsx, /src/components/casino/games/RouletteView.tsx, /src/components/casino/games/CrapsBetMenu.tsx
+11:07:29 AM [vite] (client) hmr update /src/index.css, /src/components/casino/RegistrationView.tsx, /src/components/casino/Layout.tsx, /src/CasinoApp.tsx, /src/components/casino/games/VideoPokerView.tsx, /src/components/casino/games/HiLoView.tsx, /src/components/casino/games/GenericGameView.tsx, /src/components/casino/games/ThreeCardPokerView.tsx, /src/components/casino/games/BaccaratView.tsx, /src/components/casino/games/BlackjackView.tsx, /src/components/casino/games/SicBoView.tsx, /src/components/casino/games/CrapsView.tsx, /src/components/casino/games/RouletteView.tsx, /src/components/casino/games/CrapsBetMenu.tsx
+11:15:35 AM [vite] (client) hmr update /src/components/casino/GameComponents.tsx, /src/index.css
+11:15:35 AM [vite] (client) hmr invalidate /src/components/casino/GameComponents.tsx Could not Fast Refresh (new export)
+11:15:35 AM [vite] (client) hmr update /src/index.css, /src/components/casino/games/VideoPokerView.tsx, /src/components/casino/games/HiLoView.tsx, /src/components/casino/games/GenericGameView.tsx, /src/components/casino/games/ThreeCardPokerView.tsx, /src/components/casino/games/BaccaratView.tsx, /src/components/casino/games/BlackjackView.tsx, /src/components/casino/games/UltimateHoldemView.tsx, /src/components/casino/games/SicBoView.tsx, /src/components/casino/games/CrapsView.tsx
+11:15:49 AM [vite] (client) hmr update /src/components/casino/games/CrapsView.tsx, /src/index.css
+11:16:02 AM [vite] (client) hmr update /src/components/casino/games/SicBoView.tsx, /src/index.css
+11:16:11 AM [vite] (client) page reload src/components/casino/legacy/3d/CrapsDice3DWrapper.tsx
+11:16:27 AM [vite] (client) page reload src/components/casino/legacy/3d/CrapsDice3DWrapper.tsx
+11:16:37 AM [vite] (client) page reload src/components/casino/legacy/3d/SicBoDice3DWrapper.tsx
+11:16:42 AM [vite] (client) page reload src/components/casino/legacy/3d/SicBoDice3DWrapper.tsx
+11:17:37 AM [vite] (client) hmr update /src/components/casino/GameComponents.tsx, /src/index.css
+11:18:24 AM [vite] (client) hmr update /src/components/casino/GameComponents.tsx, /src/index.css
+11:18:49 AM [vite] (client) hmr update /src/components/casino/GameComponents.tsx, /src/index.css
+11:18:56 AM [vite] (client) hmr update /src/components/casino/games/CrapsView.tsx, /src/index.css
+11:19:07 AM [vite] (client) hmr update /src/components/casino/GameComponents.tsx, /src/index.css
+11:30:34 AM [vite] (client) hmr update /src/index.css, /src/components/casino/RegistrationView.tsx, /src/components/casino/Layout.tsx, /src/CasinoApp.tsx, /src/components/casino/games/VideoPokerView.tsx, /src/components/casino/games/HiLoView.tsx, /src/components/casino/games/GenericGameView.tsx, /src/components/casino/games/ThreeCardPokerView.tsx, /src/components/casino/games/BaccaratView.tsx, /src/components/casino/games/BlackjackView.tsx, /src/components/casino/games/SicBoView.tsx, /src/components/casino/games/CrapsView.tsx, /src/components/casino/games/RouletteView.tsx, /src/components/casino/games/CrapsBetMenu.tsx
+11:31:05 AM [vite] (client) hmr update /src/index.css, /src/components/casino/RegistrationView.tsx, /src/components/casino/Layout.tsx, /src/CasinoApp.tsx, /src/components/casino/games/VideoPokerView.tsx, /src/components/casino/games/HiLoView.tsx, /src/components/casino/games/GenericGameView.tsx, /src/components/casino/games/ThreeCardPokerView.tsx, /src/components/casino/games/BaccaratView.tsx, /src/components/casino/games/BlackjackView.tsx, /src/components/casino/games/SicBoView.tsx, /src/components/casino/games/CrapsView.tsx, /src/components/casino/games/RouletteView.tsx, /src/components/casino/games/CrapsBetMenu.tsx
+11:31:32 AM [vite] (client) hmr update /src/index.css, /src/components/casino/RegistrationView.tsx, /src/components/casino/Layout.tsx, /src/CasinoApp.tsx, /src/components/casino/games/VideoPokerView.tsx, /src/components/casino/games/HiLoView.tsx, /src/components/casino/games/GenericGameView.tsx, /src/components/casino/games/ThreeCardPokerView.tsx, /src/components/casino/games/BaccaratView.tsx, /src/components/casino/games/BlackjackView.tsx, /src/components/casino/games/SicBoView.tsx, /src/components/casino/games/CrapsView.tsx, /src/components/casino/games/RouletteView.tsx, /src/components/casino/games/CrapsBetMenu.tsx
+11:32:10 AM [vite] (client) hmr update /src/index.css, /src/components/casino/RegistrationView.tsx, /src/components/casino/Layout.tsx, /src/CasinoApp.tsx, /src/components/casino/games/VideoPokerView.tsx, /src/components/casino/games/HiLoView.tsx, /src/components/casino/games/GenericGameView.tsx, /src/components/casino/games/ThreeCardPokerView.tsx, /src/components/casino/games/BaccaratView.tsx, /src/components/casino/games/BlackjackView.tsx, /src/components/casino/games/SicBoView.tsx, /src/components/casino/games/CrapsView.tsx, /src/components/casino/games/RouletteView.tsx, /src/components/casino/games/CrapsBetMenu.tsx
+11:43:03 AM [vite] (client) hmr update /src/index.css, /src/components/casino/RegistrationView.tsx, /src/components/casino/Layout.tsx, /src/CasinoApp.tsx, /src/components/casino/games/VideoPokerView.tsx, /src/components/casino/games/HiLoView.tsx, /src/components/casino/games/GenericGameView.tsx, /src/components/casino/games/ThreeCardPokerView.tsx, /src/components/casino/games/BaccaratView.tsx, /src/components/casino/games/BlackjackView.tsx, /src/components/casino/games/SicBoView.tsx, /src/components/casino/games/CrapsView.tsx, /src/components/casino/games/RouletteView.tsx, /src/components/casino/games/CrapsBetMenu.tsx
+11:43:12 AM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+11:43:52 AM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+11:44:05 AM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+11:44:14 AM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+11:44:27 AM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+11:44:33 AM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+11:44:41 AM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+11:44:49 AM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+11:45:01 AM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+11:45:13 AM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+11:45:55 AM [vite] (client) hmr update /src/components/casino/Layout.tsx, /src/index.css
+11:46:13 AM [vite] (client) hmr update /src/components/casino/Layout.tsx, /src/index.css
+11:46:20 AM [vite] (client) hmr update /src/components/casino/Layout.tsx, /src/index.css
+11:47:54 AM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+12:11:18 PM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css, /src/components/casino/ActiveGame.tsx, /src/components/casino/Layout.tsx, /src/components/casino/games/GenericGameView.tsx, /src/components/casino/RegistrationView.tsx, /src/components/casino/games/VideoPokerView.tsx, /src/components/casino/games/HiLoView.tsx, /src/components/casino/games/ThreeCardPokerView.tsx, /src/components/casino/games/BaccaratView.tsx, /src/components/casino/games/BlackjackView.tsx, /src/components/casino/games/SicBoView.tsx, /src/components/casino/games/CrapsView.tsx, /src/components/casino/games/RouletteView.tsx, /src/components/casino/games/CrapsBetMenu.tsx
+12:11:25 PM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+12:11:33 PM [vite] (client) page reload src/hooks/useGameState.ts
+12:11:41 PM [vite] (client) hmr update /src/index.css, /src/components/casino/RegistrationView.tsx, /src/components/casino/Layout.tsx, /src/CasinoApp.tsx, /src/components/casino/games/VideoPokerView.tsx, /src/components/casino/games/HiLoView.tsx, /src/components/casino/games/GenericGameView.tsx, /src/components/casino/games/ThreeCardPokerView.tsx, /src/components/casino/games/BaccaratView.tsx, /src/components/casino/games/BlackjackView.tsx, /src/components/casino/games/SicBoView.tsx, /src/components/casino/games/CrapsView.tsx, /src/components/casino/games/RouletteView.tsx, /src/components/casino/games/CrapsBetMenu.tsx
+12:11:46 PM [vite] (client) hmr update /src/index.css, /src/components/casino/RegistrationView.tsx, /src/components/casino/Layout.tsx, /src/CasinoApp.tsx, /src/components/casino/games/VideoPokerView.tsx, /src/components/casino/games/HiLoView.tsx, /src/components/casino/games/GenericGameView.tsx, /src/components/casino/games/ThreeCardPokerView.tsx, /src/components/casino/games/BaccaratView.tsx, /src/components/casino/games/BlackjackView.tsx, /src/components/casino/games/SicBoView.tsx, /src/components/casino/games/CrapsView.tsx, /src/components/casino/games/RouletteView.tsx, /src/components/casino/games/CrapsBetMenu.tsx
+12:12:14 PM [vite] (client) hmr update /src/index.css, /src/components/casino/RegistrationView.tsx, /src/components/casino/Layout.tsx, /src/CasinoApp.tsx, /src/components/casino/games/VideoPokerView.tsx, /src/components/casino/games/HiLoView.tsx, /src/components/casino/games/GenericGameView.tsx, /src/components/casino/games/ThreeCardPokerView.tsx, /src/components/casino/games/BaccaratView.tsx, /src/components/casino/games/BlackjackView.tsx, /src/components/casino/games/SicBoView.tsx, /src/components/casino/games/CrapsView.tsx, /src/components/casino/games/RouletteView.tsx, /src/components/casino/games/CrapsBetMenu.tsx
+12:12:30 PM [vite] (client) hmr update /src/index.css, /src/components/casino/RegistrationView.tsx, /src/components/casino/Layout.tsx, /src/CasinoApp.tsx, /src/components/casino/games/VideoPokerView.tsx, /src/components/casino/games/HiLoView.tsx, /src/components/casino/games/GenericGameView.tsx, /src/components/casino/games/ThreeCardPokerView.tsx, /src/components/casino/games/BaccaratView.tsx, /src/components/casino/games/BlackjackView.tsx, /src/components/casino/games/SicBoView.tsx, /src/components/casino/games/CrapsView.tsx, /src/components/casino/games/RouletteView.tsx, /src/components/casino/games/CrapsBetMenu.tsx
+12:12:41 PM [vite] (client) hmr update /src/index.css, /src/components/casino/RegistrationView.tsx, /src/components/casino/Layout.tsx, /src/CasinoApp.tsx, /src/components/casino/games/VideoPokerView.tsx, /src/components/casino/games/HiLoView.tsx, /src/components/casino/games/GenericGameView.tsx, /src/components/casino/games/ThreeCardPokerView.tsx, /src/components/casino/games/BaccaratView.tsx, /src/components/casino/games/BlackjackView.tsx, /src/components/casino/games/SicBoView.tsx, /src/components/casino/games/CrapsView.tsx, /src/components/casino/games/RouletteView.tsx, /src/components/casino/games/CrapsBetMenu.tsx
+12:12:51 PM [vite] (client) hmr update /src/index.css, /src/components/casino/RegistrationView.tsx, /src/components/casino/Layout.tsx, /src/CasinoApp.tsx, /src/components/casino/games/VideoPokerView.tsx, /src/components/casino/games/HiLoView.tsx, /src/components/casino/games/GenericGameView.tsx, /src/components/casino/games/ThreeCardPokerView.tsx, /src/components/casino/games/BaccaratView.tsx, /src/components/casino/games/BlackjackView.tsx, /src/components/casino/games/SicBoView.tsx, /src/components/casino/games/CrapsView.tsx, /src/components/casino/games/RouletteView.tsx, /src/components/casino/games/CrapsBetMenu.tsx
+12:13:13 PM [vite] (client) hmr update /src/index.css, /src/components/casino/RegistrationView.tsx, /src/components/casino/Layout.tsx, /src/CasinoApp.tsx, /src/components/casino/games/VideoPokerView.tsx, /src/components/casino/games/HiLoView.tsx, /src/components/casino/games/GenericGameView.tsx, /src/components/casino/games/ThreeCardPokerView.tsx, /src/components/casino/games/BaccaratView.tsx, /src/components/casino/games/BlackjackView.tsx, /src/components/casino/games/SicBoView.tsx, /src/components/casino/games/CrapsView.tsx, /src/components/casino/games/RouletteView.tsx, /src/components/casino/games/CrapsBetMenu.tsx
+12:13:29 PM [vite] (client) hmr update /src/index.css, /src/components/casino/RegistrationView.tsx, /src/components/casino/Layout.tsx, /src/CasinoApp.tsx, /src/components/casino/games/VideoPokerView.tsx, /src/components/casino/games/HiLoView.tsx, /src/components/casino/games/GenericGameView.tsx, /src/components/casino/games/ThreeCardPokerView.tsx, /src/components/casino/games/BaccaratView.tsx, /src/components/casino/games/BlackjackView.tsx, /src/components/casino/games/SicBoView.tsx, /src/components/casino/games/CrapsView.tsx, /src/components/casino/games/RouletteView.tsx, /src/components/casino/games/CrapsBetMenu.tsx
+12:13:40 PM [vite] (client) hmr update /src/index.css, /src/components/casino/RegistrationView.tsx, /src/components/casino/Layout.tsx, /src/CasinoApp.tsx, /src/components/casino/games/VideoPokerView.tsx, /src/components/casino/games/HiLoView.tsx, /src/components/casino/games/GenericGameView.tsx, /src/components/casino/games/ThreeCardPokerView.tsx, /src/components/casino/games/BaccaratView.tsx, /src/components/casino/games/BlackjackView.tsx, /src/components/casino/games/SicBoView.tsx, /src/components/casino/games/CrapsView.tsx, /src/components/casino/games/RouletteView.tsx, /src/components/casino/games/CrapsBetMenu.tsx
+12:13:52 PM [vite] (client) hmr update /src/index.css, /src/components/casino/RegistrationView.tsx, /src/components/casino/Layout.tsx, /src/CasinoApp.tsx, /src/components/casino/games/VideoPokerView.tsx, /src/components/casino/games/HiLoView.tsx, /src/components/casino/games/GenericGameView.tsx, /src/components/casino/games/ThreeCardPokerView.tsx, /src/components/casino/games/BaccaratView.tsx, /src/components/casino/games/BlackjackView.tsx, /src/components/casino/games/SicBoView.tsx, /src/components/casino/games/CrapsView.tsx, /src/components/casino/games/RouletteView.tsx, /src/components/casino/games/CrapsBetMenu.tsx
+12:14:06 PM [vite] (client) hmr update /src/index.css, /src/components/casino/RegistrationView.tsx, /src/components/casino/Layout.tsx, /src/CasinoApp.tsx, /src/components/casino/games/VideoPokerView.tsx, /src/components/casino/games/HiLoView.tsx, /src/components/casino/games/GenericGameView.tsx, /src/components/casino/games/ThreeCardPokerView.tsx, /src/components/casino/games/BaccaratView.tsx, /src/components/casino/games/BlackjackView.tsx, /src/components/casino/games/SicBoView.tsx, /src/components/casino/games/CrapsView.tsx, /src/components/casino/games/RouletteView.tsx, /src/components/casino/games/CrapsBetMenu.tsx
+12:14:35 PM [vite] (client) hmr update /src/index.css, /src/components/casino/RegistrationView.tsx, /src/components/casino/Layout.tsx, /src/CasinoApp.tsx, /src/components/casino/games/VideoPokerView.tsx, /src/components/casino/games/HiLoView.tsx, /src/components/casino/games/GenericGameView.tsx, /src/components/casino/games/ThreeCardPokerView.tsx, /src/components/casino/games/BaccaratView.tsx, /src/components/casino/games/BlackjackView.tsx, /src/components/casino/games/SicBoView.tsx, /src/components/casino/games/CrapsView.tsx, /src/components/casino/games/RouletteView.tsx, /src/components/casino/games/CrapsBetMenu.tsx
+12:15:59 PM [vite] (client) hmr update /src/index.css, /src/components/casino/RegistrationView.tsx, /src/components/casino/Layout.tsx, /src/CasinoApp.tsx, /src/components/casino/games/VideoPokerView.tsx, /src/components/casino/games/HiLoView.tsx, /src/components/casino/games/GenericGameView.tsx, /src/components/casino/games/ThreeCardPokerView.tsx, /src/components/casino/games/BaccaratView.tsx, /src/components/casino/games/BlackjackView.tsx, /src/components/casino/games/SicBoView.tsx, /src/components/casino/games/CrapsView.tsx, /src/components/casino/games/RouletteView.tsx, /src/components/casino/games/CrapsBetMenu.tsx
+12:16:24 PM [vite] (client) hmr update /src/index.css, /src/components/casino/RegistrationView.tsx, /src/components/casino/Layout.tsx, /src/CasinoApp.tsx, /src/components/casino/games/VideoPokerView.tsx, /src/components/casino/games/HiLoView.tsx, /src/components/casino/games/GenericGameView.tsx, /src/components/casino/games/ThreeCardPokerView.tsx, /src/components/casino/games/BaccaratView.tsx, /src/components/casino/games/BlackjackView.tsx, /src/components/casino/games/SicBoView.tsx, /src/components/casino/games/CrapsView.tsx, /src/components/casino/games/RouletteView.tsx, /src/components/casino/games/CrapsBetMenu.tsx
+12:16:45 PM [vite] (client) hmr update /src/index.css, /src/components/casino/RegistrationView.tsx, /src/components/casino/Layout.tsx, /src/CasinoApp.tsx, /src/components/casino/games/VideoPokerView.tsx, /src/components/casino/games/HiLoView.tsx, /src/components/casino/games/GenericGameView.tsx, /src/components/casino/games/ThreeCardPokerView.tsx, /src/components/casino/games/BaccaratView.tsx, /src/components/casino/games/BlackjackView.tsx, /src/components/casino/games/SicBoView.tsx, /src/components/casino/games/CrapsView.tsx, /src/components/casino/games/RouletteView.tsx, /src/components/casino/games/CrapsBetMenu.tsx
+12:16:57 PM [vite] (client) hmr update /src/index.css, /src/components/casino/RegistrationView.tsx, /src/components/casino/Layout.tsx, /src/CasinoApp.tsx, /src/components/casino/games/VideoPokerView.tsx, /src/components/casino/games/HiLoView.tsx, /src/components/casino/games/GenericGameView.tsx, /src/components/casino/games/ThreeCardPokerView.tsx, /src/components/casino/games/BaccaratView.tsx, /src/components/casino/games/BlackjackView.tsx, /src/components/casino/games/SicBoView.tsx, /src/components/casino/games/CrapsView.tsx, /src/components/casino/games/RouletteView.tsx, /src/components/casino/games/CrapsBetMenu.tsx
+12:17:08 PM [vite] (client) hmr update /src/index.css, /src/components/casino/RegistrationView.tsx, /src/components/casino/Layout.tsx, /src/CasinoApp.tsx, /src/components/casino/games/VideoPokerView.tsx, /src/components/casino/games/HiLoView.tsx, /src/components/casino/games/GenericGameView.tsx, /src/components/casino/games/ThreeCardPokerView.tsx, /src/components/casino/games/BaccaratView.tsx, /src/components/casino/games/BlackjackView.tsx, /src/components/casino/games/SicBoView.tsx, /src/components/casino/games/CrapsView.tsx, /src/components/casino/games/RouletteView.tsx, /src/components/casino/games/CrapsBetMenu.tsx
+12:17:56 PM [vite] (client) hmr update /src/index.css, /src/components/casino/RegistrationView.tsx, /src/components/casino/Layout.tsx, /src/CasinoApp.tsx, /src/components/casino/games/VideoPokerView.tsx, /src/components/casino/games/HiLoView.tsx, /src/components/casino/games/GenericGameView.tsx, /src/components/casino/games/ThreeCardPokerView.tsx, /src/components/casino/games/BaccaratView.tsx, /src/components/casino/games/BlackjackView.tsx, /src/components/casino/games/SicBoView.tsx, /src/components/casino/games/CrapsView.tsx, /src/components/casino/games/RouletteView.tsx, /src/components/casino/games/CrapsBetMenu.tsx
+12:18:03 PM [vite] (client) hmr update /src/index.css, /src/components/casino/RegistrationView.tsx, /src/components/casino/Layout.tsx, /src/CasinoApp.tsx, /src/components/casino/games/VideoPokerView.tsx, /src/components/casino/games/HiLoView.tsx, /src/components/casino/games/GenericGameView.tsx, /src/components/casino/games/ThreeCardPokerView.tsx, /src/components/casino/games/BaccaratView.tsx, /src/components/casino/games/BlackjackView.tsx, /src/components/casino/games/SicBoView.tsx, /src/components/casino/games/CrapsView.tsx, /src/components/casino/games/RouletteView.tsx, /src/components/casino/games/CrapsBetMenu.tsx
+12:18:36 PM [vite] (client) hmr update /src/index.css, /src/components/casino/RegistrationView.tsx, /src/components/casino/Layout.tsx, /src/CasinoApp.tsx, /src/components/casino/games/VideoPokerView.tsx, /src/components/casino/games/HiLoView.tsx, /src/components/casino/games/GenericGameView.tsx, /src/components/casino/games/ThreeCardPokerView.tsx, /src/components/casino/games/BaccaratView.tsx, /src/components/casino/games/BlackjackView.tsx, /src/components/casino/games/SicBoView.tsx, /src/components/casino/games/CrapsView.tsx, /src/components/casino/games/RouletteView.tsx, /src/components/casino/games/CrapsBetMenu.tsx
+12:19:01 PM [vite] (client) hmr update /src/index.css, /src/components/casino/RegistrationView.tsx, /src/components/casino/Layout.tsx, /src/CasinoApp.tsx, /src/components/casino/games/VideoPokerView.tsx, /src/components/casino/games/HiLoView.tsx, /src/components/casino/games/GenericGameView.tsx, /src/components/casino/games/ThreeCardPokerView.tsx, /src/components/casino/games/BaccaratView.tsx, /src/components/casino/games/BlackjackView.tsx, /src/components/casino/games/SicBoView.tsx, /src/components/casino/games/CrapsView.tsx, /src/components/casino/games/RouletteView.tsx, /src/components/casino/games/CrapsBetMenu.tsx
+12:19:22 PM [vite] (client) hmr update /src/index.css, /src/components/casino/RegistrationView.tsx, /src/components/casino/Layout.tsx, /src/CasinoApp.tsx, /src/components/casino/games/VideoPokerView.tsx, /src/components/casino/games/HiLoView.tsx, /src/components/casino/games/GenericGameView.tsx, /src/components/casino/games/ThreeCardPokerView.tsx, /src/components/casino/games/BaccaratView.tsx, /src/components/casino/games/BlackjackView.tsx, /src/components/casino/games/SicBoView.tsx, /src/components/casino/games/CrapsView.tsx, /src/components/casino/games/RouletteView.tsx, /src/components/casino/games/CrapsBetMenu.tsx
+12:20:12 PM [vite] (client) hmr update /src/index.css, /src/components/casino/RegistrationView.tsx, /src/components/casino/Layout.tsx, /src/CasinoApp.tsx, /src/components/casino/games/VideoPokerView.tsx, /src/components/casino/games/HiLoView.tsx, /src/components/casino/games/GenericGameView.tsx, /src/components/casino/games/ThreeCardPokerView.tsx, /src/components/casino/games/BaccaratView.tsx, /src/components/casino/games/BlackjackView.tsx, /src/components/casino/games/SicBoView.tsx, /src/components/casino/games/CrapsView.tsx, /src/components/casino/games/RouletteView.tsx, /src/components/casino/games/CrapsBetMenu.tsx
+12:20:28 PM [vite] (client) hmr update /src/index.css, /src/components/casino/RegistrationView.tsx, /src/components/casino/Layout.tsx, /src/CasinoApp.tsx, /src/components/casino/games/VideoPokerView.tsx, /src/components/casino/games/HiLoView.tsx, /src/components/casino/games/GenericGameView.tsx, /src/components/casino/games/ThreeCardPokerView.tsx, /src/components/casino/games/BaccaratView.tsx, /src/components/casino/games/BlackjackView.tsx, /src/components/casino/games/SicBoView.tsx, /src/components/casino/games/CrapsView.tsx, /src/components/casino/games/RouletteView.tsx, /src/components/casino/games/CrapsBetMenu.tsx
+12:22:07 PM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+12:22:47 PM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+12:23:00 PM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+12:23:16 PM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+12:23:33 PM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+12:23:45 PM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+12:24:08 PM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+12:24:24 PM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+12:24:58 PM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+12:25:08 PM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+12:25:22 PM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+12:25:33 PM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+12:25:52 PM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+12:26:03 PM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+12:26:13 PM [vite] (client) hmr update /src/components/casino/Layout.tsx, /src/index.css
+12:26:24 PM [vite] (client) hmr update /src/components/casino/Layout.tsx, /src/index.css
+12:26:42 PM [vite] (client) hmr update /src/components/casino/Layout.tsx, /src/index.css
+12:26:54 PM [vite] (client) hmr update /src/components/casino/Layout.tsx, /src/index.css
+12:27:20 PM [vite] (client) hmr update /src/components/casino/Layout.tsx, /src/index.css
+12:27:31 PM [vite] (client) hmr update /src/components/casino/Layout.tsx, /src/index.css
+12:27:40 PM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+12:28:07 PM [vite] (client) hmr update /src/index.css
+12:28:46 PM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+12:30:11 PM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+12:40:41 PM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+12:41:04 PM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+12:41:22 PM [vite] (client) hmr update /src/components/casino/Layout.tsx, /src/index.css
+1:03:32 PM [vite] (client) hmr update /src/index.css, /src/components/casino/RegistrationView.tsx, /src/components/casino/Layout.tsx, /src/CasinoApp.tsx, /src/components/casino/games/VideoPokerView.tsx, /src/components/casino/games/HiLoView.tsx, /src/components/casino/games/GenericGameView.tsx, /src/components/casino/games/ThreeCardPokerView.tsx, /src/components/casino/games/BaccaratView.tsx, /src/components/casino/games/BlackjackView.tsx, /src/components/casino/games/SicBoView.tsx, /src/components/casino/games/CrapsView.tsx, /src/components/casino/games/RouletteView.tsx, /src/components/casino/games/CrapsBetMenu.tsx
+1:03:51 PM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+1:04:08 PM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+1:04:32 PM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+1:04:41 PM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+1:04:46 PM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+1:05:03 PM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+1:06:37 PM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+1:06:50 PM [vite] (client) hmr update /src/CasinoApp.tsx, /src/index.css
+1:11:00 PM [vite] (client) hmr update /src/components/casino/GameComponents.tsx, /src/index.css
+1:11:17 PM [vite] (client) hmr update /src/components/casino/games/CrapsView.tsx, /src/index.css
+1:16:20 PM [vite] (client) hmr update /src/components/casino/GameComponents.tsx, /src/index.css
+1:16:30 PM [vite] (client) hmr update /src/components/casino/games/CrapsView.tsx, /src/index.css

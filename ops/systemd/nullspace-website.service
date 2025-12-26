@@ -1,0 +1,13 @@
+[Unit]
+Description=Nullspace Website (Nginx)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/nginx -c /etc/nginx/nullspace.conf -g "daemon off;"
+ExecReload=/usr/sbin/nginx -c /etc/nginx/nullspace.conf -s reload
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

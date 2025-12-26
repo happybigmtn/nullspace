@@ -4,6 +4,7 @@ import { PlaySwapStakeTabs } from './components/PlaySwapStakeTabs';
 import { WalletPill } from './components/WalletPill';
 import { PageHeader } from './components/PageHeader';
 import { AuthStatusPill } from './components/AuthStatusPill';
+import { ConnectionStatus } from './components/ConnectionStatus';
 import { SwapPanel } from './components/economy/SwapPanel';
 import { useSharedCasinoConnection } from './chain/CasinoConnectionContext';
 import { useActivityFeed } from './hooks/useActivityFeed';
@@ -84,22 +85,6 @@ export default function EconomyApp() {
     });
   };
 
-  const statusText = useMemo(() => {
-    switch (connection.status) {
-      case 'connected':
-        return 'Connected';
-      case 'connecting':
-        return 'Connecting…';
-      case 'vault_locked':
-      case 'missing_identity':
-        return connection.statusDetail ?? 'Not ready';
-      case 'error':
-        return connection.statusDetail ?? connection.error ?? 'Failed to connect';
-      default:
-        return 'Connecting…';
-    }
-  }, [connection.error, connection.status, connection.statusDetail]);
-
   const getReadyClient = () => {
     const client: any = connection.client;
     if (!client?.nonceManager) {
@@ -124,6 +109,8 @@ export default function EconomyApp() {
   useEffect(() => {
     if (connection.status === 'connected') {
       pushActivity('Connected');
+    } else if (connection.status === 'offline') {
+      pushActivity('Offline - check your connection', 'error');
     } else if (connection.status === 'vault_locked') {
       pushActivity('Vault locked — unlock to continue', 'error');
     } else if (connection.status === 'missing_identity') {
@@ -813,7 +800,7 @@ export default function EconomyApp() {
     <div className="min-h-screen bg-terminal-black text-white font-mono">
       <PageHeader
         title={`Economy — ${tabTitle}`}
-        status={statusText}
+        status={<ConnectionStatus />}
         leading={<PlaySwapStakeTabs />}
         right={
           <>

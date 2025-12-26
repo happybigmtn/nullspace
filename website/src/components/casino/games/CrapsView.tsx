@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { GameState } from '../../../types';
-import { DiceRender } from '../GameComponents';
+import { DiceThrow2D } from '../GameComponents';
 import { MobileDrawer } from '../MobileDrawer';
 import { calculateCrapsExposure, canPlaceCrapsBonusBets } from '../../../utils/gameUtils';
 import { CrapsBonusDashboard } from './CrapsBonusDashboard';
@@ -260,10 +260,10 @@ export const CrapsView = React.memo<{
                         <span className="md:hidden">{gameState.message?.replace(/SPACE TO ROLL/gi, 'PLACE BETS')}</span>
                     </div>
                     {gameState.crapsRollHistory.length > 0 && (
-                        <div className="text-[10px] tracking-widest mt-1 flex items-center justify-center gap-1">
-                            <span className="text-gray-600">LAST:</span>
+                        <div className="text-[11px] sm:text-[10px] tracking-widest mt-1 flex items-center justify-center gap-1">
+                            <span className="text-gray-400">LAST:</span>
                             {gameState.crapsRollHistory.slice(-10).map((roll, i, arr) => (
-                                <span key={i} className={`${i === arr.length - 1 ? 'text-yellow-400 font-bold' : roll === 7 ? 'text-terminal-accent' : 'text-gray-600'}`}>
+                                <span key={i} className={`${i === arr.length - 1 ? 'text-yellow-400 font-bold' : roll === 7 ? 'text-terminal-accent' : 'text-gray-400'}`}>
                                     {roll}{i < arr.length - 1 ? ' -' : ''}
                                 </span>
                             ))}
@@ -272,17 +272,19 @@ export const CrapsView = React.memo<{
                 </div>
 
                 {/* Dice Area */}
-                <div className="min-h-[96px] flex gap-8 items-center justify-center">
-                    {gameState.dice.length > 0 && (
-                        <div className="flex flex-col gap-2 items-center">
-                            <span className="text-xs uppercase tracking-widest text-gray-500">ROLL</span>
-                            <div className="flex gap-4">
-                                {gameState.dice.map((d, i) => (
-                                    <DiceRender key={`${gameState.crapsRollHistory.length}-${i}`} value={d} delayMs={i * 60} />
-                                ))}
-                            </div>
-                        </div>
-                    )}
+                <div className="min-h-[170px] w-full flex items-center justify-center">
+                    <DiceThrow2D
+                        values={gameState.dice}
+                        rollKey={gameState.crapsRollHistory.length}
+                        className="w-full"
+                        maxWidthClassName="max-w-[760px] sm:max-w-[900px] lg:max-w-[1100px]"
+                        heightClassName="h-[150px] sm:h-[175px] md:h-[190px]"
+                        launchDirection="right"
+                        horizontalBoost={22}
+                        verticalBoost={9}
+                        preventOverlap
+                        settleToRow
+                    />
                 </div>
 
                 {/* Super Mode Info - Animated */}

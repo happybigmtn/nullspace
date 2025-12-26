@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { internalMutation, internalQuery, mutation } from "./_generated/server";
+import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { paginationOptsValidator } from "convex/server";
 import { requireServiceToken } from "./serviceAuth";
 
@@ -37,6 +37,19 @@ export const getUserById = internalQuery({
   },
   returns: v.union(v.null(), userDoc),
   handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    return user ?? null;
+  },
+});
+
+export const getUserByIdWithToken = query({
+  args: {
+    serviceToken: v.string(),
+    userId: v.id("users"),
+  },
+  returns: v.union(v.null(), userDoc),
+  handler: async (ctx, args) => {
+    requireServiceToken(args.serviceToken);
     const user = await ctx.db.get(args.userId);
     return user ?? null;
   },

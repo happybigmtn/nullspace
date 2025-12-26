@@ -85,6 +85,60 @@ describe('EVM contracts', function () {
     expect(await rng.balanceOf(bob.address)).to.equal(bobAmount);
   });
 
+  it('distributes fee claims with cumulative Merkle roots', async () => {
+    const [owner, alice, bob, treasury] = await ethers.getSigners();
+    const usdtFactory = await ethers.getContractFactory('MockUSDT');
+    const usdt = await usdtFactory.deploy(owner.address, 6);
+    await usdt.waitForDeployment();
+
+    const distributorFactory = await ethers.getContractFactory('FeeDistributor');
+    const distributor = await distributorFactory.deploy(owner.address, await usdt.getAddress());
+    await distributor.waitForDeployment();
+
+    const buildRoot = (aliceAmount, bobAmount) => {
+      const leaves = [
+        ethers.solidityPackedKeccak256(['address', 'uint256'], [alice.address, aliceAmount]),
+        ethers.solidityPackedKeccak256(['address', 'uint256'], [bob.address, bobAmount])
+      ].map((leaf) => Buffer.from(leaf.slice(2), 'hex'));
+      const tree = new MerkleTree(leaves, keccak256, { sortPairs: true });
+      return {
+        root: tree.getHexRoot(),
+        proofs: {
+          alice: tree.getHexProof(leaves[0]),
+          bob: tree.getHexProof(leaves[1])
+        }
+      };
+    };
+
+    const round1 = buildRoot(1_000n, 2_000n);
+    await distributor.setMerkleRoot(round1.root, 0, 1);
+
+    await usdt.mint(owner.address, 10_000n);
+    await usdt.approve(await distributor.getAddress(), 10_000n);
+    await distributor.seed(10_000n);
+
+    await expect(distributor.connect(alice).claim(1_000n, round1.proofs.alice)).to.not.be.reverted;
+    expect(await usdt.balanceOf(alice.address)).to.equal(1_000n);
+
+    const round2 = buildRoot(1_500n, 2_500n);
+    await distributor.setMerkleRoot(round2.root, 0, 2);
+    await expect(distributor.connect(alice).claim(1_500n, round2.proofs.alice)).to.not.be.reverted;
+    expect(await usdt.balanceOf(alice.address)).to.equal(1_500n);
+
+    await distributor.setPaused(true);
+    await expect(distributor.connect(bob).claim(2_500n, round2.proofs.bob)).to.be.revertedWith(
+      'FeeDistributor: paused'
+    );
+
+    await distributor.setPaused(false);
+    await expect(distributor.connect(bob).claim(2_500n, round2.proofs.bob)).to.not.be.reverted;
+    expect(await usdt.balanceOf(bob.address)).to.equal(2_500n);
+
+    await distributor.setMerkleRoot(round2.root, 0, 2);
+    await expect(distributor.sweep(treasury.address)).to.not.be.reverted;
+    expect(await usdt.balanceOf(treasury.address)).to.equal(10_000n - 1_500n - 2_500n);
+  });
+
   it('locks and releases tokens in the bridge lockbox', async () => {
     const [owner, user] = await ethers.getSigners();
     const rngFactory = await ethers.getContractFactory('RNGToken');

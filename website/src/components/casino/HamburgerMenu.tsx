@@ -61,6 +61,9 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
                         <NavLink to="/stake" onClick={close} className={({ isActive }) => `px-3 py-3 rounded text-sm font-bold tracking-widest ${isActive ? 'bg-terminal-green/10 text-terminal-green' : 'text-gray-300 hover:bg-gray-800'}`}>
                             STAKE
                         </NavLink>
+                        <NavLink to="/bridge" onClick={close} className={({ isActive }) => `px-3 py-3 rounded text-sm font-bold tracking-widest ${isActive ? 'bg-terminal-green/10 text-terminal-green' : 'text-gray-300 hover:bg-gray-800'}`}>
+                            BRIDGE
+                        </NavLink>
                         <NavLink to="/security" onClick={close} className={({ isActive }) => `px-3 py-3 rounded text-sm font-bold tracking-widest ${isActive ? 'bg-terminal-green/10 text-terminal-green' : 'text-gray-300 hover:bg-gray-800'}`}>
                             VAULT
                         </NavLink>

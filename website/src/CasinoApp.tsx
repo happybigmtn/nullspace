@@ -438,6 +438,12 @@ export default function CasinoApp() {
         }
         if (e.key.toLowerCase() === 'l' && !commandOpen && !customBetOpen) setLeaderboardView(prev => prev === 'RANK' ? 'PAYOUT' : 'RANK');
     }}>
+       <a
+         href="#casino-main"
+         className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:rounded focus:border focus:border-terminal-green focus:bg-terminal-black focus:px-3 focus:py-2 focus:text-[10px] focus:tracking-widest focus:text-terminal-green"
+       >
+         Skip to content
+       </a>
        <Header
            phase={phase}
            tournamentTime={playMode === 'FREEROLL' ? tournamentTime : 0}
@@ -509,7 +515,11 @@ export default function CasinoApp() {
        </div>
 
 	       <div className="flex flex-1 overflow-hidden relative">
-	          <main className={`flex-1 flex flex-col relative bg-terminal-black p-3 sm:p-4 overflow-y-auto ${gameState.type !== GameType.NONE ? 'pb-24 sm:pb-20 md:pb-4' : ''}`}>
+	          <main
+              id="casino-main"
+              tabIndex={-1}
+              className={`flex-1 flex flex-col relative bg-terminal-black p-3 sm:p-4 overflow-y-auto ${gameState.type !== GameType.NONE ? 'pb-24 sm:pb-20 md:pb-4' : ''}`}
+            >
 	             {gameState.type === GameType.NONE ? (
 	               <div className="mb-2 lg:hidden space-y-2">
 	                 <AuthStatusPill publicKeyHex={walletPublicKeyHex} className="w-full" />
@@ -581,6 +591,8 @@ export default function CasinoApp() {
                 winnersPct={0.15}
                 gameType={gameState.type}
                 crapsEventLog={gameState.crapsEventLog}
+                resolvedBets={gameState.resolvedBets}
+                resolvedBetsKey={gameState.resolvedBetsKey}
              />
           )}
        </div>

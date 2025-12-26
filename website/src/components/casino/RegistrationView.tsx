@@ -48,6 +48,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
   onBotConfigChange
 }) => {
   const {
+    enabled: passkeyEnabled,
     session: passkeySession,
     register: registerPasskey,
     loading: passkeyLoading,
@@ -73,6 +74,13 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
     playerActiveTournamentId !== null &&
     playerActiveTournamentId === activeTournamentId;
   const showStatus = !!statusMessage && statusMessage !== 'PRESS / FOR COMMANDS';
+  const normalizedStatus = (statusMessage ?? '').toLowerCase();
+  const statusTone =
+    normalizedStatus.includes('offline') ||
+    normalizedStatus.includes('error') ||
+    normalizedStatus.includes('failed')
+      ? 'text-terminal-accent'
+      : 'text-gray-300';
 
   return (
       <div className="flex flex-col min-h-screen w-screen bg-terminal-black text-white font-mono items-center justify-center p-4 sm:p-6 md:p-8 overflow-auto">
@@ -187,26 +195,36 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
                            )}
 	                           <div className="text-xs text-gray-400 flex flex-col items-center gap-1">
 	                               {showStatus && (
-	                                   <div className="text-[10px] text-gray-500 tracking-widest text-center">
+	                                   <div
+                                         className={`text-[11px] tracking-widest text-center ${statusTone}`}
+                                         role="status"
+                                         aria-live="polite"
+                                       >
 	                                       {statusMessage}
 	                                       {lastTxSig ? (
 	                                           <span className="text-gray-600"> · TX {lastTxSig}</span>
 	                                       ) : null}
 	                                   </div>
 	                               )}
-	                               <button
-	                                   onClick={registerPasskey}
-	                                   disabled={passkeyLoading}
-	                                   className="text-terminal-green hover:underline disabled:opacity-50"
-                               >
-                                   {passkeyLoading ? 'Pairing passkey...' : 'Use passkey (beta)'}
-                               </button>
-                               {passkeySession && (
-                                   <span className="text-[10px] text-terminal-green">
-                                       Passkey ready · {passkeySession.credentialId.slice(0, 8)}...
-                                   </span>
+                               {passkeyEnabled && (
+                                   <>
+                                       <button
+                                           onClick={registerPasskey}
+                                           disabled={passkeyLoading}
+                                           className="text-terminal-green hover:underline disabled:opacity-50"
+                                       >
+                                           {passkeyLoading ? 'Pairing passkey...' : 'Use passkey (beta)'}
+                                       </button>
+                                       {passkeySession && (
+                                           <span className="text-[10px] text-terminal-green">
+                                               Passkey ready · {passkeySession.credentialId.slice(0, 8)}...
+                                           </span>
+                                       )}
+                                       {passkeyError && (
+                                           <span className="text-[10px] text-terminal-accent">{passkeyError}</span>
+                                       )}
+                                   </>
                                )}
-                               {passkeyError && <span className="text-[10px] text-terminal-accent">{passkeyError}</span>}
                            </div>
                            
                            <div className="text-center">

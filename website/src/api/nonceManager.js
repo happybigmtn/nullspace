@@ -751,4 +751,65 @@ export class NonceManager {
       'processEpoch'
     );
   }
+
+  /**
+   * Submit a bridge withdraw transaction.
+   * @param {bigint|number} amount - Amount of RNG to bridge out
+   * @param {Uint8Array} destinationBytes - EVM address bytes (20) or bytes32
+   * @returns {Promise<{status: string, txHash?: string, txDigest?: string}>} Transaction result
+   */
+  async submitBridgeWithdraw(amount, destinationBytes) {
+    return this.submitTransaction(
+      (nonce) => this.wasm.createBridgeWithdrawTransaction(nonce, amount, destinationBytes),
+      'bridgeWithdraw'
+    );
+  }
+
+  /**
+   * Admin: submit a bridge deposit transaction.
+   * @param {Uint8Array} recipientPublicKeyBytes - Recipient public key bytes
+   * @param {bigint|number} amount - Amount of RNG to credit
+   * @param {Uint8Array} sourceBytes - Source identifier (tx hash)
+   * @returns {Promise<{status: string, txHash?: string, txDigest?: string}>} Transaction result
+   */
+  async submitBridgeDeposit(recipientPublicKeyBytes, amount, sourceBytes) {
+    return this.submitTransaction(
+      (nonce) => this.wasm.createBridgeDepositTransaction(nonce, recipientPublicKeyBytes, amount, sourceBytes),
+      'bridgeDeposit'
+    );
+  }
+
+  /**
+   * Admin: submit a finalize bridge withdrawal transaction.
+   * @param {bigint|number} withdrawalId - Withdrawal ID
+   * @param {Uint8Array} sourceBytes - Source identifier (tx hash)
+   * @returns {Promise<{status: string, txHash?: string, txDigest?: string}>} Transaction result
+   */
+  async submitFinalizeBridgeWithdrawal(withdrawalId, sourceBytes) {
+    return this.submitTransaction(
+      (nonce) => this.wasm.createFinalizeBridgeWithdrawalTransaction(nonce, withdrawalId, sourceBytes),
+      'bridgeFinalize'
+    );
+  }
+
+  /**
+   * Admin: submit an oracle update transaction.
+   * @param {bigint|number} priceVusdtNumerator - Oracle price numerator (vUSDT)
+   * @param {bigint|number} priceRngDenominator - Oracle price denominator (RNG)
+   * @param {bigint|number} updatedTs - Timestamp for the oracle price (seconds)
+   * @param {Uint8Array} sourceBytes - Source metadata bytes
+   * @returns {Promise<{status: string, txHash?: string, txDigest?: string}>} Transaction result
+   */
+  async submitUpdateOracle(priceVusdtNumerator, priceRngDenominator, updatedTs, sourceBytes) {
+    return this.submitTransaction(
+      (nonce) => this.wasm.createUpdateOracleTransaction(
+        nonce,
+        priceVusdtNumerator,
+        priceRngDenominator,
+        updatedTs,
+        sourceBytes
+      ),
+      'oracle_update'
+    );
+  }
 }

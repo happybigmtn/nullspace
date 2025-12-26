@@ -23,6 +23,11 @@ body {
   font-family: 'JetBrains Mono', monospace;
 }
 
+*:focus-visible {
+  outline: 2px solid #00ff41;
+  outline-offset: 2px;
+}
+
 @media (max-width: 639px) {
   .pb-bottom-nav {
     padding-bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom));
@@ -246,6 +251,54 @@ body {
   );
   background-size: 200% 100%;
   animation: shimmer 1.4s linear infinite;
+}
+
+@keyframes bet-flash-win {
+  0% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+    background-color: rgba(34, 197, 94, 0.15);
+  }
+  100% {
+    box-shadow: 0 0 0 12px rgba(34, 197, 94, 0);
+    background-color: transparent;
+  }
+}
+
+@keyframes bet-flash-loss {
+  0% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+    background-color: rgba(239, 68, 68, 0.12);
+  }
+  100% {
+    box-shadow: 0 0 0 12px rgba(239, 68, 68, 0);
+    background-color: transparent;
+  }
+}
+
+@keyframes bet-flash-push {
+  0% {
+    box-shadow: 0 0 0 0 rgba(148, 163, 184, 0.5);
+    background-color: rgba(148, 163, 184, 0.08);
+  }
+  100% {
+    box-shadow: 0 0 0 10px rgba(148, 163, 184, 0);
+    background-color: transparent;
+  }
+}
+
+.bet-flash-win {
+  animation: bet-flash-win 1.2s ease-out;
+  border-color: rgba(34, 197, 94, 0.45);
+}
+
+.bet-flash-loss {
+  animation: bet-flash-loss 1.2s ease-out;
+  border-color: rgba(239, 68, 68, 0.45);
+}
+
+.bet-flash-push {
+  animation: bet-flash-push 1.2s ease-out;
+  border-color: rgba(148, 163, 184, 0.45);
 }
 
 @media (prefers-reduced-motion: reduce) {

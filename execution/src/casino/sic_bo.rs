@@ -276,14 +276,14 @@ impl SicBoState {
 fn total_payout(total: u8, paytable: SicBoPaytable) -> u64 {
     match paytable {
         SicBoPaytable::Macau => match total {
-            3 | 18 => 180,
-            4 | 17 => 50,
-            5 | 16 => 18,
-            6 | 15 => 14,
-            7 | 14 => 12,
-            8 | 13 => 8,
-            9 | 12 => 6,
-            10 | 11 => 6,
+            3 | 18 => payouts::TOTAL_3_OR_18,
+            4 | 17 => payouts::TOTAL_4_OR_17,
+            5 | 16 => payouts::TOTAL_5_OR_16,
+            6 | 15 => payouts::TOTAL_6_OR_15,
+            7 | 14 => payouts::TOTAL_7_OR_14,
+            8 | 13 => payouts::TOTAL_8_OR_13,
+            9 | 12 => payouts::TOTAL_9_OR_12,
+            10 | 11 => payouts::TOTAL_10_OR_11,
             _ => 0,
         },
         SicBoPaytable::AtlanticCity => match total {
@@ -361,7 +361,7 @@ fn calculate_bet_payout(bet: &SicBoBet, dice: &[u8; 3], rules: SicBoRules) -> u6
         BetType::SpecificTriple => {
             if triple && dice[0] == bet.number {
                 let payout: u64 = match rules.paytable {
-                    SicBoPaytable::Macau => 150,
+                    SicBoPaytable::Macau => payouts::SPECIFIC_TRIPLE,
                     SicBoPaytable::AtlanticCity => 180,
                 };
                 bet.amount.saturating_mul(payout.saturating_add(1))
@@ -372,7 +372,7 @@ fn calculate_bet_payout(bet: &SicBoBet, dice: &[u8; 3], rules: SicBoRules) -> u6
         BetType::AnyTriple => {
             if triple {
                 let payout: u64 = match rules.paytable {
-                    SicBoPaytable::Macau => 24,
+                    SicBoPaytable::Macau => payouts::ANY_TRIPLE,
                     SicBoPaytable::AtlanticCity => 30,
                 };
                 bet.amount.saturating_mul(payout.saturating_add(1))
@@ -383,7 +383,7 @@ fn calculate_bet_payout(bet: &SicBoBet, dice: &[u8; 3], rules: SicBoRules) -> u6
         BetType::SpecificDouble => {
             if count_number(dice, bet.number) >= 2 {
                 let payout: u64 = match rules.paytable {
-                    SicBoPaytable::Macau => 8,
+                    SicBoPaytable::Macau => payouts::SPECIFIC_DOUBLE,
                     SicBoPaytable::AtlanticCity => 10,
                 };
                 bet.amount.saturating_mul(payout.saturating_add(1))

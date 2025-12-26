@@ -24,5 +24,6 @@ fn casino_error_vec(
 }
 
 mod casino;
+mod bridge;
 mod liquidity;
 mod staking;

@@ -8,12 +8,12 @@ This document is the canonical roadmap for RNG token distribution + liquidity ac
 
 | Bucket | % of supply | Amount (RNG) | Mechanism | Status in code |
 |---|---:|---:|---|---|
-| Freeroll bonus pool | up to 15% | 150,000,000 | Phase 2 BOGO bonus for successful CCA bidders (not airdropped) | **Not implemented** |
-| Phase 2 auction sale | 20% | 200,000,000 | Ethereum CCA raising USDT; proceeds seed a v4 pool | **Not implemented** |
-| Liquidity reserve | 10% | 100,000,000 | Paired with auction proceeds at clearing price | **Not implemented** |
-| Player snapshot + rewards | 35% | 350,000,000 | Phase 1 earnings + allocations | **Partially implemented (credits ledger + emissions; snapshot tooling pending)** |
-| Treasury / ops / partnerships | 15% | 150,000,000 | Treasury allocations + market-making | **Ledger implemented; vesting enforcement pending** |
-| Team / investor vesting | 5% | 50,000,000 | Time-locked vesting | **Ledger implemented; vesting enforcement pending** |
+| Freeroll bonus pool | up to 15% | 150,000,000 | Phase 2 BOGO bonus for successful CCA bidders (not airdropped) | **EVM contract implemented (BogoDistributor); deployment + eligibility root pending** |
+| Phase 2 auction sale | 20% | 200,000,000 | Ethereum CCA raising USDT; proceeds seed a v4 pool | **CCA integration scripts present; runbook done, deployment/testnet rehearsal pending** |
+| Liquidity reserve | 10% | 100,000,000 | Paired with auction proceeds at clearing price | **EVM token reserve accounted for; pool launch pending** |
+| Player snapshot + rewards | 35% | 350,000,000 | Phase 1 earnings + allocations | **Partially implemented (credits ledger + emissions; snapshot exporter exists)** |
+| Treasury / ops / partnerships | 15% | 150,000,000 | Treasury allocations + market-making | **Ledger + vesting enforcement implemented; schedule config pending** |
+| Team / investor vesting | 5% | 50,000,000 | Time-locked vesting | **Ledger + vesting enforcement implemented; schedule config pending** |
 
 Baseline example totals 100%. Final allocation must be reconciled to Phase 1
 snapshot data before launch.
@@ -55,7 +55,7 @@ The current “economy” lives inside the casino state machine. RNG is represen
 - **RNG balance (in-protocol):** `types/src/casino/player.rs` `Player.balances.chips`
 - **vUSDT (virtual stable):** `types/src/casino/player.rs` `Player.balances.vusdt_balance`
 - **CPMM AMM (RNG/vUSDT):**
-  - State: `types/src/casino/economy.rs` `AmmPool { reserve_rng, reserve_vusdt, total_shares, fee_basis_points, sell_tax_basis_points, bootstrap_price_vusdt_numerator, bootstrap_price_rng_denominator }`
+  - State: `types/src/casino/economy.rs` `AmmPool { reserve_rng, reserve_vusdt, total_shares, fee_basis_points, sell_tax_basis_points, bootstrap_price_vusdt_numerator, bootstrap_price_rng_denominator, bootstrap_finalized, bootstrap_final_price_vusdt_numerator, bootstrap_final_price_rng_denominator, bootstrap_finalized_ts }`
   - Execution: `execution/src/layer/handlers/liquidity.rs` `handle_swap`, `handle_add_liquidity`, `handle_remove_liquidity`
   - Defaults: 0.3% LP fee (`fee_basis_points=30`) + 5% sell-tax on RNG→vUSDT (`sell_tax_basis_points=500`) + bootstrap price (default: `1 RNG = 1 vUSDT`)
   - Accounting: sell-tax increments `HouseState.total_burned`; LP fee increments `HouseState.accumulated_fees`
@@ -68,15 +68,14 @@ The current “economy” lives inside the casino state machine. RNG is represen
 - **Staking (dev / MVP):**
   - Stake/unstake bookkeeping exists (`execution/src/layer/handlers/staking.rs` `handle_stake`, `handle_unstake`)
   - Rewards distribution is implemented: positive epoch `HouseState.net_pnl` is allocated to stakers; `ClaimRewards` pays from a tracked reward pool.
-- **Analytics tooling (simulated):**
-  - Simulation: `client/examples/simulation_ecosystem.rs` writes `economy_log.json`
-  - Dashboard: `website/src/components/EconomyDashboard.jsx` reads `website/public/economy_log.json`
+- **Analytics tooling (live):**
+  - Dashboard: `website/src/components/EconomyDashboard.jsx` polls live `House`, `AmmPool`, and registry data
+  - Simulation: `client/examples/simulation_ecosystem.rs` still writes `economy_log.json` for offline runs
 
 ### What does NOT exist yet (and is required for the roadmap)
-- Treasury / allocation ledger exists; vesting enforcement is still pending.
 - A protocol-native **token ledger** (CTI-20 / “real RNG token”) separate from casino player state.
-- Any Ethereum contracts (ERC-20 RNG on Ethereum, auctions, Uniswap pool launch tooling).
-- Any bridge contracts or canonical supply enforcement across chains.
+- Full Phase 2 deployment flow (testnet CCA rehearsal, liquidity launcher governance).
+- Bridge relayer/service (Commonware bridge module + UI flows implemented; relayer shipped).
 
 ## Stage 1 — On-Chain Price Discovery (RNG/vUSD on Commonware)
 
@@ -170,11 +169,11 @@ Then implement a bridge that is **supply-preserving**:
 ## Next Steps (Concrete, Codebase-Aligned)
 
 ### Immediate (this repo)
-- [ ] Complete treasury vesting enforcement for Phase 2 allocation buckets.
+- [x] Complete treasury vesting enforcement for Phase 2 allocation buckets.
 - [x] Implement website UI flows for AMM swap + LP management, vault borrow/repay,
   and price/TVL/LP share metrics.
 - [x] Add execution events for AMM/vault/stake actions so the UI can rely on updates instead of polling.
-- [x] Update `client/examples/simulation_ecosystem.rs` assumptions to match the
+- [ ] Update `client/examples/simulation_ecosystem.rs` assumptions to match the
   Phase 2 allocation (20/10/15 bonus plus remaining buckets).
 - [ ] Decide whether Stage 1 needs an explicit time-limited “finalize” step; if yes, design new state + instructions.
 

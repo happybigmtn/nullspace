@@ -13,11 +13,17 @@ async function fetchChallenge(): Promise<string> {
 }
 
 export function usePasskeyAuth() {
+  const passkeyEnabled = import.meta.env.VITE_ENABLE_SIMULATOR_PASSKEYS === '1';
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const register = async () => {
+    if (!passkeyEnabled) {
+      const message = 'Passkeys disabled';
+      setError(message);
+      throw new Error(message);
+    }
     setLoading(true);
     setError(null);
     try {
@@ -62,6 +68,9 @@ export function usePasskeyAuth() {
   };
 
   const signHex = async (messageHex: string) => {
+    if (!passkeyEnabled) {
+      throw new Error('Passkeys disabled');
+    }
     if (!session) {
       throw new Error('No active session');
     }
@@ -82,6 +91,7 @@ export function usePasskeyAuth() {
   const logout = () => setSession(null);
 
   return {
+    enabled: passkeyEnabled,
     session,
     loading,
     error,

@@ -1,0 +1,16 @@
+[Unit]
+Description=Nullspace Auth Service
+After=network.target
+
+[Service]
+Type=simple
+User=nullspace
+Group=nullspace
+WorkingDirectory=/opt/nullspace/services/auth
+EnvironmentFile=/etc/nullspace/auth.env
+ExecStart=/usr/bin/node dist/server.js
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

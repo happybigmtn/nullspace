@@ -9,6 +9,8 @@ use tokio::sync::{broadcast, RwLock};
 mod api;
 pub use api::Api;
 
+mod cache;
+mod fanout;
 mod explorer;
 pub use explorer::{AccountActivity, ExplorerBlock, ExplorerState, ExplorerTransaction};
 mod explorer_persistence;
@@ -22,6 +24,10 @@ pub use passkeys::{PasskeyChallenge, PasskeyCredential, PasskeySession, PasskeyS
 mod state;
 pub use state::{ExplorerPersistenceBackpressure, InternalUpdate, SimulatorConfig, State};
 use state::SubscriptionTracker;
+mod submission;
+
+use cache::RedisCache;
+use fanout::Fanout;
 
 use metrics::{
     HttpMetrics, HttpMetricsSnapshot, SystemMetrics, SystemMetricsSnapshot, UpdateIndexMetrics,
@@ -200,6 +206,8 @@ pub struct Simulator {
     subscriptions: Arc<Mutex<SubscriptionTracker>>,
     update_tx: broadcast::Sender<InternalUpdate>,
     mempool_tx: broadcast::Sender<Pending>,
+    fanout: Option<Arc<Fanout>>,
+    cache: Option<Arc<RedisCache>>,
     ws_metrics: WsMetrics,
     explorer_metrics: Arc<ExplorerMetrics>,
     update_index_metrics: Arc<UpdateIndexMetrics>,
@@ -282,6 +290,53 @@ impl Simulator {
             }
         };
         let explorer = Arc::new(RwLock::new(explorer));
+        let fanout = match config.fanout_redis_url.as_deref() {
+            Some(url) => {
+                let publish = config.fanout_publish.unwrap_or(true);
+                let subscribe = config.fanout_subscribe.unwrap_or(true);
+                if !publish && !subscribe {
+                    tracing::warn!("Fanout disabled: publish and subscribe are false.");
+                    None
+                } else {
+                    let channel = config
+                        .fanout_channel
+                        .clone()
+                        .unwrap_or_else(|| "nullspace.submissions".to_string());
+                    let origin = config.fanout_origin.clone();
+                    match Fanout::new(url, channel, origin, publish, subscribe) {
+                        Ok(fanout) => Some(Arc::new(fanout)),
+                        Err(err) => {
+                            tracing::warn!("Fanout disabled: {err}");
+                            None
+                        }
+                    }
+                }
+            }
+            None => None,
+        };
+        let cache = match (
+            config.cache_redis_url.as_deref(),
+            config.cache_redis_ttl_seconds,
+        ) {
+            (Some(url), Some(ttl)) if ttl > 0 => {
+                let prefix = config
+                    .cache_redis_prefix
+                    .clone()
+                    .unwrap_or_else(|| "nullspace:explorer:".to_string());
+                match RedisCache::new(url, prefix, std::time::Duration::from_secs(ttl)) {
+                    Ok(cache) => Some(Arc::new(cache)),
+                    Err(err) => {
+                        tracing::warn!("Redis cache disabled: {err}");
+                        None
+                    }
+                }
+            }
+            (Some(_), _) => {
+                tracing::warn!("Redis cache disabled: ttl is zero or unset.");
+                None
+            }
+            _ => None,
+        };
 
         Self {
             identity,
@@ -292,6 +347,8 @@ impl Simulator {
             subscriptions: Arc::new(Mutex::new(SubscriptionTracker::default())),
             update_tx,
             mempool_tx,
+            fanout,
+            cache,
             ws_metrics: WsMetrics::default(),
             explorer_metrics,
             update_index_metrics,
@@ -315,6 +372,29 @@ impl Simulator {
 
     pub(crate) fn update_index_metrics_snapshot(&self) -> UpdateIndexMetricsSnapshot {
         self.update_index_metrics.snapshot()
+    }
+
+    pub(crate) fn cache(&self) -> Option<Arc<RedisCache>> {
+        self.cache.as_ref().map(Arc::clone)
+    }
+
+    pub(crate) async fn publish_submission(&self, payload: &[u8]) {
+        if let Some(fanout) = &self.fanout {
+            fanout.publish(payload).await;
+        }
+    }
+
+    pub fn start_fanout(self: &Arc<Self>) {
+        if let Some(fanout) = &self.fanout {
+            if fanout.subscribe_enabled() {
+                tracing::info!(
+                    origin = fanout.origin(),
+                    channel = fanout.channel(),
+                    "Starting fanout subscriber"
+                );
+                fanout.start(Arc::clone(self));
+            }
+        }
     }
 
     pub(crate) fn http_metrics(&self) -> &HttpMetrics {

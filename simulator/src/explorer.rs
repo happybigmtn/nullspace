@@ -1,7 +1,7 @@
 use axum::{
     extract::{Path, Query, State as AxumState},
-    http::StatusCode,
-    response::IntoResponse,
+    http::{header, HeaderValue, StatusCode},
+    response::{IntoResponse, Response},
     Json,
 };
 use commonware_codec::{DecodeExt, ReadExt};
@@ -20,11 +20,14 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{
     collections::{BTreeMap, HashMap, VecDeque},
+    future::Future,
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
 
 use crate::Simulator;
+
+const EXPLORER_CACHE_CONTROL: &str = "public, max-age=2, stale-while-revalidate=10";
 
 #[derive(Clone, Serialize)]
 pub struct ExplorerBlock {
@@ -261,6 +264,22 @@ fn record_event(explorer: &mut ExplorerState, event: &Event, height: u64) {
         Event::AmmSwapped { .. } => "AmmSwapped",
         Event::LiquidityAdded { .. } => "LiquidityAdded",
         Event::LiquidityRemoved { .. } => "LiquidityRemoved",
+        Event::AmmBootstrapped { .. } => "AmmBootstrapped",
+        Event::AmmBootstrapFinalized { .. } => "AmmBootstrapFinalized",
+        Event::PolicyUpdated { .. } => "PolicyUpdated",
+        Event::OracleUpdated { .. } => "OracleUpdated",
+        Event::TreasuryUpdated { .. } => "TreasuryUpdated",
+        Event::TreasuryVestingUpdated { .. } => "TreasuryVestingUpdated",
+        Event::TreasuryAllocationReleased { .. } => "TreasuryAllocationReleased",
+        Event::BridgeWithdrawalRequested { .. } => "BridgeWithdrawalRequested",
+        Event::BridgeWithdrawalFinalized { .. } => "BridgeWithdrawalFinalized",
+        Event::BridgeDepositCredited { .. } => "BridgeDepositCredited",
+        Event::VaultLiquidated { .. } => "VaultLiquidated",
+        Event::RecoveryPoolFunded { .. } => "RecoveryPoolFunded",
+        Event::RecoveryPoolRetired { .. } => "RecoveryPoolRetired",
+        Event::SavingsDeposited { .. } => "SavingsDeposited",
+        Event::SavingsWithdrawn { .. } => "SavingsWithdrawn",
+        Event::SavingsRewardsClaimed { .. } => "SavingsRewardsClaimed",
         Event::Staked { .. } => "Staked",
         Event::Unstaked { .. } => "Unstaked",
         Event::EpochProcessed { .. } => "EpochProcessed",
@@ -341,6 +360,27 @@ fn record_event(explorer: &mut ExplorerState, event: &Event, height: u64) {
         Event::AmmSwapped { player, .. } => touch_account(player),
         Event::LiquidityAdded { player, .. } => touch_account(player),
         Event::LiquidityRemoved { player, .. } => touch_account(player),
+        Event::AmmBootstrapped { .. } => {}
+        Event::AmmBootstrapFinalized { .. } => {}
+        Event::PolicyUpdated { .. } => {}
+        Event::OracleUpdated { .. } => {}
+        Event::TreasuryUpdated { .. } => {}
+        Event::TreasuryVestingUpdated { .. } => {}
+        Event::TreasuryAllocationReleased { .. } => {}
+        Event::BridgeWithdrawalRequested { player, .. } => touch_account(player),
+        Event::BridgeWithdrawalFinalized { .. } => {}
+        Event::BridgeDepositCredited { recipient, .. } => touch_account(recipient),
+        Event::VaultLiquidated {
+            liquidator, target, ..
+        } => {
+            touch_account(liquidator);
+            touch_account(target);
+        }
+        Event::RecoveryPoolFunded { .. } => {}
+        Event::RecoveryPoolRetired { target, .. } => touch_account(target),
+        Event::SavingsDeposited { player, .. } => touch_account(player),
+        Event::SavingsWithdrawn { player, .. } => touch_account(player),
+        Event::SavingsRewardsClaimed { player, .. } => touch_account(player),
         Event::Staked { player, .. } => touch_account(player),
         Event::Unstaked { player, .. } => touch_account(player),
         Event::EpochProcessed { .. } => {}
@@ -441,6 +481,51 @@ fn describe_instruction(instruction: &Instruction) -> String {
         Instruction::RemoveLiquidity { shares } => {
             format!("Remove liquidity ({shares} LP shares)")
         }
+        Instruction::LiquidateVault { target } => {
+            format!("Liquidate vault for {}", hex(target.as_ref()))
+        }
+        Instruction::SetPolicy { .. } => "Set policy parameters".to_string(),
+        Instruction::SetTreasury { .. } => "Set treasury allocations".to_string(),
+        Instruction::FundRecoveryPool { amount } => format!("Fund recovery pool ({amount} vUSDT)"),
+        Instruction::RetireVaultDebt { target, amount } => format!(
+            "Retire {amount} vUSDT debt for vault {}",
+            hex(target.as_ref())
+        ),
+        Instruction::RetireWorstVaultDebt { amount } => {
+            format!("Retire {amount} vUSDT debt for worst vault")
+        }
+        Instruction::DepositSavings { amount } => format!("Deposit {amount} vUSDT to savings"),
+        Instruction::WithdrawSavings { amount } => format!("Withdraw {amount} vUSDT from savings"),
+        Instruction::ClaimSavingsRewards => "Claim savings rewards".to_string(),
+        Instruction::SeedAmm {
+            rng_amount,
+            usdt_amount,
+            ..
+        } => format!("Seed AMM ({rng_amount} RNG + {usdt_amount} vUSDT)"),
+        Instruction::FinalizeAmmBootstrap => "Finalize AMM bootstrap".to_string(),
+        Instruction::SetTreasuryVesting { .. } => "Set treasury vesting schedule".to_string(),
+        Instruction::ReleaseTreasuryAllocation { bucket, amount } => {
+            format!("Release treasury allocation {bucket:?} ({amount} RNG)")
+        }
+        Instruction::BridgeWithdraw { amount, destination } => {
+            format!("Bridge withdraw {amount} RNG ({} bytes)", destination.len())
+        }
+        Instruction::BridgeDeposit {
+            recipient, amount, ..
+        } => format!(
+            "Bridge deposit {amount} RNG to {}",
+            hex(recipient.as_ref())
+        ),
+        Instruction::FinalizeBridgeWithdrawal { withdrawal_id, .. } => {
+            format!("Finalize bridge withdrawal {withdrawal_id}")
+        }
+        Instruction::UpdateOracle {
+            price_vusdt_numerator,
+            price_rng_denominator,
+            ..
+        } => format!(
+            "Update oracle price {price_vusdt_numerator}/{price_rng_denominator} vUSDT/RNG"
+        ),
     }
 }
 
@@ -584,47 +669,61 @@ pub(crate) async fn list_blocks(
     let offset = pagination.offset.unwrap_or(0);
     let limit = pagination.limit.unwrap_or(20).min(200);
 
-    let explorer = simulator.explorer.read().await;
+    let cache_key = format!("blocks:offset={offset}:limit={limit}");
+    let simulator_ref = Arc::clone(&simulator);
+    cached_json(simulator.as_ref(), &cache_key, move || {
+        let simulator = Arc::clone(&simulator_ref);
+        async move {
+            let explorer = simulator.explorer.read().await;
 
-    let total = explorer.indexed_blocks.len();
-    let blocks: Vec<_> = explorer
-        .indexed_blocks
-        .iter()
-        .rev()
-        .skip(offset)
-        .take(limit)
-        .map(|(_, b)| b.clone())
-        .collect();
+            let total = explorer.indexed_blocks.len();
+            let blocks: Vec<_> = explorer
+                .indexed_blocks
+                .iter()
+                .rev()
+                .skip(offset)
+                .take(limit)
+                .map(|(_, b)| b.clone())
+                .collect();
 
-    let next_offset = if offset + blocks.len() < total {
-        Some(offset + blocks.len())
-    } else {
-        None
-    };
+            let next_offset = if offset + blocks.len() < total {
+                Some(offset + blocks.len())
+            } else {
+                None
+            };
 
-    Json(json!({ "blocks": blocks, "next_offset": next_offset, "total": total })).into_response()
+            json!({ "blocks": blocks, "next_offset": next_offset, "total": total })
+        }
+    })
+    .await
 }
 
 pub(crate) async fn get_block(
     AxumState(simulator): AxumState<Arc<Simulator>>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
-    let explorer = simulator.explorer.read().await;
-
     // Try height first
-    let block_opt = if let Ok(height) = id.parse::<u64>() {
-        explorer.indexed_blocks.get(&height).cloned()
-    } else {
-        // Try hash
-        from_hex(&id)
-            .and_then(|raw| Digest::decode(&mut raw.as_slice()).ok())
-            .and_then(|digest| explorer.blocks_by_hash.get(&digest).cloned())
-    };
+    let cache_key = format!("block:{id}");
+    let simulator_ref = Arc::clone(&simulator);
+    cached_json_optional(simulator.as_ref(), &cache_key, move || {
+        let simulator = Arc::clone(&simulator_ref);
+        let id = id.clone();
+        async move {
+            let explorer = simulator.explorer.read().await;
 
-    match block_opt {
-        Some(block) => Json(block).into_response(),
-        None => StatusCode::NOT_FOUND.into_response(),
-    }
+            let block_opt = if let Ok(height) = id.parse::<u64>() {
+                explorer.indexed_blocks.get(&height).cloned()
+            } else {
+                from_hex(&id)
+                    .and_then(|raw| Digest::decode(&mut raw.as_slice()).ok())
+                    .and_then(|digest| explorer.blocks_by_hash.get(&digest).cloned())
+            };
+
+            block_opt
+        }
+    })
+    .await
+    .unwrap_or_else(|| StatusCode::NOT_FOUND.into_response())
 }
 
 pub(crate) async fn get_transaction(
@@ -640,12 +739,17 @@ pub(crate) async fn get_transaction(
         Err(_) => return StatusCode::BAD_REQUEST.into_response(),
     };
 
-    let explorer = simulator.explorer.read().await;
-
-    match explorer.txs_by_hash.get(&digest) {
-        Some(tx) => Json(tx).into_response(),
-        None => StatusCode::NOT_FOUND.into_response(),
-    }
+    let cache_key = format!("tx:{hash}");
+    let simulator_ref = Arc::clone(&simulator);
+    cached_json_optional(simulator.as_ref(), &cache_key, move || {
+        let simulator = Arc::clone(&simulator_ref);
+        async move {
+            let explorer = simulator.explorer.read().await;
+            explorer.txs_by_hash.get(&digest).cloned()
+        }
+    })
+    .await
+    .unwrap_or_else(|| StatusCode::NOT_FOUND.into_response())
 }
 
 pub(crate) async fn get_account_activity(
@@ -661,12 +765,17 @@ pub(crate) async fn get_account_activity(
         Err(_) => return StatusCode::BAD_REQUEST.into_response(),
     };
 
-    let explorer = simulator.explorer.read().await;
-
-    match explorer.accounts.get(&public_key) {
-        Some(account) => Json(account).into_response(),
-        None => StatusCode::NOT_FOUND.into_response(),
-    }
+    let cache_key = format!("account:{pubkey}");
+    let simulator_ref = Arc::clone(&simulator);
+    cached_json_optional(simulator.as_ref(), &cache_key, move || {
+        let simulator = Arc::clone(&simulator_ref);
+        async move {
+            let explorer = simulator.explorer.read().await;
+            explorer.accounts.get(&public_key).cloned()
+        }
+    })
+    .await
+    .unwrap_or_else(|| StatusCode::NOT_FOUND.into_response())
 }
 
 #[derive(Deserialize)]
@@ -678,39 +787,49 @@ pub(crate) async fn search_explorer(
     AxumState(simulator): AxumState<Arc<Simulator>>,
     Query(params): Query<SearchQuery>,
 ) -> impl IntoResponse {
-    let explorer = simulator.explorer.read().await;
-
     let q = params.q.trim();
-
-    // Height search
-    if let Ok(height) = q.parse::<u64>() {
-        if let Some(block) = explorer.indexed_blocks.get(&height) {
-            return Json(json!({"type": "block", "block": block})).into_response();
-        }
+    if q.is_empty() {
+        return StatusCode::BAD_REQUEST.into_response();
     }
 
-    // Hex search
-    if let Some(raw) = from_hex(q) {
-        if raw.len() == 32 {
-            if let Ok(digest) = Digest::decode(&mut raw.as_slice()) {
-                if let Some(block) = explorer.blocks_by_hash.get(&digest) {
-                    return Json(json!({"type": "block", "block": block})).into_response();
-                }
-                if let Some(tx) = explorer.txs_by_hash.get(&digest) {
-                    return Json(json!({"type": "transaction", "transaction": tx})).into_response();
+    let cache_key = format!("search:{q}");
+    let simulator_ref = Arc::clone(&simulator);
+    cached_json_optional(simulator.as_ref(), &cache_key, move || {
+        let simulator = Arc::clone(&simulator_ref);
+        let q = q.to_string();
+        async move {
+            let explorer = simulator.explorer.read().await;
+
+            if let Ok(height) = q.parse::<u64>() {
+                if let Some(block) = explorer.indexed_blocks.get(&height) {
+                    return Some(json!({"type": "block", "block": block}));
                 }
             }
-        }
 
-        // Account search
-        if let Ok(pk) = ed25519::PublicKey::read(&mut raw.as_slice()) {
-            if let Some(account) = explorer.accounts.get(&pk) {
-                return Json(json!({"type": "account", "account": account})).into_response();
+            if let Some(raw) = from_hex(&q) {
+                if raw.len() == 32 {
+                    if let Ok(digest) = Digest::decode(&mut raw.as_slice()) {
+                        if let Some(block) = explorer.blocks_by_hash.get(&digest) {
+                            return Some(json!({"type": "block", "block": block}));
+                        }
+                        if let Some(tx) = explorer.txs_by_hash.get(&digest) {
+                            return Some(json!({"type": "transaction", "transaction": tx}));
+                        }
+                    }
+                }
+
+                if let Ok(pk) = ed25519::PublicKey::read(&mut raw.as_slice()) {
+                    if let Some(account) = explorer.accounts.get(&pk) {
+                        return Some(json!({"type": "account", "account": account}));
+                    }
+                }
             }
-        }
-    }
 
-    StatusCode::NOT_FOUND.into_response()
+            None
+        }
+    })
+    .await
+    .unwrap_or_else(|| StatusCode::NOT_FOUND.into_response())
 }
 
 /// Get game history (completed games with logs) for an account
@@ -728,35 +847,120 @@ pub(crate) async fn get_game_history(
         Err(_) => return StatusCode::BAD_REQUEST.into_response(),
     };
 
-    let explorer = simulator.explorer.read().await;
-
-    let events = explorer.game_events.get(&public_key);
-    let empty_vec = VecDeque::new();
-    let events = events.unwrap_or(&empty_vec);
-
     let offset = pagination.offset.unwrap_or(0);
     let limit = pagination.limit.unwrap_or(20).min(100);
-    let total = events.len();
 
-    // Return events in reverse order (most recent first)
-    let game_history: Vec<_> = events
-        .iter()
-        .rev()
-        .skip(offset)
-        .take(limit)
-        .cloned()
-        .collect();
+    let cache_key = format!("games:{pubkey}:offset={offset}:limit={limit}");
+    let simulator_ref = Arc::clone(&simulator);
+    cached_json(simulator.as_ref(), &cache_key, move || {
+        let simulator = Arc::clone(&simulator_ref);
+        async move {
+            let explorer = simulator.explorer.read().await;
 
-    let next_offset = if offset + game_history.len() < total {
-        Some(offset + game_history.len())
-    } else {
-        None
-    };
+            let events = explorer.game_events.get(&public_key);
+            let empty_vec = VecDeque::new();
+            let events = events.unwrap_or(&empty_vec);
 
-    Json(json!({
-        "games": game_history,
-        "next_offset": next_offset,
-        "total": total
-    }))
-    .into_response()
+            let total = events.len();
+
+            let game_history: Vec<_> = events
+                .iter()
+                .rev()
+                .skip(offset)
+                .take(limit)
+                .cloned()
+                .collect();
+
+            let next_offset = if offset + game_history.len() < total {
+                Some(offset + game_history.len())
+            } else {
+                None
+            };
+
+            json!({
+                "games": game_history,
+                "next_offset": next_offset,
+                "total": total
+            })
+        }
+    })
+    .await
+}
+
+fn with_cache(response: impl IntoResponse) -> axum::response::Response {
+    let mut response = response.into_response();
+    response.headers_mut().insert(
+        header::CACHE_CONTROL,
+        HeaderValue::from_static(EXPLORER_CACHE_CONTROL),
+    );
+    response
+}
+
+async fn cached_json<T, F, Fut>(simulator: &Simulator, key: &str, build: F) -> Response
+where
+    T: Serialize,
+    F: FnOnce() -> Fut,
+    Fut: Future<Output = T>,
+{
+    if let Some(cache) = simulator.cache() {
+        if let Some(bytes) = cache.get(key).await {
+            return with_cache_bytes(bytes);
+        }
+    }
+    let value = build().await;
+    match serde_json::to_vec(&value) {
+        Ok(bytes) => {
+            if let Some(cache) = simulator.cache() {
+                cache.set(key, &bytes).await;
+            }
+            with_cache_bytes(bytes)
+        }
+        Err(err) => {
+            tracing::warn!("Explorer cache serialization failed: {err}");
+            with_cache(Json(value))
+        }
+    }
+}
+
+async fn cached_json_optional<T, F, Fut>(
+    simulator: &Simulator,
+    key: &str,
+    build: F,
+) -> Option<Response>
+where
+    T: Serialize,
+    F: FnOnce() -> Fut,
+    Fut: Future<Output = Option<T>>,
+{
+    if let Some(cache) = simulator.cache() {
+        if let Some(bytes) = cache.get(key).await {
+            return Some(with_cache_bytes(bytes));
+        }
+    }
+    let value = build().await?;
+    match serde_json::to_vec(&value) {
+        Ok(bytes) => {
+            if let Some(cache) = simulator.cache() {
+                cache.set(key, &bytes).await;
+            }
+            Some(with_cache_bytes(bytes))
+        }
+        Err(err) => {
+            tracing::warn!("Explorer cache serialization failed: {err}");
+            Some(with_cache(Json(value)))
+        }
+    }
+}
+
+fn with_cache_bytes(body: Vec<u8>) -> Response {
+    let mut response = (StatusCode::OK, body).into_response();
+    response.headers_mut().insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/json"),
+    );
+    response.headers_mut().insert(
+        header::CACHE_CONTROL,
+        HeaderValue::from_static(EXPLORER_CACHE_CONTROL),
+    );
+    response
 }

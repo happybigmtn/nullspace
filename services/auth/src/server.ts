@@ -4,6 +4,7 @@ import express from "express";
 import cors from "cors";
 import { ExpressAuth, getSession, type ExpressAuthConfig } from "@auth/express";
 import Credentials from "@auth/express/providers/credentials";
+import { ethers } from "ethers";
 import { ConvexHttpClient } from "convex/browser";
 import { createRequire } from "module";
 import { syncFreerollLimit } from "./casinoAdmin.js";
@@ -29,6 +30,7 @@ const CHALLENGE_TTL_MS = Number(process.env.AUTH_CHALLENGE_TTL_MS ?? "300000");
 const challengeTtlMs =
   Number.isFinite(CHALLENGE_TTL_MS) && CHALLENGE_TTL_MS > 0 ? CHALLENGE_TTL_MS : 300000;
 const AUTH_CHALLENGE_PREFIX = "nullspace-auth:";
+const EVM_LINK_PREFIX = "nullspace-evm-link";
 const ED25519_SPKI_PREFIX = Buffer.from("302a300506032b6570032100", "hex");
 
 const normalizeHex = (value: string): string =>
@@ -40,11 +42,43 @@ const isHex = (value: string, length?: number): boolean => {
   return true;
 };
 
+const normalizeEvmAddress = (value: string): string | null => {
+  try {
+    return ethers.getAddress(value);
+  } catch {
+    return null;
+  }
+};
+
+const parseChainId = (value: unknown): number | null => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return parsed;
+};
+
 const buildAuthMessage = (challengeHex: string): Buffer => {
   return Buffer.concat([
     Buffer.from(AUTH_CHALLENGE_PREFIX, "utf8"),
     Buffer.from(challengeHex, "hex"),
   ]);
+};
+
+const buildEvmLinkMessage = (params: {
+  origin: string;
+  address: string;
+  chainId: number;
+  userId: string;
+  challenge: string;
+}): string => {
+  const { origin, address, chainId, userId, challenge } = params;
+  return [
+    EVM_LINK_PREFIX,
+    `origin:${origin}`,
+    `address:${address}`,
+    `chainId:${chainId}`,
+    `userId:${userId}`,
+    `nonce:${challenge}`,
+  ].join("\n");
 };
 
 const verifySignature = (
@@ -64,6 +98,19 @@ const verifySignature = (
   }
 };
 
+const verifyEvmSignature = (
+  address: string,
+  message: string,
+  signature: string,
+): boolean => {
+  try {
+    const recovered = ethers.verifyMessage(message, signature);
+    return normalizeEvmAddress(recovered)?.toLowerCase() === address.toLowerCase();
+  } catch {
+    return false;
+  }
+};
+
 const parseAllowedOrigins = (): string[] => {
   return (process.env.AUTH_ALLOWED_ORIGINS ?? "")
     .split(",")
@@ -71,10 +118,18 @@ const parseAllowedOrigins = (): string[] => {
     .filter(Boolean);
 };
 
+const parseAllowedChainIds = (): number[] => {
+  return (process.env.EVM_ALLOWED_CHAIN_IDS ?? "")
+    .split(",")
+    .map((value) => Number(value.trim()))
+    .filter((value) => Number.isFinite(value) && value > 0);
+};
+
 const allowedOrigins = parseAllowedOrigins();
 if (allowedOrigins.length === 0) {
   throw new Error("AUTH_ALLOWED_ORIGINS must be set");
 }
+const allowedChainIds = parseAllowedChainIds();
 
 const getRequestOrigin = (req: express.Request): string | null => {
   const originHeader = req.headers.origin;
@@ -90,6 +145,11 @@ const getRequestOrigin = (req: express.Request): string | null => {
     }
   }
   return null;
+};
+
+const isAllowedChainId = (chainId: number): boolean => {
+  if (allowedChainIds.length === 0) return true;
+  return allowedChainIds.includes(chainId);
 };
 
 const requireAllowedOrigin: express.RequestHandler = (req, res, next) => {
@@ -245,6 +305,30 @@ const observe = (name: string, ms: number) => {
   timings.set(name, sample);
 };
 
+const escapePromLabel = (value: string) =>
+  value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n");
+
+const renderPrometheusMetrics = () => {
+  const lines: string[] = [];
+  lines.push("# TYPE nullspace_auth_counter_total counter");
+  for (const [name, value] of counters.entries()) {
+    lines.push(`nullspace_auth_counter_total{key="${escapePromLabel(name)}"} ${value}`);
+  }
+  lines.push("# TYPE nullspace_auth_timing_count_total counter");
+  lines.push("# TYPE nullspace_auth_timing_total_ms counter");
+  lines.push("# TYPE nullspace_auth_timing_max_ms gauge");
+  lines.push("# TYPE nullspace_auth_timing_avg_ms gauge");
+  for (const [name, sample] of timings.entries()) {
+    const label = escapePromLabel(name);
+    const avgMs = sample.count ? sample.totalMs / sample.count : 0;
+    lines.push(`nullspace_auth_timing_count_total{key="${label}"} ${sample.count}`);
+    lines.push(`nullspace_auth_timing_total_ms{key="${label}"} ${sample.totalMs}`);
+    lines.push(`nullspace_auth_timing_max_ms{key="${label}"} ${sample.maxMs}`);
+    lines.push(`nullspace_auth_timing_avg_ms{key="${label}"} ${avgMs}`);
+  }
+  return `${lines.join("\n")}\n`;
+};
+
 const logJson = (level: "info" | "warn" | "error", message: string, data: any) => {
   const line = JSON.stringify({ level, message, ...data });
   if (level === "error") {
@@ -305,9 +389,9 @@ const authConfig: ExpressAuthConfig = {
         const authProvider =
           (account as any)?.provider ?? (user as any)?.authProvider ?? "passkey";
         const authSubject =
-          (account as any)?.providerAccountId ??
           (user as any)?.authSubject ??
           (user as any)?.publicKey ??
+          (account as any)?.providerAccountId ??
           (authProvider === "passkey" ? (user as any)?.id : undefined) ??
           (user as any)?.email ??
           "unknown";
@@ -405,6 +489,10 @@ app.get("/metrics", (_req, res) => {
   }
   res.status(200).json({ counters: countersObj, timings: timingsObj });
 });
+app.get("/metrics/prometheus", (_req, res) => {
+  res.setHeader("Content-Type", "text/plain; version=0.0.4");
+  res.status(200).send(renderPrometheusMetrics());
+});
 app.post("/auth/challenge", requireAllowedOrigin, challengeRateLimit, async (req, res) => {
   const publicKey = normalizeHex(String(req.body?.publicKey ?? ""));
   if (!isHex(publicKey, 64)) {
@@ -451,6 +539,10 @@ app.get("/profile", requireAllowedOrigin, profileRateLimit, async (req, res) => 
     serviceToken,
     userId,
   });
+  const evmLink = await convex.query(api.evm.getEvmLinkByUser, {
+    serviceToken,
+    userId,
+  });
   const publicKey = (session as any)?.user?.authSubject as string | undefined;
   if (publicKey) {
     inc("freeroll.sync.attempt");
@@ -465,7 +557,7 @@ app.get("/profile", requireAllowedOrigin, profileRateLimit, async (req, res) => 
       });
   }
   inc("profile.success");
-  res.json({ session, entitlements });
+  res.json({ session, entitlements, evmLink });
 });
 
 app.post("/profile/link-public-key", requireAllowedOrigin, profileRateLimit, async (req, res) => {
@@ -513,6 +605,143 @@ app.post("/profile/link-public-key", requireAllowedOrigin, profileRateLimit, asy
   res.json({ ok: true });
 });
 
+app.post("/profile/evm-challenge", requireAllowedOrigin, profileRateLimit, async (req, res) => {
+  const session = await requireSession(req, res);
+  if (!session) return;
+  const address = normalizeEvmAddress(String(req.body?.address ?? ""));
+  const chainId = parseChainId(req.body?.chainId);
+  if (!address || !chainId) {
+    inc("profile.evm_challenge.invalid");
+    res.status(400).json({ error: "invalid evm address or chainId" });
+    return;
+  }
+  if (!isAllowedChainId(chainId)) {
+    inc("profile.evm_challenge.invalid");
+    res.status(400).json({ error: "chainId not allowed" });
+    return;
+  }
+
+  const user = await convex.query(api.users.getUserByIdWithToken, {
+    serviceToken,
+    userId: session.userId,
+  });
+  if (!user?.publicKey) {
+    inc("profile.evm_challenge.invalid");
+    res.status(400).json({ error: "link casino key before linking EVM" });
+    return;
+  }
+
+  const challengeId = crypto.randomUUID();
+  const challenge = crypto.randomBytes(32).toString("hex");
+  const expiresAtMs = Date.now() + challengeTtlMs;
+
+  await convex.mutation(api.evm.createEvmChallenge, {
+    serviceToken,
+    challengeId,
+    userId: session.userId,
+    evmAddress: address,
+    chainId,
+    challenge,
+    expiresAtMs,
+  });
+
+  const origin = getRequestOrigin(req) ?? "nullspace.local";
+  const message = buildEvmLinkMessage({
+    origin,
+    address,
+    chainId,
+    userId: session.userId,
+    challenge,
+  });
+
+  inc("profile.evm_challenge.success");
+  res.json({ challengeId, message, expiresAtMs, address, chainId });
+});
+
+app.post("/profile/link-evm", requireAllowedOrigin, profileRateLimit, async (req, res) => {
+  const session = await requireSession(req, res);
+  if (!session) return;
+
+  const address = normalizeEvmAddress(String(req.body?.address ?? ""));
+  const signature = String(req.body?.signature ?? "");
+  const challengeId = String(req.body?.challengeId ?? "");
+  const chainId = parseChainId(req.body?.chainId);
+
+  if (!address || !chainId) {
+    inc("profile.link_evm.invalid");
+    res.status(400).json({ error: "invalid evm address or chainId" });
+    return;
+  }
+  if (!signature) {
+    inc("profile.link_evm.invalid");
+    res.status(400).json({ error: "signature is required" });
+    return;
+  }
+  if (!challengeId) {
+    inc("profile.link_evm.invalid");
+    res.status(400).json({ error: "challengeId is required" });
+    return;
+  }
+  if (!isAllowedChainId(chainId)) {
+    inc("profile.link_evm.invalid");
+    res.status(400).json({ error: "chainId not allowed" });
+    return;
+  }
+
+  const challenge = await convex.mutation(api.evm.consumeEvmChallenge, {
+    serviceToken,
+    challengeId,
+    userId: session.userId,
+    evmAddress: address,
+  });
+  if (!challenge) {
+    inc("profile.link_evm.invalid");
+    res.status(400).json({ error: "invalid challenge" });
+    return;
+  }
+  if (challenge.chainId !== chainId) {
+    inc("profile.link_evm.invalid");
+    res.status(400).json({ error: "chainId mismatch" });
+    return;
+  }
+
+  const origin = getRequestOrigin(req) ?? "nullspace.local";
+  const message = buildEvmLinkMessage({
+    origin,
+    address,
+    chainId,
+    userId: session.userId,
+    challenge: challenge.challenge,
+  });
+  if (!verifyEvmSignature(address, message, signature)) {
+    inc("profile.link_evm.invalid");
+    res.status(400).json({ error: "invalid signature" });
+    return;
+  }
+
+  const link = await convex.mutation(api.evm.linkEvmAddress, {
+    serviceToken,
+    userId: session.userId,
+    evmAddress: address,
+    chainId,
+    signatureType: "personal_sign",
+  });
+
+  inc("profile.link_evm.success");
+  res.json({ ok: true, link });
+});
+
+app.post("/profile/unlink-evm", requireAllowedOrigin, profileRateLimit, async (req, res) => {
+  const session = await requireSession(req, res);
+  if (!session) return;
+  await convex.mutation(api.evm.unlinkEvmAddress, {
+    serviceToken,
+    userId: session.userId,
+  });
+  inc("profile.unlink_evm.success");
+  res.json({ ok: true });
+});
+
 app.post("/profile/sync-freeroll", requireAllowedOrigin, profileRateLimit, async (req, res) => {
   const session = await requireSession(req, res);
   if (!session) return;
@@ -543,6 +772,13 @@ app.post("/profile/sync-freeroll", requireAllowedOrigin, profileRateLimit, async
     return;
   }
   res.json({ ok: true, ...result });
+  logJson("info", "audit.admin.freeroll_sync", {
+    requestId: res.locals.requestId,
+    userId: session.userId,
+    publicKey,
+    status: result.status,
+    limit: result.limit ?? null,
+  });
 });
 
 app.post("/billing/checkout", requireAllowedOrigin, billingRateLimit, async (req, res) => {
@@ -580,6 +816,13 @@ app.post("/billing/checkout", requireAllowedOrigin, billingRateLimit, async (req
     });
     observe("billing.checkout_ms", Date.now() - start);
     inc("billing.checkout.success");
+    logJson("info", "audit.billing.checkout", {
+      requestId: res.locals.requestId,
+      userId: session.userId,
+      priceId: String(priceId),
+      tier: resolvedTier,
+      allowPromotionCodes: Boolean(allowPromotionCodes),
+    });
     res.json(result);
   } catch (error) {
     inc("billing.checkout.failure");
@@ -617,6 +860,10 @@ app.post("/billing/portal", requireAllowedOrigin, billingRateLimit, async (req, 
     });
     observe("billing.portal_ms", Date.now() - start);
     inc("billing.portal.success");
+    logJson("info", "audit.billing.portal", {
+      requestId: res.locals.requestId,
+      userId: session.userId,
+    });
     res.json(result);
   } catch (error) {
     inc("billing.portal.failure");
@@ -642,6 +889,11 @@ app.post("/billing/reconcile", requireAllowedOrigin, billingRateLimit, async (re
     });
     observe("billing.reconcile_ms", Date.now() - start);
     inc("billing.reconcile.success");
+    logJson("info", "audit.billing.reconcile", {
+      requestId: res.locals.requestId,
+      userId: session.userId,
+      limit: limit ?? null,
+    });
     res.json(result);
   } catch (error) {
     inc("billing.reconcile.failure");

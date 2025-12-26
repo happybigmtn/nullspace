@@ -51,7 +51,7 @@ export const useBlackjack = ({
     }
 
     // Local mode not supported - require on-chain session
-    setGameState(prev => ({ ...prev, message: 'OFFLINE - START BACKEND' }));
+    setGameState(prev => ({ ...prev, message: 'OFFLINE - CHECK CONNECTION' }));
   }, [isPendingRef, isOnChain, chainService, currentSessionIdRef, setLastTxSig, setGameState]);
 
   const bjStand = useCallback(async () => {
@@ -78,7 +78,7 @@ export const useBlackjack = ({
     }
 
     // Local mode not supported - require on-chain session
-    setGameState(prev => ({ ...prev, message: 'OFFLINE - START BACKEND' }));
+    setGameState(prev => ({ ...prev, message: 'OFFLINE - CHECK CONNECTION' }));
   }, [isPendingRef, isOnChain, chainService, currentSessionIdRef, setLastTxSig, setGameState]);
 
   const bjDouble = useCallback(async () => {
@@ -105,7 +105,7 @@ export const useBlackjack = ({
     }
 
     // Local mode not supported - require on-chain session
-    setGameState(prev => ({ ...prev, message: 'OFFLINE - START BACKEND' }));
+    setGameState(prev => ({ ...prev, message: 'OFFLINE - CHECK CONNECTION' }));
   }, [isPendingRef, isOnChain, chainService, currentSessionIdRef, setLastTxSig, setGameState]);
 
   const bjSplit = useCallback(async () => {
@@ -150,13 +150,13 @@ export const useBlackjack = ({
     }
 
     // Local mode not supported - require on-chain session
-    setGameState(prev => ({ ...prev, message: 'OFFLINE - START BACKEND' }));
+    setGameState(prev => ({ ...prev, message: 'OFFLINE - CHECK CONNECTION' }));
   }, [gameState.stage, gameState.playerCards, gameState.bet, stats.chips, isOnChain, chainService, currentSessionIdRef, isPendingRef, setLastTxSig, setGameState]);
 
   const bjInsurance = useCallback((take: boolean) => {
     // Insurance is only available on-chain via chain events
     if (!isOnChain) {
-      setGameState(prev => ({ ...prev, message: 'OFFLINE - START BACKEND' }));
+      setGameState(prev => ({ ...prev, message: 'OFFLINE - CHECK CONNECTION' }));
       return;
     }
     // On-chain insurance is handled via game flow, just acknowledge the choice

@@ -263,7 +263,7 @@ export const useRoulette = ({
     }
 
     if (!isOnChain) {
-      setGameState(prev => ({ ...prev, message: 'OFFLINE - START BACKEND' }));
+      setGameState(prev => ({ ...prev, message: 'OFFLINE - CHECK CONNECTION' }));
     }
   }, [
     gameState.rouletteIsPrison, gameState.rouletteBets, gameState.rouletteLastRoundBets,

@@ -1,7 +1,10 @@
 # Reporting Security Issues
 
-We welcome security disclosures and are committed to providing prompt attention to any confirmed security issues.
+We welcome security disclosures and are committed to prompt attention for confirmed issues.
 
-Vulnerabilities should be reported privately [via GitHub Security](https://github.com/commonwarexyz/monorepo/security) instead of as a public issue.
+Please report vulnerabilities privately:
+- GitHub Security: https://github.com/commonwarexyz/nullspace/security/advisories
+- Email: security@nullspace.xyz
 
-We do not yet offer a bounty program for responsible disclosure of security vulnerabilities, however, we do track contributions and record them in the [Commonware Library](https://github.com/commonwarexyz/monorepo/blob/main/SECURITY.md).
+We do not currently offer a public bounty program. We may provide discretionary rewards for
+critical issues and will credit reporters with permission.

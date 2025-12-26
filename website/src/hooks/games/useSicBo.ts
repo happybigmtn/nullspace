@@ -182,7 +182,7 @@ export const useSicBo = ({
     }
 
     if (!isOnChain) {
-      setGameState(prev => ({ ...prev, message: 'OFFLINE - START BACKEND' }));
+      setGameState(prev => ({ ...prev, message: 'OFFLINE - CHECK CONNECTION' }));
     }
   }, [
     gameState.sicBoBets, gameState.sicBoLastRoundBets, stats.chips,

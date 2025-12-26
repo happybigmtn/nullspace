@@ -4,9 +4,9 @@ import { useThreeCardPoker } from './games/useThreeCardPoker';
 import { useBlackjack } from './games/useBlackjack';
 import { useBaccarat } from './games/useBaccarat';
 import { useCraps } from './games/useCraps';
-import { GameType, PlayerStats, GameState, Card, LeaderboardEntry, TournamentPhase, CompletedHand, CrapsBet, RouletteBet, SicBoBet, BaccaratBet, AutoPlayDraft, AutoPlayPlan } from '../types';
+import { GameType, PlayerStats, GameState, Card, LeaderboardEntry, TournamentPhase, CompletedHand, CrapsBet, RouletteBet, SicBoBet, BaccaratBet, AutoPlayDraft, AutoPlayPlan, ResolvedBet } from '../types';
 import { GameType as ChainGameType, CasinoGameStartedEvent, CasinoGameMovedEvent, CasinoGameCompletedEvent } from '../types/casino';
-import { createDeck, rollDie, getHandValue, getBaccaratValue, getHiLoRank, WAYS, getRouletteColor, formatRouletteNumber, evaluateVideoPokerHand, calculateCrapsExposure, calculateSicBoOutcomeExposure, getSicBoCombinations, resolveCrapsBets, resolveRouletteBets, resolveSicBoBets, evaluateThreeCardHand, parseGameLogs } from '../utils/gameUtils';
+import { createDeck, rollDie, getHandValue, getHiLoRank, getBaccaratValue, getRouletteColor, WAYS, formatRouletteNumber, evaluateVideoPokerHand, calculateCrapsExposure, calculateSicBoOutcomeExposure, getSicBoCombinations, resolveCrapsBets, parseGameLogs, buildHistoryEntry, formatSummaryLine, prependPnlLine } from '../utils/gameUtils';
 import { getStrategicAdvice } from '../services/geminiService';
 import { CasinoChainService } from '../services/CasinoChainService';
 import { CasinoClient } from '../api/client.js';
@@ -108,18 +108,48 @@ const formatCrapsChainBetLabel = (type: string, target?: number): string => {
 const formatCrapsChainResults = (roll: CrapsChainRollLog): string[] => (
   roll.bets.map((bet) => {
     const label = formatCrapsChainBetLabel(bet.type, bet.target);
-    const net = bet.returnAmount - bet.wagered;
-    if (bet.outcome === 'WIN') {
-      const profit = Math.max(0, Math.floor(net));
-      return `${label} WIN (+$${profit})`;
-    }
-    if (bet.outcome === 'LOSS') {
-      const loss = bet.wagered > 0 ? bet.wagered : Math.abs(Math.floor(net));
-      return `${label} LOSS (-$${loss})`;
-    }
-    return `${label} PUSH`;
+    return `${label}: ${bet.outcome}`;
   })
 );
+
+const formatCrapsChainResolvedBets = (roll: CrapsChainRollLog): ResolvedBet[] => (
+  roll.bets.map((bet, idx) => {
+    const label = formatCrapsChainBetLabel(bet.type, bet.target);
+    return {
+      id: `${label.replace(/\s+/g, '_').toLowerCase()}-${idx}`,
+      label,
+      pnl: Math.round(bet.returnAmount - bet.wagered - bet.odds),
+    };
+  })
+);
+
+const adjustResolvedBetsForNetPnl = (resolvedBets: ResolvedBet[], netPnL: number): ResolvedBet[] => {
+  if (!resolvedBets.length) return resolvedBets;
+  if (!Number.isFinite(netPnL) || netPnL === 0) return resolvedBets;
+
+  const sum = resolvedBets.reduce((acc, bet) => (
+    acc + (Number.isFinite(bet.pnl) ? bet.pnl : 0)
+  ), 0);
+
+  if (!Number.isFinite(sum) || sum === 0) {
+    if (resolvedBets.length === 1) {
+      return [{ ...resolvedBets[0], pnl: Math.round(netPnL) }];
+    }
+    return resolvedBets;
+  }
+
+  if (Math.sign(sum) !== Math.sign(netPnL)) {
+    return resolvedBets;
+  }
+
+  const scale = netPnL / sum;
+  if (!Number.isFinite(scale) || Math.abs(scale - 1) < 0.01) return resolvedBets;
+
+  return resolvedBets.map((bet) => ({
+    ...bet,
+    pnl: Math.round((Number.isFinite(bet.pnl) ? bet.pnl : 0) * scale),
+  }));
+};
 
 function getFreerollSchedule(nowMs: number) {
   const slot = Math.floor(nowMs / FREEROLL_CYCLE_MS);
@@ -464,6 +494,8 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
     sicBoInputMode: 'NONE',
     sicBoUndoStack: [],
     sicBoLastRoundBets: [],
+    resolvedBets: [],
+    resolvedBetsKey: 0,
     baccaratBets: [],
     baccaratUndoStack: [],
     baccaratLastRoundBets: [],
@@ -1373,167 +1405,126 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
     gameStateRef.current = gameState;
   }, [gameState]);
 
-  // FALLBACK: Generate result messages locally when backend logs aren't available.
-  // Primary source of truth is now parseGameLogs() which parses backend JSON logs.
-  // This function duplicates backend logic and should only be used as a fallback.
-  const generateGameResult = (gameType: GameType, state: GameState | null, netPnL: number): { summary: string, details: string[] } => {
-    // Show net P&L with sign
-    const resultPart = netPnL >= 0 ? `+$${netPnL}` : `-$${Math.abs(netPnL)}`;
-    const details: string[] = [];
+  // FALLBACK: Use net P&L only (no local re-sim) when backend logs are unavailable.
+  const generateGameResult = (
+    gameType: GameType,
+    state: GameState | null,
+    _netPnL: number,
+  ): { summary: string; details: string[] } => {
+    const formatCardLabel = (card?: Card) => (card ? `${card.rank}${card.suit}` : '?');
+    let label = 'OUTCOME PENDING';
 
-    if (!state) return { summary: resultPart, details };
-
-    let summary = resultPart;
-
-	    switch (gameType) {
-      case GameType.BACCARAT: {
-        if (state.playerCards.length === 0 || state.dealerCards.length === 0) return { summary, details };
-        const pScore = getBaccaratValue(state.playerCards);
-        const bScore = getBaccaratValue(state.dealerCards);
-        const winner = pScore > bScore ? 'PLAYER' : bScore > pScore ? 'BANKER' : 'TIE';
-        const scoreDisplay = winner === 'TIE' ? `${pScore}-${bScore}` : winner === 'PLAYER' ? `${pScore}-${bScore}` : `${bScore}-${pScore}`;
-        summary = `${winner} wins ${scoreDisplay}. ${resultPart}`;
-        
-        // Generate details for bets
-        state.baccaratBets.forEach(bet => {
-            let win = false;
-            let amount = 0;
-            if (bet.type === 'TIE' && winner === 'TIE') { win = true; amount = bet.amount * 8; }
-            else if (bet.type === 'P_PAIR' && state.playerCards[0].rank === state.playerCards[1].rank) { win = true; amount = bet.amount * 11; }
-            else if (bet.type === 'B_PAIR' && state.dealerCards[0].rank === state.dealerCards[1].rank) { win = true; amount = bet.amount * 11; }
-            else if (bet.type === 'LUCKY6' && winner === 'BANKER' && bScore === 6) {
-              win = true;
-              amount = bet.amount * (state.dealerCards.length === 2 ? 12 : 23);
-            }
-            
-            if (win) details.push(`${bet.type} WIN (+$${amount})`);
-            else details.push(`${bet.type} LOSS (-$${bet.amount})`);
-        });
-        // Main bet detail
-        const mainBet = state.sessionWager - state.baccaratBets.reduce((a,b) => a + b.amount, 0); // Approx
-        if (mainBet > 0) {
-             if (state.baccaratSelection === winner) details.push(`${state.baccaratSelection} WIN (+$${mainBet})`);
-             else if (winner !== 'TIE') details.push(`${state.baccaratSelection} LOSS (-$${mainBet})`);
-             else details.push(`${state.baccaratSelection} PUSH`);
+    if (state) {
+      switch (gameType) {
+        case GameType.CRAPS: {
+          const [d1, d2] = state.dice;
+          if (state.dice.length >= 2 && d1 > 0 && d2 > 0) {
+            label = `Roll: ${d1 + d2} (${d1}-${d2})`;
+          }
+          break;
         }
-        break;
-      }
-	      case GameType.BLACKJACK: {
-	        if (!state.playerCards?.length || !state.dealerCards?.length) return { summary, details };
-	        const pVal = getHandValue(state.playerCards);
-	        const dVal = getHandValue(state.dealerCards);
-	        const outcome = netPnL > 0 ? 'WIN' : netPnL < 0 ? 'LOSE' : 'PUSH';
-	        summary = `${outcome}: ${pVal} vs. ${dVal}.`;
-	        
-	        if (netPnL > 0) details.push(`WIN (+$${netPnL})`);
-	        else if (netPnL < 0) details.push(`LOSS (-$${Math.abs(netPnL)})`);
-	        else details.push(`PUSH`);
-	        break;
-	      }
-	      case GameType.CASINO_WAR: {
-	        const pCard = state.playerCards[0];
-	        const dCard = state.dealerCards[0];
-	        if (!pCard || !dCard) return { summary, details };
-	        const rankToAceHigh = (rank: string): number => {
-	          if (rank === 'A') return 14;
-	          if (rank === 'K') return 13;
-	          if (rank === 'Q') return 12;
-	          if (rank === 'J') return 11;
-	          const parsed = Number(rank);
-	          return Number.isFinite(parsed) ? parsed : 0;
-	        };
-	        const pScore = rankToAceHigh(pCard.rank);
-	        const dScore = rankToAceHigh(dCard.rank);
-	        const outcome = netPnL > 0 ? 'WIN' : netPnL < 0 ? 'LOSE' : 'PUSH';
-	        summary = `${outcome}: ${pScore} vs. ${dScore}.`;
-	        if (netPnL > 0) details.push(`WIN (+$${netPnL})`);
-	        else if (netPnL < 0) details.push(`LOSS (-$${Math.abs(netPnL)})`);
-	        else details.push(`TIE/PUSH`);
-	        break;
-	      }
-      case GameType.HILO: {
-        const lastCard = state.playerCards[state.playerCards.length - 1];
-        if (!lastCard) return { summary, details };
-        summary = `${lastCard.rank}${lastCard.suit}. ${resultPart}`;
-        details.push(`Outcome: ${lastCard.rank}${lastCard.suit}`);
-        if (netPnL > 0) details.push(`WIN (+$${netPnL})`);
-        else details.push(`LOSS (-$${Math.abs(netPnL)})`);
-        break;
-      }
-      case GameType.VIDEO_POKER: {
-        const hand = evaluateVideoPokerHand(state.playerCards);
-        summary = `${hand.rank}. ${resultPart}`;
-        details.push(`${hand.rank}`);
-        if (netPnL > 0) details.push(`WIN (+$${netPnL})`);
-        else details.push(`LOSS (-$${Math.abs(netPnL)})`);
-        break;
-      }
-      case GameType.THREE_CARD: {
-        const pHand = evaluateThreeCardHand(state.playerCards);
-        const dHand = evaluateThreeCardHand(state.dealerCards);
-        summary = `${pHand.rank} vs ${dHand.rank}. ${resultPart}`;
-        details.push(`Player: ${pHand.rank}`);
-        details.push(`Dealer: ${dHand.rank}`);
-        if (netPnL > 0) details.push(`WIN (+$${netPnL})`);
-        else if (netPnL < 0) details.push(`LOSS (-$${Math.abs(netPnL)})`);
-        else details.push(`PUSH`);
-        break;
-      }
-      case GameType.ULTIMATE_HOLDEM: {
-        const pVal = getHandValue(state.playerCards);
-        const dVal = getHandValue(state.dealerCards);
-        summary = `Player ${pVal} vs Dealer ${dVal}. ${resultPart}`;
-        if (netPnL > 0) details.push(`WIN (+$${netPnL})`);
-        else if (netPnL < 0) details.push(`LOSS (-$${Math.abs(netPnL)})`);
-        else details.push(`PUSH`);
-        break;
-      }
-      case GameType.CRAPS: {
-        if (!state.dice || state.dice.length < 2) return { summary, details };
-        const d1 = state.dice[0];
-        const d2 = state.dice[1];
-        const total = d1 + d2;
-        summary = `Rolled: ${total}. ${resultPart}`;
-        
-        // Use resolveCrapsBets to generate details using Bets from state
-        // Note: we use state.crapsBets here, but if game is over, active bets might be cleared?
-        // Actually, resolveCrapsBets processes *all* bets passed to it.
-        // We need the bets that were active *before* the result cleared them.
-        // gameStateRef.current holds the state from the last move.
-        // If this is CasinoGameCompleted, the state might not have cleared them yet if we rely on local clearing?
-        // Actually, parseGameState updates crapsBets from chain.
-        // If chain cleared them, they are gone.
-        // We should ideally use `crapsLastRoundBets` if `crapsBets` is empty, or combine them?
-        // For simplicity, we'll try to use crapsBets + lastRoundBets?
-        const betsToResolve = state.crapsBets.length > 0 ? state.crapsBets : state.crapsLastRoundBets;
-        const res = resolveCrapsBets([d1, d2], state.crapsPoint, betsToResolve);
-        details.push(...res.results);
-        break;
-      }
-      case GameType.ROULETTE: {
-        const last = state.rouletteHistory[state.rouletteHistory.length - 1];
-        if (last === undefined) return { summary, details };
-        const color = getRouletteColor(last);
-        summary = `${last} ${color}. ${resultPart}`;
-        
-        // Use resolveRouletteBets
-        const betsToResolve = state.rouletteBets.length > 0 ? state.rouletteBets : state.rouletteLastRoundBets;
-        const res = resolveRouletteBets(last, betsToResolve, state.rouletteZeroRule);
-        details.push(...res.results);
-        break;
-      }
-      case GameType.SIC_BO: {
-        if (!state.dice || state.dice.length < 3) return { summary, details };
-        const total = state.dice.reduce((a, b) => a + b, 0);
-        summary = `Rolled ${total} (${state.dice.join('-')}). ${resultPart}`;
-        
-        const betsToResolve = state.sicBoBets.length > 0 ? state.sicBoBets : state.sicBoLastRoundBets;
-        const res = resolveSicBoBets(state.dice, betsToResolve);
-        details.push(...res.results);
-        break;
+        case GameType.SIC_BO: {
+          if (state.dice.length >= 3) {
+            const total = state.dice.reduce((sum, die) => sum + die, 0);
+            label = `Roll: ${total} (${state.dice.slice(0, 3).join('-')})`;
+          }
+          break;
+        }
+        case GameType.ROULETTE: {
+          const history = state.rouletteHistory;
+          const last = history.length > 0 ? history[history.length - 1] : null;
+          if (typeof last === 'number' && Number.isFinite(last)) {
+            label = `Roll: ${formatRouletteNumber(last)} ${getRouletteColor(last)}`;
+          }
+          break;
+        }
+        case GameType.BACCARAT: {
+          if (state.playerCards.length || state.dealerCards.length) {
+            const pTotal = getBaccaratValue(state.playerCards);
+            const bTotal = getBaccaratValue(state.dealerCards);
+            label = `P: ${pTotal}, B: ${bTotal}`;
+          }
+          break;
+        }
+        case GameType.BLACKJACK: {
+          if (state.playerCards.length || state.dealerCards.length) {
+            label = `P: ${getHandValue(state.playerCards)}, D: ${getHandValue(state.dealerCards)}`;
+          }
+          break;
+        }
+        case GameType.CASINO_WAR: {
+          if (state.playerCards.length || state.dealerCards.length) {
+            const pCard = state.playerCards[0];
+            const dCard = state.dealerCards[0];
+            label = `P: ${formatCardLabel(pCard)}, D: ${formatCardLabel(dCard)}`;
+          }
+          break;
+        }
+        case GameType.VIDEO_POKER: {
+          if (state.playerCards.length) {
+            const { rank } = evaluateVideoPokerHand(state.playerCards);
+            label = `Hand: ${rank}`;
+          }
+          break;
+        }
+        case GameType.HILO: {
+          if (state.playerCards.length >= 2) {
+            const prev = state.playerCards[state.playerCards.length - 2];
+            const next = state.playerCards[state.playerCards.length - 1];
+            label = `${formatCardLabel(prev)} -> ${formatCardLabel(next)}`;
+          }
+          break;
+        }
+        case GameType.THREE_CARD: {
+          if (state.playerCards.length || state.dealerCards.length) {
+            const pCards = state.playerCards.slice(0, 3).map(formatCardLabel).join(' ');
+            const dCards = state.dealerCards.slice(0, 3).map(formatCardLabel).join(' ');
+            label = `P: ${pCards || '?'}, D: ${dCards || '?'}`;
+          }
+          break;
+        }
+        case GameType.ULTIMATE_HOLDEM: {
+          if (state.playerCards.length || state.dealerCards.length) {
+            const pCards = state.playerCards.slice(0, 2).map(formatCardLabel).join(' ');
+            const dCards = state.dealerCards.slice(0, 2).map(formatCardLabel).join(' ');
+            label = `P: ${pCards || '?'}, D: ${dCards || '?'}`;
+          }
+          break;
+        }
+        default:
+          break;
       }
     }
-    return { summary, details };
+
+    if (label === 'OUTCOME PENDING' && state?.message) {
+      const msg = String(state.message).trim();
+      const normalized = msg.toUpperCase();
+      const blocked = [
+        'WAITING FOR CHAIN',
+        'WAITING FOR CHAIN...',
+        'PLACE BETS',
+        'PLACE BETS & DEAL',
+        'PLACE BETS - SPACE TO ROLL',
+        'BET SIZE',
+        'ROLLING',
+        'SPINNING',
+        'DEALING',
+        'TRANSACTION',
+        'INSUFFICIENT FUNDS',
+        'BET LOCKED',
+        'AUTO PLAY FAILED',
+        'PLAYING',
+        'BETTING',
+        'ROUND COMPLETE',
+        'OUTCOME PENDING',
+      ];
+      const isBlocked = blocked.some((entry) => normalized.startsWith(entry));
+      if (msg && !isBlocked) {
+        label = msg;
+      }
+    }
+
+    return { summary: formatSummaryLine(label), details: [] };
   };
 
   const runAutoPlayPlanForSession = (sessionId: bigint, frontendGameType: GameType) => {
@@ -1841,26 +1832,21 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
           crapsChainRollLogRef.current = null;
         }
         if (event.logs && event.logs.length > 0) {
-             setStats(prev => ({
-                ...prev,
-                history: [...prev.history, ...event.logs!],
-             }));
-             if (gameTypeRef.current === GameType.CRAPS) {
-               const rollLog = parseCrapsChainRollLog(event.logs);
-               if (rollLog) {
-                 crapsChainRollLogRef.current = {
-                   sessionId: eventSessionId,
-                   roll: rollLog,
-                 };
-               }
-             }
-             crapsPendingRollLogRef.current = null;
+          if (gameTypeRef.current === GameType.CRAPS) {
+            const rollLog = parseCrapsChainRollLog(event.logs);
+            if (rollLog) {
+              crapsChainRollLogRef.current = {
+                sessionId: eventSessionId,
+                roll: rollLog,
+              };
+            }
+          }
+          crapsPendingRollLogRef.current = null;
         } else {
-            // Legacy fallback: Manual resolution
-            // Craps: log per-bet resolution (WIN/LOSS/PUSH) on each roll.
-            // We must compute this BEFORE parsing the post-roll state because the on-chain game removes resolved bets.
+          // Legacy fallback: consume pending craps snapshot once dice appear.
+          if (gameTypeRef.current === GameType.CRAPS) {
             const crapsSnap = crapsPendingRollLogRef.current;
-            if (gameTypeRef.current === GameType.CRAPS && crapsSnap && crapsSnap.sessionId === eventSessionId) {
+            if (crapsSnap && crapsSnap.sessionId === eventSessionId) {
               let d1 = 0;
               let d2 = 0;
               if (stateBlob.length >= 5 && (stateBlob[0] === 1 || stateBlob[0] === 2)) {
@@ -1872,22 +1858,10 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
               }
 
               if (d1 > 0 && d2 > 0) {
-                const diceChangedFromSnapshot =
-                  !crapsSnap.prevDice || crapsSnap.prevDice[0] !== d1 || crapsSnap.prevDice[1] !== d2;
-                const isFinalPendingMove = pendingMoveCountRef.current === 1;
-
-                // Consume the snapshot on the roll result (usually dice changes; if dice repeats, fall back to pending count).
-                if (diceChangedFromSnapshot || isFinalPendingMove) {
-                  const total = d1 + d2;
-                  const res = resolveCrapsBets([d1, d2], crapsSnap.point, crapsSnap.bets);
-                  setStats(prev => ({
-                    ...prev,
-                    history: [...prev.history, `Rolled: ${total}`, ...res.results],
-                  }));
-                  crapsPendingRollLogRef.current = null;
-                }
+                crapsPendingRollLogRef.current = null;
               }
             }
+          }
         }
 
         // Parse state and update UI using the tracked game type from ref (not stale closure)
@@ -2063,26 +2037,46 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
         const sessionWager = gameStateRef.current?.sessionWager || 0;
         const interimPayout = gameStateRef.current?.sessionInterimPayout || 0;
         const startChips = sessionStartChipsRef.current.get(eventSessionId);
+        const netFromPayout = Number.isFinite(payout)
+          ? (payout >= 0 ? (payout + interimPayout - sessionWager) : (payout + interimPayout))
+          : NaN;
 
         // Prefer net PnL via chip delta to capture all mid-session deductions/credits (table games).
-        // Fallback to payout/sessionWager semantics if the baseline is missing.
-        const netPnL =
-          startChips !== undefined
-            ? finalChips - startChips
-            : (payout >= 0 ? (payout + interimPayout - sessionWager) : (payout + interimPayout));
+        // Fallback to payout/sessionWager semantics if the baseline is missing or looks stale.
+        let netPnL =
+          Number.isFinite(startChips) && Number.isFinite(nextChips)
+            ? nextChips - startChips
+            : NaN;
+        if (!Number.isFinite(netPnL)) {
+          netPnL = netFromPayout;
+        }
+        if (Number.isFinite(netPnL) && netPnL === 0 && Number.isFinite(netFromPayout) && netFromPayout !== 0) {
+          netPnL = netFromPayout;
+        }
+        if (!Number.isFinite(netPnL)) {
+          netPnL = 0;
+        }
         console.log('[useTerminalGame] PnL Calc:', { payout, interimPayout, sessionWager, startChips, netPnL });
 
         // Use backend logs if available, otherwise fall back to local generation
+        const eventGameType = CHAIN_TO_FRONTEND_GAME_TYPE[event.gameType] ?? gameTypeRef.current;
         const parsed = (event.logs && event.logs.length > 0)
-          ? parseGameLogs(gameTypeRef.current, event.logs, netPnL)
+          ? parseGameLogs(eventGameType, event.logs, netPnL, gameStateRef.current)
           : null;
-        const { summary: resultMessage, details } = parsed || generateGameResult(gameTypeRef.current, gameStateRef.current, netPnL);
+        const fallback = generateGameResult(eventGameType, gameStateRef.current, netPnL);
+        const isPlaceholder = (summary?: string | null) => {
+          if (!summary) return true;
+          const normalized = summary.replace(/\.$/, '').trim().toUpperCase();
+          return normalized === 'OUTCOME PENDING' || normalized === 'ROUND COMPLETE';
+        };
+        const resultMessage = parsed && !isPlaceholder(parsed.summary) ? parsed.summary : fallback.summary;
+        const resolvedBets = adjustResolvedBetsForNetPnl(parsed?.resolvedBets ?? [], netPnL);
 
         // Track Super Mode round completion (Phase 2 metrics)
         const wasSuperRound = gameStateRef.current?.superMode?.isActive || gameStateRef.current?.activeModifiers?.super;
         if (wasSuperRound) {
           track('casino.super.round_completed', {
-            game: gameTypeRef.current,
+            game: eventGameType,
             mode: playMode,
             netPnL,
             wager: sessionWager,
@@ -2093,10 +2087,10 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
 
         // Update stats including history and pnlByGame
         setStats(prev => {
-          const currentGameType = gameTypeRef.current;
+          const currentGameType = eventGameType;
           const pnlEntry = { [currentGameType]: (prev.pnlByGame[currentGameType] || 0) + netPnL };
           // Use parsed details from backend logs, or fall back to locally computed details
-          const historyEntry = [resultMessage, ...details.map(detail => `  ${detail}`)].join('\n');
+          const historyEntry = buildHistoryEntry(resultMessage, prependPnlLine([], netPnL));
 
           return {
             ...prev,
@@ -2132,6 +2126,8 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
           stage: 'RESULT',
           message: resultMessage,
           lastResult: netPnL,
+          resolvedBets,
+          resolvedBetsKey: resolvedBets.length > 0 ? prev.resolvedBetsKey + 1 : prev.resolvedBetsKey,
           sessionId: null,
           moveNumber: 0,
           sessionWager: 0,
@@ -2860,6 +2856,8 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
           // parsedBets = what chain has AFTER this roll (bets already resolved by chain)
           // Difference = bets that the chain resolved this roll
           let newEventLog = prev.crapsEventLog;
+          let newResolvedBets = prev.resolvedBets;
+          let newResolvedBetsKey = prev.resolvedBetsKey;
           if (hasDice && rollChanged) {
             if (hasChainRollLog && chainRollLogEntry) {
               const chainRoll = chainRollLogEntry.roll;
@@ -2876,6 +2874,13 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
                 ? []
                 : [...prev.crapsEventLog, newEvent].slice(-MAX_GRAPH_POINTS);
               crapsChainRollLogRef.current = null;
+              newResolvedBets = adjustResolvedBetsForNetPnl(
+                formatCrapsChainResolvedBets(chainRoll),
+                chainPnl,
+              );
+              if (newResolvedBets.length > 0) {
+                newResolvedBetsKey = prev.resolvedBetsKey + 1;
+              }
             } else {
               // Get previous chain bets (excluding local staged bets - those aren't on chain yet)
               const prevChainBets = prev.crapsBets.filter(b => b.local !== true);
@@ -2902,6 +2907,10 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
               newEventLog = sevenOut
                 ? [] // Clear log - new epoch starts fresh
                 : [...prev.crapsEventLog, newEvent].slice(-MAX_GRAPH_POINTS);
+              newResolvedBets = adjustResolvedBetsForNetPnl(rollResult.resolvedBets, rollResult.pnl);
+              if (newResolvedBets.length > 0) {
+                newResolvedBetsKey = prev.resolvedBetsKey + 1;
+              }
             }
           }
 
@@ -2943,6 +2952,8 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
             crapsRollHistory: newHistory,
             crapsEventLog: newEventLog,
             crapsLastRoundBets: savedBetsForRebet,
+            resolvedBets: newResolvedBets,
+            resolvedBetsKey: newResolvedBetsKey,
             stage: 'PLAYING' as const,
             // Show 7-OUT message on seven-out, otherwise normal message
             message: hasDice
@@ -3331,6 +3342,8 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
       sicBoInputMode: 'NONE',
       sicBoUndoStack: type === GameType.SIC_BO ? prev.sicBoUndoStack : [],
       sicBoLastRoundBets: prev.sicBoLastRoundBets,
+      resolvedBets: [],
+      resolvedBetsKey: 0,
       // Preserve baccarat bets when restarting
       baccaratBets: type === GameType.BACCARAT ? prev.baccaratBets : [],
       baccaratUndoStack: type === GameType.BACCARAT ? prev.baccaratUndoStack : [],
@@ -3375,7 +3388,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
           setGameState(prev => ({
             ...prev,
             stage: 'BETTING',
-            message: 'CHAIN OFFLINE — START nullspace-simulator + dev-executor',
+            message: 'CHAIN OFFLINE - CHECK BACKEND',
           }));
           return;
         }
@@ -4068,7 +4081,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
     setStats(prev => ({ ...prev, shields: newShields, doubles: newDoubles }));
 
     if (!isOnChain) {
-        setGameState(prev => ({ ...prev, message: 'OFFLINE - START BACKEND' }));
+        setGameState(prev => ({ ...prev, message: 'OFFLINE - CHECK CONNECTION' }));
         return;
     }
     const newDeck = createDeck();
@@ -4083,23 +4096,30 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
         setGameState(prev => ({ ...prev, stage: 'PLAYING', playerCards: [newDeck.pop()!, newDeck.pop()!, newDeck.pop()!, newDeck.pop()!, newDeck.pop()!], message: "HOLD (1-5), DRAW (D)" }));
     } else if (gameState.type === GameType.BACCARAT) {
         // Baccarat deal is handled on-chain - show offline message for local mode
-        setGameState(prev => ({ ...prev, message: 'OFFLINE - START BACKEND' }));
+        setGameState(prev => ({ ...prev, message: 'OFFLINE - CHECK CONNECTION' }));
     } else if (gameState.type === GameType.CASINO_WAR) {
         const p1 = newDeck.pop()!, d1 = newDeck.pop()!;
         let win = p1.value > d1.value ? gameState.bet : p1.value < d1.value ? -gameState.bet : 0;
         
-        const summary = `${p1.rank} vs ${d1.rank}. ${win >= 0 ? '+' : '-'}$${Math.abs(win)}`;
-        const details = [win > 0 ? `WIN (+$${win})` : win < 0 ? `LOSS (-$${Math.abs(win)})` : 'TIE'];
+        const summary = formatSummaryLine(`P: ${p1.rank}${p1.suit}, D: ${d1.rank}${d1.suit}`);
+        const historyEntry = buildHistoryEntry(summary, prependPnlLine([], win));
 
         setStats(prev => ({
             ...prev,
             chips: prev.chips + win,
-            history: [...prev.history, summary, ...details],
+            history: [...prev.history, historyEntry],
             pnlByGame: { ...prev.pnlByGame, [GameType.CASINO_WAR]: (prev.pnlByGame[GameType.CASINO_WAR] || 0) + win },
             pnlHistory: [...prev.pnlHistory, (prev.pnlHistory[prev.pnlHistory.length - 1] || 0) + win].slice(-MAX_GRAPH_POINTS)
         }));
 
-        setGameState(prev => ({ ...prev, stage: 'RESULT', playerCards: [p1], dealerCards: [d1] }));
+        setGameState(prev => ({
+            ...prev,
+            stage: 'RESULT',
+            playerCards: [p1],
+            dealerCards: [d1],
+            resolvedBets: [{ id: 'main-0', label: 'MAIN', pnl: win }],
+            resolvedBetsKey: prev.resolvedBetsKey + 1,
+        }));
         setGameState(prev => ({ ...prev, message: win > 0 ? "WIN" : win < 0 ? "LOSE" : "TIE", lastResult: win }));
     } else if (gameState.type === GameType.THREE_CARD) {
         // Three Card Poker - deal 3 cards each
@@ -4171,18 +4191,25 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
       const { rank, multiplier } = evaluateVideoPokerHand(hand);
       const profit = (gameState.bet * multiplier) - gameState.bet;
       
-      const summary = `${rank}. ${profit >= 0 ? '+' : '-'}$${Math.abs(profit)}`;
-      const details = [profit > 0 ? `WIN (+$${profit})` : `LOSS (-$${Math.abs(profit)})`];
+      const summary = formatSummaryLine(`Hand: ${rank}`);
+      const historyEntry = buildHistoryEntry(summary, prependPnlLine([], profit));
 
       setStats(prev => ({
           ...prev,
           chips: prev.chips + profit,
-          history: [...prev.history, summary, ...details],
+          history: [...prev.history, historyEntry],
           pnlByGame: { ...prev.pnlByGame, [GameType.VIDEO_POKER]: (prev.pnlByGame[GameType.VIDEO_POKER] || 0) + profit },
           pnlHistory: [...prev.pnlHistory, (prev.pnlHistory[prev.pnlHistory.length - 1] || 0) + profit].slice(-MAX_GRAPH_POINTS)
       }));
 
-      setGameState(prev => ({ ...prev, playerCards: hand, stage: 'RESULT', lastResult: profit }));
+      setGameState(prev => ({
+          ...prev,
+          playerCards: hand,
+          stage: 'RESULT',
+          lastResult: profit,
+          resolvedBets: [{ id: 'hand-0', label: 'HAND', pnl: profit }],
+          resolvedBetsKey: prev.resolvedBetsKey + 1,
+      }));
       setGameState(prev => ({ ...prev, message: multiplier > 0 ? `${rank}!` : "LOST" }));
   };
 
@@ -4222,7 +4249,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
       const cVal = getHiLoRank(curr);
       const nVal = getHiLoRank(next);
 
-      const summary = `Guess ${guess}: ${next.rank}${next.suit}.`;
+      const summary = formatSummaryLine(`${curr.rank}${curr.suit} -> ${next.rank}${next.suit}`);
 
       // Win conditions match on-chain logic:
       // - SAME: wins if ranks equal
@@ -4248,18 +4275,26 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
           setGameState(prev => ({ ...prev, playerCards: [...prev.playerCards, next], hiloAccumulator: newAcc, hiloGraphData: [...prev.hiloGraphData, newAcc].slice(-MAX_GRAPH_POINTS), message: `Correct. +$${change}` }));
       } else {
           const pnl = -gameState.bet;
-          const fullSummary = `${summary} -$${gameState.bet}`;
-          const details = [`LOSS (-$${gameState.bet})`];
+          const historyEntry = buildHistoryEntry(summary, prependPnlLine([], pnl));
 
           setStats(prev => ({
               ...prev,
               chips: prev.chips + pnl,
-              history: [...prev.history, fullSummary, ...details],
+              history: [...prev.history, historyEntry],
               pnlByGame: { ...prev.pnlByGame, [GameType.HILO]: (prev.pnlByGame[GameType.HILO] || 0) + pnl },
               pnlHistory: [...prev.pnlHistory, (prev.pnlHistory[prev.pnlHistory.length - 1] || 0) + pnl].slice(-MAX_GRAPH_POINTS)
           }));
 
-          setGameState(prev => ({ ...prev, playerCards: [...prev.playerCards, next], hiloGraphData: [...prev.hiloGraphData, 0].slice(-MAX_GRAPH_POINTS), stage: 'RESULT', message: `Incorrect. -$${gameState.bet}`, lastResult: pnl }));
+          setGameState(prev => ({
+              ...prev,
+              playerCards: [...prev.playerCards, next],
+              hiloGraphData: [...prev.hiloGraphData, 0].slice(-MAX_GRAPH_POINTS),
+              stage: 'RESULT',
+              message: `Incorrect. -$${gameState.bet}`,
+              lastResult: pnl,
+              resolvedBets: [{ id: `guess-0`, label: guess, pnl }],
+              resolvedBetsKey: prev.resolvedBetsKey + 1,
+          }));
       }
   };
   const hiloCashout = async () => {
@@ -4290,20 +4325,28 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
          }
        }
 
-       // Local mode fallback
+      // Local mode fallback
       const profit = gameState.hiloAccumulator - gameState.bet;
-      const summary = `CASHED OUT. +$${profit}`;
-      const details = [`WIN (+$${profit})`];
+      const lastCard = gameState.playerCards[gameState.playerCards.length - 1];
+      const summary = formatSummaryLine(`Cashout: ${lastCard ? `${lastCard.rank}${lastCard.suit}` : '?'}`);
+      const historyEntry = buildHistoryEntry(summary, prependPnlLine([], profit));
       
       setStats(prev => ({
           ...prev,
           chips: prev.chips + profit,
-          history: [...prev.history, summary, ...details],
+          history: [...prev.history, historyEntry],
           pnlByGame: { ...prev.pnlByGame, [GameType.HILO]: (prev.pnlByGame[GameType.HILO] || 0) + profit },
           pnlHistory: [...prev.pnlHistory, (prev.pnlHistory[prev.pnlHistory.length - 1] || 0) + profit].slice(-MAX_GRAPH_POINTS)
       }));
       
-      setGameState(prev => ({ ...prev, message: `Cashed Out. +$${profit}`, stage: 'RESULT', lastResult: profit }));
+      setGameState(prev => ({
+          ...prev,
+          message: `Cashed Out. +$${profit}`,
+          stage: 'RESULT',
+          lastResult: profit,
+          resolvedBets: [{ id: 'cashout-0', label: 'CASHOUT', pnl: profit }],
+          resolvedBetsKey: prev.resolvedBetsKey + 1,
+      }));
   };
 
   // --- ROULETTE / SIC BO / CRAPS / BACCARAT BETTING HELPERS ---
@@ -4592,7 +4635,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
       }
 
       if (!isOnChain) {
-          setGameState(prev => ({ ...prev, message: 'OFFLINE - START BACKEND' }));
+          setGameState(prev => ({ ...prev, message: 'OFFLINE - CHECK CONNECTION' }));
       }
 	  };
 
@@ -4709,7 +4752,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
        }
 
         if (!isOnChain) {
-            setGameState(prev => ({ ...prev, message: 'OFFLINE - START BACKEND' }));
+            setGameState(prev => ({ ...prev, message: 'OFFLINE - CHECK CONNECTION' }));
         }
 	  };
 
@@ -5159,35 +5202,41 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
       if (!dealerQualifies) {
           totalWin = gameState.bet; // Ante wins, play/blind push
           message = "DEALER DOESN'T QUALIFY";
-          details.push(`Ante WIN (+$${gameState.bet})`);
-          details.push(`Play PUSH`);
-          details.push(`Blind PUSH`);
+          details.push('ANTE: WIN');
+          details.push('PLAY: PUSH');
+          details.push('BLIND: PUSH');
       } else if (pVal > dVal) {
           totalWin = gameState.bet * (2 + multiplier); // Win ante + play (blind logic omitted for brevity in local mode)
           message = "YOU WIN!";
-          details.push(`Ante WIN (+$${gameState.bet})`);
-          details.push(`Play WIN (+$${playBet})`);
-          details.push(`Blind PUSH (Simulated)`);
+          details.push('ANTE: WIN');
+          details.push('PLAY: WIN');
+          details.push('BLIND: PUSH');
       } else if (pVal < dVal) {
           totalWin = -(gameState.bet * (2 + multiplier)); // Lose ante + play + blind
           message = "DEALER WINS";
-          details.push(`Ante LOSS (-$${gameState.bet})`);
-          details.push(`Play LOSS (-$${playBet})`);
-          details.push(`Blind LOSS (-$${gameState.bet})`);
+          details.push('ANTE: LOSS');
+          details.push('PLAY: LOSS');
+          details.push('BLIND: LOSS');
       } else {
           totalWin = 0;
           message = "PUSH";
-          details.push(`Ante PUSH`);
-          details.push(`Play PUSH`);
-          details.push(`Blind PUSH`);
+          details.push('ANTE: PUSH');
+          details.push('PLAY: PUSH');
+          details.push('BLIND: PUSH');
       }
 
-      const summary = `Player ${pVal} vs Dealer ${dVal}. ${totalWin >= 0 ? '+' : '-'}$${Math.abs(totalWin)}`;
+      const qualifyNote = dealerQualifies ? '' : ' (NO QUALIFY)';
+      const summary = formatSummaryLine(`P: ${pVal}, D: ${dVal}${qualifyNote}`);
+      const playBetAmount = gameState.bet * multiplier;
+      const antePnl = details.includes('ANTE: WIN') ? gameState.bet : details.includes('ANTE: LOSS') ? -gameState.bet : 0;
+      const playPnl = details.includes('PLAY: WIN') ? playBetAmount : details.includes('PLAY: LOSS') ? -playBetAmount : 0;
+      const blindPnl = details.includes('BLIND: WIN') ? gameState.bet : details.includes('BLIND: LOSS') ? -gameState.bet : 0;
+      const historyEntry = buildHistoryEntry(summary, prependPnlLine([], totalWin));
 
       setStats(prev => ({
           ...prev,
           chips: prev.chips + totalWin,
-          history: [...prev.history, summary, ...details],
+          history: [...prev.history, historyEntry],
           pnlByGame: { ...prev.pnlByGame, [GameType.ULTIMATE_HOLDEM]: (prev.pnlByGame[GameType.ULTIMATE_HOLDEM] || 0) + totalWin },
           pnlHistory: [...prev.pnlHistory, (prev.pnlHistory[prev.pnlHistory.length - 1] || 0) + totalWin].slice(-MAX_GRAPH_POINTS)
       }));
@@ -5196,7 +5245,13 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
           ...prev,
           communityCards: community,
           dealerCards: dealerRevealed,
-          stage: 'RESULT'
+          stage: 'RESULT',
+          resolvedBets: [
+            { id: 'ante-0', label: 'ANTE', pnl: antePnl },
+            { id: 'play-0', label: 'PLAY', pnl: playPnl },
+            { id: 'blind-0', label: 'BLIND', pnl: blindPnl },
+          ],
+          resolvedBetsKey: prev.resolvedBetsKey + 1,
       }));
       setGameState(prev => ({ ...prev, message, lastResult: totalWin }));
   };
@@ -5239,18 +5294,29 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
       // Local mode fallback
       const dealerRevealed = gameState.dealerCards.map(c => ({ ...c, isHidden: false }));
       const pnl = -gameState.bet * 2; // Ante + Blind
-      const summary = `FOLDED. -$${Math.abs(pnl)}`;
-      const details = [`Ante LOSS (-$${gameState.bet})`, `Blind LOSS (-$${gameState.bet})`];
+      const pVal = getHandValue(gameState.playerCards);
+      const dVal = getHandValue(dealerRevealed);
+      const summary = formatSummaryLine(`P: ${pVal}, D: ${dVal} (FOLD)`);
+      const historyEntry = buildHistoryEntry(summary, prependPnlLine([], pnl));
 
       setStats(prev => ({
           ...prev,
           chips: prev.chips + pnl,
-          history: [...prev.history, summary, ...details],
+          history: [...prev.history, historyEntry],
           pnlByGame: { ...prev.pnlByGame, [GameType.ULTIMATE_HOLDEM]: (prev.pnlByGame[GameType.ULTIMATE_HOLDEM] || 0) + pnl },
           pnlHistory: [...prev.pnlHistory, (prev.pnlHistory[prev.pnlHistory.length - 1] || 0) + pnl].slice(-MAX_GRAPH_POINTS)
       }));
 
-      setGameState(prev => ({ ...prev, dealerCards: dealerRevealed, stage: 'RESULT' }));
+      setGameState(prev => ({
+          ...prev,
+          dealerCards: dealerRevealed,
+          stage: 'RESULT',
+          resolvedBets: [
+            { id: 'ante-0', label: 'ANTE', pnl: -gameState.bet },
+            { id: 'blind-0', label: 'BLIND', pnl: -gameState.bet },
+          ],
+          resolvedBetsKey: prev.resolvedBetsKey + 1,
+      }));
       setGameState(prev => ({ ...prev, message: "FOLDED", lastResult: pnl }));
   };
 

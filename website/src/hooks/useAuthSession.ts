@@ -4,10 +4,15 @@ import { type AuthProfile, getProfile } from '../services/authClient';
 type AuthState = {
   session: AuthProfile['session'];
   entitlements: AuthProfile['entitlements'];
+  evmLink?: AuthProfile['evmLink'];
 };
 
 export function useAuthSession() {
-  const [state, setState] = useState<AuthState>({ session: null, entitlements: [] });
+  const [state, setState] = useState<AuthState>({
+    session: null,
+    entitlements: [],
+    evmLink: null,
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -15,10 +20,14 @@ export function useAuthSession() {
     setLoading(true);
     try {
       const profile = await getProfile();
-      setState({ session: profile.session, entitlements: profile.entitlements });
+      setState({
+        session: profile.session,
+        entitlements: profile.entitlements,
+        evmLink: profile.evmLink ?? null,
+      });
       setError(null);
     } catch (err) {
-      setState({ session: null, entitlements: [] });
+      setState({ session: null, entitlements: [], evmLink: null });
       setError(err instanceof Error ? err.message : 'Failed to load auth session');
     } finally {
       setLoading(false);

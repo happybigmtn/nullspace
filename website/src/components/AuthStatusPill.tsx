@@ -9,9 +9,13 @@ import {
   createBillingPortalSession,
   createCheckoutSession,
   linkPublicKey,
+  linkEvmAddress,
+  requestEvmChallenge,
   requestAuthChallenge,
   signInWithKey,
+  unlinkEvmAddress,
 } from '../services/authClient';
+import { connectEvmWallet, hasEvmProvider, signEvmMessage } from '../services/evmWallet';
 
 type AuthStatusPillProps = {
   publicKeyHex?: string | null;
@@ -21,13 +25,15 @@ type AuthStatusPillProps = {
 const ACTIVE_STATUSES = new Set(['active', 'trialing']);
 
 export const AuthStatusPill: React.FC<AuthStatusPillProps> = ({ publicKeyHex, className }) => {
-  const { session, entitlements, loading, error, refresh } = useAuthSession();
+  const { session, entitlements, evmLink, loading, error, refresh } = useAuthSession();
   const [vaultStatus, setVaultStatus] = useState(() => getVaultStatusSync());
   const [billingBusy, setBillingBusy] = useState(false);
   const [billingError, setBillingError] = useState<string | null>(null);
   const [linkBusy, setLinkBusy] = useState(false);
   const [linkError, setLinkError] = useState<string | null>(null);
   const [linkDone, setLinkDone] = useState(false);
+  const [evmBusy, setEvmBusy] = useState(false);
+  const [evmError, setEvmError] = useState<string | null>(null);
   const [signInBusy, setSignInBusy] = useState(false);
   const [signInError, setSignInError] = useState<string | null>(null);
   const stripeTiers = useMemo(() => getStripeTiers(), []);
@@ -121,6 +127,55 @@ export const AuthStatusPill: React.FC<AuthStatusPillProps> = ({ publicKeyHex, cl
     }
   };
 
+  const onLinkEvm = async () => {
+    if (!session) return;
+    setEvmBusy(true);
+    setEvmError(null);
+    try {
+      if (!hasEvmProvider()) {
+        throw new Error('No EVM wallet detected');
+      }
+      const wallet = await connectEvmWallet();
+      const challenge = await requestEvmChallenge({
+        address: wallet.address,
+        chainId: wallet.chainId,
+      });
+      const signature = await signEvmMessage(wallet.address, challenge.message);
+      await linkEvmAddress({
+        address: wallet.address,
+        chainId: wallet.chainId,
+        signature,
+        challengeId: challenge.challengeId,
+      });
+      refresh();
+    } catch (err) {
+      setEvmError(err instanceof Error ? err.message : 'EVM link failed');
+    } finally {
+      setEvmBusy(false);
+    }
+  };
+
+  const onUnlinkEvm = async () => {
+    if (!session) return;
+    setEvmBusy(true);
+    setEvmError(null);
+    try {
+      await unlinkEvmAddress();
+      refresh();
+    } catch (err) {
+      setEvmError(err instanceof Error ? err.message : 'EVM unlink failed');
+    } finally {
+      setEvmBusy(false);
+    }
+  };
+
+  const formatEvmAddress = (address?: string | null) => {
+    if (!address) return 'Not linked';
+    const trimmed = address.trim();
+    if (trimmed.length <= 12) return trimmed;
+    return `${trimmed.slice(0, 6)}…${trimmed.slice(-4)}`;
+  };
+
   const effectivePublicKey = publicKeyHex ?? vaultStatus.nullspacePublicKeyHex;
 
   const onKeySignIn = async () => {
@@ -179,10 +234,10 @@ export const AuthStatusPill: React.FC<AuthStatusPillProps> = ({ publicKeyHex, cl
             </button>
           ) : vaultStatus.supported ? (
             <a href="/security" className="text-terminal-green hover:underline">
-              Unlock vault
+              Unlock passkey
             </a>
           ) : (
-            <span className="text-gray-500">Passkey required</span>
+            <span className="text-gray-500">Passkey unavailable</span>
           )}
         </>
       )}
@@ -239,6 +294,39 @@ export const AuthStatusPill: React.FC<AuthStatusPillProps> = ({ publicKeyHex, cl
               {linkDone ? 'Key linked' : linkBusy ? 'Linking…' : 'Link key'}
             </button>
           ) : null}
+          <div className="h-4 w-px bg-gray-800" />
+          <span className="text-gray-500">EVM</span>
+          <span className="text-gray-400">
+            {formatEvmAddress(evmLink?.evmAddress)}
+            {evmLink?.chainId ? ` (chain ${evmLink.chainId})` : ''}
+          </span>
+          {evmLink?.status === 'active' ? (
+            <button
+              type="button"
+              onClick={onUnlinkEvm}
+              disabled={evmBusy}
+              className={`border px-2 py-1 rounded transition-colors ${
+                evmBusy
+                  ? 'bg-gray-800 border-gray-700 text-gray-500 cursor-not-allowed'
+                  : 'bg-gray-900 border-gray-800 text-gray-300 hover:border-gray-600'
+              }`}
+            >
+              {evmBusy ? 'Unlinking…' : 'Unlink'}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onLinkEvm}
+              disabled={evmBusy}
+              className={`border px-2 py-1 rounded transition-colors ${
+                evmBusy
+                  ? 'bg-gray-800 border-gray-700 text-gray-500 cursor-not-allowed'
+                  : 'bg-gray-900 border-gray-800 text-gray-300 hover:border-gray-600'
+              }`}
+            >
+              {evmBusy ? 'Linking…' : 'Link wallet'}
+            </button>
+          )}
           <a href={signOutUrl} className="text-gray-400 hover:text-white">
             Sign out
           </a>
@@ -250,6 +338,7 @@ export const AuthStatusPill: React.FC<AuthStatusPillProps> = ({ publicKeyHex, cl
       ) : null}
       {billingError ? <span className="text-terminal-accent">{billingError}</span> : null}
       {linkError ? <span className="text-terminal-accent">{linkError}</span> : null}
+      {evmError ? <span className="text-terminal-accent">{evmError}</span> : null}
       {signInError ? <span className="text-terminal-accent">{signInError}</span> : null}
       {error ? <span className="text-terminal-accent">{error}</span> : null}
     </div>

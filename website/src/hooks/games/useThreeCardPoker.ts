@@ -134,7 +134,7 @@ export const useThreeCardPoker = ({
       }
 
       // Local mode not supported - require on-chain session
-      setGameState(prev => ({ ...prev, message: 'OFFLINE - START BACKEND' }));
+      setGameState(prev => ({ ...prev, message: 'OFFLINE - CHECK CONNECTION' }));
   }, [gameState.type, gameState.stage, isOnChain, chainService, currentSessionIdRef, isPendingRef, setLastTxSig, setGameState]);
 
   const threeCardFold = useCallback(async () => {
@@ -167,7 +167,7 @@ export const useThreeCardPoker = ({
       }
 
       // Local mode not supported - require on-chain session
-      setGameState(prev => ({ ...prev, message: 'OFFLINE - START BACKEND' }));
+      setGameState(prev => ({ ...prev, message: 'OFFLINE - CHECK CONNECTION' }));
   }, [gameState.type, gameState.stage, isOnChain, chainService, currentSessionIdRef, isPendingRef, setLastTxSig, setGameState]);
 
   return {

@@ -2,7 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { WasmWrapper } from '../api/wasm.js';
 import { CasinoClient } from '../api/client.js';
 
-export type ConnectionStatus = 'missing_identity' | 'vault_locked' | 'connecting' | 'connected' | 'error';
+export type ConnectionStatus =
+  | 'missing_identity'
+  | 'vault_locked'
+  | 'connecting'
+  | 'connected'
+  | 'offline'
+  | 'error';
 
 export type CasinoConnection = {
   status: ConnectionStatus;
@@ -16,6 +22,16 @@ export type CasinoConnection = {
   onEvent: (name: string, handler: (evt: any) => void) => () => void;
 };
 
+const IS_DEV = Boolean(import.meta.env?.DEV);
+const MISSING_IDENTITY_DETAIL = IS_DEV
+  ? 'Missing VITE_IDENTITY (see website/README.md).'
+  : 'Identity not configured. Refresh the page or contact support.';
+const OFFLINE_DETAIL = 'Offline - check your connection and retry.';
+const VAULT_LOCKED_DETAIL = 'Passkey vault locked. Open Security to unlock.';
+const ERROR_DETAIL = IS_DEV
+  ? 'Failed to connect. Check simulator + dev-executor.'
+  : 'Failed to connect. Check your connection and retry.';
+
 export function useCasinoConnection(baseUrl = '/api'): CasinoConnection {
   const [status, setStatus] = useState<ConnectionStatus>('connecting');
   const [statusDetail, setStatusDetail] = useState<string | undefined>(undefined);
@@ -24,6 +40,8 @@ export function useCasinoConnection(baseUrl = '/api'): CasinoConnection {
   const [wasm, setWasm] = useState<WasmWrapper | null>(null);
   const [keypair, setKeypair] = useState<{ publicKey: Uint8Array; publicKeyHex: string } | null>(null);
   const [currentView, setCurrentView] = useState<number | null>(null);
+  const [refreshToken, setRefreshToken] = useState(0);
+  const [online, setOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine));
 
   const clientRef = useRef<CasinoClient | null>(null);
 
@@ -40,7 +58,13 @@ export function useCasinoConnection(baseUrl = '/api'): CasinoConnection {
         const identityHex = import.meta.env.VITE_IDENTITY as string | undefined;
         if (!identityHex) {
           setStatus('missing_identity');
-          setStatusDetail('Missing VITE_IDENTITY (see website/README.md).');
+          setStatusDetail(MISSING_IDENTITY_DETAIL);
+          return;
+        }
+
+        if (!online) {
+          setStatus('offline');
+          setStatusDetail(OFFLINE_DETAIL);
           return;
         }
 
@@ -59,7 +83,7 @@ export function useCasinoConnection(baseUrl = '/api'): CasinoConnection {
             // ignore
           }
           setStatus('vault_locked');
-          setStatusDetail('Unlock passkey vault (Vault tab).');
+          setStatusDetail(VAULT_LOCKED_DETAIL);
           return;
         }
 
@@ -98,7 +122,7 @@ export function useCasinoConnection(baseUrl = '/api'): CasinoConnection {
         console.error('[useCasinoConnection] init failed:', e);
         setStatus('error');
         setError(e?.message ?? String(e));
-        setStatusDetail('Failed to connect. Check simulator + dev-executor.');
+        setStatusDetail(ERROR_DETAIL);
       }
     };
 
@@ -123,9 +147,23 @@ export function useCasinoConnection(baseUrl = '/api'): CasinoConnection {
       setKeypair(null);
       setCurrentView(null);
     };
-  }, [baseUrl]);
+  }, [baseUrl, online, refreshToken]);
 
-  const refreshOnce = useCallback(async () => undefined, []);
+  const refreshOnce = useCallback(async () => {
+    setRefreshToken((token) => token + 1);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleOnline = () => setOnline(true);
+    const handleOffline = () => setOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   const onEvent = useCallback((name: string, handler: (evt: any) => void) => {
     const c: any = clientRef.current;

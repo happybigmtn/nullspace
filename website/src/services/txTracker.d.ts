@@ -1,10 +1,14 @@
-export type ActivitySurface = 'casino' | 'economy' | 'staking' | 'security' | 'system';
+export type ActivitySurface = 'casino' | 'economy' | 'staking' | 'bridge' | 'security' | 'system';
 export type ActivityLevel = 'info' | 'success' | 'error';
 
 export type TxStatus = 'submitted' | 'confirmed' | 'failed';
 export type TxKind =
   | 'register'
   | 'deposit'
+  | 'bridge_withdraw'
+  | 'bridge_deposit'
+  | 'bridge_finalize'
+  | 'oracle_update'
   | 'swap'
   | 'add_liquidity'
   | 'remove_liquidity'

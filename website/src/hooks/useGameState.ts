@@ -36,6 +36,8 @@ export const INITIAL_GAME_STATE: GameState = {
     sicBoInputMode: 'NONE',
     sicBoUndoStack: [],
     sicBoLastRoundBets: [],
+    resolvedBets: [],
+    resolvedBetsKey: 0,
     baccaratBets: [],
     baccaratUndoStack: [],
     baccaratLastRoundBets: [],

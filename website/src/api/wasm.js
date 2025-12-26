@@ -120,9 +120,19 @@ export class WasmWrapper {
     return this.wasm.encode_treasury_key();
   }
 
+  // Encode treasury vesting key
+  encodeTreasuryVestingKey() {
+    return this.wasm.encode_treasury_vesting_key();
+  }
+
   // Encode vault registry key
   encodeVaultRegistryKey() {
     return this.wasm.encode_vault_registry_key();
+  }
+
+  // Encode player registry key
+  encodePlayerRegistryKey() {
+    return this.wasm.encode_player_registry_key();
   }
 
   // Encode savings pool key
@@ -138,6 +148,21 @@ export class WasmWrapper {
   // Encode staker key
   encodeStakerKey(publicKeyBytes) {
     return this.wasm.encode_staker_key(publicKeyBytes);
+  }
+
+  // Encode bridge state key
+  encodeBridgeStateKey() {
+    return this.wasm.encode_bridge_state_key();
+  }
+
+  // Encode bridge withdrawal key
+  encodeBridgeWithdrawalKey(withdrawalId) {
+    return this.wasm.encode_bridge_withdrawal_key(BigInt(withdrawalId));
+  }
+
+  // Encode oracle state key
+  encodeOracleStateKey() {
+    return this.wasm.encode_oracle_state_key();
   }
 
   // Encode UpdatesFilter for all events
@@ -611,6 +636,65 @@ export class WasmWrapper {
     const tx = this.wasm.Transaction.claim_savings_rewards(
       this.keypair,
       BigInt(nonce)
+    );
+    return tx.encode();
+  }
+
+  // Create a bridge withdraw transaction
+  createBridgeWithdrawTransaction(nonce, amount, destinationBytes) {
+    if (!this.keypair) {
+      throw new Error('Keypair not initialized');
+    }
+    const tx = this.wasm.Transaction.bridge_withdraw(
+      this.keypair,
+      BigInt(nonce),
+      BigInt(amount),
+      destinationBytes
+    );
+    return tx.encode();
+  }
+
+  // Admin: create a bridge deposit transaction
+  createBridgeDepositTransaction(nonce, recipientPublicKeyBytes, amount, sourceBytes) {
+    if (!this.keypair) {
+      throw new Error('Keypair not initialized');
+    }
+    const tx = this.wasm.Transaction.bridge_deposit(
+      this.keypair,
+      BigInt(nonce),
+      recipientPublicKeyBytes,
+      BigInt(amount),
+      sourceBytes
+    );
+    return tx.encode();
+  }
+
+  // Admin: create a bridge withdrawal finalize transaction
+  createFinalizeBridgeWithdrawalTransaction(nonce, withdrawalId, sourceBytes) {
+    if (!this.keypair) {
+      throw new Error('Keypair not initialized');
+    }
+    const tx = this.wasm.Transaction.finalize_bridge_withdrawal(
+      this.keypair,
+      BigInt(nonce),
+      BigInt(withdrawalId),
+      sourceBytes
+    );
+    return tx.encode();
+  }
+
+  // Admin: update oracle price data
+  createUpdateOracleTransaction(nonce, priceVusdtNumerator, priceRngDenominator, updatedTs, sourceBytes) {
+    if (!this.keypair) {
+      throw new Error('Keypair not initialized');
+    }
+    const tx = this.wasm.Transaction.update_oracle(
+      this.keypair,
+      BigInt(nonce),
+      BigInt(priceVusdtNumerator),
+      BigInt(priceRngDenominator),
+      BigInt(updatedTs),
+      sourceBytes
     );
     return tx.encode();
   }

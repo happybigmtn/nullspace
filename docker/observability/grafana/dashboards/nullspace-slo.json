@@ -1,0 +1,82 @@
+{
+  "uid": "nullspace-slo",
+  "title": "Nullspace SLO Overview",
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Simulator submit p95 latency (ms)",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(nullspace_simulator_http_submit_latency_ms_bucket[5m])) by (le))",
+          "legendFormat": "p95"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {},
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Auth request avg (ms)",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "avg_over_time(nullspace_auth_timing_avg_ms{key=\"http.request_ms\"}[5m])",
+          "legendFormat": "avg"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {},
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Update index failures (rate)",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "rate(nullspace_simulator_update_index_failures_total[5m])",
+          "legendFormat": "failures/sec"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {},
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 }
+    },
+    {
+      "type": "timeseries",
+      "title": "WS update send errors (rate)",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "rate(nullspace_simulator_ws_updates_send_errors_total[5m])",
+          "legendFormat": "errors/sec"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {},
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 }
+    }
+  ]
+}

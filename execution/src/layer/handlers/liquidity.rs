@@ -8,6 +8,7 @@ const BASIS_POINTS_SCALE: u128 = 10_000;
 const MAX_BASIS_POINTS: u16 = 10_000;
 const SECONDS_PER_YEAR: u64 = 365 * 24 * 60 * 60;
 const SAVINGS_REWARD_SCALE: u128 = nullspace_types::casino::STAKING_REWARD_SCALE;
+const MAX_ORACLE_SOURCE_BYTES: usize = 64;
 
 fn admin_public_key() -> Option<PublicKey> {
     static ADMIN_KEY: OnceLock<Option<PublicKey>> = OnceLock::new();
@@ -184,6 +185,100 @@ fn rng_price_ratio(
     }
 }
 
+fn oracle_price_ratio(
+    policy: &nullspace_types::casino::PolicyState,
+    oracle: &nullspace_types::casino::OracleState,
+    now: u64,
+) -> Option<(u128, u128)> {
+    if !policy.oracle_enabled {
+        return None;
+    }
+    if oracle.price_vusdt_numerator == 0 || oracle.price_rng_denominator == 0 {
+        return None;
+    }
+    if policy.oracle_stale_secs > 0 && now.saturating_sub(oracle.updated_ts) > policy.oracle_stale_secs
+    {
+        return None;
+    }
+    Some((
+        oracle.price_vusdt_numerator as u128,
+        oracle.price_rng_denominator as u128,
+    ))
+}
+
+fn price_deviation_bps(
+    amm_num: u128,
+    amm_den: u128,
+    oracle_num: u128,
+    oracle_den: u128,
+) -> Option<u16> {
+    if amm_den == 0 || oracle_den == 0 {
+        return None;
+    }
+    let amm_scaled = amm_num.checked_mul(oracle_den)?;
+    let oracle_scaled = oracle_num.checked_mul(amm_den)?;
+    if oracle_scaled == 0 {
+        return None;
+    }
+    let diff = if amm_scaled > oracle_scaled {
+        amm_scaled - oracle_scaled
+    } else {
+        oracle_scaled - amm_scaled
+    };
+    let deviation = diff
+        .checked_mul(BASIS_POINTS_SCALE)?
+        .checked_div(oracle_scaled)?;
+    Some(deviation.min(u16::MAX as u128) as u16)
+}
+
+fn price_is_greater(a_num: u128, a_den: u128, b_num: u128, b_den: u128) -> bool {
+    a_num.saturating_mul(b_den) > b_num.saturating_mul(a_den)
+}
+
+fn effective_price_ratio_for_borrow(
+    policy: &nullspace_types::casino::PolicyState,
+    oracle: &nullspace_types::casino::OracleState,
+    now: u64,
+    amm_num: u128,
+    amm_den: u128,
+) -> (u128, u128) {
+    let Some((oracle_num, oracle_den)) = oracle_price_ratio(policy, oracle, now) else {
+        return (amm_num, amm_den);
+    };
+    let deviation =
+        price_deviation_bps(amm_num, amm_den, oracle_num, oracle_den).unwrap_or(u16::MAX);
+    if deviation <= policy.oracle_max_deviation_bps {
+        return (amm_num, amm_den);
+    }
+    if price_is_greater(amm_num, amm_den, oracle_num, oracle_den) {
+        (oracle_num, oracle_den)
+    } else {
+        (amm_num, amm_den)
+    }
+}
+
+fn effective_price_ratio_for_liquidation(
+    policy: &nullspace_types::casino::PolicyState,
+    oracle: &nullspace_types::casino::OracleState,
+    now: u64,
+    amm_num: u128,
+    amm_den: u128,
+) -> (u128, u128) {
+    let Some((oracle_num, oracle_den)) = oracle_price_ratio(policy, oracle, now) else {
+        return (amm_num, amm_den);
+    };
+    let deviation =
+        price_deviation_bps(amm_num, amm_den, oracle_num, oracle_den).unwrap_or(u16::MAX);
+    if deviation <= policy.oracle_max_deviation_bps {
+        return (amm_num, amm_den);
+    }
+    if price_is_greater(amm_num, amm_den, oracle_num, oracle_den) {
+        (amm_num, amm_den)
+    } else {
+        (oracle_num, oracle_den)
+    }
+}
+
 fn constant_product_quote(
     amount_in: u64,
     reserve_in: u64,
@@ -289,6 +384,20 @@ fn validate_policy(policy: &nullspace_types::casino::PolicyState) -> Result<(), 
     if policy.credit_immediate_bps > MAX_BASIS_POINTS {
         return Err("invalid credit vesting");
     }
+    if policy.oracle_max_deviation_bps > MAX_BASIS_POINTS {
+        return Err("invalid oracle deviation");
+    }
+    if policy.bridge_max_withdraw > 0 && policy.bridge_min_withdraw > policy.bridge_max_withdraw {
+        return Err("invalid bridge min/max");
+    }
+    if policy.bridge_daily_limit == 0 && policy.bridge_daily_limit_per_account > 0 {
+        return Err("invalid bridge daily limits");
+    }
+    if policy.bridge_daily_limit > 0
+        && policy.bridge_daily_limit_per_account > policy.bridge_daily_limit
+    {
+        return Err("bridge per-account limit exceeds daily limit");
+    }
 
     Ok(())
 }
@@ -307,6 +416,51 @@ fn validate_treasury(
         return Err("treasury allocation exceeds total supply");
     }
     Ok(())
+}
+
+fn validate_treasury_vesting(
+    treasury: &nullspace_types::casino::TreasuryState,
+    vesting: &nullspace_types::casino::TreasuryVestingState,
+) -> Result<(), &'static str> {
+    if vesting.auction.released > treasury.auction_allocation_rng {
+        return Err("treasury auction release exceeds allocation");
+    }
+    if vesting.liquidity.released > treasury.liquidity_reserve_rng {
+        return Err("treasury liquidity release exceeds allocation");
+    }
+    if vesting.bonus.released > treasury.bonus_pool_rng {
+        return Err("treasury bonus release exceeds allocation");
+    }
+    if vesting.player.released > treasury.player_allocation_rng {
+        return Err("treasury player release exceeds allocation");
+    }
+    if vesting.treasury.released > treasury.treasury_allocation_rng {
+        return Err("treasury ops release exceeds allocation");
+    }
+    if vesting.team.released > treasury.team_allocation_rng {
+        return Err("treasury team release exceeds allocation");
+    }
+    Ok(())
+}
+
+fn vested_amount(total: u64, schedule: &nullspace_types::casino::VestingSchedule, now: u64) -> u64 {
+    if total == 0 {
+        return 0;
+    }
+    if schedule.duration_secs == 0 {
+        return total;
+    }
+    if now <= schedule.start_ts {
+        return 0;
+    }
+    let elapsed = now.saturating_sub(schedule.start_ts);
+    if elapsed >= schedule.duration_secs {
+        return total;
+    }
+    (total as u128)
+        .saturating_mul(elapsed as u128)
+        .checked_div(schedule.duration_secs as u128)
+        .unwrap_or(0) as u64
 }
 
 fn invalid_amm_state(public: &PublicKey) -> Vec<Event> {
@@ -444,6 +598,7 @@ impl<'a, S: State> Layer<'a, S> {
 
         let mut house = self.get_or_init_house().await?;
         let policy = self.get_or_init_policy().await?;
+        let oracle = self.get_or_init_oracle_state().await?;
         let now = current_time_sec(self.seed.view);
         let interest = accrue_vault_debt(&mut vault, &mut house, now, &policy);
         self.allocate_savings_rewards(interest).await?;
@@ -457,6 +612,13 @@ impl<'a, S: State> Layer<'a, S> {
             amm.reserve_vusdt,
             amm.bootstrap_price_vusdt_numerator,
             amm.bootstrap_price_rng_denominator,
+        );
+        let (price_numerator, price_denominator) = effective_price_ratio_for_borrow(
+            &policy,
+            &oracle,
+            now,
+            price_numerator,
+            price_denominator,
         );
 
         let mut updated_player = match self.get(&Key::CasinoPlayer(public.clone())).await? {
@@ -1104,6 +1266,164 @@ impl<'a, S: State> Layer<'a, S> {
         Ok(vec![event])
     }
 
+    pub(in crate::layer) async fn handle_seed_amm(
+        &mut self,
+        public: &PublicKey,
+        rng_amount: u64,
+        usdt_amount: u64,
+        bootstrap_price_vusdt_numerator: u64,
+        bootstrap_price_rng_denominator: u64,
+    ) -> anyhow::Result<Vec<Event>> {
+        match admin_public_key() {
+            Some(admin_key) if *public == admin_key => {}
+            _ => {
+                return Ok(casino_error_vec(
+                    public,
+                    None,
+                    nullspace_types::casino::ERROR_UNAUTHORIZED,
+                    "Unauthorized admin instruction",
+                ))
+            }
+        }
+
+        if rng_amount == 0 || usdt_amount == 0 {
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_INVALID_MOVE,
+                "Zero bootstrap liquidity not allowed",
+            ));
+        }
+        if bootstrap_price_rng_denominator == 0 {
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_INVALID_MOVE,
+                "Invalid bootstrap price",
+            ));
+        }
+
+        let mut amm = self.get_or_init_amm().await?;
+        if validate_amm_state(&amm).is_err() {
+            return Ok(invalid_amm_state(public));
+        }
+        if amm.total_shares != 0 || amm.reserve_rng != 0 || amm.reserve_vusdt != 0 {
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_INVALID_MOVE,
+                "AMM already seeded",
+            ));
+        }
+
+        let shares_minted = Self::integer_sqrt((rng_amount as u128) * (usdt_amount as u128));
+        if shares_minted <= MINIMUM_LIQUIDITY {
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_INVALID_MOVE,
+                "Initial liquidity too small",
+            ));
+        }
+
+        amm.reserve_rng = rng_amount;
+        amm.reserve_vusdt = usdt_amount;
+        amm.total_shares = shares_minted;
+        amm.bootstrap_price_vusdt_numerator = bootstrap_price_vusdt_numerator;
+        amm.bootstrap_price_rng_denominator = bootstrap_price_rng_denominator;
+        amm.bootstrap_finalized = false;
+        amm.bootstrap_final_price_vusdt_numerator = 0;
+        amm.bootstrap_final_price_rng_denominator = 0;
+        amm.bootstrap_finalized_ts = 0;
+
+        let mut house = self.get_or_init_house().await?;
+        if usdt_amount > 0 {
+            house.total_vusdt_debt = house.total_vusdt_debt.saturating_add(usdt_amount);
+        }
+
+        let amm_snapshot = amm.clone();
+        let house_snapshot = house.clone();
+        self.insert(Key::AmmPool, Value::AmmPool(amm));
+        self.insert(Key::House, Value::House(house));
+
+        Ok(vec![Event::AmmBootstrapped {
+            admin: public.clone(),
+            rng_amount,
+            vusdt_amount: usdt_amount,
+            shares_minted,
+            reserve_rng: amm_snapshot.reserve_rng,
+            reserve_vusdt: amm_snapshot.reserve_vusdt,
+            bootstrap_price_vusdt_numerator: amm_snapshot.bootstrap_price_vusdt_numerator,
+            bootstrap_price_rng_denominator: amm_snapshot.bootstrap_price_rng_denominator,
+            amm: amm_snapshot,
+            house: house_snapshot,
+        }])
+    }
+
+    pub(in crate::layer) async fn handle_finalize_amm_bootstrap(
+        &mut self,
+        public: &PublicKey,
+    ) -> anyhow::Result<Vec<Event>> {
+        match admin_public_key() {
+            Some(admin_key) if *public == admin_key => {}
+            _ => {
+                return Ok(casino_error_vec(
+                    public,
+                    None,
+                    nullspace_types::casino::ERROR_UNAUTHORIZED,
+                    "Unauthorized admin instruction",
+                ))
+            }
+        }
+
+        let mut amm = self.get_or_init_amm().await?;
+        if validate_amm_state(&amm).is_err() {
+            return Ok(invalid_amm_state(public));
+        }
+        if amm.bootstrap_finalized {
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_INVALID_MOVE,
+                "AMM bootstrap already finalized",
+            ));
+        }
+
+        let (price_vusdt_numerator, price_rng_denominator) = if amm.reserve_rng > 0 {
+            (amm.reserve_vusdt, amm.reserve_rng)
+        } else {
+            (
+                amm.bootstrap_price_vusdt_numerator,
+                amm.bootstrap_price_rng_denominator,
+            )
+        };
+        if price_rng_denominator == 0 {
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_INVALID_MOVE,
+                "Invalid bootstrap price",
+            ));
+        }
+
+        let finalized_ts = current_time_sec(self.seed.view);
+        amm.bootstrap_finalized = true;
+        amm.bootstrap_final_price_vusdt_numerator = price_vusdt_numerator;
+        amm.bootstrap_final_price_rng_denominator = price_rng_denominator;
+        amm.bootstrap_finalized_ts = finalized_ts;
+
+        let amm_snapshot = amm.clone();
+        self.insert(Key::AmmPool, Value::AmmPool(amm));
+
+        Ok(vec![Event::AmmBootstrapFinalized {
+            admin: public.clone(),
+            price_vusdt_numerator,
+            price_rng_denominator,
+            finalized_ts,
+            amm: amm_snapshot,
+        }])
+    }
+
     pub(in crate::layer) async fn handle_liquidate_vault(
         &mut self,
         public: &PublicKey,
@@ -1128,6 +1448,7 @@ impl<'a, S: State> Layer<'a, S> {
 
         let mut house = self.get_or_init_house().await?;
         let policy = self.get_or_init_policy().await?;
+        let oracle = self.get_or_init_oracle_state().await?;
         let now = current_time_sec(self.seed.view);
         let interest = accrue_vault_debt(&mut vault, &mut house, now, &policy);
         self.allocate_savings_rewards(interest).await?;
@@ -1150,6 +1471,20 @@ impl<'a, S: State> Layer<'a, S> {
             amm.reserve_vusdt,
             amm.bootstrap_price_vusdt_numerator,
             amm.bootstrap_price_rng_denominator,
+        );
+        let (price_numerator, price_denominator) = effective_price_ratio_for_liquidation(
+            &policy,
+            &oracle,
+            now,
+            price_numerator,
+            price_denominator,
+        );
+        let (price_numerator, price_denominator) = effective_price_ratio_for_liquidation(
+            &policy,
+            &oracle,
+            now,
+            price_numerator,
+            price_denominator,
         );
         if price_numerator == 0 {
             return Ok(casino_error_vec(
@@ -1331,6 +1666,59 @@ impl<'a, S: State> Layer<'a, S> {
         }])
     }
 
+    pub(in crate::layer) async fn handle_update_oracle(
+        &mut self,
+        public: &PublicKey,
+        price_vusdt_numerator: u64,
+        price_rng_denominator: u64,
+        updated_ts: u64,
+        source: &[u8],
+    ) -> anyhow::Result<Vec<Event>> {
+        match admin_public_key() {
+            Some(admin_key) if *public == admin_key => {}
+            _ => {
+                return Ok(casino_error_vec(
+                    public,
+                    None,
+                    nullspace_types::casino::ERROR_UNAUTHORIZED,
+                    "Unauthorized admin instruction",
+                ))
+            }
+        }
+
+        if source.len() > MAX_ORACLE_SOURCE_BYTES {
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_INVALID_MOVE,
+                "Oracle source too long",
+            ));
+        }
+        let clearing = price_vusdt_numerator == 0 && price_rng_denominator == 0;
+        if !clearing && (price_vusdt_numerator == 0 || price_rng_denominator == 0) {
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_INVALID_MOVE,
+                "Oracle price must be non-zero",
+            ));
+        }
+
+        let now = current_time_sec(self.seed.view);
+        let oracle = nullspace_types::casino::OracleState {
+            price_vusdt_numerator,
+            price_rng_denominator,
+            updated_ts: if updated_ts == 0 { now } else { updated_ts },
+            source: source.to_vec(),
+        };
+
+        self.insert(Key::OracleState, Value::OracleState(oracle.clone()));
+        Ok(vec![Event::OracleUpdated {
+            admin: public.clone(),
+            oracle,
+        }])
+    }
+
     pub(in crate::layer) async fn handle_set_treasury(
         &mut self,
         public: &PublicKey,
@@ -1360,6 +1748,117 @@ impl<'a, S: State> Layer<'a, S> {
         self.insert(Key::Treasury, Value::Treasury(treasury.clone()));
         Ok(vec![Event::TreasuryUpdated {
             treasury: treasury.clone(),
+        }])
+    }
+
+    pub(in crate::layer) async fn handle_set_treasury_vesting(
+        &mut self,
+        public: &PublicKey,
+        vesting: &nullspace_types::casino::TreasuryVestingState,
+    ) -> anyhow::Result<Vec<Event>> {
+        match admin_public_key() {
+            Some(admin_key) if *public == admin_key => {}
+            _ => {
+                return Ok(casino_error_vec(
+                    public,
+                    None,
+                    nullspace_types::casino::ERROR_UNAUTHORIZED,
+                    "Unauthorized admin instruction",
+                ))
+            }
+        }
+
+        let treasury = self.get_or_init_treasury().await?;
+        if let Err(message) = validate_treasury_vesting(&treasury, vesting) {
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_INVALID_MOVE,
+                message,
+            ));
+        }
+
+        self.insert(
+            Key::TreasuryVesting,
+            Value::TreasuryVesting(vesting.clone()),
+        );
+        Ok(vec![Event::TreasuryVestingUpdated {
+            vesting: vesting.clone(),
+        }])
+    }
+
+    pub(in crate::layer) async fn handle_release_treasury_allocation(
+        &mut self,
+        public: &PublicKey,
+        bucket: &nullspace_types::casino::TreasuryBucket,
+        amount: u64,
+    ) -> anyhow::Result<Vec<Event>> {
+        match admin_public_key() {
+            Some(admin_key) if *public == admin_key => {}
+            _ => {
+                return Ok(casino_error_vec(
+                    public,
+                    None,
+                    nullspace_types::casino::ERROR_UNAUTHORIZED,
+                    "Unauthorized admin instruction",
+                ))
+            }
+        }
+
+        if amount == 0 {
+            return Ok(vec![]);
+        }
+
+        let treasury = self.get_or_init_treasury().await?;
+        let mut vesting = self.get_or_init_treasury_vesting().await?;
+        let now = current_time_sec(self.seed.view);
+
+        let (schedule, total_allocation) = match bucket {
+            nullspace_types::casino::TreasuryBucket::Auction => {
+                (&mut vesting.auction, treasury.auction_allocation_rng)
+            }
+            nullspace_types::casino::TreasuryBucket::Liquidity => {
+                (&mut vesting.liquidity, treasury.liquidity_reserve_rng)
+            }
+            nullspace_types::casino::TreasuryBucket::Bonus => {
+                (&mut vesting.bonus, treasury.bonus_pool_rng)
+            }
+            nullspace_types::casino::TreasuryBucket::Player => {
+                (&mut vesting.player, treasury.player_allocation_rng)
+            }
+            nullspace_types::casino::TreasuryBucket::Treasury => {
+                (&mut vesting.treasury, treasury.treasury_allocation_rng)
+            }
+            nullspace_types::casino::TreasuryBucket::Team => {
+                (&mut vesting.team, treasury.team_allocation_rng)
+            }
+        };
+
+        let vested_total = vested_amount(total_allocation, schedule, now);
+        let available = vested_total.saturating_sub(schedule.released);
+        if amount > available {
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_INVALID_MOVE,
+                "Treasury allocation not vested",
+            ));
+        }
+
+        schedule.released = schedule.released.saturating_add(amount);
+        let total_released = schedule.released;
+        self.insert(
+            Key::TreasuryVesting,
+            Value::TreasuryVesting(vesting),
+        );
+
+        Ok(vec![Event::TreasuryAllocationReleased {
+            admin: public.clone(),
+            bucket: *bucket,
+            amount,
+            total_released,
+            total_vested: vested_total,
+            total_allocation,
         }])
     }
 
@@ -1496,6 +1995,9 @@ impl<'a, S: State> Layer<'a, S> {
             ));
         }
 
+        let policy = self.get_or_init_policy().await?;
+        let oracle = self.get_or_init_oracle_state().await?;
+        let now = current_time_sec(self.seed.view);
         let amm = self.get_or_init_amm().await?;
         if validate_amm_state(&amm).is_err() {
             return Ok(invalid_amm_state(public));
@@ -1505,6 +2007,13 @@ impl<'a, S: State> Layer<'a, S> {
             amm.reserve_vusdt,
             amm.bootstrap_price_vusdt_numerator,
             amm.bootstrap_price_rng_denominator,
+        );
+        let (price_numerator, price_denominator) = effective_price_ratio_for_liquidation(
+            &policy,
+            &oracle,
+            now,
+            price_numerator,
+            price_denominator,
         );
 
         let mut selected: Option<(PublicKey, u128, u64)> = None;
