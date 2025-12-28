@@ -59,7 +59,7 @@ export const VideoPokerView = React.memo<VideoPokerViewProps & { lastWin?: numbe
                                             key={row.rank}
                                             className={`flex items-center justify-between rounded border-2 px-2 py-1 text-[11px] font-mono ${
                                                 active
-                                                    ? 'border-terminal-green bg-terminal-green/10 text-terminal-green'
+                                                    ? 'border-action-success bg-action-success/10 text-action-success'
                                                     : 'border-gray-800 bg-black/40 text-gray-300'
                                             }`}
                                         >
@@ -77,12 +77,12 @@ export const VideoPokerView = React.memo<VideoPokerViewProps & { lastWin?: numbe
                 </div>
                 {/* Center Info */}
                 <div className="text-center space-y-3 relative z-20">
-                    <div className="text-lg sm:text-2xl font-bold text-terminal-gold tracking-widest leading-tight animate-pulse font-mono">
+                    <div className="text-lg sm:text-2xl font-bold text-action-primary tracking-widest leading-tight animate-pulse font-mono">
                         {gameState.message}
                     </div>
                     {handEval && gameState.stage !== 'BETTING' ? (
                         <div className={`text-[10px] tracking-widest uppercase font-mono ${
-                            handEval.multiplier > 0 ? 'text-terminal-green' : 'text-gray-600'
+                            handEval.multiplier > 0 ? 'text-action-success' : 'text-gray-600'
                         }`}>
                             {handEval.rank}
                             {handEval.multiplier > 0 ? ` · x${handEval.multiplier}` : ''}
@@ -103,7 +103,7 @@ export const VideoPokerView = React.memo<VideoPokerViewProps & { lastWin?: numbe
                              <Hand cards={[card]} />
                              <div className={`text-center text-[10px] font-bold py-1 border-2 rounded font-mono tracking-widest ${
                                 card.isHeld
-                                    ? 'border-terminal-green text-terminal-green bg-terminal-green/10'
+                                    ? 'border-action-success text-action-success bg-action-success/10'
                                     : 'border-transparent text-transparent'
                              }`}>
                                  HOLD
@@ -115,9 +115,9 @@ export const VideoPokerView = React.memo<VideoPokerViewProps & { lastWin?: numbe
             </div>
 
             {/* LEFT SIDEBAR - PAY TABLE */}
-            <div className="hidden lg:flex absolute top-0 left-0 bottom-24 w-56 bg-terminal-black/80 border-r-2 border-gray-700 backdrop-blur-sm z-30 flex-col">
+            <div className="hidden lg:flex absolute top-0 left-0 bottom-24 w-56 bg-titanium-900/80 border-r-2 border-gray-700 backdrop-blur-sm z-30 flex-col">
                 <div className="flex-none border-b border-gray-800 py-2">
-                    <div className="text-[10px] font-bold tracking-widest uppercase text-center text-terminal-green">
+                    <div className="text-[10px] font-bold tracking-widest uppercase text-center text-action-success">
                         PAY TABLE
                     </div>
                 </div>
@@ -130,7 +130,7 @@ export const VideoPokerView = React.memo<VideoPokerViewProps & { lastWin?: numbe
                                     key={row.rank}
                                     className={`flex items-center justify-between rounded border-2 px-2 py-1.5 text-[11px] font-mono transition-colors ${
                                         active
-                                            ? 'border-terminal-green bg-terminal-green/10 text-terminal-green'
+                                            ? 'border-action-success bg-action-success/10 text-action-success'
                                             : 'border-gray-800 bg-black/40 text-gray-300'
                                     }`}
                                 >
@@ -144,7 +144,7 @@ export const VideoPokerView = React.memo<VideoPokerViewProps & { lastWin?: numbe
             </div>
 
             {/* CONTROLS */}
-            <div className="ns-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-terminal-black/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
+            <div className="ns-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-titanium-900/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
                 <div className="h-16 md:h-20 flex items-center justify-center gap-2 md:gap-3 p-2 md:px-4">
                     {gameState.stage === 'PLAYING' && (
                         <>
@@ -161,7 +161,7 @@ export const VideoPokerView = React.memo<VideoPokerViewProps & { lastWin?: numbe
                                                     onClick={() => handleToggleHold(n - 1)}
                                                     className={`py-3 rounded border text-xs font-bold ${
                                                         isHeld
-                                                            ? 'border-terminal-green bg-terminal-green/20 text-terminal-green'
+                                                            ? 'border-action-success bg-action-success/20 text-action-success'
                                                             : 'border-gray-700 bg-gray-900 text-gray-400'
                                                         }`}
                                                 >
@@ -183,7 +183,7 @@ export const VideoPokerView = React.memo<VideoPokerViewProps & { lastWin?: numbe
                                             onClick={() => handleToggleHold(n - 1)}
                                             className={`h-12 px-4 rounded border-2 font-bold text-sm tracking-widest uppercase font-mono transition-all ${
                                                 isHeld
-                                                    ? 'border-terminal-green bg-terminal-green/20 text-terminal-green'
+                                                    ? 'border-action-success bg-action-success/20 text-action-success'
                                                     : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'
                                             }`}
                                         >
@@ -201,7 +201,7 @@ export const VideoPokerView = React.memo<VideoPokerViewProps & { lastWin?: numbe
                                 ? actions?.deal
                                 : actions?.drawVideoPoker
                         }
-                        className="h-12 md:h-14 px-6 md:px-8 rounded border-2 font-bold text-sm md:text-base tracking-widest uppercase font-mono transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] border-terminal-green bg-terminal-green text-black hover:bg-white hover:border-white hover:scale-105 active:scale-95"
+                        className="h-12 md:h-14 px-6 md:px-8 rounded border-2 font-bold text-sm md:text-base tracking-widest uppercase font-mono transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] border-action-success bg-action-success text-black hover:bg-white hover:border-white hover:scale-105 active:scale-95"
                     >
                         <span className="ns-keycap ns-keycap-dark">⎵</span> {(gameState.stage === 'BETTING' || gameState.stage === 'RESULT') ? 'DEAL' : 'DRAW'}
                     </button>

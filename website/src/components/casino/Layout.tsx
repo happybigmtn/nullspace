@@ -42,152 +42,93 @@ export const Header: React.FC<HeaderProps> = ({
     playMode,
     children,
 }) => (
-    <header className="h-12 border-b-2 border-gray-700 flex items-center justify-between px-2 sm:px-4 z-10 bg-terminal-black/90 backdrop-blur">
-    <div className="flex items-center gap-2 sm:gap-4">
-        <span className="font-bold tracking-tighter text-white text-sm sm:text-base">null<span className="text-terminal-green">/</span>space</span>
-        <div className="hidden sm:flex items-center gap-2">
+    <header className="h-14 border-b border-titanium-200 flex items-center justify-between px-4 sm:px-6 z-10 bg-glass-light backdrop-blur-xl sticky top-0">
+    <div className="flex items-center gap-4 sm:gap-8">
+        <span className="font-bold tracking-tight text-titanium-900 text-lg">nullspace</span>
+        <div className="hidden lg:flex items-center gap-3">
             <button 
                 onClick={() => setFocusMode(!focusMode)}
-                className={`text-[10px] border px-1.5 py-0.5 rounded transition-colors ${focusMode ? 'bg-terminal-green text-black border-terminal-green' : 'text-gray-600 bg-gray-900 border-gray-800 hover:border-gray-600'}`}
+                className={`text-[11px] font-semibold px-3 py-1 rounded-full transition-all duration-200 border ${
+                    focusMode 
+                        ? 'bg-titanium-900 text-white border-titanium-900 shadow-sm' 
+                        : 'text-titanium-800 bg-white border-titanium-200 hover:border-titanium-400'
+                }`}
             >
-                {focusMode ? 'FOCUS ON' : 'FOCUS OFF'}
+                {focusMode ? 'Focus On' : 'Focus'}
             </button>
-            {onToggleTouchMode ? (
-                <button
-                    type="button"
-                    onClick={onToggleTouchMode}
-                    className={`text-[10px] border px-1.5 py-0.5 rounded transition-colors ${
-                        touchMode ? 'bg-terminal-green text-black border-terminal-green' : 'text-gray-600 bg-gray-900 border-gray-800 hover:border-gray-600'
-                    }`}
-                    title="Touch mode hides key hints"
-                >
-                    {touchMode ? 'TOUCH ON' : 'TOUCH OFF'}
-                </button>
-            ) : null}
             {onToggleSound ? (
                 <button
                     type="button"
                     onClick={onToggleSound}
-                    className={`text-[10px] border px-1.5 py-0.5 rounded transition-colors ${
-                        soundEnabled ? 'bg-terminal-green text-black border-terminal-green' : 'text-gray-600 bg-gray-900 border-gray-800 hover:border-gray-600'
+                    className={`text-[11px] font-semibold px-3 py-1 rounded-full transition-all duration-200 border ${
+                        soundEnabled 
+                            ? 'bg-white text-titanium-800 border-titanium-200 hover:border-titanium-400' 
+                            : 'bg-titanium-100 text-titanium-400 border-titanium-100'
                     }`}
-                    title="Sound effects"
                 >
-                    {soundEnabled ? 'SFX ON' : 'SFX OFF'}
-                </button>
-            ) : null}
-            {onToggleReducedMotion ? (
-                <button
-                    type="button"
-                    onClick={onToggleReducedMotion}
-                    className={`text-[10px] border px-1.5 py-0.5 rounded transition-colors ${
-                        reducedMotion ? 'bg-terminal-green text-black border-terminal-green' : 'text-gray-600 bg-gray-900 border-gray-800 hover:border-gray-600'
-                    }`}
-                    title="Reduce motion"
-                >
-                    {reducedMotion ? 'MOTION LOW' : 'MOTION FULL'}
+                    {soundEnabled ? 'Sound' : 'Muted'}
                 </button>
             ) : null}
             <NavLink
                 to="/security"
-                className="text-[10px] border px-1.5 py-0.5 rounded transition-colors text-gray-300 bg-gray-900 border-gray-800 hover:border-gray-600 hover:text-white"
+                className="text-[11px] font-semibold px-3 py-1 rounded-full transition-all duration-200 border text-titanium-800 bg-white border-titanium-200 hover:border-titanium-400"
             >
-                PASSKEY
+                Security
             </NavLink>
-            {onToggleHelp ? (
+            {onToggleHelp && (
                 <button
                     type="button"
                     onClick={onToggleHelp}
-                    className="text-[10px] border px-1.5 py-0.5 rounded transition-colors text-gray-300 bg-gray-900 border-gray-800 hover:border-gray-600 hover:text-white"
-                    title="Help (shortcut: ?)"
+                    className="text-[11px] font-semibold px-3 py-1 rounded-full transition-all duration-200 border text-titanium-800 bg-white border-titanium-200 hover:border-titanium-400"
                 >
-                    <span className="text-gray-600">[?]</span> HELP
+                    Help
                 </button>
-            ) : (
-                <span className="text-[10px] text-gray-600 bg-gray-900 border border-gray-800 px-1.5 py-0.5 rounded">
-                    [?] HELP
-                </span>
             )}
         </div>
     </div>
-    <div className="flex items-center gap-2 sm:gap-4 md:gap-6 text-xs sm:text-sm">
+    <div className="flex items-center gap-4 sm:gap-6 text-sm">
             {showTimer && (
-                <div className="flex items-center gap-1 sm:gap-2">
-                    <span className="text-gray-500 hidden sm:inline">TIMER</span>
-                    <span className={`font-bold ${tournamentTime < 60 ? 'text-terminal-accent animate-pulse' : 'text-white'}`}>{formatTime(tournamentTime)}</span>
+                <div className="flex items-center gap-2 px-3 py-1 bg-titanium-100 rounded-full border border-titanium-200">
+                    <span className="text-titanium-400 text-[10px] font-bold tracking-widest uppercase">Timer</span>
+                    <span className={`font-mono font-bold tabular-nums ${tournamentTime < 60 ? 'text-action-destructive animate-pulse' : 'text-titanium-900'}`}>{formatTime(tournamentTime)}</span>
                 </div>
             )}
-            {/* Desktop shields/doubles/aura - hidden in CASH mode */}
+            
             {playMode !== 'CASH' && (
-                <>
-                    <div className="hidden sm:flex items-center gap-2">
-                        <span className="text-gray-500">SHIELDS</span>
-                        <div className="flex gap-1">
+                <div className="hidden md:flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                        <span className="text-titanium-400 text-[10px] font-bold tracking-widest uppercase">Shields</span>
+                        <div className="flex gap-1.5">
                             {[...Array(3)].map((_, i) => (
-                                <div key={i} className={`w-2 h-2 rounded-full ${i < stats.shields ? 'bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.8)]' : 'bg-gray-800'}`} />
+                                <div key={i} className={`w-2 h-2 rounded-full transition-colors ${i < stats.shields ? 'bg-action-primary shadow-sm' : 'bg-titanium-200'}`} />
                             ))}
                         </div>
                     </div>
-                    <div className="hidden sm:flex items-center gap-2">
-                        <span className="text-gray-500">DOUBLES</span>
-                        <div className="flex gap-1">
-                            {[...Array(3)].map((_, i) => (
-                                <div key={i} className={`w-2 h-2 rounded-full ${i < stats.doubles ? 'bg-purple-400 shadow-[0_0_8px_rgba(192,132,252,0.8)]' : 'bg-gray-800'}`} />
-                            ))}
-                        </div>
-                    </div>
-                    <div className="hidden sm:flex items-center gap-2">
-                        <span className="text-gray-500">AURA</span>
-                        <div className="flex gap-1 items-center">
+                    <div className="flex items-center gap-2">
+                        <span className="text-titanium-400 text-[10px] font-bold tracking-widest uppercase">Aura</span>
+                        <div className="flex gap-1 items-center h-3">
                             {[...Array(5)].map((_, i) => (
                                 <div
                                     key={i}
-                                    className={`w-2 h-4 rounded-sm transition-all duration-300 ${
+                                    className={`w-1.5 h-full rounded-full transition-all duration-300 ${
                                         i < (stats.auraMeter ?? 0)
-                                            ? 'bg-terminal-gold shadow-[0_0_8px_rgba(255,215,0,0.6)]'
-                                            : 'bg-terminal-gold/20'
+                                            ? 'bg-action-success'
+                                            : 'bg-titanium-200'
                                     }`}
                                 />
                             ))}
-                            {(stats.auraMeter ?? 0) >= 5 && (
-                                <span className="text-[10px] text-terminal-gold animate-pulse ml-1 font-bold">
-                                    SUPER!
-                                </span>
-                            )}
                         </div>
-                    </div>
-                </>
-            )}
-            {/* Mobile: Compact shields/doubles/aura indicator - hidden in CASH mode */}
-            {playMode !== 'CASH' && (
-                <div className="flex sm:hidden items-center gap-1">
-                    <div className="flex gap-0.5">
-                        {[...Array(3)].map((_, i) => (
-                            <div key={i} className={`w-1.5 h-1.5 rounded-full ${i < stats.shields ? 'bg-cyan-400' : 'bg-gray-800'}`} />
-                        ))}
-                    </div>
-                    <div className="flex gap-0.5">
-                        {[...Array(3)].map((_, i) => (
-                            <div key={i} className={`w-1.5 h-1.5 rounded-full ${i < stats.doubles ? 'bg-purple-400' : 'bg-gray-800'}`} />
-                        ))}
-                    </div>
-                    <div className="flex gap-0.5 items-center">
-                        {[...Array(5)].map((_, i) => (
-                            <div
-                                key={i}
-                                className={`w-1.5 h-3 rounded-sm transition-all duration-300 ${
-                                    i < (stats.auraMeter ?? 0)
-                                        ? 'bg-terminal-gold shadow-[0_0_4px_rgba(255,215,0,0.5)]'
-                                        : 'bg-terminal-gold/20'
-                                }`}
-                            />
-                        ))}
                     </div>
                 </div>
             )}
-            <div className="flex items-center gap-1 sm:gap-2">
-                <span className="text-gray-500 hidden sm:inline">CHIPS</span>
-                <span className="text-white font-bold text-sm sm:text-lg">${stats.chips.toLocaleString()}</span>
+
+            <div className="flex items-center gap-3">
+                <div className="flex flex-col items-end">
+                    <span className="text-titanium-400 text-[9px] font-bold tracking-widest uppercase leading-none mb-0.5">Balance</span>
+                    <span className="text-titanium-900 font-bold text-base sm:text-lg tracking-tight tabular-nums leading-none">
+                        ${stats.chips.toLocaleString()}
+                    </span>
+                </div>
             </div>
             {children}
     </div>
@@ -195,25 +136,24 @@ export const Header: React.FC<HeaderProps> = ({
 );;
 
 export const TournamentAlert: React.FC<{ tournamentTime: number }> = ({ tournamentTime }) => {
-    // 60s warning (display for 3s), 30s warning (display for 3s), 5s countdown
     if (tournamentTime === 60 || tournamentTime === 59 || tournamentTime === 58) {
         return (
-            <div className="absolute top-12 left-0 right-0 bg-terminal-accent/20 border-b border-terminal-accent/50 text-terminal-accent text-center font-bold py-1 z-50 animate-pulse">
-                WARNING: 1 MINUTE REMAINING
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-action-destructive text-white px-6 py-2 rounded-full font-bold text-xs tracking-widest uppercase shadow-lg z-50 animate-bounce">
+                One minute remaining
             </div>
         );
     }
     if (tournamentTime === 30 || tournamentTime === 29 || tournamentTime === 28) {
         return (
-            <div className="absolute top-12 left-0 right-0 bg-terminal-accent/20 border-b border-terminal-accent/50 text-terminal-accent text-center font-bold py-1 z-50 animate-pulse">
-                WARNING: 30 SECONDS REMAINING
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-action-destructive text-white px-6 py-2 rounded-full font-bold text-xs tracking-widest uppercase shadow-lg z-50 animate-bounce">
+                30 seconds left
             </div>
         );
     }
     if (tournamentTime <= 5 && tournamentTime > 0) {
         return (
-             <div className="absolute inset-0 z-50 flex items-center justify-center pointer-events-none">
-                 <div className="text-[10rem] font-bold text-terminal-accent opacity-50 animate-ping">
+             <div className="absolute inset-0 z-50 flex items-center justify-center pointer-events-none bg-white/20 backdrop-blur-sm">
+                 <div className="text-[12rem] font-light text-action-destructive opacity-80 animate-scale-in tabular-nums">
                      {tournamentTime}
                  </div>
              </div>
@@ -222,23 +162,9 @@ export const TournamentAlert: React.FC<{ tournamentTime: number }> = ({ tourname
     return null;
 };
 
-interface SidebarProps {
-    leaderboard: LeaderboardEntry[];
-    history: string[];
-    viewMode?: 'RANK' | 'PAYOUT';
-    currentChips?: number;
-    prizePool?: number;
-    totalPlayers?: number;
-    winnersPct?: number;
-    gameType?: GameType;
-    crapsEventLog?: CrapsEventLog[];
-    resolvedBets?: ResolvedBet[];
-    resolvedBetsKey?: number;
-}
-
 export const Sidebar: React.FC<SidebarProps> = ({ leaderboard, history, viewMode = 'RANK', currentChips, prizePool, totalPlayers, winnersPct = 0.15, gameType, crapsEventLog = [], resolvedBets = [], resolvedBetsKey = 0 }) => {
     const effectivePlayerCount = totalPlayers ?? leaderboard.length;
-    const bubbleIndex = Math.max(1, Math.min(effectivePlayerCount, Math.ceil(effectivePlayerCount * winnersPct))); // Top 15% by default
+    const bubbleIndex = Math.max(1, Math.min(effectivePlayerCount, Math.ceil(effectivePlayerCount * winnersPct)));
     const userEntry = leaderboard.find(e => e.name === 'YOU' || e.name.includes('(YOU)'));
     const isCraps = gameType === GameType.CRAPS;
     const resolvedEntries = resolvedBets.filter((bet) => bet && bet.label);
@@ -246,11 +172,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ leaderboard, history, viewMode
     const getPayout = (rank: number) => {
         if (!prizePool || effectivePlayerCount <= 0) return "$0";
         if (rank > bubbleIndex) return "$0";
-
         let totalWeight = 0;
-        for (let i = 1; i <= bubbleIndex; i++) {
-            totalWeight += 1 / i;
-        }
+        for (let i = 1; i <= bubbleIndex; i++) totalWeight += 1 / i;
         const payout = Math.floor(((1 / rank) / totalWeight) * prizePool);
         return `$${payout.toLocaleString()}`;
     };
@@ -260,26 +183,33 @@ export const Sidebar: React.FC<SidebarProps> = ({ leaderboard, history, viewMode
         if (isSticky) {
             rank = leaderboard.findIndex(e => e.name === entry.name) + 1;
         }
-
         const isUser = entry.name === 'YOU' || entry.name.includes('(YOU)');
         const isMoneyCutoff = rank === bubbleIndex;
-        // Use real-time chips for the user to update instantly
         const displayChips = isUser && currentChips !== undefined ? currentChips : entry.chips;
 
         return (
             <React.Fragment key={isSticky ? 'sticky-you' : i}>
-                <div className={`flex justify-between items-center text-sm ${isSticky ? 'bg-terminal-dim/50 -mx-2 px-2 py-1 rounded border-l-2 border-terminal-green' : ''}`}>
-                    <div className="flex gap-2">
-                        <span className="text-gray-600 font-mono w-6 text-right">{rank}</span>
-                        <span className={isUser ? 'text-white font-bold' : 'text-gray-400'}>{entry.name}</span>
+                <div className={`flex justify-between items-center py-2 px-3 rounded-xl transition-colors ${
+                    isSticky 
+                        ? 'bg-titanium-900 text-white shadow-lg' 
+                        : isUser ? 'bg-titanium-100 text-titanium-900' : 'text-titanium-800'
+                }`}>
+                    <div className="flex items-center gap-3">
+                        <span className={`text-[10px] font-bold font-mono w-4 text-center ${isSticky ? 'text-titanium-400' : 'text-titanium-300'}`}>{rank}</span>
+                        <span className={`text-sm font-medium ${isSticky ? 'text-white' : 'text-titanium-800'}`}>{entry.name}</span>
                     </div>
-                    <span className={viewMode === 'PAYOUT' && rank <= bubbleIndex ? 'text-terminal-gold' : 'text-terminal-green text-xs'}>
+                    <span className={`text-sm font-bold tabular-nums ${
+                        isSticky ? 'text-white' : 
+                        viewMode === 'PAYOUT' && rank <= bubbleIndex ? 'text-action-success' : 'text-titanium-900'
+                    }`}>
                         {viewMode === 'RANK' ? `$${Math.floor(displayChips).toLocaleString()}` : getPayout(rank)}
                     </span>
                 </div>
                 {!isSticky && isMoneyCutoff && (
-                    <div className="border-b border-dashed border-terminal-accent my-2 py-1 text-[10px] text-terminal-accent text-center tracking-widest opacity-75">
-                        IN THE MONEY // CUTOFF
+                    <div className="border-b border-titanium-200 my-3 relative h-px">
+                        <span className="absolute left-1/2 -top-2 -translate-x-1/2 bg-white px-2 text-[9px] font-bold text-titanium-400 tracking-widest uppercase">
+                            Money Line
+                        </span>
                     </div>
                 )}
             </React.Fragment>
@@ -287,29 +217,24 @@ export const Sidebar: React.FC<SidebarProps> = ({ leaderboard, history, viewMode
     };
 
     const renderLogEntry = (entry: string, key: number) => {
-        const lines = entry
-            .split('\n')
-            .map(line => line.trim())
-            .filter(line => line.length > 0);
+        const lines = entry.split('\n').map(l => l.trim()).filter(l => l.length > 0);
         if (lines.length === 0) return null;
 
         const pnlIndex = lines.findIndex((line, idx) => idx > 0 && /^[+-]\$/.test(line));
         const pnlLine = pnlIndex > 0 ? lines[pnlIndex] : null;
-        const pnlClass = pnlLine?.startsWith('+$') ? 'text-terminal-green' : 'text-terminal-accent';
-        const detailLines = lines
-            .slice(1)
-            .filter((_, idx) => (pnlIndex < 0 ? true : idx + 1 !== pnlIndex));
+        const pnlClass = pnlLine?.startsWith('+$') ? 'text-action-success' : 'text-action-destructive';
+        const detailLines = lines.slice(1).filter((_, idx) => (pnlIndex < 0 ? true : idx + 1 !== pnlIndex));
 
         return (
-            <div key={key} className="flex flex-col gap-0.5">
-                <div className="text-gray-300">&gt; {lines[0]}</div>
+            <div key={key} className="flex flex-col gap-1 py-2 border-b border-titanium-100 last:border-0">
+                <div className="text-xs font-semibold text-titanium-800 leading-tight">{lines[0]}</div>
                 {pnlLine && (
-                    <div className={`${pnlClass} pl-4 font-semibold`}>
+                    <div className={`${pnlClass} text-xs font-bold tabular-nums`}>
                         {pnlLine}
                     </div>
                 )}
                 {detailLines.map((line, i) => (
-                    <div key={i} className="text-[10px] text-gray-500 pl-4">
+                    <div key={i} className="text-[10px] text-titanium-400 leading-snug">
                         {line}
                     </div>
                 ))}
@@ -318,72 +243,70 @@ export const Sidebar: React.FC<SidebarProps> = ({ leaderboard, history, viewMode
     };
 
     const renderResolvedBet = (bet: ResolvedBet, idx: number) => {
-        const pnlLabel = formatPnlLabel(bet.pnl);
         const isWin = bet.pnl > 0;
         const isLoss = bet.pnl < 0;
-        const pnlText = pnlLabel || 'PUSH';
-        const pnlClass = isWin ? 'text-terminal-green' : isLoss ? 'text-terminal-accent' : 'text-gray-500';
-        const flashClass = isWin ? 'bet-flash-win' : isLoss ? 'bet-flash-loss' : 'bet-flash-push';
+        const pnlText = formatPnlLabel(bet.pnl) || 'PUSH';
+        const pnlClass = isWin ? 'text-action-success' : isLoss ? 'text-action-destructive' : 'text-titanium-400';
 
         return (
             <div
                 key={`${resolvedBetsKey}-${bet.id}-${idx}`}
-                className={`rounded border border-gray-800 bg-black/40 px-2 py-1 flex flex-col gap-0.5 ${flashClass}`}
+                className="bg-white border border-titanium-200 rounded-xl px-3 py-2 flex items-center justify-between shadow-soft"
             >
-                <div className="text-[11px] text-gray-200 font-mono">{bet.label}</div>
-                <div className={`text-[10px] font-mono ${pnlClass}`}>{pnlText}</div>
+                <span className="text-[11px] font-bold text-titanium-800 uppercase tracking-tight truncate mr-2">{bet.label}</span>
+                <span className={`text-[11px] font-bold tabular-nums ${pnlClass}`}>{pnlText}</span>
             </div>
         );
     };
 
     return (
-        <aside className="w-64 border-l-2 border-gray-700 bg-terminal-black/50 hidden lg:flex flex-col">
+        <aside className="w-72 border-l border-titanium-200 bg-white hidden lg:flex flex-col">
             {/* Live Feed Header */}
-            <div className="p-4 pb-2 flex-none">
-                <div className="flex justify-between items-center mb-2">
-                    <h3 className="text-xs font-bold text-gray-500 tracking-widest">{viewMode === 'RANK' ? 'LIVE FEED' : 'PAYOUT PROJECTION'}</h3>
-                    <span className="text-[9px] text-gray-600 border border-gray-800 px-1 rounded">[L] TOGGLE</span>
+            <div className="px-6 pt-6 pb-4 flex-none">
+                <div className="flex justify-between items-center">
+                    <h3 className="text-[10px] font-bold text-titanium-400 tracking-widest uppercase">{viewMode === 'RANK' ? 'Live Feed' : 'Payouts'}</h3>
+                    <button onClick={() => {}} className="text-[9px] font-bold text-titanium-400 bg-titanium-100 px-2 py-0.5 rounded-full hover:bg-titanium-200 transition-colors">
+                        Toggle [L]
+                    </button>
                 </div>
             </div>
 
-            {/* Fixed User Row (Pinned to Top) */}
+            {/* Fixed User Row */}
             {userEntry && (
-                <div className="flex-none px-4 py-2 border-b border-terminal-dim bg-terminal-black/80 z-10 shadow-[0_5px_15px_rgba(0,0,0,0.5)]">
+                <div className="flex-none px-4 pb-4">
                      {renderEntry(userEntry, 0, true)}
                 </div>
             )}
 
-            {/* Scrollable Leaderboard - takes half space when craps, full otherwise */}
-            <div className={`overflow-y-auto px-4 py-2 space-y-2 min-h-0 ${isCraps ? 'flex-1' : 'flex-1'}`}>
+            {/* Scrollable Leaderboard */}
+            <div className="overflow-y-auto px-4 space-y-1.5 flex-1 min-h-0">
                 {leaderboard.map((entry, i) => renderEntry(entry, i, false))}
             </div>
 
             {resolvedEntries.length > 0 && (
-                <div className="flex-none border-t-2 border-gray-700 p-3 bg-terminal-black/40">
-                    <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-2 text-center">
-                        Resolved Bets
+                <div className="flex-none p-4 bg-titanium-50 border-t border-titanium-200">
+                    <div className="text-[9px] font-bold text-titanium-400 uppercase tracking-widest mb-3 text-center">
+                        Last Resolved
                     </div>
-                    <div className="flex flex-col gap-1">
-                        {resolvedEntries.slice(0, 8).map((bet, i) => renderResolvedBet(bet, i))}
+                    <div className="flex flex-col gap-2">
+                        {resolvedEntries.slice(0, 5).map((bet, i) => renderResolvedBet(bet, i))}
                     </div>
                 </div>
             )}
 
-            {/* Logs Area - shows craps roll log when playing craps */}
-            <div className="flex-1 border-t-2 border-gray-700 p-4 bg-terminal-black/30 flex flex-col min-h-0">
-                <h3 className="text-sm font-bold text-gray-500 mb-2 tracking-widest flex-none">
-                    {isCraps ? 'ROLL LOG' : 'LOG'}
+            {/* Logs Area */}
+            <div className="flex-1 border-t border-titanium-200 p-6 bg-white flex flex-col min-h-0">
+                <h3 className="text-[10px] font-bold text-titanium-400 uppercase tracking-widest mb-4 flex-none">
+                    {isCraps ? 'Roll Log' : 'History'}
                 </h3>
-                <div className="flex-1 overflow-y-auto flex flex-col gap-1 text-sm font-mono scrollbar-thin min-h-0">
+                <div className="flex-1 overflow-y-auto flex flex-col scrollbar-hide min-h-0">
                     {isCraps ? (
                         crapsEventLog.length === 0 ? (
-                            <div className="text-gray-600 text-xs">NO ROLLS YET</div>
+                            <div className="text-titanium-300 text-xs italic">No rolls recorded.</div>
                         ) : (
                             [...crapsEventLog].reverse().slice(0, 20).map((event, i) => {
                                 const diceLabel = event.dice?.length === 2 ? ` (${event.dice.join('-')})` : '';
-                                const summary = formatSummaryLine(`Roll: ${event.total}${diceLabel}`);
-                                const details = prependPnlLine([], event.pnl);
-                                const entry = buildHistoryEntry(summary, details);
+                                const entry = buildHistoryEntry(formatSummaryLine(`Roll: ${event.total}${diceLabel}`), prependPnlLine([], event.pnl));
                                 return renderLogEntry(entry, i);
                             })
                         )
@@ -401,17 +324,24 @@ export const Footer: React.FC<{ currentBet?: number }> = ({ currentBet }) => {
     const isCustom = currentBet && !bets.includes(currentBet);
 
     return (
-        <footer className="hidden lg:flex fixed bottom-0 left-0 right-0 lg:right-64 border-t-2 border-gray-700 bg-terminal-black/95 text-[10px] sm:text-xs text-gray-600 pt-1 pb-[calc(0.25rem+env(safe-area-inset-bottom))] px-2 sm:px-4 flex-wrap justify-center gap-2 sm:gap-4 md:gap-6 z-20">
+        <footer className="hidden lg:flex fixed bottom-0 left-0 right-0 lg:right-72 border-t border-titanium-200 bg-glass-light backdrop-blur-xl h-10 items-center justify-center gap-6 px-6 z-20">
+            <span className="text-[9px] font-bold text-titanium-400 tracking-widest uppercase mr-2">Quick Bet Keys</span>
             {bets.map((bet, i) => {
-                const label = bet >= 1000 ? `${bet/1000}K` : `$${bet}`;
+                const label = bet >= 1000 ? `${bet/1000}k` : `$${bet}`;
                 const isSelected = currentBet === bet;
                 return (
-                    <span key={i} className={`whitespace-nowrap ${isSelected ? 'text-terminal-green font-bold' : ''}`}>
-                        ^{i + 1} {label}
-                    </span>
+                    <div key={i} className="flex items-center gap-1.5">
+                        <span className="text-titanium-300 text-[10px] font-mono">^{i + 1}</span>
+                        <span className={`text-[11px] font-bold tabular-nums transition-colors ${isSelected ? 'text-action-primary' : 'text-titanium-800'}`}>
+                            {label}
+                        </span>
+                    </div>
                 );
             })}
-            <span className={`whitespace-nowrap ${isCustom ? 'text-terminal-green font-bold' : ''}`}>^0 CUSTOM</span>
+            <div className="flex items-center gap-1.5 ml-4">
+                <span className="text-titanium-300 text-[10px] font-mono">^0</span>
+                <span className={`text-[11px] font-bold transition-colors ${isCustom ? 'text-action-primary' : 'text-titanium-800'}`}>Custom</span>
+            </div>
         </footer>
     );
 };
@@ -428,48 +358,45 @@ interface CommandPaletteProps {
 
 export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, searchQuery, onSearchChange, sortedGames, onSelectGame, inputRef, onClose }) => {
     if (!isOpen) return null;
-
     const filtered = sortedGames.filter(g => g.toLowerCase().includes(searchQuery.toLowerCase()));
 
     return (
         <div
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-start justify-center pt-16 sm:pt-32 px-4"
+            className="fixed inset-0 bg-titanium-900/40 backdrop-blur-md z-[100] flex items-start justify-center pt-24 px-4"
             onClick={onClose}
         >
             <div
-                className="w-full max-w-[600px] bg-terminal-black border border-terminal-dim rounded shadow-2xl overflow-hidden flex flex-col max-h-[70vh] sm:max-h-[500px]"
+                className="w-full max-w-[640px] bg-white rounded-3xl shadow-float overflow-hidden flex flex-col border border-titanium-200 max-h-[60vh]"
                 onClick={(e) => e.stopPropagation()}
             >
-                <div className="p-3 sm:p-4 border-b border-terminal-dim flex items-center gap-2">
-                    <span className="text-terminal-green font-bold">&gt;</span>
+                <div className="px-6 py-5 border-b border-titanium-100 flex items-center gap-4">
                     <input
                         ref={inputRef}
                         type="text"
                         value={searchQuery}
                         onChange={(e) => onSearchChange(e.target.value)}
-                        className="flex-1 bg-transparent outline-none text-white placeholder-gray-700 uppercase text-sm sm:text-base"
-                        placeholder="TYPE COMMAND OR GAME NAME..."
+                        className="flex-1 bg-transparent outline-none text-titanium-900 placeholder-titanium-300 font-medium text-lg"
+                        placeholder="Search games..."
                         autoFocus
                     />
+                    <div className="text-[10px] font-bold text-titanium-400 bg-titanium-100 px-2 py-1 rounded-md uppercase tracking-widest">Esc to close</div>
                 </div>
-                <div className="flex-1 overflow-y-auto p-2">
+                <div className="flex-1 overflow-y-auto py-2 scrollbar-hide">
                     {filtered.map((game, i) => (
                         <div
                             key={game}
                             onClick={() => onSelectGame(game)}
-                            className="flex items-center gap-3 p-2 hover:bg-terminal-dim cursor-pointer rounded group text-sm sm:text-base"
+                            className="flex items-center justify-between px-6 py-3.5 hover:bg-titanium-50 cursor-pointer group transition-colors"
                         >
-                            <span className="text-gray-600 font-mono w-6 text-right group-hover:text-terminal-green">{i < 9 ? i + 1 : i === 9 ? 0 : ''}</span>
-                            <span className="text-gray-400 group-hover:text-white">{game}</span>
+                            <span className="text-titanium-800 font-semibold text-base group-hover:text-action-primary">{game}</span>
+                            <span className="text-titanium-300 font-mono text-xs opacity-0 group-hover:opacity-100 transition-opacity">
+                                Enter to play
+                            </span>
                         </div>
                     ))}
                     {filtered.length === 0 && (
-                        <div className="p-4 text-gray-600 text-center italic">NO RESULTS FOUND</div>
+                        <div className="px-6 py-8 text-titanium-400 text-center italic font-medium">No games match your search.</div>
                     )}
-                </div>
-                <div className="p-2 border-t border-terminal-dim bg-terminal-black/50 text-[10px] text-gray-600 flex justify-between">
-                     <span>[ENTER] SELECT</span>
-                     <span>[ESC] CLOSE</span>
                 </div>
             </div>
         </div>
@@ -480,24 +407,26 @@ export const CustomBetOverlay: React.FC<{ isOpen: boolean; betString: string; in
     if (!isOpen) return null;
 
     return (
-         <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center px-4">
-             <div className="bg-terminal-black border border-terminal-green p-4 sm:p-8 rounded shadow-xl flex flex-col items-center gap-3 sm:gap-4 w-full max-w-sm">
-                 <div className="text-xs sm:text-sm tracking-widest text-gray-400">ENTER CUSTOM BET AMOUNT</div>
-                 <div className="flex items-center gap-1 text-2xl sm:text-4xl text-terminal-gold font-bold">
-                     <span>$</span>
+         <div className="fixed inset-0 bg-titanium-900/60 backdrop-blur-lg z-[100] flex items-center justify-center px-4">
+             <div className="bg-white rounded-[40px] p-10 shadow-float flex flex-col items-center gap-6 w-full max-w-sm border border-titanium-200">
+                 <div className="text-[10px] font-bold tracking-[0.2em] text-titanium-400 uppercase">Set Custom Bet</div>
+                 <div className="flex items-center text-6xl text-titanium-900 font-bold tracking-tighter">
+                     <span className="text-titanium-200">$</span>
                      <input
                         ref={inputRef}
                         type="text"
                         value={betString}
                         readOnly
-                        className="bg-transparent outline-none w-32 sm:w-48 text-center"
+                        className="bg-transparent outline-none text-center w-full"
                      />
-                     <span className="animate-pulse bg-terminal-green w-2 sm:w-3 h-6 sm:h-8 block"></span>
                  </div>
-                 <div className="text-[10px] sm:text-xs text-gray-600 mt-2 sm:mt-4 flex flex-wrap justify-center gap-2 sm:gap-4">
-                     <span>[0-9] TYPE</span>
-                     <span>[ENTER] CONFIRM</span>
-                     <span>[ESC] CANCEL</span>
+                 <div className="flex flex-col gap-3 w-full">
+                    <div className="h-1 bg-titanium-100 rounded-full w-full overflow-hidden">
+                        <div className="h-full bg-action-primary w-1/3 animate-pulse" />
+                    </div>
+                    <div className="text-[10px] font-medium text-titanium-400 text-center uppercase tracking-widest mt-2">
+                        Use number keys to type
+                    </div>
                  </div>
              </div>
          </div>
@@ -514,194 +443,108 @@ interface HelpOverlayProps {
 export const HelpOverlay: React.FC<HelpOverlayProps> = ({ isOpen, onClose, gameType, detail }) => {
     if (!isOpen) return null;
     
-    // Check if we have detailed content to show
-    if (detail) {
+    const renderHelpDetail = (detailKey: string) => {
         const gameHelp = HELP_CONTENT[gameType];
-        const detailInfo = gameHelp ? gameHelp[detail] : null;
+        const detailInfo = gameHelp ? gameHelp[detailKey] : null;
+        if (!detailInfo) return null;
 
-        if (detailInfo) {
-             return (
-                <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-8">
-                    <div className="bg-terminal-black border border-terminal-accent rounded-lg shadow-2xl max-w-lg w-full flex flex-col max-h-[90vh] overflow-y-auto">
-                        <div className="p-4 sm:p-6 border-b border-terminal-dim bg-terminal-dim/20">
-                             <div className="text-[10px] sm:text-xs text-terminal-green mb-2 font-bold">[ {detail.toUpperCase()} ] COMMAND DETAIL</div>
-                             <h2 className="text-lg sm:text-xl font-bold text-white tracking-widest">{detailInfo.title}</h2>
+        return (
+            <div className="fixed inset-0 bg-titanium-900/40 backdrop-blur-md z-[110] flex items-center justify-center p-6">
+                <div className="bg-white rounded-3xl shadow-float max-w-md w-full flex flex-col border border-titanium-200 overflow-hidden">
+                    <div className="p-8 border-b border-titanium-100 bg-titanium-50">
+                         <div className="text-[10px] font-bold text-action-primary mb-3 uppercase tracking-[0.2em]">Rule Detail</div>
+                         <h2 className="text-2xl font-bold text-titanium-900 tracking-tight">{detailInfo.title}</h2>
+                    </div>
+                    <div className="p-8 space-y-8">
+                        <div>
+                            <h4 className="text-action-success font-bold text-[10px] uppercase tracking-widest mb-2">Win</h4>
+                            <p className="text-sm text-titanium-800 font-medium leading-relaxed">{detailInfo.win}</p>
                         </div>
-                        <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
-                            <div>
-                                <h4 className="text-terminal-green font-bold text-[10px] sm:text-xs mb-1">WIN CONDITION</h4>
-                                <p className="text-xs sm:text-sm text-gray-300">{detailInfo.win}</p>
-                            </div>
-                            <div>
-                                <h4 className="text-terminal-accent font-bold text-[10px] sm:text-xs mb-1">LOSS CONDITION</h4>
-                                <p className="text-xs sm:text-sm text-gray-300">{detailInfo.loss}</p>
-                            </div>
-                            <div className="bg-gray-900 p-2 sm:p-3 rounded border border-gray-800">
-                                <h4 className="text-gray-500 font-bold text-[10px] mb-1">EXAMPLE</h4>
-                                <p className="text-[10px] sm:text-xs text-gray-400 font-mono">{detailInfo.example}</p>
-                            </div>
+                        <div>
+                            <h4 className="text-action-destructive font-bold text-[10px] uppercase tracking-widest mb-2">Loss</h4>
+                            <p className="text-sm text-titanium-800 font-medium leading-relaxed">{detailInfo.loss}</p>
                         </div>
-                        <div className="p-3 sm:p-4 border-t border-terminal-dim text-center">
-                            <span className="text-[10px] sm:text-xs text-gray-500">[ESC] BACK</span>
+                        <div className="bg-titanium-50 p-4 rounded-2xl border border-titanium-100">
+                            <h4 className="text-titanium-400 font-bold text-[10px] uppercase tracking-widest mb-2">Example</h4>
+                            <p className="text-xs text-titanium-600 font-mono leading-relaxed">{detailInfo.example}</p>
                         </div>
                     </div>
+                    <button onClick={onClose} className="p-4 text-center text-xs font-bold text-titanium-400 uppercase tracking-widest border-t border-titanium-100 hover:bg-titanium-50 transition-colors">
+                        Close
+                    </button>
                 </div>
-             );
-        }
-    }
+            </div>
+        );
+    };
 
-    // Help content based on GameType
-    const renderHelpContent = () => {
+    if (detail) return renderHelpDetail(detail);
+
+    const renderGridItems = (items: {key: string, label: string}[]) => (
+        <div className="grid grid-cols-2 gap-4">
+            {items.map(item => (
+                <div key={item.key} className="flex items-center gap-3">
+                    <span className="w-8 h-8 flex items-center justify-center bg-titanium-900 text-white rounded-lg font-bold text-xs shadow-sm">{item.key}</span>
+                    <span className="text-sm font-semibold text-titanium-800 uppercase tracking-tight">{item.label}</span>
+                </div>
+            ))}
+        </div>
+    );
+
+    const getContent = () => {
         switch(gameType) {
             case GameType.BLACKJACK:
-                return (
-                    <div className="space-y-4">
-                        <h3 className="text-terminal-green font-bold border-b border-terminal-dim pb-1">BLACKJACK CONTROLS</h3>
-                        <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm text-gray-300">
-                            <div><span className="text-white font-bold w-6 inline-block">[H]</span> HIT</div>
-                            <div><span className="text-white font-bold w-6 inline-block">[S]</span> STAND</div>
-                            <div><span className="text-white font-bold w-6 inline-block">[D]</span> DOUBLE</div>
-                            <div><span className="text-white font-bold w-6 inline-block">[P]</span> SPLIT</div>
-                            <div><span className="text-white font-bold w-6 inline-block">[I]</span> INSURANCE</div>
-                        </div>
-                    </div>
-                );
-            case GameType.CRAPS:
-                return (
-                    <div className="space-y-4">
-                        <h3 className="text-terminal-green font-bold border-b border-terminal-dim pb-1">CRAPS CONTROLS</h3>
-                        <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm text-gray-300">
-                            <div><span className="text-white font-bold w-6 inline-block">[P]</span> PASS / COME</div>
-                            <div><span className="text-white font-bold w-6 inline-block">[D]</span> DONT PASS / DONT COME</div>
-                            <div><span className="text-white font-bold w-6 inline-block">[F]</span> FIELD BET</div>
-                            <div><span className="text-white font-bold w-6 inline-block">[O]</span> ADD ODDS</div>
-                            <div><span className="text-white font-bold w-6 inline-block">[H]</span> HARDWAYS MENU</div>
-                            <div><span className="text-white font-bold w-6 inline-block">[Y]</span> YES MENU</div>
-                            <div><span className="text-white font-bold w-6 inline-block">[N]</span> NO MENU</div>
-                            <div><span className="text-white font-bold w-6 inline-block">[X]</span> NEXT ROLL MENU</div>
-                            <div><span className="text-white font-bold w-6 inline-block">[U]</span> UNDO BET</div>
-                            <div><span className="text-white font-bold w-20 inline-block">[SPACE]</span> ROLL DICE</div>
-                        </div>
-                    </div>
-                );
+                return renderGridItems([
+                    {key: 'H', label: 'Hit'}, {key: 'S', label: 'Stand'},
+                    {key: 'D', label: 'Double'}, {key: 'P', label: 'Split'},
+                    {key: 'I', label: 'Insure'}
+                ]);
             case GameType.ROULETTE:
-                return (
-                    <div className="space-y-4">
-                        <h3 className="text-terminal-green font-bold border-b border-terminal-dim pb-1">ROULETTE CONTROLS</h3>
-                        <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm text-gray-300">
-                            <div><span className="text-white font-bold w-6 inline-block">[R]</span> RED</div>
-                            <div><span className="text-white font-bold w-6 inline-block">[B]</span> BLACK</div>
-                            <div><span className="text-white font-bold w-6 inline-block">[E]</span> EVEN</div>
-                            <div><span className="text-white font-bold w-6 inline-block">[O]</span> ODD</div>
-                            <div><span className="text-white font-bold w-6 inline-block">[L]</span> LOW (1-18)</div>
-                            <div><span className="text-white font-bold w-6 inline-block">[H]</span> HIGH (19-36)</div>
-                            <div><span className="text-white font-bold w-6 inline-block">[0]</span> ZERO</div>
-                            <div><span className="text-white font-bold w-6 inline-block">[N]</span> SPECIFIC NUMBER</div>
-                            <div><span className="text-white font-bold w-6 inline-block">[T]</span> REBET</div>
-                            <div><span className="text-white font-bold w-6 inline-block">[U]</span> UNDO BET</div>
-                            <div><span className="text-white font-bold w-20 inline-block">[SPACE]</span> SPIN WHEEL</div>
-                        </div>
-                    </div>
-                );
-             case GameType.SIC_BO:
-                return (
-                    <div className="space-y-4">
-                        <h3 className="text-terminal-green font-bold border-b border-terminal-dim pb-1">SIC BO CONTROLS</h3>
-                        <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm text-gray-300">
-                            <div><span className="text-white font-bold w-6 inline-block">[S]</span> SMALL (4-10)</div>
-                            <div><span className="text-white font-bold w-6 inline-block">[B]</span> BIG (11-17)</div>
-                            <div><span className="text-white font-bold w-6 inline-block">[A]</span> ANY TRIPLE</div>
-                            <div><span className="text-white font-bold w-6 inline-block">[N]</span> SINGLE DIE BET</div>
-                            <div><span className="text-white font-bold w-6 inline-block">[D]</span> DOUBLE BET</div>
-                            <div><span className="text-white font-bold w-6 inline-block">[M]</span> SUM (TOTAL) BET</div>
-                            <div><span className="text-white font-bold w-6 inline-block">[T]</span> REBET</div>
-                            <div><span className="text-white font-bold w-6 inline-block">[U]</span> UNDO BET</div>
-                            <div><span className="text-white font-bold w-20 inline-block">[SPACE]</span> ROLL DICE</div>
-                        </div>
-                    </div>
-                );
-             case GameType.BACCARAT:
-                return (
-                    <div className="space-y-4">
-                        <h3 className="text-terminal-green font-bold border-b border-terminal-dim pb-1">BACCARAT CONTROLS</h3>
-                        <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm text-gray-300">
-                            <div><span className="text-white font-bold w-6 inline-block">[P]</span> SELECT PLAYER</div>
-                            <div><span className="text-white font-bold w-6 inline-block">[B]</span> SELECT BANKER</div>
-                            <div><span className="text-white font-bold w-6 inline-block">[E]</span> TIE BET</div>
-                            <div><span className="text-white font-bold w-6 inline-block">[Q]</span> PLAYER PAIR</div>
-                            <div><span className="text-white font-bold w-6 inline-block">[W]</span> BANKER PAIR</div>
-                            <div><span className="text-white font-bold w-6 inline-block">[T]</span> REBET</div>
-                            <div><span className="text-white font-bold w-6 inline-block">[U]</span> UNDO BET</div>
-                            <div><span className="text-white font-bold w-20 inline-block">[SPACE]</span> DEAL</div>
-                        </div>
-                    </div>
-                );
-             case GameType.HILO:
-                return (
-                    <div className="space-y-4">
-                        <h3 className="text-terminal-green font-bold border-b border-terminal-dim pb-1">HILO CONTROLS</h3>
-                        <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm text-gray-300">
-                            <div><span className="text-white font-bold w-6 inline-block">[H]</span> HIGHER</div>
-                            <div><span className="text-white font-bold w-6 inline-block">[L]</span> LOWER</div>
-                            <div><span className="text-white font-bold w-6 inline-block">[C]</span> CASHOUT</div>
-                        </div>
-                    </div>
-                );
-             case GameType.VIDEO_POKER:
-                return (
-                    <div className="space-y-4">
-                        <h3 className="text-terminal-green font-bold border-b border-terminal-dim pb-1">VIDEO POKER CONTROLS</h3>
-                        <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm text-gray-300">
-                            <div><span className="text-white font-bold w-12 inline-block">[1-5]</span> TOGGLE HOLD</div>
-                            <div><span className="text-white font-bold w-12 inline-block">[D]</span> DRAW</div>
-                        </div>
-                    </div>
-                );
-            case GameType.NONE:
-                return (
-                     <div className="text-center text-gray-400 py-4">
-                         PRESS <span className="text-white font-bold">[/]</span> TO SELECT A GAME
-                     </div>
-                );
+                return renderGridItems([
+                    {key: 'R', label: 'Red'}, {key: 'B', label: 'Black'},
+                    {key: 'E', label: 'Even'}, {key: 'O', label: 'Odd'},
+                    {key: 'SPACE', label: 'Spin'}
+                ]);
             default:
-                return (
-                    <div className="text-center text-gray-400 py-4">
-                        STANDARD CONTROLS: [SPACE] TO DEAL
-                    </div>
-                );
+                return <div className="text-titanium-400 font-medium text-sm">Standard controls: [SPACE] to action.</div>;
         }
     };
 
     return (
-        <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-8" onClick={onClose}>
-            <div className="bg-terminal-black border border-terminal-dim rounded-lg shadow-2xl max-w-2xl w-full flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
-                <div className="p-4 sm:p-6 border-b border-terminal-dim flex justify-between items-center bg-terminal-dim/20 gap-2">
-                    <div className="flex flex-col min-w-0">
-                        <h2 className="text-base sm:text-xl font-bold text-white tracking-widest">HELP & COMMANDS</h2>
-                        <span className="text-[10px] sm:text-xs text-terminal-green mt-1 hidden sm:block">TYPE ANY COMMAND KEY BELOW FOR DETAILS</span>
+        <div className="fixed inset-0 bg-titanium-900/40 backdrop-blur-md z-[100] flex items-center justify-center p-6" onClick={onClose}>
+            <div className="bg-white rounded-[32px] shadow-float max-w-2xl w-full flex flex-col border border-titanium-200 overflow-hidden" onClick={e => e.stopPropagation()}>
+                <div className="p-8 border-b border-titanium-100 flex justify-between items-center bg-titanium-50">
+                    <div>
+                        <h2 className="text-2xl font-bold text-titanium-900 tracking-tight">Rules & Controls</h2>
+                        <p className="text-xs text-titanium-400 font-semibold mt-1 uppercase tracking-widest">Keyboard shortcuts for power play</p>
                     </div>
-                    <span className="text-[10px] sm:text-xs text-gray-500 whitespace-nowrap">[ESC] CLOSE</span>
+                    <button onClick={onClose} className="w-10 h-10 flex items-center justify-center bg-white rounded-full border border-titanium-200 text-titanium-400 hover:text-titanium-900 transition-colors">
+                        ✕
+                    </button>
                 </div>
 
-                <div className="p-4 sm:p-6 overflow-y-auto space-y-6 sm:space-y-8">
-                    {/* General Shortcuts */}
-                    <div className="space-y-3 sm:space-y-4">
-                        <h3 className="text-terminal-gold font-bold border-b border-terminal-dim pb-1 text-sm sm:text-base">GLOBAL COMMANDS</h3>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-4 text-xs sm:text-sm text-gray-300">
-                            <div><span className="text-white font-bold">[/]</span> GAME MENU</div>
-                            <div><span className="text-white font-bold">[?]</span> TOGGLE HELP</div>
-                            <div><span className="text-white font-bold">[Z]</span> USE SHIELD</div>
-                            <div><span className="text-white font-bold">[X]</span> USE DOUBLE</div>
-                            <div><span className="text-white font-bold">[G]</span> SUPER MODE</div>
-                            <div><span className="text-white font-bold">[L]</span> LEADERBOARD VIEW</div>
-                        </div>
-                        <div className="text-[10px] sm:text-xs text-gray-500 mt-2">
-                             BET SIZING: [1] $1, [2] $5, [3] $25, ... [0] CUSTOM
+                <div className="p-8 overflow-y-auto space-y-10">
+                    <div className="space-y-4">
+                        <h3 className="text-[10px] font-bold text-titanium-400 uppercase tracking-[0.2em] border-b border-titanium-100 pb-2">Global Controls</h3>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
+                            <div className="flex items-center gap-3">
+                                <span className="bg-titanium-100 text-titanium-900 px-2 py-1 rounded-md font-bold text-xs uppercase shadow-inner-light">/</span>
+                                <span className="text-xs font-bold text-titanium-800 uppercase tracking-tight">Menu</span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <span className="bg-titanium-100 text-titanium-900 px-2 py-1 rounded-md font-bold text-xs uppercase shadow-inner-light">?</span>
+                                <span className="text-xs font-bold text-titanium-800 uppercase tracking-tight">Help</span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <span className="bg-titanium-100 text-titanium-900 px-2 py-1 rounded-md font-bold text-xs uppercase shadow-inner-light">L</span>
+                                <span className="text-xs font-bold text-titanium-800 uppercase tracking-tight">Leaderboard</span>
+                            </div>
                         </div>
                     </div>
 
-                    {/* Specific Game Help */}
-                    {renderHelpContent()}
+                    <div className="space-y-4">
+                        <h3 className="text-[10px] font-bold text-titanium-400 uppercase tracking-[0.2em] border-b border-titanium-100 pb-2">{gameType} Controls</h3>
+                        {getContent()}
+                    </div>
                 </div>
             </div>
         </div>
@@ -744,186 +587,98 @@ export const ResponsiblePlayOverlay: React.FC<ResponsiblePlayOverlayProps> = ({
 }) => {
     if (!isOpen) return null;
 
-    const now = Date.now();
-    const cooldownRemainingMs = settings.cooldownUntilMs > now ? settings.cooldownUntilMs - now : 0;
-    const cooldownMinutes = cooldownRemainingMs > 0 ? Math.ceil(cooldownRemainingMs / 60_000) : 0;
+    const cooldownRemainingMs = settings.cooldownUntilMs > Date.now() ? settings.cooldownUntilMs - Date.now() : 0;
+    const cooldownMinutes = Math.ceil(cooldownRemainingMs / 60_000);
 
-    const setNumber = (key: keyof ResponsiblePlaySettings, raw: string) => {
-        const parsed = raw.trim() === '' ? 0 : parseInt(raw, 10);
+    const setNumber = (key: keyof ResponsiblePlaySettings, val: string) => {
+        const parsed = val === '' ? 0 : parseInt(val, 10);
         const nextValue = Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
-        const next: ResponsiblePlaySettings = { ...settings, [key]: nextValue } as ResponsiblePlaySettings;
-
+        const next = { ...settings, [key]: nextValue };
         if (key === 'realityCheckMinutes') {
-            if (next.realityCheckMinutes <= 0) {
-                next.nextRealityCheckMs = 0;
-            } else if (next.sessionStartMs > 0) {
-                next.nextRealityCheckMs = Date.now() + next.realityCheckMinutes * 60_000;
-            }
+            next.nextRealityCheckMs = nextValue <= 0 ? 0 : (next.sessionStartMs > 0 ? Date.now() + nextValue * 60_000 : 0);
         }
-
-        onChange(next);
+        onChange(next as ResponsiblePlaySettings);
     };
 
-    const pnlLabel =
-        summary.netPnl === 0 ? '$0' : summary.netPnl > 0 ? `+$${summary.netPnl}` : `-$${Math.abs(summary.netPnl)}`;
-
     return (
-        <div
-            className="absolute inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-8"
-            onClick={() => (mode === 'reality' ? onContinue() : onClose())}
-        >
-            <div
-                className="bg-terminal-black border border-gray-800 rounded-lg shadow-2xl max-w-lg w-full flex flex-col max-h-[90vh] overflow-y-auto"
-                onClick={(e) => e.stopPropagation()}
-            >
-                <div className="p-4 sm:p-6 border-b border-gray-800 bg-terminal-black/90">
-                    <div className="text-[10px] text-gray-500 tracking-widest uppercase">
-                        {mode === 'reality' ? 'Reality Check' : 'Responsible Play'}
+        <div className="fixed inset-0 bg-titanium-900/60 backdrop-blur-lg z-[100] flex items-center justify-center p-6" onClick={onClose}>
+            <div className="bg-white rounded-[40px] shadow-float max-w-xl w-full flex flex-col border border-titanium-200 overflow-hidden" onClick={e => e.stopPropagation()}>
+                <div className="p-10 border-b border-titanium-100 bg-titanium-50">
+                    <div className="text-[10px] font-bold text-titanium-400 uppercase tracking-[0.2em] mb-3">
+                        {mode === 'reality' ? 'Safety Notification' : 'Play Settings'}
                     </div>
-                    <div className="mt-1 flex items-center justify-between gap-3">
-                        <div className="text-lg font-bold tracking-widest text-white">Session Summary</div>
-                        <button
-                            type="button"
-                            onClick={mode === 'reality' ? onContinue : onClose}
-                            className="text-[10px] px-2 py-1 rounded border border-gray-700 bg-black/40 text-gray-400 hover:border-gray-500"
-                        >
-                            ESC
-                        </button>
-                    </div>
+                    <h2 className="text-3xl font-bold text-titanium-900 tracking-tight">Session Summary</h2>
                 </div>
 
-                <div className="p-4 sm:p-6 space-y-6">
-                    <div className="grid grid-cols-3 gap-2 text-[11px]">
-                        <div className="border border-gray-800 rounded bg-black/40 p-2">
-                            <div className="text-gray-500 tracking-widest text-[10px] uppercase">Time</div>
-                            <div className="text-white mt-1">{summary.sessionMinutes}m</div>
+                <div className="p-10 space-y-10">
+                    <div className="grid grid-cols-3 gap-4">
+                        <div className="bg-titanium-50 p-5 rounded-3xl border border-titanium-100">
+                            <span className="text-[9px] font-bold text-titanium-400 uppercase tracking-widest block mb-1">Duration</span>
+                            <span className="text-lg font-bold text-titanium-900 tabular-nums">{summary.sessionMinutes}m</span>
                         </div>
-                        <div className="border border-gray-800 rounded bg-black/40 p-2">
-                            <div className="text-gray-500 tracking-widest text-[10px] uppercase">Net PnL</div>
-                            <div className={['mt-1', summary.netPnl < 0 ? 'text-terminal-accent' : 'text-terminal-green'].join(' ')}>
-                                {pnlLabel}
-                            </div>
+                        <div className="bg-titanium-50 p-5 rounded-3xl border border-titanium-100">
+                            <span className="text-[9px] font-bold text-titanium-400 uppercase tracking-widest block mb-1">Net PnL</span>
+                            <span className={`text-lg font-bold tabular-nums ${summary.netPnl < 0 ? 'text-action-destructive' : 'text-action-success'}`}>
+                                {summary.netPnl >= 0 ? '+' : '-'}${Math.abs(summary.netPnl).toLocaleString()}
+                            </span>
                         </div>
-                        <div className="border border-gray-800 rounded bg-black/40 p-2">
-                            <div className="text-gray-500 tracking-widest text-[10px] uppercase">Chips</div>
-                            <div className="text-white mt-1">${summary.chips.toLocaleString()}</div>
+                        <div className="bg-titanium-50 p-5 rounded-3xl border border-titanium-100">
+                            <span className="text-[9px] font-bold text-titanium-400 uppercase tracking-widest block mb-1">Balance</span>
+                            <span className="text-lg font-bold text-titanium-900 tabular-nums">${summary.chips.toLocaleString()}</span>
                         </div>
                     </div>
 
-                    <div className="border border-gray-800 rounded bg-black/40 p-3">
-                        <div className="text-[10px] text-gray-500 tracking-widest uppercase mb-2">Reality Check</div>
-                        <div className="grid grid-cols-2 gap-2 items-center text-[11px]">
-                            <div className="text-gray-400">Interval (minutes)</div>
+                    <div className="space-y-6">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h4 className="text-sm font-bold text-titanium-900 uppercase tracking-tight">Reality Check</h4>
+                                <p className="text-[11px] text-titanium-400 font-medium">Notification interval in minutes</p>
+                            </div>
                             <select
-                                className="bg-terminal-black border border-gray-800 rounded px-2 py-2 text-[11px]"
+                                className="bg-white border border-titanium-200 rounded-xl px-4 py-2 text-sm font-bold text-titanium-800 outline-none focus:border-action-primary transition-colors"
                                 value={settings.realityCheckMinutes}
                                 onChange={(e) => setNumber('realityCheckMinutes', e.target.value)}
                             >
-                                <option value={0}>Off</option>
-                                <option value={15}>15</option>
-                                <option value={30}>30</option>
-                                <option value={60}>60</option>
+                                <option value={0}>Disabled</option>
+                                <option value={15}>15 mins</option>
+                                <option value={30}>30 mins</option>
+                                <option value={60}>1 hour</option>
                             </select>
                         </div>
-                        <div className="mt-2 text-[10px] text-gray-600">
-                            When the timer triggers, this screen pauses new rounds until you continue or cool down.
-                        </div>
-                    </div>
 
-                    <div className="border border-gray-800 rounded bg-black/40 p-3">
-                        <div className="text-[10px] text-gray-500 tracking-widest uppercase mb-2">Optional Limits</div>
-                        <div className="grid grid-cols-2 gap-2 text-[11px] items-center">
-                            <div className="text-gray-400">Max wager (0 = unlimited)</div>
-                            <input
-                                className="bg-terminal-black border border-gray-800 rounded px-2 py-2 text-[11px]"
-                                inputMode="numeric"
-                                pattern="[0-9]*"
-                                value={String(settings.maxWager ?? 0)}
-                                onChange={(e) => setNumber('maxWager', e.target.value)}
-                            />
-                            <div className="text-gray-400">Max loss (0 = unlimited)</div>
-                            <input
-                                className="bg-terminal-black border border-gray-800 rounded px-2 py-2 text-[11px]"
-                                inputMode="numeric"
-                                pattern="[0-9]*"
-                                value={String(settings.maxLoss ?? 0)}
-                                onChange={(e) => setNumber('maxLoss', e.target.value)}
-                            />
-                            <div className="text-gray-400">Max session minutes (0 = unlimited)</div>
-                            <input
-                                className="bg-terminal-black border border-gray-800 rounded px-2 py-2 text-[11px]"
-                                inputMode="numeric"
-                                pattern="[0-9]*"
-                                value={String(settings.maxSessionMinutes ?? 0)}
-                                onChange={(e) => setNumber('maxSessionMinutes', e.target.value)}
-                            />
-                        </div>
-                        <div className="mt-2 text-[10px] text-gray-600">
-                            Limits block starting a new round when exceeded (they do not interrupt an in-progress hand).
-                        </div>
-                    </div>
-
-                    <div className="border border-gray-800 rounded bg-black/40 p-3">
-                        <div className="text-[10px] text-gray-500 tracking-widest uppercase mb-2">Cooldown</div>
-                        <div className="flex items-center justify-between gap-2 text-[11px]">
-                            <div className="text-gray-400">
-                                Status:{' '}
-                                {cooldownMinutes > 0 ? (
-                                    <span className="text-terminal-accent">ACTIVE ({cooldownMinutes}m)</span>
-                                ) : (
-                                    <span className="text-gray-500">off</span>
-                                )}
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h4 className="text-sm font-bold text-titanium-900 uppercase tracking-tight">Cooldown Mode</h4>
+                                <p className="text-[11px] text-titanium-400 font-medium">{cooldownMinutes > 0 ? `Active for ${cooldownMinutes}m` : 'Pause gaming temporarily'}</p>
                             </div>
                             <div className="flex gap-2">
-                                {[5, 15, 30].map((m) => (
-                                    <button
+                                {[15, 30, 60].map(m => (
+                                    <button 
                                         key={m}
-                                        type="button"
                                         onClick={() => onCooldown(m)}
-                                        className="h-10 px-3 rounded border border-gray-800 text-gray-300 text-[10px] tracking-widest uppercase hover:border-gray-600 hover:text-white"
+                                        className="w-10 h-10 rounded-full border border-titanium-200 text-xs font-bold text-titanium-800 hover:border-titanium-900 transition-colors"
                                     >
-                                        {m}m
+                                        {m}
                                     </button>
                                 ))}
-                                <button
-                                    type="button"
-                                    onClick={() => onCooldown(0)}
-                                    className="h-10 px-3 rounded border border-gray-800 text-gray-300 text-[10px] tracking-widest uppercase hover:border-gray-600 hover:text-white"
-                                >
-                                    Clear
-                                </button>
                             </div>
                         </div>
-                        <div className="mt-2 text-[10px] text-gray-600">Cooldown prevents starting new rounds for the selected duration.</div>
                     </div>
                 </div>
 
-                <div className="p-4 sm:p-6 border-t border-gray-800 bg-terminal-black/90 flex items-center justify-between gap-2">
+                <div className="p-10 border-t border-titanium-100 bg-titanium-50 flex items-center gap-4">
                     <button
-                        type="button"
                         onClick={onStop}
-                        className="h-11 px-4 rounded border border-terminal-accent text-terminal-accent text-[10px] tracking-widest uppercase hover:bg-terminal-accent/10"
+                        className="flex-1 h-14 rounded-full border-2 border-action-destructive text-action-destructive font-bold text-xs uppercase tracking-[0.2em] hover:bg-action-destructive/5 transition-colors"
                     >
-                        Stop Playing
+                        End Session
                     </button>
-                    <div className="flex items-center gap-2">
-                        {mode === 'reality' ? (
-                            <button
-                                type="button"
-                                onClick={onContinue}
-                                className="h-11 px-4 rounded border border-terminal-green text-terminal-green text-[10px] tracking-widest uppercase hover:bg-terminal-green/10"
-                            >
-                                Continue
-                            </button>
-                        ) : null}
-                        <button
-                            type="button"
-                            onClick={mode === 'reality' ? onContinue : onClose}
-                            className="h-11 px-4 rounded border border-gray-700 text-gray-300 text-[10px] tracking-widest uppercase hover:border-gray-500"
-                        >
-                            Close
-                        </button>
-                    </div>
+                    <button
+                        onClick={mode === 'reality' ? onContinue : onClose}
+                        className="flex-1 h-14 rounded-full bg-titanium-900 text-white font-bold text-xs uppercase tracking-[0.2em] shadow-lg shadow-titanium-900/20"
+                    >
+                        {mode === 'reality' ? 'Keep Playing' : 'Save & Close'}
+                    </button>
                 </div>
             </div>
         </div>

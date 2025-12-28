@@ -6,6 +6,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use tokio::sync::{broadcast, RwLock};
 
+fn parse_env_usize(var: &str) -> Option<usize> {
+    std::env::var(var).ok().and_then(|v| v.parse().ok())
+}
+
 mod api;
 pub use api::Api;
 
@@ -421,8 +425,11 @@ impl Simulator {
         self: &Arc<Self>,
         ip: IpAddr,
     ) -> Result<WsConnectionGuard, WsConnectionRejection> {
-        let max_total = self.config.ws_max_connections;
-        let max_per_ip = self.config.ws_max_connections_per_ip;
+        // Environment variables override config
+        let max_total = parse_env_usize("RATE_LIMIT_WS_CONNECTIONS")
+            .or(self.config.ws_max_connections);
+        let max_per_ip = parse_env_usize("RATE_LIMIT_WS_CONNECTIONS_PER_IP")
+            .or(self.config.ws_max_connections_per_ip);
         let mut tracker = self.ws_connections.lock().unwrap();
 
         if let Some(limit) = max_total {
@@ -847,5 +854,86 @@ mod tests {
                 assert_eq!(account.nonce, expected_nonce);
             }
         });
+    }
+
+    #[tokio::test]
+    async fn test_ws_connection_per_ip_limit() {
+        let (_, network_identity) = create_network_keypair();
+        let config = SimulatorConfig {
+            ws_max_connections_per_ip: Some(2),
+            ws_max_connections: Some(100),
+            ..Default::default()
+        };
+        let simulator = Arc::new(Simulator::new_with_config(network_identity, config));
+        let ip: IpAddr = "192.168.1.1".parse().unwrap();
+
+        // First connection should succeed
+        let guard1 = simulator.try_acquire_ws_connection(ip);
+        assert!(guard1.is_ok(), "First connection should succeed");
+
+        // Second connection should succeed
+        let guard2 = simulator.try_acquire_ws_connection(ip);
+        assert!(guard2.is_ok(), "Second connection should succeed");
+
+        // Third connection should be rejected (per-IP limit reached)
+        let guard3 = simulator.try_acquire_ws_connection(ip);
+        assert!(
+            matches!(guard3, Err(WsConnectionRejection::PerIpLimit)),
+            "Third connection should be rejected with per-IP limit"
+        );
+
+        // Different IP should still work
+        let other_ip: IpAddr = "192.168.1.2".parse().unwrap();
+        let guard4 = simulator.try_acquire_ws_connection(other_ip);
+        assert!(guard4.is_ok(), "Different IP should succeed");
+
+        // Drop one connection and retry
+        drop(guard1);
+        let guard5 = simulator.try_acquire_ws_connection(ip);
+        assert!(
+            guard5.is_ok(),
+            "After dropping one connection, new connection should succeed"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_ws_connection_global_limit() {
+        let (_, network_identity) = create_network_keypair();
+        let config = SimulatorConfig {
+            ws_max_connections_per_ip: Some(10),
+            ws_max_connections: Some(3),
+            ..Default::default()
+        };
+        let simulator = Arc::new(Simulator::new_with_config(network_identity, config));
+
+        // Create 3 connections from different IPs
+        let ip1: IpAddr = "192.168.1.1".parse().unwrap();
+        let ip2: IpAddr = "192.168.1.2".parse().unwrap();
+        let ip3: IpAddr = "192.168.1.3".parse().unwrap();
+        let ip4: IpAddr = "192.168.1.4".parse().unwrap();
+
+        let guard1 = simulator.try_acquire_ws_connection(ip1);
+        assert!(guard1.is_ok(), "First connection should succeed");
+
+        let guard2 = simulator.try_acquire_ws_connection(ip2);
+        assert!(guard2.is_ok(), "Second connection should succeed");
+
+        let guard3 = simulator.try_acquire_ws_connection(ip3);
+        assert!(guard3.is_ok(), "Third connection should succeed");
+
+        // Fourth connection should be rejected (global limit reached)
+        let guard4 = simulator.try_acquire_ws_connection(ip4);
+        assert!(
+            matches!(guard4, Err(WsConnectionRejection::GlobalLimit)),
+            "Fourth connection should be rejected with global limit"
+        );
+
+        // Drop one and retry
+        drop(guard1);
+        let guard5 = simulator.try_acquire_ws_connection(ip4);
+        assert!(
+            guard5.is_ok(),
+            "After dropping one connection, new connection should succeed"
+        );
     }
 }

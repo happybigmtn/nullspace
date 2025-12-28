@@ -37,15 +37,15 @@ export const WalletPill: React.FC<WalletPillProps> = ({ rng, vusdt, credits, cre
 
   const vault = useMemo(() => {
     if (!vaultStatus.supported) {
-      return { label: 'PASSKEY UNAVAILABLE', className: 'text-gray-500 border-gray-800' };
+      return { label: 'Unsupported', className: 'text-titanium-300' };
     }
     if (!vaultStatus.enabled) {
-      return { label: 'PASSKEY OFF', className: 'text-gray-400 border-gray-800' };
+      return { label: 'Disabled', className: 'text-titanium-400' };
     }
     if (vaultStatus.unlocked) {
-      return { label: 'UNLOCKED', className: 'text-terminal-green border-terminal-green/50' };
+      return { label: 'Unlocked', className: 'text-action-success' };
     }
-    return { label: 'LOCKED', className: 'text-terminal-accent border-terminal-accent/50' };
+    return { label: 'Locked', className: 'text-action-destructive' };
   }, [vaultStatus.enabled, vaultStatus.supported, vaultStatus.unlocked]);
 
   const effectivePubkey = pubkeyHex ?? vaultStatus.nullspacePublicKeyHex;
@@ -53,7 +53,7 @@ export const WalletPill: React.FC<WalletPillProps> = ({ rng, vusdt, credits, cre
   return (
     <div
       className={[
-        'flex flex-wrap items-center gap-2 rounded border border-gray-800 bg-gray-900/30 px-2 py-1',
+        'flex flex-wrap items-center gap-3 rounded-full border border-titanium-200 bg-white shadow-soft px-4 py-1.5',
         className ?? '',
       ]
         .join(' ')
@@ -63,45 +63,39 @@ export const WalletPill: React.FC<WalletPillProps> = ({ rng, vusdt, credits, cre
         <>
           <Link
             to="/security"
-            className={[
-              'inline-flex items-center gap-1 rounded border px-2 py-1 text-[10px] tracking-widest uppercase hover:bg-gray-900/60',
-              vault.className,
-            ].join(' ')}
+            className="flex items-center gap-2 group transition-opacity hover:opacity-70"
           >
-            <span className="text-gray-500">Passkey</span>
-            <span className="font-bold">{vault.label}</span>
+            <span className="text-titanium-400 text-[10px] font-bold tracking-widest uppercase">Vault</span>
+            <span className={`text-[10px] font-bold uppercase ${vault.className}`}>{vault.label}</span>
           </Link>
 
-          <div className="h-4 w-px bg-gray-800" />
+          <div className="h-3 w-px bg-titanium-200" />
         </>
       )}
 
-      <div className="flex items-center gap-2 text-[10px] tracking-widest uppercase text-gray-400 whitespace-nowrap">
+      <div className="flex items-center gap-4 text-[10px] tracking-widest uppercase font-bold text-titanium-400 whitespace-nowrap">
         <span>
-          RNG <span className="text-white font-bold">{formatInteger(rng)}</span>
+          RNG <span className="text-titanium-900">{formatInteger(rng)}</span>
         </span>
         <span>
-          vUSDT <span className="text-white font-bold">{formatInteger(vusdt)}</span>
+          vUSDT <span className="text-titanium-900">{formatInteger(vusdt)}</span>
         </span>
         {credits !== undefined || creditsLocked !== undefined ? (
           <span>
-            Credits <span className="text-white font-bold">{formatInteger(credits)}</span>
-            {creditsLocked !== undefined && creditsLocked !== null
-              ? ` (${formatInteger(creditsLocked)} locked)`
-              : ''}
+            Credits <span className="text-titanium-900">{formatInteger(credits)}</span>
           </span>
         ) : null}
       </div>
 
       {effectivePubkey ? (
         <>
-          <div className="h-4 w-px bg-gray-800" />
+          <div className="h-3 w-px bg-titanium-200" />
           <Link
             to={`/explorer/account/${effectivePubkey}`}
-            className="text-[10px] tracking-widest uppercase text-terminal-green hover:underline"
+            className="text-[10px] font-bold tracking-widest uppercase text-action-primary hover:opacity-70 transition-opacity"
             title={effectivePubkey}
           >
-            PK {shortHex(effectivePubkey)}
+            PK {shortHex(effectivePubkey, 6, 4)}
           </Link>
         </>
       ) : null}

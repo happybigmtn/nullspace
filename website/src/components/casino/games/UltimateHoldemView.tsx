@@ -70,12 +70,12 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
                                     Blind Bonus
                                 </div>
                                 <div className="space-y-2 text-[10px]">
-                                    <div className="flex justify-between"><span className="text-gray-400">Royal Flush</span><span className="text-terminal-gold">500:1</span></div>
-                                    <div className="flex justify-between"><span className="text-gray-400">Straight Flush</span><span className="text-terminal-gold">50:1</span></div>
-                                    <div className="flex justify-between"><span className="text-gray-400">Four of Kind</span><span className="text-terminal-gold">10:1</span></div>
-                                    <div className="flex justify-between"><span className="text-gray-400">Full House</span><span className="text-terminal-gold">3:1</span></div>
-                                    <div className="flex justify-between"><span className="text-gray-400">Flush</span><span className="text-terminal-gold">3:2</span></div>
-                                    <div className="flex justify-between"><span className="text-gray-400">Straight</span><span className="text-terminal-gold">1:1</span></div>
+                                    <div className="flex justify-between"><span className="text-gray-400">Royal Flush</span><span className="text-action-primary">500:1</span></div>
+                                    <div className="flex justify-between"><span className="text-gray-400">Straight Flush</span><span className="text-action-primary">50:1</span></div>
+                                    <div className="flex justify-between"><span className="text-gray-400">Four of Kind</span><span className="text-action-primary">10:1</span></div>
+                                    <div className="flex justify-between"><span className="text-gray-400">Full House</span><span className="text-action-primary">3:1</span></div>
+                                    <div className="flex justify-between"><span className="text-gray-400">Flush</span><span className="text-action-primary">3:2</span></div>
+                                    <div className="flex justify-between"><span className="text-gray-400">Straight</span><span className="text-action-primary">1:1</span></div>
                                     <div className="border-t border-gray-800 pt-2 mt-2 text-[10px] text-gray-500 italic">
                                         Dealer must have pair+ to qualify
                                     </div>
@@ -87,17 +87,17 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
                                 </div>
                                 <div className="space-y-2 text-[10px] text-gray-400">
                                     <div className="border-b border-gray-800 pb-2">
-                                        <div className="text-terminal-green mb-1">PRE-FLOP</div>
+                                        <div className="text-action-success mb-1">PRE-FLOP</div>
                                         <div>• Check OR</div>
                                         <div>• Bet 3x/4x Ante</div>
                                     </div>
                                     <div className="border-b border-gray-800 pb-2">
-                                        <div className="text-terminal-green mb-1">FLOP</div>
+                                        <div className="text-action-success mb-1">FLOP</div>
                                         <div>• Check OR</div>
                                         <div>• Bet 2x Ante</div>
                                     </div>
                                     <div>
-                                        <div className="text-terminal-green mb-1">RIVER</div>
+                                        <div className="text-action-success mb-1">RIVER</div>
                                         <div>• Fold OR</div>
                                         <div>• Bet 1x Ante</div>
                                     </div>
@@ -111,18 +111,18 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
                 <div className="min-h-[88px] sm:min-h-[100px] flex items-center justify-center opacity-75">
                     {gameState.dealerCards.length > 0 ? (
                         <div className="flex flex-col items-center gap-2">
-                            <span className="text-lg font-bold tracking-widest text-terminal-accent">DEALER</span>
+                            <span className="text-lg font-bold tracking-widest text-action-destructive">DEALER</span>
                             <Hand
                                 cards={gameState.dealerCards}
-                                forcedColor="text-terminal-accent"
+                                forcedColor="text-action-destructive"
                             />
                         </div>
                     ) : (
                         <div className="flex flex-col items-center gap-2">
-                            <span className="text-lg font-bold tracking-widest text-terminal-accent">DEALER</span>
+                            <span className="text-lg font-bold tracking-widest text-action-destructive">DEALER</span>
                             <div className="flex gap-1 sm:gap-1.5 md:gap-2">
                                 {[0, 1].map(i => (
-                                    <div key={i} className="w-12 h-[4.5rem] sm:w-14 sm:h-20 md:w-16 md:h-24 border border-dashed border-terminal-accent/50 rounded" />
+                                    <div key={i} className="w-12 h-[4.5rem] sm:w-14 sm:h-20 md:w-16 md:h-24 border border-dashed border-action-destructive/50 rounded" />
                                 ))}
                             </div>
                         </div>
@@ -160,14 +160,14 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
                         {stageDesc ? (
                             <>
                                 <span className="text-gray-700">•</span>
-                                <span className="text-terminal-gold">{stageDesc}</span>
+                                <span className="text-action-primary">{stageDesc}</span>
                             </>
                         ) : null}
                         <span className="text-gray-700">•</span>
                         <span className="text-gray-500">TOTAL</span>
-                        <span className="text-terminal-gold">${baseTotalBet.toLocaleString()}</span>
+                        <span className="text-action-primary">${baseTotalBet.toLocaleString()}</span>
                     </div>
-                    <div className="text-lg sm:text-xl font-bold text-terminal-gold tracking-widest leading-tight animate-pulse">
+                    <div className="text-lg sm:text-xl font-bold text-action-primary tracking-widest leading-tight animate-pulse">
                         {gameState.message}
                     </div>
                     <div className="text-xs text-gray-500 flex flex-wrap gap-x-4 gap-y-1 justify-center">
@@ -179,7 +179,7 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
                     </div>
                     <div
                         className={`inline-flex items-center gap-2 px-3 py-1 rounded border bg-black/40 text-[10px] tracking-widest ${
-                            gameState.uthProgressiveBet > 0 ? 'border-terminal-green/40 text-terminal-gold' : 'border-gray-800 text-gray-600'
+                            gameState.uthProgressiveBet > 0 ? 'border-action-success/40 text-action-primary' : 'border-gray-800 text-gray-600'
                         }`}
                     >
                         <span>PROG JACKPOT</span>
@@ -193,18 +193,18 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
                 <div className="min-h-[88px] sm:min-h-[100px] flex gap-8 items-center justify-center">
                     {gameState.playerCards.length > 0 ? (
                         <div className="flex flex-col items-center gap-2 scale-110">
-                            <span className="text-lg font-bold tracking-widest text-terminal-green">YOU</span>
+                            <span className="text-lg font-bold tracking-widest text-action-success">YOU</span>
                             <Hand
                                 cards={gameState.playerCards}
-                                forcedColor="text-terminal-green"
+                                forcedColor="text-action-success"
                             />
                         </div>
                     ) : (
                         <div className="flex flex-col items-center gap-2 scale-110">
-                            <span className="text-lg font-bold tracking-widest text-terminal-green">YOU</span>
+                            <span className="text-lg font-bold tracking-widest text-action-success">YOU</span>
                             <div className="flex gap-1 sm:gap-1.5 md:gap-2">
                                 {[0, 1].map(i => (
-                                    <div key={i} className="w-12 h-[4.5rem] sm:w-14 sm:h-20 md:w-16 md:h-24 border border-dashed border-terminal-green/50 rounded" />
+                                    <div key={i} className="w-12 h-[4.5rem] sm:w-14 sm:h-20 md:w-16 md:h-24 border border-dashed border-action-success/50 rounded" />
                                 ))}
                             </div>
                         </div>
@@ -213,15 +213,15 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
             </div>
 
             {/* Blind Payouts Sidebar */}
-            <div className="hidden lg:flex absolute top-0 left-0 bottom-24 w-36 bg-terminal-black/80 border-r-2 border-gray-700 p-2 overflow-y-auto backdrop-blur-sm z-30 flex-col">
+            <div className="hidden lg:flex absolute top-0 left-0 bottom-24 w-36 bg-titanium-900/80 border-r-2 border-gray-700 p-2 overflow-y-auto backdrop-blur-sm z-30 flex-col">
                 <h3 className="text-[10px] font-bold text-gray-500 mb-2 tracking-widest text-center border-b border-gray-800 pb-1 flex-none">BLIND BONUS</h3>
                 <div className="flex-1 flex flex-col justify-center space-y-2 text-[10px]">
-                    <div className="flex justify-between"><span className="text-gray-400">Royal Flush</span><span className="text-terminal-gold">500:1</span></div>
-                    <div className="flex justify-between"><span className="text-gray-400">Straight Flush</span><span className="text-terminal-gold">50:1</span></div>
-                    <div className="flex justify-between"><span className="text-gray-400">Four of Kind</span><span className="text-terminal-gold">10:1</span></div>
-                    <div className="flex justify-between"><span className="text-gray-400">Full House</span><span className="text-terminal-gold">3:1</span></div>
-                    <div className="flex justify-between"><span className="text-gray-400">Flush</span><span className="text-terminal-gold">3:2</span></div>
-                    <div className="flex justify-between"><span className="text-gray-400">Straight</span><span className="text-terminal-gold">1:1</span></div>
+                    <div className="flex justify-between"><span className="text-gray-400">Royal Flush</span><span className="text-action-primary">500:1</span></div>
+                    <div className="flex justify-between"><span className="text-gray-400">Straight Flush</span><span className="text-action-primary">50:1</span></div>
+                    <div className="flex justify-between"><span className="text-gray-400">Four of Kind</span><span className="text-action-primary">10:1</span></div>
+                    <div className="flex justify-between"><span className="text-gray-400">Full House</span><span className="text-action-primary">3:1</span></div>
+                    <div className="flex justify-between"><span className="text-gray-400">Flush</span><span className="text-action-primary">3:2</span></div>
+                    <div className="flex justify-between"><span className="text-gray-400">Straight</span><span className="text-action-primary">1:1</span></div>
                     <div className="border-t border-gray-800 pt-2 mt-2">
                         <div className="text-[9px] text-gray-500 italic">Dealer must have pair or better to qualify</div>
                     </div>
@@ -229,21 +229,21 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
             </div>
 
             {/* Betting Guide Sidebar */}
-            <div className="hidden lg:flex absolute top-0 right-0 bottom-24 w-36 bg-terminal-black/80 border-l-2 border-gray-700 p-2 backdrop-blur-sm z-30 flex-col">
+            <div className="hidden lg:flex absolute top-0 right-0 bottom-24 w-36 bg-titanium-900/80 border-l-2 border-gray-700 p-2 backdrop-blur-sm z-30 flex-col">
                 <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-2 border-b border-gray-800 pb-1 flex-none text-center">Betting</div>
                 <div className="flex-1 overflow-y-auto flex flex-col justify-center space-y-2 text-[9px] text-gray-400">
                     <div className="border-b border-gray-800 pb-2">
-                        <div className="text-terminal-green mb-1">PRE-FLOP</div>
+                        <div className="text-action-success mb-1">PRE-FLOP</div>
                         <div>• Check OR</div>
                         <div>• Bet 3x/4x Ante</div>
                     </div>
                     <div className="border-b border-gray-800 pb-2">
-                        <div className="text-terminal-green mb-1">FLOP</div>
+                        <div className="text-action-success mb-1">FLOP</div>
                         <div>• Check OR</div>
                         <div>• Bet 2x Ante</div>
                     </div>
                     <div>
-                        <div className="text-terminal-green mb-1">RIVER</div>
+                        <div className="text-action-success mb-1">RIVER</div>
                         <div>• Fold OR</div>
                         <div>• Bet 1x Ante</div>
                     </div>
@@ -251,7 +251,7 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
             </div>
 
             {/* Controls */}
-            <div className="ns-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-terminal-black/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
+            <div className="ns-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-titanium-900/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
                 <div className="h-auto md:h-20 flex flex-col md:flex-row items-stretch md:items-center justify-between md:justify-center gap-2 p-2 md:px-4">
                     {/* Desktop: Grouped Controls */}
                     <div className="hidden md:flex items-center gap-4 flex-1">
@@ -259,7 +259,7 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
                             <>
                                 {/* NORMAL BETS GROUP */}
                                 <div className="flex items-center gap-2">
-                                    <span className="text-[10px] text-terminal-green font-bold tracking-widest uppercase font-mono">NORMAL:</span>
+                                    <span className="text-[10px] text-action-success font-bold tracking-widest uppercase font-mono">NORMAL:</span>
                                     <div className="h-6 w-px bg-gray-700" />
                                     <span className="text-xs text-gray-500 font-mono">Ante + Blind</span>
                                 </div>
@@ -316,13 +316,13 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
                             <>
                                 <button
                                     onClick={() => actions?.uhBet?.(4)}
-                                    className="px-6 py-2 rounded border-2 font-bold text-sm font-mono tracking-widest uppercase transition-all border-terminal-gold text-terminal-gold hover:bg-terminal-gold/10"
+                                    className="px-6 py-2 rounded border-2 font-bold text-sm font-mono tracking-widest uppercase transition-all border-action-primary text-action-primary hover:bg-action-primary/10"
                                 >
                                     <span className="ns-keycap">4</span> BET 4X
                                 </button>
                                 <button
                                     onClick={() => actions?.uhBet?.(3)}
-                                    className="px-6 py-2 rounded border-2 font-bold text-sm font-mono tracking-widest uppercase transition-all border-terminal-gold text-terminal-gold hover:bg-terminal-gold/10"
+                                    className="px-6 py-2 rounded border-2 font-bold text-sm font-mono tracking-widest uppercase transition-all border-action-primary text-action-primary hover:bg-action-primary/10"
                                 >
                                     <span className="ns-keycap">3</span> BET 3X
                                 </button>
@@ -330,14 +330,14 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
                         ) : gameState.communityCards.length === 3 ? (
                             <button
                                 onClick={() => actions?.uhBet?.(2)}
-                                className="px-6 py-2 rounded border-2 font-bold text-sm font-mono tracking-widest uppercase transition-all border-terminal-gold text-terminal-gold hover:bg-terminal-gold/10"
+                                className="px-6 py-2 rounded border-2 font-bold text-sm font-mono tracking-widest uppercase transition-all border-action-primary text-action-primary hover:bg-action-primary/10"
                             >
                                 <span className="ns-keycap">2</span> BET 2X
                             </button>
                         ) : gameState.communityCards.length === 5 && !gameState.message.includes('REVEAL') ? (
                             <button
                                 onClick={actions?.uhFold}
-                                className="px-6 py-2 rounded border-2 font-bold text-sm font-mono tracking-widest uppercase transition-all border-terminal-accent text-terminal-accent hover:bg-terminal-accent/10"
+                                className="px-6 py-2 rounded border-2 font-bold text-sm font-mono tracking-widest uppercase transition-all border-action-destructive text-action-destructive hover:bg-action-destructive/10"
                             >
                                 <span className="ns-keycap">F</span> FOLD
                             </button>
@@ -359,8 +359,8 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
                             }
                             className={`h-14 px-8 rounded border-2 font-bold text-base font-mono tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] ${
                                 gameState.communityCards.length === 5 && gameState.stage === 'PLAYING' && !gameState.message.includes('REVEAL')
-                                    ? 'border-terminal-gold bg-terminal-gold text-black hover:bg-white hover:border-white'
-                                    : 'border-terminal-green bg-terminal-green text-black hover:bg-white hover:border-white'
+                                    ? 'border-action-primary bg-action-primary text-black hover:bg-white hover:border-white'
+                                    : 'border-action-success bg-action-success text-black hover:bg-white hover:border-white'
                             } hover:scale-105 active:scale-95`}
                         >
                             {gameState.stage === 'BETTING'
@@ -476,8 +476,8 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
                                 }
                                 className={`flex-1 h-12 px-6 rounded border-2 font-bold text-sm font-mono tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] ${
                                     gameState.communityCards.length === 5 && gameState.stage === 'PLAYING' && !gameState.message.includes('REVEAL')
-                                        ? 'border-terminal-gold bg-terminal-gold text-black hover:bg-white hover:border-white'
-                                        : 'border-terminal-green bg-terminal-green text-black hover:bg-white hover:border-white'
+                                        ? 'border-action-primary bg-action-primary text-black hover:bg-white hover:border-white'
+                                        : 'border-action-success bg-action-success text-black hover:bg-white hover:border-white'
                                 } hover:scale-105 active:scale-95`}
                             >
                                 {gameState.stage === 'BETTING'
@@ -499,13 +499,13 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
                                     <>
                                         <button
                                             onClick={() => actions?.uhBet?.(4)}
-                                            className="flex-1 py-3 rounded border-2 font-bold text-sm font-mono tracking-widest uppercase transition-all border-terminal-gold text-terminal-gold hover:bg-terminal-gold/10"
+                                            className="flex-1 py-3 rounded border-2 font-bold text-sm font-mono tracking-widest uppercase transition-all border-action-primary text-action-primary hover:bg-action-primary/10"
                                         >
                                             <span className="ns-keycap">4</span> BET 4X
                                         </button>
                                         <button
                                             onClick={() => actions?.uhBet?.(3)}
-                                            className="flex-1 py-3 rounded border-2 font-bold text-sm font-mono tracking-widest uppercase transition-all border-terminal-gold text-terminal-gold hover:bg-terminal-gold/10"
+                                            className="flex-1 py-3 rounded border-2 font-bold text-sm font-mono tracking-widest uppercase transition-all border-action-primary text-action-primary hover:bg-action-primary/10"
                                         >
                                             <span className="ns-keycap">3</span> BET 3X
                                         </button>
@@ -514,7 +514,7 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
                                 {gameState.communityCards.length === 3 && (
                                     <button
                                         onClick={() => actions?.uhBet?.(2)}
-                                        className="flex-1 py-3 rounded border-2 font-bold text-sm font-mono tracking-widest uppercase transition-all border-terminal-gold text-terminal-gold hover:bg-terminal-gold/10"
+                                        className="flex-1 py-3 rounded border-2 font-bold text-sm font-mono tracking-widest uppercase transition-all border-action-primary text-action-primary hover:bg-action-primary/10"
                                     >
                                         <span className="ns-keycap">2</span> BET 2X
                                     </button>
@@ -522,7 +522,7 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
                                 {gameState.communityCards.length === 5 && (
                                     <button
                                         onClick={actions?.uhFold}
-                                        className="flex-1 py-3 rounded border-2 font-bold text-sm font-mono tracking-widest uppercase transition-all border-terminal-accent text-terminal-accent hover:bg-terminal-accent/10"
+                                        className="flex-1 py-3 rounded border-2 font-bold text-sm font-mono tracking-widest uppercase transition-all border-action-destructive text-action-destructive hover:bg-action-destructive/10"
                                     >
                                         <span className="ns-keycap">F</span> FOLD
                                     </button>

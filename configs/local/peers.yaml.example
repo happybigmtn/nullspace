@@ -1,0 +1,8 @@
+# Peer address mappings
+# Format: "<public_key_hex>": "<ip:port>"
+# Public keys are derived from private keys using generate-keys
+addresses:
+  "<NODE0_PUBLIC_KEY_HEX>": "127.0.0.1:9000"
+  "<NODE1_PUBLIC_KEY_HEX>": "127.0.0.1:9001"
+  "<NODE2_PUBLIC_KEY_HEX>": "127.0.0.1:9002"
+  "<NODE3_PUBLIC_KEY_HEX>": "127.0.0.1:9003"

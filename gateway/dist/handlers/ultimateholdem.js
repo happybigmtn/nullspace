@@ -56,9 +56,9 @@ export class UltimateHoldemHandler extends GameHandler {
         }
     }
     async handleDeal(ctx, msg) {
-        const ante = msg.ante;
-        const blind = msg.blind;
-        const trips = msg.trips;
+        const ante = typeof msg.ante === 'number' ? msg.ante : msg.anteBet;
+        const blind = typeof msg.blind === 'number' ? msg.blind : msg.blindBet;
+        const trips = (typeof msg.trips === 'number' ? msg.trips : msg.tripsBet);
         if (typeof ante !== 'number' || ante <= 0) {
             return {
                 success: false,
@@ -71,16 +71,19 @@ export class UltimateHoldemHandler extends GameHandler {
                 error: createError(ErrorCodes.INVALID_BET, 'Invalid blind amount'),
             };
         }
-        // Trips is optional side bet
-        const totalBet = BigInt(ante) + BigInt(blind) + BigInt(trips ?? 0);
         const gameSessionId = generateSessionId(ctx.session.publicKey, ctx.session.gameSessionCounter++);
-        // Step 1: Start game (enters Betting stage)
-        const startResult = await this.startGame(ctx, totalBet, gameSessionId);
+        // Step 1: Start game with ante only (blind is deducted on init; trips via Deal payload)
+        const startResult = await this.startGame(ctx, BigInt(ante), gameSessionId);
         if (!startResult.success) {
             return startResult;
         }
         // Step 2: Send Deal move to deal cards (moves to Preflop stage)
-        const dealPayload = new Uint8Array([UthAction.Deal]);
+        let dealPayload = new Uint8Array([UthAction.Deal]);
+        if (typeof trips === 'number' && trips > 0) {
+            dealPayload = new Uint8Array(1 + 8);
+            dealPayload[0] = UthAction.Deal;
+            new DataView(dealPayload.buffer).setBigUint64(1, BigInt(trips), false);
+        }
         const dealResult = await this.makeMove(ctx, dealPayload);
         if (!dealResult.success) {
             return dealResult;

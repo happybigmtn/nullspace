@@ -12,14 +12,14 @@ export const PlaySwapStakeTabs: React.FC<TabsProps> = ({ className }) => {
 
   const tabClass = (active: boolean) =>
     [
-      'inline-flex shrink-0 whitespace-nowrap items-center justify-center h-11 px-3 rounded border text-[10px] tracking-widest uppercase transition-colors',
+      'inline-flex shrink-0 whitespace-nowrap items-center justify-center h-10 px-5 rounded-full text-[11px] font-bold tracking-tight transition-all duration-200 border',
       active
-        ? 'border-terminal-green text-terminal-green bg-terminal-green/10'
-        : 'border-gray-800 text-gray-400 hover:border-gray-600 hover:text-white',
+        ? 'bg-titanium-900 text-white border-titanium-900 shadow-sm'
+        : 'bg-white text-titanium-800 border-titanium-200 hover:border-titanium-400',
     ].join(' ');
 
   return (
-    <nav className={['flex items-center gap-2 max-w-full overflow-x-auto', className ?? ''].join(' ').trim()}>
+    <nav className={['flex items-center gap-2 max-w-full overflow-x-auto scrollbar-hide p-1 bg-titanium-100/50 rounded-full border border-titanium-200', className ?? ''].join(' ').trim()}>
       <Link to="/" className={tabClass(pathname === '/')}>
         Play
       </Link>

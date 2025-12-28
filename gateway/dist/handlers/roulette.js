@@ -9,6 +9,7 @@
  */
 import { GameHandler } from './base.js';
 import { GameType } from '../codec/index.js';
+import { ROULETTE_BET_NAMES, encodeRouletteBet } from '../codec/bet-types.js';
 import { generateSessionId } from '../codec/transactions.js';
 import { ErrorCodes, createError } from '../types/errors.js';
 /** Roulette action codes matching execution/src/casino/roulette.rs */
@@ -42,26 +43,25 @@ export class RouletteHandler extends GameHandler {
                 error: createError(ErrorCodes.INVALID_BET, 'No bets provided'),
             };
         }
-        // Validate bets and calculate total
-        let totalBet = 0n;
+        // Validate bets
         for (const bet of bets) {
-            if (typeof bet.type !== 'number' || typeof bet.value !== 'number' || typeof bet.amount !== 'number') {
+            const amount = bet.amount;
+            if (typeof amount !== 'number') {
                 return {
                     success: false,
                     error: createError(ErrorCodes.INVALID_BET, 'Invalid bet format'),
                 };
             }
-            if (bet.amount <= 0) {
+            if (amount <= 0) {
                 return {
                     success: false,
                     error: createError(ErrorCodes.INVALID_BET, 'Bet amount must be positive'),
                 };
             }
-            totalBet += BigInt(bet.amount);
         }
         const gameSessionId = generateSessionId(ctx.session.publicKey, ctx.session.gameSessionCounter++);
-        // Start game with total bet
-        const startResult = await this.startGame(ctx, totalBet, gameSessionId);
+        // Start game with bet=0; roulette bets are deducted via moves.
+        const startResult = await this.startGame(ctx, 0n, gameSessionId);
         if (!startResult.success) {
             return startResult;
         }
@@ -73,9 +73,33 @@ export class RouletteHandler extends GameHandler {
         payload[1] = bets.length;
         let offset = 2;
         for (const bet of bets) {
-            payload[offset] = bet.type;
-            payload[offset + 1] = bet.value;
-            view.setBigUint64(offset + 2, BigInt(bet.amount), false); // BE
+            const amount = bet.amount;
+            const betType = bet.type;
+            const rawValue = bet.value ?? bet.number ?? bet.target ?? 0;
+            if (typeof betType !== 'number' && typeof betType !== 'string') {
+                return {
+                    success: false,
+                    error: createError(ErrorCodes.INVALID_BET, 'Invalid bet format'),
+                };
+            }
+            const encoded = typeof betType === 'string'
+                ? (() => {
+                    const betKey = betType.toUpperCase();
+                    if (!ROULETTE_BET_NAMES.includes(betKey)) {
+                        return null;
+                    }
+                    return encodeRouletteBet(betKey, typeof rawValue === 'number' ? rawValue : undefined);
+                })()
+                : { type: betType, value: typeof rawValue === 'number' ? rawValue : 0 };
+            if (!encoded) {
+                return {
+                    success: false,
+                    error: createError(ErrorCodes.INVALID_BET, `Invalid bet type: ${betType}`),
+                };
+            }
+            payload[offset] = encoded.type;
+            payload[offset + 1] = encoded.value;
+            view.setBigUint64(offset + 2, BigInt(amount), false); // BE
             offset += 10;
         }
         return this.makeMove(ctx, payload);

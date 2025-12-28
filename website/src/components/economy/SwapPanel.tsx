@@ -220,7 +220,7 @@ export const SwapPanel: React.FC<SwapPanelProps> = ({
             className={[
               'h-11 px-3 rounded border text-[10px] tracking-widest uppercase',
               canSubmit
-                ? 'border-terminal-accent text-terminal-accent hover:bg-terminal-accent/10'
+                ? 'border-action-destructive text-action-destructive hover:bg-action-destructive/10'
                 : 'border-gray-800 text-gray-600 cursor-not-allowed',
             ].join(' ')}
             onClick={() => (canSubmit ? setConfirmOpen(true) : null)}
@@ -231,7 +231,7 @@ export const SwapPanel: React.FC<SwapPanelProps> = ({
         </div>
 
         {validationMessage ? (
-          <div className="text-[10px] text-terminal-accent">{validationMessage}</div>
+          <div className="text-[10px] text-action-destructive">{validationMessage}</div>
         ) : (
           <div className="text-[10px] text-gray-500 leading-relaxed">
             Est. out: <span className="text-white">{quote.out.toString()}</span> · Min out:{' '}

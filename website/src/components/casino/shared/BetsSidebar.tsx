@@ -21,7 +21,7 @@ export function BetsSidebar<T>({
     <div
       className={`
         hidden md:flex absolute top-0 right-0 bottom-24 w-36
-        bg-terminal-black/80 border-l-2 border-gray-700 p-2 backdrop-blur-sm z-30
+        bg-titanium-900/80 border-l-2 border-gray-700 p-2 backdrop-blur-sm z-30
         flex-col ${className}
       `}
     >
@@ -39,7 +39,7 @@ export function BetsSidebar<T>({
             {/* Confirmed (on-chain) bets */}
             {confirmedBets.length > 0 && (
               <div className="space-y-1">
-                <div className="text-[8px] text-terminal-green uppercase tracking-widest font-bold font-mono">
+                <div className="text-[8px] text-action-success uppercase tracking-widest font-bold font-mono">
                   Confirmed ({confirmedBets.length})
                 </div>
                 {confirmedBets.map((bet, i) => renderBet(bet, i, false))}

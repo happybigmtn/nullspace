@@ -17,6 +17,13 @@ target
 .env
 .env.*
 !.env.example
+!.env.*.example
+
+# Local node configurations (contain private keys)
+configs/local/node*.yaml
+!configs/local/node.yaml.example
+configs/local/peers.yaml
+!configs/local/peers.yaml.example
 
 # Logs
 npm-debug.log*

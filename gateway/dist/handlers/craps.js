@@ -10,6 +10,7 @@
  */
 import { GameHandler } from './base.js';
 import { GameType } from '../codec/index.js';
+import { CRAPS_BET_TYPES, encodeCrapsBet } from '../codec/bet-types.js';
 import { generateSessionId } from '../codec/transactions.js';
 import { ErrorCodes, createError } from '../types/errors.js';
 /** Craps action codes matching execution/src/casino/craps.rs */
@@ -30,6 +31,9 @@ export class CrapsHandler extends GameHandler {
             case 'craps_bet':
                 return this.handleBet(ctx, msg);
             case 'craps_roll':
+                if (Array.isArray(msg.bets)) {
+                    return this.handleBet(ctx, msg);
+                }
                 return this.handleRoll(ctx);
             default:
                 return {
@@ -39,36 +43,102 @@ export class CrapsHandler extends GameHandler {
         }
     }
     async handleBet(ctx, msg) {
-        const betType = msg.betType;
-        const amount = msg.amount;
-        const target = msg.target ?? 0;
-        if (typeof betType !== 'number' || typeof amount !== 'number') {
-            return {
-                success: false,
-                error: createError(ErrorCodes.INVALID_BET, 'Invalid bet format'),
-            };
-        }
-        if (amount <= 0) {
-            return {
-                success: false,
-                error: createError(ErrorCodes.INVALID_BET, 'Bet amount must be positive'),
-            };
-        }
+        const bets = Array.isArray(msg.bets) ? msg.bets : null;
         const gameSessionId = generateSessionId(ctx.session.publicKey, ctx.session.gameSessionCounter++);
-        // Start game with bet=0 (Craps requires bet as first move, not at start)
+        // Start game with bet=0 (Craps requires bet as first move, not at start).
         const startResult = await this.startGame(ctx, 0n, gameSessionId);
         if (!startResult.success) {
             return startResult;
         }
-        // Use atomic batch: place bet + roll in one transaction
-        // Format: [4, bet_count=1, bet_type, target, amount_u64_BE]
-        const payload = new Uint8Array(12); // 1 + 1 + 10 bytes per bet
+        if (!bets) {
+            const betType = msg.betType;
+            const amount = msg.amount;
+            const target = msg.target;
+            if ((typeof betType !== 'number' && typeof betType !== 'string') || typeof amount !== 'number') {
+                return {
+                    success: false,
+                    error: createError(ErrorCodes.INVALID_BET, 'Invalid bet format'),
+                };
+            }
+            if (amount <= 0) {
+                return {
+                    success: false,
+                    error: createError(ErrorCodes.INVALID_BET, 'Bet amount must be positive'),
+                };
+            }
+            const encoded = typeof betType === 'string'
+                ? (() => {
+                    const betKey = betType.toUpperCase();
+                    if (!(betKey in CRAPS_BET_TYPES)) {
+                        return null;
+                    }
+                    return encodeCrapsBet(betKey, target);
+                })()
+                : { betType, target: target ?? 0 };
+            if (!encoded) {
+                return {
+                    success: false,
+                    error: createError(ErrorCodes.INVALID_BET, `Invalid bet type: ${betType}`),
+                };
+            }
+            // Use atomic batch: place bet + roll in one transaction
+            // Format: [4, bet_count=1, bet_type, target, amount_u64_BE]
+            const payload = new Uint8Array(12); // 1 + 1 + 10 bytes per bet
+            const view = new DataView(payload.buffer);
+            payload[0] = CrapsAction.AtomicBatch;
+            payload[1] = 1; // bet_count
+            payload[2] = encoded.betType;
+            payload[3] = encoded.target;
+            view.setBigUint64(4, BigInt(amount), false); // BE
+            return this.makeMove(ctx, payload);
+        }
+        if (bets.length === 0) {
+            return {
+                success: false,
+                error: createError(ErrorCodes.INVALID_BET, 'No bets provided'),
+            };
+        }
+        const payload = new Uint8Array(2 + bets.length * 10);
         const view = new DataView(payload.buffer);
         payload[0] = CrapsAction.AtomicBatch;
-        payload[1] = 1; // bet_count
-        payload[2] = betType;
-        payload[3] = target;
-        view.setBigUint64(4, BigInt(amount), false); // BE
+        payload[1] = bets.length;
+        let offset = 2;
+        for (const bet of bets) {
+            const betType = bet.type;
+            const amount = bet.amount;
+            const target = bet.target;
+            if ((typeof betType !== 'number' && typeof betType !== 'string') || typeof amount !== 'number') {
+                return {
+                    success: false,
+                    error: createError(ErrorCodes.INVALID_BET, 'Invalid bet format'),
+                };
+            }
+            if (amount <= 0) {
+                return {
+                    success: false,
+                    error: createError(ErrorCodes.INVALID_BET, 'Bet amount must be positive'),
+                };
+            }
+            const encoded = typeof betType === 'string'
+                ? (() => {
+                    const betKey = betType.toUpperCase();
+                    if (!(betKey in CRAPS_BET_TYPES)) {
+                        return null;
+                    }
+                    return encodeCrapsBet(betKey, typeof target === 'number' ? target : undefined);
+                })()
+                : { betType, target: typeof target === 'number' ? target : 0 };
+            if (!encoded) {
+                return {
+                    success: false,
+                    error: createError(ErrorCodes.INVALID_BET, `Invalid bet type: ${betType}`),
+                };
+            }
+            payload[offset] = encoded.betType;
+            payload[offset + 1] = encoded.target;
+            view.setBigUint64(offset + 2, BigInt(amount), false);
+            offset += 10;
+        }
         return this.makeMove(ctx, payload);
     }
     async handleRoll(ctx) {

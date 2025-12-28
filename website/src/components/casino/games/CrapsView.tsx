@@ -82,8 +82,8 @@ export const CrapsView = React.memo<{
     const pointColor = useMemo(() => {
         const hasPassBet = gameState.crapsBets.some(b => b.type === 'PASS');
         const hasDontPassBet = gameState.crapsBets.some(b => b.type === 'DONT_PASS');
-        if (hasPassBet) return 'border-terminal-green text-terminal-green';
-        if (hasDontPassBet) return 'border-terminal-accent text-terminal-accent';
+        if (hasPassBet) return 'border-action-success text-action-success';
+        if (hasDontPassBet) return 'border-action-destructive text-action-destructive';
         return 'border-gray-700 text-gray-700';
     }, [gameState.crapsBets]);
 
@@ -149,22 +149,22 @@ export const CrapsView = React.memo<{
                                                 <div key={idx} className="flex items-center h-6 text-sm">
                                                     <div className="flex-1 flex justify-end items-center pr-2">
                                                         {pnlRounded < 0 && (
-                                                            <span className="text-terminal-accent font-mono text-[10px]">
+                                                            <span className="text-action-destructive font-mono text-[10px]">
                                                                 -{Math.abs(pnlRounded).toLocaleString()}
                                                             </span>
                                                         )}
                                                     </div>
                                                     <div className={`w-9 text-center font-bold ${
                                                         isHighlight ? 'text-yellow-400 bg-yellow-400/20 rounded' :
-                                                        row.num === 7 ? 'text-terminal-accent' :
-                                                        row.isHard === true ? 'text-terminal-gold' :
+                                                        row.num === 7 ? 'text-action-destructive' :
+                                                        row.isHard === true ? 'text-action-primary' :
                                                         row.isHard === false ? 'text-gray-400' : 'text-white'
                                                     }`}>
                                                         {row.label}
                                                     </div>
                                                     <div className="flex-1 flex justify-start items-center pl-2">
                                                         {pnlRounded > 0 && (
-                                                            <span className="text-terminal-green font-mono text-[10px]">
+                                                            <span className="text-action-success font-mono text-[10px]">
                                                                 +{pnlRounded.toLocaleString()}
                                                             </span>
                                                         )}
@@ -186,16 +186,16 @@ export const CrapsView = React.memo<{
                                             const candidateIdx = gameState.crapsOddsCandidates?.indexOf(i);
                                             const isCandidate = candidateIdx !== undefined && candidateIdx !== -1;
                                             return (
-                                                <div key={i} onClick={() => isCandidate ? actions?.addCrapsOdds?.(candidateIdx) : actions?.placeCrapsBet?.(b.type, b.target)} className={`flex justify-between items-center text-xs border p-1 rounded cursor-pointer transition-colors ${isCandidate ? 'border-terminal-gold bg-terminal-gold/10' : 'border-gray-800 bg-black/50 hover:bg-gray-800'}`}>
+                                                <div key={i} onClick={() => isCandidate ? actions?.addCrapsOdds?.(candidateIdx) : actions?.placeCrapsBet?.(b.type, b.target)} className={`flex justify-between items-center text-xs border p-1 rounded cursor-pointer transition-colors ${isCandidate ? 'border-action-primary bg-action-primary/10' : 'border-gray-800 bg-black/50 hover:bg-gray-800'}`}>
                                                 <div className="flex flex-col">
-                                                    <span className={`font-bold text-[10px] ${isCandidate ? 'text-terminal-gold' : 'text-terminal-green'}`}>
+                                                    <span className={`font-bold text-[10px] ${isCandidate ? 'text-action-primary' : 'text-action-success'}`}>
                                                         {isCandidate ? `[${candidateIdx! + 1}] ` : ''}{b.type}{b.target !== undefined ? ` ${b.target}` : ''}
                                                     </span>
                                                     <span className="text-[9px] text-gray-500">{b.status === 'PENDING' ? 'WAIT' : 'ON'}</span>
                                                 </div>
                                                 <div className="text-right">
                                                     <div className="text-white text-[10px]">${b.amount}</div>
-                                                    {b.oddsAmount && <div className="text-[9px] text-terminal-gold">+${b.oddsAmount}</div>}
+                                                    {b.oddsAmount && <div className="text-[9px] text-action-primary">+${b.oddsAmount}</div>}
                                                 </div>
                                             </div>
                                             );
@@ -228,12 +228,12 @@ export const CrapsView = React.memo<{
                             
                             return (
                             <div key={i} onClick={() => isCandidate ? actions?.addCrapsOdds?.(candidateIdx) : actions?.placeCrapsBet?.(bet.type, bet.target)} className="flex flex-col items-center gap-1 cursor-pointer hover:scale-105 transition-transform">
-                                <span className={`text-[10px] uppercase tracking-widest ${isCandidate ? 'text-terminal-gold font-bold' : (bet.type === 'COME' ? 'text-terminal-green' : 'text-terminal-accent')}`}>
+                                <span className={`text-[10px] uppercase tracking-widest ${isCandidate ? 'text-action-primary font-bold' : (bet.type === 'COME' ? 'text-action-success' : 'text-action-destructive')}`}>
                                     {isCandidate ? `[${candidateIdx! + 1}] ` : ''}{bet.type === 'COME' ? 'COME' : "DON'T"}
                                 </span>
                                 <div className={`w-12 h-12 border-2 flex items-center justify-center text-lg font-bold rounded-full shadow-[0_0_10px_rgba(0,0,0,0.5)] ${
-                                    isCandidate ? 'border-terminal-gold text-terminal-gold bg-terminal-gold/10' :
-                                    (bet.type === 'COME' ? 'border-terminal-green text-terminal-green' : 'border-terminal-accent text-terminal-accent')
+                                    isCandidate ? 'border-action-primary text-action-primary bg-action-primary/10' :
+                                    (bet.type === 'COME' ? 'border-action-success text-action-success' : 'border-action-destructive text-action-destructive')
                                 }`}>
                                     {bet.target}
                                 </div>
@@ -254,7 +254,7 @@ export const CrapsView = React.memo<{
 
                 {/* Center Info */}
                 <div className="text-center space-y-3 relative z-20">
-                    <div className="text-lg sm:text-2xl font-bold text-terminal-gold tracking-widest leading-tight animate-pulse">
+                    <div className="text-lg sm:text-2xl font-bold text-action-primary tracking-widest leading-tight animate-pulse">
                         {/* On mobile, replace "SPACE TO ROLL" with "PLACE BETS" */}
                         <span className="hidden sm:inline">{gameState.message}</span>
                         <span className="md:hidden">{gameState.message?.replace(/SPACE TO ROLL/gi, 'PLACE BETS')}</span>
@@ -263,7 +263,7 @@ export const CrapsView = React.memo<{
                         <div className="text-[11px] sm:text-[10px] tracking-widest mt-1 flex items-center justify-center gap-1">
                             <span className="text-gray-400">LAST:</span>
                             {gameState.crapsRollHistory.slice(-10).map((roll, i, arr) => (
-                                <span key={i} className={`${i === arr.length - 1 ? 'text-yellow-400 font-bold' : roll === 7 ? 'text-terminal-accent' : 'text-gray-400'}`}>
+                                <span key={i} className={`${i === arr.length - 1 ? 'text-yellow-400 font-bold' : roll === 7 ? 'text-action-destructive' : 'text-gray-400'}`}>
                                     {roll}{i < arr.length - 1 ? ' -' : ''}
                                 </span>
                             ))}
@@ -290,13 +290,13 @@ export const CrapsView = React.memo<{
                 {/* Super Mode Info - Animated */}
                 {gameState.superMode?.isActive && (
                     <div className="w-full max-w-md mx-auto px-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                        <div className="relative bg-terminal-black/95 border-2 border-terminal-gold rounded text-center overflow-hidden
+                        <div className="relative bg-titanium-900/95 border-2 border-action-primary rounded text-center overflow-hidden
                                         shadow-[0_0_20px_rgba(255,215,0,0.3),inset_0_0_30px_rgba(255,215,0,0.05)]
                                         animate-pulse-glow">
                             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-terminal-gold/10 to-transparent
                                             animate-shimmer pointer-events-none" />
                             <div className="relative p-3">
-                                <div className="text-xs font-bold text-terminal-gold tracking-[0.3em] mb-2 font-mono flex items-center justify-center gap-2">
+                                <div className="text-xs font-bold text-action-primary tracking-[0.3em] mb-2 font-mono flex items-center justify-center gap-2">
                                     <span className="animate-pulse">⚡</span>
                                     <span className="bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-300 bg-clip-text text-transparent">
                                         SUPER MODE ACTIVE
@@ -309,7 +309,7 @@ export const CrapsView = React.memo<{
                                             <span
                                                 key={idx}
                                                 className="px-2.5 py-1 rounded-lg bg-gradient-to-br from-amber-900/50 to-amber-950/50
-                                                           border border-terminal-gold/60 text-terminal-gold text-xs font-mono font-bold
+                                                           border border-action-primary/60 text-action-primary text-xs font-mono font-bold
                                                            shadow-[0_0_8px_rgba(255,215,0,0.2)] hover:shadow-[0_0_12px_rgba(255,215,0,0.4)]
                                                            transition-all duration-200 hover:scale-105"
                                             >
@@ -333,7 +333,7 @@ export const CrapsView = React.memo<{
                             onClick={() => actions?.placeCrapsBet?.(gameState.crapsPoint ? 'COME' : 'PASS')}
                             className={`flex-1 py-3 rounded border text-xs font-bold tracking-wider transition-colors ${
                                 betTypes.has('PASS') || betTypes.has('COME')
-                                    ? 'border-terminal-green bg-terminal-green/20 text-terminal-green'
+                                    ? 'border-action-success bg-action-success/20 text-action-success'
                                     : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'
                             }`}
                         >
@@ -343,7 +343,7 @@ export const CrapsView = React.memo<{
                             onClick={() => actions?.placeCrapsBet?.(gameState.crapsPoint ? 'DONT_COME' : 'DONT_PASS')}
                             className={`flex-1 py-3 rounded border text-xs font-bold tracking-wider transition-colors ${
                                 betTypes.has('DONT_PASS') || betTypes.has('DONT_COME')
-                                    ? 'border-terminal-accent bg-terminal-accent/20 text-terminal-accent'
+                                    ? 'border-action-destructive bg-action-destructive/20 text-action-destructive'
                                     : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'
                             }`}
                         >
@@ -358,7 +358,7 @@ export const CrapsView = React.memo<{
                             <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
                                 {gameState.crapsBets.map((b, i) => (
                                     <div key={i} onClick={() => actions?.placeCrapsBet?.(b.type, b.target)} className="flex-none flex flex-col items-center border border-gray-800 bg-black/50 p-1 rounded min-w-[60px] cursor-pointer hover:bg-gray-800 transition-colors">
-                                        <span className="text-[9px] text-terminal-green font-bold">{b.type}</span>
+                                        <span className="text-[9px] text-action-success font-bold">{b.type}</span>
                                         <span className="text-[9px] text-white">${b.amount + (b.oddsAmount || 0)}</span>
                                         {b.target !== undefined && <span className="text-[8px] text-gray-500">{b.target}</span>}
                                     </div>
@@ -370,14 +370,14 @@ export const CrapsView = React.memo<{
             </div>
 
             {/* LEFT SIDEBAR - EXPOSURE / SIDE BETS TOGGLE */}
-            <div className="hidden lg:flex absolute top-0 left-0 bottom-24 w-56 bg-terminal-black/80 border-r-2 border-gray-700 backdrop-blur-sm z-30 flex-col">
+            <div className="hidden lg:flex absolute top-0 left-0 bottom-24 w-56 bg-titanium-900/80 border-r-2 border-gray-700 backdrop-blur-sm z-30 flex-col">
                 {/* Toggle Tabs */}
                 <div className="flex-none flex border-b border-gray-800">
                     <button
                         onClick={() => setLeftSidebarView('EXPOSURE')}
                         className={`flex-1 py-2 text-[10px] font-bold tracking-widest uppercase transition-colors ${
                             leftSidebarView === 'EXPOSURE'
-                                ? 'text-terminal-green border-b-2 border-terminal-green bg-terminal-green/10'
+                                ? 'text-action-success border-b-2 border-action-success bg-action-success/10'
                                 : 'text-gray-500 hover:text-gray-300'
                         }`}
                     >
@@ -428,22 +428,22 @@ export const CrapsView = React.memo<{
                                         <div key={idx} className="flex items-center h-7 text-base">
                                             <div className="flex-1 flex justify-end items-center pr-2">
                                                 {pnlRounded < 0 && (
-                                                    <span className="text-terminal-accent font-mono text-sm">
+                                                    <span className="text-action-destructive font-mono text-sm">
                                                         -{Math.abs(pnlRounded).toLocaleString()}
                                                     </span>
                                                 )}
                                             </div>
                                             <div className={`w-10 text-center font-bold relative ${
                                                 isHighlight ? 'text-yellow-400 bg-yellow-400/20 rounded' :
-                                                row.num === 7 ? 'text-terminal-accent' :
-                                                row.isHard === true ? 'text-terminal-gold' :
+                                                row.num === 7 ? 'text-action-destructive' :
+                                                row.isHard === true ? 'text-action-primary' :
                                                 row.isHard === false ? 'text-gray-400' : 'text-white'
                                             }`}>
                                                 {row.label}
                                             </div>
                                             <div className="flex-1 flex justify-start items-center pl-2">
                                                 {pnlRounded > 0 && (
-                                                    <span className="text-terminal-green font-mono text-sm">
+                                                    <span className="text-action-success font-mono text-sm">
                                                         +{pnlRounded.toLocaleString()}
                                                     </span>
                                                 )}
@@ -464,7 +464,7 @@ export const CrapsView = React.memo<{
             </div>
 
             {/* ACTIVE BETS SIDEBAR */}
-            <div className="hidden lg:flex absolute top-0 right-0 bottom-24 w-36 bg-terminal-black/80 border-l-2 border-gray-700 p-2 backdrop-blur-sm z-30 flex-col">
+            <div className="hidden lg:flex absolute top-0 right-0 bottom-24 w-36 bg-titanium-900/80 border-l-2 border-gray-700 p-2 backdrop-blur-sm z-30 flex-col">
                 <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-2 border-b border-gray-800 pb-1 flex-none text-center">Table Bets</div>
                 <div className="flex-1 overflow-y-auto flex flex-col space-y-2">
                     {(() => {
@@ -482,7 +482,7 @@ export const CrapsView = React.memo<{
                                     onClick={() => isCandidate ? actions?.addCrapsOdds?.(candidateIdx) : actions?.placeCrapsBet?.(b.type, b.target)}
                                     className={`flex justify-between items-center text-xs border p-1 rounded cursor-pointer hover:bg-gray-800 transition-colors ${
                                         isCandidate
-                                            ? 'border-terminal-gold bg-terminal-gold/10'
+                                            ? 'border-action-primary bg-action-primary/10'
                                             : isPending
                                                 ? 'border-amber-600/50 bg-amber-900/20'
                                                 : 'border-gray-800 bg-black/50'
@@ -490,7 +490,7 @@ export const CrapsView = React.memo<{
                                 >
                                     <div className="flex flex-col">
                                         <span className={`font-bold text-[10px] ${
-                                            isCandidate ? 'text-terminal-gold' : isPending ? 'text-amber-400' : 'text-terminal-green'
+                                            isCandidate ? 'text-action-primary' : isPending ? 'text-amber-400' : 'text-action-success'
                                         }`}>
                                             {isCandidate ? `[${candidateIdx! + 1}] ` : ''}{b.type}{b.target !== undefined ? ` ${b.target}` : ''}
                                         </span>
@@ -515,7 +515,7 @@ export const CrapsView = React.memo<{
                                 {/* Confirmed (on-chain) bets */}
                                 {confirmedBets.length > 0 && (
                                     <div className="space-y-1">
-                                        <div className="text-[8px] text-terminal-green uppercase tracking-widest font-bold">
+                                        <div className="text-[8px] text-action-success uppercase tracking-widest font-bold">
                                             Confirmed ({confirmedBets.length})
                                         </div>
                                         {confirmedBets.map((b, i) => renderBet(b, i, false))}
@@ -539,7 +539,7 @@ export const CrapsView = React.memo<{
 
 
             {/* CONTROLS */}
-            <div className="ns-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-terminal-black/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
+            <div className="ns-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-titanium-900/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
                 <div className="h-16 md:h-20 flex items-center justify-between md:justify-center gap-2 p-2 md:px-4">
                     {/* Bet Menu */}
                     <div className="hidden md:flex items-center gap-2 flex-1">
@@ -598,7 +598,7 @@ export const CrapsView = React.memo<{
                         <button
                             type="button"
                             onClick={actions?.deal}
-                            className="h-14 px-8 rounded border-2 font-bold text-base tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] border-terminal-green bg-terminal-green text-black hover:bg-white hover:border-white hover:scale-105 active:scale-95"
+                            className="h-14 px-8 rounded border-2 font-bold text-base tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] border-action-success bg-action-success text-black hover:bg-white hover:border-white hover:scale-105 active:scale-95"
                         >
                             ROLL
                         </button>
@@ -684,7 +684,7 @@ export const CrapsView = React.memo<{
                     <button
                         type="button"
                         onClick={actions?.deal}
-                        className="md:hidden h-12 px-6 rounded border-2 font-bold text-sm tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] border-terminal-green bg-terminal-green text-black hover:bg-white hover:border-white hover:scale-105 active:scale-95"
+                        className="md:hidden h-12 px-6 rounded border-2 font-bold text-sm tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] border-action-success bg-action-success text-black hover:bg-white hover:border-white hover:scale-105 active:scale-95"
                     >
                         ROLL
                     </button>
@@ -694,7 +694,7 @@ export const CrapsView = React.memo<{
             {/* MODAL */}
             {gameState.crapsInputMode !== 'NONE' && (
                      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={closeInput}>
-                         <div className="bg-terminal-black border border-terminal-green p-4 sm:p-6 rounded-lg shadow-xl flex flex-col items-center gap-4 w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
+                         <div className="bg-titanium-900 border border-action-success p-4 sm:p-6 rounded-lg shadow-xl flex flex-col items-center gap-4 w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
                              <div className="text-sm tracking-widest text-gray-400 uppercase">SELECT {gameState.crapsInputMode} NUMBER</div>
                              <div className="grid grid-cols-4 gap-3">
                                  {(() => {
@@ -747,9 +747,9 @@ export const CrapsView = React.memo<{
                                                     onClick={() => actions?.placeCrapsNumberBet?.(gameState.crapsInputMode, item.num)}
                                                     className="flex flex-col items-center gap-1"
                                                 >
-                                                    <div className="w-12 h-12 flex items-center justify-center border border-terminal-accent rounded bg-gray-900 text-terminal-accent font-bold text-lg relative">
+                                                    <div className="w-12 h-12 flex items-center justify-center border border-action-destructive rounded bg-gray-900 text-action-destructive font-bold text-lg relative">
                                                         7
-                                                        <span className="absolute bottom-0.5 text-[8px] text-terminal-gold">{item.payout}</span>
+                                                        <span className="absolute bottom-0.5 text-[8px] text-action-primary">{item.payout}</span>
                                                     </div>
                                                     <div className="text-[10px] text-gray-500 bg-gray-800 px-1 rounded uppercase">
                                                         KEY 7
@@ -767,7 +767,7 @@ export const CrapsView = React.memo<{
                                             >
                                                 <div className="w-12 h-12 flex items-center justify-center border border-gray-700 rounded bg-gray-900 text-white font-bold text-lg relative">
                                                     {item.num}
-                                                    {item.payout && <span className="absolute bottom-0.5 text-[8px] text-terminal-gold">({item.payout})</span>}
+                                                    {item.payout && <span className="absolute bottom-0.5 text-[8px] text-action-primary">({item.payout})</span>}
                                                 </div>
                                                 <div className="text-[10px] text-gray-500 bg-gray-800 px-1 rounded uppercase">
                                                     KEY {item.label}

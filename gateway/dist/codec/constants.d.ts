@@ -1,7 +1,3 @@
-/**
- * Protocol constants matching the Rust backend
- * See: types/src/execution.rs
- */
 export declare const TRANSACTION_NAMESPACE: Uint8Array<ArrayBuffer>;
 export declare const InstructionTag: {
     readonly CasinoRegister: 10;
@@ -114,8 +110,6 @@ export declare const CrapsBet: {
     readonly Hardway8: 10;
     readonly Hardway10: 11;
     readonly Fire: 12;
-    readonly CAndE: 13;
-    readonly Horn: 14;
     readonly AtsSmall: 15;
     readonly AtsTall: 16;
     readonly AtsAll: 17;

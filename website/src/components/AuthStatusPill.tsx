@@ -202,7 +202,7 @@ export const AuthStatusPill: React.FC<AuthStatusPillProps> = ({ publicKeyHex, cl
     typeof window !== 'undefined' ? authLinks.signOut(window.location.href) : authLinks.signOut();
 
   const pillClass = [
-    'flex flex-wrap items-center gap-2 rounded border border-gray-800 bg-gray-900/30 px-2 py-1 text-[10px] tracking-widest uppercase',
+    'flex flex-wrap items-center gap-3 rounded-full border border-titanium-200 bg-white shadow-soft px-4 py-1.5 text-[10px] font-bold tracking-widest uppercase',
     className ?? '',
   ]
     .join(' ')
@@ -210,11 +210,11 @@ export const AuthStatusPill: React.FC<AuthStatusPillProps> = ({ publicKeyHex, cl
 
   return (
     <div className={pillClass}>
-      <span className="text-gray-500">Auth</span>
+      <span className="text-titanium-400">Auth</span>
       {loading ? (
-        <span className="text-gray-500">Checking…</span>
+        <span className="text-titanium-300">Checking…</span>
       ) : session ? (
-        <span className="text-terminal-green max-w-[140px] truncate" title={displayName}>
+        <span className="text-titanium-900 max-w-[140px] truncate" title={displayName}>
           {displayLabel}
         </span>
       ) : (
@@ -224,30 +224,30 @@ export const AuthStatusPill: React.FC<AuthStatusPillProps> = ({ publicKeyHex, cl
               type="button"
               onClick={onKeySignIn}
               disabled={signInBusy}
-              className={`border px-2 py-1 rounded transition-colors ${
+              className={`px-3 py-1 rounded-full transition-all duration-200 ${
                 signInBusy
-                  ? 'bg-gray-800 border-gray-700 text-gray-500 cursor-not-allowed'
-                  : 'bg-terminal-green/20 border-terminal-green text-terminal-green hover:bg-terminal-green/30'
+                  ? 'bg-titanium-100 text-titanium-300'
+                  : 'bg-action-primary text-white shadow-sm hover:scale-105 active:scale-95'
               }`}
             >
               {signInBusy ? 'Signing…' : 'Sign in'}
             </button>
           ) : vaultStatus.supported ? (
-            <a href="/security" className="text-terminal-green hover:underline">
-              Unlock passkey
+            <a href="/security" className="text-action-primary hover:opacity-70 transition-opacity">
+              Unlock
             </a>
           ) : (
-            <span className="text-gray-500">Passkey unavailable</span>
+            <span className="text-titanium-300 italic">Vault Unavailable</span>
           )}
         </>
       )}
 
       {session ? (
         <>
-          <div className="h-4 w-px bg-gray-800" />
+          <div className="h-3 w-px bg-titanium-200" />
           {!activeEntitlement && stripeTiers.length > 1 ? (
             <select
-              className="bg-gray-950 border border-gray-800 rounded px-2 py-1 text-[10px] text-gray-300"
+              className="bg-white border border-titanium-200 rounded-lg px-2 py-0.5 text-[10px] font-bold text-titanium-800 outline-none"
               value={selectedTier}
               onChange={(event) => setSelectedTier(event.target.value)}
             >
@@ -265,82 +265,22 @@ export const AuthStatusPill: React.FC<AuthStatusPillProps> = ({ publicKeyHex, cl
               billingBusy ||
               (!activeEntitlement && !fallbackPriceId && stripeTiers.length === 0)
             }
-            className={`border px-2 py-1 rounded transition-colors ${
-              billingBusy
-                ? 'bg-gray-800 border-gray-700 text-gray-500 cursor-not-allowed'
-                : 'bg-terminal-green/20 border-terminal-green text-terminal-green hover:bg-terminal-green/30'
-            }`}
-            title={
-              !activeEntitlement && !fallbackPriceId && stripeTiers.length === 0
-                ? 'Set VITE_STRIPE_TIERS or VITE_STRIPE_PRICE_ID'
-                : undefined
-            }
+            className="px-3 py-1 rounded-full bg-titanium-100 text-titanium-800 border border-titanium-200 hover:border-titanium-400 transition-all"
           >
-            {activeEntitlement ? 'Manage' : 'Subscribe'}
+            {activeEntitlement ? 'Account' : 'Join'}
           </button>
-          {publicKeyHex ? (
-            <button
-              type="button"
-              onClick={onLinkKey}
-              disabled={linkBusy || linkDone}
-              className={`border px-2 py-1 rounded transition-colors ${
-                linkBusy
-                  ? 'bg-gray-800 border-gray-700 text-gray-500 cursor-not-allowed'
-                  : linkDone
-                    ? 'bg-gray-900 border-gray-700 text-gray-500'
-                    : 'bg-gray-900 border-gray-800 text-gray-300 hover:border-gray-600'
-              }`}
-            >
-              {linkDone ? 'Key linked' : linkBusy ? 'Linking…' : 'Link key'}
-            </button>
-          ) : null}
-          <div className="h-4 w-px bg-gray-800" />
-          <span className="text-gray-500">EVM</span>
-          <span className="text-gray-400">
-            {formatEvmAddress(evmLink?.evmAddress)}
-            {evmLink?.chainId ? ` (chain ${evmLink.chainId})` : ''}
-          </span>
-          {evmLink?.status === 'active' ? (
-            <button
-              type="button"
-              onClick={onUnlinkEvm}
-              disabled={evmBusy}
-              className={`border px-2 py-1 rounded transition-colors ${
-                evmBusy
-                  ? 'bg-gray-800 border-gray-700 text-gray-500 cursor-not-allowed'
-                  : 'bg-gray-900 border-gray-800 text-gray-300 hover:border-gray-600'
-              }`}
-            >
-              {evmBusy ? 'Unlinking…' : 'Unlink'}
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={onLinkEvm}
-              disabled={evmBusy}
-              className={`border px-2 py-1 rounded transition-colors ${
-                evmBusy
-                  ? 'bg-gray-800 border-gray-700 text-gray-500 cursor-not-allowed'
-                  : 'bg-gray-900 border-gray-800 text-gray-300 hover:border-gray-600'
-              }`}
-            >
-              {evmBusy ? 'Linking…' : 'Link wallet'}
-            </button>
-          )}
-          <a href={signOutUrl} className="text-gray-400 hover:text-white">
-            Sign out
+          <div className="h-3 w-px bg-titanium-200" />
+          <a href={signOutUrl} className="text-titanium-400 hover:text-titanium-900 transition-colors">
+            Exit
           </a>
         </>
       ) : null}
 
-      {activeEntitlement ? (
-        <span className="text-gray-500">Tier {activeEntitlement.tier}</span>
-      ) : null}
-      {billingError ? <span className="text-terminal-accent">{billingError}</span> : null}
-      {linkError ? <span className="text-terminal-accent">{linkError}</span> : null}
-      {evmError ? <span className="text-terminal-accent">{evmError}</span> : null}
-      {signInError ? <span className="text-terminal-accent">{signInError}</span> : null}
-      {error ? <span className="text-terminal-accent">{error}</span> : null}
+      {billingError ? <span className="text-action-destructive">{billingError}</span> : null}
+      {linkError ? <span className="text-action-destructive">{linkError}</span> : null}
+      {evmError ? <span className="text-action-destructive">{evmError}</span> : null}
+      {signInError ? <span className="text-action-destructive">{signInError}</span> : null}
+      {error ? <span className="text-action-destructive">{error}</span> : null}
     </div>
   );
 };

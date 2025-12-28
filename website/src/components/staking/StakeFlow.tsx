@@ -118,7 +118,7 @@ export const StakeFlow: React.FC<StakeFlowProps> = ({
         <button
           className={`flex-1 text-xs px-3 py-2 rounded border ${
             canStake
-              ? 'border-terminal-green text-terminal-green hover:bg-terminal-green/10'
+              ? 'border-action-success text-action-success hover:bg-action-success/10'
               : 'border-gray-800 text-gray-600 cursor-not-allowed'
           }`}
           onClick={() => (canStake ? setConfirmOpen(true) : null)}
@@ -159,7 +159,7 @@ export const StakeFlow: React.FC<StakeFlowProps> = ({
       )}
 
       {stakeValidationMessage ? (
-        <div className="text-[10px] text-terminal-accent">{stakeValidationMessage}</div>
+        <div className="text-[10px] text-action-destructive">{stakeValidationMessage}</div>
       ) : null}
 
       <div className="text-[10px] text-gray-600 leading-relaxed">

@@ -53,8 +53,8 @@ export const MobileChipSelector: React.FC<MobileChipSelectorProps> = ({ currentB
 
     const buttonStyle = fixedMode ? {} : { left: pos.x, top: pos.y };
     const buttonClass = fixedMode
-        ? `relative flex items-center justify-center w-9 h-9 rounded-full border border-terminal-gold bg-terminal-black/90 shadow-lg backdrop-blur-sm ${className || ''}`
-        : `fixed sm:hidden z-50 flex items-center justify-center w-14 h-14 rounded-full border-2 border-terminal-gold bg-terminal-black/90 shadow-lg backdrop-blur-sm touch-none ${className || ''}`;
+        ? `relative flex items-center justify-center w-10 h-10 rounded-full border border-titanium-200 bg-white shadow-soft transition-shadow active:shadow-md ${className || ''}`
+        : `fixed sm:hidden z-50 flex items-center justify-center w-14 h-14 rounded-full border border-titanium-200 bg-white/80 backdrop-blur-xl shadow-float transition-all active:scale-95 touch-none ${className || ''}`;
 
     const menuStyle = fixedMode
         ? { top: '3.5rem', right: '0.5rem' }
@@ -72,8 +72,8 @@ export const MobileChipSelector: React.FC<MobileChipSelectorProps> = ({ currentB
                 className={buttonClass}
             >
                 <div className="flex flex-col items-center leading-none">
-                    <span className={`${fixedMode ? 'text-[5px]' : 'text-[8px]'} text-terminal-gold uppercase tracking-widest mb-0.5`}>BET</span>
-                    <span className={`${fixedMode ? 'text-[9px]' : 'text-xs'} font-bold text-white`}>
+                    <span className={`${fixedMode ? 'text-[6px]' : 'text-[8px]'} text-titanium-400 font-bold uppercase tracking-[0.2em] mb-0.5`}>Bet</span>
+                    <span className={`${fixedMode ? 'text-[10px]' : 'text-sm'} font-bold text-titanium-900 tabular-nums`}>
                         {currentBet >= 1000 ? `${currentBet / 1000}k` : currentBet}
                     </span>
                 </div>
@@ -82,9 +82,9 @@ export const MobileChipSelector: React.FC<MobileChipSelectorProps> = ({ currentB
             {/* Chip Selection Menu */}
             {isOpen && (
                 <>
-                    <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm" onClick={() => setIsOpen(false)} />
+                    <div className="fixed inset-0 z-40 bg-titanium-900/10 backdrop-blur-md" onClick={() => setIsOpen(false)} />
                     <div
-                        className="fixed z-50 flex flex-col gap-2 animate-slide-down origin-top overflow-y-auto max-h-[60vh] p-2 bg-terminal-black/90 border border-gray-700 rounded-lg backdrop-blur-sm"
+                        className="fixed z-50 flex flex-col gap-3 p-3 bg-white/90 border border-titanium-200 rounded-[32px] shadow-float backdrop-blur-xl animate-scale-in origin-top overflow-y-auto max-h-[60vh] scrollbar-hide"
                         style={menuStyle}
                     >
                         {CHIPS.map((chip) => (
@@ -92,13 +92,13 @@ export const MobileChipSelector: React.FC<MobileChipSelectorProps> = ({ currentB
                                 key={chip}
                                 type="button"
                                 onClick={() => handleSelect(chip)}
-                                className={`w-12 h-12 rounded-full border flex items-center justify-center shadow-lg transition-transform active:scale-95 flex-shrink-0 ${
+                                className={`w-12 h-12 rounded-full border flex items-center justify-center transition-all duration-200 flex-shrink-0 font-bold text-xs tabular-nums ${
                                     currentBet === chip
-                                        ? 'border-terminal-green bg-terminal-green text-black scale-110'
-                                        : 'border-gray-600 bg-gray-900 text-gray-300'
+                                        ? 'bg-titanium-900 text-white border-titanium-900 shadow-md scale-110'
+                                        : 'bg-white text-titanium-800 border-titanium-200 hover:border-titanium-400'
                                 }`}
                             >
-                                <span className="text-[10px] font-bold">
+                                <span>
                                     {chip >= 1000 ? `${chip / 1000}k` : chip}
                                 </span>
                             </button>

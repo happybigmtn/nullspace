@@ -18,7 +18,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({ title, status, leading, 
   return (
     <header
       className={[
-        'border-b border-gray-800 bg-terminal-black/90 backdrop-blur px-4 py-3 flex flex-wrap items-center justify-between gap-3',
+        'border-b border-gray-800 bg-titanium-900/90 backdrop-blur px-4 py-3 flex flex-wrap items-center justify-between gap-3',
         className ?? '',
       ]
         .join(' ')

@@ -24,11 +24,11 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({ label, title, childr
     <div className="fixed inset-0 z-[100] md:hidden" data-testid="mobile-drawer">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setOpen(false)} />
       <div
-        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[92%] max-w-sm sm:max-w-md max-h-[80vh] sm:max-h-[85vh] bg-terminal-black border-2 border-gray-700 rounded-xl shadow-2xl overflow-hidden flex flex-col"
+        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[92%] max-w-sm sm:max-w-md max-h-[80vh] sm:max-h-[85vh] bg-titanium-900 border-2 border-gray-700 rounded-xl shadow-2xl overflow-hidden flex flex-col"
         data-testid="mobile-drawer-panel"
         data-drawer-label={label}
       >
-        <div className="flex items-center justify-between px-3 py-2 border-b border-gray-800 bg-terminal-black/90">
+        <div className="flex items-center justify-between px-3 py-2 border-b border-gray-800 bg-titanium-900/90">
           <div className="text-[10px] text-gray-500 uppercase tracking-widest">{title}</div>
           <button
             type="button"

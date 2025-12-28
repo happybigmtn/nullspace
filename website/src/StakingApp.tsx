@@ -418,7 +418,7 @@ export default function StakingApp() {
   };
 
   return (
-    <div className="min-h-screen bg-terminal-black text-white font-mono">
+    <div className="min-h-screen bg-titanium-900 text-white font-mono">
       <PageHeader
         title="Staking"
         status={<ConnectionStatus />}
@@ -439,7 +439,7 @@ export default function StakingApp() {
               className={[
                 'h-11 px-3 rounded border text-[10px] tracking-widest uppercase transition-colors',
                 showAdvanced
-                  ? 'border-terminal-green text-terminal-green bg-terminal-green/10'
+                  ? 'border-action-success text-action-success bg-action-success/10'
                   : 'border-gray-800 text-gray-400 hover:border-gray-600 hover:text-white',
               ].join(' ')}
               title="Show advanced / dev controls"
@@ -450,7 +450,7 @@ export default function StakingApp() {
               lastTxDigest ? (
                 <Link
                   to={`/explorer/tx/${lastTxDigest}`}
-                  className="text-[10px] text-terminal-green tracking-widest hover:underline"
+                  className="text-[10px] text-action-success tracking-widest hover:underline"
                   title={lastTxDigest}
                 >
                   LAST TX: {lastTxSig}
@@ -471,7 +471,7 @@ export default function StakingApp() {
             <div className="space-y-2 text-sm">
               <div>
                 Registered:{' '}
-                <span className={isRegistered ? 'text-terminal-green' : 'text-terminal-accent'}>
+                <span className={isRegistered ? 'text-action-success' : 'text-action-destructive'}>
                   {isRegistered ? 'YES' : 'NO'}
                 </span>
               </div>
@@ -493,14 +493,14 @@ export default function StakingApp() {
                   placeholder="Name"
                 />
                 <button
-                  className="text-xs px-3 py-1 rounded border border-terminal-green text-terminal-green hover:bg-terminal-green/10"
+                  className="text-xs px-3 py-1 rounded border border-action-success text-action-success hover:bg-action-success/10"
                   onClick={ensureRegistered}
                 >
                   Register
                 </button>
               </div>
               <button
-                className="w-full text-xs px-3 py-2 rounded border border-terminal-green text-terminal-green hover:bg-terminal-green/10"
+                className="w-full text-xs px-3 py-2 rounded border border-action-success text-action-success hover:bg-action-success/10"
                 onClick={claimFaucet}
               >
                 Daily Faucet (1000 RNG)
@@ -577,14 +577,14 @@ export default function StakingApp() {
                       : 'INFO';
                 const labelClass = isTx
                   ? item.status === 'confirmed'
-                    ? 'text-terminal-green'
+                    ? 'text-action-success'
                     : item.status === 'failed'
-                      ? 'text-terminal-accent'
+                      ? 'text-action-destructive'
                       : 'text-gray-500'
                   : item.level === 'error'
-                    ? 'text-terminal-accent'
+                    ? 'text-action-destructive'
                     : item.level === 'success'
-                      ? 'text-terminal-green'
+                      ? 'text-action-success'
                       : 'text-gray-500';
 
                 const messageNode =

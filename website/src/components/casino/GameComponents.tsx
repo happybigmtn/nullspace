@@ -87,7 +87,7 @@ export const Hand: React.FC<{ cards: Card[]; title?: string; forcedColor?: strin
 );
 
 export const Chip: React.FC<{ value: number }> = ({ value }) => (
-  <div className="w-6 h-6 rounded-full border border-terminal-gold text-terminal-gold flex items-center justify-center text-[10px] font-bold">
+  <div className="w-6 h-6 rounded-full border border-action-primary text-action-primary flex items-center justify-center text-[10px] font-bold">
     {value >= 1000 ? 'K' : value}
   </div>
 );

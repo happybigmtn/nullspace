@@ -38,12 +38,28 @@ export function varintSize(value) {
     return size;
 }
 /**
+ * Build union_unique format for signing (matches commonware-utils)
+ *
+ * Format: [varint(namespace.len)] [namespace] [message]
+ *
+ * This is how commonware-cryptography signs with a namespace.
+ */
+function unionUnique(namespace, message) {
+    const lenVarint = encodeVarint(namespace.length);
+    const result = new Uint8Array(lenVarint.length + namespace.length + message.length);
+    result.set(lenVarint, 0);
+    result.set(namespace, lenVarint.length);
+    result.set(message, lenVarint.length + namespace.length);
+    return result;
+}
+/**
  * Build a signed transaction
  *
  * Transaction format:
  * [nonce:u64 BE] [instruction bytes] [pubkey:32] [signature:64]
  *
- * Signature covers: TRANSACTION_NAMESPACE + nonce + instruction
+ * Signature covers (using union_unique format):
+ * [varint(namespace.len)] [TRANSACTION_NAMESPACE] [nonce + instruction]
  */
 export function buildTransaction(nonce, instruction, privateKey) {
     const publicKey = ed25519.getPublicKey(privateKey);
@@ -51,10 +67,9 @@ export function buildTransaction(nonce, instruction, privateKey) {
     const payload = new Uint8Array(8 + instruction.length);
     new DataView(payload.buffer).setBigUint64(0, nonce, false); // BE
     payload.set(instruction, 8);
-    // Sign with namespace prefix: TRANSACTION_NAMESPACE + payload
-    const toSign = new Uint8Array(TRANSACTION_NAMESPACE.length + payload.length);
-    toSign.set(TRANSACTION_NAMESPACE, 0);
-    toSign.set(payload, TRANSACTION_NAMESPACE.length);
+    // Sign with union_unique format: [varint(namespace.len)] [namespace] [payload]
+    // This matches how commonware-cryptography handles namespaced signing
+    const toSign = unionUnique(TRANSACTION_NAMESPACE, payload);
     const signature = ed25519.sign(toSign, privateKey);
     // Build transaction: payload + pubkey + signature
     const tx = new Uint8Array(payload.length + 32 + 64);
@@ -121,9 +136,8 @@ export function verifyTransaction(tx, instructionLen) {
     const payload = new Uint8Array(8 + instructionLen);
     new DataView(payload.buffer).setBigUint64(0, nonce, false);
     payload.set(instruction, 8);
-    const toSign = new Uint8Array(TRANSACTION_NAMESPACE.length + payload.length);
-    toSign.set(TRANSACTION_NAMESPACE, 0);
-    toSign.set(payload, TRANSACTION_NAMESPACE.length);
+    // Use union_unique format to match signing
+    const toSign = unionUnique(TRANSACTION_NAMESPACE, payload);
     try {
         return ed25519.verify(signature, toSign, publicKey);
     }

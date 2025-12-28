@@ -101,11 +101,11 @@ export const ThreeCardPokerView = React.memo<ThreeCardPokerViewProps & { lastWin
                                     Pair Plus
                                 </div>
                                 <div className="space-y-2 text-[10px]">
-                                    <div className="flex justify-between"><span className="text-gray-400">Straight Flush</span><span className="text-terminal-gold">40:1</span></div>
-                                    <div className="flex justify-between"><span className="text-gray-400">Three of Kind</span><span className="text-terminal-gold">30:1</span></div>
-                                    <div className="flex justify-between"><span className="text-gray-400">Straight</span><span className="text-terminal-gold">6:1</span></div>
-                                    <div className="flex justify-between"><span className="text-gray-400">Flush</span><span className="text-terminal-gold">3:1</span></div>
-                                    <div className="flex justify-between"><span className="text-gray-400">Pair</span><span className="text-terminal-gold">1:1</span></div>
+                                    <div className="flex justify-between"><span className="text-gray-400">Straight Flush</span><span className="text-action-primary">40:1</span></div>
+                                    <div className="flex justify-between"><span className="text-gray-400">Three of Kind</span><span className="text-action-primary">30:1</span></div>
+                                    <div className="flex justify-between"><span className="text-gray-400">Straight</span><span className="text-action-primary">6:1</span></div>
+                                    <div className="flex justify-between"><span className="text-gray-400">Flush</span><span className="text-action-primary">3:1</span></div>
+                                    <div className="flex justify-between"><span className="text-gray-400">Pair</span><span className="text-action-primary">1:1</span></div>
                                 </div>
                             </div>
                             <div className="border border-gray-800 rounded bg-black/40 p-2">
@@ -126,11 +126,11 @@ export const ThreeCardPokerView = React.memo<ThreeCardPokerViewProps & { lastWin
                 <div className="min-h-[96px] sm:min-h-[120px] flex items-center justify-center opacity-75">
                     {gameState.dealerCards.length > 0 ? (
                         <div className="flex flex-col items-center gap-2">
-                            <span className="text-lg font-bold tracking-widest text-terminal-accent">DEALER</span>
+                            <span className="text-lg font-bold tracking-widest text-action-destructive">DEALER</span>
                             <Hand
                                 cards={gameState.dealerCards}
                                 title={dealerRank ? `(${dealerRank})` : ''}
-                                forcedColor="text-terminal-accent"
+                                forcedColor="text-action-destructive"
                             />
                             {dealerRank && (
                                 <span className="text-xs text-gray-500 mt-1">
@@ -141,10 +141,10 @@ export const ThreeCardPokerView = React.memo<ThreeCardPokerViewProps & { lastWin
                         </div>
                     ) : (
                         <div className="flex flex-col items-center gap-2">
-                            <span className="text-lg font-bold tracking-widest text-terminal-accent">DEALER</span>
+                            <span className="text-lg font-bold tracking-widest text-action-destructive">DEALER</span>
                             <div className="flex gap-1 sm:gap-1.5 md:gap-2">
                                 {[0, 1, 2].map(i => (
-                                    <div key={i} className="w-12 h-[4.5rem] sm:w-14 sm:h-20 md:w-16 md:h-24 border border-dashed border-terminal-accent/50 rounded" />
+                                    <div key={i} className="w-12 h-[4.5rem] sm:w-14 sm:h-20 md:w-16 md:h-24 border border-dashed border-action-destructive/50 rounded" />
                                 ))}
                             </div>
                         </div>
@@ -157,9 +157,9 @@ export const ThreeCardPokerView = React.memo<ThreeCardPokerViewProps & { lastWin
                         <span className="text-gray-500">{gameState.stage}</span>
                         <span className="text-gray-700">•</span>
                         <span className="text-gray-500">TOTAL</span>
-                        <span className="text-terminal-gold">${totalBet.toLocaleString()}</span>
+                        <span className="text-action-primary">${totalBet.toLocaleString()}</span>
                     </div>
-                    <div className="text-lg sm:text-2xl font-bold text-terminal-gold tracking-widest leading-tight animate-pulse">
+                    <div className="text-lg sm:text-2xl font-bold text-action-primary tracking-widest leading-tight animate-pulse">
                         {gameState.message}
                     </div>
                     <div className="text-sm text-gray-500 flex flex-col items-center gap-1">
@@ -175,7 +175,7 @@ export const ThreeCardPokerView = React.memo<ThreeCardPokerViewProps & { lastWin
                         )}
                         <div
                             className={`mt-1 inline-flex items-center gap-2 px-3 py-1 rounded border bg-black/40 text-[10px] tracking-widest ${
-                                gameState.threeCardProgressiveBet > 0 ? 'border-terminal-green/40 text-terminal-gold' : 'border-gray-800 text-gray-600'
+                                gameState.threeCardProgressiveBet > 0 ? 'border-action-success/40 text-action-primary' : 'border-gray-800 text-gray-600'
                             }`}
                         >
                             <span>PROG JACKPOT</span>
@@ -190,19 +190,19 @@ export const ThreeCardPokerView = React.memo<ThreeCardPokerViewProps & { lastWin
                 <div className="min-h-[96px] sm:min-h-[120px] flex gap-8 items-center justify-center">
                     {gameState.playerCards.length > 0 ? (
                         <div className="flex flex-col items-center gap-2 scale-110">
-                            <span className="text-lg font-bold tracking-widest text-terminal-green">YOU</span>
+                            <span className="text-lg font-bold tracking-widest text-action-success">YOU</span>
                             <Hand
                                 cards={gameState.playerCards}
                                 title={playerRank ? `(${playerRank})` : ''}
-                                forcedColor="text-terminal-green"
+                                forcedColor="text-action-success"
                             />
                         </div>
                     ) : (
                         <div className="flex flex-col items-center gap-2 scale-110">
-                            <span className="text-lg font-bold tracking-widest text-terminal-green">YOU</span>
+                            <span className="text-lg font-bold tracking-widest text-action-success">YOU</span>
                             <div className="flex gap-1 sm:gap-1.5 md:gap-2">
                                 {[0, 1, 2].map(i => (
-                                    <div key={i} className="w-12 h-[4.5rem] sm:w-14 sm:h-20 md:w-16 md:h-24 border border-dashed border-terminal-green/50 rounded" />
+                                    <div key={i} className="w-12 h-[4.5rem] sm:w-14 sm:h-20 md:w-16 md:h-24 border border-dashed border-action-success/50 rounded" />
                                 ))}
                             </div>
                         </div>
@@ -211,19 +211,19 @@ export const ThreeCardPokerView = React.memo<ThreeCardPokerViewProps & { lastWin
             </div>
 
             {/* Pair Plus Info Sidebar */}
-            <div className="hidden lg:flex absolute top-0 left-0 bottom-24 w-36 bg-terminal-black/80 border-r-2 border-gray-700 p-2 overflow-y-auto backdrop-blur-sm z-30 flex-col">
+            <div className="hidden lg:flex absolute top-0 left-0 bottom-24 w-36 bg-titanium-900/80 border-r-2 border-gray-700 p-2 overflow-y-auto backdrop-blur-sm z-30 flex-col">
                 <h3 className="text-[10px] font-bold text-gray-500 mb-2 tracking-widest text-center border-b border-gray-800 pb-1 flex-none">PAIR PLUS</h3>
                 <div className="flex-1 flex flex-col justify-center space-y-2 text-[10px]">
-                    <div className="flex justify-between"><span className="text-gray-400">Straight Flush</span><span className="text-terminal-gold">40:1</span></div>
-                    <div className="flex justify-between"><span className="text-gray-400">Three of Kind</span><span className="text-terminal-gold">30:1</span></div>
-                    <div className="flex justify-between"><span className="text-gray-400">Straight</span><span className="text-terminal-gold">6:1</span></div>
-                    <div className="flex justify-between"><span className="text-gray-400">Flush</span><span className="text-terminal-gold">3:1</span></div>
-                    <div className="flex justify-between"><span className="text-gray-400">Pair</span><span className="text-terminal-gold">1:1</span></div>
+                    <div className="flex justify-between"><span className="text-gray-400">Straight Flush</span><span className="text-action-primary">40:1</span></div>
+                    <div className="flex justify-between"><span className="text-gray-400">Three of Kind</span><span className="text-action-primary">30:1</span></div>
+                    <div className="flex justify-between"><span className="text-gray-400">Straight</span><span className="text-action-primary">6:1</span></div>
+                    <div className="flex justify-between"><span className="text-gray-400">Flush</span><span className="text-action-primary">3:1</span></div>
+                    <div className="flex justify-between"><span className="text-gray-400">Pair</span><span className="text-action-primary">1:1</span></div>
                 </div>
             </div>
 
             {/* Game Rules Sidebar */}
-            <div className="hidden lg:flex absolute top-0 right-0 bottom-24 w-36 bg-terminal-black/80 border-l-2 border-gray-700 p-2 backdrop-blur-sm z-30 flex-col">
+            <div className="hidden lg:flex absolute top-0 right-0 bottom-24 w-36 bg-titanium-900/80 border-l-2 border-gray-700 p-2 backdrop-blur-sm z-30 flex-col">
                 <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-2 border-b border-gray-800 pb-1 flex-none text-center">Rules</div>
                 <div className="flex-1 overflow-y-auto flex flex-col justify-center space-y-2 text-[9px] text-gray-400">
                     <div>• Dealer qualifies with Queen-high or better</div>
@@ -234,7 +234,7 @@ export const ThreeCardPokerView = React.memo<ThreeCardPokerViewProps & { lastWin
             </div>
 
             {/* Controls */}
-            <div className="ns-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-terminal-black/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
+            <div className="ns-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-titanium-900/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
                 <div className="h-auto md:h-20 flex flex-col md:flex-row items-stretch md:items-center justify-between md:justify-center gap-2 p-2 md:px-4">
                     {/* Desktop: Grouped Controls */}
                     <div className="hidden md:flex items-center gap-4 flex-1">
@@ -242,7 +242,7 @@ export const ThreeCardPokerView = React.memo<ThreeCardPokerViewProps & { lastWin
                             <>
                                 {/* NORMAL BETS GROUP */}
                                 <div className="flex items-center gap-2">
-                                    <span className="text-[10px] text-terminal-green font-bold tracking-widest uppercase font-mono">NORMAL:</span>
+                                    <span className="text-[10px] text-action-success font-bold tracking-widest uppercase font-mono">NORMAL:</span>
                                     <div className="h-6 w-px bg-gray-700" />
                                     <span className="text-xs text-gray-500 font-mono">Ante + Play</span>
                                 </div>
@@ -298,7 +298,7 @@ export const ThreeCardPokerView = React.memo<ThreeCardPokerViewProps & { lastWin
                         ) : gameState.stage === 'PLAYING' && !gameState.message.includes('REVEAL') ? (
                             <button
                                 onClick={actions?.threeCardFold}
-                                className="px-6 py-2 rounded border-2 font-bold text-sm font-mono tracking-widest uppercase transition-all border-terminal-accent text-terminal-accent hover:bg-terminal-accent/10"
+                                className="px-6 py-2 rounded border-2 font-bold text-sm font-mono tracking-widest uppercase transition-all border-action-destructive text-action-destructive hover:bg-action-destructive/10"
                             >
                                 FOLD
                             </button>
@@ -318,8 +318,8 @@ export const ThreeCardPokerView = React.memo<ThreeCardPokerViewProps & { lastWin
                             }
                             className={`h-14 px-8 rounded border-2 font-bold text-base font-mono tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] ${
                                 gameState.stage === 'PLAYING' && !gameState.message.includes('REVEAL')
-                                    ? 'border-terminal-green bg-terminal-green text-black hover:bg-white hover:border-white'
-                                    : 'border-terminal-green bg-terminal-green text-black hover:bg-white hover:border-white'
+                                    ? 'border-action-success bg-action-success text-black hover:bg-white hover:border-white'
+                                    : 'border-action-success bg-action-success text-black hover:bg-white hover:border-white'
                             } hover:scale-105 active:scale-95`}
                         >
                             {gameState.stage === 'BETTING'
@@ -429,7 +429,7 @@ export const ThreeCardPokerView = React.memo<ThreeCardPokerViewProps & { lastWin
                                             ? actions?.deal
                                             : actions?.threeCardPlay
                                 }
-                                className="flex-1 h-12 px-6 rounded border-2 font-bold text-sm font-mono tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] border-terminal-green bg-terminal-green text-black hover:bg-white hover:border-white hover:scale-105 active:scale-95"
+                                className="flex-1 h-12 px-6 rounded border-2 font-bold text-sm font-mono tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] border-action-success bg-action-success text-black hover:bg-white hover:border-white hover:scale-105 active:scale-95"
                             >
                                 {gameState.stage === 'BETTING'
                                     ? 'DEAL'
@@ -445,7 +445,7 @@ export const ThreeCardPokerView = React.memo<ThreeCardPokerViewProps & { lastWin
                         {gameState.stage === 'PLAYING' && !gameState.message.includes('REVEAL') && (
                             <button
                                 onClick={actions?.threeCardFold}
-                                className="w-full py-3 rounded border-2 font-bold text-sm font-mono tracking-widest uppercase transition-all border-terminal-accent text-terminal-accent hover:bg-terminal-accent/10"
+                                className="w-full py-3 rounded border-2 font-bold text-sm font-mono tracking-widest uppercase transition-all border-action-destructive text-action-destructive hover:bg-action-destructive/10"
                             >
                                 FOLD
                             </button>

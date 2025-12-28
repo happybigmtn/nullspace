@@ -47,24 +47,27 @@ export class ThreeCardPokerHandler extends GameHandler {
         }
     }
     async handleDeal(ctx, msg) {
-        const ante = msg.ante;
-        const pairPlus = msg.pairPlus;
+        const ante = typeof msg.ante === 'number' ? msg.ante : msg.anteBet;
+        const pairPlus = (typeof msg.pairPlus === 'number' ? msg.pairPlus : msg.pairPlusBet);
         if (typeof ante !== 'number' || ante <= 0) {
             return {
                 success: false,
                 error: createError(ErrorCodes.INVALID_BET, 'Invalid ante amount'),
             };
         }
-        // Pair plus is optional side bet
-        const totalBet = BigInt(ante) + BigInt(pairPlus ?? 0);
         const gameSessionId = generateSessionId(ctx.session.publicKey, ctx.session.gameSessionCounter++);
-        // Step 1: Start game (enters Betting stage)
-        const startResult = await this.startGame(ctx, totalBet, gameSessionId);
+        // Step 1: Start game with ante (pair plus placed via Deal payload)
+        const startResult = await this.startGame(ctx, BigInt(ante), gameSessionId);
         if (!startResult.success) {
             return startResult;
         }
         // Step 2: Send Deal move to deal cards (moves to Decision stage)
-        const dealPayload = new Uint8Array([ThreeCardMove.Deal]);
+        let dealPayload = new Uint8Array([ThreeCardMove.Deal]);
+        if (typeof pairPlus === 'number' && pairPlus > 0) {
+            dealPayload = new Uint8Array(1 + 8);
+            dealPayload[0] = ThreeCardMove.Deal;
+            new DataView(dealPayload.buffer).setBigUint64(1, BigInt(pairPlus), false);
+        }
         const dealResult = await this.makeMove(ctx, dealPayload);
         if (!dealResult.success) {
             return dealResult;

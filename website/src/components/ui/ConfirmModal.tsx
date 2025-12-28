@@ -40,8 +40,8 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
         className="absolute inset-0 bg-black/70 backdrop-blur-sm"
         onClick={loading ? undefined : onClose}
       />
-      <div className="relative w-full max-w-md border border-gray-800 rounded-lg bg-terminal-black shadow-2xl overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 bg-terminal-black/90">
+      <div className="relative w-full max-w-md border border-gray-800 rounded-lg bg-titanium-900 shadow-2xl overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 bg-titanium-900/90">
           <div className="text-[10px] text-gray-500 tracking-widest uppercase">{title}</div>
           <button
             type="button"
@@ -54,7 +54,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
 
         <div className="p-4">{children}</div>
 
-        <div className="px-4 py-3 border-t border-gray-800 bg-terminal-black/90 flex items-center justify-end gap-2">
+        <div className="px-4 py-3 border-t border-gray-800 bg-titanium-900/90 flex items-center justify-end gap-2">
           <button
             type="button"
             onClick={loading ? undefined : onClose}
@@ -66,7 +66,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
           <button
             type="button"
             onClick={loading ? undefined : onConfirm}
-            className="h-11 px-4 rounded border border-terminal-accent text-terminal-accent text-[10px] tracking-widest uppercase hover:bg-terminal-accent/10 disabled:opacity-60 disabled:cursor-not-allowed"
+            className="h-11 px-4 rounded border border-action-destructive text-action-destructive text-[10px] tracking-widest uppercase hover:bg-action-destructive/10 disabled:opacity-60 disabled:cursor-not-allowed"
             disabled={loading}
           >
             {loading ? 'Confirming…' : confirmText}

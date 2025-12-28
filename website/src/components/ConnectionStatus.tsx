@@ -28,15 +28,15 @@ const statusLabel = (status: string) => {
 const statusColor = (status: string) => {
   switch (status) {
     case 'connected':
-      return 'text-terminal-green';
+      return 'text-action-success';
     case 'connecting':
       return 'text-gray-400';
     case 'offline':
     case 'error':
-      return 'text-terminal-accent';
+      return 'text-action-destructive';
     case 'vault_locked':
     case 'missing_identity':
-      return 'text-terminal-gold';
+      return 'text-action-primary';
     default:
       return 'text-gray-400';
   }
@@ -76,7 +76,7 @@ export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({ className })
       {showUnlock ? (
         <Link
           to="/security"
-          className="text-[10px] text-terminal-green hover:underline"
+          className="text-[10px] text-action-success hover:underline"
         >
           Unlock
         </Link>

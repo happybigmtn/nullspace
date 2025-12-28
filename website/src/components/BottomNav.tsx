@@ -29,13 +29,13 @@ export const BottomNav: React.FC = () => {
   const itemClass = (active: boolean) =>
     [
       'flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] tracking-widest uppercase transition-colors',
-      active ? 'text-terminal-green bg-terminal-green/10' : 'text-gray-400 hover:text-white',
+      active ? 'text-action-success bg-action-success/10' : 'text-gray-400 hover:text-white',
     ].join(' ');
 
   return (
     <nav
       aria-label="Primary"
-      className="fixed bottom-0 left-0 right-0 sm:hidden z-40 border-t border-gray-800 bg-terminal-black/95 backdrop-blur"
+      className="fixed bottom-0 left-0 right-0 sm:hidden z-40 border-t border-gray-800 bg-titanium-900/95 backdrop-blur"
       style={{
         height: 'calc(var(--bottom-nav-h) + env(safe-area-inset-bottom))',
         paddingBottom: 'env(safe-area-inset-bottom)',

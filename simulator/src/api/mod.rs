@@ -66,11 +66,17 @@ impl Api {
             ])
             .expose_headers([header::HeaderName::from_static("x-request-id")]);
 
-        // Configure Rate Limiting
-        let governor_conf = match (
-            self.simulator.config.http_rate_limit_per_second,
-            self.simulator.config.http_rate_limit_burst,
-        ) {
+        // Configure Rate Limiting - environment variables override config
+        let http_rate_per_sec = parse_env_u64("RATE_LIMIT_HTTP_PER_SEC")
+            .or(self.simulator.config.http_rate_limit_per_second);
+        let http_rate_burst = parse_env_u32("RATE_LIMIT_HTTP_BURST")
+            .or(self.simulator.config.http_rate_limit_burst);
+        let submit_rate_per_min = parse_env_u64("RATE_LIMIT_SUBMIT_PER_MIN")
+            .or(self.simulator.config.submit_rate_limit_per_minute);
+        let submit_rate_burst = parse_env_u32("RATE_LIMIT_SUBMIT_BURST")
+            .or(self.simulator.config.submit_rate_limit_burst);
+
+        let governor_conf = match (http_rate_per_sec, http_rate_burst) {
             (Some(rate_per_second), Some(burst_size))
                 if rate_per_second > 0 && burst_size > 0 =>
             {
@@ -96,6 +102,48 @@ impl Api {
             _ => None,
         };
 
+        // Configure submit-specific rate limiting (per minute)
+        let submit_governor_conf = match (submit_rate_per_min, submit_rate_burst) {
+            (Some(rate_per_minute), Some(burst_size))
+                if rate_per_minute > 0 && burst_size > 0 =>
+            {
+                // Convert per-minute rate to period between requests
+                let nanos_per_request = (60_000_000_000u64 / rate_per_minute).max(1);
+                let period = Duration::from_nanos(nanos_per_request);
+                tracing::info!(
+                    rate_per_minute = rate_per_minute,
+                    burst_size = burst_size,
+                    period_ms = period.as_millis(),
+                    "Submit endpoint rate limit configured"
+                );
+                Some(Arc::new(
+                    GovernorConfigBuilder::default()
+                        .period(period)
+                        .burst_size(burst_size)
+                        .key_extractor(SmartIpKeyExtractor)
+                        .finish()
+                        .unwrap_or_else(|| {
+                            tracing::warn!(
+                                "invalid submit rate-limit config; falling back to defaults"
+                            );
+                            GovernorConfigBuilder::default()
+                                .key_extractor(SmartIpKeyExtractor)
+                                .finish()
+                                .expect("default governor config is valid")
+                        }),
+                ))
+            }
+            _ => None,
+        };
+
+        // Create submit route with its own rate limiter
+        let submit_route = match submit_governor_conf {
+            Some(config) => Router::new()
+                .route("/submit", post(http::submit))
+                .layer(GovernorLayer { config }),
+            None => Router::new().route("/submit", post(http::submit)),
+        };
+
         let router = Router::new()
             .route("/healthz", get(http::healthz))
             .route("/config", get(http::config))
@@ -105,7 +153,7 @@ impl Api {
             .route("/metrics/explorer", get(http::explorer_metrics))
             .route("/metrics/updates", get(http::update_index_metrics))
             .route("/metrics/prometheus", get(http::prometheus_metrics))
-            .route("/submit", post(http::submit))
+            .merge(submit_route)
             .route("/seed/:query", get(http::query_seed))
             .route("/state/:query", get(http::query_state))
             .route("/updates/:filter", get(ws::updates_ws))
@@ -170,6 +218,15 @@ fn parse_allow_no_origin(var: &str) -> bool {
         Ok("1") | Ok("true") | Ok("TRUE") | Ok("yes") | Ok("YES")
     )
 }
+
+fn parse_env_u64(var: &str) -> Option<u64> {
+    std::env::var(var).ok().and_then(|v| v.parse().ok())
+}
+
+fn parse_env_u32(var: &str) -> Option<u32> {
+    std::env::var(var).ok().and_then(|v| v.parse().ok())
+}
+
 
 async fn enforce_origin(
     config: OriginConfig,

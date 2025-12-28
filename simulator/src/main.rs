@@ -81,6 +81,14 @@ struct Args {
     #[arg(long)]
     http_rate_limit_burst: Option<u32>,
 
+    /// Submit endpoint rate limit per IP in requests per minute (default: 100).
+    #[arg(long)]
+    submit_rate_limit_per_minute: Option<u64>,
+
+    /// Submit endpoint rate limit burst size (default: 10).
+    #[arg(long)]
+    submit_rate_limit_burst: Option<u32>,
+
     /// Max request body size in bytes (0 disables limit).
     #[arg(long)]
     http_body_limit_bytes: Option<usize>,
@@ -237,6 +245,16 @@ async fn main() -> anyhow::Result<()> {
             Some(0) => None,
             Some(value) => Some(value),
             None => defaults.http_rate_limit_burst,
+        },
+        submit_rate_limit_per_minute: match args.submit_rate_limit_per_minute {
+            Some(0) => None,
+            Some(value) => Some(value),
+            None => defaults.submit_rate_limit_per_minute,
+        },
+        submit_rate_limit_burst: match args.submit_rate_limit_burst {
+            Some(0) => None,
+            Some(value) => Some(value),
+            None => defaults.submit_rate_limit_burst,
         },
         http_body_limit_bytes: match args.http_body_limit_bytes {
             Some(0) => None,

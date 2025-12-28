@@ -9,6 +9,7 @@
  */
 import { GameHandler } from './base.js';
 import { GameType } from '../codec/index.js';
+import { SICBO_BET_TYPES, encodeSicBoBet } from '../codec/bet-types.js';
 import { generateSessionId } from '../codec/transactions.js';
 import { ErrorCodes, createError } from '../types/errors.js';
 /** Sic Bo action codes matching execution/src/casino/sic_bo.rs */
@@ -44,10 +45,9 @@ export class SicBoHandler extends GameHandler {
                 error: createError(ErrorCodes.INVALID_BET, 'No bets provided'),
             };
         }
-        // Validate bets and calculate total
-        let totalBet = 0n;
+        // Validate bets
         for (const bet of bets) {
-            if (typeof bet.type !== 'number' || typeof bet.amount !== 'number') {
+            if (typeof bet.amount !== 'number' || (typeof bet.type !== 'number' && typeof bet.type !== 'string')) {
                 return {
                     success: false,
                     error: createError(ErrorCodes.INVALID_BET, 'Invalid bet format'),
@@ -59,11 +59,10 @@ export class SicBoHandler extends GameHandler {
                     error: createError(ErrorCodes.INVALID_BET, 'Bet amount must be positive'),
                 };
             }
-            totalBet += BigInt(bet.amount);
         }
         const gameSessionId = generateSessionId(ctx.session.publicKey, ctx.session.gameSessionCounter++);
-        // Start game with total bet
-        const startResult = await this.startGame(ctx, totalBet, gameSessionId);
+        // Start game with bet=0; sic bo bets are deducted via moves.
+        const startResult = await this.startGame(ctx, 0n, gameSessionId);
         if (!startResult.success) {
             return startResult;
         }
@@ -75,9 +74,27 @@ export class SicBoHandler extends GameHandler {
         payload[1] = bets.length;
         let offset = 2;
         for (const bet of bets) {
-            payload[offset] = bet.type;
-            payload[offset + 1] = bet.number ?? 0; // number is 0 for simple bets like Small/Big
-            view.setBigUint64(offset + 2, BigInt(bet.amount), false); // BE
+            const betType = bet.type;
+            const amount = bet.amount;
+            const rawNumber = bet.number ?? bet.target ?? bet.value ?? 0;
+            const encoded = typeof betType === 'string'
+                ? (() => {
+                    const betKey = betType.toUpperCase();
+                    if (!(betKey in SICBO_BET_TYPES)) {
+                        return null;
+                    }
+                    return encodeSicBoBet(betKey, typeof rawNumber === 'number' ? rawNumber : undefined);
+                })()
+                : { betType, number: typeof rawNumber === 'number' ? rawNumber : 0 };
+            if (!encoded) {
+                return {
+                    success: false,
+                    error: createError(ErrorCodes.INVALID_BET, `Invalid bet type: ${betType}`),
+                };
+            }
+            payload[offset] = encoded.betType;
+            payload[offset + 1] = encoded.number; // number is 0 for simple bets like Small/Big
+            view.setBigUint64(offset + 2, BigInt(amount), false); // BE
             offset += 10;
         }
         return this.makeMove(ctx, payload);

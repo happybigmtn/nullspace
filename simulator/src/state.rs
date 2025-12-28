@@ -40,10 +40,12 @@ const DEFAULT_SUBMISSION_HISTORY_LIMIT: usize = 10_000;
 const DEFAULT_SEED_HISTORY_LIMIT: usize = 10_000;
 const DEFAULT_HTTP_RATE_LIMIT_PER_SECOND: u64 = 1_000;
 const DEFAULT_HTTP_RATE_LIMIT_BURST: u32 = 5_000;
+const DEFAULT_SUBMIT_RATE_LIMIT_PER_MINUTE: u64 = 100;
+const DEFAULT_SUBMIT_RATE_LIMIT_BURST: u32 = 10;
 const DEFAULT_HTTP_BODY_LIMIT_BYTES: usize = 8 * 1024 * 1024;
 const DEFAULT_WS_OUTBOUND_BUFFER: usize = 256;
 const DEFAULT_WS_MAX_CONNECTIONS: usize = 20_000;
-const DEFAULT_WS_MAX_CONNECTIONS_PER_IP: usize = 200;
+const DEFAULT_WS_MAX_CONNECTIONS_PER_IP: usize = 10;
 const DEFAULT_WS_MAX_MESSAGE_BYTES: usize = 4 * 1024 * 1024;
 const DEFAULT_UPDATES_BROADCAST_BUFFER: usize = 1_024;
 const DEFAULT_MEMPOOL_BROADCAST_BUFFER: usize = 1_024;
@@ -88,6 +90,8 @@ pub struct SimulatorConfig {
     pub seed_history_limit: Option<usize>,
     pub http_rate_limit_per_second: Option<u64>,
     pub http_rate_limit_burst: Option<u32>,
+    pub submit_rate_limit_per_minute: Option<u64>,
+    pub submit_rate_limit_burst: Option<u32>,
     pub http_body_limit_bytes: Option<usize>,
     pub ws_outbound_buffer: Option<usize>,
     pub ws_max_connections: Option<usize>,
@@ -124,6 +128,8 @@ impl Default for SimulatorConfig {
             seed_history_limit: Some(DEFAULT_SEED_HISTORY_LIMIT),
             http_rate_limit_per_second: Some(DEFAULT_HTTP_RATE_LIMIT_PER_SECOND),
             http_rate_limit_burst: Some(DEFAULT_HTTP_RATE_LIMIT_BURST),
+            submit_rate_limit_per_minute: Some(DEFAULT_SUBMIT_RATE_LIMIT_PER_MINUTE),
+            submit_rate_limit_burst: Some(DEFAULT_SUBMIT_RATE_LIMIT_BURST),
             http_body_limit_bytes: Some(DEFAULT_HTTP_BODY_LIMIT_BYTES),
             ws_outbound_buffer: Some(DEFAULT_WS_OUTBOUND_BUFFER),
             ws_max_connections: Some(DEFAULT_WS_MAX_CONNECTIONS),

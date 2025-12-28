@@ -70,9 +70,50 @@ body {
   display: none;
 }
 
-/* Legacy Terminal Class Keep (for safety, can be removed later) */
-.bg-terminal-black { background-color: #0a0a0a; }
-.text-terminal-green { color: #00ff41; }
+/* Titanium & Glass Utilities */
+.bg-glass-light {
+  background-color: rgba(255, 255, 255, 0.7);
+}
+
+.bg-glass-dark {
+  background-color: rgba(0, 0, 0, 0.6);
+}
+
+.border-glass {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.shadow-float {
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08);
+}
+
+.shadow-soft {
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Transitions */
+.transition-all-snappy {
+  transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Animations */
+@keyframes scaleIn {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
 
 /* Win Animations - Refined */
 @keyframes slideIn {

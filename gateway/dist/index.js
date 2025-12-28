@@ -6,17 +6,23 @@
  */
 import { WebSocketServer } from 'ws';
 import { createHandlerRegistry } from './handlers/index.js';
-import { SessionManager, NonceManager } from './session/index.js';
+import { SessionManager, NonceManager, ConnectionLimiter } from './session/index.js';
 import { SubmitClient } from './backend/index.js';
 import { GameType } from './codec/index.js';
 import { ErrorCodes } from './types/errors.js';
 // Configuration from environment
 const PORT = parseInt(process.env.GATEWAY_PORT || '9010', 10);
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8080';
+const MAX_CONNECTIONS_PER_IP = parseInt(process.env.MAX_CONNECTIONS_PER_IP || '5', 10);
+const MAX_TOTAL_SESSIONS = parseInt(process.env.MAX_TOTAL_SESSIONS || '1000', 10);
 // Core services
 const nonceManager = new NonceManager();
 const submitClient = new SubmitClient(BACKEND_URL);
 const sessionManager = new SessionManager(submitClient, BACKEND_URL, nonceManager);
+const connectionLimiter = new ConnectionLimiter({
+    maxConnectionsPerIp: MAX_CONNECTIONS_PER_IP,
+    maxTotalSessions: MAX_TOTAL_SESSIONS,
+});
 const handlers = createHandlerRegistry();
 // Message type to GameType mapping
 // Includes both canonical names and mobile app variations (with underscores)
@@ -168,8 +174,20 @@ async function handleMessage(ws, rawData) {
 // Create WebSocket server
 const wss = new WebSocketServer({ port: PORT });
 wss.on('connection', async (ws, req) => {
-    const clientIp = req.socket.remoteAddress;
+    const clientIp = req.socket.remoteAddress ?? 'unknown';
     console.log(`[Gateway] Client connected from ${clientIp}`);
+    // Check connection limits before proceeding
+    const limitCheck = connectionLimiter.canConnect(clientIp);
+    if (!limitCheck.allowed) {
+        console.log(`[Gateway] Connection rejected: ${limitCheck.reason}`);
+        sendError(ws, limitCheck.code ?? ErrorCodes.BACKEND_UNAVAILABLE, limitCheck.reason ?? 'Connection limit exceeded');
+        ws.close(1013, limitCheck.reason); // 1013 = Try Again Later
+        return;
+    }
+    // Generate a connection ID for tracking (will be replaced by session.id once created)
+    const connectionId = `conn_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    // Register the connection
+    connectionLimiter.registerConnection(clientIp, connectionId);
     try {
         // Create session with auto-registration
         const session = await sessionManager.createSession(ws);
@@ -195,6 +213,7 @@ wss.on('connection', async (ws, req) => {
         ws.on('close', () => {
             console.log(`[Gateway] Client disconnected: ${session.id}`);
             sessionManager.destroySession(ws);
+            connectionLimiter.unregisterConnection(clientIp, connectionId);
         });
         // Handle errors
         ws.on('error', (err) => {
@@ -204,6 +223,8 @@ wss.on('connection', async (ws, req) => {
     catch (err) {
         console.error('[Gateway] Session creation error:', err);
         sendError(ws, ErrorCodes.BACKEND_UNAVAILABLE, 'Failed to create session');
+        // Clean up the connection tracking on error
+        connectionLimiter.unregisterConnection(clientIp, connectionId);
         ws.close();
     }
 });
@@ -230,5 +251,6 @@ process.on('SIGTERM', () => {
 nonceManager.restore();
 console.log(`[Gateway] Mobile gateway listening on ws://0.0.0.0:${PORT}`);
 console.log(`[Gateway] Backend URL: ${BACKEND_URL}`);
+console.log(`[Gateway] Connection limits: ${MAX_CONNECTIONS_PER_IP} per IP, ${MAX_TOTAL_SESSIONS} total`);
 console.log(`[Gateway] Registered handlers for ${handlers.size} game types`);
 //# sourceMappingURL=index.js.map

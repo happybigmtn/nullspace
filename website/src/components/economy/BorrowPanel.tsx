@@ -63,9 +63,9 @@ export const BorrowPanel: React.FC<BorrowPanelProps> = ({
     const maxLtv = vaultDerived.maxLtvBps;
     const liquidation = vaultDerived.liquidationThresholdBps;
     const safeCutoff = Math.max(1, Math.floor(maxLtv * 0.8));
-    if (ltvBps < safeCutoff) return { label: 'SAFE', className: 'text-terminal-green' };
-    if (ltvBps < liquidation) return { label: 'CAUTION', className: 'text-terminal-gold' };
-    return { label: 'RISK', className: 'text-terminal-accent' };
+    if (ltvBps < safeCutoff) return { label: 'SAFE', className: 'text-action-success' };
+    if (ltvBps < liquidation) return { label: 'CAUTION', className: 'text-action-primary' };
+    return { label: 'RISK', className: 'text-action-destructive' };
   }, [vaultDerived.liquidationThresholdBps, vaultDerived.ltvBps, vaultDerived.maxLtvBps]);
 
   return (
@@ -103,7 +103,7 @@ export const BorrowPanel: React.FC<BorrowPanelProps> = ({
 
       <div className="mt-4 space-y-2">
         <button
-          className="w-full text-xs px-3 py-2 rounded border border-terminal-green text-terminal-green hover:bg-terminal-green/10"
+          className="w-full text-xs px-3 py-2 rounded border border-action-success text-action-success hover:bg-action-success/10"
           onClick={onCreateVault}
         >
           Create Vault
@@ -118,7 +118,7 @@ export const BorrowPanel: React.FC<BorrowPanelProps> = ({
             pattern="[0-9]*"
           />
           <button
-            className="text-xs px-3 py-1 rounded border border-terminal-green text-terminal-green hover:bg-terminal-green/10"
+            className="text-xs px-3 py-1 rounded border border-action-success text-action-success hover:bg-action-success/10"
             onClick={onDepositCollateral}
           >
             Deposit
@@ -134,7 +134,7 @@ export const BorrowPanel: React.FC<BorrowPanelProps> = ({
             pattern="[0-9]*"
           />
           <button
-            className="text-xs px-3 py-1 rounded border border-terminal-accent text-terminal-accent hover:bg-terminal-accent/10"
+            className="text-xs px-3 py-1 rounded border border-action-destructive text-action-destructive hover:bg-action-destructive/10"
             onClick={onBorrowVusdt}
           >
             Borrow
@@ -190,7 +190,7 @@ export const BorrowPanel: React.FC<BorrowPanelProps> = ({
               pattern="[0-9]*"
             />
             <button
-              className="text-xs px-3 py-1 rounded border border-terminal-green text-terminal-green hover:bg-terminal-green/10"
+              className="text-xs px-3 py-1 rounded border border-action-success text-action-success hover:bg-action-success/10"
               onClick={onDepositSavings}
             >
               Deposit
@@ -213,7 +213,7 @@ export const BorrowPanel: React.FC<BorrowPanelProps> = ({
             </button>
           </div>
           <button
-            className="w-full text-xs px-3 py-2 rounded border border-terminal-gold text-terminal-gold hover:bg-terminal-gold/10"
+            className="w-full text-xs px-3 py-2 rounded border border-action-primary text-action-primary hover:bg-action-primary/10"
             onClick={onClaimSavingsRewards}
           >
             Claim Savings Rewards

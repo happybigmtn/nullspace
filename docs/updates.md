@@ -3431,3 +3431,84 @@ The codebase is significantly more robust than the initial review suggested. Mos
 - Small bounded collection performance characteristics
 
 **Recommendation**: Proceed with the 6 valid action items, prioritizing hook extraction and CI security scanning.
+
+---
+
+## 2025-12-28: Secret File Audit and Template Creation (RR-2)
+
+Audited and created template files for committed secrets.
+
+### Files Containing Secrets (Already Committed)
+
+| File | Secrets Found | Requires Rotation |
+|------|---------------|-------------------|
+| `configs/local/node0.yaml` | private_key, share, polynomial | No (local dev only) |
+| `configs/local/node1.yaml` | private_key, share, polynomial | No (local dev only) |
+| `configs/local/node2.yaml` | private_key, share, polynomial | No (local dev only) |
+| `configs/local/node3.yaml` | private_key, share, polynomial | No (local dev only) |
+| `configs/local/peers.yaml` | public keys (derived from private) | No (local dev only) |
+| `docker/convex/.env` | CONVEX_SERVICE_TOKEN, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET | **YES** |
+| `services/auth/.env` | AUTH_SECRET, CONVEX_SERVICE_TOKEN, CASINO_ADMIN_PRIVATE_KEY_HEX | **YES** |
+| `website/.env.local` | CONVEX_SELF_HOSTED_ADMIN_KEY | **YES** |
+
+### Secrets Requiring External Rotation
+
+1. **Convex Service Token** (`svc_72b521ea51ad5901c151ed998316a21f`)
+   - Location: `docker/convex/.env`, `services/auth/.env`
+   - Action: Generate new service token in Convex dashboard
+
+2. **Stripe Test Secret Key** (`sk_test_51SgDHo...`)
+   - Location: `docker/convex/.env`
+   - Action: Rotate in Stripe Dashboard > API Keys
+
+3. **Stripe Webhook Secret** (`whsec_de957e271e766873229914d1dac8fdf9`)
+   - Location: `docker/convex/.env`
+   - Action: Rotate in Stripe Dashboard > Webhooks
+
+4. **Auth Secret** (session signing key)
+   - Location: `services/auth/.env`
+   - Action: Generate new random 64-char hex string
+
+5. **Casino Admin Private Key**
+   - Location: `services/auth/.env`
+   - Action: Generate new key with `generate-keys`
+
+6. **Convex Self-Hosted Admin Key**
+   - Location: `website/.env.local`
+   - Action: Rotate via self-hosted Convex admin
+
+### Template Files Created
+
+- `/configs/local/.env.local.example`
+- `/configs/local/node.yaml.example`
+- `/configs/local/peers.yaml.example`
+
+### .gitignore Updates
+
+Added rules to exclude:
+- `configs/local/node*.yaml` (private keys)
+- `configs/local/peers.yaml` (derived keys)
+- Added `!.env.*.example` exception
+
+### Files Safe (Not Tracked in Git)
+
+The following files exist locally but are NOT tracked (already in .gitignore):
+- `docker/convex/.env`
+- `configs/local/.env.local`
+- `website/.env`
+- `website/.env.local`
+- `services/auth/.env`
+- `mobile/.env`
+
+### Action Required
+
+The node*.yaml files with private keys are currently tracked. To remove from git history:
+```bash
+# Remove from tracking (keeps local files)
+git rm --cached configs/local/node*.yaml configs/local/peers.yaml
+
+# Commit the removal
+git commit -m "Remove tracked secret files from git"
+```
+
+**Note**: The secrets in git history remain accessible. For production secrets, consider using `git filter-branch` or BFG Repo-Cleaner to fully purge history.

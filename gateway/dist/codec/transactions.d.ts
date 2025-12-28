@@ -22,7 +22,8 @@ export declare function varintSize(value: number): number;
  * Transaction format:
  * [nonce:u64 BE] [instruction bytes] [pubkey:32] [signature:64]
  *
- * Signature covers: TRANSACTION_NAMESPACE + nonce + instruction
+ * Signature covers (using union_unique format):
+ * [varint(namespace.len)] [TRANSACTION_NAMESPACE] [nonce + instruction]
  */
 export declare function buildTransaction(nonce: bigint, instruction: Uint8Array, privateKey: Uint8Array): Uint8Array;
 /**

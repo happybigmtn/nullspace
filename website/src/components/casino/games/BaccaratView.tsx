@@ -76,8 +76,8 @@ export const BaccaratView = React.memo<{
         [allBets]
     );
 
-    const playerColor = isPlayerSelected ? 'text-terminal-green' : 'text-terminal-accent';
-    const bankerColor = isBankerSelected ? 'text-terminal-green' : 'text-terminal-accent';
+    const playerColor = isPlayerSelected ? 'text-action-success' : 'text-action-destructive';
+    const bankerColor = isBankerSelected ? 'text-action-success' : 'text-action-destructive';
 
     const allBonusPlaced = useMemo(
         () => Object.values(sideBetAmounts).every(amount => amount > 0),
@@ -169,7 +169,7 @@ export const BaccaratView = React.memo<{
         else if (type === 'P_PERFECT_PAIR') won = gameState.playerCards.length >= 2 && gameState.playerCards[0].rank === gameState.playerCards[1].rank && gameState.playerCards[0].suit === gameState.playerCards[1].suit;
         else if (type === 'B_PERFECT_PAIR') won = gameState.dealerCards.length >= 2 && gameState.dealerCards[0].rank === gameState.dealerCards[1].rank && gameState.dealerCards[0].suit === gameState.dealerCards[1].suit;
 
-        if (won) return 'border-terminal-green text-terminal-green shadow-[0_0_10px_rgba(74,222,128,0.5)] animate-pulse bg-terminal-green/10';
+        if (won) return 'border-action-success text-action-success shadow-[0_0_10px_rgba(74,222,128,0.5)] animate-pulse bg-action-success/10';
         return 'border-gray-800 bg-black/40 text-gray-500';
     };
 
@@ -184,10 +184,10 @@ export const BaccaratView = React.memo<{
                                 <div
                                     key={i}
                                     className={`flex justify-between items-center text-xs border p-2 rounded bg-black/40 ${
-                                        i === 0 ? 'border-terminal-green/30' : 'border-gray-800'
+                                        i === 0 ? 'border-action-success/30' : 'border-gray-800'
                                     }`}
                                 >
-                                    <span className={`font-bold text-[10px] ${b.type === 'PLAYER' || b.type === 'BANKER' ? 'text-terminal-green' : 'text-gray-400'}`}>{b.type}</span>
+                                    <span className={`font-bold text-[10px] ${b.type === 'PLAYER' || b.type === 'BANKER' ? 'text-action-success' : 'text-gray-400'}`}>{b.type}</span>
                                     <div className="text-white text-[10px]">${b.amount}</div>
                                 </div>
                             ))}
@@ -206,12 +206,12 @@ export const BaccaratView = React.memo<{
                 </div>
                 {/* Center Info */}
                 <div className="text-center space-y-2 relative z-20 py-2 sm:py-4">
-                    <div className="text-lg sm:text-2xl font-bold text-terminal-gold tracking-widest leading-tight animate-pulse">
+                    <div className="text-lg sm:text-2xl font-bold text-action-primary tracking-widest leading-tight animate-pulse">
                         {gameState.message}
                     </div>
                     <div className="flex flex-wrap items-center justify-center gap-2 text-[11px]">
                         <span className={`px-2 py-0.5 rounded border transition-all ${getWinnerClass(gameState.baccaratSelection)}`}>
-                            <span className={gameState.stage === 'RESULT' && getWinnerClass(gameState.baccaratSelection).includes('text-terminal-green') ? 'text-terminal-green' : 'text-white'}>
+                            <span className={gameState.stage === 'RESULT' && getWinnerClass(gameState.baccaratSelection).includes('text-action-success') ? 'text-action-success' : 'text-white'}>
                                 {gameState.baccaratSelection}
                             </span> ${gameState.bet.toLocaleString()}
                         </span>
@@ -266,13 +266,13 @@ export const BaccaratView = React.memo<{
                 {/* Super Mode Info - Animated */}
                 {gameState.superMode?.isActive && (
                     <div className="w-full max-w-md mx-auto px-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                        <div className="relative bg-terminal-black/95 border-2 border-terminal-gold rounded text-center overflow-hidden
+                        <div className="relative bg-titanium-900/95 border-2 border-action-primary rounded text-center overflow-hidden
                                         shadow-[0_0_20px_rgba(255,215,0,0.3),inset_0_0_30px_rgba(255,215,0,0.05)]
                                         animate-pulse-glow">
                             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-terminal-gold/10 to-transparent
                                             animate-shimmer pointer-events-none" />
                             <div className="relative p-3">
-                                <div className="text-xs font-bold text-terminal-gold tracking-[0.3em] mb-2 font-mono flex items-center justify-center gap-2">
+                                <div className="text-xs font-bold text-action-primary tracking-[0.3em] mb-2 font-mono flex items-center justify-center gap-2">
                                     <span className="animate-pulse">⚡</span>
                                     <span className="bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-300 bg-clip-text text-transparent">
                                         SUPER MODE ACTIVE
@@ -285,7 +285,7 @@ export const BaccaratView = React.memo<{
                                             <span
                                                 key={idx}
                                                 className="px-2.5 py-1 rounded-lg bg-gradient-to-br from-amber-900/50 to-amber-950/50
-                                                           border border-terminal-gold/60 text-terminal-gold text-xs font-mono font-bold
+                                                           border border-action-primary/60 text-action-primary text-xs font-mono font-bold
                                                            shadow-[0_0_8px_rgba(255,215,0,0.2)] hover:shadow-[0_0_12px_rgba(255,215,0,0.4)]
                                                            transition-all duration-200 hover:scale-105"
                                             >
@@ -303,14 +303,14 @@ export const BaccaratView = React.memo<{
             </div>
 
             {/* LEFT SIDEBAR - EXPOSURE / SIDE BETS TOGGLE */}
-            <div className="hidden lg:flex absolute top-0 left-0 bottom-24 w-56 bg-terminal-black/80 border-r-2 border-gray-700 backdrop-blur-sm z-30 flex-col">
+            <div className="hidden lg:flex absolute top-0 left-0 bottom-24 w-56 bg-titanium-900/80 border-r-2 border-gray-700 backdrop-blur-sm z-30 flex-col">
                 {/* Toggle Tabs */}
                 <div className="flex-none flex border-b border-gray-800">
                     <button
                         onClick={() => setLeftSidebarView('EXPOSURE')}
                         className={`flex-1 py-2 text-[10px] font-bold tracking-widest uppercase transition-colors ${
                             leftSidebarView === 'EXPOSURE'
-                                ? 'text-terminal-green border-b-2 border-terminal-green bg-terminal-green/10'
+                                ? 'text-action-success border-b-2 border-action-success bg-action-success/10'
                                 : 'text-gray-500 hover:text-gray-300'
                         }`}
                     >
@@ -337,18 +337,18 @@ export const BaccaratView = React.memo<{
                             </div>
                             {/* Player Win */}
                             <div className="flex items-center justify-between p-2 border border-gray-800 rounded bg-black/40">
-                                <span className="text-sm text-terminal-green font-bold">PLAYER WIN</span>
+                                <span className="text-sm text-action-success font-bold">PLAYER WIN</span>
                                 <span className="text-xs text-gray-400">1:1</span>
                             </div>
                             {/* Banker Win */}
                             <div className="flex items-center justify-between p-2 border border-gray-800 rounded bg-black/40">
-                                <span className="text-sm text-terminal-green font-bold">BANKER WIN</span>
+                                <span className="text-sm text-action-success font-bold">BANKER WIN</span>
                                 <span className="text-xs text-gray-400">0.95:1</span>
                             </div>
                             {/* Tie */}
                             <div className="flex items-center justify-between p-2 border border-gray-800 rounded bg-black/40">
                                 <span className="text-sm text-gray-400 font-bold">TIE</span>
-                                <span className="text-xs text-terminal-gold">8:1</span>
+                                <span className="text-xs text-action-primary">8:1</span>
                             </div>
                         </div>
                     ) : (
@@ -371,7 +371,7 @@ export const BaccaratView = React.memo<{
                                 <div key={bet.type} className="border border-gray-800 rounded bg-black/40 p-2">
                                     <div className="flex items-center justify-between mb-1">
                                         <span className="text-xs text-amber-400 font-bold">{bet.type}</span>
-                                        <span className="text-xs text-terminal-gold">{bet.payout}</span>
+                                        <span className="text-xs text-action-primary">{bet.payout}</span>
                                     </div>
                                     <div className="text-[9px] text-gray-500">{bet.desc}</div>
                                 </div>
@@ -382,7 +382,7 @@ export const BaccaratView = React.memo<{
             </div>
 
             {/* BETS SIDEBAR - Split Confirmed/Pending */}
-            <div className="hidden lg:flex absolute top-0 right-0 bottom-24 w-40 bg-terminal-black/80 border-l-2 border-gray-700 p-2 backdrop-blur-sm z-30 flex-col">
+            <div className="hidden lg:flex absolute top-0 right-0 bottom-24 w-40 bg-titanium-900/80 border-l-2 border-gray-700 p-2 backdrop-blur-sm z-30 flex-col">
                 <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-2 border-b border-gray-800 pb-1 flex-none text-center">Bets</div>
                 <div className="flex-1 overflow-y-auto flex flex-col space-y-2">
                     {(() => {
@@ -403,12 +403,12 @@ export const BaccaratView = React.memo<{
                                         isPending
                                             ? 'border-dashed border-amber-600/50 bg-amber-900/20 opacity-60 cursor-pointer hover:bg-amber-800/30'
                                             : isMainBet
-                                                ? 'border-terminal-green/30 bg-black/50'
+                                                ? 'border-action-success/30 bg-black/50'
                                                 : 'border-gray-800 bg-black/50 cursor-pointer hover:bg-gray-800'
                                     }`}
                                 >
                                     <span className={`font-bold text-[10px] ${
-                                        isMainBet ? 'text-terminal-green' : isPending ? 'text-amber-400' : 'text-gray-400'
+                                        isMainBet ? 'text-action-success' : isPending ? 'text-amber-400' : 'text-gray-400'
                                     }`}>
                                         {b.type}
                                     </span>
@@ -425,7 +425,7 @@ export const BaccaratView = React.memo<{
                             <>
                                 {confirmedBets.length > 0 && (
                                     <div className="space-y-1">
-                                        <div className="text-[8px] text-terminal-green uppercase tracking-widest font-bold">
+                                        <div className="text-[8px] text-action-success uppercase tracking-widest font-bold">
                                             Confirmed ({confirmedBets.length})
                                         </div>
                                         {confirmedBets.map((b, i) => renderBet(b, i, false))}
@@ -447,7 +447,7 @@ export const BaccaratView = React.memo<{
             </div>
 
             {/* CONTROLS - Grouped by Normal/Bonus */}
-            <div className="ns-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-terminal-black/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
+            <div className="ns-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-titanium-900/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
                 <div className="h-auto md:h-20 flex flex-col md:flex-row items-stretch md:items-center justify-between md:justify-center gap-2 p-2 md:px-4">
                     {/* Desktop: Bet Groups */}
                     <div className="hidden md:flex items-center gap-3 flex-1">
@@ -459,7 +459,7 @@ export const BaccaratView = React.memo<{
                                 onClick={() => actions?.baccaratActions?.toggleSelection?.('PLAYER')}
                                 className={`px-3 py-1.5 rounded border text-xs font-bold tracking-wider transition-all ${
                                     isPlayerSelected
-                                        ? 'border-terminal-green bg-terminal-green/20 text-terminal-green'
+                                        ? 'border-action-success bg-action-success/20 text-action-success'
                                         : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'
                                 }`}
                             >
@@ -470,7 +470,7 @@ export const BaccaratView = React.memo<{
                                 onClick={() => actions?.baccaratActions?.toggleSelection?.('BANKER')}
                                 className={`px-3 py-1.5 rounded border text-xs font-bold tracking-wider transition-all ${
                                     isBankerSelected
-                                        ? 'border-terminal-green bg-terminal-green/20 text-terminal-green'
+                                        ? 'border-action-success bg-action-success/20 text-action-success'
                                         : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'
                                 }`}
                             >
@@ -510,7 +510,7 @@ export const BaccaratView = React.memo<{
                                         onClick={actions?.toggleShield}
                                         className={`px-3 py-1.5 rounded border text-xs font-bold tracking-wider transition-all ${
                                             gameState.activeModifiers.shield
-                                                ? 'border-terminal-gold bg-terminal-gold/20 text-terminal-gold'
+                                                ? 'border-action-primary bg-action-primary/20 text-action-primary'
                                                 : 'border-gray-700 bg-black/50 text-gray-400 hover:bg-gray-800'
                                         }`}
                                     >
@@ -521,7 +521,7 @@ export const BaccaratView = React.memo<{
                                         onClick={actions?.toggleDouble}
                                         className={`px-3 py-1.5 rounded border text-xs font-bold tracking-wider transition-all ${
                                             gameState.activeModifiers.double
-                                                ? 'border-terminal-gold bg-terminal-gold/20 text-terminal-gold'
+                                                ? 'border-action-primary bg-action-primary/20 text-action-primary'
                                                 : 'border-gray-700 bg-black/50 text-gray-400 hover:bg-gray-800'
                                         }`}
                                     >
@@ -534,7 +534,7 @@ export const BaccaratView = React.memo<{
                                 onClick={actions?.toggleSuper}
                                 className={`px-3 py-1.5 rounded border text-xs font-bold tracking-wider transition-all ${
                                     gameState.activeModifiers.super
-                                        ? 'border-terminal-gold bg-terminal-gold/20 text-terminal-gold'
+                                        ? 'border-action-primary bg-action-primary/20 text-action-primary'
                                         : 'border-gray-700 bg-black/50 text-gray-400 hover:bg-gray-800'
                                 }`}
                             >
@@ -547,7 +547,7 @@ export const BaccaratView = React.memo<{
                     <button
                         type="button"
                         onClick={actions?.deal}
-                        className="h-14 px-8 rounded border-2 font-bold text-base tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] border-terminal-green bg-terminal-green text-black hover:bg-white hover:border-white hover:scale-105 active:scale-95"
+                        className="h-14 px-8 rounded border-2 font-bold text-base tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] border-action-success bg-action-success text-black hover:bg-white hover:border-white hover:scale-105 active:scale-95"
                     >
                         DEAL
                     </button>

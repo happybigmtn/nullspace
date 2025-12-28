@@ -102,7 +102,7 @@ export default function EconomyApp() {
     [
       'flex-1 sm:flex-none inline-flex items-center justify-center h-11 px-3 rounded border text-[10px] tracking-widest uppercase transition-colors',
       isActive
-        ? 'border-terminal-green text-terminal-green bg-terminal-green/10'
+        ? 'border-action-success text-action-success bg-action-success/10'
         : 'border-gray-800 text-gray-400 hover:border-gray-600 hover:text-white',
     ].join(' ');
 
@@ -797,7 +797,7 @@ export default function EconomyApp() {
   }, [activeTab, swapDirection]);
 
   return (
-    <div className="min-h-screen bg-terminal-black text-white font-mono">
+    <div className="min-h-screen bg-titanium-900 text-white font-mono">
       <PageHeader
         title={`Economy — ${tabTitle}`}
         status={<ConnectionStatus />}
@@ -816,7 +816,7 @@ export default function EconomyApp() {
               lastTxDigest ? (
                 <Link
                   to={`/explorer/tx/${lastTxDigest}`}
-                  className="text-[10px] text-terminal-green tracking-widest hover:underline"
+                  className="text-[10px] text-action-success tracking-widest hover:underline"
                   title={lastTxDigest}
                 >
                   LAST TX: {lastTxSig}
@@ -829,7 +829,7 @@ export default function EconomyApp() {
         }
       />
 
-      <div className="px-4 py-3 border-b border-gray-800 bg-terminal-black/90 backdrop-blur">
+      <div className="px-4 py-3 border-b border-gray-800 bg-titanium-900/90 backdrop-blur">
         <nav className="flex items-center gap-2">
           <NavLink to="/swap" end className={economyTabClass}>
             Swap
@@ -849,7 +849,7 @@ export default function EconomyApp() {
         <section className="border border-gray-800 rounded p-4 bg-gray-900/30 lg:col-span-1">
 	          <div className="text-xs text-gray-400 tracking-widest mb-3">WALLET</div>
 	          <div className="space-y-2 text-sm">
-	            <div>Registered: <span className={isRegistered ? 'text-terminal-green' : 'text-terminal-accent'}>{isRegistered ? 'YES' : 'NO'}</span></div>
+	            <div>Registered: <span className={isRegistered ? 'text-action-success' : 'text-action-destructive'}>{isRegistered ? 'YES' : 'NO'}</span></div>
 	            <div>RNG: <span className="text-white">{player?.chips ?? 0}</span></div>
 	            <div>vUSDT: <span className="text-white">{player?.vusdtBalance ?? 0}</span></div>
             <div>
@@ -882,14 +882,14 @@ export default function EconomyApp() {
                 placeholder="Name"
               />
               <button
-                className="text-xs px-3 py-1 rounded border border-terminal-green text-terminal-green hover:bg-terminal-green/10"
+                className="text-xs px-3 py-1 rounded border border-action-success text-action-success hover:bg-action-success/10"
                 onClick={ensureRegistered}
               >
                 Register
               </button>
             </div>
             <button
-              className="w-full text-xs px-3 py-2 rounded border border-terminal-green bg-terminal-green/10 text-terminal-green hover:bg-terminal-green/20"
+              className="w-full text-xs px-3 py-2 rounded border border-action-success bg-action-success/10 text-action-success hover:bg-action-success/20"
               onClick={claimFaucet}
             >
               Daily Faucet (1000 RNG)
@@ -996,14 +996,14 @@ export default function EconomyApp() {
                   : 'INFO';
             const labelClass = isTx
               ? item.status === 'confirmed'
-                ? 'text-terminal-green'
+                ? 'text-action-success'
                 : item.status === 'failed'
-                  ? 'text-terminal-accent'
+                  ? 'text-action-destructive'
                   : 'text-gray-500'
               : item.level === 'error'
-                ? 'text-terminal-accent'
+                ? 'text-action-destructive'
                 : item.level === 'success'
-                  ? 'text-terminal-green'
+                  ? 'text-action-success'
                   : 'text-gray-500';
 
             const messageNode =

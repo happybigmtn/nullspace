@@ -5,9 +5,9 @@ import { dismissToast, getToasts, subscribeToasts, type Toast } from '../../serv
 function levelClasses(level: Toast['level']) {
   switch (level) {
     case 'success':
-      return 'border-terminal-green text-terminal-green';
+      return 'border-action-success text-action-success';
     case 'error':
-      return 'border-terminal-accent text-terminal-accent';
+      return 'border-action-destructive text-action-destructive';
     default:
       return 'border-gray-700 text-gray-400';
   }
@@ -61,7 +61,7 @@ export function ToastHost() {
           <div
             key={t.id}
             className={[
-              'pointer-events-auto w-[min(92vw,420px)] rounded border bg-terminal-black/95 backdrop-blur px-3 py-2 shadow-lg',
+              'pointer-events-auto w-[min(92vw,420px)] rounded border bg-titanium-900/95 backdrop-blur px-3 py-2 shadow-lg',
               levelClasses(t.level),
             ].join(' ')}
             role="status"

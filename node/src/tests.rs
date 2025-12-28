@@ -57,6 +57,9 @@ fn config_redacted_debug_does_not_leak_secrets() {
         deque_size: 128,
         mempool_max_backlog: 64,
         mempool_max_transactions: 100_000,
+        mempool_stream_buffer_size: 4_096,
+        nonce_cache_capacity: 100_000,
+        nonce_cache_ttl_seconds: 600,
         max_pending_seed_listeners: 10_000,
         indexer: "http://127.0.0.1:8080".to_string(),
         execution_concurrency: 4,
@@ -263,6 +266,9 @@ fn all_online(n: u32, seed: u64, link: Link, required: u64) -> String {
                     mempool_max_backlog: 64,
                     mempool_max_transactions: 100_000,
                     max_pending_seed_listeners: 10_000,
+                    mempool_stream_buffer_size: 4_096,
+                    nonce_cache_capacity: 100_000,
+                    nonce_cache_ttl: Duration::from_secs(600),
                 },
             };
             let engine = Engine::new(context.with_label(&uid), config).await;
@@ -508,6 +514,9 @@ fn test_backfill() {
                     mempool_max_backlog: 64,
                     mempool_max_transactions: 100_000,
                     max_pending_seed_listeners: 10_000,
+                    mempool_stream_buffer_size: 4_096,
+                    nonce_cache_capacity: 100_000,
+                    nonce_cache_ttl: Duration::from_secs(600),
                 },
             };
             let engine = Engine::new(context.with_label(&uid), config).await;
@@ -627,6 +636,9 @@ fn test_backfill() {
                 mempool_max_backlog: 64,
                 mempool_max_transactions: 100_000,
                 max_pending_seed_listeners: 10_000,
+                mempool_stream_buffer_size: 4_096,
+                nonce_cache_capacity: 100_000,
+                nonce_cache_ttl: Duration::from_secs(600),
             },
         };
         let engine = Engine::new(context.with_label(&uid), config).await;
@@ -791,6 +803,9 @@ fn test_unclean_shutdown() {
                         mempool_max_backlog: 64,
                         mempool_max_transactions: 100_000,
                         max_pending_seed_listeners: 10_000,
+                        mempool_stream_buffer_size: 4_096,
+                        nonce_cache_capacity: 100_000,
+                        nonce_cache_ttl: Duration::from_secs(600),
                     },
                 };
                 let engine = Engine::new(context.with_label(&uid), config).await;
@@ -1025,6 +1040,9 @@ fn test_execution(seed: u64, link: Link) -> String {
                     mempool_max_backlog: 64,
                     mempool_max_transactions: 100_000,
                     max_pending_seed_listeners: 10_000,
+                    mempool_stream_buffer_size: 4_096,
+                    nonce_cache_capacity: 100_000,
+                    nonce_cache_ttl: Duration::from_secs(600),
                 },
             };
             let engine = Engine::new(context.with_label(&uid), config).await;

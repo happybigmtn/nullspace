@@ -279,7 +279,7 @@ export default function SecurityApp() {
   };
 
   return (
-    <div className="min-h-screen w-screen bg-terminal-black text-white font-mono">
+    <div className="min-h-screen w-screen bg-titanium-900 text-white font-mono">
       <PageHeader
         title="Passkey Vault"
         status={status}
@@ -294,30 +294,30 @@ export default function SecurityApp() {
               <div className="text-[10px] text-gray-500 tracking-widest">SECURITY</div>
               <div className="text-lg font-bold mt-1">Passkey Vault</div>
               <div className="text-xs text-gray-500 mt-2">
-                Vault: <span className="text-terminal-green">{vaultLabel}</span>
+                Vault: <span className="text-action-success">{vaultLabel}</span>
                 {supported ? (
                   <>
                     <span className="text-gray-700"> · </span>
                     Enabled:{' '}
-                    <span className={enabled ? 'text-terminal-green' : 'text-gray-500'}>{enabled ? 'YES' : 'NO'}</span>
+                    <span className={enabled ? 'text-action-success' : 'text-gray-500'}>{enabled ? 'YES' : 'NO'}</span>
                   </>
                 ) : null}
                 {publicKeyHex ? (
                   <>
                     {' '}
-                    · Casino pubkey: <span className="text-terminal-green">{publicKeyHex.slice(0, 12)}…</span>
+                    · Casino pubkey: <span className="text-action-success">{publicKeyHex.slice(0, 12)}…</span>
                   </>
                 ) : null}
               </div>
               {!identityOk && (
-                <div className="text-xs text-terminal-accent mt-2">Missing `VITE_IDENTITY` (required to verify chain state).</div>
+                <div className="text-xs text-action-destructive mt-2">Missing `VITE_IDENTITY` (required to verify chain state).</div>
               )}
             </div>
 
             <div className="flex flex-col gap-2 items-end">
               {!hasVault && supported && (
                 <button
-                  className="text-[10px] border px-3 py-2 rounded bg-terminal-green/20 border-terminal-green text-terminal-green hover:bg-terminal-green/30"
+                  className="text-[10px] border px-3 py-2 rounded bg-action-success/20 border-action-success text-action-success hover:bg-action-success/30"
                   onClick={onCreateVault}
                 >
                   CREATE PASSKEY VAULT
@@ -344,7 +344,7 @@ export default function SecurityApp() {
 
               {hasVault && (
                 <button
-                  className="text-[10px] border px-3 py-2 rounded bg-gray-900 border-gray-800 text-gray-400 hover:border-terminal-accent hover:text-terminal-accent"
+                  className="text-[10px] border px-3 py-2 rounded bg-gray-900 border-gray-800 text-gray-400 hover:border-action-destructive hover:text-action-destructive"
                   onClick={onDeleteVault}
                 >
                   DELETE VAULT
@@ -354,7 +354,7 @@ export default function SecurityApp() {
           </div>
 
           {error && (
-            <div className="mt-3 text-xs text-terminal-accent border border-terminal-accent/40 rounded bg-terminal-accent/10 p-2">
+            <div className="mt-3 text-xs text-action-destructive border border-action-destructive/40 rounded bg-action-destructive/10 p-2">
               {error}
             </div>
           )}
@@ -417,7 +417,7 @@ export default function SecurityApp() {
                         type="button"
                         onClick={() => onToggleFlag(f.key)}
                         className={`text-[10px] px-2 py-1 rounded border ${
-                          flags[f.key] ? 'border-terminal-green text-terminal-green' : 'border-gray-800 text-gray-500'
+                          flags[f.key] ? 'border-action-success text-action-success' : 'border-gray-800 text-gray-500'
                         }`}
                       >
                         {flags[f.key] ? 'ON' : 'OFF'}
@@ -433,7 +433,7 @@ export default function SecurityApp() {
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-[11px] text-gray-400">
                     Enabled:{' '}
-                    <span className={telemetryEnabled ? 'text-terminal-green' : 'text-gray-500'}>
+                    <span className={telemetryEnabled ? 'text-action-success' : 'text-gray-500'}>
                       {telemetryEnabled ? 'YES' : 'NO'}
                     </span>
                     <span className="text-gray-700"> · </span>
@@ -443,7 +443,7 @@ export default function SecurityApp() {
                     type="button"
                     onClick={onToggleTelemetry}
                     className={`text-[10px] px-2 py-1 rounded border ${
-                      telemetryEnabled ? 'border-terminal-green text-terminal-green' : 'border-gray-800 text-gray-500'
+                      telemetryEnabled ? 'border-action-success text-action-success' : 'border-gray-800 text-gray-500'
                     }`}
                   >
                     {telemetryEnabled ? 'ON' : 'OFF'}
@@ -460,7 +460,7 @@ export default function SecurityApp() {
                   <button
                     type="button"
                     onClick={onClearTelemetry}
-                    className="text-[10px] border px-3 py-2 rounded bg-gray-900 border-gray-800 text-gray-400 hover:border-terminal-accent hover:text-terminal-accent"
+                    className="text-[10px] border px-3 py-2 rounded bg-gray-900 border-gray-800 text-gray-400 hover:border-action-destructive hover:text-action-destructive"
                   >
                     CLEAR
                   </button>
@@ -495,7 +495,7 @@ export default function SecurityApp() {
                   <button
                     type="button"
                     onClick={onClearActivity}
-                    className="text-[10px] border px-3 py-2 rounded bg-gray-900 border-gray-800 text-gray-400 hover:border-terminal-accent hover:text-terminal-accent"
+                    className="text-[10px] border px-3 py-2 rounded bg-gray-900 border-gray-800 text-gray-400 hover:border-action-destructive hover:text-action-destructive"
                   >
                     CLEAR
                   </button>
@@ -518,7 +518,7 @@ export default function SecurityApp() {
                 <button
                   className={`text-[10px] border px-3 py-2 rounded ${
                     unlocked
-                      ? 'bg-terminal-green/20 border-terminal-green text-terminal-green hover:bg-terminal-green/30'
+                      ? 'bg-action-success/20 border-action-success text-action-success hover:bg-action-success/30'
                       : 'bg-gray-900 border-gray-800 text-gray-500 cursor-not-allowed'
                   }`}
                   onClick={startBot}
@@ -539,7 +539,7 @@ export default function SecurityApp() {
 
           <div className="mt-3">
             <div className="text-[10px] text-gray-500 tracking-widest mb-2">LOGS</div>
-            <div className="border border-gray-800 rounded bg-terminal-black/60 p-2 h-40 overflow-y-auto text-xs text-gray-300">
+            <div className="border border-gray-800 rounded bg-titanium-900/60 p-2 h-40 overflow-y-auto text-xs text-gray-300">
               {botLogs.length === 0 ? (
                 <div className="text-gray-600">No bot activity yet.</div>
               ) : (

@@ -67,20 +67,20 @@ export const RouletteView = React.memo<{
         const maxScale = Math.max(100, totalBet * 36); 
         const barPercent = Math.min(Math.abs(pnl) / maxScale * 50, 50);
         const color = getRouletteColor(num);
-        const colorClass = color === 'RED' ? 'text-terminal-accent' : color === 'BLACK' ? 'text-white' : 'text-terminal-green';
+        const colorClass = color === 'RED' ? 'text-action-destructive' : color === 'BLACK' ? 'text-white' : 'text-action-success';
 
         return (
             <div key={num} className="flex items-center h-7 text-base">
                 <div className="flex-1 flex justify-end items-center pr-1 gap-1 min-w-0">
                     {pnl < 0 && <span className="text-sm text-gray-400 truncate">{Math.abs(pnl)}</span>}
                     {pnl < 0 && (
-                        <div className="bg-terminal-accent/80 h-3 rounded-l" style={{ width: `${barPercent}%` }} />
+                        <div className="bg-action-destructive/80 h-3 rounded-l" style={{ width: `${barPercent}%` }} />
                     )}
                 </div>
                 <div className={`w-7 text-center font-bold ${colorClass} flex-shrink-0`}>{formatRouletteNumber(num)}</div>
                 <div className="flex-1 flex justify-start items-center pl-1 gap-1 min-w-0">
                     {pnl > 0 && (
-                        <div className="bg-terminal-green/80 h-3 rounded-r" style={{ width: `${barPercent}%` }} />
+                        <div className="bg-action-success/80 h-3 rounded-r" style={{ width: `${barPercent}%` }} />
                     )}
                     {pnl > 0 && <span className="text-sm text-gray-400 truncate">{pnl}</span>}
                 </div>
@@ -132,7 +132,7 @@ export const RouletteView = React.memo<{
                                                 }`}
                                             >
                                                 <div className="flex flex-col">
-                                                    <span className={`font-bold text-[10px] ${isPending ? 'text-amber-400' : 'text-terminal-green'}`}>
+                                                    <span className={`font-bold text-[10px] ${isPending ? 'text-amber-400' : 'text-action-success'}`}>
                                                         {b.type} {b.target !== undefined ? b.target : ''}
                                                     </span>
                                                 </div>
@@ -148,7 +148,7 @@ export const RouletteView = React.memo<{
                                             <>
                                                 {confirmedBets.length > 0 && (
                                                     <div className="space-y-1">
-                                                        <div className="text-[8px] text-terminal-green uppercase tracking-widest font-bold">
+                                                        <div className="text-[8px] text-action-success uppercase tracking-widest font-bold">
                                                             Confirmed ({confirmedBets.length})
                                                         </div>
                                                         {confirmedBets.map((b, i) => renderMobileBet(b, i, false))}
@@ -189,7 +189,7 @@ export const RouletteView = React.memo<{
                      {gameState.rouletteHistory.length > 0 && (
                          <div className="flex gap-2 opacity-75 mt-4">
                              {gameState.rouletteHistory.slice(-8).reverse().map((num, i) => (
-                                 <div key={i} className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border ${getRouletteColor(num) === 'RED' ? 'border-terminal-accent text-terminal-accent' : getRouletteColor(num) === 'BLACK' ? 'border-gray-500 text-white' : 'border-terminal-green text-terminal-green'}`}>
+                                 <div key={i} className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border ${getRouletteColor(num) === 'RED' ? 'border-action-destructive text-action-destructive' : getRouletteColor(num) === 'BLACK' ? 'border-gray-500 text-white' : 'border-action-success text-action-success'}`}>
                                      {formatRouletteNumber(num)}
                                  </div>
                              ))}
@@ -199,7 +199,7 @@ export const RouletteView = React.memo<{
 
                 {/* Center Info */}
                 <div className="text-center space-y-3 relative z-20">
-                    <div className="text-lg sm:text-2xl font-bold text-terminal-gold tracking-widest leading-tight animate-pulse">
+                    <div className="text-lg sm:text-2xl font-bold text-action-primary tracking-widest leading-tight animate-pulse">
                         {gameState.message}
                     </div>
                     <div className="text-[10px] text-gray-500 uppercase tracking-widest">
@@ -208,9 +208,9 @@ export const RouletteView = React.memo<{
                     {/* Current Bets Summary - visible on main screen */}
                     {gameState.rouletteBets.length > 0 && (
                         <div className="mt-2 flex flex-wrap justify-center gap-2 max-w-md mx-auto">
-                            <div className="inline-flex items-center gap-2 px-3 py-1 rounded border border-terminal-green/40 bg-black/40 text-[10px] tracking-widest">
+                            <div className="inline-flex items-center gap-2 px-3 py-1 rounded border border-action-success/40 bg-black/40 text-[10px] tracking-widest">
                                 <span className="text-gray-500">TOTAL:</span>
-                                <span className="text-terminal-gold">${totalBet.toLocaleString()}</span>
+                                <span className="text-action-primary">${totalBet.toLocaleString()}</span>
                                 <span className="text-gray-600">({gameState.rouletteBets.length} bets)</span>
                             </div>
                             <div className="flex flex-wrap justify-center gap-1">
@@ -231,7 +231,7 @@ export const RouletteView = React.memo<{
             </div>
 
             {/* EXPOSURE SIDEBAR */}
-            <div className="hidden lg:flex absolute top-0 left-0 bottom-24 w-60 bg-terminal-black/80 border-r-2 border-gray-700 p-2 overflow-hidden backdrop-blur-sm z-30 flex-col">
+            <div className="hidden lg:flex absolute top-0 left-0 bottom-24 w-60 bg-titanium-900/80 border-r-2 border-gray-700 p-2 overflow-hidden backdrop-blur-sm z-30 flex-col">
                 <h3 className="text-[10px] font-bold text-gray-500 mb-2 tracking-widest text-center border-b border-gray-800 pb-1 flex-none">EXPOSURE</h3>
                 
                 {/* 0 Row */}
@@ -256,7 +256,7 @@ export const RouletteView = React.memo<{
             </div>
 
             {/* ACTIVE BETS SIDEBAR */}
-            <div className="hidden lg:flex absolute top-0 right-0 bottom-24 w-60 bg-terminal-black/80 border-l-2 border-gray-700 p-2 backdrop-blur-sm z-30 flex-col">
+            <div className="hidden lg:flex absolute top-0 right-0 bottom-24 w-60 bg-titanium-900/80 border-l-2 border-gray-700 p-2 backdrop-blur-sm z-30 flex-col">
                 <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-2 border-b border-gray-800 pb-1 flex-none text-center">Table Bets</div>
                 <div className="flex-1 overflow-y-auto flex flex-col space-y-2">
                     {(() => {
@@ -274,7 +274,7 @@ export const RouletteView = React.memo<{
                                 }`}
                             >
                                 <div className="flex flex-col">
-                                    <span className={`font-bold text-[10px] ${isPending ? 'text-amber-400' : 'text-terminal-green'}`}>
+                                    <span className={`font-bold text-[10px] ${isPending ? 'text-amber-400' : 'text-action-success'}`}>
                                         {b.type} {b.target !== undefined ? b.target : ''}
                                     </span>
                                 </div>
@@ -291,7 +291,7 @@ export const RouletteView = React.memo<{
                                 {/* Confirmed (on-chain) bets */}
                                 {confirmedBets.length > 0 && (
                                     <div className="space-y-1">
-                                        <div className="text-[8px] text-terminal-green uppercase tracking-widest font-bold">
+                                        <div className="text-[8px] text-action-success uppercase tracking-widest font-bold">
                                             Confirmed ({confirmedBets.length})
                                         </div>
                                         {confirmedBets.map((b, i) => renderBet(b, i, false))}
@@ -314,57 +314,57 @@ export const RouletteView = React.memo<{
             </div>
 
             {/* CONTROLS */}
-            <div className="ns-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-terminal-black/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
+            <div className="ns-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-titanium-900/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
                 <div className="h-auto md:h-20 flex flex-col md:flex-row items-center justify-center gap-2 p-2 md:px-4">
                     <div className="flex md:hidden items-center gap-2">
                         <MobileDrawer label="BETS" title="ROULETTE BETS">
                             <div className="space-y-4">
                                 <div className="rounded border border-gray-800 bg-black/40 p-2 space-y-2">
-                                    <div className="text-[10px] text-terminal-green font-bold tracking-widest border-b border-gray-800 pb-1">OUTSIDE</div>
+                                    <div className="text-[10px] text-action-success font-bold tracking-widest border-b border-gray-800 pb-1">OUTSIDE</div>
                                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                        <button type="button" onClick={() => actions?.placeRouletteBet?.('RED')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('RED') ? 'border-terminal-accent bg-terminal-accent/20 text-terminal-accent' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>RED</button>
+                                        <button type="button" onClick={() => actions?.placeRouletteBet?.('RED')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('RED') ? 'border-action-destructive bg-action-destructive/20 text-action-destructive' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>RED</button>
                                         <button type="button" onClick={() => actions?.placeRouletteBet?.('BLACK')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('BLACK') ? 'border-white bg-white/20 text-white' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>BLACK</button>
-                                        <button type="button" onClick={() => actions?.placeRouletteBet?.('ODD')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('ODD') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>ODD</button>
-                                        <button type="button" onClick={() => actions?.placeRouletteBet?.('EVEN')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('EVEN') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>EVEN</button>
-                                        <button type="button" onClick={() => actions?.placeRouletteBet?.('LOW')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('LOW') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>1-18</button>
-                                        <button type="button" onClick={() => actions?.placeRouletteBet?.('HIGH')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('HIGH') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>19-36</button>
+                                        <button type="button" onClick={() => actions?.placeRouletteBet?.('ODD')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('ODD') ? 'border-action-success bg-action-success/20 text-action-success' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>ODD</button>
+                                        <button type="button" onClick={() => actions?.placeRouletteBet?.('EVEN')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('EVEN') ? 'border-action-success bg-action-success/20 text-action-success' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>EVEN</button>
+                                        <button type="button" onClick={() => actions?.placeRouletteBet?.('LOW')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('LOW') ? 'border-action-success bg-action-success/20 text-action-success' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>1-18</button>
+                                        <button type="button" onClick={() => actions?.placeRouletteBet?.('HIGH')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('HIGH') ? 'border-action-success bg-action-success/20 text-action-success' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>19-36</button>
                                     </div>
                                 </div>
 
                                 <div className="rounded border border-gray-800 bg-black/40 p-2 space-y-2">
-                                    <div className="text-[10px] text-terminal-green font-bold tracking-widest border-b border-gray-800 pb-1">DOZENS</div>
+                                    <div className="text-[10px] text-action-success font-bold tracking-widest border-b border-gray-800 pb-1">DOZENS</div>
                                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                        <button type="button" onClick={() => actions?.placeRouletteBet?.('DOZEN_1')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('DOZEN_1') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>1ST 12</button>
-                                        <button type="button" onClick={() => actions?.placeRouletteBet?.('DOZEN_2')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('DOZEN_2') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>2ND 12</button>
-                                        <button type="button" onClick={() => actions?.placeRouletteBet?.('DOZEN_3')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('DOZEN_3') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>3RD 12</button>
+                                        <button type="button" onClick={() => actions?.placeRouletteBet?.('DOZEN_1')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('DOZEN_1') ? 'border-action-success bg-action-success/20 text-action-success' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>1ST 12</button>
+                                        <button type="button" onClick={() => actions?.placeRouletteBet?.('DOZEN_2')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('DOZEN_2') ? 'border-action-success bg-action-success/20 text-action-success' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>2ND 12</button>
+                                        <button type="button" onClick={() => actions?.placeRouletteBet?.('DOZEN_3')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('DOZEN_3') ? 'border-action-success bg-action-success/20 text-action-success' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>3RD 12</button>
                                     </div>
                                 </div>
 
                                 <div className="rounded border border-gray-800 bg-black/40 p-2 space-y-2">
-                                    <div className="text-[10px] text-terminal-green font-bold tracking-widest border-b border-gray-800 pb-1">COLUMNS</div>
+                                    <div className="text-[10px] text-action-success font-bold tracking-widest border-b border-gray-800 pb-1">COLUMNS</div>
                                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                        <button type="button" onClick={() => actions?.placeRouletteBet?.('COL_1')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('COL_1') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>COL 1</button>
-                                        <button type="button" onClick={() => actions?.placeRouletteBet?.('COL_2')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('COL_2') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>COL 2</button>
-                                        <button type="button" onClick={() => actions?.placeRouletteBet?.('COL_3')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('COL_3') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>COL 3</button>
+                                        <button type="button" onClick={() => actions?.placeRouletteBet?.('COL_1')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('COL_1') ? 'border-action-success bg-action-success/20 text-action-success' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>COL 1</button>
+                                        <button type="button" onClick={() => actions?.placeRouletteBet?.('COL_2')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('COL_2') ? 'border-action-success bg-action-success/20 text-action-success' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>COL 2</button>
+                                        <button type="button" onClick={() => actions?.placeRouletteBet?.('COL_3')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('COL_3') ? 'border-action-success bg-action-success/20 text-action-success' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>COL 3</button>
                                     </div>
                                 </div>
 
                                 <div className="rounded border border-gray-800 bg-black/40 p-2 space-y-2">
-                                    <div className="text-[10px] text-terminal-green font-bold tracking-widest border-b border-gray-800 pb-1">ZERO</div>
+                                    <div className="text-[10px] text-action-success font-bold tracking-widest border-b border-gray-800 pb-1">ZERO</div>
                                     <div className="grid grid-cols-2 gap-2">
-                                        <button type="button" onClick={() => actions?.placeRouletteBet?.('ZERO')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('ZERO') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-terminal-green/30 bg-gray-900 text-terminal-green'}`}>ZERO</button>
+                                        <button type="button" onClick={() => actions?.placeRouletteBet?.('ZERO')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('ZERO') ? 'border-action-success bg-action-success/20 text-action-success' : 'border-action-success/30 bg-gray-900 text-action-success'}`}>ZERO</button>
                                     </div>
                                 </div>
 
                                 <div className="rounded border border-gray-800 bg-black/40 p-2 space-y-2">
-                                    <div className="text-[10px] text-terminal-gold font-bold tracking-widest border-b border-gray-800 pb-1">INSIDE</div>
+                                    <div className="text-[10px] text-action-primary font-bold tracking-widest border-b border-gray-800 pb-1">INSIDE</div>
                                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                        <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'STRAIGHT' }))} className={`py-3 rounded border text-xs font-bold ${gameState.rouletteInputMode === 'STRAIGHT' ? 'border-terminal-gold bg-terminal-gold/20 text-terminal-gold' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>STRAIGHT</button>
-                                        <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'SPLIT_H' }))} className={`py-3 rounded border text-xs font-bold ${gameState.rouletteInputMode === 'SPLIT_H' ? 'border-terminal-gold bg-terminal-gold/20 text-terminal-gold' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>SPLIT</button>
-                                        <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'SPLIT_V' }))} className={`py-3 rounded border text-xs font-bold ${gameState.rouletteInputMode === 'SPLIT_V' ? 'border-terminal-gold bg-terminal-gold/20 text-terminal-gold' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>VSPLIT</button>
-                                        <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'STREET' }))} className={`py-3 rounded border text-xs font-bold ${gameState.rouletteInputMode === 'STREET' ? 'border-terminal-gold bg-terminal-gold/20 text-terminal-gold' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>STREET</button>
-                                        <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'CORNER' }))} className={`py-3 rounded border text-xs font-bold ${gameState.rouletteInputMode === 'CORNER' ? 'border-terminal-gold bg-terminal-gold/20 text-terminal-gold' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>CORNER</button>
-                                        <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'SIX_LINE' }))} className={`py-3 rounded border text-xs font-bold ${gameState.rouletteInputMode === 'SIX_LINE' ? 'border-terminal-gold bg-terminal-gold/20 text-terminal-gold' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>SIX LINE</button>
+                                        <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'STRAIGHT' }))} className={`py-3 rounded border text-xs font-bold ${gameState.rouletteInputMode === 'STRAIGHT' ? 'border-action-primary bg-action-primary/20 text-action-primary' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>STRAIGHT</button>
+                                        <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'SPLIT_H' }))} className={`py-3 rounded border text-xs font-bold ${gameState.rouletteInputMode === 'SPLIT_H' ? 'border-action-primary bg-action-primary/20 text-action-primary' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>SPLIT</button>
+                                        <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'SPLIT_V' }))} className={`py-3 rounded border text-xs font-bold ${gameState.rouletteInputMode === 'SPLIT_V' ? 'border-action-primary bg-action-primary/20 text-action-primary' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>VSPLIT</button>
+                                        <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'STREET' }))} className={`py-3 rounded border text-xs font-bold ${gameState.rouletteInputMode === 'STREET' ? 'border-action-primary bg-action-primary/20 text-action-primary' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>STREET</button>
+                                        <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'CORNER' }))} className={`py-3 rounded border text-xs font-bold ${gameState.rouletteInputMode === 'CORNER' ? 'border-action-primary bg-action-primary/20 text-action-primary' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>CORNER</button>
+                                        <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'SIX_LINE' }))} className={`py-3 rounded border text-xs font-bold ${gameState.rouletteInputMode === 'SIX_LINE' ? 'border-action-primary bg-action-primary/20 text-action-primary' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>SIX LINE</button>
                                     </div>
                                 </div>
 
@@ -380,7 +380,7 @@ export const RouletteView = React.memo<{
                                                 <button type="button" onClick={actions?.toggleDouble} className={`py-3 rounded border text-xs font-bold ${gameState.activeModifiers.double ? 'border-purple-400 bg-purple-500/20 text-purple-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>DOUBLE</button>
                                             </>
                                         )}
-                                        <button type="button" onClick={actions?.toggleSuper} className={`py-3 rounded border text-xs font-bold ${gameState.activeModifiers.super ? 'border-terminal-gold bg-terminal-gold/20 text-terminal-gold' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>SUPER</button>
+                                        <button type="button" onClick={actions?.toggleSuper} className={`py-3 rounded border text-xs font-bold ${gameState.activeModifiers.super ? 'border-action-primary bg-action-primary/20 text-action-primary' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>SUPER</button>
                                     </div>
                                 </div>
                             </div>
@@ -388,42 +388,42 @@ export const RouletteView = React.memo<{
                     </div>
 
                     {/* Outside Bets Group */}
-                    <div className="hidden md:flex items-center gap-1 px-3 py-2 rounded border border-terminal-green/30 bg-terminal-green/5">
-                        <span className="text-[8px] text-terminal-green font-bold tracking-widest uppercase mr-2">OUTSIDE</span>
-                        <button type="button" onClick={() => actions?.placeRouletteBet?.('RED')} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${betTypes.has('RED') ? 'border-terminal-accent bg-terminal-accent/20 text-terminal-accent' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>RED</button>
+                    <div className="hidden md:flex items-center gap-1 px-3 py-2 rounded border border-action-success/30 bg-action-success/5">
+                        <span className="text-[8px] text-action-success font-bold tracking-widest uppercase mr-2">OUTSIDE</span>
+                        <button type="button" onClick={() => actions?.placeRouletteBet?.('RED')} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${betTypes.has('RED') ? 'border-action-destructive bg-action-destructive/20 text-action-destructive' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>RED</button>
                         <button type="button" onClick={() => actions?.placeRouletteBet?.('BLACK')} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${betTypes.has('BLACK') ? 'border-white bg-white/20 text-white' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>BLACK</button>
-                        <button type="button" onClick={() => actions?.placeRouletteBet?.('ODD')} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${betTypes.has('ODD') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>ODD</button>
-                        <button type="button" onClick={() => actions?.placeRouletteBet?.('EVEN')} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${betTypes.has('EVEN') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>EVEN</button>
-                        <button type="button" onClick={() => actions?.placeRouletteBet?.('LOW')} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${betTypes.has('LOW') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>1-18</button>
-                        <button type="button" onClick={() => actions?.placeRouletteBet?.('HIGH')} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${betTypes.has('HIGH') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>19-36</button>
+                        <button type="button" onClick={() => actions?.placeRouletteBet?.('ODD')} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${betTypes.has('ODD') ? 'border-action-success bg-action-success/20 text-action-success' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>ODD</button>
+                        <button type="button" onClick={() => actions?.placeRouletteBet?.('EVEN')} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${betTypes.has('EVEN') ? 'border-action-success bg-action-success/20 text-action-success' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>EVEN</button>
+                        <button type="button" onClick={() => actions?.placeRouletteBet?.('LOW')} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${betTypes.has('LOW') ? 'border-action-success bg-action-success/20 text-action-success' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>1-18</button>
+                        <button type="button" onClick={() => actions?.placeRouletteBet?.('HIGH')} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${betTypes.has('HIGH') ? 'border-action-success bg-action-success/20 text-action-success' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>19-36</button>
                         <div className="w-px h-6 bg-gray-700 mx-1"></div>
-                        <button type="button" onClick={() => actions?.placeRouletteBet?.('DOZEN_1')} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${betTypes.has('DOZEN_1') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>1ST 12</button>
-                        <button type="button" onClick={() => actions?.placeRouletteBet?.('DOZEN_2')} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${betTypes.has('DOZEN_2') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>2ND 12</button>
-                        <button type="button" onClick={() => actions?.placeRouletteBet?.('DOZEN_3')} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${betTypes.has('DOZEN_3') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>3RD 12</button>
+                        <button type="button" onClick={() => actions?.placeRouletteBet?.('DOZEN_1')} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${betTypes.has('DOZEN_1') ? 'border-action-success bg-action-success/20 text-action-success' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>1ST 12</button>
+                        <button type="button" onClick={() => actions?.placeRouletteBet?.('DOZEN_2')} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${betTypes.has('DOZEN_2') ? 'border-action-success bg-action-success/20 text-action-success' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>2ND 12</button>
+                        <button type="button" onClick={() => actions?.placeRouletteBet?.('DOZEN_3')} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${betTypes.has('DOZEN_3') ? 'border-action-success bg-action-success/20 text-action-success' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>3RD 12</button>
                         <div className="w-px h-6 bg-gray-700 mx-1"></div>
-                        <button type="button" onClick={() => actions?.placeRouletteBet?.('COL_1')} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${betTypes.has('COL_1') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>COL 1</button>
-                        <button type="button" onClick={() => actions?.placeRouletteBet?.('COL_2')} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${betTypes.has('COL_2') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>COL 2</button>
-                        <button type="button" onClick={() => actions?.placeRouletteBet?.('COL_3')} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${betTypes.has('COL_3') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>COL 3</button>
+                        <button type="button" onClick={() => actions?.placeRouletteBet?.('COL_1')} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${betTypes.has('COL_1') ? 'border-action-success bg-action-success/20 text-action-success' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>COL 1</button>
+                        <button type="button" onClick={() => actions?.placeRouletteBet?.('COL_2')} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${betTypes.has('COL_2') ? 'border-action-success bg-action-success/20 text-action-success' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>COL 2</button>
+                        <button type="button" onClick={() => actions?.placeRouletteBet?.('COL_3')} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${betTypes.has('COL_3') ? 'border-action-success bg-action-success/20 text-action-success' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>COL 3</button>
                         <div className="w-px h-6 bg-gray-700 mx-1"></div>
-                        <button type="button" onClick={() => actions?.placeRouletteBet?.('ZERO')} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${betTypes.has('ZERO') ? 'border-terminal-green bg-terminal-green/20 text-terminal-green' : 'border-terminal-green/30 bg-black/50 text-terminal-green hover:bg-gray-800'}`}>ZERO</button>
+                        <button type="button" onClick={() => actions?.placeRouletteBet?.('ZERO')} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${betTypes.has('ZERO') ? 'border-action-success bg-action-success/20 text-action-success' : 'border-action-success/30 bg-black/50 text-action-success hover:bg-gray-800'}`}>ZERO</button>
                     </div>
 
                     {/* Inside Bets Group */}
-                    <div className="hidden md:flex items-center gap-1 px-3 py-2 rounded border border-terminal-gold/30 bg-terminal-gold/5">
-                        <span className="text-[8px] text-terminal-gold font-bold tracking-widest uppercase mr-2">INSIDE</span>
-                        <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'STRAIGHT' }))} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${gameState.rouletteInputMode === 'STRAIGHT' ? 'border-terminal-gold bg-terminal-gold/20 text-terminal-gold' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>STRAIGHT</button>
-                        <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'SPLIT_H' }))} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${gameState.rouletteInputMode === 'SPLIT_H' ? 'border-terminal-gold bg-terminal-gold/20 text-terminal-gold' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>SPLIT</button>
-                        <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'SPLIT_V' }))} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${gameState.rouletteInputMode === 'SPLIT_V' ? 'border-terminal-gold bg-terminal-gold/20 text-terminal-gold' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>VSPLIT</button>
-                        <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'STREET' }))} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${gameState.rouletteInputMode === 'STREET' ? 'border-terminal-gold bg-terminal-gold/20 text-terminal-gold' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>STREET</button>
-                        <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'CORNER' }))} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${gameState.rouletteInputMode === 'CORNER' ? 'border-terminal-gold bg-terminal-gold/20 text-terminal-gold' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>CORNER</button>
-                        <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'SIX_LINE' }))} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${gameState.rouletteInputMode === 'SIX_LINE' ? 'border-terminal-gold bg-terminal-gold/20 text-terminal-gold' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>SIX LINE</button>
+                    <div className="hidden md:flex items-center gap-1 px-3 py-2 rounded border border-action-primary/30 bg-action-primary/5">
+                        <span className="text-[8px] text-action-primary font-bold tracking-widest uppercase mr-2">INSIDE</span>
+                        <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'STRAIGHT' }))} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${gameState.rouletteInputMode === 'STRAIGHT' ? 'border-action-primary bg-action-primary/20 text-action-primary' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>STRAIGHT</button>
+                        <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'SPLIT_H' }))} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${gameState.rouletteInputMode === 'SPLIT_H' ? 'border-action-primary bg-action-primary/20 text-action-primary' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>SPLIT</button>
+                        <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'SPLIT_V' }))} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${gameState.rouletteInputMode === 'SPLIT_V' ? 'border-action-primary bg-action-primary/20 text-action-primary' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>VSPLIT</button>
+                        <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'STREET' }))} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${gameState.rouletteInputMode === 'STREET' ? 'border-action-primary bg-action-primary/20 text-action-primary' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>STREET</button>
+                        <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'CORNER' }))} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${gameState.rouletteInputMode === 'CORNER' ? 'border-action-primary bg-action-primary/20 text-action-primary' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>CORNER</button>
+                        <button type="button" onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, rouletteInputMode: 'SIX_LINE' }))} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${gameState.rouletteInputMode === 'SIX_LINE' ? 'border-action-primary bg-action-primary/20 text-action-primary' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>SIX LINE</button>
                     </div>
 
                     {/* SPIN Button */}
                     <button
                         type="button"
                         onClick={actions?.deal}
-                        className="h-14 px-8 rounded border-2 font-bold text-base tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] border-terminal-green bg-terminal-green text-black hover:bg-white hover:border-white hover:scale-105 active:scale-95"
+                        className="h-14 px-8 rounded border-2 font-bold text-base tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] border-action-success bg-action-success text-black hover:bg-white hover:border-white hover:scale-105 active:scale-95"
                     >
                         SPIN
                     </button>
@@ -439,7 +439,7 @@ export const RouletteView = React.memo<{
                                 <button type="button" onClick={actions?.toggleDouble} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${gameState.activeModifiers.double ? 'border-purple-400 bg-purple-500/20 text-purple-300' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>DOUBLE</button>
                             </>
                         )}
-                        <button type="button" onClick={actions?.toggleSuper} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${gameState.activeModifiers.super ? 'border-terminal-gold bg-terminal-gold/20 text-terminal-gold' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>SUPER</button>
+                        <button type="button" onClick={actions?.toggleSuper} className={`h-8 px-2 rounded border text-[10px] font-bold tracking-widest uppercase transition-all ${gameState.activeModifiers.super ? 'border-action-primary bg-action-primary/20 text-action-primary' : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'}`}>SUPER</button>
                     </div>
                 </div>
             </div>
@@ -451,7 +451,7 @@ export const RouletteView = React.memo<{
                      onClick={closeInsideBet}
                  >
                      <div
-                         className="bg-terminal-black border border-terminal-green p-4 sm:p-6 rounded-lg shadow-xl flex flex-col items-center gap-4 w-full max-w-lg"
+                         className="bg-titanium-900 border border-action-success p-4 sm:p-6 rounded-lg shadow-xl flex flex-col items-center gap-4 w-full max-w-lg"
                          onClick={(e) => e.stopPropagation()}
                      >
                          <div className="text-sm tracking-widest text-gray-400 uppercase text-center">

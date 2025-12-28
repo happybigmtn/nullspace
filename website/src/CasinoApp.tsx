@@ -430,7 +430,7 @@ export default function CasinoApp() {
 	  }
 
   return (
-    <div className="flex flex-col h-[100dvh] w-screen bg-terminal-black text-white font-mono overflow-hidden select-none" onKeyDown={(e) => {
+    <div className="flex flex-col h-[100dvh] w-screen bg-titanium-50 text-titanium-900 font-sans overflow-hidden select-none" onKeyDown={(e) => {
         if (e.key === 'Enter') {
             if (commandOpen) handleCommandEnter();
             if (customBetOpen) handleCustomBetEnter();
@@ -440,7 +440,7 @@ export default function CasinoApp() {
     }}>
        <a
          href="#casino-main"
-         className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:rounded focus:border focus:border-terminal-green focus:bg-terminal-black focus:px-3 focus:py-2 focus:text-[10px] focus:tracking-widest focus:text-terminal-green"
+         className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:rounded-full focus:border focus:border-action-primary focus:bg-white focus:px-4 focus:py-2 focus:text-xs focus:font-bold focus:text-action-primary shadow-float"
        >
          Skip to content
        </a>
@@ -484,25 +484,25 @@ export default function CasinoApp() {
            </div>
        </Header>
 
-       <div className="border-b border-gray-800 bg-terminal-black/90 backdrop-blur px-2 sm:px-4 py-2 flex items-center gap-2">
+       <div className="border-b border-titanium-200 bg-glass-light backdrop-blur-lg px-4 py-2.5 flex items-center gap-3">
            <button
                type="button"
                onClick={openCommandPalette}
-               className="h-11 px-3 rounded border border-gray-800 text-gray-300 text-[10px] tracking-widest uppercase hover:border-gray-600 hover:text-white flex items-center justify-center w-full lg:w-auto"
+               className="h-10 px-4 rounded-full border border-titanium-200 bg-white text-titanium-800 text-[11px] font-bold tracking-widest uppercase hover:border-titanium-400 hover:shadow-sm transition-all flex items-center justify-center w-full lg:w-auto"
            >
                Games
            </button>
            <button
                type="button"
                onClick={() => openResponsiblePlay('settings')}
-               className="hidden lg:flex h-11 px-3 rounded border border-gray-800 text-gray-300 text-[10px] tracking-widest uppercase hover:border-gray-600 hover:text-white items-center justify-center"
+               className="hidden lg:flex h-10 px-4 rounded-full border border-titanium-200 bg-white text-titanium-800 text-[11px] font-bold tracking-widest uppercase hover:border-titanium-400 hover:shadow-sm transition-all items-center justify-center"
            >
                Safety
            </button>
            <div className="hidden lg:flex flex-1 min-w-0 justify-center">
                <PlaySwapStakeTabs />
            </div>
-           <div className="hidden lg:flex items-center gap-2">
+           <div className="hidden lg:flex items-center gap-3">
                <AuthStatusPill publicKeyHex={walletPublicKeyHex} />
                <WalletPill
                  rng={walletRng}
@@ -518,10 +518,10 @@ export default function CasinoApp() {
 	          <main
               id="casino-main"
               tabIndex={-1}
-              className={`flex-1 flex flex-col relative bg-terminal-black p-3 sm:p-4 overflow-y-auto ${gameState.type !== GameType.NONE ? 'pb-24 sm:pb-20 md:pb-4' : ''}`}
+              className={`flex-1 flex flex-col relative bg-titanium-50 p-4 sm:p-6 overflow-y-auto scrollbar-hide ${gameState.type !== GameType.NONE ? 'pb-28' : ''}`}
             >
 	             {gameState.type === GameType.NONE ? (
-	               <div className="mb-2 lg:hidden space-y-2">
+	               <div className="mb-4 lg:hidden space-y-3">
 	                 <AuthStatusPill publicKeyHex={walletPublicKeyHex} className="w-full" />
 	                 <WalletPill
                      rng={walletRng}
@@ -534,27 +534,27 @@ export default function CasinoApp() {
 	               </div>
 	             ) : null}
 	             {playMode === 'CASH' && (
-	                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2 border border-gray-800 rounded bg-gray-900/30 px-3 py-1">
-	                     <div className="text-[10px] text-gray-500 tracking-widest">
-	                         MODE: <span className="text-terminal-green">CASH</span>
+	                 <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border border-titanium-200 rounded-2xl bg-white px-4 py-2 shadow-soft">
+	                     <div className="text-[10px] font-bold text-titanium-400 tracking-[0.2em] uppercase">
+	                         Current Mode: <span className="text-action-primary">Cash Play</span>
 	                     </div>
                      <div className="flex items-center gap-2">
                          <button
-                             className="text-[10px] border px-2 py-1 rounded bg-gray-900 border-gray-800 text-gray-300 hover:border-gray-600"
+                             className="text-[10px] font-bold border px-3 py-1.5 rounded-full bg-white border-titanium-200 text-titanium-800 hover:border-titanium-400 transition-colors uppercase tracking-widest"
                              onClick={() => setPlayMode(null)}
                          >
-                             CHANGE MODE
+                             Change
                          </button>
                          <button
-                             className={`text-[10px] border px-2 py-1 rounded ${
+                             className={`text-[10px] font-bold border px-3 py-1.5 rounded-full uppercase tracking-widest transition-all ${
                                  isFaucetClaiming
-                                     ? 'bg-gray-800 border-gray-700 text-gray-500 cursor-not-allowed'
-                                     : 'bg-terminal-green/20 border-terminal-green text-terminal-green hover:bg-terminal-green/30'
+                                     ? 'bg-titanium-100 border-titanium-100 text-titanium-300 cursor-not-allowed'
+                                     : 'bg-action-success text-white border-action-success shadow-sm hover:scale-105 active:scale-95'
                              }`}
                              onClick={actions.claimFaucet}
                              disabled={isFaucetClaiming}
                          >
-                             {isFaucetClaiming ? 'CLAIMING…' : 'DAILY FAUCET'}
+                             {isFaucetClaiming ? 'Claiming…' : 'Daily Faucet'}
                          </button>
                      </div>
                  </div>

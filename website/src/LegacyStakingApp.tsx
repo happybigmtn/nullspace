@@ -325,7 +325,7 @@ export default function LegacyStakingApp() {
   };
 
   return (
-    <div className="min-h-screen bg-terminal-black text-white font-mono p-4">
+    <div className="min-h-screen bg-titanium-900 text-white font-mono p-4">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-800 pb-3 mb-4">
         <div className="flex items-center gap-3 flex-wrap">
           <PlaySwapStakeTabs />
@@ -347,7 +347,7 @@ export default function LegacyStakingApp() {
           <div className="space-y-2 text-sm">
             <div>
               Registered:{' '}
-              <span className={isRegistered ? 'text-terminal-green' : 'text-terminal-accent'}>
+              <span className={isRegistered ? 'text-action-success' : 'text-action-destructive'}>
                 {isRegistered ? 'YES' : 'NO'}
               </span>
             </div>
@@ -369,14 +369,14 @@ export default function LegacyStakingApp() {
                 placeholder="Name"
               />
               <button
-                className="text-xs px-3 py-1 rounded border border-terminal-green text-terminal-green hover:bg-terminal-green/10"
+                className="text-xs px-3 py-1 rounded border border-action-success text-action-success hover:bg-action-success/10"
                 onClick={ensureRegistered}
               >
                 Register
               </button>
             </div>
             <button
-              className="w-full text-xs px-3 py-2 rounded border border-terminal-green text-terminal-green hover:bg-terminal-green/10"
+              className="w-full text-xs px-3 py-2 rounded border border-action-success text-action-success hover:bg-action-success/10"
               onClick={claimFaucet}
             >
               Daily Faucet (1000 RNG)
@@ -424,7 +424,7 @@ export default function LegacyStakingApp() {
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <button
-                className="flex-1 text-xs px-3 py-2 rounded border border-terminal-green text-terminal-green hover:bg-terminal-green/10"
+                className="flex-1 text-xs px-3 py-2 rounded border border-action-success text-action-success hover:bg-action-success/10"
                 onClick={stake}
               >
                 Stake

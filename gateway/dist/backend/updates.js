@@ -125,7 +125,11 @@ export class UpdatesClient extends EventEmitter {
      */
     handleMessage(data) {
         try {
-            console.log(`[UpdatesClient] Received message: ${data.length} bytes`);
+            // Debug: log first 10 bytes to identify message type
+            const header = Array.from(data.slice(0, Math.min(10, data.length)))
+                .map((b) => b.toString(16).padStart(2, '0'))
+                .join(' ');
+            console.log(`[UpdatesClient] Received message: ${data.length} bytes, header: ${header}`);
             const events = extractCasinoEvents(new Uint8Array(data));
             console.log(`[UpdatesClient] Extracted ${events.length} casino events`);
             for (const event of events) {

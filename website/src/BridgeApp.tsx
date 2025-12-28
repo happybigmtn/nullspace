@@ -408,7 +408,7 @@ export default function BridgeApp() {
     : '-';
 
   return (
-    <div className="min-h-screen bg-terminal-black text-white">
+    <div className="min-h-screen bg-titanium-900 text-white">
       <PageHeader
         title="Bridge"
         status={<ConnectionStatus />}
@@ -460,14 +460,14 @@ export default function BridgeApp() {
               <div>Delay: <span className="text-white">{policyLimits.delaySecs ? `${policyLimits.delaySecs}s` : '-'}</span></div>
             </div>
             {withdrawValidation ? (
-              <div className="text-[11px] text-terminal-accent">{withdrawValidation}</div>
+              <div className="text-[11px] text-action-destructive">{withdrawValidation}</div>
             ) : null}
             <button
               onClick={onWithdraw}
               disabled={!canWithdraw}
               className={`w-full rounded px-3 py-2 text-xs font-bold tracking-widest uppercase border ${
                 canWithdraw
-                  ? 'border-terminal-green text-terminal-green hover:bg-terminal-green/10'
+                  ? 'border-action-success text-action-success hover:bg-action-success/10'
                   : 'border-gray-800 text-gray-600 cursor-not-allowed'
               }`}
             >
@@ -481,7 +481,7 @@ export default function BridgeApp() {
               Deposit RNG on Ethereum and receive credited RNG once the relayer confirms the lockbox event.
             </div>
             {!hasEvmProvider() ? (
-              <div className="text-[11px] text-terminal-accent">Install an EVM wallet to deposit.</div>
+              <div className="text-[11px] text-action-destructive">Install an EVM wallet to deposit.</div>
             ) : (
               <div className="flex items-center justify-between text-[11px] text-gray-500">
                 <div>
@@ -521,20 +521,20 @@ export default function BridgeApp() {
               </label>
             </div>
             {evmChainMismatch ? (
-              <div className="text-[11px] text-terminal-accent">
+              <div className="text-[11px] text-action-destructive">
                 Wrong network. Expected chain ID {EVM_CHAIN_ID}.
               </div>
             ) : null}
             {depositValidation ? (
-              <div className="text-[11px] text-terminal-accent">{depositValidation}</div>
+              <div className="text-[11px] text-action-destructive">{depositValidation}</div>
             ) : null}
-            {evmError ? <div className="text-[11px] text-terminal-accent">{evmError}</div> : null}
+            {evmError ? <div className="text-[11px] text-action-destructive">{evmError}</div> : null}
             <button
               onClick={onDeposit}
               disabled={!canDeposit}
               className={`w-full rounded px-3 py-2 text-xs font-bold tracking-widest uppercase border ${
                 canDeposit
-                  ? 'border-terminal-green text-terminal-green hover:bg-terminal-green/10'
+                  ? 'border-action-success text-action-success hover:bg-action-success/10'
                   : 'border-gray-800 text-gray-600 cursor-not-allowed'
               }`}
             >
@@ -598,14 +598,14 @@ export default function BridgeApp() {
                     : 'INFO';
               const labelClass = isTx
                 ? item.status === 'confirmed'
-                  ? 'text-terminal-green'
+                  ? 'text-action-success'
                   : item.status === 'failed'
-                    ? 'text-terminal-accent'
+                    ? 'text-action-destructive'
                     : 'text-gray-500'
                 : item.level === 'error'
-                  ? 'text-terminal-accent'
+                  ? 'text-action-destructive'
                   : item.level === 'success'
-                    ? 'text-terminal-green'
+                    ? 'text-action-success'
                     : 'text-gray-500';
 
               const messageNode =

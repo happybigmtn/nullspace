@@ -138,7 +138,7 @@ export const Pseudo3DWheel: React.FC<Pseudo3DWheelProps> = ({
                 />
                 
                 {/* Pointer / Flapper */}
-                <div className="absolute top-[-10px] left-1/2 -translate-x-1/2 w-4 h-8 bg-terminal-gold z-20 shadow-lg" style={{ clipPath: 'polygon(0% 0%, 100% 0%, 50% 100%)' }} />
+                <div className="absolute top-[-10px] left-1/2 -translate-x-1/2 w-4 h-8 bg-action-primary z-20 shadow-lg" style={{ clipPath: 'polygon(0% 0%, 100% 0%, 50% 100%)' }} />
                 
                 {/* Gloss Overlay */}
                 <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-white/5 to-transparent pointer-events-none" />

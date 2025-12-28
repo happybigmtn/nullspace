@@ -425,7 +425,7 @@ export default function LegacyLiquidityApp() {
   };
 
   return (
-    <div className="min-h-screen bg-terminal-black text-white font-mono p-4">
+    <div className="min-h-screen bg-titanium-900 text-white font-mono p-4">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-800 pb-3 mb-4">
         <div className="flex items-center gap-3">
           <PlaySwapStakeTabs />
@@ -445,7 +445,7 @@ export default function LegacyLiquidityApp() {
         <section className="border border-gray-800 rounded p-4 bg-gray-900/30">
           <div className="text-xs text-gray-400 tracking-widest mb-3">WALLET</div>
           <div className="space-y-2 text-sm">
-            <div>Registered: <span className={isRegistered ? 'text-terminal-green' : 'text-terminal-accent'}>{isRegistered ? 'YES' : 'NO'}</span></div>
+            <div>Registered: <span className={isRegistered ? 'text-action-success' : 'text-action-destructive'}>{isRegistered ? 'YES' : 'NO'}</span></div>
             <div>RNG: <span className="text-white">{player?.chips ?? 0}</span></div>
             <div>vUSDT: <span className="text-white">{player?.vusdtBalance ?? 0}</span></div>
             <div className="text-[10px] text-gray-600 break-all">PK: {publicKeyHexRef.current ?? '—'}</div>
@@ -460,14 +460,14 @@ export default function LegacyLiquidityApp() {
                 placeholder="Name"
               />
               <button
-                className="text-xs px-3 py-1 rounded border border-terminal-green text-terminal-green hover:bg-terminal-green/10"
+                className="text-xs px-3 py-1 rounded border border-action-success text-action-success hover:bg-action-success/10"
                 onClick={ensureRegistered}
               >
                 Register
               </button>
             </div>
             <button
-              className="w-full text-xs px-3 py-2 rounded border border-terminal-green bg-terminal-green/10 text-terminal-green hover:bg-terminal-green/20"
+              className="w-full text-xs px-3 py-2 rounded border border-action-success bg-action-success/10 text-action-success hover:bg-action-success/20"
               onClick={claimFaucet}
             >
               Daily Faucet (1000 RNG)
@@ -530,7 +530,7 @@ export default function LegacyLiquidityApp() {
                 placeholder="Amount in"
               />
               <button
-                className="text-xs px-3 py-1 rounded border border-terminal-accent text-terminal-accent hover:bg-terminal-accent/10"
+                className="text-xs px-3 py-1 rounded border border-action-destructive text-action-destructive hover:bg-action-destructive/10"
                 onClick={submitSwap}
               >
                 Swap
@@ -539,7 +539,7 @@ export default function LegacyLiquidityApp() {
 
             {(() => {
               const amtIn = parseAmount(swapAmountIn);
-              if (amtIn === null) return <div className="text-[10px] text-terminal-accent">Invalid amount</div>;
+              if (amtIn === null) return <div className="text-[10px] text-action-destructive">Invalid amount</div>;
               const isBuyingRng = swapDirection === 'BUY_RNG';
               const { out, fee, burned } = estimateSwapOut(amm, amtIn, isBuyingRng);
               const minOut = (out * BigInt(10_000 - slippageBps)) / 10_000n;
@@ -570,7 +570,7 @@ export default function LegacyLiquidityApp() {
               />
             </div>
             <button
-              className="w-full text-xs px-3 py-2 rounded border border-terminal-green text-terminal-green hover:bg-terminal-green/10"
+              className="w-full text-xs px-3 py-2 rounded border border-action-success text-action-success hover:bg-action-success/10"
               onClick={addLiquidity}
             >
               Add Liquidity
@@ -620,7 +620,7 @@ export default function LegacyLiquidityApp() {
 
           <div className="mt-4 space-y-2">
             <button
-              className="w-full text-xs px-3 py-2 rounded border border-terminal-green text-terminal-green hover:bg-terminal-green/10"
+              className="w-full text-xs px-3 py-2 rounded border border-action-success text-action-success hover:bg-action-success/10"
               onClick={createVault}
             >
               Create Vault
@@ -633,7 +633,7 @@ export default function LegacyLiquidityApp() {
                 placeholder="Deposit collateral (RNG)"
               />
               <button
-                className="text-xs px-3 py-1 rounded border border-terminal-green text-terminal-green hover:bg-terminal-green/10"
+                className="text-xs px-3 py-1 rounded border border-action-success text-action-success hover:bg-action-success/10"
                 onClick={depositCollateral}
               >
                 Deposit
@@ -647,7 +647,7 @@ export default function LegacyLiquidityApp() {
                 placeholder="Borrow (vUSDT)"
               />
               <button
-                className="text-xs px-3 py-1 rounded border border-terminal-accent text-terminal-accent hover:bg-terminal-accent/10"
+                className="text-xs px-3 py-1 rounded border border-action-destructive text-action-destructive hover:bg-action-destructive/10"
                 onClick={borrowVusdt}
               >
                 Borrow

@@ -79,15 +79,15 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
     normalizedStatus.includes('offline') ||
     normalizedStatus.includes('error') ||
     normalizedStatus.includes('failed')
-      ? 'text-terminal-accent'
+      ? 'text-action-destructive'
       : 'text-gray-300';
 
   return (
-      <div className="flex flex-col min-h-screen w-screen bg-terminal-black text-white font-mono items-center justify-center p-4 sm:p-6 md:p-8 overflow-auto">
+      <div className="flex flex-col min-h-screen w-screen bg-titanium-900 text-white font-mono items-center justify-center p-4 sm:p-6 md:p-8 overflow-auto">
           <div className="max-w-4xl w-full mb-3 flex justify-center">
               <PlaySwapStakeTabs />
           </div>
-          <div className="max-w-4xl w-full border border-terminal-green rounded-lg p-4 sm:p-6 md:p-8 shadow-2xl relative bg-black/80 backdrop-blur">
+          <div className="max-w-4xl w-full border border-action-success rounded-lg p-4 sm:p-6 md:p-8 shadow-2xl relative bg-black/80 backdrop-blur">
               <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-center mb-2 tracking-[0.2em] sm:tracking-[0.3em] md:tracking-[0.5em] text-white">
                   FREEROLL LOBBY
               </h1>
@@ -98,7 +98,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
                       {activeTimeLeft > 0 && (
                           <div>
                               <div className="text-[10px] sm:text-xs text-gray-500 tracking-widest mb-1">TOURNAMENT IN PROGRESS · ENDS IN</div>
-                              <div className="text-2xl sm:text-3xl md:text-4xl font-bold text-terminal-accent animate-pulse font-mono">
+                              <div className="text-2xl sm:text-3xl md:text-4xl font-bold text-action-destructive animate-pulse font-mono">
                                   {formatTime(activeTimeLeft)}
                               </div>
                           </div>
@@ -108,11 +108,11 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
                           <div className="text-[10px] sm:text-xs text-gray-500 tracking-widest mb-1">
                               NEXT TOURNAMENT STARTS IN{nextTournamentId !== null ? ` · ID ${nextTournamentId}` : ''}
                           </div>
-                          <div className="text-xl sm:text-2xl md:text-3xl font-bold text-terminal-green font-mono">
+                          <div className="text-xl sm:text-2xl md:text-3xl font-bold text-action-success font-mono">
                               {formatTime(nextStartIn)}
                           </div>
                           <div className="mt-2 text-[10px] text-gray-600 tracking-widest">
-                              ENTRIES LEFT TODAY: <span className={entriesRemaining > 0 ? 'text-terminal-green' : 'text-terminal-accent'}>{entriesRemaining}/{maxEntries}</span>
+                              ENTRIES LEFT TODAY: <span className={entriesRemaining > 0 ? 'text-action-success' : 'text-action-destructive'}>{entriesRemaining}/{maxEntries}</span>
                           </div>
                       </div>
                   </div>
@@ -129,7 +129,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
                            </div>
                            <div className="bg-gray-900 p-2 sm:p-4 rounded border border-gray-800">
                                <div className="text-gray-500 text-[10px] sm:text-xs mb-1">FINAL RANK</div>
-                               <div className="text-lg sm:text-xl md:text-2xl text-terminal-green font-bold">#{stats.rank}</div>
+                               <div className="text-lg sm:text-xl md:text-2xl text-action-success font-bold">#{stats.rank}</div>
                            </div>
                       </div>
                       
@@ -140,7 +140,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
                               return (
                               <div key={game} className="flex justify-between text-xs border-b border-gray-800 pb-1">
                                   <span>{game}</span>
-                                  <span className={val >= 0 ? 'text-terminal-green' : 'text-terminal-accent'}>
+                                  <span className={val >= 0 ? 'text-action-success' : 'text-action-destructive'}>
                                       {val >= 0 ? '+' : ''}{val}
                                   </span>
                               </div>
@@ -169,7 +169,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
 	                           <button
 	                              className={`px-8 py-4 font-bold text-lg rounded transition-colors shadow-[0_0_20px_rgba(0,255,65,0.35)] ${
 	                                  !isRegistered || (!isJoinedNext && entriesRemaining > 0)
-	                                      ? 'bg-terminal-green text-black hover:bg-green-400'
+	                                      ? 'bg-action-success text-black hover:bg-green-400'
 	                                      : 'bg-gray-800 text-gray-500 cursor-not-allowed'
 	                              }`}
 	                              onClick={onRegister}
@@ -187,7 +187,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
 	                           </button>
                            {canEnterTournament && (
                                <button
-                                   className="px-8 py-3 font-bold text-sm rounded transition-colors border border-terminal-accent/60 text-terminal-accent bg-terminal-accent/10 hover:bg-terminal-accent/20"
+                                   className="px-8 py-3 font-bold text-sm rounded transition-colors border border-action-destructive/60 text-action-destructive bg-action-destructive/10 hover:bg-action-destructive/20"
                                    onClick={onEnterTournament}
                                >
                                    ENTER TOURNAMENT
@@ -211,17 +211,17 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
                                        <button
                                            onClick={registerPasskey}
                                            disabled={passkeyLoading}
-                                           className="text-terminal-green hover:underline disabled:opacity-50"
+                                           className="text-action-success hover:underline disabled:opacity-50"
                                        >
                                            {passkeyLoading ? 'Pairing passkey...' : 'Use passkey (beta)'}
                                        </button>
                                        {passkeySession && (
-                                           <span className="text-[10px] text-terminal-green">
+                                           <span className="text-[10px] text-action-success">
                                                Passkey ready · {passkeySession.credentialId.slice(0, 8)}...
                                            </span>
                                        )}
                                        {passkeyError && (
-                                           <span className="text-[10px] text-terminal-accent">{passkeyError}</span>
+                                           <span className="text-[10px] text-action-destructive">{passkeyError}</span>
                                        )}
                                    </>
                                )}
@@ -247,7 +247,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
                       <button
                           className={`px-4 py-2 rounded text-xs font-bold transition-colors ${
                               botConfig.enabled
-                                  ? 'bg-terminal-accent text-black'
+                                  ? 'bg-action-destructive text-black'
                                   : 'bg-gray-800 text-gray-500 hover:bg-gray-700'
                           }`}
                           onClick={() => onBotConfigChange({ ...botConfig, enabled: !botConfig.enabled })}
@@ -273,7 +273,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
                                       onChange={(e) => onBotConfigChange({ ...botConfig, numBots: parseInt(e.target.value) })}
                                       className="flex-1 accent-terminal-green bg-gray-800"
                                   />
-                                  <span className="text-terminal-green font-mono w-12 text-right">{botConfig.numBots}</span>
+                                  <span className="text-action-success font-mono w-12 text-right">{botConfig.numBots}</span>
                               </div>
                           </div>
 
@@ -292,7 +292,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
                                       onChange={(e) => onBotConfigChange({ ...botConfig, betIntervalMs: parseInt(e.target.value) })}
                                       className="flex-1 accent-terminal-green bg-gray-800"
                                   />
-                                  <span className="text-terminal-green font-mono w-12 text-right">{botConfig.betIntervalMs / 1000}s</span>
+                                  <span className="text-action-success font-mono w-12 text-right">{botConfig.betIntervalMs / 1000}s</span>
                               </div>
                           </div>
 
@@ -304,7 +304,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
                               <button
                                   className={`w-full py-2 rounded text-xs font-bold transition-colors ${
                                       botConfig.randomizeInterval
-                                          ? 'bg-terminal-green/20 text-terminal-green border border-terminal-green'
+                                          ? 'bg-action-success/20 text-action-success border border-action-success'
                                           : 'bg-gray-800 text-gray-500 border border-gray-700'
                                   }`}
                                   onClick={() => onBotConfigChange({ ...botConfig, randomizeInterval: !botConfig.randomizeInterval })}
