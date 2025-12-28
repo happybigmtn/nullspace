@@ -492,11 +492,11 @@ export const HelpOverlay: React.FC<HelpOverlayProps> = ({ isOpen, onClose, gameT
     const renderGridItems = (items: {key: string, label: string}[]) => (
         <div className="grid grid-cols-2 gap-4">
             {items.map(item => (
-                <div key={item.key} className="flex items-center gap-4 bg-titanium-50 border border-titanium-100 p-3 rounded-2xl shadow-soft">
-                    <div className="w-10 h-10 flex items-center justify-center bg-titanium-900 text-white rounded-xl font-black text-sm shadow-md">
+                <div key={item.key} className="flex items-center gap-4 bg-titanium-50 border border-titanium-100 p-3 rounded-2xl shadow-soft group hover:bg-white transition-all">
+                    <div className="w-11 h-11 flex items-center justify-center bg-titanium-900 text-white rounded-xl font-display font-black text-sm shadow-md group-hover:scale-110 transition-transform">
                         {item.key}
                     </div>
-                    <span className="text-sm font-bold text-titanium-800 uppercase tracking-tight">{item.label}</span>
+                    <span className="text-body-sm font-bold text-titanium-800 uppercase tracking-tight">{item.label}</span>
                 </div>
             ))}
         </div>
@@ -538,17 +538,17 @@ export const HelpOverlay: React.FC<HelpOverlayProps> = ({ isOpen, onClose, gameT
                     <div className="space-y-6">
                         <Label variant="gold" size="micro" className="border-b border-titanium-100 pb-2 block">System Commands</Label>
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-8">
-                            <div className="flex items-center gap-4 group">
-                                <span className="bg-titanium-100 text-titanium-900 w-10 h-10 flex items-center justify-center rounded-xl font-black text-sm border border-titanium-200 shadow-soft group-hover:scale-110 transition-transform">/
-                                <span className="text-xs font-black text-titanium-800 uppercase tracking-widest">Menu</span>
+                            <div className="flex items-center gap-4 group cursor-pointer">
+                                <div className="w-11 h-11 flex items-center justify-center bg-white border border-titanium-200 rounded-xl font-display font-black text-sm text-titanium-900 shadow-soft group-hover:scale-110 group-hover:border-action-primary transition-all">/</div>
+                                <span className="text-body-sm font-bold text-titanium-800 uppercase tracking-tight">Menu</span>
                             </div>
-                            <div className="flex items-center gap-4 group">
-                                <span className="bg-titanium-100 text-titanium-900 w-10 h-10 flex items-center justify-center rounded-xl font-black text-sm border border-titanium-200 shadow-soft group-hover:scale-110 transition-transform">?
-                                <span className="text-xs font-black text-titanium-800 uppercase tracking-widest">Help</span>
+                            <div className="flex items-center gap-4 group cursor-pointer">
+                                <div className="w-11 h-11 flex items-center justify-center bg-white border border-titanium-200 rounded-xl font-display font-black text-sm text-titanium-900 shadow-soft group-hover:scale-110 group-hover:border-action-primary transition-all">?</div>
+                                <span className="text-body-sm font-bold text-titanium-800 uppercase tracking-tight">Help</span>
                             </div>
-                            <div className="flex items-center gap-4 group">
-                                <span className="bg-titanium-100 text-titanium-900 w-10 h-10 flex items-center justify-center rounded-xl font-black text-sm border border-titanium-200 shadow-soft group-hover:scale-110 transition-transform">L
-                                <span className="text-xs font-black text-titanium-800 uppercase tracking-widest">Feed</span>
+                            <div className="flex items-center gap-4 group cursor-pointer">
+                                <div className="w-11 h-11 flex items-center justify-center bg-white border border-titanium-200 rounded-xl font-display font-black text-sm text-titanium-900 shadow-soft group-hover:scale-110 group-hover:border-action-primary transition-all">L</div>
+                                <span className="text-body-sm font-bold text-titanium-800 uppercase tracking-tight">Feed</span>
                             </div>
                         </div>
                     </div>

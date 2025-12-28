@@ -50,9 +50,9 @@ export function PrimaryButton({
   }));
 
   const variantStyles = {
-    primary: { bg: COLORS.primary, text: COLORS.background, border: COLORS.primary },
-    secondary: { bg: COLORS.surfaceElevated, text: COLORS.textPrimary, border: COLORS.border },
-    danger: { bg: 'transparent', text: COLORS.accent, border: COLORS.accent },
+    primary: { bg: COLORS.textPrimary, text: COLORS.surface, border: COLORS.textPrimary },
+    secondary: { bg: COLORS.surface, text: COLORS.textPrimary, border: COLORS.border },
+    danger: { bg: 'transparent', text: COLORS.destructive, border: COLORS.destructive },
     ghost: { bg: 'transparent', text: COLORS.textMuted, border: 'transparent' },
   };
 
@@ -92,24 +92,25 @@ export function PrimaryButton({
 
 const styles = StyleSheet.create({
   button: {
-    paddingVertical: SPACING.sm + 4,
+    paddingVertical: SPACING.md,
     paddingHorizontal: SPACING.xl,
-    borderRadius: RADIUS.md,
+    borderRadius: RADIUS.full, // Modern pill shape
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 120,
-    borderWidth: 2,
+    minWidth: 140,
+    borderWidth: 1,
   },
   buttonLarge: {
-    paddingVertical: SPACING.md,
+    paddingVertical: SPACING.lg,
     paddingHorizontal: SPACING.xxl,
-    minWidth: 160,
+    minWidth: 180,
   },
   text: {
     ...TYPOGRAPHY.label,
-    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
   textLarge: {
     fontSize: 18,
+    fontWeight: '800',
   },
 });

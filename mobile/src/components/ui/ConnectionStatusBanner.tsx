@@ -34,61 +34,49 @@ export function ConnectionStatusBanner({
   useEffect(() => {
     if (connectionState === 'connecting') {
       pulseOpacity.value = withRepeat(
-        withTiming(0.4, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0.4, { duration: 1000, easing: Easing.inOut(Easing.ease) }),
         -1,
         true
       );
     } else {
       pulseOpacity.value = 1;
     }
-  }, [connectionState]); // pulseOpacity is a SharedValue (stable ref) - must not be in deps
+  }, [connectionState]);
 
   const pulseStyle = useAnimatedStyle(() => ({
     opacity: pulseOpacity.value,
   }));
 
-  // Don't show banner when connected
   if (connectionState === 'connected') {
     return null;
   }
 
   const isFailed = connectionState === 'failed';
   const isConnecting = connectionState === 'connecting';
-  const statusColor = isFailed ? COLORS.accent : isConnecting ? COLORS.gold : COLORS.textSecondary;
+  const statusColor = isFailed ? COLORS.destructive : isConnecting ? COLORS.gold : COLORS.textMuted;
 
   const getMessage = (): string => {
-    if (isFailed) {
-      return 'Connection failed';
-    }
-    if (isConnecting) {
-      if (reconnectAttempt > 0) {
-        return `Reconnecting... (${reconnectAttempt}/${maxReconnectAttempts})`;
-      }
-      return 'Connecting...';
-    }
-    // disconnected
-    if (reconnectAttempt > 0) {
-      return `Reconnecting... (${reconnectAttempt}/${maxReconnectAttempts})`;
-    }
-    return 'Disconnected';
+    if (isFailed) return 'Disconnected';
+    if (isConnecting) return 'Connecting';
+    return 'Status Unknown';
   };
 
   return (
     <Animated.View
-      entering={FadeIn.duration(200)}
-      exiting={FadeOut.duration(200)}
+      entering={FadeIn.duration(300)}
+      exiting={FadeOut.duration(300)}
       style={[styles.container, isFailed && styles.containerFailed]}
     >
       <View style={styles.content}>
-        {isConnecting && (
-          <Animated.View style={[styles.indicator, pulseStyle, { backgroundColor: statusColor }]} />
-        )}
-        {!isConnecting && <View style={[styles.indicator, styles.indicatorStatic, { backgroundColor: statusColor }]} />}
+        <Animated.View style={[styles.indicator, pulseStyle, { backgroundColor: statusColor }]} />
         <Text style={styles.message}>{getMessage()}</Text>
+        {reconnectAttempt > 0 && (
+            <Text style={styles.count}>({reconnectAttempt}/{maxReconnectAttempts})</Text>
+        )}
       </View>
       {isFailed && onRetry && (
         <Pressable onPress={onRetry} style={styles.retryButton}>
-          <Text style={styles.retryText}>Retry</Text>
+          <Text style={styles.retryText}>Reconnect</Text>
         </Pressable>
       )}
     </Animated.View>
@@ -98,8 +86,8 @@ export function ConnectionStatusBanner({
 const styles = StyleSheet.create({
   container: {
     backgroundColor: COLORS.surface,
-    paddingVertical: SPACING.xs,
-    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.lg,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -107,7 +95,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
   },
   containerFailed: {
-    borderColor: COLORS.accent,
+    borderColor: COLORS.destructive,
   },
   content: {
     flexDirection: 'row',
@@ -115,31 +103,29 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
   },
   indicator: {
-    width: 8,
-    height: 8,
+    width: 6,
+    height: 6,
     borderRadius: RADIUS.full,
-  },
-  indicatorStatic: {
-    opacity: 0.6,
   },
   message: {
     color: COLORS.textPrimary,
-    ...TYPOGRAPHY.bodySmall,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
+    ...TYPOGRAPHY.label,
+    fontSize: 11,
+  },
+  count: {
+    ...TYPOGRAPHY.label,
+    fontSize: 10,
+    color: COLORS.textMuted,
   },
   retryButton: {
     paddingVertical: SPACING.xs,
-    paddingHorizontal: SPACING.sm,
-    borderWidth: 1,
-    borderColor: COLORS.accent,
-    backgroundColor: 'rgba(255, 0, 60, 0.12)',
-    borderRadius: RADIUS.sm,
+    paddingHorizontal: SPACING.md,
+    backgroundColor: COLORS.textPrimary,
+    borderRadius: RADIUS.full,
   },
   retryText: {
-    color: COLORS.accent,
-    ...TYPOGRAPHY.bodySmall,
-    fontWeight: '700',
+    color: COLORS.surface,
+    ...TYPOGRAPHY.label,
+    fontSize: 10,
   },
 });
