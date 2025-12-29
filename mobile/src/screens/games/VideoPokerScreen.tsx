@@ -13,7 +13,7 @@ import { haptics } from '../../services/haptics';
 import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useChipBetting } from '../../hooks';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS } from '../../constants/theme';
 import type { ChipValue, TutorialStep, PokerHand, Card as CardType } from '../../types';
-import type { VideoPokerMessage } from '../../types/protocol';
+import type { VideoPokerMessage } from '@nullspace/protocol/mobile';
 
 interface VideoPokerState {
   cards: CardType[];

@@ -1,0 +1,41 @@
+{
+  "name": "@nullspace/constants",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./games": {
+      "types": "./dist/games.d.ts",
+      "import": "./dist/games.js"
+    },
+    "./moves": {
+      "types": "./dist/moves.d.ts",
+      "import": "./dist/moves.js"
+    },
+    "./chips": {
+      "types": "./dist/chips.d.ts",
+      "import": "./dist/chips.js"
+    },
+    "./bet-types": {
+      "types": "./dist/bet-types.d.ts",
+      "import": "./dist/bet-types.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsc -p tsconfig.build.json --watch",
+    "type-check": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@nullspace/types": "workspace:*"
+  },
+  "devDependencies": {
+    "@nullspace/tsconfig": "workspace:*",
+    "typescript": "^5.7.0"
+  }
+}

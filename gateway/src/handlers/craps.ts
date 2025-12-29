@@ -10,18 +10,17 @@
  */
 import { GameHandler, type HandlerContext, type HandleResult } from './base.js';
 import { GameType } from '../codec/index.js';
-import { CRAPS_BET_TYPES, encodeCrapsBet, type CrapsBetName } from '../codec/bet-types.js';
+import { CRAPS_BET_TYPES, encodeCrapsBet, type CrapsBetName } from '@nullspace/constants/bet-types';
 import { generateSessionId } from '../codec/transactions.js';
 import { ErrorCodes, createError } from '../types/errors.js';
+// Import craps constants from @nullspace/constants
+import { CrapsMove } from '@nullspace/constants';
 
-/** Craps action codes matching execution/src/casino/craps.rs */
-const CrapsAction = {
-  PlaceBet: 0,
-  AddOdds: 1,
-  Roll: 2,
-  ClearBets: 3,
-  AtomicBatch: 4,
-} as const;
+/**
+ * Craps action codes matching execution/src/casino/craps.rs
+ * Now using shared constants directly from @nullspace/constants
+ */
+const CrapsAction = CrapsMove;
 
 export class CrapsHandler extends GameHandler {
   constructor() {

@@ -430,7 +430,7 @@ export default function BridgeApp() {
       <div className="px-4 py-6 space-y-6">
         <div className="grid gap-6 lg:grid-cols-2">
           <section className="border border-gray-800 rounded-lg bg-gray-900/40 p-4 space-y-4">
-            <div className="text-xs text-gray-400 tracking-widest">COMMONWARE -> EVM</div>
+            <div className="text-xs text-gray-400 tracking-widest">COMMONWARE → EVM</div>
             <div className="text-[11px] text-gray-500">
               Withdraw RNG to Ethereum (lock/mint). Withdrawals respect daily caps and delay windows.
             </div>
@@ -476,7 +476,7 @@ export default function BridgeApp() {
           </section>
 
           <section className="border border-gray-800 rounded-lg bg-gray-900/40 p-4 space-y-4">
-            <div className="text-xs text-gray-400 tracking-widest">EVM -> COMMONWARE</div>
+            <div className="text-xs text-gray-400 tracking-widest">EVM → COMMONWARE</div>
             <div className="text-[11px] text-gray-500">
               Deposit RNG on Ethereum and receive credited RNG once the relayer confirms the lockbox event.
             </div>
@@ -562,7 +562,7 @@ export default function BridgeApp() {
               {pendingWithdrawals.map((item) => (
                 <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-900 py-1">
                   <div className="min-w-0">
-                    <div className="text-gray-400">#{item.id} -> {shortHex(item.destination)}</div>
+                    <div className="text-gray-400">#{item.id} → {shortHex(item.destination)}</div>
                     <div className="text-white">{formatInteger(item.amount)} RNG</div>
                   </div>
                   <div className="text-right text-gray-500">

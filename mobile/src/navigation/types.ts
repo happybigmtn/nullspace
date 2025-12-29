@@ -3,7 +3,7 @@
  */
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { GameId } from '../types';
-import { GAME_NAMES } from '../constants/games';
+import { GAME_DISPLAY_NAMES } from '@nullspace/constants/games';
 
 // Root stack param list
 export type RootStackParamList = {
@@ -22,4 +22,4 @@ export type LobbyScreenProps = NativeStackScreenProps<RootStackParamList, 'Lobby
 export type GameScreenProps = NativeStackScreenProps<RootStackParamList, 'Game'>;
 
 // Game screen names - re-export from constants
-export const GAME_SCREENS = GAME_NAMES;
+export const GAME_SCREENS = GAME_DISPLAY_NAMES;

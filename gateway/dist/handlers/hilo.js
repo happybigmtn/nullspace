@@ -8,6 +8,9 @@ import { GameHandler } from './base.js';
 import { GameType, buildHiLoPayload } from '../codec/index.js';
 import { generateSessionId } from '../codec/transactions.js';
 import { ErrorCodes, createError } from '../types/errors.js';
+// TODO: The shared HiLoMove has Higher=1, Lower=2, CashOut=3
+// This differs from local buildHiLoPayload which uses 0=higher, 1=lower, 3=same
+// Need to verify which is correct against execution/src/casino/hilo.rs
 export class HiLoHandler extends GameHandler {
     constructor() {
         super(GameType.HiLo);

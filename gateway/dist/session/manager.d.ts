@@ -2,7 +2,7 @@ import type { WebSocket } from 'ws';
 import { NonceManager } from './nonce.js';
 import { SubmitClient } from '../backend/http.js';
 import type { Session, SessionCreateOptions } from '../types/session.js';
-import type { GameType } from '../codec/constants.js';
+import type { GameType } from '@nullspace/types';
 export declare class SessionManager {
     private sessions;
     private byPublicKey;

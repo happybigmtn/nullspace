@@ -11,19 +11,14 @@ import { GameHandler, type HandlerContext, type HandleResult } from './base.js';
 import { GameType } from '../codec/index.js';
 import { generateSessionId } from '../codec/transactions.js';
 import { ErrorCodes, createError } from '../types/errors.js';
+// Import shared ThreeCardMove from @nullspace/constants
+import { ThreeCardMove as SharedThreeCardMove } from '@nullspace/constants';
 
-/** Three Card Poker move codes matching execution/src/casino/three_card.rs */
-const ThreeCardMove = {
-  Play: 0,
-  Fold: 1,
-  Deal: 2,
-  SetPairPlus: 3,
-  Reveal: 4,
-  SetSixCardBonus: 5,
-  SetProgressive: 6,
-  AtomicDeal: 7,
-  SetRules: 8,
-} as const;
+/**
+ * Three Card Poker move codes matching execution/src/casino/three_card.rs
+ * Now using shared constants directly from @nullspace/constants
+ */
+const ThreeCardMove = SharedThreeCardMove;
 
 export class ThreeCardPokerHandler extends GameHandler {
   constructor() {

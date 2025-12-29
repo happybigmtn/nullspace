@@ -1,6 +1,7 @@
 import { Dispatch, SetStateAction, MutableRefObject, useCallback } from 'react';
 import { GameState, PlayerStats, GameType } from '../../types';
 import { CasinoChainService } from '../../services/CasinoChainService';
+import { ThreeCardMove } from '@nullspace/constants';
 
 interface UseThreeCardPokerProps {
   gameState: GameState;
@@ -113,8 +114,7 @@ export const useThreeCardPoker = ({
 
         isPendingRef.current = true;
         try {
-          // Payload: [0] for Play
-          const payload = new Uint8Array([0]);
+          const payload = new Uint8Array([ThreeCardMove.Play]);
           const result = await chainService.sendMove(currentSessionIdRef.current, payload);
           if (result.txHash) setLastTxSig(result.txHash);
           setGameState(prev => ({
@@ -150,8 +150,7 @@ export const useThreeCardPoker = ({
 
         isPendingRef.current = true;
         try {
-          // Payload: [1] for Fold
-          const payload = new Uint8Array([1]);
+          const payload = new Uint8Array([ThreeCardMove.Fold]);
           const result = await chainService.sendMove(currentSessionIdRef.current, payload);
           if (result.txHash) setLastTxSig(result.txHash);
           setGameState(prev => ({ ...prev, message: 'FOLDING...' }));

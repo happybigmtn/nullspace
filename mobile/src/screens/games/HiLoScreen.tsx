@@ -13,7 +13,7 @@ import { haptics } from '../../services/haptics';
 import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useChipBetting } from '../../hooks';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 import type { ChipValue, TutorialStep, Suit, Rank } from '../../types';
-import type { HiLoMessage } from '../../types/protocol';
+import type { HiLoMessage } from '@nullspace/protocol/mobile';
 
 interface HiLoState {
   currentCard: { suit: Suit; rank: Rank } | null;

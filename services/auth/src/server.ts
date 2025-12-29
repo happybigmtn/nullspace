@@ -11,7 +11,7 @@ import { syncFreerollLimit } from "./casinoAdmin.js";
 
 // Avoid pulling Convex source files into the auth build output.
 const require = createRequire(import.meta.url);
-const { api } = require("../../../website/convex/_generated/api.js") as { api: any };
+const { api } = require("website/convex/_generated/api.js") as { api: any };
 
 const required = (name: string): string => {
   const value = process.env[name];

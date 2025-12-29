@@ -13,7 +13,7 @@ import { haptics } from '../../services/haptics';
 import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useChipBetting } from '../../hooks';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 import type { ChipValue, TutorialStep, Card as CardType } from '../../types';
-import type { CasinoWarMessage } from '../../types/protocol';
+import type { CasinoWarMessage } from '@nullspace/protocol/mobile';
 
 interface CasinoWarState {
   playerCard: CardType | null;

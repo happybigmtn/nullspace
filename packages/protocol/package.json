@@ -1,0 +1,50 @@
+{
+  "name": "@nullspace/protocol",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./encode": {
+      "types": "./dist/encode.d.ts",
+      "import": "./dist/encode.js"
+    },
+    "./decode": {
+      "types": "./dist/decode.d.ts",
+      "import": "./dist/decode.js"
+    },
+    "./websocket": {
+      "types": "./dist/websocket.d.ts",
+      "import": "./dist/websocket.js"
+    },
+    "./validation": {
+      "types": "./dist/validation.d.ts",
+      "import": "./dist/validation.js"
+    },
+    "./mobile": {
+      "types": "./dist/mobile.d.ts",
+      "import": "./dist/mobile.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsc -p tsconfig.build.json --watch",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@nullspace/types": "workspace:*",
+    "@nullspace/constants": "workspace:*",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@nullspace/tsconfig": "workspace:*",
+    "typescript": "^5.7.0",
+    "vitest": "^2.0.0"
+  }
+}

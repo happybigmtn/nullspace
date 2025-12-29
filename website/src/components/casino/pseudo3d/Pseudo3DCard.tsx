@@ -24,6 +24,14 @@ const suitIcons: Record<string, string> = {
   spades: '♠',
 };
 
+// Different sizes for each suit to ensure visual balance
+const suitSizes: Record<string, string> = {
+  hearts: '5rem',
+  diamonds: '5rem',
+  clubs: '4rem',    // Clubs slightly smaller
+  spades: '4.5rem',
+};
+
 export const Pseudo3DCard: React.FC<Pseudo3DCardProps> = ({
   suit,
   rank,
@@ -49,6 +57,7 @@ export const Pseudo3DCard: React.FC<Pseudo3DCardProps> = ({
 
   const color = suitColors[suit.toLowerCase()] || '#1C1C1E';
   const icon = suitIcons[suit.toLowerCase()] || suit;
+  const iconSize = suitSizes[suit.toLowerCase()] || '4.5rem';
 
   return (
     <div className={`relative w-24 h-36 ${className}`} style={style}>
@@ -58,22 +67,32 @@ export const Pseudo3DCard: React.FC<Pseudo3DCardProps> = ({
       >
         {/* Front Face */}
         <div
-          className="absolute inset-0 w-full h-full bg-white rounded-xl backface-hidden flex flex-col justify-between p-3 border border-titanium-200"
-          style={{ transform: 'rotateY(0deg)' }}
+          className="absolute inset-0 w-full h-full rounded-xl backface-hidden flex items-center justify-center border border-titanium-200 overflow-hidden"
+          style={{ transform: 'rotateY(0deg)', backgroundColor: color }}
         >
-          <div className="flex flex-col items-center leading-none">
-            <span className="font-extrabold text-xl tracking-tighter" style={{ color, fontFamily: 'Outfit' }}>{rank}</span>
-            <span className="text-sm mt-0.5" style={{ color }}>{icon}</span>
+          {/* Large solid suit - centered with suit-specific sizing */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
+            <span
+              className="leading-none"
+              style={{
+                color: 'white',
+                fontSize: iconSize,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              {icon}
+            </span>
           </div>
 
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-5">
-             <span className="text-8xl" style={{ color }}>{icon}</span>
-          </div>
-
-          <div className="flex flex-col items-center leading-none rotate-180">
-            <span className="font-extrabold text-xl tracking-tighter" style={{ color, fontFamily: 'Outfit' }}>{rank}</span>
-            <span className="text-sm mt-0.5" style={{ color }}>{icon}</span>
-          </div>
+          {/* Single centered rank in white */}
+          <span
+            className="font-extrabold text-3xl tracking-tighter relative z-10 text-white"
+            style={{ fontFamily: 'Outfit' }}
+          >
+            {rank}
+          </span>
         </div>
 
         {/* Back Face */}

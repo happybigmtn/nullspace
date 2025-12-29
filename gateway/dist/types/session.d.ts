@@ -2,7 +2,7 @@
  * Session types for gateway
  */
 import type { WebSocket } from 'ws';
-import type { GameType } from '../codec/constants.js';
+import type { GameType } from '@nullspace/types';
 import type { UpdatesClient } from '../backend/updates.js';
 /**
  * Client session state

@@ -13,23 +13,14 @@ import { GameHandler, type HandlerContext, type HandleResult } from './base.js';
 import { GameType } from '../codec/index.js';
 import { generateSessionId } from '../codec/transactions.js';
 import { ErrorCodes, createError } from '../types/errors.js';
+// Import shared UltimateHoldemMove from @nullspace/constants
+import { UltimateHoldemMove as SharedUltimateHoldemMove } from '@nullspace/constants';
 
-/** Ultimate Holdem action codes matching execution/src/casino/ultimate_holdem.rs */
-const UthAction = {
-  Check: 0,
-  Bet4x: 1,
-  Bet2x: 2,
-  Bet1x: 3,
-  Fold: 4,    // Fold is 4 in Rust
-  Deal: 5,    // Deal is 5 in Rust
-  SetTrips: 6,
-  Reveal: 7,
-  Bet3x: 8,
-  SetSixCardBonus: 9,
-  SetProgressive: 10,
-  AtomicDeal: 11,
-  SetRules: 12,
-} as const;
+/**
+ * Ultimate Holdem action codes matching execution/src/casino/ultimate_holdem.rs
+ * Now using shared constants directly from @nullspace/constants
+ */
+const UthAction = SharedUltimateHoldemMove;
 
 export class UltimateHoldemHandler extends GameHandler {
   constructor() {

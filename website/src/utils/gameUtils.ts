@@ -211,6 +211,9 @@ export const generateSuperMultipliers = (gameType: GameType): SuperMultiplier[] 
 };
 
 // --- HAND VALUES ---
+// TODO: Remove - chain provides hand totals via parsed game state.
+// Frontend should display values from chain state, not recalculate locally.
+// This function is kept temporarily for UI display during state parsing transition.
 export const getHandValue = (cards: Card[]): number => {
   if (!cards || !Array.isArray(cards)) return 0;
   // Filter out undefined/null cards and cards with invalid values
@@ -224,6 +227,8 @@ export const getHandValue = (cards: Card[]): number => {
   return value;
 };
 
+// TODO: Remove - chain provides baccarat hand values via parsed game state.
+// Frontend should display values from chain state, not recalculate locally.
 export const getBaccaratValue = (cards: Card[]): number => {
   if (!cards || !Array.isArray(cards)) return 0;
   // Filter out undefined/null cards
@@ -475,6 +480,8 @@ export const evaluateThreeCardHand = (cards: Card[]): { score: number, rank: str
 };
 
 
+// TODO: Remove - chain provides visible hand values via parsed game state.
+// Frontend should use hand totals from chain state instead of local calculation.
 export const getVisibleHandValue = (cards: Card[]) => {
     if (!cards || !Array.isArray(cards)) return 0;
     return getHandValue(cards.filter(c => c && !c.isHidden));

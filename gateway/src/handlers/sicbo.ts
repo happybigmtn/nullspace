@@ -9,18 +9,15 @@
  */
 import { GameHandler, type HandlerContext, type HandleResult } from './base.js';
 import { GameType } from '../codec/index.js';
-import { SICBO_BET_TYPES, encodeSicBoBet, type SicBoBetName } from '../codec/bet-types.js';
+import { SICBO_BET_TYPES, encodeSicBoBet, type SicBoBetName } from '@nullspace/constants/bet-types';
 import { generateSessionId } from '../codec/transactions.js';
 import { ErrorCodes, createError } from '../types/errors.js';
+import { SicBoMove as SharedSicBoMove } from '@nullspace/constants';
 
-/** Sic Bo action codes matching execution/src/casino/sic_bo.rs */
-const SicBoAction = {
-  PlaceBet: 0,
-  Roll: 1,
-  ClearBets: 2,
-  AtomicBatch: 3,
-  SetRules: 4,
-} as const;
+/**
+ * Sic Bo action codes matching execution/src/casino/sic_bo.rs
+ */
+const SicBoAction = SharedSicBoMove;
 
 export class SicBoHandler extends GameHandler {
   constructor() {
@@ -105,7 +102,7 @@ export class SicBoHandler extends GameHandler {
             }
             return encodeSicBoBet(betKey, typeof rawNumber === 'number' ? rawNumber : undefined);
           })()
-        : { betType, number: typeof rawNumber === 'number' ? rawNumber : 0 };
+        : { betType, target: typeof rawNumber === 'number' ? rawNumber : 0 };
 
       if (!encoded) {
         return {
@@ -115,7 +112,7 @@ export class SicBoHandler extends GameHandler {
       }
 
       payload[offset] = encoded.betType;
-      payload[offset + 1] = encoded.number; // number is 0 for simple bets like Small/Big
+      payload[offset + 1] = encoded.target; // target is 0 for simple bets like Small/Big
       view.setBigUint64(offset + 2, BigInt(amount), false); // BE
       offset += 10;
     }

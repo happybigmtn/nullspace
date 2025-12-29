@@ -1,10 +1,19 @@
 /**
  * Jony Ive-inspired design system constants
  * Principles: Radical Simplicity, Progressive Disclosure, Clarity, Tactile Response
- * Palette: Titanium & Glass
+ *
+ * Imports raw tokens from @nullspace/design-tokens and applies platform-specific transforms
  */
 
 import { Platform } from 'react-native';
+import {
+  TITANIUM,
+  ACTION,
+  SPACING_SEMANTIC,
+  RADIUS as TOKEN_RADIUS,
+  DURATION,
+  SPRING,
+} from '@nullspace/design-tokens';
 
 const FONT_FAMILY = Platform.select({
   ios: 'System',
@@ -18,52 +27,67 @@ const MONO_FONT = Platform.select({
   default: 'monospace',
 });
 
+/**
+ * Color palette derived from design-tokens
+ * Maps semantic names to platform-appropriate values
+ */
 export const COLORS = {
-  // Titanium Palette
-  background: '#F9F9F9', 
-  surface: '#FFFFFF', 
+  // Titanium Palette (from design-tokens)
+  background: TITANIUM[100],
+  surface: '#FFFFFF',
   surfaceElevated: '#FFFFFF',
-  border: '#E5E5EA', 
+  border: TITANIUM[200],
 
-  // Action Colors
-  primary: '#007AFF',
-  primaryDark: '#005BB5',
-  success: '#34C759',
-  destructive: '#FF3B30',
-  gold: '#FFCC00',
+  // Action Colors (from design-tokens)
+  primary: ACTION.indigo,
+  primaryDark: ACTION.indigoHover,
+  success: ACTION.success,
+  destructive: ACTION.error,
+  gold: '#FFCC00', // Not in design-tokens yet
 
-  // Text hierarchy
-  textPrimary: '#1C1C1E', 
-  textSecondary: '#636366',
-  textMuted: '#8E8E93', // WCAG AA compliant on white
-  textDisabled: '#D1D1D6',
+  // Text hierarchy (derived from titanium scale)
+  textPrimary: TITANIUM[900],
+  textSecondary: TITANIUM[500],
+  textMuted: TITANIUM[400], // WCAG AA compliant on white
+  textDisabled: TITANIUM[300],
 
   // Card suits
-  suitRed: '#FF3B30',
-  suitBlack: '#1C1C1E',
+  suitRed: ACTION.error,
+  suitBlack: TITANIUM[900],
 
-  // Glass
+  // Glass (platform-specific - not in tokens)
   glassLight: 'rgba(255, 255, 255, 0.75)',
   glassDark: 'rgba(28, 28, 30, 0.8)',
 } as const;
 
+/**
+ * Spacing scale from design-tokens
+ */
 export const SPACING = {
-  xs: 4,
-  sm: 8,
-  md: 16,
-  lg: 24,
-  xl: 32,
-  xxl: 48,
+  xs: SPACING_SEMANTIC.xs,
+  sm: SPACING_SEMANTIC.sm,
+  md: SPACING_SEMANTIC.md,
+  lg: SPACING_SEMANTIC.lg,
+  xl: SPACING_SEMANTIC.xl,
+  xxl: SPACING_SEMANTIC['2xl'],
 } as const;
 
+/**
+ * Border radius from design-tokens
+ * Mobile uses slightly larger values for touch targets
+ */
 export const RADIUS = {
-  sm: 8,
-  md: 12,
-  lg: 20,
-  xl: 32,
-  full: 9999,
+  sm: TOKEN_RADIUS.md,  // 8px
+  md: TOKEN_RADIUS.lg,  // 12px
+  lg: 20,               // Mobile-specific
+  xl: TOKEN_RADIUS['2xl'], // 24px
+  full: TOKEN_RADIUS.full,
 } as const;
 
+/**
+ * Typography definitions
+ * Platform-specific (fonts differ between iOS/Android)
+ */
 export const TYPOGRAPHY = {
   displayLarge: {
     fontSize: 48,
@@ -122,31 +146,51 @@ export const TYPOGRAPHY = {
   mono: {
     fontFamily: MONO_FONT,
     fontSize: 12,
-  }
-} as const;
-
-export const ANIMATION = {
-  fast: 150,
-  normal: 300,
-  slow: 500,
-  spring: {
-    damping: 20,
-    stiffness: 120,
-    mass: 1,
+  },
+  // Additional variants used by game screens
+  bodySmall: {
+    fontSize: 14,
+    fontWeight: '400' as const,
+    lineHeight: 20,
+    fontFamily: FONT_FAMILY,
+    color: COLORS.textSecondary,
+  },
+  caption: {
+    fontSize: 12,
+    fontWeight: '400' as const,
+    lineHeight: 16,
+    fontFamily: FONT_FAMILY,
+    color: COLORS.textMuted,
   },
 } as const;
 
+/**
+ * Animation durations from design-tokens
+ * Spring configs available via SPRING export
+ */
+export const ANIMATION = {
+  fast: DURATION.fast,
+  normal: DURATION.normal,
+  slow: DURATION.slow,
+  spring: SPRING.modal, // Default spring for UI elements
+} as const;
+
+// Re-export spring configs for components that need physics-based animations
+export { SPRING };
+
+// TODO: CHIP_VALUES duplicates @nullspace/constants/chips
+// Consider migrating to: import { CHIP_VALUES, type ChipValue } from '@nullspace/constants';
 export const CHIP_VALUES = [1, 5, 25, 100, 500, 1000] as const;
 
 export const GAME_DETAIL_COLORS = {
   roulette: {
-    red: '#FF3B30',
-    black: '#1C1C1E',
-    green: '#34C759',
+    red: ACTION.error,
+    black: TITANIUM[900],
+    green: ACTION.success,
   },
   craps: {
-    pass: '#34C759',
-    dontPass: '#FF3B30',
+    pass: ACTION.success,
+    dontPass: ACTION.error,
     field: '#FFCC00',
   },
 } as const;

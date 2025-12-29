@@ -21,7 +21,7 @@ import { useGameKeyboard, KEY_ACTIONS, useGameConnection } from '../../hooks';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS, GAME_COLORS, GAME_DETAIL_COLORS } from '../../constants/theme';
 import { useGameStore } from '../../stores/gameStore';
 import type { ChipValue, TutorialStep, RouletteBetType } from '../../types';
-import type { RouletteMessage } from '../../types/protocol';
+import type { RouletteMessage } from '@nullspace/protocol/mobile';
 
 const QUICK_BETS: RouletteBetType[] = ['RED', 'BLACK', 'ODD', 'EVEN', 'LOW', 'HIGH'];
 const SPLIT_H_TARGETS = Array.from({ length: 35 }, (_, i) => i + 1).filter((num) => num % 3 !== 0);

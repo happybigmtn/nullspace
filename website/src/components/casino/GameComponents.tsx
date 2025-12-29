@@ -180,51 +180,53 @@ export const DiceThrow2D: React.FC<{
     const boundsX = Math.max(0, rect.width - diceSize - clampedRightInset);
     const boundsY = Math.max(0, rect.height - diceSize);
 
-    // Start position based on launch direction
+    // Calculate center targets for each die
+    const gap = diceSize * 0.25;
+    const totalWidth = values.length * diceSize + (values.length - 1) * gap;
+    const centerX = rect.width / 2;
+    const startTargetX = centerX - totalWidth / 2;
+    const targetY = Math.max(0, Math.min(boundsY, (rect.height - diceSize) / 2));
+
+    const targets = values.map((_, idx) => ({
+      x: Math.max(0, Math.min(boundsX, startTargetX + idx * (diceSize + gap))),
+      y: targetY,
+    }));
+
+    // Start position: left side for rightward throw
     const baseX = launchDirection === 'right'
-      ? rect.width * 0.02 // Start from far left for rightward launch
+      ? rect.width * 0.02
       : launchDirection === 'left'
-        ? rect.width * 0.85 // Start from far right for leftward launch
+        ? rect.width * 0.85
         : rect.width * 0.15;
-    const baseY = rect.height * 0.3; // Start higher for more dramatic arc
+    const baseY = targetY; // Start at target Y for horizontal throw
     const spread = Math.max(diceSize + 8, diceSize * 0.8);
 
     const initialPoses: DicePose[] = values.map((_, idx) => ({
-      x: Math.min(boundsX, Math.max(0, baseX + idx * spread)),
-      y: Math.min(boundsY, Math.max(0, baseY + (idx % 2) * (diceSize * 0.12))),
-      rot: (Math.random() * 60) - 30,
-      rollRotation: 0, // Will be computed from cumulative X movement
+      x: Math.min(boundsX, Math.max(0, baseX + idx * spread * 0.3)),
+      y: Math.min(boundsY, Math.max(0, baseY)),
+      rot: 0,
+      rollRotation: 0,
     }));
 
+    // Strong horizontal velocity to hit right wall
     const initialVelocities: DiceVelocity[] = values.map((_, idx) => {
-      const directionSign =
-        launchDirection === 'left'
-          ? -1
-          : launchDirection === 'right'
-            ? 1
-            : (idx % 2 === 0 ? 1 : -1);
-      const horizontalJitter = (idx - (values.length - 1) / 2) * 2.5;
+      const directionSign = launchDirection === 'left' ? -1 : 1;
+      const jitter = (idx - (values.length - 1) / 2) * 1.5;
       return {
-        vx: ((Math.random() * 8 + horizontalBoost) + horizontalJitter) * directionSign,
-        vy: -(Math.random() * 3 + verticalBoost * 0.6),
-        vr: (Math.random() * 15 + 18) * (idx % 2 === 0 ? 1 : -1),
+        vx: (horizontalBoost + 12 + Math.random() * 4 + jitter) * directionSign,
+        vy: (Math.random() - 0.5) * 2, // Minimal vertical movement
+        vr: (Math.random() * 10 + 5) * (idx % 2 === 0 ? 1 : -1),
         settleTicks: 0,
-        cumulativeX: 0, // Track total horizontal distance for rotation
+        cumulativeX: 0,
       };
     });
 
     if (settleToRow) {
-      const gap = diceSize * 0.25; // Consistent gap between dice
-      const totalWidth = values.length * diceSize + (values.length - 1) * gap;
-      const centerX = rect.width / 2;
-      const startX = centerX - totalWidth / 2;
-      // Center dice vertically, accounting for dice height
-      const targetY = Math.max(0, Math.min(boundsY, (rect.height - diceSize) / 2));
-      settleTargetsRef.current = values.map((_, idx) => ({
-        x: Math.max(0, Math.min(boundsX, startX + idx * (diceSize + gap))),
-        y: targetY,
+      settleTargetsRef.current = targets.map(t => ({
+        x: t.x,
+        y: t.y,
         rot: 0,
-        rollRotation: 0, // Will be ignored - dice snap flat on settle
+        rollRotation: 0,
       }));
     } else {
       settleTargetsRef.current = [];
@@ -233,20 +235,20 @@ export const DiceThrow2D: React.FC<{
     setPoses(initialPoses);
     velocitiesRef.current = initialVelocities;
     lastTimeRef.current = null;
-    startTimeRef.current = null; // Will be set on first frame
+    startTimeRef.current = null;
 
     if (reducedMotion) {
-        setIsSettled(true);
-        onSettled?.();
-        return;
+      setIsSettled(true);
+      onSettled?.();
+      return;
     }
 
-    const gravity = 0.4; // Low gravity for longer air time
-    const restitution = 0.85; // Very bouncy for dramatic wall hits
-    const airDrag = 0.99; // Minimal drag for fast travel
-    const floorFriction = 0.7;
-    const PHYSICS_PHASE_MS = 1800; // More time for physics (roll right, bounce, roll back)
-    const EASE_PHASE_MS = 350; // Quick translate to center
+    // Physics constants for realistic craps throw
+    const restitution = 0.6; // Bounce off walls
+    const rollingFriction = 0.985; // Gradual slowdown on table
+    const centerAttraction = 0.008; // Gentle pull toward center
+    const settleThreshold = 0.3; // Velocity threshold to consider settled
+    const MAX_DURATION_MS = 3000; // Safety timeout
 
     const clampPose = (pose: DicePose) => ({
       x: Math.max(0, Math.min(boundsX, pose.x)),
@@ -255,17 +257,7 @@ export const DiceThrow2D: React.FC<{
       rollRotation: pose.rollRotation,
     });
 
-    const TOTAL_DURATION_MS = PHYSICS_PHASE_MS + EASE_PHASE_MS;
-
-    // Smooth easing function (ease-out back for overshoot)
-    const easeOutBack = (x: number): number => {
-      const c1 = 1.70158;
-      const c3 = c1 + 1;
-      return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
-    };
-
     const step = (time: number) => {
-      // Track animation start time
       if (startTimeRef.current === null) {
         startTimeRef.current = time;
       }
@@ -276,12 +268,75 @@ export const DiceThrow2D: React.FC<{
       const dtScale = dt / 16.67;
       lastTimeRef.current = time;
 
-      // Phase 1: Pure physics (0 - PHYSICS_PHASE_MS)
-      // Phase 2: Smooth ease to target (PHYSICS_PHASE_MS - TOTAL_DURATION_MS)
-      // Phase 3: Settled (after TOTAL_DURATION_MS)
+      // Check if all dice have settled
+      let allSettled = true;
+      const circumference = diceSize * Math.PI;
 
-      if (elapsed >= TOTAL_DURATION_MS) {
-        // Final snap and stop
+      setPoses((prev) => {
+        return prev.map((pose, i) => {
+          const vel = velocitiesRef.current[i];
+          if (!vel) return pose;
+
+          const target = settleToRow ? targets[i] : null;
+          let x = pose.x;
+          let y = pose.y;
+          let rollRotation = pose.rollRotation;
+
+          // Apply rolling friction
+          vel.vx *= Math.pow(rollingFriction, dtScale);
+          vel.vy *= Math.pow(rollingFriction, dtScale);
+
+          // Center attraction (increases as velocity decreases)
+          if (target && settleToRow) {
+            const speed = Math.sqrt(vel.vx * vel.vx + vel.vy * vel.vy);
+            const attractionStrength = centerAttraction * (1 + Math.max(0, 5 - speed) * 0.5);
+            const dx = target.x - x;
+            const dy = target.y - y;
+            vel.vx += dx * attractionStrength * dtScale;
+            vel.vy += dy * attractionStrength * dtScale;
+          }
+
+          // Update position
+          const moveX = vel.vx * dtScale;
+          x = pose.x + moveX;
+          y = pose.y + vel.vy * dtScale;
+
+          // Track cumulative horizontal movement for rotation
+          vel.cumulativeX += moveX;
+          rollRotation = (vel.cumulativeX / circumference) * 360;
+
+          // Wall bounces
+          if (x <= 0) {
+            x = 0;
+            vel.vx = Math.abs(vel.vx) * restitution;
+          } else if (x >= boundsX) {
+            x = boundsX;
+            vel.vx = -Math.abs(vel.vx) * restitution;
+          }
+
+          // Vertical bounds (keep on table)
+          if (y >= boundsY) {
+            y = boundsY;
+            vel.vy = -Math.abs(vel.vy) * restitution * 0.5;
+          } else if (y <= 0) {
+            y = 0;
+            vel.vy = Math.abs(vel.vy) * restitution * 0.5;
+          }
+
+          // Check if this die has settled
+          const speed = Math.sqrt(vel.vx * vel.vx + vel.vy * vel.vy);
+          const distToTarget = target ? Math.sqrt((x - target.x) ** 2 + (y - target.y) ** 2) : 0;
+          if (speed > settleThreshold || (target && distToTarget > 5)) {
+            allSettled = false;
+          }
+
+          return { ...clampPose({ x, y, rot: 0, rollRotation }), rollRotation };
+        });
+      });
+
+      // End animation when all dice settled or timeout
+      if (allSettled || elapsed >= MAX_DURATION_MS) {
+        // Snap to final positions
         if (settleToRow && settleTargetsRef.current.length > 0) {
           setPoses(settleTargetsRef.current.map(clampPose));
         }
@@ -289,83 +344,6 @@ export const DiceThrow2D: React.FC<{
         onSettled?.();
         return;
       }
-
-      setPoses((prev) => {
-        return prev.map((pose, i) => {
-          const vel = velocitiesRef.current[i];
-          if (!vel) return pose;
-
-          let x = pose.x;
-          let y = pose.y;
-          let rot = pose.rot;
-
-          // Dice circumference for realistic rotation
-          const circumference = diceSize * Math.PI;
-          let rollRotation = pose.rollRotation;
-
-          if (elapsed < PHYSICS_PHASE_MS) {
-            // Phase 1: Pure physics simulation
-            vel.vy += gravity * dtScale;
-            vel.vx *= Math.pow(airDrag, dtScale);
-            vel.vy *= Math.pow(airDrag, dtScale);
-            vel.vr *= Math.pow(airDrag, dtScale);
-
-            const dx = vel.vx * dtScale;
-            x = pose.x + dx;
-            y = pose.y + vel.vy * dtScale;
-            rot = pose.rot + vel.vr * dtScale;
-
-            // Track cumulative horizontal movement and convert to rotation
-            vel.cumulativeX += dx;
-            // Rotation = (distance / circumference) * 360 degrees
-            // Positive X movement = positive rotation (rolling right)
-            rollRotation = (vel.cumulativeX / circumference) * 360;
-
-            // Wall bounces
-            if (x <= 0) {
-              x = 0;
-              vel.vx = Math.abs(vel.vx) * restitution;
-              vel.vr *= 0.9;
-            } else if (x >= boundsX) {
-              x = boundsX;
-              vel.vx = -Math.abs(vel.vx) * restitution;
-              vel.vr *= 0.9;
-            }
-
-            // Floor/ceiling bounces
-            if (y >= boundsY) {
-              y = boundsY;
-              vel.vy = -Math.abs(vel.vy) * restitution;
-              vel.vx *= floorFriction;
-              vel.vr *= 0.85;
-            } else if (y <= 0) {
-              y = 0;
-              vel.vy = Math.abs(vel.vy) * restitution;
-            }
-          } else if (settleToRow && settleTargetsRef.current[i]) {
-            // Phase 2: Smooth ease to target position
-            const target = settleTargetsRef.current[i];
-            const easeElapsed = elapsed - PHYSICS_PHASE_MS;
-            const easeProgress = Math.min(1, easeElapsed / EASE_PHASE_MS);
-            const easedProgress = easeOutBack(easeProgress);
-
-            // Store start positions for easing (use current pose as start)
-            if (easeProgress < 0.02) {
-              // Just started easing - current position is our start
-              vel.vx = pose.x; // Repurpose velocity refs to store start positions
-              vel.vy = pose.y;
-              vel.vr = pose.rot;
-            }
-
-            // Interpolate from stored start to target
-            x = vel.vx + (target.x - vel.vx) * easedProgress;
-            y = vel.vy + (target.y - vel.vy) * easedProgress;
-            rot = vel.vr + (target.rot - vel.vr) * easedProgress;
-          }
-
-          return { ...clampPose({ x, y, rot, rollRotation }), rollRotation };
-        });
-      });
 
       frameRef.current = requestAnimationFrame(step);
     };

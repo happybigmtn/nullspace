@@ -1,6 +1,7 @@
 import { Dispatch, SetStateAction, MutableRefObject, useCallback } from 'react';
 import { GameState, SicBoBet, PlayerStats, GameType, AutoPlayDraft } from '../../types';
 import { CasinoChainService } from '../../services/CasinoChainService';
+import { SicBoMove } from '@nullspace/constants';
 
 const MAX_GRAPH_POINTS = 100;
 

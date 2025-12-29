@@ -13,6 +13,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@nullspace/types": "workspace:*",
+    "@nullspace/constants": "workspace:*",
+    "@nullspace/design-tokens": "workspace:*",
+    "@nullspace/protocol": "workspace:*",
     "@noble/curves": "^1.7.0",
     "@react-native-async-storage/async-storage": "^2.1.0",
     "@react-navigation/native": "^7.0.0",

@@ -2,6 +2,7 @@
  * Tests for case normalization utilities
  */
 
+import { describe, test, expect } from 'vitest';
 import { snakeToCamel, camelToSnake } from '../caseNormalizer';
 
 describe('caseNormalizer', () => {

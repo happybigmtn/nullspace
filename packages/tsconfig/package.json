@@ -1,0 +1,12 @@
+{
+  "name": "@nullspace/tsconfig",
+  "version": "0.0.0",
+  "private": true,
+  "exports": {
+    "./base.json": "./base.json",
+    "./react.json": "./react.json",
+    "./react-native.json": "./react-native.json",
+    "./node.json": "./node.json"
+  },
+  "files": ["*.json"]
+}

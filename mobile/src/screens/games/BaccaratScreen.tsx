@@ -14,7 +14,7 @@ import { useGameKeyboard, KEY_ACTIONS, useGameConnection } from '../../hooks';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS } from '../../constants/theme';
 import { useGameStore } from '../../stores/gameStore';
 import type { ChipValue, TutorialStep, BaccaratBetType, Card as CardType } from '../../types';
-import type { BaccaratMessage } from '../../types/protocol';
+import type { BaccaratMessage } from '@nullspace/protocol/mobile';
 
 interface BaccaratBet {
   type: BaccaratBetType;

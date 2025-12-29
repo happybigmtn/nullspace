@@ -1,8 +1,12 @@
 /**
  * Binary instruction encoders matching Rust types/src/execution.rs
  * All multi-byte integers are Big Endian
+ *
+ * Note: This module encodes higher-level casino instructions (CasinoStartGame, CasinoGameMove).
+ * Game-specific payloads should defer to @nullspace/protocol where possible.
  */
 import { InstructionTag, GameType, PlayerAction } from './constants.js';
+import { encodeBlackjackMove, type BlackjackMoveAction } from '@nullspace/protocol/encode';
 
 /**
  * CasinoRegister - Register a new casino player
@@ -108,9 +112,8 @@ export function encodeCasinoJoinTournament(tournamentId: bigint): Uint8Array {
  * Blackjack move payload
  * Just a single byte for the action
  */
-export function buildBlackjackPayload(move: 'hit' | 'stand' | 'double' | 'split'): Uint8Array {
-  const moveMap = { hit: 0, stand: 1, double: 2, split: 3 };
-  return new Uint8Array([moveMap[move]]);
+export function buildBlackjackPayload(move: BlackjackMoveAction): Uint8Array {
+  return encodeBlackjackMove(move);
 }
 
 /**

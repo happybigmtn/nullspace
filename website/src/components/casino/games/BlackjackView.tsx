@@ -3,6 +3,7 @@ import React, { useMemo, useState } from 'react';
 import { GameState } from '../../../types';
 import { Hand } from '../GameComponents';
 import { MobileDrawer } from '../MobileDrawer';
+import { Label } from '../ui/Label';
 import { getVisibleHandValue } from '../../../utils/gameUtils';
 import { cardIdToString } from '../../../utils/gameStateParser';
 
@@ -63,6 +64,8 @@ export const BlackjackView = React.memo<{
         return msg.includes('INSURANCE');
     }, [gameState.message, gameState.stage]);
 
+    // TODO: Remove local action availability logic - chain state should provide canHit/canStand/canDouble/canSplit flags.
+    // These calculations duplicate chain logic and may drift. Chain is source of truth.
     const canHit = gameState.stage === 'PLAYING' && !showInsurancePrompt && playerValue < 21;
     const canStand = gameState.stage === 'PLAYING' && !showInsurancePrompt && gameState.playerCards.length > 0;
     const canDouble = gameState.stage === 'PLAYING' && !showInsurancePrompt && gameState.playerCards.length === 2;

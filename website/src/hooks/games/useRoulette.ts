@@ -1,6 +1,8 @@
 import { Dispatch, SetStateAction, MutableRefObject, useCallback } from 'react';
 import { GameState, RouletteBet, PlayerStats, GameType, AutoPlayDraft } from '../../types';
 import { CasinoChainService } from '../../services/CasinoChainService';
+import { RouletteMove } from '@nullspace/constants';
+import { encodeRouletteBet, type RouletteBetName } from '@nullspace/constants/bet-types';
 
 const MAX_GRAPH_POINTS = 100;
 
@@ -8,20 +10,8 @@ const MAX_GRAPH_POINTS = 100;
  * Convert RouletteBet to numeric format for serialization
  */
 const rouletteBetToNumeric = (bet: RouletteBet): {betType: number, number: number, amount: number} => {
-  const betTypeMap: Record<RouletteBet['type'], number> = {
-    'STRAIGHT': 0, 'RED': 1, 'BLACK': 2, 'EVEN': 3, 'ODD': 4,
-    'LOW': 5, 'HIGH': 6, 'DOZEN_1': 7, 'DOZEN_2': 7, 'DOZEN_3': 7,
-    'COL_1': 8, 'COL_2': 8, 'COL_3': 8, 'ZERO': 0,
-    'SPLIT_H': 9, 'SPLIT_V': 10, 'STREET': 11, 'CORNER': 12, 'SIX_LINE': 13
-  };
-  const numberMap: Record<RouletteBet['type'], number> = {
-    'STRAIGHT': bet.target ?? 0, 'RED': 0, 'BLACK': 0, 'EVEN': 0, 'ODD': 0,
-    'LOW': 0, 'HIGH': 0, 'DOZEN_1': 0, 'DOZEN_2': 1, 'DOZEN_3': 2,
-    'COL_1': 0, 'COL_2': 1, 'COL_3': 2, 'ZERO': 0,
-    'SPLIT_H': bet.target ?? 0, 'SPLIT_V': bet.target ?? 0, 'STREET': bet.target ?? 0,
-    'CORNER': bet.target ?? 0, 'SIX_LINE': bet.target ?? 0
-  };
-  return { betType: betTypeMap[bet.type], number: numberMap[bet.type], amount: bet.amount };
+  const encoded = encodeRouletteBet(bet.type as RouletteBetName, bet.target);
+  return { betType: encoded.type, number: encoded.value, amount: bet.amount };
 };
 
 /**
@@ -31,7 +21,7 @@ const rouletteBetToNumeric = (bet: RouletteBet): {betType: number, number: numbe
 const serializeRouletteAtomicBatch = (bets: RouletteBet[]): Uint8Array => {
   const numericBets = bets.map(rouletteBetToNumeric);
   const payload = new Uint8Array(2 + numericBets.length * 10);
-  payload[0] = 4; // Action 4: Atomic batch
+  payload[0] = RouletteMove.AtomicBatch;
   payload[1] = numericBets.length;
   const view = new DataView(payload.buffer);
   numericBets.forEach((b, i) => {
@@ -139,7 +129,7 @@ export const useRoulette = ({
                 : nextRule === 'AMERICAN'
                   ? 4
                   : 0;
-        const payload = new Uint8Array([3, ruleByte]);
+        const payload = new Uint8Array([RouletteMove.SetRules, ruleByte]);
         const result = await chainService.sendMove(currentSessionIdRef.current, payload);
         if (result.txHash) setLastTxSig(result.txHash);
       } catch (e) {
@@ -228,7 +218,7 @@ export const useRoulette = ({
         if (gameState.rouletteIsPrison) {
           pendingMoveCountRef.current = 1;
           setGameState(prev => ({ ...prev, message: 'SPINNING ON CHAIN...' }));
-          const spinPayload = new Uint8Array([1]); // Action 1: Spin wheel
+          const spinPayload = new Uint8Array([RouletteMove.Spin]);
           const result = await chainService.sendMove(currentSessionIdRef.current, spinPayload);
           if (result.txHash) setLastTxSig(result.txHash);
           return;

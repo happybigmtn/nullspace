@@ -1,3 +1,8 @@
+/**
+ * Protocol constants matching the Rust backend
+ * See: types/src/execution.rs
+ */
+export { GameType } from '@nullspace/types';
 export declare const TRANSACTION_NAMESPACE: Uint8Array<ArrayBuffer>;
 export declare const InstructionTag: {
     readonly CasinoRegister: 10;
@@ -14,19 +19,6 @@ export declare const SubmissionTag: {
     readonly Transactions: 1;
     readonly Summary: 2;
 };
-export declare const GameType: {
-    readonly Baccarat: 0;
-    readonly Blackjack: 1;
-    readonly CasinoWar: 2;
-    readonly Craps: 3;
-    readonly VideoPoker: 4;
-    readonly HiLo: 5;
-    readonly Roulette: 6;
-    readonly SicBo: 7;
-    readonly ThreeCard: 8;
-    readonly UltimateHoldem: 9;
-};
-export type GameType = typeof GameType[keyof typeof GameType];
 export declare const PlayerAction: {
     readonly Hit: 0;
     readonly Stand: 1;
@@ -38,12 +30,6 @@ export declare const PlayerAction: {
     readonly CashOut: 20;
 };
 export type PlayerAction = typeof PlayerAction[keyof typeof PlayerAction];
-export declare const BlackjackMove: {
-    readonly Hit: 0;
-    readonly Stand: 1;
-    readonly Double: 2;
-    readonly Split: 3;
-};
 export declare const HiLoGuess: {
     readonly Higher: 0;
     readonly Lower: 1;

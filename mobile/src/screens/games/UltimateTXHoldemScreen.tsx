@@ -14,7 +14,7 @@ import { useGameKeyboard, KEY_ACTIONS, useGameConnection } from '../../hooks';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS } from '../../constants/theme';
 import { useGameStore } from '../../stores/gameStore';
 import type { ChipValue, TutorialStep, PokerHand, Card as CardType } from '../../types';
-import type { UltimateTXMessage } from '../../types/protocol';
+import type { UltimateTXMessage } from '@nullspace/protocol/mobile';
 
 type GamePhase = 'betting' | 'preflop' | 'flop' | 'river' | 'showdown' | 'result';
 

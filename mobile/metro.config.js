@@ -1,15 +1,21 @@
 const { getDefaultConfig } = require('expo/metro-config');
 const path = require('path');
 
-const config = getDefaultConfig(__dirname);
+const projectRoot = __dirname;
+const monorepoRoot = path.resolve(projectRoot, '..');
+
+const config = getDefaultConfig(projectRoot);
 
 // Enable CSS support for web
 config.resolver.sourceExts.push('css');
-config.watchFolders = [
-  path.resolve(__dirname, '..', 'gateway', 'src'),
-];
+
+// Watch the monorepo root for workspace packages
+config.watchFolders = [monorepoRoot];
+
+// Resolve node_modules from both project and monorepo root
 config.resolver.nodeModulesPaths = [
-  path.resolve(__dirname, 'node_modules'),
+  path.resolve(projectRoot, 'node_modules'),
+  path.resolve(monorepoRoot, 'node_modules'),
 ];
 
 module.exports = config;

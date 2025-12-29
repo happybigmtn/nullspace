@@ -30,6 +30,10 @@
   "type": "module",
   "description": "",
   "dependencies": {
+    "@nullspace/constants": "workspace:*",
+    "@nullspace/design-tokens": "workspace:*",
+    "@nullspace/protocol": "workspace:*",
+    "@nullspace/types": "workspace:*",
     "@react-spring/web": "^10.0.3",
     "@tailwindcss/postcss": "^4.1.11",
     "@types/node": "^20.0.0",

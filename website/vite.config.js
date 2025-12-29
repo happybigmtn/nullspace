@@ -76,7 +76,12 @@ export default defineConfig({
     }
   },
   optimizeDeps: {
-    exclude: ['./wasm/pkg/nullspace_wasm.js']
+    exclude: ['./wasm/pkg/nullspace_wasm.js'],
+    include: [
+      '@nullspace/types',
+      '@nullspace/constants',
+      '@nullspace/protocol'
+    ]
   },
   build: {
     modulePreload: {

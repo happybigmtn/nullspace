@@ -29,8 +29,8 @@ import { VideoPokerHandler } from './videopoker.js';
 /**
  * Create handler registry with all 10 games
  */
-export function createHandlerRegistry(): Map<number, GameHandler> {
-  const registry = new Map<number, GameHandler>();
+export function createHandlerRegistry(): Map<GameType, GameHandler> {
+  const registry = new Map<GameType, GameHandler>();
 
   registry.set(GameType.Baccarat, new BaccaratHandler());
   registry.set(GameType.Blackjack, new BlackjackHandler());

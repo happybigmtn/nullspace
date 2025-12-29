@@ -1,6 +1,7 @@
 import { Dispatch, SetStateAction, MutableRefObject, useCallback } from 'react';
 import { GameState, Card, PlayerStats, GameType } from '../../types';
 import { CasinoChainService } from '../../services/CasinoChainService';
+import { BlackjackMove } from '@nullspace/constants';
 
 interface UseBlackjackProps {
   gameState: GameState;
@@ -37,7 +38,7 @@ export const useBlackjack = ({
       try {
         isPendingRef.current = true;
         console.log('[useBlackjack] Set isPending = true, sending move...');
-        const result = await chainService.sendMove(currentSessionIdRef.current, new Uint8Array([0]));
+        const result = await chainService.sendMove(currentSessionIdRef.current, new Uint8Array([BlackjackMove.Hit]));
         if (result.txHash) setLastTxSig(result.txHash);
         setGameState(prev => ({ ...prev, message: 'HITTING...' }));
         console.log('[useBlackjack] Move sent successfully, waiting for chain event...');
@@ -64,7 +65,7 @@ export const useBlackjack = ({
       try {
         isPendingRef.current = true;
         console.log('[useBlackjack] Set isPending = true, sending move...');
-        const result = await chainService.sendMove(currentSessionIdRef.current, new Uint8Array([1]));
+        const result = await chainService.sendMove(currentSessionIdRef.current, new Uint8Array([BlackjackMove.Stand]));
         if (result.txHash) setLastTxSig(result.txHash);
         setGameState(prev => ({ ...prev, message: 'STANDING...' }));
         console.log('[useBlackjack] Move sent successfully, waiting for chain event...');
@@ -91,7 +92,7 @@ export const useBlackjack = ({
       try {
         isPendingRef.current = true;
         console.log('[useBlackjack] Set isPending = true, sending move...');
-        const result = await chainService.sendMove(currentSessionIdRef.current, new Uint8Array([2]));
+        const result = await chainService.sendMove(currentSessionIdRef.current, new Uint8Array([BlackjackMove.Double]));
         if (result.txHash) setLastTxSig(result.txHash);
         setGameState(prev => ({ ...prev, message: 'DOUBLING...' }));
         console.log('[useBlackjack] Move sent successfully, waiting for chain event...');
@@ -137,7 +138,7 @@ export const useBlackjack = ({
         }
         isPendingRef.current = true;
         console.log('[useBlackjack] Sending split command to chain');
-        const result = await chainService.sendMove(currentSessionIdRef.current, new Uint8Array([3]));
+        const result = await chainService.sendMove(currentSessionIdRef.current, new Uint8Array([BlackjackMove.Split]));
         if (result.txHash) setLastTxSig(result.txHash);
         setGameState(prev => ({ ...prev, message: 'SPLITTING...' }));
         return;

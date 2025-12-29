@@ -10,6 +10,7 @@ import { SessionManager, NonceManager, ConnectionLimiter } from './session/index
 import { SubmitClient } from './backend/index.js';
 import { GameType } from './codec/index.js';
 import { ErrorCodes, createError } from './types/errors.js';
+import { OutboundMessageSchema } from '@nullspace/protocol/mobile';
 
 // Configuration from environment
 const PORT = parseInt(process.env.GATEWAY_PORT || '9010', 10);
@@ -29,7 +30,7 @@ const handlers = createHandlerRegistry();
 
 // Message type to GameType mapping
 // Includes both canonical names and mobile app variations (with underscores)
-const messageGameTypeMap: Record<string, number> = {
+const messageGameTypeMap: Record<string, GameType> = {
   // Baccarat
   baccarat_deal: GameType.Baccarat,
 
@@ -150,6 +151,15 @@ async function handleMessage(ws: WebSocket, rawData: Buffer): Promise<void> {
     return;
   }
 
+  const validation = OutboundMessageSchema.safeParse(msg);
+  if (!validation.success) {
+    sendError(ws, ErrorCodes.INVALID_MESSAGE, 'Invalid message payload');
+    return;
+  }
+
+  const validatedMsg = validation.data as Record<string, unknown>;
+  const validatedType = validatedMsg.type as string;
+
   // Get session
   const session = sessionManager.getSession(ws);
   if (!session) {
@@ -158,9 +168,9 @@ async function handleMessage(ws: WebSocket, rawData: Buffer): Promise<void> {
   }
 
   // Map message type to game type
-  const gameType = messageGameTypeMap[msgType];
+  const gameType = messageGameTypeMap[validatedType];
   if (gameType === undefined) {
-    sendError(ws, ErrorCodes.INVALID_MESSAGE, `Unknown message type: ${msgType}`);
+    sendError(ws, ErrorCodes.INVALID_MESSAGE, `Unknown message type: ${validatedType}`);
     return;
   }
 
@@ -180,8 +190,8 @@ async function handleMessage(ws: WebSocket, rawData: Buffer): Promise<void> {
   };
 
   // Execute handler
-  console.log(`[Gateway] Executing handler for ${msgType}...`);
-  const result = await handler.handleMessage(ctx, msg);
+  console.log(`[Gateway] Executing handler for ${validatedType}...`);
+  const result = await handler.handleMessage(ctx, validatedMsg);
   console.log(`[Gateway] Handler result:`, result.success ? 'success' : 'failed', result.error?.message ?? '');
 
   if (result.success) {

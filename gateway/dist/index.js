@@ -10,6 +10,7 @@ import { SessionManager, NonceManager, ConnectionLimiter } from './session/index
 import { SubmitClient } from './backend/index.js';
 import { GameType } from './codec/index.js';
 import { ErrorCodes } from './types/errors.js';
+import { OutboundMessageSchema } from '@nullspace/protocol/mobile';
 // Configuration from environment
 const PORT = parseInt(process.env.GATEWAY_PORT || '9010', 10);
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8080';
@@ -132,6 +133,13 @@ async function handleMessage(ws, rawData) {
         }
         return;
     }
+    const validation = OutboundMessageSchema.safeParse(msg);
+    if (!validation.success) {
+        sendError(ws, ErrorCodes.INVALID_MESSAGE, 'Invalid message payload');
+        return;
+    }
+    const validatedMsg = validation.data;
+    const validatedType = validatedMsg.type;
     // Get session
     const session = sessionManager.getSession(ws);
     if (!session) {
@@ -139,9 +147,9 @@ async function handleMessage(ws, rawData) {
         return;
     }
     // Map message type to game type
-    const gameType = messageGameTypeMap[msgType];
+    const gameType = messageGameTypeMap[validatedType];
     if (gameType === undefined) {
-        sendError(ws, ErrorCodes.INVALID_MESSAGE, `Unknown message type: ${msgType}`);
+        sendError(ws, ErrorCodes.INVALID_MESSAGE, `Unknown message type: ${validatedType}`);
         return;
     }
     // Get handler for game type
@@ -158,8 +166,8 @@ async function handleMessage(ws, rawData) {
         backendUrl: BACKEND_URL,
     };
     // Execute handler
-    console.log(`[Gateway] Executing handler for ${msgType}...`);
-    const result = await handler.handleMessage(ctx, msg);
+    console.log(`[Gateway] Executing handler for ${validatedType}...`);
+    const result = await handler.handleMessage(ctx, validatedMsg);
     console.log(`[Gateway] Handler result:`, result.success ? 'success' : 'failed', result.error?.message ?? '');
     if (result.success) {
         if (result.response) {

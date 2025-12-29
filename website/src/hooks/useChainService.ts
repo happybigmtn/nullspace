@@ -3,7 +3,7 @@ import { CasinoClient } from '../api/client';
 import { WasmWrapper } from '../api/wasm';
 import { CasinoChainService } from '../services/CasinoChainService';
 import { LeaderboardEntry, GameType } from '../types';
-import { GameType as ChainGameType } from '../types/casino';
+import { GameType as ChainGameType } from '@nullspace/types/casino';
 
 // Reverse mapping from chain game type to frontend game type
 const CHAIN_TO_FRONTEND_GAME_TYPE: Record<ChainGameType, GameType> = {

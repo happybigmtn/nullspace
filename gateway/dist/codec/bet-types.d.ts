@@ -1,6 +1,10 @@
 /**
  * Shared bet type constants + helpers for mobile + gateway.
  * Must match execution/src/casino/* enums exactly.
+ *
+ * TODO: Consider moving these bet type constants to @nullspace/constants
+ * The shared package currently has move opcodes but not bet type encoders.
+ * Gateway-specific encoding helpers could remain here while constants migrate.
  */
 export declare const BACCARAT_BET_TYPES: {
     readonly PLAYER: 0;

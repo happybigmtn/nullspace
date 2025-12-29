@@ -3,7 +3,7 @@
  * TypeScript class that wraps casino serialization and integrates with CasinoClient
  */
 
-import { GameType, CasinoGameStartedEvent, CasinoGameMovedEvent, CasinoGameCompletedEvent, PlayerBalanceSnapshot } from '../types/casino';
+import { GameType, CasinoGameStartedEvent, CasinoGameMovedEvent, CasinoGameCompletedEvent, PlayerBalanceSnapshot } from '@nullspace/types/casino';
 import { CasinoClient } from '../api/client.js';
 import { snakeToCamel } from '../utils/caseNormalizer';
 

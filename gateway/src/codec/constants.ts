@@ -2,12 +2,13 @@
  * Protocol constants matching the Rust backend
  * See: types/src/execution.rs
  */
+export { GameType } from '@nullspace/types';
 import {
   BACCARAT_BET_TYPES,
   CRAPS_BET_TYPES,
   ROULETTE_BET_TYPES,
   SICBO_BET_TYPES,
-} from './bet-types.js';
+} from '@nullspace/constants/bet-types';
 
 // Transaction signing namespace - used for Ed25519 signatures
 // CRITICAL: Must match TRANSACTION_NAMESPACE in Rust (b"_NULLSPACE_TX")
@@ -32,22 +33,6 @@ export const SubmissionTag = {
   Summary: 2,
 } as const;
 
-// Game types (matching types/src/casino/game.rs)
-export const GameType = {
-  Baccarat: 0,
-  Blackjack: 1,
-  CasinoWar: 2,
-  Craps: 3,
-  VideoPoker: 4,
-  HiLo: 5,
-  Roulette: 6,
-  SicBo: 7,
-  ThreeCard: 8,
-  UltimateHoldem: 9,
-} as const;
-
-export type GameType = typeof GameType[keyof typeof GameType];
-
 // Player actions (matching types/src/casino/game.rs)
 export const PlayerAction = {
   Hit: 0,
@@ -61,14 +46,6 @@ export const PlayerAction = {
 } as const;
 
 export type PlayerAction = typeof PlayerAction[keyof typeof PlayerAction];
-
-// Blackjack move types (payload for CasinoGameMove)
-export const BlackjackMove = {
-  Hit: 0,
-  Stand: 1,
-  Double: 2,
-  Split: 3,
-} as const;
 
 // Hi-Lo guess types (matching execution/src/casino/hilo.rs Move enum)
 export const HiLoGuess = {

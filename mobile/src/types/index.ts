@@ -1,20 +1,18 @@
 /**
- * Shared type definitions for the mobile app
+ * Shared type definitions for the mobile app.
  */
 
-import type { BaccaratBetName, CrapsBetName, RouletteBetName, SicBoBetName } from '../constants/betTypes';
+import type { Card, Suit, Rank, GameId } from '@nullspace/types';
+import { GAME_DISPLAY_NAMES } from '@nullspace/constants/games';
+import type { ChipValue } from '@nullspace/constants/chips';
+import type { BaccaratBetName, CrapsBetName, RouletteBetName, SicBoBetName } from '@nullspace/constants/bet-types';
 
-// Re-export game ID constants and types from centralized location
-export { GAME_IDS, GAME_NAMES, getGameName } from '../constants/games';
-export type { GameId } from '../constants/games';
+export type { Card, Suit, Rank, GameId };
 
-// Card types
-export type Suit = 'hearts' | 'diamonds' | 'clubs' | 'spades';
-export type Rank = 'A' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '10' | 'J' | 'Q' | 'K';
+export const GAME_NAMES = GAME_DISPLAY_NAMES;
 
-export interface Card {
-  suit: Suit;
-  rank: Rank;
+export function getGameName(gameId: GameId): string {
+  return GAME_DISPLAY_NAMES[gameId] ?? gameId;
 }
 
 // Game phases
@@ -40,7 +38,7 @@ export interface Balance {
   locked: number;
 }
 
-// WebSocket message types - re-exported from protocol.ts for convenience
+// WebSocket message types - re-exported from shared protocol for convenience
 export type {
   GameMessage,
   BlackjackMessage,
@@ -53,7 +51,7 @@ export type {
   SicBoMessage,
   ThreeCardPokerMessage,
   UltimateTXMessage,
-} from './protocol';
+} from '@nullspace/protocol/mobile';
 
 // Tutorial step
 export interface TutorialStep {
@@ -62,8 +60,7 @@ export interface TutorialStep {
   highlight?: string;
 }
 
-// Chip value type
-export type ChipValue = 1 | 5 | 25 | 100 | 500 | 1000;
+export type { ChipValue };
 
 // Roulette bet types
 export type RouletteBetType = RouletteBetName;
@@ -99,5 +96,5 @@ export type ThreeCardPokerHand =
   | 'PAIR'
   | 'HIGH_CARD';
 
-// Re-export all schemas and utilities from protocol for full access
-export * from './protocol';
+// Re-export all schemas and utilities from shared protocol for full access
+export * from '@nullspace/protocol/mobile';

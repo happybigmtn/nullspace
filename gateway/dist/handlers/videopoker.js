@@ -1,5 +1,7 @@
 /**
  * Video Poker game handler
+ *
+ * Payload uses a hold mask; there is no move opcode for deal/draw.
  */
 import { GameHandler } from './base.js';
 import { GameType, buildVideoPokerPayload } from '../codec/index.js';

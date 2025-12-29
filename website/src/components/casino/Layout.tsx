@@ -231,14 +231,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ leaderboard, history, viewMode
         const lines = entry.split('\n').map(l => l.trim()).filter(l => l.length > 0);
         if (lines.length === 0) return null;
 
-        const pnlIndex = lines.findIndex((line, idx) => idx > 0 && /^[+-]/.test(line));
+        const pnlIndex = lines.findIndex((line, idx) => idx > 0 && /^[+-]\$/.test(line));
         const pnlLine = pnlIndex > 0 ? lines[pnlIndex] : null;
         const pnlClass = pnlLine?.startsWith('+$') ? 'text-action-success' : 'text-action-destructive';
         const detailLines = lines.slice(1).filter((_, idx) => (pnlIndex < 0 ? true : idx + 1 !== pnlIndex));
 
         return (
             <div key={key} className="flex flex-col gap-1 py-3 border-b border-titanium-100 last:border-0 px-2">
-                <div className="text-xs font-bold text-titanium-800 leading-tight">> {lines[0]}</div>
+                <div className="text-xs font-bold text-titanium-800 leading-tight"> &gt; {lines[0]}</div>
                 {pnlLine && (
                     <div className={`${pnlClass} text-xs font-black tabular-nums`}>
                         {pnlLine}
@@ -374,7 +374,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, searchQu
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="px-8 py-6 border-b border-titanium-100 flex items-center gap-4 bg-titanium-50/50">
-                    <span className="text-action-primary font-black text-xl font-mono">>
+                    <span className="text-action-primary font-black text-xl font-mono">&gt;</span>
                     <input
                         ref={inputRef}
                         type="text"
@@ -421,7 +421,7 @@ export const CustomBetOverlay: React.FC<{ isOpen: boolean; betString: string; in
              <div className="bg-white rounded-[48px] p-12 shadow-float flex flex-col items-center gap-8 w-full max-w-md border border-titanium-200 animate-scale-in">
                  <Label size="micro" variant="primary">Set Custom Wager</Label>
                  <div className="flex items-center text-8xl text-titanium-900 font-extrabold tracking-tighter font-display">
-                     <span className="text-titanium-200">$
+                     <span className="text-titanium-200">$</span>
                      <input
                         ref={inputRef}
                         type="text"
@@ -443,11 +443,11 @@ export const CustomBetOverlay: React.FC<{ isOpen: boolean; betString: string; in
     );
 };
 
-interface HelpOverlayProps { 
-    isOpen: boolean; 
-    onClose: () => void; 
-    gameType: GameType; 
-    detail?: string | null; 
+interface HelpOverlayProps {
+    isOpen: boolean;
+    onClose: () => void;
+    gameType: GameType;
+    detail?: string | null;
 }
 
 export const HelpOverlay: React.FC<HelpOverlayProps> = ({ isOpen, onClose, gameType, detail }) => {
@@ -614,7 +614,7 @@ export const ResponsiblePlayOverlay: React.FC<ResponsiblePlayOverlayProps> = ({
 
     return (
         <div className="fixed inset-0 bg-titanium-900/60 backdrop-blur-lg z-[100] flex items-center justify-center p-6" onClick={onClose}>
-            <div className="bg-white rounded-[48px] shadow-float max-w-xl w-full flex flex-col border border-titanium-200 overflow-hidden animate-scale-in">
+            <div className="bg-white rounded-[48px] shadow-float max-xl w-full flex flex-col border border-titanium-200 overflow-hidden animate-scale-in" onClick={e => e.stopPropagation()}>
                 <div className="p-12 border-b border-titanium-100 bg-titanium-50/50 text-center">
                     <Label variant="destructive" size="micro" className="mb-4 block tracking-[0.4em]">
                         {mode === 'reality' ? 'Player Protection' : 'Operation Settings'}

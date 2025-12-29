@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 import { useSpring, animated, config, to } from '@react-spring/web';
 
 interface Pseudo3DWheelProps {
@@ -19,6 +19,13 @@ const getNumberColor = (num: number) => {
     return redNums.includes(num) ? '#FF3B30' : '#1C1C1E';
 };
 
+// Calculate the angle for a number on the wheel
+const getNumberAngle = (num: number): number => {
+    const index = ROULETTE_NUMBERS.indexOf(num);
+    if (index === -1) return 0;
+    return (index * 360 / 37);
+};
+
 export const Pseudo3DWheel: React.FC<Pseudo3DWheelProps> = ({
     lastNumber,
     isSpinning,
@@ -26,43 +33,63 @@ export const Pseudo3DWheel: React.FC<Pseudo3DWheelProps> = ({
     style,
     onSpinComplete
 }) => {
-    const [rotation, setRotation] = useState(0);
+    // Use refs to track state without causing re-renders
+    const totalRotationRef = useRef(0);
+    const spinIdRef = useRef(0);
 
-    const getTargetRotation = (target: number) => {
-        const index = ROULETTE_NUMBERS.indexOf(target);
-        if (index === -1) return 0;
-        const segmentAngle = 360 / 37;
-        const baseRotation = index * segmentAngle;
-        const extraSpins = (6 + Math.floor(Math.random() * 4)) * 360; 
-        return -(baseRotation + extraSpins);
-    };
+    // Calculate target rotation when lastNumber changes
+    // The wheel rotates so the winning number aligns with the pointer at top
+    const targetRotation = useMemo(() => {
+        if (lastNumber === null) return 0;
+
+        const numberAngle = getNumberAngle(lastNumber);
+        // Add extra spins for visual effect (only when starting a new spin)
+        const extraSpins = (6 + Math.floor(Math.random() * 4)) * 360;
+
+        // Negative rotation to bring the number to the top (clockwise spin)
+        const newTarget = -(numberAngle + extraSpins);
+
+        // Store this as the new base rotation
+        totalRotationRef.current = newTarget;
+        spinIdRef.current += 1;
+
+        return newTarget;
+    }, [lastNumber]);
+
+    // Final resting position (normalized to show correct number at top)
+    const restingRotation = useMemo(() => {
+        if (lastNumber === null) return 0;
+        const numberAngle = getNumberAngle(lastNumber);
+        // Normalize to position the winning number at top
+        return -(numberAngle % 360);
+    }, [lastNumber]);
 
     const { rotate } = useSpring({
-        rotate: isSpinning && lastNumber !== null 
-            ? getTargetRotation(lastNumber) 
-            : rotation,
-        config: isSpinning ? { mass: 4, tension: 100, friction: 40 } : config.stiff,
+        rotate: isSpinning ? targetRotation : restingRotation,
+        config: isSpinning
+            ? { mass: 4, tension: 100, friction: 40 }
+            : { mass: 1, tension: 200, friction: 30 },
         onRest: () => {
             if (isSpinning && onSpinComplete) {
                 onSpinComplete();
             }
         }
     });
-    
-    // Fixed Ball Animation (using ballRadius in transform)
+
+    // Ball animation - lands at top (0 degrees) where the pointer is
     const { ballRotate, ballRadius } = useSpring({
         ballRotate: isSpinning ? 1440 + Math.random() * 720 : 0,
         ballRadius: isSpinning ? 135 : 118,
-        config: isSpinning 
-            ? { duration: 3500, easing: t => t * t * (3 - 2 * t) } 
+        config: isSpinning
+            ? { duration: 3500, easing: (t: number) => t * t * (3 - 2 * t) }
             : { mass: 3, tension: 120, friction: 14 }
     });
 
     return (
-        <div className={`relative ${className}`} style={{ width: 320, height: 320, ...style }}>
-            <div className="absolute inset-4 rounded-full bg-black/20 blur-2xl" />
+        <div className={`relative aspect-square ${className}`} style={{ width: 320, height: 320, ...style }}>
+            <div className="absolute inset-4 rounded-full aspect-square bg-black/20 blur-2xl" />
 
-            <div className="absolute inset-0 rounded-full border-[12px] border-titanium-200 shadow-float flex items-center justify-center bg-titanium-100 overflow-hidden">
+            <div className="absolute inset-0 rounded-full aspect-square border-[12px] border-titanium-200 shadow-float flex items-center justify-center bg-titanium-100 overflow-hidden">
                 
                 <animated.div 
                     className="w-full h-full rounded-full relative shadow-inner"

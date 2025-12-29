@@ -3,7 +3,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { z } from 'zod';
-import { BaseMessageSchema } from '../types/protocol';
+import { BaseMessageSchema } from '@nullspace/protocol/mobile';
 
 // Base message type for all game communications
 export interface GameMessage {

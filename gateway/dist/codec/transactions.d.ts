@@ -1,6 +1,11 @@
 /**
  * Transaction building and signing
  * Matches Rust types/src/execution.rs Transaction struct
+ *
+ * TODO: This transaction building logic is gateway-specific and uses a different format
+ * than @nullspace/protocol encoding. The protocol package focuses on game moves while
+ * this module handles the full transaction signing with Ed25519 and nonce management.
+ * Keep this module separate as it serves a different purpose.
  */
 import { ed25519 } from '@noble/curves/ed25519';
 /**

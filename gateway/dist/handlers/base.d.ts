@@ -2,7 +2,7 @@
  * Base game handler interface and utilities
  */
 import type { Session } from '../types/session.js';
-import type { GameType } from '../codec/constants.js';
+import type { GameType } from '@nullspace/types';
 import type { SubmitClient } from '../backend/http.js';
 import type { NonceManager } from '../session/nonce.js';
 import { type ErrorResponse } from '../types/errors.js';

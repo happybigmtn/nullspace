@@ -1,5 +1,5 @@
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { GameState } from '../../../types';
 import { DiceThrow2D } from '../GameComponents';
 import { MobileDrawer } from '../MobileDrawer';
@@ -61,6 +61,21 @@ export const CrapsView = React.memo<{
 }>(({ gameState, actions, lastWin, playMode, currentBet, onBetChange }) => {
     const [showChipSelector, setShowChipSelector] = useState(false);
     const [leftSidebarView, setLeftSidebarView] = useState<'EXPOSURE' | 'SIDE_BETS'>('EXPOSURE');
+    const [diceSettled, setDiceSettled] = useState(true);
+    const [showOutcome, setShowOutcome] = useState(true);
+
+    // Reset settled state when a new roll starts
+    const rollKey = gameState.crapsRollHistory.length;
+    useEffect(() => {
+        setDiceSettled(false);
+        setShowOutcome(false);
+    }, [rollKey]);
+
+    const handleDiceSettled = useCallback(() => {
+        setDiceSettled(true);
+        // Delay showing outcome text until AFTER dots have faded in (200ms dot delay + 150ms buffer)
+        setTimeout(() => setShowOutcome(true), 350);
+    }, []);
 
     // Get current roll (last dice sum)
     const currentRoll = useMemo(() =>
@@ -137,6 +152,15 @@ export const CrapsView = React.memo<{
                                             }
                                         });
 
+                                        // Format number with K/M abbreviations for large values
+                                        const formatPnl = (n: number) => {
+                                            const abs = Math.abs(n);
+                                            if (abs >= 1000000) return `${(abs / 1000000).toFixed(1)}M`;
+                                            if (abs >= 10000) return `${Math.round(abs / 1000)}K`;
+                                            if (abs >= 1000) return `${(abs / 1000).toFixed(1)}K`;
+                                            return abs.toString();
+                                        };
+
                                         return rows.map((row, idx) => {
                                             const pnl = row.isHard !== undefined
                                                 ? calculateCrapsExposure(row.num, gameState.crapsPoint, gameState.crapsBets, row.isHard)
@@ -147,14 +171,14 @@ export const CrapsView = React.memo<{
 
                                             return (
                                                 <div key={idx} className="flex items-center h-6 text-sm">
-                                                    <div className="flex-1 flex justify-end items-center pr-2">
+                                                    <div className="w-14 flex justify-end items-center pr-2 overflow-hidden">
                                                         {pnlRounded < 0 && (
-                                                            <span className="text-action-destructive font-mono text-[10px]">
-                                                                -{Math.abs(pnlRounded).toLocaleString()}
+                                                            <span className="text-action-destructive font-mono text-[10px] whitespace-nowrap">
+                                                                -{formatPnl(pnlRounded)}
                                                             </span>
                                                         )}
                                                     </div>
-                                                    <div className={`w-9 text-center font-bold ${
+                                                    <div className={`w-9 text-center font-bold flex-shrink-0 ${
                                                         isHighlight ? 'text-yellow-400 bg-yellow-400/20 rounded' :
                                                         row.num === 7 ? 'text-action-destructive' :
                                                         row.isHard === true ? 'text-action-primary' :
@@ -162,10 +186,10 @@ export const CrapsView = React.memo<{
                                                     }`}>
                                                         {row.label}
                                                     </div>
-                                                    <div className="flex-1 flex justify-start items-center pl-2">
+                                                    <div className="w-14 flex justify-start items-center pl-2 overflow-hidden">
                                                         {pnlRounded > 0 && (
-                                                            <span className="text-action-success font-mono text-[10px]">
-                                                                +{pnlRounded.toLocaleString()}
+                                                            <span className="text-action-success font-mono text-[10px] whitespace-nowrap">
+                                                                +{formatPnl(pnlRounded)}
                                                             </span>
                                                         )}
                                                     </div>
@@ -254,13 +278,13 @@ export const CrapsView = React.memo<{
 
                 {/* Center Info */}
                 <div className="text-center space-y-3 relative z-20">
-                    <div className="text-lg sm:text-2xl font-bold text-action-primary tracking-widest leading-tight animate-pulse">
+                    <div className={`text-lg sm:text-2xl font-bold text-action-primary tracking-widest leading-tight transition-opacity duration-200 ${showOutcome ? 'opacity-100' : 'opacity-0'}`}>
                         {/* On mobile, replace "SPACE TO ROLL" with "PLACE BETS" */}
                         <span className="hidden sm:inline">{gameState.message}</span>
-                        <span className="md:hidden">{gameState.message?.replace(/SPACE TO ROLL/gi, 'PLACE BETS')}</span>
+                        <span className="sm:hidden">{gameState.message?.replace(/SPACE TO ROLL/gi, 'PLACE BETS')}</span>
                     </div>
                     {gameState.crapsRollHistory.length > 0 && (
-                        <div className="text-[11px] sm:text-[10px] tracking-widest mt-1 flex items-center justify-center gap-1">
+                        <div className={`text-[11px] sm:text-[10px] tracking-widest mt-1 flex items-center justify-center gap-1 transition-opacity duration-200 ${showOutcome ? 'opacity-100' : 'opacity-0'}`}>
                             <span className="text-gray-400">LAST:</span>
                             {gameState.crapsRollHistory.slice(-10).map((roll, i, arr) => (
                                 <span key={i} className={`${i === arr.length - 1 ? 'text-yellow-400 font-bold' : roll === 7 ? 'text-action-destructive' : 'text-gray-400'}`}>
@@ -272,18 +296,22 @@ export const CrapsView = React.memo<{
                 </div>
 
                 {/* Dice Area */}
-                <div className="min-h-[170px] w-full flex items-center justify-center">
+                <div className="w-full flex items-center justify-center">
                     <DiceThrow2D
                         values={gameState.dice}
-                        rollKey={gameState.crapsRollHistory.length}
+                        rollKey={rollKey}
+                        label=""
                         className="w-full"
                         maxWidthClassName="max-w-[760px] sm:max-w-[900px] lg:max-w-[1100px]"
-                        heightClassName="h-[150px] sm:h-[175px] md:h-[190px]"
+                        heightClassName="h-[120px] sm:h-[140px] md:h-[150px]"
                         launchDirection="right"
                         horizontalBoost={22}
                         verticalBoost={9}
                         preventOverlap
                         settleToRow
+                        rightWallInset={32}
+                        flatOnSettle
+                        onSettled={handleDiceSettled}
                     />
                 </div>
 
@@ -416,6 +444,15 @@ export const CrapsView = React.memo<{
                                     }
                                 });
 
+                                // Format number with K/M abbreviations for large values
+                                const formatPnl = (n: number) => {
+                                    const abs = Math.abs(n);
+                                    if (abs >= 1000000) return `${(abs / 1000000).toFixed(1)}M`;
+                                    if (abs >= 10000) return `${Math.round(abs / 1000)}K`;
+                                    if (abs >= 1000) return `${(abs / 1000).toFixed(1)}K`;
+                                    return abs.toString();
+                                };
+
                                 return rows.map((row, idx) => {
                                     const pnl = row.isHard !== undefined
                                         ? calculateCrapsExposure(row.num, gameState.crapsPoint, gameState.crapsBets, row.isHard)
@@ -426,14 +463,14 @@ export const CrapsView = React.memo<{
 
                                     return (
                                         <div key={idx} className="flex items-center h-7 text-base">
-                                            <div className="flex-1 flex justify-end items-center pr-2">
+                                            <div className="w-20 flex justify-end items-center pr-2 overflow-hidden">
                                                 {pnlRounded < 0 && (
-                                                    <span className="text-action-destructive font-mono text-sm">
-                                                        -{Math.abs(pnlRounded).toLocaleString()}
+                                                    <span className="text-action-destructive font-mono text-sm whitespace-nowrap">
+                                                        -{formatPnl(pnlRounded)}
                                                     </span>
                                                 )}
                                             </div>
-                                            <div className={`w-10 text-center font-bold relative ${
+                                            <div className={`w-10 text-center font-bold relative flex-shrink-0 ${
                                                 isHighlight ? 'text-yellow-400 bg-yellow-400/20 rounded' :
                                                 row.num === 7 ? 'text-action-destructive' :
                                                 row.isHard === true ? 'text-action-primary' :
@@ -441,10 +478,10 @@ export const CrapsView = React.memo<{
                                             }`}>
                                                 {row.label}
                                             </div>
-                                            <div className="flex-1 flex justify-start items-center pl-2">
+                                            <div className="w-20 flex justify-start items-center pl-2 overflow-hidden">
                                                 {pnlRounded > 0 && (
-                                                    <span className="text-action-success font-mono text-sm">
-                                                        +{pnlRounded.toLocaleString()}
+                                                    <span className="text-action-success font-mono text-sm whitespace-nowrap">
+                                                        +{formatPnl(pnlRounded)}
                                                     </span>
                                                 )}
                                             </div>

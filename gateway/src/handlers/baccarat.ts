@@ -1,11 +1,14 @@
 /**
  * Baccarat game handler
+ *
+ * Uses shared bet types + move opcodes from @nullspace/constants.
  */
 import { GameHandler, type HandlerContext, type HandleResult } from './base.js';
 import { GameType } from '../codec/index.js';
-import { BACCARAT_BET_TYPES, encodeBaccaratBet, type BaccaratBetName } from '../codec/bet-types.js';
+import { BACCARAT_BET_TYPES, encodeBaccaratBet, type BaccaratBetName } from '@nullspace/constants/bet-types';
 import { generateSessionId } from '../codec/transactions.js';
 import { ErrorCodes, createError } from '../types/errors.js';
+import { BaccaratMove } from '@nullspace/constants';
 
 export class BaccaratHandler extends GameHandler {
   constructor() {
@@ -127,7 +130,7 @@ export class BaccaratHandler extends GameHandler {
     // Atomic batch: place all bets + deal
     const payload = new Uint8Array(2 + normalizedBets.length * 9);
     const view = new DataView(payload.buffer);
-    payload[0] = 3;
+    payload[0] = BaccaratMove.AtomicBatch;
     payload[1] = normalizedBets.length;
 
     let offset = 2;

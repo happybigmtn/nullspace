@@ -14,7 +14,7 @@ import { useGameKeyboard, KEY_ACTIONS, useGameConnection } from '../../hooks';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS } from '../../constants/theme';
 import { useGameStore } from '../../stores/gameStore';
 import type { ChipValue, TutorialStep, ThreeCardPokerHand, Card as CardType } from '../../types';
-import type { ThreeCardPokerMessage } from '../../types/protocol';
+import type { ThreeCardPokerMessage } from '@nullspace/protocol/mobile';
 
 interface ThreeCardPokerState {
   anteBet: number;

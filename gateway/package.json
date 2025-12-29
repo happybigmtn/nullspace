@@ -15,6 +15,9 @@
   "dependencies": {
     "@noble/curves": "^1.4.0",
     "@noble/hashes": "^1.4.0",
+    "@nullspace/types": "workspace:*",
+    "@nullspace/constants": "workspace:*",
+    "@nullspace/protocol": "workspace:*",
     "ws": "^8.17.0",
     "zod": "^3.23.0"
   },

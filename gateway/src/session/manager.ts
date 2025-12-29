@@ -17,7 +17,7 @@ import {
   generateSessionId,
 } from '../codec/index.js';
 import type { Session, SessionCreateOptions } from '../types/session.js';
-import type { GameType } from '../codec/constants.js';
+import type { GameType } from '@nullspace/types';
 
 const DEFAULT_INITIAL_BALANCE = 10000n;  // 10,000 test chips
 

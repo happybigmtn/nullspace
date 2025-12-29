@@ -9,16 +9,14 @@
  */
 import { GameHandler } from './base.js';
 import { GameType } from '../codec/index.js';
-import { ROULETTE_BET_NAMES, encodeRouletteBet } from '../codec/bet-types.js';
+import { ROULETTE_BET_NAMES, encodeRouletteBet } from '@nullspace/constants/bet-types';
 import { generateSessionId } from '../codec/transactions.js';
 import { ErrorCodes, createError } from '../types/errors.js';
-/** Roulette action codes matching execution/src/casino/roulette.rs */
-const RouletteAction = {
-    PlaceBet: 0,
-    Spin: 1,
-    ClearBets: 2,
-    AtomicBatch: 4,
-};
+import { RouletteMove as SharedRouletteMove } from '@nullspace/constants';
+/**
+ * Roulette action codes matching execution/src/casino/roulette.rs
+ */
+const RouletteAction = SharedRouletteMove;
 export class RouletteHandler extends GameHandler {
     constructor() {
         super(GameType.Roulette);

@@ -21,7 +21,6 @@
     "**/*.ts",
     "**/*.tsx",
     ".expo/types/**/*.ts",
-    "expo-env.d.ts",
-    "../gateway/src/codec/bet-types.ts"
+    "expo-env.d.ts"
   ]
 }

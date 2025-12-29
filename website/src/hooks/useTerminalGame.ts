@@ -5,7 +5,7 @@ import { useBlackjack } from './games/useBlackjack';
 import { useBaccarat } from './games/useBaccarat';
 import { useCraps } from './games/useCraps';
 import { GameType, PlayerStats, GameState, Card, LeaderboardEntry, TournamentPhase, CompletedHand, CrapsBet, RouletteBet, SicBoBet, BaccaratBet, AutoPlayDraft, AutoPlayPlan, ResolvedBet } from '../types';
-import { GameType as ChainGameType, CasinoGameStartedEvent, CasinoGameMovedEvent, CasinoGameCompletedEvent } from '../types/casino';
+import { GameType as ChainGameType, CasinoGameStartedEvent, CasinoGameMovedEvent, CasinoGameCompletedEvent } from '@nullspace/types/casino';
 import { createDeck, rollDie, getHandValue, getHiLoRank, getBaccaratValue, getRouletteColor, WAYS, formatRouletteNumber, evaluateVideoPokerHand, calculateCrapsExposure, calculateSicBoOutcomeExposure, getSicBoCombinations, resolveCrapsBets, parseGameLogs, buildHistoryEntry, formatSummaryLine, prependPnlLine } from '../utils/gameUtils';
 import { getStrategicAdvice } from '../services/geminiService';
 import { CasinoChainService } from '../services/CasinoChainService';

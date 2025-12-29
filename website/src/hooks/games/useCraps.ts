@@ -2,11 +2,8 @@ import { Dispatch, SetStateAction, MutableRefObject, useCallback } from 'react';
 import { GameState, CrapsBet, PlayerStats, GameType, AutoPlayDraft } from '../../types';
 import { canPlaceCrapsBonusBets, crapsBetCost, CRAPS_MAX_BETS } from '../../utils/gameUtils';
 import { CasinoChainService } from '../../services/CasinoChainService';
-
-// ATS subtype values stored in target field
-const ATS_SMALL = 0;
-const ATS_TALL = 1;
-const ATS_ALL = 2;
+import { CrapsMove } from '@nullspace/constants';
+import { encodeCrapsBet, type CrapsBetName } from '@nullspace/constants/bet-types';
 
 const CRAPS_BONUS_BET_TYPES = new Set<CrapsBet['type']>([
   'FIRE',
@@ -20,75 +17,13 @@ const CRAPS_BONUS_BET_TYPES = new Set<CrapsBet['type']>([
   'HOT_ROLLER',
 ]);
 
-/**
- * Maps frontend bet type strings to backend numeric values
- * Must match execution/src/casino/craps.rs BetType enum exactly
- *
- * Backend BetType enum:
- *   Pass=0, DontPass=1, Come=2, DontCome=3, Field=4, Yes=5, No=6, Next=7,
- *   Hardway4=8, Hardway6=9, Hardway8=10, Hardway10=11, Fire=12,
- *   AtsSmall=15, AtsTall=16, AtsAll=17,
- *   Muggsy=18, DiffDoubles=19, RideLine=20, Replay=21, HotRoller=22
- */
-const CRAPS_BET_TYPE_MAP: Record<CrapsBet['type'], number> = {
-  'PASS': 0,
-  'DONT_PASS': 1,
-  'COME': 2,
-  'DONT_COME': 3,
-  'FIELD': 4,
-  'YES': 5,
-  'NO': 6,
-  'NEXT': 7,
-  'HARDWAY': 8,  // Base value; actual value computed from target (4→8, 6→9, 8→10, 10→11)
-  'FIRE': 12,
-  'ATS_SMALL': 15,
-  'ATS_TALL': 16,
-  'ATS_ALL': 17,
-  // Side bet types
-  'MUGGSY': 18,
-  'DIFF_DOUBLES': 19,
-  'RIDE_LINE': 20,
-  'REPLAY': 21,
-  'HOT_ROLLER': 22,
+const getEncodedBet = (bet: CrapsBet): { betType: number; target: number } => {
+  return encodeCrapsBet(bet.type as CrapsBetName, bet.target);
 };
 
-/**
- * Get the numeric bet type for the backend.
- * HARDWAY bets map target to specific backend types:
- *   target 4 → Hardway4 (8), target 6 → Hardway6 (9),
- *   target 8 → Hardway8 (10), target 10 → Hardway10 (11)
- */
-const getBetTypeNum = (bet: CrapsBet): number => {
-  if (bet.type === 'HARDWAY' && bet.target !== undefined) {
-    // Map hardway target to specific backend bet type
-    const hardwayMap: Record<number, number> = { 4: 8, 6: 9, 8: 10, 10: 11 };
-    return hardwayMap[bet.target] ?? 8;
-  }
-  return CRAPS_BET_TYPE_MAP[bet.type];
-};
+const getBetTypeNum = (bet: CrapsBet): number => getEncodedBet(bet).betType;
 
-/**
- * Get the target value to send to backend.
- * ATS, HARDWAY, and side bets don't need target (bet type encodes all info).
- */
-const getTargetForBackend = (bet: CrapsBet): number => {
-  // ATS bets: backend expects target = 0
-  if (bet.type === 'ATS_SMALL' || bet.type === 'ATS_TALL' || bet.type === 'ATS_ALL') {
-    return 0;
-  }
-  // HARDWAY bets: backend expects target = 0 (the number is in the bet type)
-  if (bet.type === 'HARDWAY') {
-    return 0;
-  }
-  if (bet.type === 'MUGGSY'
-      || bet.type === 'DIFF_DOUBLES'
-      || bet.type === 'RIDE_LINE'
-      || bet.type === 'REPLAY'
-      || bet.type === 'HOT_ROLLER') {
-    return 0;
-  }
-  return bet.target ?? 0;
-};
+const getTargetForBackend = (bet: CrapsBet): number => getEncodedBet(bet).target;
 
 const isValidCrapsTarget = (type: CrapsBet['type'], target?: number): boolean => {
   if (type === 'YES' || type === 'NO') {
@@ -491,8 +426,8 @@ export const useCraps = ({
                }));
              }
 
-             // Then roll dice (command 2)
-             const result = await chainService.sendMove(currentSessionIdRef.current!, new Uint8Array([2]));
+             // Then roll dice
+             const result = await chainService.sendMove(currentSessionIdRef.current!, new Uint8Array([CrapsMove.Roll]));
              if (result.txHash) setLastTxSig(result.txHash);
              setGameState(prev => ({ ...prev, message: 'ROLLING...' }));
            } catch (e) {

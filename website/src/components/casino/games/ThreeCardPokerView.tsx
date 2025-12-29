@@ -1,8 +1,8 @@
 
 import React, { useMemo } from 'react';
-import { GameState } from '../../../types';
+import { GameState, Card } from '../../../types';
 import { Hand } from '../GameComponents';
-import { getVisibleHandValue } from '../../../utils/gameUtils';
+import { getVisibleHandValue, evaluateThreeCardHand } from '../../../utils/gameUtils';
 import { MobileDrawer } from '../MobileDrawer';
 import { SideBetMenu } from './SideBetMenu';
 
@@ -11,32 +11,10 @@ interface ThreeCardPokerViewProps {
     actions: any;
 }
 
-const getHandRankName = (cards: { rank: string; suit: string }[]): string => {
+// Use canonical hand evaluation from gameUtils to avoid flush detection bugs
+const getHandRankName = (cards: Card[]): string => {
     if (cards.length !== 3) return '';
-
-    const getRankValue = (r: string) => {
-        if (r === 'A') return 12;
-        if (r === 'K') return 11;
-        if (r === 'Q') return 10;
-        if (r === 'J') return 9;
-        return parseInt(r) - 2;
-    };
-
-    const ranks = cards.map(c => getRankValue(c.rank)).sort((a, b) => b - a);
-    const suits = cards.map(c => c.suit);
-
-    const isFlush = suits[0] === suits[1] && suits[1] === suits[2];
-    const isStraight = (ranks[0] - ranks[1] === 1 && ranks[1] - ranks[2] === 1) ||
-                       (ranks[0] === 12 && ranks[1] === 1 && ranks[2] === 0);
-    const isTrips = ranks[0] === ranks[1] && ranks[1] === ranks[2];
-    const isPair = ranks[0] === ranks[1] || ranks[1] === ranks[2] || ranks[0] === ranks[2];
-
-    if (isStraight && isFlush) return 'STRAIGHT FLUSH';
-    if (isTrips) return 'THREE OF A KIND';
-    if (isStraight) return 'STRAIGHT';
-    if (isFlush) return 'FLUSH';
-    if (isPair) return 'PAIR';
-    return 'HIGH CARD';
+    return evaluateThreeCardHand(cards).rank;
 };
 
 const BONUS_BETS = [

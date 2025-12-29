@@ -1,9 +1,10 @@
 import { ConvexHttpClient } from "convex/browser";
 import { createRequire } from "module";
+import { pathToFileURL } from "url";
 
 // Avoid pulling Convex source files into the auth build output.
 const require = createRequire(import.meta.url);
-const { api } = require("../../../website/convex/_generated/api.js") as { api: any };
+const { api } = require("website/convex/_generated/api.js") as { api: any };
 
 type Entitlement = {
   tier?: string;
@@ -94,17 +95,11 @@ let nonceStorePromise: Promise<NonceStore | null> | null = null;
 const loadWasm = async (): Promise<WasmModule | null> => {
   if (!wasmPromise) {
     wasmPromise = (async () => {
-      const wasmUrl = new URL(
-        "../../../website/wasm/pkg/nullspace_wasm.js",
-        import.meta.url,
-      );
-      const wasmBinUrl = new URL(
-        "../../../website/wasm/pkg/nullspace_wasm_bg.wasm",
-        import.meta.url,
-      );
-      const wasmModule = (await import(wasmUrl.href)) as WasmModule;
+      const wasmModulePath = require.resolve("website/wasm/pkg/nullspace_wasm.js");
+      const wasmBinPath = require.resolve("website/wasm/pkg/nullspace_wasm_bg.wasm");
+      const wasmModule = (await import(pathToFileURL(wasmModulePath).href)) as WasmModule;
       const fs = await import("fs/promises");
-      const wasmBytes = await fs.readFile(wasmBinUrl);
+      const wasmBytes = await fs.readFile(wasmBinPath);
       await wasmModule.default({ module_or_path: wasmBytes });
       return wasmModule;
     })().catch((error) => {

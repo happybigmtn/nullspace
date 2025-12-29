@@ -14,17 +14,21 @@ import { GameHandler } from './base.js';
 import { GameType, buildBlackjackPayload } from '../codec/index.js';
 import { generateSessionId } from '../codec/transactions.js';
 import { ErrorCodes, createError } from '../types/errors.js';
-/** Blackjack move codes matching execution/src/casino/blackjack.rs */
+import { BlackjackMove as SharedBlackjackMove } from '@nullspace/constants';
+/**
+ * Blackjack move codes matching execution/src/casino/blackjack.rs
+ * Uses shared move opcodes; SetRules remains a local admin-only opcode (unused by clients).
+ */
 const BlackjackMove = {
-    Hit: 0,
-    Stand: 1,
-    Double: 2,
-    Split: 3,
-    Deal: 4,
-    Set21Plus3: 5,
-    Reveal: 6,
-    Surrender: 7,
-    SetRules: 8,
+    Hit: SharedBlackjackMove.Hit,
+    Stand: SharedBlackjackMove.Stand,
+    Double: SharedBlackjackMove.Double,
+    Split: SharedBlackjackMove.Split,
+    Deal: SharedBlackjackMove.Deal,
+    Set21Plus3: SharedBlackjackMove.Set21Plus3,
+    Reveal: SharedBlackjackMove.Reveal,
+    Surrender: SharedBlackjackMove.Surrender,
+    SetRules: 8, // Not in shared package yet
 };
 export class BlackjackHandler extends GameHandler {
     constructor() {

@@ -1,0 +1,27 @@
+{
+  "blackjackMoves": [
+    { "move": "hit", "hex": "00" },
+    { "move": "stand", "hex": "01" },
+    { "move": "double", "hex": "02" },
+    { "move": "split", "hex": "03" },
+    { "move": "deal", "hex": "04" },
+    { "move": "surrender", "hex": "07" }
+  ],
+  "rouletteMoves": [
+    { "move": "spin", "hex": "01" },
+    { "move": "clear_bets", "hex": "02" }
+  ],
+  "rouletteBets": [
+    { "betType": 1, "number": 0, "amount": "100", "hex": "0001000000000000000064" }
+  ],
+  "crapsMoves": [
+    { "move": "roll", "hex": "02" },
+    { "move": "clear_bets", "hex": "03" }
+  ],
+  "crapsPlaceBets": [
+    { "betType": 0, "target": 0, "amount": "100", "hex": "0000000000000000000064" }
+  ],
+  "crapsAddOdds": [
+    { "amount": "25", "hex": "010000000000000019" }
+  ]
+}

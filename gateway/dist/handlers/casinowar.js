@@ -1,10 +1,15 @@
 /**
  * Casino War game handler
+ *
+ * TODO: Import CasinoWarMove from @nullspace/constants when complete
+ * The shared package has PlaceBet=0, Deal=1, GoToWar=2, Surrender=3
  */
 import { GameHandler } from './base.js';
 import { GameType } from '../codec/index.js';
 import { generateSessionId } from '../codec/transactions.js';
 import { ErrorCodes, createError } from '../types/errors.js';
+// Local CasinoWarMove aligns with shared package
+// TODO: Replace magic numbers with SharedCasinoWarMove once verified
 export class CasinoWarHandler extends GameHandler {
     constructor() {
         super(GameType.CasinoWar);

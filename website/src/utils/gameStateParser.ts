@@ -6,7 +6,12 @@
  * State formats match the Rust implementations in execution/src/casino/*.rs
  */
 
-import { GameType } from '../types/casino';
+import { GameType } from '@nullspace/types/casino';
+import {
+  getHandValue as getBlackjackValue,
+  getBaccaratValue,
+  getHiLoRank,
+} from './gameUtils';
 
 // ============================================================================
 // Card Representation
@@ -610,62 +615,17 @@ export function parseGameState(gameType: GameType, state: Uint8Array): ParsedGam
 // Utility Functions
 // ============================================================================
 
-/**
- * Get the numeric value of a card for Blackjack
- */
-export function getBlackjackValue(cards: Card[]): number {
-  let value = 0;
-  let aces = 0;
+// Re-export getBlackjackValue for backwards compatibility
+// Canonical implementation is in gameUtils.ts
+export { getBlackjackValue };
 
-  for (const card of cards) {
-    if (card.rank === 'A') {
-      aces++;
-      value += 11;
-    } else if (['J', 'Q', 'K'].includes(card.rank)) {
-      value += 10;
-    } else {
-      value += parseInt(card.rank);
-    }
-  }
+// Re-export getBaccaratValue for backwards compatibility
+// Canonical implementation is in gameUtils.ts
+export { getBaccaratValue };
 
-  // Adjust for aces
-  while (value > 21 && aces > 0) {
-    value -= 10;
-    aces--;
-  }
-
-  return value;
-}
-
-/**
- * Get the Baccarat value of cards (mod 10)
- */
-export function getBaccaratValue(cards: Card[]): number {
-  let value = 0;
-
-  for (const card of cards) {
-    if (card.rank === 'A') {
-      value += 1;
-    } else if (['10', 'J', 'Q', 'K'].includes(card.rank)) {
-      value += 0;
-    } else {
-      value += parseInt(card.rank);
-    }
-  }
-
-  return value % 10;
-}
-
-/**
- * Get HiLo card rank (1-13, Ace=1, King=13)
- */
-export function getHiLoRank(card: Card): number {
-  if (card.rank === 'A') return 1;
-  if (card.rank === 'K') return 13;
-  if (card.rank === 'Q') return 12;
-  if (card.rank === 'J') return 11;
-  return parseInt(card.rank);
-}
+// Re-export getHiLoRank for backwards compatibility
+// Canonical implementation is in gameUtils.ts
+export { getHiLoRank };
 
 /**
  * Convert HiLo accumulator from basis points to multiplier
