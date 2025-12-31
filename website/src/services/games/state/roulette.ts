@@ -2,6 +2,7 @@ import type { GameState } from '../../../types';
 import { GameType } from '../../../types';
 import { MAX_GRAPH_POINTS } from '../constants';
 import { formatRouletteNumber } from '../../../utils/gameUtils';
+import { parseRouletteState as parseRouletteStateBlob } from '@nullspace/game-state';
 import type { GameStateRef, SetGameState } from './types';
 
 type RouletteStateArgs = {
@@ -17,22 +18,14 @@ export const applyRouletteState = ({
   setGameState,
   gameStateRef,
 }: RouletteStateArgs): void => {
-  if (stateBlob.length < 1) {
-    console.error('[parseGameState] Roulette state blob too short:', stateBlob.length);
+  const parsed = parseRouletteStateBlob(stateBlob);
+  if (!parsed) {
+    console.error('[parseGameState] Invalid roulette state blob');
     return;
   }
 
-  const betCount = stateBlob[0];
-  const betsSize = betCount * 10;
-  const legacyResultOffset = 1 + betsSize;
-  const v2HeaderLen = 19;
-  const v2ResultOffset = v2HeaderLen + betsSize;
-  const looksLikeV2 =
-    stateBlob.length === v2HeaderLen + betsSize || stateBlob.length === v2HeaderLen + betsSize + 1;
-
-  const zeroRuleByte = looksLikeV2 ? stateBlob[1] : 0;
-  const phaseByte = looksLikeV2 ? stateBlob[2] : 0;
-  const resultOffset = looksLikeV2 ? v2ResultOffset : legacyResultOffset;
+  const zeroRuleByte = parsed.zeroRule;
+  const phaseByte = parsed.phase;
 
   const zeroRule =
     zeroRuleByte === 1
@@ -46,8 +39,8 @@ export const applyRouletteState = ({
             : 'STANDARD';
   const rouletteIsPrison = phaseByte === 1;
 
-  if (stateBlob.length > resultOffset) {
-    const result = stateBlob[resultOffset];
+  if (parsed.result !== null) {
+    const result = parsed.result;
 
     if (gameStateRef.current) {
       gameStateRef.current = {

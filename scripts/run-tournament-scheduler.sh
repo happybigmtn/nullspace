@@ -7,8 +7,9 @@ POLL_SECS="${POLL_SECS:-5}"
 NO_BUILD="${NO_BUILD:-false}"
 
 ADMIN_KEY="${CASINO_ADMIN_PRIVATE_KEY_HEX:-}"
-if [[ -z "$ADMIN_KEY" ]]; then
-  echo "Set CASINO_ADMIN_PRIVATE_KEY_HEX to the admin private key."
+ADMIN_KEY_FILE="${CASINO_ADMIN_PRIVATE_KEY_FILE:-}"
+if [[ -z "$ADMIN_KEY" && -z "$ADMIN_KEY_FILE" ]]; then
+  echo "Set CASINO_ADMIN_PRIVATE_KEY_FILE or CASINO_ADMIN_PRIVATE_KEY_HEX to the admin private key."
   exit 1
 fi
 
@@ -32,15 +33,31 @@ if [[ "$NO_BUILD" == "true" ]]; then
     echo "Missing target/release/tournament-scheduler; run without NO_BUILD to compile."
     exit 1
   fi
-  ./target/release/tournament-scheduler \
-    --url "$URL" \
-    --identity "$IDENTITY" \
-    --admin-key "$ADMIN_KEY" \
-    --poll-secs "$POLL_SECS"
+  if [[ -n "$ADMIN_KEY_FILE" ]]; then
+    ./target/release/tournament-scheduler \
+      --url "$URL" \
+      --identity "$IDENTITY" \
+      --admin-key-file "$ADMIN_KEY_FILE" \
+      --poll-secs "$POLL_SECS"
+  else
+    ./target/release/tournament-scheduler \
+      --url "$URL" \
+      --identity "$IDENTITY" \
+      --admin-key "$ADMIN_KEY" \
+      --poll-secs "$POLL_SECS"
+  fi
 else
-  cargo run --release --bin tournament-scheduler -- \
-    --url "$URL" \
-    --identity "$IDENTITY" \
-    --admin-key "$ADMIN_KEY" \
-    --poll-secs "$POLL_SECS"
+  if [[ -n "$ADMIN_KEY_FILE" ]]; then
+    cargo run --release --bin tournament-scheduler -- \
+      --url "$URL" \
+      --identity "$IDENTITY" \
+      --admin-key-file "$ADMIN_KEY_FILE" \
+      --poll-secs "$POLL_SECS"
+  else
+    cargo run --release --bin tournament-scheduler -- \
+      --url "$URL" \
+      --identity "$IDENTITY" \
+      --admin-key "$ADMIN_KEY" \
+      --poll-secs "$POLL_SECS"
+  fi
 fi

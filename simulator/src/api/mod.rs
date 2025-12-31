@@ -14,6 +14,7 @@ use tower_governor::{
     governor::GovernorConfigBuilder, key_extractor::SmartIpKeyExtractor, GovernorLayer,
 };
 use tower_http::cors::{AllowOrigin, CorsLayer};
+use tower_http::trace::TraceLayer;
 use uuid::Uuid;
 
 use crate::Simulator;
@@ -28,6 +29,7 @@ pub struct Api {
 #[derive(Clone)]
 struct OriginConfig {
     allowed_origins: Arc<HashSet<String>>,
+    allow_any_origin: bool,
     allow_no_origin: bool,
 }
 
@@ -47,12 +49,14 @@ impl Api {
 
     pub fn router(&self) -> Router {
         let allowed_origins = parse_allowed_origins("ALLOWED_HTTP_ORIGINS");
+        let allow_any_origin = allowed_origins.contains("*");
         let allow_no_origin = parse_allow_no_origin("ALLOW_HTTP_NO_ORIGIN");
         if allowed_origins.is_empty() {
             tracing::warn!("ALLOWED_HTTP_ORIGINS is empty; all browser origins will be rejected");
         }
         let cors_origins = allowed_origins
             .iter()
+            .filter(|origin| *origin != "*")
             .filter_map(|origin| match HeaderValue::from_str(origin) {
                 Ok(value) => Some(value),
                 Err(_) => {
@@ -63,18 +67,22 @@ impl Api {
             .collect::<Vec<_>>();
         let origin_config = OriginConfig {
             allowed_origins: Arc::new(allowed_origins),
+            allow_any_origin,
             allow_no_origin,
         };
 
         // Configure CORS
-        let cors = CorsLayer::new()
-            .allow_origin(AllowOrigin::list(cors_origins))
-            .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
-            .allow_headers([
-                header::CONTENT_TYPE,
-                header::HeaderName::from_static("x-request-id"),
-            ])
-            .expose_headers([header::HeaderName::from_static("x-request-id")]);
+        let cors = if allow_any_origin {
+            CorsLayer::new().allow_origin(AllowOrigin::any())
+        } else {
+            CorsLayer::new().allow_origin(AllowOrigin::list(cors_origins))
+        }
+        .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+        .allow_headers([
+            header::CONTENT_TYPE,
+            header::HeaderName::from_static("x-request-id"),
+        ])
+        .expose_headers([header::HeaderName::from_static("x-request-id")]);
 
         // Configure Rate Limiting - environment variables override config
         let http_rate_per_sec = parse_env_u64("RATE_LIMIT_HTTP_PER_SEC")
@@ -203,6 +211,7 @@ impl Api {
             self.simulator.clone(),
             request_id_middleware,
         ));
+        let router = router.layer(TraceLayer::new_for_http());
 
         router.with_state(self.simulator.clone())
     }
@@ -243,7 +252,7 @@ async fn enforce_origin(
         .get(header::ORIGIN)
         .and_then(|value| value.to_str().ok());
     if let Some(origin) = origin {
-        if !config.allowed_origins.contains(origin) {
+        if !config.allow_any_origin && !config.allowed_origins.contains(origin) {
             return (StatusCode::FORBIDDEN, "Origin not allowed").into_response();
         }
     } else if !config.allow_no_origin {

@@ -10,6 +10,8 @@
 //! bit 0 = hold card 1, bit 1 = hold card 2, etc.
 //! [0xFF, rules:u8] - set paytable rules (Deal stage only)
 
+use super::logging::clamp_i64;
+use super::serialization::{StateReader, StateWriter};
 use super::super_mode::apply_super_multiplier_cards;
 use super::{cards, CasinoGame, GameError, GameResult, GameRng};
 use nullspace_types::casino::GameSession;
@@ -27,6 +29,9 @@ mod payouts {
     pub const STRAIGHT_FLUSH: u64 = 50;
     pub const ROYAL_FLUSH: u64 = 800;
 }
+
+const STATE_LEN_BASE: usize = 6;
+const STATE_LEN_WITH_RULES: usize = 7;
 
 /// Video Poker stages.
 #[repr(u8)]
@@ -254,19 +259,20 @@ fn payout_multiplier(hand: Hand, paytable: VideoPokerPaytable) -> u64 {
 }
 
 fn parse_state(state: &[u8]) -> Option<VideoPokerState> {
-    if state.len() < 6 {
+    if state.len() < STATE_LEN_BASE {
         return None;
     }
-    if state.len() != 6 && state.len() != 7 {
+    if state.len() != STATE_LEN_BASE && state.len() != STATE_LEN_WITH_RULES {
         return None;
     }
-    let stage = Stage::try_from(state[0]).ok()?;
-    let cards = [state[1], state[2], state[3], state[4], state[5]];
+    let mut reader = StateReader::new(state);
+    let stage = Stage::try_from(reader.read_u8()?).ok()?;
+    let cards: [u8; 5] = reader.read_bytes(5)?.try_into().ok()?;
     if cards.iter().any(|&card| card >= 52) {
         return None;
     }
-    let rules = if state.len() >= 7 {
-        VideoPokerRules::from_byte(state[6])?
+    let rules = if reader.remaining() > 0 {
+        VideoPokerRules::from_byte(reader.read_u8()?)?
     } else {
         VideoPokerRules::default()
     };
@@ -274,11 +280,11 @@ fn parse_state(state: &[u8]) -> Option<VideoPokerState> {
 }
 
 fn serialize_state(stage: Stage, cards: &[u8; 5], rules: VideoPokerRules) -> Vec<u8> {
-    let mut out = Vec::with_capacity(7);
-    out.push(stage as u8);
-    out.extend_from_slice(cards);
-    out.push(rules.to_byte());
-    out
+    let mut out = StateWriter::with_capacity(7);
+    out.push_u8(stage as u8);
+    out.push_bytes(cards);
+    out.push_u8(rules.to_byte());
+    out.into_inner()
 }
 
 pub struct VideoPoker;
@@ -367,10 +373,6 @@ impl CasinoGame for VideoPoker {
             0
         };
 
-        let clamp_i64 = |value: i128| -> i64 {
-            value
-                .clamp(i64::MIN as i128, i64::MAX as i128) as i64
-        };
         let hand_name = hand_label(hand);
         let hand_summary = hand_name.replace('_', " ");
         let net_pnl = clamp_i64(i128::from(total_return) - i128::from(session.bet));

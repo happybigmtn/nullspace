@@ -78,6 +78,8 @@ export const INITIAL_GAME_STATE: GameState = {
     hiloGraphData: [],
     hiloRules: null,
     hiloNextMultipliers: null,
+    sessionId: null,
+    moveNumber: 0,
     sessionWager: 0,
     sessionInterimPayout: 0,
     superMode: null

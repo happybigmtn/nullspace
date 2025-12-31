@@ -6,6 +6,7 @@ export default defineConfig({
     include: [
       'src/components/casino/3d/physics/**/*.test.ts',
       'src/components/casino/3d/cards/**/*.test.ts',
+      'src/services/games/**/*.test.ts',
       'src/utils/**/*.test.ts',
     ],
   },

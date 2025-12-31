@@ -80,75 +80,117 @@ export abstract class GameHandler {
       };
     }
 
-    // Encode and submit
-    const instruction = encodeCasinoStartGame(this.gameType, bet, gameSessionId);
-    const nonce = nonceManager.getAndIncrement(session.publicKeyHex);
-    const tx = buildTransaction(nonce, instruction, session.privateKey);
-    const submission = wrapSubmission(tx);
+    return nonceManager.withLock(session.publicKeyHex, async (nonce) => {
+      // Encode and submit
+      const instruction = encodeCasinoStartGame(this.gameType, bet, gameSessionId);
+      const tx = buildTransaction(nonce, instruction, session.privateKey);
+      const submission = wrapSubmission(tx);
 
-    const result = await submitClient.submit(submission);
+      const result = await submitClient.submit(submission);
 
-    if (result.accepted) {
-      session.activeGameId = gameSessionId;
-      session.gameType = this.gameType;
-      nonceManager.confirmNonce(session.publicKeyHex, nonce);
+      if (result.accepted) {
+        session.activeGameId = gameSessionId;
+        session.gameType = this.gameType;
+        nonceManager.setCurrentNonce(session.publicKeyHex, nonce + 1n);
 
-      // Wait for CasinoGameStarted or CasinoError event from backend
-      const gameEvent = await this.waitForEvent(session, 'started');
+        // Wait for CasinoGameStarted or CasinoError event from backend
+        const gameEvent = await this.waitForEvent(session, 'started');
 
-      if (gameEvent) {
-        if (gameEvent.type === 'error') {
-          // Backend rejected the game start
-          session.activeGameId = null;
-          session.gameType = null;
-          const errorMsg = gameEvent.errorMessage || `Game rejected (code ${gameEvent.errorCode})`;
-          console.log(`[GameHandler] Backend error: ${errorMsg}`);
+        if (gameEvent) {
+          if (gameEvent.type === 'error') {
+            // Backend rejected the game start
+            session.activeGameId = null;
+            session.gameType = null;
+            const errorMsg = gameEvent.errorMessage || `Game rejected (code ${gameEvent.errorCode})`;
+            console.log(`[GameHandler] Backend error: ${errorMsg}`);
+            return {
+              success: false,
+              error: createError(ErrorCodes.TRANSACTION_REJECTED, errorMsg),
+            };
+          }
+
+          // CRITICAL: Update session to use backend's actual on-chain session ID
+          // The client generates a session ID but the backend may assign a different one
+          if (gameEvent.sessionId && gameEvent.sessionId !== 0n) {
+            console.log(`[GameHandler] Updating activeGameId: ${session.activeGameId} -> ${gameEvent.sessionId}`);
+            session.activeGameId = gameEvent.sessionId;
+          }
+
           return {
-            success: false,
-            error: createError(ErrorCodes.TRANSACTION_REJECTED, errorMsg),
+            success: true,
+            response: this.buildGameStartedResponse(gameEvent, session, session.activeGameId!, bet),
           };
         }
 
-        // CRITICAL: Update session to use backend's actual on-chain session ID
-        // The client generates a session ID but the backend may assign a different one
-        if (gameEvent.sessionId && gameEvent.sessionId !== 0n) {
-          console.log(`[GameHandler] Updating activeGameId: ${session.activeGameId} -> ${gameEvent.sessionId}`);
-          session.activeGameId = gameEvent.sessionId;
-        }
-
+        // Fallback if no event received (backend may be slow)
         return {
           success: true,
-          response: this.buildGameStartedResponse(gameEvent, session, session.activeGameId!, bet),
+          response: {
+            type: 'game_started',
+            gameType: this.gameType,
+            sessionId: gameSessionId.toString(),
+            bet: bet.toString(),
+            balance: session.balance.toString(),
+          },
         };
       }
 
-      // Fallback if no event received (backend may be slow)
+      if (result.error && nonceManager.handleRejection(session.publicKeyHex, result.error)) {
+        const synced = await nonceManager.syncFromBackend(session.publicKeyHex, backendUrl);
+        if (synced) {
+          const retryNonce = nonceManager.getCurrentNonce(session.publicKeyHex);
+          const retryTx = buildTransaction(retryNonce, instruction, session.privateKey);
+          const retrySubmission = wrapSubmission(retryTx);
+          const retryResult = await submitClient.submit(retrySubmission);
+          if (retryResult.accepted) {
+            session.activeGameId = gameSessionId;
+            session.gameType = this.gameType;
+            nonceManager.setCurrentNonce(session.publicKeyHex, retryNonce + 1n);
+
+            const gameEvent = await this.waitForEvent(session, 'started');
+            if (gameEvent) {
+              if (gameEvent.type === 'error') {
+                session.activeGameId = null;
+                session.gameType = null;
+                const errorMsg = gameEvent.errorMessage || `Game rejected (code ${gameEvent.errorCode})`;
+                console.log(`[GameHandler] Backend error: ${errorMsg}`);
+                return {
+                  success: false,
+                  error: createError(ErrorCodes.TRANSACTION_REJECTED, errorMsg),
+                };
+              }
+              if (gameEvent.sessionId && gameEvent.sessionId !== 0n) {
+                console.log(`[GameHandler] Updating activeGameId: ${session.activeGameId} -> ${gameEvent.sessionId}`);
+                session.activeGameId = gameEvent.sessionId;
+              }
+              return {
+                success: true,
+                response: this.buildGameStartedResponse(gameEvent, session, session.activeGameId!, bet),
+              };
+            }
+
+            return {
+              success: true,
+              response: {
+                type: 'game_started',
+                gameType: this.gameType,
+                sessionId: gameSessionId.toString(),
+                bet: bet.toString(),
+                balance: session.balance.toString(),
+              },
+            };
+          }
+        }
+      }
+
       return {
-        success: true,
-        response: {
-          type: 'game_started',
-          gameType: this.gameType,
-          sessionId: gameSessionId.toString(),
-          bet: bet.toString(),
-          balance: session.balance.toString(),
-        },
+        success: false,
+        error: createError(
+          ErrorCodes.TRANSACTION_REJECTED,
+          result.error ?? 'Transaction rejected'
+        ),
       };
-    }
-
-    // Handle nonce mismatch
-    if (result.error && nonceManager.handleRejection(session.publicKeyHex, result.error)) {
-      await nonceManager.syncFromBackend(session.publicKeyHex, backendUrl);
-      // Retry once
-      return this.startGame(ctx, bet, gameSessionId);
-    }
-
-    return {
-      success: false,
-      error: createError(
-        ErrorCodes.TRANSACTION_REJECTED,
-        result.error ?? 'Transaction rejected'
-      ),
-    };
+    });
   }
 
   /**
@@ -171,77 +213,123 @@ export abstract class GameHandler {
     const gameSessionId = session.activeGameId;
     console.log(`[GameHandler] Making move with sessionId=${gameSessionId} (hex=${gameSessionId.toString(16)})`);
 
-    // Encode and submit
-    const instruction = encodeCasinoGameMove(gameSessionId, payload);
-    const nonce = nonceManager.getAndIncrement(session.publicKeyHex);
-    const tx = buildTransaction(nonce, instruction, session.privateKey);
-    const submission = wrapSubmission(tx);
+    return nonceManager.withLock(session.publicKeyHex, async (nonce) => {
+      const instruction = encodeCasinoGameMove(gameSessionId, payload);
+      const tx = buildTransaction(nonce, instruction, session.privateKey);
+      const submission = wrapSubmission(tx);
 
-    const result = await submitClient.submit(submission);
+      const result = await submitClient.submit(submission);
 
-    if (result.accepted) {
-      nonceManager.confirmNonce(session.publicKeyHex, nonce);
+      if (result.accepted) {
+        nonceManager.setCurrentNonce(session.publicKeyHex, nonce + 1n);
 
-      // Wait for either CasinoGameMoved or CasinoGameCompleted event
-      const gameEvent = await this.waitForMoveOrComplete(session);
+        // Wait for either CasinoGameMoved or CasinoGameCompleted event
+        const gameEvent = await this.waitForMoveOrComplete(session);
 
-      if (gameEvent) {
-        if (gameEvent.type === 'error') {
-          // Move was rejected by backend
-          const errorMsg = gameEvent.errorMessage || `Move rejected (code ${gameEvent.errorCode})`;
-          console.log(`[GameHandler] Backend error during move: ${errorMsg}`);
-          return {
-            success: false,
-            error: createError(ErrorCodes.TRANSACTION_REJECTED, errorMsg),
-          };
-        } else if (gameEvent.type === 'completed') {
-          // Game is over, clear session state
-          session.activeGameId = null;
-          session.gameType = null;
-          if (gameEvent.finalChips !== undefined) {
-            session.balance = gameEvent.finalChips;
-          } else if (gameEvent.balanceSnapshot) {
-            session.balance = gameEvent.balanceSnapshot.chips;
+        if (gameEvent) {
+          if (gameEvent.type === 'error') {
+            // Move was rejected by backend
+            const errorMsg = gameEvent.errorMessage || `Move rejected (code ${gameEvent.errorCode})`;
+            console.log(`[GameHandler] Backend error during move: ${errorMsg}`);
+            return {
+              success: false,
+              error: createError(ErrorCodes.TRANSACTION_REJECTED, errorMsg),
+            };
+          } else if (gameEvent.type === 'completed') {
+            // Game is over, clear session state
+            session.activeGameId = null;
+            session.gameType = null;
+            if (gameEvent.finalChips !== undefined) {
+              session.balance = gameEvent.finalChips;
+            } else if (gameEvent.balanceSnapshot) {
+              session.balance = gameEvent.balanceSnapshot.chips;
+            }
+            return {
+              success: true,
+              response: this.buildGameCompletedResponse(gameEvent, session),
+            };
+          } else if (gameEvent.type === 'moved') {
+            if (gameEvent.balanceSnapshot) {
+              session.balance = gameEvent.balanceSnapshot.chips;
+            }
+            return {
+              success: true,
+              response: this.buildGameMoveResponse(gameEvent, session),
+            };
           }
-          return {
-            success: true,
-            response: this.buildGameCompletedResponse(gameEvent, session),
-          };
-        } else if (gameEvent.type === 'moved') {
-          if (gameEvent.balanceSnapshot) {
-            session.balance = gameEvent.balanceSnapshot.chips;
+        }
+
+        // Fallback if no event received
+        return {
+          success: true,
+          response: {
+            type: 'move_accepted',
+            sessionId: gameSessionId.toString(),
+          },
+        };
+      }
+
+      if (result.error && nonceManager.handleRejection(session.publicKeyHex, result.error)) {
+        const synced = await nonceManager.syncFromBackend(session.publicKeyHex, backendUrl);
+        if (synced) {
+          const retryNonce = nonceManager.getCurrentNonce(session.publicKeyHex);
+          const retryTx = buildTransaction(retryNonce, instruction, session.privateKey);
+          const retrySubmission = wrapSubmission(retryTx);
+          const retryResult = await submitClient.submit(retrySubmission);
+          if (retryResult.accepted) {
+            nonceManager.setCurrentNonce(session.publicKeyHex, retryNonce + 1n);
+
+            const gameEvent = await this.waitForMoveOrComplete(session);
+            if (gameEvent) {
+              if (gameEvent.type === 'error') {
+                const errorMsg = gameEvent.errorMessage || `Move rejected (code ${gameEvent.errorCode})`;
+                console.log(`[GameHandler] Backend error during move: ${errorMsg}`);
+                return {
+                  success: false,
+                  error: createError(ErrorCodes.TRANSACTION_REJECTED, errorMsg),
+                };
+              } else if (gameEvent.type === 'completed') {
+                session.activeGameId = null;
+                session.gameType = null;
+                if (gameEvent.finalChips !== undefined) {
+                  session.balance = gameEvent.finalChips;
+                } else if (gameEvent.balanceSnapshot) {
+                  session.balance = gameEvent.balanceSnapshot.chips;
+                }
+                return {
+                  success: true,
+                  response: this.buildGameCompletedResponse(gameEvent, session),
+                };
+              } else if (gameEvent.type === 'moved') {
+                if (gameEvent.balanceSnapshot) {
+                  session.balance = gameEvent.balanceSnapshot.chips;
+                }
+                return {
+                  success: true,
+                  response: this.buildGameMoveResponse(gameEvent, session),
+                };
+              }
+            }
+
+            return {
+              success: true,
+              response: {
+                type: 'move_accepted',
+                sessionId: gameSessionId.toString(),
+              },
+            };
           }
-          return {
-            success: true,
-            response: this.buildGameMoveResponse(gameEvent, session),
-          };
         }
       }
 
-      // Fallback if no event received
       return {
-        success: true,
-        response: {
-          type: 'move_accepted',
-          sessionId: gameSessionId.toString(),
-        },
+        success: false,
+        error: createError(
+          ErrorCodes.TRANSACTION_REJECTED,
+          result.error ?? 'Transaction rejected'
+        ),
       };
-    }
-
-    // Handle nonce mismatch
-    if (result.error && nonceManager.handleRejection(session.publicKeyHex, result.error)) {
-      await nonceManager.syncFromBackend(session.publicKeyHex, backendUrl);
-      // Retry once
-      return this.makeMove(ctx, payload);
-    }
-
-    return {
-      success: false,
-      error: createError(
-        ErrorCodes.TRANSACTION_REJECTED,
-        result.error ?? 'Transaction rejected'
-      ),
-    };
+    });
   }
 
   /**

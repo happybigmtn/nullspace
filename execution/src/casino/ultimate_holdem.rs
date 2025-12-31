@@ -42,10 +42,11 @@
 //! 10 = Set Progressive bet (u64)
 //! 12 = Set rules (u8)
 
+use super::logging::{clamp_i64, format_card_list, push_resolved_entry};
+use super::serialization::{StateReader, StateWriter};
 use super::super_mode::apply_super_multiplier_cards;
 use super::{cards, CasinoGame, GameError, GameResult, GameRng};
 use nullspace_types::casino::{GameSession, UTH_PROGRESSIVE_BASE_JACKPOT};
-use std::fmt::Write;
 
 const STATE_VERSION: u8 = 3;
 const CARD_UNKNOWN: u8 = 0xFF;
@@ -193,19 +194,24 @@ struct UthState {
 }
 
 fn parse_state(state: &[u8]) -> Option<UthState> {
-    if state.len() < STATE_LEN_BASE || state[0] != STATE_VERSION {
+    if state.len() < STATE_LEN_BASE {
         return None;
     }
     if state.len() != STATE_LEN_BASE && state.len() != STATE_LEN_WITH_RULES {
         return None;
     }
 
-    let stage = Stage::try_from(state[1]).ok()?;
-    let player = [state[2], state[3]];
-    let community = [state[4], state[5], state[6], state[7], state[8]];
-    let dealer = [state[9], state[10]];
-    let play_mult = state[11];
-    let bonus = [state[12], state[13], state[14], state[15]];
+    let mut reader = StateReader::new(state);
+    let version = reader.read_u8()?;
+    if version != STATE_VERSION {
+        return None;
+    }
+    let stage = Stage::try_from(reader.read_u8()?).ok()?;
+    let player: [u8; 2] = reader.read_bytes(2)?.try_into().ok()?;
+    let community: [u8; 5] = reader.read_bytes(5)?.try_into().ok()?;
+    let dealer: [u8; 2] = reader.read_bytes(2)?.try_into().ok()?;
+    let play_mult = reader.read_u8()?;
+    let bonus: [u8; 4] = reader.read_bytes(4)?.try_into().ok()?;
     if play_mult > 4 {
         return None;
     }
@@ -218,11 +224,11 @@ fn parse_state(state: &[u8]) -> Option<UthState> {
     {
         return None;
     }
-    let trips_bet = u64::from_be_bytes(state[16..24].try_into().ok()?);
-    let six_card_bonus_bet = u64::from_be_bytes(state[24..32].try_into().ok()?);
-    let progressive_bet = u64::from_be_bytes(state[32..40].try_into().ok()?);
-    let rules = if state.len() >= STATE_LEN_WITH_RULES {
-        UthRules::from_byte(state[40])
+    let trips_bet = reader.read_u64_be()?;
+    let six_card_bonus_bet = reader.read_u64_be()?;
+    let progressive_bet = reader.read_u64_be()?;
+    let rules = if reader.remaining() > 0 {
+        UthRules::from_byte(reader.read_u8()?)
     } else {
         UthRules::default()
     };
@@ -242,19 +248,19 @@ fn parse_state(state: &[u8]) -> Option<UthState> {
 }
 
 fn serialize_state(state: &UthState) -> Vec<u8> {
-    let mut out = Vec::with_capacity(STATE_LEN_WITH_RULES);
-    out.push(STATE_VERSION);
-    out.push(state.stage as u8);
-    out.extend_from_slice(&state.player);
-    out.extend_from_slice(&state.community);
-    out.extend_from_slice(&state.dealer);
-    out.push(state.play_mult);
-    out.extend_from_slice(&state.bonus);
-    out.extend_from_slice(&state.trips_bet.to_be_bytes());
-    out.extend_from_slice(&state.six_card_bonus_bet.to_be_bytes());
-    out.extend_from_slice(&state.progressive_bet.to_be_bytes());
-    out.push(state.rules.to_byte());
-    out
+    let mut out = StateWriter::with_capacity(STATE_LEN_WITH_RULES);
+    out.push_u8(STATE_VERSION);
+    out.push_u8(state.stage as u8);
+    out.push_bytes(&state.player);
+    out.push_bytes(&state.community);
+    out.push_bytes(&state.dealer);
+    out.push_u8(state.play_mult);
+    out.push_bytes(&state.bonus);
+    out.push_u64_be(state.trips_bet);
+    out.push_u64_be(state.six_card_bonus_bet);
+    out.push_u64_be(state.progressive_bet);
+    out.push_u8(state.rules.to_byte());
+    out.into_inner()
 }
 
 fn is_known_card(card: u8) -> bool {
@@ -575,24 +581,6 @@ fn uth_progressive_return(hole: &[u8; 2], flop: &[u8; 3], progressive_bet: u64) 
     }
 }
 
-fn format_card_list(cards: &[u8]) -> String {
-    let mut out = String::new();
-    for (idx, card) in cards.iter().enumerate() {
-        if idx > 0 {
-            out.push(',');
-        }
-        let _ = write!(out, "{}", card);
-    }
-    out
-}
-
-fn push_resolved_entry(out: &mut String, label: &str, pnl: i64) {
-    if !out.is_empty() {
-        out.push(',');
-    }
-    let _ = write!(out, r#"{{"label":"{}","pnl":{}}}"#, label, pnl);
-}
-
 fn resolve_showdown(
     session: &mut GameSession,
     state: &mut UthState,
@@ -754,10 +742,6 @@ fn resolve_showdown(
     state.stage = Stage::Showdown;
     session.is_complete = true;
 
-    let clamp_i64 = |value: i128| -> i64 {
-        value
-            .clamp(i64::MIN as i128, i64::MAX as i128) as i64
-    };
     // Generate logs for frontend display
     let hand_rank_str = |rank: HandRank| -> &'static str {
         match rank {
@@ -791,7 +775,7 @@ fn resolve_showdown(
     let dealer_cards_str = format_card_list(&state.dealer);
     let community_cards_str = format_card_list(&state.community);
 
-    let mut resolved_entries = String::new();
+    let mut resolved_entries = String::with_capacity(384);
     let mut resolved_sum: i128 = 0;
     let ante_pnl = clamp_i64(i128::from(ante_return) - i128::from(ante));
     push_resolved_entry(&mut resolved_entries, "ANTE", ante_pnl);
@@ -1326,7 +1310,7 @@ mod tests {
     }
 
     #[test]
-    fn test_set_trips_then_deal() {
+    fn test_set_trips_then_deal() -> Result<(), GameError> {
         let seed = create_test_seed();
         let mut session = create_test_session(100);
         let mut rng = GameRng::new(&seed, session.id, 0);
@@ -1337,7 +1321,7 @@ mod tests {
         let mut payload = vec![Action::SetTrips as u8];
         payload.extend_from_slice(&25u64.to_be_bytes());
         let mut rng = GameRng::new(&seed, session.id, 1);
-        let res = UltimateHoldem::process_move(&mut session, &payload, &mut rng).unwrap();
+        let res = UltimateHoldem::process_move(&mut session, &payload, &mut rng)?;
         assert!(matches!(
             res,
             GameResult::ContinueWithUpdate { payout: -25, .. }
@@ -1345,18 +1329,18 @@ mod tests {
 
         // Deal
         let mut rng = GameRng::new(&seed, session.id, 2);
-        let res =
-            UltimateHoldem::process_move(&mut session, &[Action::Deal as u8], &mut rng).unwrap();
+        let res = UltimateHoldem::process_move(&mut session, &[Action::Deal as u8], &mut rng)?;
         assert!(matches!(res, GameResult::Continue(_)));
 
         let state = parse_state(&session.state_blob).expect("Failed to parse state");
         assert_eq!(state.stage, Stage::Preflop);
         assert!(state.player.iter().all(|&c| is_known_card(c)));
         assert_eq!(state.trips_bet, 25);
+        Ok(())
     }
 
     #[test]
-    fn test_trips_refund_on_decrease() {
+    fn test_trips_refund_on_decrease() -> Result<(), GameError> {
         let seed = create_test_seed();
         let mut session = create_test_session(100);
         let mut rng = GameRng::new(&seed, session.id, 0);
@@ -1367,7 +1351,7 @@ mod tests {
         let mut payload = vec![Action::SetTrips as u8];
         payload.extend_from_slice(&25u64.to_be_bytes());
         let mut rng = GameRng::new(&seed, session.id, 1);
-        let res = UltimateHoldem::process_move(&mut session, &payload, &mut rng).unwrap();
+        let res = UltimateHoldem::process_move(&mut session, &payload, &mut rng)?;
         assert!(matches!(
             res,
             GameResult::ContinueWithUpdate { payout: -25, .. }
@@ -1377,15 +1361,16 @@ mod tests {
         let mut payload = vec![Action::SetTrips as u8];
         payload.extend_from_slice(&0u64.to_be_bytes());
         let mut rng = GameRng::new(&seed, session.id, 2);
-        let res = UltimateHoldem::process_move(&mut session, &payload, &mut rng).unwrap();
+        let res = UltimateHoldem::process_move(&mut session, &payload, &mut rng)?;
         assert!(matches!(res, GameResult::ContinueWithUpdate { payout: 25, .. }));
 
         let state = parse_state(&session.state_blob).expect("Failed to parse state");
         assert_eq!(state.trips_bet, 0);
+        Ok(())
     }
 
     #[test]
-    fn test_set_six_card_bonus_then_reveal_draws_bonus_cards() {
+    fn test_set_six_card_bonus_then_reveal_draws_bonus_cards() -> Result<(), GameError> {
         let seed = create_test_seed();
         let mut session = create_test_session(100);
 
@@ -1397,7 +1382,7 @@ mod tests {
         let mut payload = vec![Action::SetSixCardBonus as u8];
         payload.extend_from_slice(&25u64.to_be_bytes());
         let mut rng = GameRng::new(&seed, session.id, 1);
-        let res = UltimateHoldem::process_move(&mut session, &payload, &mut rng).unwrap();
+        let res = UltimateHoldem::process_move(&mut session, &payload, &mut rng)?;
         assert!(matches!(
             res,
             GameResult::ContinueWithUpdate { payout: -25, .. }
@@ -1405,23 +1390,24 @@ mod tests {
 
         // Deal
         let mut rng = GameRng::new(&seed, session.id, 2);
-        UltimateHoldem::process_move(&mut session, &[Action::Deal as u8], &mut rng).unwrap();
+        UltimateHoldem::process_move(&mut session, &[Action::Deal as u8], &mut rng)?;
 
         // Bet 4x to go to reveal
         let mut rng = GameRng::new(&seed, session.id, 3);
-        UltimateHoldem::process_move(&mut session, &[Action::Bet4x as u8], &mut rng).unwrap();
+        UltimateHoldem::process_move(&mut session, &[Action::Bet4x as u8], &mut rng)?;
 
         // Reveal resolves (and should draw bonus cards)
         let mut rng = GameRng::new(&seed, session.id, 4);
-        UltimateHoldem::process_move(&mut session, &[Action::Reveal as u8], &mut rng).unwrap();
+        UltimateHoldem::process_move(&mut session, &[Action::Reveal as u8], &mut rng)?;
 
         let state = parse_state(&session.state_blob).expect("Failed to parse state");
         assert!(state.bonus.iter().all(|&c| is_known_card(c)));
         assert_eq!(state.six_card_bonus_bet, 25);
+        Ok(())
     }
 
     #[test]
-    fn test_preflop_bet_then_reveal_completes() {
+    fn test_preflop_bet_then_reveal_completes() -> Result<(), GameError> {
         let seed = create_test_seed();
         let mut session = create_test_session(100);
 
@@ -1431,12 +1417,11 @@ mod tests {
 
         // Deal
         let mut rng = GameRng::new(&seed, session.id, 1);
-        UltimateHoldem::process_move(&mut session, &[Action::Deal as u8], &mut rng).unwrap();
+        UltimateHoldem::process_move(&mut session, &[Action::Deal as u8], &mut rng)?;
 
         // Bet 4x (deduct play bet)
         let mut rng = GameRng::new(&seed, session.id, 2);
-        let res =
-            UltimateHoldem::process_move(&mut session, &[Action::Bet4x as u8], &mut rng).unwrap();
+        let res = UltimateHoldem::process_move(&mut session, &[Action::Bet4x as u8], &mut rng)?;
         assert!(matches!(
             res,
             GameResult::ContinueWithUpdate { payout: -400, .. }
@@ -1444,17 +1429,17 @@ mod tests {
 
         // Reveal resolves
         let mut rng = GameRng::new(&seed, session.id, 3);
-        let res =
-            UltimateHoldem::process_move(&mut session, &[Action::Reveal as u8], &mut rng).unwrap();
+        let res = UltimateHoldem::process_move(&mut session, &[Action::Reveal as u8], &mut rng)?;
         assert!(matches!(
             res,
             GameResult::Win(_, _) | GameResult::LossPreDeducted(_, _)
         ));
         assert!(session.is_complete);
+        Ok(())
     }
 
     #[test]
-    fn test_preflop_bet3x_then_reveal_completes() {
+    fn test_preflop_bet3x_then_reveal_completes() -> Result<(), GameError> {
         let seed = create_test_seed();
         let mut session = create_test_session(100);
 
@@ -1464,12 +1449,11 @@ mod tests {
 
         // Deal
         let mut rng = GameRng::new(&seed, session.id, 1);
-        UltimateHoldem::process_move(&mut session, &[Action::Deal as u8], &mut rng).unwrap();
+        UltimateHoldem::process_move(&mut session, &[Action::Deal as u8], &mut rng)?;
 
         // Bet 3x (deduct play bet)
         let mut rng = GameRng::new(&seed, session.id, 2);
-        let res =
-            UltimateHoldem::process_move(&mut session, &[Action::Bet3x as u8], &mut rng).unwrap();
+        let res = UltimateHoldem::process_move(&mut session, &[Action::Bet3x as u8], &mut rng)?;
         assert!(matches!(
             res,
             GameResult::ContinueWithUpdate { payout: -300, .. }
@@ -1477,17 +1461,17 @@ mod tests {
 
         // Reveal resolves
         let mut rng = GameRng::new(&seed, session.id, 3);
-        let res =
-            UltimateHoldem::process_move(&mut session, &[Action::Reveal as u8], &mut rng).unwrap();
+        let res = UltimateHoldem::process_move(&mut session, &[Action::Reveal as u8], &mut rng)?;
         assert!(matches!(
             res,
             GameResult::Win(_, _) | GameResult::LossPreDeducted(_, _)
         ));
         assert!(session.is_complete);
+        Ok(())
     }
 
     #[test]
-    fn test_check_check_fold_flow() {
+    fn test_check_check_fold_flow() -> Result<(), GameError> {
         let seed = create_test_seed();
         let mut session = create_test_session(100);
 
@@ -1497,25 +1481,25 @@ mod tests {
 
         // Deal
         let mut rng = GameRng::new(&seed, session.id, 1);
-        UltimateHoldem::process_move(&mut session, &[Action::Deal as u8], &mut rng).unwrap();
+        UltimateHoldem::process_move(&mut session, &[Action::Deal as u8], &mut rng)?;
 
         // Check to flop
         let mut rng = GameRng::new(&seed, session.id, 2);
-        UltimateHoldem::process_move(&mut session, &[Action::Check as u8], &mut rng).unwrap();
+        UltimateHoldem::process_move(&mut session, &[Action::Check as u8], &mut rng)?;
 
         // Check to river
         let mut rng = GameRng::new(&seed, session.id, 3);
-        UltimateHoldem::process_move(&mut session, &[Action::Check as u8], &mut rng).unwrap();
+        UltimateHoldem::process_move(&mut session, &[Action::Check as u8], &mut rng)?;
 
         // Fold
         let mut rng = GameRng::new(&seed, session.id, 4);
-        let res =
-            UltimateHoldem::process_move(&mut session, &[Action::Fold as u8], &mut rng).unwrap();
+        let res = UltimateHoldem::process_move(&mut session, &[Action::Fold as u8], &mut rng)?;
         assert!(matches!(
             res,
             GameResult::Win(_, _) | GameResult::LossPreDeducted(_, _)
         ));
         assert!(session.is_complete);
+        Ok(())
     }
 
     #[test]

@@ -171,8 +171,22 @@ export const useDeal = ({
         if (gameState.stage === 'BETTING') {
           isPendingRef.current = true;
           try {
-            setGameState(prev => ({ ...prev, message: 'DEALING...' }));
-            const result = await chainService.sendMove(sessionId, new Uint8Array([4]));
+            const sideBet21p3 = gameState.blackjack21Plus3Bet || 0;
+            let payload: Uint8Array;
+            if (sideBet21p3 > 0) {
+              payload = new Uint8Array(9);
+              payload[0] = 7;
+              new DataView(payload.buffer).setBigUint64(1, BigInt(sideBet21p3), false);
+            } else {
+              payload = new Uint8Array([4]);
+            }
+
+            setGameState(prev => ({
+              ...prev,
+              message: 'DEALING...',
+              sessionWager: sideBet21p3 > 0 ? prev.sessionWager + sideBet21p3 : prev.sessionWager,
+            }));
+            const result = await chainService.sendMove(sessionId, payload);
             if (result.txHash) setLastTxSig(result.txHash);
             return;
           } catch (error) {

@@ -261,8 +261,12 @@ fn prune_to_min_height_sqlite(conn: &mut Connection, min_height: u64) -> anyhow:
         "DELETE FROM explorer_blocks WHERE height < ?",
         params![min_height],
     )?;
-    tx.commit()?;
-    Ok(())
+    match tx.commit() {
+        Ok(_) => Ok(()),
+        Err(err) => Err(anyhow::anyhow!(
+            "Failed to commit pruning transaction: {err}"
+        )),
+    }
 }
 
 fn load_into_sqlite(

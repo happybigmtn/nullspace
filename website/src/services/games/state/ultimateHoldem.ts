@@ -1,6 +1,7 @@
 import type { Card, GameState } from '../../../types';
 import { GameType } from '../../../types';
 import { decodeCard } from '../shared/cards';
+import { parseUltimateHoldemState as parseUltimateHoldemStateBlob } from '@nullspace/game-state';
 import type { Ref } from '../refs';
 import type { GameStateRef, SetGameState } from './types';
 
@@ -19,31 +20,25 @@ export const applyUltimateHoldemState = ({
   gameStateRef,
   uthBackendStageRef,
 }: UltimateHoldemStateArgs): void => {
-  const version = stateBlob[0];
-  if (version !== 1 && version !== 2 && version !== 3) {
-    console.error('[parseGameState] Unsupported Ultimate Holdem state version:', version);
+  const parsed = parseUltimateHoldemStateBlob(stateBlob);
+  if (!parsed) {
+    console.error('[parseGameState] Invalid Ultimate Holdem state blob');
     return;
   }
 
-  const requiredLen = version === 3 ? 40 : version === 2 ? 32 : 20;
-  if (stateBlob.length < requiredLen) {
-    console.error('[parseGameState] Ultimate Holdem state blob too short:', stateBlob.length);
-    return;
-  }
-
-  const view = new DataView(stateBlob.buffer, stateBlob.byteOffset, stateBlob.byteLength);
-  const stageVal = stateBlob[1];
+  const stageVal = parsed.stage;
+  const version = parsed.version ?? 1;
   uthBackendStageRef.current = stageVal;
-  const pBytes = [stateBlob[2], stateBlob[3]];
-  const cBytes = [stateBlob[4], stateBlob[5], stateBlob[6], stateBlob[7], stateBlob[8]];
-  const dBytes = [stateBlob[9], stateBlob[10]];
-  const playMult = stateBlob[11];
-  const bonusBytes = version >= 2
-    ? [stateBlob[12], stateBlob[13], stateBlob[14], stateBlob[15]]
+  const pBytes = parsed.playerCards;
+  const cBytes = parsed.communityCards;
+  const dBytes = parsed.dealerCards;
+  const playMult = parsed.playMultiplier;
+  const bonusBytes = parsed.bonusCards.length > 0
+    ? parsed.bonusCards
     : [0xff, 0xff, 0xff, 0xff];
-  const tripsBet = Number(view.getBigUint64(version === 1 ? 12 : 16, false));
-  const sixCardBonusBet = version >= 2 ? Number(view.getBigUint64(24, false)) : 0;
-  const progressiveBet = version === 3 ? Number(view.getBigUint64(32, false)) : 0;
+  const tripsBet = parsed.tripsBet;
+  const sixCardBonusBet = parsed.sixCardBonusBet;
+  const progressiveBet = parsed.progressiveBet;
 
   const pCards: Card[] = pBytes[0] === 0xff ? [] : pBytes.map(decodeCard);
 

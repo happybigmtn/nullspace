@@ -1,6 +1,7 @@
 import type { GameState } from '../../../types';
 import { GameType } from '../../../types';
 import { decodeCard } from '../shared/cards';
+import { parseCasinoWarState as parseCasinoWarStateBlob } from '@nullspace/game-state';
 import type { GameStateRef, SetGameState } from './types';
 
 type CasinoWarStateArgs = {
@@ -16,18 +17,17 @@ export const applyCasinoWarState = ({
   setGameState,
   gameStateRef,
 }: CasinoWarStateArgs): void => {
-  const looksLikeV1 = stateBlob.length >= 12 && stateBlob[0] === 1;
+  const parsed = parseCasinoWarStateBlob(stateBlob);
+  if (!parsed) {
+    console.error('[parseGameState] Invalid Casino War state blob');
+    return;
+  }
 
-  if (looksLikeV1) {
-    const stage = stateBlob[1];
-    const playerCardByte = stateBlob[2];
-    const dealerCardByte = stateBlob[3];
-    const tieBet = Number(
-      new DataView(stateBlob.buffer, stateBlob.byteOffset + 4, 8).getBigUint64(0, false),
-    );
-
-    const playerCard = stage === 0 ? null : decodeCard(playerCardByte);
-    const dealerCard = stage === 0 ? null : decodeCard(dealerCardByte);
+  if (parsed.version === 1) {
+    const stage = parsed.stage;
+    const tieBet = Number(parsed.tieBet);
+    const playerCard = stage === 0 ? null : decodeCard(parsed.playerCard);
+    const dealerCard = stage === 0 ? null : decodeCard(parsed.dealerCard);
 
     setGameState((prev) => {
       const shouldRecordTieCredit =
@@ -56,13 +56,9 @@ export const applyCasinoWarState = ({
     return;
   }
 
-  if (stateBlob.length < 3) {
-    console.error('[parseGameState] Casino War state blob too short:', stateBlob.length);
-    return;
-  }
-  const playerCard = decodeCard(stateBlob[0]);
-  const dealerCard = decodeCard(stateBlob[1]);
-  const stage = stateBlob[2];
+  const playerCard = decodeCard(parsed.playerCard);
+  const dealerCard = decodeCard(parsed.dealerCard);
+  const stage = parsed.stage;
 
   setGameState((prev) => {
     const newState: GameState = {

@@ -3044,6 +3044,7 @@ name = "nullspace-node"
 version = "0.0.1"
 dependencies = [
  "anyhow",
+ "axum 0.7.9",
  "bytes",
  "clap",
  "commonware-broadcast",
@@ -3095,6 +3096,9 @@ dependencies = [
  "governor",
  "nullspace-execution",
  "nullspace-types",
+ "opentelemetry",
+ "opentelemetry-otlp",
+ "opentelemetry_sdk",
  "postgres",
  "rand 0.8.5",
  "redis",
@@ -3108,6 +3112,7 @@ dependencies = [
  "tower-http",
  "tower_governor",
  "tracing",
+ "tracing-opentelemetry",
  "tracing-subscriber",
  "url",
  "uuid 1.19.0",
@@ -5393,6 +5398,7 @@ dependencies = [
  "tower",
  "tower-layer",
  "tower-service",
+ "tracing",
 ]
 
 [[package]]

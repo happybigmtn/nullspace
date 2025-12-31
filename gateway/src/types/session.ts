@@ -56,6 +56,9 @@ export interface Session {
 
   /** WebSocket client for backend updates (optional, created after registration) */
   updatesClient?: UpdatesClient;
+
+  /** Periodic balance refresh interval (optional) */
+  balanceRefreshIntervalId?: ReturnType<typeof setInterval>;
 }
 
 /**

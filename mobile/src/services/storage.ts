@@ -9,6 +9,7 @@ import * as SecureStore from 'expo-secure-store';
 
 const ENCRYPTION_KEY_ID = 'mmkv_encryption_key';
 const isWeb = Platform.OS === 'web';
+const REQUIRE_SECURESTORE_AUTH = !__DEV__;
 
 // Web storage adapter that mimics MMKV interface
 class WebStorage {
@@ -57,7 +58,18 @@ export { storageInstance as storage };
  * Get or create encryption key from SecureStore
  */
 async function getOrCreateEncryptionKey(): Promise<string> {
-  let key = await SecureStore.getItemAsync(ENCRYPTION_KEY_ID);
+  let key: string | null = null;
+  const authOptions = REQUIRE_SECURESTORE_AUTH ? { requireAuthentication: true } : undefined;
+  try {
+    key = await SecureStore.getItemAsync(ENCRYPTION_KEY_ID, authOptions);
+  } catch (error) {
+    if (REQUIRE_SECURESTORE_AUTH) {
+      console.warn('[storage] SecureStore auth failed, retrying without auth:', error);
+      key = await SecureStore.getItemAsync(ENCRYPTION_KEY_ID);
+    } else {
+      throw error;
+    }
+  }
   if (!key) {
     // Generate a random 32-byte key
     const bytes = new Uint8Array(32);
@@ -65,9 +77,21 @@ async function getOrCreateEncryptionKey(): Promise<string> {
     key = Array.from(bytes)
       .map((b) => b.toString(16).padStart(2, '0'))
       .join('');
-    await SecureStore.setItemAsync(ENCRYPTION_KEY_ID, key, {
-      keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
-    });
+    try {
+      await SecureStore.setItemAsync(ENCRYPTION_KEY_ID, key, {
+        keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+        requireAuthentication: REQUIRE_SECURESTORE_AUTH,
+      });
+    } catch (error) {
+      if (REQUIRE_SECURESTORE_AUTH) {
+        console.warn('[storage] SecureStore auth failed, saving key without auth:', error);
+        await SecureStore.setItemAsync(ENCRYPTION_KEY_ID, key, {
+          keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+        });
+      } else {
+        throw error;
+      }
+    }
   }
   return key;
 }

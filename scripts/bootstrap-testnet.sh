@@ -20,6 +20,34 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   exit 0
 fi
 
+is_number() {
+  [[ "$1" =~ ^[0-9]+$ ]]
+}
+
+require_number() {
+  local name="$1"
+  local value="$2"
+  if ! is_number "$value"; then
+    echo "Invalid ${name}: ${value}" >&2
+    exit 1
+  fi
+}
+
+if [[ -z "${OUTPUT}" ]]; then
+  echo "OUTPUT must not be empty" >&2
+  exit 1
+fi
+
+if [[ ! "${INDEXER}" =~ ^https?:// ]]; then
+  echo "INDEXER must start with http:// or https:// (got: ${INDEXER})" >&2
+  exit 1
+fi
+
+require_number "NODES" "${NODES}"
+require_number "SEED" "${SEED}"
+require_number "BASE_PORT" "${BASE_PORT}"
+require_number "METRICS_BASE_PORT" "${METRICS_BASE_PORT}"
+
 echo "Bootstrapping testnet configs..."
 echo "  nodes: ${NODES}"
 echo "  output: ${OUTPUT}"

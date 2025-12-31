@@ -1,31 +1,29 @@
 import type { Card } from '../../types';
 import { decodeCardId, isHiddenCard } from '../cards';
+import { parseCasinoWarState as parseCasinoWarStateBlob } from '@nullspace/game-state';
 
 export interface CasinoWarStateUpdate {
   playerCard: Card | null;
   dealerCard: Card | null;
   stage: 'betting' | 'war' | 'complete';
+  tieBet: number;
 }
 
 export function parseCasinoWarState(stateBlob: Uint8Array): CasinoWarStateUpdate | null {
-  if (stateBlob.length < 12 || stateBlob[0] !== 1) {
-    return null;
-  }
-  const stageByte = stateBlob[1];
-  const playerRaw = stateBlob[2];
-  const dealerRaw = stateBlob[3];
-  if (stageByte === undefined || playerRaw === undefined || dealerRaw === undefined) {
+  const parsed = parseCasinoWarStateBlob(stateBlob);
+  if (!parsed) {
     return null;
   }
 
-  const playerCard = isHiddenCard(playerRaw) ? null : decodeCardId(playerRaw);
-  const dealerCard = isHiddenCard(dealerRaw) ? null : decodeCardId(dealerRaw);
-
+  const playerCard = isHiddenCard(parsed.playerCard) ? null : decodeCardId(parsed.playerCard);
+  const dealerCard = isHiddenCard(parsed.dealerCard) ? null : decodeCardId(parsed.dealerCard);
+  const stageByte = parsed.stage;
   const stage = stageByte === 1 ? 'war' : stageByte === 2 ? 'complete' : 'betting';
 
   return {
     playerCard: playerCard ?? null,
     dealerCard: dealerCard ?? null,
     stage,
+    tieBet: Number.isFinite(parsed.tieBet) ? parsed.tieBet : 0,
   };
 }

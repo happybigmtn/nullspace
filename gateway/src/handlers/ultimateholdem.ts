@@ -61,6 +61,20 @@ export class UltimateHoldemHandler extends GameHandler {
     const ante = typeof msg.ante === 'number' ? msg.ante : msg.anteBet;
     const blind = typeof msg.blind === 'number' ? msg.blind : msg.blindBet;
     const trips = (typeof msg.trips === 'number' ? msg.trips : msg.tripsBet) as number | undefined;
+    const sixCard =
+      typeof msg.sixCard === 'number'
+        ? msg.sixCard
+        : typeof msg.sixCardBonus === 'number'
+          ? msg.sixCardBonus
+          : typeof msg.sixCardBet === 'number'
+            ? msg.sixCardBet
+            : 0;
+    const progressive =
+      typeof msg.progressive === 'number'
+        ? msg.progressive
+        : typeof msg.progressiveBet === 'number'
+          ? msg.progressiveBet
+          : 0;
 
     if (typeof ante !== 'number' || ante <= 0) {
       return {
@@ -75,6 +89,30 @@ export class UltimateHoldemHandler extends GameHandler {
         error: createError(ErrorCodes.INVALID_BET, 'Invalid blind amount'),
       };
     }
+    if (typeof trips === 'number' && trips < 0) {
+      return {
+        success: false,
+        error: createError(ErrorCodes.INVALID_BET, 'Invalid trips amount'),
+      };
+    }
+    if (typeof sixCard !== 'number' || sixCard < 0) {
+      return {
+        success: false,
+        error: createError(ErrorCodes.INVALID_BET, 'Invalid six-card amount'),
+      };
+    }
+    if (typeof progressive !== 'number' || progressive < 0) {
+      return {
+        success: false,
+        error: createError(ErrorCodes.INVALID_BET, 'Invalid progressive amount'),
+      };
+    }
+    if (progressive !== 0 && progressive !== 1) {
+      return {
+        success: false,
+        error: createError(ErrorCodes.INVALID_BET, 'Progressive bet must be 0 or 1'),
+      };
+    }
 
     const gameSessionId = generateSessionId(
       ctx.session.publicKey,
@@ -87,12 +125,17 @@ export class UltimateHoldemHandler extends GameHandler {
       return startResult;
     }
 
-    // Step 2: Send Deal move to deal cards (moves to Preflop stage)
+    // Step 2: Send Deal move to deal cards (atomic batch when side bets are set)
+    const tripsValue = typeof trips === 'number' ? trips : 0;
+    const hasSideBets = tripsValue > 0 || sixCard > 0 || progressive > 0;
     let dealPayload = new Uint8Array([UthAction.Deal]);
-    if (typeof trips === 'number' && trips > 0) {
-      dealPayload = new Uint8Array(1 + 8);
-      dealPayload[0] = UthAction.Deal;
-      new DataView(dealPayload.buffer).setBigUint64(1, BigInt(trips), false);
+    if (hasSideBets) {
+      dealPayload = new Uint8Array(25);
+      dealPayload[0] = UthAction.AtomicDeal;
+      const view = new DataView(dealPayload.buffer);
+      view.setBigUint64(1, BigInt(tripsValue), false);
+      view.setBigUint64(9, BigInt(sixCard), false);
+      view.setBigUint64(17, BigInt(progressive), false);
     }
     const dealResult = await this.makeMove(ctx, dealPayload);
 

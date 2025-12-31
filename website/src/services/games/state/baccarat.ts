@@ -1,6 +1,7 @@
 import type { Card, GameState } from '../../../types';
 import { GameType } from '../../../types';
 import { decodeCard } from '../shared/cards';
+import { parseBaccaratState as parseBaccaratStateBlob } from '@nullspace/game-state';
 import type { GameStateRef, SetGameState } from './types';
 
 type BaccaratStateArgs = {
@@ -18,52 +19,14 @@ export const applyBaccaratState = ({
   setGameState,
   gameStateRef,
 }: BaccaratStateArgs): void => {
-  if (stateBlob.length < 1) {
-    console.error('[parseGameState] Baccarat state blob too short:', stateBlob.length);
+  const parsed = parseBaccaratStateBlob(stateBlob);
+  if (!parsed) {
+    console.error('[parseGameState] Invalid baccarat state blob');
     return;
   }
 
-  const betCount = stateBlob[0];
-  const betsSize = betCount * 9;
-  const cardsStartOffset = 1 + betsSize;
-
-  if (stateBlob.length <= cardsStartOffset) {
-    setGameState((prev) => ({
-      ...prev,
-      type: gameType,
-      playerCards: [],
-      dealerCards: [],
-      baccaratPlayerTotal: null,
-      baccaratBankerTotal: null,
-      stage: 'PLAYING',
-      message: 'PLACE BETS & DEAL',
-    }));
-    return;
-  }
-
-  let offset = cardsStartOffset;
-  const pLen = stateBlob[offset++];
-
-  if (stateBlob.length < offset + pLen + 1) {
-    console.error(
-      '[parseGameState] Baccarat state blob too short for player cards:',
-      stateBlob.length,
-      'need',
-      offset + pLen + 1,
-    );
-    return;
-  }
-
-  const pCards: Card[] = [];
-  for (let i = 0; i < pLen && offset < stateBlob.length; i++) {
-    pCards.push(decodeCard(stateBlob[offset++]));
-  }
-
-  const bLen = offset < stateBlob.length ? stateBlob[offset++] : 0;
-  const bCards: Card[] = [];
-  for (let i = 0; i < bLen && offset < stateBlob.length; i++) {
-    bCards.push(decodeCard(stateBlob[offset++]));
-  }
+  const pCards: Card[] = parsed.playerCards.map((cardId) => decodeCard(cardId));
+  const bCards: Card[] = parsed.bankerCards.map((cardId) => decodeCard(cardId));
 
   if (pCards.length === 0 && bCards.length === 0) {
     setGameState((prev) => ({

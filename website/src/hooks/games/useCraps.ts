@@ -62,17 +62,19 @@ export const useCraps = ({
     }, 0);
   }, [currentSessionIdRef, gameState.activeModifiers.super, isOnChain]);
 
-  const placeCrapsBet = useCallback((type: CrapsBet['type'], target?: number) => {
+  const placeCrapsBet = useCallback((type: CrapsBet['type'], target?: number, stateOverride?: GameState, statsOverride?: PlayerStats) => {
+      const state = stateOverride ?? gameState;
+      const player = statsOverride ?? stats;
       if (!isValidCrapsTarget(type, target)) {
           setGameState(prev => ({ ...prev, message: invalidTargetMessage(type) }));
           return;
       }
       // Toggle logic: If identical local bet exists, remove it.
-      const existingIdx = gameState.crapsBets.findIndex(b => b.type === type && b.target === target && b.local);
+      const existingIdx = state.crapsBets.findIndex(b => b.type === type && b.target === target && b.local);
       if (existingIdx !== -1) {
-          const betToRemove = gameState.crapsBets[existingIdx];
+          const betToRemove = state.crapsBets[existingIdx];
           const refund = localBetCost(betToRemove);
-          const newBets = [...gameState.crapsBets];
+          const newBets = [...state.crapsBets];
           newBets.splice(existingIdx, 1);
           setGameState(prev => ({
               ...prev,
@@ -84,27 +86,27 @@ export const useCraps = ({
           return;
       }
 
-      const betAmount = gameState.bet;
+      const betAmount = state.bet;
       const placementCost = betAmount;
 
       const isBonusBet = CRAPS_BONUS_BET_TYPES.has(type);
-      const canPlaceBonus = canPlaceCrapsBonusBets(gameState.crapsEpochPointEstablished, gameState.dice);
+      const canPlaceBonus = canPlaceCrapsBonusBets(state.crapsEpochPointEstablished, state.dice);
       if (isBonusBet && !canPlaceBonus) {
           setGameState(prev => ({ ...prev, message: 'BONUS CLOSED' }));
           return;
       }
 
-      if (gameState.crapsBets.length >= CRAPS_MAX_BETS) {
+      if (state.crapsBets.length >= CRAPS_MAX_BETS) {
           setGameState(prev => ({ ...prev, message: `BET LIMIT ${CRAPS_MAX_BETS}` }));
           return;
       }
 
-      if (type === 'FIRE' && gameState.crapsBets.some(b => b.type === 'FIRE' && b.local)) {
+      if (type === 'FIRE' && state.crapsBets.some(b => b.type === 'FIRE' && b.local)) {
           setGameState(prev => ({ ...prev, message: 'FIRE BET ALREADY PLACED' }));
           return;
       }
 
-      let bets = [...gameState.crapsBets];
+      let bets = [...state.crapsBets];
       if (type === 'PASS') bets = bets.filter(b => b.type !== 'DONT_PASS' || !b.local);
       if (type === 'DONT_PASS') bets = bets.filter(b => b.type !== 'PASS' || !b.local);
 
@@ -114,7 +116,7 @@ export const useCraps = ({
       ];
       const totalRequired = stagedCrapsCost(nextBets);
 
-      if (stats.chips < totalRequired) {
+      if (player.chips < totalRequired) {
           setGameState(prev => ({ ...prev, message: 'INSUFFICIENT FUNDS' }));
           return;
       }
@@ -265,9 +267,10 @@ export const useCraps = ({
       }));
   }, [gameState.crapsOddsCandidates, gameState.crapsBets, executeAddOdds, setGameState]);
 
-  const rollCraps = useCallback(async () => {
+  const rollCraps = useCallback(async (stateOverride?: GameState) => {
+       const state = stateOverride ?? gameState;
        const hasSession = !!currentSessionIdRef.current;
-       const stagedLocalBets = gameState.crapsBets.filter(b => b.local === true);
+       const stagedLocalBets = state.crapsBets.filter(b => b.local === true);
 
        // No auto-rebet - only use explicitly staged bets
        const betsToPlace = stagedLocalBets;
@@ -277,7 +280,7 @@ export const useCraps = ({
          return;
        }
 
-       const hasOutstandingBets = hasSession && (gameState.crapsBets.some(b => !b.local) || gameState.crapsPoint !== null);
+       const hasOutstandingBets = hasSession && (state.crapsBets.some(b => !b.local) || state.crapsPoint !== null);
 
        if (betsToPlace.length === 0 && !hasOutstandingBets) {
          setGameState(prev => ({ ...prev, message: 'PLACE BET FIRST' }));
@@ -346,7 +349,7 @@ export const useCraps = ({
 
              // Second, send any staged odds (command 1: add odds)
              // Each odds is: [1, amount:u64 BE]
-             const betsWithStagedOdds = gameState.crapsBets.filter(b => (b.localOddsAmount ?? 0) > 0);
+             const betsWithStagedOdds = state.crapsBets.filter(b => (b.localOddsAmount ?? 0) > 0);
              for (const bet of betsWithStagedOdds) {
                const oddsAmount = bet.localOddsAmount!;
                const payload = new Uint8Array(9);

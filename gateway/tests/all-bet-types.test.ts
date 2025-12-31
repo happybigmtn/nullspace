@@ -254,26 +254,30 @@ const SICBO_BETS = [
 // THREE CARD POKER BONUS BETS
 // ============================================================
 const THREE_CARD_BETS = [
-  { name: 'Ante Only', ante: 100, pairPlus: 0 },
-  { name: 'Ante + Pair Plus', ante: 100, pairPlus: 50 },
+  { name: 'Ante Only', ante: 100, pairPlus: 0, sixCard: 0, progressive: 0 },
+  { name: 'Ante + Pair Plus', ante: 100, pairPlus: 50, sixCard: 0, progressive: 0 },
+  { name: 'Ante + Six Card', ante: 100, pairPlus: 0, sixCard: 25, progressive: 0 },
+  { name: 'Ante + Progressive', ante: 100, pairPlus: 0, sixCard: 0, progressive: 1 },
+  { name: 'All Side Bets', ante: 100, pairPlus: 25, sixCard: 25, progressive: 1 },
 ];
 
 // ============================================================
 // ULTIMATE HOLDEM BONUS BETS
 // ============================================================
 const ULTIMATE_HOLDEM_BETS = [
-  { name: 'Ante/Blind Only', ante: 100, blind: 100, trips: 0, sixCard: 0 },
-  { name: 'With Trips', ante: 100, blind: 100, trips: 50, sixCard: 0 },
-  // { name: 'With 6-Card Bonus', ante: 100, blind: 100, trips: 0, sixCard: 25 },
-  // { name: 'All Side Bets', ante: 100, blind: 100, trips: 25, sixCard: 25 },
+  { name: 'Ante/Blind Only', ante: 100, blind: 100, trips: 0, sixCard: 0, progressive: 0 },
+  { name: 'With Trips', ante: 100, blind: 100, trips: 50, sixCard: 0, progressive: 0 },
+  { name: 'With 6-Card Bonus', ante: 100, blind: 100, trips: 0, sixCard: 25, progressive: 0 },
+  { name: 'With Progressive', ante: 100, blind: 100, trips: 0, sixCard: 0, progressive: 1 },
+  { name: 'All Side Bets', ante: 100, blind: 100, trips: 25, sixCard: 25, progressive: 1 },
 ];
 
 // ============================================================
 // BLACKJACK BONUS BETS
 // ============================================================
 const BLACKJACK_BETS = [
-  { name: 'Standard', amount: 100, bonus21Plus3: 0 },
-  { name: 'With 21+3', amount: 100, bonus21Plus3: 25 },
+  { name: 'Standard', amount: 100, sideBet21Plus3: 0 },
+  { name: 'With 21+3', amount: 100, sideBet21Plus3: 25 },
 ];
 
 // ============================================================
@@ -282,8 +286,8 @@ const BLACKJACK_BETS = [
 const OTHER_GAMES = [
   { name: 'HiLo Deal', game: 'HiLo', msg: { type: 'hilo_deal', amount: 100 } },
   { name: 'Video Poker Deal', game: 'Video Poker', msg: { type: 'videopoker_deal', amount: 100 } },
-  { name: 'Casino War Basic', game: 'Casino War', msg: { type: 'casinowar_deal', amount: 100, bonus: 0 } },
-  { name: 'Casino War +Bonus', game: 'Casino War', msg: { type: 'casinowar_deal', amount: 100, bonus: 50 } },
+  { name: 'Casino War Basic', game: 'Casino War', msg: { type: 'casinowar_deal', amount: 100, tieBet: 0 } },
+  { name: 'Casino War +Tie', game: 'Casino War', msg: { type: 'casinowar_deal', amount: 100, tieBet: 25 } },
 ];
 
 async function runBaccaratTests(): Promise<TestResult[]> {
@@ -387,7 +391,13 @@ async function runThreeCardPokerTests(): Promise<TestResult[]> {
     const result = await testBet(
       'Three Card Poker',
       bet.name,
-      { type: 'threecardpoker_deal', ante: bet.ante, pairPlus: bet.pairPlus },
+      {
+        type: 'threecardpoker_deal',
+        ante: bet.ante,
+        pairPlus: bet.pairPlus,
+        sixCard: bet.sixCard,
+        progressive: bet.progressive,
+      },
       { type: 'threecardpoker_play' }
     );
     results.push(result);
@@ -411,7 +421,14 @@ async function runUltimateHoldemTests(): Promise<TestResult[]> {
     const result = await testBet(
       'Ultimate Holdem',
       bet.name,
-      { type: 'ultimateholdem_deal', ante: bet.ante, blind: bet.blind, trips: bet.trips },
+      {
+        type: 'ultimateholdem_deal',
+        ante: bet.ante,
+        blind: bet.blind,
+        trips: bet.trips,
+        sixCard: bet.sixCard,
+        progressive: bet.progressive,
+      },
       { type: 'ultimateholdem_check' }  // Check through to river, then fold or bet
     );
     results.push(result);
@@ -435,7 +452,7 @@ async function runBlackjackTests(): Promise<TestResult[]> {
     const result = await testBet(
       'Blackjack',
       bet.name,
-      { type: 'blackjack_deal', amount: bet.amount, bonus21Plus3: bet.bonus21Plus3 }
+      { type: 'blackjack_deal', amount: bet.amount, sideBet21Plus3: bet.sideBet21Plus3 }
     );
     results.push(result);
 

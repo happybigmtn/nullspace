@@ -52,6 +52,106 @@ const ACTIVE_STATUSES = new Set(["active", "trialing"]);
 const normalizeHex = (value: string): string =>
   value.trim().toLowerCase().replace(/^0x/, "");
 
+const readSecretFile = async (filePath: string, label: string): Promise<string | null> => {
+  try {
+    const fs = await import("fs/promises");
+    const contents = await fs.readFile(filePath, "utf8");
+    const trimmed = contents.trim();
+    if (!trimmed) {
+      console.warn(`[auth] ${label} file is empty: ${filePath}`);
+      return null;
+    }
+    return trimmed;
+  } catch (error) {
+    console.warn(`[auth] Failed to read ${label} file: ${filePath}`, error);
+    return null;
+  }
+};
+
+const extractSecretValue = (payload: string): string | null => {
+  const trimmed = payload.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(trimmed) as Record<string, any>;
+      const candidates = [
+        parsed.CASINO_ADMIN_PRIVATE_KEY_HEX,
+        parsed.adminKeyHex,
+        parsed.admin_key_hex,
+        parsed.key,
+        parsed.value,
+        parsed.secret,
+        parsed?.data?.key,
+        parsed?.data?.value,
+        parsed?.data?.secret,
+        parsed?.data?.data?.key,
+        parsed?.data?.data?.value,
+        parsed?.data?.data?.secret,
+      ];
+      const found = candidates.find((candidate) => typeof candidate === "string" && candidate.trim().length > 0);
+      return found ? String(found).trim() : null;
+    } catch {
+      return null;
+    }
+  }
+  return trimmed;
+};
+
+const readSecretUrl = async (url: string, label: string): Promise<string | null> => {
+  try {
+    const headers: Record<string, string> = {};
+    const bearer = process.env.CASINO_ADMIN_PRIVATE_KEY_TOKEN;
+    if (bearer) {
+      headers.Authorization = `Bearer ${bearer}`;
+    }
+    const vaultToken = process.env.VAULT_TOKEN;
+    if (vaultToken) {
+      headers["X-Vault-Token"] = vaultToken;
+    }
+    const response = await fetch(url, { headers });
+    if (!response.ok) {
+      console.warn(`[auth] Failed to fetch ${label} from URL (${response.status})`);
+      return null;
+    }
+    const body = await response.text();
+    const extracted = extractSecretValue(body);
+    if (!extracted) {
+      console.warn(`[auth] ${label} URL response did not contain a usable secret`);
+    }
+    return extracted;
+  } catch (error) {
+    console.warn(`[auth] Failed to fetch ${label} from URL: ${url}`, error);
+    return null;
+  }
+};
+
+const resolveAdminKeyHex = async (): Promise<string> => {
+  const secretUrl = process.env.CASINO_ADMIN_PRIVATE_KEY_URL;
+  if (secretUrl) {
+    const fromUrl = await readSecretUrl(secretUrl, "admin key");
+    if (fromUrl) return fromUrl;
+  }
+
+  const filePath = process.env.CASINO_ADMIN_PRIVATE_KEY_FILE;
+  if (filePath) {
+    const fromFile = await readSecretFile(filePath, "admin key");
+    if (fromFile) return fromFile;
+  }
+
+  const fromEnv = process.env.CASINO_ADMIN_PRIVATE_KEY_HEX ?? "";
+  const allowEnv =
+    process.env.ALLOW_INSECURE_ADMIN_KEY_ENV === "true" || process.env.NODE_ENV !== "production";
+  if (fromEnv && allowEnv) {
+    return fromEnv;
+  }
+  if (fromEnv && !allowEnv) {
+    console.warn(
+      "[auth] CASINO_ADMIN_PRIVATE_KEY_HEX is not allowed in production; use CASINO_ADMIN_PRIVATE_KEY_FILE instead.",
+    );
+  }
+  return "";
+};
+
 const parseLimit = (value: string | undefined, fallback: number): number => {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
@@ -110,13 +210,13 @@ const loadWasm = async (): Promise<WasmModule | null> => {
   return wasmPromise;
 };
 
-const initAdminState = async (): Promise<AdminState | null> => {
-  const adminKeyHex = normalizeHex(process.env.CASINO_ADMIN_PRIVATE_KEY_HEX ?? "");
+const initAdminState = async (adminKeyHex: string): Promise<AdminState | null> => {
+  const normalizedKey = normalizeHex(adminKeyHex);
   const identityHex = normalizeHex(process.env.CASINO_IDENTITY_HEX ?? "");
   const baseUrl = process.env.CASINO_API_URL ?? "http://localhost:8080/api";
 
-  if (!adminKeyHex || adminKeyHex.length !== 64) {
-    console.warn("[auth] Missing or invalid CASINO_ADMIN_PRIVATE_KEY_HEX");
+  if (!normalizedKey || normalizedKey.length !== 64) {
+    console.warn("[auth] Missing or invalid casino admin private key");
     return null;
   }
   if (!identityHex || identityHex.length !== 192) {
@@ -127,7 +227,7 @@ const initAdminState = async (): Promise<AdminState | null> => {
   const wasm = await loadWasm();
   if (!wasm) return null;
 
-  const adminKeyBytes = hexToBytes(adminKeyHex);
+  const adminKeyBytes = hexToBytes(normalizedKey);
   const signer = wasm.Signer.from_bytes(adminKeyBytes);
   const adminPublicKeyBytes = signer.public_key as Uint8Array;
   const identityBytes = hexToBytes(identityHex);
@@ -153,14 +253,19 @@ const initNonceStore = async (state: AdminState): Promise<NonceStore | null> => 
 };
 
 let adminStatePromise: Promise<AdminState | null> | null = null;
+let adminStateKeyHex: string | null = null;
 
 const getAdminState = async (): Promise<AdminState | null> => {
-  if (!adminStatePromise) {
-    adminStatePromise = initAdminState().catch((error) => {
-      console.warn("[auth] Failed to init admin state:", error);
-      return null;
-    });
+  const resolvedKeyHex = normalizeHex(await resolveAdminKeyHex());
+  if (adminStatePromise && adminStateKeyHex === resolvedKeyHex) {
+    return adminStatePromise;
   }
+  adminStateKeyHex = resolvedKeyHex;
+  nonceStorePromise = null;
+  adminStatePromise = initAdminState(resolvedKeyHex).catch((error) => {
+    console.warn("[auth] Failed to init admin state:", error);
+    return null;
+  });
   return adminStatePromise;
 };
 
@@ -293,7 +398,14 @@ export const syncFreerollLimit = async (
     }
 
     const currentLimit = Number(player.tournament_daily_limit ?? 0);
+    const adminPublicKeyHex = bytesToHex(state.adminPublicKeyBytes);
     if (currentLimit === desiredLimit) {
+      console.info("[auth][audit] tournament_limit.no_change", {
+        playerPublicKey: normalizedKey,
+        currentLimit,
+        desiredLimit,
+        adminPublicKey: adminPublicKeyHex,
+      });
       return { status: "already_set", limit: desiredLimit };
     }
 
@@ -305,9 +417,26 @@ export const syncFreerollLimit = async (
         playerKeyBytes,
         desiredLimit,
       );
+      console.info("[auth][audit] tournament_limit.submit", {
+        playerPublicKey: normalizedKey,
+        currentLimit,
+        desiredLimit,
+        adminPublicKey: adminPublicKeyHex,
+      });
       await submitTransaction(state, tx.encode());
+      console.info("[auth][audit] tournament_limit.submitted", {
+        playerPublicKey: normalizedKey,
+        desiredLimit,
+        adminPublicKey: adminPublicKeyHex,
+      });
       return { status: "submitted", limit: desiredLimit };
     } catch (error) {
+      console.warn("[auth][audit] tournament_limit.failed", {
+        playerPublicKey: normalizedKey,
+        desiredLimit,
+        adminPublicKey: adminPublicKeyHex,
+        error: error instanceof Error ? error.message : String(error),
+      });
       try {
         await resetNonceStore(state);
       } catch (resetError) {

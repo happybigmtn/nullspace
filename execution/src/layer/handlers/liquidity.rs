@@ -1,31 +1,11 @@
 use super::super::*;
 use super::casino_error_vec;
-use commonware_codec::ReadExt;
-use commonware_utils::from_hex;
-use std::sync::OnceLock;
 
 const BASIS_POINTS_SCALE: u128 = 10_000;
 const MAX_BASIS_POINTS: u16 = 10_000;
 const SECONDS_PER_YEAR: u64 = 365 * 24 * 60 * 60;
 const SAVINGS_REWARD_SCALE: u128 = nullspace_types::casino::STAKING_REWARD_SCALE;
 const MAX_ORACLE_SOURCE_BYTES: usize = 64;
-
-fn admin_public_key() -> Option<PublicKey> {
-    static ADMIN_KEY: OnceLock<Option<PublicKey>> = OnceLock::new();
-    ADMIN_KEY
-        .get_or_init(|| {
-            let raw = std::env::var("CASINO_ADMIN_PUBLIC_KEY_HEX").ok()?;
-            let trimmed = raw.trim_start_matches("0x");
-            let bytes = from_hex(trimmed)?;
-            let mut buf = bytes.as_slice();
-            let key = PublicKey::read(&mut buf).ok()?;
-            if !buf.is_empty() {
-                return None;
-            }
-            Some(key)
-        })
-        .clone()
-}
 
 fn current_time_sec(view: u64) -> u64 {
     view.saturating_mul(3)
@@ -1274,16 +1254,13 @@ impl<'a, S: State> Layer<'a, S> {
         bootstrap_price_vusdt_numerator: u64,
         bootstrap_price_rng_denominator: u64,
     ) -> anyhow::Result<Vec<Event>> {
-        match admin_public_key() {
-            Some(admin_key) if *public == admin_key => {}
-            _ => {
-                return Ok(casino_error_vec(
-                    public,
-                    None,
-                    nullspace_types::casino::ERROR_UNAUTHORIZED,
-                    "Unauthorized admin instruction",
-                ))
-            }
+        if !super::is_admin_public_key(public) {
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_UNAUTHORIZED,
+                "Unauthorized admin instruction",
+            ));
         }
 
         if rng_amount == 0 || usdt_amount == 0 {
@@ -1364,16 +1341,13 @@ impl<'a, S: State> Layer<'a, S> {
         &mut self,
         public: &PublicKey,
     ) -> anyhow::Result<Vec<Event>> {
-        match admin_public_key() {
-            Some(admin_key) if *public == admin_key => {}
-            _ => {
-                return Ok(casino_error_vec(
-                    public,
-                    None,
-                    nullspace_types::casino::ERROR_UNAUTHORIZED,
-                    "Unauthorized admin instruction",
-                ))
-            }
+        if !super::is_admin_public_key(public) {
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_UNAUTHORIZED,
+                "Unauthorized admin instruction",
+            ));
         }
 
         let mut amm = self.get_or_init_amm().await?;
@@ -1639,16 +1613,13 @@ impl<'a, S: State> Layer<'a, S> {
         public: &PublicKey,
         policy: &nullspace_types::casino::PolicyState,
     ) -> anyhow::Result<Vec<Event>> {
-        match admin_public_key() {
-            Some(admin_key) if *public == admin_key => {}
-            _ => {
-                return Ok(casino_error_vec(
-                    public,
-                    None,
-                    nullspace_types::casino::ERROR_UNAUTHORIZED,
-                    "Unauthorized admin instruction",
-                ))
-            }
+        if !super::is_admin_public_key(public) {
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_UNAUTHORIZED,
+                "Unauthorized admin instruction",
+            ));
         }
 
         if let Err(message) = validate_policy(policy) {
@@ -1674,16 +1645,13 @@ impl<'a, S: State> Layer<'a, S> {
         updated_ts: u64,
         source: &[u8],
     ) -> anyhow::Result<Vec<Event>> {
-        match admin_public_key() {
-            Some(admin_key) if *public == admin_key => {}
-            _ => {
-                return Ok(casino_error_vec(
-                    public,
-                    None,
-                    nullspace_types::casino::ERROR_UNAUTHORIZED,
-                    "Unauthorized admin instruction",
-                ))
-            }
+        if !super::is_admin_public_key(public) {
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_UNAUTHORIZED,
+                "Unauthorized admin instruction",
+            ));
         }
 
         if source.len() > MAX_ORACLE_SOURCE_BYTES {
@@ -1724,16 +1692,13 @@ impl<'a, S: State> Layer<'a, S> {
         public: &PublicKey,
         treasury: &nullspace_types::casino::TreasuryState,
     ) -> anyhow::Result<Vec<Event>> {
-        match admin_public_key() {
-            Some(admin_key) if *public == admin_key => {}
-            _ => {
-                return Ok(casino_error_vec(
-                    public,
-                    None,
-                    nullspace_types::casino::ERROR_UNAUTHORIZED,
-                    "Unauthorized admin instruction",
-                ))
-            }
+        if !super::is_admin_public_key(public) {
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_UNAUTHORIZED,
+                "Unauthorized admin instruction",
+            ));
         }
 
         if let Err(message) = validate_treasury(treasury) {
@@ -1756,16 +1721,13 @@ impl<'a, S: State> Layer<'a, S> {
         public: &PublicKey,
         vesting: &nullspace_types::casino::TreasuryVestingState,
     ) -> anyhow::Result<Vec<Event>> {
-        match admin_public_key() {
-            Some(admin_key) if *public == admin_key => {}
-            _ => {
-                return Ok(casino_error_vec(
-                    public,
-                    None,
-                    nullspace_types::casino::ERROR_UNAUTHORIZED,
-                    "Unauthorized admin instruction",
-                ))
-            }
+        if !super::is_admin_public_key(public) {
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_UNAUTHORIZED,
+                "Unauthorized admin instruction",
+            ));
         }
 
         let treasury = self.get_or_init_treasury().await?;
@@ -1793,16 +1755,13 @@ impl<'a, S: State> Layer<'a, S> {
         bucket: &nullspace_types::casino::TreasuryBucket,
         amount: u64,
     ) -> anyhow::Result<Vec<Event>> {
-        match admin_public_key() {
-            Some(admin_key) if *public == admin_key => {}
-            _ => {
-                return Ok(casino_error_vec(
-                    public,
-                    None,
-                    nullspace_types::casino::ERROR_UNAUTHORIZED,
-                    "Unauthorized admin instruction",
-                ))
-            }
+        if !super::is_admin_public_key(public) {
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_UNAUTHORIZED,
+                "Unauthorized admin instruction",
+            ));
         }
 
         if amount == 0 {
@@ -1867,16 +1826,13 @@ impl<'a, S: State> Layer<'a, S> {
         public: &PublicKey,
         amount: u64,
     ) -> anyhow::Result<Vec<Event>> {
-        match admin_public_key() {
-            Some(admin_key) if *public == admin_key => {}
-            _ => {
-                return Ok(casino_error_vec(
-                    public,
-                    None,
-                    nullspace_types::casino::ERROR_UNAUTHORIZED,
-                    "Unauthorized admin instruction",
-                ))
-            }
+        if !super::is_admin_public_key(public) {
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_UNAUTHORIZED,
+                "Unauthorized admin instruction",
+            ));
         }
 
         if amount == 0 {
@@ -1900,16 +1856,13 @@ impl<'a, S: State> Layer<'a, S> {
         target: &PublicKey,
         amount: u64,
     ) -> anyhow::Result<Vec<Event>> {
-        match admin_public_key() {
-            Some(admin_key) if *public == admin_key => {}
-            _ => {
-                return Ok(casino_error_vec(
-                    public,
-                    None,
-                    nullspace_types::casino::ERROR_UNAUTHORIZED,
-                    "Unauthorized admin instruction",
-                ))
-            }
+        if !super::is_admin_public_key(public) {
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_UNAUTHORIZED,
+                "Unauthorized admin instruction",
+            ));
         }
 
         if amount == 0 {
@@ -1969,16 +1922,13 @@ impl<'a, S: State> Layer<'a, S> {
         public: &PublicKey,
         amount: u64,
     ) -> anyhow::Result<Vec<Event>> {
-        match admin_public_key() {
-            Some(admin_key) if *public == admin_key => {}
-            _ => {
-                return Ok(casino_error_vec(
-                    public,
-                    None,
-                    nullspace_types::casino::ERROR_UNAUTHORIZED,
-                    "Unauthorized admin instruction",
-                ))
-            }
+        if !super::is_admin_public_key(public) {
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_UNAUTHORIZED,
+                "Unauthorized admin instruction",
+            ));
         }
 
         if amount == 0 {

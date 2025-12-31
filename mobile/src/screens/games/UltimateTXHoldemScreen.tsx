@@ -24,6 +24,8 @@ interface UltimateTXState {
   blindBet: number;
   playBet: number;
   tripsBet: number;
+  sixCardBet: number;
+  progressiveBet: number;
   playerCards: CardType[];
   communityCards: CardType[];
   dealerCards: CardType[];
@@ -79,6 +81,8 @@ export function UltimateTXHoldemScreen() {
     blindBet: 0,
     playBet: 0,
     tripsBet: 0,
+    sixCardBet: 0,
+    progressiveBet: 0,
     playerCards: [],
     communityCards: [],
     dealerCards: [],
@@ -96,7 +100,7 @@ export function UltimateTXHoldemScreen() {
     hasChecked: false,
   });
   const [selectedChip, setSelectedChip] = useState<ChipValue>(25);
-  const [activeBetType, setActiveBetType] = useState<'main' | 'trips'>('main');
+  const [activeBetType, setActiveBetType] = useState<'main' | 'trips' | 'sixcard' | 'progressive'>('main');
   const [showTutorial, setShowTutorial] = useState(false);
 
   useEffect(() => {
@@ -114,6 +118,8 @@ export function UltimateTXHoldemScreen() {
           communityCards: parsed.communityCards.length > 0 ? parsed.communityCards : prev.communityCards,
           dealerCards: parsed.dealerCards.length > 0 ? parsed.dealerCards : prev.dealerCards,
           tripsBet: parsed.tripsBet > 0 ? parsed.tripsBet : prev.tripsBet,
+          sixCardBet: parsed.sixCardBonusBet > 0 ? parsed.sixCardBonusBet : prev.sixCardBet,
+          progressiveBet: parsed.progressiveBet > 0 ? parsed.progressiveBet : prev.progressiveBet,
           dealerRevealed: parsed.stage === 'showdown' || parsed.stage === 'result',
           phase: parsed.stage,
           message: parsed.stage === 'preflop'
@@ -180,7 +186,8 @@ export function UltimateTXHoldemScreen() {
     if (state.phase !== 'betting') return;
 
     // Calculate current total bet
-    const currentTotalBet = state.anteBet + state.blindBet + state.tripsBet;
+    const currentTotalBet =
+      state.anteBet + state.blindBet + state.tripsBet + state.sixCardBet + state.progressiveBet;
     if (currentTotalBet + value > balance) {
       haptics.error();
       return;
@@ -192,17 +199,62 @@ export function UltimateTXHoldemScreen() {
       ...prev,
       tripsBet: prev.tripsBet + value,
     }));
-  }, [state.phase, state.anteBet, state.blindBet, state.tripsBet, balance]);
+  }, [state.phase, state.anteBet, state.blindBet, state.tripsBet, state.sixCardBet, state.progressiveBet, balance]);
+
+  const handleSixCardChip = useCallback((value: ChipValue) => {
+    if (state.phase !== 'betting') return;
+
+    const currentTotalBet =
+      state.anteBet + state.blindBet + state.tripsBet + state.sixCardBet + state.progressiveBet;
+    if (currentTotalBet + value > balance) {
+      haptics.error();
+      return;
+    }
+
+    haptics.chipPlace();
+
+    setState((prev) => ({
+      ...prev,
+      sixCardBet: prev.sixCardBet + value,
+    }));
+  }, [state.phase, state.anteBet, state.blindBet, state.tripsBet, state.sixCardBet, state.progressiveBet, balance]);
+
+  const handleProgressiveToggle = useCallback(() => {
+    if (state.phase !== 'betting') return;
+
+    const currentTotalBet =
+      state.anteBet + state.blindBet + state.tripsBet + state.sixCardBet + state.progressiveBet;
+    const progressiveUnit = 1;
+    if (currentTotalBet + (state.progressiveBet > 0 ? 0 : progressiveUnit) > balance) {
+      haptics.error();
+      return;
+    }
+
+    haptics.chipPlace();
+    setState((prev) => ({
+      ...prev,
+      progressiveBet: prev.progressiveBet > 0 ? 0 : progressiveUnit,
+    }));
+  }, [state.phase, state.anteBet, state.blindBet, state.tripsBet, state.sixCardBet, state.progressiveBet, balance]);
 
   const handleChipPlace = useCallback((value: ChipValue) => {
     if (activeBetType === 'trips') {
       handleTripsChip(value);
       return;
     }
+    if (activeBetType === 'sixcard') {
+      handleSixCardChip(value);
+      return;
+    }
+    if (activeBetType === 'progressive') {
+      handleProgressiveToggle();
+      return;
+    }
     if (state.phase !== 'betting') return;
 
     // Calculate current total bet (ante + blind are placed together, so 2x value)
-    const currentTotalBet = state.anteBet + state.blindBet + state.tripsBet;
+    const currentTotalBet =
+      state.anteBet + state.blindBet + state.tripsBet + state.sixCardBet + state.progressiveBet;
     if (currentTotalBet + (value * 2) > balance) {
       haptics.error();
       return;
@@ -216,7 +268,19 @@ export function UltimateTXHoldemScreen() {
       anteBet: prev.anteBet + value,
       blindBet: prev.blindBet + value,
     }));
-  }, [activeBetType, handleTripsChip, state.phase, state.anteBet, state.blindBet, state.tripsBet, balance]);
+  }, [
+    activeBetType,
+    handleTripsChip,
+    handleSixCardChip,
+    handleProgressiveToggle,
+    state.phase,
+    state.anteBet,
+    state.blindBet,
+    state.tripsBet,
+    state.sixCardBet,
+    state.progressiveBet,
+    balance,
+  ]);
 
   const handleDeal = useCallback(async () => {
     if (state.anteBet === 0) return;
@@ -227,13 +291,15 @@ export function UltimateTXHoldemScreen() {
       ante: state.anteBet,
       blind: state.blindBet,
       trips: state.tripsBet,
+      sixCard: state.sixCardBet,
+      progressive: state.progressiveBet,
     });
 
     setState((prev) => ({
       ...prev,
       message: 'Dealing...',
     }));
-  }, [state.anteBet, state.blindBet, state.tripsBet, send]);
+  }, [state.anteBet, state.blindBet, state.tripsBet, state.sixCardBet, state.progressiveBet, send]);
 
   const handleBet = useCallback(async (multiplier: number) => {
     await haptics.betConfirm();
@@ -284,6 +350,8 @@ export function UltimateTXHoldemScreen() {
       blindBet: 0,
       playBet: 0,
       tripsBet: 0,
+      sixCardBet: 0,
+      progressiveBet: 0,
       playerCards: [],
       communityCards: [],
       dealerCards: [],
@@ -317,7 +385,14 @@ export function UltimateTXHoldemScreen() {
 
   const handleClearBets = useCallback(() => {
     if (state.phase !== 'betting') return;
-    setState((prev) => ({ ...prev, anteBet: 0, blindBet: 0, tripsBet: 0 }));
+    setState((prev) => ({
+      ...prev,
+      anteBet: 0,
+      blindBet: 0,
+      tripsBet: 0,
+      sixCardBet: 0,
+      progressiveBet: 0,
+    }));
   }, [state.phase]);
 
   // Keyboard controls
@@ -489,6 +564,18 @@ export function UltimateTXHoldemScreen() {
                 <Text style={styles.betAmount}>${state.tripsBet}</Text>
               </View>
             )}
+            {state.sixCardBet > 0 && (
+              <View style={styles.betItem}>
+                <Text style={styles.betLabel}>6-Card</Text>
+                <Text style={styles.betAmount}>${state.sixCardBet}</Text>
+              </View>
+            )}
+            {state.progressiveBet > 0 && (
+              <View style={styles.betItem}>
+                <Text style={styles.betLabel}>Prog</Text>
+                <Text style={styles.betAmount}>${state.progressiveBet}</Text>
+              </View>
+            )}
           </View>
         )}
       </ScrollView>
@@ -576,6 +663,38 @@ export function UltimateTXHoldemScreen() {
               ]}
             >
               Trips (Optional)
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setActiveBetType('sixcard')}
+            style={[
+              styles.chipLabelButton,
+              activeBetType === 'sixcard' && styles.chipLabelButtonActive,
+            ]}
+          >
+            <Text
+              style={[
+                styles.chipLabelAlt,
+                activeBetType === 'sixcard' && styles.chipLabelTextActive,
+              ]}
+            >
+              6-Card Bonus
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setActiveBetType('progressive')}
+            style={[
+              styles.chipLabelButton,
+              activeBetType === 'progressive' && styles.chipLabelButtonActive,
+            ]}
+          >
+            <Text
+              style={[
+                styles.chipLabelAlt,
+                activeBetType === 'progressive' && styles.chipLabelTextActive,
+              ]}
+            >
+              Progressive ($1)
             </Text>
           </Pressable>
         </View>
@@ -719,7 +838,9 @@ const styles = StyleSheet.create({
   },
   chipLabels: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: SPACING.xs,
     marginBottom: SPACING.xs,
   },
   chipLabelButton: {

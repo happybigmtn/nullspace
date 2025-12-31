@@ -1,6 +1,7 @@
 import type { Card, GameState } from '../../../types';
 import { GameType } from '../../../types';
 import { decodeCard } from '../shared/cards';
+import { parseVideoPokerState as parseVideoPokerStateBlob } from '@nullspace/game-state';
 import type { GameStateRef, SetGameState } from './types';
 
 type VideoPokerStateArgs = {
@@ -16,15 +17,13 @@ export const applyVideoPokerState = ({
   setGameState,
   gameStateRef,
 }: VideoPokerStateArgs): void => {
-  if (stateBlob.length < 6) {
-    console.error('[parseGameState] Video Poker state blob too short:', stateBlob.length);
+  const parsed = parseVideoPokerStateBlob(stateBlob);
+  if (!parsed) {
+    console.error('[parseGameState] Invalid Video Poker state blob');
     return;
   }
-  const stage = stateBlob[0];
-  const cards: Card[] = [];
-  for (let i = 1; i <= 5 && i < stateBlob.length; i++) {
-    cards.push(decodeCard(stateBlob[i]));
-  }
+  const stage = parsed.stage;
+  const cards: Card[] = parsed.cards.map((cardId) => decodeCard(cardId));
 
   if (gameStateRef.current) {
     gameStateRef.current = {

@@ -34,16 +34,18 @@ export const useRoulette = ({
   autoPlayDraftRef
 }: UseRouletteProps) => {
 
-  const placeRouletteBet = useCallback((type: RouletteBet['type'], target?: number) => {
-    if (gameState.rouletteIsPrison) {
+  const placeRouletteBet = useCallback((type: RouletteBet['type'], target?: number, stateOverride?: GameState, statsOverride?: PlayerStats) => {
+    const state = stateOverride ?? gameState;
+    const player = statsOverride ?? stats;
+    if (state.rouletteIsPrison) {
       setGameState(prev => ({ ...prev, message: 'EN PRISON - NO NEW BETS' }));
       return;
     }
 
-    const existing = gameState.rouletteBets.some(b => b.type === type && b.target === target);
+    const existing = state.rouletteBets.some(b => b.type === type && b.target === target);
     if (existing) {
-      const newBets = gameState.rouletteBets.filter(b => !(b.type === type && b.target === target));
-      const removedAmount = gameState.rouletteBets.reduce((sum, b) => (b.type === type && b.target === target) ? sum + b.amount : sum, 0);
+      const newBets = state.rouletteBets.filter(b => !(b.type === type && b.target === target));
+      const removedAmount = state.rouletteBets.reduce((sum, b) => (b.type === type && b.target === target) ? sum + b.amount : sum, 0);
       setGameState(prev => ({
         ...prev,
         rouletteBets: newBets,
@@ -54,7 +56,7 @@ export const useRoulette = ({
       return;
     }
 
-    if (stats.chips < gameState.bet) return;
+    if (player.chips < state.bet) return;
     setGameState(prev => ({
       ...prev,
       rouletteUndoStack: [...prev.rouletteUndoStack, prev.rouletteBets],
@@ -132,18 +134,19 @@ export const useRoulette = ({
     }));
   }, [gameState.rouletteLastRoundBets, gameState.rouletteBets, stats.chips, setGameState]);
 
-  const spinRoulette = useCallback(async () => {
-    const shouldRebet = !gameState.rouletteIsPrison && gameState.rouletteBets.length === 0 && gameState.rouletteLastRoundBets.length > 0;
-    const betsToSpin = shouldRebet ? gameState.rouletteLastRoundBets : gameState.rouletteBets;
+  const spinRoulette = useCallback(async (stateOverride?: GameState) => {
+    const state = stateOverride ?? gameState;
+    const shouldRebet = !state.rouletteIsPrison && state.rouletteBets.length === 0 && state.rouletteLastRoundBets.length > 0;
+    const betsToSpin = shouldRebet ? state.rouletteLastRoundBets : state.rouletteBets;
 
-    if (!gameState.rouletteIsPrison && betsToSpin.length === 0) {
+    if (!state.rouletteIsPrison && betsToSpin.length === 0) {
       setGameState(prev => ({ ...prev, message: "PLACE BET" }));
       return;
     }
 
     // SPACE should rebet by default if we have a previous spin to reuse.
     if (shouldRebet) {
-      const totalRequired = gameState.rouletteLastRoundBets.reduce((a, b) => a + b.amount, 0);
+      const totalRequired = state.rouletteLastRoundBets.reduce((a, b) => a + b.amount, 0);
       if (stats.chips < totalRequired) {
         setGameState(prev => ({ ...prev, message: 'INSUFFICIENT FUNDS' }));
         return;
@@ -151,7 +154,7 @@ export const useRoulette = ({
       setGameState(prev => ({
         ...prev,
         rouletteUndoStack: [...prev.rouletteUndoStack, prev.rouletteBets],
-        rouletteBets: [...gameState.rouletteLastRoundBets],
+        rouletteBets: [...state.rouletteLastRoundBets],
         sessionWager: prev.sessionWager + totalRequired,
         message: "REBET PLACED",
       }));
@@ -164,14 +167,14 @@ export const useRoulette = ({
 
     // If on-chain mode with no session, auto-start a new game
     if (isOnChain && chainService && !currentSessionIdRef.current) {
-      if (gameState.rouletteIsPrison) {
+      if (state.rouletteIsPrison) {
         setGameState(prev => ({ ...prev, message: 'PRISON - WAIT FOR SESSION' }));
         return;
       }
       autoPlayDraftRef.current = {
         type: GameType.ROULETTE,
         rouletteBets: betsToSpin,
-        rouletteZeroRule: gameState.rouletteZeroRule,
+        rouletteZeroRule: state.rouletteZeroRule,
       };
       setGameState(prev => ({ ...prev, message: 'STARTING NEW SESSION...' }));
       startGame(GameType.ROULETTE);
@@ -184,14 +187,14 @@ export const useRoulette = ({
         isPendingRef.current = true;
 
         // Prison mode: just send spin command (action 1) - bets already on chain
-        if (gameState.rouletteIsPrison) {
-          pendingMoveCountRef.current = 1;
-          setGameState(prev => ({ ...prev, message: 'SPINNING ON CHAIN...' }));
-          const spinPayload = new Uint8Array([RouletteMove.Spin]);
-          const result = await chainService.sendMove(currentSessionIdRef.current, spinPayload);
-          if (result.txHash) setLastTxSig(result.txHash);
-          return;
-        }
+      if (state.rouletteIsPrison) {
+        pendingMoveCountRef.current = 1;
+        setGameState(prev => ({ ...prev, message: 'SPINNING ON CHAIN...' }));
+        const spinPayload = new Uint8Array([RouletteMove.Spin]);
+        const result = await chainService.sendMove(currentSessionIdRef.current, spinPayload);
+        if (result.txHash) setLastTxSig(result.txHash);
+        return;
+      }
 
         // Fresh betting round: use atomic batch (single transaction)
         pendingMoveCountRef.current = 1;

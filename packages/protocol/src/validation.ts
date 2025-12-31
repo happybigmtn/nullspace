@@ -37,6 +37,24 @@ const betAmountSchema = z.string().regex(/^\d+$/, 'Bet must be numeric string').
   { message: 'Bet exceeds maximum value (u64 max)' }
 );
 
+const positiveBetAmountSchema = betAmountSchema.refine(
+  (val) => {
+    try {
+      return BigInt(val) > 0n;
+    } catch {
+      return false;
+    }
+  },
+  { message: 'Bet must be greater than zero' }
+);
+
+const ZERO_BET_GAME_TYPES = new Set<GameType>([
+  GameType.Baccarat,
+  GameType.Craps,
+  GameType.Roulette,
+  GameType.SicBo,
+]);
+
 /** Session ID as numeric string */
 const sessionIdSchema = z.string().regex(/^\d+$/, 'Session ID must be numeric string');
 
@@ -46,9 +64,25 @@ export const startGameSchema = z.object({
   bet: betAmountSchema,
   sideBets: z.array(z.object({
     type: z.number().int().min(0).max(255),
-    amount: betAmountSchema,
+    amount: positiveBetAmountSchema,
   })).optional(),
   requestId: z.string().optional(),
+}).superRefine((data, ctx) => {
+  try {
+    if (BigInt(data.bet) === 0n && !ZERO_BET_GAME_TYPES.has(data.gameType)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Bet must be greater than zero',
+        path: ['bet'],
+      });
+    }
+  } catch {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Bet must be numeric string',
+      path: ['bet'],
+    });
+  }
 });
 
 /**
@@ -71,7 +105,7 @@ const roulettePlaceBetSchema = z.object({
   move: z.literal('place_bet'),
   betType: z.number().int().min(0),       // Required
   number: z.number().int().min(0).max(36), // Required
-  amount: betAmountSchema,                 // Required
+  amount: positiveBetAmountSchema,         // Required
   requestId: z.string().optional(),
 });
 
@@ -93,7 +127,7 @@ const crapsPlaceBetSchema = z.object({
   move: z.literal('place_bet'),
   betType: z.number().int().min(0),
   target: z.number().int().min(0).max(12).optional(),
-  amount: betAmountSchema,                 // Required for bets
+  amount: positiveBetAmountSchema,         // Required for bets
   requestId: z.string().optional(),
 });
 
@@ -102,7 +136,7 @@ const crapsAddOddsSchema = z.object({
   sessionId: sessionIdSchema,
   game: z.literal('craps'),
   move: z.literal('add_odds'),
-  amount: betAmountSchema,                 // Required for odds
+  amount: positiveBetAmountSchema,         // Required for odds
   requestId: z.string().optional(),
 });
 

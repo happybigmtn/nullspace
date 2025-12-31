@@ -33,11 +33,13 @@ export const useSicBo = ({
   autoPlayDraftRef
 }: UseSicBoProps) => {
 
-  const placeSicBoBet = useCallback((type: SicBoBet['type'], target?: number) => {
-    const existing = gameState.sicBoBets.some(b => b.type === type && b.target === target);
+  const placeSicBoBet = useCallback((type: SicBoBet['type'], target?: number, stateOverride?: GameState, statsOverride?: PlayerStats) => {
+    const state = stateOverride ?? gameState;
+    const player = statsOverride ?? stats;
+    const existing = state.sicBoBets.some(b => b.type === type && b.target === target);
     if (existing) {
-      const newBets = gameState.sicBoBets.filter(b => !(b.type === type && b.target === target));
-      const removedAmount = gameState.sicBoBets.reduce((sum, b) => (b.type === type && b.target === target) ? sum + b.amount : sum, 0);
+      const newBets = state.sicBoBets.filter(b => !(b.type === type && b.target === target));
+      const removedAmount = state.sicBoBets.reduce((sum, b) => (b.type === type && b.target === target) ? sum + b.amount : sum, 0);
       setGameState(prev => ({
         ...prev,
         sicBoBets: newBets,
@@ -48,7 +50,7 @@ export const useSicBo = ({
       return;
     }
 
-    if (stats.chips < gameState.bet) return;
+    if (player.chips < state.bet) return;
     setGameState(prev => ({
       ...prev,
       sicBoUndoStack: [...prev.sicBoUndoStack, prev.sicBoBets],
@@ -80,9 +82,10 @@ export const useSicBo = ({
     }));
   }, [gameState.sicBoLastRoundBets, gameState.sicBoBets, stats.chips, setGameState]);
 
-  const rollSicBo = useCallback(async () => {
-    const shouldRebet = gameState.sicBoBets.length === 0 && gameState.sicBoLastRoundBets.length > 0;
-    const betsToRoll = shouldRebet ? gameState.sicBoLastRoundBets : gameState.sicBoBets;
+  const rollSicBo = useCallback(async (stateOverride?: GameState) => {
+    const state = stateOverride ?? gameState;
+    const shouldRebet = state.sicBoBets.length === 0 && state.sicBoLastRoundBets.length > 0;
+    const betsToRoll = shouldRebet ? state.sicBoLastRoundBets : state.sicBoBets;
 
     if (betsToRoll.length === 0) {
       setGameState(prev => ({ ...prev, message: "PLACE BET" }));
@@ -91,7 +94,7 @@ export const useSicBo = ({
 
     // SPACE should rebet by default if we have a previous roll to reuse.
     if (shouldRebet) {
-      const totalRequired = gameState.sicBoLastRoundBets.reduce((a, b) => a + b.amount, 0);
+      const totalRequired = state.sicBoLastRoundBets.reduce((a, b) => a + b.amount, 0);
       if (stats.chips < totalRequired) {
         setGameState(prev => ({ ...prev, message: 'INSUFFICIENT FUNDS' }));
         return;
@@ -99,7 +102,7 @@ export const useSicBo = ({
       setGameState(prev => ({
         ...prev,
         sicBoUndoStack: [...prev.sicBoUndoStack, prev.sicBoBets],
-        sicBoBets: [...gameState.sicBoLastRoundBets],
+        sicBoBets: [...state.sicBoLastRoundBets],
         sessionWager: prev.sessionWager + totalRequired,
         message: 'REBET',
       }));

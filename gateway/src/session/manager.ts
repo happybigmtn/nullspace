@@ -20,6 +20,11 @@ import type { Session, SessionCreateOptions } from '../types/session.js';
 import type { GameType } from '@nullspace/types';
 
 const DEFAULT_INITIAL_BALANCE = 10000n;  // 10,000 test chips
+const SESSION_CREATE_LIMIT = {
+  points: 10,
+  durationMs: 60 * 60 * 1000,
+  blockMs: 60 * 60 * 1000,
+};
 
 export class SessionManager {
   private sessions: Map<WebSocket, Session> = new Map();
@@ -27,6 +32,7 @@ export class SessionManager {
   private nonceManager: NonceManager;
   private submitClient: SubmitClient;
   private backendUrl: string;
+  private sessionCreateAttempts: Map<string, { count: number; windowStart: number; blockedUntil: number }> = new Map();
 
   constructor(submitClient: SubmitClient, backendUrl: string, nonceManager?: NonceManager) {
     this.submitClient = submitClient;
@@ -34,16 +40,62 @@ export class SessionManager {
     this.nonceManager = nonceManager ?? new NonceManager();
   }
 
+  private generatePrivateKey(): Uint8Array {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const privateKey = ed25519.utils.randomPrivateKey();
+      const allZeros = privateKey.every((b) => b === 0);
+      const allSame = privateKey.every((b) => b === privateKey[0]);
+      if (!allZeros && !allSame) {
+        return privateKey;
+      }
+    }
+    throw new Error('Insufficient entropy detected for session key generation');
+  }
+
+  private enforceSessionRateLimit(clientIp: string): void {
+    const now = Date.now();
+    const existing = this.sessionCreateAttempts.get(clientIp);
+    if (existing && existing.blockedUntil > now) {
+      throw new Error('Session creation rate limit exceeded');
+    }
+
+    const record = existing ?? { count: 0, windowStart: now, blockedUntil: 0 };
+    if (now - record.windowStart > SESSION_CREATE_LIMIT.durationMs) {
+      record.count = 0;
+      record.windowStart = now;
+    }
+    record.count += 1;
+    if (record.count > SESSION_CREATE_LIMIT.points) {
+      record.blockedUntil = now + SESSION_CREATE_LIMIT.blockMs;
+      this.sessionCreateAttempts.set(clientIp, record);
+      throw new Error('Session creation rate limit exceeded');
+    }
+    this.sessionCreateAttempts.set(clientIp, record);
+  }
+
   /**
    * Create a new session and register player on-chain
    */
   async createSession(
     ws: WebSocket,
-    options: SessionCreateOptions = {}
+    options: SessionCreateOptions = {},
+    clientIp: string = 'unknown'
   ): Promise<Session> {
-    const privateKey = ed25519.utils.randomPrivateKey();
-    const publicKey = ed25519.getPublicKey(privateKey);
-    const publicKeyHex = Buffer.from(publicKey).toString('hex');
+    this.enforceSessionRateLimit(clientIp);
+    let privateKey: Uint8Array;
+    let publicKey: Uint8Array;
+    let publicKeyHex: string;
+    let attempts = 0;
+    do {
+      privateKey = this.generatePrivateKey();
+      publicKey = ed25519.getPublicKey(privateKey);
+      publicKeyHex = Buffer.from(publicKey).toString('hex');
+      attempts += 1;
+    } while (this.byPublicKey.has(publicKeyHex) && attempts < 3);
+
+    if (this.byPublicKey.has(publicKeyHex)) {
+      throw new Error('Failed to generate unique session key');
+    }
 
     const playerName = options.playerName ?? `Player_${publicKeyHex.slice(0, 8)}`;
     const initialBalance = options.initialBalance ?? DEFAULT_INITIAL_BALANCE;
@@ -118,59 +170,86 @@ export class SessionManager {
    * Register player on-chain (CasinoRegister)
    */
   private async registerPlayer(session: Session): Promise<boolean> {
-    const instruction = encodeCasinoRegister(session.playerName);
-    const nonce = this.nonceManager.getAndIncrement(session.publicKeyHex);
-    const tx = buildTransaction(nonce, instruction, session.privateKey);
-    const submission = wrapSubmission(tx);
+    return this.nonceManager.withLock(session.publicKeyHex, async (nonce) => {
+      const instruction = encodeCasinoRegister(session.playerName);
+      const tx = buildTransaction(nonce, instruction, session.privateKey);
+      const submission = wrapSubmission(tx);
 
-    const result = await this.submitClient.submit(submission);
+      const result = await this.submitClient.submit(submission);
 
-    if (result.accepted) {
-      session.registered = true;
-      this.nonceManager.confirmNonce(session.publicKeyHex, nonce);
-      console.log(`Registered player: ${session.playerName}`);
-      return true;
-    }
+      if (result.accepted) {
+        session.registered = true;
+        this.nonceManager.setCurrentNonce(session.publicKeyHex, nonce + 1n);
+        console.log(`Registered player: ${session.playerName}`);
+        return true;
+      }
 
-    // Handle nonce mismatch
-    if (result.error && this.nonceManager.handleRejection(session.publicKeyHex, result.error)) {
-      await this.nonceManager.syncFromBackend(session.publicKeyHex, this.getBackendUrl());
-      // Retry once
-      return this.registerPlayer(session);
-    }
+      if (result.error && this.nonceManager.handleRejection(session.publicKeyHex, result.error)) {
+        const synced = await this.nonceManager.syncFromBackend(
+          session.publicKeyHex,
+          this.getBackendUrl(),
+        );
+        if (synced) {
+          const retryNonce = this.nonceManager.getCurrentNonce(session.publicKeyHex);
+          const retryTx = buildTransaction(retryNonce, instruction, session.privateKey);
+          const retrySubmission = wrapSubmission(retryTx);
+          const retryResult = await this.submitClient.submit(retrySubmission);
+          if (retryResult.accepted) {
+            session.registered = true;
+            this.nonceManager.setCurrentNonce(session.publicKeyHex, retryNonce + 1n);
+            console.log(`Registered player: ${session.playerName}`);
+            return true;
+          }
+        }
+      }
 
-    console.error(`Registration rejected for ${session.playerName}: ${result.error}`);
-    return false;
+      console.error(`Registration rejected for ${session.playerName}: ${result.error}`);
+      return false;
+    });
   }
 
   /**
    * Deposit chips (CasinoDeposit)
    */
   private async depositChips(session: Session, amount: bigint): Promise<boolean> {
-    const instruction = encodeCasinoDeposit(amount);
-    const nonce = this.nonceManager.getAndIncrement(session.publicKeyHex);
-    const tx = buildTransaction(nonce, instruction, session.privateKey);
-    const submission = wrapSubmission(tx);
+    return this.nonceManager.withLock(session.publicKeyHex, async (nonce) => {
+      const instruction = encodeCasinoDeposit(amount);
+      const tx = buildTransaction(nonce, instruction, session.privateKey);
+      const submission = wrapSubmission(tx);
 
-    const result = await this.submitClient.submit(submission);
+      const result = await this.submitClient.submit(submission);
 
-    if (result.accepted) {
-      session.hasBalance = true;
-      session.balance = session.balance + amount;
-      this.nonceManager.confirmNonce(session.publicKeyHex, nonce);
-      console.log(`Deposited ${amount} chips for ${session.playerName}`);
-      return true;
-    }
+      if (result.accepted) {
+        session.hasBalance = true;
+        session.balance = session.balance + amount;
+        this.nonceManager.setCurrentNonce(session.publicKeyHex, nonce + 1n);
+        console.log(`Deposited ${amount} chips for ${session.playerName}`);
+        return true;
+      }
 
-    // Handle nonce mismatch
-    if (result.error && this.nonceManager.handleRejection(session.publicKeyHex, result.error)) {
-      await this.nonceManager.syncFromBackend(session.publicKeyHex, this.getBackendUrl());
-      // Retry once
-      return this.depositChips(session, amount);
-    }
+      if (result.error && this.nonceManager.handleRejection(session.publicKeyHex, result.error)) {
+        const synced = await this.nonceManager.syncFromBackend(
+          session.publicKeyHex,
+          this.getBackendUrl(),
+        );
+        if (synced) {
+          const retryNonce = this.nonceManager.getCurrentNonce(session.publicKeyHex);
+          const retryTx = buildTransaction(retryNonce, instruction, session.privateKey);
+          const retrySubmission = wrapSubmission(retryTx);
+          const retryResult = await this.submitClient.submit(retrySubmission);
+          if (retryResult.accepted) {
+            session.hasBalance = true;
+            session.balance = session.balance + amount;
+            this.nonceManager.setCurrentNonce(session.publicKeyHex, retryNonce + 1n);
+            console.log(`Deposited ${amount} chips for ${session.playerName}`);
+            return true;
+          }
+        }
+      }
 
-    console.error(`Deposit rejected for ${session.playerName}: ${result.error}`);
-    return false;
+      console.error(`Deposit rejected for ${session.playerName}: ${result.error}`);
+      return false;
+    });
   }
 
   /**
@@ -183,6 +262,22 @@ export class SessionManager {
     }
     session.balance = account.balance;
     return account.balance;
+  }
+
+  startBalanceRefresh(session: Session, intervalMs: number): void {
+    if (!Number.isFinite(intervalMs) || intervalMs <= 0) {
+      return;
+    }
+    if (session.balanceRefreshIntervalId) {
+      clearInterval(session.balanceRefreshIntervalId);
+    }
+    session.balanceRefreshIntervalId = setInterval(async () => {
+      try {
+        await this.refreshBalance(session);
+      } catch (err) {
+        console.warn(`[Gateway] Balance refresh failed for ${session.playerName}:`, err);
+      }
+    }, intervalMs);
   }
 
   /**
@@ -233,6 +328,9 @@ export class SessionManager {
   destroySession(ws: WebSocket): Session | undefined {
     const session = this.sessions.get(ws);
     if (session) {
+      if (session.balanceRefreshIntervalId) {
+        clearInterval(session.balanceRefreshIntervalId);
+      }
       // Disconnect updates client
       if (session.updatesClient) {
         session.updatesClient.disconnect();

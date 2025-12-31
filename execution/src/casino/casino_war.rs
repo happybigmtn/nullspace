@@ -12,13 +12,16 @@
 //! [3, tie_bet:u64 BE] = Set tie bet (Betting stage only)
 //! [5, rules:u8] = Set rules (Betting stage only)
 
+use super::logging::{clamp_i64, push_resolved_entry};
+use super::serialization::{StateReader, StateWriter};
 use super::super_mode::apply_super_multiplier_cards;
 use super::{cards, CasinoGame, GameError, GameResult, GameRng};
 use nullspace_types::casino::GameSession;
-use std::fmt::Write;
 
 const STATE_VERSION: u8 = 1;
 const HIDDEN_CARD: u8 = 0xFF;
+const STATE_LEN_BASE: usize = 12;
+const STATE_LEN_WITH_RULES: usize = 13;
 /// WoO: Casino War is played with six decks.
 const CASINO_WAR_DECKS: u8 = 6;
 
@@ -43,17 +46,6 @@ fn format_card_label(card: u8) -> String {
         _ => "?",
     };
     format!("{}{}", rank_label, suit)
-}
-
-fn clamp_i64(value: i128) -> i64 {
-    value.clamp(i64::MIN as i128, i64::MAX as i128) as i64
-}
-
-fn push_resolved_entry(out: &mut String, label: &str, pnl: i64) {
-    if !out.is_empty() {
-        out.push(',');
-    }
-    let _ = write!(out, r#"{{"label":"{}","pnl":{}}}"#, label, pnl);
 }
 
 #[repr(u8)]
@@ -174,24 +166,29 @@ struct CasinoWarState {
 }
 
 fn parse_state(state: &[u8]) -> Option<CasinoWarState> {
-    if state.len() < 12 || state[0] != STATE_VERSION {
+    if state.len() < STATE_LEN_BASE {
         return None;
     }
-    if state.len() != 12 && state.len() != 13 {
+    if state.len() != STATE_LEN_BASE && state.len() != STATE_LEN_WITH_RULES {
         return None;
     }
-    let stage = Stage::try_from(state[1]).ok()?;
-    let player_card = state[2];
-    let dealer_card = state[3];
+    let mut reader = StateReader::new(state);
+    let version = reader.read_u8()?;
+    if version != STATE_VERSION {
+        return None;
+    }
+    let stage = Stage::try_from(reader.read_u8()?).ok()?;
+    let player_card = reader.read_u8()?;
+    let dealer_card = reader.read_u8()?;
     if !matches!(player_card, HIDDEN_CARD) && player_card >= 52 {
         return None;
     }
     if !matches!(dealer_card, HIDDEN_CARD) && dealer_card >= 52 {
         return None;
     }
-    let tie_bet = u64::from_be_bytes(state[4..12].try_into().ok()?);
-    let rules = if state.len() > 12 {
-        CasinoWarRules::from_byte(state[12])?
+    let tie_bet = reader.read_u64_be()?;
+    let rules = if reader.remaining() > 0 {
+        CasinoWarRules::from_byte(reader.read_u8()?)?
     } else {
         CasinoWarRules::default()
     };
@@ -205,14 +202,14 @@ fn parse_state(state: &[u8]) -> Option<CasinoWarState> {
 }
 
 fn serialize_state(state: &CasinoWarState) -> Vec<u8> {
-    let mut out = Vec::with_capacity(13);
-    out.push(STATE_VERSION);
-    out.push(state.stage as u8);
-    out.push(state.player_card);
-    out.push(state.dealer_card);
-    out.extend_from_slice(&state.tie_bet.to_be_bytes());
-    out.push(state.rules.to_byte());
-    out
+    let mut out = StateWriter::with_capacity(13);
+    out.push_u8(STATE_VERSION);
+    out.push_u8(state.stage as u8);
+    out.push_u8(state.player_card);
+    out.push_u8(state.dealer_card);
+    out.push_u64_be(state.tie_bet);
+    out.push_u8(state.rules.to_byte());
+    out.into_inner()
 }
 
 pub struct CasinoWar;
@@ -339,7 +336,7 @@ impl CasinoGame for CasinoWar {
                             format_card_label(player_card),
                             format_card_label(dealer_card)
                         );
-                        let mut resolved_entries = String::new();
+                        let mut resolved_entries = String::with_capacity(256);
                         let mut resolved_sum: i128 = 0;
                         let main_pnl =
                             clamp_i64(i128::from(base_winnings) - i128::from(session.bet));
@@ -382,7 +379,7 @@ impl CasinoGame for CasinoWar {
                             format_card_label(player_card),
                             format_card_label(dealer_card)
                         );
-                        let mut resolved_entries = String::new();
+                        let mut resolved_entries = String::with_capacity(256);
                         let mut resolved_sum: i128 = 0;
                         let main_pnl = -(session.bet as i64);
                         push_resolved_entry(&mut resolved_entries, "MAIN", main_pnl);
@@ -421,7 +418,7 @@ impl CasinoGame for CasinoWar {
                             format_card_label(player_card),
                             format_card_label(dealer_card)
                         );
-                        let mut resolved_entries = String::new();
+                        let mut resolved_entries = String::with_capacity(256);
                         let mut resolved_sum: i128 = 0;
                         if state.tie_bet > 0 {
                             let tie_pnl = clamp_i64(
@@ -534,7 +531,7 @@ impl CasinoGame for CasinoWar {
                                     format_card_label(player_card),
                                     format_card_label(dealer_card)
                                 );
-                                let mut resolved_entries = String::new();
+                                let mut resolved_entries = String::with_capacity(256);
                                 let mut resolved_sum: i128 = 0;
                                 let main_pnl =
                                     clamp_i64(i128::from(base_payout) - i128::from(session.bet));
@@ -589,7 +586,7 @@ impl CasinoGame for CasinoWar {
                                     format_card_label(player_card),
                                     format_card_label(dealer_card)
                                 );
-                                let mut resolved_entries = String::new();
+                                let mut resolved_entries = String::with_capacity(256);
                                 let mut resolved_sum: i128 = 0;
                                 let main_pnl = -(session.bet as i64);
                                 push_resolved_entry(&mut resolved_entries, "MAIN", main_pnl);
@@ -635,7 +632,7 @@ impl CasinoGame for CasinoWar {
                                     format_card_label(player_card),
                                     format_card_label(dealer_card)
                                 );
-                                let mut resolved_entries = String::new();
+                                let mut resolved_entries = String::with_capacity(256);
                                 let mut resolved_sum: i128 = 0;
                                 if state.tie_bet > 0 {
                                     let tie_pnl = clamp_i64(
@@ -697,7 +694,7 @@ impl CasinoGame for CasinoWar {
                     } else {
                         0
                     };
-                    let mut resolved_entries = String::new();
+                    let mut resolved_entries = String::with_capacity(256);
                     let mut resolved_sum: i128 = 0;
                     let main_pnl = clamp_i64(i128::from(refund) - i128::from(session.bet));
                     push_resolved_entry(&mut resolved_entries, "MAIN", main_pnl);
@@ -795,7 +792,7 @@ impl CasinoGame for CasinoWar {
                             format_card_label(new_player_card),
                             format_card_label(new_dealer_card)
                         );
-                        let mut resolved_entries = String::new();
+                        let mut resolved_entries = String::with_capacity(256);
                         let mut resolved_sum: i128 = 0;
                         let main_pnl =
                             clamp_i64(i128::from(base_winnings) - i128::from(session.bet));
@@ -838,7 +835,7 @@ impl CasinoGame for CasinoWar {
                             format_card_label(new_player_card),
                             format_card_label(new_dealer_card)
                         );
-                        let mut resolved_entries = String::new();
+                        let mut resolved_entries = String::with_capacity(256);
                         let mut resolved_sum: i128 = 0;
                         let main_pnl = -(session.bet as i64);
                         let war_pnl = -(war_bet as i64);
@@ -989,7 +986,7 @@ mod tests {
     }
 
     #[test]
-    fn test_surrender_refunds_half_bet() {
+    fn test_surrender_refunds_half_bet() -> Result<(), GameError> {
         let seed = create_test_seed();
         let mut session = create_test_session(100);
         let state = CasinoWarState {
@@ -1002,13 +999,13 @@ mod tests {
         session.state_blob = serialize_state(&state);
 
         let mut rng = GameRng::new(&seed, session.id, 1);
-        let result =
-            CasinoWar::process_move(&mut session, &[Move::Surrender as u8], &mut rng).unwrap();
+        let result = CasinoWar::process_move(&mut session, &[Move::Surrender as u8], &mut rng)?;
 
         assert!(matches!(result, GameResult::Win(50, _)));
         assert!(session.is_complete);
         let parsed = parse_state(&session.state_blob).expect("parse state");
         assert_eq!(parsed.stage, Stage::Complete);
+        Ok(())
     }
 
     #[test]

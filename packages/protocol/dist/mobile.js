@@ -231,6 +231,8 @@ export const UltimateTXMessageSchema = BaseMessageSchema.extend({
 export const BlackjackDealRequestSchema = z.object({
     type: z.literal('blackjack_deal'),
     amount: z.number().positive(),
+    sideBet21Plus3: z.number().nonnegative().optional(),
+    sideBet21p3: z.number().nonnegative().optional(),
 });
 export const BlackjackHitRequestSchema = z.object({
     type: z.literal('blackjack_hit'),
@@ -294,6 +296,7 @@ export const BaccaratDealRequestSchema = z.object({
 export const CasinoWarDealRequestSchema = z.object({
     type: z.literal('casino_war_deal'),
     amount: z.number().positive(),
+    tieBet: z.number().nonnegative().optional(),
 });
 export const CasinoWarWarRequestSchema = z.object({
     type: z.literal('casino_war_war'),
@@ -346,6 +349,9 @@ export const ThreeCardPokerDealRequestSchema = z.object({
     type: z.literal('three_card_poker_deal'),
     ante: z.number().positive(),
     pairPlus: z.number().nonnegative().optional(),
+    sixCard: z.number().nonnegative().optional(),
+    sixCardBonus: z.number().nonnegative().optional(),
+    progressive: z.number().nonnegative().optional(),
 });
 export const ThreeCardPokerPlayRequestSchema = z.object({
     type: z.literal('three_card_poker_play'),
@@ -368,6 +374,9 @@ export const UltimateTXDealRequestSchema = z.object({
     ante: z.number().positive(),
     blind: z.number().positive(),
     trips: z.number().nonnegative().optional(),
+    sixCard: z.number().nonnegative().optional(),
+    sixCardBonus: z.number().nonnegative().optional(),
+    progressive: z.number().nonnegative().optional(),
 });
 export const UltimateTXBetRequestSchema = z.object({
     type: z.literal('ultimate_tx_bet'),

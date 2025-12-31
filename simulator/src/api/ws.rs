@@ -72,7 +72,7 @@ fn validate_origin(headers: &HeaderMap) -> bool {
         .map(|s| s.trim())
         .filter(|s| !s.is_empty())
         .collect();
-    if allowed_list.contains(&origin) {
+    if allowed_list.contains(&"*") || allowed_list.contains(&origin) {
         tracing::debug!("WebSocket origin validated: {}", origin);
         return true;
     }

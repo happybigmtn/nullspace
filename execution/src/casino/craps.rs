@@ -28,6 +28,8 @@
 //!                          Ensures all-or-nothing semantics (only before first roll)
 //!                          Note: Odds cannot be added in atomic batch
 
+use super::logging::{clamp_i64, push_resolved_entry};
+use super::serialization::{StateReader, StateWriter};
 use super::super_mode::apply_super_multiplier_total;
 use super::{limits, CasinoGame, GameError, GameResult, GameRng};
 use nullspace_types::casino::GameSession;
@@ -72,6 +74,8 @@ const STATE_VERSION: u8 = 2;
 const BUY_COMMISSION_BPS: u64 = 500; // 5.00%
 #[cfg(test)]
 const BUY_COMMISSION_DENOM: u64 = 10_000;
+const STATE_HEADER_LEN: usize = 8;
+const BET_BYTES: usize = 19;
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -368,17 +372,15 @@ fn generate_craps_logs(
     total_wagered: u64,
     total_return: u64,
 ) -> Vec<String> {
-    let clamp_i64 = |value: i128| -> i64 {
-        value
-            .clamp(i64::MIN as i128, i64::MAX as i128) as i64
-    };
     let d1 = state.d1;
     let d2 = state.d2;
     let total = d1.saturating_add(d2);
 
     // Build bet results array
-    let mut bet_results = String::new();
-    let mut resolved_entries = String::new();
+    let bet_capacity = resolved_bets.len().saturating_mul(96);
+    let resolved_capacity = resolved_bets.len().saturating_mul(48).saturating_add(32);
+    let mut bet_results = String::with_capacity(bet_capacity);
+    let mut resolved_entries = String::with_capacity(resolved_capacity);
     let mut resolved_sum: i128 = 0;
     let mut total_odds: u64 = 0;
     for (idx, (bet_type, target, wagered, return_amount, odds)) in
@@ -386,7 +388,6 @@ fn generate_craps_logs(
     {
         if idx > 0 {
             bet_results.push(',');
-            resolved_entries.push(',');
         }
         let outcome = if *return_amount > *wagered {
             "WIN"
@@ -410,7 +411,7 @@ fn generate_craps_logs(
         );
         resolved_sum = resolved_sum.saturating_add(i128::from(pnl));
         total_odds = total_odds.saturating_add(*odds);
-        let _ = write!(resolved_entries, r#"{{"label":"{}","pnl":{}}}"#, label, pnl);
+        push_resolved_entry(&mut resolved_entries, &label, pnl);
         if *target > 0 {
             let _ = write!(
                 bet_results,
@@ -442,14 +443,7 @@ fn generate_craps_logs(
     let net_pnl = clamp_i64(net_from_totals);
     let diff = i128::from(net_pnl).saturating_sub(resolved_sum);
     if diff != 0 {
-        if !resolved_entries.is_empty() {
-            resolved_entries.push(',');
-        }
-        let _ = write!(
-            resolved_entries,
-            r#"{{"label":"ADJUSTMENT","pnl":{}}}"#,
-            clamp_i64(diff)
-        );
+        push_resolved_entry(&mut resolved_entries, "ADJUSTMENT", clamp_i64(diff));
     }
 
     vec![format!(
@@ -485,26 +479,26 @@ impl CrapsState {
     /// Serialize state to blob
     fn to_blob(&self) -> Vec<u8> {
         // Capacity: 8 (header) + bets (19 bytes each) + 2 (optional rules bytes)
-        let capacity = 8 + (self.bets.len() * 19) + 2;
-        let mut blob = Vec::with_capacity(capacity);
-        blob.push(STATE_VERSION);
-        blob.push(self.phase as u8);
-        blob.push(self.main_point);
-        blob.push(self.d1);
-        blob.push(self.d2);
-        blob.push(self.made_points_mask);
-        blob.push(self.epoch_point_established as u8);
-        blob.push(self.bets.len() as u8);
+        let capacity = STATE_HEADER_LEN + (self.bets.len() * BET_BYTES) + 2;
+        let mut blob = StateWriter::with_capacity(capacity);
+        blob.push_u8(STATE_VERSION);
+        blob.push_u8(self.phase as u8);
+        blob.push_u8(self.main_point);
+        blob.push_u8(self.d1);
+        blob.push_u8(self.d2);
+        blob.push_u8(self.made_points_mask);
+        blob.push_u8(self.epoch_point_established as u8);
+        blob.push_u8(self.bets.len() as u8);
 
         for bet in &self.bets {
-            blob.extend_from_slice(&bet.to_bytes());
+            blob.push_bytes(&bet.to_bytes());
         }
 
         // Post-bets optional rules bytes (kept at the end so legacy parsers remain compatible).
-        blob.push(self.field_paytable as u8);
-        blob.push(self.buy_commission_timing as u8);
+        blob.push_u8(self.field_paytable as u8);
+        blob.push_u8(self.buy_commission_timing as u8);
 
-        blob
+        blob.into_inner()
     }
 
     /// Deserialize state from blob
@@ -513,19 +507,19 @@ impl CrapsState {
             return None;
         }
 
-        let version = blob[0];
+        let mut reader = StateReader::new(blob);
+        let version = reader.read_u8()?;
         if version != STATE_VERSION {
             return None;
         }
 
-        let phase = Phase::try_from(blob[1]).ok()?;
-        let main_point = blob[2];
-        let d1 = blob[3];
-        let d2 = blob[4];
-        let made_points_mask = blob[5];
-        let epoch_point_established = blob[6] != 0;
-        let bet_count = blob[7] as usize;
-        let header_len = 8usize;
+        let phase = Phase::try_from(reader.read_u8()?).ok()?;
+        let main_point = reader.read_u8()?;
+        let d1 = reader.read_u8()?;
+        let d2 = reader.read_u8()?;
+        let made_points_mask = reader.read_u8()?;
+        let epoch_point_established = reader.read_u8()? != 0;
+        let bet_count = reader.read_u8()? as usize;
 
         if (d1 > 6 || d2 > 6) || (d1 == 0 && d2 != 0) || (d1 != 0 && d2 == 0) {
             return None;
@@ -540,33 +534,22 @@ impl CrapsState {
             return None;
         }
 
-        // Validate we have enough bytes for all bets before allocating
-        let required_len = header_len + (bet_count * 19);
-        if blob.len() < required_len {
-            return None;
-        }
-
         let mut bets = Vec::with_capacity(bet_count);
-        let mut offset = header_len;
 
         for _ in 0..bet_count {
-            if offset + 19 > blob.len() {
-                return None;
-            }
-            let bet = CrapsBet::from_bytes(&blob[offset..offset + 19])?;
+            let bet = CrapsBet::from_bytes(reader.read_bytes(BET_BYTES)?)?;
             if !is_valid_bet_state(&bet) {
                 return None;
             }
             bets.push(bet);
-            offset += 19;
         }
 
-        let remaining = blob.len().saturating_sub(offset);
+        let remaining = reader.remaining();
         let (field_paytable, buy_commission_timing) = match remaining {
             0 => (FieldPaytable::default(), BuyCommissionTiming::default()),
             2 => (
-                FieldPaytable::try_from(blob[offset]).ok()?,
-                BuyCommissionTiming::try_from(blob[offset + 1]).ok()?,
+                FieldPaytable::try_from(reader.read_u8()?).ok()?,
+                BuyCommissionTiming::try_from(reader.read_u8()?).ok()?,
             ),
             _ => return None,
         };
@@ -583,6 +566,14 @@ impl CrapsState {
             bets,
         })
     }
+}
+
+fn serialize_state(state: &CrapsState) -> Vec<u8> {
+    state.to_blob()
+}
+
+fn parse_state(blob: &[u8]) -> Option<CrapsState> {
+    CrapsState::from_blob(blob)
 }
 
 // ============================================================================
@@ -1582,7 +1573,7 @@ impl CasinoGame for Craps {
             buy_commission_timing: BuyCommissionTiming::default(),
             bets: Vec::new(),
         };
-        session.state_blob = state.to_blob();
+        session.state_blob = serialize_state(&state);
         GameResult::Continue(vec![])
     }
 
@@ -1609,7 +1600,7 @@ impl CasinoGame for Craps {
                 bets: Vec::new(),
             }
         } else {
-            CrapsState::from_blob(&session.state_blob).ok_or(GameError::InvalidPayload)?
+            parse_state(&session.state_blob).ok_or(GameError::InvalidPayload)?
         };
 
         if payload.is_empty() {
@@ -1721,7 +1712,7 @@ impl CasinoGame for Craps {
                     odds_amount: 0,
                 });
 
-                session.state_blob = state.to_blob();
+                session.state_blob = serialize_state(&state);
 
                 let deduction_i64 =
                     i64::try_from(amount).map_err(|_| GameError::InvalidPayload)?;
@@ -1771,7 +1762,7 @@ impl CasinoGame for Craps {
                     return Err(GameError::InvalidMove);
                 }
 
-                session.state_blob = state.to_blob();
+                session.state_blob = serialize_state(&state);
                 Ok(GameResult::ContinueWithUpdate {
                     payout: -(odds_amount as i64),
                     logs: vec![],
@@ -1826,7 +1817,7 @@ impl CasinoGame for Craps {
                 }
 
                 // Update state
-                session.state_blob = state.to_blob();
+                session.state_blob = serialize_state(&state);
 
                 // Check if game is complete (no bets left)
                 if state.bets.is_empty() {
@@ -1884,7 +1875,7 @@ impl CasinoGame for Craps {
                     .map(|b| b.amount.saturating_add(b.odds_amount))
                     .sum();
                 state.bets.clear();
-                session.state_blob = state.to_blob();
+                session.state_blob = serialize_state(&state);
 
                 if refund > 0 {
                     // Positive payout = credit chips back to player
@@ -2026,7 +2017,7 @@ impl CasinoGame for Craps {
                     state.bets.remove(*idx);
                 }
 
-                session.state_blob = state.to_blob();
+                session.state_blob = serialize_state(&state);
 
                 // Check if game is complete
                 if state.bets.is_empty() {
@@ -2172,7 +2163,7 @@ mod tests {
             ],
         };
 
-        let blob = state.to_blob();
+        let blob = serialize_state(&state);
         assert_eq!(blob[0], STATE_VERSION);
         assert_eq!(blob[1], Phase::Point as u8);
         assert_eq!(blob[2], 6);
@@ -2180,7 +2171,7 @@ mod tests {
         assert_eq!(blob[6], 1); // epoch_point_established
         assert_eq!(blob[7], 2); // bet count
 
-        let deserialized = CrapsState::from_blob(&blob).expect("Failed to parse state");
+        let deserialized = parse_state(&blob).expect("Failed to parse state");
         assert_eq!(deserialized.phase, state.phase);
         assert_eq!(deserialized.main_point, state.main_point);
         assert_eq!(deserialized.made_points_mask, state.made_points_mask);
@@ -2198,7 +2189,7 @@ mod tests {
             let len = rng.gen_range(0..=256);
             let mut blob = vec![0u8; len];
             rng.fill(&mut blob[..]);
-            let _ = CrapsState::from_blob(&blob);
+            let _ = parse_state(&blob);
         }
     }
 
@@ -2388,7 +2379,7 @@ mod tests {
         assert!(!session.is_complete);
 
         // Verify state
-        let state = CrapsState::from_blob(&session.state_blob).expect("Failed to parse state");
+        let state = parse_state(&session.state_blob).expect("Failed to parse state");
         assert_eq!(state.bets.len(), 1);
         assert_eq!(state.bets[0].bet_type, BetType::Field);
     }
@@ -2463,7 +2454,7 @@ mod tests {
         let mut rng = GameRng::new(&seed, session.id, 2);
         Craps::process_move(&mut session, &[2], &mut rng).expect("Failed to process move");
 
-        let state = CrapsState::from_blob(&session.state_blob).expect("Failed to parse state");
+        let state = parse_state(&session.state_blob).expect("Failed to parse state");
         if state.phase == Phase::Point {
             // Add odds
             let mut odds_payload = vec![1];
@@ -2474,7 +2465,7 @@ mod tests {
             assert!(result.is_ok());
 
             // Verify odds added
-            let state = CrapsState::from_blob(&session.state_blob).expect("Failed to parse state");
+            let state = parse_state(&session.state_blob).expect("Failed to parse state");
             assert_eq!(state.bets[0].odds_amount, 200);
         }
     }
@@ -2488,10 +2479,10 @@ mod tests {
         Craps::init(&mut session, &mut rng);
 
         // Force point phase (come bets are only allowed after a point is established).
-        let mut state = CrapsState::from_blob(&session.state_blob).expect("Failed to parse state");
+        let mut state = parse_state(&session.state_blob).expect("Failed to parse state");
         state.phase = Phase::Point;
         state.main_point = 4;
-        session.state_blob = state.to_blob();
+        session.state_blob = serialize_state(&state);
 
         // Place come bet
         let mut payload = vec![0, BetType::Come as u8, 0];
@@ -2500,11 +2491,11 @@ mod tests {
         let mut rng = GameRng::new(&seed, session.id, 1);
         Craps::process_move(&mut session, &payload, &mut rng).expect("Failed to process move");
 
-        let state = CrapsState::from_blob(&session.state_blob).expect("Failed to parse state");
+        let state = parse_state(&session.state_blob).expect("Failed to parse state");
         assert_eq!(state.bets[0].status, BetStatus::Pending);
 
         // Roll a point number (6) to travel the come bet.
-        let mut state = CrapsState::from_blob(&session.state_blob).expect("Failed to parse state");
+        let mut state = parse_state(&session.state_blob).expect("Failed to parse state");
         process_roll(&mut state, 3, 3);
         assert_eq!(state.bets[0].status, BetStatus::On);
         assert_eq!(state.bets[0].target, 6);
@@ -2531,7 +2522,7 @@ mod tests {
         assert!(result.is_ok());
 
         // Verify bets are cleared
-        let state = CrapsState::from_blob(&session.state_blob).expect("Failed to parse state");
+        let state = parse_state(&session.state_blob).expect("Failed to parse state");
         assert!(state.bets.is_empty());
 
         // Place another bet and roll
@@ -2570,7 +2561,7 @@ mod tests {
             assert!(result.is_ok());
         }
 
-        let state = CrapsState::from_blob(&session.state_blob).expect("Failed to parse state");
+        let state = parse_state(&session.state_blob).expect("Failed to parse state");
         assert_eq!(state.bets.len(), 2);
 
         // Verify we have Pass and Field bets
@@ -2583,7 +2574,7 @@ mod tests {
         let mut rng = GameRng::new(&seed, session.id, 3);
         Craps::process_move(&mut session, &[2], &mut rng).expect("Failed to process move");
 
-        let state = CrapsState::from_blob(&session.state_blob).expect("Failed to parse state");
+        let state = parse_state(&session.state_blob).expect("Failed to parse state");
         // Field bet always resolves on first roll, so at least that bet is gone
         // Remaining bets depend on actual dice roll (Pass may resolve on 7/11/2/3/12)
         assert!(
@@ -2698,7 +2689,7 @@ mod tests {
     }
 
     #[test]
-    fn test_yes_bet_target_2_can_be_placed() {
+    fn test_yes_bet_target_2_can_be_placed() -> Result<(), GameError> {
         // Verify YES bet with target 2 can be placed
         let seed = create_test_seed();
         let mut session = create_test_session(100);
@@ -2712,15 +2703,16 @@ mod tests {
         assert!(result.is_ok(), "YES bet with target 2 should be accepted");
 
         // Verify bet was placed
-        let state = CrapsState::from_blob(&session.state_blob).unwrap();
+        let state = parse_state(&session.state_blob).ok_or(GameError::InvalidPayload)?;
         assert_eq!(state.bets.len(), 1);
         assert_eq!(state.bets[0].bet_type, BetType::Yes);
         assert_eq!(state.bets[0].target, 2);
         assert_eq!(state.bets[0].amount, 100);
+        Ok(())
     }
 
     #[test]
-    fn test_no_bet_target_2_can_be_placed() {
+    fn test_no_bet_target_2_can_be_placed() -> Result<(), GameError> {
         // Verify NO bet with target 2 can be placed
         let seed = create_test_seed();
         let mut session = create_test_session(100);
@@ -2734,10 +2726,11 @@ mod tests {
         assert!(result.is_ok(), "NO bet with target 2 should be accepted");
 
         // Verify bet was placed
-        let state = CrapsState::from_blob(&session.state_blob).unwrap();
+        let state = parse_state(&session.state_blob).ok_or(GameError::InvalidPayload)?;
         assert_eq!(state.bets.len(), 1);
         assert_eq!(state.bets[0].bet_type, BetType::No);
         assert_eq!(state.bets[0].target, 2);
+        Ok(())
     }
 
     #[test]

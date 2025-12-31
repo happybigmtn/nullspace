@@ -1,28 +1,8 @@
 use super::casino_error_vec;
 use super::super::*;
-use commonware_codec::ReadExt;
-use commonware_utils::from_hex;
-use std::sync::OnceLock;
 
 const SECONDS_PER_DAY: u64 = 24 * 60 * 60;
 const MAX_BRIDGE_BYTES: usize = 64;
-
-fn admin_public_key() -> Option<PublicKey> {
-    static ADMIN_KEY: OnceLock<Option<PublicKey>> = OnceLock::new();
-    ADMIN_KEY
-        .get_or_init(|| {
-            let raw = std::env::var("CASINO_ADMIN_PUBLIC_KEY_HEX").ok()?;
-            let trimmed = raw.trim_start_matches("0x");
-            let bytes = from_hex(trimmed)?;
-            let mut buf = bytes.as_slice();
-            let key = PublicKey::read(&mut buf).ok()?;
-            if !buf.is_empty() {
-                return None;
-            }
-            Some(key)
-        })
-        .clone()
-}
 
 fn current_time_sec(view: u64) -> u64 {
     view.saturating_mul(3)
@@ -210,16 +190,13 @@ impl<'a, S: State> Layer<'a, S> {
         amount: u64,
         source: &[u8],
     ) -> anyhow::Result<Vec<Event>> {
-        match admin_public_key() {
-            Some(admin_key) if *public == admin_key => {}
-            _ => {
-                return Ok(casino_error_vec(
-                    public,
-                    None,
-                    nullspace_types::casino::ERROR_UNAUTHORIZED,
-                    "Unauthorized admin instruction",
-                ))
-            }
+        if !super::is_admin_public_key(public) {
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_UNAUTHORIZED,
+                "Unauthorized admin instruction",
+            ));
         }
         if amount == 0 {
             return Ok(casino_error_vec(
@@ -278,16 +255,13 @@ impl<'a, S: State> Layer<'a, S> {
         withdrawal_id: u64,
         source: &[u8],
     ) -> anyhow::Result<Vec<Event>> {
-        match admin_public_key() {
-            Some(admin_key) if *public == admin_key => {}
-            _ => {
-                return Ok(casino_error_vec(
-                    public,
-                    None,
-                    nullspace_types::casino::ERROR_UNAUTHORIZED,
-                    "Unauthorized admin instruction",
-                ))
-            }
+        if !super::is_admin_public_key(public) {
+            return Ok(casino_error_vec(
+                public,
+                None,
+                nullspace_types::casino::ERROR_UNAUTHORIZED,
+                "Unauthorized admin instruction",
+            ));
         }
         if !validate_source_bytes(source) {
             return Ok(casino_error_vec(

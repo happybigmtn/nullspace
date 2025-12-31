@@ -4,6 +4,7 @@ import { MAX_GRAPH_POINTS } from '../constants';
 import type { Ref } from '../refs';
 import { adjustResolvedBetsForNetPnl, formatCrapsChainResolvedBets, formatCrapsChainResults } from '../crapsLogs';
 import type { CrapsChainRollLog } from '../crapsLogs';
+import { parseCrapsState as parseCrapsStateBlob } from '@nullspace/game-state';
 import type { GameStateRef, SetGameState } from './types';
 
 type CrapsChainRollRef = Ref<{ sessionId: bigint; roll: CrapsChainRollLog } | null>;
@@ -19,6 +20,41 @@ type CrapsStateArgs = {
   crapsChainRollLogRef: CrapsChainRollRef;
 };
 
+const VALID_CRAPS_BETS = new Set<CrapsBet['type']>([
+  'PASS',
+  'DONT_PASS',
+  'COME',
+  'DONT_COME',
+  'FIELD',
+  'YES',
+  'NO',
+  'NEXT',
+  'HARDWAY',
+  'FIRE',
+  'ATS_SMALL',
+  'ATS_TALL',
+  'ATS_ALL',
+  'MUGGSY',
+  'DIFF_DOUBLES',
+  'RIDE_LINE',
+  'REPLAY',
+  'HOT_ROLLER',
+]);
+
+const isValidCrapsBet = (bet: CrapsBet): boolean => {
+  if (!VALID_CRAPS_BETS.has(bet.type)) return false;
+  if (!Number.isFinite(bet.amount) || bet.amount <= 0 || bet.amount > Number.MAX_SAFE_INTEGER) {
+    return false;
+  }
+  if (bet.target !== undefined) {
+    if (!Number.isFinite(bet.target) || bet.target < 0 || bet.target > 12) return false;
+    if (bet.type === 'HARDWAY' && ![4, 6, 8, 10].includes(bet.target)) {
+      return false;
+    }
+  }
+  return true;
+};
+
 export const applyCrapsState = ({
   stateBlob,
   gameType,
@@ -28,51 +64,16 @@ export const applyCrapsState = ({
   isPendingRef,
   crapsChainRollLogRef,
 }: CrapsStateArgs): void => {
-  if (stateBlob.length < 5) {
-    console.error('[parseGameState] Craps state blob too short:', stateBlob.length);
+  const parsed = parseCrapsStateBlob(stateBlob);
+  if (!parsed) {
+    console.error('[parseGameState] Invalid Craps state blob');
     return;
   }
 
-  const looksLikeV2 =
-    stateBlob[0] === 2 && stateBlob.length >= 8 && (stateBlob[1] === 0 || stateBlob[1] === 1);
-  const looksLikeV1 =
-    stateBlob[0] === 1 && stateBlob.length >= 7 && (stateBlob[1] === 0 || stateBlob[1] === 1);
-
-  let d1: number;
-  let d2: number;
-  let mainPoint: number;
-  let epochPointEstablished: boolean;
-  let madePointsMask: number;
-  let betCount: number;
-  let betsOffset: number;
-
-  if (looksLikeV2) {
-    mainPoint = stateBlob[2];
-    d1 = stateBlob[3];
-    d2 = stateBlob[4];
-    madePointsMask = stateBlob[5] ?? 0;
-    epochPointEstablished = stateBlob[6] === 1;
-    betCount = stateBlob[7];
-    betsOffset = 8;
-  } else if (looksLikeV1) {
-    mainPoint = stateBlob[2];
-    d1 = stateBlob[3];
-    d2 = stateBlob[4];
-    madePointsMask = stateBlob[5] ?? 0;
-    epochPointEstablished = stateBlob[1] === 1 || mainPoint > 0 || madePointsMask !== 0;
-    betCount = stateBlob[6];
-    betsOffset = 7;
-  } else {
-    mainPoint = stateBlob[1];
-    d1 = stateBlob[2];
-    d2 = stateBlob[3];
-    madePointsMask = 0;
-    epochPointEstablished = stateBlob[0] === 1 || mainPoint > 0;
-    betCount = stateBlob[4];
-    betsOffset = 5;
-  }
-
-  const view = new DataView(stateBlob.buffer, stateBlob.byteOffset, stateBlob.byteLength);
+  const [d1, d2] = parsed.dice;
+  const mainPoint = parsed.mainPoint;
+  const epochPointEstablished = parsed.epochPointEstablished;
+  const madePointsMask = parsed.madePointsMask;
   const BET_TYPE_REVERSE: Record<number, CrapsBet['type']> = {
     0: 'PASS',
     1: 'DONT_PASS',
@@ -98,13 +99,12 @@ export const applyCrapsState = ({
   };
 
   const parsedBets: CrapsBet[] = [];
-  let offset = betsOffset;
-  for (let i = 0; i < betCount && offset + 19 <= stateBlob.length; i++) {
-    const betTypeVal = stateBlob[offset];
-    const target = stateBlob[offset + 1];
-    const statusVal = stateBlob[offset + 2];
-    const amount = Number(view.getBigUint64(offset + 3, false));
-    const oddsAmount = Number(view.getBigUint64(offset + 11, false));
+  for (const bet of parsed.bets) {
+    const betTypeVal = bet.betType;
+    const target = bet.target;
+    const statusVal = bet.status;
+    const amount = bet.amount;
+    const oddsAmount = bet.oddsAmount;
 
     const betType = BET_TYPE_REVERSE[betTypeVal] || 'PASS';
     const isHardway = betTypeVal >= 8 && betTypeVal <= 11;
@@ -128,7 +128,6 @@ export const applyCrapsState = ({
       oddsAmount: (!isHardway && !isSideBetWithProgress && oddsAmount > 0) ? oddsAmount : undefined,
       progressMask: isSideBetWithProgress ? oddsAmount : undefined,
     });
-    offset += 19;
   }
 
   if (gameStateRef.current) {
@@ -220,6 +219,10 @@ export const applyCrapsState = ({
     for (const bet of localStagedBets) {
       const key = betKeyLoose(bet);
       if (seen.has(key)) continue;
+      if (!isValidCrapsBet(bet)) {
+        console.warn('[parseGameState] Ignoring invalid local craps bet', bet);
+        continue;
+      }
       seen.add(key);
       mergedBets.push(bet);
     }

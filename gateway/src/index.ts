@@ -4,6 +4,7 @@
  * Bridges mobile JSON protocol to Rust backend binary protocol.
  * Enables full-stack testing with real on-chain game execution.
  */
+import './telemetry.js';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { createHandlerRegistry, type HandlerContext } from './handlers/index.js';
 import { SessionManager, NonceManager, ConnectionLimiter } from './session/index.js';
@@ -19,6 +20,7 @@ const MAX_CONNECTIONS_PER_IP = parseInt(process.env.MAX_CONNECTIONS_PER_IP || '5
 const MAX_TOTAL_SESSIONS = parseInt(process.env.MAX_TOTAL_SESSIONS || '1000', 10);
 const DEFAULT_FAUCET_AMOUNT = 1000n;
 const FAUCET_COOLDOWN_MS = 60_000;
+const BALANCE_REFRESH_MS = parseInt(process.env.BALANCE_REFRESH_MS || '60000', 10);
 
 // Core services
 const nonceManager = new NonceManager();
@@ -260,7 +262,8 @@ wss.on('connection', async (ws: WebSocket, req) => {
 
   try {
     // Create session with auto-registration
-    const session = await sessionManager.createSession(ws);
+    const session = await sessionManager.createSession(ws, {}, clientIp);
+    sessionManager.startBalanceRefresh(session, BALANCE_REFRESH_MS);
 
     // Send session ready message
     send(ws, {

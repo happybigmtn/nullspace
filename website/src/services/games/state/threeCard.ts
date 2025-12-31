@@ -1,6 +1,7 @@
 import type { Card, GameState } from '../../../types';
 import { GameType } from '../../../types';
 import { decodeCard } from '../shared/cards';
+import { parseThreeCardState as parseThreeCardStateBlob } from '@nullspace/game-state';
 import type { GameStateRef, SetGameState } from './types';
 
 type ThreeCardStateArgs = {
@@ -16,26 +17,19 @@ export const applyThreeCardState = ({
   setGameState,
   gameStateRef,
 }: ThreeCardStateArgs): void => {
-  const version = stateBlob[0];
-  if (version !== 1 && version !== 2 && version !== 3) {
-    console.error('[parseGameState] Unsupported Three Card state version:', version);
+  const parsed = parseThreeCardStateBlob(stateBlob);
+  if (!parsed) {
+    console.error('[parseGameState] Invalid Three Card state blob');
     return;
   }
 
-  const requiredLen = version === 3 ? 32 : version === 2 ? 24 : 16;
-  if (stateBlob.length < requiredLen) {
-    console.error('[parseGameState] Three Card state blob too short:', stateBlob.length);
-    return;
-  }
+  const stageVal = parsed.stage;
+  const pairplusBet = parsed.pairPlusBet;
+  const sixCardBonusBet = parsed.sixCardBonusBet;
+  const progressiveBet = parsed.progressiveBet;
 
-  const view = new DataView(stateBlob.buffer, stateBlob.byteOffset, stateBlob.byteLength);
-  const stageVal = stateBlob[1];
-  const pairplusBet = Number(view.getBigUint64(8, false));
-  const sixCardBonusBet = version >= 2 ? Number(view.getBigUint64(16, false)) : 0;
-  const progressiveBet = version === 3 ? Number(view.getBigUint64(24, false)) : 0;
-
-  const pBytes = [stateBlob[2], stateBlob[3], stateBlob[4]];
-  const dBytes = [stateBlob[5], stateBlob[6], stateBlob[7]];
+  const pBytes = parsed.playerCards;
+  const dBytes = parsed.dealerCards;
 
   const pCards: Card[] = stageVal === 0 ? [] : pBytes.map(decodeCard);
   const dCards: Card[] =

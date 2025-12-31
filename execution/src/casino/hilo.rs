@@ -20,12 +20,17 @@
 //!
 //! Draws WITH replacement (always 52 cards in deck).
 
+use super::logging::clamp_i64;
+use super::serialization::{StateReader, StateWriter};
 use super::super_mode::apply_hilo_streak_multiplier;
 use super::{cards, CasinoGame, GameError, GameResult, GameRng};
 use nullspace_types::casino::GameSession;
 
 /// Base multiplier in basis points (1.0 = 10000)
 const BASE_MULTIPLIER: i64 = 10_000;
+const STATE_LEN_BASE: usize = 9;
+const STATE_LEN_WITH_RULES: usize = 10;
+const STATE_LEN_WITH_MULTIPLIERS: usize = 22;
 
 fn format_card_label(card: u8) -> String {
     if !cards::is_valid_card(card) {
@@ -48,10 +53,6 @@ fn format_card_label(card: u8) -> String {
         _ => "?",
     };
     format!("{}{}", rank_label, suit)
-}
-
-fn clamp_i64(value: i128) -> i64 {
-    value.clamp(i64::MIN as i128, i64::MAX as i128) as i64
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -183,22 +184,24 @@ fn next_guess_multipliers(current_card: u8, rules: HiLoRules) -> (u32, u32, u32)
 
 /// Parse state blob into current card, accumulator, and rules.
 fn parse_state(state: &[u8]) -> Option<HiLoState> {
-    if state.len() < 9 {
+    if state.len() < STATE_LEN_BASE {
         return None;
     }
-    if state.len() != 9 && state.len() != 10 && state.len() != 22 {
+    if state.len() != STATE_LEN_BASE
+        && state.len() != STATE_LEN_WITH_RULES
+        && state.len() != STATE_LEN_WITH_MULTIPLIERS
+    {
         return None;
     }
 
-    let current_card = state[0];
+    let mut reader = StateReader::new(state);
+    let current_card = reader.read_u8()?;
     if current_card >= 52 {
         return None;
     }
-    let accumulator = i64::from_be_bytes([
-        state[1], state[2], state[3], state[4], state[5], state[6], state[7], state[8],
-    ]);
-    let rules = if state.len() >= 10 {
-        HiLoRules::from_byte(state[9])
+    let accumulator = reader.read_i64_be()?;
+    let rules = if reader.remaining() > 0 {
+        HiLoRules::from_byte(reader.read_u8()?)
     } else {
         HiLoRules::default()
     };
@@ -212,15 +215,15 @@ fn parse_state(state: &[u8]) -> Option<HiLoState> {
 
 /// Serialize state to blob.
 fn serialize_state(current_card: u8, accumulator: i64, rules: HiLoRules) -> Vec<u8> {
-    let mut state = Vec::with_capacity(22);
-    state.push(current_card);
-    state.extend_from_slice(&accumulator.to_be_bytes());
-    state.push(rules.to_byte());
+    let mut state = StateWriter::with_capacity(22);
+    state.push_u8(current_card);
+    state.push_i64_be(accumulator);
+    state.push_u8(rules.to_byte());
     let (higher, lower, same) = next_guess_multipliers(current_card, rules);
-    state.extend_from_slice(&higher.to_be_bytes());
-    state.extend_from_slice(&lower.to_be_bytes());
-    state.extend_from_slice(&same.to_be_bytes());
-    state
+    state.push_u32_be(higher);
+    state.push_u32_be(lower);
+    state.push_u32_be(same);
+    state.into_inner()
 }
 
 pub struct HiLo;

@@ -1,6 +1,7 @@
 import type { GameState } from '../../../types';
 import { GameType } from '../../../types';
 import { MAX_GRAPH_POINTS } from '../constants';
+import { parseSicBoState as parseSicBoStateBlob } from '@nullspace/game-state';
 import type { GameStateRef, SetGameState } from './types';
 
 type SicBoStateArgs = {
@@ -16,21 +17,14 @@ export const applySicBoState = ({
   setGameState,
   gameStateRef,
 }: SicBoStateArgs): void => {
-  if (stateBlob.length < 1) {
-    console.error('[parseGameState] SicBo state blob too short:', stateBlob.length);
+  const parsed = parseSicBoStateBlob(stateBlob);
+  if (!parsed) {
+    console.error('[parseGameState] Invalid SicBo state blob');
     return;
   }
 
-  const betCount = stateBlob[0];
-  const betsSize = betCount * 10;
-  const diceOffset = 1 + betsSize;
-
-  if (stateBlob.length >= diceOffset + 3) {
-    const dice: [number, number, number] = [
-      stateBlob[diceOffset],
-      stateBlob[diceOffset + 1],
-      stateBlob[diceOffset + 2],
-    ];
+  if (parsed.dice) {
+    const dice = parsed.dice;
     const total = dice[0] + dice[1] + dice[2];
 
     if (gameStateRef.current) {

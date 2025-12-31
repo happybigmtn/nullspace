@@ -1,0 +1,25 @@
+name: Type Generation
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  generate-types:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Run setup
+        uses: ./.github/actions/setup
+      - name: Generate TypeScript types
+        run: cargo run --release --bin export_ts --features ts
+      - name: Check for drift
+        run: |
+          if ! git diff --exit-code packages/types/src/generated; then
+            echo "❌ Generated types are out of sync!"
+            echo "Run: cargo run --release --bin export_ts --features ts"
+            exit 1
+          fi
+          echo "✅ Generated types are up to date"

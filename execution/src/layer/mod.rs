@@ -620,6 +620,7 @@ mod tests {
     use crate::mocks::{create_account_keypair, create_network_keypair, create_seed};
     use commonware_runtime::deterministic::Runner;
     use commonware_runtime::Runner as _;
+    use commonware_utils::hex;
     use nullspace_types::casino::{GameType, TournamentPhase};
 
     const TEST_NAMESPACE: &[u8] = b"test-namespace";
@@ -741,6 +742,8 @@ mod tests {
             let mut layer = Layer::new(&state, master_public, TEST_NAMESPACE, seed);
 
             let (signer, public) = create_account_keypair(1);
+            let (admin_signer, admin_public) = create_account_keypair(999);
+            std::env::set_var("CASINO_ADMIN_PUBLIC_KEY_HEX", hex(admin_public.as_ref()));
 
             let register = Transaction::sign(
                 &signer,
@@ -779,6 +782,25 @@ mod tests {
             );
             assert!(layer.prepare(&start).await.is_ok());
             let events = layer.apply(&start).await.unwrap();
+            assert!(
+                !events.iter().any(|event| matches!(
+                    event,
+                    Event::TournamentStarted { id, .. } if *id == tournament_id
+                )),
+                "non-admin should not start tournaments"
+            );
+
+            let start = Transaction::sign(
+                &admin_signer,
+                2,
+                Instruction::CasinoStartTournament {
+                    tournament_id,
+                    start_time_ms,
+                    end_time_ms: start_time_ms + expected_duration_ms,
+                },
+            );
+            assert!(layer.prepare(&start).await.is_ok());
+            let events = layer.apply(&start).await.unwrap();
             assert!(events.iter().any(|event| matches!(
                 event,
                 Event::TournamentStarted { id, .. } if *id == tournament_id
@@ -806,7 +828,7 @@ mod tests {
             }
 
             let end = Transaction::sign(
-                &signer,
+                &admin_signer,
                 3,
                 Instruction::CasinoEndTournament { tournament_id },
             );
@@ -832,6 +854,56 @@ mod tests {
                 assert_eq!(player.tournament.chips, 0);
             } else {
                 panic!("Player not found");
+            }
+
+            let _ = layer.commit();
+        });
+    }
+
+    #[test]
+    fn test_game_start_persists_session() {
+        let executor = Runner::default();
+        executor.start(|_| async move {
+            let state = MockState::new();
+            let (network_secret, master_public) = create_network_keypair();
+            let seed = create_seed(&network_secret, 1);
+            let mut layer = Layer::new(&state, master_public, TEST_NAMESPACE, seed);
+
+            let (signer, public) = create_account_keypair(1);
+            let register = Transaction::sign(
+                &signer,
+                0,
+                Instruction::CasinoRegister {
+                    name: "Alice".to_string(),
+                },
+            );
+            assert!(layer.prepare(&register).await.is_ok());
+            let _ = layer.apply(&register).await.unwrap();
+
+            let session_id = 42;
+            let start = Transaction::sign(
+                &signer,
+                1,
+                Instruction::CasinoStartGame {
+                    game_type: GameType::Blackjack,
+                    bet: 10,
+                    session_id,
+                },
+            );
+            assert!(layer.prepare(&start).await.is_ok());
+            let events = layer.apply(&start).await.unwrap();
+            assert!(events.iter().any(|event| matches!(
+                event,
+                Event::CasinoGameStarted { session_id: id, .. } if *id == session_id
+            )));
+
+            if let Some(Value::CasinoSession(session)) =
+                layer.get(&Key::CasinoSession(session_id)).await.unwrap()
+            {
+                assert_eq!(session.id, session_id);
+                assert_eq!(session.player, public);
+            } else {
+                panic!("Session not found");
             }
 
             let _ = layer.commit();

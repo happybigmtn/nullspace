@@ -2,7 +2,7 @@ groups:
   - name: simulator_limits
     rules:
       - alert: SimulatorHttpRejectOrigin
-        expr: increase(nullspace_simulator_http_reject_origin_total[5m]) > 0
+        expr: increase(nullspace_simulator_http_reject_origin_total[5m]) > 5
         for: 5m
         labels:
           severity: warning
@@ -10,7 +10,7 @@ groups:
           summary: "Simulator rejecting HTTP requests due to origin checks"
           description: "Origin validation is rejecting requests. Verify allowed origins and client config."
       - alert: SimulatorHttpRejectRateLimit
-        expr: increase(nullspace_simulator_http_reject_rate_limit_total[5m]) > 0
+        expr: increase(nullspace_simulator_http_reject_rate_limit_total[5m]) > 10
         for: 5m
         labels:
           severity: warning
@@ -18,7 +18,7 @@ groups:
           summary: "Simulator HTTP rate limit exceeded"
           description: "Rate limiting is rejecting requests. Consider tuning limits or client backoff."
       - alert: SimulatorHttpRejectBodyLimit
-        expr: increase(nullspace_simulator_http_reject_body_limit_total[5m]) > 0
+        expr: increase(nullspace_simulator_http_reject_body_limit_total[5m]) > 5
         for: 5m
         labels:
           severity: warning
@@ -26,7 +26,7 @@ groups:
           summary: "Simulator HTTP body limit exceeded"
           description: "Request bodies exceeded configured size limits. Check client payload sizes."
       - alert: SimulatorWsConnectionRejects
-        expr: increase(nullspace_simulator_ws_connection_reject_global_total[5m]) > 0 or increase(nullspace_simulator_ws_connection_reject_per_ip_total[5m]) > 0
+        expr: increase(nullspace_simulator_ws_connection_reject_global_total[5m]) > 5 or increase(nullspace_simulator_ws_connection_reject_per_ip_total[5m]) > 5
         for: 5m
         labels:
           severity: warning
@@ -34,7 +34,7 @@ groups:
           summary: "Simulator WS connection rejects detected"
           description: "WebSocket connection limits are rejecting clients. Verify per-IP/global limits."
       - alert: SimulatorWsQueueFull
-        expr: increase(nullspace_simulator_ws_updates_queue_full_total[5m]) > 0 or increase(nullspace_simulator_ws_mempool_queue_full_total[5m]) > 0
+        expr: increase(nullspace_simulator_ws_updates_queue_full_total[5m]) > 3 or increase(nullspace_simulator_ws_mempool_queue_full_total[5m]) > 3
         for: 5m
         labels:
           severity: warning
@@ -42,7 +42,7 @@ groups:
           summary: "Simulator WS queue full"
           description: "WS updates/mempool queues are full. Check backpressure and client consumption."
       - alert: SimulatorWsSendErrors
-        expr: rate(nullspace_simulator_ws_updates_send_errors_total[5m]) > 0 or rate(nullspace_simulator_ws_mempool_send_errors_total[5m]) > 0
+        expr: rate(nullspace_simulator_ws_updates_send_errors_total[5m]) > 0.05 or rate(nullspace_simulator_ws_mempool_send_errors_total[5m]) > 0.05
         for: 5m
         labels:
           severity: critical
@@ -50,7 +50,7 @@ groups:
           summary: "Simulator WS send errors detected"
           description: "WebSocket send failures detected. Investigate network stability and backpressure."
       - alert: SimulatorWsSendTimeouts
-        expr: rate(nullspace_simulator_ws_updates_send_timeouts_total[5m]) > 0 or rate(nullspace_simulator_ws_mempool_send_timeouts_total[5m]) > 0
+        expr: rate(nullspace_simulator_ws_updates_send_timeouts_total[5m]) > 0.05 or rate(nullspace_simulator_ws_mempool_send_timeouts_total[5m]) > 0.05
         for: 5m
         labels:
           severity: warning
@@ -58,7 +58,7 @@ groups:
           summary: "Simulator WS send timeouts detected"
           description: "WebSocket sends are timing out. Investigate queueing and downstream clients."
       - alert: SimulatorUpdateIndexFailures
-        expr: increase(nullspace_simulator_update_index_failures_total[5m]) > 0
+        expr: increase(nullspace_simulator_update_index_failures_total[5m]) > 3
         for: 5m
         labels:
           severity: warning
@@ -68,7 +68,7 @@ groups:
   - name: node_mempool_limits
     rules:
       - alert: NodeMempoolRejected
-        expr: sum(increase({__name__=~".*_application_mempool_rejected_total"}[5m])) > 0
+        expr: sum(increase({__name__=~".*_application_mempool_rejected_total"}[5m])) > 10
         for: 5m
         labels:
           severity: warning
@@ -76,7 +76,7 @@ groups:
           summary: "Node mempool rejecting transactions due to limits"
           description: "Mempool max transactions limit is being hit. Consider tuning limits or load shedding."
       - alert: NodeMempoolTrimmed
-        expr: sum(increase({__name__=~".*_application_mempool_trimmed_total"}[5m])) > 0
+        expr: sum(increase({__name__=~".*_application_mempool_trimmed_total"}[5m])) > 10
         for: 5m
         labels:
           severity: warning
@@ -86,10 +86,42 @@ groups:
   - name: casino_activity
     rules:
       - alert: CasinoErrorSpike
-        expr: rate(nullspace_simulator_casino_errors_total[5m]) > 0
+        expr: rate(nullspace_simulator_casino_errors_total[5m]) > 0.05
         for: 5m
         labels:
           severity: warning
         annotations:
           summary: "Casino error events observed"
           description: "CasinoError events are being emitted. Check execution logs for invalid moves or state issues."
+  - name: simulator_slo
+    rules:
+      - record: nullspace_simulator_http_submit_latency_slo
+        expr: sum(rate(nullspace_simulator_http_submit_latency_ms_bucket{le="250"}[5m])) / sum(rate(nullspace_simulator_http_submit_latency_ms_count[5m]))
+      - record: nullspace_simulator_http_query_state_latency_slo
+        expr: sum(rate(nullspace_simulator_http_query_state_latency_ms_bucket{le="250"}[5m])) / sum(rate(nullspace_simulator_http_query_state_latency_ms_count[5m]))
+      - record: nullspace_simulator_http_query_seed_latency_slo
+        expr: sum(rate(nullspace_simulator_http_query_seed_latency_ms_bucket{le="250"}[5m])) / sum(rate(nullspace_simulator_http_query_seed_latency_ms_count[5m]))
+      - alert: SimulatorSubmitLatencySloBurn
+        expr: nullspace_simulator_http_submit_latency_slo < 0.99
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Simulator submit latency SLO burn"
+          description: "Less than 99% of submit requests complete under 250ms over 5m."
+      - alert: SimulatorQueryStateLatencySloBurn
+        expr: nullspace_simulator_http_query_state_latency_slo < 0.99
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Simulator query_state latency SLO burn"
+          description: "Less than 99% of query_state requests complete under 250ms over 5m."
+      - alert: SimulatorQuerySeedLatencySloBurn
+        expr: nullspace_simulator_http_query_seed_latency_slo < 0.99
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Simulator query_seed latency SLO burn"
+          description: "Less than 99% of query_seed requests complete under 250ms over 5m."

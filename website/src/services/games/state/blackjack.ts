@@ -1,6 +1,7 @@
 import type { Card, CompletedHand, GameState } from '../../../types';
 import { GameType } from '../../../types';
 import { decodeCard } from '../shared/cards';
+import { parseBlackjackState as parseBlackjackStateBlob } from '@nullspace/game-state';
 import type { GameStateRef, SetGameState } from './types';
 
 type BlackjackStateArgs = {
@@ -18,31 +19,17 @@ export const applyBlackjackState = ({
   setGameState,
   gameStateRef,
 }: BlackjackStateArgs): void => {
-  if (stateBlob.length < 2) {
-    console.error('[parseGameState] Blackjack state blob too short:', stateBlob.length);
+  const parsed = parseBlackjackStateBlob(stateBlob);
+  if (!parsed) {
+    console.error('[parseGameState] Invalid blackjack state blob');
     return;
   }
 
-  const version = stateBlob[0];
-  if (version !== 2) {
-    console.error('[parseGameState] Unsupported blackjack state version:', version);
-    return;
-  }
-  if (stateBlob.length < 14) {
-    console.error('[parseGameState] Blackjack v2 state blob too short:', stateBlob.length);
-    return;
-  }
-
-  const view = new DataView(stateBlob.buffer, stateBlob.byteOffset, stateBlob.byteLength);
-  let offset = 0;
-  offset++; // version
-  const bjStage = stateBlob[offset++]; // 0=Betting,1=PlayerTurn,2=AwaitingReveal,3=Complete
-  const sideBet21p3 = Number(view.getBigUint64(offset, false));
-  offset += 8;
-  const initP1 = stateBlob[offset++];
-  const initP2 = stateBlob[offset++];
-  const activeHandIdx = stateBlob[offset++];
-  const handCount = stateBlob[offset++];
+  const bjStage = parsed.stage;
+  const sideBet21p3 = parsed.sideBet21Plus3;
+  const [initP1, initP2] = parsed.initPlayerCards;
+  const activeHandIdx = parsed.activeHandIndex;
+  const handCount = parsed.hands.length;
 
   const prevState = gameStateRef.current ?? fallbackState;
   const baseBet = prevState?.bet || 100;
@@ -55,15 +42,11 @@ export const applyBlackjackState = ({
   const allHandsFinished = activeHandIdx >= handCount;
 
   for (let h = 0; h < handCount; h++) {
-    const betMult = stateBlob[offset++];
-    const status = stateBlob[offset++]; // 0=Play, 1=Stand, 2=Bust, 3=BJ
-    offset++; // was_split (unused for display)
-    const cLen = stateBlob[offset++];
+    const hand = parsed.hands[h];
+    const betMult = hand.betMult;
+    const status = hand.status; // 0=Play, 1=Stand, 2=Bust, 3=BJ
 
-    const handCards: Card[] = [];
-    for (let i = 0; i < cLen; i++) {
-      handCards.push(decodeCard(stateBlob[offset++]));
-    }
+    const handCards: Card[] = hand.cards.map((cardId) => decodeCard(cardId));
 
     const isDoubled = betMult === 2;
     const handBet = baseBet * betMult;
@@ -85,9 +68,8 @@ export const applyBlackjackState = ({
     }
   }
 
-  const dLen = stateBlob[offset++];
-  for (let i = 0; i < dLen; i++) {
-    dCards.push(decodeCard(stateBlob[offset++]));
+  for (const cardId of parsed.dealerCards) {
+    dCards.push(decodeCard(cardId));
   }
 
   let blackjackPlayerValue: number | null = null;
@@ -98,19 +80,16 @@ export const applyBlackjackState = ({
     canDouble: false,
     canSplit: false,
   };
-  if (stateBlob.length >= offset + 2) {
-    offset += 2;
-    if (stateBlob.length >= offset + 3) {
-      blackjackPlayerValue = stateBlob[offset];
-      blackjackDealerValue = stateBlob[offset + 1];
-      const actionMask = stateBlob[offset + 2];
-      blackjackActions = {
-        canHit: (actionMask & 0x01) !== 0,
-        canStand: (actionMask & 0x02) !== 0,
-        canDouble: (actionMask & 0x04) !== 0,
-        canSplit: (actionMask & 0x08) !== 0,
-      };
-    }
+  if (parsed.playerValue !== null && parsed.dealerValue !== null && parsed.actionMask !== null) {
+    blackjackPlayerValue = parsed.playerValue;
+    blackjackDealerValue = parsed.dealerValue;
+    const actionMask = parsed.actionMask;
+    blackjackActions = {
+      canHit: (actionMask & 0x01) !== 0,
+      canStand: (actionMask & 0x02) !== 0,
+      canDouble: (actionMask & 0x04) !== 0,
+      canSplit: (actionMask & 0x08) !== 0,
+    };
   }
 
   const isComplete = bjStage === 3;

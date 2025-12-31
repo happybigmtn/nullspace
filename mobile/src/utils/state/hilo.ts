@@ -1,6 +1,6 @@
 import type { Card } from '../../types';
 import { decodeCardId } from '../cards';
-import { readI64BE } from './shared';
+import { parseHiLoState as parseHiLoStateBlob } from '@nullspace/game-state';
 
 export interface HiLoStateUpdate {
   currentCard: Card | null;
@@ -8,16 +8,12 @@ export interface HiLoStateUpdate {
 }
 
 export function parseHiLoState(stateBlob: Uint8Array): HiLoStateUpdate | null {
-  if (stateBlob.length < 9) {
+  const parsed = parseHiLoStateBlob(stateBlob);
+  if (!parsed) {
     return null;
   }
-  const cardId = stateBlob[0];
-  if (cardId === undefined) {
-    return null;
-  }
-  const card = decodeCardId(cardId);
-  const view = new DataView(stateBlob.buffer, stateBlob.byteOffset, stateBlob.byteLength);
-  const accumulator = Number(readI64BE(view, 1));
+  const card = decodeCardId(parsed.cardId);
+  const accumulator = Number(parsed.accumulatorBasisPoints);
   return {
     currentCard: card,
     accumulator: Number.isFinite(accumulator) ? accumulator : null,

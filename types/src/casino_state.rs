@@ -37,7 +37,7 @@ pub enum GameStage {
 }
 
 #[derive(TS, Debug, Clone, PartialEq)]
-#[ts(export)]
+#[ts(export, rename_all = "camelCase")]
 pub struct Card {
     pub suit: String,
     pub rank: String,

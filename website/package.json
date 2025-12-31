@@ -22,7 +22,8 @@
     "e2e:auth": "node scripts/e2e-auth-billing.mjs",
     "e2e:layout": "node scripts/layout-smoke.mjs",
     "latency-test": "node scripts/latency-test.mjs",
-    "latency-test:headed": "HEADED=1 node scripts/latency-test.mjs"
+    "latency-test:headed": "HEADED=1 node scripts/latency-test.mjs",
+    "qa:bet-suite": "node scripts/qa-bet-suite.mjs"
   },
   "keywords": [],
   "author": "",
@@ -32,6 +33,7 @@
   "dependencies": {
     "@nullspace/constants": "workspace:*",
     "@nullspace/design-tokens": "workspace:*",
+    "@nullspace/game-state": "workspace:*",
     "@nullspace/protocol": "workspace:*",
     "@nullspace/types": "workspace:*",
     "@react-spring/web": "^10.0.3",

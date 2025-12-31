@@ -1,12 +1,63 @@
-use anyhow::Context;
+use anyhow::{Context, Result};
 use clap::Parser;
 use commonware_codec::DecodeExt;
 use nullspace_simulator::{Api, Simulator, SimulatorConfig};
 use nullspace_types::Identity;
+use opentelemetry_otlp::WithExportConfig;
 use std::net::{IpAddr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::Arc;
+use opentelemetry::trace::TracerProvider as _;
 use tracing::info;
+use tracing_subscriber::filter::LevelFilter;
+use tracing_subscriber::Layer;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+
+fn init_tracing() -> Result<()> {
+    let endpoint = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT")
+        .ok()
+        .and_then(|value| {
+            let trimmed = value.trim().to_string();
+            (!trimmed.is_empty()).then_some(trimmed)
+        });
+
+    if let Some(endpoint) = endpoint {
+        let service_name =
+            std::env::var("OTEL_SERVICE_NAME").unwrap_or_else(|_| "nullspace-simulator".to_string());
+        let rate = std::env::var("OTEL_SAMPLING_RATE")
+            .ok()
+            .and_then(|value| value.parse::<f64>().ok())
+            .map(|value| value.clamp(0.0, 1.0))
+            .unwrap_or(1.0);
+        let exporter = opentelemetry_otlp::SpanExporter::builder()
+            .with_http()
+            .with_endpoint(endpoint)
+            .build()
+            .context("failed to build OTLP exporter")?;
+        let tracer_provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
+            .with_sampler(opentelemetry_sdk::trace::Sampler::TraceIdRatioBased(rate))
+            .with_resource(
+                opentelemetry_sdk::Resource::builder_empty()
+                    .with_attributes([opentelemetry::KeyValue::new("service.name", service_name)])
+                    .build(),
+            )
+            .with_batch_exporter(exporter)
+            .build();
+        let tracer = tracer_provider.tracer("nullspace-simulator");
+        opentelemetry::global::set_tracer_provider(tracer_provider);
+
+        tracing_subscriber::registry()
+            .with(tracing_subscriber::fmt::layer().with_filter(LevelFilter::INFO))
+            .with(tracing_opentelemetry::layer().with_tracer(tracer))
+            .init();
+    } else {
+        tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::INFO)
+            .init();
+    }
+
+    Ok(())
+}
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -160,9 +211,7 @@ async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     // Create logger
-    tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::INFO)
-        .init();
+    init_tracing()?;
 
     // Parse identity
     eprintln!("DEBUG: Identity string len: {}", args.identity.len());

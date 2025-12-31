@@ -118,6 +118,14 @@ export const createGameCompletedHandler = ({
     };
     const resultMessage = parsed && !isPlaceholder(parsed.summary) ? parsed.summary : fallback.summary;
     const resolvedBets = adjustResolvedBetsForNetPnl(parsed?.resolvedBets ?? [], netPnL);
+    const rouletteResult = (() => {
+      if (eventGameType !== GameType.ROULETTE) return null;
+      if (!parsed?.raw || typeof parsed.raw !== 'object') return null;
+      const raw: any = parsed.raw;
+      const value = raw.result ?? raw.number ?? raw.roll ?? null;
+      const numeric = Number(value);
+      return Number.isFinite(numeric) ? numeric : null;
+    })();
 
     const wasSuperRound = gameStateRef.current?.superMode?.isActive || gameStateRef.current?.activeModifiers?.super;
     if (wasSuperRound) {
@@ -167,6 +175,11 @@ export const createGameCompletedHandler = ({
       lastResult: netPnL,
       resolvedBets,
       resolvedBetsKey: resolvedBets.length > 0 ? prev.resolvedBetsKey + 1 : prev.resolvedBetsKey,
+      rouletteHistory: rouletteResult === null
+        ? prev.rouletteHistory
+        : (prev.rouletteHistory[prev.rouletteHistory.length - 1] === rouletteResult
+          ? prev.rouletteHistory
+          : [...prev.rouletteHistory, rouletteResult].slice(-MAX_GRAPH_POINTS)),
       sessionId: null,
       moveNumber: 0,
       sessionWager: 0,

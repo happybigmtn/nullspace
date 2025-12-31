@@ -1,6 +1,8 @@
 import type { BaccaratBet, CrapsBet, RouletteBet, SicBoBet } from '../../types';
+import { validateBetAmount } from './validation';
 
 export const serializeBaccaratBet = (betType: number, amount: number): Uint8Array => {
+  validateBetAmount(amount, 'BaccaratBet');
   const payload = new Uint8Array(10);
   payload[0] = 0;
   payload[1] = betType;
@@ -48,6 +50,7 @@ export const serializeBaccaratAtomicBatch = (
   const view = new DataView(payload.buffer);
   let offset = 2;
   for (const bet of bets) {
+    validateBetAmount(bet.amount, 'BaccaratAtomicBatch');
     payload[offset] = bet.betType;
     view.setBigUint64(offset + 1, BigInt(bet.amount), false);
     offset += 9;
@@ -59,6 +62,8 @@ export const serializeBaccaratAtomicBatch = (
 const rouletteBetToNumeric = (bet: RouletteBet): { betType: number; number: number; amount: number } => {
   let betType: number;
   let number = 0;
+
+  validateBetAmount(bet.amount, 'RouletteBet');
 
   switch (bet.type) {
     case 'STRAIGHT': betType = 0; number = bet.target ?? 0; break;
@@ -105,92 +110,15 @@ export const serializeRouletteAtomicBatch = (bets: RouletteBet[]): Uint8Array =>
 };
 
 export const serializeRouletteBet = (bet: RouletteBet): Uint8Array => {
+  const numeric = rouletteBetToNumeric(bet);
   const payload = new Uint8Array(11);
   payload[0] = 0;
 
-  switch (bet.type) {
-    case 'STRAIGHT':
-      payload[1] = 0;
-      payload[2] = bet.target ?? 0;
-      break;
-    case 'RED':
-      payload[1] = 1;
-      payload[2] = 0;
-      break;
-    case 'BLACK':
-      payload[1] = 2;
-      payload[2] = 0;
-      break;
-    case 'EVEN':
-      payload[1] = 3;
-      payload[2] = 0;
-      break;
-    case 'ODD':
-      payload[1] = 4;
-      payload[2] = 0;
-      break;
-    case 'LOW':
-      payload[1] = 5;
-      payload[2] = 0;
-      break;
-    case 'HIGH':
-      payload[1] = 6;
-      payload[2] = 0;
-      break;
-    case 'DOZEN_1':
-      payload[1] = 7;
-      payload[2] = 0;
-      break;
-    case 'DOZEN_2':
-      payload[1] = 7;
-      payload[2] = 1;
-      break;
-    case 'DOZEN_3':
-      payload[1] = 7;
-      payload[2] = 2;
-      break;
-    case 'COL_1':
-      payload[1] = 8;
-      payload[2] = 0;
-      break;
-    case 'COL_2':
-      payload[1] = 8;
-      payload[2] = 1;
-      break;
-    case 'COL_3':
-      payload[1] = 8;
-      payload[2] = 2;
-      break;
-    case 'ZERO':
-      payload[1] = 0;
-      payload[2] = 0;
-      break;
-    case 'SPLIT_H':
-      payload[1] = 9;
-      payload[2] = bet.target ?? 0;
-      break;
-    case 'SPLIT_V':
-      payload[1] = 10;
-      payload[2] = bet.target ?? 0;
-      break;
-    case 'STREET':
-      payload[1] = 11;
-      payload[2] = bet.target ?? 0;
-      break;
-    case 'CORNER':
-      payload[1] = 12;
-      payload[2] = bet.target ?? 0;
-      break;
-    case 'SIX_LINE':
-      payload[1] = 13;
-      payload[2] = bet.target ?? 0;
-      break;
-    default:
-      throw new Error(`Unknown bet type: ${bet.type}`);
-  }
+  payload[1] = numeric.betType;
+  payload[2] = numeric.number;
 
   const view = new DataView(payload.buffer);
-  view.setBigUint64(3, BigInt(bet.amount), false);
+  view.setBigUint64(3, BigInt(numeric.amount), false);
   return payload;
 };
 
@@ -210,6 +138,8 @@ const sicBoBetToNumeric = (bet: SicBoBet): { betType: number; number: number; am
     'HOP3_HARD': 11,
     'HOP4_EASY': 12,
   };
+
+  validateBetAmount(bet.amount, 'SicBoBet');
 
   return {
     betType: betTypeMap[bet.type],
@@ -237,31 +167,14 @@ export const serializeSicBoAtomicBatch = (bets: SicBoBet[]): Uint8Array => {
 };
 
 export const serializeSicBoBet = (bet: SicBoBet): Uint8Array => {
-  const betTypeMap: Record<SicBoBet['type'], number> = {
-    'SMALL': 0,
-    'BIG': 1,
-    'ODD': 2,
-    'EVEN': 3,
-    'TRIPLE_ANY': 5,
-    'TRIPLE_SPECIFIC': 4,
-    'DOUBLE_SPECIFIC': 6,
-    'SUM': 7,
-    'SINGLE_DIE': 8,
-    'DOMINO': 9,
-    'HOP3_EASY': 10,
-    'HOP3_HARD': 11,
-    'HOP4_EASY': 12,
-  };
-
-  const betType = betTypeMap[bet.type];
-  const number = bet.target ?? 0;
+  const numeric = sicBoBetToNumeric(bet);
 
   const payload = new Uint8Array(11);
   payload[0] = 0;
-  payload[1] = betType;
-  payload[2] = number;
+  payload[1] = numeric.betType;
+  payload[2] = numeric.number;
   const view = new DataView(payload.buffer);
-  view.setBigUint64(3, BigInt(bet.amount), false);
+  view.setBigUint64(3, BigInt(numeric.amount), false);
   return payload;
 };
 
@@ -286,6 +199,8 @@ const crapsBetToNumeric = (bet: CrapsBet): { betType: number; target: number; am
     'REPLAY': 21,
     'HOT_ROLLER': 22,
   };
+
+  validateBetAmount(bet.amount, 'CrapsBet');
 
   let betTypeValue: number;
   if (bet.type === 'HARDWAY' && bet.target !== undefined) {

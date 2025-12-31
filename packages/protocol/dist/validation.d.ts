@@ -20,13 +20,13 @@ declare const gameTypeSchema: z.ZodEffects<z.ZodNumber, GameType, number>;
 declare const betAmountSchema: z.ZodEffects<z.ZodString, string, string>;
 /** Session ID as numeric string */
 declare const sessionIdSchema: z.ZodString;
-export declare const startGameSchema: z.ZodObject<{
+export declare const startGameSchema: z.ZodEffects<z.ZodObject<{
     type: z.ZodLiteral<"start_game">;
     gameType: z.ZodEffects<z.ZodNumber, GameType, number>;
     bet: z.ZodEffects<z.ZodString, string, string>;
     sideBets: z.ZodOptional<z.ZodArray<z.ZodObject<{
         type: z.ZodNumber;
-        amount: z.ZodEffects<z.ZodString, string, string>;
+        amount: z.ZodEffects<z.ZodEffects<z.ZodString, string, string>, string, string>;
     }, "strip", z.ZodTypeAny, {
         type: number;
         amount: string;
@@ -36,6 +36,24 @@ export declare const startGameSchema: z.ZodObject<{
     }>, "many">>;
     requestId: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
+    type: "start_game";
+    gameType: GameType;
+    bet: string;
+    sideBets?: {
+        type: number;
+        amount: string;
+    }[] | undefined;
+    requestId?: string | undefined;
+}, {
+    type: "start_game";
+    gameType: number;
+    bet: string;
+    sideBets?: {
+        type: number;
+        amount: string;
+    }[] | undefined;
+    requestId?: string | undefined;
+}>, {
     type: "start_game";
     gameType: GameType;
     bet: string;
@@ -84,25 +102,25 @@ export declare const rouletteMoveSchema: z.ZodUnion<[z.ZodObject<{
     move: z.ZodLiteral<"place_bet">;
     betType: z.ZodNumber;
     number: z.ZodNumber;
-    amount: z.ZodEffects<z.ZodString, string, string>;
+    amount: z.ZodEffects<z.ZodEffects<z.ZodString, string, string>, string, string>;
     requestId: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
     number: number;
     type: "game_move";
     amount: string;
-    betType: number;
     sessionId: string;
     game: "roulette";
     move: "place_bet";
+    betType: number;
     requestId?: string | undefined;
 }, {
     number: number;
     type: "game_move";
     amount: string;
-    betType: number;
     sessionId: string;
     game: "roulette";
     move: "place_bet";
+    betType: number;
     requestId?: string | undefined;
 }>, z.ZodObject<{
     type: z.ZodLiteral<"game_move">;
@@ -130,32 +148,32 @@ export declare const crapsMoveSchema: z.ZodUnion<[z.ZodObject<{
     move: z.ZodLiteral<"place_bet">;
     betType: z.ZodNumber;
     target: z.ZodOptional<z.ZodNumber>;
-    amount: z.ZodEffects<z.ZodString, string, string>;
+    amount: z.ZodEffects<z.ZodEffects<z.ZodString, string, string>, string, string>;
     requestId: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
     type: "game_move";
     amount: string;
-    betType: number;
     sessionId: string;
     game: "craps";
     move: "place_bet";
-    target?: number | undefined;
+    betType: number;
     requestId?: string | undefined;
+    target?: number | undefined;
 }, {
     type: "game_move";
     amount: string;
-    betType: number;
     sessionId: string;
     game: "craps";
     move: "place_bet";
-    target?: number | undefined;
+    betType: number;
     requestId?: string | undefined;
+    target?: number | undefined;
 }>, z.ZodObject<{
     type: z.ZodLiteral<"game_move">;
     sessionId: z.ZodString;
     game: z.ZodLiteral<"craps">;
     move: z.ZodLiteral<"add_odds">;
-    amount: z.ZodEffects<z.ZodString, string, string>;
+    amount: z.ZodEffects<z.ZodEffects<z.ZodString, string, string>, string, string>;
     requestId: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
     type: "game_move";
@@ -233,25 +251,25 @@ export declare const gameMoveSchema: z.ZodUnion<[z.ZodObject<{
     move: z.ZodLiteral<"place_bet">;
     betType: z.ZodNumber;
     number: z.ZodNumber;
-    amount: z.ZodEffects<z.ZodString, string, string>;
+    amount: z.ZodEffects<z.ZodEffects<z.ZodString, string, string>, string, string>;
     requestId: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
     number: number;
     type: "game_move";
     amount: string;
-    betType: number;
     sessionId: string;
     game: "roulette";
     move: "place_bet";
+    betType: number;
     requestId?: string | undefined;
 }, {
     number: number;
     type: "game_move";
     amount: string;
-    betType: number;
     sessionId: string;
     game: "roulette";
     move: "place_bet";
+    betType: number;
     requestId?: string | undefined;
 }>, z.ZodObject<{
     type: z.ZodLiteral<"game_move">;
@@ -278,32 +296,32 @@ export declare const gameMoveSchema: z.ZodUnion<[z.ZodObject<{
     move: z.ZodLiteral<"place_bet">;
     betType: z.ZodNumber;
     target: z.ZodOptional<z.ZodNumber>;
-    amount: z.ZodEffects<z.ZodString, string, string>;
+    amount: z.ZodEffects<z.ZodEffects<z.ZodString, string, string>, string, string>;
     requestId: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
     type: "game_move";
     amount: string;
-    betType: number;
     sessionId: string;
     game: "craps";
     move: "place_bet";
-    target?: number | undefined;
+    betType: number;
     requestId?: string | undefined;
+    target?: number | undefined;
 }, {
     type: "game_move";
     amount: string;
-    betType: number;
     sessionId: string;
     game: "craps";
     move: "place_bet";
-    target?: number | undefined;
+    betType: number;
     requestId?: string | undefined;
+    target?: number | undefined;
 }>, z.ZodObject<{
     type: z.ZodLiteral<"game_move">;
     sessionId: z.ZodString;
     game: z.ZodLiteral<"craps">;
     move: z.ZodLiteral<"add_odds">;
-    amount: z.ZodEffects<z.ZodString, string, string>;
+    amount: z.ZodEffects<z.ZodEffects<z.ZodString, string, string>, string, string>;
     requestId: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
     type: "game_move";
@@ -356,13 +374,13 @@ export declare const gameMoveSchema: z.ZodUnion<[z.ZodObject<{
     move: "clear_bets";
     requestId?: string | undefined;
 }>]>;
-export declare const clientMessageSchema: z.ZodUnion<[z.ZodObject<{
+export declare const clientMessageSchema: z.ZodUnion<[z.ZodEffects<z.ZodObject<{
     type: z.ZodLiteral<"start_game">;
     gameType: z.ZodEffects<z.ZodNumber, GameType, number>;
     bet: z.ZodEffects<z.ZodString, string, string>;
     sideBets: z.ZodOptional<z.ZodArray<z.ZodObject<{
         type: z.ZodNumber;
-        amount: z.ZodEffects<z.ZodString, string, string>;
+        amount: z.ZodEffects<z.ZodEffects<z.ZodString, string, string>, string, string>;
     }, "strip", z.ZodTypeAny, {
         type: number;
         amount: string;
@@ -372,6 +390,24 @@ export declare const clientMessageSchema: z.ZodUnion<[z.ZodObject<{
     }>, "many">>;
     requestId: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
+    type: "start_game";
+    gameType: GameType;
+    bet: string;
+    sideBets?: {
+        type: number;
+        amount: string;
+    }[] | undefined;
+    requestId?: string | undefined;
+}, {
+    type: "start_game";
+    gameType: number;
+    bet: string;
+    sideBets?: {
+        type: number;
+        amount: string;
+    }[] | undefined;
+    requestId?: string | undefined;
+}>, {
     type: "start_game";
     gameType: GameType;
     bet: string;
@@ -414,25 +450,25 @@ export declare const clientMessageSchema: z.ZodUnion<[z.ZodObject<{
     move: z.ZodLiteral<"place_bet">;
     betType: z.ZodNumber;
     number: z.ZodNumber;
-    amount: z.ZodEffects<z.ZodString, string, string>;
+    amount: z.ZodEffects<z.ZodEffects<z.ZodString, string, string>, string, string>;
     requestId: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
     number: number;
     type: "game_move";
     amount: string;
-    betType: number;
     sessionId: string;
     game: "roulette";
     move: "place_bet";
+    betType: number;
     requestId?: string | undefined;
 }, {
     number: number;
     type: "game_move";
     amount: string;
-    betType: number;
     sessionId: string;
     game: "roulette";
     move: "place_bet";
+    betType: number;
     requestId?: string | undefined;
 }>, z.ZodObject<{
     type: z.ZodLiteral<"game_move">;
@@ -459,32 +495,32 @@ export declare const clientMessageSchema: z.ZodUnion<[z.ZodObject<{
     move: z.ZodLiteral<"place_bet">;
     betType: z.ZodNumber;
     target: z.ZodOptional<z.ZodNumber>;
-    amount: z.ZodEffects<z.ZodString, string, string>;
+    amount: z.ZodEffects<z.ZodEffects<z.ZodString, string, string>, string, string>;
     requestId: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
     type: "game_move";
     amount: string;
-    betType: number;
     sessionId: string;
     game: "craps";
     move: "place_bet";
-    target?: number | undefined;
+    betType: number;
     requestId?: string | undefined;
+    target?: number | undefined;
 }, {
     type: "game_move";
     amount: string;
-    betType: number;
     sessionId: string;
     game: "craps";
     move: "place_bet";
-    target?: number | undefined;
+    betType: number;
     requestId?: string | undefined;
+    target?: number | undefined;
 }>, z.ZodObject<{
     type: z.ZodLiteral<"game_move">;
     sessionId: z.ZodString;
     game: z.ZodLiteral<"craps">;
     move: z.ZodLiteral<"add_odds">;
-    amount: z.ZodEffects<z.ZodString, string, string>;
+    amount: z.ZodEffects<z.ZodEffects<z.ZodString, string, string>, string, string>;
     requestId: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
     type: "game_move";

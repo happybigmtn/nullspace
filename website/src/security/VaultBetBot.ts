@@ -1,4 +1,5 @@
 import { WasmWrapper } from '../api/wasm.js';
+import { validateBetAmount } from '../services/games/validation';
 
 export type VaultBetBotConfig = {
   betIntervalMs: number;
@@ -249,6 +250,7 @@ export class VaultBetBot {
   }
 
   private serializeBaccaratBet(betType: number, amount: number): Uint8Array {
+    validateBetAmount(amount, 'VaultBetBot');
     // [action:u8] [betType:u8] [amount:u64 BE]
     const payload = new Uint8Array(10);
     payload[0] = 0; // Place bet
@@ -264,6 +266,7 @@ export class VaultBetBot {
     payload[1] = bets.length;
     let offset = 2;
     for (const bet of bets) {
+      validateBetAmount(bet.amount, 'VaultBetBot');
       payload[offset] = bet.betType;
       new DataView(payload.buffer).setBigUint64(offset + 1, BigInt(bet.amount), false);
       offset += 9;
@@ -272,6 +275,7 @@ export class VaultBetBot {
   }
 
   private serializeCrapsBet(betType: number, point: number, amount: number): Uint8Array {
+    validateBetAmount(amount, 'VaultBetBot');
     // Match existing frontend encoding: [action:u8=0] [betType:u8] [point:u8] [amount:u64 BE]
     const payload = new Uint8Array(11);
     payload[0] = 0;
@@ -281,4 +285,3 @@ export class VaultBetBot {
     return payload;
   }
 }
-

@@ -20,6 +20,8 @@ import type { GameMessage } from '@nullspace/protocol/mobile';
 interface ThreeCardPokerState {
   anteBet: number;
   pairPlusBet: number;
+  sixCardBet: number;
+  progressiveBet: number;
   playerCards: CardType[];
   dealerCards: CardType[];
   dealerRevealed: boolean;
@@ -65,6 +67,8 @@ export function ThreeCardPokerScreen() {
   const [state, setState] = useState<ThreeCardPokerState>({
     anteBet: 0,
     pairPlusBet: 0,
+    sixCardBet: 0,
+    progressiveBet: 0,
     playerCards: [],
     dealerCards: [],
     dealerRevealed: false,
@@ -79,7 +83,7 @@ export function ThreeCardPokerScreen() {
   });
   const [selectedChip, setSelectedChip] = useState<ChipValue>(25);
   const [showTutorial, setShowTutorial] = useState(false);
-  const [activeBetType, setActiveBetType] = useState<'ante' | 'pairplus'>('ante');
+  const [activeBetType, setActiveBetType] = useState<'ante' | 'pairplus' | 'sixcard' | 'progressive'>('ante');
 
   useEffect(() => {
     if (!lastMessage) return;
@@ -95,6 +99,8 @@ export function ThreeCardPokerScreen() {
           playerCards: parsed.playerCards.length > 0 ? parsed.playerCards : prev.playerCards,
           dealerCards: parsed.dealerCards.length > 0 ? parsed.dealerCards : prev.dealerCards,
           pairPlusBet: parsed.pairPlusBet > 0 ? parsed.pairPlusBet : prev.pairPlusBet,
+          sixCardBet: parsed.sixCardBonusBet > 0 ? parsed.sixCardBonusBet : prev.sixCardBet,
+          progressiveBet: parsed.progressiveBet > 0 ? parsed.progressiveBet : prev.progressiveBet,
           dealerRevealed: parsed.stage === 'awaiting' || parsed.stage === 'complete',
           phase: parsed.stage === 'decision'
             ? 'dealt'
@@ -156,7 +162,20 @@ export function ThreeCardPokerScreen() {
     if (state.phase !== 'betting') return;
 
     // Calculate current total bet
-    const currentTotalBet = state.anteBet + state.pairPlusBet;
+    const currentTotalBet = state.anteBet + state.pairPlusBet + state.sixCardBet + state.progressiveBet;
+    if (activeBetType === 'progressive') {
+      const progressiveUnit = 1;
+      if (currentTotalBet + (state.progressiveBet > 0 ? 0 : progressiveUnit) > balance) {
+        haptics.error();
+        return;
+      }
+      haptics.chipPlace();
+      setState((prev) => ({
+        ...prev,
+        progressiveBet: prev.progressiveBet > 0 ? 0 : progressiveUnit,
+      }));
+      return;
+    }
     if (currentTotalBet + value > balance) {
       haptics.error();
       return;
@@ -168,8 +187,9 @@ export function ThreeCardPokerScreen() {
       ...prev,
       anteBet: activeBetType === 'ante' ? prev.anteBet + value : prev.anteBet,
       pairPlusBet: activeBetType === 'pairplus' ? prev.pairPlusBet + value : prev.pairPlusBet,
+      sixCardBet: activeBetType === 'sixcard' ? prev.sixCardBet + value : prev.sixCardBet,
     }));
-  }, [state.phase, activeBetType, state.anteBet, state.pairPlusBet, balance]);
+  }, [state.phase, activeBetType, state.anteBet, state.pairPlusBet, state.sixCardBet, state.progressiveBet, balance]);
 
   const handleDeal = useCallback(async () => {
     if (state.anteBet === 0) return;
@@ -179,6 +199,8 @@ export function ThreeCardPokerScreen() {
       type: 'three_card_poker_deal',
       ante: state.anteBet,
       pairPlus: state.pairPlusBet,
+      sixCard: state.sixCardBet,
+      progressive: state.progressiveBet,
     });
 
     setState((prev) => ({
@@ -220,6 +242,8 @@ export function ThreeCardPokerScreen() {
     setState({
       anteBet: 0,
       pairPlusBet: 0,
+      sixCardBet: 0,
+      progressiveBet: 0,
       playerCards: [],
       dealerCards: [],
       dealerRevealed: false,
@@ -237,7 +261,7 @@ export function ThreeCardPokerScreen() {
 
   const handleClearBets = useCallback(() => {
     if (state.phase !== 'betting') return;
-    setState((prev) => ({ ...prev, anteBet: 0, pairPlusBet: 0 }));
+    setState((prev) => ({ ...prev, anteBet: 0, pairPlusBet: 0, sixCardBet: 0, progressiveBet: 0 }));
   }, [state.phase]);
 
   // Keyboard controls
@@ -379,6 +403,34 @@ export function ThreeCardPokerScreen() {
             )}
             <Text style={styles.betSpotOdds}>40:1 max</Text>
           </Pressable>
+
+          <Pressable
+            onPress={() => setActiveBetType('sixcard')}
+            style={[
+              styles.betSpot,
+              activeBetType === 'sixcard' && styles.betSpotActive,
+            ]}
+          >
+            <Text style={styles.betSpotLabel}>6-CARD</Text>
+            {state.sixCardBet > 0 && (
+              <Text style={styles.betSpotAmount}>${state.sixCardBet}</Text>
+            )}
+            <Text style={styles.betSpotOdds}>1000:1 max</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => setActiveBetType('progressive')}
+            style={[
+              styles.betSpot,
+              activeBetType === 'progressive' && styles.betSpotActive,
+            ]}
+          >
+            <Text style={styles.betSpotLabel}>PROG</Text>
+            {state.progressiveBet > 0 && (
+              <Text style={styles.betSpotAmount}>${state.progressiveBet}</Text>
+            )}
+            <Text style={styles.betSpotOdds}>$1 unit</Text>
+          </Pressable>
         </View>
       )}
 
@@ -499,6 +551,7 @@ const styles = StyleSheet.create({
   },
   betSpots: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'center',
     gap: SPACING.md,
     paddingHorizontal: SPACING.md,

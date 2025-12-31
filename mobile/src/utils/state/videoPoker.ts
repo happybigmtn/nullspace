@@ -1,5 +1,6 @@
 import type { Card } from '../../types';
 import { decodeCardId } from '../cards';
+import { parseVideoPokerState as parseVideoPokerStateBlob } from '@nullspace/game-state';
 
 export interface VideoPokerStateUpdate {
   cards: Card[];
@@ -7,20 +8,13 @@ export interface VideoPokerStateUpdate {
 }
 
 export function parseVideoPokerState(stateBlob: Uint8Array): VideoPokerStateUpdate | null {
-  if (stateBlob.length < 6) {
+  const parsed = parseVideoPokerStateBlob(stateBlob);
+  if (!parsed) {
     return null;
   }
-  const stageByte = stateBlob[0];
-  if (stageByte === undefined) {
-    return null;
-  }
-  const stage = stageByte === 1 ? 'draw' : 'deal';
+  const stage = parsed.stage === 1 ? 'draw' : 'deal';
   const cards: Card[] = [];
-  for (let i = 1; i <= 5 && i < stateBlob.length; i += 1) {
-    const cardId = stateBlob[i];
-    if (cardId === undefined) {
-      break;
-    }
+  for (const cardId of parsed.cards) {
     const card = decodeCardId(cardId);
     if (card) {
       cards.push(card);

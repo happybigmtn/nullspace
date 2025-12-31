@@ -800,12 +800,18 @@ export type ThreeCardPokerHand = z.infer<typeof ThreeCardPokerHandSchema>;
 export declare const BlackjackDealRequestSchema: z.ZodObject<{
     type: z.ZodLiteral<"blackjack_deal">;
     amount: z.ZodNumber;
+    sideBet21Plus3: z.ZodOptional<z.ZodNumber>;
+    sideBet21p3: z.ZodOptional<z.ZodNumber>;
 }, "strip", z.ZodTypeAny, {
     type: "blackjack_deal";
     amount: number;
+    sideBet21Plus3?: number | undefined;
+    sideBet21p3?: number | undefined;
 }, {
     type: "blackjack_deal";
     amount: number;
+    sideBet21Plus3?: number | undefined;
+    sideBet21p3?: number | undefined;
 }>;
 export declare const BlackjackHitRequestSchema: z.ZodObject<{
     type: z.ZodLiteral<"blackjack_hit">;
@@ -1011,12 +1017,15 @@ export declare const BaccaratDealRequestSchema: z.ZodObject<{
 export declare const CasinoWarDealRequestSchema: z.ZodObject<{
     type: z.ZodLiteral<"casino_war_deal">;
     amount: z.ZodNumber;
+    tieBet: z.ZodOptional<z.ZodNumber>;
 }, "strip", z.ZodTypeAny, {
     type: "casino_war_deal";
     amount: number;
+    tieBet?: number | undefined;
 }, {
     type: "casino_war_deal";
     amount: number;
+    tieBet?: number | undefined;
 }>;
 export declare const CasinoWarWarRequestSchema: z.ZodObject<{
     type: z.ZodLiteral<"casino_war_war">;
@@ -1034,14 +1043,17 @@ export declare const CasinoWarSurrenderRequestSchema: z.ZodObject<{
 }>;
 export declare const CasinoWarLegacyDealRequestSchema: z.ZodObject<{
     amount: z.ZodNumber;
+    tieBet: z.ZodOptional<z.ZodNumber>;
 } & {
     type: z.ZodLiteral<"casinowar_deal">;
 }, "strip", z.ZodTypeAny, {
     type: "casinowar_deal";
     amount: number;
+    tieBet?: number | undefined;
 }, {
     type: "casinowar_deal";
     amount: number;
+    tieBet?: number | undefined;
 }>;
 export declare const CasinoWarLegacyWarRequestSchema: z.ZodObject<{} & {
     type: z.ZodLiteral<"casinowar_war">;
@@ -1202,14 +1214,23 @@ export declare const ThreeCardPokerDealRequestSchema: z.ZodObject<{
     type: z.ZodLiteral<"three_card_poker_deal">;
     ante: z.ZodNumber;
     pairPlus: z.ZodOptional<z.ZodNumber>;
+    sixCard: z.ZodOptional<z.ZodNumber>;
+    sixCardBonus: z.ZodOptional<z.ZodNumber>;
+    progressive: z.ZodOptional<z.ZodNumber>;
 }, "strip", z.ZodTypeAny, {
     type: "three_card_poker_deal";
     ante: number;
     pairPlus?: number | undefined;
+    sixCard?: number | undefined;
+    sixCardBonus?: number | undefined;
+    progressive?: number | undefined;
 }, {
     type: "three_card_poker_deal";
     ante: number;
     pairPlus?: number | undefined;
+    sixCard?: number | undefined;
+    sixCardBonus?: number | undefined;
+    progressive?: number | undefined;
 }>;
 export declare const ThreeCardPokerPlayRequestSchema: z.ZodObject<{
     type: z.ZodLiteral<"three_card_poker_play">;
@@ -1228,16 +1249,25 @@ export declare const ThreeCardPokerFoldRequestSchema: z.ZodObject<{
 export declare const ThreeCardPokerLegacyDealRequestSchema: z.ZodObject<{
     ante: z.ZodNumber;
     pairPlus: z.ZodOptional<z.ZodNumber>;
+    sixCard: z.ZodOptional<z.ZodNumber>;
+    sixCardBonus: z.ZodOptional<z.ZodNumber>;
+    progressive: z.ZodOptional<z.ZodNumber>;
 } & {
     type: z.ZodLiteral<"threecardpoker_deal">;
 }, "strip", z.ZodTypeAny, {
     type: "threecardpoker_deal";
     ante: number;
     pairPlus?: number | undefined;
+    sixCard?: number | undefined;
+    sixCardBonus?: number | undefined;
+    progressive?: number | undefined;
 }, {
     type: "threecardpoker_deal";
     ante: number;
     pairPlus?: number | undefined;
+    sixCard?: number | undefined;
+    sixCardBonus?: number | undefined;
+    progressive?: number | undefined;
 }>;
 export declare const ThreeCardPokerLegacyPlayRequestSchema: z.ZodObject<{} & {
     type: z.ZodLiteral<"threecardpoker_play">;
@@ -1258,15 +1288,24 @@ export declare const UltimateTXDealRequestSchema: z.ZodObject<{
     ante: z.ZodNumber;
     blind: z.ZodNumber;
     trips: z.ZodOptional<z.ZodNumber>;
+    sixCard: z.ZodOptional<z.ZodNumber>;
+    sixCardBonus: z.ZodOptional<z.ZodNumber>;
+    progressive: z.ZodOptional<z.ZodNumber>;
 }, "strip", z.ZodTypeAny, {
     type: "ultimate_tx_deal";
     ante: number;
     blind: number;
+    sixCard?: number | undefined;
+    sixCardBonus?: number | undefined;
+    progressive?: number | undefined;
     trips?: number | undefined;
 }, {
     type: "ultimate_tx_deal";
     ante: number;
     blind: number;
+    sixCard?: number | undefined;
+    sixCardBonus?: number | undefined;
+    progressive?: number | undefined;
     trips?: number | undefined;
 }>;
 export declare const UltimateTXBetRequestSchema: z.ZodObject<{
@@ -1297,17 +1336,26 @@ export declare const UltimateTXLegacyDealRequestSchema: z.ZodObject<{
     ante: z.ZodNumber;
     blind: z.ZodNumber;
     trips: z.ZodOptional<z.ZodNumber>;
+    sixCard: z.ZodOptional<z.ZodNumber>;
+    sixCardBonus: z.ZodOptional<z.ZodNumber>;
+    progressive: z.ZodOptional<z.ZodNumber>;
 } & {
     type: z.ZodLiteral<"ultimateholdem_deal">;
 }, "strip", z.ZodTypeAny, {
     type: "ultimateholdem_deal";
     ante: number;
     blind: number;
+    sixCard?: number | undefined;
+    sixCardBonus?: number | undefined;
+    progressive?: number | undefined;
     trips?: number | undefined;
 }, {
     type: "ultimateholdem_deal";
     ante: number;
     blind: number;
+    sixCard?: number | undefined;
+    sixCardBonus?: number | undefined;
+    progressive?: number | undefined;
     trips?: number | undefined;
 }>;
 export declare const UltimateTXLegacyBetRequestSchema: z.ZodObject<{
@@ -1348,12 +1396,18 @@ export declare const FaucetClaimRequestSchema: z.ZodObject<{
 export declare const OutboundMessageSchema: z.ZodDiscriminatedUnion<"type", [z.ZodObject<{
     type: z.ZodLiteral<"blackjack_deal">;
     amount: z.ZodNumber;
+    sideBet21Plus3: z.ZodOptional<z.ZodNumber>;
+    sideBet21p3: z.ZodOptional<z.ZodNumber>;
 }, "strip", z.ZodTypeAny, {
     type: "blackjack_deal";
     amount: number;
+    sideBet21Plus3?: number | undefined;
+    sideBet21p3?: number | undefined;
 }, {
     type: "blackjack_deal";
     amount: number;
+    sideBet21Plus3?: number | undefined;
+    sideBet21p3?: number | undefined;
 }>, z.ZodObject<{
     type: z.ZodLiteral<"blackjack_hit">;
 }, "strip", z.ZodTypeAny, {
@@ -1506,12 +1560,15 @@ export declare const OutboundMessageSchema: z.ZodDiscriminatedUnion<"type", [z.Z
 }>, z.ZodObject<{
     type: z.ZodLiteral<"casino_war_deal">;
     amount: z.ZodNumber;
+    tieBet: z.ZodOptional<z.ZodNumber>;
 }, "strip", z.ZodTypeAny, {
     type: "casino_war_deal";
     amount: number;
+    tieBet?: number | undefined;
 }, {
     type: "casino_war_deal";
     amount: number;
+    tieBet?: number | undefined;
 }>, z.ZodObject<{
     type: z.ZodLiteral<"casino_war_war">;
 }, "strip", z.ZodTypeAny, {
@@ -1526,14 +1583,17 @@ export declare const OutboundMessageSchema: z.ZodDiscriminatedUnion<"type", [z.Z
     type: "casino_war_surrender";
 }>, z.ZodObject<{
     amount: z.ZodNumber;
+    tieBet: z.ZodOptional<z.ZodNumber>;
 } & {
     type: z.ZodLiteral<"casinowar_deal">;
 }, "strip", z.ZodTypeAny, {
     type: "casinowar_deal";
     amount: number;
+    tieBet?: number | undefined;
 }, {
     type: "casinowar_deal";
     amount: number;
+    tieBet?: number | undefined;
 }>, z.ZodObject<{} & {
     type: z.ZodLiteral<"casinowar_war">;
 }, "strip", z.ZodTypeAny, {
@@ -1666,14 +1726,23 @@ export declare const OutboundMessageSchema: z.ZodDiscriminatedUnion<"type", [z.Z
     type: z.ZodLiteral<"three_card_poker_deal">;
     ante: z.ZodNumber;
     pairPlus: z.ZodOptional<z.ZodNumber>;
+    sixCard: z.ZodOptional<z.ZodNumber>;
+    sixCardBonus: z.ZodOptional<z.ZodNumber>;
+    progressive: z.ZodOptional<z.ZodNumber>;
 }, "strip", z.ZodTypeAny, {
     type: "three_card_poker_deal";
     ante: number;
     pairPlus?: number | undefined;
+    sixCard?: number | undefined;
+    sixCardBonus?: number | undefined;
+    progressive?: number | undefined;
 }, {
     type: "three_card_poker_deal";
     ante: number;
     pairPlus?: number | undefined;
+    sixCard?: number | undefined;
+    sixCardBonus?: number | undefined;
+    progressive?: number | undefined;
 }>, z.ZodObject<{
     type: z.ZodLiteral<"three_card_poker_play">;
 }, "strip", z.ZodTypeAny, {
@@ -1689,16 +1758,25 @@ export declare const OutboundMessageSchema: z.ZodDiscriminatedUnion<"type", [z.Z
 }>, z.ZodObject<{
     ante: z.ZodNumber;
     pairPlus: z.ZodOptional<z.ZodNumber>;
+    sixCard: z.ZodOptional<z.ZodNumber>;
+    sixCardBonus: z.ZodOptional<z.ZodNumber>;
+    progressive: z.ZodOptional<z.ZodNumber>;
 } & {
     type: z.ZodLiteral<"threecardpoker_deal">;
 }, "strip", z.ZodTypeAny, {
     type: "threecardpoker_deal";
     ante: number;
     pairPlus?: number | undefined;
+    sixCard?: number | undefined;
+    sixCardBonus?: number | undefined;
+    progressive?: number | undefined;
 }, {
     type: "threecardpoker_deal";
     ante: number;
     pairPlus?: number | undefined;
+    sixCard?: number | undefined;
+    sixCardBonus?: number | undefined;
+    progressive?: number | undefined;
 }>, z.ZodObject<{} & {
     type: z.ZodLiteral<"threecardpoker_play">;
 }, "strip", z.ZodTypeAny, {
@@ -1716,15 +1794,24 @@ export declare const OutboundMessageSchema: z.ZodDiscriminatedUnion<"type", [z.Z
     ante: z.ZodNumber;
     blind: z.ZodNumber;
     trips: z.ZodOptional<z.ZodNumber>;
+    sixCard: z.ZodOptional<z.ZodNumber>;
+    sixCardBonus: z.ZodOptional<z.ZodNumber>;
+    progressive: z.ZodOptional<z.ZodNumber>;
 }, "strip", z.ZodTypeAny, {
     type: "ultimate_tx_deal";
     ante: number;
     blind: number;
+    sixCard?: number | undefined;
+    sixCardBonus?: number | undefined;
+    progressive?: number | undefined;
     trips?: number | undefined;
 }, {
     type: "ultimate_tx_deal";
     ante: number;
     blind: number;
+    sixCard?: number | undefined;
+    sixCardBonus?: number | undefined;
+    progressive?: number | undefined;
     trips?: number | undefined;
 }>, z.ZodObject<{
     type: z.ZodLiteral<"ultimate_tx_bet">;
@@ -1751,17 +1838,26 @@ export declare const OutboundMessageSchema: z.ZodDiscriminatedUnion<"type", [z.Z
     ante: z.ZodNumber;
     blind: z.ZodNumber;
     trips: z.ZodOptional<z.ZodNumber>;
+    sixCard: z.ZodOptional<z.ZodNumber>;
+    sixCardBonus: z.ZodOptional<z.ZodNumber>;
+    progressive: z.ZodOptional<z.ZodNumber>;
 } & {
     type: z.ZodLiteral<"ultimateholdem_deal">;
 }, "strip", z.ZodTypeAny, {
     type: "ultimateholdem_deal";
     ante: number;
     blind: number;
+    sixCard?: number | undefined;
+    sixCardBonus?: number | undefined;
+    progressive?: number | undefined;
     trips?: number | undefined;
 }, {
     type: "ultimateholdem_deal";
     ante: number;
     blind: number;
+    sixCard?: number | undefined;
+    sixCardBonus?: number | undefined;
+    progressive?: number | undefined;
     trips?: number | undefined;
 }>, z.ZodObject<{
     multiplier: z.ZodNumber;

@@ -70,7 +70,7 @@ Confirm it rejoins and continues at the current height.
 Run the scheduler to start/end freeroll tournaments on schedule:
 
 ```bash
-CASINO_ADMIN_PRIVATE_KEY_HEX=... \
+CASINO_ADMIN_PRIVATE_KEY_FILE=/path/to/casino-admin-key.hex \
   ./scripts/run-tournament-scheduler.sh configs/testnet http://<INDEXER_HOST>:8080
 ```
 

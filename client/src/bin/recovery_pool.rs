@@ -31,6 +31,10 @@ struct Args {
     #[arg(long)]
     admin_key: Option<String>,
 
+    /// Path to file with admin private key hex
+    #[arg(long)]
+    admin_key_file: Option<String>,
+
     #[command(subcommand)]
     command: Command,
 }
@@ -62,7 +66,12 @@ async fn main() -> Result<()> {
     let identity = decode_identity(&args.identity)?;
     let client = Client::new(&args.url, identity)?;
 
-    let admin_key = require_arg_or_env(args.admin_key, "CASINO_ADMIN_PRIVATE_KEY_HEX")?;
+    let admin_key = require_arg_or_env_or_file(
+        args.admin_key,
+        args.admin_key_file,
+        "CASINO_ADMIN_PRIVATE_KEY_HEX",
+        "CASINO_ADMIN_PRIVATE_KEY_FILE",
+    )?;
     let admin_private = decode_admin_key(&admin_key)?;
     let admin_public = admin_private.public_key();
 
@@ -97,11 +106,34 @@ fn decode_identity(hex_str: &str) -> Result<Identity> {
     Ok(identity)
 }
 
-fn require_arg_or_env(value: Option<String>, env_key: &str) -> Result<String> {
+fn read_secret_file(path: &str) -> Result<String> {
+    let contents = std::fs::read_to_string(path).context("Failed to read secret file")?;
+    let trimmed = contents.trim();
+    if trimmed.is_empty() {
+        return Err(anyhow!("Secret file is empty: {path}"));
+    }
+    Ok(trimmed.to_string())
+}
+
+fn require_arg_or_env_or_file(
+    value: Option<String>,
+    file: Option<String>,
+    env_key: &str,
+    env_file: &str,
+) -> Result<String> {
     if let Some(value) = value {
         return Ok(value);
     }
-    env::var(env_key).map_err(|_| anyhow!("Missing {env_key} (flag or env var)"))
+    if let Some(file_path) = file {
+        return read_secret_file(&file_path);
+    }
+    if let Ok(value) = env::var(env_key) {
+        return Ok(value);
+    }
+    if let Ok(file_path) = env::var(env_file) {
+        return read_secret_file(&file_path);
+    }
+    Err(anyhow!("Missing {env_key} or {env_file} (flag or env var)"))
 }
 
 fn decode_admin_key(hex_str: &str) -> Result<PrivateKey> {

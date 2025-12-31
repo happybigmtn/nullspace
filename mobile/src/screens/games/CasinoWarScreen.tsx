@@ -23,6 +23,7 @@ interface CasinoWarState {
   message: string;
   lastResult: 'win' | 'loss' | 'war' | null;
   warBet: number;
+  tieBet: number;
 }
 
 const TUTORIAL_STEPS: TutorialStep[] = [
@@ -52,6 +53,7 @@ export function CasinoWarScreen() {
     message: 'Place your bet',
     lastResult: null,
     warBet: 0,
+    tieBet: 0,
   });
   const [showTutorial, setShowTutorial] = useState(false);
 
@@ -85,6 +87,7 @@ export function CasinoWarScreen() {
               ...prev,
               playerCard: parsedState.playerCard ?? prev.playerCard,
               dealerCard: parsedState.dealerCard ?? prev.dealerCard,
+              tieBet: parsedState.tieBet > 0 ? parsedState.tieBet : prev.tieBet,
               phase: nextPhase,
               message: nextPhase === 'war_choice' ? 'Tie! Go to War or Surrender?' : prev.message,
             };
@@ -123,13 +126,26 @@ export function CasinoWarScreen() {
     send({
       type: 'casino_war_deal',
       amount: bet,
+      tieBet: state.tieBet,
     });
 
     setState((prev) => ({
       ...prev,
       message: 'Dealing...',
     }));
-  }, [bet, send]);
+  }, [bet, send, state.tieBet]);
+
+  const handleToggleTieBet = useCallback(async () => {
+    if (state.phase !== 'betting') return;
+    const nextAmount = state.tieBet > 0 ? 0 : selectedChip;
+    if (bet + nextAmount > balance) {
+      haptics.error();
+      setState((prev) => ({ ...prev, message: 'Insufficient balance' }));
+      return;
+    }
+    await haptics.buttonPress();
+    setState((prev) => ({ ...prev, tieBet: nextAmount }));
+  }, [state.phase, state.tieBet, selectedChip, bet, balance]);
 
   const handleWar = useCallback(async () => {
     await haptics.betConfirm();
@@ -170,7 +186,13 @@ export function CasinoWarScreen() {
       message: 'Place your bet',
       lastResult: null,
       warBet: 0,
+      tieBet: 0,
     });
+  }, [clearBet]);
+
+  const handleClearBets = useCallback(() => {
+    clearBet();
+    setState((prev) => ({ ...prev, tieBet: 0 }));
   }, [clearBet]);
 
   // Keyboard controls
@@ -181,7 +203,7 @@ export function CasinoWarScreen() {
       else if (state.phase === 'war_choice' && !isDisconnected) handleWar();
     },
     [KEY_ACTIONS.ESCAPE]: () => {
-      if (state.phase === 'betting') clearBet();
+      if (state.phase === 'betting') handleClearBets();
       else if (state.phase === 'war_choice' && !isDisconnected) handleSurrender();
     },
     [KEY_ACTIONS.ONE]: () => state.phase === 'betting' && handleChipPlace(1 as ChipValue),
@@ -189,7 +211,7 @@ export function CasinoWarScreen() {
     [KEY_ACTIONS.THREE]: () => state.phase === 'betting' && handleChipPlace(25 as ChipValue),
     [KEY_ACTIONS.FOUR]: () => state.phase === 'betting' && handleChipPlace(100 as ChipValue),
     [KEY_ACTIONS.FIVE]: () => state.phase === 'betting' && handleChipPlace(500 as ChipValue),
-  }), [state.phase, bet, isDisconnected, handleDeal, handleNewGame, handleWar, handleSurrender, clearBet, handleChipPlace]);
+  }), [state.phase, bet, isDisconnected, handleDeal, handleNewGame, handleWar, handleSurrender, handleClearBets, handleChipPlace]);
 
   useGameKeyboard(keyboardHandlers);
   const cardEnterLeft = SlideInLeft.springify()
@@ -274,7 +296,20 @@ export function CasinoWarScreen() {
             <Text style={styles.betAmount}>
               ${bet + state.warBet}
             </Text>
+            {state.tieBet > 0 && (
+              <Text style={styles.tieBetAmount}>
+                Tie Bet: ${state.tieBet}
+              </Text>
+            )}
           </View>
+        )}
+
+        {state.phase === 'betting' && (
+          <PrimaryButton
+            label={state.tieBet > 0 ? `Tie Bet $${state.tieBet}` : 'Add Tie Bet'}
+            onPress={handleToggleTieBet}
+            variant={state.tieBet > 0 ? 'secondary' : 'ghost'}
+          />
         )}
       </View>
 
@@ -324,7 +359,7 @@ export function CasinoWarScreen() {
           {bet > 0 && (
             <PrimaryButton
               label="CLEAR"
-              onPress={clearBet}
+              onPress={handleClearBets}
               variant="secondary"
             />
           )}
@@ -410,6 +445,11 @@ const styles = StyleSheet.create({
   betAmount: {
     color: COLORS.gold,
     ...TYPOGRAPHY.h2,
+  },
+  tieBetAmount: {
+    color: COLORS.textSecondary,
+    ...TYPOGRAPHY.caption,
+    marginTop: SPACING.xs,
   },
   actions: {
     flexDirection: 'row',

@@ -3,6 +3,17 @@ version: "3.9"
 services:
   prometheus:
     image: prom/prometheus:v2.51.2
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--config.expand-env"
+    environment:
+      METRICS_AUTH_TOKEN: ${METRICS_AUTH_TOKEN:-}
+      SIMULATOR_METRICS_TARGET: ${SIMULATOR_METRICS_TARGET:-host.docker.internal:8080}
+      AUTH_METRICS_TARGET: ${AUTH_METRICS_TARGET:-host.docker.internal:4000}
+      NODE_METRICS_TARGET_0: ${NODE_METRICS_TARGET_0:-host.docker.internal:9100}
+      NODE_METRICS_TARGET_1: ${NODE_METRICS_TARGET_1:-host.docker.internal:9101}
+      NODE_METRICS_TARGET_2: ${NODE_METRICS_TARGET_2:-host.docker.internal:9102}
+      NODE_METRICS_TARGET_3: ${NODE_METRICS_TARGET_3:-host.docker.internal:9103}
     ports:
       - "9090:9090"
     volumes:

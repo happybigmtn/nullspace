@@ -7,6 +7,7 @@
 
 import { WasmWrapper } from '../api/wasm.js';
 import { logDebug } from '../utils/logger';
+import { validateBetAmount } from './games/validation';
 
 export interface BotConfig {
   enabled: boolean;
@@ -649,6 +650,7 @@ export class BotService {
   }
 
   private serializeU64Action(action: number, amount: number): Uint8Array {
+    validateBetAmount(amount, 'BotService');
     const payload = new Uint8Array(9);
     payload[0] = action;
     new DataView(payload.buffer).setBigUint64(1, BigInt(amount), false);
@@ -656,6 +658,7 @@ export class BotService {
   }
 
   private serializeTableBet(betType: number, number: number, amount: number): Uint8Array {
+    validateBetAmount(amount, 'BotService');
     const payload = new Uint8Array(11);
     payload[0] = 0;
     payload[1] = betType;
@@ -724,6 +727,7 @@ export class BotService {
   }
 
   private serializeBaccaratBet(betType: number, amount: number): Uint8Array {
+    validateBetAmount(amount, 'BotService');
     const payload = new Uint8Array(10);
     payload[0] = 0; // Place bet action
     payload[1] = betType;
@@ -740,6 +744,7 @@ export class BotService {
     payload[1] = bets.length;
     let offset = 2;
     for (const bet of bets) {
+      validateBetAmount(bet.amount, 'BotService');
       payload[offset] = bet.betType;
       new DataView(payload.buffer).setBigUint64(offset + 1, BigInt(bet.amount), false);
       offset += 9;
@@ -748,6 +753,7 @@ export class BotService {
   }
 
   private serializeCrapsBet(betType: number, target: number, amount: number): Uint8Array {
+    validateBetAmount(amount, 'BotService');
     const payload = new Uint8Array(11);
     payload[0] = 0; // Place bet action
     payload[1] = betType;

@@ -1,6 +1,6 @@
+import type { UIGameState } from '@nullspace/game-state';
 import type {
   Card as GeneratedCard,
-  GameState as GeneratedGameState,
   PlayerStats as GeneratedPlayerStats,
   ResolvedBet as GeneratedResolvedBet,
   CompletedHand as GeneratedCompletedHand,
@@ -42,7 +42,7 @@ export type SicBoBet = GeneratedSicBoBet;
 export type CrapsEventLog = GeneratedCrapsEventLog;
 export type LeaderboardEntry = GeneratedLeaderboardEntry;
 
-export type GameState = Omit<GeneratedGameState, 'type'> & { type: GameType };
+export type GameState = Omit<UIGameState, 'type'> & { type: GameType };
 
 export type AutoPlayDraft =
   | {

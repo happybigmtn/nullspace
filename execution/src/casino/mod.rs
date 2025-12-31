@@ -20,9 +20,11 @@ pub mod craps;
 pub mod hilo;
 #[cfg(test)]
 mod integration_tests;
+pub(crate) mod logging;
 pub mod limits;
 pub(crate) mod payload;
 pub mod roulette;
+pub(crate) mod serialization;
 pub mod sic_bo;
 pub mod super_mode;
 pub mod three_card;
@@ -249,6 +251,35 @@ impl GameRng {
         let mut deck: Vec<u8> = Vec::with_capacity(52 * decks as usize);
         for card in 0u8..52u8 {
             let used = used_counts[card as usize];
+            let remaining = decks.saturating_sub(used);
+            for _ in 0..remaining {
+                deck.push(card);
+            }
+        }
+
+        self.shuffle(&mut deck);
+        deck
+    }
+
+    /// Create a shuffled multi-deck shoe excluding cards from a precomputed count table.
+    pub fn create_shoe_excluding_counts(&mut self, used_counts: &[u8; 52], decks: u8) -> Vec<u8> {
+        let decks = decks.max(1);
+        if decks == 1 {
+            let mut deck = Vec::with_capacity(52usize.saturating_sub(
+                used_counts.iter().filter(|count| **count > 0).count(),
+            ));
+            for card in 0u8..52u8 {
+                if used_counts[card as usize] == 0 {
+                    deck.push(card);
+                }
+            }
+            self.shuffle(&mut deck);
+            return deck;
+        }
+
+        let mut deck = Vec::with_capacity(52 * decks as usize);
+        for card in 0u8..52u8 {
+            let used = used_counts[card as usize].min(decks);
             let remaining = decks.saturating_sub(used);
             for _ in 0..remaining {
                 deck.push(card);

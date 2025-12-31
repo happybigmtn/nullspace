@@ -1,6 +1,6 @@
 import type { Card } from '../../types';
 import { decodeCardId, isHiddenCard } from '../cards';
-import { readU64BE } from './shared';
+import { parseUltimateHoldemState as parseUltimateHoldemStateBlob } from '@nullspace/game-state';
 
 export interface UltimateHoldemStateUpdate {
   playerCards: Card[];
@@ -8,44 +8,17 @@ export interface UltimateHoldemStateUpdate {
   dealerCards: Card[];
   stage: 'betting' | 'preflop' | 'flop' | 'river' | 'showdown' | 'result';
   tripsBet: number;
+  sixCardBonusBet: number;
+  progressiveBet: number;
 }
 
 export function parseUltimateHoldemState(stateBlob: Uint8Array): UltimateHoldemStateUpdate | null {
-  if (stateBlob.length < 40 || stateBlob[0] !== 3) {
+  const parsed = parseUltimateHoldemStateBlob(stateBlob);
+  if (!parsed) {
     return null;
   }
-  const stageByte = stateBlob[1];
-  const playerRaw = stateBlob.slice(2, 4);
-  const communityRaw = stateBlob.slice(4, 9);
-  const dealerRaw = stateBlob.slice(9, 11);
 
-  const playerCards: Card[] = [];
-  for (const cardId of playerRaw) {
-    if (!isHiddenCard(cardId)) {
-      const card = decodeCardId(cardId);
-      if (card) playerCards.push(card);
-    }
-  }
-
-  const communityCards: Card[] = [];
-  for (const cardId of communityRaw) {
-    if (!isHiddenCard(cardId)) {
-      const card = decodeCardId(cardId);
-      if (card) communityCards.push(card);
-    }
-  }
-
-  const dealerCards: Card[] = [];
-  for (const cardId of dealerRaw) {
-    if (!isHiddenCard(cardId)) {
-      const card = decodeCardId(cardId);
-      if (card) dealerCards.push(card);
-    }
-  }
-
-  const view = new DataView(stateBlob.buffer, stateBlob.byteOffset, stateBlob.byteLength);
-  const tripsBet = Number(readU64BE(view, 16));
-
+  const stageByte = parsed.stage;
   const stage: UltimateHoldemStateUpdate['stage'] =
     stageByte === 1
       ? 'preflop'
@@ -59,12 +32,37 @@ export function parseUltimateHoldemState(stateBlob: Uint8Array): UltimateHoldemS
               ? 'result'
               : 'betting';
 
+  const playerCards: Card[] = [];
+  for (const cardId of parsed.playerCards) {
+    if (!isHiddenCard(cardId)) {
+      const card = decodeCardId(cardId);
+      if (card) playerCards.push(card);
+    }
+  }
+
+  const communityCards: Card[] = [];
+  for (const cardId of parsed.communityCards) {
+    if (!isHiddenCard(cardId)) {
+      const card = decodeCardId(cardId);
+      if (card) communityCards.push(card);
+    }
+  }
+
+  const dealerCards: Card[] = [];
+  for (const cardId of parsed.dealerCards) {
+    if (!isHiddenCard(cardId)) {
+      const card = decodeCardId(cardId);
+      if (card) dealerCards.push(card);
+    }
+  }
+
   return {
     playerCards,
     communityCards,
     dealerCards,
     stage,
-    tripsBet: Number.isFinite(tripsBet) ? tripsBet : 0,
+    tripsBet: Number.isFinite(parsed.tripsBet) ? parsed.tripsBet : 0,
+    sixCardBonusBet: Number.isFinite(parsed.sixCardBonusBet) ? parsed.sixCardBonusBet : 0,
+    progressiveBet: Number.isFinite(parsed.progressiveBet) ? parsed.progressiveBet : 0,
   };
 }
-

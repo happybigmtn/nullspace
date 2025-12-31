@@ -30,6 +30,8 @@
 //! 11 = Three-Number Hard Hop (50:1) - number = (double<<4)|single, both 1-6 and distinct
 //! 12 = Four-Number Easy Hop (7:1) - number = 6-bit mask of chosen numbers (exactly 4 bits set)
 
+use super::logging::{clamp_i64, push_resolved_entry};
+use super::serialization::{StateReader, StateWriter};
 use super::super_mode::apply_super_multiplier_total;
 use super::{limits, CasinoGame, GameError, GameResult, GameRng};
 use nullspace_types::casino::GameSession;
@@ -224,6 +226,11 @@ fn is_valid_dice(dice: &[u8; 3]) -> bool {
     dice.iter().all(|d| (1..=6).contains(d))
 }
 
+const BET_BYTES: usize = 10;
+const DICE_BYTES: usize = 3;
+const RULES_BYTES: usize = 1;
+const DICE_AND_RULES_BYTES: usize = DICE_BYTES + RULES_BYTES;
+
 /// Sic Bo game state.
 struct SicBoState {
     bets: Vec<SicBoBet>,
@@ -245,47 +252,40 @@ impl SicBoState {
             return Some(Self::new());
         }
 
-        let bet_count = bytes[0] as usize;
+        let mut reader = StateReader::new(bytes);
+        let bet_count = reader.read_u8()? as usize;
 
         // Validate bet count against maximum to prevent DoS via large allocations
         if bet_count > limits::SIC_BO_MAX_BETS {
             return None;
         }
 
-        let expected_bet_bytes = bet_count * 10;
-
-        if bytes.len() < 1 + expected_bet_bytes {
-            return None;
-        }
-
         let mut bets = Vec::with_capacity(bet_count);
-        let mut offset = 1;
         for _ in 0..bet_count {
-            let bet = SicBoBet::from_bytes(&bytes[offset..])?;
+            let bet = SicBoBet::from_bytes(reader.read_bytes(BET_BYTES)?)?;
             if !is_valid_bet_number(bet.bet_type, bet.number) {
                 return None;
             }
             bets.push(bet);
-            offset += 10;
         }
 
-        let remaining = bytes.len().saturating_sub(offset);
+        let remaining = reader.remaining();
         let (dice, rules) = match remaining {
             0 => (None, SicBoRules::default()),
-            1 => (None, SicBoRules::from_byte(bytes[offset])?),
-            3 => {
-                let dice = [bytes[offset], bytes[offset + 1], bytes[offset + 2]];
+            RULES_BYTES => (None, SicBoRules::from_byte(reader.read_u8()?)?),
+            DICE_BYTES => {
+                let dice = [reader.read_u8()?, reader.read_u8()?, reader.read_u8()?];
                 if !is_valid_dice(&dice) {
                     return None;
                 }
                 (Some(dice), SicBoRules::default())
             }
-            4 => {
-                let dice = [bytes[offset], bytes[offset + 1], bytes[offset + 2]];
+            DICE_AND_RULES_BYTES => {
+                let dice = [reader.read_u8()?, reader.read_u8()?, reader.read_u8()?];
                 if !is_valid_dice(&dice) {
                     return None;
                 }
-                let rules = SicBoRules::from_byte(bytes[offset + 3])?;
+                let rules = SicBoRules::from_byte(reader.read_u8()?)?;
                 (Some(dice), rules)
             }
             _ => return None,
@@ -296,19 +296,29 @@ impl SicBoState {
 
     fn to_bytes(&self) -> Vec<u8> {
         // Capacity: 1 (bet count) + bets (10 bytes each) + 3 (optional dice) + 1 (rules)
-        let capacity =
-            1 + (self.bets.len() * 10) + if self.dice.is_some() { 3 } else { 0 } + 1;
-        let mut bytes = Vec::with_capacity(capacity);
-        bytes.push(self.bets.len() as u8);
+        let capacity = 1
+            + (self.bets.len() * BET_BYTES)
+            + if self.dice.is_some() { DICE_BYTES } else { 0 }
+            + RULES_BYTES;
+        let mut bytes = StateWriter::with_capacity(capacity);
+        bytes.push_u8(self.bets.len() as u8);
         for bet in &self.bets {
-            bytes.extend_from_slice(&bet.to_bytes());
+            bytes.push_bytes(&bet.to_bytes());
         }
         if let Some(dice) = self.dice {
-            bytes.extend_from_slice(&dice);
+            bytes.push_bytes(&dice);
         }
-        bytes.push(self.rules.to_byte());
-        bytes
+        bytes.push_u8(self.rules.to_byte());
+        bytes.into_inner()
     }
+}
+
+fn serialize_state(state: &SicBoState) -> Vec<u8> {
+    state.to_bytes()
+}
+
+fn parse_state(bytes: &[u8]) -> Option<SicBoState> {
+    SicBoState::from_bytes(bytes)
 }
 
 /// Payout table for total bets.
@@ -505,21 +515,18 @@ fn generate_sicbo_logs(
     total_wagered: u64,
     total_return: u64,
 ) -> Vec<String> {
-    let clamp_i64 = |value: i128| -> i64 {
-        value
-            .clamp(i64::MIN as i128, i64::MAX as i128) as i64
-    };
     let total: u8 = dice.iter().sum();
     let is_triple = is_triple(dice);
 
     // Build bet results array
-    let mut bet_results = String::new();
-    let mut resolved_entries = String::new();
+    let bet_capacity = state.bets.len().saturating_mul(96);
+    let resolved_capacity = state.bets.len().saturating_mul(48).saturating_add(32);
+    let mut bet_results = String::with_capacity(bet_capacity);
+    let mut resolved_entries = String::with_capacity(resolved_capacity);
     let mut resolved_sum: i128 = 0;
     for (idx, bet) in state.bets.iter().enumerate() {
         if idx > 0 {
             bet_results.push(',');
-            resolved_entries.push(',');
         }
         let payout = calculate_bet_payout(bet, dice, state.rules);
         let won = payout > 0;
@@ -556,11 +563,7 @@ fn generate_sicbo_logs(
         };
         let pnl = clamp_i64(i128::from(payout) - i128::from(bet.amount));
         resolved_sum = resolved_sum.saturating_add(i128::from(pnl));
-        let _ = write!(
-            resolved_entries,
-            r#"{{"label":"{}","pnl":{}}}"#,
-            label, pnl
-        );
+        push_resolved_entry(&mut resolved_entries, &label, pnl);
         let _ = write!(
             bet_results,
             r#"{{"type":"{}","number":{},"amount":{},"won":{},"payout":{}}}"#,
@@ -577,14 +580,7 @@ fn generate_sicbo_logs(
     let net_pnl = clamp_i64(i128::from(total_return) - i128::from(total_wagered));
     let diff = i128::from(net_pnl).saturating_sub(resolved_sum);
     if diff != 0 {
-        if !resolved_entries.is_empty() {
-            resolved_entries.push(',');
-        }
-        let _ = write!(
-            resolved_entries,
-            r#"{{"label":"ADJUSTMENT","pnl":{}}}"#,
-            clamp_i64(diff)
-        );
+        push_resolved_entry(&mut resolved_entries, "ADJUSTMENT", clamp_i64(diff));
     }
 
     vec![format!(
@@ -608,7 +604,7 @@ pub struct SicBo;
 impl CasinoGame for SicBo {
     fn init(session: &mut GameSession, _rng: &mut GameRng) -> GameResult {
         let state = SicBoState::new();
-        session.state_blob = state.to_bytes();
+        session.state_blob = serialize_state(&state);
         GameResult::Continue(vec![])
     }
 
@@ -627,7 +623,7 @@ impl CasinoGame for SicBo {
 
         let action = payload[0];
         let mut state =
-            SicBoState::from_bytes(&session.state_blob).ok_or(GameError::InvalidMove)?;
+            parse_state(&session.state_blob).ok_or(GameError::InvalidMove)?;
 
         match action {
             // Action 0: Place bet
@@ -646,7 +642,7 @@ impl CasinoGame for SicBo {
                     number,
                     amount,
                 });
-                session.state_blob = state.to_bytes();
+                session.state_blob = serialize_state(&state);
                 session.move_count += 1;
                 Ok(GameResult::ContinueWithUpdate {
                     payout: -(amount as i64),
@@ -664,7 +660,7 @@ impl CasinoGame for SicBo {
                 }
                 let rules = SicBoRules::from_byte(payload[1]).ok_or(GameError::InvalidPayload)?;
                 state.rules = rules;
-                session.state_blob = state.to_bytes();
+                session.state_blob = serialize_state(&state);
                 Ok(GameResult::Continue(vec![]))
             }
 
@@ -686,7 +682,7 @@ impl CasinoGame for SicBo {
                     .map(|bet| calculate_bet_payout(bet, &dice, state.rules))
                     .sum();
 
-                session.state_blob = state.to_bytes();
+                session.state_blob = serialize_state(&state);
                 session.move_count += 1;
                 session.is_complete = true;
 
@@ -717,7 +713,7 @@ impl CasinoGame for SicBo {
                 // Calculate total to refund (bets were deducted via ContinueWithUpdate)
                 let refund: u64 = state.bets.iter().map(|b| b.amount).sum();
                 state.bets.clear();
-                session.state_blob = state.to_bytes();
+                session.state_blob = serialize_state(&state);
 
                 if refund > 0 {
                     // Positive payout = credit chips back to player
@@ -802,7 +798,7 @@ impl CasinoGame for SicBo {
                     .map(|bet| calculate_bet_payout(bet, &dice, state.rules))
                     .sum();
 
-                session.state_blob = state.to_bytes();
+                session.state_blob = serialize_state(&state);
                 session.move_count += 1;
                 session.is_complete = true;
 
@@ -905,7 +901,7 @@ mod tests {
             let len = rng.gen_range(0..=256);
             let mut blob = vec![0u8; len];
             rng.fill(&mut blob[..]);
-            let _ = SicBoState::from_bytes(&blob);
+            let _ = parse_state(&blob);
         }
     }
 
@@ -1108,7 +1104,7 @@ mod tests {
         ));
 
         // Verify bet was stored
-        let state = SicBoState::from_bytes(&session.state_blob).expect("Failed to parse state");
+        let state = parse_state(&session.state_blob).expect("Failed to parse state");
         assert_eq!(state.bets.len(), 1);
         assert_eq!(state.bets[0].bet_type, BetType::Small);
         assert_eq!(state.bets[0].amount, 100);
@@ -1138,7 +1134,7 @@ mod tests {
         assert!(session.is_complete);
 
         // Verify dice were rolled and stored
-        let state = SicBoState::from_bytes(&session.state_blob).expect("Failed to parse state");
+        let state = parse_state(&session.state_blob).expect("Failed to parse state");
         assert!(state.dice.is_some());
         let dice = state.dice.expect("Dice should be rolled");
         for die in dice.iter() {
@@ -1211,7 +1207,7 @@ mod tests {
         SicBo::process_move(&mut session, &payload, &mut rng).expect("Failed to process move");
 
         // Verify bet was placed
-        let state = SicBoState::from_bytes(&session.state_blob).expect("Failed to parse state");
+        let state = parse_state(&session.state_blob).expect("Failed to parse state");
         assert_eq!(state.bets.len(), 1);
 
         // Clear bets
@@ -1220,7 +1216,7 @@ mod tests {
         assert!(result.is_ok());
 
         // Verify bets were cleared
-        let state = SicBoState::from_bytes(&session.state_blob).expect("Failed to parse state");
+        let state = parse_state(&session.state_blob).expect("Failed to parse state");
         assert_eq!(state.bets.len(), 0);
     }
 
@@ -1243,7 +1239,7 @@ mod tests {
         SicBo::process_move(&mut session, &payload, &mut rng).expect("Failed to process move");
 
         // Verify both bets were placed
-        let state = SicBoState::from_bytes(&session.state_blob).expect("Failed to parse state");
+        let state = parse_state(&session.state_blob).expect("Failed to parse state");
         assert_eq!(state.bets.len(), 2);
         assert_eq!(state.bets[0].bet_type, BetType::Small);
         assert_eq!(state.bets[1].bet_type, BetType::Big);

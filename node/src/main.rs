@@ -1,10 +1,19 @@
 use anyhow::{Context, Result};
+use axum::{
+    body::Body,
+    extract::State,
+    http::{header, HeaderMap, StatusCode},
+    response::Response,
+    routing::get,
+    Router,
+};
 use clap::{Arg, ArgAction, Command};
 use commonware_codec::DecodeExt;
 use commonware_cryptography::{ed25519::PublicKey, Signer};
 use commonware_deployer::ec2::Hosts;
 use commonware_p2p::authenticated::discovery as authenticated;
-use commonware_runtime::{tokio, Metrics, Runner};
+use commonware_runtime::{tokio, Metrics, Runner, Spawner};
+use commonware_runtime::tokio::tracing::Config as TraceConfig;
 use commonware_utils::{from_hex_formatted, union_unique};
 use futures::future::try_join_all;
 use governor::Quota;
@@ -16,6 +25,7 @@ use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::PathBuf,
     str::FromStr,
+    sync::Arc,
 };
 use tracing::{error, info, Level};
 
@@ -46,6 +56,82 @@ fn format_bytes(bytes: u64) -> String {
     } else {
         format!("{bytes} B")
     }
+}
+
+fn resolve_trace_config() -> Option<TraceConfig> {
+    let endpoint = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT").ok()?;
+    if endpoint.trim().is_empty() {
+        return None;
+    }
+    let name = std::env::var("OTEL_SERVICE_NAME").unwrap_or_else(|_| "nullspace-node".to_string());
+    let rate = std::env::var("OTEL_SAMPLING_RATE")
+        .ok()
+        .and_then(|value| value.parse::<f64>().ok())
+        .map(|value| value.clamp(0.0, 1.0))
+        .unwrap_or(1.0);
+    Some(TraceConfig {
+        endpoint,
+        name,
+        rate,
+    })
+}
+
+struct MetricsState {
+    context: tokio::Context,
+    auth_token: Option<String>,
+}
+
+fn metrics_auth_token() -> Option<String> {
+    let token = std::env::var("METRICS_AUTH_TOKEN").ok()?;
+    let trimmed = token.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
+async fn metrics_handler(
+    State(state): State<Arc<MetricsState>>,
+    headers: HeaderMap,
+) -> Result<Response<Body>, StatusCode> {
+    if let Some(token) = state.auth_token.as_deref() {
+        let bearer = headers
+            .get(header::AUTHORIZATION)
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.strip_prefix("Bearer "));
+        let header_token = headers
+            .get("x-metrics-token")
+            .and_then(|value| value.to_str().ok());
+
+        if bearer != Some(token) && header_token != Some(token) {
+            return Err(StatusCode::UNAUTHORIZED);
+        }
+    }
+
+    Ok(Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "text/plain; version=0.0.4")
+        .body(Body::from(state.context.encode()))
+        .expect("Failed to create metrics response"))
+}
+
+fn spawn_metrics_server(context: tokio::Context, addr: SocketAddr) {
+    let state = Arc::new(MetricsState {
+        context: context.clone(),
+        auth_token: metrics_auth_token(),
+    });
+    context.with_label("metrics").spawn(move |_context| async move {
+        let listener = ::tokio::net::TcpListener::bind(addr)
+            .await
+            .expect("Failed to bind metrics server");
+        let app = Router::new()
+            .route("/metrics", get(metrics_handler))
+            .with_state(state);
+        axum::serve(listener, app.into_make_service())
+            .await
+            .expect("Could not serve metrics");
+    });
 }
 
 fn print_dry_run_report(config: &nullspace_node::ValidatedConfig, peer_count: usize, ip: IpAddr) {
@@ -252,6 +338,7 @@ fn main_result() -> Result<()> {
 
     // Start runtime
     executor.start(|context| async move {
+        let context = context.with_label("nullspace");
         let result: Result<()> = async {
             let use_json_logs = hosts_file.is_some();
 
@@ -264,11 +351,12 @@ fn main_result() -> Result<()> {
                     // If we are using `commonware-deployer`, we should use structured logging.
                     json: use_json_logs,
                 },
-                Some(SocketAddr::new(
-                    IpAddr::V4(Ipv4Addr::UNSPECIFIED),
-                    config.metrics_port,
-                )),
                 None,
+                resolve_trace_config(),
+            );
+            spawn_metrics_server(
+                context.clone(),
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), config.metrics_port),
             );
             info!(config = ?config.redacted_debug(), "loaded config file");
 

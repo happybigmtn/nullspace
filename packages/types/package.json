@@ -34,9 +34,14 @@
     }
   },
   "scripts": {
+    "generate": "cd ../../ && cargo run --release --bin export_ts --features ts",
+    "prebuild": "pnpm run generate",
+    "prepare": "pnpm run generate",
+    "predev": "pnpm run generate",
     "build": "tsc -p tsconfig.build.json",
     "dev": "tsc -p tsconfig.build.json --watch",
-    "type-check": "tsc --noEmit",
+    "pretype-check": "pnpm run generate",
+    "type-check": "tsc -p tsconfig.test.json --noEmit",
     "lint": "eslint src --max-warnings 0",
     "clean": "rm -rf dist"
   },

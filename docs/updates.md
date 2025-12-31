@@ -3456,7 +3456,7 @@ Audited and created template files for committed secrets.
 | `configs/local/node3.yaml` | private_key, share, polynomial | No (local dev only) |
 | `configs/local/peers.yaml` | public keys (derived from private) | No (local dev only) |
 | `docker/convex/.env` | CONVEX_SERVICE_TOKEN, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET | **YES** |
-| `services/auth/.env` | AUTH_SECRET, CONVEX_SERVICE_TOKEN, CASINO_ADMIN_PRIVATE_KEY_HEX | **YES** |
+| `services/auth/.env` | AUTH_SECRET, CONVEX_SERVICE_TOKEN, CASINO_ADMIN_PRIVATE_KEY_FILE (or CASINO_ADMIN_PRIVATE_KEY_HEX for dev) | **YES** |
 | `website/.env.local` | CONVEX_SELF_HOSTED_ADMIN_KEY | **YES** |
 
 ### Secrets Requiring External Rotation

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   getBaccaratBetsToPlace,
   serializeBaccaratAtomicBatch,
+  serializeRouletteBet,
   serializeRouletteAtomicBatch,
   serializeSicBoAtomicBatch,
 } from '../serialization';
@@ -43,6 +44,18 @@ describe('services/games serialization', () => {
     expect(payload[12]).toBe(0);
     expect(payload[13]).toBe(7);
     expect(Number(view.getBigUint64(14, false))).toBe(5);
+  });
+
+  it('rejects invalid bet amounts', () => {
+    expect(() => serializeRouletteAtomicBatch([{ type: 'RED', amount: 0 }])).toThrow(
+      'bet amount must be > 0',
+    );
+    expect(() => serializeRouletteAtomicBatch([{ type: 'BLACK', amount: -5 }])).toThrow(
+      'bet amount must be > 0',
+    );
+    expect(() => serializeRouletteBet({ type: 'ODD', amount: Number.NaN })).toThrow(
+      'bet amount must be finite',
+    );
   });
 
   it('serializes sic bo atomic batches', () => {

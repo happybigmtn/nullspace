@@ -1,4 +1,5 @@
 import "dotenv/config";
+import "./telemetry.js";
 import crypto from "crypto";
 import express from "express";
 import cors from "cors";
@@ -180,6 +181,28 @@ const requireAllowedOrigin: express.RequestHandler = (req, res, next) => {
     return;
   }
   next();
+};
+
+const metricsAuthToken = process.env.METRICS_AUTH_TOKEN ?? "";
+const requireMetricsAuth: express.RequestHandler = (req, res, next) => {
+  if (!metricsAuthToken) {
+    next();
+    return;
+  }
+  const authHeader = req.headers.authorization;
+  const bearerToken =
+    typeof authHeader === "string" && authHeader.startsWith("Bearer ")
+      ? authHeader.slice("Bearer ".length)
+      : null;
+  const headerToken =
+    typeof req.headers["x-metrics-token"] === "string"
+      ? req.headers["x-metrics-token"]
+      : null;
+  if (bearerToken === metricsAuthToken || headerToken === metricsAuthToken) {
+    next();
+    return;
+  }
+  res.status(401).json({ error: "unauthorized" });
 };
 
 const parseStripeTierMap = (raw: string): Map<string, string> => {
@@ -498,7 +521,7 @@ app.use(express.json());
 app.get("/healthz", (_req, res) => {
   res.status(200).json({ ok: true });
 });
-app.get("/metrics", (_req, res) => {
+app.get("/metrics", requireMetricsAuth, (_req, res) => {
   const countersObj: Record<string, number> = {};
   for (const [name, value] of counters.entries()) {
     countersObj[name] = value;
@@ -515,7 +538,7 @@ app.get("/metrics", (_req, res) => {
   }
   res.status(200).json({ counters: countersObj, timings: timingsObj });
 });
-app.get("/metrics/prometheus", (_req, res) => {
+app.get("/metrics/prometheus", requireMetricsAuth, (_req, res) => {
   res.setHeader("Content-Type", "text/plain; version=0.0.4");
   res.status(200).send(renderPrometheusMetrics());
 });

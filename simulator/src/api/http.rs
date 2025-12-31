@@ -1,8 +1,8 @@
 use axum::{
     body::Bytes,
     extract::State as AxumState,
-    http::{header, HeaderValue, StatusCode},
-    response::IntoResponse,
+    http::{header, HeaderMap, HeaderValue, StatusCode},
+    response::{IntoResponse, Response},
     Json,
 };
 use commonware_codec::{DecodeExt, Encode, Read, ReadExt, ReadRangeExt};
@@ -35,47 +35,71 @@ struct HealthzResponse {
     ok: bool,
 }
 
-pub(super) async fn healthz() -> impl IntoResponse {
-    Json(HealthzResponse { ok: true })
+pub(super) async fn healthz() -> Response {
+    Json(HealthzResponse { ok: true }).into_response()
 }
 
-pub(super) async fn config(AxumState(simulator): AxumState<Arc<Simulator>>) -> impl IntoResponse {
-    Json(simulator.config.clone())
+pub(super) async fn config(AxumState(simulator): AxumState<Arc<Simulator>>) -> Response {
+    Json(simulator.config.clone()).into_response()
 }
 
 pub(super) async fn ws_metrics(
+    headers: HeaderMap,
     AxumState(simulator): AxumState<Arc<Simulator>>,
-) -> impl IntoResponse {
-    Json(simulator.ws_metrics_snapshot())
+) -> Response {
+    if let Some(status) = metrics_auth_error(&headers) {
+        return status.into_response();
+    }
+    Json(simulator.ws_metrics_snapshot()).into_response()
 }
 
 pub(super) async fn http_metrics(
+    headers: HeaderMap,
     AxumState(simulator): AxumState<Arc<Simulator>>,
-) -> impl IntoResponse {
-    Json(simulator.http_metrics_snapshot())
+) -> Response {
+    if let Some(status) = metrics_auth_error(&headers) {
+        return status.into_response();
+    }
+    Json(simulator.http_metrics_snapshot()).into_response()
 }
 
 pub(super) async fn system_metrics(
+    headers: HeaderMap,
     AxumState(simulator): AxumState<Arc<Simulator>>,
-) -> impl IntoResponse {
-    Json(simulator.system_metrics_snapshot())
+) -> Response {
+    if let Some(status) = metrics_auth_error(&headers) {
+        return status.into_response();
+    }
+    Json(simulator.system_metrics_snapshot()).into_response()
 }
 
 pub(super) async fn explorer_metrics(
+    headers: HeaderMap,
     AxumState(simulator): AxumState<Arc<Simulator>>,
-) -> impl IntoResponse {
-    Json(simulator.explorer_metrics_snapshot())
+) -> Response {
+    if let Some(status) = metrics_auth_error(&headers) {
+        return status.into_response();
+    }
+    Json(simulator.explorer_metrics_snapshot()).into_response()
 }
 
 pub(super) async fn update_index_metrics(
+    headers: HeaderMap,
     AxumState(simulator): AxumState<Arc<Simulator>>,
-) -> impl IntoResponse {
-    Json(simulator.update_index_metrics_snapshot())
+) -> Response {
+    if let Some(status) = metrics_auth_error(&headers) {
+        return status.into_response();
+    }
+    Json(simulator.update_index_metrics_snapshot()).into_response()
 }
 
 pub(super) async fn prometheus_metrics(
+    headers: HeaderMap,
     AxumState(simulator): AxumState<Arc<Simulator>>,
-) -> impl IntoResponse {
+) -> Response {
+    if let Some(status) = metrics_auth_error(&headers) {
+        return status.into_response();
+    }
     let body = render_prometheus_metrics(&simulator);
     (
         StatusCode::OK,
@@ -85,6 +109,28 @@ pub(super) async fn prometheus_metrics(
         )],
         body,
     )
+        .into_response()
+}
+
+fn metrics_auth_error(headers: &HeaderMap) -> Option<StatusCode> {
+    let token = std::env::var("METRICS_AUTH_TOKEN").unwrap_or_default();
+    if token.is_empty() {
+        return None;
+    }
+    let bearer = headers
+        .get(header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.strip_prefix("Bearer "))
+        .map(str::to_string);
+    let header_token = headers
+        .get("x-metrics-token")
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_string);
+    if bearer.as_deref() == Some(token.as_str()) || header_token.as_deref() == Some(token.as_str()) {
+        None
+    } else {
+        Some(StatusCode::UNAUTHORIZED)
+    }
 }
 
 fn render_prometheus_metrics(simulator: &Simulator) -> String {

@@ -452,7 +452,7 @@ Phase 2 (EVM + bridge workstream):
 
 ## Deployment Checklist (Go-Live)
 - [ ] Set `VITE_STRIPE_TIERS=member:<priceId>` and `FREEROLL_MEMBER_TIERS=member` in production env.
-- [ ] Set `CASINO_ADMIN_PUBLIC_KEY_HEX` for simulator/executor and `CASINO_ADMIN_PRIVATE_KEY_HEX` for Auth service.
+- [ ] Set `CASINO_ADMIN_PUBLIC_KEY_HEX` for simulator/executor and `CASINO_ADMIN_PRIVATE_KEY_FILE` for Auth service.
 - [ ] Configure Stripe webhook endpoint to Convex HTTP action and verify signature.
 - [ ] Set simulator allowlists (`ALLOWED_HTTP_ORIGINS`, `ALLOWED_WS_ORIGINS`) and origin exemptions if needed.
 - [ ] Configure simulator explorer persistence (use `--explorer-persistence-url` for Postgres shared storage).

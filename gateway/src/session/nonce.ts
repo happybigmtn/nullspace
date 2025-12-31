@@ -7,6 +7,7 @@ import { readFileSync, writeFileSync, existsSync } from 'fs';
 export class NonceManager {
   private nonces: Map<string, bigint> = new Map();
   private pending: Map<string, Set<bigint>> = new Map();
+  private locks: Map<string, Promise<void>> = new Map();
   private persistPath: string;
 
   constructor(persistPath: string = '.gateway-nonces.json') {
@@ -35,6 +36,39 @@ export class NonceManager {
    */
   getCurrentNonce(publicKeyHex: string): bigint {
     return this.nonces.get(publicKeyHex) ?? 0n;
+  }
+
+  /**
+   * Set current nonce explicitly (e.g., after sync or successful submission)
+   */
+  setCurrentNonce(publicKeyHex: string, nonce: bigint): void {
+    this.nonces.set(publicKeyHex, nonce);
+  }
+
+  /**
+   * Serialize nonce usage per public key to avoid concurrent nonce races
+   */
+  async withLock<T>(
+    publicKeyHex: string,
+    fn: (nonce: bigint) => Promise<T>
+  ): Promise<T> {
+    const pendingLock = this.locks.get(publicKeyHex);
+    if (pendingLock) {
+      await pendingLock;
+    }
+
+    let releaseLock: () => void;
+    const lockPromise = new Promise<void>((resolve) => {
+      releaseLock = resolve;
+    });
+    this.locks.set(publicKeyHex, lockPromise);
+
+    try {
+      return await fn(this.getCurrentNonce(publicKeyHex));
+    } finally {
+      this.locks.delete(publicKeyHex);
+      releaseLock!();
+    }
   }
 
   /**

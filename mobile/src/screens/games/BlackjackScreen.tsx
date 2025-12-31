@@ -11,7 +11,7 @@ import { GameLayout } from '../../components/game';
 import { TutorialOverlay, PrimaryButton } from '../../components/ui';
 import { haptics } from '../../services/haptics';
 import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useChipBetting } from '../../hooks';
-import { COLORS, SPACING, TYPOGRAPHY, SPRING } from '../../constants/theme';
+import { COLORS, SPACING, TYPOGRAPHY, SPRING, RADIUS } from '../../constants/theme';
 import { decodeCardList, decodeStateBytes, parseBlackjackState } from '../../utils';
 import type { ChipValue, TutorialStep, Card as CardType } from '../../types';
 import type { GameMessage } from '@nullspace/protocol/mobile';
@@ -62,6 +62,7 @@ export function BlackjackScreen() {
     lastResult: null,
   });
   const [showTutorial, setShowTutorial] = useState(false);
+  const [sideBet21Plus3, setSideBet21Plus3] = useState(0);
 
   // Wrap chip placement to check game phase
   const handleChipPlace = useCallback((value: ChipValue) => {
@@ -162,6 +163,7 @@ export function BlackjackScreen() {
     send({
       type: 'blackjack_deal',
       amount: bet,
+      sideBet21Plus3,
     });
 
     setState((prev) => ({
@@ -169,7 +171,7 @@ export function BlackjackScreen() {
       phase: 'player_turn',
       message: 'Your turn',
     }));
-  }, [bet, send]);
+  }, [bet, send, sideBet21Plus3]);
 
   const handleHit = useCallback(async () => {
     await haptics.buttonPress();
@@ -197,8 +199,21 @@ export function BlackjackScreen() {
     send({ type: 'blackjack_split' });
   }, [send]);
 
+  const handleToggle21Plus3 = useCallback(async () => {
+    if (state.phase !== 'betting') return;
+    const nextAmount = sideBet21Plus3 > 0 ? 0 : selectedChip;
+    if (bet + nextAmount > balance) {
+      haptics.error();
+      setState((prev) => ({ ...prev, message: 'Insufficient balance' }));
+      return;
+    }
+    await haptics.buttonPress();
+    setSideBet21Plus3(nextAmount);
+  }, [state.phase, sideBet21Plus3, selectedChip, bet, balance]);
+
   const handleNewGame = useCallback(() => {
     clearBet();
+    setSideBet21Plus3(0);
     setState({
       playerCards: [],
       dealerCards: [],
@@ -306,6 +321,21 @@ export function BlackjackScreen() {
               <Text style={styles.betLabel}>Bet</Text>
               <Text style={styles.betAmount}>${bet}</Text>
             </View>
+          )}
+
+          {state.phase === 'betting' && (
+            <Pressable
+              onPress={handleToggle21Plus3}
+              style={[
+                styles.sideBetToggle,
+                sideBet21Plus3 > 0 && styles.sideBetToggleActive,
+              ]}
+            >
+              <Text style={styles.sideBetLabel}>21+3</Text>
+              <Text style={styles.sideBetAmount}>
+                {sideBet21Plus3 > 0 ? `$${sideBet21Plus3}` : 'OFF'}
+              </Text>
+            </Pressable>
           )}
         </View>
 
@@ -437,6 +467,29 @@ const styles = StyleSheet.create({
   betAmount: {
     color: COLORS.gold,
     ...TYPOGRAPHY.h2,
+  },
+  sideBetToggle: {
+    alignSelf: 'center',
+    marginTop: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+    borderColor: COLORS.surfaceBorder,
+    backgroundColor: COLORS.surface,
+    alignItems: 'center',
+  },
+  sideBetToggleActive: {
+    borderColor: COLORS.accent,
+    backgroundColor: COLORS.accentMuted,
+  },
+  sideBetLabel: {
+    color: COLORS.textSecondary,
+    ...TYPOGRAPHY.label,
+  },
+  sideBetAmount: {
+    color: COLORS.textPrimary,
+    ...TYPOGRAPHY.caption,
   },
   actions: {
     flexDirection: 'row',

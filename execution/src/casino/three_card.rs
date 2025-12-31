@@ -36,10 +36,11 @@
 //! 6 = Set Progressive bet (u64)
 //! 8 = Set rules (u8)
 
+use super::logging::{clamp_i64, format_card_list, push_resolved_entry};
+use super::serialization::{StateReader, StateWriter};
 use super::super_mode::apply_super_multiplier_cards;
 use super::{cards, CasinoGame, GameError, GameResult, GameRng};
 use nullspace_types::casino::{GameSession, THREE_CARD_PROGRESSIVE_BASE_JACKPOT};
-use std::fmt::Write;
 
 /// Payout multipliers for Three Card Poker (expressed as "to 1" winnings).
 mod payouts {
@@ -311,16 +312,21 @@ struct TcState {
 }
 
 fn parse_state(state: &[u8]) -> Option<TcState> {
-    if state.len() < STATE_LEN_BASE || state[0] != STATE_VERSION {
+    if state.len() < STATE_LEN_BASE {
         return None;
     }
     if state.len() != STATE_LEN_BASE && state.len() != STATE_LEN_WITH_RULES {
         return None;
     }
 
-    let stage = Stage::try_from(state[1]).ok()?;
-    let player = [state[2], state[3], state[4]];
-    let dealer = [state[5], state[6], state[7]];
+    let mut reader = StateReader::new(state);
+    let version = reader.read_u8()?;
+    if version != STATE_VERSION {
+        return None;
+    }
+    let stage = Stage::try_from(reader.read_u8()?).ok()?;
+    let player: [u8; 3] = reader.read_bytes(3)?.try_into().ok()?;
+    let dealer: [u8; 3] = reader.read_bytes(3)?.try_into().ok()?;
     if player
         .iter()
         .chain(dealer.iter())
@@ -328,11 +334,11 @@ fn parse_state(state: &[u8]) -> Option<TcState> {
     {
         return None;
     }
-    let pairplus_bet = u64::from_be_bytes(state[8..16].try_into().ok()?);
-    let six_card_bonus_bet = u64::from_be_bytes(state[16..24].try_into().ok()?);
-    let progressive_bet = u64::from_be_bytes(state[24..32].try_into().ok()?);
-    let rules = if state.len() >= STATE_LEN_WITH_RULES {
-        ThreeCardRules::from_byte(state[32])?
+    let pairplus_bet = reader.read_u64_be()?;
+    let six_card_bonus_bet = reader.read_u64_be()?;
+    let progressive_bet = reader.read_u64_be()?;
+    let rules = if reader.remaining() > 0 {
+        ThreeCardRules::from_byte(reader.read_u8()?)?
     } else {
         ThreeCardRules::default()
     };
@@ -349,16 +355,16 @@ fn parse_state(state: &[u8]) -> Option<TcState> {
 }
 
 fn serialize_state(state: &TcState) -> Vec<u8> {
-    let mut out = Vec::with_capacity(STATE_LEN_WITH_RULES);
-    out.push(STATE_VERSION);
-    out.push(state.stage as u8);
-    out.extend_from_slice(&state.player);
-    out.extend_from_slice(&state.dealer);
-    out.extend_from_slice(&state.pairplus_bet.to_be_bytes());
-    out.extend_from_slice(&state.six_card_bonus_bet.to_be_bytes());
-    out.extend_from_slice(&state.progressive_bet.to_be_bytes());
-    out.push(state.rules.to_byte());
-    out
+    let mut out = StateWriter::with_capacity(STATE_LEN_WITH_RULES);
+    out.push_u8(STATE_VERSION);
+    out.push_u8(state.stage as u8);
+    out.push_bytes(&state.player);
+    out.push_bytes(&state.dealer);
+    out.push_u64_be(state.pairplus_bet);
+    out.push_u64_be(state.six_card_bonus_bet);
+    out.push_u64_be(state.progressive_bet);
+    out.push_u8(state.rules.to_byte());
+    out.into_inner()
 }
 
 fn apply_pairplus_update(state: &mut TcState, new_bet: u64) -> Result<i64, GameError> {
@@ -586,24 +592,6 @@ fn is_mini_royal(cards: &[u8; 3]) -> bool {
     cards.iter().all(|&card| cards::card_suit(card) == suit)
 }
 
-fn format_card_list(cards: &[u8]) -> String {
-    let mut out = String::new();
-    for (idx, card) in cards.iter().enumerate() {
-        if idx > 0 {
-            out.push(',');
-        }
-        let _ = write!(out, "{}", card);
-    }
-    out
-}
-
-fn push_resolved_entry(out: &mut String, label: &str, pnl: i64) {
-    if !out.is_empty() {
-        out.push(',');
-    }
-    let _ = write!(out, r#"{{"label":"{}","pnl":{}}}"#, label, pnl);
-}
-
 /// Generate JSON logs for Three Card Poker game completion
 fn generate_three_card_logs(
     state: &TcState,
@@ -619,10 +607,6 @@ fn generate_three_card_logs(
     ante_bonus: u64,
     total_return: u64,
 ) -> Vec<String> {
-    let clamp_i64 = |value: i128| -> i64 {
-        value
-            .clamp(i64::MIN as i128, i64::MAX as i128) as i64
-    };
     let player_hand = evaluate_hand(&state.player);
     let dealer_hand = evaluate_hand(&state.dealer);
 
@@ -650,7 +634,7 @@ fn generate_three_card_logs(
         .saturating_add(state.pairplus_bet)
         .saturating_add(state.six_card_bonus_bet)
         .saturating_add(state.progressive_bet);
-    let mut resolved_entries = String::new();
+    let mut resolved_entries = String::with_capacity(384);
     let mut resolved_sum: i128 = 0;
     let ante_pnl = clamp_i64(i128::from(ante_return) - i128::from(session.bet));
     push_resolved_entry(&mut resolved_entries, "ANTE", ante_pnl);
@@ -1199,7 +1183,7 @@ mod tests {
     }
 
     #[test]
-    fn test_basic_flow_deal_play_reveal() {
+    fn test_basic_flow_deal_play_reveal() -> Result<(), GameError> {
         let seed = create_test_seed();
         let mut session = create_test_session(100);
 
@@ -1209,12 +1193,11 @@ mod tests {
 
         // Deal (no pairplus)
         let mut rng = GameRng::new(&seed, session.id, 1);
-        ThreeCardPoker::process_move(&mut session, &[Move::Deal as u8], &mut rng).unwrap();
+        ThreeCardPoker::process_move(&mut session, &[Move::Deal as u8], &mut rng)?;
 
         // Play (deduct play bet)
         let mut rng = GameRng::new(&seed, session.id, 2);
-        let res =
-            ThreeCardPoker::process_move(&mut session, &[Move::Play as u8], &mut rng).unwrap();
+        let res = ThreeCardPoker::process_move(&mut session, &[Move::Play as u8], &mut rng)?;
         assert!(matches!(
             res,
             GameResult::ContinueWithUpdate { payout: -100, .. }
@@ -1222,13 +1205,13 @@ mod tests {
 
         // Reveal resolves
         let mut rng = GameRng::new(&seed, session.id, 3);
-        let res =
-            ThreeCardPoker::process_move(&mut session, &[Move::Reveal as u8], &mut rng).unwrap();
+        let res = ThreeCardPoker::process_move(&mut session, &[Move::Reveal as u8], &mut rng)?;
         assert!(matches!(
             res,
             GameResult::Win(_, _) | GameResult::LossPreDeducted(_, _)
         ));
         assert!(session.is_complete);
+        Ok(())
     }
 
     #[test]

@@ -1,5 +1,6 @@
 import type { Card } from '../../types';
 import { decodeCardId } from '../cards';
+import { parseBaccaratState as parseBaccaratStateBlob } from '@nullspace/game-state';
 
 export interface BaccaratStateUpdate {
   playerCards: Card[];
@@ -18,53 +19,17 @@ const totalValue = (cards: Card[]): number =>
   cards.reduce((sum, card) => sum + cardValue(card), 0) % 10;
 
 export function parseBaccaratState(stateBlob: Uint8Array): BaccaratStateUpdate | null {
-  if (stateBlob.length < 1) {
+  const parsed = parseBaccaratStateBlob(stateBlob);
+  if (!parsed) {
     return null;
   }
-  const betCount = stateBlob[0];
-  if (betCount === undefined) {
-    return null;
-  }
-  const betsSize = betCount * 9;
-  const cardsStart = 1 + betsSize;
-  if (stateBlob.length <= cardsStart) {
-    return null;
-  }
-  let offset = cardsStart;
-  const playerLen = stateBlob[offset];
-  if (playerLen === undefined) {
-    return null;
-  }
-  offset += 1;
-  const playerCards: Card[] = [];
-  for (let i = 0; i < playerLen && offset < stateBlob.length; i += 1) {
-    const cardId = stateBlob[offset];
-    if (cardId === undefined) {
-      break;
-    }
-    offset += 1;
-    const card = decodeCardId(cardId);
-    if (card) {
-      playerCards.push(card);
-    }
-  }
-  const bankerLenByte = stateBlob[offset];
-  const bankerLen = bankerLenByte ?? 0;
-  if (bankerLenByte !== undefined) {
-    offset += 1;
-  }
-  const bankerCards: Card[] = [];
-  for (let i = 0; i < bankerLen && offset < stateBlob.length; i += 1) {
-    const cardId = stateBlob[offset];
-    if (cardId === undefined) {
-      break;
-    }
-    offset += 1;
-    const card = decodeCardId(cardId);
-    if (card) {
-      bankerCards.push(card);
-    }
-  }
+
+  const playerCards = parsed.playerCards
+    .map(decodeCardId)
+    .filter((card): card is Card => !!card);
+  const bankerCards = parsed.bankerCards
+    .map(decodeCardId)
+    .filter((card): card is Card => !!card);
 
   if (playerCards.length === 0 && bankerCards.length === 0) {
     return null;

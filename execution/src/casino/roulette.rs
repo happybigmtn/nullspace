@@ -37,6 +37,8 @@
 //! 12 = Corner (4-number corner, 8:1) - number = top-left (1-32, not multiple of 3)
 //! 13 = SixLine (6 numbers, 5:1) - number = row start (1,4,...,31)
 
+use super::logging::{clamp_i64, push_resolved_entry};
+use super::serialization::{StateReader, StateWriter};
 use super::super_mode::apply_super_multiplier_number;
 use super::{limits, CasinoGame, GameError, GameResult, GameRng};
 use nullspace_types::casino::GameSession;
@@ -58,6 +60,7 @@ mod payouts {
 
 /// State header length: bet_count(1) + zero_rule(1) + phase(1) + totalWagered(8) + pendingReturn(8).
 const STATE_HEADER_V2_LEN: usize = 19;
+const BET_BYTES: usize = 10;
 
 /// Red numbers on a roulette wheel.
 const RED_NUMBERS: [u8; 18] = [
@@ -329,21 +332,21 @@ impl RouletteState {
     fn to_blob(&self) -> Vec<u8> {
         // Capacity: header + bets (10 bytes each) + 1 (optional result)
         let capacity = STATE_HEADER_V2_LEN
-            + (self.bets.len() * 10)
+            + (self.bets.len() * BET_BYTES)
             + if self.result.is_some() { 1 } else { 0 };
-        let mut blob = Vec::with_capacity(capacity);
-        blob.push(self.bets.len() as u8);
-        blob.push(self.zero_rule as u8);
-        blob.push(self.phase as u8);
-        blob.extend_from_slice(&self.total_wagered.to_be_bytes());
-        blob.extend_from_slice(&self.pending_return.to_be_bytes());
+        let mut blob = StateWriter::with_capacity(capacity);
+        blob.push_u8(self.bets.len() as u8);
+        blob.push_u8(self.zero_rule as u8);
+        blob.push_u8(self.phase as u8);
+        blob.push_u64_be(self.total_wagered);
+        blob.push_u64_be(self.pending_return);
         for bet in &self.bets {
-            blob.extend_from_slice(&bet.to_bytes());
+            blob.push_bytes(&bet.to_bytes());
         }
         if let Some(result) = self.result {
-            blob.push(result);
+            blob.push_u8(result);
         }
-        blob
+        blob.into_inner()
     }
 
     /// Deserialize state from blob.
@@ -360,38 +363,34 @@ impl RouletteState {
             return None;
         }
 
-        let bet_count = blob[0] as usize;
+        let mut reader = StateReader::new(blob);
+        let bet_count = reader.read_u8()? as usize;
         if bet_count > limits::ROULETTE_MAX_BETS {
             return None;
         }
 
         // Parse header
-        let zero_rule = ZeroRule::try_from(blob[1]).ok()?;
-        let phase = Phase::try_from(blob[2]).ok()?;
-        let total_wagered = u64::from_be_bytes(blob[3..11].try_into().ok()?);
-        let pending_return = u64::from_be_bytes(blob[11..19].try_into().ok()?);
+        let zero_rule = ZeroRule::try_from(reader.read_u8()?).ok()?;
+        let phase = Phase::try_from(reader.read_u8()?).ok()?;
+        let total_wagered = reader.read_u64_be()?;
+        let pending_return = reader.read_u64_be()?;
 
         // Parse bets
-        let mut offset = STATE_HEADER_V2_LEN;
         let mut bets = Vec::with_capacity(bet_count);
         for _ in 0..bet_count {
-            if offset + 10 > blob.len() {
-                return None;
-            }
-            let bet = RouletteBet::from_bytes(&blob[offset..offset + 10])?;
+            let bet = RouletteBet::from_bytes(reader.read_bytes(BET_BYTES)?)?;
             if !is_valid_bet_number(bet.bet_type, bet.number, zero_rule) {
                 return None;
             }
             bets.push(bet);
-            offset += 10;
         }
 
         // Parse optional result
-        let result = if offset < blob.len() {
-            if offset + 1 != blob.len() {
+        let result = if reader.remaining() > 0 {
+            if reader.remaining() != 1 {
                 return None;
             }
-            let result = blob[offset];
+            let result = reader.read_u8()?;
             let max_result = if matches!(zero_rule, ZeroRule::American) {
                 DOUBLE_ZERO
             } else {
@@ -416,17 +415,20 @@ impl RouletteState {
     }
 }
 
+fn serialize_state(state: &RouletteState) -> Vec<u8> {
+    state.to_blob()
+}
+
+fn parse_state(blob: &[u8]) -> Option<RouletteState> {
+    RouletteState::from_blob(blob)
+}
+
 /// Generate JSON logs for roulette game completion
 fn generate_roulette_logs(
     state: &RouletteState,
     result: u8,
     total_return: u64,
 ) -> Vec<String> {
-    let clamp_i64 = |value: i128| -> i64 {
-        value
-            .clamp(i64::MIN as i128, i64::MAX as i128) as i64
-    };
-
     let display_number = if result == DOUBLE_ZERO {
         "00".to_string()
     } else {
@@ -434,13 +436,14 @@ fn generate_roulette_logs(
     };
 
     // Build bet results array
-    let mut bet_results = String::new();
-    let mut resolved_bets = String::new();
+    let bet_capacity = state.bets.len().saturating_mul(96);
+    let resolved_capacity = state.bets.len().saturating_mul(48).saturating_add(32);
+    let mut bet_results = String::with_capacity(bet_capacity);
+    let mut resolved_bets = String::with_capacity(resolved_capacity);
     let mut resolved_sum: i128 = 0;
     for (idx, bet) in state.bets.iter().enumerate() {
         if idx > 0 {
             bet_results.push(',');
-            resolved_bets.push(',');
         }
         let wins = bet_wins(bet.bet_type, bet.number, result);
         let bet_type_str = match bet.bet_type {
@@ -496,11 +499,7 @@ fn generate_roulette_logs(
         };
         let pnl = clamp_i64(i128::from(bet_return) - i128::from(bet.amount));
         resolved_sum = resolved_sum.saturating_add(i128::from(pnl));
-        let _ = write!(
-            resolved_bets,
-            r#"{{"label":"{}","pnl":{}}}"#,
-            label, pnl
-        );
+        push_resolved_entry(&mut resolved_bets, &label, pnl);
         let _ = write!(
             bet_results,
             r#"{{"type":"{}","number":{},"amount":{},"won":{}}}"#,
@@ -520,14 +519,7 @@ fn generate_roulette_logs(
     let net_pnl = clamp_i64(i128::from(total_return) - i128::from(state.total_wagered));
     let diff = i128::from(net_pnl).saturating_sub(resolved_sum);
     if diff != 0 {
-        if !resolved_bets.is_empty() {
-            resolved_bets.push(',');
-        }
-        let _ = write!(
-            resolved_bets,
-            r#"{{"label":"ADJUSTMENT","pnl":{}}}"#,
-            clamp_i64(diff)
-        );
+        push_resolved_entry(&mut resolved_bets, "ADJUSTMENT", clamp_i64(diff));
     }
 
     vec![format!(
@@ -549,7 +541,7 @@ impl CasinoGame for Roulette {
     fn init(session: &mut GameSession, _rng: &mut GameRng) -> GameResult {
         // Initialize with empty state
         let state = RouletteState::new();
-        session.state_blob = state.to_blob();
+        session.state_blob = serialize_state(&state);
         GameResult::Continue(vec![])
     }
 
@@ -568,7 +560,7 @@ impl CasinoGame for Roulette {
 
         // Parse current state
         let mut state =
-            RouletteState::from_blob(&session.state_blob).ok_or(GameError::InvalidPayload)?;
+            parse_state(&session.state_blob).ok_or(GameError::InvalidPayload)?;
 
         match payload[0] {
             // [0, bet_type, number, amount_bytes...] - Place bet
@@ -605,7 +597,7 @@ impl CasinoGame for Roulette {
                     .checked_add(amount)
                     .ok_or(GameError::InvalidPayload)?;
 
-                session.state_blob = state.to_blob();
+                session.state_blob = serialize_state(&state);
                 Ok(GameResult::ContinueWithUpdate {
                     payout: -(amount as i64),
                     logs: vec![],
@@ -696,7 +688,7 @@ impl CasinoGame for Roulette {
                                         state.bets = imprisoned;
                                         state.phase = Phase::Prison;
 
-                                        session.state_blob = state.to_blob();
+                                        session.state_blob = serialize_state(&state);
                                         session.move_count += 1;
                                         return Ok(GameResult::Continue(vec![]));
                                     }
@@ -728,7 +720,7 @@ impl CasinoGame for Roulette {
                             }
                         }
 
-                        session.state_blob = state.to_blob();
+                        session.state_blob = serialize_state(&state);
                         session.move_count += 1;
                         session.is_complete = true;
 
@@ -752,7 +744,7 @@ impl CasinoGame for Roulette {
                             && state.zero_rule == ZeroRule::EnPrisonDouble
                         {
                             // Double-imprisonment variant: a second 0 re-imprisons the bets.
-                            session.state_blob = state.to_blob();
+                            session.state_blob = serialize_state(&state);
                             session.move_count += 1;
                             return Ok(GameResult::Continue(vec![]));
                         }
@@ -777,7 +769,7 @@ impl CasinoGame for Roulette {
 
                         let total_return = state.pending_return.saturating_add(push_return);
 
-                        session.state_blob = state.to_blob();
+                        session.state_blob = serialize_state(&state);
                         session.move_count += 1;
                         session.is_complete = true;
 
@@ -802,7 +794,7 @@ impl CasinoGame for Roulette {
                 let refund = state.total_wagered;
                 state.bets.clear();
                 state.total_wagered = 0;
-                session.state_blob = state.to_blob();
+                session.state_blob = serialize_state(&state);
 
                 if refund > 0 {
                     // Positive payout = credit chips back to player
@@ -824,7 +816,7 @@ impl CasinoGame for Roulette {
                     return Err(GameError::InvalidMove);
                 }
                 state.zero_rule = ZeroRule::try_from(payload[1])?;
-                session.state_blob = state.to_blob();
+                session.state_blob = serialize_state(&state);
                 Ok(GameResult::Continue(vec![]))
             }
 
@@ -919,7 +911,7 @@ impl CasinoGame for Roulette {
                     );
                 }
 
-                session.state_blob = state.to_blob();
+                session.state_blob = serialize_state(&state);
                 session.move_count += 1;
                 session.is_complete = true;
 
@@ -998,7 +990,7 @@ mod tests {
             let len = rng.gen_range(0..=256);
             let mut blob = vec![0u8; len];
             rng.fill(&mut blob[..]);
-            let _ = RouletteState::from_blob(&blob);
+            let _ = parse_state(&blob);
         }
     }
 
@@ -1188,7 +1180,7 @@ mod tests {
         assert!(!session.is_complete); // Game continues - need to spin
 
         // Verify bet was stored
-        let state = RouletteState::from_blob(&session.state_blob).expect("Failed to parse state");
+        let state = parse_state(&session.state_blob).expect("Failed to parse state");
         assert_eq!(state.bets.len(), 1);
         assert_eq!(state.bets[0].bet_type, BetType::Red);
         assert_eq!(state.bets[0].amount, 100);
@@ -1216,7 +1208,7 @@ mod tests {
         assert!(session.is_complete);
 
         // State should have bet and result
-        let state = RouletteState::from_blob(&session.state_blob).expect("Failed to parse state");
+        let state = parse_state(&session.state_blob).expect("Failed to parse state");
         assert!(state.result.is_some());
         assert!(state.result.expect("Result should be set") <= 36);
     }
@@ -1243,7 +1235,7 @@ mod tests {
         Roulette::process_move(&mut session, &payload, &mut rng).expect("Failed to process move");
 
         // Verify all bets stored
-        let state = RouletteState::from_blob(&session.state_blob).expect("Failed to parse state");
+        let state = parse_state(&session.state_blob).expect("Failed to parse state");
         assert_eq!(state.bets.len(), 3);
 
         // Spin
@@ -1333,7 +1325,7 @@ mod tests {
         assert!(result.is_ok());
 
         // Verify bets cleared
-        let state = RouletteState::from_blob(&session.state_blob).expect("Failed to parse state");
+        let state = parse_state(&session.state_blob).expect("Failed to parse state");
         assert!(state.bets.is_empty());
     }
 
@@ -1363,7 +1355,7 @@ mod tests {
             let res =
                 Roulette::process_move(&mut test_session, &[1], &mut rng).expect("Spin failed");
             let state =
-                RouletteState::from_blob(&test_session.state_blob).expect("Failed to parse state");
+                parse_state(&test_session.state_blob).expect("Failed to parse state");
 
             if state.result == Some(0) {
                 assert!(matches!(res, GameResult::Win(50, _)));
@@ -1400,7 +1392,7 @@ mod tests {
             let res1 =
                 Roulette::process_move(&mut test_session, &[1], &mut rng).expect("Spin failed");
             let state1 =
-                RouletteState::from_blob(&test_session.state_blob).expect("Failed to parse state");
+                parse_state(&test_session.state_blob).expect("Failed to parse state");
 
             if state1.result != Some(0) {
                 continue;
@@ -1415,7 +1407,7 @@ mod tests {
             let res2 =
                 Roulette::process_move(&mut test_session, &[1], &mut rng).expect("Spin failed");
             let state2 =
-                RouletteState::from_blob(&test_session.state_blob).expect("Failed to parse state");
+                parse_state(&test_session.state_blob).expect("Failed to parse state");
             let result2 = state2.result.expect("Second result should be set");
 
             assert!(test_session.is_complete);
@@ -1457,7 +1449,7 @@ mod tests {
             let res1 =
                 Roulette::process_move(&mut test_session, &[1], &mut rng).expect("Spin failed");
             let state1 =
-                RouletteState::from_blob(&test_session.state_blob).expect("Failed to parse state");
+                parse_state(&test_session.state_blob).expect("Failed to parse state");
 
             if state1.result != Some(0) {
                 continue;
@@ -1472,7 +1464,7 @@ mod tests {
             let res2 =
                 Roulette::process_move(&mut test_session, &[1], &mut rng).expect("Spin failed");
             let state2 =
-                RouletteState::from_blob(&test_session.state_blob).expect("Failed to parse state");
+                parse_state(&test_session.state_blob).expect("Failed to parse state");
 
             if state2.result != Some(0) {
                 continue;
@@ -1518,7 +1510,7 @@ mod tests {
             let res =
                 Roulette::process_move(&mut test_session, &[1], &mut rng).expect("Spin failed");
             let state =
-                RouletteState::from_blob(&test_session.state_blob).expect("Failed to parse state");
+                parse_state(&test_session.state_blob).expect("Failed to parse state");
 
             if state.result == Some(DOUBLE_ZERO) {
                 assert!(matches!(res, GameResult::Win(3600, _)));

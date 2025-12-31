@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import type { MutableRefObject, Dispatch, SetStateAction } from 'react';
 import { GameState, GameType, LeaderboardEntry, PlayerStats } from '../../types';
 import { GameType as ChainGameType } from '@nullspace/types/casino';
@@ -57,7 +57,14 @@ export const useChainInit = ({
   gameTypeRef,
   parseGameState,
 }: UseChainInitArgs) => {
+  const didInitRef = useRef(false);
+
   useEffect(() => {
+    if (didInitRef.current) {
+      return;
+    }
+    didInitRef.current = true;
+
     const initChain = async () => {
       try {
         const networkIdentity = import.meta.env.VITE_IDENTITY as string | undefined;

@@ -55,11 +55,43 @@ export class ThreeCardPokerHandler extends GameHandler {
   ): Promise<HandleResult> {
     const ante = typeof msg.ante === 'number' ? msg.ante : msg.anteBet;
     const pairPlus = (typeof msg.pairPlus === 'number' ? msg.pairPlus : msg.pairPlusBet) as number | undefined;
+    const sixCard =
+      typeof msg.sixCard === 'number'
+        ? msg.sixCard
+        : typeof msg.sixCardBonus === 'number'
+          ? msg.sixCardBonus
+          : typeof msg.sixCardBet === 'number'
+            ? msg.sixCardBet
+            : 0;
+    const progressive =
+      typeof msg.progressive === 'number'
+        ? msg.progressive
+        : typeof msg.progressiveBet === 'number'
+          ? msg.progressiveBet
+          : 0;
 
     if (typeof ante !== 'number' || ante <= 0) {
       return {
         success: false,
         error: createError(ErrorCodes.INVALID_BET, 'Invalid ante amount'),
+      };
+    }
+    if (typeof pairPlus === 'number' && pairPlus < 0) {
+      return {
+        success: false,
+        error: createError(ErrorCodes.INVALID_BET, 'Invalid Pair Plus amount'),
+      };
+    }
+    if (typeof sixCard !== 'number' || sixCard < 0) {
+      return {
+        success: false,
+        error: createError(ErrorCodes.INVALID_BET, 'Invalid Six Card amount'),
+      };
+    }
+    if (typeof progressive !== 'number' || progressive < 0) {
+      return {
+        success: false,
+        error: createError(ErrorCodes.INVALID_BET, 'Invalid progressive amount'),
       };
     }
 
@@ -74,12 +106,17 @@ export class ThreeCardPokerHandler extends GameHandler {
       return startResult;
     }
 
-    // Step 2: Send Deal move to deal cards (moves to Decision stage)
+    // Step 2: Send Deal move to deal cards (atomic batch when side bets are set)
+    const pairPlusValue = typeof pairPlus === 'number' ? pairPlus : 0;
+    const hasSideBets = pairPlusValue > 0 || sixCard > 0 || progressive > 0;
     let dealPayload = new Uint8Array([ThreeCardMove.Deal]);
-    if (typeof pairPlus === 'number' && pairPlus > 0) {
-      dealPayload = new Uint8Array(1 + 8);
-      dealPayload[0] = ThreeCardMove.Deal;
-      new DataView(dealPayload.buffer).setBigUint64(1, BigInt(pairPlus), false);
+    if (hasSideBets) {
+      dealPayload = new Uint8Array(25);
+      dealPayload[0] = ThreeCardMove.AtomicDeal;
+      const view = new DataView(dealPayload.buffer);
+      view.setBigUint64(1, BigInt(pairPlusValue), false);
+      view.setBigUint64(9, BigInt(sixCard), false);
+      view.setBigUint64(17, BigInt(progressive), false);
     }
     const dealResult = await this.makeMove(ctx, dealPayload);
 
