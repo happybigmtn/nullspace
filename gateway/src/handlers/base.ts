@@ -10,6 +10,7 @@ import {
   wrapSubmission,
 } from '../codec/index.js';
 import { parseGameLog, type CasinoGameEvent } from '../codec/events.js';
+import { UpdatesClient } from '../backend/updates.js';
 import type { SubmitClient } from '../backend/http.js';
 import type { NonceManager } from '../session/nonce.js';
 import { ErrorCodes, createError, type ErrorResponse } from '../types/errors.js';
@@ -120,6 +121,8 @@ export abstract class GameHandler {
             session.activeGameId = gameEvent.sessionId;
           }
 
+          await this.ensureSessionUpdatesClient(session, backendUrl, session.activeGameId!);
+
           return {
             success: true,
             response: this.buildGameStartedResponse(gameEvent, session, session.activeGameId!, bet),
@@ -127,6 +130,7 @@ export abstract class GameHandler {
         }
 
         // Fallback if no event received (backend may be slow)
+        await this.ensureSessionUpdatesClient(session, backendUrl, session.activeGameId!);
         return {
           success: true,
           response: {
@@ -167,12 +171,14 @@ export abstract class GameHandler {
                 console.log(`[GameHandler] Updating activeGameId: ${session.activeGameId} -> ${gameEvent.sessionId}`);
                 session.activeGameId = gameEvent.sessionId;
               }
+              await this.ensureSessionUpdatesClient(session, backendUrl, session.activeGameId!);
               return {
                 success: true,
                 response: this.buildGameStartedResponse(gameEvent, session, session.activeGameId!, bet),
               };
             }
 
+            await this.ensureSessionUpdatesClient(session, backendUrl, session.activeGameId!);
             return {
               success: true,
               response: {
@@ -243,6 +249,7 @@ export abstract class GameHandler {
             // Game is over, clear session state
             session.activeGameId = null;
             session.gameType = null;
+            this.clearSessionUpdatesClient(session);
             if (gameEvent.finalChips !== undefined) {
               session.balance = gameEvent.finalChips;
             } else if (gameEvent.balanceSnapshot) {
@@ -295,6 +302,7 @@ export abstract class GameHandler {
               } else if (gameEvent.type === 'completed') {
                 session.activeGameId = null;
                 session.gameType = null;
+                this.clearSessionUpdatesClient(session);
                 if (gameEvent.finalChips !== undefined) {
                   session.balance = gameEvent.finalChips;
                 } else if (gameEvent.balanceSnapshot) {
@@ -368,16 +376,67 @@ export abstract class GameHandler {
   private async waitForMoveOrComplete(
     session: Session
   ): Promise<CasinoGameEvent | null> {
-    if (!session.updatesClient) {
+    const accountClient = session.updatesClient;
+    const sessionClient = session.sessionUpdatesClient ?? accountClient;
+
+    if (!accountClient && !sessionClient) {
       console.warn('No updates client connected, skipping event wait');
       return null;
     }
 
     try {
-      return await session.updatesClient.waitForMoveOrComplete(GAME_EVENT_TIMEOUT);
+      const movePromise = sessionClient
+        ? sessionClient.waitForAnyEvent('moved', GAME_EVENT_TIMEOUT).catch(() => null)
+        : Promise.resolve(null);
+      const completePromise = accountClient
+        ? accountClient.waitForAnyEvent('completed', GAME_EVENT_TIMEOUT).catch(() => null)
+        : Promise.resolve(null);
+      const errorPromise = accountClient
+        ? accountClient.waitForAnyEvent('error', GAME_EVENT_TIMEOUT).catch(() => null)
+        : Promise.resolve(null);
+
+      const event = await Promise.race([movePromise, completePromise, errorPromise]);
+      return event ?? null;
     } catch (err) {
       console.warn('Timeout waiting for move/complete event:', err);
       return null;
+    }
+  }
+
+  private async ensureSessionUpdatesClient(
+    session: Session,
+    backendUrl: string,
+    sessionId: bigint
+  ): Promise<void> {
+    if (!sessionId) {
+      return;
+    }
+
+    if (session.sessionUpdatesClient && session.sessionUpdatesSessionId === sessionId) {
+      return;
+    }
+
+    if (session.sessionUpdatesClient) {
+      session.sessionUpdatesClient.disconnect();
+      session.sessionUpdatesClient = undefined;
+      session.sessionUpdatesSessionId = undefined;
+    }
+
+    try {
+      const updatesClient = new UpdatesClient(backendUrl);
+      await updatesClient.connectForSession(sessionId);
+      session.sessionUpdatesClient = updatesClient;
+      session.sessionUpdatesSessionId = sessionId;
+    } catch (err) {
+      console.warn('Failed to connect session updates client:', err);
+    }
+  }
+
+  private clearSessionUpdatesClient(session: Session): void {
+    if (session.sessionUpdatesClient) {
+      session.sessionUpdatesClient.disconnect();
+      session.sessionUpdatesClient = undefined;
+      session.sessionUpdatesSessionId = undefined;
     }
   }
 

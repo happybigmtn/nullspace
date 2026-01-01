@@ -16,6 +16,8 @@
 //!
 //! ## Minimal execution pipeline (example)
 //! ```rust,ignore
+//! # #[cfg(feature = "mocks")]
+//! # {
 //! use nullspace_execution::state_transition::execute_state_transition;
 //! use nullspace_types::{Identity, NAMESPACE};
 //! use nullspace_execution::mocks::{create_network_keypair, create_seed};
@@ -41,6 +43,7 @@
 //! )
 //! .await?;
 //! # Ok(())
+//! # }
 //! # }
 //! ```
 

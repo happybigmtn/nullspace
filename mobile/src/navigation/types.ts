@@ -10,6 +10,7 @@ export type RootStackParamList = {
   Splash: undefined;
   Auth: undefined;
   Lobby: undefined;
+  Vault: undefined;
   Game: {
     gameId: GameId;
   };
@@ -19,6 +20,7 @@ export type RootStackParamList = {
 export type SplashScreenProps = NativeStackScreenProps<RootStackParamList, 'Splash'>;
 export type AuthScreenProps = NativeStackScreenProps<RootStackParamList, 'Auth'>;
 export type LobbyScreenProps = NativeStackScreenProps<RootStackParamList, 'Lobby'>;
+export type VaultScreenProps = NativeStackScreenProps<RootStackParamList, 'Vault'>;
 export type GameScreenProps = NativeStackScreenProps<RootStackParamList, 'Game'>;
 
 // Game screen names - re-export from constants

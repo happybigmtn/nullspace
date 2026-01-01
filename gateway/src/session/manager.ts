@@ -341,6 +341,9 @@ export class SessionManager {
       if (session.updatesClient) {
         session.updatesClient.disconnect();
       }
+      if (session.sessionUpdatesClient) {
+        session.sessionUpdatesClient.disconnect();
+      }
       this.byPublicKey.delete(session.publicKeyHex);
       this.sessions.delete(ws);
       console.log(`Session destroyed: ${session.playerName}`);

@@ -387,8 +387,12 @@ function parseOutput(reader: BinaryReader): CasinoGameEvent | null {
 export function extractCasinoEvents(data: Uint8Array): CasinoGameEvent[] {
   const events: CasinoGameEvent[] = [];
 
-  // Skip non-FilteredEvents messages (Seed = 0x00, Events = 0x01)
-  if (data[0] !== 0x02) {
+  if (data.length === 0) {
+    return events;
+  }
+
+  // Skip Seed updates (no events included)
+  if (data[0] === 0x00) {
     return events;
   }
 
@@ -399,12 +403,11 @@ export function extractCasinoEvents(data: Uint8Array): CasinoGameEvent[] {
   // We scan BACKWARDS from the end to find the Vec, avoiding false positives in crypto data.
   // The Vec length should be small (1-10 events) and is preceded by the Proof.
 
-  // Scan the last 500 bytes - the events_proof_ops Vec can appear earlier in the message
-  // CasinoGameCompleted events may be at position 500-600 in 800+ byte messages
-  const scanStart = Math.max(data.length - 500, 50);
+  // Scan the entire message for event markers; proof sizes vary and can push events earlier.
+  const scanStart = 0;
 
   // Debug: find and show the [05 00 tag] pattern location - scan more of the message
-  const debugStart = Math.max(50, data.length - 400);  // Scan more
+  const debugStart = Math.max(0, data.length - 400);
   if (data.length > 100) {
     for (let d = debugStart; d < data.length - 3; d++) {
       if (data[d] === 0x05 && data[d + 1] === 0x00) {
@@ -417,51 +420,7 @@ export function extractCasinoEvents(data: Uint8Array): CasinoGameEvent[] {
     }
   }
 
-  // Strategy: Scan BACKWARDS looking for valid Vec header + event structure
-  // Each element in events_proof_ops is: (u64 location, Keyless<Output>)
-  // Keyless::Append = 0x05 discriminant, Output::Event = 0x00 discriminant
-  // Pattern: [Vec len: u32][u64 location][05 = Keyless::Append][00 = Output::Event][event_tag]
-  for (let i = data.length - 60; i >= scanStart; i--) {
-    // Check for small Vec length (1-10 elements) - we expect very few events
-    if (data[i] >= 1 && data[i] <= 10 && data[i + 1] === 0 && data[i + 2] === 0 && data[i + 3] === 0) {
-      // i+0..3 = Vec length (u32 LE)
-      // i+4..11 = u64 location (8 bytes)
-      // i+12 = Keyless discriminant (0x05 for Append)
-      // i+13 = Output discriminant (0x00 for Event)
-      // i+14 = Event tag
-      if (i + 14 < data.length && data[i + 12] === 0x05 && data[i + 13] === 0x00) {
-        const eventTag = data[i + 14];
-        if (
-          eventTag === EVENT_TAGS.CASINO_GAME_STARTED ||
-          eventTag === EVENT_TAGS.CASINO_GAME_MOVED ||
-          eventTag === EVENT_TAGS.CASINO_GAME_COMPLETED ||
-          eventTag === EVENT_TAGS.CASINO_ERROR
-        ) {
-          const vecLen = data[i];
-          const ctx = Array.from(data.slice(i, Math.min(data.length, i + 30)))
-            .map((x) => x.toString(16).padStart(2, '0'))
-            .join(' ');
-          console.log(`[extractCasinoEvents] Found Vec[${vecLen}] at ${i}: ${ctx}`);
-
-          try {
-            // Parse the event starting at i+14 (after Vec len + location + Keyless + Output discriminants)
-            const reader = new BinaryReader(data.slice(i + 14));
-            const event = parseEvent(reader);
-
-            if (event && validateEvent(event)) {
-              console.log(`[extractCasinoEvents] Parsed ${event.type} at ${i + 14}: session=${event.sessionId}`);
-              events.push(event);
-              return events; // Found valid event, return immediately
-            }
-          } catch (err) {
-            console.log(`[extractCasinoEvents] Parse error at Vec[${vecLen}]@${i}: ${(err as Error).message}`);
-          }
-        }
-      }
-    }
-  }
-
-  // Fallback: scan backwards for [05][00][tag] pattern (Keyless::Append + Output::Event + tag)
+  // Scan backwards for [05][00][tag] pattern (Keyless::Append + Output::Event + tag)
   for (let i = data.length - 60; i >= scanStart; i--) {
     if (data[i] === 0x05 && data[i + 1] === 0x00) {
       const eventTag = data[i + 2];

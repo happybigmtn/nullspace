@@ -77,7 +77,28 @@ Business strategy summary and CEO view: `BUSINESS_PLAN.md`.
 - Phase 2 gating: CCA testnet rehearsal + auction parameter validation and contract security plan/audit.
 - Product polish: onboarding status copy + accessibility/readability pass updated; remaining UX polish is ongoing.
 - Gateway: shared protocol validation updated for roulette/sic bo numeric bet types and `hilo_deal` amount; session rate limiting and event timeouts are configurable; integration bet-type coverage runs in `gateway/tests/all-bet-types.test.ts`.
+- Gateway integration testing surfaced the default session creation rate limit (10/hr) and submit endpoint rate limits as bottlenecks; testnet must set explicit rate-limit profiles to avoid onboarding stalls and internal 429s.
+- AI strategy defaults to disabled in staging/testnet to avoid external API dependencies; enable only when Gemini keys + billing are provisioned.
 - Local staging load test completed (200 bots, 120s, 0 failures); production-scale run still pending.
+
+## Pre-Testnet Deliverables (Post-Review + Full Bet/Game Tests)
+- [x] Harden gateway update handling: parse Update::Events/FilteredEvents across varied proof sizes, connect session-scoped updates for move events, and fix session filter endianness.
+- [x] Fix Casino War tie-bet flow (SetTieBet + Play) to avoid invalid move rejections.
+- [x] Run full bet-type integration suite (`gateway/tests/all-bet-types.test.ts`) with 87/87 bets passing (requires elevated gateway session rate limits + simulator submit limits).
+- [x] Run execution unit/integration tests (`cargo test -p nullspace-execution`) and Monte Carlo RTP ignored test (passed).
+- [x] Run game-state parser tests (`pnpm -C packages/game-state test` + `pnpm -C website exec vitest run src/services/games/__tests__/game-state.test.ts`).
+- [x] Fix execution doctest failure in `execution/src/lib.rs` so `cargo test -p nullspace-execution --doc` passes (mocks feature gating/API drift).
+- [x] Implement mobile non-custodial vault fallback for devices without passkeys (password-derived vault + recovery key) and document export/recovery flow.
+- [x] Run local testnet runbook smoke (`scripts/testnet-local-runbook.sh`) covering health/metrics, restart recovery, tournament scheduler, and bot load.
+- [x] Define testnet rate-limit profiles (gateway session creation + simulator submit endpoints) that avoid 429s while preserving abuse controls; document in runbooks + staging env.
+- [ ] Enforce non-custodial vaults in staging/testnet by disabling legacy browser keys (`VITE_ALLOW_LEGACY_KEYS=0`) and validating passkey/password fallback UX.
+- [x] Publish testnet readiness + mobile vault QA runbooks to standardize preflight and go/no-go.
+- [x] Publish Hetzner deployment + Postgres ops runbooks for staging/testnet infrastructure.
+- [x] Add gateway + simulator env templates with testnet rate-limit defaults (staging/production examples).
+- [ ] Execute the testnet runbook on real infra (bootstrap configs, multi-node soak test, restart recovery, tournament scheduler, bot load) once staging hosts are available.
+- [ ] Stand up staging/testnet observability (metrics + logs + alerts) and confirm explorer persistence/backup paths.
+- [ ] Deploy Auth + Convex in staging/testnet with production-like secrets, origins, and backup/restore drills.
+- [ ] Complete mobile parity QA on real devices, including key vault recovery flows and reconnect scenarios.
 
 ## Priority Focus (Business Plan Alignment)
 ### P0 - Phase 1 readiness + transparency
@@ -85,7 +106,7 @@ Business strategy summary and CEO view: `BUSINESS_PLAN.md`.
 - [x] Define and ship AMM bootstrap seeding mechanism; decide on optional bootstrap-finalize snapshot.
 - [x] Replace simulated analytics with live economy dashboards (issuance/burn/fees/house PnL, debt, distribution).
 - [x] Add proof-of-play weighting + sybil heuristics and tighten faucet/tournament churn limits.
-- [x] Close go-live blockers: containerize node/executor/website, fix simulator Dockerfile healthcheck, remove browser private keys or enforce dev-only.
+- [x] Close go-live blockers: containerize node/executor/website, fix simulator Dockerfile healthcheck, replace legacy browser private keys with non-custodial vaults (passkey + password fallback) or enforce dev-only.
 
 ### P1 - Phase 2 launch prep
 - [x] Write Uniswap v4 CCA testnet runbook (`cca_runbook.md`).

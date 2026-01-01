@@ -1,5 +1,12 @@
 # Incident Runbooks
 
+## Testnet Readiness
+- `docs/testnet-readiness-runbook.md`
+- `docs/testnet-runbook.md`
+- `docs/mobile-vault-qa-runbook.md`
+- `docs/hetzner-deployment-runbook.md`
+- `docs/postgres-ops-runbook.md`
+
 ## On-Call Basics
 - Primary responds within 15 minutes; secondary within 30 minutes.
 - Escalate to engineering lead if downtime > 30 minutes.

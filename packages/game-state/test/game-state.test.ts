@@ -93,6 +93,19 @@ describe('game-state parsers', () => {
     expect(parsed?.betCount).toBe(0);
   });
 
+  it('rejects craps state with too many bets', () => {
+    const blob = new Uint8Array(8);
+    blob[0] = 2; // version
+    blob[1] = 0; // phase
+    blob[2] = 0; // main point
+    blob[3] = 1; // die1
+    blob[4] = 2; // die2
+    blob[5] = 0; // made points
+    blob[6] = 0; // epoch flag
+    blob[7] = 21; // bet count (over limit)
+    expect(parseCrapsState(blob)).toBeNull();
+  });
+
   it('parses hi-lo state', () => {
     const blob = new Uint8Array(22);
     blob[0] = 10;

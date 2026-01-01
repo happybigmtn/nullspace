@@ -39,7 +39,8 @@ This roadmap covers deployment, data, scalability, UI/UX usability, security, an
 - Add health checks that do not rely on missing runtime deps (current Dockerfile lacks curl).
 - Standardize gateway envs: `GATEWAY_DATA_DIR`, `GATEWAY_EVENT_TIMEOUT_MS`,
   `GATEWAY_SESSION_RATE_LIMIT_POINTS`, `GATEWAY_SESSION_RATE_LIMIT_WINDOW_MS`,
-  and `GATEWAY_SESSION_RATE_LIMIT_BLOCK_MS`.
+  `GATEWAY_SESSION_RATE_LIMIT_BLOCK_MS`, `MAX_CONNECTIONS_PER_IP`, and
+  `MAX_TOTAL_SESSIONS`.
 
 ### 2) Data & Persistence
 - Define Convex schema and indexes in `convex/schema.ts` with retention for events and explorer history.
@@ -75,7 +76,8 @@ This roadmap covers deployment, data, scalability, UI/UX usability, security, an
 
 ### 5) Security, Privacy, and Compliance
 - Threat model: signing keys, API abuse, WS flooding, replay, and botting.
-- Move private keys out of the browser or mark strictly dev-only.
+- Move private keys out of the browser or mark strictly dev-only; use non-custodial vaults (passkey with password fallback) for web clients.
+- Enforce vault-only browser keys in staging/prod (`VITE_ALLOW_LEGACY_KEYS=0`).
 - Add rate-limits for WebSockets and per-account actions.
 - Implement audit logging (auth, payments, privileged actions).
 - Set up security headers (CSP, X-Frame-Options, etc.).

@@ -4,6 +4,7 @@ Use isolated keys and endpoints for staging.
 
 - `simulator.env.example`: systemd env file for the simulator.
 - `node.env.example`: systemd env file pointing at your node YAML.
+- `gateway.env.example`: systemd env file for the gateway (mobile/web).
 - Auth service env: `services/auth/.env.staging.example`.
 - Website build env: `website/.env.staging.example`.
 

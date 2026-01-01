@@ -76,7 +76,7 @@ export default function LegacyStakingApp() {
 
         const keypair = client.getOrCreateKeypair();
         if (!keypair) {
-          setStatus('Unlock passkey vault (see Vault tab).');
+          setStatus('Unlock vault (see Vault tab).');
           pushActivity('Vault locked — unlock to continue');
           return;
         }

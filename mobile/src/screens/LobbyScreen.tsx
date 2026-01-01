@@ -169,7 +169,7 @@ export function LobbyScreen({ navigation }: LobbyScreenProps) {
             <Text style={styles.headerMetaText}>{shortKey}</Text>
           </View>
         </View>
-        <Pressable style={styles.profileButton}>
+        <Pressable style={styles.profileButton} onPress={() => navigation.navigate('Vault')}>
           <Text style={styles.profileIcon}>👤</Text>
         </Pressable>
       </Animated.View>

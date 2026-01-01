@@ -1,6 +1,6 @@
 export type UnlockedVault = {
   vaultId: string;
-  credentialId: string;
+  credentialId?: string;
   unlockedAtMs: number;
   nullspaceEd25519PrivateKey: Uint8Array;
   chatEvmPrivateKey: Uint8Array;
@@ -46,4 +46,3 @@ export function subscribeVault(listener: Listener): () => void {
   }
   return () => listeners.delete(listener);
 }
-

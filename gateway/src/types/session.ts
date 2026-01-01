@@ -57,6 +57,12 @@ export interface Session {
   /** WebSocket client for backend updates (optional, created after registration) */
   updatesClient?: UpdatesClient;
 
+  /** WebSocket client for session-scoped updates (optional, created per game) */
+  sessionUpdatesClient?: UpdatesClient;
+
+  /** Session ID currently bound to sessionUpdatesClient */
+  sessionUpdatesSessionId?: bigint;
+
   /** Periodic balance refresh interval (optional) */
   balanceRefreshIntervalId?: ReturnType<typeof setInterval>;
 }

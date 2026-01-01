@@ -232,12 +232,15 @@ impl<'a, S: State> Layer<'a, S> {
         self.ensure_player_registry(public).await?;
 
         // Update leaderboard with initial chips
-        self.update_casino_leaderboard(public, &player).await?;
-
-        Ok(vec![Event::CasinoPlayerRegistered {
+        let mut events = vec![Event::CasinoPlayerRegistered {
             player: public.clone(),
             name: name.to_string(),
-        }])
+        }];
+        if let Some(event) = self.update_casino_leaderboard(public, &player).await? {
+            events.push(event);
+        }
+
+        Ok(events)
     }
 
     pub(in crate::layer) async fn handle_casino_deposit(
@@ -301,13 +304,16 @@ impl<'a, S: State> Layer<'a, S> {
             Value::CasinoPlayer(player.clone()),
         );
 
-        self.update_casino_leaderboard(public, &player).await?;
-
-        Ok(vec![Event::CasinoDeposited {
+        let mut events = vec![Event::CasinoDeposited {
             player: public.clone(),
             amount,
             new_chips: player.balances.chips,
-        }])
+        }];
+        if let Some(event) = self.update_casino_leaderboard(public, &player).await? {
+            events.push(event);
+        }
+
+        Ok(events)
     }
 
     fn update_aura_meter_for_completion(
@@ -470,7 +476,8 @@ impl<'a, S: State> Layer<'a, S> {
             }
             session.super_mode.multipliers = multipliers;
         }
-        self.update_leaderboard_for_session(&session, public, &player)
+        let leaderboard_event = self
+            .update_leaderboard_for_session(&session, public, &player)
             .await?;
 
         // Initialize game
@@ -499,6 +506,9 @@ impl<'a, S: State> Layer<'a, S> {
             bet,
             initial_state,
         }];
+        if let Some(event) = leaderboard_event {
+            events.push(event);
+        }
 
         // Handle immediate result (e.g. Natural Blackjack)
         if !matches!(result, crate::casino::GameResult::Continue(_)) {
@@ -548,8 +558,12 @@ impl<'a, S: State> Layer<'a, S> {
                             Key::CasinoPlayer(public.clone()),
                             Value::CasinoPlayer(player.clone()),
                         );
-                        self.update_leaderboard_for_session(&session, public, &player)
-                            .await?;
+                        if let Some(event) = self
+                            .update_leaderboard_for_session(&session, public, &player)
+                            .await?
+                        {
+                            events.push(event);
+                        }
 
                         let balances =
                             nullspace_types::casino::PlayerBalanceSnapshot::from_player(&player);
@@ -588,8 +602,12 @@ impl<'a, S: State> Layer<'a, S> {
                         );
 
                         // Update leaderboard after push
-                        self.update_leaderboard_for_session(&session, public, &player)
-                            .await?;
+                        if let Some(event) = self
+                            .update_leaderboard_for_session(&session, public, &player)
+                            .await?
+                        {
+                            events.push(event);
+                        }
 
                         let balances =
                             nullspace_types::casino::PlayerBalanceSnapshot::from_player(&player);
@@ -639,8 +657,12 @@ impl<'a, S: State> Layer<'a, S> {
                         );
 
                         // Update leaderboard after immediate loss
-                        self.update_leaderboard_for_session(&session, public, &player)
-                            .await?;
+                        if let Some(event) = self
+                            .update_leaderboard_for_session(&session, public, &player)
+                            .await?
+                        {
+                            events.push(event);
+                        }
 
                         let balances =
                             nullspace_types::casino::PlayerBalanceSnapshot::from_player(&player);
@@ -839,8 +861,12 @@ impl<'a, S: State> Layer<'a, S> {
                         ));
 
                     // Update leaderboard after mid-game balance change
-                    self.update_leaderboard_for_session(&session, public, &player)
-                        .await?;
+                    if let Some(event) = self
+                        .update_leaderboard_for_session(&session, public, &player)
+                        .await?
+                    {
+                        events.push(event);
+                    }
                 }
                 self.insert(
                     Key::CasinoSession(session_id),
@@ -910,8 +936,12 @@ impl<'a, S: State> Layer<'a, S> {
                         Key::CasinoPlayer(public.clone()),
                         Value::CasinoPlayer(player.clone()),
                     );
-                    self.update_leaderboard_for_session(&session, public, &player)
-                        .await?;
+                    if let Some(event) = self
+                        .update_leaderboard_for_session(&session, public, &player)
+                        .await?
+                    {
+                        events.push(event);
+                    }
 
                     let balances =
                         nullspace_types::casino::PlayerBalanceSnapshot::from_player(&player);
@@ -982,8 +1012,12 @@ impl<'a, S: State> Layer<'a, S> {
                     );
 
                     // Update leaderboard after push
-                    self.update_leaderboard_for_session(&session, public, &player)
-                        .await?;
+                    if let Some(event) = self
+                        .update_leaderboard_for_session(&session, public, &player)
+                        .await?
+                    {
+                        events.push(event);
+                    }
 
                     let balances =
                         nullspace_types::casino::PlayerBalanceSnapshot::from_player(&player);
@@ -1057,8 +1091,12 @@ impl<'a, S: State> Layer<'a, S> {
                     );
 
                     // Update leaderboard after loss
-                    self.update_leaderboard_for_session(&session, public, &player)
-                        .await?;
+                    if let Some(event) = self
+                        .update_leaderboard_for_session(&session, public, &player)
+                        .await?
+                    {
+                        events.push(event);
+                    }
 
                     let balances =
                         nullspace_types::casino::PlayerBalanceSnapshot::from_player(&player);
@@ -1149,8 +1187,12 @@ impl<'a, S: State> Layer<'a, S> {
                     );
 
                     // Update leaderboard after loss with extra deduction
-                    self.update_leaderboard_for_session(&session, public, &player)
-                        .await?;
+                    if let Some(event) = self
+                        .update_leaderboard_for_session(&session, public, &player)
+                        .await?
+                    {
+                        events.push(event);
+                    }
 
                     let balances =
                         nullspace_types::casino::PlayerBalanceSnapshot::from_player(&player);
@@ -1222,8 +1264,12 @@ impl<'a, S: State> Layer<'a, S> {
                     );
 
                     // Update leaderboard after pre-deducted loss
-                    self.update_leaderboard_for_session(&session, public, &player)
-                        .await?;
+                    if let Some(event) = self
+                        .update_leaderboard_for_session(&session, public, &player)
+                        .await?
+                    {
+                        events.push(event);
+                    }
 
                     let balances =
                         nullspace_types::casino::PlayerBalanceSnapshot::from_player(&player);
@@ -1786,21 +1832,25 @@ impl<'a, S: State> Layer<'a, S> {
         &mut self,
         public: &PublicKey,
         player: &nullspace_types::casino::Player,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Option<Event>> {
         let mut leaderboard = match self.get(&Key::CasinoLeaderboard).await? {
             Some(Value::CasinoLeaderboard(lb)) => lb,
             _ => nullspace_types::casino::CasinoLeaderboard::default(),
         };
+        let previous = leaderboard.clone();
         leaderboard.update(
             public.clone(),
             player.profile.name.clone(),
             player.balances.chips,
         );
+        if leaderboard == previous {
+            return Ok(None);
+        }
         self.insert(
             Key::CasinoLeaderboard,
-            Value::CasinoLeaderboard(leaderboard),
+            Value::CasinoLeaderboard(leaderboard.clone()),
         );
-        Ok(())
+        Ok(Some(Event::CasinoLeaderboardUpdated { leaderboard }))
     }
 
     async fn update_tournament_leaderboard(
@@ -1825,16 +1875,16 @@ impl<'a, S: State> Layer<'a, S> {
         session: &nullspace_types::casino::GameSession,
         public: &PublicKey,
         player: &nullspace_types::casino::Player,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Option<Event>> {
         if session.is_tournament {
             if let Some(tid) = session.tournament_id {
                 self.update_tournament_leaderboard(tid, public, player)
                     .await?;
             }
+            Ok(None)
         } else {
-            self.update_casino_leaderboard(public, player).await?;
+            self.update_casino_leaderboard(public, player).await
         }
-        Ok(())
     }
 
     async fn apply_progressive_meters_for_completion(

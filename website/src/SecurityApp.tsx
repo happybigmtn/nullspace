@@ -2,7 +2,16 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { PlaySwapStakeTabs } from './components/PlaySwapStakeTabs';
 import { PageHeader } from './components/PageHeader';
 import { AuthStatusPill } from './components/AuthStatusPill';
-import { createPasskeyVault, deleteVault, getVaultRecord, getVaultStatusSync, lockPasskeyVault, unlockPasskeyVault } from './security/keyVault';
+import {
+  createPasskeyVault,
+  createPasswordVault,
+  deleteVault,
+  getVaultRecord,
+  getVaultStatusSync,
+  lockPasskeyVault,
+  unlockPasskeyVault,
+  unlockPasswordVault,
+} from './security/keyVault';
 import { getUnlockedVault, subscribeVault } from './security/vaultRuntime';
 import { VaultBetBot } from './security/VaultBetBot';
 import { getAllFeatureFlags, setFeatureEnabled, type FeatureFlag } from './services/featureFlags';
@@ -20,9 +29,15 @@ export default function SecurityApp() {
   const [error, setError] = useState<string | null>(null);
   const [hasVault, setHasVault] = useState<boolean>(false);
   const [supported, setSupported] = useState<boolean>(false);
+  const [passkeySupported, setPasskeySupported] = useState<boolean>(false);
+  const [passwordSupported, setPasswordSupported] = useState<boolean>(false);
   const [enabled, setEnabled] = useState<boolean>(false);
   const [unlocked, setUnlocked] = useState<boolean>(!!getUnlockedVault());
   const [publicKeyHex, setPublicKeyHex] = useState<string | null>(getVaultStatusSync().nullspacePublicKeyHex);
+  const [vaultKind, setVaultKind] = useState<'passkey' | 'password' | null>(getVaultStatusSync().kind);
+  const [passwordCreate, setPasswordCreate] = useState('');
+  const [passwordConfirm, setPasswordConfirm] = useState('');
+  const [passwordUnlock, setPasswordUnlock] = useState('');
 
   const [botRunning, setBotRunning] = useState(false);
   const [botLogs, setBotLogs] = useState<string[]>([]);
@@ -68,6 +83,18 @@ export default function SecurityApp() {
     if (msg === 'passkey-prf-unsupported') {
       return 'This passkey/authenticator does not support the PRF/hmac-secret/largeBlob extensions required to derive a local vault key. Try creating the passkey on this device (platform passkey), or use a different authenticator (Android Chrome / hardware security key).';
     }
+    if (msg === 'password-too-short') {
+      return 'Password too short (minimum 8 characters).';
+    }
+    if (msg === 'password-required') {
+      return 'Enter your vault password.';
+    }
+    if (msg === 'password-invalid') {
+      return 'Incorrect password or corrupted vault.';
+    }
+    if (msg === 'vault-kind-mismatch') {
+      return 'Vault type mismatch. Delete the current vault before switching types.';
+    }
     return msg;
   };
 
@@ -75,12 +102,15 @@ export default function SecurityApp() {
     setError(null);
     const s = getVaultStatusSync();
     setSupported(s.supported);
+    setPasskeySupported(s.passkeySupported);
+    setPasswordSupported(s.passwordSupported);
     setEnabled(s.enabled);
     setUnlocked(s.unlocked);
     setPublicKeyHex(s.nullspacePublicKeyHex);
+    setVaultKind(s.kind);
 
     if (!s.supported) {
-      setStatus('Passkeys unavailable (requires secure context + WebAuthn).');
+      setStatus('Vault unavailable on this device.');
       setHasVault(false);
       return;
     }
@@ -88,7 +118,16 @@ export default function SecurityApp() {
     try {
       const record = await getVaultRecord();
       setHasVault(!!record);
-      setStatus(record ? 'Vault found' : 'No vault yet');
+      let inferredKind = s.kind;
+      if (!inferredKind && record) {
+        inferredKind = record.version === 3 ? 'password' : 'passkey';
+        setVaultKind(inferredKind);
+      }
+      if (record && inferredKind) {
+        setStatus(`Vault found (${inferredKind})`);
+      } else {
+        setStatus(record ? 'Vault found' : 'No vault yet');
+      }
     } catch (e: any) {
       setHasVault(false);
       setStatus('Failed to read vault');
@@ -102,8 +141,10 @@ export default function SecurityApp() {
 
   useEffect(() => {
     return subscribeVault((v) => {
+      const status = getVaultStatusSync();
       setUnlocked(!!v);
-      setPublicKeyHex(v?.nullspacePublicKeyHex ?? getVaultStatusSync().nullspacePublicKeyHex);
+      setPublicKeyHex(v?.nullspacePublicKeyHex ?? status.nullspacePublicKeyHex);
+      setVaultKind(status.kind);
     });
   }, []);
 
@@ -114,11 +155,24 @@ export default function SecurityApp() {
     return 'LOCKED';
   }, [supported, hasVault, unlocked]);
 
+  const passkeyActive = hasVault && vaultKind === 'passkey';
+  const passwordActive = hasVault && vaultKind === 'password';
+  const passkeyLabel = useMemo(() => {
+    if (!passkeySupported) return 'UNSUPPORTED';
+    if (!passkeyActive) return 'INACTIVE';
+    return unlocked ? 'UNLOCKED' : 'LOCKED';
+  }, [passkeyActive, passkeySupported, unlocked]);
+  const passwordLabel = useMemo(() => {
+    if (!passwordSupported) return 'UNSUPPORTED';
+    if (!passwordActive) return 'INACTIVE';
+    return unlocked ? 'UNLOCKED' : 'LOCKED';
+  }, [passwordActive, passwordSupported, unlocked]);
+
   const pushBotLog = (msg: string) => {
     setBotLogs(prev => [`${new Date().toLocaleTimeString()} ${msg}`, ...prev].slice(0, 20));
   };
 
-  const onCreateVault = async () => {
+  const onCreatePasskeyVault = async () => {
     setError(null);
     setStatus('Creating passkey + vault…');
     try {
@@ -131,7 +185,7 @@ export default function SecurityApp() {
     }
   };
 
-  const onUnlockVault = async () => {
+  const onUnlockPasskeyVault = async () => {
     setError(null);
     setStatus('Unlocking…');
     try {
@@ -147,6 +201,43 @@ export default function SecurityApp() {
   const onLockVault = () => {
     lockPasskeyVault();
     setStatus('Locked');
+  };
+
+  const onCreatePasswordVault = async () => {
+    setError(null);
+    if (passwordCreate.length < 8) {
+      setError('Password too short (minimum 8 characters).');
+      return;
+    }
+    if (passwordCreate !== passwordConfirm) {
+      setError('Passwords do not match.');
+      return;
+    }
+    setStatus('Creating password vault…');
+    try {
+      await createPasswordVault(passwordCreate, { migrateExistingCasinoKey: true });
+      setPasswordCreate('');
+      setPasswordConfirm('');
+      setStatus('Password vault created and unlocked');
+      await sync();
+    } catch (e: any) {
+      setStatus('Create failed');
+      setError(formatError(e));
+    }
+  };
+
+  const onUnlockPasswordVault = async () => {
+    setError(null);
+    setStatus('Unlocking…');
+    try {
+      await unlockPasswordVault(passwordUnlock);
+      setPasswordUnlock('');
+      setStatus('Unlocked');
+      await sync();
+    } catch (e: any) {
+      setStatus('Unlock failed');
+      setError(formatError(e));
+    }
   };
 
   const onDeleteVault = async () => {
@@ -281,25 +372,33 @@ export default function SecurityApp() {
   return (
     <div className="min-h-screen w-screen bg-titanium-900 text-white font-mono">
       <PageHeader
-        title="Passkey Vault"
+        title="Vaults"
         status={status}
         leading={<PlaySwapStakeTabs />}
         right={<AuthStatusPill publicKeyHex={publicKeyHex} />}
       />
 
       <div className="max-w-4xl mx-auto p-4 space-y-4">
+        {error && (
+          <div className="text-xs text-action-destructive border border-action-destructive/40 rounded bg-action-destructive/10 p-2">
+            {error}
+          </div>
+        )}
+
         <div className="border border-gray-800 rounded bg-gray-900/30 p-4">
           <div className="flex items-start justify-between gap-4">
             <div>
               <div className="text-[10px] text-gray-500 tracking-widest">SECURITY</div>
-              <div className="text-lg font-bold mt-1">Passkey Vault</div>
+              <div className="text-lg font-bold mt-1">Passkey Vault (recommended)</div>
               <div className="text-xs text-gray-500 mt-2">
-                Vault: <span className="text-action-success">{vaultLabel}</span>
-                {supported ? (
+                Vault: <span className="text-action-success">{passkeyLabel}</span>
+                {passkeySupported ? (
                   <>
                     <span className="text-gray-700"> · </span>
-                    Enabled:{' '}
-                    <span className={enabled ? 'text-action-success' : 'text-gray-500'}>{enabled ? 'YES' : 'NO'}</span>
+                    Active:{' '}
+                    <span className={passkeyActive ? 'text-action-success' : 'text-gray-500'}>
+                      {passkeyActive ? 'YES' : 'NO'}
+                    </span>
                   </>
                 ) : null}
                 {publicKeyHex ? (
@@ -315,25 +414,25 @@ export default function SecurityApp() {
             </div>
 
             <div className="flex flex-col gap-2 items-end">
-              {!hasVault && supported && (
+              {!hasVault && passkeySupported && (
                 <button
                   className="text-[10px] border px-3 py-2 rounded bg-action-success/20 border-action-success text-action-success hover:bg-action-success/30"
-                  onClick={onCreateVault}
+                  onClick={onCreatePasskeyVault}
                 >
                   CREATE PASSKEY VAULT
                 </button>
               )}
 
-              {hasVault && !unlocked && (
+              {passkeyActive && !unlocked && (
                 <button
                   className="text-[10px] border px-3 py-2 rounded bg-gray-900 border-gray-700 text-gray-200 hover:border-gray-500"
-                  onClick={onUnlockVault}
+                  onClick={onUnlockPasskeyVault}
                 >
                   UNLOCK WITH PASSKEY
                 </button>
               )}
 
-              {hasVault && unlocked && (
+              {passkeyActive && unlocked && (
                 <button
                   className="text-[10px] border px-3 py-2 rounded bg-gray-900 border-gray-700 text-gray-200 hover:border-gray-500"
                   onClick={onLockVault}
@@ -342,7 +441,7 @@ export default function SecurityApp() {
                 </button>
               )}
 
-              {hasVault && (
+              {passkeyActive && (
                 <button
                   className="text-[10px] border px-3 py-2 rounded bg-gray-900 border-gray-800 text-gray-400 hover:border-action-destructive hover:text-action-destructive"
                   onClick={onDeleteVault}
@@ -352,12 +451,6 @@ export default function SecurityApp() {
               )}
             </div>
           </div>
-
-          {error && (
-            <div className="mt-3 text-xs text-action-destructive border border-action-destructive/40 rounded bg-action-destructive/10 p-2">
-              {error}
-            </div>
-          )}
 
           <div className="mt-4 text-[10px] text-gray-500 leading-relaxed">
             Passkeys unlock a local encrypted vault (stored in IndexedDB). The vault stores:
@@ -374,6 +467,107 @@ export default function SecurityApp() {
                 RELOAD
               </button>
             </div>
+          </div>
+        </div>
+
+        <div className="border border-gray-800 rounded bg-gray-900/30 p-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="text-[10px] text-gray-500 tracking-widest">SECURITY</div>
+              <div className="text-lg font-bold mt-1">Password Vault (fallback)</div>
+              <div className="text-xs text-gray-500 mt-2">
+                Vault: <span className="text-action-success">{passwordLabel}</span>
+                {passwordSupported ? (
+                  <>
+                    <span className="text-gray-700"> · </span>
+                    Active:{' '}
+                    <span className={passwordActive ? 'text-action-success' : 'text-gray-500'}>
+                      {passwordActive ? 'YES' : 'NO'}
+                    </span>
+                  </>
+                ) : null}
+                {publicKeyHex ? (
+                  <>
+                    {' '}
+                    · Casino pubkey: <span className="text-action-success">{publicKeyHex.slice(0, 12)}…</span>
+                  </>
+                ) : null}
+              </div>
+              {!passwordSupported && (
+                <div className="text-xs text-gray-500 mt-2">Password vaults need WebCrypto + IndexedDB support.</div>
+              )}
+              {passkeyActive && (
+                <div className="text-xs text-gray-500 mt-2">Passkey vault is active. Delete it to switch vault types.</div>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-2 items-end">
+              {passwordActive && unlocked && (
+                <button
+                  className="text-[10px] border px-3 py-2 rounded bg-gray-900 border-gray-700 text-gray-200 hover:border-gray-500"
+                  onClick={onLockVault}
+                >
+                  LOCK VAULT
+                </button>
+              )}
+
+              {passwordActive && (
+                <button
+                  className="text-[10px] border px-3 py-2 rounded bg-gray-900 border-gray-800 text-gray-400 hover:border-action-destructive hover:text-action-destructive"
+                  onClick={onDeleteVault}
+                >
+                  DELETE VAULT
+                </button>
+              )}
+            </div>
+          </div>
+
+          {!hasVault && passwordSupported && !passkeyActive && (
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+              <input
+                type="password"
+                className="text-xs px-3 py-2 rounded bg-black/40 border border-gray-800 text-gray-200 focus:outline-none focus:border-gray-600"
+                placeholder="Create password (min 8 chars)"
+                value={passwordCreate}
+                onChange={(e) => setPasswordCreate(e.target.value)}
+              />
+              <input
+                type="password"
+                className="text-xs px-3 py-2 rounded bg-black/40 border border-gray-800 text-gray-200 focus:outline-none focus:border-gray-600"
+                placeholder="Confirm password"
+                value={passwordConfirm}
+                onChange={(e) => setPasswordConfirm(e.target.value)}
+              />
+              <button
+                className="text-[10px] border px-3 py-2 rounded bg-action-success/20 border-action-success text-action-success hover:bg-action-success/30 md:col-span-2"
+                onClick={onCreatePasswordVault}
+              >
+                CREATE PASSWORD VAULT
+              </button>
+            </div>
+          )}
+
+          {passwordActive && !unlocked && (
+            <div className="mt-4 flex flex-col md:flex-row gap-3">
+              <input
+                type="password"
+                className="text-xs px-3 py-2 rounded bg-black/40 border border-gray-800 text-gray-200 focus:outline-none focus:border-gray-600 flex-1"
+                placeholder="Enter password to unlock"
+                value={passwordUnlock}
+                onChange={(e) => setPasswordUnlock(e.target.value)}
+              />
+              <button
+                className="text-[10px] border px-3 py-2 rounded bg-gray-900 border-gray-700 text-gray-200 hover:border-gray-500"
+                onClick={onUnlockPasswordVault}
+              >
+                UNLOCK WITH PASSWORD
+              </button>
+            </div>
+          )}
+
+          <div className="mt-4 text-[10px] text-gray-500 leading-relaxed">
+            Password vaults encrypt keys locally with PBKDF2 + AES-GCM. Keep the password in a manager —
+            if you lose it, the vault cannot be recovered. No keys leave the device.
           </div>
         </div>
 

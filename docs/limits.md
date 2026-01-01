@@ -73,6 +73,31 @@ Consensus-critical limits are called out explicitly.
 - state_max_key_versions: 1
 - state_max_progress_entries: 10000
 
+## Gateway (configurable via env)
+- max_connections_per_ip: 5 (`MAX_CONNECTIONS_PER_IP`)
+- max_total_sessions: 1000 (`MAX_TOTAL_SESSIONS`)
+- session_rate_limit_points: 10 (`GATEWAY_SESSION_RATE_LIMIT_POINTS`)
+- session_rate_limit_window_ms: 3600000 (`GATEWAY_SESSION_RATE_LIMIT_WINDOW_MS`)
+- session_rate_limit_block_ms: 3600000 (`GATEWAY_SESSION_RATE_LIMIT_BLOCK_MS`)
+- event_timeout_ms: 30000 (`GATEWAY_EVENT_TIMEOUT_MS`)
+
+### Testnet recommended overrides (initial 5k concurrent target)
+Simulator:
+- `RATE_LIMIT_HTTP_PER_SEC=5000`
+- `RATE_LIMIT_HTTP_BURST=10000`
+- `RATE_LIMIT_SUBMIT_PER_MIN=120000`
+- `RATE_LIMIT_SUBMIT_BURST=20000`
+- `RATE_LIMIT_WS_CONNECTIONS=30000` (raise if >20k WS clients expected)
+- `RATE_LIMIT_WS_CONNECTIONS_PER_IP=500`
+
+Gateway:
+- `MAX_CONNECTIONS_PER_IP=200`
+- `MAX_TOTAL_SESSIONS=20000`
+- `GATEWAY_SESSION_RATE_LIMIT_POINTS=1000`
+- `GATEWAY_SESSION_RATE_LIMIT_WINDOW_MS=3600000`
+- `GATEWAY_SESSION_RATE_LIMIT_BLOCK_MS=600000`
+- `GATEWAY_EVENT_TIMEOUT_MS=30000`
+
 ## Casino engine (consensus-critical)
 - baccarat_max_bets: 11
 - craps_max_bets: 20

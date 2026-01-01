@@ -4,6 +4,7 @@ import { GameState, GameType, PlayerStats, AutoPlayDraft, AutoPlayPlan } from '.
 import type { CasinoChainService } from '../../../services/CasinoChainService';
 import { GAME_TYPE_MAP, TABLE_GAMES } from '../../../services/games';
 import { logDebug } from '../../../utils/logger';
+import { getCasinoKeyIdForStorage } from '../../../security/keyVault';
 
 type UseStartGameArgs = {
   gameState: GameState;
@@ -168,8 +169,7 @@ export const useStartGame = ({
             if (existingPlayer) {
               playerExistsOnChain = true;
               hasRegisteredRef.current = true;
-              const keyId =
-                localStorage.getItem('casino_public_key_hex') ?? localStorage.getItem('casino_private_key');
+              const keyId = getCasinoKeyIdForStorage();
               if (keyId) {
                 localStorage.setItem(`casino_registered_${keyId}`, 'true');
               }
@@ -187,8 +187,7 @@ export const useStartGame = ({
               }));
             } else {
               hasRegisteredRef.current = false;
-              const keyId =
-                localStorage.getItem('casino_public_key_hex') ?? localStorage.getItem('casino_private_key');
+              const keyId = getCasinoKeyIdForStorage();
               if (keyId) {
                 localStorage.removeItem(`casino_registered_${keyId}`);
               }
@@ -203,8 +202,7 @@ export const useStartGame = ({
           const playerName = `Player_${Date.now().toString(36)}`;
           await chainService.register(playerName);
           hasRegisteredRef.current = true;
-          const keyId =
-            localStorage.getItem('casino_public_key_hex') ?? localStorage.getItem('casino_private_key');
+          const keyId = getCasinoKeyIdForStorage();
           if (keyId) {
             localStorage.setItem(`casino_registered_${keyId}`, 'true');
           }

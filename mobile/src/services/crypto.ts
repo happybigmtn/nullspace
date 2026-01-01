@@ -8,6 +8,12 @@
 import { ed25519 } from '@noble/curves/ed25519';
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
+import { bytesToHex, hexToBytes } from '../utils/hex';
+import {
+  getUnlockedVaultPrivateKey,
+  getVaultPublicKeyHex,
+  isVaultEnabled,
+} from './vault';
 
 const PRIVATE_KEY_KEY = 'nullspace_private_key';
 const isWeb = Platform.OS === 'web';
@@ -28,25 +34,7 @@ const WebSecureStore = {
 // Use appropriate storage based on platform
 const KeyStore = isWeb ? WebSecureStore : SecureStore;
 
-/**
- * Convert bytes to hex string (React Native doesn't have Buffer)
- */
-export function bytesToHex(bytes: Uint8Array): string {
-  return Array.from(bytes)
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
-}
-
-/**
- * Convert hex string to bytes
- */
-export function hexToBytes(hex: string): Uint8Array {
-  const bytes = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < bytes.length; i++) {
-    bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
-  }
-  return bytes;
-}
+export { bytesToHex, hexToBytes };
 
 /**
  * Internal: Get or create the Ed25519 key pair
@@ -81,6 +69,10 @@ async function getOrCreateKeyPairInternal(): Promise<{
  * Only the public key is returned - private key stays internal
  */
 export async function getPublicKey(): Promise<Uint8Array> {
+  const vaultPublicKeyHex = await getVaultPublicKeyHex();
+  if (vaultPublicKeyHex) {
+    return hexToBytes(vaultPublicKeyHex);
+  }
   const { publicKey } = await getOrCreateKeyPairInternal();
   return publicKey;
 }
@@ -90,6 +82,15 @@ export async function getPublicKey(): Promise<Uint8Array> {
  * Private key is used internally and never exposed
  */
 export async function signMessage(message: Uint8Array): Promise<Uint8Array> {
+  const vaultEnabled = await isVaultEnabled();
+  if (vaultEnabled) {
+    const privateKey = getUnlockedVaultPrivateKey();
+    if (!privateKey) {
+      throw new Error('vault_locked');
+    }
+    return ed25519.sign(message, privateKey);
+  }
+
   const privateKeyHex = await KeyStore.getItemAsync(PRIVATE_KEY_KEY);
   if (!privateKeyHex) {
     throw new Error('No key pair exists. Call getPublicKey() first to create one.');

@@ -23,11 +23,11 @@ function createConnection(): Promise<WebSocket> {
     const ws = new WebSocket(GATEWAY_URL);
     ws.on('open', () => resolve(ws));
     ws.on('error', reject);
-    setTimeout(() => reject(new Error('Connection timeout')), 5000);
+    setTimeout(() => reject(new Error('Connection timeout')), 10000);
   });
 }
 
-function sendAndReceive(ws: WebSocket, msg: unknown, timeout = 35000): Promise<Record<string, unknown>> {
+function sendAndReceive(ws: WebSocket, msg: unknown, timeout = 60000): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('Response timeout')), timeout);
 
@@ -48,7 +48,7 @@ function sendAndReceive(ws: WebSocket, msg: unknown, timeout = 35000): Promise<R
 
 async function waitForReady(ws: WebSocket): Promise<void> {
   await new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('session_ready timeout')), 10000);
+    const timer = setTimeout(() => reject(new Error('session_ready timeout')), 60000);
     const handler = (data: WebSocket.Data) => {
       const msg = JSON.parse(data.toString());
       if (msg.type === 'session_ready') {
@@ -527,6 +527,6 @@ describe.skipIf(!INTEGRATION_ENABLED)('Gateway bet type coverage', () => {
       const failed = results.filter((result) => result.status === 'failed');
       expect(failed).toEqual([]);
     },
-    180_000
+    1_200_000
   );
 });

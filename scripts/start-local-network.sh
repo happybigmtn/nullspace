@@ -47,6 +47,21 @@ NC='\033[0m' # No Color
 CONFIG_DIR="${1:-configs/local}"
 NODES="${2:-4}"
 
+DEFAULT_ALLOWED_ORIGINS="http://localhost:9010,http://127.0.0.1:9010,http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000"
+ALLOWED_HTTP_ORIGINS="${ALLOWED_HTTP_ORIGINS:-$DEFAULT_ALLOWED_ORIGINS}"
+ALLOWED_WS_ORIGINS="${ALLOWED_WS_ORIGINS:-$ALLOWED_HTTP_ORIGINS}"
+ALLOW_HTTP_NO_ORIGIN="${ALLOW_HTTP_NO_ORIGIN:-1}"
+ALLOW_WS_NO_ORIGIN="${ALLOW_WS_NO_ORIGIN:-1}"
+RATE_LIMIT_SUBMIT_PER_MIN="${RATE_LIMIT_SUBMIT_PER_MIN:-10000}"
+RATE_LIMIT_SUBMIT_BURST="${RATE_LIMIT_SUBMIT_BURST:-1000}"
+
+export ALLOWED_HTTP_ORIGINS
+export ALLOWED_WS_ORIGINS
+export ALLOW_HTTP_NO_ORIGIN
+export ALLOW_WS_NO_ORIGIN
+export RATE_LIMIT_SUBMIT_PER_MIN
+export RATE_LIMIT_SUBMIT_BURST
+
 echo -e "${CYAN}Starting local consensus network${NC}"
 echo "Config directory: $CONFIG_DIR"
 echo "Number of nodes: $NODES"
@@ -194,10 +209,15 @@ echo
 echo -e "${YELLOW}Press Ctrl+C to stop all processes${NC}"
 echo
 
-# Wait for any process to exit (this will catch crashes)
-wait -n "${PIDS[@]}" 2>/dev/null || true
-
-# If we get here, a process died
-echo -e "${RED}A process exited unexpectedly${NC}"
-echo "Check the logs above for errors."
-exit 1
+# Wait strategy: default to exiting on first child exit, unless restart tolerance is enabled.
+ALLOW_NODE_RESTART="${ALLOW_NODE_RESTART:-0}"
+if [[ "$ALLOW_NODE_RESTART" == "1" ]]; then
+    wait "${PIDS[@]}" 2>/dev/null || true
+else
+    # Wait for any process to exit (this will catch crashes)
+    wait -n "${PIDS[@]}" 2>/dev/null || true
+    # If we get here, a process died
+    echo -e "${RED}A process exited unexpectedly${NC}"
+    echo "Check the logs above for errors."
+    exit 1
+fi

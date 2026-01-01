@@ -3,6 +3,7 @@ import { base64UrlToBytes, bytesToBase64Url } from './base64url';
 import { clearUnlockedVault, getUnlockedVault, setUnlockedVault, type UnlockedVault } from './vaultRuntime';
 
 type VaultId = 'default';
+type VaultKind = 'passkey' | 'password';
 
 type VaultRecordV1 = {
   id: VaultId;
@@ -34,7 +35,27 @@ type VaultRecordV2 = {
   updatedAtMs: number;
 };
 
-type VaultRecord = VaultRecordV1 | VaultRecordV2;
+// v3: password-derived vault (non-custodial fallback for non-passkey devices).
+type VaultRecordV3 = {
+  id: VaultId;
+  version: 3;
+  kind: 'password';
+  kdf: {
+    name: 'PBKDF2';
+    iterations: number;
+    hash: 'SHA-256';
+  };
+  salt: string; // base64url (32 bytes)
+  cipher: {
+    iv: string; // base64url (12 bytes)
+    ciphertext: string; // base64url
+  };
+  nullspacePublicKeyHex: string;
+  createdAtMs: number;
+  updatedAtMs: number;
+};
+
+type VaultRecord = VaultRecordV1 | VaultRecordV2 | VaultRecordV3;
 
 type VaultSecretsV1 = {
   version: 1;
@@ -47,20 +68,35 @@ const DB_VERSION = 1;
 const STORE_NAME = 'vaults';
 
 const LS_VAULT_ENABLED = 'nullspace_vault_enabled';
+const LS_VAULT_KIND = 'nullspace_vault_kind';
 const LS_VAULT_ID = 'nullspace_vault_id';
 const LS_VAULT_CREDENTIAL_ID = 'nullspace_vault_credential_id';
 const LS_CASINO_PUBLIC_KEY_HEX = 'casino_public_key_hex';
+const VAULT_KIND_PASSKEY: VaultKind = 'passkey';
+const VAULT_KIND_PASSWORD: VaultKind = 'password';
+const PASSWORD_MIN_LENGTH = 8;
+const PASSWORD_KDF_ITERATIONS = 310_000;
 
 function isBrowser(): boolean {
   return typeof window !== 'undefined' && typeof document !== 'undefined';
 }
 
-export function isPasskeyVaultSupported(): boolean {
+function isVaultStorageSupported(): boolean {
   if (!isBrowser()) return false;
   if (typeof crypto === 'undefined' || !crypto.subtle || !crypto.getRandomValues) return false;
   if (typeof indexedDB === 'undefined') return false;
+  if (typeof TextEncoder === 'undefined' || typeof TextDecoder === 'undefined') return false;
+  return true;
+}
+
+export function isPasskeyVaultSupported(): boolean {
+  if (!isVaultStorageSupported()) return false;
   // Basic WebAuthn availability check
   return typeof window.PublicKeyCredential !== 'undefined' && !!navigator?.credentials;
+}
+
+export function isPasswordVaultSupported(): boolean {
+  return isVaultStorageSupported();
 }
 
 function randomBytes(length: number): Uint8Array {
@@ -128,7 +164,7 @@ async function idbPutVault(record: VaultRecord): Promise<void> {
 }
 
 export async function deleteVault(): Promise<void> {
-  if (!isPasskeyVaultSupported()) throw new Error('passkey-vault-unsupported');
+  if (!isVaultStorageSupported()) throw new Error('vault-unsupported');
   const db = await openDb();
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite');
@@ -138,14 +174,11 @@ export async function deleteVault(): Promise<void> {
     req.onerror = () => reject(req.error ?? new Error('Failed to delete vault'));
   });
   clearUnlockedVault();
-  localStorage.removeItem(LS_VAULT_ENABLED);
-  localStorage.removeItem(LS_VAULT_ID);
-  localStorage.removeItem(LS_VAULT_CREDENTIAL_ID);
-  localStorage.removeItem(LS_CASINO_PUBLIC_KEY_HEX);
+  clearVaultMeta();
 }
 
 export async function getVaultRecord(): Promise<VaultRecord | null> {
-  if (!isPasskeyVaultSupported()) return null;
+  if (!isVaultStorageSupported()) return null;
   return idbGetVault('default');
 }
 
@@ -154,9 +187,52 @@ export function isVaultEnabled(): boolean {
   return localStorage.getItem(LS_VAULT_ENABLED) === 'true';
 }
 
+export function getVaultKind(): VaultKind | null {
+  if (!isBrowser()) return null;
+  const raw = localStorage.getItem(LS_VAULT_KIND);
+  if (raw === VAULT_KIND_PASSKEY || raw === VAULT_KIND_PASSWORD) return raw;
+  return null;
+}
+
 export function getVaultPublicKeyHex(): string | null {
   if (!isBrowser()) return null;
   return localStorage.getItem(LS_CASINO_PUBLIC_KEY_HEX);
+}
+
+export function getCasinoKeyIdForStorage(): string | null {
+  if (!isBrowser()) return null;
+  const publicKeyHex = getVaultPublicKeyHex();
+  if (publicKeyHex) return publicKeyHex;
+  const allowLegacyKeys =
+    typeof import.meta !== 'undefined' &&
+    (import.meta.env?.DEV || import.meta.env?.VITE_ALLOW_LEGACY_KEYS === 'true');
+  if (!allowLegacyKeys) return null;
+  return localStorage.getItem('casino_private_key');
+}
+
+function setVaultMeta(meta: {
+  kind: VaultKind;
+  vaultId: VaultId;
+  publicKeyHex: string;
+  credentialId?: string;
+}) {
+  localStorage.setItem(LS_VAULT_ENABLED, 'true');
+  localStorage.setItem(LS_VAULT_KIND, meta.kind);
+  localStorage.setItem(LS_VAULT_ID, meta.vaultId);
+  localStorage.setItem(LS_CASINO_PUBLIC_KEY_HEX, meta.publicKeyHex);
+  if (meta.credentialId) {
+    localStorage.setItem(LS_VAULT_CREDENTIAL_ID, meta.credentialId);
+  } else {
+    localStorage.removeItem(LS_VAULT_CREDENTIAL_ID);
+  }
+}
+
+function clearVaultMeta() {
+  localStorage.removeItem(LS_VAULT_ENABLED);
+  localStorage.removeItem(LS_VAULT_KIND);
+  localStorage.removeItem(LS_VAULT_ID);
+  localStorage.removeItem(LS_VAULT_CREDENTIAL_ID);
+  localStorage.removeItem(LS_CASINO_PUBLIC_KEY_HEX);
 }
 
 function normalizeRpId(hostname: string): string {
@@ -281,6 +357,24 @@ async function deriveAesKeyFromPrf(prfOutput: Uint8Array, prfSalt: Uint8Array): 
   );
 }
 
+async function deriveAesKeyFromPassword(password: string, salt: Uint8Array, iterations: number): Promise<CryptoKey> {
+  const normalized = password.normalize('NFKC');
+  const baseKey = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(normalized) as BufferSource,
+    'PBKDF2',
+    false,
+    ['deriveKey'],
+  );
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: salt as BufferSource, iterations, hash: 'SHA-256' },
+    baseKey,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt'],
+  );
+}
+
 async function encryptVaultSecrets(aesKey: CryptoKey, vaultId: VaultId, secrets: VaultSecretsV1): Promise<VaultRecord['cipher']> {
   const iv = randomBytes(12);
   const aad = new TextEncoder().encode(`nullspace:${vaultId}:v1`);
@@ -324,34 +418,14 @@ function clearPendingNonceAndTxs() {
   for (const k of keysToRemove) localStorage.removeItem(k);
 }
 
-export async function createPasskeyVault(options?: { migrateExistingCasinoKey?: boolean }): Promise<VaultRecord> {
-  if (!isPasskeyVaultSupported()) throw new Error('passkey-vault-unsupported');
-  const vaultId: VaultId = 'default';
-
-  const { credentialId } = await createPasskeyCredential();
-  const prfSalt = randomBytes(32);
-
-  // Prefer PRF/hmac-secret/largeBlob when available; otherwise fall back to a local keystore key.
-  let aesKey: CryptoKey;
-  let recordVersion: 1 | 2 = 1;
-  try {
-    const largeBlobSeed = randomBytes(32);
-    const prfOutput = await getPrfOutput(credentialId, prfSalt, { largeBlobWrite: largeBlobSeed });
-    aesKey = await deriveAesKeyFromPrf(prfOutput, prfSalt);
-  } catch (e: any) {
-    const msg = e?.message ?? String(e);
-    if (msg !== 'passkey-prf-unsupported') throw e;
-
-    // Fallback: store an AES key in IndexedDB (non-extractable). This supports "camera / hybrid"
-    // passkey flows that do not expose PRF/hmac-secret/largeBlob.
-    aesKey = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, [
-      'encrypt',
-      'decrypt',
-    ]);
-    recordVersion = 2;
-  }
-
-  // Determine nullspace betting key (ed25519)
+async function createVaultSecrets(options?: { migrateExistingCasinoKey?: boolean }): Promise<{
+  secrets: VaultSecretsV1;
+  nullspacePublicKeyHex: string;
+  bettingPrivateKeyBytes: Uint8Array;
+  chatEvmPrivateKey: Uint8Array;
+  migrated: boolean;
+  existingPrivateKeyHex: string | null;
+}> {
   const shouldMigrate = options?.migrateExistingCasinoKey !== false;
   const existingPrivateKeyHex = localStorage.getItem('casino_private_key');
   const canMigrate = shouldMigrate && typeof existingPrivateKeyHex === 'string' && existingPrivateKeyHex.length === 64;
@@ -387,6 +461,52 @@ export async function createPasskeyVault(options?: { migrateExistingCasinoKey?: 
     chatEvmPrivateKey: bytesToBase64Url(chatEvmPrivateKey),
   };
 
+  return {
+    secrets,
+    nullspacePublicKeyHex,
+    bettingPrivateKeyBytes,
+    chatEvmPrivateKey,
+    migrated,
+    existingPrivateKeyHex: typeof existingPrivateKeyHex === 'string' ? existingPrivateKeyHex : null,
+  };
+}
+
+export async function createPasskeyVault(options?: { migrateExistingCasinoKey?: boolean }): Promise<VaultRecord> {
+  if (!isPasskeyVaultSupported()) throw new Error('passkey-vault-unsupported');
+  const vaultId: VaultId = 'default';
+
+  const { credentialId } = await createPasskeyCredential();
+  const prfSalt = randomBytes(32);
+
+  // Prefer PRF/hmac-secret/largeBlob when available; otherwise fall back to a local keystore key.
+  let aesKey: CryptoKey;
+  let recordVersion: 1 | 2 = 1;
+  try {
+    const largeBlobSeed = randomBytes(32);
+    const prfOutput = await getPrfOutput(credentialId, prfSalt, { largeBlobWrite: largeBlobSeed });
+    aesKey = await deriveAesKeyFromPrf(prfOutput, prfSalt);
+  } catch (e: any) {
+    const msg = e?.message ?? String(e);
+    if (msg !== 'passkey-prf-unsupported') throw e;
+
+    // Fallback: store an AES key in IndexedDB (non-extractable). This supports "camera / hybrid"
+    // passkey flows that do not expose PRF/hmac-secret/largeBlob.
+    aesKey = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, [
+      'encrypt',
+      'decrypt',
+    ]);
+    recordVersion = 2;
+  }
+
+  const {
+    secrets,
+    nullspacePublicKeyHex,
+    bettingPrivateKeyBytes,
+    chatEvmPrivateKey,
+    migrated,
+    existingPrivateKeyHex,
+  } = await createVaultSecrets(options);
+
   const cipher = await encryptVaultSecrets(aesKey, vaultId, secrets);
   const now = Date.now();
 
@@ -415,10 +535,12 @@ export async function createPasskeyVault(options?: { migrateExistingCasinoKey?: 
   await idbPutVault(record);
 
   // Mark vault enabled and store non-secret metadata in localStorage for sync access.
-  localStorage.setItem(LS_VAULT_ENABLED, 'true');
-  localStorage.setItem(LS_VAULT_ID, vaultId);
-  localStorage.setItem(LS_VAULT_CREDENTIAL_ID, credentialId);
-  localStorage.setItem(LS_CASINO_PUBLIC_KEY_HEX, nullspacePublicKeyHex);
+  setVaultMeta({
+    kind: VAULT_KIND_PASSKEY,
+    vaultId,
+    publicKeyHex: nullspacePublicKeyHex,
+    credentialId,
+  });
 
   if (migrated && existingPrivateKeyHex) {
     migrateRegistrationFlag(existingPrivateKeyHex, nullspacePublicKeyHex);
@@ -433,6 +555,74 @@ export async function createPasskeyVault(options?: { migrateExistingCasinoKey?: 
   const unlocked: UnlockedVault = {
     vaultId,
     credentialId,
+    unlockedAtMs: now,
+    nullspaceEd25519PrivateKey: bettingPrivateKeyBytes,
+    chatEvmPrivateKey,
+    nullspacePublicKeyHex,
+  };
+  setUnlockedVault(unlocked);
+
+  return record;
+}
+
+export async function createPasswordVault(
+  password: string,
+  options?: { migrateExistingCasinoKey?: boolean },
+): Promise<VaultRecord> {
+  if (!isPasswordVaultSupported()) throw new Error('password-vault-unsupported');
+  if (!password || password.length < PASSWORD_MIN_LENGTH) throw new Error('password-too-short');
+
+  const vaultId: VaultId = 'default';
+  const salt = randomBytes(32);
+  const aesKey = await deriveAesKeyFromPassword(password, salt, PASSWORD_KDF_ITERATIONS);
+
+  const {
+    secrets,
+    nullspacePublicKeyHex,
+    bettingPrivateKeyBytes,
+    chatEvmPrivateKey,
+    migrated,
+    existingPrivateKeyHex,
+  } = await createVaultSecrets(options);
+
+  const cipher = await encryptVaultSecrets(aesKey, vaultId, secrets);
+  const now = Date.now();
+
+  const record: VaultRecordV3 = {
+    id: vaultId,
+    version: 3,
+    kind: 'password',
+    kdf: {
+      name: 'PBKDF2',
+      iterations: PASSWORD_KDF_ITERATIONS,
+      hash: 'SHA-256',
+    },
+    salt: bytesToBase64Url(salt),
+    cipher,
+    nullspacePublicKeyHex,
+    createdAtMs: now,
+    updatedAtMs: now,
+  };
+
+  await idbPutVault(record);
+
+  setVaultMeta({
+    kind: VAULT_KIND_PASSWORD,
+    vaultId,
+    publicKeyHex: nullspacePublicKeyHex,
+  });
+
+  if (migrated && existingPrivateKeyHex) {
+    migrateRegistrationFlag(existingPrivateKeyHex, nullspacePublicKeyHex);
+    // Remove the raw secret from localStorage after successful migration.
+    localStorage.removeItem('casino_private_key');
+  } else {
+    // New identity → clear local nonce/tx cache to avoid nonce mismatches.
+    clearPendingNonceAndTxs();
+  }
+
+  const unlocked: UnlockedVault = {
+    vaultId,
     unlockedAtMs: now,
     nullspaceEd25519PrivateKey: bettingPrivateKeyBytes,
     chatEvmPrivateKey,
@@ -463,7 +653,7 @@ export async function unlockPasskeyVault(): Promise<UnlockedVault> {
     await assertPasskeyUserVerification(record.credentialId);
     aesKey = record.keystoreKey;
   } else {
-    throw new Error('vault-version-unsupported');
+    throw new Error('vault-kind-mismatch');
   }
   const secrets = await decryptVaultSecrets(aesKey, record);
 
@@ -478,10 +668,53 @@ export async function unlockPasskeyVault(): Promise<UnlockedVault> {
   };
 
   // Persist non-secret metadata for app flows.
-  localStorage.setItem(LS_VAULT_ENABLED, 'true');
-  localStorage.setItem(LS_VAULT_ID, record.id);
-  localStorage.setItem(LS_VAULT_CREDENTIAL_ID, record.credentialId);
-  localStorage.setItem(LS_CASINO_PUBLIC_KEY_HEX, record.nullspacePublicKeyHex);
+  setVaultMeta({
+    kind: VAULT_KIND_PASSKEY,
+    vaultId: record.id,
+    publicKeyHex: record.nullspacePublicKeyHex,
+    credentialId: record.credentialId,
+  });
+
+  setUnlockedVault(unlocked);
+  return unlocked;
+}
+
+export async function unlockPasswordVault(password: string): Promise<UnlockedVault> {
+  if (!isPasswordVaultSupported()) throw new Error('password-vault-unsupported');
+  if (!password) throw new Error('password-required');
+
+  const existing = getUnlockedVault();
+  if (existing) return existing;
+
+  const record = await idbGetVault('default');
+  if (!record) throw new Error('vault-not-found');
+  if (record.version !== 3 || record.kind !== 'password') {
+    throw new Error('vault-kind-mismatch');
+  }
+
+  const salt = base64UrlToBytes(record.salt);
+  const aesKey = await deriveAesKeyFromPassword(password, salt, record.kdf.iterations);
+  let secrets: VaultSecretsV1;
+  try {
+    secrets = await decryptVaultSecrets(aesKey, record);
+  } catch {
+    throw new Error('password-invalid');
+  }
+
+  const now = Date.now();
+  const unlocked: UnlockedVault = {
+    vaultId: record.id,
+    unlockedAtMs: now,
+    nullspaceEd25519PrivateKey: base64UrlToBytes(secrets.nullspaceEd25519PrivateKey),
+    chatEvmPrivateKey: base64UrlToBytes(secrets.chatEvmPrivateKey),
+    nullspacePublicKeyHex: record.nullspacePublicKeyHex,
+  };
+
+  setVaultMeta({
+    kind: VAULT_KIND_PASSWORD,
+    vaultId: record.id,
+    publicKeyHex: record.nullspacePublicKeyHex,
+  });
 
   setUnlockedVault(unlocked);
   return unlocked;
@@ -496,10 +729,24 @@ export function getVaultStatusSync(): {
   enabled: boolean;
   unlocked: boolean;
   nullspacePublicKeyHex: string | null;
+  kind: VaultKind | null;
+  passkeySupported: boolean;
+  passwordSupported: boolean;
 } {
-  const supported = isPasskeyVaultSupported();
+  const passkeySupported = isPasskeyVaultSupported();
+  const passwordSupported = isPasswordVaultSupported();
+  const supported = passkeySupported || passwordSupported;
   const enabled = supported && isVaultEnabled();
   const unlocked = !!getUnlockedVault();
   const nullspacePublicKeyHex = getVaultPublicKeyHex();
-  return { supported, enabled, unlocked, nullspacePublicKeyHex };
+  const kind = getVaultKind();
+  return {
+    supported,
+    enabled,
+    unlocked,
+    nullspacePublicKeyHex,
+    kind,
+    passkeySupported,
+    passwordSupported,
+  };
 }

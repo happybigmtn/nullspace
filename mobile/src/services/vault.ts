@@ -1,0 +1,330 @@
+import { Platform } from 'react-native';
+import * as SecureStore from 'expo-secure-store';
+import { ed25519 } from '@noble/curves/ed25519';
+import { pbkdf2 } from '@noble/hashes/pbkdf2';
+import { sha256 } from '@noble/hashes/sha256';
+import { xchacha20poly1305 } from '@noble/ciphers/chacha';
+import { bytesToHex, hexToBytes } from '../utils/hex';
+
+const VAULT_RECORD_KEY = 'nullspace_vault_record_v1';
+const LEGACY_PRIVATE_KEY_KEY = 'nullspace_private_key';
+const PASSWORD_MIN_LENGTH = 8;
+const PASSWORD_KDF_ITERATIONS = 250_000;
+const SALT_BYTES = 32;
+const NONCE_BYTES = 24;
+const PRIVATE_KEY_BYTES = 32;
+
+const isWeb = Platform.OS === 'web';
+
+const WebSecureStore = {
+  async getItemAsync(key: string): Promise<string | null> {
+    return localStorage.getItem(key);
+  },
+  async setItemAsync(key: string, value: string): Promise<void> {
+    localStorage.setItem(key, value);
+  },
+  async deleteItemAsync(key: string): Promise<void> {
+    localStorage.removeItem(key);
+  },
+};
+
+const VaultStore = isWeb ? WebSecureStore : SecureStore;
+const LegacyStore = isWeb ? WebSecureStore : SecureStore;
+
+type VaultRecord = {
+  version: 1;
+  kind: 'password';
+  kdf: {
+    name: 'PBKDF2';
+    iterations: number;
+    hash: 'SHA-256';
+  };
+  saltHex: string;
+  nonceHex: string;
+  ciphertextHex: string;
+  publicKeyHex: string;
+  createdAtMs: number;
+  updatedAtMs: number;
+};
+
+let unlockedPrivateKey: Uint8Array | null = null;
+let unlockedPublicKeyHex: string | null = null;
+
+function getRandomBytes(length: number): Uint8Array {
+  const out = new Uint8Array(length);
+  if (typeof crypto === 'undefined' || !crypto.getRandomValues) {
+    throw new Error('random_unavailable');
+  }
+  crypto.getRandomValues(out);
+  return out;
+}
+
+function encodePassword(password: string): Uint8Array {
+  if (typeof TextEncoder === 'undefined') {
+    throw new Error('text_encoder_unavailable');
+  }
+  return new TextEncoder().encode(password);
+}
+
+function normalizeKeyHex(value: string | null | undefined): string | null {
+  if (!value || typeof value !== 'string') return null;
+  let trimmed = value.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith('0x') || trimmed.startsWith('0X')) {
+    trimmed = trimmed.slice(2);
+  }
+  if (!/^[0-9a-fA-F]+$/.test(trimmed) || trimmed.length !== PRIVATE_KEY_BYTES * 2) {
+    return null;
+  }
+  return trimmed.toLowerCase();
+}
+
+function deriveKey(password: string, salt: Uint8Array): Uint8Array {
+  const passwordBytes = encodePassword(password);
+  return pbkdf2(sha256, passwordBytes, salt, {
+    c: PASSWORD_KDF_ITERATIONS,
+    dkLen: 32,
+  });
+}
+
+function encryptPrivateKey(privateKey: Uint8Array, password: string) {
+  const salt = getRandomBytes(SALT_BYTES);
+  const nonce = getRandomBytes(NONCE_BYTES);
+  const key = deriveKey(password, salt);
+  const cipher = xchacha20poly1305(key, nonce).encrypt(privateKey);
+  return {
+    saltHex: bytesToHex(salt),
+    nonceHex: bytesToHex(nonce),
+    ciphertextHex: bytesToHex(cipher),
+  };
+}
+
+function decryptPrivateKey(record: VaultRecord, password: string): Uint8Array {
+  const salt = hexToBytes(record.saltHex);
+  const nonce = hexToBytes(record.nonceHex);
+  const ciphertext = hexToBytes(record.ciphertextHex);
+  const key = deriveKey(password, salt);
+  try {
+    return xchacha20poly1305(key, nonce).decrypt(ciphertext);
+  } catch {
+    throw new Error('vault_password_invalid');
+  }
+}
+
+async function readVaultRecord(): Promise<VaultRecord | null> {
+  const raw = await VaultStore.getItemAsync(VAULT_RECORD_KEY);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as VaultRecord;
+    if (parsed?.version !== 1 || parsed.kind !== 'password') return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+async function writeVaultRecord(record: VaultRecord): Promise<void> {
+  await VaultStore.setItemAsync(VAULT_RECORD_KEY, JSON.stringify(record));
+}
+
+async function deleteVaultRecord(): Promise<void> {
+  await VaultStore.deleteItemAsync(VAULT_RECORD_KEY);
+}
+
+async function readLegacyPrivateKey(): Promise<string | null> {
+  const raw = await LegacyStore.getItemAsync(LEGACY_PRIVATE_KEY_KEY);
+  return normalizeKeyHex(raw);
+}
+
+async function clearLegacyPrivateKey(): Promise<void> {
+  await LegacyStore.deleteItemAsync(LEGACY_PRIVATE_KEY_KEY);
+}
+
+export async function isVaultEnabled(): Promise<boolean> {
+  return (await readVaultRecord()) !== null;
+}
+
+export async function getVaultPublicKeyHex(): Promise<string | null> {
+  const record = await readVaultRecord();
+  return record?.publicKeyHex ?? null;
+}
+
+export function getUnlockedVaultPrivateKey(): Uint8Array | null {
+  return unlockedPrivateKey;
+}
+
+export async function getVaultStatus(): Promise<{
+  enabled: boolean;
+  unlocked: boolean;
+  publicKeyHex: string | null;
+}> {
+  const record = await readVaultRecord();
+  const publicKeyHex = record?.publicKeyHex ?? null;
+  const unlocked = !!unlockedPrivateKey && unlockedPublicKeyHex === publicKeyHex;
+  return {
+    enabled: !!record,
+    unlocked,
+    publicKeyHex,
+  };
+}
+
+export async function createPasswordVault(
+  password: string,
+  options: { migrateLegacyKey?: boolean; overwrite?: boolean } = {}
+): Promise<string> {
+  if (!password || password.length < PASSWORD_MIN_LENGTH) {
+    throw new Error('password_too_short');
+  }
+
+  const existing = await readVaultRecord();
+  if (existing && !options.overwrite) {
+    throw new Error('vault_exists');
+  }
+
+  let privateKey: Uint8Array;
+  if (options.migrateLegacyKey) {
+    const legacyHex = await readLegacyPrivateKey();
+    if (legacyHex) {
+      privateKey = hexToBytes(legacyHex);
+    } else {
+      privateKey = ed25519.utils.randomPrivateKey();
+    }
+  } else {
+    privateKey = ed25519.utils.randomPrivateKey();
+  }
+
+  if (privateKey.length !== PRIVATE_KEY_BYTES) {
+    throw new Error('invalid_private_key');
+  }
+
+  const publicKey = ed25519.getPublicKey(privateKey);
+  const publicKeyHex = bytesToHex(publicKey);
+  const { saltHex, nonceHex, ciphertextHex } = encryptPrivateKey(privateKey, password);
+  const now = Date.now();
+  const record: VaultRecord = {
+    version: 1,
+    kind: 'password',
+    kdf: {
+      name: 'PBKDF2',
+      iterations: PASSWORD_KDF_ITERATIONS,
+      hash: 'SHA-256',
+    },
+    saltHex,
+    nonceHex,
+    ciphertextHex,
+    publicKeyHex,
+    createdAtMs: now,
+    updatedAtMs: now,
+  };
+
+  await writeVaultRecord(record);
+  if (options.migrateLegacyKey) {
+    await clearLegacyPrivateKey();
+  }
+
+  unlockedPrivateKey = privateKey;
+  unlockedPublicKeyHex = publicKeyHex;
+
+  return publicKeyHex;
+}
+
+export async function unlockPasswordVault(password: string): Promise<string> {
+  if (!password || password.length < PASSWORD_MIN_LENGTH) {
+    throw new Error('password_too_short');
+  }
+
+  const record = await readVaultRecord();
+  if (!record) {
+    throw new Error('vault_missing');
+  }
+
+  const privateKey = decryptPrivateKey(record, password);
+  if (privateKey.length !== PRIVATE_KEY_BYTES) {
+    throw new Error('invalid_private_key');
+  }
+
+  unlockedPrivateKey = privateKey;
+  unlockedPublicKeyHex = record.publicKeyHex;
+  return record.publicKeyHex;
+}
+
+export function lockVault(): void {
+  unlockedPrivateKey = null;
+  unlockedPublicKeyHex = null;
+}
+
+export async function deleteVault(): Promise<void> {
+  await deleteVaultRecord();
+  lockVault();
+}
+
+export async function exportVaultPrivateKey(password?: string): Promise<string> {
+  if (unlockedPrivateKey) {
+    return bytesToHex(unlockedPrivateKey);
+  }
+
+  if (!password) {
+    throw new Error('vault_locked');
+  }
+
+  const record = await readVaultRecord();
+  if (!record) {
+    throw new Error('vault_missing');
+  }
+
+  const privateKey = decryptPrivateKey(record, password);
+  return bytesToHex(privateKey);
+}
+
+export async function importVaultPrivateKey(
+  password: string,
+  privateKeyHex: string,
+  options: { overwrite?: boolean } = {}
+): Promise<string> {
+  if (!password || password.length < PASSWORD_MIN_LENGTH) {
+    throw new Error('password_too_short');
+  }
+
+  const normalized = normalizeKeyHex(privateKeyHex);
+  if (!normalized) {
+    throw new Error('invalid_private_key');
+  }
+
+  const existing = await readVaultRecord();
+  if (existing && !options.overwrite) {
+    throw new Error('vault_exists');
+  }
+
+  const privateKey = hexToBytes(normalized);
+  if (privateKey.length !== PRIVATE_KEY_BYTES) {
+    throw new Error('invalid_private_key');
+  }
+
+  const publicKey = ed25519.getPublicKey(privateKey);
+  const publicKeyHex = bytesToHex(publicKey);
+  const { saltHex, nonceHex, ciphertextHex } = encryptPrivateKey(privateKey, password);
+  const now = Date.now();
+  const record: VaultRecord = {
+    version: 1,
+    kind: 'password',
+    kdf: {
+      name: 'PBKDF2',
+      iterations: PASSWORD_KDF_ITERATIONS,
+      hash: 'SHA-256',
+    },
+    saltHex,
+    nonceHex,
+    ciphertextHex,
+    publicKeyHex,
+    createdAtMs: now,
+    updatedAtMs: now,
+  };
+
+  await writeVaultRecord(record);
+  await clearLegacyPrivateKey();
+  unlockedPrivateKey = privateKey;
+  unlockedPublicKeyHex = publicKeyHex;
+  return publicKeyHex;
+}
+
+export const VAULT_PASSWORD_MIN_LENGTH = PASSWORD_MIN_LENGTH;

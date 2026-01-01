@@ -12,6 +12,7 @@ import * as Linking from 'expo-linking';
 import { SplashScreen } from '../screens/SplashScreen';
 import { AuthScreen } from '../screens/AuthScreen';
 import { LobbyScreen } from '../screens/LobbyScreen';
+import { VaultScreen } from '../screens/VaultScreen';
 import { GameScreen } from '../screens/GameScreen';
 import { RootStackParamList } from './types';
 import { COLORS } from '../constants/theme';
@@ -20,6 +21,7 @@ import { useAuth } from '../context';
 const linkingConfig = {
   screens: {
     Lobby: 'lobby',
+    Vault: 'vault',
     Game: 'game/:gameId',
   },
 };
@@ -76,6 +78,7 @@ export function RootNavigator() {
         <Stack.Screen name="Splash" component={SplashScreen} />
         <Stack.Screen name="Auth" component={AuthScreen} />
         <Stack.Screen name="Lobby" component={LobbyScreen} />
+        <Stack.Screen name="Vault" component={VaultScreen} />
         <Stack.Screen
           name="Game"
           component={GameScreen}

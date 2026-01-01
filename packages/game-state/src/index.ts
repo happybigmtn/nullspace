@@ -271,6 +271,8 @@ export type CrapsParsedState = {
   bets: CrapsRawBet[];
 };
 
+const CRAPS_MAX_BETS = 20;
+
 export const parseCrapsState = (stateBlob: Uint8Array): CrapsParsedState | null => {
   if (stateBlob.length < 5) {
     return null;
@@ -321,6 +323,10 @@ export const parseCrapsState = (stateBlob: Uint8Array): CrapsParsedState | null 
       epochPointEstablished = stateBlob[0] === 1 || mainPoint > 0;
       betCount = stateBlob[4];
       betsOffset = 5;
+    }
+
+    if (betCount > CRAPS_MAX_BETS) {
+      return null;
     }
 
     const bets: CrapsRawBet[] = [];

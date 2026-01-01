@@ -113,7 +113,10 @@ async fn metrics_handler(
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, "text/plain; version=0.0.4")
         .body(Body::from(state.context.encode()))
-        .expect("Failed to create metrics response"))
+        .map_err(|err| {
+            error!("metrics response build failed: {err}");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?)
 }
 
 fn spawn_metrics_server(context: tokio::Context, addr: SocketAddr) {
@@ -122,15 +125,19 @@ fn spawn_metrics_server(context: tokio::Context, addr: SocketAddr) {
         auth_token: metrics_auth_token(),
     });
     context.with_label("metrics").spawn(move |_context| async move {
-        let listener = ::tokio::net::TcpListener::bind(addr)
-            .await
-            .expect("Failed to bind metrics server");
+        let listener = match ::tokio::net::TcpListener::bind(addr).await {
+            Ok(listener) => listener,
+            Err(err) => {
+                error!("metrics server bind failed on {addr}: {err}");
+                return;
+            }
+        };
         let app = Router::new()
             .route("/metrics", get(metrics_handler))
             .with_state(state);
-        axum::serve(listener, app.into_make_service())
-            .await
-            .expect("Could not serve metrics");
+        if let Err(err) = axum::serve(listener, app.into_make_service()).await {
+            error!("metrics server failed on {addr}: {err}");
+        }
     });
 }
 

@@ -4,6 +4,7 @@ import type { GameState, PlayerStats, TournamentPhase } from '../../../types';
 import type { CasinoClient } from '../../../api/client';
 import { getStrategicAdvice } from '../../../services/geminiService';
 import { syncFreerollLimit } from '../../../services/authClient';
+import { getCasinoKeyIdForStorage } from '../../../security/keyVault';
 import { FREEROLL_DAILY_LIMIT_FREE, getFreerollSchedule } from '../freeroll';
 import { logDebug } from '../../../utils/logger';
 
@@ -81,7 +82,7 @@ export const useTournamentActions = ({
         const playerName = `Player_${Date.now().toString(36)}`;
         await client.nonceManager.submitCasinoRegister(playerName);
         hasRegisteredRef.current = true;
-        const keyId = localStorage.getItem('casino_public_key_hex') ?? localStorage.getItem('casino_private_key');
+        const keyId = getCasinoKeyIdForStorage();
         if (keyId) {
           localStorage.setItem(`casino_registered_${keyId}`, 'true');
         }
@@ -225,7 +226,7 @@ export const useTournamentActions = ({
         await client.nonceManager.submitCasinoRegister(playerName);
         hasRegisteredRef.current = true;
         setIsRegistered(true);
-        const keyId = localStorage.getItem('casino_public_key_hex') ?? localStorage.getItem('casino_private_key');
+        const keyId = getCasinoKeyIdForStorage();
         if (keyId) {
           localStorage.setItem(`casino_registered_${keyId}`, 'true');
         }

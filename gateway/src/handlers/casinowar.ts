@@ -72,13 +72,17 @@ export class CasinoWarHandler extends GameHandler {
       return startResult;
     }
 
-    // Deal immediately (atomic deal if tie bet is set)
-    let dealPayload = new Uint8Array([SharedCasinoWarMove.Play]);
     if (tieBet > 0) {
-      dealPayload = new Uint8Array(9);
-      dealPayload[0] = 4; // atomic deal opcode for tie bet
-      new DataView(dealPayload.buffer).setBigUint64(1, BigInt(tieBet), false);
+      const tiePayload = new Uint8Array(9);
+      tiePayload[0] = SharedCasinoWarMove.SetTieBet;
+      new DataView(tiePayload.buffer).setBigUint64(1, BigInt(tieBet), false);
+      const tieResult = await this.makeMove(ctx, tiePayload);
+      if (!tieResult.success) {
+        return tieResult;
+      }
     }
+
+    const dealPayload = new Uint8Array([SharedCasinoWarMove.Play]);
     const dealResult = await this.makeMove(ctx, dealPayload);
 
     if (!dealResult.success) {

@@ -274,7 +274,23 @@ export const ActiveGame: React.FC<ActiveGameProps> = ({ gameState, numberInput, 
       default:
         return gameState.bet || 0;
     }
-  }, [gameState]);
+  }, [
+    gameState.type,
+    gameState.bet,
+    gameState.rouletteBets,
+    gameState.sicBoBets,
+    gameState.crapsBets,
+    gameState.baccaratBets,
+    gameState.blackjack21Plus3Bet,
+    gameState.insuranceBet,
+    gameState.threeCardPairPlusBet,
+    gameState.threeCardSixCardBonusBet,
+    gameState.threeCardProgressiveBet,
+    gameState.uthTripsBet,
+    gameState.uthSixCardBonusBet,
+    gameState.uthProgressiveBet,
+    gameState.casinoWarTieBet,
+  ]);
   const oddsLabel = ODDS_SUMMARY[gameState.type] ?? '—';
   const maxWin = React.useMemo(() => {
     switch (gameState.type) {
@@ -290,7 +306,14 @@ export const ActiveGame: React.FC<ActiveGameProps> = ({ gameState, numberInput, 
       default:
         return null;
     }
-  }, [gameState]);
+  }, [
+    gameState.type,
+    gameState.rouletteBets,
+    gameState.rouletteZeroRule,
+    gameState.sicBoBets,
+    gameState.crapsBets,
+    gameState.crapsPoint,
+  ]);
 
   const firstHandKey = React.useMemo(() => {
     if (gameState.type === GameType.NONE) return null;

@@ -710,12 +710,18 @@ mod tests {
             assert!(layer.prepare(&tx).await.is_ok());
             let events = layer.apply(&tx).await.unwrap();
 
-            assert_eq!(events.len(), 1);
+            assert_eq!(events.len(), 2);
             if let Event::CasinoPlayerRegistered { player, name } = &events[0] {
                 assert_eq!(player, &public);
                 assert_eq!(name, "Alice");
             } else {
                 panic!("Expected CasinoPlayerRegistered event");
+            }
+            if let Event::CasinoLeaderboardUpdated { leaderboard } = &events[1] {
+                assert_eq!(leaderboard.entries.len(), 1);
+                assert_eq!(leaderboard.entries[0].name, "Alice");
+            } else {
+                panic!("Expected CasinoLeaderboardUpdated event");
             }
 
             // Verify player was created
@@ -792,7 +798,7 @@ mod tests {
 
             let start = Transaction::sign(
                 &admin_signer,
-                2,
+                0,
                 Instruction::CasinoStartTournament {
                     tournament_id,
                     start_time_ms,
@@ -829,7 +835,7 @@ mod tests {
 
             let end = Transaction::sign(
                 &admin_signer,
-                3,
+                1,
                 Instruction::CasinoEndTournament { tournament_id },
             );
             assert!(layer.prepare(&end).await.is_ok());

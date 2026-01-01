@@ -76,8 +76,18 @@ WebSocket URL by platform:
 ### Gateway bet coverage (all games, all bet types)
 
 ```bash
+# Ensure simulator + gateway rate limits are relaxed for full bet coverage.
+RATE_LIMIT_SUBMIT_PER_MIN=1000000 RATE_LIMIT_SUBMIT_BURST=100000 \
+RATE_LIMIT_HTTP_PER_SEC=100000 RATE_LIMIT_HTTP_BURST=100000 \
+./scripts/start-local-network.sh configs/local 4 --fresh --no-build
+
+GATEWAY_SESSION_RATE_LIMIT_POINTS=500 \
+GATEWAY_SESSION_RATE_LIMIT_WINDOW_MS=600000 \
+GATEWAY_SESSION_RATE_LIMIT_BLOCK_MS=600000 \
+pnpm -C gateway start
+
 RUN_INTEGRATION=true pnpm -C gateway exec vitest run tests/all-bet-types.test.ts \
-  --testTimeout 600000
+  --testTimeout 1200000
 ```
 
 ### Web parser coverage (game state blobs)
@@ -96,6 +106,14 @@ pnpm -C website exec vitest run src/services/games/__tests__/game-state.test.ts
 - Background the mobile app for 30s and return; confirm reconnect + state
   restore.
 - Toggle airplane mode mid-game and confirm reconnect banner + recovery.
+
+## Vault Backup + Recovery (Non-Custodial Fallback)
+
+- Open the Vault screen from the Lobby avatar and create a password vault.
+- Tap **Show recovery key** and save the 64-hex key offline.
+- Lock the vault, then unlock with the password to confirm access.
+- Delete the vault locally and use **Import & replace** with the recovery key
+  and a new password; confirm the public key matches.
 
 ---
 

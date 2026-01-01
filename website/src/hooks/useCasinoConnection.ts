@@ -27,7 +27,7 @@ const MISSING_IDENTITY_DETAIL = IS_DEV
   ? 'Missing VITE_IDENTITY (see website/README.md).'
   : 'Identity not configured. Refresh the page or contact support.';
 const OFFLINE_DETAIL = 'Offline - check your connection and retry.';
-const VAULT_LOCKED_DETAIL = 'Passkey vault locked. Open Security to unlock.';
+const VAULT_LOCKED_DETAIL = 'Vault locked. Open Security to unlock.';
 const ERROR_DETAIL = IS_DEV
   ? 'Failed to connect. Check simulator + dev-executor.'
   : 'Failed to connect. Check your connection and retry.';

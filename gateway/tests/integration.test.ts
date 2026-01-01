@@ -4,7 +4,7 @@
  * These tests require a running simulator backend.
  * Skip with: npm test -- --skip-integration
  */
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { WebSocket } from 'ws';
 
 const GATEWAY_PORT = process.env.TEST_GATEWAY_PORT || '9010';
@@ -13,13 +13,15 @@ const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8080';
 // Skip integration tests unless explicitly enabled
 const INTEGRATION_ENABLED = process.env.RUN_INTEGRATION === 'true';
 
+vi.setConfig({ testTimeout: 35000 });
+
 /**
  * Helper to send JSON message and wait for response
  */
 async function sendAndReceive(
   ws: WebSocket,
   msg: Record<string, unknown>,
-  timeout = 5000
+  timeout = 35000
 ): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -45,7 +47,7 @@ async function sendAndReceive(
 async function waitForMessage(
   ws: WebSocket,
   type: string,
-  timeout = 5000
+  timeout = 15000
 ): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -86,7 +88,7 @@ async function connectToGateway(): Promise<WebSocket> {
 
     setTimeout(() => {
       reject(new Error('Connection timeout'));
-    }, 5000);
+    }, 10000);
   });
 }
 
@@ -172,7 +174,7 @@ describe.skipIf(!INTEGRATION_ENABLED)('Gateway Integration Tests', () => {
       type: 'blackjack_stand',
     });
 
-    expect(response.type).toBe('move_accepted');
+    expect(['game_move', 'game_result']).toContain(response.type);
     expect(response.sessionId).toBeDefined();
   });
 
@@ -187,8 +189,10 @@ describe.skipIf(!INTEGRATION_ENABLED)('Gateway Integration Tests', () => {
 
   it('should reject invalid bet amount', async () => {
     const response = await sendAndReceive(ws, {
-      type: 'blackjack_deal',
-      amount: -100,
+      type: 'ultimate_tx_deal',
+      ante: 100,
+      blind: 100,
+      progressive: 2,
     });
 
     expect(response.type).toBe('error');

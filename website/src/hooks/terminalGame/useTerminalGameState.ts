@@ -15,6 +15,7 @@ import type { CasinoClient } from '../../api/client';
 import { CasinoChainService } from '../../services/CasinoChainService';
 import { BotConfig, DEFAULT_BOT_CONFIG } from '../../services/BotService';
 import type { CrapsChainRollLog } from '../../services/games';
+import { getCasinoKeyIdForStorage } from '../../security/keyVault';
 import { FREEROLL_DAILY_LIMIT_FREE } from './freeroll';
 import { createInitialGameState, createInitialStats } from './initialState';
 import { logDebug } from '../../utils/logger';
@@ -119,7 +120,7 @@ export const useTerminalGameState = (playMode: 'CASH' | 'FREEROLL' | null) => {
     if (typeof localStorage === 'undefined') {
       hasRegisteredRef.current = false;
     } else {
-      const keyId = localStorage.getItem('casino_public_key_hex') ?? localStorage.getItem('casino_private_key');
+      const keyId = getCasinoKeyIdForStorage();
       if (keyId) {
         hasRegisteredRef.current = localStorage.getItem(`casino_registered_${keyId}`) === 'true';
         logDebug('[useTerminalGameState] Loaded registration status from localStorage:', hasRegisteredRef.current, 'for key:', keyId.substring(0, 8) + '...');

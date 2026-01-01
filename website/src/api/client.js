@@ -1210,19 +1210,19 @@ export class CasinoClient {
       }
     })();
 
-    // If the user has enabled a passkey vault, require it to be unlocked for signing.
+    // If the user has enabled a vault, require it to be unlocked for signing.
     if (vaultEnabled && !unlockedVault) {
-      console.warn('[CasinoClient] Passkey vault enabled but locked. Unlock via /security.');
+      console.warn('[CasinoClient] Vault enabled but locked. Unlock via /security.');
       return null;
     }
 
     if (unlockedVault?.nullspaceEd25519PrivateKey) {
       this.wasm.createKeypair(unlockedVault.nullspaceEd25519PrivateKey);
-      logDebug('Loaded keypair from passkey vault');
+      logDebug('Loaded keypair from vault');
     } else {
       if (!allowLegacyKeys) {
         removeStoredPrivateKey();
-        console.warn('[CasinoClient] Legacy browser keys disabled. Unlock passkey vault to continue.');
+        console.warn('[CasinoClient] Legacy browser keys disabled. Unlock vault to continue.');
         return null;
       }
       // Security warning for development (legacy mode)

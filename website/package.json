@@ -58,6 +58,7 @@
     "zustand": "^5.0.9"
   },
   "devDependencies": {
+    "fake-indexeddb": "^6.2.5",
     "jsdom": "^26.1.0",
     "node-fetch": "^3.3.2",
     "playwright-core": "^1.49.0",

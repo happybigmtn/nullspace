@@ -310,7 +310,7 @@ export const SwapPanel: React.FC<SwapPanelProps> = ({
             ) : null}
           </div>
           <div className="text-[10px] text-gray-600 leading-relaxed">
-            You may be prompted by your passkey to confirm this transaction.
+            You may be prompted to unlock your vault to confirm this transaction.
           </div>
         </div>
       </ConfirmModal>

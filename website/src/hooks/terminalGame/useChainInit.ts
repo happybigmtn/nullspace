@@ -7,6 +7,7 @@ import { CasinoClient } from '../../api/client';
 import { CasinoChainService } from '../../services/CasinoChainService';
 import { CHAIN_TO_FRONTEND_GAME_TYPE } from '../../services/games';
 import { logDebug } from '../../utils/logger';
+import { getCasinoKeyIdForStorage } from '../../security/keyVault';
 
 type UseChainInitArgs = {
   clientRef: MutableRefObject<CasinoClient | null>;
@@ -75,12 +76,12 @@ export const useChainInit = ({
 
         const keypair = client.getOrCreateKeypair();
         if (!keypair) {
-          console.warn('[useChainInit] No keypair available (passkey vault locked?)');
+          console.warn('[useChainInit] No keypair available (vault locked?)');
           setIsOnChain(false);
           setGameState(prev => ({
             ...prev,
             stage: 'BETTING',
-            message: 'UNLOCK PASSKEY VAULT — OPEN VAULT TAB',
+            message: 'UNLOCK VAULT — OPEN VAULT TAB',
           }));
           return;
         }
@@ -160,8 +161,7 @@ export const useChainInit = ({
           } else {
             hasRegisteredRef.current = false;
             setIsRegistered(false);
-            const keyId =
-              localStorage.getItem('casino_public_key_hex') ?? localStorage.getItem('casino_private_key');
+            const keyId = getCasinoKeyIdForStorage();
             if (keyId) {
               localStorage.removeItem(`casino_registered_${keyId}`);
               logDebug('[useChainInit] Cleared localStorage registration flag for key:', keyId.substring(0, 8) + '...');
