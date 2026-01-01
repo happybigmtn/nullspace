@@ -27,18 +27,21 @@ Business strategy summary and CEO view: `BUSINESS_PLAN.md`.
 
 ## What You Need To Do
 - Provide prod Stripe keys and decide whether to create live prices or reuse test plan mapping.
-- Provide admin ed25519 keypair and set `CASINO_ADMIN_PUBLIC_KEY_HEX` for simulator/executor.
+- Provide admin ed25519 keypair via secret file/URL for production and set
+  `CASINO_ADMIN_PUBLIC_KEY_HEX` for non-prod fallback.
 - Provision the self-hosted Convex backend (or grant access to do so) with persistent storage and backups.
 - Point DNS at your frontend + API domains and confirm allowed origins list.
 - Configure simulator origin allowlists: `ALLOWED_HTTP_ORIGINS`, `ALLOWED_WS_ORIGINS`, and (optional) `ALLOW_HTTP_NO_ORIGIN` / `ALLOW_WS_NO_ORIGIN` for non-browser clients.
+- Configure gateway persistence + session limits: `GATEWAY_DATA_DIR`,
+  `GATEWAY_SESSION_RATE_LIMIT_*`, and `GATEWAY_EVENT_TIMEOUT_MS` for production/staging.
 - Approve the target concurrency SLOs so infra sizing can be locked.
 - Engage Wyoming counsel and a registered agent to form the DUNA entity and
   confirm tax/regulatory posture (gaming + token issuance).
 
 ## Reference Self-Hosted Architecture (Scale Targets)
-- 1k-5k concurrent players: 1x simulator/indexer, 2x web/app nodes, 1x auth service, 1x Convex backend with persistent volume + backups, CDN for static site.
-- 5k-20k concurrent players: 2x simulator/indexer (active/passive or sharded reads), 3-6x web/app nodes, WS gateways with sticky sessions, Redis/NATS for WS fanout, dedicated Convex backend with external Postgres + object storage.
-- 20k+ concurrent players: separate read/indexer tier, multiple WS gateways behind L7 LB, Redis/NATS fanout, dedicated metrics/logs stack, replicated Convex backend with external DB + storage, multi-region failover plan.
+- 1k-5k concurrent players: 1x simulator/indexer, 2x web/app nodes, 1x gateway, 1x auth service, 1x Convex backend with persistent volume + backups, CDN for static site.
+- 5k-20k concurrent players: 2x simulator/indexer (active/passive or sharded reads), 3-6x web/app nodes, 2x+ gateways with sticky sessions, Redis/NATS for WS fanout, dedicated Convex backend with external Postgres + object storage.
+- 20k+ concurrent players: separate read/indexer tier, multiple gateways behind L7 LB, Redis/NATS fanout, dedicated metrics/logs stack, replicated Convex backend with external DB + storage, multi-region failover plan.
 
 ## Practical Scaling Limit (Current Code + Defaults)
 - Single simulator node: ~3k-5k concurrent WS connections before latency spikes (depends on update rate and proof load).
@@ -73,6 +76,7 @@ Business strategy summary and CEO view: `BUSINESS_PLAN.md`.
 - Business/compliance gates: DUNA formation path, KYC/AML + responsible gaming scope, and geo-fencing plan if required.
 - Phase 2 gating: CCA testnet rehearsal + auction parameter validation and contract security plan/audit.
 - Product polish: onboarding status copy + accessibility/readability pass updated; remaining UX polish is ongoing.
+- Gateway: shared protocol validation updated for roulette/sic bo numeric bet types and `hilo_deal` amount; session rate limiting and event timeouts are configurable; integration bet-type coverage runs in `gateway/tests/all-bet-types.test.ts`.
 - Local staging load test completed (200 bots, 120s, 0 failures); production-scale run still pending.
 
 ## Priority Focus (Business Plan Alignment)

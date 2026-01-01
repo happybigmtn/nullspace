@@ -6,7 +6,12 @@ This roadmap covers deployment, data, scalability, UI/UX usability, security, an
 ## Current System Snapshot (as-is)
 - Consensus network: `nullspace-node` validators with local disk storage and YAML configs.
 - Indexer/explorer: `nullspace-simulator` serving HTTP/WS, in-memory state, optional SQLite persistence.
+- Gateway: `gateway` WebSocket bridge for mobile/web clients, validates the shared
+  protocol, persists nonces in `GATEWAY_DATA_DIR`, and uses configurable session
+  rate limits and event wait timeouts (`GATEWAY_SESSION_RATE_LIMIT_*`,
+  `GATEWAY_EVENT_TIMEOUT_MS`).
 - Frontend: `website` (Vite + React + WASM) consuming simulator APIs and WebSockets.
+- Mobile: `mobile` (Expo/native) consuming the gateway WebSocket API.
 - Dev-only auth: simulator passkeys are feature-gated, store raw Ed25519 keys in memory, and are not production-safe.
 - No centralized DB for accounts, billing, or analytics; no production deployment pipeline; Dockerfile only targets simulator.
 - Convex schema + functions, Stripe webhook handling, Auth.js v5 service, and billing UI are implemented; on-chain freeroll limits can be synced from entitlements, but Stripe price IDs and production infra are still pending.
@@ -22,7 +27,7 @@ This roadmap covers deployment, data, scalability, UI/UX usability, security, an
 
 ### 1) Infrastructure & Deployment
 - Build real deployment topology: validators, indexer/explorer, API gateway, and frontend host/CDN.
-- Containerize **all** deployable services (node, simulator/indexer, executor, website build).
+- Containerize **all** deployable services (node, simulator/indexer, executor, gateway, website build).
 - Deploy the Auth.js v5 service (see `services/auth`) alongside Convex and Stripe webhooks.
 - Deploy a self-hosted Convex backend with persistent storage, backups, and staging/prod isolation.
   - Source: open-source Convex backend (`get-convex/convex-backend`), follow its self-hosted README.
@@ -32,6 +37,9 @@ This roadmap covers deployment, data, scalability, UI/UX usability, security, an
 - Terminate TLS at the edge, enforce HTTPS/WSS, and enable HSTS.
 - Replace local scripts with production-grade process supervision (systemd/K8s).
 - Add health checks that do not rely on missing runtime deps (current Dockerfile lacks curl).
+- Standardize gateway envs: `GATEWAY_DATA_DIR`, `GATEWAY_EVENT_TIMEOUT_MS`,
+  `GATEWAY_SESSION_RATE_LIMIT_POINTS`, `GATEWAY_SESSION_RATE_LIMIT_WINDOW_MS`,
+  and `GATEWAY_SESSION_RATE_LIMIT_BLOCK_MS`.
 
 ### 2) Data & Persistence
 - Define Convex schema and indexes in `convex/schema.ts` with retention for events and explorer history.
@@ -45,6 +53,8 @@ This roadmap covers deployment, data, scalability, UI/UX usability, security, an
 - Add caching layer for high-traffic endpoints (Redis + HTTP cache headers).
 - Load test with realistic concurrent players; define SLOs for latency and disconnects.
 - Introduce backpressure policies for ingestion and persistence (now configurable).
+- Tune gateway event wait timeouts (`GATEWAY_EVENT_TIMEOUT_MS`) to avoid
+  client hangs during high latency or partial outages.
 - Document resource sizing: CPU/memory for nodes, indexer, frontend.
 
 ### 4) Authentication + Stripe Memberships (Recommended Plan)
@@ -94,6 +104,7 @@ This roadmap covers deployment, data, scalability, UI/UX usability, security, an
 ### 8) Testing, QA, and Release Management
 - CI/CD pipeline for Rust + web build/test + wasm compilation.
 - End-to-end tests for game flows across all games and devices.
+- Integration bet coverage via `gateway/tests/all-bet-types.test.ts` in staging.
 - Security testing: SAST, dependency scanning, and web vulnerability scans.
 - Staging environment with production-like traffic.
 - Release process with versioning, rollback, and canary deploys.

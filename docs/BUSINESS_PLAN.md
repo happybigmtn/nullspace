@@ -22,6 +22,9 @@ Core loops:
 - Casino games + freerolls (engagement and emissions).
 - Internal DeFi: AMM (RNG/vUSDT), vaults, staking, and liquidity.
 - Membership tier for expanded freeroll access and retention.
+Delivery surfaces:
+- Web (Vite/React) and mobile (Expo/native), both using the gateway
+  WebSocket protocol for on-chain actions and updates.
 
 Internal assets:
 - RNG (chips): internal unit of account and staking asset.
@@ -98,8 +101,10 @@ Phase 2:
 
 ## Operations and Scaling
 Technical plan and infra sizing live in `plan.md` and `golive.md`.
-Scale targets are prioritized around simulator/indexer throughput, WebSocket
-fanout, and Convex-backed auth/billing.
+Scale targets prioritize simulator/indexer throughput, gateway WebSocket
+fanout, and Convex-backed auth/billing. Production configs should set
+gateway session limits (`GATEWAY_SESSION_RATE_LIMIT_*`) and event wait
+timeouts (`GATEWAY_EVENT_TIMEOUT_MS`) alongside simulator origin allowlists.
 
 ## Legal Structure (Wyoming DUNA)
 We will form a Wyoming Decentralized Unincorporated Nonprofit Association
