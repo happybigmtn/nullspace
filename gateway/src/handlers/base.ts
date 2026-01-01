@@ -3,6 +3,7 @@
  */
 import type { Session } from '../types/session.js';
 import type { GameType } from '@nullspace/types';
+import type { OutboundMessage } from '@nullspace/protocol/mobile';
 import {
   encodeCasinoStartGame,
   encodeCasinoGameMove,
@@ -56,7 +57,7 @@ export abstract class GameHandler {
    */
   abstract handleMessage(
     ctx: HandlerContext,
-    msg: Record<string, unknown>
+    msg: OutboundMessage
   ): Promise<HandleResult>;
 
   /**

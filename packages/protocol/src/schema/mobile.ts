@@ -3,6 +3,7 @@
  * Consolidated from mobile app to keep message validation in sync.
  */
 import { z } from 'zod';
+import { GameType } from '@nullspace/types';
 
 // Base message schema - all messages must have a type field
 export const BaseMessageSchema = z.object({
@@ -341,6 +342,22 @@ export const HiLoDealRequestSchema = z.object({
   amount: z.number().positive(),
 });
 
+export const HiLoHigherRequestSchema = z.object({
+  type: z.literal('hilo_higher'),
+});
+
+export const HiLoLowerRequestSchema = z.object({
+  type: z.literal('hilo_lower'),
+});
+
+export const HiLoSameRequestSchema = z.object({
+  type: z.literal('hilo_same'),
+});
+
+export const HiLoCashoutRequestSchema = z.object({
+  type: z.literal('hilo_cashout'),
+});
+
 // --- Baccarat Outbound ---
 export const BaccaratBetSchema = z.object({
   type: BaccaratBetTypeSchema,
@@ -509,6 +526,10 @@ export const OutboundMessageSchema = z.discriminatedUnion('type', [
   // Hi-Lo
   HiLoBetRequestSchema,
   HiLoDealRequestSchema,
+  HiLoHigherRequestSchema,
+  HiLoLowerRequestSchema,
+  HiLoSameRequestSchema,
+  HiLoCashoutRequestSchema,
   // Baccarat
   BaccaratDealRequestSchema,
   // Casino War
@@ -558,25 +579,90 @@ export type CrapsRollRequest = z.infer<typeof CrapsRollRequestSchema>;
 export type CrapsSingleBetRequest = z.infer<typeof CrapsSingleBetRequestSchema>;
 export type HiLoBetRequest = z.infer<typeof HiLoBetRequestSchema>;
 export type HiLoDealRequest = z.infer<typeof HiLoDealRequestSchema>;
+export type HiLoHigherRequest = z.infer<typeof HiLoHigherRequestSchema>;
+export type HiLoLowerRequest = z.infer<typeof HiLoLowerRequestSchema>;
+export type HiLoSameRequest = z.infer<typeof HiLoSameRequestSchema>;
+export type HiLoCashoutRequest = z.infer<typeof HiLoCashoutRequestSchema>;
 export type BaccaratBet = z.infer<typeof BaccaratBetSchema>;
 export type BaccaratDealRequest = z.infer<typeof BaccaratDealRequestSchema>;
 export type CasinoWarDealRequest = z.infer<typeof CasinoWarDealRequestSchema>;
 export type CasinoWarWarRequest = z.infer<typeof CasinoWarWarRequestSchema>;
 export type CasinoWarSurrenderRequest = z.infer<typeof CasinoWarSurrenderRequestSchema>;
+export type CasinoWarLegacyDealRequest = z.infer<typeof CasinoWarLegacyDealRequestSchema>;
+export type CasinoWarLegacyWarRequest = z.infer<typeof CasinoWarLegacyWarRequestSchema>;
+export type CasinoWarLegacySurrenderRequest = z.infer<typeof CasinoWarLegacySurrenderRequestSchema>;
 export type VideoPokerDealRequest = z.infer<typeof VideoPokerDealRequestSchema>;
 export type VideoPokerDrawRequest = z.infer<typeof VideoPokerDrawRequestSchema>;
+export type VideoPokerLegacyDealRequest = z.infer<typeof VideoPokerLegacyDealRequestSchema>;
 export type VideoPokerLegacyHoldRequest = z.infer<typeof VideoPokerLegacyHoldRequestSchema>;
 export type SicBoBet = z.infer<typeof SicBoBetSchema>;
 export type SicBoRollRequest = z.infer<typeof SicBoRollRequestSchema>;
+export type SicBoLegacyRollRequest = z.infer<typeof SicBoLegacyRollRequestSchema>;
 export type ThreeCardPokerDealRequest = z.infer<typeof ThreeCardPokerDealRequestSchema>;
 export type ThreeCardPokerPlayRequest = z.infer<typeof ThreeCardPokerPlayRequestSchema>;
 export type ThreeCardPokerFoldRequest = z.infer<typeof ThreeCardPokerFoldRequestSchema>;
+export type ThreeCardPokerLegacyDealRequest = z.infer<typeof ThreeCardPokerLegacyDealRequestSchema>;
+export type ThreeCardPokerLegacyPlayRequest = z.infer<typeof ThreeCardPokerLegacyPlayRequestSchema>;
+export type ThreeCardPokerLegacyFoldRequest = z.infer<typeof ThreeCardPokerLegacyFoldRequestSchema>;
 export type UltimateTXDealRequest = z.infer<typeof UltimateTXDealRequestSchema>;
 export type UltimateTXBetRequest = z.infer<typeof UltimateTXBetRequestSchema>;
 export type UltimateTXCheckRequest = z.infer<typeof UltimateTXCheckRequestSchema>;
 export type UltimateTXFoldRequest = z.infer<typeof UltimateTXFoldRequestSchema>;
+export type UltimateTXLegacyDealRequest = z.infer<typeof UltimateTXLegacyDealRequestSchema>;
+export type UltimateTXLegacyBetRequest = z.infer<typeof UltimateTXLegacyBetRequestSchema>;
+export type UltimateTXLegacyCheckRequest = z.infer<typeof UltimateTXLegacyCheckRequestSchema>;
+export type UltimateTXLegacyFoldRequest = z.infer<typeof UltimateTXLegacyFoldRequestSchema>;
 export type FaucetClaimRequest = z.infer<typeof FaucetClaimRequestSchema>;
 export type OutboundMessage = z.infer<typeof OutboundMessageSchema>;
+
+export const OUTBOUND_MESSAGE_GAME_TYPES = {
+  blackjack_deal: GameType.Blackjack,
+  blackjack_hit: GameType.Blackjack,
+  blackjack_stand: GameType.Blackjack,
+  blackjack_double: GameType.Blackjack,
+  blackjack_split: GameType.Blackjack,
+  roulette_spin: GameType.Roulette,
+  craps_roll: GameType.Craps,
+  craps_bet: GameType.Craps,
+  hilo_bet: GameType.HiLo,
+  hilo_deal: GameType.HiLo,
+  hilo_higher: GameType.HiLo,
+  hilo_lower: GameType.HiLo,
+  hilo_same: GameType.HiLo,
+  hilo_cashout: GameType.HiLo,
+  baccarat_deal: GameType.Baccarat,
+  casino_war_deal: GameType.CasinoWar,
+  casino_war_war: GameType.CasinoWar,
+  casino_war_surrender: GameType.CasinoWar,
+  casinowar_deal: GameType.CasinoWar,
+  casinowar_war: GameType.CasinoWar,
+  casinowar_surrender: GameType.CasinoWar,
+  video_poker_deal: GameType.VideoPoker,
+  video_poker_draw: GameType.VideoPoker,
+  videopoker_deal: GameType.VideoPoker,
+  videopoker_hold: GameType.VideoPoker,
+  sic_bo_roll: GameType.SicBo,
+  sicbo_roll: GameType.SicBo,
+  three_card_poker_deal: GameType.ThreeCard,
+  three_card_poker_play: GameType.ThreeCard,
+  three_card_poker_fold: GameType.ThreeCard,
+  threecardpoker_deal: GameType.ThreeCard,
+  threecardpoker_play: GameType.ThreeCard,
+  threecardpoker_fold: GameType.ThreeCard,
+  ultimate_tx_deal: GameType.UltimateHoldem,
+  ultimate_tx_bet: GameType.UltimateHoldem,
+  ultimate_tx_check: GameType.UltimateHoldem,
+  ultimate_tx_fold: GameType.UltimateHoldem,
+  ultimateholdem_deal: GameType.UltimateHoldem,
+  ultimateholdem_bet: GameType.UltimateHoldem,
+  ultimateholdem_check: GameType.UltimateHoldem,
+  ultimateholdem_fold: GameType.UltimateHoldem,
+  faucet_claim: null,
+} as const satisfies Record<OutboundMessage['type'], GameType | null>;
+
+export function getOutboundMessageGameType(type: OutboundMessage['type']): GameType | null {
+  return OUTBOUND_MESSAGE_GAME_TYPES[type] ?? null;
+}
 
 /**
  * Validates a raw WebSocket message and returns the parsed result or null

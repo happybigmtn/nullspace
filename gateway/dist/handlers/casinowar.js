@@ -13,8 +13,7 @@ export class CasinoWarHandler extends GameHandler {
         super(GameType.CasinoWar);
     }
     async handleMessage(ctx, msg) {
-        const msgType = msg.type;
-        switch (msgType) {
+        switch (msg.type) {
             case 'casinowar_deal':
             case 'casino_war_deal':
                 return this.handleDeal(ctx, msg);
@@ -27,41 +26,28 @@ export class CasinoWarHandler extends GameHandler {
             default:
                 return {
                     success: false,
-                    error: createError(ErrorCodes.INVALID_MESSAGE, `Unknown casinowar message: ${msgType}`),
+                    error: createError(ErrorCodes.INVALID_MESSAGE, `Unknown casinowar message: ${msg.type}`),
                 };
         }
     }
     async handleDeal(ctx, msg) {
         const amount = msg.amount;
-        const tieBet = typeof msg.tieBet === 'number'
-            ? msg.tieBet
-            : typeof msg.tieBetAmount === 'number'
-                ? msg.tieBetAmount
-                : 0;
-        if (typeof amount !== 'number' || amount <= 0) {
-            return {
-                success: false,
-                error: createError(ErrorCodes.INVALID_BET, 'Invalid bet amount'),
-            };
-        }
-        if (typeof tieBet !== 'number' || tieBet < 0) {
-            return {
-                success: false,
-                error: createError(ErrorCodes.INVALID_BET, 'Invalid tie bet amount'),
-            };
-        }
+        const tieBet = msg.tieBet ?? 0;
         const gameSessionId = generateSessionId(ctx.session.publicKey, ctx.session.gameSessionCounter++);
         const startResult = await this.startGame(ctx, BigInt(amount), gameSessionId);
         if (!startResult.success) {
             return startResult;
         }
-        // Deal immediately (atomic deal if tie bet is set)
-        let dealPayload = new Uint8Array([SharedCasinoWarMove.Play]);
         if (tieBet > 0) {
-            dealPayload = new Uint8Array(9);
-            dealPayload[0] = 4; // atomic deal opcode for tie bet
-            new DataView(dealPayload.buffer).setBigUint64(1, BigInt(tieBet), false);
+            const tiePayload = new Uint8Array(9);
+            tiePayload[0] = SharedCasinoWarMove.SetTieBet;
+            new DataView(tiePayload.buffer).setBigUint64(1, BigInt(tieBet), false);
+            const tieResult = await this.makeMove(ctx, tiePayload);
+            if (!tieResult.success) {
+                return tieResult;
+            }
         }
+        const dealPayload = new Uint8Array([SharedCasinoWarMove.Play]);
         const dealResult = await this.makeMove(ctx, dealPayload);
         if (!dealResult.success) {
             return dealResult;

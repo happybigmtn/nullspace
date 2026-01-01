@@ -3,21 +3,9 @@ import path from 'node:path';
 import { ethers } from 'ethers';
 import keccak256 from 'keccak256';
 import { MerkleTree } from 'merkletreejs';
+import env from '../src/utils/env.cjs';
 
-function envString(key, fallback = '') {
-  const value = process.env[key];
-  return value && value.length > 0 ? value : fallback;
-}
-
-function envBigInt(key, fallback) {
-  const value = process.env[key];
-  if (!value) return fallback;
-  try {
-    return BigInt(value);
-  } catch {
-    return fallback;
-  }
-}
+const { envString, envBigInt } = env;
 
 function normalizeAddress(value) {
   if (!value) return null;

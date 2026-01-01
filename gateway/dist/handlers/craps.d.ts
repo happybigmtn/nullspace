@@ -9,10 +9,10 @@
  * Each bet is 10 bytes: [bet_type:u8, target:u8, amount:u64 BE]
  */
 import { GameHandler, type HandlerContext, type HandleResult } from './base.js';
+import type { OutboundMessage } from '@nullspace/protocol/mobile';
 export declare class CrapsHandler extends GameHandler {
     constructor();
-    handleMessage(ctx: HandlerContext, msg: Record<string, unknown>): Promise<HandleResult>;
+    handleMessage(ctx: HandlerContext, msg: OutboundMessage): Promise<HandleResult>;
     private handleBet;
-    private handleRoll;
 }
 //# sourceMappingURL=craps.d.ts.map

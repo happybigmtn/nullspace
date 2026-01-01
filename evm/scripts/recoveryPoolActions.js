@@ -1,16 +1,7 @@
-const fs = require('node:fs');
-const path = require('node:path');
-const { ethers, network } = require('hardhat');
+const { ethers } = require('hardhat');
 const { erc20Abi } = require('../src/abis/erc20');
 const { recoveryPoolAbi } = require('../src/abis/recoveryPool');
-
-function loadDeployments() {
-  const deploymentsPath = path.resolve('deployments', `${network.name}.json`);
-  if (!fs.existsSync(deploymentsPath)) {
-    throw new Error(`Missing deployments file at ${deploymentsPath}`);
-  }
-  return JSON.parse(fs.readFileSync(deploymentsPath, 'utf8'));
-}
+const { loadDeployments } = require('../src/utils/deployments.cjs');
 
 function parseArgs() {
   const args = process.argv.slice(2);

@@ -8,9 +8,10 @@
  * 4. Reveal move (4) → Complete
  */
 import { GameHandler, type HandlerContext, type HandleResult } from './base.js';
+import type { OutboundMessage } from '@nullspace/protocol/mobile';
 export declare class ThreeCardPokerHandler extends GameHandler {
     constructor();
-    handleMessage(ctx: HandlerContext, msg: Record<string, unknown>): Promise<HandleResult>;
+    handleMessage(ctx: HandlerContext, msg: OutboundMessage): Promise<HandleResult>;
     private handleDeal;
     private handlePlay;
     private handleFold;

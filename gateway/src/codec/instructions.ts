@@ -7,7 +7,8 @@
  */
 import { HiLoMove } from '@nullspace/constants';
 import { InstructionTag, GameType, PlayerAction } from './constants.js';
-import { encodeBlackjackMove, type BlackjackMoveAction } from '@nullspace/protocol/encode';
+import { encodeGameMovePayload } from '@nullspace/protocol';
+import type { BlackjackMoveAction } from '@nullspace/protocol/encode';
 
 /**
  * CasinoRegister - Register a new casino player
@@ -114,7 +115,10 @@ export function encodeCasinoJoinTournament(tournamentId: bigint): Uint8Array {
  * Just a single byte for the action
  */
 export function buildBlackjackPayload(move: BlackjackMoveAction): Uint8Array {
-  return encodeBlackjackMove(move);
+  return encodeGameMovePayload({
+    game: 'blackjack',
+    move,
+  });
 }
 
 /**

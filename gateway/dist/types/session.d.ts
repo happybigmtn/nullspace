@@ -38,8 +38,18 @@ export interface Session {
     lastActivityAt: number;
     /** Last faucet claim timestamp (ms) */
     lastFaucetAt?: number;
+    /** Last bet amount (for analytics) */
+    lastGameBet?: bigint;
+    /** Balance before current game started (for analytics) */
+    lastGameStartChips?: bigint;
+    /** Timestamp when game started (ms) */
+    lastGameStartedAt?: number;
     /** WebSocket client for backend updates (optional, created after registration) */
     updatesClient?: UpdatesClient;
+    /** WebSocket client for session-scoped updates (optional, created per game) */
+    sessionUpdatesClient?: UpdatesClient;
+    /** Session ID currently bound to sessionUpdatesClient */
+    sessionUpdatesSessionId?: bigint;
     /** Periodic balance refresh interval (optional) */
     balanceRefreshIntervalId?: ReturnType<typeof setInterval>;
 }

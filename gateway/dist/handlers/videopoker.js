@@ -12,8 +12,7 @@ export class VideoPokerHandler extends GameHandler {
         super(GameType.VideoPoker);
     }
     async handleMessage(ctx, msg) {
-        const msgType = msg.type;
-        switch (msgType) {
+        switch (msg.type) {
             case 'videopoker_deal':
             case 'video_poker_deal':
                 return this.handleDeal(ctx, msg);
@@ -23,38 +22,17 @@ export class VideoPokerHandler extends GameHandler {
             default:
                 return {
                     success: false,
-                    error: createError(ErrorCodes.INVALID_MESSAGE, `Unknown videopoker message: ${msgType}`),
+                    error: createError(ErrorCodes.INVALID_MESSAGE, `Unknown videopoker message: ${msg.type}`),
                 };
         }
     }
     async handleDeal(ctx, msg) {
         const amount = msg.amount;
-        if (typeof amount !== 'number' || amount <= 0) {
-            return {
-                success: false,
-                error: createError(ErrorCodes.INVALID_BET, 'Invalid bet amount'),
-            };
-        }
         const gameSessionId = generateSessionId(ctx.session.publicKey, ctx.session.gameSessionCounter++);
         return this.startGame(ctx, BigInt(amount), gameSessionId);
     }
     async handleHold(ctx, msg) {
-        // Accept both 'holds' (gateway canonical) and 'held' (mobile app)
-        const holds = (msg.holds ?? msg.held);
-        if (!holds || !Array.isArray(holds) || holds.length !== 5) {
-            return {
-                success: false,
-                error: createError(ErrorCodes.INVALID_BET, 'Must specify 5 hold values'),
-            };
-        }
-        for (const hold of holds) {
-            if (typeof hold !== 'boolean') {
-                return {
-                    success: false,
-                    error: createError(ErrorCodes.INVALID_BET, 'Hold values must be booleans'),
-                };
-            }
-        }
+        const holds = msg.type === 'video_poker_draw' ? msg.held : msg.holds;
         const payload = buildVideoPokerPayload(holds);
         return this.makeMove(ctx, payload);
     }

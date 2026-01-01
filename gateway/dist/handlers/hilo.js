@@ -8,15 +8,13 @@ import { GameHandler } from './base.js';
 import { GameType, buildHiLoPayload } from '../codec/index.js';
 import { generateSessionId } from '../codec/transactions.js';
 import { ErrorCodes, createError } from '../types/errors.js';
-// Import shared HiLoMove from @nullspace/constants
 import { HiLoMove as SharedHiLoMove } from '@nullspace/constants';
 export class HiLoHandler extends GameHandler {
     constructor() {
         super(GameType.HiLo);
     }
     async handleMessage(ctx, msg) {
-        const msgType = msg.type;
-        switch (msgType) {
+        switch (msg.type) {
             case 'hilo_deal':
                 return this.handleDeal(ctx, msg);
             case 'hilo_bet':
@@ -33,18 +31,12 @@ export class HiLoHandler extends GameHandler {
             default:
                 return {
                     success: false,
-                    error: createError(ErrorCodes.INVALID_MESSAGE, `Unknown hilo message: ${msgType}`),
+                    error: createError(ErrorCodes.INVALID_MESSAGE, `Unknown hilo message: ${msg.type}`),
                 };
         }
     }
     async handleDeal(ctx, msg) {
         const amount = msg.amount;
-        if (typeof amount !== 'number' || amount <= 0) {
-            return {
-                success: false,
-                error: createError(ErrorCodes.INVALID_BET, 'Invalid bet amount'),
-            };
-        }
         const gameSessionId = generateSessionId(ctx.session.publicKey, ctx.session.gameSessionCounter++);
         return this.startGame(ctx, BigInt(amount), gameSessionId);
     }
@@ -55,18 +47,6 @@ export class HiLoHandler extends GameHandler {
     async handleBet(ctx, msg) {
         const amount = msg.amount;
         const choice = msg.choice;
-        if (typeof amount !== 'number' || amount <= 0) {
-            return {
-                success: false,
-                error: createError(ErrorCodes.INVALID_BET, 'Invalid bet amount'),
-            };
-        }
-        if (!['higher', 'lower'].includes(choice)) {
-            return {
-                success: false,
-                error: createError(ErrorCodes.INVALID_MESSAGE, 'Invalid choice: must be higher or lower'),
-            };
-        }
         const gameSessionId = generateSessionId(ctx.session.publicKey, ctx.session.gameSessionCounter++);
         // Start game on-chain
         const startResult = await this.startGame(ctx, BigInt(amount), gameSessionId);

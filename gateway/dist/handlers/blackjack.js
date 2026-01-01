@@ -35,8 +35,7 @@ export class BlackjackHandler extends GameHandler {
         super(GameType.Blackjack);
     }
     async handleMessage(ctx, msg) {
-        const msgType = msg.type;
-        switch (msgType) {
+        switch (msg.type) {
             case 'blackjack_deal':
                 return this.handleDeal(ctx, msg);
             case 'blackjack_hit':
@@ -47,34 +46,16 @@ export class BlackjackHandler extends GameHandler {
                 return this.handleDouble(ctx);
             case 'blackjack_split':
                 return this.handleSplit(ctx);
-            case 'blackjack_reveal':
-                return this.handleReveal(ctx);
             default:
                 return {
                     success: false,
-                    error: createError(ErrorCodes.INVALID_MESSAGE, `Unknown blackjack message: ${msgType}`),
+                    error: createError(ErrorCodes.INVALID_MESSAGE, `Unknown blackjack message: ${msg.type}`),
                 };
         }
     }
     async handleDeal(ctx, msg) {
         const amount = msg.amount;
-        const sideBet21Plus3 = typeof msg.sideBet21Plus3 === 'number'
-            ? msg.sideBet21Plus3
-            : typeof msg.sideBet21p3 === 'number'
-                ? msg.sideBet21p3
-                : 0;
-        if (typeof amount !== 'number' || amount <= 0) {
-            return {
-                success: false,
-                error: createError(ErrorCodes.INVALID_BET, 'Invalid bet amount'),
-            };
-        }
-        if (typeof sideBet21Plus3 !== 'number' || sideBet21Plus3 < 0) {
-            return {
-                success: false,
-                error: createError(ErrorCodes.INVALID_BET, 'Invalid 21+3 bet amount'),
-            };
-        }
+        const sideBet21Plus3 = msg.sideBet21Plus3 ?? msg.sideBet21p3 ?? 0;
         const gameSessionId = generateSessionId(ctx.session.publicKey, ctx.session.gameSessionCounter++);
         // Step 1: Start game (enters Betting stage)
         const startResult = await this.startGame(ctx, BigInt(amount), gameSessionId);
@@ -140,10 +121,6 @@ export class BlackjackHandler extends GameHandler {
     async handleSplit(ctx) {
         const payload = buildBlackjackPayload('split');
         return this.makeMove(ctx, payload);
-    }
-    async handleReveal(ctx) {
-        const revealPayload = new Uint8Array([BlackjackMove.Reveal]);
-        return this.makeMove(ctx, revealPayload);
     }
 }
 //# sourceMappingURL=blackjack.js.map

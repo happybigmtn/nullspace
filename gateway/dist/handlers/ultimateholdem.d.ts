@@ -10,9 +10,10 @@
  * 6. Reveal (7) → Showdown (Complete)
  */
 import { GameHandler, type HandlerContext, type HandleResult } from './base.js';
+import type { OutboundMessage } from '@nullspace/protocol/mobile';
 export declare class UltimateHoldemHandler extends GameHandler {
     constructor();
-    handleMessage(ctx: HandlerContext, msg: Record<string, unknown>): Promise<HandleResult>;
+    handleMessage(ctx: HandlerContext, msg: OutboundMessage): Promise<HandleResult>;
     private handleDeal;
     private handleBet;
     private handleCheck;

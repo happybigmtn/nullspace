@@ -13,7 +13,6 @@ import { GameHandler } from './base.js';
 import { GameType } from '../codec/index.js';
 import { generateSessionId } from '../codec/transactions.js';
 import { ErrorCodes, createError } from '../types/errors.js';
-// Import shared UltimateHoldemMove from @nullspace/constants
 import { UltimateHoldemMove as SharedUltimateHoldemMove } from '@nullspace/constants';
 /**
  * Ultimate Holdem action codes matching execution/src/casino/ultimate_holdem.rs
@@ -25,8 +24,7 @@ export class UltimateHoldemHandler extends GameHandler {
         super(GameType.UltimateHoldem);
     }
     async handleMessage(ctx, msg) {
-        const msgType = msg.type;
-        switch (msgType) {
+        switch (msg.type) {
             case 'ultimateholdem_deal':
             case 'ultimate_tx_deal':
                 return this.handleDeal(ctx, msg);
@@ -42,56 +40,16 @@ export class UltimateHoldemHandler extends GameHandler {
             default:
                 return {
                     success: false,
-                    error: createError(ErrorCodes.INVALID_MESSAGE, `Unknown ultimateholdem message: ${msgType}`),
+                    error: createError(ErrorCodes.INVALID_MESSAGE, `Unknown ultimateholdem message: ${msg.type}`),
                 };
         }
     }
     async handleDeal(ctx, msg) {
-        const ante = typeof msg.ante === 'number' ? msg.ante : msg.anteBet;
-        const blind = typeof msg.blind === 'number' ? msg.blind : msg.blindBet;
-        const trips = (typeof msg.trips === 'number' ? msg.trips : msg.tripsBet);
-        const sixCard = typeof msg.sixCard === 'number'
-            ? msg.sixCard
-            : typeof msg.sixCardBonus === 'number'
-                ? msg.sixCardBonus
-                : typeof msg.sixCardBet === 'number'
-                    ? msg.sixCardBet
-                    : 0;
-        const progressive = typeof msg.progressive === 'number'
-            ? msg.progressive
-            : typeof msg.progressiveBet === 'number'
-                ? msg.progressiveBet
-                : 0;
-        if (typeof ante !== 'number' || ante <= 0) {
-            return {
-                success: false,
-                error: createError(ErrorCodes.INVALID_BET, 'Invalid ante amount'),
-            };
-        }
-        if (typeof blind !== 'number' || blind <= 0) {
-            return {
-                success: false,
-                error: createError(ErrorCodes.INVALID_BET, 'Invalid blind amount'),
-            };
-        }
-        if (typeof trips === 'number' && trips < 0) {
-            return {
-                success: false,
-                error: createError(ErrorCodes.INVALID_BET, 'Invalid trips amount'),
-            };
-        }
-        if (typeof sixCard !== 'number' || sixCard < 0) {
-            return {
-                success: false,
-                error: createError(ErrorCodes.INVALID_BET, 'Invalid six-card amount'),
-            };
-        }
-        if (typeof progressive !== 'number' || progressive < 0) {
-            return {
-                success: false,
-                error: createError(ErrorCodes.INVALID_BET, 'Invalid progressive amount'),
-            };
-        }
+        const ante = msg.ante;
+        const blind = msg.blind;
+        const trips = msg.trips ?? 0;
+        const sixCard = msg.sixCard ?? msg.sixCardBonus ?? 0;
+        const progressive = msg.progressive ?? 0;
         if (progressive !== 0 && progressive !== 1) {
             return {
                 success: false,
@@ -135,27 +93,13 @@ export class UltimateHoldemHandler extends GameHandler {
     }
     async handleBet(ctx, msg) {
         const multiplier = msg.multiplier;
-        // Map multiplier to action code
-        let action;
-        switch (multiplier) {
-            case 4:
-                action = UthAction.Bet4x;
-                break;
-            case 3:
-                action = UthAction.Bet3x;
-                break;
-            case 2:
-                action = UthAction.Bet2x;
-                break;
-            case 1:
-                action = UthAction.Bet1x;
-                break;
-            default:
-                return {
-                    success: false,
-                    error: createError(ErrorCodes.INVALID_BET, 'Invalid bet multiplier (must be 1, 2, 3, or 4)'),
-                };
-        }
+        const action = multiplier === 4
+            ? UthAction.Bet4x
+            : multiplier === 3
+                ? UthAction.Bet3x
+                : multiplier === 2
+                    ? UthAction.Bet2x
+                    : UthAction.Bet1x;
         const payload = new Uint8Array([action]);
         const betResult = await this.makeMove(ctx, payload);
         if (!betResult.success) {

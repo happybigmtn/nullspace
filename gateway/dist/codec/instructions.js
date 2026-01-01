@@ -7,7 +7,7 @@
  */
 import { HiLoMove } from '@nullspace/constants';
 import { InstructionTag } from './constants.js';
-import { encodeBlackjackMove } from '@nullspace/protocol/encode';
+import { encodeGameMovePayload } from '@nullspace/protocol';
 /**
  * CasinoRegister - Register a new casino player
  * Binary: [10] [nameLen:u32 BE] [nameBytes...]
@@ -87,7 +87,10 @@ export function encodeCasinoJoinTournament(tournamentId) {
  * Just a single byte for the action
  */
 export function buildBlackjackPayload(move) {
-    return encodeBlackjackMove(move);
+    return encodeGameMovePayload({
+        game: 'blackjack',
+        move,
+    });
 }
 /**
  * Hi-Lo move payload (from execution/src/casino/hilo.rs)

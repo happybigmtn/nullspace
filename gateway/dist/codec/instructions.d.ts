@@ -1,5 +1,5 @@
 import { GameType, PlayerAction } from './constants.js';
-import { type BlackjackMoveAction } from '@nullspace/protocol/encode';
+import type { BlackjackMoveAction } from '@nullspace/protocol/encode';
 /**
  * CasinoRegister - Register a new casino player
  * Binary: [10] [nameLen:u32 BE] [nameBytes...]

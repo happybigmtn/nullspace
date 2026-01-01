@@ -5,64 +5,12 @@ const { ccaAbi } = require('../src/abis/cca');
 const { erc20Abi } = require('../src/abis/erc20');
 const { permit2Abi } = require('../src/abis/permit2');
 const { DEFAULT_ADDRESSES } = require('../src/config/addresses');
+const { envString, envNumber, envBigInt } = require('../src/utils/env.cjs');
+const { loadDeployments } = require('../src/utils/deployments.cjs');
+const { loadPrivateKeysFromFile, deriveKeysFromMnemonic } = require('../src/utils/bidders.cjs');
 
 const MAX_UINT160 = (1n << 160n) - 1n;
 const MAX_UINT256 = (1n << 256n) - 1n;
-
-function envString(key, fallback = '') {
-  const value = process.env[key];
-  return value && value.length > 0 ? value : fallback;
-}
-
-function envNumber(key, fallback) {
-  const value = process.env[key];
-  if (!value) return fallback;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-function envBigInt(key, fallback) {
-  const value = process.env[key];
-  if (!value) return fallback;
-  return BigInt(value);
-}
-
-function loadDeployments() {
-  const deploymentsPath = path.resolve('deployments', `${network.name}.json`);
-  if (!fs.existsSync(deploymentsPath)) {
-    throw new Error(`Missing deployments file at ${deploymentsPath}`);
-  }
-  return JSON.parse(fs.readFileSync(deploymentsPath, 'utf8'));
-}
-
-function loadPrivateKeysFromFile(filePath) {
-  if (!filePath) return [];
-  if (!fs.existsSync(filePath)) {
-    throw new Error(`BIDDER_KEYS_FILE not found: ${filePath}`);
-  }
-  const raw = fs.readFileSync(filePath, 'utf8').trim();
-  if (!raw) return [];
-  if (raw.startsWith('[')) {
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) {
-      return parsed.map((key) => String(key));
-    }
-    if (Array.isArray(parsed?.bidders)) {
-      return parsed.bidders.map((bidder) => bidder.privateKey);
-    }
-  }
-  return raw.split(',').map((key) => key.trim()).filter((key) => key.length > 0);
-}
-
-function deriveKeysFromMnemonic(mnemonic, count) {
-  const root = ethers.HDNodeWallet.fromPhrase(mnemonic);
-  const keys = [];
-  for (let i = 0; i < count; i += 1) {
-    const wallet = root.derivePath(`m/44'/60'/0'/0/${i}`);
-    keys.push(wallet.privateKey);
-  }
-  return keys;
-}
 
 async function ensurePermit2Allowance(currency, permit2, owner, spender, amount, expirationDays) {
   const ownerAddress = await owner.getAddress();

@@ -8,7 +8,7 @@ import { GameHandler, type HandlerContext, type HandleResult } from './base.js';
 import { GameType, buildHiLoPayload } from '../codec/index.js';
 import { generateSessionId } from '../codec/transactions.js';
 import { ErrorCodes, createError } from '../types/errors.js';
-// Import shared HiLoMove from @nullspace/constants
+import type { HiLoBetRequest, HiLoDealRequest, OutboundMessage } from '@nullspace/protocol/mobile';
 import { HiLoMove as SharedHiLoMove } from '@nullspace/constants';
 
 export class HiLoHandler extends GameHandler {
@@ -18,11 +18,9 @@ export class HiLoHandler extends GameHandler {
 
   async handleMessage(
     ctx: HandlerContext,
-    msg: Record<string, unknown>
+    msg: OutboundMessage
   ): Promise<HandleResult> {
-    const msgType = msg.type as string;
-
-    switch (msgType) {
+    switch (msg.type) {
       case 'hilo_deal':
         return this.handleDeal(ctx, msg);
       case 'hilo_bet':
@@ -39,22 +37,16 @@ export class HiLoHandler extends GameHandler {
       default:
         return {
           success: false,
-          error: createError(ErrorCodes.INVALID_MESSAGE, `Unknown hilo message: ${msgType}`),
+          error: createError(ErrorCodes.INVALID_MESSAGE, `Unknown hilo message: ${msg.type}`),
         };
     }
   }
 
   private async handleDeal(
     ctx: HandlerContext,
-    msg: Record<string, unknown>
+    msg: HiLoDealRequest
   ): Promise<HandleResult> {
     const amount = msg.amount;
-    if (typeof amount !== 'number' || amount <= 0) {
-      return {
-        success: false,
-        error: createError(ErrorCodes.INVALID_BET, 'Invalid bet amount'),
-      };
-    }
 
     const gameSessionId = generateSessionId(
       ctx.session.publicKey,
@@ -70,24 +62,10 @@ export class HiLoHandler extends GameHandler {
    */
   private async handleBet(
     ctx: HandlerContext,
-    msg: Record<string, unknown>
+    msg: HiLoBetRequest
   ): Promise<HandleResult> {
     const amount = msg.amount;
-    const choice = msg.choice as string;
-
-    if (typeof amount !== 'number' || amount <= 0) {
-      return {
-        success: false,
-        error: createError(ErrorCodes.INVALID_BET, 'Invalid bet amount'),
-      };
-    }
-
-    if (!['higher', 'lower'].includes(choice)) {
-      return {
-        success: false,
-        error: createError(ErrorCodes.INVALID_MESSAGE, 'Invalid choice: must be higher or lower'),
-      };
-    }
+    const choice = msg.choice;
 
     const gameSessionId = generateSessionId(
       ctx.session.publicKey,
@@ -101,7 +79,7 @@ export class HiLoHandler extends GameHandler {
     }
 
     // Make the guess - base handler waits for real CasinoGameMoved/Completed events
-    const payload = buildHiLoPayload(choice as 'higher' | 'lower');
+    const payload = buildHiLoPayload(choice);
     return this.makeMove(ctx, payload);
   }
 

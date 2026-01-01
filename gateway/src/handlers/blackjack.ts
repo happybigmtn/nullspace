@@ -15,6 +15,7 @@ import { GameType, buildBlackjackPayload } from '../codec/index.js';
 import { generateSessionId } from '../codec/transactions.js';
 import { ErrorCodes, createError } from '../types/errors.js';
 import { BlackjackMove as SharedBlackjackMove } from '@nullspace/constants';
+import type { BlackjackDealRequest, OutboundMessage } from '@nullspace/protocol/mobile';
 
 /**
  * Blackjack move codes matching execution/src/casino/blackjack.rs
@@ -39,11 +40,9 @@ export class BlackjackHandler extends GameHandler {
 
   async handleMessage(
     ctx: HandlerContext,
-    msg: Record<string, unknown>
+    msg: OutboundMessage
   ): Promise<HandleResult> {
-    const msgType = msg.type as string;
-
-    switch (msgType) {
+    switch (msg.type) {
       case 'blackjack_deal':
         return this.handleDeal(ctx, msg);
       case 'blackjack_hit':
@@ -54,39 +53,21 @@ export class BlackjackHandler extends GameHandler {
         return this.handleDouble(ctx);
       case 'blackjack_split':
         return this.handleSplit(ctx);
-      case 'blackjack_reveal':
-        return this.handleReveal(ctx);
       default:
         return {
           success: false,
-          error: createError(ErrorCodes.INVALID_MESSAGE, `Unknown blackjack message: ${msgType}`),
+          error: createError(ErrorCodes.INVALID_MESSAGE, `Unknown blackjack message: ${msg.type}`),
         };
     }
   }
 
   private async handleDeal(
     ctx: HandlerContext,
-    msg: Record<string, unknown>
+    msg: BlackjackDealRequest
   ): Promise<HandleResult> {
     const amount = msg.amount;
     const sideBet21Plus3 =
-      typeof msg.sideBet21Plus3 === 'number'
-        ? msg.sideBet21Plus3
-        : typeof msg.sideBet21p3 === 'number'
-          ? msg.sideBet21p3
-          : 0;
-    if (typeof amount !== 'number' || amount <= 0) {
-      return {
-        success: false,
-        error: createError(ErrorCodes.INVALID_BET, 'Invalid bet amount'),
-      };
-    }
-    if (typeof sideBet21Plus3 !== 'number' || sideBet21Plus3 < 0) {
-      return {
-        success: false,
-        error: createError(ErrorCodes.INVALID_BET, 'Invalid 21+3 bet amount'),
-      };
-    }
+      msg.sideBet21Plus3 ?? msg.sideBet21p3 ?? 0;
 
     const gameSessionId = generateSessionId(
       ctx.session.publicKey,
@@ -170,10 +151,5 @@ export class BlackjackHandler extends GameHandler {
   private async handleSplit(ctx: HandlerContext): Promise<HandleResult> {
     const payload = buildBlackjackPayload('split');
     return this.makeMove(ctx, payload);
-  }
-
-  private async handleReveal(ctx: HandlerContext): Promise<HandleResult> {
-    const revealPayload = new Uint8Array([BlackjackMove.Reveal]);
-    return this.makeMove(ctx, revealPayload);
   }
 }

@@ -45,7 +45,7 @@ export function encodeUpdatesFilter(filterType, data) {
             buffer = new Uint8Array(1 + 8);
             buffer[0] = 2;
             const view = new DataView(buffer.buffer);
-            view.setBigUint64(1, data, true); // little-endian
+            view.setBigUint64(1, data, false); // big-endian (commonware-codec)
             break;
         default:
             throw new Error(`Unknown filter type: ${filterType}`);

@@ -6,6 +6,7 @@ import type { GameCodec } from './types.js';
 export const GAME_CODECS = [blackjackCodec, rouletteCodec, crapsCodec] as const;
 
 export type GatewayGameMove = BlackjackMoveMessage | RouletteMoveMessage | CrapsMoveMessage;
+export type GatewayGameMovePayload = Omit<GatewayGameMove, 'type' | 'sessionId' | 'requestId'>;
 
 export const GAME_MOVE_SCHEMAS = GAME_CODECS.flatMap((codec) => codec.moveSchemas);
 
@@ -26,8 +27,17 @@ export function encodeGameMove(message: GatewayGameMove): Uint8Array {
   }
 }
 
+export function encodeGameMovePayload(message: GatewayGameMovePayload): Uint8Array {
+  return encodeGameMove({
+    type: 'game_move',
+    sessionId: '0',
+    ...message,
+  } as GatewayGameMove);
+}
+
 export { blackjackMoveSchema, rouletteMoveSchema, crapsMoveSchema };
 export * from './blackjack.js';
 export * from './roulette.js';
 export * from './craps.js';
+export * from './atomic.js';
 export * from './types.js';

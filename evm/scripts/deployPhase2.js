@@ -1,7 +1,7 @@
-const fs = require('node:fs');
-const path = require('node:path');
 const { ethers, network } = require('hardhat');
 const { buildAuctionParameters } = require('../src/auction/params');
+const { envString, envNumber } = require('../src/utils/env.cjs');
+const { saveDeployments } = require('../src/utils/deployments.cjs');
 const { virtualLbpFactoryAbi } = require('../src/abis/virtualLbpFactory');
 const { distributionContractAbi } = require('../src/abis/distributionContract');
 const { erc20Abi } = require('../src/abis/erc20');
@@ -22,18 +22,6 @@ const {
 
 const Q96 = 2n ** 96n;
 const ACTION_MSG_SENDER = '0x0000000000000000000000000000000000000001';
-
-function envString(key, fallback = '') {
-  const value = process.env[key];
-  return value && value.length > 0 ? value : fallback;
-}
-
-function envNumber(key, fallback) {
-  const value = process.env[key];
-  if (!value) return fallback;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
 
 function floorPriceQ96(currencyDecimals) {
   const explicit = envString('AUCTION_FLOOR_PRICE_Q96');
@@ -289,10 +277,7 @@ async function main() {
     }
   };
 
-  const deploymentsDir = path.resolve('deployments');
-  fs.mkdirSync(deploymentsDir, { recursive: true });
-  const outPath = path.join(deploymentsDir, `${network.name}.json`);
-  fs.writeFileSync(outPath, JSON.stringify(output, null, 2));
+  const outPath = saveDeployments(output);
 
   const recoveryTarget = 20_000_000n * USDT_UNIT;
   console.log('Deployment complete.');

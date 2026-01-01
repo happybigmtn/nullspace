@@ -1,6 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ethers } from 'ethers';
+import bidders from '../src/utils/bidders.cjs';
+
+const { deriveKeysFromMnemonic } = bidders;
 
 const count = Number(process.env.BIDDER_COUNT ?? 100);
 if (!Number.isFinite(count) || count <= 0) {
@@ -8,17 +11,15 @@ if (!Number.isFinite(count) || count <= 0) {
 }
 
 const mnemonic = process.env.BIDDER_MNEMONIC ?? ethers.Wallet.createRandom().mnemonic.phrase;
-const node = ethers.HDNodeWallet.fromPhrase(mnemonic);
-const bidders = [];
-
-for (let i = 0; i < count; i += 1) {
-  const wallet = node.derivePath(`m/44'/60'/0'/0/${i}`);
-  bidders.push({
-    index: i,
+const keys = deriveKeysFromMnemonic(mnemonic, count);
+const bidders = keys.map((key, index) => {
+  const wallet = new ethers.Wallet(key);
+  return {
+    index,
     address: wallet.address,
-    privateKey: wallet.privateKey
-  });
-}
+    privateKey: key
+  };
+});
 
 const outDir = path.resolve('data');
 fs.mkdirSync(outDir, { recursive: true });

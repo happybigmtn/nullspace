@@ -145,6 +145,7 @@ Understand the rules of the game: protocol messages, state transitions, and core
 - [x] packages/protocol/src/games/index.ts
 - [x] packages/protocol/src/games/roulette.ts
 - [x] packages/protocol/src/games/types.ts
+- [x] packages/protocol/src/games/atomic.ts
 - [x] packages/protocol/src/index.ts
 - [x] packages/protocol/src/mobile.ts
 - [x] packages/protocol/src/schema/base.ts

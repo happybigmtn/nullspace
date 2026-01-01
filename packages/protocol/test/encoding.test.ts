@@ -3,9 +3,13 @@ import {
   encodeBlackjackMove,
   encodeRouletteMove,
   encodeRouletteBet,
+  encodeRouletteAtomicBatch,
   encodeCrapsMove,
   encodeCrapsPlaceBet,
   encodeCrapsAddOdds,
+  encodeCrapsAtomicBatch,
+  encodeBaccaratAtomicBatch,
+  encodeSicBoAtomicBatch,
 } from '../src/encode.js';
 import { readFileSync } from 'fs';
 
@@ -59,5 +63,52 @@ describe('protocol encode golden vectors', () => {
     for (const { amount, hex } of fixtures.crapsAddOdds) {
       expect(toHex(encodeCrapsAddOdds(BigInt(amount)))).toBe(hex);
     }
+  });
+
+  it('encodes baccarat atomic batch payloads', () => {
+    const payload = encodeBaccaratAtomicBatch([
+      { type: 'PLAYER', amount: 5n },
+      { type: 'BANKER', amount: 10n },
+    ]);
+    expect(toHex(payload)).toBe('030200000000000000000501000000000000000a');
+  });
+
+  it('encodes roulette atomic batch payloads', () => {
+    const payload = encodeRouletteAtomicBatch([
+      { type: 'STRAIGHT', amount: 100n, number: 7 },
+      { type: 'RED', amount: 50n },
+    ]);
+    expect(toHex(payload)).toBe('04020007000000000000006401000000000000000032');
+  });
+
+  it('encodes craps atomic batch payloads', () => {
+    const payload = encodeCrapsAtomicBatch([
+      { type: 'PASS', amount: 10n },
+      { type: 'HARDWAY', amount: 25n, target: 4 },
+    ]);
+    expect(toHex(payload)).toBe('04020000000000000000000a08000000000000000019');
+  });
+
+  it('encodes sic bo atomic batch payloads', () => {
+    const payload = encodeSicBoAtomicBatch([
+      { type: 'BIG', amount: 100n },
+      { type: 'SUM', amount: 50n, target: 10 },
+    ]);
+    expect(toHex(payload)).toBe('030201000000000000000064070a0000000000000032');
+  });
+
+  it('rejects invalid atomic bet types', () => {
+    expect(() => encodeBaccaratAtomicBatch([{ type: 'INVALID', amount: 1n }])).toThrow(
+      'Invalid bet type: INVALID'
+    );
+    expect(() => encodeRouletteAtomicBatch([{ type: 'INVALID', amount: 1n }])).toThrow(
+      'Invalid bet type: INVALID'
+    );
+    expect(() => encodeCrapsAtomicBatch([{ type: 'INVALID', amount: 1n }])).toThrow(
+      'Invalid bet type: INVALID'
+    );
+    expect(() => encodeSicBoAtomicBatch([{ type: 'INVALID', amount: 1n }])).toThrow(
+      'Invalid bet type: INVALID'
+    );
   });
 });

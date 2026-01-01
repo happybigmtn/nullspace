@@ -11,14 +11,14 @@
  * The handler chains these automatically for smooth mobile UX.
  */
 import { GameHandler, type HandlerContext, type HandleResult } from './base.js';
+import type { OutboundMessage } from '@nullspace/protocol/mobile';
 export declare class BlackjackHandler extends GameHandler {
     constructor();
-    handleMessage(ctx: HandlerContext, msg: Record<string, unknown>): Promise<HandleResult>;
+    handleMessage(ctx: HandlerContext, msg: OutboundMessage): Promise<HandleResult>;
     private handleDeal;
     private handleHit;
     private handleStand;
     private handleDouble;
     private handleSplit;
-    private handleReveal;
 }
 //# sourceMappingURL=blackjack.d.ts.map

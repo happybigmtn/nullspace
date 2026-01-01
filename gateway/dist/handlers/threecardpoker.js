@@ -11,7 +11,6 @@ import { GameHandler } from './base.js';
 import { GameType } from '../codec/index.js';
 import { generateSessionId } from '../codec/transactions.js';
 import { ErrorCodes, createError } from '../types/errors.js';
-// Import shared ThreeCardMove from @nullspace/constants
 import { ThreeCardMove as SharedThreeCardMove } from '@nullspace/constants';
 /**
  * Three Card Poker move codes matching execution/src/casino/three_card.rs
@@ -23,8 +22,7 @@ export class ThreeCardPokerHandler extends GameHandler {
         super(GameType.ThreeCard);
     }
     async handleMessage(ctx, msg) {
-        const msgType = msg.type;
-        switch (msgType) {
+        switch (msg.type) {
             case 'threecardpoker_deal':
             case 'three_card_poker_deal':
                 return this.handleDeal(ctx, msg);
@@ -37,49 +35,15 @@ export class ThreeCardPokerHandler extends GameHandler {
             default:
                 return {
                     success: false,
-                    error: createError(ErrorCodes.INVALID_MESSAGE, `Unknown threecardpoker message: ${msgType}`),
+                    error: createError(ErrorCodes.INVALID_MESSAGE, `Unknown threecardpoker message: ${msg.type}`),
                 };
         }
     }
     async handleDeal(ctx, msg) {
-        const ante = typeof msg.ante === 'number' ? msg.ante : msg.anteBet;
-        const pairPlus = (typeof msg.pairPlus === 'number' ? msg.pairPlus : msg.pairPlusBet);
-        const sixCard = typeof msg.sixCard === 'number'
-            ? msg.sixCard
-            : typeof msg.sixCardBonus === 'number'
-                ? msg.sixCardBonus
-                : typeof msg.sixCardBet === 'number'
-                    ? msg.sixCardBet
-                    : 0;
-        const progressive = typeof msg.progressive === 'number'
-            ? msg.progressive
-            : typeof msg.progressiveBet === 'number'
-                ? msg.progressiveBet
-                : 0;
-        if (typeof ante !== 'number' || ante <= 0) {
-            return {
-                success: false,
-                error: createError(ErrorCodes.INVALID_BET, 'Invalid ante amount'),
-            };
-        }
-        if (typeof pairPlus === 'number' && pairPlus < 0) {
-            return {
-                success: false,
-                error: createError(ErrorCodes.INVALID_BET, 'Invalid Pair Plus amount'),
-            };
-        }
-        if (typeof sixCard !== 'number' || sixCard < 0) {
-            return {
-                success: false,
-                error: createError(ErrorCodes.INVALID_BET, 'Invalid Six Card amount'),
-            };
-        }
-        if (typeof progressive !== 'number' || progressive < 0) {
-            return {
-                success: false,
-                error: createError(ErrorCodes.INVALID_BET, 'Invalid progressive amount'),
-            };
-        }
+        const ante = msg.ante;
+        const pairPlus = msg.pairPlus ?? 0;
+        const sixCard = msg.sixCard ?? msg.sixCardBonus ?? 0;
+        const progressive = msg.progressive ?? 0;
         const gameSessionId = generateSessionId(ctx.session.publicKey, ctx.session.gameSessionCounter++);
         // Step 1: Start game with ante (pair plus placed via Deal payload)
         const startResult = await this.startGame(ctx, BigInt(ante), gameSessionId);

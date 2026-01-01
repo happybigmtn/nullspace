@@ -7,6 +7,13 @@ import { GameHandler, type HandlerContext, type HandleResult } from './base.js';
 import { GameType, buildVideoPokerPayload } from '../codec/index.js';
 import { generateSessionId } from '../codec/transactions.js';
 import { ErrorCodes, createError } from '../types/errors.js';
+import type {
+  OutboundMessage,
+  VideoPokerDealRequest,
+  VideoPokerDrawRequest,
+  VideoPokerLegacyDealRequest,
+  VideoPokerLegacyHoldRequest,
+} from '@nullspace/protocol/mobile';
 
 export class VideoPokerHandler extends GameHandler {
   constructor() {
@@ -15,11 +22,9 @@ export class VideoPokerHandler extends GameHandler {
 
   async handleMessage(
     ctx: HandlerContext,
-    msg: Record<string, unknown>
+    msg: OutboundMessage
   ): Promise<HandleResult> {
-    const msgType = msg.type as string;
-
-    switch (msgType) {
+    switch (msg.type) {
       case 'videopoker_deal':
       case 'video_poker_deal':
         return this.handleDeal(ctx, msg);
@@ -29,22 +34,16 @@ export class VideoPokerHandler extends GameHandler {
       default:
         return {
           success: false,
-          error: createError(ErrorCodes.INVALID_MESSAGE, `Unknown videopoker message: ${msgType}`),
+          error: createError(ErrorCodes.INVALID_MESSAGE, `Unknown videopoker message: ${msg.type}`),
         };
     }
   }
 
   private async handleDeal(
     ctx: HandlerContext,
-    msg: Record<string, unknown>
+    msg: VideoPokerDealRequest | VideoPokerLegacyDealRequest
   ): Promise<HandleResult> {
     const amount = msg.amount;
-    if (typeof amount !== 'number' || amount <= 0) {
-      return {
-        success: false,
-        error: createError(ErrorCodes.INVALID_BET, 'Invalid bet amount'),
-      };
-    }
 
     const gameSessionId = generateSessionId(
       ctx.session.publicKey,
@@ -56,27 +55,9 @@ export class VideoPokerHandler extends GameHandler {
 
   private async handleHold(
     ctx: HandlerContext,
-    msg: Record<string, unknown>
+    msg: VideoPokerDrawRequest | VideoPokerLegacyHoldRequest
   ): Promise<HandleResult> {
-    // Accept both 'holds' (gateway canonical) and 'held' (mobile app)
-    const holds = (msg.holds ?? msg.held) as boolean[] | undefined;
-
-    if (!holds || !Array.isArray(holds) || holds.length !== 5) {
-      return {
-        success: false,
-        error: createError(ErrorCodes.INVALID_BET, 'Must specify 5 hold values'),
-      };
-    }
-
-    for (const hold of holds) {
-      if (typeof hold !== 'boolean') {
-        return {
-          success: false,
-          error: createError(ErrorCodes.INVALID_BET, 'Hold values must be booleans'),
-        };
-      }
-    }
-
+    const holds = msg.type === 'video_poker_draw' ? msg.held : msg.holds;
     const payload = buildVideoPokerPayload(holds);
     return this.makeMove(ctx, payload);
   }

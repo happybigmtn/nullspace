@@ -9,15 +9,10 @@
  */
 import { GameHandler, type HandlerContext, type HandleResult } from './base.js';
 import { GameType } from '../codec/index.js';
-import { ROULETTE_BET_NAMES, encodeRouletteBet, type RouletteBetName } from '@nullspace/constants/bet-types';
 import { generateSessionId } from '../codec/transactions.js';
 import { ErrorCodes, createError } from '../types/errors.js';
-import { RouletteMove as SharedRouletteMove } from '@nullspace/constants';
-
-/**
- * Roulette action codes matching execution/src/casino/roulette.rs
- */
-const RouletteAction = SharedRouletteMove;
+import type { OutboundMessage, RouletteSpinRequest } from '@nullspace/protocol/mobile';
+import { encodeAtomicBatchPayload, type RouletteAtomicBetInput } from '@nullspace/protocol';
 
 export class RouletteHandler extends GameHandler {
   constructor() {
@@ -26,50 +21,30 @@ export class RouletteHandler extends GameHandler {
 
   async handleMessage(
     ctx: HandlerContext,
-    msg: Record<string, unknown>
+    msg: OutboundMessage
   ): Promise<HandleResult> {
-    const msgType = msg.type as string;
-
-    switch (msgType) {
+    switch (msg.type) {
       case 'roulette_spin':
         return this.handleSpin(ctx, msg);
       default:
         return {
           success: false,
-          error: createError(ErrorCodes.INVALID_MESSAGE, `Unknown roulette message: ${msgType}`),
+          error: createError(ErrorCodes.INVALID_MESSAGE, `Unknown roulette message: ${msg.type}`),
         };
     }
   }
 
   private async handleSpin(
     ctx: HandlerContext,
-    msg: Record<string, unknown>
+    msg: RouletteSpinRequest
   ): Promise<HandleResult> {
-    const bets = msg.bets as Array<{ type?: unknown; value?: unknown; number?: unknown; target?: unknown; amount?: unknown }> | undefined;
-
-    if (!bets || !Array.isArray(bets) || bets.length === 0) {
-      return {
-        success: false,
-        error: createError(ErrorCodes.INVALID_BET, 'No bets provided'),
-      };
-    }
-
-    // Validate bets
-    for (const bet of bets) {
-      const amount = bet.amount;
-      if (typeof amount !== 'number') {
-        return {
-          success: false,
-          error: createError(ErrorCodes.INVALID_BET, 'Invalid bet format'),
-        };
-      }
-      if (amount <= 0) {
-        return {
-          success: false,
-          error: createError(ErrorCodes.INVALID_BET, 'Bet amount must be positive'),
-        };
-      }
-    }
+    const bets: RouletteAtomicBetInput[] = msg.bets.map((bet) => ({
+      type: typeof bet.type === 'string' ? bet.type.toUpperCase() as RouletteAtomicBetInput['type'] : bet.type,
+      amount: BigInt(bet.amount),
+      target: bet.target,
+      number: bet.number,
+      value: bet.value,
+    }));
 
     const gameSessionId = generateSessionId(
       ctx.session.publicKey,
@@ -82,49 +57,15 @@ export class RouletteHandler extends GameHandler {
       return startResult;
     }
 
-    // Build atomic batch payload: [4, bet_count, bets...]
-    // Each bet is 10 bytes: [bet_type:u8, number:u8, amount:u64 BE]
-    const payload = new Uint8Array(2 + bets.length * 10);
-    const view = new DataView(payload.buffer);
-    payload[0] = RouletteAction.AtomicBatch;
-    payload[1] = bets.length;
-
-    let offset = 2;
-    for (const bet of bets) {
-      const amount = bet.amount as number;
-      const betType = bet.type;
-      const rawValue = bet.value ?? bet.number ?? bet.target ?? 0;
-
-      if (typeof betType !== 'number' && typeof betType !== 'string') {
-        return {
-          success: false,
-          error: createError(ErrorCodes.INVALID_BET, 'Invalid bet format'),
-        };
-      }
-
-      const encoded = typeof betType === 'string'
-        ? (() => {
-            const betKey = betType.toUpperCase() as RouletteBetName;
-            if (!ROULETTE_BET_NAMES.includes(betKey)) {
-              return null;
-            }
-            return encodeRouletteBet(betKey, typeof rawValue === 'number' ? rawValue : undefined);
-          })()
-        : { type: betType, value: typeof rawValue === 'number' ? rawValue : 0 };
-
-      if (!encoded) {
-        return {
-          success: false,
-          error: createError(ErrorCodes.INVALID_BET, `Invalid bet type: ${betType}`),
-        };
-      }
-
-      payload[offset] = encoded.type;
-      payload[offset + 1] = encoded.value;
-      view.setBigUint64(offset + 2, BigInt(amount), false); // BE
-      offset += 10;
+    try {
+      const payload = encodeAtomicBatchPayload('roulette', bets);
+      return this.makeMove(ctx, payload);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Invalid bet payload';
+      return {
+        success: false,
+        error: createError(ErrorCodes.INVALID_BET, message),
+      };
     }
-
-    return this.makeMove(ctx, payload);
   }
 }

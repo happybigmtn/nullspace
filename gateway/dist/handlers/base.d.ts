@@ -3,6 +3,7 @@
  */
 import type { Session } from '../types/session.js';
 import type { GameType } from '@nullspace/types';
+import type { OutboundMessage } from '@nullspace/protocol/mobile';
 import type { SubmitClient } from '../backend/http.js';
 import type { NonceManager } from '../session/nonce.js';
 import { type ErrorResponse } from '../types/errors.js';
@@ -32,7 +33,7 @@ export declare abstract class GameHandler {
     /**
      * Handle a message for this game type
      */
-    abstract handleMessage(ctx: HandlerContext, msg: Record<string, unknown>): Promise<HandleResult>;
+    abstract handleMessage(ctx: HandlerContext, msg: OutboundMessage): Promise<HandleResult>;
     /**
      * Start a new game and wait for on-chain game started event
      */
@@ -51,6 +52,8 @@ export declare abstract class GameHandler {
      * Wait for either a move or complete event
      */
     private waitForMoveOrComplete;
+    private ensureSessionUpdatesClient;
+    private clearSessionUpdatesClient;
     /**
      * Build response for game started event
      */

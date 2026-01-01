@@ -5,7 +5,28 @@
  * The on-chain Rust program validates and processes these moves.
  */
 
-import { BlackjackMove, RouletteMove, CrapsMove, CrapsBetType } from '@nullspace/constants';
+import {
+  BaccaratMove,
+  BlackjackMove,
+  CrapsMove,
+  CrapsBetType,
+  RouletteMove,
+  SicBoMove,
+} from '@nullspace/constants';
+import {
+  BACCARAT_BET_TYPES,
+  CRAPS_BET_TYPES,
+  ROULETTE_BET_NAMES,
+  SICBO_BET_TYPES,
+  encodeBaccaratBet as encodeBaccaratBetType,
+  encodeCrapsBet as encodeCrapsBetType,
+  encodeRouletteBet as encodeRouletteBetType,
+  encodeSicBoBet as encodeSicBoBetType,
+  type BaccaratBetName,
+  type CrapsBetName,
+  type RouletteBetName,
+  type SicBoBetName,
+} from '@nullspace/constants';
 import type { GameType } from '@nullspace/types';
 
 /** Valid blackjack move actions - exported for type-safe fixture typing */
@@ -214,6 +235,166 @@ export function encodeGameStart(
     view.setBigUint64(11 + i * 9, sb.amount, true);
   });
   return new Uint8Array(buffer);
+}
+
+export interface BaccaratAtomicBetInput {
+  type: BaccaratBetName | number;
+  amount: bigint;
+}
+
+export function encodeBaccaratAtomicBatch(bets: BaccaratAtomicBetInput[]): Uint8Array {
+  if (!bets.length) {
+    throw new Error('No bets provided');
+  }
+  const payload = new Uint8Array(2 + bets.length * 9);
+  const view = new DataView(payload.buffer);
+  payload[0] = BaccaratMove.AtomicBatch;
+  payload[1] = bets.length;
+
+  let offset = 2;
+  for (const bet of bets) {
+    if (bet.amount <= 0n) {
+      throw new Error('Bet amount must be positive');
+    }
+    const betType = typeof bet.type === 'string'
+      ? (() => {
+          const key = bet.type.toUpperCase() as BaccaratBetName;
+          if (!(key in BACCARAT_BET_TYPES)) {
+            throw new Error(`Invalid bet type: ${bet.type}`);
+          }
+          return encodeBaccaratBetType(key);
+        })()
+      : bet.type;
+
+    payload[offset] = betType;
+    view.setBigUint64(offset + 1, bet.amount, false);
+    offset += 9;
+  }
+
+  return payload;
+}
+
+export interface RouletteAtomicBetInput {
+  type: RouletteBetName | number;
+  amount: bigint;
+  target?: number;
+  number?: number;
+  value?: number;
+}
+
+export function encodeRouletteAtomicBatch(bets: RouletteAtomicBetInput[]): Uint8Array {
+  if (!bets.length) {
+    throw new Error('No bets provided');
+  }
+  const payload = new Uint8Array(2 + bets.length * 10);
+  const view = new DataView(payload.buffer);
+  payload[0] = RouletteMove.AtomicBatch;
+  payload[1] = bets.length;
+
+  let offset = 2;
+  for (const bet of bets) {
+    if (bet.amount <= 0n) {
+      throw new Error('Bet amount must be positive');
+    }
+    const rawValue = bet.value ?? bet.number ?? bet.target ?? 0;
+    const encoded = typeof bet.type === 'string'
+      ? (() => {
+          const key = bet.type.toUpperCase() as RouletteBetName;
+          if (!ROULETTE_BET_NAMES.includes(key)) {
+            throw new Error(`Invalid bet type: ${bet.type}`);
+          }
+          return encodeRouletteBetType(key, rawValue);
+        })()
+      : { type: bet.type, value: rawValue };
+
+    payload[offset] = encoded.type;
+    payload[offset + 1] = encoded.value;
+    view.setBigUint64(offset + 2, bet.amount, false);
+    offset += 10;
+  }
+
+  return payload;
+}
+
+export interface CrapsAtomicBetInput {
+  type: CrapsBetName | number;
+  amount: bigint;
+  target?: number;
+}
+
+export function encodeCrapsAtomicBatch(bets: CrapsAtomicBetInput[]): Uint8Array {
+  if (!bets.length) {
+    throw new Error('No bets provided');
+  }
+  const payload = new Uint8Array(2 + bets.length * 10);
+  const view = new DataView(payload.buffer);
+  payload[0] = CrapsMove.AtomicBatch;
+  payload[1] = bets.length;
+
+  let offset = 2;
+  for (const bet of bets) {
+    if (bet.amount <= 0n) {
+      throw new Error('Bet amount must be positive');
+    }
+    const encoded = typeof bet.type === 'string'
+      ? (() => {
+          const key = bet.type.toUpperCase() as CrapsBetName;
+          if (!(key in CRAPS_BET_TYPES)) {
+            throw new Error(`Invalid bet type: ${bet.type}`);
+          }
+          return encodeCrapsBetType(key, bet.target);
+        })()
+      : { betType: bet.type, target: bet.target ?? 0 };
+
+    payload[offset] = encoded.betType;
+    payload[offset + 1] = encoded.target;
+    view.setBigUint64(offset + 2, bet.amount, false);
+    offset += 10;
+  }
+
+  return payload;
+}
+
+export interface SicBoAtomicBetInput {
+  type: SicBoBetName | number;
+  amount: bigint;
+  target?: number;
+  number?: number;
+  value?: number;
+}
+
+export function encodeSicBoAtomicBatch(bets: SicBoAtomicBetInput[]): Uint8Array {
+  if (!bets.length) {
+    throw new Error('No bets provided');
+  }
+  const payload = new Uint8Array(2 + bets.length * 10);
+  const view = new DataView(payload.buffer);
+  payload[0] = SicBoMove.AtomicBatch;
+  payload[1] = bets.length;
+
+  let offset = 2;
+  for (const bet of bets) {
+    if (bet.amount <= 0n) {
+      throw new Error('Bet amount must be positive');
+    }
+    const rawValue = bet.value ?? bet.number ?? bet.target ?? 0;
+    const encoded = typeof bet.type === 'string'
+      ? (() => {
+          const key = bet.type.toUpperCase() as SicBoBetName;
+          if (!(key in SICBO_BET_TYPES)) {
+            throw new Error(`Invalid bet type: ${bet.type}`);
+          }
+          return encodeSicBoBetType(key, rawValue);
+        })()
+      : { betType: bet.type, target: rawValue };
+
+    payload[offset] = encoded.betType;
+    payload[offset + 1] = encoded.target;
+    view.setBigUint64(offset + 2, bet.amount, false);
+    offset += 10;
+  }
+
+  return payload;
 }
 
 // Re-export opcode maps for consumers that need direct access

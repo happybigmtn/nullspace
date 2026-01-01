@@ -9,98 +9,49 @@
  */
 import { GameHandler } from './base.js';
 import { GameType } from '../codec/index.js';
-import { ROULETTE_BET_NAMES, encodeRouletteBet } from '@nullspace/constants/bet-types';
 import { generateSessionId } from '../codec/transactions.js';
 import { ErrorCodes, createError } from '../types/errors.js';
-import { RouletteMove as SharedRouletteMove } from '@nullspace/constants';
-/**
- * Roulette action codes matching execution/src/casino/roulette.rs
- */
-const RouletteAction = SharedRouletteMove;
+import { encodeRouletteAtomicBatch } from '@nullspace/protocol/encode';
 export class RouletteHandler extends GameHandler {
     constructor() {
         super(GameType.Roulette);
     }
     async handleMessage(ctx, msg) {
-        const msgType = msg.type;
-        switch (msgType) {
+        switch (msg.type) {
             case 'roulette_spin':
                 return this.handleSpin(ctx, msg);
             default:
                 return {
                     success: false,
-                    error: createError(ErrorCodes.INVALID_MESSAGE, `Unknown roulette message: ${msgType}`),
+                    error: createError(ErrorCodes.INVALID_MESSAGE, `Unknown roulette message: ${msg.type}`),
                 };
         }
     }
     async handleSpin(ctx, msg) {
-        const bets = msg.bets;
-        if (!bets || !Array.isArray(bets) || bets.length === 0) {
-            return {
-                success: false,
-                error: createError(ErrorCodes.INVALID_BET, 'No bets provided'),
-            };
-        }
-        // Validate bets
-        for (const bet of bets) {
-            const amount = bet.amount;
-            if (typeof amount !== 'number') {
-                return {
-                    success: false,
-                    error: createError(ErrorCodes.INVALID_BET, 'Invalid bet format'),
-                };
-            }
-            if (amount <= 0) {
-                return {
-                    success: false,
-                    error: createError(ErrorCodes.INVALID_BET, 'Bet amount must be positive'),
-                };
-            }
-        }
+        const bets = msg.bets.map((bet) => ({
+            type: typeof bet.type === 'string' ? bet.type.toUpperCase() : bet.type,
+            amount: BigInt(bet.amount),
+            target: bet.target,
+            number: bet.number,
+            value: bet.value,
+        }));
         const gameSessionId = generateSessionId(ctx.session.publicKey, ctx.session.gameSessionCounter++);
         // Start game with bet=0; roulette bets are deducted via moves.
         const startResult = await this.startGame(ctx, 0n, gameSessionId);
         if (!startResult.success) {
             return startResult;
         }
-        // Build atomic batch payload: [4, bet_count, bets...]
-        // Each bet is 10 bytes: [bet_type:u8, number:u8, amount:u64 BE]
-        const payload = new Uint8Array(2 + bets.length * 10);
-        const view = new DataView(payload.buffer);
-        payload[0] = RouletteAction.AtomicBatch;
-        payload[1] = bets.length;
-        let offset = 2;
-        for (const bet of bets) {
-            const amount = bet.amount;
-            const betType = bet.type;
-            const rawValue = bet.value ?? bet.number ?? bet.target ?? 0;
-            if (typeof betType !== 'number' && typeof betType !== 'string') {
-                return {
-                    success: false,
-                    error: createError(ErrorCodes.INVALID_BET, 'Invalid bet format'),
-                };
-            }
-            const encoded = typeof betType === 'string'
-                ? (() => {
-                    const betKey = betType.toUpperCase();
-                    if (!ROULETTE_BET_NAMES.includes(betKey)) {
-                        return null;
-                    }
-                    return encodeRouletteBet(betKey, typeof rawValue === 'number' ? rawValue : undefined);
-                })()
-                : { type: betType, value: typeof rawValue === 'number' ? rawValue : 0 };
-            if (!encoded) {
-                return {
-                    success: false,
-                    error: createError(ErrorCodes.INVALID_BET, `Invalid bet type: ${betType}`),
-                };
-            }
-            payload[offset] = encoded.type;
-            payload[offset + 1] = encoded.value;
-            view.setBigUint64(offset + 2, BigInt(amount), false); // BE
-            offset += 10;
+        try {
+            const payload = encodeRouletteAtomicBatch(bets);
+            return this.makeMove(ctx, payload);
         }
-        return this.makeMove(ctx, payload);
+        catch (err) {
+            const message = err instanceof Error ? err.message : 'Invalid bet payload';
+            return {
+                success: false,
+                error: createError(ErrorCodes.INVALID_BET, message),
+            };
+        }
     }
 }
 //# sourceMappingURL=roulette.js.map

@@ -8,10 +8,15 @@ import { NonceManager } from './nonce.js';
 import { UpdatesClient } from '../backend/updates.js';
 import { encodeCasinoRegister, encodeCasinoDeposit, buildTransaction, wrapSubmission, generateSessionId, } from '../codec/index.js';
 const DEFAULT_INITIAL_BALANCE = 10000n; // 10,000 test chips
+const readEnvLimit = (key, fallback) => {
+    const raw = process.env[key];
+    const parsed = raw ? Number(raw) : NaN;
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
 const SESSION_CREATE_LIMIT = {
-    points: 10,
-    durationMs: 60 * 60 * 1000,
-    blockMs: 60 * 60 * 1000,
+    points: readEnvLimit('GATEWAY_SESSION_RATE_LIMIT_POINTS', 10),
+    durationMs: readEnvLimit('GATEWAY_SESSION_RATE_LIMIT_WINDOW_MS', 60 * 60 * 1000),
+    blockMs: readEnvLimit('GATEWAY_SESSION_RATE_LIMIT_BLOCK_MS', 60 * 60 * 1000),
 };
 export class SessionManager {
     sessions = new Map();
@@ -281,6 +286,9 @@ export class SessionManager {
             // Disconnect updates client
             if (session.updatesClient) {
                 session.updatesClient.disconnect();
+            }
+            if (session.sessionUpdatesClient) {
+                session.sessionUpdatesClient.disconnect();
             }
             this.byPublicKey.delete(session.publicKeyHex);
             this.sessions.delete(ws);

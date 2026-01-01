@@ -9,9 +9,9 @@ import { WebSocketServer } from 'ws';
 import { createHandlerRegistry } from './handlers/index.js';
 import { SessionManager, NonceManager, ConnectionLimiter } from './session/index.js';
 import { SubmitClient } from './backend/index.js';
-import { GameType } from './codec/index.js';
 import { ErrorCodes } from './types/errors.js';
-import { OutboundMessageSchema } from '@nullspace/protocol/mobile';
+import { OutboundMessageSchema, getOutboundMessageGameType } from '@nullspace/protocol/mobile';
+import { trackGatewayFaucet, trackGatewayResponse, trackGatewaySession } from './ops.js';
 // Configuration from environment
 const PORT = parseInt(process.env.GATEWAY_PORT || '9010', 10);
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8080';
@@ -29,61 +29,6 @@ const connectionLimiter = new ConnectionLimiter({
     maxTotalSessions: MAX_TOTAL_SESSIONS,
 });
 const handlers = createHandlerRegistry();
-// Message type to GameType mapping
-// Includes both canonical names and mobile app variations (with underscores)
-const messageGameTypeMap = {
-    // Baccarat
-    baccarat_deal: GameType.Baccarat,
-    // Blackjack
-    blackjack_deal: GameType.Blackjack,
-    blackjack_hit: GameType.Blackjack,
-    blackjack_stand: GameType.Blackjack,
-    blackjack_double: GameType.Blackjack,
-    blackjack_split: GameType.Blackjack,
-    // Casino War (mobile uses underscores)
-    casinowar_deal: GameType.CasinoWar,
-    casinowar_war: GameType.CasinoWar,
-    casinowar_surrender: GameType.CasinoWar,
-    casino_war_deal: GameType.CasinoWar,
-    casino_war_war: GameType.CasinoWar,
-    casino_war_surrender: GameType.CasinoWar,
-    // Craps
-    craps_bet: GameType.Craps,
-    craps_roll: GameType.Craps,
-    // Hi-Lo
-    hilo_deal: GameType.HiLo,
-    hilo_bet: GameType.HiLo,
-    hilo_higher: GameType.HiLo,
-    hilo_lower: GameType.HiLo,
-    hilo_same: GameType.HiLo,
-    hilo_cashout: GameType.HiLo,
-    // Roulette
-    roulette_spin: GameType.Roulette,
-    // Sic Bo (mobile uses underscore)
-    sicbo_roll: GameType.SicBo,
-    sic_bo_roll: GameType.SicBo,
-    // Three Card Poker (mobile uses underscores)
-    threecardpoker_deal: GameType.ThreeCard,
-    threecardpoker_play: GameType.ThreeCard,
-    threecardpoker_fold: GameType.ThreeCard,
-    three_card_poker_deal: GameType.ThreeCard,
-    three_card_poker_play: GameType.ThreeCard,
-    three_card_poker_fold: GameType.ThreeCard,
-    // Ultimate Texas Hold'em (mobile uses different prefix)
-    ultimateholdem_deal: GameType.UltimateHoldem,
-    ultimateholdem_bet: GameType.UltimateHoldem,
-    ultimateholdem_check: GameType.UltimateHoldem,
-    ultimateholdem_fold: GameType.UltimateHoldem,
-    ultimate_tx_deal: GameType.UltimateHoldem,
-    ultimate_tx_bet: GameType.UltimateHoldem,
-    ultimate_tx_check: GameType.UltimateHoldem,
-    ultimate_tx_fold: GameType.UltimateHoldem,
-    // Video Poker (mobile uses underscores and 'draw' vs 'hold')
-    videopoker_deal: GameType.VideoPoker,
-    videopoker_hold: GameType.VideoPoker,
-    video_poker_deal: GameType.VideoPoker,
-    video_poker_draw: GameType.VideoPoker,
-};
 /**
  * Send JSON message to client
  */
@@ -161,6 +106,7 @@ async function handleMessage(ws, rawData) {
             balance: session.balance.toString(),
             message: 'FAUCET_CLAIMED',
         });
+        trackGatewayFaucet(session, amount);
         return;
     }
     const validation = OutboundMessageSchema.safeParse(msg);
@@ -177,8 +123,8 @@ async function handleMessage(ws, rawData) {
         return;
     }
     // Map message type to game type
-    const gameType = messageGameTypeMap[validatedType];
-    if (gameType === undefined) {
+    const gameType = getOutboundMessageGameType(validatedType);
+    if (gameType === null || gameType === undefined) {
         sendError(ws, ErrorCodes.INVALID_MESSAGE, `Unknown message type: ${validatedType}`);
         return;
     }
@@ -203,6 +149,7 @@ async function handleMessage(ws, rawData) {
         if (result.response) {
             console.log(`[Gateway] Sending response:`, JSON.stringify(result.response).slice(0, 200));
             send(ws, result.response);
+            trackGatewayResponse(session, result.response);
         }
     }
     else if (result.error) {
@@ -238,6 +185,7 @@ wss.on('connection', async (ws, req) => {
             registered: session.registered,
             hasBalance: session.hasBalance,
         });
+        trackGatewaySession(session);
         // Handle messages
         ws.on('message', async (data) => {
             try {

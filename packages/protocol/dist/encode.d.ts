@@ -5,6 +5,7 @@
  * The on-chain Rust program validates and processes these moves.
  */
 import { CrapsBetType } from '@nullspace/constants';
+import { type BaccaratBetName, type CrapsBetName, type RouletteBetName, type SicBoBetName } from '@nullspace/constants';
 import type { GameType } from '@nullspace/types';
 /** Valid blackjack move actions - exported for type-safe fixture typing */
 export type BlackjackMoveAction = 'hit' | 'stand' | 'double' | 'split' | 'deal' | 'surrender';
@@ -85,6 +86,33 @@ export interface SideBet {
 }
 /** Encode a generic game start with bet amount */
 export declare function encodeGameStart(gameType: GameType, betAmount: bigint, sideBets?: SideBet[]): Uint8Array;
+export interface BaccaratAtomicBetInput {
+    type: BaccaratBetName | number;
+    amount: bigint;
+}
+export declare function encodeBaccaratAtomicBatch(bets: BaccaratAtomicBetInput[]): Uint8Array;
+export interface RouletteAtomicBetInput {
+    type: RouletteBetName | number;
+    amount: bigint;
+    target?: number;
+    number?: number;
+    value?: number;
+}
+export declare function encodeRouletteAtomicBatch(bets: RouletteAtomicBetInput[]): Uint8Array;
+export interface CrapsAtomicBetInput {
+    type: CrapsBetName | number;
+    amount: bigint;
+    target?: number;
+}
+export declare function encodeCrapsAtomicBatch(bets: CrapsAtomicBetInput[]): Uint8Array;
+export interface SicBoAtomicBetInput {
+    type: SicBoBetName | number;
+    amount: bigint;
+    target?: number;
+    number?: number;
+    value?: number;
+}
+export declare function encodeSicBoAtomicBatch(bets: SicBoAtomicBetInput[]): Uint8Array;
 export { BLACKJACK_OPCODES, ROULETTE_OPCODES, CRAPS_OPCODES };
 export { CrapsBetType };
 //# sourceMappingURL=encode.d.ts.map

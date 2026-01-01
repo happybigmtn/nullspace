@@ -5,9 +5,10 @@
  * to the backend and returning real on-chain game results via the updates stream.
  */
 import { GameHandler, type HandlerContext, type HandleResult } from './base.js';
+import type { OutboundMessage } from '@nullspace/protocol/mobile';
 export declare class HiLoHandler extends GameHandler {
     constructor();
-    handleMessage(ctx: HandlerContext, msg: Record<string, unknown>): Promise<HandleResult>;
+    handleMessage(ctx: HandlerContext, msg: OutboundMessage): Promise<HandleResult>;
     private handleDeal;
     /**
      * Handle combined bet+choice from mobile app

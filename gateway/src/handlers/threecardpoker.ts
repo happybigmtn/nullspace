@@ -11,8 +11,12 @@ import { GameHandler, type HandlerContext, type HandleResult } from './base.js';
 import { GameType } from '../codec/index.js';
 import { generateSessionId } from '../codec/transactions.js';
 import { ErrorCodes, createError } from '../types/errors.js';
-// Import shared ThreeCardMove from @nullspace/constants
 import { ThreeCardMove as SharedThreeCardMove } from '@nullspace/constants';
+import type {
+  OutboundMessage,
+  ThreeCardPokerDealRequest,
+  ThreeCardPokerLegacyDealRequest,
+} from '@nullspace/protocol/mobile';
 
 /**
  * Three Card Poker move codes matching execution/src/casino/three_card.rs
@@ -27,11 +31,9 @@ export class ThreeCardPokerHandler extends GameHandler {
 
   async handleMessage(
     ctx: HandlerContext,
-    msg: Record<string, unknown>
+    msg: OutboundMessage
   ): Promise<HandleResult> {
-    const msgType = msg.type as string;
-
-    switch (msgType) {
+    switch (msg.type) {
       case 'threecardpoker_deal':
       case 'three_card_poker_deal':
         return this.handleDeal(ctx, msg);
@@ -44,56 +46,19 @@ export class ThreeCardPokerHandler extends GameHandler {
       default:
         return {
           success: false,
-          error: createError(ErrorCodes.INVALID_MESSAGE, `Unknown threecardpoker message: ${msgType}`),
+          error: createError(ErrorCodes.INVALID_MESSAGE, `Unknown threecardpoker message: ${msg.type}`),
         };
     }
   }
 
   private async handleDeal(
     ctx: HandlerContext,
-    msg: Record<string, unknown>
+    msg: ThreeCardPokerDealRequest | ThreeCardPokerLegacyDealRequest
   ): Promise<HandleResult> {
-    const ante = typeof msg.ante === 'number' ? msg.ante : msg.anteBet;
-    const pairPlus = (typeof msg.pairPlus === 'number' ? msg.pairPlus : msg.pairPlusBet) as number | undefined;
-    const sixCard =
-      typeof msg.sixCard === 'number'
-        ? msg.sixCard
-        : typeof msg.sixCardBonus === 'number'
-          ? msg.sixCardBonus
-          : typeof msg.sixCardBet === 'number'
-            ? msg.sixCardBet
-            : 0;
-    const progressive =
-      typeof msg.progressive === 'number'
-        ? msg.progressive
-        : typeof msg.progressiveBet === 'number'
-          ? msg.progressiveBet
-          : 0;
-
-    if (typeof ante !== 'number' || ante <= 0) {
-      return {
-        success: false,
-        error: createError(ErrorCodes.INVALID_BET, 'Invalid ante amount'),
-      };
-    }
-    if (typeof pairPlus === 'number' && pairPlus < 0) {
-      return {
-        success: false,
-        error: createError(ErrorCodes.INVALID_BET, 'Invalid Pair Plus amount'),
-      };
-    }
-    if (typeof sixCard !== 'number' || sixCard < 0) {
-      return {
-        success: false,
-        error: createError(ErrorCodes.INVALID_BET, 'Invalid Six Card amount'),
-      };
-    }
-    if (typeof progressive !== 'number' || progressive < 0) {
-      return {
-        success: false,
-        error: createError(ErrorCodes.INVALID_BET, 'Invalid progressive amount'),
-      };
-    }
+    const ante = msg.ante;
+    const pairPlus = msg.pairPlus ?? 0;
+    const sixCard = msg.sixCard ?? msg.sixCardBonus ?? 0;
+    const progressive = msg.progressive ?? 0;
 
     const gameSessionId = generateSessionId(
       ctx.session.publicKey,

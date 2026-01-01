@@ -8,6 +8,11 @@ import { GameType } from '../codec/index.js';
 import { generateSessionId } from '../codec/transactions.js';
 import { ErrorCodes, createError } from '../types/errors.js';
 import { CasinoWarMove as SharedCasinoWarMove } from '@nullspace/constants';
+import type {
+  CasinoWarDealRequest,
+  CasinoWarLegacyDealRequest,
+  OutboundMessage,
+} from '@nullspace/protocol/mobile';
 
 export class CasinoWarHandler extends GameHandler {
   constructor() {
@@ -16,11 +21,9 @@ export class CasinoWarHandler extends GameHandler {
 
   async handleMessage(
     ctx: HandlerContext,
-    msg: Record<string, unknown>
+    msg: OutboundMessage
   ): Promise<HandleResult> {
-    const msgType = msg.type as string;
-
-    switch (msgType) {
+    switch (msg.type) {
       case 'casinowar_deal':
       case 'casino_war_deal':
         return this.handleDeal(ctx, msg);
@@ -33,34 +36,17 @@ export class CasinoWarHandler extends GameHandler {
       default:
         return {
           success: false,
-          error: createError(ErrorCodes.INVALID_MESSAGE, `Unknown casinowar message: ${msgType}`),
+          error: createError(ErrorCodes.INVALID_MESSAGE, `Unknown casinowar message: ${msg.type}`),
         };
     }
   }
 
   private async handleDeal(
     ctx: HandlerContext,
-    msg: Record<string, unknown>
+    msg: CasinoWarDealRequest | CasinoWarLegacyDealRequest
   ): Promise<HandleResult> {
     const amount = msg.amount;
-    const tieBet =
-      typeof msg.tieBet === 'number'
-        ? msg.tieBet
-        : typeof msg.tieBetAmount === 'number'
-          ? msg.tieBetAmount
-          : 0;
-    if (typeof amount !== 'number' || amount <= 0) {
-      return {
-        success: false,
-        error: createError(ErrorCodes.INVALID_BET, 'Invalid bet amount'),
-      };
-    }
-    if (typeof tieBet !== 'number' || tieBet < 0) {
-      return {
-        success: false,
-        error: createError(ErrorCodes.INVALID_BET, 'Invalid tie bet amount'),
-      };
-    }
+    const tieBet = msg.tieBet ?? 0;
 
     const gameSessionId = generateSessionId(
       ctx.session.publicKey,

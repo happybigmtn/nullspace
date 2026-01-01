@@ -9,5 +9,16 @@ export {
   GAME_MOVE_SCHEMAS,
   GAME_CODECS_BY_NAME,
   encodeGameMove,
+  encodeGameMovePayload,
+  encodeAtomicBatchPayload,
 } from './games/index.js';
-export type { GameCodec, GatewayGameMove } from './games/index.js';
+export type {
+  GameCodec,
+  GatewayGameMove,
+  GatewayGameMovePayload,
+  AtomicBatchGame,
+  BaccaratAtomicBetInput,
+  RouletteAtomicBetInput,
+  CrapsAtomicBetInput,
+  SicBoAtomicBetInput,
+} from './games/index.js';
