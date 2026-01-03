@@ -4,6 +4,7 @@ import { Card, GameState } from '../../../types';
 import { Hand } from '../GameComponents';
 import { MobileDrawer } from '../MobileDrawer';
 import { BetsDrawer } from '../BetsDrawer';
+import { SideBetsDrawer } from '../SideBetsDrawer';
 import { Label } from '../ui/Label';
 import { cardIdToString } from '../../../services/games';
 import { analyzeBlackjackHand, BlackjackAnalysis } from '../../../utils/blackjackAnalysis';
@@ -36,6 +37,7 @@ const ChipButton: React.FC<{
             type="button"
             onClick={onClick}
             className={`
+                ns-control-no-unify
                 ${sizes[size]} relative rounded-full font-bold
                 flex items-center justify-center transition-all duration-300
                 ${onClick ? 'cursor-pointer hover:scale-110 active:scale-95' : ''}
@@ -46,6 +48,30 @@ const ChipButton: React.FC<{
             <span className="relative z-10">{label}</span>
         </button>
     );
+};
+
+const calculateBlackjackTotal = (cards: Card[]): number => {
+    let total = 0;
+    let aces = 0;
+    for (const card of cards) {
+        if (!card) continue;
+        if (card.rank === 'A') {
+            total += 11;
+            aces += 1;
+            continue;
+        }
+        const asNumber = Number(card.rank);
+        if (Number.isFinite(asNumber)) {
+            total += Math.min(asNumber, 10);
+        } else {
+            total += 10;
+        }
+    }
+    while (total > 21 && aces > 0) {
+        total -= 10;
+        aces -= 1;
+    }
+    return total;
 };
 
 export const BlackjackView = React.memo<{
@@ -59,14 +85,21 @@ export const BlackjackView = React.memo<{
     const [showChipSelector, setShowChipSelector] = useState(false);
     const [analysis, setAnalysis] = useState<BlackjackAnalysis | null>(null);
     const [analysisPending, setAnalysisPending] = useState(false);
-    const dealerValue = useMemo(
-        () => (typeof gameState.blackjackDealerValue === 'number' ? gameState.blackjackDealerValue : '?'),
-        [gameState.blackjackDealerValue]
-    );
-    const playerValue = useMemo(
-        () => (typeof gameState.blackjackPlayerValue === 'number' ? gameState.blackjackPlayerValue : '?'),
-        [gameState.blackjackPlayerValue]
-    );
+    const dealerValue = useMemo(() => {
+        if (typeof gameState.blackjackDealerValue === 'number' && gameState.blackjackDealerValue > 0) {
+            return gameState.blackjackDealerValue;
+        }
+        const visibleDealerCards = gameState.dealerCards.filter((card) => card && !card.isHidden);
+        if (visibleDealerCards.length === 0) return '?';
+        return calculateBlackjackTotal(visibleDealerCards);
+    }, [gameState.blackjackDealerValue, gameState.dealerCards]);
+    const playerValue = useMemo(() => {
+        if (typeof gameState.blackjackPlayerValue === 'number' && gameState.blackjackPlayerValue > 0) {
+            return gameState.blackjackPlayerValue;
+        }
+        if (gameState.playerCards.length === 0) return '?';
+        return calculateBlackjackTotal(gameState.playerCards);
+    }, [gameState.blackjackPlayerValue, gameState.playerCards]);
     const showInsurancePrompt = useMemo(() => {
         if (gameState.stage !== 'PLAYING') return false;
         const msg = (gameState.message ?? '').toString().toUpperCase();
@@ -159,6 +192,47 @@ export const BlackjackView = React.memo<{
               { key: 'insurance', label: 'Insurance', code: 'I', value: analysis.values.insurance },
           ].filter((row) => row.value !== undefined)
         : [];
+    const sideBetDefs = useMemo(
+        () => [
+            { id: '21+3', amount: gameState.blackjack21Plus3Bet || 0, onToggle: actions?.bjToggle21Plus3, shortcut: '1' },
+            { id: 'Lucky Ladies', amount: gameState.blackjackLuckyLadiesBet || 0, onToggle: actions?.bjToggleLuckyLadies, shortcut: '2' },
+            { id: 'Perfect Pairs', amount: gameState.blackjackPerfectPairsBet || 0, onToggle: actions?.bjTogglePerfectPairs, shortcut: '3' },
+            { id: 'Bust It', amount: gameState.blackjackBustItBet || 0, onToggle: actions?.bjToggleBustIt, shortcut: '4' },
+            { id: 'Royal Match', amount: gameState.blackjackRoyalMatchBet || 0, onToggle: actions?.bjToggleRoyalMatch, shortcut: '5' },
+        ],
+        [
+            actions?.bjToggle21Plus3,
+            actions?.bjToggleLuckyLadies,
+            actions?.bjTogglePerfectPairs,
+            actions?.bjToggleBustIt,
+            actions?.bjToggleRoyalMatch,
+            gameState.blackjack21Plus3Bet,
+            gameState.blackjackLuckyLadiesBet,
+            gameState.blackjackPerfectPairsBet,
+            gameState.blackjackBustItBet,
+            gameState.blackjackRoyalMatchBet,
+        ]
+    );
+    const activeSideBets = useMemo(
+        () => sideBetDefs.filter((bet) => bet.amount > 0).map((bet) => ({ id: bet.id, amount: bet.amount })),
+        [sideBetDefs]
+    );
+    const [lastSideBets, setLastSideBets] = useState(activeSideBets);
+    useEffect(() => {
+        if (activeSideBets.length > 0) setLastSideBets(activeSideBets);
+    }, [activeSideBets]);
+    const displaySideBets = activeSideBets.length > 0
+        ? activeSideBets
+        : gameState.stage !== 'BETTING'
+            ? lastSideBets
+            : [];
+    const sideBetCount = activeSideBets.length > 0
+        ? activeSideBets.length
+        : gameState.stage !== 'BETTING'
+            ? lastSideBets.length
+            : 0;
+    const sideBetsLocked = gameState.stage !== 'BETTING';
+
     return (
         <>
             <div className="flex-1 w-full flex flex-col items-center justify-start sm:justify-center gap-8 relative pt-12 pb-24 animate-scale-in">
@@ -205,9 +279,9 @@ export const BlackjackView = React.memo<{
 
                 {/* Center Info */}
                 <div className="text-center relative z-20 px-6">
-                        <h2 className="text-2xl sm:text-3xl font-extrabold text-titanium-900 tracking-tight font-display animate-scale-in">
-                            {gameState.message || 'Place Your Bet'}
-                        </h2>
+                    <h2 className="text-xl sm:text-2xl font-semibold text-titanium-800 tracking-tight font-display animate-scale-in zen-hide">
+                        {gameState.message || 'Place Your Bet'}
+                    </h2>
                 </div>
 
                 {/* Player Area - Highlighted */}
@@ -254,6 +328,20 @@ export const BlackjackView = React.memo<{
                             </div>
                     )}
                 </div>
+
+                {displaySideBets.length > 0 && (
+                    <div className="flex flex-wrap items-center justify-center gap-2 text-[10px] uppercase tracking-[0.2em] text-titanium-500">
+                        <span className="text-titanium-400">Side Bets</span>
+                        {displaySideBets.map((bet) => (
+                            <span
+                                key={bet.id}
+                                className="rounded-full border border-titanium-200 px-2.5 py-1 text-titanium-700 dark:border-titanium-800 dark:text-titanium-200"
+                            >
+                                {bet.id} ${bet.amount.toLocaleString()}
+                            </span>
+                        ))}
+                    </div>
+                )}
 
                 {/* Super Mode Info - Animated */}
                 {gameState.superMode?.isActive && (
@@ -352,184 +440,106 @@ export const BlackjackView = React.memo<{
             </div>
 
             {/* CONTROLS */}
-            <div className="ns-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-titanium-900/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
+            <div className="ns-controlbar zen-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-titanium-900/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
                 <div className="h-16 md:h-20 flex items-center justify-between md:justify-center gap-2 p-2 md:px-4">
+                    <div className="flex items-center gap-2">
+                        <SideBetsDrawer
+                            title="BLACKJACK SIDE BETS"
+                            label="Side Bets"
+                            count={sideBetCount}
+                            shortcutHint="1–5"
+                            disabled={sideBetDefs.length === 0}
+                        >
+                            <div className="space-y-3">
+                                <div className="grid grid-cols-2 gap-2">
+                                    {sideBetDefs.map((bet) => {
+                                        const active = bet.amount > 0;
+                                        return (
+                                            <button
+                                                key={bet.id}
+                                                type="button"
+                                                onClick={() => !sideBetsLocked && bet.onToggle?.()}
+                                                disabled={sideBetsLocked}
+                                                className={`rounded-xl border px-3 py-3 text-xs font-semibold uppercase tracking-widest transition-all ${
+                                                    active
+                                                        ? 'border-action-primary/60 bg-action-primary/10 text-action-primary'
+                                                        : sideBetsLocked
+                                                            ? 'border-titanium-200 text-titanium-400 dark:border-titanium-800 dark:text-titanium-500'
+                                                            : 'border-titanium-200 text-titanium-700 hover:border-titanium-500 dark:border-titanium-800 dark:text-titanium-200'
+                                                }`}
+                                            >
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <span>{bet.id}</span>
+                                                    <span className="text-[10px] font-mono text-titanium-400">[{bet.shortcut}]</span>
+                                                </div>
+                                                {bet.amount > 0 ? (
+                                                    <div className="mt-1 text-[10px] tracking-[0.2em] text-titanium-500">
+                                                        ${bet.amount.toLocaleString()}
+                                                    </div>
+                                                ) : null}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                {sideBetsLocked ? (
+                                    <div className="text-[10px] uppercase tracking-[0.24em] text-titanium-400">
+                                        Locked until next hand
+                                    </div>
+                                ) : null}
+                            </div>
+                        </SideBetsDrawer>
+                    </div>
                     {/* Secondary Actions - Main Actions */}
                     {isBettingStage ? (
                         <>
                             <div className="flex md:hidden items-center gap-2">
-                                <BetsDrawer title="BLACKJACK BETS">
-                                    <div className="space-y-4">
-                                        {gameState.stage === 'BETTING' && (
-                                            <div className="rounded border border-gray-800 bg-black/40 p-2 space-y-2">
-                                                <div className="text-[10px] text-amber-500 font-bold tracking-widest border-b border-gray-800 pb-1">SIDE BETS</div>
-                                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                <BetsDrawer title="MODIFIERS">
+                                    <div className="rounded border border-gray-800 bg-black/40 p-2 space-y-2">
+                                        <div className="text-[10px] text-cyan-500 font-bold tracking-widest border-b border-gray-800 pb-1">MODIFIERS</div>
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                            {playMode !== 'CASH' && (
+                                                <>
                                                     <button
                                                         type="button"
-                                                        onClick={actions?.bjToggle21Plus3}
+                                                        onClick={actions?.toggleShield}
                                                         className={`py-3 rounded border text-xs font-bold ${
-                                                            (gameState.blackjack21Plus3Bet || 0) > 0
-                                                                ? 'border-amber-400 bg-amber-400/20 text-amber-400'
+                                                            gameState.activeModifiers.shield
+                                                                ? 'border-action-success bg-action-success/20 text-action-success'
                                                                 : 'border-gray-700 bg-gray-900 text-gray-400'
                                                         }`}
                                                     >
-                                                        21+3
+                                                        SHIELD
                                                     </button>
                                                     <button
                                                         type="button"
-                                                        onClick={actions?.bjToggleLuckyLadies}
+                                                        onClick={actions?.toggleDouble}
                                                         className={`py-3 rounded border text-xs font-bold ${
-                                                            (gameState.blackjackLuckyLadiesBet || 0) > 0
-                                                                ? 'border-amber-400 bg-amber-400/20 text-amber-400'
+                                                            gameState.activeModifiers.double
+                                                                ? 'border-action-success bg-action-success/20 text-action-success'
                                                                 : 'border-gray-700 bg-gray-900 text-gray-400'
                                                         }`}
                                                     >
-                                                        LUCKY LADIES
+                                                        DOUBLE
                                                     </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={actions?.bjTogglePerfectPairs}
-                                                        className={`py-3 rounded border text-xs font-bold ${
-                                                            (gameState.blackjackPerfectPairsBet || 0) > 0
-                                                                ? 'border-amber-400 bg-amber-400/20 text-amber-400'
-                                                                : 'border-gray-700 bg-gray-900 text-gray-400'
-                                                        }`}
-                                                    >
-                                                        PERFECT PAIRS
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={actions?.bjToggleBustIt}
-                                                        className={`py-3 rounded border text-xs font-bold ${
-                                                            (gameState.blackjackBustItBet || 0) > 0
-                                                                ? 'border-amber-400 bg-amber-400/20 text-amber-400'
-                                                                : 'border-gray-700 bg-gray-900 text-gray-400'
-                                                        }`}
-                                                    >
-                                                        BUST IT
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={actions?.bjToggleRoyalMatch}
-                                                        className={`py-3 rounded border text-xs font-bold ${
-                                                            (gameState.blackjackRoyalMatchBet || 0) > 0
-                                                                ? 'border-amber-400 bg-amber-400/20 text-amber-400'
-                                                                : 'border-gray-700 bg-gray-900 text-gray-400'
-                                                        }`}
-                                                    >
-                                                        ROYAL MATCH
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        )}
-                                        <div className="rounded border border-gray-800 bg-black/40 p-2 space-y-2">
-                                            <div className="text-[10px] text-cyan-500 font-bold tracking-widest border-b border-gray-800 pb-1">MODIFIERS</div>
-                                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                                {playMode !== 'CASH' && (
-                                                    <>
-                                                        <button
-                                                            type="button"
-                                                            onClick={actions?.toggleShield}
-                                                            className={`py-3 rounded border text-xs font-bold ${
-                                                                gameState.activeModifiers.shield
-                                                                    ? 'border-action-success bg-action-success/20 text-action-success'
-                                                                    : 'border-gray-700 bg-gray-900 text-gray-400'
-                                                            }`}
-                                                        >
-                                                            SHIELD
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={actions?.toggleDouble}
-                                                            className={`py-3 rounded border text-xs font-bold ${
-                                                                gameState.activeModifiers.double
-                                                                    ? 'border-action-success bg-action-success/20 text-action-success'
-                                                                    : 'border-gray-700 bg-gray-900 text-gray-400'
-                                                            }`}
-                                                        >
-                                                            DOUBLE
-                                                        </button>
-                                                    </>
-                                                )}
-                                                <button
-                                                    type="button"
-                                                    onClick={actions?.toggleSuper}
-                                                    className={`py-3 rounded border text-xs font-bold ${
-                                                        gameState.activeModifiers.super
-                                                            ? 'border-action-primary bg-action-primary/20 text-action-primary'
-                                                            : 'border-gray-700 bg-gray-900 text-gray-400'
-                                                    }`}
-                                                >
-                                                    SUPER
-                                                </button>
-                                            </div>
+                                                </>
+                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={actions?.toggleSuper}
+                                                className={`py-3 rounded border text-xs font-bold ${
+                                                    gameState.activeModifiers.super
+                                                        ? 'border-action-primary bg-action-primary/20 text-action-primary'
+                                                        : 'border-gray-700 bg-gray-900 text-gray-400'
+                                                }`}
+                                            >
+                                                SUPER
+                                            </button>
                                         </div>
                                     </div>
                                 </BetsDrawer>
                             </div>
 
                             <div className="hidden md:flex items-center gap-2">
-                                {/* Side Bets Group */}
-                                {gameState.stage === 'BETTING' && (
-                                    <div className="flex items-center gap-2 border-r-2 border-gray-700 pr-3">
-                                        <button
-                                            type="button"
-                                            onClick={actions?.bjToggle21Plus3}
-                                            className={`h-12 px-4 rounded border-2 font-bold text-sm tracking-widest uppercase font-mono transition-all ${
-                                                (gameState.blackjack21Plus3Bet || 0) > 0
-                                                    ? 'border-amber-400 bg-amber-400/20 text-amber-400'
-                                                    : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'
-                                            }`}
-                                        >
-                                            21+3{(gameState.blackjack21Plus3Bet || 0) > 0 ? ` $${gameState.blackjack21Plus3Bet}` : ''}
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={actions?.bjToggleLuckyLadies}
-                                            className={`h-12 px-4 rounded border-2 font-bold text-sm tracking-widest uppercase font-mono transition-all ${
-                                                (gameState.blackjackLuckyLadiesBet || 0) > 0
-                                                    ? 'border-amber-400 bg-amber-400/20 text-amber-400'
-                                                    : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'
-                                            }`}
-                                        >
-                                            LUCKY{(gameState.blackjackLuckyLadiesBet || 0) > 0 ? ` $${gameState.blackjackLuckyLadiesBet}` : ''}
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={actions?.bjTogglePerfectPairs}
-                                            className={`h-12 px-4 rounded border-2 font-bold text-sm tracking-widest uppercase font-mono transition-all ${
-                                                (gameState.blackjackPerfectPairsBet || 0) > 0
-                                                    ? 'border-amber-400 bg-amber-400/20 text-amber-400'
-                                                    : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'
-                                            }`}
-                                        >
-                                            PAIRS{(gameState.blackjackPerfectPairsBet || 0) > 0 ? ` $${gameState.blackjackPerfectPairsBet}` : ''}
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={actions?.bjToggleBustIt}
-                                            className={`h-12 px-4 rounded border-2 font-bold text-sm tracking-widest uppercase font-mono transition-all ${
-                                                (gameState.blackjackBustItBet || 0) > 0
-                                                    ? 'border-amber-400 bg-amber-400/20 text-amber-400'
-                                                    : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'
-                                            }`}
-                                        >
-                                            BUST{(gameState.blackjackBustItBet || 0) > 0 ? ` $${gameState.blackjackBustItBet}` : ''}
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={actions?.bjToggleRoyalMatch}
-                                            className={`h-12 px-4 rounded border-2 font-bold text-sm tracking-widest uppercase font-mono transition-all ${
-                                                (gameState.blackjackRoyalMatchBet || 0) > 0
-                                                    ? 'border-amber-400 bg-amber-400/20 text-amber-400'
-                                                    : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'
-                                            }`}
-                                        >
-                                            ROYAL{(gameState.blackjackRoyalMatchBet || 0) > 0 ? ` $${gameState.blackjackRoyalMatchBet}` : ''}
-                                        </button>
-                                    </div>
-                                )}
-
                                 {/* Modifiers Group */}
                                 <div className="flex items-center gap-2">
                                     {playMode !== 'CASH' && (
@@ -566,9 +576,9 @@ export const BlackjackView = React.memo<{
                                                 ? 'border-action-primary bg-action-primary/20 text-action-primary'
                                                 : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'
                                         }`}
-                                    >
-                                        SUPER
-                                    </button>
+                                            >
+                                                SUPER
+                                            </button>
                                 </div>
                             </div>
                         </>
@@ -805,7 +815,7 @@ export const BlackjackView = React.memo<{
                                         : actions?.bjHit
                             }
                             disabled={gameState.stage === 'PLAYING' && !showInsurancePrompt && !canHit}
-                            className={`h-12 md:h-14 px-6 md:px-8 rounded border-2 font-bold text-sm md:text-base tracking-widest uppercase font-mono transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] ${
+                            className={`ns-control-primary h-12 md:h-14 px-6 md:px-8 rounded border-2 font-bold text-sm md:text-base tracking-widest uppercase font-mono transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] ${
                                 showInsurancePrompt
                                     ? 'border-action-primary bg-action-primary text-black hover:bg-white hover:border-white'
                                     : (gameState.stage === 'PLAYING' && !canHit)

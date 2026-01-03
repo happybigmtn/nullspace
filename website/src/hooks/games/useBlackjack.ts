@@ -170,13 +170,38 @@ export const useBlackjack = ({
         return;
       }
 
+      const currentSideBets =
+        Number(gameState.blackjack21Plus3Bet || 0)
+        + Number(gameState.blackjackLuckyLadiesBet || 0)
+        + Number(gameState.blackjackPerfectPairsBet || 0)
+        + Number(gameState.blackjackBustItBet || 0)
+        + Number(gameState.blackjackRoyalMatchBet || 0);
+      const nextSideBetsTotal = currentSideBets - prevAmount + nextAmount;
+      const projectedWager = Number(gameState.bet || 0) + nextSideBetsTotal;
+      if (projectedWager > stats.chips) {
+        setGameState(prev => ({ ...prev, message: 'INSUFFICIENT FUNDS' }));
+        return;
+      }
+
       setGameState(prev => ({
         ...(prev as GameState),
         [key]: nextAmount,
         message: nextAmount > 0 ? `${label} +$${nextAmount}` : `${label} OFF`,
       }));
     },
-    [gameState.type, gameState.stage, gameState.bet, gameState, setGameState]
+    [
+      gameState.type,
+      gameState.stage,
+      gameState.bet,
+      gameState.blackjack21Plus3Bet,
+      gameState.blackjackLuckyLadiesBet,
+      gameState.blackjackPerfectPairsBet,
+      gameState.blackjackBustItBet,
+      gameState.blackjackRoyalMatchBet,
+      stats.chips,
+      gameState,
+      setGameState,
+    ]
   );
 
   const bjToggle21Plus3 = useCallback(() => toggleSideBet('blackjack21Plus3Bet', '21+3'), [toggleSideBet]);

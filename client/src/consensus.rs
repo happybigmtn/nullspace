@@ -1,4 +1,4 @@
-use crate::{client::join_hex_path, Client, Error, Result};
+use crate::{client::join_hex_path, seed_verifier, Client, Error, Result};
 use commonware_codec::{DecodeExt, Encode};
 use commonware_consensus::Viewable;
 use nullspace_types::{api::Query, Seed, NAMESPACE};
@@ -21,7 +21,8 @@ impl Client {
 
         let bytes = result.bytes().await.map_err(Error::Reqwest)?;
         let seed = Seed::decode(bytes.as_ref()).map_err(Error::InvalidData)?;
-        if !seed.verify(NAMESPACE, &self.identity) {
+        let verifier = seed_verifier(&self.identity);
+        if !seed.verify(&verifier, NAMESPACE) {
             return Err(Error::InvalidSignature);
         }
 
@@ -29,10 +30,10 @@ impl Client {
         match query {
             Query::Latest => {}
             Query::Index(index) => {
-                if seed.view() != index {
+                if seed.view().get() != index {
                     return Err(Error::UnexpectedSeedView {
                         expected: index,
-                        got: seed.view(),
+                        got: seed.view().get(),
                     });
                 }
             }
@@ -62,7 +63,7 @@ impl Client {
 
         loop {
             if let Some(seed) = self.query_seed(Query::Latest).await? {
-                if seed.view() >= min_view {
+                if seed.view().get() >= min_view {
                     return Ok(seed);
                 }
             }

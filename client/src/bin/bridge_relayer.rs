@@ -13,7 +13,7 @@ use commonware_cryptography::{
 use commonware_utils::from_hex;
 use ethers::signers::Signer as EvmSigner;
 use ethers::prelude::*;
-use nullspace_client::Client;
+use nullspace_client::{operation_value, Client};
 use nullspace_types::{
     api::Query,
     casino::{BridgeState, BridgeWithdrawal},
@@ -162,7 +162,7 @@ struct NonceTracker {
 impl NonceTracker {
     async fn sync(&mut self, client: &Client, public: &PublicKey) -> Result<u64> {
         let lookup = client.query_state(&Key::Account(public.clone())).await?;
-        let nonce = match lookup.and_then(|lookup| lookup.operation.value().cloned()) {
+        let nonce = match lookup.and_then(|lookup| operation_value(&lookup.operation).cloned()) {
             Some(Value::Account(account)) => account.nonce,
             _ => 0,
         };
@@ -652,7 +652,7 @@ async fn fetch_bridge_state(client: &Client) -> Result<BridgeState> {
         .query_state(&Key::BridgeState)
         .await?
         .ok_or_else(|| anyhow!("Bridge state missing"))?;
-    match lookup.operation.value() {
+    match operation_value(&lookup.operation) {
         Some(Value::BridgeState(state)) => Ok(state.clone()),
         _ => Err(anyhow!("Unexpected bridge state value")),
     }
@@ -663,7 +663,7 @@ async fn fetch_withdrawal(client: &Client, id: u64) -> Result<BridgeWithdrawal> 
         .query_state(&Key::BridgeWithdrawal(id))
         .await?
         .ok_or_else(|| anyhow!("Withdrawal {id} not found"))?;
-    match lookup.operation.value() {
+    match operation_value(&lookup.operation) {
         Some(Value::BridgeWithdrawal(withdrawal)) => Ok(withdrawal.clone()),
         _ => Err(anyhow!("Unexpected withdrawal value for {id}")),
     }
@@ -674,7 +674,7 @@ async fn current_view_time(client: &Client) -> Result<u64> {
         .query_seed(Query::Latest)
         .await?
         .ok_or_else(|| anyhow!("No seed available"))?;
-    Ok(seed.view().saturating_mul(VIEW_SECONDS))
+    Ok(seed.view().get().saturating_mul(VIEW_SECONDS))
 }
 
 async fn submit_instruction(

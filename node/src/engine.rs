@@ -2,19 +2,19 @@ use crate::{
     aggregator, application,
     indexer::Indexer,
     seeder,
-    supervisor::{EpochSupervisor, ViewSupervisor},
+    supervisor::{AggregationSupervisor, EpochSupervisor, ViewSupervisor},
     system_metrics,
 };
 use commonware_broadcast::buffered;
 use commonware_consensus::{
-    aggregation, marshal,
-    threshold_simplex::{self, Engine as Consensus},
+    aggregation, marshal, simplex,
+    types::{Epoch, EpochDelta, FixedEpocher, ViewDelta},
     Reporters,
 };
 use commonware_cryptography::{
     bls12381::primitives::{
         group,
-        poly::{public, Poly},
+        sharing::Sharing,
         variant::MinSig,
     },
     ed25519::{PrivateKey, PublicKey},
@@ -23,15 +23,17 @@ use commonware_cryptography::{
 };
 use commonware_p2p::{Blocker, Receiver, Sender};
 use commonware_runtime::{
-    buffer::PoolRef, signal::Signal, Clock, Handle, Metrics, Spawner, Storage,
+    buffer::PoolRef, signal::Signal, Clock, Handle, Metrics, Quota, Spawner, Storage,
 };
+use commonware_storage::archive::{immutable, prunable};
+use commonware_storage::translator::Translator;
 use commonware_utils::{NZDuration, NZU64};
-use governor::clock::Clock as GClock;
-use governor::Quota;
-use nullspace_types::{Activity, Block, Evaluation, NAMESPACE};
+use nullspace_types::{Activity, Block, Finalization, NAMESPACE};
 use rand::{CryptoRng, Rng};
 use std::{
+    collections::hash_map::RandomState,
     future::Future,
+    hash::BuildHasher,
     num::{NonZeroU64, NonZeroUsize},
     pin::Pin,
     task::{Context, Poll},
@@ -39,8 +41,34 @@ use std::{
 };
 use tracing::{error, warn};
 
-/// Reporter type for [threshold_simplex::Engine].
-type Reporter = Reporters<Activity, marshal::Mailbox<MinSig, Block>, seeder::Mailbox>;
+type ThresholdScheme = simplex::scheme::bls12381_threshold::Scheme<PublicKey, MinSig>;
+type FinalizationStore<E> = immutable::Archive<E, Digest, Finalization>;
+type BlockStore<E> = prunable::Archive<DigestTranslator, E, Digest, Block>;
+
+#[derive(Clone, Default)]
+struct DigestTranslator(RandomState);
+
+impl BuildHasher for DigestTranslator {
+    type Hasher = <RandomState as BuildHasher>::Hasher;
+
+    fn build_hasher(&self) -> Self::Hasher {
+        self.0.build_hasher()
+    }
+}
+
+impl Translator for DigestTranslator {
+    type Key = Digest;
+
+    fn transform(&self, key: &[u8]) -> Self::Key {
+        let bytes: [u8; 32] = key
+            .try_into()
+            .expect("digest keys should be 32 bytes");
+        Digest::from(bytes)
+    }
+}
+
+/// Reporter type for [simplex::Engine].
+type Reporter = Reporters<Activity, marshal::Mailbox<ThresholdScheme, Block>, seeder::Mailbox>;
 
 /// To better support peers near tip during network instability, we multiply
 /// the consensus activity timeout by this factor.
@@ -125,7 +153,7 @@ where
 /// Configuration for the [Engine].
 pub struct IdentityConfig {
     pub signer: PrivateKey,
-    pub polynomial: Poly<Evaluation>,
+    pub sharing: Sharing<MinSig>,
     pub share: group::Share,
     pub participants: Vec<PublicKey>,
 }
@@ -149,7 +177,7 @@ pub struct StorageConfig {
     pub cache_items_per_blob: NonZeroU64,
     pub replay_buffer: NonZeroUsize,
     pub write_buffer: NonZeroUsize,
-    pub max_repair: u64,
+    pub max_repair: NonZeroUsize,
 }
 
 pub struct ConsensusConfig {
@@ -194,11 +222,14 @@ pub struct Config<B: Blocker<PublicKey = PublicKey>, I: Indexer> {
 
 /// The engine that drives the [application].
 pub struct Engine<
-    E: Clock + GClock + Rng + CryptoRng + Spawner + Storage + Metrics,
+    E: Clock + Rng + CryptoRng + Spawner + Storage + Metrics + Clone + Send + Sync,
     B: Blocker<PublicKey = PublicKey>,
     I: Indexer,
 > {
     context: E,
+    view_supervisor: ViewSupervisor,
+    public_key: PublicKey,
+    mailbox_size: usize,
 
     application: application::Actor<E, I>,
     application_mailbox: application::Mailbox<E>,
@@ -208,36 +239,33 @@ pub struct Engine<
     aggregator_mailbox: aggregator::Mailbox,
     buffer: buffered::Engine<E, PublicKey, Block>,
     buffer_mailbox: buffered::Mailbox<PublicKey, Block>,
-    marshal: marshal::Actor<Block, E, MinSig, PublicKey, ViewSupervisor>,
-    marshal_mailbox: marshal::Mailbox<MinSig, Block>,
+    marshal: marshal::Actor<E, Block, EpochSupervisor, FinalizationStore<E>, BlockStore<E>, FixedEpocher>,
+    marshal_mailbox: marshal::Mailbox<ThresholdScheme, Block>,
 
     #[allow(clippy::type_complexity)]
-    consensus: Consensus<
+    consensus: simplex::Engine<
         E,
-        PrivateKey,
+        ThresholdScheme,
+        simplex::elector::Random,
         B,
-        MinSig,
         Digest,
         application::Mailbox<E>,
         application::Mailbox<E>,
         Reporter,
-        ViewSupervisor,
     >,
     aggregation: aggregation::Engine<
         E,
-        PublicKey,
-        MinSig,
+        AggregationSupervisor,
         Digest,
         aggregator::Mailbox,
         aggregator::Mailbox,
         EpochSupervisor,
         B,
-        EpochSupervisor,
     >,
 }
 
 impl<
-        E: Clock + GClock + Rng + CryptoRng + Spawner + Storage + Metrics,
+        E: Clock + Rng + CryptoRng + Spawner + Storage + Metrics + Clone + Send + Sync,
         B: Blocker<PublicKey = PublicKey>,
         I: Indexer,
     > Engine<E, B, I>
@@ -251,13 +279,19 @@ impl<
         );
 
         // Create the application
-        let identity = *public::<MinSig>(&cfg.identity.polynomial);
-        let (application, view_supervisor, epoch_supervisor, application_mailbox) =
-            application::Actor::new(
+        let identity = cfg.identity.sharing.public().clone();
+        let public_key = cfg.identity.signer.public_key();
+        let (
+            application,
+            view_supervisor,
+            epoch_supervisor,
+            aggregation_supervisor,
+            application_mailbox,
+        ) = application::Actor::new(
                 context.with_label("application"),
                 application::Config {
                     participants: cfg.identity.participants.clone(),
-                    polynomial: cfg.identity.polynomial.clone(),
+                    sharing: cfg.identity.sharing.clone(),
                     share: cfg.identity.share.clone(),
                     mailbox_size: cfg.consensus.mailbox_size,
                     partition_prefix: format!("{}-application", cfg.storage.partition_prefix),
@@ -288,7 +322,7 @@ impl<
                 identity,
                 supervisor: view_supervisor.clone(),
                 namespace: NAMESPACE.to_vec(),
-                public_key: cfg.identity.signer.public_key(),
+                public_key: public_key.clone(),
                 backfill_quota: cfg.consensus.backfill_quota,
                 mailbox_size: cfg.consensus.mailbox_size,
                 partition_prefix: format!("{}-seeder", cfg.storage.partition_prefix),
@@ -307,7 +341,7 @@ impl<
                 identity,
                 supervisor: view_supervisor.clone(),
                 namespace: NAMESPACE.to_vec(),
-                public_key: cfg.identity.signer.public_key(),
+                public_key: public_key.clone(),
                 backfill_quota: cfg.consensus.backfill_quota,
                 mailbox_size: cfg.consensus.mailbox_size,
                 partition: format!("{}-aggregator", cfg.storage.partition_prefix),
@@ -325,7 +359,7 @@ impl<
         let (buffer, buffer_mailbox) = buffered::Engine::new(
             context.with_label("buffer"),
             buffered::Config {
-                public_key: cfg.identity.signer.public_key(),
+                public_key: public_key.clone(),
                 mailbox_size: cfg.consensus.mailbox_size,
                 deque_size: cfg.consensus.deque_size,
                 priority: true,
@@ -333,33 +367,68 @@ impl<
             },
         );
 
+        // Create marshal stores
+        let marshal_partition = format!("{}-marshal", cfg.storage.partition_prefix);
+        let finalizations_by_height = immutable::Archive::init(
+            context.with_label("finalizations"),
+            immutable::Config {
+                metadata_partition: format!("{}-finalizations-metadata", &marshal_partition),
+                freezer_table_partition: format!("{}-finalizations-table", &marshal_partition),
+                freezer_table_initial_size: cfg.storage.finalized_freezer_table_initial_size,
+                freezer_table_resize_frequency: cfg.storage.freezer_table_resize_frequency,
+                freezer_table_resize_chunk_size: cfg.storage.freezer_table_resize_chunk_size,
+                freezer_journal_partition: format!("{}-finalizations-journal", &marshal_partition),
+                freezer_journal_target_size: cfg.storage.freezer_journal_target_size,
+                freezer_journal_compression: cfg.storage.freezer_journal_compression,
+                freezer_journal_buffer_pool: buffer_pool.clone(),
+                ordinal_partition: format!("{}-finalizations-ordinal", &marshal_partition),
+                items_per_section: cfg.storage.immutable_items_per_section,
+                write_buffer: cfg.storage.write_buffer,
+                replay_buffer: cfg.storage.replay_buffer,
+                codec_config: (),
+            },
+        )
+        .await
+        .expect("failed to initialize finalizations archive");
+
+        let finalized_blocks = prunable::Archive::init(
+            context.with_label("finalized_blocks"),
+            prunable::Config {
+                translator: DigestTranslator::default(),
+                partition: format!("{}-finalized-blocks", &marshal_partition),
+                compression: None,
+                codec_config: (),
+                items_per_section: cfg.storage.prunable_items_per_section,
+                write_buffer: cfg.storage.write_buffer,
+                replay_buffer: cfg.storage.replay_buffer,
+                buffer_pool: buffer_pool.clone(),
+            },
+        )
+        .await
+        .expect("failed to initialize finalized blocks archive");
+
         // Create marshal
-        let (marshal, marshal_mailbox): (_, marshal::Mailbox<MinSig, Block>) =
+        let (marshal, marshal_mailbox, _last_processed_height): (_, _, u64) =
             marshal::Actor::init(
                 context.with_label("marshal"),
+                finalizations_by_height,
+                finalized_blocks,
                 marshal::Config {
-                    public_key: cfg.identity.signer.public_key(),
-                    identity,
-                    coordinator: view_supervisor.clone(),
-                    partition_prefix: format!("{}-marshal", cfg.storage.partition_prefix),
+                    provider: epoch_supervisor.clone(),
+                    epocher: FixedEpocher::new(NZU64!(u64::MAX)),
+                    partition_prefix: marshal_partition,
                     mailbox_size: cfg.consensus.mailbox_size,
-                    backfill_quota: cfg.consensus.backfill_quota,
-                    view_retention_timeout: cfg
-                        .consensus
-                        .activity_timeout
-                        .saturating_mul(SYNCER_ACTIVITY_TIMEOUT_MULTIPLIER),
+                    view_retention_timeout: ViewDelta::new(
+                        cfg.consensus
+                            .activity_timeout
+                            .saturating_mul(SYNCER_ACTIVITY_TIMEOUT_MULTIPLIER),
+                    ),
                     namespace: NAMESPACE.to_vec(),
                     prunable_items_per_section: cfg.storage.prunable_items_per_section,
-                    immutable_items_per_section: cfg.storage.immutable_items_per_section,
-                    freezer_table_initial_size: cfg.storage.blocks_freezer_table_initial_size,
-                    freezer_table_resize_frequency: cfg.storage.freezer_table_resize_frequency,
-                    freezer_table_resize_chunk_size: cfg.storage.freezer_table_resize_chunk_size,
-                    freezer_journal_target_size: cfg.storage.freezer_journal_target_size,
-                    freezer_journal_compression: cfg.storage.freezer_journal_compression,
+                    buffer_pool: buffer_pool.clone(),
                     replay_buffer: cfg.storage.replay_buffer,
                     write_buffer: cfg.storage.write_buffer,
-                    freezer_journal_buffer_pool: buffer_pool.clone(),
-                    codec_config: (),
+                    block_codec_config: (),
                     max_repair: cfg.storage.max_repair,
                 },
             )
@@ -369,30 +438,29 @@ impl<
         let reporter = (marshal_mailbox.clone(), seeder_mailbox.clone()).into();
 
         // Create the consensus engine
-        let consensus = Consensus::new(
+        let consensus = simplex::Engine::new(
             context.with_label("consensus"),
-            threshold_simplex::Config {
-                namespace: NAMESPACE.to_vec(),
-                crypto: cfg.identity.signer,
+            simplex::Config {
+                scheme: epoch_supervisor.scheme(),
+                elector: simplex::elector::Random::default(),
+                blocker: cfg.blocker.clone(),
                 automaton: application_mailbox.clone(),
                 relay: application_mailbox.clone(),
                 reporter,
-                supervisor: view_supervisor,
                 partition: format!("{}-consensus", cfg.storage.partition_prefix),
                 mailbox_size: cfg.consensus.mailbox_size,
-                leader_timeout: cfg.consensus.leader_timeout,
-                notarization_timeout: cfg.consensus.notarization_timeout,
-                nullify_retry: cfg.consensus.nullify_retry,
-                fetch_timeout: cfg.consensus.fetch_timeout,
-                activity_timeout: cfg.consensus.activity_timeout,
-                skip_timeout: cfg.consensus.skip_timeout,
-                max_fetch_count: cfg.consensus.max_fetch_count,
-                fetch_concurrent: cfg.consensus.fetch_concurrent,
-                fetch_rate_per_peer: cfg.consensus.fetch_rate_per_peer,
+                epoch: Epoch::zero(),
+                namespace: NAMESPACE.to_vec(),
                 replay_buffer: cfg.storage.replay_buffer,
                 write_buffer: cfg.storage.write_buffer,
                 buffer_pool: buffer_pool.clone(),
-                blocker: cfg.blocker.clone(),
+                leader_timeout: cfg.consensus.leader_timeout,
+                notarization_timeout: cfg.consensus.notarization_timeout,
+                nullify_retry: cfg.consensus.nullify_retry,
+                activity_timeout: ViewDelta::new(cfg.consensus.activity_timeout),
+                skip_timeout: ViewDelta::new(cfg.consensus.skip_timeout),
+                fetch_timeout: cfg.consensus.fetch_timeout,
+                fetch_concurrent: cfg.consensus.fetch_concurrent,
             },
         );
 
@@ -401,14 +469,14 @@ impl<
             context.with_label("aggregation"),
             aggregation::Config {
                 monitor: epoch_supervisor.clone(),
-                validators: epoch_supervisor,
+                provider: aggregation_supervisor.clone(),
                 automaton: aggregator_mailbox.clone(),
                 reporter: aggregator_mailbox.clone(),
                 blocker: cfg.blocker,
                 namespace: NAMESPACE.to_vec(),
                 priority_acks: false,
                 rebroadcast_timeout: NZDuration!(Duration::from_secs(10)),
-                epoch_bounds: (0, 0),
+                epoch_bounds: (EpochDelta::zero(), EpochDelta::zero()),
                 window: NZU64!(16),
                 activity_timeout: cfg.consensus.activity_timeout,
                 journal_partition: format!("{}-aggregation", cfg.storage.partition_prefix),
@@ -423,7 +491,9 @@ impl<
         // Return the engine
         Self {
             context,
-
+            view_supervisor,
+            public_key,
+            mailbox_size: cfg.consensus.mailbox_size,
             application,
             application_mailbox,
             seeder,
@@ -439,7 +509,7 @@ impl<
         }
     }
 
-    /// Start the [threshold_simplex::Engine].
+    /// Start the [simplex::Engine].
     #[allow(clippy::too_many_arguments)]
     pub fn start(
         self,
@@ -551,11 +621,28 @@ impl<
             self.aggregator_mailbox,
         );
 
+        // Create marshal resolver
+        let marshal_resolver = marshal::resolver::p2p::init(
+            &self.context,
+            marshal::resolver::p2p::Config {
+                public_key: self.public_key.clone(),
+                manager: self.view_supervisor.clone(),
+                blocker: self.view_supervisor.clone(),
+                mailbox_size: self.mailbox_size,
+                initial: Duration::from_secs(1),
+                timeout: Duration::from_secs(2),
+                fetch_retry_timeout: Duration::from_secs(10),
+                priority_requests: false,
+                priority_responses: false,
+            },
+            backfill_network,
+        );
+
         // Start marshal
         let marshal_handle = self.marshal.start(
             self.application_mailbox,
             self.buffer_mailbox,
-            backfill_network,
+            marshal_resolver,
         );
 
         // Start consensus

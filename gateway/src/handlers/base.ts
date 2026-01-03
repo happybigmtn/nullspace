@@ -21,7 +21,11 @@ import { logDebug, logWarn } from '../logger.js';
 const GAME_EVENT_TIMEOUT = (() => {
   const raw = process.env.GATEWAY_EVENT_TIMEOUT_MS;
   const parsed = raw ? Number(raw) : NaN;
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 30000;
+  if (Number.isFinite(parsed) && parsed >= 0) {
+    return parsed;
+  }
+  // Keep production generous; shorten dev/test to keep integration flows responsive.
+  return process.env.NODE_ENV === 'production' ? 30000 : 5000;
 })();
 
 /**

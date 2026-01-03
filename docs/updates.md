@@ -1093,8 +1093,8 @@ pub const MAX_SUBMISSION_TRANSACTIONS: usize = 128;
 
 **Payload size limits:**
 ```rust
-pub const CASINO_MAX_NAME_LENGTH: usize = 64;
-pub const CASINO_MAX_PAYLOAD_LENGTH: usize = 1024;
+pub const CASINO_MAX_NAME_LENGTH: usize = 32;
+pub const CASINO_MAX_PAYLOAD_LENGTH: usize = 256;
 ```
 
 **Proof size limits (DoS protection):**
@@ -3301,7 +3301,7 @@ The following findings were determined to be **NOT actual issues**:
 **Severity**: Low
 **Location**: Project root
 **Status**: ✅ RESOLVED
-**Description**: Containerization added for simulator, node, executor, gateway, auth, ops, live-table, and website.
+**Description**: Containerization added for simulator, node, gateway, auth, ops, live-table, and website.
 **Action**: Implemented Dockerfiles + GHCR build workflow; see `.github/workflows/build-images.yml`.
 
 ---
@@ -3375,7 +3375,7 @@ These are improvement opportunities, not issues requiring immediate action:
 3. **V-3**: Continue reducing useTerminalGame.ts size
    - ✅ Roulette and SicBo hooks extracted, following Baccarat/Craps pattern
 4. **V-5**: Add Dockerfile for production
-   - ✅ Added Dockerfiles for simulator, node, executor, gateway, auth, ops, live-table, website
+   - ✅ Added Dockerfiles for simulator, node, gateway, auth, ops, live-table, website
    - ✅ CI builds GHCR images via `.github/workflows/build-images.yml`
    - ✅ `.dockerignore` tuned for efficient builds
 5. **V-7**: Generate shared game state TS bindings (ts-rs)

@@ -265,11 +265,14 @@ export const DiceThrow2D: React.FC<{
     }
 
     // Physics constants for realistic craps throw
-    const restitution = 0.6; // Bounce off walls
-    const rollingFriction = 0.985; // Gradual slowdown on table
-    const centerAttraction = 0.008; // Gentle pull toward center
-    const settleThreshold = 0.3; // Velocity threshold to consider settled
-    const MAX_DURATION_MS = 3000; // Safety timeout
+    const restitution = 0.65; // Bounce off walls
+    const wallKick = 0.55; // Extra kick when hitting the craps wall
+    const floorRestitution = 0.45; // Softer bounce off felt
+    const rollingFriction = 0.982; // Gradual slowdown on table
+    const centerAttraction = 0.01; // Gentle pull toward center
+    const settleThreshold = 0.28; // Velocity threshold to consider settled
+    const gravity = 0.14; // Simulated downward force on the table
+    const MAX_DURATION_MS = 3200; // Safety timeout
 
     const step = (time: number) => {
       if (startTimeRef.current === null) {
@@ -301,6 +304,9 @@ export const DiceThrow2D: React.FC<{
         vel.vy *= Math.pow(rollingFriction, dtScale);
         vel.vr *= Math.pow(rollingFriction, dtScale);
 
+        // Simulated gravity to give weight against the felt
+        vel.vy += gravity * dtScale;
+
         // Center attraction (increases as velocity decreases)
         if (target && settleToRow) {
           const speed = Math.sqrt(vel.vx * vel.vx + vel.vy * vel.vy);
@@ -321,22 +327,26 @@ export const DiceThrow2D: React.FC<{
         rot += vel.vr * dtScale;
         rollRotation = rot + (vel.cumulativeX / circumference) * 360;
 
-        // Wall bounces
+        // Wall bounces (craps wall on the right)
         if (x <= 0) {
           x = 0;
           vel.vx = Math.abs(vel.vx) * restitution;
         } else if (x >= boundsX) {
           x = boundsX;
           vel.vx = -Math.abs(vel.vx) * restitution;
+          vel.vy += (Math.random() - 0.5) * 2.6 * wallKick;
+          vel.vr += (Math.random() - 0.5) * 6 * wallKick;
         }
 
         // Vertical bounds (keep on table)
         if (y >= boundsY) {
           y = boundsY;
-          vel.vy = -Math.abs(vel.vy) * restitution * 0.5;
+          vel.vy = -Math.abs(vel.vy) * floorRestitution;
+          vel.vx *= 0.92;
+          vel.vr *= 0.85;
         } else if (y <= 0) {
           y = 0;
-          vel.vy = Math.abs(vel.vy) * restitution * 0.5;
+          vel.vy = Math.abs(vel.vy) * floorRestitution;
         }
 
         // Check if this die has settled

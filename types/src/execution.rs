@@ -8,10 +8,13 @@ use commonware_codec::{
     varint::UInt, Encode, EncodeSize, Error, FixedSize, RangeCfg, Read, ReadExt, ReadRangeExt,
     Write,
 };
-use commonware_consensus::threshold_simplex::types::{
-    Activity as CActivity, Finalization as CFinalization, Notarization as CNotarization,
-    Seed as CSeed, View,
+use commonware_consensus::simplex::scheme::bls12381_threshold::{
+    Seed as CSeed, Scheme as ThresholdScheme,
 };
+use commonware_consensus::simplex::types::{
+    Activity as CActivity, Finalization as CFinalization, Notarization as CNotarization,
+};
+use commonware_consensus::types::View;
 use commonware_cryptography::{
     bls12381::primitives::variant::{MinSig, Variant},
     ed25519::{self, Batch, PublicKey},
@@ -246,9 +249,10 @@ mod tags {
 }
 
 pub type Seed = CSeed<MinSig>;
-pub type Notarization = CNotarization<MinSig, Digest>;
-pub type Finalization = CFinalization<MinSig, Digest>;
-pub type Activity = CActivity<MinSig, Digest>;
+type ConsensusScheme = ThresholdScheme<ed25519::PublicKey, MinSig>;
+pub type Notarization = CNotarization<ConsensusScheme, Digest>;
+pub type Finalization = CFinalization<ConsensusScheme, Digest>;
+pub type Activity = CActivity<ConsensusScheme, Digest>;
 
 pub type Identity = <MinSig as Variant>::Public;
 pub type Evaluation = Identity;
@@ -288,7 +292,7 @@ impl Transaction {
         scratch: &mut Vec<u8>,
     ) -> Self {
         Self::write_payload(&nonce, &instruction, scratch);
-        let signature = private.sign(Some(TRANSACTION_NAMESPACE), scratch.as_slice());
+        let signature = private.sign(TRANSACTION_NAMESPACE, scratch.as_slice());
 
         Self {
             nonce,
@@ -305,11 +309,8 @@ impl Transaction {
 
     pub fn verify_with_scratch(&self, scratch: &mut Vec<u8>) -> bool {
         Self::write_payload(&self.nonce, &self.instruction, scratch);
-        self.public.verify(
-            Some(TRANSACTION_NAMESPACE),
-            scratch.as_slice(),
-            &self.signature,
-        )
+        self.public
+            .verify(TRANSACTION_NAMESPACE, scratch.as_slice(), &self.signature)
     }
 
     pub fn verify_batch(&self, batch: &mut Batch) {
@@ -320,7 +321,7 @@ impl Transaction {
     pub fn verify_batch_with_scratch(&self, batch: &mut Batch, scratch: &mut Vec<u8>) {
         Self::write_payload(&self.nonce, &self.instruction, scratch);
         batch.add(
-            Some(TRANSACTION_NAMESPACE),
+            TRANSACTION_NAMESPACE,
             scratch.as_slice(),
             &self.public,
             &self.signature,
@@ -1250,7 +1251,7 @@ impl Block {
     ) -> Digest {
         let mut hasher = Sha256::new();
         hasher.update(parent);
-        hasher.update(&view.to_be_bytes());
+        hasher.update(&view.get().to_be_bytes());
         hasher.update(&height.to_be_bytes());
         for transaction in transactions {
             hasher.update(&transaction.digest());
@@ -1301,7 +1302,7 @@ pub fn genesis_block() -> Block {
     // Use a deterministic, stable parent digest so the genesis commitment is constant.
     // (Digest does not implement Default.)
     let parent = Sha256::hash(b"NULLSPACE_GENESIS");
-    Block::new(parent, 0, 0, Vec::new())
+    Block::new(parent, View::zero(), 0, Vec::new())
 }
 
 /// The digest/commitment of the canonical genesis block.
@@ -1312,7 +1313,7 @@ pub fn genesis_digest() -> Digest {
 impl Write for Block {
     fn write(&self, writer: &mut impl BufMut) {
         self.parent.write(writer);
-        UInt(self.view).write(writer);
+        UInt(self.view.get()).write(writer);
         UInt(self.height).write(writer);
         self.transactions.write(writer);
     }
@@ -1323,7 +1324,7 @@ impl Read for Block {
 
     fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
         let parent = Digest::read(reader)?;
-        let view = UInt::read(reader)?.into();
+        let view = View::new(UInt::read(reader)?.into());
         let height = UInt::read(reader)?.into();
         let transactions = Vec::<Transaction>::read_cfg(
             reader,
@@ -1345,7 +1346,7 @@ impl Read for Block {
 impl EncodeSize for Block {
     fn encode_size(&self) -> usize {
         self.parent.encode_size()
-            + UInt(self.view).encode_size()
+            + UInt(self.view.get()).encode_size()
             + UInt(self.height).encode_size()
             + self.transactions.encode_size()
     }
@@ -1379,17 +1380,19 @@ impl commonware_consensus::Block for Block {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Notarized {
-    pub proof: CNotarization<MinSig, Digest>,
+    pub proof: Notarization,
     pub block: Block,
 }
 
 impl Notarized {
-    pub fn new(proof: CNotarization<MinSig, Digest>, block: Block) -> Self {
+    pub fn new(proof: Notarization, block: Block) -> Self {
         Self { proof, block }
     }
 
     pub fn verify(&self, namespace: &[u8], identity: &<MinSig as Variant>::Public) -> bool {
-        self.proof.verify(namespace, identity)
+        let scheme = ThresholdScheme::certificate_verifier(identity.clone());
+        let mut rng = rand::thread_rng();
+        self.proof.verify(&mut rng, &scheme, namespace)
     }
 }
 
@@ -1404,7 +1407,7 @@ impl Read for Notarized {
     type Cfg = ();
 
     fn read_cfg(buf: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
-        let proof = CNotarization::<MinSig, Digest>::read(buf)?;
+        let proof = Notarization::read(buf)?;
         let block = Block::read(buf)?;
 
         // Ensure the proof is for the block
@@ -1426,17 +1429,19 @@ impl EncodeSize for Notarized {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Finalized {
-    pub proof: CFinalization<MinSig, Digest>,
+    pub proof: Finalization,
     pub block: Block,
 }
 
 impl Finalized {
-    pub fn new(proof: CFinalization<MinSig, Digest>, block: Block) -> Self {
+    pub fn new(proof: Finalization, block: Block) -> Self {
         Self { proof, block }
     }
 
     pub fn verify(&self, namespace: &[u8], identity: &<MinSig as Variant>::Public) -> bool {
-        self.proof.verify(namespace, identity)
+        let scheme = ThresholdScheme::certificate_verifier(identity.clone());
+        let mut rng = rand::thread_rng();
+        self.proof.verify(&mut rng, &scheme, namespace)
     }
 }
 
@@ -3896,7 +3901,7 @@ impl Progress {
 
 impl Write for Progress {
     fn write(&self, writer: &mut impl BufMut) {
-        self.view.write(writer);
+        self.view.get().write(writer);
         self.height.write(writer);
         self.block_digest.write(writer);
         self.state_root.write(writer);
@@ -3912,8 +3917,9 @@ impl Read for Progress {
     type Cfg = ();
 
     fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
+        let view = View::new(u64::read(reader)?);
         Ok(Self {
-            view: View::read(reader)?,
+            view,
             height: u64::read(reader)?,
             block_digest: Digest::read(reader)?,
             state_root: Digest::read(reader)?,
@@ -3927,7 +3933,7 @@ impl Read for Progress {
 }
 
 impl FixedSize for Progress {
-    const SIZE: usize = View::SIZE
+    const SIZE: usize = u64::SIZE
         + u64::SIZE
         + Digest::SIZE
         + Digest::SIZE

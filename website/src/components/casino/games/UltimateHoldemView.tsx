@@ -4,7 +4,9 @@ import { GameState } from '../../../types';
 import { Hand } from '../GameComponents';
 import { MobileDrawer } from '../MobileDrawer';
 import { BetsDrawer } from '../BetsDrawer';
-import { SideBetMenu } from './SideBetMenu';
+import { SideBetsDrawer } from '../SideBetsDrawer';
+import { PanelDrawer } from '../PanelDrawer';
+import { Label } from '../ui/Label';
 
 interface UltimateHoldemViewProps {
     gameState: GameState;
@@ -168,7 +170,7 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
                         <span className="text-gray-500">TOTAL</span>
                         <span className="text-action-primary">${baseTotalBet.toLocaleString()}</span>
                     </div>
-                    <div className="text-lg sm:text-xl font-bold text-action-primary tracking-widest leading-tight animate-pulse">
+                    <div className="text-base sm:text-lg font-semibold text-action-primary tracking-widest leading-tight animate-pulse zen-hide">
                         {gameState.message}
                     </div>
                     <div className="text-xs text-gray-500 flex flex-wrap gap-x-4 gap-y-1 justify-center">
@@ -213,46 +215,10 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
                 </div>
             </div>
 
-            {/* Blind Payouts Sidebar */}
-            <div className="hidden lg:flex absolute top-0 left-0 bottom-24 w-36 bg-titanium-900/80 border-r-2 border-gray-700 p-2 overflow-y-auto backdrop-blur-sm z-30 flex-col">
-                <h3 className="text-[10px] font-bold text-gray-500 mb-2 tracking-widest text-center border-b border-gray-800 pb-1 flex-none">BLIND BONUS</h3>
-                <div className="flex-1 flex flex-col justify-center space-y-2 text-[10px]">
-                    <div className="flex justify-between"><span className="text-gray-400">Royal Flush</span><span className="text-action-primary">500:1</span></div>
-                    <div className="flex justify-between"><span className="text-gray-400">Straight Flush</span><span className="text-action-primary">50:1</span></div>
-                    <div className="flex justify-between"><span className="text-gray-400">Four of Kind</span><span className="text-action-primary">10:1</span></div>
-                    <div className="flex justify-between"><span className="text-gray-400">Full House</span><span className="text-action-primary">3:1</span></div>
-                    <div className="flex justify-between"><span className="text-gray-400">Flush</span><span className="text-action-primary">3:2</span></div>
-                    <div className="flex justify-between"><span className="text-gray-400">Straight</span><span className="text-action-primary">1:1</span></div>
-                    <div className="border-t border-gray-800 pt-2 mt-2">
-                        <div className="text-[9px] text-gray-500 italic">Dealer must have pair or better to qualify</div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Betting Guide Sidebar */}
-            <div className="hidden lg:flex absolute top-0 right-0 bottom-24 w-36 bg-titanium-900/80 border-l-2 border-gray-700 p-2 backdrop-blur-sm z-30 flex-col">
-                <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-2 border-b border-gray-800 pb-1 flex-none text-center">Betting</div>
-                <div className="flex-1 overflow-y-auto flex flex-col justify-center space-y-2 text-[9px] text-gray-400">
-                    <div className="border-b border-gray-800 pb-2">
-                        <div className="text-action-success mb-1">PRE-FLOP</div>
-                        <div>• Check OR</div>
-                        <div>• Bet 3x/4x Ante</div>
-                    </div>
-                    <div className="border-b border-gray-800 pb-2">
-                        <div className="text-action-success mb-1">FLOP</div>
-                        <div>• Check OR</div>
-                        <div>• Bet 2x Ante</div>
-                    </div>
-                    <div>
-                        <div className="text-action-success mb-1">RIVER</div>
-                        <div>• Fold OR</div>
-                        <div>• Bet 1x Ante</div>
-                    </div>
-                </div>
-            </div>
+            {/* Guide Drawer */}
 
             {/* Controls */}
-            <div className="ns-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-titanium-900/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
+            <div className="ns-controlbar zen-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-titanium-900/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
                 <div className="h-auto md:h-20 flex flex-col md:flex-row items-stretch md:items-center justify-between md:justify-center gap-2 p-2 md:px-4">
                     {/* Desktop: Grouped Controls */}
                     <div className="hidden md:flex items-center gap-4 flex-1">
@@ -268,11 +234,74 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
                                 {/* Spacer */}
                                 <div className="h-8 w-px bg-gray-700" />
 
-                                <SideBetMenu
-                                    bets={BONUS_BETS}
-                                    isActive={isBonusActive}
-                                    onSelect={handleBonusSelect}
-                                />
+                                <SideBetsDrawer
+                                    title="HOLD'EM SIDE BETS"
+                                    label="Side Bets"
+                                    count={BONUS_BETS.filter((bet) => isBonusActive(bet.action)).length}
+                                    shortcutHint="T/6/J"
+                                >
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {BONUS_BETS.map((bet) => {
+                                            const active = isBonusActive(bet.action);
+                                            return (
+                                                <button
+                                                    key={bet.action}
+                                                    type="button"
+                                                    onClick={() => handleBonusSelect(bet.action)}
+                                                    className={`rounded-xl border px-3 py-3 text-xs font-semibold uppercase tracking-widest transition-all ${
+                                                        active
+                                                            ? 'border-action-primary/60 bg-action-primary/10 text-action-primary'
+                                                            : 'border-titanium-200 text-titanium-700 hover:border-titanium-500 dark:border-titanium-800 dark:text-titanium-200'
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <span>{bet.label}</span>
+                                                        <span className="text-[10px] font-mono text-titanium-400">[{bet.key}]</span>
+                                                    </div>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </SideBetsDrawer>
+
+                                <PanelDrawer label="Guide" title="HOLD'EM GUIDE" className="hidden md:inline-flex">
+                                    <div className="space-y-6">
+                                        <div>
+                                            <Label size="micro" className="mb-2 block">Blind Bonus</Label>
+                                            <div className="space-y-2 text-[10px]">
+                                                <div className="flex justify-between"><span className="text-titanium-600">Royal Flush</span><span className="text-action-primary">500:1</span></div>
+                                                <div className="flex justify-between"><span className="text-titanium-600">Straight Flush</span><span className="text-action-primary">50:1</span></div>
+                                                <div className="flex justify-between"><span className="text-titanium-600">Four of Kind</span><span className="text-action-primary">10:1</span></div>
+                                                <div className="flex justify-between"><span className="text-titanium-600">Full House</span><span className="text-action-primary">3:1</span></div>
+                                                <div className="flex justify-between"><span className="text-titanium-600">Flush</span><span className="text-action-primary">3:2</span></div>
+                                                <div className="flex justify-between"><span className="text-titanium-600">Straight</span><span className="text-action-primary">1:1</span></div>
+                                                <div className="border-t border-titanium-200 pt-2 mt-2 text-[9px] text-titanium-500 italic">
+                                                    Dealer must have pair or better to qualify
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <Label size="micro" className="mb-2 block">Betting</Label>
+                                            <div className="space-y-2 text-[10px] text-titanium-500">
+                                                <div className="border-b border-titanium-200 pb-2">
+                                                    <div className="text-action-success mb-1">Pre-flop</div>
+                                                    <div>• Check OR</div>
+                                                    <div>• Bet 3x/4x Ante</div>
+                                                </div>
+                                                <div className="border-b border-titanium-200 pb-2">
+                                                    <div className="text-action-success mb-1">Flop</div>
+                                                    <div>• Check OR</div>
+                                                    <div>• Bet 2x Ante</div>
+                                                </div>
+                                                <div>
+                                                    <div className="text-action-success mb-1">River</div>
+                                                    <div>• Fold OR</div>
+                                                    <div>• Bet 1x Ante</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </PanelDrawer>
 
                                 {/* Spacer */}
                                 {(playMode !== 'CASH' || gameState.activeModifiers.super) && <div className="h-8 w-px bg-gray-700" />}
@@ -358,7 +387,7 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
                                             ? () => actions?.uhBet?.(1)
                                             : actions?.uhCheck
                             }
-                            className={`h-14 px-8 rounded border-2 font-bold text-base font-mono tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] ${
+                            className={`ns-control-primary h-14 px-8 rounded border-2 font-bold text-base font-mono tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] ${
                                 gameState.communityCards.length === 5 && gameState.stage === 'PLAYING' && !gameState.message.includes('REVEAL')
                                     ? 'border-action-primary bg-action-primary text-black hover:bg-white hover:border-white'
                                     : 'border-action-success bg-action-success text-black hover:bg-white hover:border-white'
@@ -380,46 +409,33 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
                     <div className="flex md:hidden flex-col gap-2">
                         <div className="flex items-center gap-2">
                             {gameState.stage === 'BETTING' && (
-                                <BetsDrawer title="PLACE BETS">
-                                    <div className="space-y-4">
-                                        {/* Bonus Bets */}
-                                        <div className="rounded border border-gray-800 bg-black/40 p-2 space-y-2">
-                                            <div className="text-[10px] text-amber-500 font-bold tracking-widest border-b border-gray-800 pb-1">BONUS BETS</div>
-                                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                                <button
-                                                    onClick={actions?.uthToggleTrips}
-                                                    className={`py-3 rounded border text-xs font-bold ${
-                                                        (gameState.uthTripsBet || 0) > 0
-                                                            ? 'border-amber-400 bg-amber-500/20 text-amber-300'
-                                                            : 'border-gray-700 bg-gray-900 text-gray-400'
-                                                    }`}
-                                                >
-                                                    TRIPS
-                                                </button>
-                                                <button
-                                                    onClick={actions?.uthToggleSixCardBonus}
-                                                    className={`py-3 rounded border text-xs font-bold ${
-                                                        (gameState.uthSixCardBonusBet || 0) > 0
-                                                            ? 'border-amber-400 bg-amber-500/20 text-amber-300'
-                                                            : 'border-gray-700 bg-gray-900 text-gray-400'
-                                                    }`}
-                                                >
-                                                    6-CARD
-                                                </button>
-                                                <button
-                                                    onClick={actions?.uthToggleProgressive}
-                                                    className={`py-3 rounded border text-xs font-bold ${
-                                                        (gameState.uthProgressiveBet || 0) > 0
-                                                            ? 'border-yellow-400 bg-yellow-500/20 text-yellow-300'
-                                                            : 'border-gray-700 bg-gray-900 text-gray-400'
-                                                    }`}
-                                                >
-                                                    PROG
-                                                </button>
-                                            </div>
+                                <>
+                                    <SideBetsDrawer
+                                        title="HOLD'EM SIDE BETS"
+                                        label="Side Bets"
+                                        count={BONUS_BETS.filter((bet) => isBonusActive(bet.action)).length}
+                                        shortcutHint="T/6/J"
+                                    >
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {BONUS_BETS.map((bet) => {
+                                                const active = isBonusActive(bet.action);
+                                                return (
+                                                    <button
+                                                        key={bet.action}
+                                                        onClick={() => handleBonusSelect(bet.action)}
+                                                        className={`py-3 rounded border text-xs font-bold ${
+                                                            active
+                                                                ? 'border-amber-400 bg-amber-500/20 text-amber-300'
+                                                                : 'border-gray-700 bg-gray-900 text-gray-400'
+                                                        }`}
+                                                    >
+                                                        {bet.label}
+                                                    </button>
+                                                );
+                                            })}
                                         </div>
-
-                                        {/* Modifiers */}
+                                    </SideBetsDrawer>
+                                    <BetsDrawer title="MODIFIERS">
                                         <div className="rounded border border-gray-800 bg-black/40 p-2 space-y-2">
                                             <div className="text-[10px] text-cyan-500 font-bold tracking-widest border-b border-gray-800 pb-1">MODIFIERS</div>
                                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -459,8 +475,8 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
                                                 </button>
                                             </div>
                                         </div>
-                                    </div>
-                                </BetsDrawer>
+                                    </BetsDrawer>
+                                </>
                             )}
 
                             {/* Primary Button */}
@@ -475,7 +491,7 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
                                                 ? () => actions?.uhBet?.(1)
                                                 : actions?.uhCheck
                                 }
-                                className={`flex-1 h-12 px-6 rounded border-2 font-bold text-sm font-mono tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] ${
+                                className={`ns-control-primary flex-1 h-12 px-6 rounded border-2 font-bold text-sm font-mono tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] ${
                                     gameState.communityCards.length === 5 && gameState.stage === 'PLAYING' && !gameState.message.includes('REVEAL')
                                         ? 'border-action-primary bg-action-primary text-black hover:bg-white hover:border-white'
                                         : 'border-action-success bg-action-success text-black hover:bg-white hover:border-white'

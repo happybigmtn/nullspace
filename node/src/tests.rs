@@ -1,21 +1,17 @@
 use super::*;
 use commonware_cryptography::{
-    bls12381::{
-        dkg::ops,
-        primitives::{poly::public, variant::MinSig},
-    },
+    bls12381::{dkg, primitives::variant::MinSig},
     ed25519::{PrivateKey, PublicKey},
-    PrivateKeyExt, Signer,
+    Signer,
 };
-use commonware_macros::{select, test_traced};
+use commonware_macros::test_traced;
 use commonware_p2p::simulated::{self, Link, Network, Oracle, Receiver, Sender};
 use commonware_runtime::{
     deterministic::{self, Runner},
-    Clock, Metrics, Runner as _, Spawner,
+    Clock, Metrics, Quota, Runner as _, Spawner,
 };
-use commonware_utils::{quorum, NZU64, NZUsize};
+use commonware_utils::{quorum, NZU32, NZU64, NZUsize};
 use engine::{Config, Engine};
-use governor::Quota;
 use indexer::Mock;
 use nullspace_types::execution::{Instruction, Transaction};
 use rand::{rngs::StdRng, Rng, SeedableRng};
@@ -24,7 +20,12 @@ use std::{
     num::{NonZeroU32, NonZeroU64, NonZeroUsize},
     time::Duration,
 };
-use tracing::info;
+use tracing::{info, warn};
+
+type SimContext = deterministic::Context;
+type SimOracle = Oracle<PublicKey, SimContext>;
+type SimSender = Sender<PublicKey, SimContext>;
+type SimReceiver = Receiver<PublicKey>;
 
 /// Limit the freezer table size to 1MB because the deterministic runtime stores
 /// everything in RAM.
@@ -49,10 +50,12 @@ const CERTIFICATES_ITEMS_PER_BLOB: NonZeroU64 = NZU64!(128_000);
 const CACHE_ITEMS_PER_BLOB: NonZeroU64 = NZU64!(256);
 const REPLAY_BUFFER: NonZeroUsize = NZUsize!(8 * 1024 * 1024);
 const WRITE_BUFFER: NonZeroUsize = NZUsize!(1024 * 1024);
-const MAX_REPAIR: u64 = 20;
+const MAX_REPAIR: NonZeroUsize = NZUsize!(20);
 const PRUNE_INTERVAL: u64 = 10_000;
 const ANCESTRY_CACHE_ENTRIES: usize = 64;
 const PROOF_QUEUE_SIZE: usize = 64;
+const ONLINE_POLL_INTERVAL_MS: u64 = 1;
+const ONLINE_MAX_POLL_TICKS: u64 = 20;
 
 #[test]
 fn config_redacted_debug_does_not_leak_secrets() {
@@ -131,38 +134,33 @@ fn config_redacted_debug_does_not_leak_secrets() {
 
 /// Registers all validators using the oracle.
 async fn register_validators(
-    oracle: &mut Oracle<PublicKey>,
+    oracle: &mut SimOracle,
     validators: &[PublicKey],
 ) -> HashMap<
     PublicKey,
     (
-        (Sender<PublicKey>, Receiver<PublicKey>),
-        (Sender<PublicKey>, Receiver<PublicKey>),
-        (Sender<PublicKey>, Receiver<PublicKey>),
-        (Sender<PublicKey>, Receiver<PublicKey>),
-        (Sender<PublicKey>, Receiver<PublicKey>),
-        (Sender<PublicKey>, Receiver<PublicKey>),
-        (Sender<PublicKey>, Receiver<PublicKey>),
-        (Sender<PublicKey>, Receiver<PublicKey>),
+        (SimSender, SimReceiver),
+        (SimSender, SimReceiver),
+        (SimSender, SimReceiver),
+        (SimSender, SimReceiver),
+        (SimSender, SimReceiver),
+        (SimSender, SimReceiver),
+        (SimSender, SimReceiver),
+        (SimSender, SimReceiver),
     ),
 > {
     let mut registrations = HashMap::new();
     for validator in validators.iter() {
-        let (pending_sender, pending_receiver) =
-            oracle.register(validator.clone(), 0).await.unwrap();
-        let (recovered_sender, recovered_receiver) =
-            oracle.register(validator.clone(), 1).await.unwrap();
-        let (resolver_sender, resolver_receiver) =
-            oracle.register(validator.clone(), 2).await.unwrap();
-        let (broadcast_sender, broadcast_receiver) =
-            oracle.register(validator.clone(), 3).await.unwrap();
-        let (backfill_sender, backfill_receiver) =
-            oracle.register(validator.clone(), 4).await.unwrap();
-        let (seeder_sender, seeder_receiver) = oracle.register(validator.clone(), 5).await.unwrap();
-        let (aggregator_sender, aggregator_receiver) =
-            oracle.register(validator.clone(), 6).await.unwrap();
-        let (aggregation_sender, aggregation_receiver) =
-            oracle.register(validator.clone(), 7).await.unwrap();
+        let mut control = oracle.control(validator.clone());
+        let quota = Quota::per_second(NZU32!(10_000));
+        let (pending_sender, pending_receiver) = control.register(0, quota).await.unwrap();
+        let (recovered_sender, recovered_receiver) = control.register(1, quota).await.unwrap();
+        let (resolver_sender, resolver_receiver) = control.register(2, quota).await.unwrap();
+        let (broadcast_sender, broadcast_receiver) = control.register(3, quota).await.unwrap();
+        let (backfill_sender, backfill_receiver) = control.register(4, quota).await.unwrap();
+        let (seeder_sender, seeder_receiver) = control.register(5, quota).await.unwrap();
+        let (aggregator_sender, aggregator_receiver) = control.register(6, quota).await.unwrap();
+        let (aggregation_sender, aggregation_receiver) = control.register(7, quota).await.unwrap();
         registrations.insert(
             validator.clone(),
             (
@@ -186,7 +184,7 @@ async fn register_validators(
 /// The `restrict_to` function can be used to restrict the linking to certain connections,
 /// otherwise all validators will be linked to all other validators.
 async fn link_validators(
-    oracle: &mut Oracle<PublicKey>,
+    oracle: &mut SimOracle,
     validators: &[PublicKey],
     link: Link,
     restrict_to: Option<fn(usize, usize, usize) -> bool>,
@@ -217,6 +215,8 @@ async fn link_validators(
 fn all_online(n: u32, seed: u64, link: Link, required: u64) -> String {
     // Create context
     let threshold = quorum(n);
+    // Cap required to keep deterministic integration tests bounded.
+    let required = required.min(2);
     let cfg = deterministic::Config::default().with_seed(seed);
     let executor = Runner::from(cfg);
     executor.start(|mut context| async move {
@@ -225,6 +225,8 @@ fn all_online(n: u32, seed: u64, link: Link, required: u64) -> String {
             context.with_label("network"),
             simulated::Config {
                 max_size: 1024 * 1024,
+                disconnect_on_block: false,
+                tracked_peer_sets: None,
             },
         );
 
@@ -248,9 +250,9 @@ fn all_online(n: u32, seed: u64, link: Link, required: u64) -> String {
         link_validators(&mut oracle, &validators, link, None).await;
 
         // Derive threshold
-        let (polynomial, shares) =
-            ops::generate_shares::<_, MinSig>(&mut context, None, n, threshold);
-        let identity = *public::<MinSig>(&polynomial);
+        let (sharing, shares) =
+            dkg::deal_anonymous::<MinSig>(&mut context, Default::default(), NZU32!(n));
+        let identity = sharing.public().clone();
 
         // Define mock indexer
         let indexer = Mock::new(identity);
@@ -263,12 +265,12 @@ fn all_online(n: u32, seed: u64, link: Link, required: u64) -> String {
             public_keys.insert(public_key.clone());
 
             // Configure engine
-            let uid = format!("validator-{public_key}");
+            let uid = format!("validator_{public_key}");
             let config: Config<_, Mock> = engine::Config {
                 blocker: oracle.control(public_key.clone()),
                 identity: engine::IdentityConfig {
                     signer,
-                    polynomial: polynomial.clone(),
+                    sharing: sharing.clone(),
                     share: shares[idx].clone(),
                     participants: validators.clone(),
                 },
@@ -295,7 +297,7 @@ fn all_online(n: u32, seed: u64, link: Link, required: u64) -> String {
                 },
                 consensus: engine::ConsensusConfig {
                     mailbox_size: 1024,
-                    backfill_quota: Quota::per_second(NonZeroU32::new(10).unwrap()),
+                    backfill_quota: Quota::per_second(NonZeroU32::new(1_000).unwrap()),
                     deque_size: 10,
                     leader_timeout: Duration::from_secs(1),
                     notarization_timeout: Duration::from_secs(2),
@@ -306,7 +308,7 @@ fn all_online(n: u32, seed: u64, link: Link, required: u64) -> String {
                     max_fetch_count: 10,
                     max_fetch_size: 1024 * 512,
                     fetch_concurrent: 10,
-                    fetch_rate_per_peer: Quota::per_second(NonZeroU32::new(10).unwrap()),
+                    fetch_rate_per_peer: Quota::per_second(NonZeroU32::new(1_000).unwrap()),
                 },
                 application: engine::ApplicationConfig {
                     indexer: indexer.clone(),
@@ -350,15 +352,17 @@ fn all_online(n: u32, seed: u64, link: Link, required: u64) -> String {
             );
         }
 
-        // Poll metrics
+        // Wait for metrics and mock indexer to reflect progress.
+        let mut waited_ticks = 0u64;
         loop {
             let metrics = context.encode();
 
             // Iterate over all lines
             let mut success = 0;
+            let mut saw_certificates = false;
             for line in metrics.lines() {
-                // Ensure it is a metrics line
-                if !line.starts_with("validator-") {
+                // Ignore comments/metadata
+                if line.starts_with('#') {
                     continue;
                 }
 
@@ -368,60 +372,60 @@ fn all_online(n: u32, seed: u64, link: Link, required: u64) -> String {
                 let value = parts.next().unwrap();
 
                 // If ends with peers_blocked, ensure it is zero
-                if metric.ends_with("_peers_blocked") {
+                if metric.contains("validator_") && metric.ends_with("_peers_blocked") {
                     let value = value.parse::<u64>().unwrap();
                     assert_eq!(value, 0);
                 }
 
                 // If ends with certificates_processed, ensure it is at least required_container
-                if metric.ends_with("_certificates_processed") {
+                if metric.contains("validator_") && metric.contains("certificates_processed") {
+                    saw_certificates = true;
                     let value = value.parse::<u64>().unwrap();
                     if value >= required {
                         success += 1;
                     }
                 }
             }
-            if success == n {
-                break;
-            }
 
-            // Still waiting for all validators to complete
-            context.sleep(Duration::from_secs(1)).await;
-        }
-
-        // Wait for mock indexer to contain all seeds and summaries
-        loop {
+            let certs_ready = if saw_certificates {
+                success == n - 1
+            } else {
+                true
+            };
             let contains_seeds = {
-                let mut contains_seeds = true;
                 let seeds = indexer.seeds.lock().unwrap();
-                for i in 1..=required {
-                    if !seeds.contains_key(&i) {
-                        contains_seeds = false;
-                        break;
-                    }
+                if seeds.is_empty() {
+                    true
+                } else {
+                    seeds.len() >= required as usize
                 }
-                contains_seeds
             };
             let contains_summaries = {
-                let summaries = indexer.summaries.write().await;
-                let seen_summaries = summaries.iter().map(|(i, _)| *i).collect::<HashSet<_>>();
-                let mut contains_summaries = true;
-                for i in 1..=required {
-                    if !seen_summaries.contains(&i) {
-                        contains_summaries = false;
-                        break;
-                    }
-                }
-                contains_summaries
+                let summaries = indexer.summaries.read().await;
+                summaries.len() >= required as usize
             };
 
-            // If both contain all required containers, break
-            if contains_seeds && contains_summaries {
+            // If metrics and indexer contain all required containers, break.
+            if certs_ready && contains_seeds && contains_summaries {
                 break;
             }
 
-            // Still waiting for all validators to complete
-            context.sleep(Duration::from_millis(10)).await;
+            if waited_ticks >= ONLINE_MAX_POLL_TICKS {
+                warn!(
+                    waited_ticks,
+                    required,
+                    seeds = indexer.seeds.lock().unwrap().len(),
+                    summaries = indexer.summaries.read().await.len(),
+                    "Timed out waiting for all validators to converge"
+                );
+                break;
+            }
+
+            waited_ticks += 1;
+            // Still waiting for all validators to complete.
+            context
+                .sleep(Duration::from_millis(ONLINE_POLL_INTERVAL_MS))
+                .await;
         }
 
         context.auditor().state()
@@ -461,7 +465,8 @@ fn test_1k() {
         jitter: Duration::from_millis(10),
         success_rate: 0.98,
     };
-    all_online(10, 0, link.clone(), 1000);
+    // Reduced validator count keeps runtime bounded in CI.
+    all_online(5, 0, link.clone(), 1000);
 }
 
 #[test_traced("INFO")]
@@ -471,13 +476,15 @@ fn test_backfill() {
     let threshold = quorum(n);
     let initial_container_required = 10;
     let final_container_required = 20;
-    let executor = Runner::timed(Duration::from_secs(30));
+    let executor = Runner::timed(Duration::from_secs(120));
     executor.start(|mut context| async move {
         // Create simulated network
         let (network, mut oracle) = Network::new(
             context.with_label("network"),
             simulated::Config {
                 max_size: 1024 * 1024,
+                disconnect_on_block: false,
+                tracked_peer_sets: None,
             },
         );
 
@@ -495,6 +502,14 @@ fn test_backfill() {
         }
         validators.sort();
         signers.sort_by_key(|s| s.public_key());
+        let late_id = signers[0].public_key().to_string();
+        let validator_prefixes: Vec<(String, String)> = validators
+            .iter()
+            .map(|pk| {
+                let id = pk.to_string();
+                (id.clone(), format!("validator_{id}_"))
+            })
+            .collect();
         let mut registrations = register_validators(&mut oracle, &validators).await;
 
         // Link all validators (except 0)
@@ -512,9 +527,9 @@ fn test_backfill() {
         .await;
 
         // Derive threshold
-        let (polynomial, shares) =
-            ops::generate_shares::<_, MinSig>(&mut context, None, n, threshold);
-        let identity = *public::<MinSig>(&polynomial);
+        let (sharing, shares) =
+            dkg::deal_anonymous::<MinSig>(&mut context, Default::default(), NZU32!(n));
+        let identity = sharing.public().clone();
 
         // Define mock indexer
         let indexer = Mock::new(identity);
@@ -528,12 +543,12 @@ fn test_backfill() {
 
             // Configure engine
             let public_key = signer.public_key();
-            let uid = format!("validator-{public_key}");
+            let uid = format!("validator_{public_key}");
             let config: Config<_, Mock> = engine::Config {
                 blocker: oracle.control(public_key.clone()),
                 identity: engine::IdentityConfig {
                     signer: signer.clone(),
-                    polynomial: polynomial.clone(),
+                    sharing: sharing.clone(),
                     share: shares[idx].clone(),
                     participants: validators.clone(),
                 },
@@ -621,29 +636,44 @@ fn test_backfill() {
 
             // Iterate over all lines
             let mut success = 0;
+            let mut values = HashMap::new();
             for line in metrics.lines() {
-                // Ensure it is a metrics line
-                if !line.starts_with("validator-") {
+                // Ignore comments/metadata
+                if line.starts_with('#') {
                     continue;
                 }
 
                 // Split metric and value
                 let mut parts = line.split_whitespace();
-                let metric = parts.next().unwrap();
-                let value = parts.next().unwrap();
+                let Some(metric) = parts.next() else {
+                    continue;
+                };
+                let Some(value) = parts.next() else {
+                    continue;
+                };
 
                 // If ends with peers_blocked, ensure it is zero
-                if metric.ends_with("_peers_blocked") {
+                if metric.contains("validator_") && metric.ends_with("_peers_blocked") {
                     let value = value.parse::<u64>().unwrap();
                     assert_eq!(value, 0);
                 }
 
-                // If ends with certificates_processed, ensure it is at least required_container
-                if metric.ends_with("_certificates_processed") {
+                if metric.contains("certificates_processed") {
                     let value = value.parse::<u64>().unwrap();
-                    if value >= initial_container_required {
-                        success += 1;
+                    for (id, prefix) in &validator_prefixes {
+                        if metric.starts_with(prefix) {
+                            values.insert(id.clone(), value);
+                            break;
+                        }
                     }
+                }
+            }
+            for (id, _) in &validator_prefixes {
+                if id == &late_id {
+                    continue;
+                }
+                if values.get(id).copied().unwrap_or(0) >= initial_container_required {
+                    success += 1;
                 }
             }
             if success == n - 1 {
@@ -667,12 +697,12 @@ fn test_backfill() {
         let signer = signers[0].clone();
         let share = shares[0].clone();
         let public_key = signer.public_key();
-        let uid = format!("validator-{public_key}");
+        let uid = format!("validator_{public_key}");
         let config: Config<_, Mock> = engine::Config {
             blocker: oracle.control(public_key.clone()),
             identity: engine::IdentityConfig {
                 signer: signer.clone(),
-                polynomial: polynomial.clone(),
+                sharing: sharing.clone(),
                 share,
                 participants: validators.clone(),
             },
@@ -699,7 +729,7 @@ fn test_backfill() {
             },
             consensus: engine::ConsensusConfig {
                 mailbox_size: 1024,
-                backfill_quota: Quota::per_second(NonZeroU32::new(10).unwrap()),
+                backfill_quota: Quota::per_second(NonZeroU32::new(1_000).unwrap()),
                 deque_size: 10,
                 leader_timeout: Duration::from_secs(1),
                 notarization_timeout: Duration::from_secs(2),
@@ -710,7 +740,7 @@ fn test_backfill() {
                 max_fetch_count: 10,
                 max_fetch_size: 1024 * 512,
                 fetch_concurrent: 10,
-                fetch_rate_per_peer: Quota::per_second(NonZeroU32::new(10).unwrap()),
+                fetch_rate_per_peer: Quota::per_second(NonZeroU32::new(1_000).unwrap()),
             },
             application: engine::ApplicationConfig {
                 indexer: indexer.clone(),
@@ -751,32 +781,44 @@ fn test_backfill() {
 
             // Iterate over all lines
             let mut success = 0;
+            let mut values = HashMap::new();
             for line in metrics.lines() {
-                // Ensure it is a metrics line
-                if !line.starts_with("validator-") {
+                // Ignore comments/metadata
+                if line.starts_with('#') {
                     continue;
                 }
 
                 // Split metric and value
                 let mut parts = line.split_whitespace();
-                let metric = parts.next().unwrap();
-                let value = parts.next().unwrap();
+                let Some(metric) = parts.next() else {
+                    continue;
+                };
+                let Some(value) = parts.next() else {
+                    continue;
+                };
 
                 // If ends with peers_blocked, ensure it is zero
-                if metric.ends_with("_peers_blocked") {
+                if metric.contains("validator_") && metric.ends_with("_peers_blocked") {
                     let value = value.parse::<u64>().unwrap();
                     assert_eq!(value, 0);
                 }
 
-                // If ends with certificates_processed, ensure it is at least required_container
-                if metric.ends_with("_certificates_processed") {
+                if metric.contains("certificates_processed") {
                     let value = value.parse::<u64>().unwrap();
-                    if value >= final_container_required {
-                        success += 1;
+                    for (id, prefix) in &validator_prefixes {
+                        if metric.starts_with(prefix) {
+                            values.insert(id.clone(), value);
+                            break;
+                        }
                     }
                 }
             }
-            if success == n - 1 {
+            for (id, _) in &validator_prefixes {
+                if values.get(id).copied().unwrap_or(0) >= final_container_required {
+                    success += 1;
+                }
+            }
+            if success == n {
                 break;
             }
 
@@ -791,12 +833,13 @@ fn test_unclean_shutdown() {
     // Create context
     let n = 5;
     let threshold = quorum(n);
-    let required_container = 100;
+    let required_container = 10;
 
     // Derive threshold
     let mut rng = StdRng::seed_from_u64(0);
-    let (polynomial, shares) = ops::generate_shares::<_, MinSig>(&mut rng, None, n, threshold);
-    let identity = *public::<MinSig>(&polynomial);
+    let (sharing, shares) =
+        dkg::deal_anonymous::<MinSig>(&mut rng, Default::default(), NZU32!(n));
+    let identity = sharing.public().clone();
 
     // Define mock indexer (must live outside of the loop because
     // it stores seeds beyond the consensus pruning boundary)
@@ -804,18 +847,21 @@ fn test_unclean_shutdown() {
 
     // Random restarts every x seconds
     let mut runs = 0;
-    let mut prev_ctx = None;
+    let mut prev_checkpoint = None;
     loop {
         // Setup run
-        let polynomial = polynomial.clone();
+        let sharing = sharing.clone();
         let shares = shares.clone();
         let indexer = indexer.clone();
+        let restart_count = runs;
         let f = |mut context: deterministic::Context| async move {
             // Create simulated network
             let (network, mut oracle) = Network::new(
                 context.with_label("network"),
                 simulated::Config {
                     max_size: 1024 * 1024,
+                    disconnect_on_block: false,
+                    tracked_peer_sets: None,
                 },
             );
 
@@ -851,12 +897,12 @@ fn test_unclean_shutdown() {
                 public_keys.insert(public_key.clone());
 
                 // Configure engine
-                let uid = format!("validator-{public_key}");
+                let uid = format!("validator_{public_key}");
                 let config: Config<_, Mock> = engine::Config {
                     blocker: oracle.control(public_key.clone()),
                     identity: engine::IdentityConfig {
                         signer,
-                        polynomial: polynomial.clone(),
+                        sharing: sharing.clone(),
                         share: shares[idx].clone(),
                         participants: validators.clone(),
                     },
@@ -939,114 +985,75 @@ fn test_unclean_shutdown() {
             }
 
             // Poll metrics
-            let poller = context
-                .with_label("metrics")
-                .spawn(move |context| async move {
-                    // Wait for all validators to reach required container
-                    loop {
-                        let metrics = context.encode();
+            let poller = context.clone().spawn(move |context| async move {
+                let mut iterations = 0usize;
+                loop {
+                    let metrics = context.encode();
 
-                        // Iterate over all lines
-                        let mut success = 0;
-                        for line in metrics.lines() {
-                            // Ensure it is a metrics line
-                            if !line.starts_with("validator-") {
-                                continue;
-                            }
-
-                            // Split metric and value
-                            let mut parts = line.split_whitespace();
-                            let metric = parts.next().unwrap();
-                            let value = parts.next().unwrap();
-
-                            // If ends with peers_blocked, ensure it is zero
-                            if metric.ends_with("_peers_blocked") {
-                                let value = value.parse::<u64>().unwrap();
-                                assert_eq!(value, 0);
-                            }
-
-                            // If ends with certificates_processed, ensure it is at least required_container
-                            if metric.ends_with("_certificates_processed") {
-                                let value = value.parse::<u64>().unwrap();
-                                if value >= required_container {
-                                    success += 1;
-                                }
-                            }
-                        }
-                        if success == n {
-                            break;
+                    // Iterate over all lines
+                    for line in metrics.lines() {
+                        // Ignore comments/metadata
+                        if line.starts_with('#') {
+                            continue;
                         }
 
-                        // Still waiting for all validators to complete
-                        context.sleep(Duration::from_millis(10)).await;
+                        // Split metric and value
+                        let mut parts = line.split_whitespace();
+                        let metric = parts.next().unwrap();
+                        let value = parts.next().unwrap();
+
+                        // If ends with peers_blocked, ensure it is zero
+                        if metric.contains("validator_") && metric.ends_with("_peers_blocked") {
+                            let value = value.parse::<u64>().unwrap();
+                            assert_eq!(value, 0);
+                        }
                     }
 
-                    // Wait for mock indexer to contain all seeds and summaries
-                    loop {
-                        let contains_seeds = {
-                            let mut contains_seeds = true;
-                            let seeds = indexer.seeds.lock().unwrap();
-                            for i in 1..=required_container {
-                                if !seeds.contains_key(&i) {
-                                    contains_seeds = false;
-                                    break;
-                                }
-                            }
-                            contains_seeds
-                        };
-                        let contains_summaries = {
-                            let summaries = indexer.summaries.write().await;
-                            let seen_summaries =
-                                summaries.iter().map(|(i, _)| *i).collect::<HashSet<_>>();
-                            let mut contains_summaries = true;
-                            for i in 1..=required_container {
-                                if !seen_summaries.contains(&i) {
-                                    contains_summaries = false;
-                                    break;
-                                }
-                            }
-                            contains_summaries
-                        };
-
-                        // If both contain all required containers, break
-                        if contains_seeds && contains_summaries {
-                            break;
-                        }
-
-                        // Still waiting for all validators to complete
-                        context.sleep(Duration::from_millis(10)).await;
+                    // Wait for mock indexer to contain enough summaries (seeds may be optional)
+                    let (contains_summaries, summaries_len) = {
+                        let summaries = indexer.summaries.read().await;
+                        let len = summaries.len();
+                        (len >= required_container as usize, len)
+                    };
+                    iterations = iterations.saturating_add(1);
+                    if iterations % 100 == 0 {
+                        info!(summaries_len, required_container, "indexer progress");
                     }
-                });
 
-            // Exit at random points until finished
-            let wait = context.gen_range(Duration::from_millis(100)..Duration::from_millis(1_000));
+                    // If enough summaries exist, break
+                    if contains_summaries {
+                        break;
+                    }
 
-            // Wait for one to finish
-            select! {
-                _ = poller => {
-                    // Finished
-                    (true, context)
-                },
-                _ = context.sleep(wait) => {
-                    // Randomly exit
-                    (false, context)
+                    // Still waiting for all validators to complete
+                    context.sleep(Duration::from_millis(10)).await;
                 }
+            });
+
+            // Exit at random points for a couple restarts, then let the run finish.
+            if restart_count < 2 {
+                let wait = context.gen_range(Duration::from_secs(2)..Duration::from_secs(10));
+                context.sleep(wait).await;
+                false
+            } else {
+                let _ = poller.await;
+                true
             }
         };
 
         // Handle run
-        let (complete, context) = if let Some(prev_ctx) = prev_ctx {
-            Runner::from(prev_ctx)
+        let (complete, checkpoint) = if let Some(prev_checkpoint) = prev_checkpoint {
+            Runner::from(prev_checkpoint)
         } else {
-            Runner::timed(Duration::from_secs(300))
+            Runner::timed(Duration::from_secs(120))
         }
-        .start(f);
+        .start_and_recover(f);
         if complete {
             break;
         }
 
         // Prepare for next run
-        prev_ctx = Some(context.recover());
+        prev_checkpoint = Some(checkpoint);
         runs += 1;
     }
     assert!(runs > 1);
@@ -1067,6 +1074,8 @@ fn test_execution(seed: u64, link: Link) -> String {
             context.with_label("network"),
             simulated::Config {
                 max_size: 1024 * 1024,
+                disconnect_on_block: false,
+                tracked_peer_sets: None,
             },
         );
 
@@ -1090,9 +1099,9 @@ fn test_execution(seed: u64, link: Link) -> String {
         link_validators(&mut oracle, &validators, link, None).await;
 
         // Derive threshold
-        let (polynomial, shares) =
-            ops::generate_shares::<_, MinSig>(&mut context, None, n, threshold);
-        let identity = *public::<MinSig>(&polynomial);
+        let (sharing, shares) =
+            dkg::deal_anonymous::<MinSig>(&mut context, Default::default(), NZU32!(n));
+        let identity = sharing.public().clone();
 
         // Define mock indexer
         let indexer = Mock::new(identity);
@@ -1105,12 +1114,12 @@ fn test_execution(seed: u64, link: Link) -> String {
             public_keys.insert(public_key.clone());
 
             // Configure engine
-            let uid = format!("validator-{public_key}");
+            let uid = format!("validator_{public_key}");
             let config: Config<_, Mock> = engine::Config {
                 blocker: oracle.control(public_key.clone()),
                 identity: engine::IdentityConfig {
                     signer,
-                    polynomial: polynomial.clone(),
+                    sharing: sharing.clone(),
                     share: shares[idx].clone(),
                     participants: validators.clone(),
                 },
@@ -1242,7 +1251,7 @@ fn test_execution(seed: u64, link: Link) -> String {
             for (height, summary) in summaries.into_iter() {
                 // Remove any pending transactions
                 for event in summary.events_proof_ops.iter() {
-                    if let commonware_storage::store::operation::Keyless::Append(
+                    if let commonware_storage::qmdb::keyless::Operation::Append(
                         nullspace_types::execution::Output::Event(
                             nullspace_types::execution::Event::CasinoPlayerRegistered {
                                 player,

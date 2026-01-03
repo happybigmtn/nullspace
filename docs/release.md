@@ -15,6 +15,11 @@
 - Node: `npm audit --omit=dev --audit-level=high` in CI (warn-only until tuned).
 - Optional: container scan with Trivy and code scan with Semgrep.
 
+## CI Image Builds
+- `build-images.yml` builds/publishes container images on main/master and PRs.
+- If CI cost becomes an issue, tighten triggers with `paths` filters or disable PR builds.
+- Website image builds depend on build args (VITE_*); ensure secrets/vars are set in CI.
+
 ## Rollback Plan
 1) Keep the last two container images tagged and ready to redeploy.
 2) Roll back by redeploying the previous image and reverting env changes.

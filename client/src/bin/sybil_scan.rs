@@ -14,7 +14,7 @@ use clap::Parser;
 use commonware_codec::{DecodeExt, Encode, ReadExt};
 use commonware_cryptography::ed25519::PublicKey;
 use commonware_utils::{from_hex, hex};
-use nullspace_client::Client;
+use nullspace_client::{operation_value, Client};
 use nullspace_types::{
     execution::{Key, Value},
     Identity,
@@ -139,7 +139,7 @@ async fn main() -> Result<()> {
         .query_state(&Key::PlayerRegistry)
         .await?
         .ok_or_else(|| anyhow!("Player registry not found"))?;
-    let registry = match registry_lookup.operation.value() {
+    let registry = match operation_value(&registry_lookup.operation) {
         Some(Value::PlayerRegistry(registry)) => registry.clone(),
         _ => return Err(anyhow!("Unexpected registry value")),
     };
@@ -150,7 +150,7 @@ async fn main() -> Result<()> {
         let Some(lookup) = lookup else {
             continue;
         };
-        let Some(Value::CasinoPlayer(player)) = lookup.operation.value() else {
+        let Some(Value::CasinoPlayer(player)) = operation_value(&lookup.operation) else {
             continue;
         };
 
@@ -300,7 +300,7 @@ async fn main() -> Result<()> {
 
     let payload = Output {
         generated_at_unix,
-        view: registry_lookup.progress.view,
+        view: registry_lookup.progress.view.get(),
         height: registry_lookup.progress.height,
         bucket_seconds: args.bucket_seconds,
         min_cluster_size: args.min_cluster_size,

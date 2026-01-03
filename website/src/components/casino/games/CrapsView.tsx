@@ -4,6 +4,8 @@ import { GameState } from '../../../types';
 import { DiceThrow2D } from '../GameComponents';
 import { MobileDrawer } from '../MobileDrawer';
 import { BetsDrawer } from '../BetsDrawer';
+import { PanelDrawer } from '../PanelDrawer';
+import { Label } from '../ui/Label';
 import { calculateCrapsExposure, canPlaceCrapsBonusBets } from '../../../utils/gameUtils';
 import { CrapsBonusDashboard } from './CrapsBonusDashboard';
 import { CrapsBetMenu } from './CrapsBetMenu';
@@ -398,186 +400,8 @@ export const CrapsView = React.memo<{
                 </div>
             </div>
 
-            {/* LEFT SIDEBAR - EXPOSURE / SIDE BETS TOGGLE */}
-            <div className="hidden lg:flex absolute top-0 left-0 bottom-24 w-56 bg-titanium-900/80 border-r-2 border-gray-700 backdrop-blur-sm z-30 flex-col">
-                {/* Toggle Tabs */}
-                <div className="flex-none flex border-b border-gray-800">
-                    <button
-                        onClick={() => setLeftSidebarView('EXPOSURE')}
-                        className={`flex-1 py-2 text-[10px] font-bold tracking-widest uppercase transition-colors ${
-                            leftSidebarView === 'EXPOSURE'
-                                ? 'text-action-success border-b-2 border-action-success bg-action-success/10'
-                                : 'text-gray-500 hover:text-gray-300'
-                        }`}
-                    >
-                        EXPOSURE
-                    </button>
-                    <button
-                        onClick={() => setLeftSidebarView('SIDE_BETS')}
-                        className={`flex-1 py-2 text-[10px] font-bold tracking-widest uppercase transition-colors ${
-                            leftSidebarView === 'SIDE_BETS'
-                                ? 'text-amber-400 border-b-2 border-amber-400 bg-amber-400/10'
-                                : 'text-gray-500 hover:text-gray-300'
-                        }`}
-                    >
-                        SIDE BETS
-                    </button>
-                </div>
-
-                {/* Content */}
-                <div className="flex-1 overflow-y-auto p-2">
-                    {leftSidebarView === 'EXPOSURE' ? (
-                        <div className="flex flex-col justify-center space-y-1 h-full">
-                            {(() => {
-                                const hardwayTargets = [4, 6, 8, 10];
-                                const activeHardways = gameState.crapsBets
-                                    .filter(b => b.type === 'HARDWAY')
-                                    .map(b => b.target!);
-
-                                const rows: { num: number; label: string; isHard?: boolean }[] = [];
-
-                                [2,3,4,5,6,7,8,9,10,11,12].forEach(num => {
-                                    if (hardwayTargets.includes(num) && activeHardways.includes(num)) {
-                                        rows.push({ num, label: `${num}H`, isHard: true });
-                                        rows.push({ num, label: `${num}E`, isHard: false });
-                                    } else {
-                                        rows.push({ num, label: num.toString() });
-                                    }
-                                });
-
-                                // Format number with K/M abbreviations for large values
-                                const formatPnl = (n: number) => {
-                                    const abs = Math.abs(n);
-                                    if (abs >= 1000000) return `${(abs / 1000000).toFixed(1)}M`;
-                                    if (abs >= 10000) return `${Math.round(abs / 1000)}K`;
-                                    if (abs >= 1000) return `${(abs / 1000).toFixed(1)}K`;
-                                    return abs.toString();
-                                };
-
-                                return rows.map((row, idx) => {
-                                    const pnl = row.isHard !== undefined
-                                        ? calculateCrapsExposure(row.num, gameState.crapsPoint, gameState.crapsBets, row.isHard)
-                                        : calculateCrapsExposure(row.num, gameState.crapsPoint, gameState.crapsBets);
-
-                                    const pnlRounded = Math.round(pnl);
-                                    const isHighlight = row.num === currentRoll;
-
-                                    return (
-                                        <div key={idx} className="flex items-center h-7 text-base">
-                                            <div className="w-20 flex justify-end items-center pr-2 overflow-hidden">
-                                                {pnlRounded < 0 && (
-                                                    <span className="text-action-destructive font-mono text-sm whitespace-nowrap">
-                                                        -{formatPnl(pnlRounded)}
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <div className={`w-10 text-center font-bold relative flex-shrink-0 ${
-                                                isHighlight ? 'text-yellow-400 bg-yellow-400/20 rounded' :
-                                                row.num === 7 ? 'text-action-destructive' :
-                                                row.isHard === true ? 'text-action-primary' :
-                                                row.isHard === false ? 'text-gray-400' : 'text-white'
-                                            }`}>
-                                                {row.label}
-                                            </div>
-                                            <div className="w-20 flex justify-start items-center pl-2 overflow-hidden">
-                                                {pnlRounded > 0 && (
-                                                    <span className="text-action-success font-mono text-sm whitespace-nowrap">
-                                                        +{formatPnl(pnlRounded)}
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </div>
-                                    );
-                                });
-                            })()}
-                        </div>
-                    ) : (
-                        <CrapsBonusDashboard
-                            bets={gameState.crapsBets}
-                            madePointsMask={gameState.crapsMadePointsMask}
-                            compact={true}
-                        />
-                    )}
-                </div>
-            </div>
-
-            {/* ACTIVE BETS SIDEBAR */}
-            <div className="hidden lg:flex absolute top-0 right-0 bottom-24 w-36 bg-titanium-900/80 border-l-2 border-gray-700 p-2 backdrop-blur-sm z-30 flex-col">
-                <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-2 border-b border-gray-800 pb-1 flex-none text-center">Table Bets</div>
-                <div className="flex-1 overflow-y-auto flex flex-col space-y-2">
-                    {(() => {
-                        const confirmedBets = gameState.crapsBets.filter(b => b.local !== true);
-                        const pendingBets = gameState.crapsBets.filter(b => b.local === true);
-
-                        const renderBet = (b: typeof gameState.crapsBets[0], i: number, isPending: boolean) => {
-                            const globalIdx = gameState.crapsBets.indexOf(b);
-                            const candidateIdx = gameState.crapsOddsCandidates?.indexOf(globalIdx);
-                            const isCandidate = candidateIdx !== undefined && candidateIdx !== -1;
-
-                            return (
-                                <div
-                                    key={i}
-                                    onClick={() => isCandidate ? actions?.addCrapsOdds?.(candidateIdx) : actions?.placeCrapsBet?.(b.type, b.target)}
-                                    className={`flex justify-between items-center text-xs border p-1 rounded cursor-pointer hover:bg-gray-800 transition-colors ${
-                                        isCandidate
-                                            ? 'border-action-primary bg-action-primary/10'
-                                            : isPending
-                                                ? 'border-amber-600/50 bg-amber-900/20'
-                                                : 'border-gray-800 bg-black/50'
-                                    }`}
-                                >
-                                    <div className="flex flex-col">
-                                        <span className={`font-bold text-[10px] ${
-                                            isCandidate ? 'text-action-primary' : isPending ? 'text-amber-400' : 'text-action-success'
-                                        }`}>
-                                            {isCandidate ? `[${candidateIdx! + 1}] ` : ''}{b.type}{b.target !== undefined ? ` ${b.target}` : ''}
-                                        </span>
-                                        <span className="text-[9px] text-gray-500">{b.status === 'PENDING' ? 'WAIT' : 'ON'}</span>
-                                    </div>
-                                    <div className="text-right">
-                                        <div className="text-white text-[10px]">${b.amount + (b.oddsAmount || 0)}</div>
-                                        {b.localOddsAmount && b.localOddsAmount > 0 && (
-                                            <div className="text-[9px] text-amber-400">+${b.localOddsAmount} odds pending</div>
-                                        )}
-                                    </div>
-                                </div>
-                            );
-                        };
-
-                        if (confirmedBets.length === 0 && pendingBets.length === 0) {
-                            return <div className="text-center text-[10px] text-gray-700 italic">NO BETS</div>;
-                        }
-
-                        return (
-                            <>
-                                {/* Confirmed (on-chain) bets */}
-                                {confirmedBets.length > 0 && (
-                                    <div className="space-y-1">
-                                        <div className="text-[8px] text-action-success uppercase tracking-widest font-bold">
-                                            Confirmed ({confirmedBets.length})
-                                        </div>
-                                        {confirmedBets.map((b, i) => renderBet(b, i, false))}
-                                    </div>
-                                )}
-
-                                {/* Pending (local staged) bets */}
-                                {pendingBets.length > 0 && (
-                                    <div className="space-y-1">
-                                        <div className="text-[8px] text-amber-400 uppercase tracking-widest font-bold">
-                                            Pending ({pendingBets.length})
-                                        </div>
-                                        {pendingBets.map((b, i) => renderBet(b, i, true))}
-                                    </div>
-                                )}
-                            </>
-                        );
-                    })()}
-                </div>
-            </div>
-
-
             {/* CONTROLS */}
-            <div className="ns-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-titanium-900/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
+            <div className="ns-controlbar zen-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-titanium-900/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
                 <div className="h-16 md:h-20 flex items-center justify-between md:justify-center gap-2 p-2 md:px-4">
                     {/* Bet Menu */}
                     <div className="hidden md:flex items-center gap-2 flex-1">
@@ -587,6 +411,177 @@ export const CrapsView = React.memo<{
                             canPlaceBonus={canPlaceBonus}
                             playMode={playMode}
                         />
+                        <PanelDrawer label="Table" title="CRAPS TABLE" count={gameState.crapsBets.length} className="hidden md:inline-flex">
+                            <div className="space-y-6">
+                                <div>
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <button
+                                            onClick={() => setLeftSidebarView('EXPOSURE')}
+                                            className={`flex-1 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest transition-colors ${
+                                                leftSidebarView === 'EXPOSURE'
+                                                    ? 'text-action-success border border-action-success bg-action-success/10'
+                                                    : 'text-titanium-500 border border-titanium-200 hover:text-titanium-800'
+                                            }`}
+                                        >
+                                            Exposure
+                                        </button>
+                                        <button
+                                            onClick={() => setLeftSidebarView('SIDE_BETS')}
+                                            className={`flex-1 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest transition-colors ${
+                                                leftSidebarView === 'SIDE_BETS'
+                                                    ? 'text-amber-500 border border-amber-400 bg-amber-400/10'
+                                                    : 'text-titanium-500 border border-titanium-200 hover:text-titanium-800'
+                                            }`}
+                                        >
+                                            Bonus
+                                        </button>
+                                    </div>
+
+                                    {leftSidebarView === 'EXPOSURE' ? (
+                                        <div className="max-h-52 overflow-y-auto scrollbar-hide rounded-2xl border border-titanium-200 bg-titanium-50/60 p-2">
+                                            {(() => {
+                                                const hardwayTargets = [4, 6, 8, 10];
+                                                const activeHardways = gameState.crapsBets
+                                                    .filter(b => b.type === 'HARDWAY')
+                                                    .map(b => b.target!);
+
+                                                const rows: { num: number; label: string; isHard?: boolean }[] = [];
+
+                                                [2,3,4,5,6,7,8,9,10,11,12].forEach(num => {
+                                                    if (hardwayTargets.includes(num) && activeHardways.includes(num)) {
+                                                        rows.push({ num, label: `${num}H`, isHard: true });
+                                                        rows.push({ num, label: `${num}E`, isHard: false });
+                                                    } else {
+                                                        rows.push({ num, label: num.toString() });
+                                                    }
+                                                });
+
+                                                const formatPnl = (n: number) => {
+                                                    const abs = Math.abs(n);
+                                                    if (abs >= 1000000) return `${(abs / 1000000).toFixed(1)}M`;
+                                                    if (abs >= 10000) return `${Math.round(abs / 1000)}K`;
+                                                    if (abs >= 1000) return `${(abs / 1000).toFixed(1)}K`;
+                                                    return abs.toString();
+                                                };
+
+                                                return rows.map((row, idx) => {
+                                                    const pnl = row.isHard !== undefined
+                                                        ? calculateCrapsExposure(row.num, gameState.crapsPoint, gameState.crapsBets, row.isHard)
+                                                        : calculateCrapsExposure(row.num, gameState.crapsPoint, gameState.crapsBets);
+
+                                                    const pnlRounded = Math.round(pnl);
+                                                    const isHighlight = row.num === currentRoll;
+
+                                                    return (
+                                                        <div key={idx} className="flex items-center h-7 text-base">
+                                                            <div className="w-20 flex justify-end items-center pr-2 overflow-hidden">
+                                                                {pnlRounded < 0 && (
+                                                                    <span className="text-action-destructive font-mono text-sm whitespace-nowrap">
+                                                                        -{formatPnl(pnlRounded)}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <div className={`w-10 text-center font-bold relative flex-shrink-0 ${
+                                                                isHighlight ? 'text-yellow-400 bg-yellow-400/20 rounded' :
+                                                                row.num === 7 ? 'text-action-destructive' :
+                                                                row.isHard === true ? 'text-action-primary' :
+                                                                row.isHard === false ? 'text-titanium-500' : 'text-titanium-900'
+                                                            }`}>
+                                                                {row.label}
+                                                            </div>
+                                                            <div className="w-20 flex justify-start items-center pl-2 overflow-hidden">
+                                                                {pnlRounded > 0 && (
+                                                                    <span className="text-action-success font-mono text-sm whitespace-nowrap">
+                                                                        +{formatPnl(pnlRounded)}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                });
+                                            })()}
+                                        </div>
+                                    ) : (
+                                        <CrapsBonusDashboard
+                                            bets={gameState.crapsBets}
+                                            madePointsMask={gameState.crapsMadePointsMask}
+                                            compact={true}
+                                        />
+                                    )}
+                                </div>
+
+                                <div>
+                                    <Label size="micro" className="mb-2 block">Table Bets</Label>
+                                    <div className="space-y-2">
+                                        {(() => {
+                                            const confirmedBets = gameState.crapsBets.filter(b => b.local !== true);
+                                            const pendingBets = gameState.crapsBets.filter(b => b.local === true);
+
+                                            const renderBet = (b: typeof gameState.crapsBets[0], i: number, isPending: boolean) => {
+                                                const globalIdx = gameState.crapsBets.indexOf(b);
+                                                const candidateIdx = gameState.crapsOddsCandidates?.indexOf(globalIdx);
+                                                const isCandidate = candidateIdx !== undefined && candidateIdx !== -1;
+
+                                                return (
+                                                    <div
+                                                        key={i}
+                                                        onClick={() => isCandidate ? actions?.addCrapsOdds?.(candidateIdx) : actions?.placeCrapsBet?.(b.type, b.target)}
+                                                        className={`flex justify-between items-center text-xs border p-2 rounded cursor-pointer transition-colors ${
+                                                            isCandidate
+                                                                ? 'border-action-primary bg-action-primary/10'
+                                                                : isPending
+                                                                    ? 'border-amber-400/50 bg-amber-500/10'
+                                                                    : 'border-titanium-200 bg-white hover:bg-titanium-50'
+                                                        }`}
+                                                    >
+                                                        <div className="flex flex-col">
+                                                            <span className={`font-bold text-[10px] ${
+                                                                isCandidate ? 'text-action-primary' : isPending ? 'text-amber-500' : 'text-action-success'
+                                                            }`}>
+                                                                {isCandidate ? `[${candidateIdx! + 1}] ` : ''}{b.type}{b.target !== undefined ? ` ${b.target}` : ''}
+                                                            </span>
+                                                            <span className="text-[9px] text-titanium-500">{b.status === 'PENDING' ? 'WAIT' : 'ON'}</span>
+                                                        </div>
+                                                        <div className="text-right">
+                                                            <div className="text-titanium-900 text-[10px]">${b.amount + (b.oddsAmount || 0)}</div>
+                                                            {b.localOddsAmount && b.localOddsAmount > 0 && (
+                                                                <div className="text-[9px] text-amber-500">+${b.localOddsAmount} odds pending</div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            };
+
+                                            if (confirmedBets.length === 0 && pendingBets.length === 0) {
+                                                return <div className="text-center text-[10px] text-titanium-500 uppercase tracking-widest">No bets</div>;
+                                            }
+
+                                            return (
+                                                <>
+                                                    {confirmedBets.length > 0 && (
+                                                        <div className="space-y-1">
+                                                            <div className="text-[8px] text-action-success uppercase tracking-widest font-bold">
+                                                                Confirmed ({confirmedBets.length})
+                                                            </div>
+                                                            {confirmedBets.map((b, i) => renderBet(b, i, false))}
+                                                        </div>
+                                                    )}
+
+                                                    {pendingBets.length > 0 && (
+                                                        <div className="space-y-1">
+                                                            <div className="text-[8px] text-amber-500 uppercase tracking-widest font-bold">
+                                                                Pending ({pendingBets.length})
+                                                            </div>
+                                                            {pendingBets.map((b, i) => renderBet(b, i, true))}
+                                                        </div>
+                                                    )}
+                                                </>
+                                            );
+                                        })()}
+                                    </div>
+                                </div>
+                            </div>
+                        </PanelDrawer>
                     </div>
 
                     {/* Desktop: Chip + ROLL Button */}
@@ -636,7 +631,7 @@ export const CrapsView = React.memo<{
                         <button
                             type="button"
                             onClick={actions?.deal}
-                            className="h-14 px-8 rounded border-2 font-bold text-base tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] border-action-success bg-action-success text-black hover:bg-white hover:border-white hover:scale-105 active:scale-95"
+                            className="ns-control-primary h-14 px-8 rounded border-2 font-bold text-base tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] border-action-success bg-action-success text-black hover:bg-white hover:border-white hover:scale-105 active:scale-95"
                         >
                             ROLL
                         </button>
@@ -722,7 +717,7 @@ export const CrapsView = React.memo<{
                     <button
                         type="button"
                         onClick={actions?.deal}
-                        className="md:hidden h-12 px-6 rounded border-2 font-bold text-sm tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] border-action-success bg-action-success text-black hover:bg-white hover:border-white hover:scale-105 active:scale-95"
+                        className="ns-control-primary md:hidden h-12 px-6 rounded border-2 font-bold text-sm tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] border-action-success bg-action-success text-black hover:bg-white hover:border-white hover:scale-105 active:scale-95"
                     >
                         ROLL
                     </button>

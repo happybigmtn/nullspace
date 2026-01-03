@@ -11,10 +11,11 @@ secrets available.
 - Admin key files (casino admin ed25519).
 - Convex self-hosted backend provisioned (URL + service token).
 - Stripe testnet prices (if membership flows are enabled on testnet).
-- Executor identity hex (`EXECUTOR_IDENTITY`) and indexer URL.
+- Validator network identity (`VITE_IDENTITY` from configs) and indexer URL.
 - Metrics auth token for simulator + validators + auth (`METRICS_AUTH_TOKEN`).
 - Ops admin token if running ops service (`OPS_ADMIN_TOKEN`).
 - Ops origin allowlist if running ops service (`OPS_ALLOWED_ORIGINS`).
+- Convex admin nonce store reachable (auth falls back to in-memory nonces if unavailable).
 
 ## 1) Config + secrets (staging/testnet)
 - Generate node configs:
@@ -50,6 +51,11 @@ secrets available.
 - Use env templates:
   - `configs/staging/simulator.env.example`
   - `configs/staging/gateway.env.example`
+  - Run preflight checks before first boot:
+    - `node scripts/preflight-management.mjs gateway /etc/nullspace/gateway.env simulator /etc/nullspace/simulator.env auth /etc/nullspace/auth.env website /etc/nullspace/website.env`
+- Website required envs:
+  - `VITE_IDENTITY`, `VITE_URL`, `VITE_AUTH_URL`, `VITE_AUTH_PROXY_URL`
+  - Stripe UI optional: `VITE_STRIPE_TIERS`, `VITE_STRIPE_PRICE_ID`
 
 ## 2) Rate-limit profile (testnet default)
 Use the baseline profile from `docs/limits.md`. Recommended defaults:
@@ -70,15 +76,18 @@ Gateway:
 - `GATEWAY_SESSION_RATE_LIMIT_BLOCK_MS=600000`
 - `GATEWAY_EVENT_TIMEOUT_MS=30000`
 
+Notes:
+- For NAT-heavy mobile traffic, keep per-IP caps at or above these defaults
+  to avoid false throttling; raise if you see 429s on clean traffic.
+
 ## 3) Bring-up sequence (staging/testnet)
 1) Start simulator/indexer with rate limits.
 2) Start validators (one per host).
-3) Start executor (dev-executor) on its host.
-4) Start gateway pointing at simulator.
-5) Start Auth service with Convex + Stripe configured.
-6) Start website with vault-only defaults and correct Auth URL.
-7) (Optional) Start live-table service for craps.
-8) (Optional) Start ops service for analytics.
+3) Start gateway pointing at simulator.
+4) Start Auth service with Convex + Stripe configured.
+5) Start website with vault-only defaults and correct Auth URL.
+6) (Optional) Start live-table service for craps.
+7) (Optional) Start ops service for analytics.
 
 Reference: `docs/testnet-runbook.md`.
 
@@ -106,6 +115,8 @@ Reference: `docs/testnet-runbook.md`.
   ```bash
   RUN_INTEGRATION=true pnpm -C gateway exec vitest run tests/all-bet-types.test.ts
   ```
+  - Requires a running gateway (`TEST_GATEWAY_PORT` if non-default).
+  - Adjust `TEST_TIMEOUT_MS` / `TEST_RESPONSE_TIMEOUT_MS` for slow environments.
 - Game-state parser tests:
   ```bash
   pnpm -C packages/game-state test

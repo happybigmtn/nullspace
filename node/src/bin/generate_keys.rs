@@ -11,14 +11,11 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use commonware_codec::Encode;
 use commonware_cryptography::{
-    bls12381::{
-        dkg::ops,
-        primitives::{poly::public, variant::MinSig},
-    },
+    bls12381::{dkg, primitives::variant::MinSig},
     ed25519::PrivateKey,
-    PrivateKeyExt, Signer,
+    Signer,
 };
-use commonware_utils::{hex, quorum};
+use commonware_utils::{hex, quorum, NZU32};
 use nullspace_node::defaults::{
     DEFAULT_DEQUE_SIZE, DEFAULT_EXECUTION_CONCURRENCY, DEFAULT_LOG_LEVEL,
     DEFAULT_MAILBOX_SIZE, DEFAULT_MAX_PENDING_SEED_LISTENERS, DEFAULT_MEMPOOL_MAX_BACKLOG,
@@ -80,11 +77,11 @@ fn run() -> Result<()> {
     // Using StdRng for compatibility with commonware tests
     let mut rng = StdRng::seed_from_u64(args.seed);
 
-    // Generate BLS threshold polynomial and shares
-    let (polynomial, shares) = ops::generate_shares::<_, MinSig>(&mut rng, None, n, threshold);
-    let identity = *public::<MinSig>(&polynomial);
+    // Generate BLS threshold sharing and shares
+    let (sharing, shares) = dkg::deal_anonymous::<MinSig>(&mut rng, Default::default(), NZU32!(n));
+    let identity = sharing.public().clone();
 
-    let polynomial_hex = hex(&polynomial.encode());
+    let polynomial_hex = hex(&sharing.encode());
     let identity_hex = hex(&identity.encode());
 
     // Create output directory

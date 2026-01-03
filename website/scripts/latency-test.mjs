@@ -22,12 +22,14 @@ const CHROMIUM_PATH = process.env.PW_CHROMIUM_PATH || '/usr/bin/chromium';
 const WEBSITE_DIR = fileURLToPath(new URL('..', import.meta.url));
 const REPO_DIR = fileURLToPath(new URL('../..', import.meta.url));
 
-const SIMULATOR_PORT = Number(process.env.SMOKE_SIMULATOR_PORT || 8089);
-const SIMULATOR_URL = process.env.SMOKE_SIMULATOR_URL || `http://127.0.0.1:${SIMULATOR_PORT}`;
-const SIMULATOR_BIN =
-  process.env.SMOKE_SIMULATOR_BIN || path.join(REPO_DIR, 'target', 'release', 'nullspace-simulator');
-const EXECUTOR_BIN =
-  process.env.SMOKE_EXECUTOR_BIN || path.join(REPO_DIR, 'target', 'release', 'dev-executor');
+const CONFIG_DIR = process.env.SMOKE_CONFIG_DIR || path.join(REPO_DIR, 'configs', 'local');
+const NODE_CONFIG = path.join(CONFIG_DIR, 'node0.yaml');
+const NETWORK_SCRIPT = path.join(REPO_DIR, 'scripts', 'start-local-network.sh');
+const SIMULATOR_URL = process.env.SMOKE_SIMULATOR_URL;
+const NO_BUILD = /^(1|true)$/i.test(process.env.SMOKE_NO_BUILD || '');
+const FRESH = /^(1|true)$/i.test(process.env.SMOKE_FRESH || '');
+const NODES = Number(process.env.SMOKE_NODES || 4);
+const SKIP_BACKEND = /^(1|true)$/i.test(process.env.SMOKE_SKIP_BACKEND || '');
 const BLOCK_INTERVAL = Number(process.env.BLOCK_INTERVAL_MS || 50);
 const HEADLESS = !process.env.HEADED;
 
@@ -78,6 +80,16 @@ function readDotEnv(envPath) {
   }
 }
 
+function readIndexerUrl(configPath) {
+  try {
+    const raw = fs.readFileSync(configPath, 'utf8');
+    const match = raw.match(/^\s*indexer:\s*["']?([^"'\n]+)["']?/m);
+    return match ? match[1].trim() : null;
+  } catch {
+    return null;
+  }
+}
+
 async function waitForSimulatorReady(url, timeoutMs = 20_000) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
@@ -101,29 +113,44 @@ function killGroup(child, signal = 'SIGTERM') {
   }
 }
 
-function startBackend(identityHex) {
-  if (!fs.existsSync(SIMULATOR_BIN)) {
-    throw new Error(`Simulator binary not found at ${SIMULATOR_BIN} (build with cargo)`);
+function startBackend() {
+  if (!fs.existsSync(NETWORK_SCRIPT)) {
+    throw new Error(`Network script not found at ${NETWORK_SCRIPT}`);
   }
-  if (!fs.existsSync(EXECUTOR_BIN)) {
-    throw new Error(`dev-executor binary not found at ${EXECUTOR_BIN} (build with cargo)`);
+  if (!fs.existsSync(NODE_CONFIG)) {
+    throw new Error(
+      `Validator configs missing at ${NODE_CONFIG} (run generate-keys to create ${CONFIG_DIR})`
+    );
   }
 
-  const simulator = spawn(
-    SIMULATOR_BIN,
-    ['--host', '127.0.0.1', '--port', String(SIMULATOR_PORT), '--identity', identityHex],
-    { cwd: REPO_DIR, stdio: 'inherit', detached: true }
-  );
-  simulator.unref();
+  const args = [NETWORK_SCRIPT, CONFIG_DIR, String(NODES)];
+  if (FRESH) args.push('--fresh');
+  if (NO_BUILD) args.push('--no-build');
 
-  const executor = spawn(
-    EXECUTOR_BIN,
-    ['--url', SIMULATOR_URL, '--identity', identityHex, '--block-interval-ms', String(BLOCK_INTERVAL)],
-    { cwd: REPO_DIR, stdio: 'inherit', detached: true }
-  );
-  executor.unref();
+  const allowedOrigins = [
+    `http://${HOST}:${PORT}`,
+    `http://127.0.0.1:${PORT}`,
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+  ].join(',');
 
-  return { simulator, executor };
+  const network = spawn(args[0], args.slice(1), {
+    cwd: REPO_DIR,
+    stdio: 'inherit',
+    detached: true,
+    env: {
+      ...process.env,
+      ALLOW_HTTP_NO_ORIGIN: '1',
+      ALLOW_WS_NO_ORIGIN: '1',
+      ALLOWED_HTTP_ORIGINS: allowedOrigins,
+      ALLOWED_WS_ORIGINS: allowedOrigins,
+    },
+  });
+  network.unref();
+
+  return { network };
 }
 
 function startVite(extraEnv) {
@@ -623,19 +650,34 @@ function generateReport() {
 
 async function run() {
   const envFile = path.join(WEBSITE_DIR, '.env');
+  const envLocalFile = path.join(WEBSITE_DIR, '.env.local');
+  const envConfigFile = path.join(CONFIG_DIR, '.env.local');
   const envFromFile = readDotEnv(envFile);
-  const identityHex = process.env.VITE_IDENTITY || envFromFile.VITE_IDENTITY;
+  const envFromLocal = readDotEnv(envLocalFile);
+  const envFromConfig = readDotEnv(envConfigFile);
+  const identityHex =
+    process.env.VITE_IDENTITY ||
+    envFromLocal.VITE_IDENTITY ||
+    envFromFile.VITE_IDENTITY ||
+    envFromConfig.VITE_IDENTITY;
+  const configSimulatorUrl = readIndexerUrl(NODE_CONFIG) || 'http://127.0.0.1:8080';
+  const simulatorUrl = SKIP_BACKEND ? SIMULATOR_URL || configSimulatorUrl : configSimulatorUrl;
 
   if (!identityHex) {
-    throw new Error(`Missing VITE_IDENTITY (set env or add ${envFile})`);
+    throw new Error(
+      `Missing VITE_IDENTITY (set env or add ${envFile} / ${envLocalFile} / ${envConfigFile})`
+    );
   }
 
-  console.log('Starting backend services...');
-  const backend = startBackend(identityHex);
-  await waitForSimulatorReady(SIMULATOR_URL);
+  let backend = null;
+  if (!SKIP_BACKEND) {
+    console.log('Starting backend services...');
+    backend = startBackend();
+  }
+  await waitForSimulatorReady(simulatorUrl);
   console.log('Backend ready.');
 
-  const server = startVite({ VITE_URL: SIMULATOR_URL, VITE_IDENTITY: identityHex });
+  const server = startVite({ VITE_URL: simulatorUrl, VITE_IDENTITY: identityHex });
 
   try {
     console.log('Waiting for frontend...');
@@ -702,8 +744,9 @@ async function run() {
     }
   } finally {
     killGroup(server);
-    killGroup(backend.executor);
-    killGroup(backend.simulator);
+    if (backend) {
+      killGroup(backend.network);
+    }
   }
 }
 

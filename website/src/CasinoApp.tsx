@@ -3,14 +3,14 @@ import { GameType } from './types';
 import { ROULETTE_DOUBLE_ZERO } from './utils/gameUtils';
 import { useTerminalGame } from './hooks/useTerminalGame';
 import { useKeyboardControls } from './hooks/useKeyboardControls';
-import { PlaySwapStakeTabs } from './components/PlaySwapStakeTabs';
 import { WalletPill } from './components/WalletPill';
 import { AuthStatusPill } from './components/AuthStatusPill';
+import { useTheme } from './hooks/useTheme';
 
 // Components
 import {
   Header,
-  Sidebar,
+  SidebarDrawer,
   Footer,
   CommandPalette,
   CustomBetOverlay,
@@ -47,6 +47,8 @@ const DEFAULT_RESPONSIBLE_PLAY: ResponsiblePlaySettings = {
 };
 
 export default function CasinoApp() {
+  const { theme } = useTheme();
+  const casinoTheme = theme === 'dark' ? 'dark' : 'light';
   // Mode selection (Cash vs Freeroll)
   const [playMode, setPlayMode] = useState<PlayMode | null>(null);
 
@@ -65,8 +67,9 @@ export default function CasinoApp() {
   const [customBetString, setCustomBetString] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [leaderboardView, setLeaderboardView] = useState<'RANK' | 'PAYOUT'>('RANK');
+  const [feedOpen, setFeedOpen] = useState(false);
   const [numberInputString, setNumberInputString] = useState("");
-  const [focusMode, setFocusMode] = useState(false);
+  const [focusMode, setFocusMode] = useState(true);
   const [rewardsOpen, setRewardsOpen] = useState(false);
   const [touchMode, setTouchMode] = useState(() => {
     try {
@@ -332,7 +335,11 @@ export default function CasinoApp() {
           setCommandOpen, setCustomBetOpen, setHelpOpen, setHelpDetail, setSearchQuery,
           setCustomBetString, setNumberInputString,
           startGame: safeActions.startGame,
-          setBetAmount: safeActions.setBetAmount
+          setBetAmount: safeActions.setBetAmount,
+          toggleFocus: () => setFocusMode((prev) => !prev),
+          openRewards: () => setRewardsOpen(true),
+          openSafety: () => openResponsiblePlay('settings'),
+          toggleFeed: () => setFeedOpen((prev) => !prev),
       },
       gameActions: { ...safeActions, setGameState },
       phase,
@@ -457,14 +464,18 @@ export default function CasinoApp() {
 	  }
 
   return (
-    <div className="flex flex-col h-[100dvh] w-screen bg-titanium-50 text-titanium-900 font-sans overflow-hidden select-none dark:bg-titanium-900 dark:text-titanium-100" onKeyDown={(e) => {
+    <div
+      className="flex flex-col h-[100dvh] w-screen bg-titanium-100 text-titanium-900 font-sans overflow-hidden select-none dark:bg-titanium-900 dark:text-titanium-100 casino-shell"
+      data-casino-theme={casinoTheme}
+      data-zen={focusMode ? 'true' : 'false'}
+      onKeyDown={(e) => {
         if (e.key === 'Enter') {
             if (commandOpen) handleCommandEnter();
             if (customBetOpen) handleCustomBetEnter();
             if (gameState.rouletteInputMode !== 'NONE' || gameState.sicBoInputMode === 'SUM') handleNumberInputEnter();
         }
-        if (e.key.toLowerCase() === 'l' && !commandOpen && !customBetOpen) setLeaderboardView(prev => prev === 'RANK' ? 'PAYOUT' : 'RANK');
-    }}>
+    }}
+    >
        <a
          href="#casino-main"
          className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:rounded-full focus:border focus:border-action-primary focus:bg-white focus:px-4 focus:py-2 focus:text-xs focus:font-bold focus:text-action-primary shadow-float"
@@ -479,6 +490,7 @@ export default function CasinoApp() {
            focusMode={focusMode}
            setFocusMode={setFocusMode}
            showTimer={playMode === 'FREEROLL'}
+           onOpenCommandPalette={openCommandPalette}
            onToggleHelp={toggleHelp}
            touchMode={touchMode}
            onToggleTouchMode={() => setTouchMode((v) => !v)}
@@ -491,68 +503,62 @@ export default function CasinoApp() {
            sessionDelta={netPnl}
            sessionMinutes={sessionMinutes}
        >
-           <div className="flex lg:hidden items-center gap-2">
+           <div className="flex items-center gap-2">
                <MobileChipSelector 
                    currentBet={gameState.bet} 
                    onSelectBet={safeActions.setBetAmount} 
                    fixedMode 
-                   className="border-none bg-transparent"
+                   className="border-none bg-transparent md:hidden"
                />
-                   <HamburgerMenu
-                       playMode={playMode}
-                       onSetPlayMode={setPlayMode}
-                       onOpenSafety={() => openResponsiblePlay('settings')}
-                       onOpenRewards={() => setRewardsOpen(true)}
-                       onToggleHelp={toggleHelp}
-                       soundEnabled={soundEnabled}
-                       onToggleSound={() => setSoundEnabled((v) => !v)}
-                       touchMode={touchMode}
-                       onToggleTouchMode={() => setTouchMode((v) => !v)}
-                       reducedMotion={reducedMotion}
-                       onToggleReducedMotion={() => setReducedMotion((v) => !v)}
-                       publicKeyHex={walletPublicKeyHex}
-                   />
+               <SidebarDrawer
+                   leaderboard={leaderboard}
+                   history={stats.history}
+                   viewMode={leaderboardView}
+                   currentChips={stats.chips}
+                   prizePool={playMode === 'FREEROLL' ? (freerollActivePrizePool ?? undefined) : undefined}
+                   totalPlayers={playMode === 'FREEROLL' ? (freerollActivePlayerCount ?? undefined) : undefined}
+                   winnersPct={0.15}
+                   gameType={gameState.type}
+                   crapsEventLog={gameState.crapsEventLog}
+                   resolvedBets={gameState.resolvedBets}
+                   resolvedBetsKey={gameState.resolvedBetsKey}
+                   onToggleView={() => setLeaderboardView(prev => prev === 'RANK' ? 'PAYOUT' : 'RANK')}
+                   open={feedOpen}
+                   onOpenChange={setFeedOpen}
+                   className={`hidden md:inline-flex ${focusMode ? 'zen-hide' : ''}`}
+               />
+               <HamburgerMenu
+                   playMode={playMode}
+                   onSetPlayMode={setPlayMode}
+                   onOpenSafety={() => openResponsiblePlay('settings')}
+                   onOpenRewards={() => setRewardsOpen(true)}
+                   onToggleHelp={toggleHelp}
+                   soundEnabled={soundEnabled}
+                   onToggleSound={() => setSoundEnabled((v) => !v)}
+                   touchMode={touchMode}
+                   onToggleTouchMode={() => setTouchMode((v) => !v)}
+                   reducedMotion={reducedMotion}
+                   onToggleReducedMotion={() => setReducedMotion((v) => !v)}
+                   publicKeyHex={walletPublicKeyHex}
+                   focusMode={focusMode}
+                   onToggleFocus={() => setFocusMode((v) => !v)}
+                   walletSlot={
+                     <div className="flex flex-col gap-3">
+                       <AuthStatusPill publicKeyHex={walletPublicKeyHex} />
+                       <WalletPill
+                         rng={walletRng}
+                         vusdt={walletVusdt}
+                         credits={walletCredits}
+                         creditsLocked={walletCreditsLocked}
+                         pubkeyHex={walletPublicKeyHex}
+                         networkLabel={networkLabel}
+                         networkStatus={networkStatus}
+                       />
+                     </div>
+                   }
+               />
            </div>
        </Header>
-
-       <div className="border-b border-titanium-200 bg-glass-light backdrop-blur-lg px-4 py-2.5 flex items-center gap-3 dark:border-titanium-800 dark:bg-glass-dark">
-           <button
-               type="button"
-               onClick={openCommandPalette}
-               className="h-10 px-4 rounded-full border border-titanium-200 bg-white text-titanium-800 text-[11px] font-bold tracking-widest uppercase hover:border-titanium-400 hover:shadow-sm transition-all motion-interaction flex items-center justify-center w-full lg:w-auto dark:border-titanium-800 dark:bg-titanium-900/70 dark:text-titanium-100 dark:hover:border-titanium-600 dark:shadow-none"
-           >
-               Games
-           </button>
-           <button
-               type="button"
-               onClick={() => openResponsiblePlay('settings')}
-               className="hidden lg:flex h-10 px-4 rounded-full border border-titanium-200 bg-white text-titanium-800 text-[11px] font-bold tracking-widest uppercase hover:border-titanium-400 hover:shadow-sm transition-all motion-interaction items-center justify-center dark:border-titanium-800 dark:bg-titanium-900/70 dark:text-titanium-100 dark:hover:border-titanium-600 dark:shadow-none"
-           >
-               Safety
-           </button>
-           <button
-               type="button"
-               onClick={() => setRewardsOpen(true)}
-               className="hidden lg:flex h-10 px-4 rounded-full border border-titanium-200 bg-white text-titanium-800 text-[11px] font-bold tracking-widest uppercase hover:border-titanium-400 hover:shadow-sm transition-all motion-interaction items-center justify-center dark:border-titanium-800 dark:bg-titanium-900/70 dark:text-titanium-100 dark:hover:border-titanium-600 dark:shadow-none"
-           >
-               Rewards
-           </button>
-           <div className="hidden lg:flex flex-1 min-w-0 justify-center">
-               <PlaySwapStakeTabs />
-           </div>
-           <div className="hidden lg:flex items-center gap-3">
-               <AuthStatusPill publicKeyHex={walletPublicKeyHex} />
-               <WalletPill
-                 rng={walletRng}
-                 vusdt={walletVusdt}
-                 credits={walletCredits}
-                 creditsLocked={walletCreditsLocked}
-                 pubkeyHex={walletPublicKeyHex}
-                 networkLabel={networkLabel}
-                 networkStatus={networkStatus}
-               />
-           </div>
-       </div>
 
 	       <div className="flex flex-1 overflow-hidden relative">
 	          <main
@@ -575,29 +581,7 @@ export default function CasinoApp() {
                    />
 	               </div>
 	             ) : null}
-	             {playMode === 'CASH' && (
-	                 <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border border-titanium-200 rounded-2xl bg-white px-4 py-2 shadow-soft">
-	                     <div className="text-[10px] font-bold text-titanium-400 tracking-[0.2em] uppercase">
-	                         Current Mode: <span className="text-action-primary">Cash Play</span>
-	                     </div>
-                     <div className="flex items-center gap-2">
-                         <button
-                             className="text-[10px] font-bold border px-3 py-1.5 rounded-full bg-white border-titanium-200 text-titanium-800 hover:border-titanium-400 transition-colors uppercase tracking-widest"
-                             onClick={() => setPlayMode(null)}
-                         >
-                             Change
-                         </button>
-                         <button
-                             className="text-[10px] font-bold border px-3 py-1.5 rounded-full uppercase tracking-widest transition-all bg-titanium-900 text-white border-titanium-900 shadow-sm hover:scale-105 active:scale-95"
-                             onClick={() => setRewardsOpen(true)}
-                         >
-                             Rewards
-                         </button>
-                     </div>
-                 </div>
-             )}
-
-             <div className="relative flex flex-col flex-1 min-h-0">
+             <div className="relative flex flex-col flex-1 min-h-0 casino-surface casino-contrast">
                {playMode === 'FREEROLL' && <TournamentAlert tournamentTime={tournamentTime} />}
                <ErrorBoundary>
                  <ActiveGame
@@ -612,29 +596,15 @@ export default function CasinoApp() {
                     playMode={playMode}
                     currentBet={gameState.bet}
                     onBetChange={safeActions.setBetAmount}
+                    focusMode={focusMode}
                  />
                </ErrorBoundary>
              </div>
           </main>
-          {!focusMode && (
-             <Sidebar
-                leaderboard={leaderboard}
-                history={stats.history}
-                viewMode={leaderboardView}
-                currentChips={stats.chips}
-                prizePool={playMode === 'FREEROLL' ? (freerollActivePrizePool ?? undefined) : undefined}
-                totalPlayers={playMode === 'FREEROLL' ? (freerollActivePlayerCount ?? undefined) : undefined}
-                winnersPct={0.15}
-                gameType={gameState.type}
-                crapsEventLog={gameState.crapsEventLog}
-                resolvedBets={gameState.resolvedBets}
-                resolvedBetsKey={gameState.resolvedBetsKey}
-             />
-          )}
        </div>
 
        {gameState.type !== GameType.NONE && (
-           <Footer currentBet={gameState.bet} />
+           <Footer currentBet={gameState.bet} className={focusMode ? 'zen-hide' : ''} />
        )}
 
        {/* MODALS */}
@@ -708,6 +678,7 @@ export default function CasinoApp() {
            actions={qaActions}
            lastTxSig={lastTxSig}
            isOnChain={isOnChain}
+           className={focusMode ? 'zen-hide' : ''}
        />
     </div>
   );

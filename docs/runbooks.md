@@ -17,7 +17,7 @@
 
 1) Check validator logs for quorum or networking errors.
 2) Verify peer connectivity and clock sync (NTP).
-3) Restart the executor if block production is stalled.
+3) Restart a validator (one at a time) if block production is stalled.
 4) If still stalled, restart one validator at a time to rejoin quorum.
 5) Post-incident: collect logs and review consensus configs.
 

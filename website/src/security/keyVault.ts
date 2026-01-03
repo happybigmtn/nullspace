@@ -74,7 +74,7 @@ const LS_VAULT_CREDENTIAL_ID = 'nullspace_vault_credential_id';
 const LS_CASINO_PUBLIC_KEY_HEX = 'casino_public_key_hex';
 const VAULT_KIND_PASSKEY: VaultKind = 'passkey';
 const VAULT_KIND_PASSWORD: VaultKind = 'password';
-const PASSWORD_MIN_LENGTH = 8;
+const PASSWORD_MIN_LENGTH = 10;
 const PASSWORD_KDF_ITERATIONS = 310_000;
 
 function isBrowser(): boolean {

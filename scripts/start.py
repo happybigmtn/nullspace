@@ -11,14 +11,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 LOGS = {
-    "simulator": ROOT / "simulator.log",
-    "executor": ROOT / "executor.log",
+    "network": ROOT / "network.log",
     "auth": ROOT / "auth.log",
     "website": ROOT / "website.log",
 }
 PIDS = {
-    "simulator": ROOT / "simulator.pid",
-    "executor": ROOT / "executor.pid",
+    "network": ROOT / "network.pid",
     "auth": ROOT / "auth.pid",
     "website": ROOT / "website.pid",
 }
@@ -140,15 +138,19 @@ def tail_file(path: Path, prefix: str, stop_event: threading.Event):
 def main() -> int:
     parser = argparse.ArgumentParser(description="Start local Nullspace stack and tail logs.")
     parser.add_argument("--web-port", type=int, default=5173)
-    parser.add_argument("--no-build", action="store_true", help="Skip rebuilding simulator/executor binaries.")
+    parser.add_argument("--config-dir", default=str(ROOT / "configs" / "local"))
+    parser.add_argument("--nodes", type=int, default=4)
+    parser.add_argument("--fresh", action="store_true", help="Prune node data before starting.")
+    parser.add_argument("--no-build", action="store_true", help="Skip rebuilding simulator/node binaries.")
     args = parser.parse_args()
 
-    # Clean up existing frontend/simulator/executor/auth processes before restarting.
-    for key in ("website", "simulator", "executor", "auth"):
+    # Clean up existing frontend/network/auth processes before restarting.
+    for key in ("website", "network", "auth"):
         kill_pidfile(PIDS[key])
     for pattern in (
         "nullspace-simulator",
-        "dev-executor",
+        "nullspace-node",
+        "start-local-network.sh",
         "tsx src/server.ts",
         "node .*vite",
         "vite",
@@ -176,17 +178,10 @@ def main() -> int:
         print("Missing Convex env vars in docker/convex/.env", file=sys.stderr)
         return 1
 
-    sim_path = ROOT / "target" / "release" / "nullspace-simulator"
-    exec_path = ROOT / "target" / "release" / "dev-executor"
-    if args.no_build:
-        if not sim_path.exists() or not exec_path.exists():
-            print("Missing simulator/dev-executor binaries. Re-run without --no-build.", file=sys.stderr)
-            return 1
-    else:
-        run(
-            ["cargo", "build", "--release", "--bin", "nullspace-simulator", "--bin", "dev-executor"],
-            cwd=ROOT,
-        )
+    config_dir = Path(args.config_dir)
+    if not (config_dir / "node0.yaml").exists():
+        print(f"Missing validator configs in {config_dir}. Run generate-keys first.", file=sys.stderr)
+        return 1
 
     # Start Convex
     run(
@@ -237,8 +232,8 @@ def main() -> int:
         ]
     )
 
-    simulator_env = os.environ.copy()
-    simulator_env.update(
+    network_env = os.environ.copy()
+    network_env.update(
         {
             "ALLOW_HTTP_NO_ORIGIN": "1",
             "ALLOW_WS_NO_ORIGIN": "1",
@@ -248,34 +243,20 @@ def main() -> int:
     )
 
     processes = []
+    network_cmd = [
+        str(ROOT / "scripts" / "start-local-network.sh"),
+        str(config_dir),
+        str(args.nodes),
+    ]
+    if args.fresh:
+        network_cmd.append("--fresh")
+    if args.no_build:
+        network_cmd.append("--no-build")
     processes.append(
         start_process(
-            "simulator",
-            [
-                str(sim_path),
-                "--host",
-                "127.0.0.1",
-                "--port",
-                "8080",
-                "--identity",
-                vite_identity,
-            ],
-            env=simulator_env,
-        )
-    )
-    processes.append(
-        start_process(
-            "executor",
-            [
-                str(exec_path),
-                "--url",
-                "http://127.0.0.1:8080",
-                "--identity",
-                vite_identity,
-                "--block-interval-ms",
-                "100",
-            ],
-            env={**os.environ, "CASINO_ADMIN_PUBLIC_KEY_HEX": "ae2817b9b6a4038dac68cfc9f109b1d800a56b86eae035e616f901ea96a0565d"},
+            "network",
+            network_cmd,
+            env=network_env,
         )
     )
     processes.append(

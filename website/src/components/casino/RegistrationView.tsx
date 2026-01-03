@@ -83,7 +83,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
       : 'text-gray-300';
 
   return (
-      <div className="flex flex-col min-h-screen w-screen bg-titanium-900 text-white font-mono items-center justify-center p-4 sm:p-6 md:p-8 overflow-auto">
+      <div className="flex flex-col min-h-screen w-screen bg-titanium-900 text-white font-mono items-center justify-center p-4 sm:p-6 md:p-8 overflow-auto casino-contrast" data-contrast="dark">
           <div className="max-w-4xl w-full mb-3 flex justify-center">
               <PlaySwapStakeTabs />
           </div>

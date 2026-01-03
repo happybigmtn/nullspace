@@ -20,14 +20,18 @@ export const getEntitlementsByUser = query({
   args: {
     serviceToken: v.string(),
     userId: v.id("users"),
+    limit: v.optional(v.number()),
   },
   returns: v.array(entitlementDoc),
   handler: async (ctx, args) => {
     requireServiceToken(args.serviceToken);
+    const rawLimit = Number(args.limit);
+    const resolved = Number.isFinite(rawLimit) && rawLimit > 0 ? Math.floor(rawLimit) : 100;
+    const limit = Math.min(resolved, 200);
     return await ctx.db
       .query("entitlements")
       .withIndex("by_user_id", (q) => q.eq("userId", args.userId))
       .order("desc")
-      .collect();
+      .take(limit);
   },
 });

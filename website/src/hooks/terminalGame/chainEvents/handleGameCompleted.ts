@@ -6,6 +6,7 @@ import { GameState, GameType, PlayerStats } from '../../../types';
 import { buildHistoryEntry, parseGameLogs, prependPnlLine } from '../../../utils/gameUtils';
 import { logDebug } from '../../../utils/logger';
 import { track } from '../../../services/telemetry';
+import { decodeCard } from '../../../services/games/shared/cards';
 import {
   MAX_GRAPH_POINTS,
   CHAIN_TO_FRONTEND_GAME_TYPE,
@@ -126,6 +127,28 @@ export const createGameCompletedHandler = ({
       const numeric = Number(value);
       return Number.isFinite(numeric) ? numeric : null;
     })();
+    const blackjackReveal = (() => {
+      if (eventGameType !== GameType.BLACKJACK) return null;
+      if (!parsed?.raw || typeof parsed.raw !== 'object') return null;
+      const raw: any = parsed.raw;
+      const dealerCardsRaw = Array.isArray(raw.dealer?.cards) ? raw.dealer.cards : [];
+      const handsRaw = Array.isArray(raw.hands) ? raw.hands : [];
+      const playerCardsRaw = Array.isArray(handsRaw[0]?.cards) ? handsRaw[0].cards : [];
+      const dealerValue = Number(raw.dealer?.value);
+      const playerValue = Number(handsRaw[0]?.value);
+      const dealerCards = dealerCardsRaw
+        .map((cardId: any) => decodeCard(Number(cardId)))
+        .map((card) => ({ ...card, isHidden: false }));
+      const playerCards = playerCardsRaw
+        .map((cardId: any) => decodeCard(Number(cardId)))
+        .map((card) => ({ ...card, isHidden: false }));
+      return {
+        dealerCards: dealerCards.length > 0 ? dealerCards : null,
+        playerCards: playerCards.length > 0 ? playerCards : null,
+        dealerValue: Number.isFinite(dealerValue) ? dealerValue : null,
+        playerValue: Number.isFinite(playerValue) ? playerValue : null,
+      };
+    })();
 
     const wasSuperRound = gameStateRef.current?.superMode?.isActive || gameStateRef.current?.activeModifiers?.super;
     track('casino.game.completed', {
@@ -150,7 +173,10 @@ export const createGameCompletedHandler = ({
     setStats(prev => {
       const currentGameType = eventGameType;
       const pnlEntry = { [currentGameType]: (prev.pnlByGame[currentGameType] || 0) + netPnL };
-      const historyEntry = buildHistoryEntry(resultMessage, prependPnlLine([], netPnL));
+      const historyEntry = buildHistoryEntry(
+        resultMessage,
+        prependPnlLine(parsed?.details ?? [], netPnL),
+      );
 
       return {
         ...prev,
@@ -188,6 +214,10 @@ export const createGameCompletedHandler = ({
         : (prev.rouletteHistory[prev.rouletteHistory.length - 1] === rouletteResult
           ? prev.rouletteHistory
           : [...prev.rouletteHistory, rouletteResult].slice(-MAX_GRAPH_POINTS)),
+      dealerCards: blackjackReveal?.dealerCards ?? prev.dealerCards,
+      playerCards: blackjackReveal?.playerCards ?? prev.playerCards,
+      blackjackDealerValue: blackjackReveal?.dealerValue ?? prev.blackjackDealerValue,
+      blackjackPlayerValue: blackjackReveal?.playerValue ?? prev.blackjackPlayerValue,
       sessionId: null,
       moveNumber: 0,
       sessionWager: 0,

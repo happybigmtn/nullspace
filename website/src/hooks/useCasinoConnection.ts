@@ -29,7 +29,7 @@ const MISSING_IDENTITY_DETAIL = IS_DEV
 const OFFLINE_DETAIL = 'Offline - check your connection and retry.';
 const VAULT_LOCKED_DETAIL = 'Vault locked. Open Security to unlock.';
 const ERROR_DETAIL = IS_DEV
-  ? 'Failed to connect. Check simulator + dev-executor.'
+  ? 'Failed to connect. Check simulator + validators.'
   : 'Failed to connect. Check your connection and retry.';
 
 export function useCasinoConnection(baseUrl = '/api'): CasinoConnection {

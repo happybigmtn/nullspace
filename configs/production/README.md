@@ -5,6 +5,8 @@ Use isolated keys and endpoints for production.
 - `simulator.env.example`: systemd env file for the simulator.
 - `node.env.example`: systemd env file pointing at your node YAML.
 - `gateway.env.example`: systemd env file for the gateway (mobile/web).
+- `ops.env.example`: systemd env file for the ops/analytics service.
+- `live-table.env.example`: env file for the live-table service.
 - Auth service env: `services/auth/.env.example`.
 - Website build env: `website/.env.production.example`.
 

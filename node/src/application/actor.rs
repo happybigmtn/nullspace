@@ -8,34 +8,35 @@ use crate::{
     backoff::jittered_backoff,
     indexer::Indexer,
     seeder,
-    supervisor::{EpochSupervisor, Supervisor, ViewSupervisor},
+    supervisor::{AggregationSupervisor, EpochSupervisor, Supervisor, ViewSupervisor},
 };
-use commonware_consensus::{marshal, threshold_simplex::types::View};
+use commonware_consensus::{marshal, types::{Round, View}};
 use commonware_cryptography::{
-    bls12381::primitives::{poly::public, variant::MinSig},
+    bls12381::primitives::variant::MinSig,
     ed25519::{Batch, PublicKey},
     sha256::Digest,
     BatchVerifier, Committable, Digestible, Sha256,
 };
 use commonware_macros::select;
 use commonware_runtime::{
-    buffer::PoolRef, telemetry::metrics::histogram, Clock, Handle, Metrics, RwLock, Spawner,
-    Storage, ThreadPool,
+    buffer::PoolRef, telemetry::metrics::histogram, Clock, Handle, Metrics, Spawner, Storage,
+    ThreadPool,
 };
-use commonware_storage::{
-    adb::{self, keyless},
-    translator::EightCap,
-};
-use commonware_utils::{futures::ClosedExt, NZU64};
+use commonware_storage::mmr::{mem::Clean, Location};
+use commonware_storage::qmdb::{any::VariableConfig, keyless};
+use commonware_storage::qmdb::store::CleanStore as _;
+use commonware_storage::translator::EightCap;
+use commonware_utils::futures::ClosedExt;
+use futures::executor::block_on;
 use futures::{SinkExt, StreamExt};
 use futures::{
     channel::{mpsc, oneshot},
     future::try_join,
 };
 use futures::{future, future::Either};
-use nullspace_execution::{nonce, state_transition, Adb, Noncer};
+use nullspace_execution::{state_transition, Adb, PrepareError, State};
 use nullspace_types::{
-    execution::{Output, Value, MAX_BLOCK_TRANSACTIONS},
+    execution::{Key, Output, Transaction, Value, MAX_BLOCK_TRANSACTIONS},
     genesis_block, genesis_digest, Block, Identity,
 };
 use prometheus_client::metrics::{counter::Counter, histogram::Histogram};
@@ -46,7 +47,11 @@ use std::{
     sync::{atomic::AtomicU64, Arc, Mutex},
     time::{Duration, SystemTime},
 };
+use tokio::sync::Mutex as AsyncMutex;
 use tracing::{debug, error, info, warn};
+
+type ThresholdScheme =
+    commonware_consensus::simplex::scheme::bls12381_threshold::Scheme<PublicKey, MinSig>;
 
 /// Histogram buckets for application latency.
 const LATENCY: [f64; 20] = [
@@ -168,6 +173,48 @@ impl NonceCache {
 
 }
 
+async fn fetch_account_nonce<R>(
+    state: Arc<AsyncMutex<Adb<R, EightCap>>>,
+    public: PublicKey,
+) -> Result<u64, PrepareError>
+where
+    R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage + Clone + Send + Sync + 'static,
+{
+    let state_guard = state.lock().await;
+    match block_on(State::get(&*state_guard, Key::Account(public)))
+        .map_err(PrepareError::State)?
+    {
+        Some(Value::Account(account)) => Ok(account.nonce),
+        _ => Ok(0),
+    }
+}
+
+async fn apply_transaction_nonce<R>(
+    state: Arc<AsyncMutex<Adb<R, EightCap>>>,
+    pending: &mut HashMap<PublicKey, u64>,
+    public: PublicKey,
+    nonce: u64,
+) -> Result<(), PrepareError>
+where
+    R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage + Clone + Send + Sync + 'static,
+{
+    let cached_nonce = pending.get(&public).copied();
+    let expected = match cached_nonce {
+        Some(nonce) => nonce,
+        None => fetch_account_nonce(state, public.clone()).await?,
+    };
+
+    if expected != nonce {
+        return Err(PrepareError::NonceMismatch {
+            expected,
+            got: nonce,
+        });
+    }
+
+    pending.insert(public, expected.saturating_add(1));
+    Ok(())
+}
+
 struct ProofJob<R: Clock> {
     view: View,
     height: u64,
@@ -213,8 +260,8 @@ impl AncestryCache {
 }
 
 async fn ancestry(
-    mut marshal: marshal::Mailbox<MinSig, Block>,
-    start: (Option<View>, Digest),
+    mut marshal: marshal::Mailbox<ThresholdScheme, Block>,
+    start: (Option<Round>, Digest),
     end: u64,
 ) -> Option<Arc<[Block]>> {
     let mut ancestry = Vec::new();
@@ -242,8 +289,8 @@ async fn ancestry(
 }
 
 async fn ancestry_cached(
-    marshal: marshal::Mailbox<MinSig, Block>,
-    start: (Option<View>, Digest),
+    marshal: marshal::Mailbox<ThresholdScheme, Block>,
+    start: (Option<Round>, Digest),
     end: u64,
     cache: Arc<Mutex<AncestryCache>>,
 ) -> Option<Arc<[Block]>> {
@@ -270,7 +317,10 @@ async fn ancestry_cached(
 }
 
 /// Application actor.
-pub struct Actor<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> {
+pub struct Actor<
+    R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage + Clone + Send + Sync,
+    I: Indexer,
+> {
     context: R,
     inbound: Mailbox<R>,
     mailbox: mpsc::Receiver<Message<R>>,
@@ -294,21 +344,26 @@ pub struct Actor<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: In
     proof_queue_size: usize,
 }
 
-impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor<R, I> {
+impl<
+        R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage + Clone + Send + Sync,
+        I: Indexer,
+    > Actor<R, I>
+{
     /// Create a new application actor.
     pub fn new(
         context: R,
         config: Config<I>,
-    ) -> (Self, ViewSupervisor, EpochSupervisor, Mailbox<R>) {
+    ) -> (Self, ViewSupervisor, EpochSupervisor, AggregationSupervisor, Mailbox<R>) {
         // Create actor
         let (sender, mailbox) = mpsc::channel(config.mailbox_size);
         let inbound = Mailbox::new(sender, context.stopped());
 
         // Create supervisors
-        let identity = *public::<MinSig>(&config.polynomial);
-        let supervisor = Supervisor::new(config.polynomial, config.participants, config.share);
+        let identity = config.sharing.public().clone();
+        let supervisor = Supervisor::new(config.sharing, config.participants, config.share);
         let view_supervisor = ViewSupervisor::new(supervisor.clone());
-        let epoch_supervisor = EpochSupervisor::new(supervisor);
+        let epoch_supervisor = EpochSupervisor::new(supervisor.clone());
+        let aggregation_supervisor = AggregationSupervisor::new(supervisor);
 
         (
             Self {
@@ -336,23 +391,29 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
             },
             view_supervisor,
             epoch_supervisor,
+            aggregation_supervisor,
             inbound,
         )
     }
 
     pub fn start(
-        mut self,
-        marshal: marshal::Mailbox<MinSig, Block>,
+        self,
+        marshal: marshal::Mailbox<ThresholdScheme, Block>,
         seeder: seeder::Mailbox,
         aggregator: aggregator::Mailbox,
     ) -> Handle<()> {
-        self.context.spawn_ref()(self.run(marshal, seeder, aggregator))
+        let context = self.context.clone();
+        context.spawn(move |context| async move {
+            let mut actor = self;
+            actor.context = context;
+            actor.run(marshal, seeder, aggregator).await;
+        })
     }
 
     /// Run the application actor.
     async fn run(
         mut self,
-        mut marshal: marshal::Mailbox<MinSig, Block>,
+        mut marshal: marshal::Mailbox<ThresholdScheme, Block>,
         seeder: seeder::Mailbox,
         aggregator: aggregator::Mailbox,
     ) {
@@ -467,21 +528,16 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
         // Initialize the state
         let state = match Adb::init(
             self.context.with_label("state"),
-            adb::any::variable::Config {
+            VariableConfig {
                 mmr_journal_partition: format!("{}-state-mmr-journal", self.partition_prefix),
                 mmr_metadata_partition: format!("{}-state-mmr-metadata", self.partition_prefix),
                 mmr_items_per_blob: self.mmr_items_per_blob,
                 mmr_write_buffer: self.mmr_write_buffer,
-                log_journal_partition: format!("{}-state-log-journal", self.partition_prefix),
-                log_items_per_section: self.log_items_per_section,
+                log_partition: format!("{}-state-log-journal", self.partition_prefix),
+                log_items_per_blob: self.log_items_per_section,
                 log_write_buffer: self.log_write_buffer,
                 log_compression: None,
                 log_codec_config: (),
-                locations_journal_partition: format!(
-                    "{}-state-locations-journal",
-                    self.partition_prefix
-                ),
-                locations_items_per_blob: self.locations_items_per_blob,
                 translator: EightCap,
                 thread_pool: None,
                 buffer_pool: self.buffer_pool.clone(),
@@ -495,24 +551,18 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                 return;
             }
         };
-        let events = match keyless::Keyless::<_, Output, Sha256>::init(
+        let events = match keyless::Keyless::<_, Output, Sha256, Clean<Digest>>::init(
             self.context.with_label("events"),
             keyless::Config {
                 mmr_journal_partition: format!("{}-events-mmr-journal", self.partition_prefix),
                 mmr_metadata_partition: format!("{}-events-mmr-metadata", self.partition_prefix),
                 mmr_items_per_blob: self.mmr_items_per_blob,
                 mmr_write_buffer: self.mmr_write_buffer,
-                log_journal_partition: format!("{}-events-log-journal", self.partition_prefix),
+                log_partition: format!("{}-events-log-journal", self.partition_prefix),
                 log_items_per_section: self.log_items_per_section,
                 log_write_buffer: self.log_write_buffer,
                 log_compression: None,
                 log_codec_config: (),
-                locations_journal_partition: format!(
-                    "{}-events-locations-journal",
-                    self.partition_prefix
-                ),
-                locations_items_per_blob: self.locations_items_per_blob,
-                locations_write_buffer: self.log_write_buffer,
                 thread_pool: None,
                 buffer_pool: self.buffer_pool.clone(),
             },
@@ -525,8 +575,8 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                 return;
             }
         };
-        let state = Arc::new(RwLock::new(state));
-        let events = Arc::new(RwLock::new(events));
+        let state = Arc::new(AsyncMutex::new(state));
+        let events = Arc::new(AsyncMutex::new(events));
 
         // Create the execution pool
         //
@@ -549,11 +599,11 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
         let genesis_digest = genesis_digest();
 
         let mut committed_height = {
-            let state_guard = state.read().await;
-            match state_guard.get_metadata().await {
+            let state_guard = state.lock().await;
+            match block_on(state_guard.get_metadata()) {
                 Ok(meta) => meta
-                    .and_then(|(_, v)| match v {
-                        Some(Value::Commit { height, start: _ }) => Some(height),
+                    .and_then(|v| match v {
+                        Value::Commit { height, start: _ } => Some(height),
                         _ => None,
                     })
                     .unwrap_or(0),
@@ -569,7 +619,7 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
         };
 
         // Track built blocks
-        let built: Option<(View, Block)> = None;
+        let built: Option<(Round, Block)> = None;
         let built = Arc::new(Mutex::new(built));
 
         let ancestry_cache = Arc::new(Mutex::new(AncestryCache::new(
@@ -614,26 +664,32 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                         continue;
                     }
 
+                    let state_op_count = std::num::NonZeroU64::new(state_op_count)
+                        .expect("state op count should be non-zero");
+                    let events_op_count = std::num::NonZeroU64::new(events_op_count)
+                        .expect("events op count should be non-zero");
+
                     let mut attempt = 0usize;
                     let mut backoff = Duration::from_millis(50);
                     let ((state_proof, state_proof_ops), (events_proof, events_proof_ops)) = loop {
                         attempt += 1;
                         let proofs = {
-                            let state_guard = proof_state.read().await;
-                            let events_guard = proof_events.read().await;
-                            try_join(
-                                state_guard.historical_proof(
-                                    result.state_end_op,
-                                    result.state_start_op,
-                                    state_op_count,
-                                ),
-                                events_guard.historical_proof(
-                                    result.events_end_op,
-                                    events_start_op,
-                                    NZU64!(events_op_count),
-                                ),
-                            )
-                            .await
+                            let state_guard = proof_state.lock().await;
+                            let events_guard = proof_events.lock().await;
+                            let state_proofs = block_on(state_guard.historical_proof(
+                                Location::from(result.state_end_op),
+                                Location::from(result.state_start_op),
+                                state_op_count,
+                            ));
+                            let events_proofs = block_on(events_guard.historical_proof(
+                                Location::from(result.events_end_op),
+                                Location::from(events_start_op),
+                                events_op_count,
+                            ));
+                            match (state_proofs, events_proofs) {
+                                (Ok(state), Ok(events)) => Ok((state, events)),
+                                (Err(err), _) | (_, Err(err)) => Err(err),
+                            }
                         };
                         match proofs {
                             Ok(proofs) => break proofs,
@@ -681,15 +737,13 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                     next_prune = next_prune.saturating_sub(1);
                     if next_prune == 0 {
                         let timer = proof_prune_latency.timer();
-                        let mut state_guard = proof_state.write().await;
-                        let mut events_guard = proof_events.write().await;
+                        let mut state_guard = proof_state.lock().await;
+                        let mut events_guard = proof_events.lock().await;
                         let inactivity_floor = state_guard.inactivity_floor_loc();
-                        if let Err(err) = try_join(
-                            state_guard.prune(inactivity_floor),
-                            events_guard.prune(events_start_op),
-                        )
-                        .await
-                        {
+                        let prune_state = block_on(state_guard.prune(inactivity_floor));
+                        let prune_events =
+                            block_on(events_guard.prune(Location::from(events_start_op)));
+                        if let Err(err) = prune_state.and_then(|_| prune_events) {
                             proof_storage_prune_errors.inc();
                             warn!(?err, height, "failed to prune storage");
                         }
@@ -729,10 +783,11 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                                 let _ = response.send(genesis_digest);
                             }
                             Message::Propose {
-                                view,
+                                round,
                                 parent,
                                 mut response,
                             } => {
+                                let view = round.view();
                                 // Start the timer
                                 let ancestry_timer = ancestry_latency.timer();
                                 let propose_timer = propose_latency.timer();
@@ -742,19 +797,20 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                                     drop(ancestry_timer);
                                     if let Err(err) = self
                                         .inbound
-                                        .ancestry(view, Arc::from(vec![genesis_block()]), propose_timer, response)
+                                        .ancestry(round, Arc::from(vec![genesis_block()]), propose_timer, response)
                                         .await
                                     {
-                                        warn!(view, ?err, "failed to send ancestry response");
+                                        warn!(view = view.get(), ?err, "failed to send ancestry response");
                                     }
                                     continue;
                                 }
 
                                 // Get the ancestry
                                 let committed_height_snapshot = committed_height;
+                                let parent_round = Round::new(round.epoch(), parent.0);
                                 let ancestry = ancestry_cached(
                                     marshal.clone(),
-                                    (Some(parent.0), parent.1),
+                                    (Some(parent_round), parent.1),
                                     committed_height_snapshot,
                                     ancestry_cache.clone(),
                                 );
@@ -769,45 +825,46 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                                                 // Get the ancestry
                                                 let Some(ancestry) = ancestry else {
                                                     ancestry_timer.cancel();
-                                                    warn!(view, "missing parent ancestry");
+                                                    warn!(view = view.get(), "missing parent ancestry");
                                                     return;
                                                 };
                                                 drop(ancestry_timer);
 
                                                 // Pass back to mailbox
                                                 if let Err(err) = inbound
-                                                    .ancestry(view, ancestry, propose_timer, response)
+                                                    .ancestry(round, ancestry, propose_timer, response)
                                                     .await
                                                 {
-                                                    warn!(view, ?err, "failed to send ancestry response");
+                                                    warn!(view = view.get(), ?err, "failed to send ancestry response");
                                                 }
                                             },
                                             _ = response.closed() => {
                                                 // The response was cancelled
                                                 ancestry_timer.cancel();
-                                                warn!(view, "propose aborted");
+                                                warn!(view = view.get(), "propose aborted");
                                             }
                                         }
                                     }
                                 });
                             }
                             Message::Ancestry {
-                                view,
+                                round,
                                 blocks,
                                 timer,
                                 response,
                             } => {
+                                let view = round.view();
                                 // Get parent block
                                 let Some(parent) = blocks.last() else {
-                                    warn!(view, "missing parent block for propose");
+                                    warn!(view = view.get(), "missing parent block for propose");
                                     drop(timer);
                                     continue;
                                 };
 
                                 // Find first block on top of finalized state (may have increased since we started)
                                 let height = committed_height;
-                                let state_guard = state.read().await;
-                                let mut noncer = Noncer::new(&*state_guard);
+                                let state_for_nonce = state.clone();
+                                let mut pending_nonces: HashMap<PublicKey, u64> = HashMap::new();
                                 for block in blocks.iter() {
                                     // Skip blocks below our height
                                     if block.height <= height {
@@ -818,7 +875,13 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                                     // Apply transaction nonces to state
                                     for tx in &block.transactions {
                                         // We don't care if the nonces are valid or not, we just need to ensure we'll process tip the same way as state will be processed during finalization
-                                        let _ = noncer.prepare(tx).await;
+                                        let _ = apply_transaction_nonce(
+                                            state_for_nonce.clone(),
+                                            &mut pending_nonces,
+                                            tx.public.clone(),
+                                            tx.nonce,
+                                        )
+                                        .await;
                                     }
                                 }
 
@@ -834,7 +897,15 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                                     }
 
                                     // Attempt to apply
-                                    if noncer.prepare(&tx).await.is_err() {
+                                    if apply_transaction_nonce(
+                                        state_for_nonce.clone(),
+                                        &mut pending_nonces,
+                                        tx.public.clone(),
+                                        tx.nonce,
+                                    )
+                                    .await
+                                    .is_err()
+                                    {
                                         continue;
                                     }
 
@@ -860,7 +931,7 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                                     Ok(block) => block,
                                     Err(err) => {
                                         warn!(
-                                            view,
+                                            view = view.get(),
                                             parent_height = parent.height,
                                             ?err,
                                             "failed to build proposed block; proposing parent digest"
@@ -875,12 +946,18 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                                     // We may drop the transactions from a block that was never broadcast...users
                                     // can rebroadcast.
                                     let mut built = built.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-                                    *built = Some((view, block));
+                                    *built = Some((round, block));
                                 }
 
                                 // Send the digest to the consensus
                                 let result = response.send(digest);
-                                info!(view, ?digest, txs, success=result.is_ok(), "proposed block");
+                                info!(
+                                    view = view.get(),
+                                    ?digest,
+                                    txs,
+                                    success = result.is_ok(),
+                                    "proposed block"
+                                );
                                 drop(timer);
                             }
                             Message::Broadcast { payload } => {
@@ -899,18 +976,19 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                                 // Send the block to the syncer
                                 debug!(
                                     ?payload,
-                                    view = built.0,
+                                    view = built.0.view().get(),
                                     height = built.1.height,
                                     "broadcast requested"
                                 );
-                                marshal.broadcast(built.1).await;
+                                marshal.proposed(built.0, built.1).await;
                             }
                             Message::Verify {
-                                view,
+                                round,
                                 parent,
                                 payload,
                                 mut response,
                             } => {
+                                let view = round.view();
                                 // Start the timer
                                 let timer = verify_latency.timer();
 
@@ -918,7 +996,8 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                                 let parent_request = if parent.1 == genesis_digest {
                                     Either::Left(future::ready(Ok(genesis_block())))
                                 } else {
-                                    Either::Right(marshal.subscribe(Some(parent.0), parent.1).await)
+                                    let parent_round = Round::new(round.epoch(), parent.0);
+                                    Either::Right(marshal.subscribe(Some(parent_round), parent.1).await)
                                 };
 
                                 // Wait for the blocks to be available or the request to be cancelled in a separate task (to
@@ -931,7 +1010,11 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                                         select! {
                                             result = requester => {
                                                 let Ok((parent, block)) = result else {
-                                                    warn!(view, ?payload, "verify aborted: missing blocks");
+                                                    warn!(
+                                                        view = view.get(),
+                                                        ?payload,
+                                                        "verify aborted: missing blocks"
+                                                    );
                                                     let _ = response.send(false);
                                                     return;
                                                 };
@@ -965,7 +1048,7 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                                                 }
 
                                                 // Persist the verified block (transactions may be invalid)
-                                                marshal.verified(view, block).await;
+                                                marshal.verified(round, block).await;
 
                                                 // Send the verification result to the consensus
                                                 let _ = response.send(true);
@@ -975,7 +1058,7 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                                             },
                                             _ = response.closed() => {
                                                 // The response was cancelled
-                                                warn!(view, "verify aborted");
+                                                warn!(view = view.get(), "verify aborted");
                                             }
                                         }
                                     }
@@ -995,7 +1078,11 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                                         let seed = match seeder.get(block.view).await {
                                             Ok(seed) => seed,
                                             Err(err) => {
-                                                warn!(?err, view = block.view, "failed to fetch seed");
+                                                warn!(
+                                                    ?err,
+                                                    view = block.view.get(),
+                                                    "failed to fetch seed"
+                                                );
                                                 return;
                                             }
                                         };
@@ -1021,10 +1108,10 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                                 // otherwise we will not be able to match players or compute attack strength.
                                 let execute_timer = execute_latency.timer();
                                 let tx_count = block.transactions.len();
-                                let result = {
-                                    let mut state_guard = state.write().await;
-                                    let mut events_guard = events.write().await;
-                                    state_transition::execute_state_transition(
+                                let (result, sync_result) = {
+                                    let mut state_guard = state.lock().await;
+                                    let mut events_guard = events.lock().await;
+                                    let result = state_transition::execute_state_transition(
                                         &mut *state_guard,
                                         &mut *events_guard,
                                         self.identity,
@@ -1033,7 +1120,16 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                                         block.transactions,
                                         execution_pool.clone(),
                                     )
-                                    .await
+                                    .await;
+                                    let sync_result = if result.is_ok() {
+                                        match state_guard.sync().await {
+                                            Ok(()) => events_guard.sync().await,
+                                            Err(err) => Err(err),
+                                        }
+                                    } else {
+                                        Ok(())
+                                    };
+                                    (result, sync_result)
                                 };
                                 let result = match result {
                                     Ok(result) => result,
@@ -1044,6 +1140,10 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                                     }
                                 };
                                 drop(execute_timer);
+                                if let Err(err) = sync_result {
+                                    error!(?err, height, "failed to sync execution storage");
+                                    return;
+                                }
 
                                 // Update metrics
                                 txs_executed.inc_by(tx_count as u64);
@@ -1110,26 +1210,24 @@ impl<R: Rng + CryptoRng + Spawner + Metrics + Clock + Storage, I: Indexer> Actor
                     for tx in pending.transactions {
                         // Check if below next
                         let now = self.context.current();
-                        let next = match next_nonce_cache.get(now, &tx.public) {
+                        let cached_next = next_nonce_cache.get(now, &tx.public);
+                        let next = match cached_next {
                             Some(next) => next,
-                            None => {
-                                let state_guard = state.read().await;
-                                match nonce(&*state_guard, &tx.public).await {
-                                    Ok(next) => {
-                                        next_nonce_cache.insert(now, tx.public.clone(), next);
-                                        next
-                                    }
-                                    Err(err) => {
-                                        nonce_read_errors.inc();
-                                        warn!(
-                                            ?err,
-                                            public = ?tx.public,
-                                            "failed to read account nonce; dropping transaction"
-                                        );
-                                        continue;
-                                    }
+                            None => match fetch_account_nonce(state.clone(), tx.public.clone()).await {
+                                Ok(next) => {
+                                    next_nonce_cache.insert(now, tx.public.clone(), next);
+                                    next
                                 }
-                            }
+                                Err(err) => {
+                                    nonce_read_errors.inc();
+                                    warn!(
+                                        ?err,
+                                        public = ?tx.public,
+                                        "failed to read account nonce; dropping transaction"
+                                    );
+                                    continue;
+                                }
+                            },
                         };
                         if tx.nonce < next {
                             // If below next, we drop the incoming transaction

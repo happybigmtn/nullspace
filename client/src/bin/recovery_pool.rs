@@ -8,7 +8,7 @@ use commonware_cryptography::{
     Signer,
 };
 use commonware_utils::from_hex;
-use nullspace_client::Client;
+use nullspace_client::{operation_value, Client};
 use nullspace_types::{
     execution::{Instruction, Key, Transaction, Value},
     Identity,
@@ -160,7 +160,7 @@ fn decode_public_key(hex_str: &str) -> Result<PublicKey> {
 
 async fn fetch_nonce(client: &Client, public: &PublicKey) -> Result<u64> {
     let lookup = client.query_state(&Key::Account(public.clone())).await?;
-    let nonce = match lookup.and_then(|lookup| lookup.operation.value().cloned()) {
+    let nonce = match lookup.and_then(|lookup| operation_value(&lookup.operation).cloned()) {
         Some(Value::Account(account)) => account.nonce,
         _ => 0,
     };

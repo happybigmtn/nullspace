@@ -9,7 +9,7 @@ use commonware_codec::{
 };
 use commonware_consensus::aggregation::types::{Certificate, Index, Item};
 use commonware_cryptography::{
-    bls12381::primitives::variant::{MinSig, Variant},
+    bls12381::primitives::variant::MinSig,
     ed25519::PublicKey,
     sha256::Digest,
     Digestible,
@@ -19,18 +19,17 @@ use commonware_resolver::{p2p, Resolver};
 use commonware_runtime::{Clock, Handle, Metrics, Spawner, Storage};
 use commonware_storage::{
     cache,
-    journal::fixed,
-    mmr::verification::Proof,
+    journal::contiguous::fixed,
+    mmr::Proof,
     ordinal::{self, Ordinal},
+    qmdb::{any::unordered::variable, keyless},
     rmap::RMap,
-    store::operation::{Keyless, Variable},
 };
 use commonware_utils::sequence::U64;
 use futures::{
     channel::{mpsc, oneshot},
     join, StreamExt,
 };
-use governor::clock::Clock as GClock;
 use nullspace_types::{
     api::Summary,
     api::{
@@ -68,11 +67,19 @@ const PROOFS_ENCODED_BYTES_BUCKETS: [f64; 14] = [
     8_388_608.0, // 8MB
 ];
 
+type AggregationScheme =
+    commonware_consensus::aggregation::scheme::bls12381_threshold::Scheme<PublicKey, MinSig>;
+type AggregationCertificate = Certificate<AggregationScheme, Digest>;
+type AggregationSignature =
+    <AggregationScheme as commonware_cryptography::certificate::Scheme>::Certificate;
+type StateOp = variable::Operation<Digest, Value>;
+type EventOp = keyless::Operation<Output>;
+
 pub struct Proofs {
     pub state_proof: Proof<Digest>,
-    pub state_proof_ops: Vec<Variable<Digest, Value>>,
+    pub state_proof_ops: Vec<StateOp>,
     pub events_proof: Proof<Digest>,
-    pub events_proof_ops: Vec<Keyless<Output>>,
+    pub events_proof_ops: Vec<EventOp>,
 }
 
 impl Write for Proofs {
@@ -114,7 +121,7 @@ impl EncodeSize for Proofs {
 pub struct FixedCertificate {
     pub index: Index,
     pub digest: Digest,
-    pub signature: <MinSig as Variant>::Signature,
+    pub signature: AggregationSignature,
 }
 
 impl Write for FixedCertificate {
@@ -131,7 +138,7 @@ impl Read for FixedCertificate {
     fn read_cfg(reader: &mut impl Buf, _: &()) -> Result<Self, commonware_codec::Error> {
         let index = Index::read(reader)?;
         let digest = Digest::read(reader)?;
-        let signature = <MinSig as Variant>::Signature::read(reader)?;
+        let signature = AggregationSignature::read(reader)?;
         Ok(Self {
             index,
             digest,
@@ -141,32 +148,35 @@ impl Read for FixedCertificate {
 }
 
 impl FixedSize for FixedCertificate {
-    const SIZE: usize = Index::SIZE + Digest::SIZE + <MinSig as Variant>::Signature::SIZE;
+    const SIZE: usize = Index::SIZE + Digest::SIZE + AggregationSignature::SIZE;
 }
 
-impl From<Certificate<MinSig, Digest>> for FixedCertificate {
-    fn from(certificate: Certificate<MinSig, Digest>) -> Self {
+impl From<AggregationCertificate> for FixedCertificate {
+    fn from(certificate: AggregationCertificate) -> Self {
         Self {
             index: certificate.item.index,
             digest: certificate.item.digest,
-            signature: certificate.signature,
+            signature: certificate.certificate,
         }
     }
 }
 
-impl From<FixedCertificate> for Certificate<MinSig, Digest> {
+impl From<FixedCertificate> for AggregationCertificate {
     fn from(fixed_certificate: FixedCertificate) -> Self {
         Self {
             item: Item {
                 index: fixed_certificate.index,
                 digest: fixed_certificate.digest,
             },
-            signature: fixed_certificate.signature,
+            certificate: fixed_certificate.signature,
         }
     }
 }
 
-pub struct Actor<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> {
+pub struct Actor<
+    R: Storage + Metrics + Clock + Spawner + RngCore + Clone + Send + Sync,
+    I: Indexer,
+> {
     context: R,
     config: Config<I>,
     inbound: Mailbox,
@@ -176,7 +186,11 @@ pub struct Actor<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: I
     certificates_processed: Gauge,
 }
 
-impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Actor<R, I> {
+impl<
+        R: Storage + Metrics + Clock + Spawner + RngCore + Clone + Send + Sync,
+        I: Indexer,
+    > Actor<R, I>
+{
     pub fn new(context: R, config: Config<I>) -> (Self, Mailbox) {
         // Create mailbox
         let (sender, mailbox) = mpsc::channel(config.mailbox_size);
@@ -204,13 +218,18 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
     }
 
     pub fn start(
-        mut self,
+        self,
         backfill: (
             impl Sender<PublicKey = PublicKey>,
             impl Receiver<PublicKey = PublicKey>,
         ),
     ) -> Handle<()> {
-        self.context.spawn_ref()(self.run(backfill))
+        let context = self.context.clone();
+        context.spawn(move |context| async move {
+            let mut actor = self;
+            actor.context = context;
+            actor.run(backfill).await;
+        })
     }
 
     async fn run(
@@ -344,16 +363,14 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
         let (resolver_engine, mut resolver) = p2p::Engine::new(
             self.context.with_label("resolver"),
             p2p::Config {
-                coordinator: self.config.supervisor,
+                manager: self.config.supervisor.clone(),
+                blocker: self.config.supervisor.clone(),
                 consumer: self.inbound.clone(),
                 producer: self.inbound.clone(),
                 mailbox_size: self.config.mailbox_size,
-                requester_config: commonware_p2p::utils::requester::Config {
-                    public_key: self.config.public_key,
-                    rate_limit: self.config.backfill_quota,
-                    initial: Duration::from_secs(1),
-                    timeout: Duration::from_secs(2),
-                },
+                me: Some(self.config.public_key.clone()),
+                initial: Duration::from_secs(1),
+                timeout: Duration::from_secs(2),
                 fetch_retry_timeout: Duration::from_secs(10),
                 priority_requests: false,
                 priority_responses: false,
@@ -474,13 +491,7 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                         // Size is the next item to store and the height-th value will be stored at height - 1,
                         // so comparing size() to height is equivalent to checking if the next item stored will be
                         // at height + 1 (i.e. this height has already been processed).
-                        let size = match results.size().await {
-                            Ok(size) => size,
-                            Err(err) => {
-                                error!(?err, height, "failed to read results size");
-                                return Err(());
-                            }
-                        };
+                        let size = results.size();
                         if size == height {
                             warn!(height, "already processed results");
                             return Ok(());
@@ -501,7 +512,7 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                     }
                     info!(
                         height,
-                        view,
+                        view = view.get(),
                         ?result.state_root,
                         result.state_start_op,
                         result.state_end_op,
@@ -514,12 +525,12 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
 
                     // Check if we should clear aggregation requests
                     if let Some(request) = proposal_requests.remove(&height) {
-                        debug!(height, view, "backfilled aggregation proposal");
+                        debug!(height, view = view.get(), "backfilled aggregation proposal");
                         let _ = request.send(result_digest);
                     }
                     proposal_requests.retain(|index, _| *index > height);
                     if let Some((payload, request)) = verify_requests.remove(&height) {
-                        debug!(height, view, "backfilled aggregation verify");
+                        debug!(height, view = view.get(), "backfilled aggregation verify");
                         let _ = request.send(result_digest == payload);
                     }
                     verify_requests.retain(|index, _| *index > height);
@@ -618,7 +629,7 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                 } => {
                     // Decode certificate
                     let Ok(certificate) =
-                        Certificate::<MinSig, Digest>::decode(&mut certificate.as_ref())
+                        AggregationCertificate::decode(&mut certificate.as_ref())
                     else {
                         let _ = response.send(false);
                         continue;
@@ -629,7 +640,13 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                     }
 
                     // Verify certificate
-                    if !certificate.verify(&self.config.namespace, &self.config.identity) {
+                    let scheme =
+                        AggregationScheme::certificate_verifier(self.config.identity.clone());
+                    let verified = {
+                        let mut rng = rand::thread_rng();
+                        certificate.verify(&mut rng, &scheme, &self.config.namespace)
+                    };
+                    if !verified {
                         let _ = response.send(false);
                         continue;
                     }
@@ -661,7 +678,7 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                     let Ok(Some(fixed_certificate)) = certificates.get(index).await else {
                         continue;
                     };
-                    let certificate: Certificate<MinSig, Digest> = fixed_certificate.into();
+                    let certificate: AggregationCertificate = fixed_certificate.into();
                     let _ = response.send(certificate.encode().into());
                 }
             }

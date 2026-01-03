@@ -30,6 +30,10 @@ const serviceToken = required("CONVEX_SERVICE_TOKEN");
 const CHALLENGE_TTL_MS = Number(process.env.AUTH_CHALLENGE_TTL_MS ?? "300000");
 const challengeTtlMs =
   Number.isFinite(CHALLENGE_TTL_MS) && CHALLENGE_TTL_MS > 0 ? CHALLENGE_TTL_MS : 300000;
+const CHALLENGE_TTL_MAX_MS = Number(process.env.AUTH_CHALLENGE_TTL_MAX_MS ?? "900000");
+const challengeTtlMaxMs =
+  Number.isFinite(CHALLENGE_TTL_MAX_MS) && CHALLENGE_TTL_MAX_MS > 0 ? CHALLENGE_TTL_MAX_MS : 900000;
+const effectiveChallengeTtlMs = Math.min(challengeTtlMs, challengeTtlMaxMs);
 const AUTH_CHALLENGE_PREFIX = "nullspace-auth:";
 const EVM_LINK_PREFIX = "nullspace-evm-link";
 const ED25519_SPKI_PREFIX = Buffer.from("302a300506032b6570032100", "hex");
@@ -269,6 +273,11 @@ const parsePositiveInt = (value: string | undefined, fallback: number): number =
   if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
   return Math.floor(parsed);
 };
+
+const ENTITLEMENTS_MAX = Math.min(
+  parsePositiveInt(process.env.AUTH_ENTITLEMENTS_MAX, 100),
+  200,
+);
 
 const rateBuckets = new Map<string, RateLimitBucket>();
 const rateBucketMax = parsePositiveInt(process.env.AUTH_RATE_BUCKET_MAX, 50_000);
@@ -586,7 +595,7 @@ app.post("/auth/challenge", requireAllowedOrigin, challengeRateLimit, async (req
   }
   const challengeId = crypto.randomUUID();
   const challenge = crypto.randomBytes(32).toString("hex");
-  const expiresAtMs = Date.now() + challengeTtlMs;
+  const expiresAtMs = Date.now() + effectiveChallengeTtlMs;
 
   await convex.mutation(api.auth.createAuthChallenge, {
     serviceToken,
@@ -612,7 +621,7 @@ app.post("/mobile/challenge", challengeRateLimit, async (req, res) => {
   }
   const challengeId = crypto.randomUUID();
   const challenge = crypto.randomBytes(32).toString("hex");
-  const expiresAtMs = Date.now() + challengeTtlMs;
+  const expiresAtMs = Date.now() + effectiveChallengeTtlMs;
 
   await convex.mutation(api.auth.createAuthChallenge, {
     serviceToken,
@@ -665,6 +674,7 @@ app.post("/mobile/entitlements", challengeRateLimit, async (req, res) => {
     ? await convex.query(api.entitlements.getEntitlementsByUser, {
         serviceToken,
         userId: user._id,
+        limit: ENTITLEMENTS_MAX,
       })
     : [];
   if (entitlements.length > 0) {
@@ -698,6 +708,7 @@ app.get("/profile", requireAllowedOrigin, profileRateLimit, async (req, res) => 
   const entitlements = await convex.query(api.entitlements.getEntitlementsByUser, {
     serviceToken,
     userId,
+    limit: ENTITLEMENTS_MAX,
   });
   const evmLink = await convex.query(api.evm.getEvmLinkByUser, {
     serviceToken,
@@ -793,7 +804,7 @@ app.post("/profile/evm-challenge", requireAllowedOrigin, profileRateLimit, async
 
   const challengeId = crypto.randomUUID();
   const challenge = crypto.randomBytes(32).toString("hex");
-  const expiresAtMs = Date.now() + challengeTtlMs;
+  const expiresAtMs = Date.now() + effectiveChallengeTtlMs;
 
   await convex.mutation(api.evm.createEvmChallenge, {
     serviceToken,
@@ -908,6 +919,7 @@ app.post("/profile/sync-freeroll", requireAllowedOrigin, profileRateLimit, async
   const entitlements = await convex.query(api.entitlements.getEntitlementsByUser, {
     serviceToken,
     userId: session.userId,
+    limit: ENTITLEMENTS_MAX,
   });
   const publicKey = (session.session as any)?.user?.authSubject as string | undefined;
   if (!publicKey) {

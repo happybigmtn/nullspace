@@ -14,9 +14,10 @@ use clap::Parser;
 use commonware_codec::DecodeExt;
 use commonware_cryptography::{
     ed25519::{PrivateKey, PublicKey},
-    PrivateKeyExt, Signer,
+    Signer,
 };
-use nullspace_client::Client;
+use commonware_math::algebra::Random;
+use nullspace_client::{operation_value, Client};
 use nullspace_types::{
     casino::GameType,
     execution::{Instruction, Key, Transaction, Value},
@@ -63,7 +64,7 @@ struct BotState {
 
 impl BotState {
     fn new(id: usize, rng: &mut StdRng) -> Self {
-        let keypair = PrivateKey::from_rng(rng);
+        let keypair = PrivateKey::random(rng);
         Self {
             keypair,
             name: format!("Bot{:04}", id),
@@ -382,7 +383,7 @@ async fn monitor_logic(client: Arc<Client>, bots: Vec<Arc<BotState>>, duration: 
         // 1. Check Leaderboard
         match client.query_state(&Key::CasinoLeaderboard).await {
             Ok(Some(lookup)) => {
-                let value = lookup.operation.value();
+                let value = operation_value(&lookup.operation);
                 if let Some(Value::CasinoLeaderboard(lb)) = value {
                     info!("Leaderboard Update ({} entries):", lb.entries.len());
                     for (i, entry) in lb.entries.iter().enumerate() {
@@ -412,7 +413,7 @@ async fn monitor_logic(client: Arc<Client>, bots: Vec<Arc<BotState>>, duration: 
                     .query_state(&Key::CasinoPlayer(bot.public_key()))
                     .await
                 {
-                    let value = lookup.operation.value();
+                    let value = operation_value(&lookup.operation);
                     if let Some(Value::CasinoPlayer(_player)) = value {
                         // Just checking if we can read state, no specific assertion logs to avoid spam
                         // unless critical
@@ -532,7 +533,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Final Leaderboard Check:");
     match client.query_state(&Key::CasinoLeaderboard).await {
         Ok(Some(lookup)) => {
-            if let Some(Value::CasinoLeaderboard(lb)) = lookup.operation.value() {
+            if let Some(Value::CasinoLeaderboard(lb)) = operation_value(&lookup.operation) {
                 for (i, entry) in lb.entries.iter().enumerate() {
                     info!("  #{}: {} - {} chips", i + 1, entry.name, entry.chips);
                 }

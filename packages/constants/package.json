@@ -34,6 +34,12 @@
       "react-native": "./dist/bet-types.js",
       "import": "./dist/bet-types.js",
       "require": "./dist/bet-types.js"
+    },
+    "./limits": {
+      "types": "./dist/limits.d.ts",
+      "react-native": "./dist/limits.js",
+      "import": "./dist/limits.js",
+      "require": "./dist/limits.js"
     }
   },
   "scripts": {

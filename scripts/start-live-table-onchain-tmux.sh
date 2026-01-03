@@ -71,27 +71,12 @@ if [ -z "${CASINO_ADMIN_PUBLIC_KEY_HEX}" ]; then
   exit 1
 fi
 
-if [ ! -f "${ROOT_DIR}/target/release/nullspace-simulator" ] || [ ! -f "${ROOT_DIR}/target/release/dev-executor" ]; then
-  echo "Building nullspace-simulator and dev-executor..."
-  (cd "${ROOT_DIR}" && cargo build --release --bin nullspace-simulator --bin dev-executor)
+if [ ! -f "${ROOT_DIR}/target/release/nullspace-simulator" ] || [ ! -f "${ROOT_DIR}/target/release/nullspace-node" ]; then
+  echo "Building nullspace-simulator + validators..."
+  (cd "${ROOT_DIR}" && cargo build --release -p nullspace-simulator -p nullspace-node)
 fi
 
 ALLOWED_ORIGINS="http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000,http://localhost:9010,http://127.0.0.1:9010"
-
-EXECUTOR_PID="$(pgrep -f "dev-executor --url ${BACKEND_URL}" | head -n 1 || true)"
-if [ -n "${EXECUTOR_PID}" ]; then
-  EXISTING_ADMIN="$(tr '\0' '\n' < /proc/${EXECUTOR_PID}/environ | awk -F= '/^CASINO_ADMIN_PUBLIC_KEY_HEX=/{print $2}')"
-  if [ -n "${EXISTING_ADMIN}" ] && [ "${EXISTING_ADMIN}" != "${CASINO_ADMIN_PUBLIC_KEY_HEX}" ]; then
-    echo "Restarting dev-executor to apply casino admin key."
-    kill "${EXECUTOR_PID}" >/dev/null 2>&1 || true
-    EXECUTOR_PID=""
-  fi
-  if [ -z "${EXISTING_ADMIN}" ]; then
-    echo "Restarting dev-executor to apply casino admin key."
-    kill "${EXECUTOR_PID}" >/dev/null 2>&1 || true
-    EXECUTOR_PID=""
-  fi
-fi
 
 if tmux has-session -t "${SESSION_NAME}" 2>/dev/null; then
   echo "tmux session '${SESSION_NAME}' already exists."
@@ -131,10 +116,7 @@ elif [ -n "${ADMIN_KEY_HEX}" ]; then
   tmux set-environment -t "${SESSION_NAME}" CASINO_ADMIN_PRIVATE_KEY_HEX "${ADMIN_KEY_HEX}"
 fi
 
-tmux send-keys -t "${SESSION_NAME}:chain.0" 'cd "'"${ROOT_DIR}"'"; if [ -n "'"${SIMULATOR_PID}"'" ]; then echo "simulator already running (pid '"${SIMULATOR_PID}"')"; else if [ -f simulator.pid ] && kill -0 "$(cat simulator.pid)" >/dev/null 2>&1; then echo "simulator already running"; else ALLOW_HTTP_NO_ORIGIN=1 ALLOW_WS_NO_ORIGIN=1 ALLOWED_HTTP_ORIGINS="'"${ALLOWED_ORIGINS}"'" ALLOWED_WS_ORIGINS="'"${ALLOWED_ORIGINS}"'" ./target/release/nullspace-simulator --host 127.0.0.1 --port 8080 --identity "'"${VITE_IDENTITY}"'" > simulator.log 2>&1 & echo $! > simulator.pid; fi; fi; tail -f simulator.log' C-m
-
-tmux split-window -t "${SESSION_NAME}:chain" -h -c "${ROOT_DIR}"
-tmux send-keys -t "${SESSION_NAME}:chain.1" 'cd "'"${ROOT_DIR}"'"; if [ -n "'"${EXECUTOR_PID}"'" ]; then echo "executor already running (pid '"${EXECUTOR_PID}"')"; else if [ -f executor.pid ] && kill -0 "$(cat executor.pid)" >/dev/null 2>&1; then echo "executor already running"; else CASINO_ADMIN_PUBLIC_KEY_HEX="'"${CASINO_ADMIN_PUBLIC_KEY_HEX}"'" ./target/release/dev-executor --url "'"${BACKEND_URL}"'" --identity "'"${VITE_IDENTITY}"'" --block-interval-ms 100 > executor.log 2>&1 & echo $! > executor.pid; fi; fi; tail -f executor.log' C-m
+tmux send-keys -t "${SESSION_NAME}:chain.0" 'cd "'"${ROOT_DIR}"'"; ALLOW_HTTP_NO_ORIGIN=1 ALLOW_WS_NO_ORIGIN=1 ALLOWED_HTTP_ORIGINS="'"${ALLOWED_ORIGINS}"'" ALLOWED_WS_ORIGINS="'"${ALLOWED_ORIGINS}"'" CASINO_ADMIN_PUBLIC_KEY_HEX="'"${CASINO_ADMIN_PUBLIC_KEY_HEX}"'" ./scripts/start-local-network.sh configs/local 4 --no-build' C-m
 
 tmux new-window -t "${SESSION_NAME}" -n gateway -c "${ROOT_DIR}"
 tmux send-keys -t "${SESSION_NAME}:gateway" 'cd "'"${ROOT_DIR}"'"; BACKEND_URL="'"${BACKEND_URL}"'" GATEWAY_PORT="'"${GATEWAY_PORT}"'" GATEWAY_LIVE_TABLE_CRAPS=1 GATEWAY_LIVE_TABLE_CRAPS_ONCHAIN=1 pnpm -C gateway start' C-m

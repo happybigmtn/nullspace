@@ -18,3 +18,5 @@ futures-util = { workspace = true }
 nullspace-execution = { workspace = true }
 nullspace-types = { workspace = true }
 commonware-cryptography = { workspace = true }
+commonware-consensus = { workspace = true }
+commonware-math = { workspace = true }

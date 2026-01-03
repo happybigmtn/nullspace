@@ -22,7 +22,7 @@ export function BetsSidebar<T>({
       className={`
         hidden md:flex absolute top-0 right-0 bottom-24 w-36
         bg-titanium-900/80 border-l-2 border-gray-700 p-2 backdrop-blur-sm z-30
-        flex-col ${className}
+        flex-col zen-hide ${className}
       `}
     >
       {/* Header */}

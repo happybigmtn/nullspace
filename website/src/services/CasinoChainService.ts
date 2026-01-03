@@ -40,6 +40,7 @@ interface RawCasinoGameMovedEvent {
   session_id: string | number | bigint;
   move_number: number;
   new_state: string;
+  logs?: unknown[];
   player_balances?: {
     chips?: string | number | bigint;
     vusdt_balance?: string | number | bigint;
@@ -59,6 +60,7 @@ interface RawCasinoGameCompletedEvent {
   final_chips: string | number | bigint;
   was_shielded: boolean;
   was_doubled: boolean;
+  logs?: unknown[];
   player_balances?: {
     chips?: string | number | bigint;
     vusdt_balance?: string | number | bigint;
@@ -112,6 +114,19 @@ function toOptionalBigInt(value: string | number | bigint | null | undefined): b
   if (value === null || value === undefined) return null;
   return toBigInt(value);
 }
+
+const normalizeLogs = (raw: unknown): string[] => {
+  if (!Array.isArray(raw)) return [];
+  const decoder = new TextDecoder();
+  return raw.map((entry) => {
+    if (typeof entry === 'string') return entry;
+    if (entry instanceof Uint8Array) return decoder.decode(entry);
+    if (entry && typeof entry === 'object' && (entry as any).buffer instanceof ArrayBuffer) {
+      return decoder.decode(new Uint8Array((entry as any).buffer));
+    }
+    return String(entry);
+  });
+};
 
 function parsePlayerBalances(raw: any): PlayerBalanceSnapshot {
   const source = raw ?? {};
@@ -337,6 +352,7 @@ export class CasinoChainService {
           sessionId: BigInt(normalized.sessionId),
           moveNumber: normalized.moveNumber,
           newState: this.hexToBytes(normalized.newState),
+          logs: normalizeLogs(normalized.logs),
           playerBalances: parsePlayerBalances(normalized.playerBalances),
         };
         logDebug('[CasinoChainService] Parsed CasinoGameMoved:', {
@@ -375,6 +391,7 @@ export class CasinoChainService {
           finalChips: BigInt(normalized.finalChips),
           wasShielded: normalized.wasShielded,
           wasDoubled: normalized.wasDoubled,
+          logs: normalizeLogs(normalized.logs),
           playerBalances: parsePlayerBalances(normalized.playerBalances),
         };
         logDebug('[CasinoChainService] Parsed sessionId:', parsed.sessionId.toString(), 'type:', typeof parsed.sessionId);

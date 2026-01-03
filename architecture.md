@@ -71,7 +71,7 @@ the canonical bet acceptance and outcomes come from the updates stream.
 - `global_table_finalize(round_id)` → clears transient state, advances round.
 
 **Settlement model:** to scale to tens of thousands of players, settlement is done in **batches**.
-An executor (or multiple keepers) repeatedly calls `global_table_settle` for slices of players.
+Validators (or dedicated keepers) repeatedly call `global_table_settle` for slices of players.
 This keeps per-transaction compute bounded while still providing fully on-chain outcomes.
 
 ### RNG / fairness

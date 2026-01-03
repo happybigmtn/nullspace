@@ -2,10 +2,9 @@ use std::{num::NonZero, time::Duration};
 
 use crate::indexer::Indexer;
 use commonware_cryptography::{
-    bls12381::primitives::{group, poly::Poly},
+    bls12381::primitives::{group, sharing::Sharing, variant::MinSig},
     ed25519::PublicKey,
 };
-use nullspace_types::Evaluation;
 
 mod actor;
 pub use actor::Actor;
@@ -19,8 +18,8 @@ pub struct Config<I: Indexer> {
     /// Participants active in consensus.
     pub participants: Vec<PublicKey>,
 
-    /// The unevaluated group polynomial associated with the current dealing.
-    pub polynomial: Poly<Evaluation>,
+    /// The public sharing associated with the current dealing.
+    pub sharing: Sharing<MinSig>,
 
     /// The share of the secret.
     pub share: group::Share,

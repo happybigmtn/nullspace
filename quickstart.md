@@ -41,10 +41,10 @@ if [ "${#missing[@]}" -ne 0 ]; then
   exit 1
 fi
 
-# Build simulator + dev-executor if missing
-if [ ! -f target/release/nullspacje-simulator ] || [ ! -f target/release/dev-executor ]; then
-  echo "Building nullspace-simulator and dev-executor..."
-  cargo build --release --bin nullspace-simulator --bin dev-executor
+# Build simulator + validator if missing
+if [ ! -f target/release/nullspace-simulator ] || [ ! -f target/release/nullspace-node ]; then
+  echo "Building nullspace-simulator and nullspace-node..."
+  cargo build --release -p nullspace-simulator -p nullspace-node
 fi
 
 # Derive casino admin public key from env or local key file
@@ -106,16 +106,13 @@ fi
     npx convex dev --once
 )
 
-# Start simulator + dev-executor (chain)
+# Start local validator network (simulator + validators)
 WEB_PORT=5173
 ALLOWED_ORIGINS="http://localhost:${WEB_PORT},http://127.0.0.1:${WEB_PORT},http://localhost:3000,http://127.0.0.1:3000"
 ALLOW_HTTP_NO_ORIGIN=1 ALLOW_WS_NO_ORIGIN=1 ALLOWED_HTTP_ORIGINS="${ALLOWED_ORIGINS}" ALLOWED_WS_ORIGINS="${ALLOWED_ORIGINS}" \
-  nohup ./target/release/nullspace-simulator --host 127.0.0.1 --port 8080 --identity "${VITE_IDENTITY}" > simulator.log 2>&1 &
-echo $! > simulator.pid
-
 CASINO_ADMIN_PUBLIC_KEY_HEX="${CASINO_ADMIN_PUBLIC_KEY_HEX}" \
-  nohup ./target/release/dev-executor --url http://127.0.0.1:8080 --identity "${VITE_IDENTITY}" --block-interval-ms 100 > executor.log 2>&1 &
-echo $! > executor.pid
+  nohup ./scripts/start-local-network.sh configs/local 4 --no-build > network.log 2>&1 &
+echo $! > network.pid
 
 # Start auth service
 ( cd services/auth && nohup npm run dev > ../../auth.log 2>&1 & echo $! > ../../auth.pid )
@@ -149,13 +146,13 @@ wait_for "web" "http://127.0.0.1:${WEB_PORT}" 120 || true
 echo "UI: http://127.0.0.1:${WEB_PORT}"
 
 echo "Streaming logs (Ctrl+C to stop viewing; services keep running)."
-tail -f simulator.log executor.log auth.log ops.log website.log
+tail -f network.log auth.log ops.log website.log
 ```
 
 Stop everything:
 
 ```bash
-for pidfile in simulator.pid executor.pid auth.pid ops.pid website.pid; do
+for pidfile in network.pid auth.pid ops.pid website.pid; do
   if [ -f "$pidfile" ]; then kill "$(cat "$pidfile")" 2>/dev/null || true; fi
 done
 ```

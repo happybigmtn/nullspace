@@ -12,11 +12,11 @@ use commonware_codec::DecodeExt;
 use commonware_cryptography::{ed25519::PublicKey, Signer};
 use commonware_deployer::ec2::Hosts;
 use commonware_p2p::authenticated::discovery as authenticated;
-use commonware_runtime::{tokio, Metrics, Runner, Spawner};
+use commonware_p2p::Manager as _;
+use commonware_runtime::{tokio, Metrics, Quota, Runner, Spawner};
 use commonware_runtime::tokio::tracing::Config as TraceConfig;
 use commonware_utils::{from_hex_formatted, union_unique};
 use futures::future::try_join_all;
-use governor::Quota;
 use nullspace_client::Client;
 use nullspace_node::{engine, parse_peer_public_key, Config, Peers};
 use nullspace_types::NAMESPACE;
@@ -29,14 +29,14 @@ use std::{
 };
 use tracing::{error, info, Level};
 
-const PENDING_CHANNEL: u32 = 0;
-const RECOVERED_CHANNEL: u32 = 1;
-const RESOLVER_CHANNEL: u32 = 2;
-const BROADCASTER_CHANNEL: u32 = 3;
-const BACKFILL_BY_DIGEST_CHANNEL: u32 = 4;
-const SEEDER_CHANNEL: u32 = 5;
-const AGGREGATOR_CHANNEL: u32 = 6;
-const AGGREGATION_CHANNEL: u32 = 7;
+const PENDING_CHANNEL: u64 = 0;
+const RECOVERED_CHANNEL: u64 = 1;
+const RESOLVER_CHANNEL: u64 = 2;
+const BROADCASTER_CHANNEL: u64 = 3;
+const BACKFILL_BY_DIGEST_CHANNEL: u64 = 4;
+const SEEDER_CHANNEL: u64 = 5;
+const AGGREGATOR_CHANNEL: u64 = 6;
+const AGGREGATION_CHANNEL: u64 = 7;
 
 type PeerList = Vec<PublicKey>;
 type BootstrapList = Vec<(PublicKey, SocketAddr)>;
@@ -403,7 +403,7 @@ fn main_result() -> Result<()> {
             let peers_u32 = peers.len() as u32;
 
             let config = config.validate_with_signer(signer, peers_u32)?;
-            let identity = config.identity;
+            let identity = config.identity.clone();
             info!(
                 ?config.public_key,
                 ?identity,
@@ -414,13 +414,19 @@ fn main_result() -> Result<()> {
 
             // Configure network
             let p2p_namespace = union_unique(NAMESPACE, b"_P2P");
-            let mut p2p_cfg = authenticated::Config::aggressive(
+            let bootstrappers = bootstrappers
+                .into_iter()
+                .map(|(public_key, addr)| (public_key, addr.into()))
+                .collect();
+            let max_message_size = u32::try_from(config.max_message_size)
+                .context("max_message_size exceeds u32")?;
+            let mut p2p_cfg = authenticated::Config::recommended(
                 config.signer.clone(),
                 &p2p_namespace,
                 SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), config.port),
                 SocketAddr::new(ip, config.port),
                 bootstrappers,
-                config.max_message_size,
+                max_message_size,
             );
             p2p_cfg.mailbox_size = config.mailbox_size;
 
@@ -429,7 +435,9 @@ fn main_result() -> Result<()> {
                 authenticated::Network::new(context.with_label("network"), p2p_cfg);
 
             // Provide authorized peers
-            oracle.register(0, peers.clone()).await;
+            let peers_set = commonware_utils::ordered::Set::try_from(peers.clone())
+                .context("peers must be sorted and unique")?;
+            oracle.update(0, peers_set).await;
 
             // Register pending channel
             let pending_limit = Quota::per_second(config.pending_rate_per_second);
@@ -488,7 +496,7 @@ fn main_result() -> Result<()> {
                 blocker: oracle,
                 identity: engine::IdentityConfig {
                     signer: config.signer,
-                    polynomial: config.polynomial,
+                    sharing: config.sharing,
                     share: config.share,
                     participants: peers,
                 },

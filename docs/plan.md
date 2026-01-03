@@ -45,7 +45,7 @@ Business strategy summary and CEO view: `BUSINESS_PLAN.md`.
 
 ## Practical Scaling Limit (Current Code + Defaults)
 - Single simulator node: ~3k-5k concurrent WS connections before latency spikes (depends on update rate and proof load).
-- Single executor/validator set: throughput bound by block production + proof generation; expect low hundreds of tx/sec unless tuned.
+- Single validator set: throughput bound by block production + proof generation; expect low hundreds of tx/sec unless tuned.
 - Practical ceiling without horizontal scaling: ~5k concurrent active players with moderate gameplay rate.
 - 20k requires horizontal scaling of WS/read plane (multiple simulators + LB) and careful rate limiting.
 
@@ -53,8 +53,7 @@ Business strategy summary and CEO view: `BUSINESS_PLAN.md`.
 - Region: Ashburn (US-East) is the closest Hetzner region to NYC; use private network + firewall rules.
 - Load Balancer: 1x Hetzner LB11 for HTTP/WS (upgrade to 2x for HA if needed).
 - Simulator/Indexer nodes: 4x CPX51 (16 vCPU / 32 GB) behind LB for `/submit`, `/updates`, and explorer reads.
-- Validators (nullspace-node): 3x CPX31 (4 vCPU / 8 GB) for consensus (tolerates one failure).
-- Executor: 1x CPX31 (active) + 1x CPX21 (standby) until HA execution is implemented.
+- Validators (nullspace-node): 3x CPX31 (4 vCPU / 8 GB) for consensus + execution (tolerates one failure).
 - Auth service: 2x CPX21 (2 vCPU / 4 GB) behind LB.
 - Convex backend: 1x CPX41 (8 vCPU / 16 GB) + persistent volume; dashboard restricted to VPN.
 - Database: dedicated Postgres VM (CPX41/CPX51) with WAL archiving + Storage Box backups (Hetzner Managed Postgres not available in US regions).
@@ -219,7 +218,7 @@ staker-owned economy.
 
 ## Deployment Checklist (Go-Live)
 - [ ] Set `VITE_STRIPE_TIERS=member:<priceId>` and `FREEROLL_MEMBER_TIERS=member` in production env.
-- [ ] Set `CASINO_ADMIN_PUBLIC_KEY_HEX` for simulator/executor and `CASINO_ADMIN_PRIVATE_KEY_FILE` for Auth service.
+- [ ] Set `CASINO_ADMIN_PUBLIC_KEY_HEX` for simulator/validators and `CASINO_ADMIN_PRIVATE_KEY_FILE` for Auth service.
 - [ ] Configure Stripe webhook endpoint to Convex HTTP action and verify signature.
 - [ ] Set simulator allowlists (`ALLOWED_HTTP_ORIGINS`, `ALLOWED_WS_ORIGINS`) and origin exemptions if needed.
 - [ ] Configure simulator explorer persistence (use `--explorer-persistence-url` for Postgres shared storage).

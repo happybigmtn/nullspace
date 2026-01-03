@@ -18,7 +18,7 @@ testing = ["nullspace-execution/mocks", "private-key-export"]
 # WASM specific dependencies
 wasm-bindgen = "0.2"
 serde-wasm-bindgen = "0.6"
-getrandom = { version = "0.2", features = ["js"] }
+getrandom = { version = "0.3", features = ["wasm_js"] }
 
 # Workspace dependencies
 nullspace-execution = { workspace = true, default-features = false }
@@ -26,6 +26,7 @@ nullspace-types = { workspace = true }
 commonware-codec = { workspace = true }
 commonware-consensus = { workspace = true }
 commonware-cryptography = { workspace = true }
+commonware-math = { workspace = true }
 commonware-runtime = { workspace = true }
 commonware-storage = { workspace = true }
 commonware-utils = { workspace = true }

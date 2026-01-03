@@ -18,7 +18,14 @@ use tokio::time::{timeout, Duration};
 use crate::{InternalUpdate, Simulator, WsConnectionGuard, WsConnectionRejection};
 use crate::state::EncodedUpdate;
 
-const WS_SEND_TIMEOUT: Duration = Duration::from_secs(2);
+fn ws_send_timeout() -> Duration {
+    let raw = std::env::var("WS_SEND_TIMEOUT_MS").ok();
+    let parsed = raw
+        .as_deref()
+        .and_then(|value| value.parse::<u64>().ok())
+        .filter(|value| *value > 0);
+    Duration::from_millis(parsed.unwrap_or(2_000))
+}
 
 #[derive(Clone, Copy)]
 enum WsStreamKind {
@@ -172,7 +179,7 @@ async fn handle_updates_ws(
     let writer_simulator = simulator.clone();
     let writer_handle = tokio::spawn(async move {
         while let Some(msg) = out_rx.recv().await {
-            match timeout(WS_SEND_TIMEOUT, sender.send(msg)).await {
+            match timeout(ws_send_timeout(), sender.send(msg)).await {
                 Ok(Ok(())) => {}
                 Ok(Err(_)) => {
                     record_send_error(&writer_simulator, WsStreamKind::Updates);
@@ -309,7 +316,7 @@ async fn handle_mempool_ws(
     let writer_simulator = simulator.clone();
     let writer_handle = tokio::spawn(async move {
         while let Some(msg) = out_rx.recv().await {
-            match timeout(WS_SEND_TIMEOUT, sender.send(msg)).await {
+            match timeout(ws_send_timeout(), sender.send(msg)).await {
                 Ok(Ok(())) => {}
                 Ok(Err(_)) => {
                     record_send_error(&writer_simulator, WsStreamKind::Mempool);

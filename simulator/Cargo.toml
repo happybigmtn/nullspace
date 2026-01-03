@@ -16,6 +16,7 @@ nullspace-types = { workspace = true }
 commonware-codec = { workspace = true }
 commonware-consensus = { workspace = true }
 commonware-cryptography = { workspace = true }
+commonware-math = { workspace = true }
 commonware-runtime = { workspace = true }
 commonware-storage = { workspace = true }
 commonware-utils = { workspace = true }

@@ -17,7 +17,6 @@ Notes:
 - `nullspace-node` requires `NODE_CONFIG` plus `NODE_PEERS` or `NODE_HOSTS` in `/etc/nullspace/node.env`.
 - `nullspace-website` reads `VITE_*` config at build time; set GitHub Actions
   `vars`/`secrets` (e.g., `VITE_URL`, `VITE_AUTH_URL`) before building the image.
-- `nullspace-executor` expects `EXECUTOR_URL`, `EXECUTOR_IDENTITY`, and `EXECUTOR_BLOCK_INTERVAL_MS`.
 - `nullspace-live-table` expects `LIVE_TABLE_HOST` and `LIVE_TABLE_PORT` (defaults are ok).
 - `nullspace-ops` should set `OPS_ALLOWED_ORIGINS` and `OPS_ADMIN_TOKEN` for production.
 - If gateway live-table is enabled, set `GATEWAY_LIVE_TABLE_ADMIN_KEY_FILE` (mounted under `/etc/nullspace`).

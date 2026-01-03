@@ -50,7 +50,7 @@ impl<'a, S: State> Layer<'a, S> {
         amount: u64,
         duration: u64,
     ) -> anyhow::Result<Vec<Event>> {
-        let mut player = match self.get(&Key::CasinoPlayer(public.clone())).await? {
+        let mut player = match self.get(Key::CasinoPlayer(public.clone())).await? {
             Some(Value::CasinoPlayer(p)) => p,
             _ => return Ok(vec![]), // Error handled by checking balance
         };
@@ -87,7 +87,7 @@ impl<'a, S: State> Layer<'a, S> {
         );
 
         // Create/Update Staker
-        let mut staker = match self.get(&Key::Staker(public.clone())).await? {
+        let mut staker = match self.get(Key::Staker(public.clone())).await? {
             Some(Value::Staker(s)) => s,
             _ => nullspace_types::casino::Staker::default(),
         };
@@ -106,7 +106,7 @@ impl<'a, S: State> Layer<'a, S> {
 
         // Voting power is accumulated per stake: sum(amount_i * duration_i).
         // Lockup is the max of all stake unlocks (new stake can extend, never shorten).
-        let current_block = self.seed.view;
+        let current_block = self.seed_view;
         let new_unlock = current_block + duration;
 
         staker.balance = staker.balance.saturating_add(amount);
@@ -150,12 +150,12 @@ impl<'a, S: State> Layer<'a, S> {
         &mut self,
         public: &PublicKey,
     ) -> anyhow::Result<Vec<Event>> {
-        let mut staker = match self.get(&Key::Staker(public.clone())).await? {
+        let mut staker = match self.get(Key::Staker(public.clone())).await? {
             Some(Value::Staker(s)) => s,
             _ => return Ok(vec![]),
         };
 
-        if self.seed.view < staker.unlock_ts {
+        if self.seed_view < staker.unlock_ts {
             return Ok(casino_error_vec(
                 public,
                 None,
@@ -186,7 +186,7 @@ impl<'a, S: State> Layer<'a, S> {
         // Return chips
         let mut player_balances = None;
         if let Some(Value::CasinoPlayer(mut player)) =
-            self.get(&Key::CasinoPlayer(public.clone())).await?
+            self.get(Key::CasinoPlayer(public.clone())).await?
         {
             player.balances.chips += staker.balance;
             player_balances =
@@ -225,7 +225,7 @@ impl<'a, S: State> Layer<'a, S> {
         &mut self,
         public: &PublicKey,
     ) -> anyhow::Result<Vec<Event>> {
-        let mut staker = match self.get(&Key::Staker(public.clone())).await? {
+        let mut staker = match self.get(Key::Staker(public.clone())).await? {
             Some(Value::Staker(s)) => s,
             _ => return Ok(vec![]),
         };
@@ -254,7 +254,7 @@ impl<'a, S: State> Layer<'a, S> {
             return Ok(vec![]);
         }
 
-        let mut player = match self.get(&Key::CasinoPlayer(public.clone())).await? {
+        let mut player = match self.get(Key::CasinoPlayer(public.clone())).await? {
             Some(Value::CasinoPlayer(p)) => p,
             _ => {
                 return Ok(casino_error_vec(
@@ -322,7 +322,7 @@ impl<'a, S: State> Layer<'a, S> {
         // NOTE: Dev/demo epoch length in consensus views/blocks (short to keep tests fast).
         const DEV_EPOCH_LENGTH_BLOCKS: u64 = 100;
 
-        if self.seed.view >= house.epoch_start_ts + DEV_EPOCH_LENGTH_BLOCKS {
+        if self.seed_view >= house.epoch_start_ts + DEV_EPOCH_LENGTH_BLOCKS {
             // End Epoch
 
             // If Net PnL > 0, Surplus!
@@ -372,7 +372,7 @@ impl<'a, S: State> Layer<'a, S> {
             }
 
             house.current_epoch += 1;
-            house.epoch_start_ts = self.seed.view;
+            house.epoch_start_ts = self.seed_view;
             house.net_pnl = 0; // Reset for next week
 
             let epoch = house.current_epoch;
@@ -396,7 +396,7 @@ mod tests {
     };
     use commonware_runtime::deterministic::Runner;
     use commonware_runtime::Runner as _;
-    use commonware_storage::store::operation::Keyless;
+    use commonware_storage::qmdb::keyless;
     use nullspace_types::execution::Event;
     use nullspace_types::execution::Output;
     use nullspace_types::execution::{Instruction, Key, Transaction, Value};
@@ -436,7 +436,7 @@ mod tests {
             )
             .await;
 
-            let player = match crate::State::get(&state, &Key::CasinoPlayer(public.clone()))
+            let player = match crate::State::get(&state, Key::CasinoPlayer(public.clone()))
                 .await
                 .expect("get player")
             {
@@ -445,7 +445,7 @@ mod tests {
             };
             assert_eq!(player.balances.chips, 960);
 
-            let staker = match crate::State::get(&state, &Key::Staker(public.clone()))
+            let staker = match crate::State::get(&state, Key::Staker(public.clone()))
                 .await
                 .expect("get staker")
             {
@@ -456,7 +456,7 @@ mod tests {
             assert_eq!(staker.unlock_ts, 11);
             assert_eq!(staker.voting_power, 400);
 
-            let house = match crate::State::get(&state, &Key::House)
+            let house = match crate::State::get(&state, Key::House)
                 .await
                 .expect("get house")
             {
@@ -466,7 +466,7 @@ mod tests {
             assert_eq!(house.total_staked_amount, 40);
             assert_eq!(house.total_voting_power, 400);
 
-            let account = match crate::State::get(&state, &Key::Account(public.clone()))
+            let account = match crate::State::get(&state, Key::Account(public.clone()))
                 .await
                 .expect("get account")
             {
@@ -486,7 +486,7 @@ mod tests {
             )
             .await;
 
-            let player = match crate::State::get(&state, &Key::CasinoPlayer(public.clone()))
+            let player = match crate::State::get(&state, Key::CasinoPlayer(public.clone()))
                 .await
                 .expect("get player")
             {
@@ -495,7 +495,7 @@ mod tests {
             };
             assert_eq!(player.balances.chips, 960);
 
-            let staker = match crate::State::get(&state, &Key::Staker(public.clone()))
+            let staker = match crate::State::get(&state, Key::Staker(public.clone()))
                 .await
                 .expect("get staker")
             {
@@ -505,7 +505,7 @@ mod tests {
             assert_eq!(staker.balance, 40);
             assert_eq!(staker.voting_power, 400);
 
-            let house = match crate::State::get(&state, &Key::House)
+            let house = match crate::State::get(&state, Key::House)
                 .await
                 .expect("get house")
             {
@@ -515,7 +515,7 @@ mod tests {
             assert_eq!(house.total_staked_amount, 40);
             assert_eq!(house.total_voting_power, 400);
 
-            let account = match crate::State::get(&state, &Key::Account(public.clone()))
+            let account = match crate::State::get(&state, Key::Account(public.clone()))
                 .await
                 .expect("get account")
             {
@@ -535,7 +535,7 @@ mod tests {
             )
             .await;
 
-            let player = match crate::State::get(&state, &Key::CasinoPlayer(public.clone()))
+            let player = match crate::State::get(&state, Key::CasinoPlayer(public.clone()))
                 .await
                 .expect("get player")
             {
@@ -544,7 +544,7 @@ mod tests {
             };
             assert_eq!(player.balances.chips, 1_000);
 
-            let staker = match crate::State::get(&state, &Key::Staker(public.clone()))
+            let staker = match crate::State::get(&state, Key::Staker(public.clone()))
                 .await
                 .expect("get staker")
             {
@@ -554,7 +554,7 @@ mod tests {
             assert_eq!(staker.balance, 0);
             assert_eq!(staker.voting_power, 0);
 
-            let house = match crate::State::get(&state, &Key::House)
+            let house = match crate::State::get(&state, Key::House)
                 .await
                 .expect("get house")
             {
@@ -564,7 +564,7 @@ mod tests {
             assert_eq!(house.total_staked_amount, 0);
             assert_eq!(house.total_voting_power, 0);
 
-            let account = match crate::State::get(&state, &Key::Account(public.clone()))
+            let account = match crate::State::get(&state, Key::Account(public.clone()))
                 .await
                 .expect("get account")
             {
@@ -610,7 +610,7 @@ mod tests {
             )
             .await;
 
-            let staker = match crate::State::get(&state, &Key::Staker(public.clone()))
+            let staker = match crate::State::get(&state, Key::Staker(public.clone()))
                 .await
                 .expect("get staker")
             {
@@ -639,7 +639,7 @@ mod tests {
             )
             .await;
 
-            let staker = match crate::State::get(&state, &Key::Staker(public.clone()))
+            let staker = match crate::State::get(&state, Key::Staker(public.clone()))
                 .await
                 .expect("get staker")
             {
@@ -668,7 +668,7 @@ mod tests {
             )
             .await;
 
-            let staker = match crate::State::get(&state, &Key::Staker(public.clone()))
+            let staker = match crate::State::get(&state, Key::Staker(public.clone()))
                 .await
                 .expect("get staker")
             {
@@ -690,7 +690,7 @@ mod tests {
             )
             .await;
 
-            let staker = match crate::State::get(&state, &Key::Staker(public.clone()))
+            let staker = match crate::State::get(&state, Key::Staker(public.clone()))
                 .await
                 .expect("get staker")
             {
@@ -712,7 +712,7 @@ mod tests {
             )
             .await;
 
-            let staker = match crate::State::get(&state, &Key::Staker(public.clone()))
+            let staker = match crate::State::get(&state, Key::Staker(public.clone()))
                 .await
                 .expect("get staker")
             {
@@ -760,7 +760,7 @@ mod tests {
             )
             .await;
 
-            let house = match crate::State::get(&state, &Key::House)
+            let house = match crate::State::get(&state, Key::House)
                 .await
                 .expect("get house")
             {
@@ -781,7 +781,7 @@ mod tests {
             )
             .await;
 
-            let house = match crate::State::get(&state, &Key::House)
+            let house = match crate::State::get(&state, Key::House)
                 .await
                 .expect("get house")
             {
@@ -802,7 +802,7 @@ mod tests {
             )
             .await;
 
-            let house = match crate::State::get(&state, &Key::House)
+            let house = match crate::State::get(&state, Key::House)
                 .await
                 .expect("get house")
             {
@@ -824,7 +824,7 @@ mod tests {
             )
             .await;
 
-            let house = match crate::State::get(&state, &Key::House)
+            let house = match crate::State::get(&state, Key::House)
                 .await
                 .expect("get house")
             {
@@ -835,7 +835,7 @@ mod tests {
             assert_eq!(house.epoch_start_ts, 101);
 
             // Confirm nonce consumption (prepare step is applied even on no-op ProcessEpoch).
-            let account = match crate::State::get(&state, &Key::Account(public))
+            let account = match crate::State::get(&state, Key::Account(public))
                 .await
                 .expect("get account")
             {
@@ -926,7 +926,7 @@ mod tests {
 
             let mut saw_claim = false;
             for op in summary.events_proof_ops {
-                if let Keyless::Append(Output::Event(Event::RewardsClaimed { player, amount, .. })) = op
+                if let keyless::Operation::Append(Output::Event(Event::RewardsClaimed { player, amount, .. })) = op
                 {
                     assert_eq!(player, public);
                     assert_eq!(amount, 7);
@@ -935,7 +935,7 @@ mod tests {
             }
             assert!(saw_claim, "expected RewardsClaimed event for ClaimRewards");
 
-            let house = match crate::State::get(&state, &Key::House)
+            let house = match crate::State::get(&state, Key::House)
                 .await
                 .expect("get house")
             {
@@ -944,7 +944,7 @@ mod tests {
             };
             assert_eq!(house.staking_reward_pool, 0, "pool drained by claim");
 
-            let staker = match crate::State::get(&state, &Key::Staker(public))
+            let staker = match crate::State::get(&state, Key::Staker(public))
                 .await
                 .expect("get staker")
             {

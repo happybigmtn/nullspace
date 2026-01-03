@@ -3,6 +3,7 @@ import { GameState, RouletteBet } from '../../../types';
 import { getRouletteColor, calculateRouletteExposure, formatRouletteNumber, ROULETTE_DOUBLE_ZERO } from '../../../utils/gameUtils';
 import { MobileDrawer } from '../MobileDrawer';
 import { BetsDrawer } from '../BetsDrawer';
+import { PanelDrawer } from '../PanelDrawer';
 import { Pseudo3DWheel } from '../pseudo3d/Pseudo3DWheel';
 import { Label } from '../ui/Label';
 
@@ -167,12 +168,12 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
                  <div className="flex flex-col items-center gap-4">
                     <div className="text-center">
                         <Label variant={isSpinning ? 'gold' : 'primary'}>{isSpinning ? 'Wheel spinning...' : 'Ready to play'}</Label>
-                        <h2 className="text-2xl font-bold text-titanium-900 tracking-tight mt-1">{gameState.message || 'Place your bets'}</h2>
+                        <h2 className="text-2xl font-bold text-titanium-900 tracking-tight mt-1 zen-hide">{gameState.message || 'Place your bets'}</h2>
                     </div>
 
                     {/* Compact History */}
                     {gameState.rouletteHistory.length > 0 && (
-                        <div className="flex gap-1.5 p-1.5 bg-titanium-100 rounded-full border border-titanium-200">
+                        <div className="flex gap-1.5 p-1.5 bg-titanium-100 rounded-full border border-titanium-200 zen-hide">
                             {gameState.rouletteHistory.slice(-6).reverse().map((num, i) => (
                                 <div key={i} className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black border transition-all ${
                                     getRouletteColor(num) === 'RED' ? 'bg-white border-action-destructive text-action-destructive' : 
@@ -187,36 +188,6 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
                  </div>
             </div>
 
-            {/* Desktop Sidebars - Themed Light */}
-            <div className="hidden xl:flex absolute top-8 left-4 bottom-24 w-56 bg-white/60 backdrop-blur-md rounded-[32px] border border-titanium-200 p-4 flex-col shadow-soft">
-                <Label className="mb-4 text-center">Exposure</Label>
-                <div className="flex-1 overflow-y-auto scrollbar-hide">
-                    {Array.from({ length: exposureByNumber.length }, (_, i) => i).map(num => renderExposureRow(num))}
-                </div>
-            </div>
-
-            <div className="hidden xl:flex absolute top-8 right-4 bottom-24 w-56 bg-white/60 backdrop-blur-md rounded-[32px] border border-titanium-200 p-4 flex-col shadow-soft">
-                <Label className="mb-4 text-center">Active Bets</Label>
-                <div className="flex-1 overflow-y-auto scrollbar-hide space-y-2">
-                    {gameState.rouletteBets.length === 0 ? (
-                        <div className="text-center py-12">
-                            <Label variant="secondary">No bets placed</Label>
-                        </div>
-                    ) : (
-                        gameState.rouletteBets.map((b, i) => (
-                            <div key={i} className={`flex justify-between items-center p-3 rounded-2xl border transition-all ${b.local ? 'bg-titanium-50 border-dashed border-titanium-300' : 'bg-white border-titanium-100 shadow-soft'}`}>
-                                <div className="flex flex-col">
-                                    <span className="text-[10px] font-bold text-titanium-900 uppercase tracking-tight">
-                                        {b.type} {b.type === 'STRAIGHT' && typeof b.target === 'number' ? formatRouletteNumber(b.target) : b.target ?? ''}
-                                    </span>
-                                    <span className="text-[9px] font-bold text-titanium-400 uppercase">{b.local ? 'Pending' : 'Confirmed'}</span>
-                                </div>
-                                <span className="text-xs font-bold text-action-success">${b.amount}</span>
-                            </div>
-                        ))
-                    )}
-                </div>
-            </div>
 
             {gameState.rouletteInputMode !== 'NONE' && (
                 <div className="absolute inset-0 bg-titanium-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={closeInput}>
@@ -265,7 +236,7 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
         </div>
 
         {/* Control Bar */}
-            <div className="ns-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-titanium-50/95 backdrop-blur border-t border-titanium-200 z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
+            <div className="ns-controlbar zen-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-titanium-50/95 backdrop-blur border-t border-titanium-200 z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
             <div className="h-auto md:h-20 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2 p-2 md:px-4">
                 <div className="hidden md:flex items-center gap-2 flex-1 flex-wrap">
                     <div className="flex items-center gap-1 flex-wrap">
@@ -411,6 +382,36 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
                         >
                             Super
                         </button>
+                        <PanelDrawer label="Table" title="ROULETTE TABLE" count={gameState.rouletteBets.length} className="hidden md:inline-flex">
+                            <div className="space-y-6">
+                                <div>
+                                    <Label size="micro" className="mb-2 block">Exposure</Label>
+                                    <div className="max-h-56 overflow-y-auto scrollbar-hide rounded-2xl border border-titanium-200 bg-titanium-50/60 p-2">
+                                        {Array.from({ length: exposureByNumber.length }, (_, i) => i).map(num => renderExposureRow(num))}
+                                    </div>
+                                </div>
+                                <div>
+                                    <Label size="micro" className="mb-2 block">Active Bets</Label>
+                                    <div className="space-y-2">
+                                        {gameState.rouletteBets.length === 0 ? (
+                                            <div className="text-center py-6 text-[11px] text-titanium-500 uppercase tracking-widest">No bets placed</div>
+                                        ) : (
+                                            gameState.rouletteBets.map((b, i) => (
+                                                <div key={i} className={`flex justify-between items-center p-3 rounded-2xl border transition-all ${b.local ? 'bg-titanium-50 border-dashed border-titanium-300' : 'bg-white border-titanium-100 shadow-soft'}`}>
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[10px] font-bold text-titanium-900 uppercase tracking-tight">
+                                                            {b.type} {b.type === 'STRAIGHT' && typeof b.target === 'number' ? formatRouletteNumber(b.target) : b.target ?? ''}
+                                                        </span>
+                                                        <span className="text-[9px] font-bold text-titanium-400 uppercase">{b.local ? 'Pending' : 'Confirmed'}</span>
+                                                    </div>
+                                                    <span className="text-xs font-bold text-action-success">${b.amount}</span>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </PanelDrawer>
                     </div>
                 </div>
 
@@ -576,7 +577,7 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
                 <button
                     type="button"
                     onClick={actions?.deal}
-                    className="h-14 px-12 rounded-full border-2 font-bold text-lg font-display tracking-tight uppercase transition-all shadow-soft border-action-primary bg-action-primary text-white hover:bg-action-primary-hover hover:scale-105 active:scale-95"
+                    className="ns-control-primary h-14 px-12 rounded-full border-2 font-bold text-lg font-display tracking-tight uppercase transition-all shadow-soft border-action-primary bg-action-primary text-white hover:bg-action-primary-hover hover:scale-105 active:scale-95"
                 >
                     Spin
                 </button>

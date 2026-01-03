@@ -17,6 +17,10 @@ interface KeyboardControlsProps {
       setNumberInputString: (v: string | ((prev: string) => string)) => void;
       startGame: (g: GameType) => void;
       setBetAmount: (n: number) => void;
+      toggleFocus?: () => void;
+      openRewards?: () => void;
+      openSafety?: () => void;
+      toggleFeed?: () => void;
   };
   gameActions: {
     setGameState: React.Dispatch<React.SetStateAction<GameState>>;
@@ -90,6 +94,26 @@ export const useKeyboardControls = ({
             }
 
             // Global Shortcuts
+            if (e.altKey && e.key.toLowerCase() === 'z') {
+                e.preventDefault();
+                uiActions.toggleFocus?.();
+                return;
+            }
+            if (e.altKey && e.key.toLowerCase() === 'r') {
+                e.preventDefault();
+                uiActions.openRewards?.();
+                return;
+            }
+            if (e.altKey && e.key.toLowerCase() === 's') {
+                e.preventDefault();
+                uiActions.openSafety?.();
+                return;
+            }
+            if (e.altKey && e.key.toLowerCase() === 'l') {
+                e.preventDefault();
+                uiActions.toggleFeed?.();
+                return;
+            }
             if (e.key === '/') {
                 e.preventDefault();
                 if (!uiState.commandOpen && !uiState.customBetOpen && !uiState.helpOpen) {
@@ -205,6 +229,13 @@ export const useKeyboardControls = ({
             const k = e.key.toLowerCase();
 
             if (gameState.type === GameType.BLACKJACK) {
+                if (gameState.stage === 'BETTING') {
+                    if (e.key === '1') { gameActions.bjToggle21Plus3(); return; }
+                    if (e.key === '2') { gameActions.bjToggleLuckyLadies(); return; }
+                    if (e.key === '3') { gameActions.bjTogglePerfectPairs(); return; }
+                    if (e.key === '4') { gameActions.bjToggleBustIt(); return; }
+                    if (e.key === '5') { gameActions.bjToggleRoyalMatch(); return; }
+                }
                 if (k === 'j') gameActions.bjToggle21Plus3();
                 // Only allow blackjack actions during player turn (not during betting/reveal stages).
                 if (gameState.stage !== 'PLAYING' || gameState.message.includes('REVEAL')) return;

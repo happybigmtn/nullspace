@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { GameState, GameType, RouletteBet, SicBoBet, CrapsBet } from '../../types';
 import { calculateCrapsExposure, calculateRouletteExposure, calculateSicBoOutcomeExposure, ROULETTE_DOUBLE_ZERO } from '../../utils/gameUtils';
 import { BlackjackView } from './games/BlackjackView';
@@ -62,6 +62,21 @@ const ODDS_SUMMARY: Record<GameType, string> = {
   [GameType.CASINO_WAR]: '1:1–10:1',
   [GameType.NONE]: '—',
 };
+
+const SHORTCUT_HINTS: Partial<Record<GameType, string[]>> = {
+  [GameType.BLACKJACK]: ['Space Deal', 'H Hit', 'S Stand', 'D Double', 'P Split', '1–5 Side Bets'],
+  [GameType.BACCARAT]: ['Space Deal', 'P Player', 'B Banker', 'E Tie', 'Shift+2 Side Bets'],
+  [GameType.CRAPS]: ['Space Roll', 'Z Shield', 'G Super'],
+  [GameType.ROULETTE]: ['Space Spin', 'T Rebet', 'U Undo'],
+  [GameType.SIC_BO]: ['Space Roll', 'R Rebet', 'U Undo'],
+  [GameType.HILO]: ['H Higher', 'L Lower', 'S Same', 'C Cashout'],
+  [GameType.VIDEO_POKER]: ['Space Deal/Draw', '1–5 Hold'],
+  [GameType.THREE_CARD]: ['Space Deal', 'P Play', 'F Fold'],
+  [GameType.ULTIMATE_HOLDEM]: ['Space Deal', 'C Check', '1/2/3/4 Bet', 'F Fold'],
+  [GameType.CASINO_WAR]: ['Space Deal', 'W War', 'S Surrender', 'T Tie'],
+};
+
+const GLOBAL_SHORTCUTS = ['Alt+L Feed', '/ Games', '? Help'];
 
 const SICBO_COMBOS: number[][] = (() => {
   const combos: number[][] = [];
@@ -195,29 +210,18 @@ interface ActiveGameProps {
   playMode: 'CASH' | 'FREEROLL' | null;
   currentBet?: number;
   onBetChange?: (bet: number) => void;
+  focusMode?: boolean;
 }
 
-export const ActiveGame: React.FC<ActiveGameProps> = ({ gameState, numberInput, onToggleHold, aiAdvice, actions, onOpenCommandPalette, reducedMotion = false, chips, playMode, currentBet, onBetChange }) => {
-  if (gameState.type === GameType.NONE) {
-     const handleOpen = () => onOpenCommandPalette?.();
-     return (
-         <div className="flex-1 flex flex-col items-center justify-center gap-8 py-12">
-             <button
-                 type="button"
-                 onClick={handleOpen}
-                 className="group relative flex flex-col items-center gap-6 focus:outline-none"
-             >
-                 <div className="w-48 h-48 rounded-full bg-white border border-titanium-200 shadow-float flex items-center justify-center group-hover:scale-105 group-active:scale-95 transition-all duration-300">
-                    <span className="text-7xl font-light text-titanium-200 group-hover:text-action-primary transition-colors">/</span>
-                 </div>
-                 <div className="flex flex-col items-center gap-1">
-                    <span className="text-[11px] font-bold text-titanium-400 tracking-[0.3em] uppercase">Select Experience</span>
-                    <span className="text-[10px] text-titanium-300 font-medium uppercase">Press / to start</span>
-                 </div>
-             </button>
-         </div>
-     );
-  }
+const formatAmount = (amount: number) => {
+  if (!Number.isFinite(amount) || amount <= 0) return '0';
+  return Math.floor(amount).toLocaleString();
+};
+
+export const ActiveGame: React.FC<ActiveGameProps> = ({ gameState, numberInput, onToggleHold, aiAdvice, actions, onOpenCommandPalette, reducedMotion = false, chips, playMode, currentBet, onBetChange, focusMode = false }) => {
+  const [showShortcutOverlay, setShowShortcutOverlay] = useState(true);
+  const shortcutTimerRef = React.useRef<number | null>(null);
+  const handleOpen = useCallback(() => onOpenCommandPalette?.(), [onOpenCommandPalette]);
 
   const primaryActionLabel = () => {
     if (gameState.type === GameType.ROULETTE) return 'SPIN';
@@ -304,6 +308,39 @@ export const ActiveGame: React.FC<ActiveGameProps> = ({ gameState, numberInput, 
     gameState.casinoWarTieBet,
   ]);
   const oddsLabel = ODDS_SUMMARY[gameState.type] ?? '—';
+  const shortcutHints = useMemo(() => {
+    const base = SHORTCUT_HINTS[gameState.type] ?? ['Space Deal'];
+    return [...base, ...GLOBAL_SHORTCUTS];
+  }, [gameState.type]);
+
+  useEffect(() => {
+    setShowShortcutOverlay(true);
+    if (shortcutTimerRef.current) window.clearTimeout(shortcutTimerRef.current);
+    shortcutTimerRef.current = window.setTimeout(() => {
+      setShowShortcutOverlay(false);
+    }, 5000);
+    return () => {
+      if (shortcutTimerRef.current) window.clearTimeout(shortcutTimerRef.current);
+    };
+  }, [gameState.type, gameState.stage]);
+
+  useEffect(() => {
+    const dismiss = () => setShowShortcutOverlay(false);
+    window.addEventListener('keydown', dismiss);
+    window.addEventListener('pointerdown', dismiss);
+    return () => {
+      window.removeEventListener('keydown', dismiss);
+      window.removeEventListener('pointerdown', dismiss);
+    };
+  }, []);
+
+  const parsedShortcuts = useMemo(
+    () => shortcutHints.map((hint) => {
+      const [key, ...rest] = hint.split(' ');
+      return { key, label: rest.join(' ') };
+    }),
+    [shortcutHints]
+  );
   const maxWin = React.useMemo(() => {
     switch (gameState.type) {
       case GameType.ROULETTE:
@@ -349,25 +386,90 @@ export const ActiveGame: React.FC<ActiveGameProps> = ({ gameState, numberInput, 
     }
   }, [showFirstHand, firstHandKey, totalBet, gameState.stage]);
 
+  if (gameState.type === GameType.NONE) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center gap-8 py-12">
+        <button
+          type="button"
+          onClick={handleOpen}
+          className="group relative flex flex-col items-center gap-6 focus:outline-none"
+        >
+          <div className="w-48 h-48 rounded-full bg-white border border-titanium-200 shadow-float flex items-center justify-center group-hover:scale-105 group-active:scale-95 transition-all duration-300">
+            <span className="text-7xl font-light text-titanium-200 group-hover:text-action-primary transition-colors">/</span>
+          </div>
+          <div className="flex flex-col items-center gap-1">
+            <span className="text-[11px] font-bold text-titanium-400 tracking-[0.3em] uppercase">Select Experience</span>
+            <span className="text-[10px] text-titanium-300 font-medium uppercase">Press / to start</span>
+          </div>
+        </button>
+      </div>
+    );
+  }
+
   return (
     <>
-         <div className="flex flex-col items-center gap-3 z-30 pointer-events-none select-none mb-6">
-             <div className="px-4 py-1.5 rounded-full border border-titanium-200 bg-white/60 backdrop-blur-md shadow-soft text-[10px] font-bold tracking-widest uppercase text-titanium-400">
-                 Status: <span className="text-titanium-900">{nextActionLabel()}</span>
-             </div>
-             {gameState.type !== GameType.NONE ? (
-               <BetSlip totalBet={totalBet} oddsLabel={oddsLabel} maxWin={maxWin ?? undefined} />
-             ) : null}
+         <div className={`flex flex-col items-center gap-3 z-30 pointer-events-none select-none ${focusMode ? 'mb-2' : 'mb-6'}`}>
+             {focusMode ? (
+                 <div className="flex flex-wrap items-center justify-center gap-3 text-[11px] font-medium text-titanium-600 dark:text-titanium-300">
+                     <span className="uppercase tracking-[0.24em] text-[9px] font-semibold text-titanium-400 dark:text-titanium-400">Status</span>
+                     <span className="text-titanium-800 dark:text-titanium-100">{nextActionLabel()}</span>
+                     <span className="h-3 w-px bg-titanium-200 dark:bg-titanium-800" />
+                     <span className="uppercase tracking-[0.24em] text-[9px] font-semibold text-titanium-400 dark:text-titanium-400">Bet</span>
+                     <span className="text-titanium-800 dark:text-titanium-100">${formatAmount(totalBet)}</span>
+                     <span className="text-titanium-500 dark:text-titanium-300">Odds {oddsLabel}</span>
+                     {typeof maxWin === 'number' && (
+                       <span className="text-titanium-500 dark:text-titanium-300">Max ${formatAmount(maxWin)}</span>
+                     )}
+                 </div>
+             ) : (
+               <>
+                 <div className="px-4 py-1.5 rounded-full border border-titanium-300 bg-white backdrop-blur-md shadow-soft text-[10px] font-bold tracking-widest uppercase text-titanium-700">
+                     Status: <span className="text-titanium-900">{nextActionLabel()}</span>
+                 </div>
+                 <BetSlip totalBet={totalBet} oddsLabel={oddsLabel} maxWin={maxWin ?? undefined} />
+               </>
+             )}
+             {parsedShortcuts.length > 0 && (
+               <div className="flex flex-wrap items-center justify-center gap-2 text-[9px] uppercase tracking-[0.2em] text-titanium-500 dark:text-titanium-300 zen-quiet">
+                 {parsedShortcuts.map((shortcut) => (
+                   <div key={`${shortcut.key}-${shortcut.label}`} className="flex items-center gap-2">
+                     <span className="ns-keycap">{shortcut.key}</span>
+                     {shortcut.label ? (
+                       <span className="text-titanium-500 dark:text-titanium-300">
+                         {shortcut.label}
+                       </span>
+                     ) : null}
+                   </div>
+                 ))}
+               </div>
+             )}
          </div>
 
-         {showFirstHand && (
+         {showShortcutOverlay && parsedShortcuts.length > 0 && (
+           <div className="absolute top-16 left-1/2 -translate-x-1/2 z-40 pointer-events-none animate-scale-in">
+             <div className="flex flex-wrap items-center justify-center gap-2 rounded-full border border-titanium-200 bg-white/80 px-3 py-2 shadow-soft backdrop-blur-md dark:border-titanium-800 dark:bg-titanium-900/80">
+               {parsedShortcuts.map((shortcut) => (
+                 <div key={`${shortcut.key}-${shortcut.label}`} className="flex items-center gap-2">
+                   <span className="ns-keycap">{shortcut.key}</span>
+                   {shortcut.label ? (
+                     <span className="text-[9px] uppercase tracking-[0.2em] text-titanium-500 dark:text-titanium-300">
+                       {shortcut.label}
+                     </span>
+                   ) : null}
+                 </div>
+               ))}
+             </div>
+           </div>
+         )}
+
+         {showFirstHand && !focusMode && (
             <div className="flex justify-center mb-4">
-              <div className="max-w-md rounded-3xl border border-titanium-200 bg-white/80 px-5 py-4 text-center shadow-soft backdrop-blur-md motion-state dark:border-titanium-800 dark:bg-titanium-900/70">
+              <div className="max-w-md rounded-3xl border border-titanium-300 bg-white px-5 py-4 text-center shadow-soft backdrop-blur-md motion-state dark:border-titanium-700 dark:bg-titanium-900/70">
                 <Label size="micro" variant="primary" className="mb-2 block">First hand</Label>
                 <div className="text-sm font-semibold text-titanium-900 dark:text-titanium-100">
                   Pick a chip, place your bet, then confirm the play.
                 </div>
-                <div className="mt-2 text-[10px] font-bold uppercase tracking-widest text-titanium-400">
+                <div className="mt-2 text-[10px] font-bold uppercase tracking-widest text-titanium-600 dark:text-titanium-300">
                   Provably fair • On-chain settlement
                 </div>
               </div>
@@ -406,7 +508,7 @@ export const ActiveGame: React.FC<ActiveGameProps> = ({ gameState, numberInput, 
             )}
          </div>
          
-         {aiAdvice && (
+         {aiAdvice && !focusMode && (
              <div className="absolute top-4 right-4 max-w-xs bg-white/90 backdrop-blur-xl border border-action-primary/30 p-5 rounded-[2rem] shadow-float z-40">
                  <div className="text-[10px] font-bold text-action-primary mb-2 uppercase tracking-[0.2em]">AI Insights</div>
                  <div className="text-sm text-titanium-800 font-medium leading-relaxed">{aiAdvice}</div>

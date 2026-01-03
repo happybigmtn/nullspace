@@ -1204,7 +1204,7 @@ fn process_roll(state: &mut CrapsState, d1: u8, d2: u8) -> Vec<BetResult> {
                 if point_made.is_some() {
                     bet.odds_amount = bet.odds_amount.saturating_add(1);
                 }
-                if is_seven {
+                if seven_out {
                     let mult = ride_line_payout_to_1(bet.odds_amount);
                     let return_amount = if mult == 0 {
                         0
@@ -1228,7 +1228,7 @@ fn process_roll(state: &mut CrapsState, d1: u8, d2: u8) -> Vec<BetResult> {
                         bet.odds_amount = (bet.odds_amount & !mask) | (next << shift);
                     }
                 }
-                if is_seven {
+                if seven_out {
                     let mult = replay_payout_to_1(bet.odds_amount);
                     let return_amount = if mult == 0 {
                         0
@@ -1249,6 +1249,7 @@ fn process_roll(state: &mut CrapsState, d1: u8, d2: u8) -> Vec<BetResult> {
                     bet.odds_amount |= bit;
                 }
                 if is_seven {
+                    // Hot Roller resolves on any 7 (WoO rules).
                     let completed = hot_roller_completed_points(bet.odds_amount);
                     let mult = hot_roller_payout_to_1(completed);
                     let return_amount = if mult == 0 {
@@ -1268,8 +1269,8 @@ fn process_roll(state: &mut CrapsState, d1: u8, d2: u8) -> Vec<BetResult> {
         }
     }
 
-    // Fire bet resolves on any 7.
-    if is_seven {
+    // Fire bet resolves on seven-out.
+    if seven_out {
         let points_made = state.made_points_mask.count_ones() as u8;
         let mult = fire_bet_multiplier(points_made);
         for (idx, bet) in state.bets.iter().enumerate() {
@@ -2504,7 +2505,7 @@ mod tests {
     }
 
     #[test]
-    fn test_fire_bet_pays_on_seven() {
+    fn test_fire_bet_pays_on_seven_out() {
         let mut state = CrapsState {
             phase: Phase::ComeOut,
             main_point: 0,
@@ -2537,7 +2538,7 @@ mod tests {
         }
         assert_eq!(state.made_points_mask.count_ones(), 4);
 
-        // Establish a point, then roll 7 to resolve Fire bet.
+        // Establish a point, then seven-out to resolve Fire bet.
         process_roll(&mut state, 4, 5); // 9 establishes a point
         let results = process_roll(&mut state, 3, 4); // 7
         assert_eq!(results.len(), 1);
@@ -2677,7 +2678,7 @@ mod tests {
 
         let results = process_roll(&mut state, 3, 4);
         assert_eq!(results.len(), 1);
-        assert_eq!(results[0].return_amount, 20);
+        assert_eq!(results[0].return_amount, 30);
     }
 
     #[test]
@@ -2738,7 +2739,7 @@ mod tests {
     }
 
     #[test]
-    fn test_ride_line_pays_on_seven() {
+    fn test_ride_line_pays_on_seven_out() {
         let mut state = CrapsState {
             phase: Phase::ComeOut,
             main_point: 0,
@@ -2761,7 +2762,8 @@ mod tests {
         process_roll(&mut state, 2, 2); // point 4 made
         process_roll(&mut state, 2, 3); // point 5 established
         process_roll(&mut state, 2, 3); // point 5 made
-        let results = process_roll(&mut state, 3, 4); // 7
+        process_roll(&mut state, 3, 3); // point 6 established
+        let results = process_roll(&mut state, 3, 4); // seven-out
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].return_amount, 20);
     }
@@ -2790,7 +2792,7 @@ mod tests {
             process_roll(&mut state, 2, 2); // point 4 made
         }
         process_roll(&mut state, 2, 3); // point 5 established
-        let results = process_roll(&mut state, 3, 4); // 7
+        let results = process_roll(&mut state, 3, 4); // seven-out
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].return_amount, 121);
     }
@@ -2818,7 +2820,7 @@ mod tests {
         process_roll(&mut state, 2, 2);
         process_roll(&mut state, 1, 4);
         process_roll(&mut state, 2, 3);
-        let results = process_roll(&mut state, 3, 4);
+        let results = process_roll(&mut state, 3, 4); // seven resolves hot roller
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].return_amount, 60);
     }

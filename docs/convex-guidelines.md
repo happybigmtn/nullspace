@@ -160,6 +160,28 @@ export const listWithExtraArg = query({
     },
 });
 ```
+
+## Payments safety checklist
+- Always verify webhook signatures (e.g., Stripe `constructEvent`).
+- Store event IDs and enforce idempotency when applying billing changes.
+
+## Stripe config knobs (Convex)
+- Webhook rate limits: `STRIPE_WEBHOOK_RATE_LIMIT_WINDOW_MS`, `STRIPE_WEBHOOK_RATE_LIMIT_MAX`, `STRIPE_WEBHOOK_RATE_LIMIT_BUCKET_MAX`.
+- Event retention: `STRIPE_EVENT_RETENTION_MS` (pruned by cron).
+- API version pin: update `apiVersion` in `convex/stripe.ts` when Stripe deprecates fields.
+
+Recommended starting values (5k concurrent target):
+- `STRIPE_WEBHOOK_RATE_LIMIT_WINDOW_MS=60000`
+- `STRIPE_WEBHOOK_RATE_LIMIT_MAX=600` (10/sec per IP)
+- `STRIPE_WEBHOOK_RATE_LIMIT_BUCKET_MAX=20000`
+Adjust after observing real Stripe webhook volume.
+
+## Auth challenge retention (Convex)
+- `AUTH_CHALLENGE_RETENTION_MS` controls how long expired/used auth challenges remain before pruning.
+- `AUTH_CHALLENGE_TTL_MAX_MS` in the auth service caps the maximum challenge TTL.
+
+## Admin nonce storage (Convex)
+- `admin_nonces` has no TTL; monitor size if rotating admin keys frequently.
 Note: `paginationOpts` is an object with the following properties:
 - `numItems`: the maximum number of documents to return (the validator is `v.number()`)
 - `cursor`: the cursor to use to fetch the next page of documents (the validator is `v.union(v.string(), v.null())`)
@@ -697,4 +719,3 @@ export default function App() {
   return <div>Hello World</div>;
 }
 ```
-

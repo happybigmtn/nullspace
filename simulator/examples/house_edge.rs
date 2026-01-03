@@ -2,9 +2,10 @@ use nullspace_execution::{GameRng, GameResult, init_game as exec_init_game, proc
 use nullspace_execution::casino;
 use nullspace_types::casino::{GameSession, GameType, SuperModeState};
 use nullspace_types::Seed;
-use commonware_cryptography::bls12381::primitives::group::{Element, G1};
+use commonware_consensus::types::Round;
+use commonware_cryptography::bls12381::primitives::group::G1;
+use commonware_math::algebra::Additive;
 use commonware_cryptography::ed25519;
-use commonware_cryptography::PrivateKeyExt;
 use commonware_cryptography::Signer;
 use std::collections::BTreeMap;
 
@@ -85,7 +86,7 @@ struct ResultRow {
 }
 
 fn make_seed() -> Seed {
-    Seed::new(0, <G1 as Element>::zero())
+    Seed::new(Round::zero(), G1::zero())
 }
 
 fn make_player() -> ed25519::PublicKey {

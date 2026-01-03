@@ -81,5 +81,4 @@ export interface Session {
  */
 export interface SessionCreateOptions {
   playerName?: string;
-  initialBalance?: bigint;
 }

@@ -144,7 +144,7 @@ export default function LegacyStakingApp() {
         pushActivity('Connected');
       } catch (e) {
         console.error('[StakingApp] init failed:', e);
-        setStatus('Failed to connect. Check simulator + dev-executor.');
+        setStatus('Failed to connect. Check simulator + validators.');
       }
     };
 

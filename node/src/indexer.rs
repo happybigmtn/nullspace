@@ -1,7 +1,13 @@
 use crate::backoff::jittered_backoff;
 #[cfg(test)]
-use commonware_consensus::{threshold_simplex::types::View, Viewable};
+use commonware_consensus::{types::View, Viewable};
+#[cfg(test)]
+use commonware_consensus::simplex::scheme::bls12381_threshold;
+#[cfg(test)]
+use commonware_cryptography::bls12381::primitives::variant::MinSig;
 use commonware_cryptography::ed25519::Batch;
+#[cfg(test)]
+use commonware_cryptography::ed25519::PublicKey;
 use commonware_cryptography::BatchVerifier;
 #[cfg(test)]
 use commonware_runtime::RwLock;
@@ -99,7 +105,11 @@ impl Indexer for Mock {
 
     async fn submit_seed(&self, seed: Seed) -> Result<(), Self::Error> {
         // Verify the seed
-        assert!(seed.verify(NAMESPACE, &self.identity));
+        let verifier =
+            bls12381_threshold::Scheme::<PublicKey, MinSig>::certificate_verifier(
+                self.identity.clone(),
+            );
+        assert!(seed.verify(&verifier, NAMESPACE));
 
         // Store the seed
         let mut seeds = self.seeds.lock().unwrap();
@@ -117,7 +127,9 @@ impl Indexer for Mock {
 
     async fn submit_summary(&self, summary: Summary) -> Result<(), Self::Error> {
         // Verify the summary
-        assert!(summary.verify(&self.identity).is_ok());
+        if let Err(err) = summary.verify(&self.identity) {
+            panic!("summary verify failed: {err}");
+        }
 
         // Store the summary
         let mut summaries = self.summaries.write().await;
@@ -332,7 +344,7 @@ where
 pub struct ReconnectingIndexer<I, E>
 where
     I: Indexer,
-    E: Rng + CryptoRng + Spawner + Clock + Metrics + Clone,
+    E: Rng + CryptoRng + Spawner + Clock + Metrics + Clone + Send + Sync,
 {
     inner: I,
     context: E,
@@ -342,7 +354,7 @@ where
 impl<I, E> ReconnectingIndexer<I, E>
 where
     I: Indexer,
-    E: Rng + CryptoRng + Spawner + Clock + Metrics + Clone,
+    E: Rng + CryptoRng + Spawner + Clock + Metrics + Clone + Send + Sync,
 {
     pub fn new(context: E, inner: I, mempool_stream_buffer_size: usize) -> Self {
         Self {
@@ -382,7 +394,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use commonware_cryptography::{ed25519::PrivateKey, PrivateKeyExt, Signer};
+    use commonware_cryptography::{ed25519::PrivateKey, Signer};
     use commonware_macros::{select, test_traced};
     use commonware_runtime::{
         deterministic::{self, Runner},

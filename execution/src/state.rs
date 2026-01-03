@@ -7,15 +7,43 @@ use commonware_cryptography::{
     Hasher,
 };
 use commonware_runtime::{Clock, Metrics, Spawner, Storage};
-use commonware_storage::adb::any::variable::Any as AnyAdb;
+use commonware_storage::qmdb::any::unordered::variable::Db as AnyDb;
 use commonware_storage::translator::Translator;
 use nullspace_types::execution::{Account, Key, Transaction, Value};
-use std::{collections::BTreeMap, future::Future};
+use std::collections::BTreeMap;
 
 #[cfg(any(test, feature = "mocks"))]
 use std::collections::HashMap;
 
-pub type Adb<E, T> = AnyAdb<E, Digest, Value, Sha256, T>;
+pub type Adb<E, T> = AnyDb<E, Digest, Value, Sha256, T>;
+
+async fn adb_insert_inner<'a, E, T>(
+    adb: &'a mut Adb<E, T>,
+    key: Key,
+    value: Value,
+) -> Result<()>
+where
+    E: Spawner + Metrics + Clock + Storage + Send + Sync + 'static,
+    T: Translator + Send + Sync + 'static,
+    T::Key: Send + Sync + 'static,
+{
+    let key_hash = Sha256::hash(&key.encode());
+    AnyDb::update(adb, key_hash, value)
+        .await
+        .context("adb update")?;
+    Ok(())
+}
+
+async fn adb_delete_inner<'a, E, T>(adb: &'a mut Adb<E, T>, key: Key) -> Result<()>
+where
+    E: Spawner + Metrics + Clock + Storage + Send + Sync + 'static,
+    T: Translator + Send + Sync + 'static,
+    T::Key: Send + Sync + 'static,
+{
+    let key_hash = Sha256::hash(&key.encode());
+    AnyDb::delete(adb, key_hash).await.context("adb delete")?;
+    Ok(())
+}
 
 #[derive(Debug)]
 pub enum PrepareError {
@@ -23,40 +51,40 @@ pub enum PrepareError {
     State(anyhow::Error),
 }
 
-pub trait State {
-    fn get(&self, key: &Key) -> impl Future<Output = Result<Option<Value>>>;
-    fn insert(&mut self, key: Key, value: Value) -> impl Future<Output = Result<()>>;
-    fn delete(&mut self, key: &Key) -> impl Future<Output = Result<()>>;
+#[allow(async_fn_in_trait)]
+pub trait State: Send + Sync {
+    async fn get(&self, key: Key) -> Result<Option<Value>>;
+    async fn insert(&mut self, key: Key, value: Value) -> Result<()>;
+    async fn delete(&mut self, key: Key) -> Result<()>;
 
-    fn apply(&mut self, changes: Vec<(Key, Status)>) -> impl Future<Output = Result<()>> {
-        async {
-            for (key, status) in changes {
-                match status {
-                    Status::Update(value) => self.insert(key, value).await?,
-                    Status::Delete => self.delete(&key).await?,
-                }
+    async fn apply(&mut self, changes: Vec<(Key, Status)>) -> Result<()> {
+        for (key, status) in changes {
+            match status {
+                Status::Update(value) => self.insert(key, value).await?,
+                Status::Delete => self.delete(key).await?,
             }
-            Ok(())
         }
+        Ok(())
     }
 }
 
-impl<E: Spawner + Metrics + Clock + Storage, T: Translator> State for Adb<E, T> {
-    async fn get(&self, key: &Key) -> Result<Option<Value>> {
+impl<E, T> State for Adb<E, T>
+where
+    E: Spawner + Metrics + Clock + Storage + Send + Sync + 'static,
+    T: Translator + Send + Sync + 'static,
+    T::Key: Send + Sync + 'static,
+{
+    async fn get(&self, key: Key) -> Result<Option<Value>> {
         let key_hash = Sha256::hash(&key.encode());
-        AnyAdb::get(self, &key_hash).await.context("adb get")
+        AnyDb::get(self, &key_hash).await.context("adb get")
     }
 
     async fn insert(&mut self, key: Key, value: Value) -> Result<()> {
-        let key_hash = Sha256::hash(&key.encode());
-        self.update(key_hash, value).await.context("adb update")?;
-        Ok(())
+        adb_insert_inner(self, key, value).await
     }
 
-    async fn delete(&mut self, key: &Key) -> Result<()> {
-        let key_hash = Sha256::hash(&key.encode());
-        AnyAdb::delete(self, key_hash).await.context("adb delete")?;
-        Ok(())
+    async fn delete(&mut self, key: Key) -> Result<()> {
+        adb_delete_inner(self, key).await
     }
 }
 
@@ -68,8 +96,8 @@ pub struct Memory {
 
 #[cfg(any(test, feature = "mocks"))]
 impl State for Memory {
-    async fn get(&self, key: &Key) -> Result<Option<Value>> {
-        Ok(self.state.get(key).cloned())
+    async fn get(&self, key: Key) -> Result<Option<Value>> {
+        Ok(self.state.get(&key).cloned())
     }
 
     async fn insert(&mut self, key: Key, value: Value) -> Result<()> {
@@ -77,8 +105,8 @@ impl State for Memory {
         Ok(())
     }
 
-    async fn delete(&mut self, key: &Key) -> Result<()> {
-        self.state.remove(key);
+    async fn delete(&mut self, key: Key) -> Result<()> {
+        self.state.remove(&key);
         Ok(())
     }
 }
@@ -129,7 +157,7 @@ pub async fn nonce<S: State>(state: &S, public: &PublicKey) -> Result<u64> {
 }
 
 pub(crate) async fn load_account<S: State>(state: &S, public: &PublicKey) -> Result<Account> {
-    Ok(match state.get(&Key::Account(public.clone())).await? {
+    Ok(match state.get(Key::Account(public.clone())).await? {
         Some(Value::Account(account)) => account,
         _ => Account::default(),
     })
@@ -179,8 +207,8 @@ impl<'a, S: State> Noncer<'a, S> {
 }
 
 impl<'a, S: State> State for Noncer<'a, S> {
-    async fn get(&self, key: &Key) -> Result<Option<Value>> {
-        Ok(match self.pending.get(key) {
+    async fn get(&self, key: Key) -> Result<Option<Value>> {
+        Ok(match self.pending.get(&key) {
             Some(Status::Update(value)) => Some(value.clone()),
             Some(Status::Delete) => None,
             None => self.state.get(key).await?,
@@ -192,8 +220,8 @@ impl<'a, S: State> State for Noncer<'a, S> {
         Ok(())
     }
 
-    async fn delete(&mut self, key: &Key) -> Result<()> {
-        self.pending.insert(key.clone(), Status::Delete);
+    async fn delete(&mut self, key: Key) -> Result<()> {
+        self.pending.insert(key, Status::Delete);
         Ok(())
     }
 }

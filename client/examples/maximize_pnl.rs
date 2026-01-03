@@ -9,8 +9,9 @@
 
 use clap::Parser;
 use commonware_codec::DecodeExt;
-use commonware_cryptography::{ed25519::PrivateKey, PrivateKeyExt, Signer};
-use nullspace_client::Client;
+use commonware_cryptography::{ed25519::PrivateKey, Signer};
+use commonware_math::algebra::Random;
+use nullspace_client::{operation_value, Client};
 use nullspace_types::{
     casino::GameType,
     execution::{Instruction, Key, Transaction, Value},
@@ -42,7 +43,7 @@ impl SmartBot {
     fn new() -> Self {
         let mut rng = StdRng::from_entropy();
         Self {
-            keypair: PrivateKey::from_rng(&mut rng),
+            keypair: PrivateKey::random(&mut rng),
             nonce: AtomicU64::new(0),
         }
     }
@@ -151,7 +152,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .query_state(&Key::CasinoPlayer(bot.keypair.public_key()))
                 .await?
             {
-                if let Some(Value::CasinoPlayer(p)) = lookup.operation.value() {
+                if let Some(Value::CasinoPlayer(p)) = operation_value(&lookup.operation) {
                     info!("Current Chips: {}", p.balances.chips);
                 }
             }

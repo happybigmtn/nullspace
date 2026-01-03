@@ -29,7 +29,7 @@ This roadmap covers deployment, data, scalability, UI/UX usability, security, an
 
 ### 1) Infrastructure & Deployment
 - Build real deployment topology: validators, indexer/explorer, API gateway, and frontend host/CDN.
-- Containerize **all** deployable services (node, simulator/indexer, executor, gateway, website build, auth, ops, live-table).
+- Containerize **all** deployable services (node, simulator/indexer, gateway, website build, auth, ops, live-table).
 - CI builds GHCR images via `.github/workflows/build-images.yml`; configure `VITE_*` vars/secrets and promote tags per environment.
 - Deploy the Auth.js v5 service (see `services/auth`) alongside Convex and Stripe webhooks.
 - Deploy a self-hosted Convex backend with persistent storage, backups, and staging/prod isolation.

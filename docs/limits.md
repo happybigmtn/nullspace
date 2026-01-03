@@ -51,6 +51,11 @@ Consensus-critical limits are called out explicitly.
 - aggregation_rate_per_second: 128
 - fetch_rate_per_peer_per_second: 128
 
+Mempool budgeting (5k concurrent target):
+- Keep `mempool_max_transactions` at 100k initially; reserve ~1-2 GiB RAM for
+  mempool data + overhead (validate with real tx sizes).
+- If memory pressure appears, drop to 50k and re-test under load.
+
 ## Simulator (configurable via simulator config / CLI)
 - http_rate_limit_per_second: 1000
 - http_rate_limit_burst: 5000
@@ -61,6 +66,7 @@ Consensus-critical limits are called out explicitly.
 - ws_max_connections: 20000
 - ws_max_connections_per_ip: 10
 - ws_max_message_bytes: 4 MB
+- ws_send_timeout_ms: 2000 (`WS_SEND_TIMEOUT_MS`)
 - updates_broadcast_buffer: 1024
 - mempool_broadcast_buffer: 1024
 - updates_index_concurrency: 8
@@ -80,6 +86,32 @@ Consensus-critical limits are called out explicitly.
 - session_rate_limit_window_ms: 3600000 (`GATEWAY_SESSION_RATE_LIMIT_WINDOW_MS`)
 - session_rate_limit_block_ms: 3600000 (`GATEWAY_SESSION_RATE_LIMIT_BLOCK_MS`)
 - event_timeout_ms: 30000 (`GATEWAY_EVENT_TIMEOUT_MS`)
+- submit_timeout_ms: 10000 (`GATEWAY_SUBMIT_TIMEOUT_MS`)
+- healthcheck_timeout_ms: 5000 (`GATEWAY_HEALTHCHECK_TIMEOUT_MS`)
+- account_timeout_ms: 5000 (`GATEWAY_ACCOUNT_TIMEOUT_MS`)
+- submit_max_bytes: 8 MB (`GATEWAY_SUBMIT_MAX_BYTES`)
+
+## Gateway live-table (configurable via env)
+- GATEWAY_LIVE_TABLE_TIMEOUT_MS: 5000
+- GATEWAY_LIVE_TABLE_RECONNECT_MS: 1500
+- GATEWAY_LIVE_TABLE_TICK_MS: 1000
+- GATEWAY_LIVE_TABLE_BETTING_MS: 20000
+- GATEWAY_LIVE_TABLE_LOCK_MS: 2000
+- GATEWAY_LIVE_TABLE_PAYOUT_MS: 4000
+- GATEWAY_LIVE_TABLE_COOLDOWN_MS: 4000
+- GATEWAY_LIVE_TABLE_MIN_BET / MAX_BET: 5 / 1000
+- GATEWAY_LIVE_TABLE_MAX_BETS_PER_ROUND: 12
+- GATEWAY_LIVE_TABLE_ADMIN_RETRY_MS: 1500
+
+## Live-table service (configurable via env)
+- LIVE_TABLE_BETTING_MS: 18000
+- LIVE_TABLE_LOCK_MS: 2000
+- LIVE_TABLE_PAYOUT_MS: 2000
+- LIVE_TABLE_COOLDOWN_MS: 8000
+- LIVE_TABLE_TICK_MS: 1000
+- LIVE_TABLE_BOT_COUNT: 0 (production default)
+- LIVE_TABLE_BOT_BET_MIN / MAX: 10 / 200
+- LIVE_TABLE_BOT_BETS_MIN / MAX: 1 / 3
 
 ### Testnet recommended overrides (initial 5k concurrent target)
 Simulator:
@@ -106,6 +138,7 @@ Gateway:
 - casino_max_payload_length: 256
 - casino_max_name_length: 32
 - game_session_state_blob_max_bytes: 1024
+- super_mode_fee: 20% of bet (`get_super_mode_fee` in `execution/src/casino/mod.rs`)
 
 ## Protocol/API (consensus-critical)
 - max_block_transactions: 500
@@ -117,3 +150,8 @@ Gateway:
 Notes:
 - Casino limits live in `execution/src/casino/limits.rs` and require a coordinated upgrade to change.
 - Node/simulator limits live in config defaults and can be tuned per deployment.
+- Time-based casino/tournament rules derive from `MS_PER_VIEW` in `execution/src/layer/handlers/casino.rs` (3s per view).
+- Timing defaults (live-table windows, tournament windows) should be tuned after telemetry and load tests.
+  For the 5k target, keep current defaults (live-table windows above, tournament
+  schedule `TOURNAMENTS_PER_DAY=240`, `TOURNAMENT_DURATION_SECS=300`) unless
+  load tests show sustained queueing.

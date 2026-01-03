@@ -13,7 +13,7 @@ export const GenericGameView = React.memo<{ gameState: GameState; actions: any; 
     const isCasinoWar = gameState.type === GameType.CASINO_WAR;
     const warPlayerCard = gameState.playerCards[0];
     const warDealerCard = gameState.dealerCards[0];
-    const warOutcome = useMemo(() => {
+    const warOutcome = useMemo<'player' | 'dealer' | 'tie' | null>(() => {
         if (!isCasinoWar) return null;
         const rawOutcome = gameState.casinoWarOutcome;
         if (!rawOutcome) return null;
@@ -50,9 +50,9 @@ export const GenericGameView = React.memo<{ gameState: GameState; actions: any; 
                 className="flex-1 w-full flex flex-col items-center justify-start sm:justify-center gap-4 sm:gap-6 md:gap-8 relative z-10 pt-8 sm:pt-10 pb-24 sm:pb-20"
                 style={warGlow ? { background: `radial-gradient(circle at 50% 20%, ${warGlow}, transparent 65%)` } : undefined}
             >
-                <h1 className="absolute top-0 text-xl font-bold text-gray-500 tracking-widest uppercase">{gameTitle}</h1>
+                <h1 className="absolute top-0 text-xl font-bold text-gray-500 tracking-widest uppercase zen-hide">{gameTitle}</h1>
                 {isCasinoWar && warTrend.length > 0 && (
-                    <div className="absolute top-7 flex items-center gap-2 text-[9px] font-mono tracking-[0.3em] text-gray-500">
+                    <div className="absolute top-7 flex items-center gap-2 text-[9px] font-mono tracking-[0.3em] text-gray-500 zen-hide">
                         <span>TREND</span>
                         <div className="flex items-center gap-1">
                             {warTrend.map((outcome, index) => (
@@ -99,7 +99,7 @@ export const GenericGameView = React.memo<{ gameState: GameState; actions: any; 
                 </div>
 
                 {/* Center Info */}
-                <div className="text-center space-y-3 relative z-20">
+                <div className="text-center space-y-3 relative z-20 zen-hide">
                     <div className="text-lg sm:text-2xl font-bold text-action-primary tracking-widest leading-tight animate-pulse">
                         {gameState.message}
                     </div>

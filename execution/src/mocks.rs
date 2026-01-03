@@ -6,29 +6,33 @@
 
 use crate::{state_transition, Adb};
 use anyhow::Context;
+use commonware_codec::Encode;
 use commonware_consensus::{
-    aggregation::types::{Ack, Certificate, Item},
-    simplex::types::view_message,
-    threshold_simplex::types::seed_namespace,
+    aggregation::types::{Certificate, Item},
+    types::{Epoch, Round, View},
 };
 use commonware_cryptography::{
     bls12381::primitives::{
-        group::{Private, Share},
+        group::Private,
         ops,
         variant::{MinSig, Variant},
     },
     ed25519::{PrivateKey, PublicKey},
     sha256::{Digest, Sha256},
-    Digestible, Hasher, PrivateKeyExt, Signer,
+    certificate::Subject as _,
+    Digestible, Hasher, Signer,
 };
 #[cfg(feature = "parallel")]
 use commonware_runtime::ThreadPool;
 use commonware_runtime::{buffer::PoolRef, Clock, Metrics, Spawner, Storage};
 use commonware_storage::{
-    adb::{self, keyless},
+    mmr::{mem::Clean, Location},
+    qmdb::{any::VariableConfig, keyless},
+    qmdb::store::CleanStore as _,
     translator::EightCap,
 };
-use commonware_utils::{NZUsize, NZU64};
+use commonware_utils::{union, NZUsize, NZU64};
+use commonware_math::algebra::Random;
 use nullspace_types::{
     api::Summary,
     execution::{Output, Progress, Seed, Transaction, Value},
@@ -36,14 +40,14 @@ use nullspace_types::{
 };
 use rand::{rngs::StdRng, SeedableRng};
 
+type EventsDb<E> = keyless::Keyless<E, Output, Sha256, Clean<Digest>>;
+
 const TEST_BUFFER_POOL_PAGES: usize = 1024;
 const TEST_BUFFER_POOL_PAGE_SIZE: usize = 1024;
 const TEST_MMR_ITEMS_PER_BLOB: u64 = 1024;
 const TEST_MMR_WRITE_BUFFER: usize = 1024;
 const TEST_LOG_ITEMS_PER_SECTION: u64 = 1024;
 const TEST_LOG_WRITE_BUFFER: usize = 1024;
-const TEST_LOCATIONS_ITEMS_PER_BLOB: u64 = 1024;
-const TEST_LOCATIONS_WRITE_BUFFER: usize = 1024;
 
 /// Creates a master keypair for BLS signatures used in consensus
 pub fn create_network_keypair() -> (Private, <MinSig as Variant>::Public) {
@@ -51,10 +55,14 @@ pub fn create_network_keypair() -> (Private, <MinSig as Variant>::Public) {
     ops::keypair::<_, MinSig>(&mut rng)
 }
 
+fn seed_namespace(namespace: &[u8]) -> Vec<u8> {
+    union(namespace, b"_SEED")
+}
+
 /// Creates an account keypair for Ed25519 signatures used by users
 pub fn create_account_keypair(seed: u64) -> (PrivateKey, PublicKey) {
     let mut rng = StdRng::seed_from_u64(seed);
-    let private = PrivateKey::from_rng(&mut rng);
+    let private = PrivateKey::random(&mut rng);
     let public = private.public_key();
     (private, public)
 }
@@ -62,9 +70,10 @@ pub fn create_account_keypair(seed: u64) -> (PrivateKey, PublicKey) {
 /// Creates a test seed for consensus
 pub fn create_seed(network_secret: &Private, view: u64) -> Seed {
     let seed_namespace = seed_namespace(NAMESPACE);
-    let message = view_message(view);
+    let round = Round::new(Epoch::zero(), View::new(view));
+    let message = round.encode();
     Seed::new(
-        view,
+        round,
         ops::sign_message::<MinSig>(network_secret, Some(&seed_namespace), &message),
     )
 }
@@ -72,7 +81,7 @@ pub fn create_seed(network_secret: &Private, view: u64) -> Seed {
 /// Creates state and events databases for testing
 pub async fn create_adbs_result<E: Spawner + Metrics + Storage + Clock>(
     context: &E,
-) -> anyhow::Result<(Adb<E, EightCap>, keyless::Keyless<E, Output, Sha256>)> {
+) -> anyhow::Result<(Adb<E, EightCap>, EventsDb<E>)> {
     let buffer_pool = PoolRef::new(
         NZUsize!(TEST_BUFFER_POOL_PAGES),
         NZUsize!(TEST_BUFFER_POOL_PAGE_SIZE),
@@ -80,18 +89,16 @@ pub async fn create_adbs_result<E: Spawner + Metrics + Storage + Clock>(
 
     let state = Adb::init(
         context.with_label("state"),
-        adb::any::variable::Config {
+        VariableConfig {
             mmr_journal_partition: String::from("state-mmr-journal"),
             mmr_metadata_partition: String::from("state-mmr-metadata"),
             mmr_items_per_blob: NZU64!(TEST_MMR_ITEMS_PER_BLOB),
             mmr_write_buffer: NZUsize!(TEST_MMR_WRITE_BUFFER),
-            log_journal_partition: String::from("state-log-journal"),
-            log_items_per_section: NZU64!(TEST_LOG_ITEMS_PER_SECTION),
+            log_partition: String::from("state-log-journal"),
+            log_items_per_blob: NZU64!(TEST_LOG_ITEMS_PER_SECTION),
             log_write_buffer: NZUsize!(TEST_LOG_WRITE_BUFFER),
             log_compression: None,
             log_codec_config: (),
-            locations_journal_partition: String::from("state-locations-journal"),
-            locations_items_per_blob: NZU64!(TEST_LOCATIONS_ITEMS_PER_BLOB),
             translator: EightCap,
             thread_pool: None,
             buffer_pool: buffer_pool.clone(),
@@ -100,21 +107,18 @@ pub async fn create_adbs_result<E: Spawner + Metrics + Storage + Clock>(
     .await
     .context("failed to initialize state ADB")?;
 
-    let events = keyless::Keyless::<_, Output, Sha256>::init(
+    let events = keyless::Keyless::<_, Output, Sha256, Clean<Digest>>::init(
         context.with_label("events"),
         keyless::Config {
             mmr_journal_partition: String::from("events-mmr-journal"),
             mmr_metadata_partition: String::from("events-mmr-metadata"),
             mmr_items_per_blob: NZU64!(TEST_MMR_ITEMS_PER_BLOB),
             mmr_write_buffer: NZUsize!(TEST_MMR_WRITE_BUFFER),
-            log_journal_partition: String::from("events-log-journal"),
+            log_partition: String::from("events-log-journal"),
             log_items_per_section: NZU64!(TEST_LOG_ITEMS_PER_SECTION),
             log_write_buffer: NZUsize!(TEST_LOG_WRITE_BUFFER),
             log_compression: None,
             log_codec_config: (),
-            locations_journal_partition: String::from("events-locations-journal"),
-            locations_items_per_blob: NZU64!(TEST_LOCATIONS_ITEMS_PER_BLOB),
-            locations_write_buffer: NZUsize!(TEST_LOCATIONS_WRITE_BUFFER),
             thread_pool: None,
             buffer_pool,
         },
@@ -127,7 +131,7 @@ pub async fn create_adbs_result<E: Spawner + Metrics + Storage + Clock>(
 
 pub async fn create_adbs<E: Spawner + Metrics + Storage + Clock>(
     context: &E,
-) -> (Adb<E, EightCap>, keyless::Keyless<E, Output, Sha256>) {
+) -> (Adb<E, EightCap>, EventsDb<E>) {
     create_adbs_result(context)
         .await
         .expect("failed to initialize test databases")
@@ -138,7 +142,7 @@ pub async fn execute_block_result<E: Spawner + Metrics + Storage + Clock>(
     network_secret: &Private,
     network_identity: Identity,
     state: &mut Adb<E, EightCap>,
-    events: &mut keyless::Keyless<E, Output, Sha256>,
+    events: &mut EventsDb<E>,
     view: u64,
     txs: Vec<Transaction>,
 ) -> anyhow::Result<(Seed, Summary)> {
@@ -147,8 +151,8 @@ pub async fn execute_block_result<E: Spawner + Metrics + Storage + Clock>(
         .get_metadata()
         .await
         .context("failed to read state metadata")?
-        .and_then(|(_, v)| match v {
-            Some(Value::Commit { height, start: _ }) => Some(height),
+        .and_then(|v| match v {
+            Value::Commit { height, start: _ } => Some(height),
             _ => None,
         })
         .unwrap_or(0);
@@ -184,23 +188,31 @@ pub async fn execute_block_result<E: Spawner + Metrics + Storage + Clock>(
 
     // Generate proofs
     let state_proof_ops = result.state_end_op - result.state_start_op;
+    let state_proof_ops = std::num::NonZeroU64::new(state_proof_ops)
+        .ok_or_else(|| anyhow::anyhow!("state proof ops should be non-zero"))?;
     let (state_proof, state_proof_ops) = state
-        .historical_proof(result.state_end_op, result.state_start_op, state_proof_ops)
+        .historical_proof(
+            Location::from(result.state_end_op),
+            Location::from(result.state_start_op),
+            state_proof_ops,
+        )
         .await
         .context("failed to generate state historical proof")?;
     let events_proof_ops = result.events_end_op - result.events_start_op;
+    let events_proof_ops = std::num::NonZeroU64::new(events_proof_ops)
+        .ok_or_else(|| anyhow::anyhow!("events proof ops should be non-zero"))?;
     let (events_proof, events_proof_ops) = events
         .historical_proof(
-            result.events_end_op,
-            result.events_start_op,
-            NZU64!(events_proof_ops),
+            Location::from(result.events_end_op),
+            Location::from(result.events_start_op),
+            events_proof_ops,
         )
         .await
         .context("failed to generate events historical proof")?;
 
     // Create progress
     let progress = Progress::new(
-        view,
+        View::new(view),
         height,
         Sha256::hash(&height.to_be_bytes()),
         result.state_root,
@@ -216,18 +228,18 @@ pub async fn execute_block_result<E: Spawner + Metrics + Storage + Clock>(
         index: height,
         digest: progress.digest(),
     };
-    let ack = Ack::<MinSig, Digest>::sign(
-        NAMESPACE,
-        0,
-        &Share {
-            index: 0,
-            private: network_secret.clone(),
-        },
-        item.clone(),
+    let (namespace, message) = (&item).namespace_and_message(NAMESPACE);
+    let signature = ops::sign_message::<MinSig>(
+        network_secret,
+        Some(namespace.as_ref()),
+        message.as_ref(),
     );
-    let certificate = Certificate::<MinSig, Digest> {
+    let certificate = Certificate::<
+        commonware_consensus::aggregation::scheme::bls12381_threshold::Scheme<PublicKey, MinSig>,
+        Digest,
+    > {
         item,
-        signature: ack.signature.value,
+        certificate: signature,
     };
 
     // Create summary
@@ -248,7 +260,7 @@ pub async fn execute_block<E: Spawner + Metrics + Storage + Clock>(
     network_secret: &Private,
     network_identity: Identity,
     state: &mut Adb<E, EightCap>,
-    events: &mut keyless::Keyless<E, Output, Sha256>,
+    events: &mut EventsDb<E>,
     view: u64,
     txs: Vec<Transaction>,
 ) -> (Seed, Summary) {
@@ -261,6 +273,7 @@ pub async fn execute_block<E: Spawner + Metrics + Storage + Clock>(
 mod tests {
     use super::*;
     use commonware_codec::{DecodeExt, Encode, EncodeSize, Error};
+    use commonware_consensus::simplex::scheme::bls12381_threshold;
     use commonware_runtime::deterministic::Runner;
     use commonware_runtime::Runner as _;
     use nullspace_types::api::{Events, FilteredEvents, MAX_EVENTS_PROOF_OPS, MAX_STATE_PROOF_OPS};
@@ -269,11 +282,13 @@ mod tests {
     #[test]
     fn test_seed_codec_roundtrip() {
         let (network_secret, network_identity) = create_network_keypair();
+        let seed_verifier =
+            bls12381_threshold::Scheme::<PublicKey, MinSig>::certificate_verifier(network_identity);
         for view in [0u64, 1, 2, 10, 123, 1_000_000] {
             let seed = create_seed(&network_secret, view);
             let decoded = Seed::decode(seed.encode().as_ref()).expect("seed decode failed");
             assert_eq!(seed, decoded);
-            assert!(decoded.verify(NAMESPACE, &network_identity));
+            assert!(decoded.verify(&seed_verifier, NAMESPACE));
         }
     }
 
@@ -576,7 +591,7 @@ mod tests {
             let seed = create_seed(&network_secret, view);
 
             // Simulate a crash after committing `events` but before committing `state`.
-            let events_start_op = events.op_count();
+            let events_start_op = u64::from(events.op_count());
             let mut layer = crate::Layer::new(&state, network_identity, NAMESPACE, seed.clone());
 
             #[cfg(feature = "parallel")]
@@ -607,7 +622,7 @@ mod tests {
                 .await
                 .expect("commit events");
 
-            let events_op_count_before = events.op_count();
+            let events_op_count_before = u64::from(events.op_count());
 
             // Now rerun the state transition; it should detect the partial-commit and recover.
             let result = state_transition::execute_state_transition(
@@ -626,14 +641,14 @@ mod tests {
             assert!(result.state_end_op > result.state_start_op);
             assert_eq!(result.events_start_op, events_start_op);
             assert_eq!(result.events_end_op, events_op_count_before);
-            assert_eq!(events.op_count(), events_op_count_before);
+            assert_eq!(u64::from(events.op_count()), events_op_count_before);
 
             let state_height = state
                 .get_metadata()
                 .await
                 .expect("read state metadata")
-                .and_then(|(_, v)| match v {
-                    Some(Value::Commit { height, start: _ }) => Some(height),
+                .and_then(|v| match v {
+                    Value::Commit { height, start: _ } => Some(height),
                     _ => None,
                 })
                 .unwrap_or(0);

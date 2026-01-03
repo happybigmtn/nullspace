@@ -16,12 +16,18 @@ interface HamburgerMenuProps {
     reducedMotion: boolean;
     onToggleReducedMotion: () => void;
     publicKeyHex?: string | null;
+    focusMode?: boolean;
+    onToggleFocus?: () => void;
+    walletSlot?: React.ReactNode;
 }
 
 export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
     playMode, onSetPlayMode, onOpenSafety, onOpenRewards, onToggleHelp,
     soundEnabled, onToggleSound, touchMode, onToggleTouchMode, reducedMotion, onToggleReducedMotion,
-    publicKeyHex
+    publicKeyHex,
+    focusMode,
+    onToggleFocus,
+    walletSlot
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const hasOps = !!(import.meta as any)?.env?.VITE_OPS_URL || !!(import.meta as any)?.env?.VITE_ANALYTICS_URL;
@@ -42,6 +48,8 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
             {label}
         </NavLink>
     );
+
+    const walletContent = walletSlot ?? (publicKeyHex ? <AuthStatusPill publicKeyHex={publicKeyHex} /> : null);
 
     return (
         <div className="relative">
@@ -78,6 +86,14 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
                         <div className="px-4 py-2">
                             <div className="text-[10px] font-bold text-titanium-400 uppercase tracking-[0.2em] mb-4">Settings</div>
                             <div className="flex flex-col gap-4">
+                                {onToggleFocus && (
+                                    <button onClick={onToggleFocus} className="flex justify-between items-center group">
+                                        <span className="text-sm font-semibold text-titanium-800 dark:text-titanium-100">Zen</span>
+                                        <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${focusMode ? 'bg-action-success/10 text-action-success' : 'bg-titanium-100 text-titanium-400 dark:bg-titanium-800 dark:text-titanium-300'}`}>
+                                            {focusMode ? 'On' : 'Off'}
+                                        </span>
+                                    </button>
+                                )}
                                 <button onClick={onToggleSound} className="flex justify-between items-center group">
                                     <span className="text-sm font-semibold text-titanium-800 dark:text-titanium-100">Sound</span>
                                     <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${soundEnabled ? 'bg-action-success/10 text-action-success' : 'bg-titanium-100 text-titanium-400 dark:bg-titanium-800 dark:text-titanium-300'}`}>
@@ -95,6 +111,16 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
                         </div>
 
                         <div className="h-px bg-titanium-100 my-2 mx-4 dark:bg-titanium-800" />
+
+                        {walletContent && (
+                            <>
+                                <div className="px-4 py-2">
+                                    <div className="text-[10px] font-bold text-titanium-400 uppercase tracking-[0.2em] mb-4">Wallet</div>
+                                    {walletContent}
+                                </div>
+                                <div className="h-px bg-titanium-100 my-2 mx-4 dark:bg-titanium-800" />
+                            </>
+                        )}
 
                         <div className="px-4 py-2">
                             <button

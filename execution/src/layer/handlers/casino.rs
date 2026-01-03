@@ -2,6 +2,9 @@ use super::super::*;
 use super::casino_error_vec;
 use std::collections::{BTreeMap, BTreeSet};
 
+const SECS_PER_VIEW: u64 = 3;
+const MS_PER_VIEW: u64 = SECS_PER_VIEW * 1_000;
+
 fn settle_freeroll_credits(
     player: &mut nullspace_types::casino::Player,
     now: u64,
@@ -100,7 +103,7 @@ fn record_play_session(
     session: &nullspace_types::casino::GameSession,
     now: u64,
 ) {
-    let created_at_secs = session.created_at.saturating_mul(3);
+    let created_at_secs = session.created_at.saturating_mul(SECS_PER_VIEW);
     let duration_secs = now.saturating_sub(created_at_secs).max(1);
     player.session.sessions_played = player.session.sessions_played.saturating_add(1);
     player.session.play_seconds = player.session.play_seconds.saturating_add(duration_secs);
@@ -184,7 +187,7 @@ impl<'a, S: State> Layer<'a, S> {
         public: &PublicKey,
         session_id: Option<u64>,
     ) -> anyhow::Result<Result<nullspace_types::casino::Player, Vec<Event>>> {
-        match self.get(&Key::CasinoPlayer(public.clone())).await? {
+        match self.get(Key::CasinoPlayer(public.clone())).await? {
             Some(Value::CasinoPlayer(player)) => Ok(Ok(player)),
             _ => Ok(Err(casino_error_vec(
                 public,
@@ -200,7 +203,7 @@ impl<'a, S: State> Layer<'a, S> {
         public: &PublicKey,
         session_id: u64,
     ) -> anyhow::Result<Result<nullspace_types::casino::GameSession, Vec<Event>>> {
-        let session = match self.get(&Key::CasinoSession(session_id)).await? {
+        let session = match self.get(Key::CasinoSession(session_id)).await? {
             Some(Value::CasinoSession(session)) => session,
             _ => {
                 return Ok(Err(casino_error_vec(
@@ -240,7 +243,7 @@ impl<'a, S: State> Layer<'a, S> {
     ) -> anyhow::Result<Vec<Event>> {
         // Check if player already exists
         if self
-            .get(&Key::CasinoPlayer(public.clone()))
+            .get(Key::CasinoPlayer(public.clone()))
             .await?
             .is_some()
         {
@@ -254,7 +257,7 @@ impl<'a, S: State> Layer<'a, S> {
 
         // Create new player with initial chips and created timestamp.
         let mut player = nullspace_types::casino::Player::new(name.to_string());
-        let current_time_sec = self.seed.view.saturating_mul(3);
+        let current_time_sec = self.seed_view.saturating_mul(SECS_PER_VIEW);
         player.profile.created_ts = current_time_sec;
 
         self.insert(
@@ -286,8 +289,8 @@ impl<'a, S: State> Layer<'a, S> {
         };
 
         // Daily faucet rate limiting (dev/testing).
-        let current_block = self.seed.view;
-        let current_time_sec = current_block.saturating_mul(3);
+        let current_block = self.seed_view;
+        let current_time_sec = current_block.saturating_mul(SECS_PER_VIEW);
         let account_age = if player.profile.created_ts == 0 {
             0
         } else {
@@ -315,7 +318,8 @@ impl<'a, S: State> Layer<'a, S> {
             ));
         }
         let current_day = current_time_sec / 86_400;
-        let last_deposit_day = player.session.last_deposit_block.saturating_mul(3) / 86_400;
+        let last_deposit_day =
+            player.session.last_deposit_block.saturating_mul(SECS_PER_VIEW) / 86_400;
         let is_rate_limited =
             player.session.last_deposit_block != 0 && last_deposit_day == current_day;
         if is_rate_limited {
@@ -401,7 +405,7 @@ impl<'a, S: State> Layer<'a, S> {
         let mut is_tournament = false;
         let mut tournament_id = None;
         if let Some(active_tid) = player.tournament.active_tournament {
-            if let Some(Value::Tournament(t)) = self.get(&Key::Tournament(active_tid)).await? {
+            if let Some(Value::Tournament(t)) = self.get(Key::Tournament(active_tid)).await? {
                 if matches!(t.phase, nullspace_types::casino::TournamentPhase::Active) {
                     is_tournament = true;
                     tournament_id = Some(active_tid);
@@ -455,7 +459,7 @@ impl<'a, S: State> Layer<'a, S> {
         }
 
         // Check for existing session
-        if self.get(&Key::CasinoSession(session_id)).await?.is_some() {
+        if self.get(Key::CasinoSession(session_id)).await?.is_some() {
             return Ok(casino_error_vec(
                 public,
                 Some(session_id),
@@ -488,7 +492,7 @@ impl<'a, S: State> Layer<'a, S> {
             bet,
             state_blob: vec![],
             move_count: 0,
-            created_at: self.seed.view,
+            created_at: self.seed_view,
             is_complete: false,
             super_mode: nullspace_types::casino::SuperModeState::default(),
             is_tournament,
@@ -545,9 +549,9 @@ impl<'a, S: State> Layer<'a, S> {
         // Handle immediate result (e.g. Natural Blackjack)
         if !matches!(result, crate::casino::GameResult::Continue(_)) {
             log_game_completion(public, &session, &result);
-            let now = self.seed.view.saturating_mul(3);
+            let now = self.seed_view.saturating_mul(SECS_PER_VIEW);
             if let Some(Value::CasinoPlayer(mut player)) =
-                self.get(&Key::CasinoPlayer(public.clone())).await?
+                self.get(Key::CasinoPlayer(public.clone())).await?
             {
                 match result {
                     crate::casino::GameResult::Win(base_payout, logs) => {
@@ -731,7 +735,7 @@ impl<'a, S: State> Layer<'a, S> {
             Ok(session) => session,
             Err(events) => return Ok(events),
         };
-        let now = self.seed.view.saturating_mul(3);
+        let now = self.seed_view.saturating_mul(SECS_PER_VIEW);
         let payload_len = payload.len();
         let payload_action = payload.first().copied();
 
@@ -817,7 +821,7 @@ impl<'a, S: State> Layer<'a, S> {
                     Value::CasinoSession(session),
                 );
                 if let Some(Value::CasinoPlayer(player)) =
-                    self.get(&Key::CasinoPlayer(public.clone())).await?
+                    self.get(Key::CasinoPlayer(public.clone())).await?
                 {
                     move_balances =
                         Some(nullspace_types::casino::PlayerBalanceSnapshot::from_player(
@@ -829,7 +833,7 @@ impl<'a, S: State> Layer<'a, S> {
                 move_logs = logs;
                 // Handle mid-game balance updates (additional bets or intermediate payouts)
                 if let Some(Value::CasinoPlayer(mut player)) =
-                    self.get(&Key::CasinoPlayer(public.clone())).await?
+                    self.get(Key::CasinoPlayer(public.clone())).await?
                 {
                     let skip_super_fee = session.game_type == nullspace_types::casino::GameType::Craps
                         && session.move_count == 1
@@ -915,7 +919,7 @@ impl<'a, S: State> Layer<'a, S> {
 
                 // Get player for modifier state
                 if let Some(Value::CasinoPlayer(mut player)) =
-                    self.get(&Key::CasinoPlayer(public.clone())).await?
+                    self.get(Key::CasinoPlayer(public.clone())).await?
                 {
                     let mut payout = base_payout as i64;
                     let was_doubled = player.modifiers.active_double;
@@ -1000,7 +1004,7 @@ impl<'a, S: State> Layer<'a, S> {
                 );
 
                 if let Some(Value::CasinoPlayer(mut player)) =
-                    self.get(&Key::CasinoPlayer(public.clone())).await?
+                    self.get(Key::CasinoPlayer(public.clone())).await?
                 {
                     // Return specified refund amount on push
                     let final_chips = {
@@ -1076,7 +1080,7 @@ impl<'a, S: State> Layer<'a, S> {
                 );
 
                 if let Some(Value::CasinoPlayer(mut player)) =
-                    self.get(&Key::CasinoPlayer(public.clone())).await?
+                    self.get(Key::CasinoPlayer(public.clone())).await?
                 {
                     let shields_pool = if session.is_tournament {
                         &mut player.tournament.shields
@@ -1157,7 +1161,7 @@ impl<'a, S: State> Layer<'a, S> {
                 );
 
                 if let Some(Value::CasinoPlayer(mut player)) =
-                    self.get(&Key::CasinoPlayer(public.clone())).await?
+                    self.get(Key::CasinoPlayer(public.clone())).await?
                 {
                     let (was_shielded, payout, final_chips) = {
                         let shields_pool = if session.is_tournament {
@@ -1254,7 +1258,7 @@ impl<'a, S: State> Layer<'a, S> {
                 );
 
                 if let Some(Value::CasinoPlayer(mut player)) =
-                    self.get(&Key::CasinoPlayer(public.clone())).await?
+                    self.get(Key::CasinoPlayer(public.clone())).await?
                 {
                     let (was_shielded, payout, final_chips) = {
                         let shields_pool = if session.is_tournament {
@@ -1323,7 +1327,7 @@ impl<'a, S: State> Layer<'a, S> {
 
         if move_balances.is_none() {
             if let Some(Value::CasinoPlayer(player)) =
-                self.get(&Key::CasinoPlayer(public.clone())).await?
+                self.get(Key::CasinoPlayer(public.clone())).await?
             {
                 move_balances =
                     Some(nullspace_types::casino::PlayerBalanceSnapshot::from_player(
@@ -1369,7 +1373,7 @@ impl<'a, S: State> Layer<'a, S> {
                 // Shield and Double require player to be in an ACTIVE tournament
                 let is_in_active_tournament = match player.tournament.active_tournament {
                     Some(tid) => {
-                        match self.get(&Key::Tournament(tid)).await? {
+                        match self.get(Key::Tournament(tid)).await? {
                             Some(Value::Tournament(t)) => {
                                 t.phase == nullspace_types::casino::TournamentPhase::Active
                             }
@@ -1428,7 +1432,7 @@ impl<'a, S: State> Layer<'a, S> {
 
         // Check tournament limit (per-player daily limit).
         // Approximate time from view (3s per block)
-        let current_time_sec = self.seed.view * 3;
+        let current_time_sec = self.seed_view.saturating_mul(SECS_PER_VIEW);
         let current_day = current_time_sec / 86400;
         let last_played_day = player.tournament.last_tournament_ts / 86400;
 
@@ -1478,7 +1482,7 @@ impl<'a, S: State> Layer<'a, S> {
         }
 
         // Get or create tournament
-        let mut tournament = match self.get(&Key::Tournament(tournament_id)).await? {
+        let mut tournament = match self.get(Key::Tournament(tournament_id)).await? {
             Some(Value::Tournament(t)) => t,
             _ => nullspace_types::casino::Tournament {
                 id: tournament_id,
@@ -1561,7 +1565,7 @@ impl<'a, S: State> Layer<'a, S> {
             ));
         }
 
-        let mut player = match self.get(&Key::CasinoPlayer(player_key.clone())).await? {
+        let mut player = match self.get(Key::CasinoPlayer(player_key.clone())).await? {
             Some(Value::CasinoPlayer(player)) => player,
             _ => {
                 return Ok(casino_error_vec(
@@ -1597,7 +1601,7 @@ impl<'a, S: State> Layer<'a, S> {
                 "Unauthorized admin instruction",
             ));
         }
-        let mut tournament = match self.get(&Key::Tournament(tournament_id)).await? {
+        let mut tournament = match self.get(Key::Tournament(tournament_id)).await? {
             Some(Value::Tournament(t)) => {
                 // Prevent double-starts which would double-mint the prize pool.
                 if matches!(t.phase, nullspace_types::casino::TournamentPhase::Active) {
@@ -1623,7 +1627,7 @@ impl<'a, S: State> Layer<'a, S> {
                 let mut t = nullspace_types::casino::Tournament {
                     id: tournament_id,
                     phase: nullspace_types::casino::TournamentPhase::Active,
-                    start_block: self.seed.view,
+                    start_block: self.seed_view,
                     start_time_ms,
                     end_time_ms,
                     players: Vec::new(),
@@ -1681,7 +1685,7 @@ impl<'a, S: State> Layer<'a, S> {
 
         // Update state
         tournament.phase = nullspace_types::casino::TournamentPhase::Active;
-        tournament.start_block = self.seed.view;
+        tournament.start_block = self.seed_view;
         tournament.start_time_ms = start_time_ms;
         tournament.end_time_ms = end_time_ms;
         tournament.prize_pool = prize_pool;
@@ -1690,7 +1694,7 @@ impl<'a, S: State> Layer<'a, S> {
         let mut leaderboard = nullspace_types::casino::CasinoLeaderboard::default();
         for player_pk in &tournament.players {
             if let Some(Value::CasinoPlayer(mut player)) =
-                self.get(&Key::CasinoPlayer(player_pk.clone())).await?
+                self.get(Key::CasinoPlayer(player_pk.clone())).await?
             {
                 player.tournament.chips = tournament.starting_chips;
                 player.tournament.shields = tournament.starting_shields;
@@ -1721,7 +1725,7 @@ impl<'a, S: State> Layer<'a, S> {
 
         tracing::info!(
             tournament_id = tournament_id,
-            start_block = self.seed.view,
+            start_block = self.seed_view,
             start_time_ms = tournament.start_time_ms,
             end_time_ms = tournament.end_time_ms,
             prize_pool = tournament.prize_pool,
@@ -1731,7 +1735,7 @@ impl<'a, S: State> Layer<'a, S> {
 
         Ok(vec![Event::TournamentStarted {
             id: tournament_id,
-            start_block: self.seed.view,
+            start_block: self.seed_view,
         }])
     }
 
@@ -1749,7 +1753,7 @@ impl<'a, S: State> Layer<'a, S> {
             ));
         }
         let mut tournament =
-            if let Some(Value::Tournament(t)) = self.get(&Key::Tournament(tournament_id)).await? {
+            if let Some(Value::Tournament(t)) = self.get(Key::Tournament(tournament_id)).await? {
                 t
             } else {
                 return Ok(vec![]);
@@ -1762,14 +1766,14 @@ impl<'a, S: State> Layer<'a, S> {
             return Ok(vec![]);
         }
 
-        let now = self.seed.view.saturating_mul(3);
+        let now = self.seed_view.saturating_mul(SECS_PER_VIEW);
         let policy = self.get_or_init_policy().await?;
 
         // Gather player tournament chips
         let mut rankings: Vec<(PublicKey, u64, u128)> = Vec::new();
         for player_pk in &tournament.players {
             if let Some(Value::CasinoPlayer(p)) =
-                self.get(&Key::CasinoPlayer(player_pk.clone())).await?
+                self.get(Key::CasinoPlayer(player_pk.clone())).await?
             {
                 let proof_weight = proof_of_play_multiplier(&p, now);
                 rankings.push((player_pk.clone(), p.tournament.chips, proof_weight));
@@ -1810,7 +1814,7 @@ impl<'a, S: State> Layer<'a, S> {
 
                 if payout > 0 {
                     if let Some(Value::CasinoPlayer(mut p)) =
-                        self.get(&Key::CasinoPlayer(pk.clone())).await?
+                        self.get(Key::CasinoPlayer(pk.clone())).await?
                     {
                         // Tournament prizes are credited as non-transferable freeroll credits.
                         award_freeroll_credits(&mut p, payout, now, &policy);
@@ -1823,7 +1827,7 @@ impl<'a, S: State> Layer<'a, S> {
         // Clear tournament flags and stacks now that the event is over
         for player_pk in &tournament.players {
             if let Some(Value::CasinoPlayer(mut player)) =
-                self.get(&Key::CasinoPlayer(player_pk.clone())).await?
+                self.get(Key::CasinoPlayer(player_pk.clone())).await?
             {
                 if player.tournament.active_tournament == Some(tournament_id) {
                     player.tournament.active_tournament = None;
@@ -1914,7 +1918,7 @@ impl<'a, S: State> Layer<'a, S> {
         );
 
         if self
-            .get(&Key::GlobalTableRound(game_type))
+            .get(Key::GlobalTableRound(game_type))
             .await?
             .is_none()
         {
@@ -1950,7 +1954,7 @@ impl<'a, S: State> Layer<'a, S> {
             ));
         }
 
-        let config = match self.get(&Key::GlobalTableConfig(game_type)).await? {
+        let config = match self.get(Key::GlobalTableConfig(game_type)).await? {
             Some(Value::GlobalTableConfig(config)) => config,
             _ => {
                 return Ok(casino_error_vec(
@@ -1962,8 +1966,8 @@ impl<'a, S: State> Layer<'a, S> {
             }
         };
 
-        let now_ms = self.seed.view.saturating_mul(3_000);
-        let mut round = match self.get(&Key::GlobalTableRound(game_type)).await? {
+        let now_ms = self.seed_view.saturating_mul(MS_PER_VIEW);
+        let mut round = match self.get(Key::GlobalTableRound(game_type)).await? {
             Some(Value::GlobalTableRound(round)) => round,
             _ => default_global_table_round(game_type),
         };
@@ -2020,7 +2024,7 @@ impl<'a, S: State> Layer<'a, S> {
             }]);
         }
 
-        let config = match self.get(&Key::GlobalTableConfig(game_type)).await? {
+        let config = match self.get(Key::GlobalTableConfig(game_type)).await? {
             Some(Value::GlobalTableConfig(config)) => config,
             _ => {
                 return Ok(vec![Event::GlobalTableBetRejected {
@@ -2032,8 +2036,8 @@ impl<'a, S: State> Layer<'a, S> {
             }
         };
 
-        let now_ms = self.seed.view.saturating_mul(3_000);
-        let mut round = match self.get(&Key::GlobalTableRound(game_type)).await? {
+        let now_ms = self.seed_view.saturating_mul(MS_PER_VIEW);
+        let mut round = match self.get(Key::GlobalTableRound(game_type)).await? {
             Some(Value::GlobalTableRound(round)) => round,
             _ => {
                 return Ok(vec![Event::GlobalTableBetRejected {
@@ -2080,7 +2084,7 @@ impl<'a, S: State> Layer<'a, S> {
         };
 
         let mut player_session = match self
-            .get(&Key::GlobalTablePlayerSession(game_type, public.clone()))
+            .get(Key::GlobalTablePlayerSession(game_type, public.clone()))
             .await?
         {
             Some(Value::GlobalTablePlayerSession(session)) => session,
@@ -2092,7 +2096,7 @@ impl<'a, S: State> Layer<'a, S> {
                     bet: 0,
                     state_blob: vec![],
                     move_count: 0,
-                    created_at: self.seed.view,
+                    created_at: self.seed_view,
                     is_complete: false,
                     super_mode: nullspace_types::casino::SuperModeState::default(),
                     is_tournament: false,
@@ -2241,7 +2245,7 @@ impl<'a, S: State> Layer<'a, S> {
             ));
         }
 
-        let config = match self.get(&Key::GlobalTableConfig(game_type)).await? {
+        let config = match self.get(Key::GlobalTableConfig(game_type)).await? {
             Some(Value::GlobalTableConfig(config)) => config,
             _ => {
                 return Ok(casino_error_vec(
@@ -2252,8 +2256,8 @@ impl<'a, S: State> Layer<'a, S> {
                 ))
             }
         };
-        let now_ms = self.seed.view.saturating_mul(3_000);
-        let mut round = match self.get(&Key::GlobalTableRound(game_type)).await? {
+        let now_ms = self.seed_view.saturating_mul(MS_PER_VIEW);
+        let mut round = match self.get(Key::GlobalTableRound(game_type)).await? {
             Some(Value::GlobalTableRound(round)) => round,
             _ => {
                 return Ok(casino_error_vec(
@@ -2324,7 +2328,7 @@ impl<'a, S: State> Layer<'a, S> {
             ));
         }
 
-        let config = match self.get(&Key::GlobalTableConfig(game_type)).await? {
+        let config = match self.get(Key::GlobalTableConfig(game_type)).await? {
             Some(Value::GlobalTableConfig(config)) => config,
             _ => {
                 return Ok(casino_error_vec(
@@ -2336,8 +2340,8 @@ impl<'a, S: State> Layer<'a, S> {
             }
         };
 
-        let now_ms = self.seed.view.saturating_mul(3_000);
-        let mut round = match self.get(&Key::GlobalTableRound(game_type)).await? {
+        let now_ms = self.seed_view.saturating_mul(MS_PER_VIEW);
+        let mut round = match self.get(Key::GlobalTableRound(game_type)).await? {
             Some(Value::GlobalTableRound(round)) => round,
             _ => {
                 return Ok(casino_error_vec(
@@ -2381,7 +2385,7 @@ impl<'a, S: State> Layer<'a, S> {
             bet: 0,
             state_blob: vec![],
             move_count: 0,
-            created_at: self.seed.view,
+            created_at: self.seed_view,
             is_complete: false,
             super_mode: nullspace_types::casino::SuperModeState::default(),
             is_tournament: false,
@@ -2435,7 +2439,7 @@ impl<'a, S: State> Layer<'a, S> {
             ));
         }
 
-        let mut round = match self.get(&Key::GlobalTableRound(game_type)).await? {
+        let mut round = match self.get(Key::GlobalTableRound(game_type)).await? {
             Some(Value::GlobalTableRound(round)) => round,
             _ => {
                 return Ok(casino_error_vec(
@@ -2471,7 +2475,7 @@ impl<'a, S: State> Layer<'a, S> {
         };
 
         let mut player_session = match self
-            .get(&Key::GlobalTablePlayerSession(game_type, public.clone()))
+            .get(Key::GlobalTablePlayerSession(game_type, public.clone()))
             .await?
         {
             Some(Value::GlobalTablePlayerSession(session)) => session,
@@ -2605,7 +2609,7 @@ impl<'a, S: State> Layer<'a, S> {
 
             if player_session.session.is_complete {
                 player_session.session.is_complete = false;
-                let now = self.seed.view.saturating_mul(3);
+                let now = self.seed_view.saturating_mul(SECS_PER_VIEW);
                 record_play_session(&mut player, &player_session.session, now);
             }
 
@@ -2669,7 +2673,7 @@ impl<'a, S: State> Layer<'a, S> {
             ));
         }
 
-        let config = match self.get(&Key::GlobalTableConfig(game_type)).await? {
+        let config = match self.get(Key::GlobalTableConfig(game_type)).await? {
             Some(Value::GlobalTableConfig(config)) => config,
             _ => {
                 return Ok(casino_error_vec(
@@ -2681,8 +2685,8 @@ impl<'a, S: State> Layer<'a, S> {
             }
         };
 
-        let now_ms = self.seed.view.saturating_mul(3_000);
-        let mut round = match self.get(&Key::GlobalTableRound(game_type)).await? {
+        let now_ms = self.seed_view.saturating_mul(MS_PER_VIEW);
+        let mut round = match self.get(Key::GlobalTableRound(game_type)).await? {
             Some(Value::GlobalTableRound(round)) => round,
             _ => {
                 return Ok(casino_error_vec(
@@ -2731,7 +2735,7 @@ impl<'a, S: State> Layer<'a, S> {
         public: &PublicKey,
         player: &nullspace_types::casino::Player,
     ) -> anyhow::Result<Option<Event>> {
-        let mut leaderboard = match self.get(&Key::CasinoLeaderboard).await? {
+        let mut leaderboard = match self.get(Key::CasinoLeaderboard).await? {
             Some(Value::CasinoLeaderboard(lb)) => lb,
             _ => nullspace_types::casino::CasinoLeaderboard::default(),
         };
@@ -2757,7 +2761,7 @@ impl<'a, S: State> Layer<'a, S> {
         public: &PublicKey,
         player: &nullspace_types::casino::Player,
     ) -> anyhow::Result<()> {
-        if let Some(Value::Tournament(mut t)) = self.get(&Key::Tournament(tournament_id)).await? {
+        if let Some(Value::Tournament(mut t)) = self.get(Key::Tournament(tournament_id)).await? {
             t.leaderboard.update(
                 public.clone(),
                 player.profile.name.clone(),

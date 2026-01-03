@@ -5,7 +5,8 @@ use axum::{
     Json,
 };
 use commonware_cryptography::ed25519;
-use commonware_cryptography::{PrivateKeyExt, Signer};
+use commonware_cryptography::Signer;
+use commonware_math::algebra::Random;
 use commonware_utils::{from_hex, hex};
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
@@ -93,7 +94,7 @@ pub(crate) async fn register_passkey(
     }
 
     let mut rng = OsRng;
-    let private = ed25519::PrivateKey::from_rng(&mut rng);
+    let private = ed25519::PrivateKey::random(&mut rng);
     let public = private.public_key();
 
     let cred = PasskeyCredential {

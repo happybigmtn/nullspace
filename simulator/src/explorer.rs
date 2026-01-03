@@ -10,7 +10,7 @@ use commonware_cryptography::{
     sha256::Digest,
     Digestible,
 };
-use commonware_storage::store::operation::Keyless;
+use commonware_storage::qmdb::keyless;
 use commonware_utils::{from_hex, hex};
 use nullspace_types::{
     casino::GameType,
@@ -610,7 +610,7 @@ fn describe_instruction(instruction: &Instruction) -> String {
 pub(crate) fn apply_block_indexing(
     explorer: &mut ExplorerState,
     progress: &Progress,
-    ops: &[Keyless<Output>],
+    ops: &[keyless::Operation<Output>],
     indexed_at_ms: u64,
     metrics: &ExplorerMetrics,
 ) -> bool {
@@ -630,7 +630,7 @@ pub(crate) fn apply_block_indexing(
 
     for (idx, op) in ops.iter().enumerate() {
         match op {
-            Keyless::Append(Output::Transaction(tx)) => {
+            keyless::Operation::Append(Output::Transaction(tx)) => {
                 let digest = tx.digest();
                 let hash_hex = hex(digest.as_ref());
                 tx_hashes.push(hash_hex.clone());
@@ -663,7 +663,7 @@ pub(crate) fn apply_block_indexing(
                 }
                 explorer.touch_account_lru(&tx.public);
             }
-            Keyless::Append(Output::Event(evt)) => {
+            keyless::Operation::Append(Output::Event(evt)) => {
                 record_event(explorer, evt, progress.height, metrics);
             }
             _ => {}
@@ -673,7 +673,7 @@ pub(crate) fn apply_block_indexing(
     let tx_count = tx_hashes.len();
     let block = ExplorerBlock {
         height: progress.height,
-        view: progress.view,
+        view: progress.view.get(),
         block_digest: hex(progress.block_digest.as_ref()),
         parent,
         tx_hashes,
@@ -706,7 +706,7 @@ impl Simulator {
     pub(crate) async fn index_block_from_summary(
         &self,
         progress: &Progress,
-        ops: &[Keyless<Output>],
+        ops: &[keyless::Operation<Output>],
     ) {
         let indexed_at_ms = Self::now_ms();
         let applied = {
@@ -728,7 +728,7 @@ impl Simulator {
     async fn persist_explorer_block(
         &self,
         progress: &Progress,
-        ops: &[Keyless<Output>],
+        ops: &[keyless::Operation<Output>],
         indexed_at_ms: u64,
     ) {
         let Some(persistence) = &self.explorer_persistence else {

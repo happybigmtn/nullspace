@@ -1,10 +1,10 @@
 use commonware_codec::{Decode, DecodeExt};
 use commonware_cryptography::{
-    bls12381::primitives::{group, poly, variant::MinSig},
+    bls12381::primitives::{group, sharing::Sharing, variant::MinSig},
     ed25519::{PrivateKey, PublicKey},
     Signer,
 };
-use commonware_utils::{from_hex_formatted, hex, quorum};
+use commonware_utils::{from_hex_formatted, hex};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -19,7 +19,7 @@ use thiserror::Error;
 use tracing::Level;
 use url::Url;
 
-use nullspace_types::{Evaluation, Identity};
+use nullspace_types::Identity;
 
 pub mod aggregator;
 pub mod application;
@@ -210,7 +210,7 @@ pub struct ValidatedConfig {
     pub signer: PrivateKey,
     pub public_key: PublicKey,
     pub share: group::Share,
-    pub polynomial: poly::Poly<Evaluation>,
+    pub sharing: Sharing<MinSig>,
     pub identity: Identity,
 
     pub port: u16,
@@ -263,7 +263,7 @@ pub struct ValidatedConfig {
     pub cache_items_per_blob: NonZeroU64,
     pub replay_buffer_bytes: NonZeroUsize,
     pub write_buffer_bytes: NonZeroUsize,
-    pub max_repair: u64,
+    pub max_repair: NonZeroUsize,
     pub prune_interval: u64,
     pub ancestry_cache_entries: usize,
     pub proof_queue_size: usize,
@@ -727,7 +727,7 @@ impl Config {
             nonzero_usize("replay_buffer_bytes", self.replay_buffer_bytes)?;
         let write_buffer_bytes =
             nonzero_usize("write_buffer_bytes", self.write_buffer_bytes)?;
-        ensure_nonzero_u64("max_repair", self.max_repair)?;
+        let max_repair = nonzero_usize("max_repair", self.max_repair as usize)?;
         ensure_nonzero_u64("prune_interval", self.prune_interval)?;
         ensure_nonzero("ancestry_cache_entries", self.ancestry_cache_entries)?;
         ensure_nonzero("proof_queue_size", self.proof_queue_size)?;
@@ -765,15 +765,14 @@ impl Config {
 
         let share = decode_bytes("share", &self.share)?;
 
-        let threshold = quorum(peer_count);
-        let polynomial =
-            poly::Public::<MinSig>::decode_cfg(self.polynomial.as_ref(), &(threshold as usize))
-                .map_err(|source| ConfigError::InvalidDecode {
-                    field: "polynomial",
-                    value: hex(self.polynomial.as_ref()),
-                    source,
-                })?;
-        let identity = *poly::public::<MinSig>(&polynomial);
+        let max_participants = nonzero_u32("peer_count", peer_count)?;
+        let sharing = Sharing::<MinSig>::decode_cfg(self.polynomial.as_ref(), &max_participants)
+            .map_err(|source| ConfigError::InvalidDecode {
+                field: "polynomial",
+                value: hex(self.polynomial.as_ref()),
+                source,
+            })?;
+        let identity = sharing.public().clone();
 
         let log_level =
             Level::from_str(&self.log_level).map_err(|_| ConfigError::InvalidLogLevel {
@@ -784,7 +783,7 @@ impl Config {
             signer,
             public_key,
             share,
-            polynomial,
+            sharing,
             identity,
             port: self.port,
             metrics_port: self.metrics_port,
@@ -832,7 +831,7 @@ impl Config {
             cache_items_per_blob,
             replay_buffer_bytes,
             write_buffer_bytes,
-            max_repair: self.max_repair,
+            max_repair,
             prune_interval: self.prune_interval,
             ancestry_cache_entries: self.ancestry_cache_entries,
             proof_queue_size: self.proof_queue_size,

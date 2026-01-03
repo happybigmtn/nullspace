@@ -12,7 +12,7 @@
 //! `cargo run --example network_bot`
 
 use commonware_cryptography::ed25519::PrivateKey;
-use commonware_storage::store::operation::Keyless;
+use commonware_storage::qmdb::keyless;
 use nullspace_client::{Client, Error};
 use nullspace_execution::mocks::{create_account_keypair, create_network_keypair};
 use nullspace_types::{
@@ -121,7 +121,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         if let Update::FilteredEvents(events) = update {
             for (_, keyless_output) in events.events_proof_ops {
                 // Keyless is an enum
-                if let Keyless::Append(Output::Event(event)) = keyless_output {
+                if let keyless::Operation::Append(Output::Event(event)) = keyless_output {
                     match event {
                         Event::CasinoGameStarted {
                             session_id: sid,

@@ -4,7 +4,7 @@ mod ingress;
 use crate::{indexer::Indexer, supervisor::ViewSupervisor};
 pub use actor::Actor;
 use commonware_cryptography::ed25519::PublicKey;
-use governor::Quota;
+use commonware_runtime::Quota;
 pub use ingress::{Mailbox, MailboxError, Message};
 use nullspace_types::Identity;
 use std::num::NonZero;

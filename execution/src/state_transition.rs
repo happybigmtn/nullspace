@@ -6,15 +6,49 @@
 use crate::{Adb, Layer, State};
 use anyhow::{anyhow, Context as _};
 use commonware_cryptography::{ed25519::PublicKey, sha256::Digest, Sha256};
+use futures::executor::block_on;
 #[cfg(feature = "parallel")]
 use commonware_runtime::ThreadPool;
 use commonware_runtime::{Clock, Metrics, Spawner, Storage};
-use commonware_storage::{adb::keyless, mmr::hasher::Standard, translator::Translator};
+use commonware_storage::mmr::{mem::Clean, Location};
+use commonware_storage::qmdb::keyless;
+use commonware_storage::qmdb::store::CleanStore as _;
+use commonware_storage::translator::Translator;
 use nullspace_types::{
-    execution::{Output, Seed, Transaction, Value},
+    execution::{Key, Output, Seed, Transaction, Value},
     Identity, NAMESPACE,
 };
 use std::collections::BTreeMap;
+
+type EventsDb<S> = keyless::Keyless<S, Output, Sha256, Clean<Digest>>;
+
+struct StateView<'a, S: State> {
+    inner: &'a mut S,
+}
+
+impl<'a, S: State> StateView<'a, S> {
+    fn new(inner: &'a mut S) -> Self {
+        Self { inner }
+    }
+}
+
+// StateView holds an exclusive mutable reference, but it is only ever used within a single task.
+// Marking it Sync allows &StateView to be Send for async execution without sharing across threads.
+unsafe impl<'a, S: State + Send> Sync for StateView<'a, S> {}
+
+impl<'a, S: State + Send> State for StateView<'a, S> {
+    async fn get(&self, key: Key) -> anyhow::Result<Option<Value>> {
+        block_on(self.inner.get(key))
+    }
+
+    async fn insert(&mut self, key: Key, value: Value) -> anyhow::Result<()> {
+        block_on(self.inner.insert(key, value))
+    }
+
+    async fn delete(&mut self, key: Key) -> anyhow::Result<()> {
+        block_on(self.inner.delete(key))
+    }
+}
 
 /// Result of executing a block's state transition
 pub struct StateTransitionResult {
@@ -36,55 +70,49 @@ pub struct StateTransitionResult {
 ///
 /// Returns the resulting state and events roots along with their operation counts,
 /// plus a map of processed public keys to their next expected nonces.
-pub async fn execute_state_transition<S: Spawner + Storage + Clock + Metrics, T: Translator>(
+pub async fn execute_state_transition<S, T>(
     state: &mut Adb<S, T>,
-    events: &mut keyless::Keyless<S, Output, Sha256>,
+    events: &mut EventsDb<S>,
     identity: Identity,
     height: u64,
     seed: Seed,
     transactions: Vec<Transaction>,
     #[cfg(feature = "parallel")] pool: ThreadPool,
-) -> anyhow::Result<StateTransitionResult> {
-    let state_height = state
-        .get_metadata()
-        .await
+) -> anyhow::Result<StateTransitionResult>
+where
+    S: Spawner + Storage + Clock + Metrics + Send + Sync,
+    T: Translator + Send + Sync + 'static,
+    T::Key: Send + Sync + 'static,
+{
+    let state_height = block_on(state.get_metadata())
         .context("read state metadata")?
-        .and_then(|(_, v)| match v {
-            Some(Value::Commit { height, start: _ }) => Some(height),
+        .and_then(|v| match v {
+            Value::Commit { height, start: _ } => Some(height),
             _ => None,
         })
         .unwrap_or(0);
 
-    let (events_height, events_commit_start, events_commit_loc) = match events
-        .get_metadata()
-        .await
-        .context("read events metadata")?
-    {
-        None => (0, 0, None),
-        Some((loc, Some(Output::Commit { height, start }))) => (height, start, Some(loc)),
-        Some((loc, Some(_))) => {
-            return Err(anyhow!(
-                "unexpected events metadata at loc {loc} (expected Output::Commit)"
-            ));
-        }
-        Some((loc, None)) => {
-            return Err(anyhow!(
-                "missing events metadata at loc {loc} (expected Output::Commit)"
-            ));
-        }
-    };
+    let (events_height, events_commit_start, events_commit_loc) =
+        match block_on(events.get_metadata()).context("read events metadata")? {
+            None => (0, 0, None),
+            Some(Output::Commit { height, start }) => (height, start, Some(events.last_commit_loc())),
+            Some(_) => {
+                return Err(anyhow!(
+                    "unexpected events metadata at last commit (expected Output::Commit)"
+                ));
+            }
+        };
 
     // If this is not the next expected height, either treat as a no-op (already processed),
     // or fail (height gap) to avoid silently skipping blocks.
     if height <= state_height {
-        let mut mmr_hasher = Standard::<Sha256>::new();
-        let state_op = state.op_count();
-        let events_op = events.op_count();
+        let state_op = u64::from(state.op_count());
+        let events_op = u64::from(events.op_count());
         return Ok(StateTransitionResult {
-            state_root: state.root(&mut mmr_hasher),
+            state_root: state.root(),
             state_start_op: state_op,
             state_end_op: state_op,
-            events_root: events.root(&mut mmr_hasher),
+            events_root: events.root(),
             events_start_op: events_op,
             events_end_op: events_op,
             processed_nonces: BTreeMap::new(),
@@ -107,18 +135,23 @@ pub async fn execute_state_transition<S: Spawner + Storage + Clock + Metrics, T:
     match events_height {
         h if h == state_height => {
             // Normal sequential execution.
-            state_start_op = state.op_count();
-            events_start_op = events.op_count();
+            state_start_op = u64::from(state.op_count());
+            events_start_op = u64::from(events.op_count());
 
-            let mut layer = Layer::new(state, identity, NAMESPACE, seed);
-            let (outputs, nonces) = layer
-                .execute(
-                    #[cfg(feature = "parallel")]
-                    pool,
-                    transactions,
-                )
-                .await
-                .with_context(|| format!("execute layer (height={height})"))?;
+            let (outputs, nonces, changes) = {
+                let state_view = StateView::new(state);
+                let mut layer = Layer::new(&state_view, identity, NAMESPACE, seed);
+                let (outputs, nonces) = layer
+                    .execute(
+                        #[cfg(feature = "parallel")]
+                        pool,
+                        transactions,
+                    )
+                    .await
+                    .with_context(|| format!("execute layer (height={height})"))?;
+                let changes = layer.commit();
+                (outputs, nonces, changes)
+            };
             processed_nonces.extend(nonces);
 
             // Events must be committed before state, otherwise a crash could wedge on restart.
@@ -138,7 +171,7 @@ pub async fn execute_state_transition<S: Spawner + Storage + Clock + Metrics, T:
 
             // Apply state once we've committed events (can't regenerate after state updated).
             state
-                .apply(layer.commit())
+                .apply(changes)
                 .await
                 .with_context(|| format!("apply state changes (height={height})"))?;
             state
@@ -154,16 +187,17 @@ pub async fn execute_state_transition<S: Spawner + Storage + Clock + Metrics, T:
             let events_commit_loc = events_commit_loc.ok_or_else(|| {
                 anyhow!("missing events commit loc during recovery (height={height})")
             })?;
-            if events.op_count() != events_commit_loc + 1 {
+            let events_commit_loc_u64 = u64::from(events_commit_loc);
+            if u64::from(events.op_count()) != events_commit_loc_u64 + 1 {
                 return Err(anyhow!(
                     "events op_count mismatch during recovery (op_count={}, commit_loc={events_commit_loc})",
                     events.op_count()
                 ));
             }
 
-            state_start_op = state.op_count();
+            state_start_op = u64::from(state.op_count());
             events_start_op = events_commit_start;
-            let existing_output_count = events_commit_loc
+            let existing_output_count = events_commit_loc_u64
                 .checked_sub(events_start_op)
                 .ok_or_else(|| {
                     anyhow!(
@@ -171,15 +205,20 @@ pub async fn execute_state_transition<S: Spawner + Storage + Clock + Metrics, T:
                     )
                 })?;
 
-            let mut layer = Layer::new(state, identity, NAMESPACE, seed);
-            let (outputs, nonces) = layer
-                .execute(
-                    #[cfg(feature = "parallel")]
-                    pool,
-                    transactions,
-                )
-                .await
-                .with_context(|| format!("execute layer (recovery, height={height})"))?;
+            let (outputs, nonces, changes) = {
+                let state_view = StateView::new(state);
+                let mut layer = Layer::new(&state_view, identity, NAMESPACE, seed);
+                let (outputs, nonces) = layer
+                    .execute(
+                        #[cfg(feature = "parallel")]
+                        pool,
+                        transactions,
+                    )
+                    .await
+                    .with_context(|| format!("execute layer (recovery, height={height})"))?;
+                let changes = layer.commit();
+                (outputs, nonces, changes)
+            };
             processed_nonces.extend(nonces);
 
             if outputs.len() as u64 != existing_output_count {
@@ -192,7 +231,7 @@ pub async fn execute_state_transition<S: Spawner + Storage + Clock + Metrics, T:
             for (i, output) in outputs.iter().enumerate() {
                 let loc = events_start_op + i as u64;
                 let existing = events
-                    .get(loc)
+                    .get(Location::from(loc))
                     .await
                     .with_context(|| format!("read existing events output (loc={loc})"))?
                     .ok_or_else(|| anyhow!("missing existing events output at loc {loc}"))?;
@@ -205,7 +244,7 @@ pub async fn execute_state_transition<S: Spawner + Storage + Clock + Metrics, T:
 
             // Commit state only (events are already committed).
             state
-                .apply(layer.commit())
+                .apply(changes)
                 .await
                 .with_context(|| format!("apply state changes (recovery, height={height})"))?;
             state
@@ -224,11 +263,10 @@ pub async fn execute_state_transition<S: Spawner + Storage + Clock + Metrics, T:
     }
 
     // Compute roots
-    let mut mmr_hasher = Standard::<Sha256>::new();
-    let state_root = state.root(&mut mmr_hasher);
-    let state_end_op = state.op_count();
-    let events_root = events.root(&mut mmr_hasher);
-    let events_end_op = events.op_count();
+    let state_root = state.root();
+    let state_end_op = u64::from(state.op_count());
+    let events_root = events.root();
+    let events_end_op = u64::from(events.op_count());
 
     Ok(StateTransitionResult {
         state_root,

@@ -1,7 +1,8 @@
 use super::*;
 use commonware_codec::Encode;
 use commonware_codec::ReadExt;
-use commonware_cryptography::{ed25519::PrivateKey, PrivateKeyExt, Signer};
+use commonware_cryptography::{ed25519::PrivateKey, Signer};
+use commonware_math::algebra::Random;
 use rand::{rngs::StdRng, SeedableRng};
 
 #[test]
@@ -59,7 +60,7 @@ fn test_leaderboard_update() {
 
     // Add some players
     for i in 0..15 {
-        let pk = PrivateKey::from_rng(&mut rng).public_key();
+        let pk = PrivateKey::random(&mut rng).public_key();
         leaderboard.update(pk, format!("Player{}", i), (i as u64 + 1) * 1000);
     }
 

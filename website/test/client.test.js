@@ -76,7 +76,12 @@ async function startSimulator() {
 
   simulatorProcess = spawn(simulatorPath, simulatorArgs, {
     cwd: path.join(__dirname, '../../'),
-    stdio: 'pipe'
+    stdio: 'pipe',
+    env: {
+      ...process.env,
+      ALLOW_HTTP_NO_ORIGIN: '1',
+      ALLOW_WS_NO_ORIGIN: '1'
+    }
   });
 
   simulatorProcess.stderr.on('data', (data) => {
@@ -368,4 +373,3 @@ describe('Simulator (integration)', () => {
     assert(seed.bytes);
   });
 });
-

@@ -3,6 +3,7 @@ import { GameState } from '../../../types';
 import { Hand } from '../GameComponents';
 import { MobileDrawer } from '../MobileDrawer';
 import { Label } from '../ui/Label';
+import { PanelDrawer } from '../PanelDrawer';
 
 interface VideoPokerViewProps {
     gameState: GameState;
@@ -59,7 +60,7 @@ export const VideoPokerView = React.memo<VideoPokerViewProps & { lastWin?: numbe
 
             {/* Center Info */}
             <div className="text-center space-y-4 relative z-20">
-                <h2 className="text-3xl sm:text-4xl font-extrabold text-titanium-900 tracking-tight font-display">
+                <h2 className="text-3xl sm:text-4xl font-extrabold text-titanium-900 tracking-tight font-display zen-hide">
                     {gameState.message || 'Deal to Start'}
                 </h2>
                 {handLabel && gameState.stage !== 'BETTING' && (
@@ -111,37 +112,35 @@ export const VideoPokerView = React.memo<VideoPokerViewProps & { lastWin?: numbe
                 })}
             </div>
 
-            {/* Desktop Pay Table Sidebar */}
-            <div className="hidden xl:flex absolute top-8 left-4 bottom-24 w-60 bg-white/60 backdrop-blur-md rounded-[32px] border border-titanium-200 p-6 flex-col shadow-soft">
-                <Label size="micro" className="mb-6 text-center block">Pay Table</Label>
-                <div className="space-y-2 overflow-y-auto scrollbar-hide">
-                    {VIDEO_POKER_PAYTABLE.map((row) => (
-                        <div
-                            key={row.rank}
-                            className={`flex items-center justify-between p-3 rounded-2xl border transition-all ${
-                                highlightRank === row.rank 
-                                    ? 'bg-action-success/5 border-action-success shadow-soft' 
-                                    : 'bg-white border-titanium-100'
-                            }`}
-                        >
-                            <span className={`text-[10px] font-bold uppercase tracking-tight ${highlightRank === row.rank ? 'text-action-success' : 'text-titanium-800'}`}>
-                                {row.rank}
-                            </span>
-                            <span className={`text-xs font-black ${highlightRank === row.rank ? 'text-action-success' : 'text-action-primary'}`}>
-                                {row.multiplier}x
-                            </span>
-                        </div>
-                    ))}
-                </div>
-            </div>
 
             {/* Control Bar */}
-            <div className="ns-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-titanium-50/95 backdrop-blur border-t border-titanium-200 z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
+            <div className="ns-controlbar zen-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-titanium-50/95 backdrop-blur border-t border-titanium-200 z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
                 <div className="h-auto md:h-20 flex flex-col md:flex-row items-stretch md:items-center justify-center gap-2 p-2 md:px-4">
+                    <PanelDrawer label="Paytable" title="VIDEO POKER PAYTABLE" className="hidden md:inline-flex">
+                        <div className="space-y-2">
+                            {VIDEO_POKER_PAYTABLE.map((row) => (
+                                <div
+                                    key={row.rank}
+                                    className={`flex items-center justify-between p-3 rounded-2xl border transition-all ${
+                                        highlightRank === row.rank
+                                            ? 'bg-action-success/5 border-action-success shadow-soft'
+                                            : 'bg-white border-titanium-100'
+                                    }`}
+                                >
+                                    <span className={`text-[10px] font-bold uppercase tracking-tight ${highlightRank === row.rank ? 'text-action-success' : 'text-titanium-800'}`}>
+                                        {row.rank}
+                                    </span>
+                                    <span className={`text-xs font-black ${highlightRank === row.rank ? 'text-action-success' : 'text-action-primary'}`}>
+                                        {row.multiplier}x
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    </PanelDrawer>
                     <button
                         type="button"
                         onClick={gameState.stage === 'PLAYING' ? actions?.drawVideoPoker : actions?.deal}
-                        className="h-14 px-12 rounded-full border-2 font-bold text-lg font-display tracking-tight uppercase transition-all shadow-soft border-action-primary bg-action-primary text-white hover:bg-action-primary-hover hover:scale-105 active:scale-95"
+                        className="ns-control-primary h-14 px-12 rounded-full border-2 font-bold text-lg font-display tracking-tight uppercase transition-all shadow-soft border-action-primary bg-action-primary text-white hover:bg-action-primary-hover hover:scale-105 active:scale-95"
                     >
                         {gameState.stage === 'PLAYING' ? 'DRAW' : gameState.stage === 'RESULT' ? 'NEW HAND' : 'DEAL'}
                     </button>

@@ -1393,6 +1393,12 @@ export class OnchainCrapsTable {
     for (const bet of bets) {
       const amount = BigInt(Math.floor(bet.amount));
       if (amount <= 0n) continue;
+      if (amount < CONFIG.minBet) {
+        throw new Error(`Bet below minimum (${CONFIG.minBet.toString()})`);
+      }
+      if (amount > CONFIG.maxBet) {
+        throw new Error(`Bet exceeds maximum (${CONFIG.maxBet.toString()})`);
+      }
 
       let betType: number;
       let target: number;

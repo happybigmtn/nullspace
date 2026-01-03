@@ -576,8 +576,11 @@ mod tests {
     use commonware_codec::Encode;
     use commonware_cryptography::{Hasher, Sha256};
     use commonware_runtime::{tokio as cw_tokio, Runner as _};
-    use commonware_storage::adb::create_proof_store_from_digests;
-    use commonware_storage::store::operation::{Keyless, Variable};
+    use commonware_storage::qmdb::{
+        any::unordered::{variable, Update as StorageUpdate},
+        create_proof_store_from_digests,
+        keyless,
+    };
     use nullspace_execution::mocks::{
         create_account_keypair, create_adbs, create_network_keypair, create_seed, execute_block,
     };
@@ -716,7 +719,9 @@ mod tests {
             let account_key = Sha256::hash(&Key::Account(public.clone()).encode());
             let lookup = simulator.query_state(&account_key).await.unwrap();
             lookup.verify(&network_identity).unwrap();
-            let Variable::Update(_, Value::Account(account)) = lookup.operation else {
+            let variable::Operation::Update(StorageUpdate(_, Value::Account(account))) =
+                lookup.operation
+            else {
                 panic!("account not found");
             };
             assert_eq!(account.nonce, 1);
@@ -816,7 +821,7 @@ mod tests {
 
                     // Verify we only have events related to account1
                     for (_loc, op) in &filtered_events.events_proof_ops {
-                        if let Keyless::Append(Output::Event(Event::CasinoPlayerRegistered {
+                        if let keyless::Operation::Append(Output::Event(Event::CasinoPlayerRegistered {
                             player,
                             ..
                         })) = op
@@ -904,7 +909,9 @@ mod tests {
                 let account_key = Sha256::hash(&Key::Account(public.clone()).encode());
                 let lookup = simulator.query_state(&account_key).await.unwrap();
                 lookup.verify(&network_identity).unwrap();
-                let Variable::Update(_, Value::Account(account)) = lookup.operation else {
+                let variable::Operation::Update(StorageUpdate(_, Value::Account(account))) =
+                    lookup.operation
+                else {
                     panic!("Account not found for {public:?}");
                 };
                 assert_eq!(account.nonce, 1);
@@ -948,7 +955,9 @@ mod tests {
                 let account_key = Sha256::hash(&Key::Account(public.clone()).encode());
                 let lookup = simulator.query_state(&account_key).await.unwrap();
                 lookup.verify(&network_identity).unwrap();
-                let Variable::Update(_, Value::Account(account)) = lookup.operation else {
+                let variable::Operation::Update(StorageUpdate(_, Value::Account(account))) =
+                    lookup.operation
+                else {
                     panic!("Account not found for {public:?}");
                 };
                 // First 3 accounts should have nonce 2, others still 1

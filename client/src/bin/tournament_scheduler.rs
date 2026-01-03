@@ -18,7 +18,7 @@ use commonware_cryptography::{
     Signer,
 };
 use commonware_utils::from_hex;
-use nullspace_client::Client;
+use nullspace_client::{operation_value, Client};
 use nullspace_types::{
     casino::{Tournament, TournamentPhase, TOURNAMENTS_PER_DAY, TOURNAMENT_DURATION_SECS},
     execution::{Instruction, Key, Transaction, Value},
@@ -60,7 +60,7 @@ impl NonceTracker {
 
     async fn sync(&mut self, client: &Client, public: &PublicKey) -> Result<u64> {
         let lookup = client.query_state(&Key::Account(public.clone())).await?;
-        let nonce = match lookup.and_then(|lookup| lookup.operation.value().cloned()) {
+        let nonce = match lookup.and_then(|lookup| operation_value(&lookup.operation).cloned()) {
             Some(Value::Account(account)) => account.nonce,
             _ => 0,
         };
@@ -153,7 +153,7 @@ fn decode_admin_key(hex_str: &str) -> Result<PrivateKey> {
 
 async fn fetch_tournament(client: &Client, tournament_id: u64) -> Result<Option<Tournament>> {
     let lookup = client.query_state(&Key::Tournament(tournament_id)).await?;
-    Ok(match lookup.and_then(|lookup| lookup.operation.value().cloned()) {
+    Ok(match lookup.and_then(|lookup| operation_value(&lookup.operation).cloned()) {
         Some(Value::Tournament(tournament)) => Some(tournament),
         _ => None,
     })

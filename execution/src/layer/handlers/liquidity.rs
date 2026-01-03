@@ -471,7 +471,7 @@ impl<'a, S: State> Layer<'a, S> {
         &mut self,
         public: &PublicKey,
     ) -> anyhow::Result<Vec<Event>> {
-        if self.get(&Key::Vault(public.clone())).await?.is_some() {
+        if self.get(Key::Vault(public.clone())).await?.is_some() {
             return Ok(casino_error_vec(
                 public,
                 None,
@@ -502,13 +502,13 @@ impl<'a, S: State> Layer<'a, S> {
         public: &PublicKey,
         amount: u64,
     ) -> anyhow::Result<Vec<Event>> {
-        let mut player = match self.get(&Key::CasinoPlayer(public.clone())).await? {
+        let mut player = match self.get(Key::CasinoPlayer(public.clone())).await? {
             Some(Value::CasinoPlayer(p)) => p,
             _ => return Ok(vec![]),
         };
 
         if player.profile.created_ts == 0 {
-            player.profile.created_ts = current_time_sec(self.seed.view);
+            player.profile.created_ts = current_time_sec(self.seed_view);
         }
 
         if player.balances.chips < amount {
@@ -520,7 +520,7 @@ impl<'a, S: State> Layer<'a, S> {
             ));
         }
 
-        let mut vault = match self.get(&Key::Vault(public.clone())).await? {
+        let mut vault = match self.get(Key::Vault(public.clone())).await? {
             Some(Value::Vault(v)) => v,
             _ => {
                 return Ok(casino_error_vec(
@@ -571,7 +571,7 @@ impl<'a, S: State> Layer<'a, S> {
             return Ok(vec![]);
         }
 
-        let mut vault = match self.get(&Key::Vault(public.clone())).await? {
+        let mut vault = match self.get(Key::Vault(public.clone())).await? {
             Some(Value::Vault(v)) => v,
             _ => return Ok(vec![]),
         };
@@ -579,7 +579,7 @@ impl<'a, S: State> Layer<'a, S> {
         let mut house = self.get_or_init_house().await?;
         let policy = self.get_or_init_policy().await?;
         let oracle = self.get_or_init_oracle_state().await?;
-        let now = current_time_sec(self.seed.view);
+        let now = current_time_sec(self.seed_view);
         let interest = accrue_vault_debt(&mut vault, &mut house, now, &policy);
         self.allocate_savings_rewards(interest).await?;
 
@@ -601,7 +601,7 @@ impl<'a, S: State> Layer<'a, S> {
             price_denominator,
         );
 
-        let mut updated_player = match self.get(&Key::CasinoPlayer(public.clone())).await? {
+        let mut updated_player = match self.get(Key::CasinoPlayer(public.clone())).await? {
             Some(Value::CasinoPlayer(player)) => Some(player),
             _ => None,
         };
@@ -610,7 +610,7 @@ impl<'a, S: State> Layer<'a, S> {
                 player.profile.created_ts = now;
             }
         }
-        let staker = match self.get(&Key::Staker(public.clone())).await? {
+        let staker = match self.get(Key::Staker(public.clone())).await? {
             Some(Value::Staker(s)) => Some(s),
             _ => None,
         };
@@ -722,19 +722,19 @@ impl<'a, S: State> Layer<'a, S> {
             return Ok(vec![]);
         }
 
-        let mut player = match self.get(&Key::CasinoPlayer(public.clone())).await? {
+        let mut player = match self.get(Key::CasinoPlayer(public.clone())).await? {
             Some(Value::CasinoPlayer(p)) => p,
             _ => return Ok(vec![]),
         };
 
-        let mut vault = match self.get(&Key::Vault(public.clone())).await? {
+        let mut vault = match self.get(Key::Vault(public.clone())).await? {
             Some(Value::Vault(v)) => v,
             _ => return Ok(vec![]),
         };
 
         let mut house = self.get_or_init_house().await?;
         let policy = self.get_or_init_policy().await?;
-        let now = current_time_sec(self.seed.view);
+        let now = current_time_sec(self.seed_view);
         let interest = accrue_vault_debt(&mut vault, &mut house, now, &policy);
         self.allocate_savings_rewards(interest).await?;
 
@@ -782,7 +782,7 @@ impl<'a, S: State> Layer<'a, S> {
     ) -> anyhow::Result<Vec<Event>> {
         let original_amount_in = amount_in;
         let mut amm = self.get_or_init_amm().await?;
-        let mut player = match self.get(&Key::CasinoPlayer(public.clone())).await? {
+        let mut player = match self.get(Key::CasinoPlayer(public.clone())).await? {
             Some(Value::CasinoPlayer(p)) => p,
             _ => return Ok(vec![]),
         };
@@ -792,7 +792,7 @@ impl<'a, S: State> Layer<'a, S> {
         }
 
         let policy = self.get_or_init_policy().await?;
-        let now = current_time_sec(self.seed.view);
+        let now = current_time_sec(self.seed_view);
         let current_day = now / 86_400;
         reset_daily_flow_if_needed(&mut player, current_day);
 
@@ -1026,7 +1026,7 @@ impl<'a, S: State> Layer<'a, S> {
         if validate_amm_state(&amm).is_err() {
             return Ok(invalid_amm_state(public));
         }
-        let mut player = match self.get(&Key::CasinoPlayer(public.clone())).await? {
+        let mut player = match self.get(Key::CasinoPlayer(public.clone())).await? {
             Some(Value::CasinoPlayer(p)) => p,
             _ => return Ok(vec![]),
         };
@@ -1180,7 +1180,7 @@ impl<'a, S: State> Layer<'a, S> {
             ));
         }
 
-        let mut player = match self.get(&Key::CasinoPlayer(public.clone())).await? {
+        let mut player = match self.get(Key::CasinoPlayer(public.clone())).await? {
             Some(Value::CasinoPlayer(p)) => p,
             _ => return Ok(vec![]),
         };
@@ -1380,7 +1380,7 @@ impl<'a, S: State> Layer<'a, S> {
             ));
         }
 
-        let finalized_ts = current_time_sec(self.seed.view);
+        let finalized_ts = current_time_sec(self.seed_view);
         amm.bootstrap_finalized = true;
         amm.bootstrap_final_price_vusdt_numerator = price_vusdt_numerator;
         amm.bootstrap_final_price_rng_denominator = price_rng_denominator;
@@ -1403,12 +1403,12 @@ impl<'a, S: State> Layer<'a, S> {
         public: &PublicKey,
         target: &PublicKey,
     ) -> anyhow::Result<Vec<Event>> {
-        let mut liquidator = match self.get(&Key::CasinoPlayer(public.clone())).await? {
+        let mut liquidator = match self.get(Key::CasinoPlayer(public.clone())).await? {
             Some(Value::CasinoPlayer(player)) => player,
             _ => return Ok(vec![]),
         };
 
-        let mut vault = match self.get(&Key::Vault(target.clone())).await? {
+        let mut vault = match self.get(Key::Vault(target.clone())).await? {
             Some(Value::Vault(v)) => v,
             _ => {
                 return Ok(casino_error_vec(
@@ -1423,7 +1423,7 @@ impl<'a, S: State> Layer<'a, S> {
         let mut house = self.get_or_init_house().await?;
         let policy = self.get_or_init_policy().await?;
         let oracle = self.get_or_init_oracle_state().await?;
-        let now = current_time_sec(self.seed.view);
+        let now = current_time_sec(self.seed_view);
         let interest = accrue_vault_debt(&mut vault, &mut house, now, &policy);
         self.allocate_savings_rewards(interest).await?;
 
@@ -1672,7 +1672,7 @@ impl<'a, S: State> Layer<'a, S> {
             ));
         }
 
-        let now = current_time_sec(self.seed.view);
+        let now = current_time_sec(self.seed_view);
         let oracle = nullspace_types::casino::OracleState {
             price_vusdt_numerator,
             price_rng_denominator,
@@ -1770,7 +1770,7 @@ impl<'a, S: State> Layer<'a, S> {
 
         let treasury = self.get_or_init_treasury().await?;
         let mut vesting = self.get_or_init_treasury_vesting().await?;
-        let now = current_time_sec(self.seed.view);
+        let now = current_time_sec(self.seed_view);
 
         let (schedule, total_allocation) = match bucket {
             nullspace_types::casino::TreasuryBucket::Auction => {
@@ -1869,7 +1869,7 @@ impl<'a, S: State> Layer<'a, S> {
             return Ok(vec![]);
         }
 
-        let mut vault = match self.get(&Key::Vault(target.clone())).await? {
+        let mut vault = match self.get(Key::Vault(target.clone())).await? {
             Some(Value::Vault(v)) => v,
             _ => {
                 return Ok(casino_error_vec(
@@ -1883,7 +1883,7 @@ impl<'a, S: State> Layer<'a, S> {
 
         let mut house = self.get_or_init_house().await?;
         let policy = self.get_or_init_policy().await?;
-        let now = current_time_sec(self.seed.view);
+        let now = current_time_sec(self.seed_view);
         let interest = accrue_vault_debt(&mut vault, &mut house, now, &policy);
         self.allocate_savings_rewards(interest).await?;
 
@@ -1947,7 +1947,7 @@ impl<'a, S: State> Layer<'a, S> {
 
         let policy = self.get_or_init_policy().await?;
         let oracle = self.get_or_init_oracle_state().await?;
-        let now = current_time_sec(self.seed.view);
+        let now = current_time_sec(self.seed_view);
         let amm = self.get_or_init_amm().await?;
         if validate_amm_state(&amm).is_err() {
             return Ok(invalid_amm_state(public));
@@ -1968,7 +1968,7 @@ impl<'a, S: State> Layer<'a, S> {
 
         let mut selected: Option<(PublicKey, u128, u64)> = None;
         for pk in &registry.vaults {
-            let vault = match self.get(&Key::Vault(pk.clone())).await? {
+            let vault = match self.get(Key::Vault(pk.clone())).await? {
                 Some(Value::Vault(v)) => v,
                 _ => continue,
             };
@@ -2025,7 +2025,7 @@ impl<'a, S: State> Layer<'a, S> {
             return Ok(vec![]);
         }
 
-        let mut player = match self.get(&Key::CasinoPlayer(public.clone())).await? {
+        let mut player = match self.get(Key::CasinoPlayer(public.clone())).await? {
             Some(Value::CasinoPlayer(p)) => p,
             _ => return Ok(vec![]),
         };
@@ -2098,7 +2098,7 @@ impl<'a, S: State> Layer<'a, S> {
             return Ok(vec![]);
         }
 
-        let mut player = match self.get(&Key::CasinoPlayer(public.clone())).await? {
+        let mut player = match self.get(Key::CasinoPlayer(public.clone())).await? {
             Some(Value::CasinoPlayer(p)) => p,
             _ => return Ok(vec![]),
         };
@@ -2168,7 +2168,7 @@ impl<'a, S: State> Layer<'a, S> {
         &mut self,
         public: &PublicKey,
     ) -> anyhow::Result<Vec<Event>> {
-        let mut player = match self.get(&Key::CasinoPlayer(public.clone())).await? {
+        let mut player = match self.get(Key::CasinoPlayer(public.clone())).await? {
             Some(Value::CasinoPlayer(p)) => p,
             _ => return Ok(vec![]),
         };
@@ -2365,8 +2365,8 @@ mod tests {
     }
 
     impl State for MockState {
-        async fn get(&self, key: &Key) -> Result<Option<Value>> {
-            Ok(self.data.get(key).cloned())
+        async fn get(&self, key: Key) -> Result<Option<Value>> {
+            Ok(self.data.get(&key).cloned())
         }
 
         async fn insert(&mut self, key: Key, value: Value) -> Result<()> {
@@ -2374,8 +2374,8 @@ mod tests {
             Ok(())
         }
 
-        async fn delete(&mut self, key: &Key) -> Result<()> {
-            self.data.remove(key);
+        async fn delete(&mut self, key: Key) -> Result<()> {
+            self.data.remove(&key);
             Ok(())
         }
     }
@@ -2427,7 +2427,7 @@ mod tests {
             ));
 
             assert!(
-                layer.get(&Key::House).await.expect("get house").is_none(),
+                layer.get(Key::House).await.expect("get house").is_none(),
                 "house state must not be created/mutated on failed swap"
             );
         });
@@ -2480,7 +2480,7 @@ mod tests {
             ));
 
             assert!(
-                layer.get(&Key::House).await.expect("get house").is_none(),
+                layer.get(Key::House).await.expect("get house").is_none(),
                 "house state must not be created/mutated on failed swap"
             );
         });

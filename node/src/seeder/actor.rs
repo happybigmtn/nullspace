@@ -9,7 +9,9 @@ use crate::{
     seeder::{ingress::Mailbox, Config, Message},
 };
 use commonware_codec::{DecodeExt, Encode};
-use commonware_consensus::{threshold_simplex::types::View, Viewable};
+use commonware_consensus::simplex::scheme::bls12381_threshold;
+use commonware_consensus::types::{Epoch, Round, View};
+use commonware_consensus::Viewable;
 use commonware_cryptography::{
     bls12381::primitives::variant::{MinSig, Variant},
     ed25519::PublicKey,
@@ -27,7 +29,6 @@ use futures::{
     channel::{mpsc, oneshot},
     StreamExt,
 };
-use governor::clock::Clock as GClock;
 use nullspace_types::Seed;
 use prometheus_client::metrics::{counter::Counter, gauge::Gauge};
 use rand::RngCore;
@@ -38,7 +39,10 @@ const BATCH_ENQUEUE: usize = 20;
 const LAST_UPLOADED_KEY: u64 = 0;
 const RETRY_DELAY: Duration = Duration::from_secs(10);
 
-pub struct Actor<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> {
+pub struct Actor<
+    R: Storage + Metrics + Clock + Spawner + RngCore + Clone + Send + Sync,
+    I: Indexer,
+> {
     context: R,
     config: Config<I>,
     inbound: Mailbox,
@@ -46,7 +50,11 @@ pub struct Actor<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: I
     waiting: BTreeSet<View>,
 }
 
-impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Actor<R, I> {
+impl<
+        R: Storage + Metrics + Clock + Spawner + RngCore + Clone + Send + Sync,
+        I: Indexer,
+    > Actor<R, I>
+{
     pub fn new(context: R, config: Config<I>) -> (Self, Mailbox) {
         // Create mailbox
         let (sender, mailbox) = mpsc::channel(config.mailbox_size);
@@ -65,13 +73,18 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
     }
 
     pub fn start(
-        mut self,
+        self,
         backfill: (
             impl Sender<PublicKey = PublicKey>,
             impl Receiver<PublicKey = PublicKey>,
         ),
     ) -> Handle<()> {
-        self.context.spawn_ref()(self.run(backfill))
+        let context = self.context.clone();
+        context.spawn(move |context| async move {
+            let mut actor = self;
+            actor.context = context;
+            actor.run(backfill).await;
+        })
     }
 
     async fn run(
@@ -159,16 +172,14 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
         let (resolver_engine, mut resolver) = p2p::Engine::new(
             self.context.with_label("resolver"),
             p2p::Config {
-                coordinator: self.config.supervisor,
+                manager: self.config.supervisor.clone(),
+                blocker: self.config.supervisor.clone(),
                 consumer: self.inbound.clone(),
                 producer: self.inbound.clone(),
                 mailbox_size: self.config.mailbox_size,
-                requester_config: commonware_p2p::utils::requester::Config {
-                    public_key: self.config.public_key,
-                    rate_limit: self.config.backfill_quota,
-                    initial: Duration::from_secs(1),
-                    timeout: Duration::from_secs(2),
-                },
+                me: Some(self.config.public_key.clone()),
+                initial: Duration::from_secs(1),
+                timeout: Duration::from_secs(2),
                 fetch_retry_timeout: Duration::from_millis(100),
                 priority_requests: false,
                 priority_responses: false,
@@ -184,7 +195,7 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
         let missing = storage.missing_items(1, BATCH_ENQUEUE);
         for next in missing {
             resolver.fetch(next.into()).await;
-            self.waiting.insert(next);
+            self.waiting.insert(View::new(next));
         }
 
         // Track uploads
@@ -200,6 +211,8 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
         seed_uploads_outstanding.set(0);
         seed_listeners_outstanding.set(0);
         seed_waiting_views.set(0);
+        let seed_verifier: bls12381_threshold::Scheme<PublicKey, MinSig> =
+            bls12381_threshold::Scheme::certificate_verifier(self.config.identity.clone());
 
         // Process messages
         loop {
@@ -209,10 +222,11 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
             };
             match message {
                 Message::Uploaded { view } => {
+                    let view_u64 = view.get();
                     // Decrement uploads outstanding
                     if uploads_outstanding == 0 {
                         warn!(
-                            view,
+                            view = view.get(),
                             "unexpected seed upload completion with no outstanding uploads"
                         );
                     } else {
@@ -221,7 +235,7 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                     seed_uploads_outstanding.set(uploads_outstanding as i64);
 
                     // Track uploaded view
-                    tracked_uploads.insert(view);
+                    tracked_uploads.insert(view_u64);
 
                     // Update metadata if lowest uploaded has increased
                     let Some(end_region) = tracked_uploads.next_gap(boundary).0 else {
@@ -239,22 +253,24 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                     seed_upload_lag.set(cursor.saturating_sub(boundary) as i64);
                 }
                 Message::Put(seed) => {
-                    self.waiting.remove(&seed.view);
+                    let view = seed.view();
+                    let view_u64 = view.get();
+                    self.waiting.remove(&view);
 
                     // Store seed
-                    if !storage.has(seed.view()) {
-                        if let Err(err) = storage.put(seed.view(), seed.signature).await {
-                            error!(?err, view = seed.view(), "failed to put seed");
+                    if !storage.has(view_u64) {
+                        if let Err(err) = storage.put(view_u64, seed.signature).await {
+                            error!(?err, view = view.get(), "failed to put seed");
                             return;
                         }
                         if let Err(err) = storage.sync().await {
-                            error!(?err, view = seed.view(), "failed to sync seed");
+                            error!(?err, view = view.get(), "failed to sync seed");
                             return;
                         }
                     }
 
                     // If there were any listeners, send them the seed
-                    if let Some(listeners_for_view) = listeners.remove(&seed.view) {
+                    if let Some(listeners_for_view) = listeners.remove(&view) {
                         listeners_total = listeners_total.saturating_sub(listeners_for_view.len());
                         seed_listeners_outstanding.set(listeners_total as i64);
                         seed_waiting_views.set(listeners.len() as i64);
@@ -275,14 +291,15 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                         continue;
                     }
                     for next in missing {
-                        if !self.waiting.insert(next) {
+                        if !self.waiting.insert(View::new(next)) {
                             continue;
                         }
                         resolver.fetch(next.into()).await;
                     }
                 }
                 Message::Get { view, response } => {
-                    let signature = match storage.get(view).await {
+                    let view_u64 = view.get();
+                    let signature = match storage.get(view_u64).await {
                         Ok(Some(signature)) => signature,
                         Ok(None) => {
                             if self.waiting.insert(view) {
@@ -296,7 +313,7 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                                 > self.config.max_pending_seed_listeners
                             {
                                 error!(
-                                    view,
+                                    view = view.get(),
                                     listeners_total,
                                     max_pending = self.config.max_pending_seed_listeners,
                                     "too many pending seed listeners; shutting down"
@@ -310,11 +327,12 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                             continue;
                         }
                         Err(err) => {
-                            error!(?err, view, "failed to get seed");
+                            error!(?err, view = view.get(), "failed to get seed");
                             return;
                         }
                     };
-                    let _ = response.send(Seed { view, signature });
+                    let round = Round::new(Epoch::zero(), view);
+                    let _ = response.send(Seed::new(round, signature));
                 }
                 Message::Deliver {
                     view,
@@ -328,8 +346,9 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                         let _ = response.send(false);
                         continue;
                     };
-                    let seed = Seed::new(view, signature);
-                    if !seed.verify(&self.config.namespace, &self.config.identity) {
+                    let round = Round::new(Epoch::zero(), view);
+                    let seed = Seed::new(round, signature);
+                    if !seed.verify(&seed_verifier, &self.config.namespace) {
                         let _ = response.send(false);
                         continue;
                     }
@@ -340,13 +359,14 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                     let _ = response.send(true);
 
                     // Store seed
-                    if !storage.has(view) {
-                        if let Err(err) = storage.put(view, signature).await {
-                            error!(?err, view, "failed to put seed");
+                    let view_u64 = view.get();
+                    if !storage.has(view_u64) {
+                        if let Err(err) = storage.put(view_u64, signature).await {
+                            error!(?err, view = view.get(), "failed to put seed");
                             return;
                         }
                         if let Err(err) = storage.sync().await {
-                            error!(?err, view, "failed to sync seed");
+                            error!(?err, view = view.get(), "failed to sync seed");
                             return;
                         }
                     }
@@ -370,7 +390,7 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                     // Enqueue missing seeds
                     let missing = storage.missing_items(1, BATCH_ENQUEUE);
                     for next in missing {
-                        if !self.waiting.insert(next) {
+                        if !self.waiting.insert(View::new(next)) {
                             continue;
                         }
                         resolver.fetch(next.into()).await;
@@ -378,11 +398,11 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                 }
                 Message::Produce { view, response } => {
                     // Serve seed from storage
-                    let encoded = match storage.get(view).await {
+                    let encoded = match storage.get(view.get()).await {
                         Ok(Some(encoded)) => encoded,
                         Ok(None) => continue,
                         Err(err) => {
-                            error!(?err, view, "failed to get seed");
+                            error!(?err, view = view.get(), "failed to get seed");
                             return;
                         }
                     };
@@ -408,7 +428,8 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
 
                 // Upload seed to indexer
                 self.context.with_label("seed_submit").spawn({
-                    let seed = Seed::new(cursor, seed);
+                    let round = Round::new(Epoch::zero(), View::new(cursor));
+                    let seed = Seed::new(round, seed);
                     let indexer = self.config.indexer.clone();
                     let mut channel = self.inbound.clone();
                     let seed_upload_attempts = seed_upload_attempts.clone();
@@ -424,14 +445,14 @@ impl<R: Storage + Metrics + Clock + Spawner + GClock + RngCore, I: Indexer> Acto
                                 Ok(()) => break,
                                 Err(e) => {
                                     seed_upload_failures.inc();
-                                    warn!(?e, view, attempts, "failed to upload seed");
+                                    warn!(?e, view = view.get(), attempts, "failed to upload seed");
                                     let delay = jittered_backoff(&mut context, backoff);
                                     context.sleep(delay).await;
                                     backoff = backoff.saturating_mul(2).min(RETRY_DELAY);
                                 }
                             }
                         }
-                        debug!(view, attempts, "seed uploaded to indexer");
+                        debug!(view = view.get(), attempts, "seed uploaded to indexer");
                         let _ = channel.uploaded(view).await;
                     }
                 });

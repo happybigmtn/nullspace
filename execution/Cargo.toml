@@ -18,8 +18,10 @@ commonware-utils = { workspace = true }
 commonware-consensus = { workspace = true }
 commonware-runtime = { workspace = true }
 commonware-storage = { workspace = true }
+commonware-math = { workspace = true }
 bytes = { workspace = true }
 rand = { workspace = true }
+futures = { workspace = true }
 rayon = { workspace = true, optional = true }
 tracing = { workspace = true }
 anyhow = { workspace = true }

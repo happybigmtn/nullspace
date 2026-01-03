@@ -10,7 +10,7 @@
 
 use clap::Parser;
 use commonware_codec::Encode;
-use commonware_cryptography::{ed25519::PrivateKey, PrivateKeyExt, Signer};
+use commonware_cryptography::{ed25519::PrivateKey, Signer};
 use nullspace_types::{
     api::Submission,
     execution::{Instruction, Transaction},

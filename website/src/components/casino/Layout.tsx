@@ -1,9 +1,8 @@
 import React from 'react';
 import { LeaderboardEntry, PlayerStats, GameType, CrapsEventLog, ResolvedBet } from '../../types';
 import { formatTime, HELP_CONTENT, buildHistoryEntry, formatSummaryLine, prependPnlLine, formatPnlLabel } from '../../utils/gameUtils';
-import { MobileDrawer } from './MobileDrawer';
+import { PanelDrawer } from './PanelDrawer';
 import { Label } from './ui/Label';
-import { EventChip } from './shared/EventChip';
 import { ThemeToggle } from '../ui/ThemeToggle';
 
 interface HeaderProps {
@@ -14,6 +13,7 @@ interface HeaderProps {
     focusMode: boolean;
     setFocusMode: (mode: boolean) => void;
     showTimer?: boolean;
+    onOpenCommandPalette?: () => void;
     onToggleHelp?: () => void;
     touchMode?: boolean;
     onToggleTouchMode?: () => void;
@@ -36,6 +36,7 @@ export const Header: React.FC<HeaderProps> = ({
     focusMode,
     setFocusMode,
     showTimer = true,
+    onOpenCommandPalette,
     onToggleHelp,
     touchMode = false,
     onToggleTouchMode,
@@ -55,110 +56,53 @@ export const Header: React.FC<HeaderProps> = ({
             ? 'text-action-success'
             : sessionDelta < 0
                 ? 'text-action-destructive'
-                : 'text-titanium-400 dark:text-titanium-300';
+                : 'text-titanium-600 dark:text-titanium-200';
 
     return (
-    <header className="h-14 border-b border-titanium-200 flex items-center justify-between px-6 z-10 bg-glass-light backdrop-blur-xl sticky top-0 dark:border-titanium-800 dark:bg-glass-dark dark:text-titanium-100">
-    <div className="flex items-center gap-8">
-        <span className="font-display font-extrabold tracking-tight text-titanium-900 dark:text-titanium-100 text-xl">nullspace</span>
-        <div className="hidden lg:flex items-center gap-3">
-            <button 
-                onClick={() => setFocusMode(!focusMode)}
-                className={`text-label font-bold px-4 py-1.5 rounded-full transition-all motion-interaction border ${
-                    focusMode 
-                        ? 'bg-titanium-900 text-white border-titanium-900 shadow-sm dark:bg-action-primary/20 dark:text-action-primary dark:border-action-primary dark:shadow-none' 
-                        : 'text-titanium-800 bg-white border-titanium-200 hover:border-titanium-400 shadow-soft dark:text-titanium-100 dark:bg-titanium-900/60 dark:border-titanium-800 dark:hover:border-titanium-600 dark:shadow-none'
-                }`}
-            >
-                {focusMode ? 'Focus On' : 'Focus'}
-            </button>
-            {onToggleSound && (
-                <button
-                    type="button"
-                    onClick={onToggleSound}
-                    className={`text-label font-bold px-4 py-1.5 rounded-full transition-all motion-interaction border ${
-                        soundEnabled 
-                            ? 'bg-white text-titanium-800 border-titanium-200 hover:border-titanium-400 shadow-soft dark:bg-titanium-900/60 dark:text-titanium-100 dark:border-titanium-800 dark:hover:border-titanium-600 dark:shadow-none' 
-                            : 'bg-titanium-100 text-titanium-400 border-titanium-100 dark:bg-titanium-800/60 dark:text-titanium-400 dark:border-titanium-800'
-                    }`}
-                >
-                    {soundEnabled ? 'Sound' : 'Muted'}
-                </button>
-            )}
-            {onToggleHelp && (
-                <button
-                    type="button"
-                    onClick={onToggleHelp}
-                    className="text-label font-bold px-4 py-1.5 rounded-full transition-all motion-interaction border text-titanium-800 bg-white border-titanium-200 hover:border-titanium-400 shadow-soft dark:text-titanium-100 dark:bg-titanium-900/60 dark:border-titanium-800 dark:hover:border-titanium-600 dark:shadow-none"
-                >
-                    Help
-                </button>
-            )}
-        </div>
-    </div>
-    <div className="flex items-center gap-6">
-            {showTimer && (
-                <div className="flex items-center gap-2 px-4 py-1.5 bg-titanium-100 rounded-full border border-titanium-200 dark:bg-titanium-900/60 dark:border-titanium-800">
-                    <Label size="micro">Timer</Label>
-                    <span className={`font-mono font-bold tabular-nums text-sm ${tournamentTime < 60 ? 'text-action-destructive animate-pulse' : 'text-titanium-900 dark:text-titanium-100'}`}>{formatTime(tournamentTime)}</span>
-                </div>
-            )}
-
-            <div className="hidden lg:flex">
-                <EventChip />
+        <header className="h-14 border-b border-titanium-200 flex items-center justify-between px-6 z-10 bg-glass-light backdrop-blur-xl sticky top-0 dark:border-titanium-800 dark:bg-glass-dark dark:text-titanium-100">
+            <div className="flex items-center gap-4">
+                <span className="font-display font-semibold tracking-tight text-titanium-900 dark:text-titanium-100 text-base">nullspace</span>
+                {onOpenCommandPalette && (
+                    <button
+                        type="button"
+                        onClick={onOpenCommandPalette}
+                        className="inline-flex items-center gap-2 h-8 px-3 rounded-full border border-titanium-200 text-[10px] font-medium uppercase tracking-[0.18em] text-titanium-600 hover:text-titanium-900 hover:border-titanium-400 transition-colors dark:border-titanium-800 dark:text-titanium-300 dark:hover:text-titanium-100"
+                    >
+                        Games <span className="text-[9px] font-mono">/</span>
+                    </button>
+                )}
             </div>
-            
-            {playMode !== 'CASH' && (
-                <div className="hidden md:flex items-center gap-6">
-                    <div className="flex items-center gap-3">
-                        <Label size="micro">Shields</Label>
-                        <div className="flex gap-1.5">
-                            {[...Array(3)].map((_, i) => (
-                                <div key={i} className={`w-2 h-2 rounded-full transition-colors ${i < stats.shields ? 'bg-action-primary shadow-sm' : 'bg-titanium-200 dark:bg-titanium-800'}`} />
-                            ))}
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                        <Label size="micro">Aura</Label>
-                        <div className="flex gap-1 items-center h-3">
-                            {[...Array(5)].map((_, i) => (
-                                <div
-                                    key={i}
-                                    className={`w-1.5 h-full rounded-full transition-all duration-300 ${
-                                        i < (stats.auraMeter ?? 0)
-                                            ? 'bg-action-success'
-                                            : 'bg-titanium-200 dark:bg-titanium-800'
-                                    }`}
-                                />
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            <div className="flex items-center gap-3">
-                {sessionActive && (
-                    <div className="hidden md:flex flex-col items-end">
-                        <Label size="micro" className="mb-0.5">Session</Label>
-                        <span className={`text-sm font-bold tabular-nums leading-none ${sessionTone}`}>
-                            {sessionValue}
-                        </span>
-                        <span className="text-[9px] font-medium text-titanium-400 dark:text-titanium-400">
-                            {sessionMinutes > 0 ? `${sessionMinutes}m` : 'Live'}
-                        </span>
+            <div className="flex items-center gap-4">
+                {showTimer && (
+                    <div className="hidden md:flex items-center gap-2 px-3 py-1 rounded-full border border-titanium-200 text-[10px] font-medium uppercase tracking-[0.18em] text-titanium-600 dark:border-titanium-800 dark:text-titanium-300">
+                        <span>Timer</span>
+                        <span className={`font-mono font-semibold tabular-nums ${tournamentTime < 60 ? 'text-action-destructive animate-pulse' : 'text-titanium-900 dark:text-titanium-100'}`}>{formatTime(tournamentTime)}</span>
                     </div>
                 )}
-                <div className="flex flex-col items-end">
-                    <Label size="micro" className="mb-0.5">Balance</Label>
-                    <span className="text-titanium-900 dark:text-titanium-100 font-bold text-lg tracking-tight tabular-nums leading-none font-display">
-                        ${stats.chips.toLocaleString()}
-                    </span>
+
+                <div className="flex items-center gap-3">
+                    {sessionActive && (
+                        <div className="hidden md:flex flex-col items-end zen-hide">
+                            <Label size="micro" className="mb-0.5">Session</Label>
+                            <span className={`text-sm font-bold tabular-nums leading-none ${sessionTone}`}>
+                                {sessionValue}
+                            </span>
+                            <span className="text-[9px] font-medium text-titanium-600 dark:text-titanium-300">
+                                {sessionMinutes > 0 ? `${sessionMinutes}m` : 'Live'}
+                            </span>
+                        </div>
+                    )}
+                    <div className="flex flex-col items-end">
+                        <Label size="micro" className="mb-0.5">Balance</Label>
+                        <span className="text-titanium-900 dark:text-titanium-100 font-semibold text-base tracking-tight tabular-nums leading-none font-display">
+                            ${stats.chips.toLocaleString()}
+                        </span>
+                    </div>
                 </div>
+                <ThemeToggle className="hidden md:inline-flex" />
+                {children}
             </div>
-            <ThemeToggle className="hidden md:inline-flex" />
-            {children}
-    </div>
-    </header>
+        </header>
     );
 };
 
@@ -201,9 +145,24 @@ interface SidebarProps {
     crapsEventLog?: CrapsEventLog[];
     resolvedBets?: ResolvedBet[];
     resolvedBetsKey?: number;
+    onToggleView?: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ leaderboard, history, viewMode = 'RANK', currentChips, prizePool, totalPlayers, winnersPct = 0.15, gameType, crapsEventLog = [], resolvedBets = [], resolvedBetsKey = 0 }) => {
+const SidebarContent: React.FC<SidebarProps & { compact?: boolean }> = ({
+    leaderboard,
+    history,
+    viewMode = 'RANK',
+    currentChips,
+    prizePool,
+    totalPlayers,
+    winnersPct = 0.15,
+    gameType,
+    crapsEventLog = [],
+    resolvedBets = [],
+    resolvedBetsKey = 0,
+    onToggleView,
+    compact = false,
+}) => {
     const effectivePlayerCount = totalPlayers ?? leaderboard.length;
     const bubbleIndex = Math.max(1, Math.min(effectivePlayerCount, Math.ceil(effectivePlayerCount * winnersPct)));
     const userEntry = leaderboard.find(e => e.name === 'YOU' || e.name.includes('(YOU)'));
@@ -229,18 +188,21 @@ export const Sidebar: React.FC<SidebarProps> = ({ leaderboard, history, viewMode
         const displayChips = isUser && currentChips !== undefined ? currentChips : entry.chips;
 
         return (
-            <React.Fragment key={isSticky ? 'sticky-you' : i}>                <div className={`flex justify-between items-center py-2 px-4 rounded-xl transition-colors ${
-                    isSticky 
-                        ? 'bg-titanium-900 text-white shadow-lg' 
+            <React.Fragment key={isSticky ? 'sticky-you' : i}>
+                <div className={`flex justify-between items-center py-2 px-4 rounded-xl transition-colors ${
+                    isSticky
+                        ? 'bg-titanium-900 text-white shadow-lg'
                         : isUser ? 'bg-titanium-100 text-titanium-900' : 'text-titanium-800'
-                }`}>                    <div className="flex items-center gap-3">
+                }`}>
+                    <div className="flex items-center gap-3">
                         <span className={`text-[10px] font-bold font-mono w-4 text-center ${isSticky ? 'text-titanium-400' : 'text-titanium-300'}`}>{rank}</span>
                         <span className={`text-sm font-semibold ${isSticky ? 'text-white' : 'text-titanium-800'}`}>{entry.name}</span>
                     </div>
                     <span className={`text-sm font-bold tabular-nums ${
-                        isSticky ? 'text-white' : 
+                        isSticky ? 'text-white' :
                         viewMode === 'PAYOUT' && rank <= bubbleIndex ? 'text-action-success' : 'text-titanium-900'
-                    }`}>                        {viewMode === 'RANK' ? `$${Math.floor(displayChips).toLocaleString()}` : getPayout(rank)}
+                    }`}>
+                        {viewMode === 'RANK' ? `$${Math.floor(displayChips).toLocaleString()}` : getPayout(rank)}
                     </span>
                 </div>
                 {!isSticky && isMoneyCutoff && (
@@ -272,7 +234,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ leaderboard, history, viewMode
                     </div>
                 )}
                 {detailLines.map((line, i) => (
-                    <div key={i} className="text-[10px] font-medium text-titanium-400 leading-snug">
+                    <div key={i} className="text-[10px] font-medium text-titanium-600 leading-snug">
                         {line}
                     </div>
                 ))}
@@ -298,12 +260,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ leaderboard, history, viewMode
     };
 
     return (
-        <aside className="w-72 border-l border-titanium-200 bg-white hidden lg:flex flex-col">
-            <div className="px-6 pt-8 pb-4 flex-none">
+        <div className={`flex flex-col min-h-0 ${compact ? 'gap-5' : ''}`}>
+            <div className={`${compact ? 'px-4 pt-4' : 'px-6 pt-8'} pb-4 flex-none`}>
                 <div className="flex justify-between items-center">
                     <Label variant="primary">{viewMode === 'RANK' ? 'Live Feed' : 'Payouts'}</Label>
-                    <button onClick={() => {}} className="text-[10px] font-bold text-titanium-400 bg-titanium-100 px-3 py-1 rounded-full hover:bg-titanium-200 transition-colors">
-                        Toggle [L]
+                    <button
+                        onClick={onToggleView}
+                        className="text-[10px] font-bold text-titanium-600 bg-titanium-100 px-3 py-1 rounded-full hover:bg-titanium-200 transition-colors"
+                    >
+                        View
                     </button>
                 </div>
             </div>
@@ -314,12 +279,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ leaderboard, history, viewMode
                 </div>
             )}
 
-            <div className="overflow-y-auto px-4 space-y-1 flex-1 min-h-0 scrollbar-hide">
+            <div className={`overflow-y-auto px-4 space-y-1 ${compact ? 'max-h-56' : 'flex-1 min-h-0'} scrollbar-hide`}>
                 {leaderboard.map((entry, i) => renderEntry(entry, i, false))}
             </div>
 
             {resolvedEntries.length > 0 && (
-                <div className="flex-none p-6 bg-titanium-50 border-t border-titanium-200">
+                <div className={`flex-none border-t border-titanium-200 ${compact ? 'px-4 pb-4 pt-3' : 'p-6 bg-titanium-50'}`}>
                     <Label className="mb-4 text-center block" size="micro">Last Resolved</Label>
                     <div className="flex flex-col gap-2">
                         {resolvedEntries.slice(0, 5).map((bet, i) => renderResolvedBet(bet, i))}
@@ -327,12 +292,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ leaderboard, history, viewMode
                 </div>
             )}
 
-            <div className="flex-1 border-t border-titanium-200 p-6 bg-white flex flex-col min-h-0">
+            <div className={`flex-1 border-t border-titanium-200 flex flex-col min-h-0 ${compact ? 'px-4 pt-4 pb-3' : 'p-6 bg-white'}`}>
                 <Label className="mb-4 block" size="micro">{isCraps ? 'Roll Log' : 'History'}</Label>
-                <div className="flex-1 overflow-y-auto flex flex-col scrollbar-hide min-h-0">
+                <div className={`flex-1 overflow-y-auto flex flex-col scrollbar-hide min-h-0 ${compact ? 'max-h-48' : ''}`}>
                     {isCraps ? (
                         crapsEventLog.length === 0 ? (
-                            <div className="text-titanium-300 text-xs italic">No rolls recorded.</div>
+                        <div className="text-titanium-500 text-xs italic">No rolls recorded.</div>
                         ) : (
                             [...crapsEventLog].reverse().slice(0, 20).map((event, i) => {
                                 const diceLabel = event.dice?.length === 2 ? ` (${event.dice.join('-')})` : '';
@@ -345,23 +310,42 @@ export const Sidebar: React.FC<SidebarProps> = ({ leaderboard, history, viewMode
                     )}
                 </div>
             </div>
-        </aside>
+        </div>
     );
 };
 
-export const Footer: React.FC<{ currentBet?: number }> = ({ currentBet }) => {
+export const Sidebar: React.FC<SidebarProps> = (props) => (
+    <aside className="w-72 border-l border-titanium-200 bg-white hidden lg:flex flex-col">
+        <SidebarContent {...props} />
+    </aside>
+);
+
+export const SidebarDrawer: React.FC<SidebarProps & { className?: string; open?: boolean; onOpenChange?: (open: boolean) => void }> = ({ className, open, onOpenChange, ...props }) => (
+    <PanelDrawer
+        label="Feed"
+        title={props.viewMode === 'RANK' ? 'LIVE FEED' : 'PAYOUTS'}
+        shortcutHint="Alt+L"
+        className={className}
+        open={open}
+        onOpenChange={onOpenChange}
+    >
+        <SidebarContent {...props} compact />
+    </PanelDrawer>
+);
+
+export const Footer: React.FC<{ currentBet?: number; className?: string }> = ({ currentBet, className }) => {
     const bets = [1, 5, 25, 100, 500, 1000, 5000, 10000, 50000];
     const isCustom = currentBet && !bets.includes(currentBet);
 
     return (
-        <footer className="hidden lg:flex fixed bottom-0 left-0 right-0 lg:right-72 border-t border-titanium-200 bg-glass-light backdrop-blur-xl h-10 items-center justify-center gap-8 px-6 z-20 dark:border-titanium-800 dark:bg-glass-dark dark:text-titanium-100">
+        <footer className={`hidden lg:flex fixed bottom-0 left-0 right-0 border-t border-titanium-200 bg-glass-light backdrop-blur-xl h-10 items-center justify-center gap-8 px-6 z-20 dark:border-titanium-800 dark:bg-glass-dark dark:text-titanium-100 ${className ?? ''}`}>
             <Label size="micro">Quick Bet Keys</Label>
             <div className="flex gap-6">
                 {bets.map((bet, i) => {
                     const isSelected = currentBet === bet;
                     return (
                         <div key={i} className="flex items-center gap-2 group cursor-pointer">
-                            <span className="text-titanium-300 text-[10px] font-mono group-hover:text-titanium-500">^ {i + 1}</span>
+                            <span className="text-titanium-500 text-[10px] font-mono group-hover:text-titanium-700">^ {i + 1}</span>
                             <span className={`text-xs font-black tabular-nums transition-all group-hover:scale-110 ${isSelected ? 'text-action-primary' : 'text-titanium-800'}`}>
                                 ${bet >= 1000 ? `${bet/1000}k` : bet}
                             </span>
@@ -369,7 +353,7 @@ export const Footer: React.FC<{ currentBet?: number }> = ({ currentBet }) => {
                     );
                 })}
                 <div className="flex items-center gap-2 group cursor-pointer">
-                    <span className="text-titanium-300 text-[10px] font-mono group-hover:text-titanium-500">^0</span>
+                    <span className="text-titanium-500 text-[10px] font-mono group-hover:text-titanium-700">^0</span>
                     <span className={`text-xs font-black transition-all group-hover:scale-110 ${isCustom ? 'text-action-primary' : 'text-titanium-800'}`}>Custom</span>
                 </div>
             </div>
@@ -393,46 +377,46 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, searchQu
 
     return (
         <div
-            className="fixed inset-0 bg-titanium-900/40 backdrop-blur-md z-[100] flex items-start justify-center pt-24 px-4"
+            className="fixed inset-0 bg-titanium-900/45 backdrop-blur-md z-[100] flex items-start justify-center pt-24 px-4"
             onClick={onClose}
         >
             <div
-                className="w-full max-w-[640px] bg-white rounded-[32px] shadow-float overflow-hidden flex flex-col border border-titanium-200 max-h-[60vh] animate-scale-in"
+                className="w-full max-w-[640px] bg-white rounded-[32px] shadow-float overflow-hidden flex flex-col border border-titanium-300 max-h-[60vh] animate-scale-in dark:bg-titanium-900/85 dark:border-titanium-700"
                 onClick={(e) => e.stopPropagation()}
             >
-                <div className="px-8 py-6 border-b border-titanium-100 flex items-center gap-4 bg-titanium-50/50">
+                <div className="px-8 py-6 border-b border-titanium-200 flex items-center gap-4 bg-titanium-100/60 dark:border-titanium-700 dark:bg-titanium-900/70">
                     <span className="text-action-primary font-black text-xl font-mono">&gt;</span>
                     <input
                         ref={inputRef}
                         type="text"
                         value={searchQuery}
                         onChange={(e) => onSearchChange(e.target.value)}
-                        className="flex-1 bg-transparent outline-none text-titanium-900 placeholder-titanium-300 font-bold text-xl tracking-tight"
+                        className="flex-1 bg-transparent outline-none text-titanium-900 placeholder-titanium-600 font-bold text-xl tracking-tight dark:text-titanium-100 dark:placeholder-titanium-300"
                         placeholder="Search Nullspace..."
                         autoFocus
                     />
-                    <div className="text-[10px] font-black text-titanium-400 bg-white border border-titanium-200 px-3 py-1.5 rounded-full uppercase tracking-widest">Esc</div>
+                    <div className="text-[10px] font-black text-titanium-700 bg-white border border-titanium-300 px-3 py-1.5 rounded-full uppercase tracking-widest dark:bg-titanium-800 dark:border-titanium-600 dark:text-titanium-200">Esc</div>
                 </div>
                 <div className="flex-1 overflow-y-auto py-4 scrollbar-hide">
                     {filtered.map((game, i) => (
                         <div
                             key={game}
                             onClick={() => onSelectGame(game)}
-                            className="flex items-center justify-between px-8 py-4 hover:bg-titanium-50 cursor-pointer group transition-all active:scale-[0.99]"
+                            className="flex items-center justify-between px-8 py-4 hover:bg-titanium-100/80 cursor-pointer group transition-all active:scale-[0.99] dark:hover:bg-titanium-800/70"
                         >
                             <div className="flex items-center gap-4">
-                                <div className="w-10 h-10 rounded-xl bg-titanium-100 border border-titanium-200 flex items-center justify-center text-[10px] font-black text-titanium-400 group-hover:bg-action-primary group-hover:text-white transition-colors shadow-soft">
+                                <div className="w-10 h-10 rounded-xl bg-titanium-100 border border-titanium-300 flex items-center justify-center text-[10px] font-black text-titanium-700 group-hover:bg-action-primary group-hover:text-white transition-colors shadow-soft dark:bg-titanium-800 dark:border-titanium-700 dark:text-titanium-200">
                                     {i < 9 ? i + 1 : i === 9 ? 0 : ''}
                                 </div>
-                                <span className="text-titanium-900 font-bold text-lg tracking-tight group-hover:translate-x-1 transition-transform">{game}</span>
+                                <span className="text-titanium-900 font-bold text-lg tracking-tight group-hover:translate-x-1 transition-transform dark:text-titanium-100">{game}</span>
                             </div>
-                            <span className="text-titanium-300 font-bold text-[10px] uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
+                            <span className="text-titanium-600 font-bold text-[10px] uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity dark:text-titanium-300">
                                 Launch Game
                             </span>
                         </div>
                     ))}
                     {filtered.length === 0 && (
-                        <div className="px-8 py-12 text-titanium-400 text-center italic font-semibold">No results found.</div>
+                        <div className="px-8 py-12 text-titanium-600 text-center italic font-semibold dark:text-titanium-300">No results found.</div>
                     )}
                 </div>
             </div>
@@ -567,7 +551,7 @@ export const HelpOverlay: React.FC<HelpOverlayProps> = ({ isOpen, onClose, gameT
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-8">
                             <div className="flex items-center gap-4 group cursor-pointer">
                                 <div className="w-11 h-11 flex items-center justify-center bg-white border border-titanium-200 rounded-xl font-display font-black text-sm text-titanium-900 shadow-soft group-hover:scale-110 group-hover:border-action-primary transition-all">/</div>
-                                <span className="text-body-sm font-bold text-titanium-800 uppercase tracking-tight">Menu</span>
+                                <span className="text-body-sm font-bold text-titanium-800 uppercase tracking-tight">Games</span>
                             </div>
                             <div className="flex items-center gap-4 group cursor-pointer">
                                 <div className="w-11 h-11 flex items-center justify-center bg-white border border-titanium-200 rounded-xl font-display font-black text-sm text-titanium-900 shadow-soft group-hover:scale-110 group-hover:border-action-primary transition-all">?</div>
@@ -576,6 +560,18 @@ export const HelpOverlay: React.FC<HelpOverlayProps> = ({ isOpen, onClose, gameT
                             <div className="flex items-center gap-4 group cursor-pointer">
                                 <div className="w-11 h-11 flex items-center justify-center bg-white border border-titanium-200 rounded-xl font-display font-black text-sm text-titanium-900 shadow-soft group-hover:scale-110 group-hover:border-action-primary transition-all">L</div>
                                 <span className="text-body-sm font-bold text-titanium-800 uppercase tracking-tight">Feed</span>
+                            </div>
+                            <div className="flex items-center gap-4 group cursor-pointer">
+                                <div className="w-11 h-11 flex items-center justify-center bg-white border border-titanium-200 rounded-xl font-display font-black text-[10px] text-titanium-900 shadow-soft group-hover:scale-110 group-hover:border-action-primary transition-all">ALT+Z</div>
+                                <span className="text-body-sm font-bold text-titanium-800 uppercase tracking-tight">Zen</span>
+                            </div>
+                            <div className="flex items-center gap-4 group cursor-pointer">
+                                <div className="w-11 h-11 flex items-center justify-center bg-white border border-titanium-200 rounded-xl font-display font-black text-[10px] text-titanium-900 shadow-soft group-hover:scale-110 group-hover:border-action-primary transition-all">ALT+R</div>
+                                <span className="text-body-sm font-bold text-titanium-800 uppercase tracking-tight">Rewards</span>
+                            </div>
+                            <div className="flex items-center gap-4 group cursor-pointer">
+                                <div className="w-11 h-11 flex items-center justify-center bg-white border border-titanium-200 rounded-xl font-display font-black text-[10px] text-titanium-900 shadow-soft group-hover:scale-110 group-hover:border-action-primary transition-all">ALT+S</div>
+                                <span className="text-body-sm font-bold text-titanium-800 uppercase tracking-tight">Safety</span>
                             </div>
                         </div>
                     </div>

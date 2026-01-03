@@ -1,6 +1,6 @@
 use commonware_cryptography::{
     ed25519::{PrivateKey, PublicKey},
-    PrivateKeyExt, Signer,
+    Signer,
 };
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
 use nullspace_types::Tournament;

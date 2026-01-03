@@ -53,14 +53,14 @@ export declare const GameResultMessageSchema: z.ZodObject<{
     payout: z.ZodString;
     message: z.ZodString;
 }, "strip", z.ZodTypeAny, {
-    message: string;
     type: "game_result";
+    message: string;
     sessionId: string;
     won: boolean;
     payout: string;
 }, {
-    message: string;
     type: "game_result";
+    message: string;
     sessionId: string;
     won: boolean;
     payout: string;
@@ -70,13 +70,13 @@ export declare const ErrorMessageSchema: z.ZodObject<{
     code: z.ZodString;
     message: z.ZodString;
 }, "strip", z.ZodTypeAny, {
+    type: "error";
     code: string;
     message: string;
-    type: "error";
 }, {
+    type: "error";
     code: string;
     message: string;
-    type: "error";
 }>;
 export declare const ServerMessageSchema: z.ZodDiscriminatedUnion<"type", [z.ZodObject<{
     type: z.ZodLiteral<"game_started">;
@@ -112,14 +112,14 @@ export declare const ServerMessageSchema: z.ZodDiscriminatedUnion<"type", [z.Zod
     payout: z.ZodString;
     message: z.ZodString;
 }, "strip", z.ZodTypeAny, {
-    message: string;
     type: "game_result";
+    message: string;
     sessionId: string;
     won: boolean;
     payout: string;
 }, {
-    message: string;
     type: "game_result";
+    message: string;
     sessionId: string;
     won: boolean;
     payout: string;
@@ -128,13 +128,13 @@ export declare const ServerMessageSchema: z.ZodDiscriminatedUnion<"type", [z.Zod
     code: z.ZodString;
     message: z.ZodString;
 }, "strip", z.ZodTypeAny, {
+    type: "error";
     code: string;
     message: string;
-    type: "error";
 }, {
+    type: "error";
     code: string;
     message: string;
-    type: "error";
 }>]>;
 export type ServerMessage = z.infer<typeof ServerMessageSchema>;
 export type GameStartedMessage = z.infer<typeof GameStartedMessageSchema>;

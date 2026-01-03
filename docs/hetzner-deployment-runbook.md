@@ -35,7 +35,6 @@ Suggested layout (Ashburn):
 - `ns-gw-1..2` (Gateway): CPX31 (4 vCPU, 8 GB).
 - `ns-sim-1` (Simulator/Indexer): CPX41/CPX51 (8-16 vCPU, 16-32 GB).
 - `ns-node-1..3` (Validators): CPX31 (4 vCPU, 8 GB).
-- `ns-exec-1` (Executor): CPX31 (active; standby optional).
 - `ns-auth-1` (Auth): CPX21 (2 vCPU, 4 GB).
 - `ns-convex-1` (Convex): CPX41 (8 vCPU, 16 GB) + persistent volume.
 - `ns-db-1` (Postgres): CPX41 (8 vCPU, 16 GB) + dedicated volume.
@@ -47,6 +46,8 @@ Notes:
 - Scale gateways horizontally; each node has its own `MAX_TOTAL_SESSIONS`.
 - Use a single simulator/indexer host at 5k; add an LB + replicas for >5k.
 - Validators should be on separate hosts to maintain quorum.
+- For NAT-heavy mobile traffic, raise `MAX_CONNECTIONS_PER_IP` (>=200) and
+  `RATE_LIMIT_WS_CONNECTIONS_PER_IP` (>=500) to avoid false throttling.
 For 20k+ guidance, see `docs/resource_sizing.md`.
 
 ## 4) Base server setup
@@ -64,14 +65,17 @@ On each host:
 Use env templates from `configs/staging/` or `configs/production/`:
 - `configs/staging/simulator.env.example`
 - `configs/staging/gateway.env.example`
+- `configs/staging/ops.env.example`
+- `configs/staging/live-table.env.example`
 - `services/auth/.env.example`
 - `website/.env.staging.example`
 Optional:
 - `/etc/nullspace/live-table.env` with `LIVE_TABLE_HOST`/`LIVE_TABLE_PORT`
 - `/etc/nullspace/ops.env` with `OPS_*` settings
-- `/etc/nullspace/executor.env` with `EXECUTOR_URL`/`EXECUTOR_IDENTITY`
 - Gateway live-table integration: set `GATEWAY_LIVE_TABLE_CRAPS_URL` and `GATEWAY_LIVE_TABLE_ADMIN_KEY_FILE`
   (env keys are blocked in production unless `GATEWAY_LIVE_TABLE_ALLOW_ADMIN_ENV=1`)
+  - Live-table timing is controlled by `LIVE_TABLE_BETTING_MS`, `LIVE_TABLE_LOCK_MS`,
+    `LIVE_TABLE_PAYOUT_MS`, and `LIVE_TABLE_COOLDOWN_MS` (tune after load tests).
 
 Production-required envs (set in your env files):
 - `GATEWAY_ORIGIN` (public gateway origin, e.g. `https://gateway.example.com`)
@@ -79,6 +83,7 @@ Production-required envs (set in your env files):
 - `GATEWAY_ALLOWED_ORIGINS` (origin allowlist for gateway WebSocket)
 - `GATEWAY_ALLOW_NO_ORIGIN=1` (if supporting native mobile clients)
 - `METRICS_AUTH_TOKEN` (simulator + validators + auth metrics auth)
+- `OPS_DATA_DIR` on persistent disk (if running ops service)
 - `OPS_ADMIN_TOKEN` (ops admin endpoints) and `OPS_REQUIRE_ADMIN_TOKEN=1`
 - `OPS_ALLOWED_ORIGINS` and `OPS_REQUIRE_ALLOWED_ORIGINS=1` (ops CORS allowlist)
 
@@ -101,6 +106,7 @@ Recommended settings:
 - Enable PROXY protocol only if your services parse it.
 - Increase idle timeout for WS to 5-10 minutes.
 - Use Cloudflare in front of website/auth for TLS + WAF.
+- Align proxy/body size limits with simulator `http_body_limit_bytes` and gateway `GATEWAY_SUBMIT_MAX_BYTES`.
 
 ## 7) Systemd supervision
 Copy unit files from `ops/systemd/` to `/etc/systemd/system/` and set
@@ -108,9 +114,9 @@ Copy unit files from `ops/systemd/` to `/etc/systemd/system/` and set
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable nullspace-simulator nullspace-node nullspace-auth \
-  nullspace-gateway nullspace-website nullspace-ops nullspace-executor
+  nullspace-gateway nullspace-website nullspace-ops
 sudo systemctl start nullspace-simulator nullspace-node nullspace-auth \
-  nullspace-gateway nullspace-website nullspace-ops nullspace-executor
+  nullspace-gateway nullspace-website nullspace-ops
 
 # Optional: live-table service (craps)
 sudo systemctl enable nullspace-live-table
@@ -132,3 +138,14 @@ connection pooling, and WAL backups.
 ## 9) Validation
 Run the smoke steps in `docs/testnet-readiness-runbook.md` and the full
 sequence in `docs/testnet-runbook.md` before opening the testnet.
+
+Recommended preflight config check:
+```bash
+node scripts/preflight-management.mjs \
+  gateway /etc/nullspace/gateway.env \
+  simulator /etc/nullspace/simulator.env \
+  node /etc/nullspace/node.env \
+  auth /etc/nullspace/auth.env \
+  ops /etc/nullspace/ops.env \
+  live-table /etc/nullspace/live-table.env
+```

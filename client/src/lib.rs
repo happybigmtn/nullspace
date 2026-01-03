@@ -5,6 +5,12 @@ pub mod events;
 pub use client::Client;
 pub use client::RetryPolicy;
 pub use events::Stream;
+use commonware_consensus::simplex::scheme::bls12381_threshold;
+use commonware_cryptography::{bls12381::primitives::variant::MinSig, ed25519::PublicKey};
+use commonware_cryptography::sha256::Digest;
+use commonware_storage::qmdb::any::unordered::{variable, Update as StorageUpdate};
+use nullspace_types::execution::Value;
+use nullspace_types::Identity;
 use thiserror::Error;
 
 /// Error type for client operations.
@@ -49,6 +55,21 @@ pub enum Error {
 /// Result type for client operations.
 pub type Result<T> = std::result::Result<T, Error>;
 
+pub(crate) fn seed_verifier(
+    identity: &Identity,
+) -> bls12381_threshold::Scheme<PublicKey, MinSig> {
+    bls12381_threshold::Scheme::certificate_verifier(identity.clone())
+}
+
+pub fn operation_value(
+    operation: &variable::Operation<Digest, Value>,
+) -> Option<&Value> {
+    match operation {
+        variable::Operation::Update(StorageUpdate(_, value)) => Some(value),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -62,7 +83,7 @@ mod tests {
     use commonware_consensus::Viewable;
     use commonware_cryptography::bls12381::primitives::group::Private;
     use commonware_runtime::{deterministic::Runner, Runner as _};
-    use commonware_storage::store::operation::Variable;
+    use commonware_storage::qmdb::any::unordered::{variable, Update as StorageUpdate};
     use nullspace_execution::mocks::{
         create_account_keypair, create_adbs, create_network_keypair, create_seed, execute_block,
     };
@@ -289,7 +310,9 @@ mod tests {
         lookup.verify(&network_identity).unwrap();
 
         // Verify account data
-        let Variable::Update(_, Value::Account(account)) = lookup.operation else {
+        let variable::Operation::Update(StorageUpdate(_, Value::Account(account))) =
+            lookup.operation
+        else {
             panic!("Expected account value");
         };
         assert_eq!(account.nonce, 1);
@@ -406,7 +429,7 @@ mod tests {
 
         // Get current view
         let view = client.query_seed(Query::Latest).await.unwrap().unwrap();
-        assert_eq!(view.view(), 42);
+        assert_eq!(view.view().get(), 42);
     }
 
     #[tokio::test]
@@ -446,7 +469,7 @@ mod tests {
         .await
         .expect("timed out waiting for seed")
         .expect("wait_for_latest_seed_at_least failed");
-        assert!(seed.view() >= 5);
+        assert!(seed.view().get() >= 5);
     }
 
     #[test]

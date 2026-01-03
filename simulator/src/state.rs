@@ -1,13 +1,19 @@
 use commonware_codec::Encode;
-use commonware_consensus::{aggregation::types::Certificate, Viewable};
-use commonware_cryptography::{bls12381::primitives::variant::MinSig, sha256::Digest};
-use commonware_cryptography::ed25519::PublicKey;
+use commonware_consensus::{
+    aggregation::{scheme::bls12381_threshold, types::Certificate},
+    Viewable,
+};
+use commonware_cryptography::{
+    bls12381::primitives::variant::MinSig, ed25519::PublicKey, sha256::Digest,
+};
 use commonware_storage::{
-    adb::{
+    mmr::{Location, Position},
+    qmdb::{
+        any::unordered::{variable, Update as StorageUpdate},
         create_multi_proof, create_proof, create_proof_store_from_digests,
         digests_required_for_proof,
+        keyless,
     },
-    store::operation::{Keyless, Variable},
 };
 use futures::stream::{FuturesUnordered, StreamExt};
 use nullspace_types::{
@@ -27,6 +33,11 @@ use commonware_storage::mmr::verification::ProofStore;
 use crate::PasskeyStore;
 use crate::metrics::UpdateIndexMetrics;
 use crate::Simulator;
+
+type AggregationScheme = bls12381_threshold::Scheme<PublicKey, MinSig>;
+type AggregationCertificate = Certificate<AggregationScheme, Digest>;
+type StateOp = variable::Operation<Digest, Value>;
+type EventOp = keyless::Operation<Output>;
 
 const DEFAULT_EXPLORER_MAX_BLOCKS: usize = 10_000;
 const DEFAULT_EXPLORER_MAX_ACCOUNT_ENTRIES: usize = 2_000;
@@ -338,9 +349,9 @@ impl IndexedEvents {
 }
 
 fn merge_ops(
-    public_ops: &[(u64, Keyless<Output>)],
-    account_ops: &[(u64, Keyless<Output>)],
-) -> Vec<(u64, Keyless<Output>)> {
+    public_ops: &[(u64, EventOp)],
+    account_ops: &[(u64, EventOp)],
+) -> Vec<(u64, EventOp)> {
     let mut merged = Vec::with_capacity(public_ops.len() + account_ops.len());
     let mut i = 0;
     let mut j = 0;
@@ -367,7 +378,7 @@ fn merge_ops(
 async fn build_filtered_update(
     events: &Events,
     proof_store: &ProofStore<Digest>,
-    filtered_ops: Vec<(u64, Keyless<Output>)>,
+    filtered_ops: Vec<(u64, EventOp)>,
 ) -> Option<EncodedUpdate> {
     if filtered_ops.is_empty() {
         return None;
@@ -375,7 +386,7 @@ async fn build_filtered_update(
 
     let locations_to_include = filtered_ops
         .iter()
-        .map(|(loc, _)| *loc)
+        .map(|(loc, _)| Location::from(*loc))
         .collect::<Vec<_>>();
     let filtered_proof = match create_multi_proof(proof_store, &locations_to_include).await {
         Ok(proof) => proof,
@@ -409,14 +420,14 @@ pub(crate) async fn index_events(
     let needs_public_ops = has_account_subs;
     let include_full_update = subscriptions.map_or(true, |snapshot| snapshot.all);
 
-    let mut public_ops: Vec<(u64, Keyless<Output>)> = Vec::new();
-    let mut account_ops: HashMap<PublicKey, Vec<(u64, Keyless<Output>)>> = HashMap::new();
-    let mut session_ops: HashMap<u64, Vec<(u64, Keyless<Output>)>> = HashMap::new();
+    let mut public_ops: Vec<(u64, EventOp)> = Vec::new();
+    let mut account_ops: HashMap<PublicKey, Vec<(u64, EventOp)>> = HashMap::new();
+    let mut session_ops: HashMap<u64, Vec<(u64, EventOp)>> = HashMap::new();
 
     for (i, op) in events.events_proof_ops.iter().enumerate() {
         let loc = events.progress.events_start_op + i as u64;
         match op {
-            Keyless::Append(output) => match output {
+            EventOp::Append(output) => match output {
                 Output::Event(event) => match event {
                     Event::CasinoPlayerRegistered { player, .. } => {
                         if has_account_subs
@@ -822,7 +833,7 @@ pub(crate) async fn index_events(
                 }
                 Output::Commit { .. } => {}
             },
-            Keyless::Commit(_) => {}
+            EventOp::Commit(_) => {}
         }
     }
 
@@ -951,12 +962,12 @@ pub(crate) async fn index_events(
 pub struct State {
     seeds: BTreeMap<u64, Seed>,
 
-    nodes: BTreeMap<u64, Digest>,
-    node_ref_counts: HashMap<u64, usize>,
+    nodes: BTreeMap<Position, Digest>,
+    node_ref_counts: HashMap<Position, usize>,
     #[allow(clippy::type_complexity)]
-    keys: HashMap<Digest, BTreeMap<u64, (u64, Variable<Digest, Value>)>>,
-    progress: BTreeMap<u64, (Progress, Certificate<MinSig, Digest>)>,
-    progress_nodes: BTreeMap<u64, Vec<u64>>,
+    keys: HashMap<Digest, BTreeMap<u64, (Location, StateOp)>>,
+    progress: BTreeMap<u64, (Progress, AggregationCertificate)>,
+    progress_nodes: BTreeMap<u64, Vec<Position>>,
 
     submitted_events: HashSet<u64>,
     submitted_state: HashSet<u64>,
@@ -990,7 +1001,7 @@ impl Simulator {
     pub async fn submit_seed(&self, seed: Seed) {
         {
             let mut state = self.state.write().await;
-            if state.seeds.insert(seed.view(), seed.clone()).is_some() {
+            if state.seeds.insert(seed.view().get(), seed.clone()).is_some() {
                 return;
             }
             if let Some(limit) = self.config.seed_history_limit {
@@ -1010,7 +1021,7 @@ impl Simulator {
         }
     }
 
-    pub async fn submit_state(&self, summary: Summary, inner: Vec<(u64, Digest)>) {
+    pub async fn submit_state(&self, summary: Summary, inner: Vec<(Position, Digest)>) {
         let mut state = self.state.write().await;
         let height = summary.progress.height;
         if !state.submitted_state.insert(height) {
@@ -1037,14 +1048,18 @@ impl Simulator {
 
         let max_versions = self.config.state_max_key_versions;
         let start_loc = summary.progress.state_start_op;
+        let start_loc = Location::from(summary.progress.state_start_op);
         for (i, value) in summary.state_proof_ops.into_iter().enumerate() {
             // Store in keys
-            let loc = start_loc + i as u64;
+            let loc = start_loc
+                .checked_add(i as u64)
+                .expect("state operation location overflow");
             match value {
-                Variable::Update(key, value) => {
+                StateOp::Update(update) => {
+                    let key = update.0;
                     let remove_key = {
                         let history = state.keys.entry(key).or_default();
-                        history.insert(height, (loc, Variable::Update(key, value)));
+                        history.insert(height, (loc, StateOp::Update(update)));
                         if let Some(limit) = max_versions {
                             while history.len() > limit {
                                 history.pop_first();
@@ -1056,10 +1071,10 @@ impl Simulator {
                         state.keys.remove(&key);
                     }
                 }
-                Variable::Delete(key) => {
+                StateOp::Delete(key) => {
                     let remove_key = {
                         let history = state.keys.entry(key).or_default();
-                        history.insert(height, (loc, Variable::Delete(key)));
+                        history.insert(height, (loc, StateOp::Delete(key)));
                         if let Some(limit) = max_versions {
                             while history.len() > limit {
                                 history.pop_first();
@@ -1101,7 +1116,7 @@ impl Simulator {
         }
     }
 
-    pub async fn submit_events(&self, summary: Summary, events_digests: Vec<(u64, Digest)>) {
+    pub async fn submit_events(&self, summary: Summary, events_digests: Vec<(Position, Digest)>) {
         let height = summary.progress.height;
 
         // Check if already submitted before acquiring lock
@@ -1174,9 +1189,11 @@ impl Simulator {
                 Some((height, operation)) => (height, operation),
                 None => return None,
             };
-            let (loc, Variable::Update(_, value)) = operation else {
+            let (loc, operation) = operation;
+            let StateOp::Update(update) = operation else {
                 return None;
             };
+            let value = update.1.clone();
 
             // Get progress and certificate
             let (progress, certificate) = match state.progress.get(height) {
@@ -1185,8 +1202,22 @@ impl Simulator {
             };
 
             // Get required nodes
-            let required_digest_positions =
-                digests_required_for_proof::<Digest>(progress.state_end_op, *loc, *loc);
+            let end_loc = loc
+                .checked_add(1)
+                .expect("state proof lookup location overflow");
+            let required_digest_positions = match digests_required_for_proof::<Digest>(
+                Location::from(progress.state_end_op),
+                *loc..end_loc,
+            ) {
+                Ok(positions) => positions,
+                Err(err) => {
+                    tracing::error!(
+                        "Failed to compute required digests for lookup proof: {:?}",
+                        err
+                    );
+                    return None;
+                }
+            };
             let required_digests = required_digest_positions
                 .iter()
                 .filter_map(|pos| state.nodes.get(pos).cloned())
@@ -1202,21 +1233,29 @@ impl Simulator {
                 return None;
             }
 
-            (*progress, certificate.clone(), *loc, value.clone(), required_digests)
+            (*progress, certificate.clone(), *loc, value, required_digests)
         };
 
         // Construct proof outside the lock on a blocking thread.
         let proof = {
+            let op_count = Location::from(progress.state_end_op);
             let required_digests_clone = required_digests.clone();
-            match tokio::task::spawn_blocking(move || {
-                create_proof(progress.state_end_op, required_digests_clone)
+            let proof_result = match tokio::task::spawn_blocking(move || {
+                create_proof(op_count, required_digests_clone)
             })
             .await
             {
-                Ok(proof) => proof,
+                Ok(result) => result,
                 Err(err) => {
                     tracing::warn!("Proof build task failed; retrying inline: {err}");
-                    create_proof(progress.state_end_op, required_digests)
+                    create_proof(op_count, required_digests)
+                }
+            };
+            match proof_result {
+                Ok(proof) => proof,
+                Err(err) => {
+                    tracing::error!("Failed to build lookup proof: {:?}", err);
+                    return None;
                 }
             }
         };
@@ -1225,8 +1264,8 @@ impl Simulator {
             progress,
             certificate,
             proof,
-            location,
-            operation: Variable::Update(*key, value),
+            location: location.as_u64(),
+            operation: StateOp::Update(StorageUpdate(*key, value)),
         })
     }
 

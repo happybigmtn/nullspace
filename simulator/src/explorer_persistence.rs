@@ -1,6 +1,6 @@
 use anyhow::{bail, Context};
 use commonware_codec::{DecodeExt, Encode};
-use commonware_storage::store::operation::Keyless;
+use commonware_storage::qmdb::keyless;
 use nullspace_types::execution::{Output, Progress};
 use postgres::{Client, NoTls};
 use rusqlite::{params, Connection};
@@ -17,7 +17,7 @@ use crate::ExplorerMetrics;
 
 struct PersistedBlock {
     progress: Progress,
-    ops: Vec<Keyless<Output>>,
+    ops: Vec<keyless::Operation<Output>>,
     indexed_at_ms: u64,
 }
 
@@ -109,7 +109,7 @@ impl ExplorerPersistence {
     pub async fn persist_block(
         &self,
         progress: Progress,
-        ops: Vec<Keyless<Output>>,
+        ops: Vec<keyless::Operation<Output>>,
         indexed_at_ms: u64,
     ) {
         let request = PersistRequest::Block(PersistedBlock {
@@ -324,7 +324,10 @@ fn load_into_sqlite(
     Ok(())
 }
 
-fn load_ops_sqlite(conn: &Connection, height: u64) -> anyhow::Result<Vec<Keyless<Output>>> {
+fn load_ops_sqlite(
+    conn: &Connection,
+    height: u64,
+) -> anyhow::Result<Vec<keyless::Operation<Output>>> {
     let mut stmt = conn.prepare(
         "SELECT op_bytes FROM explorer_ops WHERE height = ? ORDER BY op_index ASC",
     )?;
@@ -332,7 +335,7 @@ fn load_ops_sqlite(conn: &Connection, height: u64) -> anyhow::Result<Vec<Keyless
     let mut ops = Vec::new();
     for row in rows {
         let bytes = row?;
-        let op = Keyless::<Output>::decode(&mut bytes.as_slice())
+        let op = keyless::Operation::<Output>::decode(&mut bytes.as_slice())
             .context("decode explorer persistence op")?;
         ops.push(op);
     }
@@ -462,7 +465,10 @@ fn load_into_postgres(
     Ok(())
 }
 
-fn load_ops_postgres(client: &mut Client, height: u64) -> anyhow::Result<Vec<Keyless<Output>>> {
+fn load_ops_postgres(
+    client: &mut Client,
+    height: u64,
+) -> anyhow::Result<Vec<keyless::Operation<Output>>> {
     let height = to_i64(height, "height")?;
     let rows = client.query(
         "SELECT op_bytes FROM explorer_ops WHERE height = $1 ORDER BY op_index ASC",
@@ -471,7 +477,7 @@ fn load_ops_postgres(client: &mut Client, height: u64) -> anyhow::Result<Vec<Key
     let mut ops = Vec::new();
     for row in rows {
         let bytes: Vec<u8> = row.get(0);
-        let op = Keyless::<Output>::decode(&mut bytes.as_slice())
+        let op = keyless::Operation::<Output>::decode(&mut bytes.as_slice())
             .context("decode explorer persistence op")?;
         ops.push(op);
     }

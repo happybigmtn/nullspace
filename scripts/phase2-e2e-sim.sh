@@ -22,51 +22,22 @@ PHASE2_BIDDERS="${PHASE2_BIDDERS:-100}"
 PHASE2_SEED="${PHASE2_SEED:-42}"
 
 SIMULATOR_URL="${SIMULATOR_URL:-http://localhost:8080}"
-EXECUTOR_BLOCK_INTERVAL_MS="${EXECUTOR_BLOCK_INTERVAL_MS:-50}"
-
-SIMULATOR_PID=""
-EXECUTOR_PID=""
-
-cleanup() {
-  if [[ -n "${EXECUTOR_PID}" ]] && kill -0 "${EXECUTOR_PID}" 2>/dev/null; then
-    kill "${EXECUTOR_PID}" 2>/dev/null || true
-  fi
-  if [[ -n "${SIMULATOR_PID}" ]] && kill -0 "${SIMULATOR_PID}" 2>/dev/null; then
-    kill "${SIMULATOR_PID}" 2>/dev/null || true
-  fi
-}
-
-trap cleanup EXIT
 
 if [[ "${RUN_PHASE1}" == "true" ]]; then
   echo "=== Phase 1 accelerated simulation ==="
 
-  if [[ ! -f "target/release/nullspace-simulator" || ! -f "target/release/dev-executor" ]]; then
-    echo "Building simulator and dev-executor..."
-    cargo build --release --bin nullspace-simulator --bin dev-executor
-  fi
-
-  IDENTITY="$(cargo run --release --example get_identity -p nullspace-simulator | tail -n 1)"
+  IDENTITY="$(grep VITE_IDENTITY configs/local/.env.local 2>/dev/null | cut -d= -f2)"
   if [[ -z "${IDENTITY}" ]]; then
-    echo "Failed to derive network identity." >&2
+    echo "Missing VITE_IDENTITY in configs/local/.env.local." >&2
+    echo "Run: cargo run --release --bin generate-keys -- --nodes 4 --output configs/local" >&2
     exit 1
   fi
 
-  echo "Starting simulator..."
-  ./target/release/nullspace-simulator --host 127.0.0.1 --port 8080 --identity "${IDENTITY}" > /tmp/simulator.log 2>&1 &
-  SIMULATOR_PID=$!
-
-  for i in {1..30}; do
-    if curl -sf "${SIMULATOR_URL}/healthz" > /dev/null 2>&1; then
-      break
-    fi
-    sleep 0.5
-  done
-
-  echo "Starting dev-executor..."
-  ./target/release/dev-executor --url "${SIMULATOR_URL}" --identity "${IDENTITY}" --block-interval-ms "${EXECUTOR_BLOCK_INTERVAL_MS}" > /tmp/dev-executor.log 2>&1 &
-  EXECUTOR_PID=$!
-  sleep 2
+  if ! curl -sf "${SIMULATOR_URL}/healthz" > /dev/null 2>&1; then
+    echo "Simulator not reachable at ${SIMULATOR_URL}." >&2
+    echo "Start validators with: ./scripts/start-local-network.sh configs/local 4" >&2
+    exit 1
+  fi
 
   echo "Running phase simulation..."
   IDENTITY="${IDENTITY}" \

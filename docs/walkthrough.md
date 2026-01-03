@@ -359,7 +359,6 @@ Connect the protocol to humans: web/mobile clients, UX assets, and design tokens
 - [ ] client/examples/network_bot.rs
 - [ ] client/examples/simulation_ecosystem.rs
 - [ ] client/src/bin/bridge_relayer.rs
-- [ ] client/src/bin/dev_executor.rs
 - [ ] client/src/bin/freeroll_snapshot.rs
 - [ ] client/src/bin/phase_simulation.rs
 - [ ] client/src/bin/recovery_pool.rs

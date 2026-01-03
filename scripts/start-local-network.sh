@@ -47,7 +47,7 @@ NC='\033[0m' # No Color
 CONFIG_DIR="${1:-configs/local}"
 NODES="${2:-4}"
 
-DEFAULT_ALLOWED_ORIGINS="http://localhost:9010,http://127.0.0.1:9010,http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000"
+DEFAULT_ALLOWED_ORIGINS="http://localhost:9010,http://127.0.0.1:9010,http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173,http://localhost:3000,http://127.0.0.1:3000"
 ALLOWED_HTTP_ORIGINS="${ALLOWED_HTTP_ORIGINS:-$DEFAULT_ALLOWED_ORIGINS}"
 ALLOWED_WS_ORIGINS="${ALLOWED_WS_ORIGINS:-$ALLOWED_HTTP_ORIGINS}"
 ALLOW_HTTP_NO_ORIGIN="${ALLOW_HTTP_NO_ORIGIN:-1}"
@@ -79,16 +79,27 @@ if [ ! -f "$CONFIG_DIR/peers.yaml" ]; then
     exit 1
 fi
 
-# Extract identity (polynomial) from first node config for simulator
-# The polynomial starts with the public identity
-POLYNOMIAL=$(grep "^polynomial:" "$CONFIG_DIR/node0.yaml" | head -1 | awk '{print $2}' | tr -d '"')
-if [ -z "$POLYNOMIAL" ]; then
-    echo -e "${RED}Error: Could not extract polynomial from config${NC}"
+# Extract identity for simulator
+IDENTITY=""
+if [ -f "$CONFIG_DIR/.env.local" ]; then
+    IDENTITY=$(grep -E "^VITE_IDENTITY=" "$CONFIG_DIR/.env.local" | head -1 | cut -d= -f2- | tr -d '"')
+fi
+
+if [ -z "$IDENTITY" ]; then
+    # Fallback for older configs: identity is the first 96 bytes (192 hex chars) of the polynomial
+    POLYNOMIAL=$(grep "^polynomial:" "$CONFIG_DIR/node0.yaml" | head -1 | awk '{print $2}' | tr -d '"')
+    if [ -z "$POLYNOMIAL" ]; then
+        echo -e "${RED}Error: Could not extract polynomial from config${NC}"
+        exit 1
+    fi
+    IDENTITY="${POLYNOMIAL:0:192}"
+fi
+
+if [ -z "$IDENTITY" ]; then
+    echo -e "${RED}Error: Could not extract network identity${NC}"
     exit 1
 fi
 
-# The identity is the first 96 bytes (192 hex chars) of the polynomial
-IDENTITY="${POLYNOMIAL:0:192}"
 echo -e "${GREEN}Network identity:${NC} ${IDENTITY:0:32}..."
 
 # Array to store PIDs

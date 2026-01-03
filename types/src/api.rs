@@ -7,15 +7,16 @@ use crate::execution::{
     Identity, Output, Progress, Seed, Transaction, Value, MAX_BLOCK_TRANSACTIONS, NAMESPACE,
 };
 use bytes::{Buf, BufMut};
-use commonware_codec::{EncodeSize, Error, Read, ReadExt, ReadRangeExt, Write};
-use commonware_consensus::aggregation::types::Certificate;
+use commonware_codec::{Encode, EncodeSize, Error, Read, ReadExt, ReadRangeExt, Write};
+use commonware_consensus::aggregation::{scheme::bls12381_threshold, types::Certificate};
 use commonware_cryptography::{
     bls12381::primitives::variant::MinSig, ed25519::PublicKey, sha256::Digest, Digestible, Sha256,
 };
-use commonware_storage::{
-    adb::{verify::verify_proof_and_extract_digests, verify_multi_proof, verify_proof},
-    mmr::{hasher::Standard, verification::Proof},
-    store::operation::{Keyless, Variable},
+use commonware_storage::mmr::{hasher::Standard, Location, Position, Proof};
+use commonware_storage::qmdb::{
+    any::unordered::variable,
+    keyless,
+    verify_multi_proof, verify_proof, verify_proof_and_extract_digests,
 };
 use thiserror::Error as ThisError;
 
@@ -39,6 +40,11 @@ pub const MAX_EVENTS_PROOF_NODES: usize = MAX_EVENTS_PROOF_OPS;
 ///
 /// Lookup proofs are for a single operation, so we keep a smaller node cap for DoS resistance.
 pub const MAX_LOOKUP_PROOF_NODES: usize = 500;
+
+type AggregationScheme = bls12381_threshold::Scheme<PublicKey, MinSig>;
+type AggregationCertificate = Certificate<AggregationScheme, Digest>;
+type StateOp = variable::Operation<Digest, Value>;
+type EventOp = keyless::Operation<Output>;
 
 #[derive(Clone, Debug, Eq, PartialEq, ThisError)]
 #[non_exhaustive]
@@ -110,14 +116,25 @@ impl EncodeSize for Query {
     }
 }
 
-#[derive(Clone, Eq, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct Summary {
     pub progress: Progress,
-    pub certificate: Certificate<MinSig, Digest>,
+    pub certificate: AggregationCertificate,
     pub state_proof: Proof<Digest>,
-    pub state_proof_ops: Vec<Variable<Digest, Value>>,
+    pub state_proof_ops: Vec<StateOp>,
     pub events_proof: Proof<Digest>,
-    pub events_proof_ops: Vec<Keyless<Output>>,
+    pub events_proof_ops: Vec<EventOp>,
+}
+
+impl PartialEq for Summary {
+    fn eq(&self, other: &Self) -> bool {
+        self.progress == other.progress
+            && self.certificate.encode() == other.certificate.encode()
+            && self.state_proof == other.state_proof
+            && self.state_proof_ops == other.state_proof_ops
+            && self.events_proof == other.events_proof
+            && self.events_proof_ops == other.events_proof_ops
+    }
 }
 
 impl Summary {
@@ -127,9 +144,11 @@ impl Summary {
     pub fn verify(
         &self,
         identity: &Identity,
-    ) -> Result<(Vec<(u64, Digest)>, Vec<(u64, Digest)>), VerifyError> {
+    ) -> Result<(Vec<(Position, Digest)>, Vec<(Position, Digest)>), VerifyError> {
         // Verify the signature
-        if !self.certificate.verify(NAMESPACE, identity) {
+        let scheme = AggregationScheme::certificate_verifier(identity.clone());
+        let mut rng = rand::thread_rng();
+        if !self.certificate.verify(&mut rng, &scheme, NAMESPACE) {
             return Err(VerifyError::InvalidSignature);
         }
         if self.progress.digest() != self.certificate.item.digest {
@@ -146,10 +165,11 @@ impl Summary {
             });
         }
         let mut hasher = Standard::<Sha256>::new();
+        let state_start_loc = Location::from(self.progress.state_start_op);
         let state_proof_digests = verify_proof_and_extract_digests(
             &mut hasher,
             &self.state_proof,
-            self.progress.state_start_op,
+            state_start_loc,
             &self.state_proof_ops,
             &self.progress.state_root,
         )
@@ -164,10 +184,11 @@ impl Summary {
                 ops_len: events_ops_len,
             });
         }
+        let events_start_loc = Location::from(self.progress.events_start_op);
         let events_proof_digests = verify_proof_and_extract_digests(
             &mut hasher,
             &self.events_proof,
-            self.progress.events_start_op,
+            events_start_loc,
             &self.events_proof_ops,
             &self.progress.events_root,
         )
@@ -220,18 +241,29 @@ impl EncodeSize for Summary {
     }
 }
 
-#[derive(Clone, Eq, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct Events {
     pub progress: Progress,
-    pub certificate: Certificate<MinSig, Digest>,
+    pub certificate: AggregationCertificate,
     pub events_proof: Proof<Digest>,
-    pub events_proof_ops: Vec<Keyless<Output>>,
+    pub events_proof_ops: Vec<EventOp>,
+}
+
+impl PartialEq for Events {
+    fn eq(&self, other: &Self) -> bool {
+        self.progress == other.progress
+            && self.certificate.encode() == other.certificate.encode()
+            && self.events_proof == other.events_proof
+            && self.events_proof_ops == other.events_proof_ops
+    }
 }
 
 impl Events {
     pub fn verify(&self, identity: &Identity) -> Result<(), VerifyError> {
         // Verify the signature
-        if !self.certificate.verify(NAMESPACE, identity) {
+        let scheme = AggregationScheme::certificate_verifier(identity.clone());
+        let mut rng = rand::thread_rng();
+        if !self.certificate.verify(&mut rng, &scheme, NAMESPACE) {
             return Err(VerifyError::InvalidSignature);
         }
         if self.progress.digest() != self.certificate.item.digest {
@@ -251,7 +283,7 @@ impl Events {
         if verify_proof(
             &mut hasher,
             &self.events_proof,
-            self.progress.events_start_op,
+            Location::from(self.progress.events_start_op),
             &self.events_proof_ops,
             &self.progress.events_root,
         ) {
@@ -300,16 +332,18 @@ impl EncodeSize for Events {
 
 pub struct Lookup {
     pub progress: Progress,
-    pub certificate: Certificate<MinSig, Digest>,
+    pub certificate: AggregationCertificate,
     pub proof: Proof<Digest>,
     pub location: u64,
-    pub operation: Variable<Digest, Value>,
+    pub operation: StateOp,
 }
 
 impl Lookup {
     pub fn verify(&self, identity: &Identity) -> Result<(), VerifyError> {
         // Verify the signature
-        if !self.certificate.verify(NAMESPACE, identity) {
+        let scheme = AggregationScheme::certificate_verifier(identity.clone());
+        let mut rng = rand::thread_rng();
+        if !self.certificate.verify(&mut rng, &scheme, NAMESPACE) {
             return Err(VerifyError::InvalidSignature);
         }
         if self.progress.digest() != self.certificate.item.digest {
@@ -321,7 +355,7 @@ impl Lookup {
         if verify_proof(
             &mut hasher,
             &self.proof,
-            self.location,
+            Location::from(self.location),
             std::slice::from_ref(&self.operation),
             &self.progress.state_root,
         ) {
@@ -350,7 +384,7 @@ impl Read for Lookup {
         let certificate = Certificate::read(reader)?;
         let proof = Proof::read_cfg(reader, &MAX_LOOKUP_PROOF_NODES)?;
         let location = u64::read(reader)?;
-        let operation = Variable::read(reader)?;
+        let operation = StateOp::read(reader)?;
         Ok(Self {
             progress,
             certificate,
@@ -374,15 +408,17 @@ impl EncodeSize for Lookup {
 #[derive(Clone, Debug)]
 pub struct FilteredEvents {
     pub progress: Progress,
-    pub certificate: Certificate<MinSig, Digest>,
+    pub certificate: AggregationCertificate,
     pub events_proof: Proof<Digest>,
-    pub events_proof_ops: Vec<(u64, Keyless<Output>)>,
+    pub events_proof_ops: Vec<(u64, EventOp)>,
 }
 
 impl FilteredEvents {
     pub fn verify(&self, identity: &Identity) -> Result<(), VerifyError> {
         // Verify the signature
-        if !self.certificate.verify(NAMESPACE, identity) {
+        let scheme = AggregationScheme::certificate_verifier(identity.clone());
+        let mut rng = rand::thread_rng();
+        if !self.certificate.verify(&mut rng, &scheme, NAMESPACE) {
             return Err(VerifyError::InvalidSignature);
         }
         if self.progress.digest() != self.certificate.item.digest {
@@ -402,10 +438,15 @@ impl FilteredEvents {
 
         // Verify the multi-proof for the filtered operations
         let mut hasher = Standard::<Sha256>::new();
+        let events_with_locations: Vec<(Location, EventOp)> = self
+            .events_proof_ops
+            .iter()
+            .map(|(loc, op)| (Location::from(*loc), op.clone()))
+            .collect();
         if verify_multi_proof(
             &mut hasher,
             &self.events_proof,
-            &self.events_proof_ops,
+            &events_with_locations,
             &self.progress.events_root,
         ) {
             Ok(())

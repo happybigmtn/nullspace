@@ -25,6 +25,8 @@ module.exports = {
           300: '#d1d1d6',
           400: '#a2a2a7', // Borderline contrast
           500: '#636366', // Better contrast for labels (WCAG AA)
+          600: '#4a4a4d',
+          700: '#3a3a3c',
           800: '#2c2c2e',
           900: '#1c1c1e',
         },

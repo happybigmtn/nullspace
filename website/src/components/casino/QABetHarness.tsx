@@ -32,6 +32,7 @@ type QABetHarnessProps = {
   actions: any;
   lastTxSig: string | null;
   isOnChain: boolean;
+  className?: string;
 };
 
 type CrapsCase = { label: string; type: CrapsBet['type']; target?: number; requiresPoint?: boolean };
@@ -147,7 +148,7 @@ const isCrapsFailureMessage = (message: string | null | undefined): boolean => {
   );
 };
 
-export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, stats, actions, lastTxSig, isOnChain }) => {
+export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, stats, actions, lastTxSig, isOnChain, className }) => {
   const [logs, setLogs] = useState<QALogEntry[]>([]);
   const [running, setRunning] = useState(false);
   const resultsRef = useRef<QABetResult[]>([]);
@@ -196,19 +197,6 @@ export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, 
     }
     throw new Error(`Timeout waiting for ${label}`);
   }, []);
-
-  const waitForTx = useCallback(async (label: string, prevSig?: string | null, prevMove?: number | null) => {
-    const prev = prevSig ?? lastTxSigRef.current;
-    const prevMoveNumber = prevMove ?? gameStateRef.current.moveNumber ?? 0;
-    await waitFor(
-      () => {
-        const nextSig = lastTxSigRef.current;
-        const nextMove = gameStateRef.current.moveNumber ?? 0;
-        return Boolean((nextSig && nextSig !== prev) || nextMove !== prevMoveNumber);
-      },
-      `${label} tx`
-    );
-  }, [waitFor]);
 
   const ensureChips = useCallback(async (label: string) => {
     if (!isOnChain) return;
@@ -269,7 +257,7 @@ export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, 
     });
   }, []);
 
-  const runTx = useCallback(async (label: string, action?: () => Promise<void> | void) => {
+  const runTx = useCallback(async (label: string, action?: () => Promise<void> | void, ack?: () => boolean) => {
     if (!action) {
       throw new Error(`Missing action for ${label}`);
     }
@@ -277,11 +265,27 @@ export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, 
     const prevMove = gameStateRef.current.moveNumber ?? 0;
     await action();
     try {
-      await waitForTx(label, prev, prevMove);
+      await waitFor(
+        () => {
+          const nextSig = lastTxSigRef.current;
+          const nextMove = gameStateRef.current.moveNumber ?? 0;
+          if (nextSig && nextSig !== prev) return true;
+          if (nextMove !== prevMove) return true;
+          if (ack) {
+            try {
+              return Boolean(ack());
+            } catch {
+              return false;
+            }
+          }
+          return false;
+        },
+        `${label} tx`
+      );
     } catch (error: any) {
       log('info', `Tx not observed for ${label}: ${error?.message ?? String(error)}`);
     }
-  }, [log, waitForTx]);
+  }, [log, waitFor]);
 
   const ensureCrapsPoint = useCallback(async () => {
     for (let attempt = 0; attempt < 8; attempt += 1) {
@@ -689,9 +693,13 @@ export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, 
         await runTx(`${label}-war`, actionsRef.current?.casinoWarGoToWar);
       }
       try {
-        await waitFor(() => gameStateRef.current.stage === 'RESULT', 'casino war result', 10_000);
+        await waitFor(
+          () => !String(gameStateRef.current.message || '').toUpperCase().includes('DEALING'),
+          'casino war settle',
+          5_000
+        );
       } catch {
-        log('info', `Casino war result not observed for ${label}; continuing`);
+        // Ignore: casino war can reset to betting quickly on-chain.
       }
       results.push({ game: GameType.CASINO_WAR, bet: 'Tie bet', ok: true });
       log('success', `Completed ${label}`);
@@ -711,9 +719,13 @@ export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, 
       await ensureChips('video poker');
       await ensureGame(GameType.VIDEO_POKER);
       setBetAmount();
-      await runTx(label, actionsRef.current?.deal);
+      await runTx(
+        label,
+        actionsRef.current?.deal,
+        () => String(gameStateRef.current.message || '').toUpperCase().includes('DRAW') || gameStateRef.current.stage === 'PLAYING'
+      );
       await waitFor(() => String(gameStateRef.current.message || '').toUpperCase().includes('DRAW'), 'video poker draw');
-      await runTx(`${label}-draw`, actionsRef.current?.drawVideoPoker);
+      await runTx(`${label}-draw`, actionsRef.current?.drawVideoPoker, () => gameStateRef.current.stage === 'RESULT');
       await waitFor(() => gameStateRef.current.stage === 'RESULT', 'video poker result');
       results.push({ game: GameType.VIDEO_POKER, bet: 'Base', ok: true });
       log('success', `Completed ${label}`);
@@ -733,15 +745,19 @@ export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, 
       await ensureChips('hi-lo');
       await ensureGame(GameType.HILO);
       setBetAmount();
-      await runTx(label, actionsRef.current?.deal);
+      await runTx(label, actionsRef.current?.deal, () => gameStateRef.current.stage === 'PLAYING');
       await waitFor(() => gameStateRef.current.stage === 'PLAYING', 'hilo playing');
       const prevCardCount = gameStateRef.current.playerCards?.length ?? 0;
-      await runTx(`${label}-guess`, () => actionsRef.current?.hiloPlay?.('HIGHER'));
+      await runTx(
+        `${label}-guess`,
+        () => actionsRef.current?.hiloPlay?.('HIGHER'),
+        () => (gameStateRef.current.playerCards?.length ?? 0) > prevCardCount
+      );
       await waitFor(
         () => (gameStateRef.current.playerCards?.length ?? 0) > prevCardCount,
         'hilo card advance'
       );
-      await runTx(`${label}-cashout`, actionsRef.current?.hiloCashout);
+      await runTx(`${label}-cashout`, actionsRef.current?.hiloCashout, () => gameStateRef.current.stage === 'RESULT');
       await waitFor(() => gameStateRef.current.stage === 'RESULT', 'hilo result');
       results.push({ game: GameType.HILO, bet: 'Base', ok: true });
       log('success', `Completed ${label}`);
@@ -838,7 +854,7 @@ export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, 
   if (!enabled) return null;
 
   return (
-    <div className="fixed bottom-4 left-4 z-[120] w-[320px] rounded-2xl border border-titanium-200 bg-white/90 p-4 shadow-float backdrop-blur">
+    <div className={`fixed bottom-4 left-4 z-[120] w-[320px] rounded-2xl border border-titanium-200 bg-white/90 p-4 shadow-float backdrop-blur ${className ?? ''}`}>
       <div className="flex items-center justify-between">
         <div className="text-[11px] font-bold tracking-[0.2em] text-titanium-500 uppercase">QA Bets</div>
         <div className={`text-[10px] font-bold ${running ? 'text-action-primary' : summary.failures ? 'text-action-destructive' : 'text-action-success'}`}>

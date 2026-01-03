@@ -174,7 +174,7 @@ describe.skipIf(!INTEGRATION_ENABLED)('Gateway Integration Tests', () => {
       type: 'blackjack_stand',
     });
 
-    expect(['game_move', 'game_result']).toContain(response.type);
+    expect(['game_move', 'game_result', 'move_accepted']).toContain(response.type);
     expect(response.sessionId).toBeDefined();
   });
 

@@ -6,8 +6,9 @@ use commonware_codec::DecodeExt;
 use commonware_codec::Encode;
 use commonware_cryptography::{
     ed25519::{PrivateKey, PublicKey},
-    PrivateKeyExt, Signer,
+    Signer,
 };
+use commonware_math::algebra::Random;
 use commonware_utils::hex;
 use nullspace_client::Client;
 use nullspace_types::{
@@ -117,7 +118,7 @@ struct ActorState {
 
 impl ActorState {
     fn new(id: usize, kind: ActorKind, member: bool, rng: &mut StdRng) -> Self {
-        let keypair = PrivateKey::from_rng(rng);
+        let keypair = PrivateKey::random(rng);
         Self {
             keypair,
             name: format!("Player{:05}", id),

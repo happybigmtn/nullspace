@@ -8,7 +8,7 @@ use anyhow::{anyhow, Context, Result};
 use clap::Parser;
 use commonware_codec::{DecodeExt, Encode};
 use commonware_utils::hex;
-use nullspace_client::Client;
+use nullspace_client::{operation_value, Client};
 use nullspace_types::{
     casino::{CasinoLeaderboard, Tournament},
     execution::{Key, Value},
@@ -84,7 +84,7 @@ fn state_blob_head_hex(blob: &[u8]) -> String {
 
 async fn fetch_leaderboard(client: &Client) -> Result<Option<CasinoLeaderboard>> {
     let lookup = client.query_state(&Key::CasinoLeaderboard).await?;
-    Ok(match lookup.and_then(|lookup| lookup.operation.value().cloned()) {
+    Ok(match lookup.and_then(|lookup| operation_value(&lookup.operation).cloned()) {
         Some(Value::CasinoLeaderboard(leaderboard)) => Some(leaderboard),
         _ => None,
     })
@@ -92,7 +92,7 @@ async fn fetch_leaderboard(client: &Client) -> Result<Option<CasinoLeaderboard>>
 
 async fn fetch_tournament(client: &Client, tournament_id: u64) -> Result<Option<Tournament>> {
     let lookup = client.query_state(&Key::Tournament(tournament_id)).await?;
-    Ok(match lookup.and_then(|lookup| lookup.operation.value().cloned()) {
+    Ok(match lookup.and_then(|lookup| operation_value(&lookup.operation).cloned()) {
         Some(Value::Tournament(tournament)) => Some(tournament),
         _ => None,
     })
@@ -135,7 +135,7 @@ async fn main() -> Result<()> {
     if let Some(session_id) = args.session_id {
         let lookup = client.query_state(&Key::CasinoSession(session_id)).await?;
         if let Some(Value::CasinoSession(session)) =
-            lookup.and_then(|lookup| lookup.operation.value().cloned())
+            lookup.and_then(|lookup| operation_value(&lookup.operation).cloned())
         {
             let pk_hex = hex(&session.player.encode());
             player_hex = Some(pk_hex.clone());
@@ -170,7 +170,7 @@ async fn main() -> Result<()> {
             .context("Failed to decode player public key")?;
         let lookup = client.query_state(&Key::CasinoPlayer(public)).await?;
         if let Some(Value::CasinoPlayer(player)) =
-            lookup.and_then(|lookup| lookup.operation.value().cloned())
+            lookup.and_then(|lookup| operation_value(&lookup.operation).cloned())
         {
             player_debug = Some(format!("{player:?}"));
         } else {

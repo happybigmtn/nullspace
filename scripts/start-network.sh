@@ -20,11 +20,14 @@ echo ""
 # Prune any leftover validator data
 "$REPO_DIR/scripts/prune-node-data.sh"
 
-# Get identity
-IDENTITY=$(grep VITE_IDENTITY "$REPO_DIR/website/.env.local" 2>/dev/null | cut -d'=' -f2)
+# Get identity (prefer generated configs/local/.env.local)
+IDENTITY=$(grep VITE_IDENTITY "$REPO_DIR/configs/local/.env.local" 2>/dev/null | cut -d'=' -f2)
+if [ -z "$IDENTITY" ]; then
+    IDENTITY=$(grep VITE_IDENTITY "$REPO_DIR/website/.env.local" 2>/dev/null | cut -d'=' -f2)
+fi
 if [ -z "$IDENTITY" ]; then
     echo "Error: No VITE_IDENTITY found in website/.env.local"
-    echo "Run: cargo run --release --bin generate-keys -- --nodes 1 --output configs/local --seed 0"
+    echo "Run: cargo run --release --bin generate-keys -- --nodes 4 --output configs/local"
     exit 1
 fi
 
@@ -39,23 +42,22 @@ echo "Updated website/.env.network with IP: $LOCAL_IP"
 echo ""
 
 # Build if needed
-if [ ! -f "$REPO_DIR/target/release/nullspace-simulator" ]; then
-    echo "Building simulator..."
-    cargo build --release --bin nullspace-simulator --bin dev-executor
+if [ ! -f "$REPO_DIR/target/release/nullspace-simulator" ] || [ ! -f "$REPO_DIR/target/release/nullspace-node" ]; then
+    echo "Building simulator + validator..."
+    cargo build --release -p nullspace-simulator -p nullspace-node
 fi
 
 # Kill any existing processes
 pkill -9 -f nullspace-simulator 2>/dev/null || true
-pkill -9 -f dev-executor 2>/dev/null || true
+pkill -9 -f nullspace-node 2>/dev/null || true
 sleep 1
 
-# Start simulator
-echo "Starting simulator on 0.0.0.0:8080..."
-"$REPO_DIR/target/release/nullspace-simulator" \
-    --host 0.0.0.0 \
-    --port 8080 \
-    --identity "$IDENTITY" > /tmp/simulator.log 2>&1 &
-SIMULATOR_PID=$!
+# Start local validator network
+NODES="${NODES:-4}"
+echo "Starting validator network (${NODES} nodes)..."
+ALLOW_HTTP_NO_ORIGIN=1 ALLOW_WS_NO_ORIGIN=1 \
+  "$REPO_DIR/scripts/start-local-network.sh" "$REPO_DIR/configs/local" "$NODES" --no-build > /tmp/localnet.log 2>&1 &
+LOCALNET_PID=$!
 
 # Wait for simulator to be ready
 echo "Waiting for simulator to be ready..."
@@ -72,22 +74,9 @@ for i in {1..30}; do
     sleep 0.5
 done
 
-# Start executor
-echo "Starting dev-executor..."
-"$REPO_DIR/target/release/dev-executor" \
-    --url "http://$LOCAL_IP:8080" \
-    --identity "$IDENTITY" \
-    --block-interval-ms 50 > /tmp/executor.log 2>&1 &
-EXECUTOR_PID=$!
-
-# Wait for executor to connect and submit genesis
-echo "Waiting for executor to initialize..."
+# Wait for validators to initialize
+echo "Waiting for validators to initialize..."
 sleep 3
-
-# Verify genesis block exists
-if ! curl -s "http://127.0.0.1:8080/seed/01" > /dev/null 2>&1; then
-    echo "WARNING: Genesis block not found yet, executor may still be initializing"
-fi
 
 # Start frontend
 echo ""
@@ -115,8 +104,7 @@ cleanup() {
     echo ""
     echo "Stopping services..."
     kill $FRONTEND_PID 2>/dev/null || true
-    kill $EXECUTOR_PID 2>/dev/null || true
-    kill $SIMULATOR_PID 2>/dev/null || true
+    kill $LOCALNET_PID 2>/dev/null || true
     # Restore original .env.local
     if [ -f "$REPO_DIR/website/.env.local.bak" ]; then
         mv "$REPO_DIR/website/.env.local.bak" "$REPO_DIR/website/.env.local"

@@ -35,6 +35,73 @@ body {
   color: #f2f2f7; /* titanium-100 */
 }
 
+/* Mode select tokens */
+:root {
+  --mode-surface: #f2f2f7;
+  --mode-panel: #ffffff;
+  --mode-border: #7c7c80;
+  --mode-text: #1c1c1e;
+  --mode-muted: #4a4a4d;
+  --mode-subtle: #636366;
+  --mode-chip: #f2f2f7;
+}
+
+.dark {
+  --mode-surface: #0f0f12;
+  --mode-panel: #1c1c1e;
+  --mode-border: #3a3a3c;
+  --mode-text: #f2f2f7;
+  --mode-muted: #d1d1d6;
+  --mode-subtle: #a2a2a7;
+  --mode-chip: #2c2c2e;
+}
+
+.mode-select {
+  background-color: var(--mode-surface);
+  color: var(--mode-text);
+}
+
+.mode-select .mode-panel {
+  background-color: var(--mode-panel);
+  border-color: var(--mode-border);
+  color: var(--mode-text);
+}
+
+.mode-select .mode-muted {
+  color: var(--mode-muted);
+}
+
+.mode-select .mode-subtle {
+  color: var(--mode-subtle);
+}
+
+.mode-select .mode-pill {
+  background-color: var(--mode-chip);
+  border-color: var(--mode-border);
+  color: var(--mode-muted);
+}
+
+.mode-select .mode-tabs {
+  background-color: var(--mode-panel);
+  border-color: var(--mode-border);
+}
+
+.mode-select .mode-tabs a {
+  color: var(--mode-text);
+  border-color: var(--mode-border);
+  background: transparent;
+}
+
+.mode-select .mode-tabs a[data-active="true"] {
+  background-color: var(--mode-text);
+  color: var(--mode-panel);
+  border-color: var(--mode-text);
+}
+
+.mode-select .mode-tabs a:hover {
+  border-color: var(--mode-text);
+}
+
 /* Font Loading Protection */
 body:not(.fonts-loaded) {
   opacity: 0;
@@ -87,6 +154,516 @@ body.fonts-loaded {
   background: #636366;
 }
 
+/* Casino contrast helpers */
+.casino-contrast {
+  --casino-muted: #2c2c2e;
+  --casino-muted-strong: #1c1c1e;
+  --casino-muted-soft: #3a3a3c;
+}
+
+.dark .casino-contrast {
+  --casino-muted: #f2f2f7;
+  --casino-muted-strong: #ffffff;
+  --casino-muted-soft: #d1d1d6;
+}
+
+.casino-contrast[data-contrast="dark"] {
+  --casino-muted: #f2f2f7;
+  --casino-muted-strong: #ffffff;
+  --casino-muted-soft: #d1d1d6;
+}
+
+.casino-contrast .text-gray-500 {
+  color: var(--casino-muted);
+}
+
+.casino-contrast .text-gray-600 {
+  color: var(--casino-muted-strong);
+}
+
+.casino-contrast .text-gray-400 {
+  color: var(--casino-muted-soft);
+}
+
+.casino-contrast .text-gray-300 {
+  color: var(--casino-muted-soft);
+}
+
+.casino-contrast .text-gray-200 {
+  color: var(--casino-muted-soft);
+}
+
+.casino-contrast .text-titanium-400 {
+  color: var(--casino-muted);
+}
+
+.casino-contrast .text-titanium-500 {
+  color: var(--casino-muted-strong);
+}
+
+.casino-contrast .text-titanium-300 {
+  color: var(--casino-muted-soft);
+}
+
+.casino-contrast .text-titanium-200 {
+  color: var(--casino-muted-soft);
+}
+
+.casino-contrast .opacity-60 {
+  opacity: 0.85;
+}
+
+.casino-contrast .opacity-50 {
+  opacity: 0.8;
+}
+
+.casino-contrast .opacity-40 {
+  opacity: 0.75;
+}
+
+.casino-contrast .border-titanium-100 {
+  border-color: #c7c7cc;
+}
+
+.casino-contrast .border-titanium-200 {
+  border-color: #b0b0b5;
+}
+
+.casino-contrast .border-titanium-300 {
+  border-color: #9a9aa0;
+}
+
+.casino-contrast .border-titanium-400 {
+  border-color: #7c7c80;
+}
+
+.casino-surface.casino-contrast .bg-titanium-50 {
+  background-color: #f2f2f7;
+}
+
+.casino-surface.casino-contrast .bg-titanium-100 {
+  background-color: #e5e5ea;
+}
+
+.casino-surface.casino-contrast .bg-titanium-200 {
+  background-color: #d1d1d6;
+}
+
+.casino-contrast .border-gray-500 {
+  border-color: #8e8e93;
+}
+
+.casino-contrast .border-gray-600 {
+  border-color: #7c7c80;
+}
+
+.casino-contrast .border-gray-700 {
+  border-color: #6b6b70;
+}
+
+.casino-contrast .border-gray-800 {
+  border-color: #5a5a5f;
+}
+
+.casino-surface.casino-contrast .bg-black\/40 {
+  background-color: rgba(255, 255, 255, 0.65);
+}
+
+.casino-surface.casino-contrast .bg-black\/50 {
+  background-color: rgba(255, 255, 255, 0.72);
+}
+
+.casino-surface.casino-contrast .bg-black\/60 {
+  background-color: rgba(255, 255, 255, 0.78);
+}
+
+.casino-surface.casino-contrast .bg-black\/70 {
+  background-color: rgba(255, 255, 255, 0.84);
+}
+
+.casino-surface.casino-contrast .bg-black\/80 {
+  background-color: rgba(255, 255, 255, 0.9);
+}
+
+.casino-surface.casino-contrast .bg-black\/95 {
+  background-color: rgba(255, 255, 255, 0.96);
+}
+
+.casino-surface.casino-contrast .bg-gray-800 {
+  background-color: #e5e5ea;
+}
+
+.casino-surface.casino-contrast .bg-gray-900 {
+  background-color: #d1d1d6;
+}
+
+.casino-surface.casino-contrast .bg-gray-900\/50 {
+  background-color: rgba(209, 209, 214, 0.6);
+}
+
+.casino-surface.casino-contrast .bg-gray-900\/80 {
+  background-color: rgba(209, 209, 214, 0.85);
+}
+
+.dark .casino-contrast .border-titanium-100 {
+  border-color: #2c2c2e;
+}
+
+.dark .casino-contrast .border-titanium-200 {
+  border-color: #3a3a3c;
+}
+
+.dark .casino-contrast .border-titanium-300 {
+  border-color: #4a4a4d;
+}
+
+.dark .casino-contrast .border-titanium-400 {
+  border-color: #636366;
+}
+
+.dark .casino-surface.casino-contrast .bg-titanium-50 {
+  background-color: #1c1c1e;
+}
+
+.dark .casino-surface.casino-contrast .bg-titanium-100 {
+  background-color: #2c2c2e;
+}
+
+.dark .casino-surface.casino-contrast .bg-titanium-200 {
+  background-color: #3a3a3c;
+}
+
+.dark .casino-contrast .border-gray-500 {
+  border-color: #4a4a4d;
+}
+
+.dark .casino-contrast .border-gray-600 {
+  border-color: #3a3a3c;
+}
+
+.dark .casino-contrast .border-gray-700 {
+  border-color: #2c2c2e;
+}
+
+.dark .casino-contrast .border-gray-800 {
+  border-color: #1c1c1e;
+}
+
+.dark .casino-surface.casino-contrast .bg-black\/40 {
+  background-color: rgba(10, 10, 12, 0.6);
+}
+
+.dark .casino-surface.casino-contrast .bg-black\/50 {
+  background-color: rgba(10, 10, 12, 0.7);
+}
+
+.dark .casino-surface.casino-contrast .bg-black\/60 {
+  background-color: rgba(10, 10, 12, 0.78);
+}
+
+.dark .casino-surface.casino-contrast .bg-black\/70 {
+  background-color: rgba(10, 10, 12, 0.85);
+}
+
+.dark .casino-surface.casino-contrast .bg-black\/80 {
+  background-color: rgba(10, 10, 12, 0.9);
+}
+
+.dark .casino-surface.casino-contrast .bg-black\/95 {
+  background-color: rgba(10, 10, 12, 0.96);
+}
+
+.dark .casino-surface.casino-contrast .bg-gray-800 {
+  background-color: #1c1c1e;
+}
+
+.dark .casino-surface.casino-contrast .bg-gray-900 {
+  background-color: #111113;
+}
+
+.dark .casino-surface.casino-contrast .bg-gray-900\/50 {
+  background-color: rgba(17, 17, 19, 0.6);
+}
+
+.dark .casino-surface.casino-contrast .bg-gray-900\/80 {
+  background-color: rgba(17, 17, 19, 0.85);
+}
+
+.casino-contrast .hover\:bg-gray-800:hover {
+  background-color: rgba(255, 255, 255, 0.85);
+}
+
+.casino-contrast .hover\:bg-titanium-100:hover {
+  background-color: #d1d1d6;
+}
+
+.dark .casino-contrast .hover\:bg-gray-800:hover {
+  background-color: rgba(10, 10, 12, 0.85);
+}
+
+.dark .casino-contrast .hover\:bg-titanium-100:hover {
+  background-color: #3a3a3c;
+}
+
+/* Casino surface tokens */
+.casino-surface {
+  --casino-surface: #f2f2f7;
+  --casino-panel: #ffffff;
+  --casino-panel-muted: #f2f2f7;
+  --casino-panel-strong: #e5e5ea;
+  --casino-border: #c7c7cc;
+  --casino-border-strong: #b0b0b5;
+  --casino-text: #1c1c1e;
+  --casino-text-muted: #3a3a3c;
+  --casino-overlay: rgba(255, 255, 255, 0.92);
+}
+
+.casino-shell {
+  --casino-surface: #f2f2f7;
+  --casino-panel: #ffffff;
+  --casino-panel-muted: #f2f2f7;
+  --casino-panel-strong: #e5e5ea;
+  --casino-border: #c7c7cc;
+  --casino-border-strong: #b0b0b5;
+  --casino-text: #1c1c1e;
+  --casino-text-muted: #3a3a3c;
+  --casino-overlay: rgba(255, 255, 255, 0.92);
+}
+
+.casino-shell[data-zen="true"] .zen-hide {
+  display: none !important;
+}
+
+.casino-shell[data-zen="true"] .zen-soft {
+  opacity: 0.6;
+}
+
+.casino-shell[data-zen="true"] .zen-quiet {
+  opacity: 0.75;
+}
+
+.casino-shell[data-zen="true"] .zen-flat {
+  box-shadow: none !important;
+}
+
+.casino-shell[data-zen="true"] .shadow-soft,
+.casino-shell[data-zen="true"] .shadow-float,
+.casino-shell[data-zen="true"] .shadow-lg,
+.casino-shell[data-zen="true"] .shadow-2xl {
+  box-shadow: none !important;
+}
+
+.casino-shell[data-zen="true"] .zen-controlbar {
+  background: transparent !important;
+  border-color: transparent !important;
+  backdrop-filter: none !important;
+  box-shadow: none !important;
+}
+
+.casino-shell[data-zen="true"] .zen-controlbar > div {
+  padding: 0.5rem 0.75rem !important;
+}
+
+.casino-shell[data-zen="true"] .zen-controlbar button {
+  box-shadow: none !important;
+}
+
+.casino-shell[data-casino-theme="dark"] .casino-surface {
+  --casino-surface: #101012;
+  --casino-panel: #1c1c1e;
+  --casino-panel-muted: #151518;
+  --casino-panel-strong: #2c2c2e;
+  --casino-border: #3a3a3c;
+  --casino-border-strong: #4a4a4d;
+  --casino-text: #f2f2f7;
+  --casino-text-muted: #d1d1d6;
+  --casino-overlay: rgba(10, 10, 12, 0.88);
+}
+
+.casino-shell[data-casino-theme="dark"] {
+  --casino-surface: #101012;
+  --casino-panel: #1c1c1e;
+  --casino-panel-muted: #151518;
+  --casino-panel-strong: #2c2c2e;
+  --casino-border: #3a3a3c;
+  --casino-border-strong: #4a4a4d;
+  --casino-text: #f2f2f7;
+  --casino-text-muted: #d1d1d6;
+  --casino-overlay: rgba(10, 10, 12, 0.88);
+}
+
+/* Force readable casino surfaces in light theme, even if dark classes leak in */
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-titanium-900 {
+  background-color: var(--casino-panel);
+  color: var(--casino-text);
+}
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-titanium-900\/95 {
+  background-color: rgba(255, 255, 255, 0.96);
+  color: var(--casino-text);
+}
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-titanium-900\/90 {
+  background-color: rgba(255, 255, 255, 0.94);
+  color: var(--casino-text);
+}
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-titanium-900\/80 {
+  background-color: rgba(255, 255, 255, 0.92);
+  color: var(--casino-text);
+}
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-titanium-900\/70 {
+  background-color: rgba(255, 255, 255, 0.9);
+  color: var(--casino-text);
+}
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-titanium-900\/60 {
+  background-color: rgba(255, 255, 255, 0.86);
+  color: var(--casino-text);
+}
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-titanium-900\/50 {
+  background-color: rgba(255, 255, 255, 0.82);
+  color: var(--casino-text);
+}
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-titanium-900\/40 {
+  background-color: rgba(255, 255, 255, 0.75);
+  color: var(--casino-text);
+}
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-titanium-900\/20 {
+  background-color: rgba(255, 255, 255, 0.62);
+  color: var(--casino-text);
+}
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-titanium-900\/10 {
+  background-color: rgba(255, 255, 255, 0.52);
+  color: var(--casino-text);
+}
+
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-black\/30,
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-black\/40,
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-black\/50,
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-black\/60,
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-black\/70,
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-black\/80,
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-black\/95 {
+  background-color: var(--casino-overlay);
+  color: var(--casino-text);
+}
+
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-gray-900,
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-gray-900\/80,
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-gray-900\/50,
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-gray-900\/40,
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-gray-900\/30,
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-gray-900\/20 {
+  background-color: var(--casino-panel-muted);
+  color: var(--casino-text);
+}
+
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-gray-800,
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-gray-800\/50 {
+  background-color: var(--casino-panel-strong);
+  color: var(--casino-text);
+}
+
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-titanium-900.text-white,
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-titanium-900\/95.text-white,
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-titanium-900\/80.text-white,
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-titanium-900\/70.text-white,
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-titanium-900\/60.text-white,
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-titanium-900\/50.text-white,
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-black\/50.text-white,
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-black\/40.text-white,
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-gray-900.text-white,
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-gray-900\/50.text-white {
+  color: var(--casino-text);
+}
+
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-titanium-900 .text-white,
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-titanium-900\/95 .text-white,
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-titanium-900\/80 .text-white,
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-titanium-900\/70 .text-white,
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-titanium-900\/60 .text-white,
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-titanium-900\/50 .text-white,
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-black\/50 .text-white,
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-black\/40 .text-white,
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-gray-900 .text-white,
+.casino-shell[data-casino-theme="light"] .casino-surface .bg-gray-900\/50 .text-white {
+  color: var(--casino-text);
+}
+
+.casino-shell[data-casino-theme="dark"] .casino-surface .border-gray-700,
+.casino-shell[data-casino-theme="dark"] .casino-surface .border-gray-800 {
+  border-color: var(--casino-border-strong);
+}
+
+.casino-shell[data-casino-theme="dark"] .casino-surface .text-gray-700,
+.casino-shell[data-casino-theme="dark"] .casino-surface .text-gray-800,
+.casino-shell[data-casino-theme="dark"] .casino-surface .text-titanium-700,
+.casino-shell[data-casino-theme="dark"] .casino-surface .text-titanium-800 {
+  color: var(--casino-text-muted);
+}
+
+.casino-shell[data-casino-theme="dark"] .bg-white {
+  background-color: var(--casino-panel);
+  color: var(--casino-text);
+}
+
+.casino-shell[data-casino-theme="dark"] .bg-titanium-50 {
+  background-color: var(--casino-panel-muted);
+  color: var(--casino-text);
+}
+
+.casino-shell[data-casino-theme="dark"] .bg-titanium-50\/50 {
+  background-color: rgba(21, 21, 24, 0.6);
+  color: var(--casino-text);
+}
+
+.casino-shell[data-casino-theme="dark"] .bg-titanium-100 {
+  background-color: var(--casino-panel-strong);
+  color: var(--casino-text);
+}
+
+.casino-shell[data-casino-theme="dark"] .bg-titanium-100\/60 {
+  background-color: rgba(44, 44, 46, 0.7);
+  color: var(--casino-text);
+}
+
+.casino-shell[data-casino-theme="dark"] .bg-titanium-100\/70 {
+  background-color: rgba(44, 44, 46, 0.78);
+  color: var(--casino-text);
+}
+
+.casino-shell[data-casino-theme="dark"] .bg-titanium-100\/80 {
+  background-color: rgba(44, 44, 46, 0.86);
+  color: var(--casino-text);
+}
+
+.casino-shell[data-casino-theme="dark"] .bg-titanium-200 {
+  background-color: #3a3a3c;
+  color: var(--casino-text);
+}
+
+.casino-shell[data-casino-theme="dark"] .border-titanium-100 {
+  border-color: var(--casino-border);
+}
+
+.casino-shell[data-casino-theme="dark"] .border-titanium-200 {
+  border-color: var(--casino-border);
+}
+
+.casino-shell[data-casino-theme="dark"] .border-titanium-300 {
+  border-color: var(--casino-border-strong);
+}
+
+.casino-shell[data-casino-theme="dark"] .border-titanium-400 {
+  border-color: var(--casino-border-strong);
+}
+
+.casino-shell[data-casino-theme="dark"] .border-gray-200,
+.casino-shell[data-casino-theme="dark"] .border-gray-300 {
+  border-color: var(--casino-border);
+}
+
+.dark .bg-glass-light {
+  background-color: rgba(20, 20, 24, 0.92);
+}
+
 @media (max-width: 639px) {
   .pb-bottom-nav {
     padding-bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom));
@@ -97,17 +674,68 @@ body.fonts-loaded {
   display: none;
 }
 
+.ns-keycap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  padding: 0 0.4rem;
+  border-radius: 0.45rem;
+  border: 1px solid var(--casino-border-strong);
+  background: var(--casino-panel);
+  color: var(--casino-text);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.casino-shell[data-casino-theme="dark"] .ns-keycap {
+  background: #1c1c1e;
+  border-color: #3a3a3c;
+  color: #f2f2f7;
+}
+
+.ns-keycap-dark {
+  background: rgba(0, 0, 0, 0.7);
+  border-color: rgba(0, 0, 0, 0.6);
+  color: #ffffff;
+}
+
+.ns-controlbar button:not(.ns-control-no-unify) {
+  border-radius: 999px !important;
+  letter-spacing: 0.2em !important;
+  font-size: 0.62rem !important;
+  font-weight: 600 !important;
+  text-transform: uppercase;
+  height: 2.6rem !important;
+  padding: 0 1.1rem !important;
+  box-shadow: none !important;
+}
+
+.ns-controlbar button:not(.ns-control-no-unify):disabled {
+  opacity: 0.5;
+}
+
+.ns-control-primary {
+  height: 3rem !important;
+  padding: 0 1.6rem !important;
+  font-size: 0.68rem !important;
+  letter-spacing: 0.24em !important;
+}
+
 /* Titanium & Glass Utilities */
 .bg-glass-light {
-  background-color: rgba(255, 255, 255, 0.75);
+  background-color: rgba(255, 255, 255, 0.92);
 }
 
 .bg-glass-dark {
-  background-color: rgba(28, 28, 30, 0.8);
+  background-color: rgba(20, 20, 24, 0.92);
 }
 
 .border-glass {
-  border-color: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.08);
 }
 
 .shadow-float {

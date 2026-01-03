@@ -8,25 +8,51 @@ export interface SubmitResult {
   error?: string;
 }
 
+export interface SubmitClientOptions {
+  submitTimeoutMs?: number;
+  healthTimeoutMs?: number;
+  accountTimeoutMs?: number;
+  origin?: string;
+  maxSubmissionBytes?: number;
+}
+
 export class SubmitClient {
   private baseUrl: string;
-  private timeout: number;
+  private submitTimeoutMs: number;
+  private healthTimeoutMs: number;
+  private accountTimeoutMs: number;
   private origin: string;
+  private maxSubmissionBytes: number | null;
 
-  constructor(baseUrl: string, timeout: number = 10000, origin?: string) {
+  constructor(baseUrl: string, options: SubmitClientOptions = {}) {
     // Remove trailing slash
     this.baseUrl = baseUrl.replace(/\/$/, '');
-    this.timeout = timeout;
+    this.submitTimeoutMs = options.submitTimeoutMs ?? 10_000;
+    this.healthTimeoutMs = options.healthTimeoutMs ?? 5_000;
+    this.accountTimeoutMs = options.accountTimeoutMs ?? 5_000;
     // Default origin for server-to-server requests (must match ALLOWED_HTTP_ORIGINS)
-    this.origin = origin || 'http://localhost:9010';
+    this.origin = options.origin || 'http://localhost:9010';
+    this.maxSubmissionBytes =
+      typeof options.maxSubmissionBytes === 'number' && options.maxSubmissionBytes > 0
+        ? Math.floor(options.maxSubmissionBytes)
+        : null;
   }
 
   /**
    * Submit a transaction to the backend
    */
   async submit(submission: Uint8Array): Promise<SubmitResult> {
+    if (
+      this.maxSubmissionBytes !== null &&
+      submission.length > this.maxSubmissionBytes
+    ) {
+      const error = `Submission too large (${submission.length} > ${this.maxSubmissionBytes} bytes)`;
+      logWarn(`[SubmitClient] ${error}`);
+      return { accepted: false, error };
+    }
+
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+    const timeoutId = setTimeout(() => controller.abort(), this.submitTimeoutMs);
 
     try {
       const response = await fetch(`${this.baseUrl}/submit`, {
@@ -81,7 +107,7 @@ export class SubmitClient {
         headers: {
           'Origin': this.origin,
         },
-        signal: AbortSignal.timeout(5000),
+        signal: AbortSignal.timeout(this.healthTimeoutMs),
       });
       return response.ok;
     } catch {
@@ -101,7 +127,7 @@ export class SubmitClient {
         headers: {
           'Origin': this.origin,
         },
-        signal: AbortSignal.timeout(5000),
+        signal: AbortSignal.timeout(this.accountTimeoutMs),
       });
 
       if (!response.ok) return null;

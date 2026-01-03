@@ -26,10 +26,6 @@ jobs:
             dockerfile: ./node/Dockerfile
             context: .
             image: nullspace-node
-          - id: executor
-            dockerfile: ./client/Dockerfile
-            context: .
-            image: nullspace-executor
           - id: gateway
             dockerfile: ./gateway/Dockerfile
             context: .

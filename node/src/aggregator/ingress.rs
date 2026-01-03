@@ -1,7 +1,7 @@
 use bytes::Bytes;
 use commonware_consensus::{
     aggregation::types::{Activity, Certificate, Index},
-    threshold_simplex::types::View,
+    types::{Epoch, View},
     Automaton, Reporter,
 };
 use commonware_cryptography::{bls12381::primitives::variant::MinSig, sha256::Digest};
@@ -9,8 +9,8 @@ use commonware_macros::select;
 use commonware_resolver::{p2p::Producer, Consumer};
 use commonware_runtime::signal::Signal;
 use commonware_storage::{
-    mmr::verification::Proof,
-    store::operation::{Keyless, Variable},
+    mmr::Proof,
+    qmdb::{any::unordered::variable, keyless},
 };
 use commonware_utils::sequence::U64;
 use futures::{
@@ -24,6 +24,15 @@ use nullspace_types::{
 };
 use tracing::warn;
 
+type AggregationScheme =
+    commonware_consensus::aggregation::scheme::bls12381_threshold::Scheme<
+        commonware_cryptography::ed25519::PublicKey,
+        MinSig,
+    >;
+type AggregationCertificate = Certificate<AggregationScheme, Digest>;
+type StateOp = variable::Operation<Digest, Value>;
+type EventOp = keyless::Operation<Output>;
+
 pub enum Message {
     Executed {
         view: View,
@@ -31,9 +40,9 @@ pub enum Message {
         commitment: Digest,
         result: StateTransitionResult,
         state_proof: Proof<Digest>,
-        state_proof_ops: Vec<Variable<Digest, Value>>,
+        state_proof_ops: Vec<StateOp>,
         events_proof: Proof<Digest>,
-        events_proof_ops: Vec<Keyless<Output>>,
+        events_proof_ops: Vec<EventOp>,
         response: oneshot::Sender<()>,
     },
     Genesis {
@@ -52,7 +61,7 @@ pub enum Message {
         index: Index,
     },
     Certified {
-        certificate: Certificate<MinSig, Digest>,
+        certificate: AggregationCertificate,
     },
     Deliver {
         index: Index,
@@ -102,9 +111,9 @@ impl Mailbox {
         commitment: Digest,
         result: StateTransitionResult,
         state_proof: Proof<Digest>,
-        state_proof_ops: Vec<Variable<Digest, Value>>,
+        state_proof_ops: Vec<StateOp>,
         events_proof: Proof<Digest>,
-        events_proof_ops: Vec<Keyless<Output>>,
+        events_proof_ops: Vec<EventOp>,
         response: oneshot::Sender<()>,
     ) {
         let mut sender = self.sender.clone();
@@ -112,11 +121,11 @@ impl Mailbox {
         select! {
             result = sender.send(Message::Executed { view, height, commitment, result, state_proof, state_proof_ops, events_proof, events_proof_ops, response }) => {
                 if result.is_err() {
-                    warn!(view, height, "aggregator mailbox closed; executed dropped");
+                warn!(view = view.get(), height, "aggregator mailbox closed; executed dropped");
                 }
             },
             _ = &mut stopped => {
-                warn!(view, height, "aggregator shutting down; executed dropped");
+                warn!(view = view.get(), height, "aggregator shutting down; executed dropped");
             }
         }
     }
@@ -126,7 +135,7 @@ impl Automaton for Mailbox {
     type Digest = Digest;
     type Context = Index;
 
-    async fn genesis(&mut self) -> Self::Digest {
+    async fn genesis(&mut self, _epoch: Epoch) -> Self::Digest {
         let (response, receiver) = oneshot::channel();
         let mut sender = self.sender.clone();
         let mut stopped = self.stopped.clone();
@@ -200,7 +209,7 @@ impl Automaton for Mailbox {
 }
 
 impl Reporter for Mailbox {
-    type Activity = Activity<MinSig, Digest>;
+    type Activity = Activity<AggregationScheme, Digest>;
 
     async fn report(&mut self, activity: Self::Activity) {
         match activity {

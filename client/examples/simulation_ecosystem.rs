@@ -13,10 +13,11 @@ use clap::Parser;
 use commonware_codec::DecodeExt;
 use commonware_cryptography::{
     ed25519::{PrivateKey, PublicKey},
-    PrivateKeyExt, Signer,
+    Signer,
 };
-use commonware_storage::store::operation::Keyless;
-use nullspace_client::Client;
+use commonware_math::algebra::Random;
+use commonware_storage::qmdb::keyless;
+use nullspace_client::{operation_value, Client};
 use nullspace_types::{
     api::{Update, UpdatesFilter},
     casino::{AmmPool, GameType, HouseState},
@@ -75,7 +76,7 @@ struct Bot {
 impl Bot {
     fn new(name: &str, rng: &mut StdRng) -> Self {
         Self {
-            keypair: PrivateKey::from_rng(rng),
+            keypair: PrivateKey::random(rng),
             nonce: AtomicU64::new(0),
             name: name.to_string(),
         }
@@ -274,7 +275,10 @@ async fn run_keeper(client: Arc<Client>, bot: Arc<Bot>, duration: Duration) {
 async fn bootstrap_amm(client: Arc<Client>, bot: Arc<Bot>) {
     let seeded = match client.query_state(&Key::AmmPool).await {
         Ok(Some(lookup)) => {
-            matches!(lookup.operation.value(), Some(Value::AmmPool(p)) if p.reserve_rng > 0 && p.reserve_vusdt > 0)
+            matches!(
+                operation_value(&lookup.operation),
+                Some(Value::AmmPool(p)) if p.reserve_rng > 0 && p.reserve_vusdt > 0
+            )
         }
         _ => false,
     };
@@ -356,7 +360,7 @@ async fn bootstrap_amm(client: Arc<Client>, bot: Arc<Bot>) {
     let mut seeded = false;
     for _ in 0..20 {
         if let Ok(Some(lookup)) = client.query_state(&Key::AmmPool).await {
-            if let Some(Value::AmmPool(p)) = lookup.operation.value() {
+            if let Some(Value::AmmPool(p)) = operation_value(&lookup.operation) {
                 info!(
                     "AMM seeded: reserves {} RNG / {} vUSD, shares {}",
                     p.reserve_rng, p.reserve_vusdt, p.total_shares
@@ -900,7 +904,7 @@ async fn run_monitor(
     let mut last_amm: Option<AmmPool> = None;
     // Try to fetch initial state
     if let Ok(Some(lookup)) = client.query_state(&Key::House).await {
-        if let Some(Value::House(h)) = lookup.operation.value() {
+        if let Some(Value::House(h)) = operation_value(&lookup.operation) {
             last_house = h.clone();
         }
     }
@@ -929,7 +933,7 @@ async fn run_monitor(
             // Fetch current AMM state for price conversion
             let amm = match client.query_state(&Key::AmmPool).await {
                 Ok(Some(lookup)) => {
-                    if let Some(Value::AmmPool(p)) = lookup.operation.value() {
+                    if let Some(Value::AmmPool(p)) = operation_value(&lookup.operation) {
                         Some(p.clone())
                     } else {
                         None
@@ -986,7 +990,7 @@ async fn run_monitor(
 
             for op in events.events_proof_ops {
                 // Keyless has Append variant.
-                if let Keyless::Append(output) = op {
+                if let keyless::Operation::Append(output) = op {
                     match output {
                         Output::Transaction(tx) => {
                             tx_count += 1;
@@ -1048,7 +1052,7 @@ async fn run_monitor(
                                         .query_state(&Key::CasinoSession(*session_id))
                                         .await
                                     {
-                                        Ok(Some(lookup)) => match lookup.operation.value() {
+                                        Ok(Some(lookup)) => match operation_value(&lookup.operation) {
                                             Some(Value::CasinoSession(s)) => s.is_tournament,
                                             _ => false,
                                         },
@@ -1204,7 +1208,7 @@ async fn run_monitor(
             // 2. Fetch Global State Deltas
             let current_house = match client.query_state(&Key::House).await {
                 Ok(Some(lookup)) => {
-                    if let Some(Value::House(h)) = lookup.operation.value() {
+                    if let Some(Value::House(h)) = operation_value(&lookup.operation) {
                         h.clone()
                     } else {
                         last_house.clone()
@@ -1277,12 +1281,12 @@ async fn run_monitor(
                 .query_state(&Key::CasinoPlayer(maximizer.public_key()))
                 .await
             {
-                if let Some(Value::CasinoPlayer(p)) = lookup.operation.value() {
+                if let Some(Value::CasinoPlayer(p)) = operation_value(&lookup.operation) {
                     if let Ok(Some(vault_lookup)) = client
                         .query_state(&Key::Vault(maximizer.public_key()))
                         .await
                     {
-                        if let Some(Value::Vault(v)) = vault_lookup.operation.value() {
+                        if let Some(Value::Vault(v)) = operation_value(&vault_lookup.operation) {
                             max_debt = v.debt_vusdt;
                         }
                     }

@@ -9,8 +9,10 @@ use axum::extract::State as AxumState;
 use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::Router;
-use commonware_cryptography::bls12381::primitives::group::{Element, G1};
-use commonware_cryptography::{PrivateKeyExt, Signer};
+use commonware_cryptography::bls12381::primitives::group::G1;
+use commonware_consensus::types::Round;
+use commonware_cryptography::Signer;
+use commonware_math::algebra::{Additive, Random};
 use nullspace_execution::{init_game, process_game_move, GameError, GameResult, GameRng};
 use nullspace_types::casino::{GameSession, GameType, SuperModeState};
 use nullspace_types::Seed;
@@ -221,7 +223,7 @@ struct LiveTableEngine {
 
 impl LiveTableEngine {
     fn new(config: LiveTableConfig) -> Self {
-        let seed = Seed::new(0, <G1 as Element>::zero());
+        let seed = Seed::new(Round::zero(), G1::zero());
         let now = Instant::now();
         let betting_ms = config.betting_ms;
         let bot_seed = config.bot_seed;
@@ -646,7 +648,7 @@ impl LiveTableEngine {
 
 fn dummy_public_key() -> commonware_cryptography::ed25519::PublicKey {
     let mut rng = StdRng::seed_from_u64(42);
-    let private = commonware_cryptography::ed25519::PrivateKey::from_rng(&mut rng);
+    let private = commonware_cryptography::ed25519::PrivateKey::random(&mut rng);
     private.public_key()
 }
 

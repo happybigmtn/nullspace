@@ -16,7 +16,7 @@ Baseline example totals 100%. Final allocation must be reconciled to pre-token l
 snapshot data and the CCA cadence before launch.
 
 ### Freeroll emission schedule (implemented)
-On each tournament start, the executor mints a **per-tournament prize pool**:
+On each tournament start, the execution layer (validators) mints a **per-tournament prize pool**:
 
 `per_tournament = floor( floor( floor(TOTAL_SUPPLY * 5% / 365) / TOURNAMENTS_PER_DAY ) )`
 
@@ -36,7 +36,7 @@ This yields approximately:
 - Daily emission target: `~82,192 RNG/day`
 - Per-tournament prize pool: `~342 RNG/tournament` (integer division rounding)
 
-The executor tracks `HouseState.total_issuance` and caps total freeroll issuance to
+The execution layer tracks `HouseState.total_issuance` and caps total freeroll issuance to
 `25% * TOTAL_SUPPLY` for CCA bonus gating across 10 CCAs.
 
 Policy update (pre-token launch → CCA program):

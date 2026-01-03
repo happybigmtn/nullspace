@@ -4,7 +4,9 @@ import { GameState } from '../../../types';
 import { Hand } from '../GameComponents';
 import { MobileDrawer } from '../MobileDrawer';
 import { BetsDrawer } from '../BetsDrawer';
-import { SideBetMenu } from './SideBetMenu';
+import { SideBetsDrawer } from '../SideBetsDrawer';
+import { PanelDrawer } from '../PanelDrawer';
+import { Label } from '../ui/Label';
 
 interface ThreeCardPokerViewProps {
     gameState: GameState;
@@ -121,7 +123,7 @@ export const ThreeCardPokerView = React.memo<ThreeCardPokerViewProps & { lastWin
                         <span className="text-gray-500">TOTAL</span>
                         <span className="text-action-primary">${totalBet.toLocaleString()}</span>
                     </div>
-                    <div className="text-lg sm:text-2xl font-bold text-action-primary tracking-widest leading-tight animate-pulse">
+                    <div className="text-base sm:text-lg font-semibold text-action-primary tracking-widest leading-tight animate-pulse zen-hide">
                         {gameState.message}
                     </div>
                     <div className="text-sm text-gray-500 flex flex-col items-center gap-1">
@@ -172,31 +174,10 @@ export const ThreeCardPokerView = React.memo<ThreeCardPokerViewProps & { lastWin
                 </div>
             </div>
 
-            {/* Pair Plus Info Sidebar */}
-            <div className="hidden lg:flex absolute top-0 left-0 bottom-24 w-36 bg-titanium-900/80 border-r-2 border-gray-700 p-2 overflow-y-auto backdrop-blur-sm z-30 flex-col">
-                <h3 className="text-[10px] font-bold text-gray-500 mb-2 tracking-widest text-center border-b border-gray-800 pb-1 flex-none">PAIR PLUS</h3>
-                <div className="flex-1 flex flex-col justify-center space-y-2 text-[10px]">
-                    <div className="flex justify-between"><span className="text-gray-400">Straight Flush</span><span className="text-action-primary">40:1</span></div>
-                    <div className="flex justify-between"><span className="text-gray-400">Three of Kind</span><span className="text-action-primary">30:1</span></div>
-                    <div className="flex justify-between"><span className="text-gray-400">Straight</span><span className="text-action-primary">6:1</span></div>
-                    <div className="flex justify-between"><span className="text-gray-400">Flush</span><span className="text-action-primary">3:1</span></div>
-                    <div className="flex justify-between"><span className="text-gray-400">Pair</span><span className="text-action-primary">1:1</span></div>
-                </div>
-            </div>
-
-            {/* Game Rules Sidebar */}
-            <div className="hidden lg:flex absolute top-0 right-0 bottom-24 w-36 bg-titanium-900/80 border-l-2 border-gray-700 p-2 backdrop-blur-sm z-30 flex-col">
-                <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-2 border-b border-gray-800 pb-1 flex-none text-center">Rules</div>
-                <div className="flex-1 overflow-y-auto flex flex-col justify-center space-y-2 text-[9px] text-gray-400">
-                    <div>• Dealer qualifies with Queen-high or better</div>
-                    <div>• If dealer doesn't qualify: Ante pays 1:1, Play pushes</div>
-                    <div>• If dealer qualifies and you win: Ante and Play pay 1:1</div>
-                    <div>• Pair Plus pays regardless of dealer hand</div>
-                </div>
-            </div>
+            {/* Guide Drawer */}
 
             {/* Controls */}
-            <div className="ns-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-titanium-900/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
+            <div className="ns-controlbar zen-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-titanium-900/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
                 <div className="h-auto md:h-20 flex flex-col md:flex-row items-stretch md:items-center justify-between md:justify-center gap-2 p-2 md:px-4">
                     {/* Desktop: Grouped Controls */}
                     <div className="hidden md:flex items-center gap-4 flex-1">
@@ -212,11 +193,59 @@ export const ThreeCardPokerView = React.memo<ThreeCardPokerViewProps & { lastWin
                                 {/* Spacer */}
                                 <div className="h-8 w-px bg-gray-700" />
 
-                                <SideBetMenu
-                                    bets={BONUS_BETS}
-                                    isActive={isBonusActive}
-                                    onSelect={handleBonusSelect}
-                                />
+                                <SideBetsDrawer
+                                    title="THREE CARD SIDE BETS"
+                                    label="Side Bets"
+                                    count={BONUS_BETS.filter((bet) => isBonusActive(bet.action)).length}
+                                    shortcutHint="P/6/J"
+                                >
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {BONUS_BETS.map((bet) => {
+                                            const active = isBonusActive(bet.action);
+                                            return (
+                                                <button
+                                                    key={bet.action}
+                                                    type="button"
+                                                    onClick={() => handleBonusSelect(bet.action)}
+                                                    className={`rounded-xl border px-3 py-3 text-xs font-semibold uppercase tracking-widest transition-all ${
+                                                        active
+                                                            ? 'border-action-primary/60 bg-action-primary/10 text-action-primary'
+                                                            : 'border-titanium-200 text-titanium-700 hover:border-titanium-500 dark:border-titanium-800 dark:text-titanium-200'
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <span>{bet.label}</span>
+                                                        <span className="text-[10px] font-mono text-titanium-400">[{bet.key}]</span>
+                                                    </div>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </SideBetsDrawer>
+
+                                <PanelDrawer label="Guide" title="THREE CARD GUIDE" className="hidden md:inline-flex">
+                                    <div className="space-y-6">
+                                        <div>
+                                            <Label size="micro" className="mb-2 block">Pair Plus</Label>
+                                            <div className="space-y-2 text-[10px]">
+                                                <div className="flex justify-between"><span className="text-titanium-600">Straight Flush</span><span className="text-action-primary">40:1</span></div>
+                                                <div className="flex justify-between"><span className="text-titanium-600">Three of Kind</span><span className="text-action-primary">30:1</span></div>
+                                                <div className="flex justify-between"><span className="text-titanium-600">Straight</span><span className="text-action-primary">6:1</span></div>
+                                                <div className="flex justify-between"><span className="text-titanium-600">Flush</span><span className="text-action-primary">3:1</span></div>
+                                                <div className="flex justify-between"><span className="text-titanium-600">Pair</span><span className="text-action-primary">1:1</span></div>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <Label size="micro" className="mb-2 block">Rules</Label>
+                                            <div className="space-y-2 text-[10px] text-titanium-500">
+                                                <div>• Dealer qualifies with Queen-high or better</div>
+                                                <div>• If dealer doesn't qualify: Ante pays 1:1, Play pushes</div>
+                                                <div>• If dealer qualifies and you win: Ante and Play pay 1:1</div>
+                                                <div>• Pair Plus pays regardless of dealer hand</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </PanelDrawer>
 
                                 {/* Spacer */}
                                 {(playMode !== 'CASH' || gameState.activeModifiers.super) && <div className="h-8 w-px bg-gray-700" />}
@@ -278,7 +307,7 @@ export const ThreeCardPokerView = React.memo<ThreeCardPokerViewProps & { lastWin
                                         ? actions?.deal
                                         : actions?.threeCardPlay
                             }
-                            className={`h-14 px-8 rounded border-2 font-bold text-base font-mono tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] ${
+                            className={`ns-control-primary h-14 px-8 rounded border-2 font-bold text-base font-mono tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] ${
                                 gameState.stage === 'PLAYING' && !gameState.message.includes('REVEAL')
                                     ? 'border-action-success bg-action-success text-black hover:bg-white hover:border-white'
                                     : 'border-action-success bg-action-success text-black hover:bg-white hover:border-white'
@@ -298,46 +327,33 @@ export const ThreeCardPokerView = React.memo<ThreeCardPokerViewProps & { lastWin
                     <div className="flex md:hidden flex-col gap-2">
                         <div className="flex items-center gap-2">
                             {gameState.stage === 'BETTING' && (
-                                <BetsDrawer title="PLACE BETS">
-                                    <div className="space-y-4">
-                                        {/* Bonus Bets */}
-                                        <div className="rounded border border-gray-800 bg-black/40 p-2 space-y-2">
-                                            <div className="text-[10px] text-amber-500 font-bold tracking-widest border-b border-gray-800 pb-1">BONUS BETS</div>
-                                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                                <button
-                                                    onClick={actions?.threeCardTogglePairPlus}
-                                                    className={`py-3 rounded border text-xs font-bold ${
-                                                        (gameState.threeCardPairPlusBet || 0) > 0
-                                                            ? 'border-amber-400 bg-amber-500/20 text-amber-300'
-                                                            : 'border-gray-700 bg-gray-900 text-gray-400'
-                                                    }`}
-                                                >
-                                                    PAIR+
-                                                </button>
-                                                <button
-                                                    onClick={actions?.threeCardToggleSixCardBonus}
-                                                    className={`py-3 rounded border text-xs font-bold ${
-                                                        (gameState.threeCardSixCardBonusBet || 0) > 0
-                                                            ? 'border-amber-400 bg-amber-500/20 text-amber-300'
-                                                            : 'border-gray-700 bg-gray-900 text-gray-400'
-                                                    }`}
-                                                >
-                                                    6-CARD
-                                                </button>
-                                                <button
-                                                    onClick={actions?.threeCardToggleProgressive}
-                                                    className={`py-3 rounded border text-xs font-bold ${
-                                                        (gameState.threeCardProgressiveBet || 0) > 0
-                                                            ? 'border-yellow-400 bg-yellow-500/20 text-yellow-300'
-                                                            : 'border-gray-700 bg-gray-900 text-gray-400'
-                                                    }`}
-                                                >
-                                                    PROG
-                                                </button>
-                                            </div>
+                                <>
+                                    <SideBetsDrawer
+                                        title="THREE CARD SIDE BETS"
+                                        label="Side Bets"
+                                        count={BONUS_BETS.filter((bet) => isBonusActive(bet.action)).length}
+                                        shortcutHint="P/6/J"
+                                    >
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {BONUS_BETS.map((bet) => {
+                                                const active = isBonusActive(bet.action);
+                                                return (
+                                                    <button
+                                                        key={bet.action}
+                                                        onClick={() => handleBonusSelect(bet.action)}
+                                                        className={`py-3 rounded border text-xs font-bold ${
+                                                            active
+                                                                ? 'border-amber-400 bg-amber-500/20 text-amber-300'
+                                                                : 'border-gray-700 bg-gray-900 text-gray-400'
+                                                        }`}
+                                                    >
+                                                        {bet.label}
+                                                    </button>
+                                                );
+                                            })}
                                         </div>
-
-                                        {/* Modifiers */}
+                                    </SideBetsDrawer>
+                                    <BetsDrawer title="MODIFIERS">
                                         <div className="rounded border border-gray-800 bg-black/40 p-2 space-y-2">
                                             <div className="text-[10px] text-cyan-500 font-bold tracking-widest border-b border-gray-800 pb-1">MODIFIERS</div>
                                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -377,8 +393,8 @@ export const ThreeCardPokerView = React.memo<ThreeCardPokerViewProps & { lastWin
                                                 </button>
                                             </div>
                                         </div>
-                                    </div>
-                                </BetsDrawer>
+                                    </BetsDrawer>
+                                </>
                             )}
 
                             {/* Primary Button */}
@@ -391,7 +407,7 @@ export const ThreeCardPokerView = React.memo<ThreeCardPokerViewProps & { lastWin
                                             ? actions?.deal
                                             : actions?.threeCardPlay
                                 }
-                                className="flex-1 h-12 px-6 rounded border-2 font-bold text-sm font-mono tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] border-action-success bg-action-success text-black hover:bg-white hover:border-white hover:scale-105 active:scale-95"
+                                className="ns-control-primary flex-1 h-12 px-6 rounded border-2 font-bold text-sm font-mono tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] border-action-success bg-action-success text-black hover:bg-white hover:border-white hover:scale-105 active:scale-95"
                             >
                                 {gameState.stage === 'BETTING'
                                     ? 'DEAL'

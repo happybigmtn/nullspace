@@ -5,7 +5,7 @@ use crate::{indexer::Indexer, supervisor::ViewSupervisor};
 pub use actor::Actor;
 use commonware_cryptography::ed25519::PublicKey;
 use commonware_runtime::buffer::PoolRef;
-use governor::Quota;
+use commonware_runtime::Quota;
 pub use ingress::{Mailbox, Message};
 use nullspace_types::Identity;
 use std::num::NonZero;

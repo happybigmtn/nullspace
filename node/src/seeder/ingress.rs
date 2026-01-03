@@ -1,8 +1,7 @@
 use bytes::Bytes;
-use commonware_consensus::{
-    threshold_simplex::types::{Seedable, View},
-    Reporter,
-};
+use commonware_consensus::simplex::scheme::bls12381_threshold::Seedable;
+use commonware_consensus::types::View;
+use commonware_consensus::Reporter;
 use commonware_macros::select;
 use commonware_resolver::{p2p::Producer, Consumer};
 use commonware_runtime::signal::Signal;
@@ -121,8 +120,9 @@ impl Consumer for Mailbox {
         {
             let mut mailbox_sender = self.sender.clone();
             let mut stopped = self.stopped.clone();
+            let view = View::new(key.into());
             select! {
-                result = mailbox_sender.send(Message::Deliver { view: key.into(), signature: value, response: sender }) => {
+                result = mailbox_sender.send(Message::Deliver { view, signature: value, response: sender }) => {
                     if result.is_err() {
                         warn!("failed to send deliver");
                         return false;
@@ -155,7 +155,7 @@ impl Producer for Mailbox {
 
     async fn produce(&mut self, key: Self::Key) -> oneshot::Receiver<Bytes> {
         let (sender, receiver) = oneshot::channel();
-        let view = key.into();
+        let view = View::new(key.into());
         let mut mailbox_sender = self.sender.clone();
         let mut stopped = self.stopped.clone();
         select! {
@@ -177,9 +177,6 @@ impl Reporter for Mailbox {
         match activity {
             Activity::Notarization(notarization) => {
                 let _ = self.put(notarization.seed()).await;
-            }
-            Activity::Nullification(nullification) => {
-                let _ = self.put(nullification.seed()).await;
             }
             Activity::Finalization(finalization) => {
                 let _ = self.put(finalization.seed()).await;

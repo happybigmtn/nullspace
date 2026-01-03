@@ -62,6 +62,10 @@ const MAX_TOTAL_SESSIONS = parsePositiveInt('MAX_TOTAL_SESSIONS', 1000, { requir
 const DEFAULT_FAUCET_AMOUNT = 1000n;
 const FAUCET_COOLDOWN_MS = 60_000;
 const BALANCE_REFRESH_MS = parsePositiveInt('BALANCE_REFRESH_MS', 60_000);
+const SUBMIT_TIMEOUT_MS = parsePositiveInt('GATEWAY_SUBMIT_TIMEOUT_MS', 10_000);
+const HEALTH_TIMEOUT_MS = parsePositiveInt('GATEWAY_HEALTHCHECK_TIMEOUT_MS', 5_000);
+const ACCOUNT_TIMEOUT_MS = parsePositiveInt('GATEWAY_ACCOUNT_TIMEOUT_MS', 5_000);
+const SUBMIT_MAX_BYTES = parsePositiveInt('GATEWAY_SUBMIT_MAX_BYTES', 8 * 1024 * 1024);
 const NONCE_PERSIST_INTERVAL_MS = parsePositiveInt(
   'GATEWAY_NONCE_PERSIST_INTERVAL_MS',
   15_000,
@@ -90,7 +94,13 @@ validateProductionEnv();
 
 // Core services
 const nonceManager = new NonceManager({ origin: GATEWAY_ORIGIN, dataDir: GATEWAY_DATA_DIR });
-const submitClient = new SubmitClient(BACKEND_URL, 10_000, GATEWAY_ORIGIN);
+const submitClient = new SubmitClient(BACKEND_URL, {
+  origin: GATEWAY_ORIGIN,
+  submitTimeoutMs: SUBMIT_TIMEOUT_MS,
+  healthTimeoutMs: HEALTH_TIMEOUT_MS,
+  accountTimeoutMs: ACCOUNT_TIMEOUT_MS,
+  maxSubmissionBytes: SUBMIT_MAX_BYTES,
+});
 const sessionManager = new SessionManager(submitClient, BACKEND_URL, nonceManager, GATEWAY_ORIGIN);
 const connectionLimiter = new ConnectionLimiter({
   maxConnectionsPerIp: MAX_CONNECTIONS_PER_IP,

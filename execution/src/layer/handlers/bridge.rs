@@ -94,7 +94,7 @@ impl<'a, S: State> Layer<'a, S> {
             ));
         }
 
-        let mut player = match self.get(&Key::CasinoPlayer(public.clone())).await? {
+        let mut player = match self.get(Key::CasinoPlayer(public.clone())).await? {
             Some(Value::CasinoPlayer(player)) => player,
             _ => {
                 return Ok(casino_error_vec(
@@ -114,7 +114,7 @@ impl<'a, S: State> Layer<'a, S> {
             ));
         }
 
-        let now = current_time_sec(self.seed.view);
+        let now = current_time_sec(self.seed_view);
         let current_day = now / SECONDS_PER_DAY;
         reset_player_bridge_daily_if_needed(&mut player, current_day);
 
@@ -215,7 +215,7 @@ impl<'a, S: State> Layer<'a, S> {
             ));
         }
 
-        let mut player = match self.get(&Key::CasinoPlayer(recipient.clone())).await? {
+        let mut player = match self.get(Key::CasinoPlayer(recipient.clone())).await? {
             Some(Value::CasinoPlayer(player)) => player,
             _ => {
                 return Ok(casino_error_vec(
@@ -272,7 +272,7 @@ impl<'a, S: State> Layer<'a, S> {
             ));
         }
 
-        let mut withdrawal = match self.get(&Key::BridgeWithdrawal(withdrawal_id)).await? {
+        let mut withdrawal = match self.get(Key::BridgeWithdrawal(withdrawal_id)).await? {
             Some(Value::BridgeWithdrawal(withdrawal)) => withdrawal,
             _ => {
                 return Ok(casino_error_vec(
@@ -293,7 +293,7 @@ impl<'a, S: State> Layer<'a, S> {
             ));
         }
 
-        let now = current_time_sec(self.seed.view);
+        let now = current_time_sec(self.seed_view);
         if now < withdrawal.available_ts {
             return Ok(casino_error_vec(
                 public,

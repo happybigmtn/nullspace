@@ -2,7 +2,7 @@
 use crate::api::{Query, UpdatesFilter};
 use crate::execution::{Instruction, Transaction};
 use commonware_codec::Encode;
-use commonware_cryptography::{ed25519::PrivateKey, PrivateKeyExt};
+use commonware_cryptography::{ed25519::PrivateKey, Signer};
 
 #[test]
 fn query_encoding_is_stable() {

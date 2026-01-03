@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useCallback, useState } from 'react';
 import { GameState, SicBoBet } from '../../../types';
 import { MobileDrawer } from '../MobileDrawer';
 import { BetsDrawer } from '../BetsDrawer';
+import { PanelDrawer } from '../PanelDrawer';
 import { getSicBoTotalItems, getSicBoCombinationItems, calculateSicBoTotalExposure, calculateSicBoCombinationExposure } from '../../../utils/gameUtils';
 import { DiceThrow2D } from '../GameComponents';
 import { Label } from '../ui/Label';
@@ -151,7 +152,7 @@ export const SicBoView = React.memo<{
 
                 {/* Center Info */}
                 <div className="text-center space-y-3 relative z-20">
-                    <h2 className="text-2xl sm:text-3xl font-extrabold text-titanium-900 tracking-tight font-display animate-scale-in">
+                    <h2 className="text-2xl sm:text-3xl font-extrabold text-titanium-900 tracking-tight font-display animate-scale-in zen-hide">
                         {gameState.message || 'Place Your Bets'}
                     </h2>
                     {/* Current Bets Summary */}
@@ -167,7 +168,7 @@ export const SicBoView = React.memo<{
 
                 {/* History */}
                  {gameState.sicBoHistory.length > 0 && (
-                     <div className="flex flex-col items-center gap-2">
+                     <div className="flex flex-col items-center gap-2 zen-hide">
                          <Label size="micro" variant="secondary">Recent Results</Label>
                          <div className="flex gap-2 opacity-80">
                              {gameState.sicBoHistory.slice(-5).reverse().map((roll, i) => (
@@ -180,42 +181,6 @@ export const SicBoView = React.memo<{
                  )}
             </div>
 
-             {/* EXPOSURE SIDEBAR */}
-             <div className="hidden lg:flex absolute top-8 left-4 bottom-24 w-64 bg-white/60 backdrop-blur-md rounded-[32px] border border-titanium-200 p-6 flex-col shadow-soft">
-                <div className="flex-none flex border-b border-titanium-100 pb-2 mb-4">
-                    <div className="flex-1 text-center"><Label size="micro">Totals</Label></div>
-                    <div className="flex-1 text-center"><Label size="micro">Combos</Label></div>
-                </div>
-
-                <div className="flex-1 flex flex-row relative overflow-hidden">
-                    <div className="absolute left-1/2 top-0 bottom-0 w-px bg-titanium-100 -translate-x-1/2"></div>
-                    <div className="flex-1 flex flex-col gap-0.5 pr-2 overflow-y-auto scrollbar-hide">
-                        {totalItems.map((entry, idx) => renderTotalRow(entry, idx))}
-                    </div>
-                    <div className="flex-1 flex flex-col gap-0.5 pl-2 overflow-y-auto scrollbar-hide text-center">
-                        {combinationItems.slice(0, 18).map((entry, idx) => renderComboRow(entry, idx))}
-                    </div>
-                </div>
-            </div>
-
-            {/* ACTIVE BETS SIDEBAR */}
-            <div className="hidden lg:flex absolute top-8 right-4 bottom-24 w-60 bg-white/60 backdrop-blur-md rounded-[32px] border border-titanium-200 p-6 flex-col shadow-soft">
-                    <Label className="mb-4 text-center block">Active Bets</Label>
-                    <div className="flex-1 overflow-y-auto space-y-2 scrollbar-hide">
-                        {gameState.sicBoBets.length === 0 ? (
-                            <div className="text-center py-12 italic text-titanium-300 text-xs">No active bets</div>
-                        ) : (
-                            gameState.sicBoBets.map((b, i) => (
-                                <div key={i} className={`p-3 rounded-2xl border transition-all ${b.local ? 'bg-titanium-50 border-dashed border-titanium-300' : 'bg-white border-titanium-100 shadow-soft'}`}>
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-[10px] font-bold text-titanium-900 uppercase tracking-tight">{b.type} {b.target ?? ''}</span>
-                                        <span className="text-xs font-black text-action-success">${b.amount}</span>
-                                    </div>
-                                </div>
-                            ))
-                        )}
-                    </div>
-            </div>
 
             {/* SIC BO MODAL */}
             {gameState.sicBoInputMode !== 'NONE' && (
@@ -265,7 +230,7 @@ export const SicBoView = React.memo<{
             )}
 
             {/* Control Bar */}
-            <div className="ns-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-titanium-50/95 backdrop-blur border-t border-titanium-200 z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
+            <div className="ns-controlbar zen-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-titanium-50/95 backdrop-blur border-t border-titanium-200 z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
                 <div className="h-auto md:h-20 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2 p-2 md:px-4">
                     {/* Quick Bets - Desktop */}
                     <div className="hidden md:flex items-center gap-2 flex-1">
@@ -330,6 +295,39 @@ export const SicBoView = React.memo<{
                         >
                             Rebet
                         </button>
+                        <PanelDrawer label="Table" title="SIC BO TABLE" count={gameState.sicBoBets.length} className="hidden md:inline-flex">
+                            <div className="space-y-6">
+                                <div>
+                                    <Label size="micro" className="mb-2 block">Totals</Label>
+                                    <div className="max-h-40 overflow-y-auto scrollbar-hide rounded-2xl border border-titanium-200 bg-titanium-50/60 p-2">
+                                        {totalItems.map((entry, idx) => renderTotalRow(entry, idx))}
+                                    </div>
+                                </div>
+                                <div>
+                                    <Label size="micro" className="mb-2 block">Combos</Label>
+                                    <div className="max-h-40 overflow-y-auto scrollbar-hide rounded-2xl border border-titanium-200 bg-titanium-50/60 p-2">
+                                        {combinationItems.slice(0, 18).map((entry, idx) => renderComboRow(entry, idx))}
+                                    </div>
+                                </div>
+                                <div>
+                                    <Label size="micro" className="mb-2 block">Active Bets</Label>
+                                    <div className="space-y-2">
+                                        {gameState.sicBoBets.length === 0 ? (
+                                            <div className="text-center py-6 text-[11px] text-titanium-500 uppercase tracking-widest">No active bets</div>
+                                        ) : (
+                                            gameState.sicBoBets.map((b, i) => (
+                                                <div key={i} className={`p-3 rounded-2xl border transition-all ${b.local ? 'bg-titanium-50 border-dashed border-titanium-300' : 'bg-white border-titanium-100 shadow-soft'}`}>
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-[10px] font-bold text-titanium-900 uppercase tracking-tight">{b.type} {b.target ?? ''}</span>
+                                                        <span className="text-xs font-black text-action-success">${b.amount}</span>
+                                                    </div>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </PanelDrawer>
                     </div>
 
                     {/* Mobile: Bet Menu Drawer */}
@@ -409,7 +407,7 @@ export const SicBoView = React.memo<{
                     <button
                         type="button"
                         onClick={actions?.deal}
-                        className="h-14 px-12 rounded-full border-2 font-bold text-lg font-display tracking-tight uppercase transition-all shadow-soft border-action-primary bg-action-primary text-white hover:bg-action-primary-hover hover:scale-105 active:scale-95"
+                        className="ns-control-primary h-14 px-12 rounded-full border-2 font-bold text-lg font-display tracking-tight uppercase transition-all shadow-soft border-action-primary bg-action-primary text-white hover:bg-action-primary-hover hover:scale-105 active:scale-95"
                     >
                         ROLL
                     </button>

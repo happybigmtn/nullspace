@@ -13,7 +13,7 @@
 use clap::Parser;
 use commonware_codec::{DecodeExt, Encode};
 use commonware_utils::hex;
-use nullspace_client::Client;
+use nullspace_client::{operation_value, Client};
 use nullspace_types::{
     execution::{Key, Value},
     Identity,
@@ -83,7 +83,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Err("Player registry not found".into());
     };
 
-    let registry = match registry_lookup.operation.value() {
+    let registry = match operation_value(&registry_lookup.operation) {
         Some(Value::PlayerRegistry(registry)) => registry.clone(),
         _ => return Err("Unexpected registry value".into()),
     };
@@ -96,7 +96,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let Some(lookup) = lookup else {
             continue;
         };
-        let Some(Value::CasinoPlayer(player)) = lookup.operation.value() else {
+        let Some(Value::CasinoPlayer(player)) = operation_value(&lookup.operation) else {
             continue;
         };
 
@@ -130,7 +130,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let payload = Snapshot {
         generated_at_unix,
-        view: registry_lookup.progress.view,
+        view: registry_lookup.progress.view.get(),
         height: registry_lookup.progress.height,
         unlocked_only: args.unlocked_only,
         min_credits: args.min_credits,

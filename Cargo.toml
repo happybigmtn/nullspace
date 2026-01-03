@@ -23,18 +23,19 @@ nullspace-execution = { version = "0.0.1", path = "execution", default-features 
 nullspace-simulator = { version = "0.0.1", path = "simulator" }
 nullspace-types = { version = "0.0.1", path = "types" }
 # Commonware dependencies
-commonware-broadcast = { version = "0.0.62" }
-commonware-codec = { version = "0.0.62" }
-commonware-consensus = { version = "0.0.62" }
-commonware-cryptography = { version = "0.0.62" }
-commonware-deployer = { version = "0.0.62", default-features = false }
-commonware-macros = { version = "0.0.62" }
-commonware-p2p = { version = "0.0.62" }
-commonware-resolver = { version = "0.0.62" }
-commonware-runtime = { version = "0.0.62" }
-commonware-storage = { version = "0.0.62" }
-commonware-stream = { version = "0.0.62" }
-commonware-utils = { version = "0.0.62" }
+commonware-broadcast = { version = "0.0.64" }
+commonware-codec = { version = "0.0.64" }
+commonware-consensus = { version = "0.0.64" }
+commonware-cryptography = { version = "0.0.64" }
+commonware-deployer = { version = "0.0.64", default-features = false }
+commonware-macros = { version = "0.0.64" }
+commonware-math = { version = "0.0.64" }
+commonware-p2p = { version = "0.0.64" }
+commonware-resolver = { version = "0.0.64" }
+commonware-runtime = { version = "0.0.64" }
+commonware-storage = { version = "0.0.64" }
+commonware-stream = { version = "0.0.64" }
+commonware-utils = { version = "0.0.64" }
 
 # Common dependencies
 anyhow = "1.0.99"
@@ -50,7 +51,7 @@ opentelemetry = "0.28.0"
 opentelemetry-otlp = "0.28.0"
 opentelemetry_sdk = "0.28.0"
 governor = "0.6.3"
-prometheus-client = "0.22.3"
+prometheus-client = "0.24.0"
 clap = { version = "4.5.18", features = ["derive"] }
 serde = { version = "1.0.218", features = ["derive"] }
 serde_json = "1.0.122"

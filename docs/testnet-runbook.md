@@ -123,20 +123,7 @@ pnpm -C services/ops build
 pnpm -C services/ops start
 ```
 
-## 4g) Start executor
-Run the executor on its own host:
-
-```bash
-EXECUTOR_URL=http://<INDEXER_HOST>:8080 \
-EXECUTOR_IDENTITY=<IDENTITY_HEX> \
-EXECUTOR_BLOCK_INTERVAL_MS=50 \
-./target/release/dev-executor \
-  --url ${EXECUTOR_URL} --identity ${EXECUTOR_IDENTITY} --block-interval-ms ${EXECUTOR_BLOCK_INTERVAL_MS}
-```
-
-You can use the chain identity from `configs/testnet/.env.local` (`VITE_IDENTITY`).
-
-## 5) Start validators
+## 4g) Start validators
 On each validator host:
 
 ```bash
@@ -150,7 +137,7 @@ Or with hosts:
 ./target/release/nullspace-node --config configs/testnet/nodeN.yaml --hosts configs/testnet/hosts.yaml
 ```
 
-## 6) Health + metrics checks
+## 5) Health + metrics checks
 Verify metrics endpoints per node (default 9100+):
 - `http://<NODE_IP>:9100/metrics` (send `x-metrics-token: <METRICS_AUTH_TOKEN>`)
 - `http://<INDEXER_IP>:8080/metrics/prometheus` (send `x-metrics-token: <METRICS_AUTH_TOKEN>`)

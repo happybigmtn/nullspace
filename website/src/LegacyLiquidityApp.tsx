@@ -202,7 +202,7 @@ export default function LegacyLiquidityApp() {
         pushActivity('Connected');
       } catch (e) {
         console.error('[LiquidityApp] init failed:', e);
-        setStatus('Failed to connect. Check simulator + dev-executor.');
+        setStatus('Failed to connect. Check simulator + validators.');
       }
     };
 

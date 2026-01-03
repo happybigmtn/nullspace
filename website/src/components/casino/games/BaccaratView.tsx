@@ -5,7 +5,8 @@ import { Hand } from '../GameComponents';
 import { cardIdToString } from '../../../services/games';
 import { MobileDrawer } from '../MobileDrawer';
 import { BetsDrawer } from '../BetsDrawer';
-import { SideBetMenu } from './SideBetMenu';
+import { SideBetsDrawer } from '../SideBetsDrawer';
+import { PanelDrawer } from '../PanelDrawer';
 import { Label } from '../ui/Label';
 
 type BetGroup = 'NONE' | 'BONUS';
@@ -31,11 +32,10 @@ export const BaccaratView = React.memo<{
 }>(({ gameState, actions, lastWin, playMode }) => {
     const [leftSidebarView, setLeftSidebarView] = useState<'EXPOSURE' | 'SIDE_BETS'>('EXPOSURE');
     const [activeGroup, setActiveGroup] = useState<BetGroup>('NONE');
-    // Consolidate main bet and side bets for display
-    const allBets = useMemo(() => [
-        { type: gameState.baccaratSelection, amount: gameState.bet },
-        ...gameState.baccaratBets
-    ], [gameState.baccaratSelection, gameState.bet, gameState.baccaratBets]);
+    const baccaratBetCount = useMemo(() => {
+        const main = gameState.bet > 0 ? 1 : 0;
+        return main + gameState.baccaratBets.length;
+    }, [gameState.bet, gameState.baccaratBets.length]);
 
     const isPlayerSelected = useMemo(() => gameState.baccaratSelection === 'PLAYER', [gameState.baccaratSelection]);
     const isBankerSelected = useMemo(() => gameState.baccaratSelection === 'BANKER', [gameState.baccaratSelection]);
@@ -69,11 +69,6 @@ export const BaccaratView = React.memo<{
             PERFECT_PAIR: amt('PERFECT_PAIR'),
         };
     }, [gameState.baccaratBets]);
-
-    const totalBet = useMemo(
-        () => allBets.reduce((sum, b) => sum + (Number.isFinite(b.amount) ? b.amount : 0), 0),
-        [allBets]
-    );
 
     const playerColor = isPlayerSelected ? 'text-action-success' : 'text-action-destructive';
     const bankerColor = isBankerSelected ? 'text-action-success' : 'text-action-destructive';
@@ -223,7 +218,7 @@ export const BaccaratView = React.memo<{
                 </div>
                 {/* Center Info */}
                 <div className="text-center space-y-2 relative z-20 py-2 sm:py-4 px-6">
-                    <h2 className="text-2xl sm:text-3xl font-extrabold text-titanium-900 tracking-tight font-display animate-scale-in">
+                    <h2 className="text-xl sm:text-2xl font-semibold text-titanium-800 tracking-tight font-display animate-scale-in zen-hide">
                         {gameState.message || 'Place Your Bets'}
                     </h2>
                     <div className="flex flex-wrap items-center justify-center gap-2">
@@ -289,151 +284,10 @@ export const BaccaratView = React.memo<{
                 )}
             </div>
 
-            {/* LEFT SIDEBAR - EXPOSURE / SIDE BETS TOGGLE */}
-            <div className="hidden lg:flex absolute top-0 left-0 bottom-24 w-56 bg-titanium-900/80 border-r-2 border-gray-700 backdrop-blur-sm z-30 flex-col">
-                {/* Toggle Tabs */}
-                <div className="flex-none flex border-b border-gray-800">
-                    <button
-                        onClick={() => setLeftSidebarView('EXPOSURE')}
-                        className={`flex-1 py-2 flex items-center justify-center transition-colors ${
-                            leftSidebarView === 'EXPOSURE'
-                                ? 'border-b-2 border-action-primary bg-action-primary/10'
-                                : 'hover:bg-titanium-100'
-                        }`}
-                    >
-                        <Label variant={leftSidebarView === 'EXPOSURE' ? 'gold' : 'primary'}>Exposure</Label>
-                    </button>
-                    <button
-                        onClick={() => setLeftSidebarView('SIDE_BETS')}
-                        className={`flex-1 py-2 flex items-center justify-center transition-colors ${
-                            leftSidebarView === 'SIDE_BETS'
-                                ? 'border-b-2 border-action-primary bg-action-primary/10'
-                                : 'hover:bg-titanium-100'
-                        }`}
-                    >
-                        <Label variant={leftSidebarView === 'SIDE_BETS' ? 'gold' : 'primary'}>Side Bets</Label>
-                    </button>
-                </div>
-
-                {/* Content */}
-                <div className="flex-1 overflow-y-auto p-2">
-                    {leftSidebarView === 'EXPOSURE' ? (
-                        <div className="flex flex-col justify-center space-y-2 h-full font-mono">
-                            <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-2 text-center border-b border-gray-800 pb-1">
-                                POTENTIAL OUTCOMES
-                            </div>
-                            {/* Player Win */}
-                            <div className="flex items-center justify-between p-2 border border-gray-800 rounded bg-black/40">
-                                <span className="text-sm text-action-success font-bold">PLAYER WIN</span>
-                                <span className="text-xs text-gray-400">1:1</span>
-                            </div>
-                            {/* Banker Win */}
-                            <div className="flex items-center justify-between p-2 border border-gray-800 rounded bg-black/40">
-                                <span className="text-sm text-action-success font-bold">BANKER WIN</span>
-                                <span className="text-xs text-gray-400">1:1 (6 pays 1:2)</span>
-                            </div>
-                            {/* Tie */}
-                            <div className="flex items-center justify-between p-2 border border-gray-800 rounded bg-black/40">
-                                <span className="text-sm text-gray-400 font-bold">TIE</span>
-                                <span className="text-xs text-action-primary">8:1</span>
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="space-y-3">
-                            <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-2 text-center border-b border-gray-800 pb-1">
-                                SIDE BET PAYOUTS
-                            </div>
-                            {/* Side bet payout info */}
-                            {[
-                                { type: 'TIE', payout: '8:1', desc: 'Player & Banker tie' },
-                                { type: 'P_PAIR', payout: '11:1', desc: 'Player first 2 same rank' },
-                                { type: 'B_PAIR', payout: '11:1', desc: 'Banker first 2 same rank' },
-                                { type: 'LUCKY6', payout: 'Varies', desc: 'Banker wins with 6' },
-                                { type: 'P_DRAGON', payout: 'Varies', desc: 'Player natural or +4' },
-                                { type: 'B_DRAGON', payout: 'Varies', desc: 'Banker natural or +4' },
-                                { type: 'PANDA8', payout: '25:1', desc: 'Player 3-card 8' },
-                                { type: 'PERF.PAIR', payout: '25:1 / 250:1', desc: 'Either suited pair / both suited pairs' },
-                            ].map((bet) => (
-                                <div key={bet.type} className="border border-gray-800 rounded bg-black/40 p-2">
-                                    <div className="flex items-center justify-between mb-1">
-                                        <span className="text-xs text-amber-400 font-bold">{bet.type}</span>
-                                        <span className="text-xs text-action-primary">{bet.payout}</span>
-                                    </div>
-                                    <div className="text-[9px] text-gray-500">{bet.desc}</div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            {/* BETS SIDEBAR - Split Confirmed/Pending */}
-            <div className="hidden lg:flex absolute top-0 right-0 bottom-24 w-40 bg-titanium-900/80 border-l-2 border-gray-700 p-2 backdrop-blur-sm z-30 flex-col">
-                <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-2 border-b border-gray-800 pb-1 flex-none text-center">Bets</div>
-                <div className="flex-1 overflow-y-auto flex flex-col space-y-2">
-                    {(() => {
-                        const confirmedMainBet = gameState.bet > 0 ? [{ type: gameState.baccaratSelection, amount: gameState.bet, local: false }] : [];
-                        const confirmedSideBets = gameState.baccaratBets.filter(b => b.local !== true);
-                        const pendingSideBets = gameState.baccaratBets.filter(b => b.local === true);
-
-                        const confirmedBets = [...confirmedMainBet, ...confirmedSideBets];
-                        const pendingBets = pendingSideBets;
-
-                        const renderBet = (b: any, i: number, isPending: boolean) => {
-                            const isMainBet = b.type === 'PLAYER' || b.type === 'BANKER';
-                            return (
-                                <div
-                                    key={i}
-                                    onClick={() => !isMainBet ? actions?.baccaratActions?.placeBet?.(b.type) : undefined}
-                                    className={`flex justify-between items-center text-xs border p-1 rounded transition-colors ${
-                                        isPending
-                                            ? 'border-dashed border-amber-600/50 bg-amber-900/20 opacity-60 cursor-pointer hover:bg-amber-800/30'
-                                            : isMainBet
-                                                ? 'border-action-success/30 bg-black/50'
-                                                : 'border-gray-800 bg-black/50 cursor-pointer hover:bg-gray-800'
-                                    }`}
-                                >
-                                    <span className={`font-bold text-[10px] ${
-                                        isMainBet ? 'text-action-success' : isPending ? 'text-amber-400' : 'text-gray-400'
-                                    }`}>
-                                        {b.type}
-                                    </span>
-                                    <div className={`text-[10px] ${isPending ? 'text-amber-300' : 'text-white'}`}>${b.amount}</div>
-                                </div>
-                            );
-                        };
-
-                        if (confirmedBets.length === 0 && pendingBets.length === 0) {
-                            return <div className="text-center text-[10px] text-gray-700 italic">NO BETS</div>;
-                        }
-
-                        return (
-                            <>
-                                {confirmedBets.length > 0 && (
-                                    <div className="space-y-1">
-                                        <div className="text-[8px] text-action-success uppercase tracking-widest font-bold">
-                                            Confirmed ({confirmedBets.length})
-                                        </div>
-                                        {confirmedBets.map((b, i) => renderBet(b, i, false))}
-                                    </div>
-                                )}
-
-                                {pendingBets.length > 0 && (
-                                    <div className="space-y-1">
-                                        <div className="text-[8px] text-amber-400 uppercase tracking-widest font-bold">
-                                            Pending ({pendingBets.length})
-                                        </div>
-                                        {pendingBets.map((b, i) => renderBet(b, i, true))}
-                                    </div>
-                                )}
-                            </>
-                        );
-                    })()}
-                </div>
-            </div>
+            {/* Table Drawer */}
 
             {/* CONTROLS - Grouped by Normal/Bonus */}
-            <div className="ns-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-titanium-900/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
+            <div className="ns-controlbar zen-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-titanium-900/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
                 <div className="h-auto md:h-20 flex flex-col md:flex-row items-stretch md:items-center justify-between md:justify-center gap-2 p-2 md:px-4">
                     {/* Desktop: Bet Groups */}
                     <div className="hidden md:flex items-center gap-3 flex-1">
@@ -464,14 +318,174 @@ export const BaccaratView = React.memo<{
                             </button>
                         </div>
 
-                        <SideBetMenu
-                            bets={BONUS_BETS}
-                            isActive={isBonusActive}
-                            onSelect={executeBetAction}
+                        <SideBetsDrawer
+                            title="BACCARAT SIDE BETS"
+                            label="Side Bets"
+                            count={Object.values(sideBetAmounts).filter((amount) => amount > 0).length}
+                            shortcutHint="Shift+2"
                             open={activeGroup === 'BONUS'}
                             onOpenChange={(open) => setActiveGroup(open ? 'BONUS' : 'NONE')}
-                            shortcutHint="SHIFT+2"
-                        />
+                        >
+                            <div className="grid grid-cols-2 gap-2">
+                                {BONUS_BETS.map((bet) => {
+                                    const active = isBonusActive(bet.action);
+                                    return (
+                                        <button
+                                            key={bet.action}
+                                            type="button"
+                                            onClick={() => executeBetAction(bet.action)}
+                                            className={`rounded-xl border px-3 py-3 text-xs font-semibold uppercase tracking-widest transition-all ${
+                                                active
+                                                    ? 'border-action-primary/60 bg-action-primary/10 text-action-primary'
+                                                    : 'border-titanium-200 text-titanium-700 hover:border-titanium-500 dark:border-titanium-800 dark:text-titanium-200'
+                                            }`}
+                                        >
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span>{bet.label}</span>
+                                                <span className="text-[10px] font-mono text-titanium-400">[{bet.key}]</span>
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </SideBetsDrawer>
+
+                        <PanelDrawer label="Table" title="BACCARAT TABLE" count={baccaratBetCount} className="hidden md:inline-flex">
+                            <div className="space-y-6">
+                                <div>
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <button
+                                            onClick={() => setLeftSidebarView('EXPOSURE')}
+                                            className={`flex-1 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest transition-colors ${
+                                                leftSidebarView === 'EXPOSURE'
+                                                    ? 'text-action-success border border-action-success bg-action-success/10'
+                                                    : 'text-titanium-500 border border-titanium-200 hover:text-titanium-800'
+                                            }`}
+                                        >
+                                            Exposure
+                                        </button>
+                                        <button
+                                            onClick={() => setLeftSidebarView('SIDE_BETS')}
+                                            className={`flex-1 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest transition-colors ${
+                                                leftSidebarView === 'SIDE_BETS'
+                                                    ? 'text-action-primary border border-action-primary bg-action-primary/10'
+                                                    : 'text-titanium-500 border border-titanium-200 hover:text-titanium-800'
+                                            }`}
+                                        >
+                                            Side Bets
+                                        </button>
+                                    </div>
+
+                                    {leftSidebarView === 'EXPOSURE' ? (
+                                        <div className="space-y-2 font-mono">
+                                            <div className="text-[10px] text-titanium-500 uppercase tracking-widest mb-2 text-center border-b border-titanium-200 pb-1">
+                                                Potential Outcomes
+                                            </div>
+                                            <div className="flex items-center justify-between p-2 border border-titanium-200 rounded bg-titanium-50">
+                                                <span className="text-sm text-action-success font-bold">PLAYER WIN</span>
+                                                <span className="text-xs text-titanium-500">1:1</span>
+                                            </div>
+                                            <div className="flex items-center justify-between p-2 border border-titanium-200 rounded bg-titanium-50">
+                                                <span className="text-sm text-action-success font-bold">BANKER WIN</span>
+                                                <span className="text-xs text-titanium-500">1:1 (6 pays 1:2)</span>
+                                            </div>
+                                            <div className="flex items-center justify-between p-2 border border-titanium-200 rounded bg-titanium-50">
+                                                <span className="text-sm text-titanium-500 font-bold">TIE</span>
+                                                <span className="text-xs text-action-primary">8:1</span>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-3">
+                                            <div className="text-[10px] text-titanium-500 uppercase tracking-widest mb-2 text-center border-b border-titanium-200 pb-1">
+                                                Side Bet Payouts
+                                            </div>
+                                            {[
+                                                { type: 'TIE', payout: '8:1', desc: 'Player & Banker tie' },
+                                                { type: 'P_PAIR', payout: '11:1', desc: 'Player first 2 same rank' },
+                                                { type: 'B_PAIR', payout: '11:1', desc: 'Banker first 2 same rank' },
+                                                { type: 'LUCKY6', payout: 'Varies', desc: 'Banker wins with 6' },
+                                                { type: 'P_DRAGON', payout: 'Varies', desc: 'Player natural or +4' },
+                                                { type: 'B_DRAGON', payout: 'Varies', desc: 'Banker natural or +4' },
+                                                { type: 'PANDA8', payout: '25:1', desc: 'Player 3-card 8' },
+                                                { type: 'PERF.PAIR', payout: '25:1 / 250:1', desc: 'Either suited pair / both suited pairs' },
+                                            ].map((bet) => (
+                                                <div key={bet.type} className="border border-titanium-200 rounded bg-titanium-50 p-2">
+                                                    <div className="flex items-center justify-between mb-1">
+                                                        <span className="text-xs text-amber-500 font-bold">{bet.type}</span>
+                                                        <span className="text-xs text-action-primary">{bet.payout}</span>
+                                                    </div>
+                                                    <div className="text-[9px] text-titanium-500">{bet.desc}</div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div>
+                                    <Label size="micro" className="mb-2 block">Bets</Label>
+                                    <div className="space-y-2">
+                                        {(() => {
+                                            const confirmedMainBet = gameState.bet > 0 ? [{ type: gameState.baccaratSelection, amount: gameState.bet, local: false }] : [];
+                                            const confirmedSideBets = gameState.baccaratBets.filter(b => b.local !== true);
+                                            const pendingSideBets = gameState.baccaratBets.filter(b => b.local === true);
+
+                                            const confirmedBets = [...confirmedMainBet, ...confirmedSideBets];
+                                            const pendingBets = pendingSideBets;
+
+                                            const renderBet = (b: any, i: number, isPending: boolean) => {
+                                                const isMainBet = b.type === 'PLAYER' || b.type === 'BANKER';
+                                                return (
+                                                    <div
+                                                        key={i}
+                                                        onClick={() => !isMainBet ? actions?.baccaratActions?.placeBet?.(b.type) : undefined}
+                                                        className={`flex justify-between items-center text-xs border p-2 rounded transition-colors ${
+                                                            isPending
+                                                                ? 'border-dashed border-amber-400/50 bg-amber-500/10 cursor-pointer hover:bg-amber-500/20'
+                                                                : isMainBet
+                                                                    ? 'border-action-success/30 bg-titanium-50'
+                                                                    : 'border-titanium-200 bg-white cursor-pointer hover:bg-titanium-50'
+                                                        }`}
+                                                    >
+                                                        <span className={`font-bold text-[10px] ${
+                                                            isMainBet ? 'text-action-success' : isPending ? 'text-amber-500' : 'text-titanium-600'
+                                                        }`}>
+                                                            {b.type}
+                                                        </span>
+                                                        <div className="text-[10px] text-titanium-900">${b.amount}</div>
+                                                    </div>
+                                                );
+                                            };
+
+                                            if (confirmedBets.length === 0 && pendingBets.length === 0) {
+                                                return <div className="text-center text-[10px] text-titanium-500 uppercase tracking-widest">No bets</div>;
+                                            }
+
+                                            return (
+                                                <>
+                                                    {confirmedBets.length > 0 && (
+                                                        <div className="space-y-1">
+                                                            <div className="text-[8px] text-action-success uppercase tracking-widest font-bold">
+                                                                Confirmed ({confirmedBets.length})
+                                                            </div>
+                                                            {confirmedBets.map((b, i) => renderBet(b, i, false))}
+                                                        </div>
+                                                    )}
+
+                                                    {pendingBets.length > 0 && (
+                                                        <div className="space-y-1">
+                                                            <div className="text-[8px] text-amber-500 uppercase tracking-widest font-bold">
+                                                                Pending ({pendingBets.length})
+                                                            </div>
+                                                            {pendingBets.map((b, i) => renderBet(b, i, true))}
+                                                        </div>
+                                                    )}
+                                                </>
+                                            );
+                                        })()}
+                                    </div>
+                                </div>
+                            </div>
+                        </PanelDrawer>
 
                         {/* Actions */}
                         <div className="flex items-center gap-2">
@@ -533,16 +547,15 @@ export const BaccaratView = React.memo<{
                     <button
                         type="button"
                         onClick={actions?.deal}
-                        className="h-14 px-8 rounded border-2 font-bold text-base tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] border-action-success bg-action-success text-black hover:bg-white hover:border-white hover:scale-105 active:scale-95"
+                        className="ns-control-primary h-14 px-8 rounded border-2 font-bold text-base tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] border-action-success bg-action-success text-black hover:bg-white hover:border-white hover:scale-105 active:scale-95"
                     >
                         DEAL
                     </button>
 
                     {/* Mobile: Simplified controls */}
                     <div className="flex md:hidden gap-2">
-                        <BetsDrawer title="PLACE BETS">
+                        <BetsDrawer title="NORMAL BETS">
                             <div className="space-y-4">
-                                {/* Normal Bets */}
                                 <div className="rounded border border-gray-800 bg-black/40 p-2 space-y-2">
                                     <div className="text-[10px] text-green-500 font-bold tracking-widest border-b border-gray-800 pb-1">NORMAL BETS</div>
                                     <div className="grid grid-cols-2 gap-2">
@@ -568,39 +581,6 @@ export const BaccaratView = React.memo<{
                                         </button>
                                     </div>
                                 </div>
-
-                                {/* Bonus Bets */}
-                                <div className="rounded border border-gray-800 bg-black/40 p-2 space-y-2">
-                                    <div className="text-[10px] text-amber-500 font-bold tracking-widest border-b border-gray-800 pb-1">BONUS BETS</div>
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                        <button onClick={() => actions?.baccaratActions?.placeBet?.('TIE')} className={`py-3 rounded border text-xs font-bold ${sideBetAmounts.TIE > 0 ? 'border-amber-400 bg-amber-500/20 text-amber-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>
-                                            TIE
-                                        </button>
-                                        <button onClick={() => actions?.baccaratActions?.placeBet?.('P_PAIR')} className={`py-3 rounded border text-xs font-bold ${sideBetAmounts.P_PAIR > 0 ? 'border-amber-400 bg-amber-500/20 text-amber-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>
-                                            P.PAIR
-                                        </button>
-                                        <button onClick={() => actions?.baccaratActions?.placeBet?.('B_PAIR')} className={`py-3 rounded border text-xs font-bold ${sideBetAmounts.B_PAIR > 0 ? 'border-amber-400 bg-amber-500/20 text-amber-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>
-                                            B.PAIR
-                                        </button>
-                                        <button onClick={() => actions?.baccaratActions?.placeBet?.('LUCKY6')} className={`py-3 rounded border text-xs font-bold ${sideBetAmounts.LUCKY6 > 0 ? 'border-amber-400 bg-amber-500/20 text-amber-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>
-                                            LUCKY6
-                                        </button>
-                                        <button onClick={() => actions?.baccaratActions?.placeBet?.('P_DRAGON')} className={`py-3 rounded border text-xs font-bold ${sideBetAmounts.P_DRAGON > 0 ? 'border-amber-400 bg-amber-500/20 text-amber-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>
-                                            P.DRAG
-                                        </button>
-                                        <button onClick={() => actions?.baccaratActions?.placeBet?.('B_DRAGON')} className={`py-3 rounded border text-xs font-bold ${sideBetAmounts.B_DRAGON > 0 ? 'border-amber-400 bg-amber-500/20 text-amber-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>
-                                            B.DRAG
-                                        </button>
-                                        <button onClick={() => actions?.baccaratActions?.placeBet?.('PANDA8')} className={`py-3 rounded border text-xs font-bold ${sideBetAmounts.PANDA8 > 0 ? 'border-amber-400 bg-amber-500/20 text-amber-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>
-                                            PANDA8
-                                        </button>
-                                        <button onClick={() => actions?.baccaratActions?.placeBet?.('PERFECT_PAIR')} className={`py-3 rounded border text-xs font-bold ${sideBetAmounts.PERFECT_PAIR > 0 ? 'border-amber-400 bg-amber-500/20 text-amber-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>
-                                            PERF.PAIR
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {/* Actions */}
                                 <div className="rounded border border-gray-800 bg-black/40 p-2">
                                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                         <button onClick={actions?.baccaratActions?.rebet} className="flex-1 py-3 rounded border border-gray-700 bg-gray-900 text-gray-400 text-xs font-bold">
@@ -616,6 +596,30 @@ export const BaccaratView = React.memo<{
                                 </div>
                             </div>
                         </BetsDrawer>
+                        <SideBetsDrawer
+                            title="BACCARAT SIDE BETS"
+                            label="Side Bets"
+                            count={Object.values(sideBetAmounts).filter((amount) => amount > 0).length}
+                            shortcutHint="Shift+2"
+                            open={activeGroup === 'BONUS'}
+                            onOpenChange={(open) => setActiveGroup(open ? 'BONUS' : 'NONE')}
+                        >
+                            <div className="grid grid-cols-2 gap-2">
+                                {BONUS_BETS.map((bet) => (
+                                    <button
+                                        key={bet.action}
+                                        onClick={() => executeBetAction(bet.action)}
+                                        className={`py-3 rounded border text-xs font-bold ${
+                                            isBonusActive(bet.action)
+                                                ? 'border-amber-400 bg-amber-500/20 text-amber-300'
+                                                : 'border-gray-700 bg-gray-900 text-gray-400'
+                                        }`}
+                                    >
+                                        {bet.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </SideBetsDrawer>
                     </div>
                 </div>
             </div>

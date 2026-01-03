@@ -150,6 +150,32 @@ Down-only mitigation toolkit:
 - Freeroll credits redeemable only via auction, with bonus vesting over a continuous
   3-month schedule.
 
+### Testnet Policy Checkpoint (5k concurrent target)
+Adopt current code defaults as the baseline for testnet and re-evaluate after
+telemetry and abuse review:
+
+Faucet + onboarding:
+- `FAUCET_AMOUNT=1000`
+- `FAUCET_MIN_ACCOUNT_AGE_SECS=86400` (24h)
+- `FAUCET_MIN_SESSIONS=3`
+- `FAUCET_RATE_LIMIT=100` (daily faucet claims per account)
+
+Freerolls + tournaments:
+- `FREEROLL_DAILY_LIMIT_FREE=1`
+- `FREEROLL_DAILY_LIMIT_TRIAL=3`
+- `FREEROLL_DAILY_LIMIT_MEMBER=10`
+- `TOURNAMENT_JOIN_COOLDOWN_SECS=300`
+- `TOURNAMENTS_PER_DAY=240` (one every 6 minutes)
+- `TOURNAMENT_DURATION_SECS=300` (5 minutes)
+
+Freeroll credits:
+- `FREEROLL_CREDIT_IMMEDIATE_BPS=2000` (20% immediate)
+- `FREEROLL_CREDIT_VEST_SECS=180 days`
+- `FREEROLL_CREDIT_EXPIRY_SECS=180 days`
+
+Revisit these parameters after 1-2 weeks of testnet telemetry and any abuse
+investigations.
+
 ### Remaining DeFi Gaps (pre-token launch window)
 
 1. Optional auction bootstrap finalization (if we want a locked closing price for token launch).

@@ -6,14 +6,15 @@ use axum::{
     Json,
 };
 use commonware_codec::{DecodeExt, Encode, Read, ReadExt, ReadRangeExt};
-use commonware_consensus::aggregation::types::Certificate;
+use commonware_consensus::aggregation::{scheme::bls12381_threshold, types::Certificate};
 use commonware_cryptography::{
     bls12381::primitives::variant::MinSig,
+    ed25519::PublicKey,
     sha256::Digest,
 };
 use commonware_storage::{
-    mmr::verification::Proof,
-    store::operation::{Keyless, Variable},
+    mmr::Proof,
+    qmdb::{any::unordered::variable, keyless},
 };
 use commonware_utils::from_hex;
 use nullspace_types::{
@@ -29,6 +30,11 @@ use std::time::Instant;
 use crate::metrics::LatencySnapshot;
 use crate::submission::apply_submission;
 use crate::Simulator;
+
+type AggregationScheme = bls12381_threshold::Scheme<PublicKey, MinSig>;
+type AggregationCertificate = Certificate<AggregationScheme, Digest>;
+type StateOp = variable::Operation<Digest, Value>;
+type EventOp = keyless::Operation<Output>;
 
 #[derive(Serialize)]
 struct HealthzResponse {
@@ -382,9 +388,9 @@ pub(super) async fn submit(
             }
         };
 
-        if let Err(e) = Certificate::<MinSig, Digest>::read(&mut reader) {
+        if let Err(e) = AggregationCertificate::read(&mut reader) {
             tracing::warn!(
-                view = progress.view,
+                view = progress.view.get(),
                 height = progress.height,
                 "Summary decode failed at certificate: {:?}",
                 e
@@ -396,7 +402,7 @@ pub(super) async fn submit(
             Proof::<Digest>::read_cfg(&mut reader, &nullspace_types::api::MAX_STATE_PROOF_NODES)
         {
             tracing::warn!(
-                view = progress.view,
+                view = progress.view.get(),
                 height = progress.height,
                 "Summary decode failed at state_proof: {:?}",
                 e
@@ -411,7 +417,7 @@ pub(super) async fn submit(
             Ok(v) => v,
             Err(e) => {
                 tracing::warn!(
-                    view = progress.view,
+                    view = progress.view.get(),
                     height = progress.height,
                     "Summary decode failed reading state_proof_ops length: {:?}",
                     e
@@ -423,12 +429,12 @@ pub(super) async fn submit(
         let mut state_ops = Vec::with_capacity(state_ops_len);
         for idx in 0..state_ops_len {
             let op_context = reader.first().copied();
-            match Variable::<Digest, Value>::read(&mut reader) {
+            match StateOp::read(&mut reader) {
                 Ok(op) => state_ops.push(op),
                 Err(e) => {
                     let preview_len = core::cmp::min(32, reader.len());
                     tracing::warn!(
-                        view = progress.view,
+                        view = progress.view.get(),
                         height = progress.height,
                         idx,
                         op_context = op_context.map(|b| format!("0x{b:02x}")).unwrap_or_else(|| "EOF".to_string()),
@@ -446,7 +452,7 @@ pub(super) async fn submit(
             Proof::<Digest>::read_cfg(&mut reader, &nullspace_types::api::MAX_EVENTS_PROOF_NODES)
         {
             tracing::warn!(
-                view = progress.view,
+                view = progress.view.get(),
                 height = progress.height,
                 state_ops = state_ops.len(),
                 "Summary decode failed at events_proof: {:?}",
@@ -455,12 +461,12 @@ pub(super) async fn submit(
             return;
         }
 
-        if let Err(e) = Vec::<Keyless<Output>>::read_range(
+        if let Err(e) = Vec::<EventOp>::read_range(
             &mut reader,
             0..=nullspace_types::api::MAX_EVENTS_PROOF_OPS,
         ) {
             tracing::warn!(
-                view = progress.view,
+                view = progress.view.get(),
                 height = progress.height,
                 state_ops = state_ops.len(),
                 "Summary decode failed at events_proof_ops: {:?}",
@@ -471,7 +477,7 @@ pub(super) async fn submit(
 
         if !reader.is_empty() {
             tracing::warn!(
-                view = progress.view,
+                view = progress.view.get(),
                 height = progress.height,
                 state_ops = state_ops.len(),
                 remaining = reader.len(),
@@ -479,7 +485,7 @@ pub(super) async fn submit(
             );
         } else {
             tracing::warn!(
-                view = progress.view,
+                view = progress.view.get(),
                 height = progress.height,
                 state_ops = state_ops.len(),
                 "Summary decode stages succeeded (unexpected)"

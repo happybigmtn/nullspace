@@ -68,7 +68,7 @@ export const useChainTimeouts = ({
           setGameState(prev => ({
             ...prev,
             stage: 'BETTING',
-            message: `NO CHAIN RESPONSE (${context}) — START dev-executor`,
+            message: `NO CHAIN RESPONSE (${context}) — START validators`,
           }));
           return;
         }
@@ -128,7 +128,7 @@ export const useChainTimeouts = ({
         setGameState(prev => ({
           ...prev,
           stage: 'BETTING',
-          message: `NO CHAIN RESPONSE (${context}) — START dev-executor`,
+          message: `NO CHAIN RESPONSE (${context}) — START validators`,
         }));
       })();
     }, chainResponseTimeoutMs);

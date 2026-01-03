@@ -6,6 +6,11 @@
  * Game-specific payloads should defer to @nullspace/protocol where possible.
  */
 import { InstructionTag, GameType, PlayerAction } from './constants.js';
+import {
+  CASINO_MAX_NAME_LENGTH,
+  CASINO_MAX_PAYLOAD_LENGTH,
+  GLOBAL_TABLE_MAX_BETS_PER_ROUND,
+} from '@nullspace/constants/limits';
 import { encodeVarint } from './transactions.js';
 import { encodeGameMovePayload, encodeGameActionPayload } from '@nullspace/protocol';
 import type { BlackjackMoveAction } from '@nullspace/protocol/encode';
@@ -16,6 +21,11 @@ import type { BlackjackMoveAction } from '@nullspace/protocol/encode';
  */
 export function encodeCasinoRegister(name: string): Uint8Array {
   const nameBytes = new TextEncoder().encode(name);
+  if (nameBytes.length > CASINO_MAX_NAME_LENGTH) {
+    throw new Error(
+      `CasinoRegister name exceeds ${CASINO_MAX_NAME_LENGTH} bytes`
+    );
+  }
   const result = new Uint8Array(1 + 4 + nameBytes.length);
   const view = new DataView(result.buffer);
 
@@ -68,6 +78,11 @@ export function encodeCasinoGameMove(
   sessionId: bigint,
   payload: Uint8Array
 ): Uint8Array {
+  if (payload.length > CASINO_MAX_PAYLOAD_LENGTH) {
+    throw new Error(
+      `CasinoGameMove payload exceeds ${CASINO_MAX_PAYLOAD_LENGTH} bytes`
+    );
+  }
   const result = new Uint8Array(1 + 8 + 4 + payload.length);
   const view = new DataView(result.buffer);
 
@@ -128,6 +143,11 @@ export interface GlobalTableBetInput {
 }
 
 export function encodeGlobalTableInit(config: GlobalTableConfigInput): Uint8Array {
+  if (config.maxBetsPerRound > GLOBAL_TABLE_MAX_BETS_PER_ROUND) {
+    throw new Error(
+      `GlobalTable maxBetsPerRound exceeds ${GLOBAL_TABLE_MAX_BETS_PER_ROUND}`
+    );
+  }
   const result = new Uint8Array(1 + 1 + (8 * 6) + 1);
   const view = new DataView(result.buffer);
 

@@ -8,3 +8,10 @@ Please report vulnerabilities privately:
 
 We do not currently offer a public bounty program. We may provide discretionary rewards for
 critical issues and will credit reporters with permission.
+
+## Operational security checklist
+- Never log private keys, admin keys, or service tokens (redact on error paths).
+- Prefer file/secret-backed keys in production (env keys only for non-prod).
+- Rotate service tokens (Convex, ops) at least every 90 days, after personnel changes,
+  and immediately after any suspected leak. Keep a rotation log and overlap new/old
+  tokens for <24 hours before revoking the old one.

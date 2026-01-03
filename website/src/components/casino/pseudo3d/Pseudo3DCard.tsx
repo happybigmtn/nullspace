@@ -12,8 +12,8 @@ interface Pseudo3DCardProps {
 }
 
 const suitColors: Record<string, string> = {
-  hearts: '#FF3B30',
-  diamonds: '#FF3B30',
+  hearts: '#D92D20',
+  diamonds: '#D92D20',
   clubs: '#1C1C1E',
   spades: '#1C1C1E',
 };
@@ -27,10 +27,10 @@ const suitIcons: Record<string, string> = {
 
 // Different sizes for each suit to ensure visual balance
 const suitSizes: Record<string, string> = {
-  hearts: '5rem',
-  diamonds: '5rem',
-  clubs: '4rem',    // Clubs slightly smaller
-  spades: '4.5rem',
+  hearts: '4.6rem',
+  diamonds: '4.6rem',
+  clubs: '4rem',
+  spades: '4.2rem',
 };
 
 export const Pseudo3DCard: React.FC<Pseudo3DCardProps> = ({
@@ -59,7 +59,8 @@ export const Pseudo3DCard: React.FC<Pseudo3DCardProps> = ({
 
   const color = suitColors[suit.toLowerCase()] || '#1C1C1E';
   const icon = suitIcons[suit.toLowerCase()] || suit;
-  const iconSize = suitSizes[suit.toLowerCase()] || '4.5rem';
+  const iconSize = suitSizes[suit.toLowerCase()] || '4.4rem';
+  const isRed = suit.toLowerCase() === 'hearts' || suit.toLowerCase() === 'diamonds';
 
   return (
     <div className={`relative w-24 h-36 ${className}`} style={style}>
@@ -69,15 +70,36 @@ export const Pseudo3DCard: React.FC<Pseudo3DCardProps> = ({
       >
         {/* Front Face */}
         <div
-          className="absolute inset-0 w-full h-full rounded-xl backface-hidden flex items-center justify-center border border-titanium-200 overflow-hidden"
-          style={{ transform: 'rotateY(0deg)', backgroundColor: color }}
+          className="absolute inset-0 w-full h-full rounded-xl backface-hidden overflow-hidden border border-titanium-200"
+          style={{
+            transform: 'rotateY(0deg)',
+            background: 'linear-gradient(145deg, #ffffff 0%, #f6f6f8 60%, #ededf0 100%)',
+          }}
         >
-          {/* Large solid suit - centered with suit-specific sizing */}
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,#ffffff_0%,#f1f1f4_45%,#e6e6ea_100%)] opacity-80" />
+
+          {/* Corner rank + suit */}
+          <div
+            className="absolute left-2 top-2 flex flex-col items-center text-xs font-semibold"
+            style={{ color }}
+          >
+            <span className="text-sm font-bold leading-none">{rank}</span>
+            <span className="text-sm leading-none">{icon}</span>
+          </div>
+          <div
+            className="absolute right-2 bottom-2 flex flex-col items-center text-xs font-semibold rotate-180"
+            style={{ color }}
+          >
+            <span className="text-sm font-bold leading-none">{rank}</span>
+            <span className="text-sm leading-none">{icon}</span>
+          </div>
+
+          {/* Center pip watermark */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <span
               className="leading-none"
               style={{
-                color: 'white',
+                color: isRed ? 'rgba(217,45,32,0.18)' : 'rgba(28,28,30,0.16)',
                 fontSize: iconSize,
                 display: 'flex',
                 alignItems: 'center',
@@ -87,34 +109,26 @@ export const Pseudo3DCard: React.FC<Pseudo3DCardProps> = ({
               {icon}
             </span>
           </div>
-
-          {/* Single centered rank in white */}
-          <span
-            className="font-extrabold text-3xl tracking-tighter relative z-10 text-white"
-            style={{ fontFamily: 'Outfit' }}
-          >
-            {rank}
-          </span>
         </div>
 
         {/* Back Face */}
         <div
-          className="absolute inset-0 w-full h-full bg-titanium-900 rounded-xl backface-hidden border-2 border-white/10 overflow-hidden shadow-inner"
-          style={{ transform: 'rotateY(180deg)' }}
+          className="absolute inset-0 w-full h-full rounded-xl backface-hidden overflow-hidden border border-titanium-800 shadow-inner"
+          style={{
+            transform: 'rotateY(180deg)',
+            background: 'linear-gradient(145deg, #1c1c1e 0%, #0f0f12 100%)',
+          }}
         >
-            <div 
-                className="w-full h-full opacity-20"
-                style={{
-                    backgroundImage: `linear-gradient(45deg, #fff 25%, transparent 25%), linear-gradient(-45deg, #fff 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #fff 75%), linear-gradient(-45deg, transparent 75%, #fff 75%)`,
-                    backgroundSize: '16px 16px',
-                    backgroundPosition: '0 0, 0 8px, 8px -8px, -8px 0px'
-                }}
-            />
-            <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-12 h-20 border border-white/20 rounded-lg flex items-center justify-center">
-                    <div className="w-8 h-14 border border-white/10 rounded-md bg-white/5" />
-                </div>
-            </div>
+          <div
+            className="absolute inset-0 opacity-30"
+            style={{
+              backgroundImage:
+                'radial-gradient(circle at 20% 20%, rgba(255,255,255,0.12) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(255,255,255,0.1) 0%, transparent 45%)',
+            }}
+          />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-12 h-20 rounded-lg border border-white/15 bg-white/5" />
+          </div>
         </div>
       </animated.div>
     </div>

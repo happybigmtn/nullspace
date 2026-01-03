@@ -5,7 +5,7 @@
 use bytes::{Buf, BufMut};
 use commonware_codec::{EncodeSize, FixedSize, Read, ReadExt, Write};
 use commonware_cryptography::ed25519::{PrivateKey, PublicKey};
-use commonware_cryptography::{PrivateKeyExt, Signer};
+use commonware_cryptography::Signer;
 use commonware_utils::{from_hex, hex};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -257,7 +257,7 @@ mod tests {
     use super::*;
     use bytes::BytesMut;
     use commonware_codec::DecodeExt as _;
-    use commonware_cryptography::{ed25519::PrivateKey, PrivateKeyExt, Signer};
+    use commonware_cryptography::{ed25519::PrivateKey, Signer};
     use rand::{rngs::StdRng, Rng as _, SeedableRng as _};
     use serde_json::json;
 

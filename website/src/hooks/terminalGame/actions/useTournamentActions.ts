@@ -71,7 +71,7 @@ export const useTournamentActions = ({
     const client: any = clientRef.current;
     if (!client || !client.nonceManager || !publicKeyBytesRef.current) {
       console.warn('[useTournamentActions] Cannot register/join - client not initialized');
-      setGameState(prev => ({ ...prev, message: 'CONNECT WALLET / START dev-executor' }));
+      setGameState(prev => ({ ...prev, message: 'CONNECT WALLET / START validators' }));
       return;
     }
     if (isRegisteringOrJoining) return;

@@ -1,14 +1,21 @@
 use commonware_codec::{Encode, ReadExt};
 #[cfg(feature = "testing")]
-use commonware_consensus::threshold_simplex::types::{seed_namespace, view_message};
+use commonware_codec::Encode as _;
+use commonware_consensus::simplex::scheme::bls12381_threshold;
+use commonware_consensus::Viewable;
+#[cfg(feature = "testing")]
+use commonware_consensus::types::{Epoch, Round, View};
 #[cfg(feature = "testing")]
 use commonware_cryptography::bls12381::primitives::ops;
-#[cfg(feature = "testing")]
 use commonware_cryptography::bls12381::primitives::variant::MinSig;
-use commonware_cryptography::{ed25519, Digestible, Hasher, PrivateKeyExt, Sha256, Signer as _};
+use commonware_cryptography::{ed25519, Digestible, Hasher, Sha256, Signer as _};
+use commonware_math::algebra::Random;
 #[cfg(feature = "testing")]
 use commonware_runtime::{deterministic::Runner, Runner as _};
-use commonware_storage::store::operation::{Keyless, Variable};
+use commonware_storage::qmdb::{
+    any::unordered::{variable, Update as StorageUpdate},
+    keyless,
+};
 use commonware_utils::hex;
 #[cfg(feature = "testing")]
 use nullspace_execution::mocks;
@@ -190,7 +197,7 @@ impl Signer {
     /// Generate a new signer from a random private key.
     #[wasm_bindgen(constructor)]
     pub fn new() -> Result<Signer, JsValue> {
-        let private_key = ed25519::PrivateKey::from_rng(&mut OsRng);
+        let private_key = ed25519::PrivateKey::random(&mut OsRng);
         let public_key = private_key.public_key();
 
         Ok(Signer {
@@ -242,7 +249,7 @@ impl Signer {
     /// Sign a message.
     pub fn sign(&self, message: &[u8]) -> Vec<u8> {
         self.private_key
-            .sign(Some(TRANSACTION_NAMESPACE), message)
+            .sign(TRANSACTION_NAMESPACE, message)
             .encode()
             .to_vec()
     }
@@ -1366,7 +1373,7 @@ pub fn decode_lookup(lookup_bytes: &[u8], identity_bytes: &[u8]) -> Result<JsVal
 
     // Extract the value from the operation
     let value = match lookup.operation {
-        Variable::Update(_, value) => value,
+        variable::Operation::Update(StorageUpdate(_, value)) => value,
         _ => return Err(JsValue::from_str("Expected Update operation in lookup")),
     };
 
@@ -1377,7 +1384,11 @@ pub fn decode_lookup(lookup_bytes: &[u8], identity_bytes: &[u8]) -> Result<JsVal
 /// Helper function to decode and verify a seed
 fn decode_seed_internal(seed: Seed, identity: &Identity) -> Result<JsValue, JsValue> {
     // Verify the seed signature
-    if !seed.verify(NAMESPACE, identity) {
+    let verifier =
+        bls12381_threshold::Scheme::<ed25519::PublicKey, MinSig>::certificate_verifier(
+            identity.clone(),
+        );
+    if !seed.verify(&verifier, NAMESPACE) {
         return Err(JsValue::from_str("invalid seed"));
     }
 
@@ -1387,7 +1398,7 @@ fn decode_seed_internal(seed: Seed, identity: &Identity) -> Result<JsValue, JsVa
     // Create response using serde_json for consistency
     let response = serde_json::json!({
         "type": "Seed",
-        "view": seed.view,
+        "view": seed.view().get(),
         "bytes": bytes
     });
 
@@ -2656,10 +2667,11 @@ pub fn encode_seed(seed: u64, view: u64) -> Vec<u8> {
     let mut rng = ChaCha20Rng::seed_from_u64(seed);
     let (network_secret, _) = ops::keypair::<_, MinSig>(&mut rng);
 
-    let seed_namespace = seed_namespace(NAMESPACE);
-    let message = view_message(view);
+    let seed_namespace = commonware_utils::union(NAMESPACE, b"_SEED");
+    let round = Round::new(Epoch::zero(), View::new(view));
+    let message = round.encode();
     let sig = ops::sign_message::<MinSig>(&network_secret, Some(&seed_namespace), &message);
-    let seed = Seed::new(view, sig);
+    let seed = Seed::new(round, sig);
 
     seed.encode().to_vec()
 }
@@ -2725,12 +2737,12 @@ fn instruction_name(instruction: &Instruction) -> &'static str {
 /// Helper function to process events (both regular and filtered)
 fn process_events<'a, I>(ops_iter: I) -> Result<JsValue, JsValue>
 where
-    I: Iterator<Item = &'a Keyless<Output>>,
+    I: Iterator<Item = &'a keyless::Operation<Output>>,
 {
     // Process events - extract outputs
     let mut events_array = Vec::new();
     for op in ops_iter {
-        if let Keyless::Append(output) = op {
+        if let keyless::Operation::Append(output) = op {
             let json_value = process_output(output)?;
             if json_value.is_null() {
                 continue;

@@ -1,4 +1,4 @@
-use crate::{Error, Result};
+use crate::{seed_verifier, Error, Result};
 use commonware_codec::ReadExt;
 use futures_util::{task::AtomicWaker, Stream as FutStream, StreamExt};
 use nullspace_types::{
@@ -132,7 +132,8 @@ pub trait Verifiable {
 
 impl Verifiable for Seed {
     fn verify(&self, identity: &Identity) -> bool {
-        self.verify(NAMESPACE, identity)
+        let verifier = seed_verifier(identity);
+        self.verify(&verifier, NAMESPACE)
     }
 }
 
@@ -145,7 +146,10 @@ impl Verifiable for Events {
 impl Verifiable for Update {
     fn verify(&self, identity: &Identity) -> bool {
         match self {
-            Update::Seed(seed) => seed.verify(NAMESPACE, identity),
+            Update::Seed(seed) => {
+                let verifier = seed_verifier(identity);
+                seed.verify(&verifier, NAMESPACE)
+            }
             Update::Events(events) => events.verify(identity).is_ok(),
             Update::FilteredEvents(events) => events.verify(identity).is_ok(),
         }

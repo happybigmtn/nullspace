@@ -14,20 +14,20 @@ export const Label: React.FC<LabelProps> = ({
   size = 'normal'
 }) => {
   const variantClasses = {
-    primary: 'text-titanium-500 dark:text-titanium-300', // Improved contrast (WCAG AA)
-    secondary: 'text-titanium-400 dark:text-titanium-400',
+    primary: 'text-titanium-600 dark:text-titanium-200',
+    secondary: 'text-titanium-500 dark:text-titanium-300',
     success: 'text-action-success',
     destructive: 'text-action-destructive',
     gold: 'text-action-primary',
   };
 
   const sizeClasses = {
-    micro: 'text-micro uppercase',
-    normal: 'text-label uppercase',
+    micro: 'text-[8px] uppercase tracking-[0.24em]',
+    normal: 'text-[10px] tracking-[0.04em]',
   };
 
   return (
-    <span className={`${sizeClasses[size]} font-bold tracking-[0.15em] ${variantClasses[variant]} ${className}`}>
+    <span className={`${sizeClasses[size]} font-semibold ${variantClasses[variant]} ${className}`}>
       {children}
     </span>
   );

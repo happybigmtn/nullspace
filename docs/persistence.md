@@ -3,7 +3,7 @@
 ## Data Stores and Ownership
 | Service | Writes | Reads | Notes |
 | --- | --- | --- | --- |
-| Validators + executor | Chain state, blocks | Chain state | Consensus source of truth. |
+| Validators | Chain state, blocks | Chain state | Consensus source of truth. |
 | Simulator/indexer | Explorer persistence (optional Postgres/SQLite) | Chain state + explorer | Read-heavy HTTP/WS API. |
 | Auth service | Convex (users, entitlements, Stripe events) | Convex | Uses service token + admin key for on-chain sync. |
 | Website | None | Simulator + Auth + Convex | Read-only; no direct writes to chain. |
@@ -12,6 +12,12 @@
 - In-memory (default): no persistence, fastest, not suitable for multi-node.
 - SQLite: `--explorer-persistence-path ./explorer.db` for single-node or dev.
 - Postgres (shared): `--explorer-persistence-url postgres://...` for multi-node.
+
+Backpressure policy:
+- `explorer_persistence_backpressure=block` (default) stalls indexing when the DB is slow.
+- `explorer_persistence_backpressure=drop` avoids stalls but drops explorer data.
+For testnet/production (5k target), prefer `block` to keep explorer data complete.
+Use `drop` only for dev or short-lived load tests where availability matters more.
 
 Retention controls:
 - `--explorer-max-blocks` (0 disables limit)
@@ -31,6 +37,11 @@ Retention controls:
 
 ## Backups + Restore Drills
 Targets (initial): RPO 15 minutes, RTO 4 hours.
+
+Drill cadence:
+- Quarterly restore drills (simulated incident, restore to staging).
+- Annual full failover rehearsal (measure end-to-end recovery time).
+- Log RPO/RTO metrics after each drill and adjust runbooks if targets missed.
 
 - Postgres:
   - Daily base backup + WAL archiving (object storage).

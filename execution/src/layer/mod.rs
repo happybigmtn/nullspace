@@ -1,5 +1,6 @@
 use anyhow::{Context as _, Result};
-use commonware_consensus::threshold_simplex::types::View;
+use commonware_consensus::types::View;
+use commonware_consensus::Viewable;
 use commonware_cryptography::{
     bls12381::primitives::variant::{MinSig, Variant},
     ed25519::PublicKey,
@@ -151,6 +152,7 @@ pub struct Layer<'a, S: State> {
     pending: BTreeMap<Key, Status>,
 
     seed: Seed,
+    seed_view: u64,
 }
 
 impl<'a, S: State> Layer<'a, S> {
@@ -173,11 +175,13 @@ impl<'a, S: State> Layer<'a, S> {
         _namespace: &[u8],
         seed: Seed,
     ) -> Self {
+        let seed_view = seed.view().get();
         Self {
             state,
             pending: BTreeMap::new(),
 
             seed,
+            seed_view,
         }
     }
 
@@ -186,7 +190,7 @@ impl<'a, S: State> Layer<'a, S> {
     }
 
     pub fn view(&self) -> View {
-        self.seed.view
+        View::new(self.seed_view)
     }
 
     async fn prepare(&mut self, transaction: &Transaction) -> Result<(), PrepareError> {
@@ -519,14 +523,14 @@ impl<'a, S: State> Layer<'a, S> {
     }
 
     async fn get_or_init_house(&mut self) -> Result<nullspace_types::casino::HouseState> {
-        Ok(match self.get(&Key::House).await? {
+        Ok(match self.get(Key::House).await? {
             Some(Value::House(h)) => h,
-            _ => nullspace_types::casino::HouseState::new(self.seed.view),
+            _ => nullspace_types::casino::HouseState::new(self.seed_view),
         })
     }
 
     async fn get_or_init_amm(&mut self) -> Result<nullspace_types::casino::AmmPool> {
-        Ok(match self.get(&Key::AmmPool).await? {
+        Ok(match self.get(Key::AmmPool).await? {
             Some(Value::AmmPool(p)) => p,
             _ => nullspace_types::casino::AmmPool::new(
                 nullspace_types::casino::AMM_DEFAULT_FEE_BASIS_POINTS,
@@ -535,21 +539,21 @@ impl<'a, S: State> Layer<'a, S> {
     }
 
     async fn get_or_init_policy(&mut self) -> Result<nullspace_types::casino::PolicyState> {
-        Ok(match self.get(&Key::Policy).await? {
+        Ok(match self.get(Key::Policy).await? {
             Some(Value::Policy(policy)) => policy,
             _ => nullspace_types::casino::PolicyState::default(),
         })
     }
 
     async fn get_or_init_oracle_state(&mut self) -> Result<nullspace_types::casino::OracleState> {
-        Ok(match self.get(&Key::OracleState).await? {
+        Ok(match self.get(Key::OracleState).await? {
             Some(Value::OracleState(state)) => state,
             _ => nullspace_types::casino::OracleState::default(),
         })
     }
 
     async fn get_or_init_treasury(&mut self) -> Result<nullspace_types::casino::TreasuryState> {
-        Ok(match self.get(&Key::Treasury).await? {
+        Ok(match self.get(Key::Treasury).await? {
             Some(Value::Treasury(treasury)) => treasury,
             _ => nullspace_types::casino::TreasuryState::default(),
         })
@@ -558,7 +562,7 @@ impl<'a, S: State> Layer<'a, S> {
     async fn get_or_init_treasury_vesting(
         &mut self,
     ) -> Result<nullspace_types::casino::TreasuryVestingState> {
-        Ok(match self.get(&Key::TreasuryVesting).await? {
+        Ok(match self.get(Key::TreasuryVesting).await? {
             Some(Value::TreasuryVesting(vesting)) => vesting,
             _ => nullspace_types::casino::TreasuryVestingState::default(),
         })
@@ -567,7 +571,7 @@ impl<'a, S: State> Layer<'a, S> {
     async fn get_or_init_vault_registry(
         &mut self,
     ) -> Result<nullspace_types::casino::VaultRegistry> {
-        Ok(match self.get(&Key::VaultRegistry).await? {
+        Ok(match self.get(Key::VaultRegistry).await? {
             Some(Value::VaultRegistry(registry)) => registry,
             _ => nullspace_types::casino::VaultRegistry::default(),
         })
@@ -576,14 +580,14 @@ impl<'a, S: State> Layer<'a, S> {
     async fn get_or_init_player_registry(
         &mut self,
     ) -> Result<nullspace_types::casino::PlayerRegistry> {
-        Ok(match self.get(&Key::PlayerRegistry).await? {
+        Ok(match self.get(Key::PlayerRegistry).await? {
             Some(Value::PlayerRegistry(registry)) => registry,
             _ => nullspace_types::casino::PlayerRegistry::default(),
         })
     }
 
     async fn get_or_init_savings_pool(&mut self) -> Result<nullspace_types::casino::SavingsPool> {
-        Ok(match self.get(&Key::SavingsPool).await? {
+        Ok(match self.get(Key::SavingsPool).await? {
             Some(Value::SavingsPool(pool)) => pool,
             _ => nullspace_types::casino::SavingsPool::default(),
         })
@@ -593,7 +597,7 @@ impl<'a, S: State> Layer<'a, S> {
         &mut self,
         public: &PublicKey,
     ) -> Result<nullspace_types::casino::SavingsBalance> {
-        Ok(match self.get(&Key::SavingsBalance(public.clone())).await? {
+        Ok(match self.get(Key::SavingsBalance(public.clone())).await? {
             Some(Value::SavingsBalance(balance)) => balance,
             _ => nullspace_types::casino::SavingsBalance::default(),
         })
@@ -602,14 +606,14 @@ impl<'a, S: State> Layer<'a, S> {
     async fn get_or_init_bridge_state(
         &mut self,
     ) -> Result<nullspace_types::casino::BridgeState> {
-        Ok(match self.get(&Key::BridgeState).await? {
+        Ok(match self.get(Key::BridgeState).await? {
             Some(Value::BridgeState(state)) => state,
             _ => nullspace_types::casino::BridgeState::default(),
         })
     }
 
     async fn get_lp_balance(&self, public: &PublicKey) -> Result<u64> {
-        Ok(match self.get(&Key::LpBalance(public.clone())).await? {
+        Ok(match self.get(Key::LpBalance(public.clone())).await? {
             Some(Value::LpBalance(bal)) => bal,
             _ => 0,
         })
@@ -645,8 +649,8 @@ impl<'a, S: State> Layer<'a, S> {
 }
 
 impl<'a, S: State> State for Layer<'a, S> {
-    async fn get(&self, key: &Key) -> Result<Option<Value>> {
-        Ok(match self.pending.get(key) {
+    async fn get(&self, key: Key) -> Result<Option<Value>> {
+        Ok(match self.pending.get(&key) {
             Some(Status::Update(value)) => Some(value.clone()),
             Some(Status::Delete) => None,
             None => self.state.get(key).await?,
@@ -658,8 +662,8 @@ impl<'a, S: State> State for Layer<'a, S> {
         Ok(())
     }
 
-    async fn delete(&mut self, key: &Key) -> Result<()> {
-        self.pending.insert(key.clone(), Status::Delete);
+    async fn delete(&mut self, key: Key) -> Result<()> {
+        self.pending.insert(key, Status::Delete);
         Ok(())
     }
 }
@@ -687,8 +691,8 @@ mod tests {
     }
 
     impl State for MockState {
-        async fn get(&self, key: &Key) -> Result<Option<Value>> {
-            Ok(self.data.get(key).cloned())
+        async fn get(&self, key: Key) -> Result<Option<Value>> {
+            Ok(self.data.get(&key).cloned())
         }
 
         async fn insert(&mut self, key: Key, value: Value) -> Result<()> {
@@ -696,8 +700,8 @@ mod tests {
             Ok(())
         }
 
-        async fn delete(&mut self, key: &Key) -> Result<()> {
-            self.data.remove(key);
+        async fn delete(&mut self, key: Key) -> Result<()> {
+            self.data.remove(&key);
             Ok(())
         }
     }
@@ -775,7 +779,7 @@ mod tests {
 
             // Verify player was created
             if let Some(Value::CasinoPlayer(player)) =
-                layer.get(&Key::CasinoPlayer(public)).await.unwrap()
+                layer.get(Key::CasinoPlayer(public)).await.unwrap()
             {
                 assert_eq!(player.profile.name, "Alice");
                 assert_eq!(player.balances.chips, 1000); // Initial chips
@@ -862,7 +866,7 @@ mod tests {
             )));
 
             if let Some(Value::Tournament(tournament)) =
-                layer.get(&Key::Tournament(tournament_id)).await.unwrap()
+                layer.get(Key::Tournament(tournament_id)).await.unwrap()
             {
                 assert!(matches!(tournament.phase, TournamentPhase::Active));
                 assert!(tournament.players.contains(&public));
@@ -871,7 +875,7 @@ mod tests {
             }
 
             if let Some(Value::CasinoPlayer(player)) =
-                layer.get(&Key::CasinoPlayer(public.clone())).await.unwrap()
+                layer.get(Key::CasinoPlayer(public.clone())).await.unwrap()
             {
                 assert_eq!(
                     player.tournament.chips,
@@ -895,7 +899,7 @@ mod tests {
             )));
 
             if let Some(Value::Tournament(tournament)) =
-                layer.get(&Key::Tournament(tournament_id)).await.unwrap()
+                layer.get(Key::Tournament(tournament_id)).await.unwrap()
             {
                 assert!(matches!(tournament.phase, TournamentPhase::Complete));
             } else {
@@ -903,7 +907,7 @@ mod tests {
             }
 
             if let Some(Value::CasinoPlayer(player)) =
-                layer.get(&Key::CasinoPlayer(public)).await.unwrap()
+                layer.get(Key::CasinoPlayer(public)).await.unwrap()
             {
                 assert_eq!(player.tournament.active_tournament, None);
                 assert_eq!(player.tournament.chips, 0);
@@ -953,7 +957,7 @@ mod tests {
             )));
 
             if let Some(Value::CasinoSession(session)) =
-                layer.get(&Key::CasinoSession(session_id)).await.unwrap()
+                layer.get(Key::CasinoSession(session_id)).await.unwrap()
             {
                 assert_eq!(session.id, session_id);
                 assert_eq!(session.player, public);

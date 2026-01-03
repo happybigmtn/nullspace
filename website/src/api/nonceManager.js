@@ -1,4 +1,5 @@
 import { logDebug } from '../utils/logger.js';
+import { CASINO_MAX_NAME_LENGTH, CASINO_MAX_PAYLOAD_LENGTH } from '@nullspace/constants/limits';
 /**
  * Manages transaction nonces and pending transactions for a Casino account.
  * Handles automatic nonce synchronization, transaction resubmission, and cleanup.
@@ -470,8 +471,13 @@ export class NonceManager {
    * @returns {Promise<{status: string, txHash?: string, txDigest?: string}>} Transaction result
    */
   async submitCasinoRegister(name) {
+    const normalized = String(name ?? '');
+    const nameBytes = new TextEncoder().encode(normalized);
+    if (nameBytes.length > CASINO_MAX_NAME_LENGTH) {
+      throw new Error(`Player name exceeds ${CASINO_MAX_NAME_LENGTH} bytes`);
+    }
     return this.submitTransaction(
-      (nonce) => this.wasm.createCasinoRegisterTransaction(nonce, name),
+      (nonce) => this.wasm.createCasinoRegisterTransaction(nonce, normalized),
       'casinoRegister'
     );
   }
@@ -497,6 +503,9 @@ export class NonceManager {
    * @returns {Promise<{status: string, txHash?: string, txDigest?: string}>} Transaction result
    */
   async submitCasinoGameMove(sessionId, payload) {
+    if (payload && payload.length > CASINO_MAX_PAYLOAD_LENGTH) {
+      throw new Error(`Game move payload exceeds ${CASINO_MAX_PAYLOAD_LENGTH} bytes`);
+    }
     return this.submitTransaction(
       (nonce) => this.wasm.createCasinoGameMoveTransaction(nonce, sessionId, payload),
       'casinoGameMove'

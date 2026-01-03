@@ -15,6 +15,14 @@ Note: production deployments require `METRICS_AUTH_TOKEN` for simulator + node
 metrics (and auth metrics if enabled). Configure Prometheus with an auth header
 (e.g. `authorization: Bearer <token>` or `x-metrics-token: <token>`).
 
+Tracing note: OTLP traces are emitted only when `OTEL_EXPORTER_OTLP_ENDPOINT` is set.
+Recommended testnet defaults (5k target):
+- `OTEL_EXPORTER_OTLP_ENDPOINT=http://<OTEL_COLLECTOR>:4318`
+- `OTEL_SERVICE_NAME=nullspace-<service>`
+- `OTEL_TRACES_SAMPLER=traceidratio`
+- `OTEL_TRACES_SAMPLER_ARG=0.05` (5% sampling; raise during incident response)
+- `OTEL_RESOURCE_ATTRIBUTES=deployment.environment=testnet,service.version=<git_sha>`
+
 ## Prometheus + Grafana Quickstart (Local)
 Files live in `docker/observability/`.
 
@@ -66,6 +74,9 @@ These are initial targets; tighten after load tests and production telemetry.
 - Recommended ingestion: Loki + Promtail or ELK.
 - Required labels: `service`, `request_id`, `user_id` (when present), `event`.
 - Alerts: consensus stalls, WS error spikes, auth 5xx spikes, webhook failures.
+- Frontend: ensure error monitoring includes lazy-loaded routes (navigate all routes in staging).
+- Mobile/WebSocket reconnect uses exponential backoff (1s -> 30s). Tune in `mobile/src/services/websocket.ts` if gateways are saturated.
+- Health endpoints should remain fast and avoid slow downstream calls.
 
 ## Local Log Aggregation (Loki)
 1) Ensure logs are written to files in the repo root (e.g. `simulator.log`).
