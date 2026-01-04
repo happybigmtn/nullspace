@@ -1,5 +1,5 @@
 use anyhow::Context;
-use commonware_codec::Decode;
+use commonware_codec::DecodeExt;
 use nullspace_types::api::Summary;
 use rusqlite::{params, Connection};
 use std::path::{Path, PathBuf};
@@ -87,7 +87,7 @@ fn load_summaries_sqlite(
 }
 
 fn persistence_worker(path: PathBuf, mut receiver: mpsc::Receiver<PersistRequest>) {
-    let mut conn = match Connection::open(&path) {
+    let conn = match Connection::open(&path) {
         Ok(conn) => conn,
         Err(err) => {
             error!("Summary persistence open failed: {err}");

@@ -21,7 +21,7 @@ pub use explorer::{AccountActivity, ExplorerBlock, ExplorerState, ExplorerTransa
 mod explorer_persistence;
 use explorer_persistence::ExplorerPersistence;
 mod summary_persistence;
-use summary_persistence::SummaryPersistence;
+pub use summary_persistence::SummaryPersistence;
 mod metrics;
 #[cfg(feature = "passkeys")]
 mod passkeys;
@@ -315,6 +315,7 @@ pub struct Simulator {
     state: Arc<RwLock<State>>,
     explorer: Arc<RwLock<ExplorerState>>,
     explorer_persistence: Option<ExplorerPersistence>,
+    summary_persistence: Option<SummaryPersistence>,
     subscriptions: Arc<Mutex<SubscriptionTracker>>,
     update_tx: broadcast::Sender<InternalUpdate>,
     mempool_tx: broadcast::Sender<Pending>,
@@ -353,10 +354,14 @@ impl Drop for WsConnectionGuard {
 
 impl Simulator {
     pub fn new(identity: Identity) -> Self {
-        Self::new_with_config(identity, SimulatorConfig::default())
+        Self::new_with_config(identity, SimulatorConfig::default(), None)
     }
 
-    pub fn new_with_config(identity: Identity, config: SimulatorConfig) -> Self {
+    pub fn new_with_config(
+        identity: Identity,
+        config: SimulatorConfig,
+        summary_persistence: Option<SummaryPersistence>,
+    ) -> Self {
         let (update_tx, update_rx) = broadcast::channel(config.updates_broadcast_capacity());
         let (mempool_tx, mempool_rx) = broadcast::channel(config.mempool_broadcast_capacity());
         let state = Arc::new(RwLock::new(State::default()));
@@ -463,6 +468,7 @@ impl Simulator {
             state,
             explorer,
             explorer_persistence,
+            summary_persistence,
             subscriptions: Arc::new(Mutex::new(SubscriptionTracker::default())),
             update_tx,
             mempool_tx,
@@ -478,6 +484,10 @@ impl Simulator {
             ws_connections: Mutex::new(WsConnectionTracker::default()),
             global_table_presence: Mutex::new(GlobalTablePresence::default()),
         }
+    }
+
+    pub fn identity(&self) -> Identity {
+        self.identity
     }
 
     pub fn update_global_table_presence(
@@ -1030,7 +1040,7 @@ mod tests {
             ws_max_connections: Some(100),
             ..Default::default()
         };
-        let simulator = Arc::new(Simulator::new_with_config(network_identity, config));
+        let simulator = Arc::new(Simulator::new_with_config(network_identity, config, None));
         let ip: IpAddr = "192.168.1.1".parse().unwrap();
 
         // First connection should succeed
@@ -1070,7 +1080,7 @@ mod tests {
             ws_max_connections: Some(3),
             ..Default::default()
         };
-        let simulator = Arc::new(Simulator::new_with_config(network_identity, config));
+        let simulator = Arc::new(Simulator::new_with_config(network_identity, config, None));
 
         // Create 3 connections from different IPs
         let ip1: IpAddr = "192.168.1.1".parse().unwrap();

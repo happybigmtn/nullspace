@@ -32,7 +32,6 @@ use commonware_storage::mmr::verification::ProofStore;
 #[cfg(feature = "passkeys")]
 use crate::PasskeyStore;
 use crate::metrics::UpdateIndexMetrics;
-use crate::summary_persistence::SummaryPersistence;
 use crate::Simulator;
 
 type AggregationScheme = bls12381_threshold::Scheme<PublicKey, MinSig>;
@@ -136,6 +135,8 @@ impl Default for SimulatorConfig {
             explorer_persistence_buffer: Some(DEFAULT_EXPLORER_PERSISTENCE_BUFFER),
             explorer_persistence_batch_size: Some(DEFAULT_EXPLORER_PERSISTENCE_BATCH_SIZE),
             explorer_persistence_backpressure: Some(ExplorerPersistenceBackpressure::Block),
+            summary_persistence_path: None,
+            summary_persistence_max_blocks: None,
             state_max_key_versions: Some(DEFAULT_STATE_MAX_KEY_VERSIONS),
             state_max_progress_entries: Some(DEFAULT_STATE_MAX_PROGRESS_ENTRIES),
             submission_history_limit: Some(DEFAULT_SUBMISSION_HISTORY_LIMIT),

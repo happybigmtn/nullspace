@@ -48,6 +48,9 @@ pub async fn apply_submission(
             Ok(())
         }
         Submission::Summary(summary) => {
+            if let Some(persistence) = &simulator.summary_persistence {
+                persistence.persist_summary(summary.clone()).await;
+            }
             let (state_digests, events_digests) = match summary.verify(&simulator.identity) {
                 Ok(digests) => digests,
                 Err(err) => {

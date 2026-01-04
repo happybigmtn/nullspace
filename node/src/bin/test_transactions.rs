@@ -84,10 +84,10 @@ async fn main() -> anyhow::Result<()> {
 
         if resp.status().is_success() {
             println!(
-                "  [{}] Submitted CasinoRegister for TestPlayer{} (pubkey: {}...)",
+                "  [{}] Submitted CasinoRegister for TestPlayer{} (pubkey: {})",
                 i,
                 i,
-                &commonware_utils::hex(&public_key.encode())[..16]
+                &commonware_utils::hex(&public_key.encode())
             );
             successful += 1;
         } else {

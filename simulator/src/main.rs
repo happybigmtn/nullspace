@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use clap::Parser;
 use commonware_codec::DecodeExt;
-use nullspace_simulator::{Api, Simulator, SimulatorConfig};
+use nullspace_simulator::{Api, Simulator, SimulatorConfig, SummaryPersistence};
 use nullspace_types::Identity;
 use opentelemetry_otlp::WithExportConfig;
 use std::net::{IpAddr, SocketAddr};
@@ -91,6 +91,14 @@ struct Args {
     /// Path to SQLite database for explorer persistence (disabled when omitted).
     #[arg(long)]
     explorer_persistence_path: Option<PathBuf>,
+
+    /// Path to SQLite database for summary persistence (disabled when omitted).
+    #[arg(long)]
+    summary_persistence_path: Option<PathBuf>,
+
+    /// Maximum number of blocks retained by the summary persistence (0 disables limit).
+    #[arg(long)]
+    summary_persistence_max_blocks: Option<usize>,
 
     /// Postgres connection string for explorer persistence (overrides SQLite path when set).
     #[arg(long)]
@@ -309,6 +317,12 @@ async fn main() -> anyhow::Result<()> {
             None => defaults.explorer_persistence_batch_size,
         },
         explorer_persistence_backpressure,
+        summary_persistence_path: args.summary_persistence_path.clone(),
+        summary_persistence_max_blocks: match args.summary_persistence_max_blocks {
+            Some(0) => None,
+            Some(value) => Some(value),
+            None => None,
+        },
         state_max_key_versions: match args.state_max_key_versions {
             Some(0) => None,
             Some(value) => Some(value),
@@ -404,7 +418,40 @@ async fn main() -> anyhow::Result<()> {
             None => defaults.cache_redis_ttl_seconds,
         },
     };
-    let simulator = Arc::new(Simulator::new_with_config(identity, config));
+
+    let (summary_persistence, summaries) = if let Some(path) = &args.summary_persistence_path {
+        let (persistence, summaries) = SummaryPersistence::load_and_start_sqlite(
+            path,
+            config.summary_persistence_max_blocks,
+            1000, // buffer size
+        )
+        .context("load and start summary persistence")?;
+        info!(
+            path = %path.display(),
+            count = summaries.len(),
+            "Summary persistence enabled"
+        );
+        (Some(persistence), summaries)
+    } else {
+        (None, Vec::new())
+    };
+
+    let simulator = Arc::new(Simulator::new_with_config(
+        identity,
+        config,
+        summary_persistence,
+    ));
+
+    for summary in summaries {
+        let (state_digests, events_digests) = summary
+            .verify(&simulator.identity())
+            .context("verify persisted summary")?;
+        simulator
+            .submit_events(summary.clone(), events_digests)
+            .await;
+        simulator.submit_state(summary, state_digests).await;
+    }
+
     simulator.start_fanout();
     let api = Api::new(simulator);
     let app = api.router();

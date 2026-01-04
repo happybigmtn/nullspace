@@ -302,6 +302,18 @@ progress log (2026-01-04, continued 14):
   still no `live_table_confirmation`/`live_table_result` within 60s; phase progression and settlement remain unresolved.
   (Anchor: `scripts/load-test-global-table.mjs`)
 
+progress log (2026-01-04, continued 15):
+
+- Wired SummaryPersistence into Simulator construction/state and exposed identity accessor used for summary replay; aligns
+  simulator startup with summary persistence integration. (Anchors: `simulator/src/lib.rs`, `simulator/src/main.rs`)
+
+progress log (2026-01-04, continued 16):
+
+- Added simulator CLI/config support for summary persistence (path + max blocks), persisted summaries on submit, and replayed
+  them on startup; updated staging/production simulator env examples with summary persistence args. (Anchors:
+  `simulator/src/main.rs`, `simulator/src/submission.rs`, `simulator/src/state.rs`,
+  `configs/staging/simulator.env.example`, `configs/production/simulator.env.example`)
+
 test execution log (local):
 
 - 2026-01-04: `pnpm -C packages/protocol test` (pass; 19 tests).
@@ -375,17 +387,6 @@ test execution log (local):
 
 findings (open):
 
-- HIGH: Indexer/simulator state is ephemeral (no persistence/backfill). If the simulator restarts while nodes keep state,
-  `/account` returns nonce 0 for existing accounts, causing gateway to submit stale nonces that nodes drop. In local non-fresh
-  runs, `/submit` returns 200 and mempool frames arrive, but proposed blocks show `txs=0` and explorer `tx_count` stays 0
-  until summary backfill catches up; fresh-network runs show `tx_count>0`, confirming the path works when the indexer starts
-  clean. Added a gateway nonce guard to avoid overwriting known nonces with zero after a simulator reset, but production still
-  needs a recovery strategy: persist simulator state (or replay summaries on startup), implement backfill from nodes, or
-  enforce coordinated restarts; re-run end-to-end tx inclusion + global table tests after fix. Candidate approaches:
-  (1) persist summaries to disk/object store and replay on simulator boot, (2) expose a "replay from node proofs" endpoint,
-  (3) require a coordinated shutdown/restart of nodes + simulator so /account state is rebuilt. (Anchors:
-  `simulator/src/state.rs`, `simulator/src/submission.rs`, `simulator/src/api/http.rs`, `gateway/src/session/nonce.ts`,
-  `gateway/src/session/manager.ts`, `node/src/application/actor.rs`, `scripts/start-local-network.sh`)
 - HIGH: Global table lifecycle still does not complete. After bootstrapping round state from `/state` and tightening update
   decoding, load tests report `roundId=1` with betting/locked phases and bets sent, but no bet confirmations/results within
   60s. Need to verify admin lock/reveal/finalize transactions are accepted and that Update stream includes Outcome/PlayerSettled
@@ -404,6 +405,9 @@ findings (open):
 
 findings (resolved / mitigated):
 
+- HIGH: Simulator summary persistence implemented via SQLite (`simulator/src/summary_persistence.rs`). Summaries are persisted
+  before application and replayed on startup, ensuring simulator state (including account nonces) is restored across restarts.
+  (Anchors: `simulator/src/summary_persistence.rs`, `simulator/src/main.rs`, `simulator/src/submission.rs`, `simulator/src/state.rs`)
 - HIGH: Tx inclusion + explorer indexing verified on a fresh network. Block height 1 shows `tx_count=2` and tx hashes,
   matching proposals with `txs=2`/`txs=1`, confirming `Output::Transaction` is preserved through summary upload and explorer
   indexing when starting from a clean state. (Anchors: `node/src/application/actor.rs`, `node/src/aggregator/actor.rs`,
