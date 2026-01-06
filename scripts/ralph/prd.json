@@ -465,8 +465,8 @@
 				"Verify no transaction rejections from nonce mismatch"
 			],
 			"priority": 36,
-			"passes": false,
-			"notes": "CRITICAL GAP: nonce.ts:103-124 - race window between checking pending lock and setting new one."
+			"passes": true,
+			"notes": "FIXED: Created nonce.test.ts with 16 unit tests. Tests cover: (1) concurrent transactions use sequential nonces via withLock serialization, (2) withLock properly serializes same-key operations while allowing parallel different-key operations, (3) nonce mismatch detection clears pending and triggers resync, (4) backend reset guard keeps local nonce when backend returns 0. Lock releases correctly even on error."
 		},
 		{
 			"id": "US-046",

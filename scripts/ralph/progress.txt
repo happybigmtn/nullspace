@@ -938,3 +938,22 @@ Target: Testnet Production
   - Connection stays open after rejection, allowing recovery
 
 ---
+
+## 2026-01-06 - US-045: Add gateway nonce concurrency tests
+
+- What was implemented:
+  - Created comprehensive unit tests for NonceManager class
+  - Tests verify `withLock` properly serializes concurrent operations on same key
+  - Tests verify different keys can run in parallel
+  - Tests verify nonce mismatch detection and handling
+  - Tests verify persistence/restore and stats reporting
+- Files changed:
+  - `gateway/tests/unit/nonce.test.ts` - Created with 16 unit tests
+- **Learnings:**
+  - `withLock` pattern: await existing lock → create new lock promise → run operation → release
+  - The "race window" noted in the story is actually correct mutex behavior - after awaiting, we must be first to set the new lock
+  - Nonce mismatch detection: checks for "nonce", "invalidnonce", or "replay" in error message
+  - Backend reset guard: if local nonce > 0 and backend returns 0, keep local nonce (prevents indexer restart from clobbering state)
+  - Lock release in finally block ensures cleanup even on error
+
+---
