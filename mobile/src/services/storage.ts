@@ -138,6 +138,7 @@ export function getStorage(): MMKV | WebStorage {
 export const STORAGE_KEYS = {
   // Auth
   SESSION_ACTIVE: 'auth.session_active',
+  SESSION_CREATED_AT: 'auth.session_created_at',
 
   // Game settings
   HAPTICS_ENABLED: 'settings.haptics_enabled',
