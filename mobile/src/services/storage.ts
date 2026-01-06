@@ -1,15 +1,86 @@
 /**
  * Storage service using MMKV for high-performance local storage
  * With encryption key stored in SecureStore
- * Falls back to localStorage on web
+ * Falls back to localStorage on web, AsyncStorage on Expo Go (no TurboModules)
  */
 import { Platform } from 'react-native';
 import { MMKV } from 'react-native-mmkv';
 import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const ENCRYPTION_KEY_ID = 'mmkv_encryption_key';
 const isWeb = Platform.OS === 'web';
 const REQUIRE_SECURESTORE_AUTH = !__DEV__;
+
+// AsyncStorage adapter that mimics MMKV interface (for Expo Go fallback)
+class AsyncStorageAdapter {
+  private prefix = 'nullspace:';
+  private cache = new Map<string, string>();
+  private initialized = false;
+
+  async init(): Promise<void> {
+    if (this.initialized) return;
+    try {
+      const keys = await AsyncStorage.getAllKeys();
+      const prefixedKeys = keys.filter(k => k.startsWith(this.prefix));
+      if (prefixedKeys.length > 0) {
+        const pairs = await AsyncStorage.multiGet(prefixedKeys);
+        for (const [key, value] of pairs) {
+          if (value !== null) {
+            this.cache.set(key, value);
+          }
+        }
+      }
+      this.initialized = true;
+    } catch (error) {
+      console.warn('[storage] AsyncStorage init failed:', error);
+      this.initialized = true;
+    }
+  }
+
+  getBoolean(key: string): boolean | undefined {
+    const val = this.cache.get(this.prefix + key);
+    if (val === undefined) return undefined;
+    return val === 'true';
+  }
+
+  getString(key: string): string | undefined {
+    return this.cache.get(this.prefix + key);
+  }
+
+  getNumber(key: string): number | undefined {
+    const val = this.cache.get(this.prefix + key);
+    if (val === undefined) return undefined;
+    return parseFloat(val);
+  }
+
+  set(key: string, value: boolean | string | number): void {
+    const strValue = String(value);
+    this.cache.set(this.prefix + key, strValue);
+    AsyncStorage.setItem(this.prefix + key, strValue).catch(e =>
+      console.warn('[storage] AsyncStorage set failed:', e)
+    );
+  }
+
+  delete(key: string): void {
+    this.cache.delete(this.prefix + key);
+    AsyncStorage.removeItem(this.prefix + key).catch(e =>
+      console.warn('[storage] AsyncStorage delete failed:', e)
+    );
+  }
+
+  contains(key: string): boolean {
+    return this.cache.has(this.prefix + key);
+  }
+
+  clearAll(): void {
+    const keys = Array.from(this.cache.keys()).filter(k => k.startsWith(this.prefix));
+    keys.forEach(k => this.cache.delete(k));
+    AsyncStorage.multiRemove(keys).catch(e =>
+      console.warn('[storage] AsyncStorage clearAll failed:', e)
+    );
+  }
+}
 
 // Web storage adapter that mimics MMKV interface
 class WebStorage {
@@ -49,10 +120,18 @@ class WebStorage {
   }
 }
 
-let storageInstance: MMKV | WebStorage | null = null;
+let storageInstance: MMKV | WebStorage | AsyncStorageAdapter | null = null;
 
 // Re-export storage instance for direct access (after initialization)
 export { storageInstance as storage };
+
+/**
+ * Reset storage instance (for testing only)
+ * @internal
+ */
+export function _resetStorageForTesting(): void {
+  storageInstance = null;
+}
 
 /**
  * Get or create encryption key from SecureStore
@@ -101,10 +180,10 @@ async function getOrCreateEncryptionKey(): Promise<string> {
 }
 
 /**
- * Initialize encrypted MMKV storage (or WebStorage on web)
+ * Initialize encrypted MMKV storage (or WebStorage on web, AsyncStorage on Expo Go)
  * Must be called before using any storage functions
  */
-export async function initializeStorage(): Promise<MMKV | WebStorage> {
+export async function initializeStorage(): Promise<MMKV | WebStorage | AsyncStorageAdapter> {
   if (storageInstance) return storageInstance;
 
   if (isWeb) {
@@ -112,18 +191,29 @@ export async function initializeStorage(): Promise<MMKV | WebStorage> {
     return storageInstance;
   }
 
-  const encryptionKey = await getOrCreateEncryptionKey();
-  storageInstance = new MMKV({
-    id: 'nullspace-storage',
-    encryptionKey,
-  });
-  return storageInstance;
+  // Try MMKV first (requires TurboModules/New Architecture)
+  try {
+    const encryptionKey = await getOrCreateEncryptionKey();
+    storageInstance = new MMKV({
+      id: 'nullspace-storage',
+      encryptionKey,
+    });
+    return storageInstance;
+  } catch (error) {
+    // MMKV 3.x requires TurboModules which Expo Go doesn't support
+    // Fall back to AsyncStorage for Expo Go development
+    console.warn('[storage] MMKV unavailable (Expo Go?), falling back to AsyncStorage:', error);
+    const adapter = new AsyncStorageAdapter();
+    await adapter.init();
+    storageInstance = adapter;
+    return storageInstance;
+  }
 }
 
 /**
  * Get the storage instance (auto-initializes on web)
  */
-export function getStorage(): MMKV | WebStorage {
+export function getStorage(): MMKV | WebStorage | AsyncStorageAdapter {
   if (!storageInstance) {
     if (isWeb) {
       storageInstance = new WebStorage();

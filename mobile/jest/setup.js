@@ -17,15 +17,44 @@ if (!global.crypto) {
 
 const mockSecureStoreData = new Map();
 const mockMmkvData = new Map();
+const mockAsyncStorageData = new Map();
+
+// Export mock data maps for test access
+globalThis.__testMocks__ = {
+  secureStore: mockSecureStoreData,
+  mmkv: mockMmkvData,
+  asyncStorage: mockAsyncStorageData,
+  // Failure simulation flags
+  mmkvShouldThrow: false,
+  secureStoreGetShouldThrow: false,
+  secureStoreSetShouldThrow: false,
+  asyncStorageGetAllKeysShouldThrow: false,
+  asyncStorageSetShouldThrow: false,
+};
 
 beforeEach(() => {
   mockSecureStoreData.clear();
   mockMmkvData.clear();
+  mockAsyncStorageData.clear();
+  // Reset failure flags
+  globalThis.__testMocks__.mmkvShouldThrow = false;
+  globalThis.__testMocks__.secureStoreGetShouldThrow = false;
+  globalThis.__testMocks__.secureStoreSetShouldThrow = false;
+  globalThis.__testMocks__.asyncStorageGetAllKeysShouldThrow = false;
+  globalThis.__testMocks__.asyncStorageSetShouldThrow = false;
 });
 
 jest.mock('expo-secure-store', () => ({
-  getItemAsync: jest.fn(async (key) => mockSecureStoreData.get(key) ?? null),
+  getItemAsync: jest.fn(async (key) => {
+    if (globalThis.__testMocks__?.secureStoreGetShouldThrow) {
+      throw new Error('SecureStore auth required');
+    }
+    return mockSecureStoreData.get(key) ?? null;
+  }),
   setItemAsync: jest.fn(async (key, value) => {
+    if (globalThis.__testMocks__?.secureStoreSetShouldThrow) {
+      throw new Error('SecureStore set auth required');
+    }
     mockSecureStoreData.set(key, value);
   }),
   deleteItemAsync: jest.fn(async (key) => {
@@ -36,6 +65,11 @@ jest.mock('expo-secure-store', () => ({
 
 jest.mock('react-native-mmkv', () => ({
   MMKV: class MMKV {
+    constructor() {
+      if (globalThis.__testMocks__?.mmkvShouldThrow) {
+        throw new Error('TurboModules unavailable (Expo Go)');
+      }
+    }
     getBoolean(key) {
       const value = mockMmkvData.get(key);
       if (value === undefined) return undefined;
@@ -111,4 +145,38 @@ jest.mock('expo-haptics', () => ({
   impactAsync: jest.fn(),
   notificationAsync: jest.fn(),
   selectionAsync: jest.fn(),
+}));
+
+// Mock AsyncStorage for Expo Go fallback in storage.ts
+jest.mock('@react-native-async-storage/async-storage', () => ({
+  default: {
+    getItem: jest.fn(async (key) => mockAsyncStorageData.get(key) ?? null),
+    setItem: jest.fn(async (key, value) => {
+      if (globalThis.__testMocks__?.asyncStorageSetShouldThrow) {
+        throw new Error('Storage quota exceeded');
+      }
+      mockAsyncStorageData.set(key, value);
+    }),
+    removeItem: jest.fn(async (key) => {
+      mockAsyncStorageData.delete(key);
+    }),
+    clear: jest.fn(async () => {
+      mockAsyncStorageData.clear();
+    }),
+    getAllKeys: jest.fn(async () => {
+      if (globalThis.__testMocks__?.asyncStorageGetAllKeysShouldThrow) {
+        throw new Error('AsyncStorage corrupted');
+      }
+      return Array.from(mockAsyncStorageData.keys());
+    }),
+    multiGet: jest.fn(async (keys) =>
+      keys.map((key) => [key, mockAsyncStorageData.get(key) ?? null])
+    ),
+    multiSet: jest.fn(async (pairs) => {
+      pairs.forEach(([key, value]) => mockAsyncStorageData.set(key, value));
+    }),
+    multiRemove: jest.fn(async (keys) => {
+      keys.forEach((key) => mockAsyncStorageData.delete(key));
+    }),
+  },
 }));
