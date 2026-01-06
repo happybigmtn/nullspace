@@ -1706,6 +1706,187 @@ mod tests {
     }
 
     #[test]
+    fn test_dragon_bonus_margin_loss_small_margins() {
+        // Test that Dragon Bonus LOSES when the side wins by 1, 2, or 3 points (non-natural)
+        // This is counterintuitive: the side wins but Dragon Bonus still loses!
+        let player_bet = BaccaratBet {
+            bet_type: BetType::PlayerDragon,
+            amount: 100,
+        };
+        let banker_bet = BaccaratBet {
+            bet_type: BetType::BankerDragon,
+            amount: 100,
+        };
+
+        // Player wins by 1 point (non-natural): 5 vs 4 - Dragon Bonus LOSES
+        let outcome = make_outcome(5, 4, false, false, false, false, 3, 3);
+        let (payout, is_push) = calculate_bet_payout(&player_bet, &outcome);
+        assert!(!is_push);
+        assert_eq!(payout, -100, "Win by 1 (non-natural) should lose Dragon Bonus");
+
+        // Player wins by 2 points (non-natural): 6 vs 4 - Dragon Bonus LOSES
+        let outcome = make_outcome(6, 4, false, false, false, false, 3, 3);
+        let (payout, is_push) = calculate_bet_payout(&player_bet, &outcome);
+        assert!(!is_push);
+        assert_eq!(payout, -100, "Win by 2 (non-natural) should lose Dragon Bonus");
+
+        // Player wins by 3 points (non-natural): 7 vs 4 - Dragon Bonus LOSES
+        let outcome = make_outcome(7, 4, false, false, false, false, 3, 3);
+        let (payout, is_push) = calculate_bet_payout(&player_bet, &outcome);
+        assert!(!is_push);
+        assert_eq!(payout, -100, "Win by 3 (non-natural) should lose Dragon Bonus");
+
+        // Banker wins by 1 point (non-natural): 4 vs 3 - Dragon Bonus LOSES
+        let outcome = make_outcome(3, 4, false, false, false, false, 3, 3);
+        let (payout, is_push) = calculate_bet_payout(&banker_bet, &outcome);
+        assert!(!is_push);
+        assert_eq!(payout, -100, "Banker win by 1 (non-natural) should lose Dragon Bonus");
+
+        // Banker wins by 2 points (non-natural): 5 vs 3 - Dragon Bonus LOSES
+        let outcome = make_outcome(3, 5, false, false, false, false, 3, 3);
+        let (payout, is_push) = calculate_bet_payout(&banker_bet, &outcome);
+        assert!(!is_push);
+        assert_eq!(payout, -100, "Banker win by 2 (non-natural) should lose Dragon Bonus");
+
+        // Banker wins by 3 points (non-natural): 6 vs 3 - Dragon Bonus LOSES
+        let outcome = make_outcome(3, 6, false, false, false, false, 3, 3);
+        let (payout, is_push) = calculate_bet_payout(&banker_bet, &outcome);
+        assert!(!is_push);
+        assert_eq!(payout, -100, "Banker win by 3 (non-natural) should lose Dragon Bonus");
+    }
+
+    #[test]
+    fn test_dragon_bonus_natural_wins_always_pay() {
+        // Natural wins (8 or 9 with 2 cards) always pay 1:1 regardless of margin
+        let player_bet = BaccaratBet {
+            bet_type: BetType::PlayerDragon,
+            amount: 100,
+        };
+        let banker_bet = BaccaratBet {
+            bet_type: BetType::BankerDragon,
+            amount: 100,
+        };
+
+        // Player natural 9 beats 7: margin is 2, but it's natural so pays 1:1
+        let outcome = make_outcome(9, 7, false, false, false, false, 2, 3);
+        let (payout, is_push) = calculate_bet_payout(&player_bet, &outcome);
+        assert!(!is_push);
+        assert_eq!(payout, 100, "Natural win by 2 should still pay 1:1");
+
+        // Player natural 8 beats 7: margin is 1, but it's natural so pays 1:1
+        let outcome = make_outcome(8, 7, false, false, false, false, 2, 3);
+        let (payout, is_push) = calculate_bet_payout(&player_bet, &outcome);
+        assert!(!is_push);
+        assert_eq!(payout, 100, "Natural win by 1 should still pay 1:1");
+
+        // Player natural 9 beats 0: margin is 9, but natural still pays just 1:1
+        let outcome = make_outcome(9, 0, false, false, false, false, 2, 3);
+        let (payout, is_push) = calculate_bet_payout(&player_bet, &outcome);
+        assert!(!is_push);
+        assert_eq!(payout, 100, "Natural win by 9 pays 1:1 (not 30:1)");
+
+        // Banker natural 8 beats 5: margin is 3, but it's natural so pays 1:1
+        let outcome = make_outcome(5, 8, false, false, false, false, 3, 2);
+        let (payout, is_push) = calculate_bet_payout(&banker_bet, &outcome);
+        assert!(!is_push);
+        assert_eq!(payout, 100, "Banker natural win by 3 should still pay 1:1");
+
+        // Banker natural 9 beats 8: margin is 1, but it's natural so pays 1:1
+        let outcome = make_outcome(8, 9, false, false, false, false, 2, 2);
+        let (payout, is_push) = calculate_bet_payout(&banker_bet, &outcome);
+        assert!(!is_push);
+        assert_eq!(payout, 100, "Banker natural 9 vs natural 8 pays 1:1");
+    }
+
+    #[test]
+    fn test_dragon_bonus_all_margin_values() {
+        // Comprehensive test of all margin values (1-9) for non-natural wins
+        let player_bet = BaccaratBet {
+            bet_type: BetType::PlayerDragon,
+            amount: 100,
+        };
+
+        // Margin 1: 5-4 = LOSE (-100)
+        let outcome = make_outcome(5, 4, false, false, false, false, 3, 3);
+        let (payout, _) = calculate_bet_payout(&player_bet, &outcome);
+        assert_eq!(payout, -100, "Margin 1 loses");
+
+        // Margin 2: 6-4 = LOSE (-100)
+        let outcome = make_outcome(6, 4, false, false, false, false, 3, 3);
+        let (payout, _) = calculate_bet_payout(&player_bet, &outcome);
+        assert_eq!(payout, -100, "Margin 2 loses");
+
+        // Margin 3: 7-4 = LOSE (-100)
+        let outcome = make_outcome(7, 4, false, false, false, false, 3, 3);
+        let (payout, _) = calculate_bet_payout(&player_bet, &outcome);
+        assert_eq!(payout, -100, "Margin 3 loses");
+
+        // Margin 4: 7-3 = 1:1 (+100)
+        let outcome = make_outcome(7, 3, false, false, false, false, 3, 3);
+        let (payout, _) = calculate_bet_payout(&player_bet, &outcome);
+        assert_eq!(payout, 100, "Margin 4 pays 1:1");
+
+        // Margin 5: 7-2 = 2:1 (+200)
+        let outcome = make_outcome(7, 2, false, false, false, false, 3, 3);
+        let (payout, _) = calculate_bet_payout(&player_bet, &outcome);
+        assert_eq!(payout, 200, "Margin 5 pays 2:1");
+
+        // Margin 6: 7-1 = 4:1 (+400)
+        let outcome = make_outcome(7, 1, false, false, false, false, 3, 3);
+        let (payout, _) = calculate_bet_payout(&player_bet, &outcome);
+        assert_eq!(payout, 400, "Margin 6 pays 4:1");
+
+        // Margin 7: 7-0 = 6:1 (+600)
+        let outcome = make_outcome(7, 0, false, false, false, false, 3, 3);
+        let (payout, _) = calculate_bet_payout(&player_bet, &outcome);
+        assert_eq!(payout, 600, "Margin 7 pays 6:1");
+
+        // Margin 8: 8-0 = 10:1 (+1000)
+        let outcome = make_outcome(8, 0, false, false, false, false, 3, 3);
+        let (payout, _) = calculate_bet_payout(&player_bet, &outcome);
+        assert_eq!(payout, 1000, "Margin 8 pays 10:1");
+
+        // Margin 9: 9-0 = 30:1 (+3000)
+        let outcome = make_outcome(9, 0, false, false, false, false, 3, 3);
+        let (payout, _) = calculate_bet_payout(&player_bet, &outcome);
+        assert_eq!(payout, 3000, "Margin 9 pays 30:1");
+    }
+
+    #[test]
+    fn test_dragon_bonus_loss_when_side_loses() {
+        // Dragon Bonus loses when the side you bet on loses
+        let player_bet = BaccaratBet {
+            bet_type: BetType::PlayerDragon,
+            amount: 100,
+        };
+        let banker_bet = BaccaratBet {
+            bet_type: BetType::BankerDragon,
+            amount: 100,
+        };
+
+        // Player loses (any margin): Dragon Bonus on Player loses
+        let outcome = make_outcome(3, 7, false, false, false, false, 3, 3);
+        let (payout, is_push) = calculate_bet_payout(&player_bet, &outcome);
+        assert!(!is_push);
+        assert_eq!(payout, -100, "Player Dragon loses when Banker wins");
+
+        // Banker loses (any margin): Dragon Bonus on Banker loses
+        let outcome = make_outcome(8, 4, false, false, false, false, 3, 3);
+        let (payout, is_push) = calculate_bet_payout(&banker_bet, &outcome);
+        assert!(!is_push);
+        assert_eq!(payout, -100, "Banker Dragon loses when Player wins");
+
+        // Non-natural tie: Both Dragon Bonus bets lose
+        let outcome = make_outcome(5, 5, false, false, false, false, 3, 3);
+        let (player_payout, player_push) = calculate_bet_payout(&player_bet, &outcome);
+        let (banker_payout, banker_push) = calculate_bet_payout(&banker_bet, &outcome);
+        assert!(!player_push);
+        assert!(!banker_push);
+        assert_eq!(player_payout, -100, "Player Dragon loses on non-natural tie");
+        assert_eq!(banker_payout, -100, "Banker Dragon loses on non-natural tie");
+    }
+
+    #[test]
     fn test_panda8_and_perfect_pair_payouts() {
         let panda_bet = BaccaratBet {
             bet_type: BetType::Panda8,
