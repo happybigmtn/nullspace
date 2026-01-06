@@ -15,6 +15,16 @@ import { OutboundMessageSchema, type OutboundMessage, getOutboundMessageGameType
 import { trackGatewayFaucet, trackGatewayResponse, trackGatewaySession } from './ops.js';
 import { crapsLiveTable } from './live-table/index.js';
 import { logDebug, logError, logInfo, logWarn } from './logger.js';
+import { validateProductionConfigOrThrow, validateDevelopmentConfig } from './config/validation.js';
+import { handleMetrics, trackConnection, trackMessage, trackSession, updateSessionCount } from './metrics/index.js';
+import {
+  enforceHttps,
+  setSecurityHeaders,
+  applyRateLimit,
+  initializeCors,
+  validateCors,
+  handleCorsPreflight,
+} from './middleware/security.js';
 
 const NODE_ENV = process.env.NODE_ENV ?? 'development';
 const IS_PROD = NODE_ENV === 'production';
@@ -66,6 +76,7 @@ const SUBMIT_TIMEOUT_MS = parsePositiveInt('GATEWAY_SUBMIT_TIMEOUT_MS', 10_000);
 const HEALTH_TIMEOUT_MS = parsePositiveInt('GATEWAY_HEALTHCHECK_TIMEOUT_MS', 5_000);
 const ACCOUNT_TIMEOUT_MS = parsePositiveInt('GATEWAY_ACCOUNT_TIMEOUT_MS', 5_000);
 const SUBMIT_MAX_BYTES = parsePositiveInt('GATEWAY_SUBMIT_MAX_BYTES', 8 * 1024 * 1024);
+const MAX_MESSAGE_SIZE = parsePositiveInt('GATEWAY_MAX_MESSAGE_SIZE', 64 * 1024); // 64KB default
 const NONCE_PERSIST_INTERVAL_MS = parsePositiveInt(
   'GATEWAY_NONCE_PERSIST_INTERVAL_MS',
   15_000,
@@ -90,7 +101,18 @@ const validateProductionEnv = (): void => {
   }
 };
 
+// Validate production configuration (placeholder detection, origin validation)
+validateProductionConfigOrThrow();
 validateProductionEnv();
+
+// Show development warnings
+validateDevelopmentConfig();
+
+// Initialize CORS middleware with defense-in-depth validation
+initializeCors({
+  allowedOrigins: GATEWAY_ALLOWED_ORIGINS,
+  allowNoOrigin: GATEWAY_ALLOW_NO_ORIGIN,
+});
 
 // Core services
 const nonceManager = new NonceManager({ origin: GATEWAY_ORIGIN, dataDir: GATEWAY_DATA_DIR });
@@ -130,6 +152,13 @@ function sendError(ws: WebSocket, code: string, message: string): void {
  * Handle incoming message from mobile client
  */
 async function handleMessage(ws: WebSocket, rawData: Buffer): Promise<void> {
+  // Size check before parsing to prevent DoS
+  if (rawData.length > MAX_MESSAGE_SIZE) {
+    logInfo(`[Gateway] Message rejected: ${rawData.length} bytes exceeds limit of ${MAX_MESSAGE_SIZE}`);
+    sendError(ws, ErrorCodes.INVALID_MESSAGE, `Message too large (${rawData.length} bytes, max ${MAX_MESSAGE_SIZE})`);
+    return;
+  }
+
   // Parse JSON
   let msg: Record<string, unknown>;
   try {
@@ -258,14 +287,44 @@ async function handleMessage(ws: WebSocket, rawData: Buffer): Promise<void> {
   }
 }
 
-// Create HTTP server with healthz endpoint, then attach WebSocket server
+// Create HTTP server with healthz and metrics endpoints, then attach WebSocket server
 const server = createServer((req, res) => {
-  if (req.method === 'GET' && req.url?.split('?')[0] === '/healthz') {
+  // Apply HTTPS redirect in production
+  if (!enforceHttps(req, res)) {
+    return; // Request was redirected
+  }
+
+  // Set security headers
+  setSecurityHeaders(res);
+
+  // Handle CORS preflight requests
+  if (handleCorsPreflight(req, res)) {
+    return; // Preflight handled
+  }
+
+  // Validate CORS for all other requests (defense-in-depth)
+  if (!validateCors(req, res)) {
+    return; // Origin not allowed
+  }
+
+  const path = req.url?.split('?')[0];
+
+  if (req.method === 'GET' && path === '/healthz') {
     res.statusCode = 200;
     res.setHeader('Content-Type', 'application/json');
     res.end(JSON.stringify({ ok: true }));
     return;
   }
+
+  if (req.method === 'GET' && path === '/metrics') {
+    // Apply rate limiting to metrics endpoint
+    if (!applyRateLimit(req, res)) {
+      return; // Rate limited
+    }
+    handleMetrics(req, res);
+    return;
+  }
+
   res.statusCode = 404;
   res.end();
 });
@@ -295,6 +354,7 @@ wss.on('connection', async (ws: WebSocket, req) => {
     }
   }
   logDebug(`[Gateway] Client connected from ${clientIp}`);
+  trackConnection('connect', clientIp);
 
   // Check connection limits before proceeding
   const limitCheck = connectionLimiter.canConnect(clientIp);
@@ -315,6 +375,7 @@ wss.on('connection', async (ws: WebSocket, req) => {
     // Create session with auto-registration
     const session = await sessionManager.createSession(ws, {}, clientIp);
     sessionManager.startBalanceRefresh(session, BALANCE_REFRESH_MS);
+    trackSession('created');
 
     // Send session ready message
     send(ws, {
@@ -341,13 +402,15 @@ wss.on('connection', async (ws: WebSocket, req) => {
     });
 
     // Handle disconnect
-    ws.on('close', () => {
-      logDebug(`[Gateway] Client disconnected: ${session.id}`);
+    ws.on('close', (code, reason) => {
+      logDebug(`[Gateway] Client disconnected: ${session.id} (code=${code}, reason=${reason.toString()})`);
       const destroyed = sessionManager.destroySession(ws);
       if (destroyed) {
         crapsLiveTable.removeSession(destroyed);
+        trackSession('destroyed');
       }
       connectionLimiter.unregisterConnection(clientIp, connectionId);
+      trackConnection('disconnect', clientIp);
     });
 
     // Handle errors
@@ -404,4 +467,5 @@ logInfo(`[Gateway] Mobile gateway listening on ws://0.0.0.0:${PORT}`);
 logInfo(`[Gateway] Backend URL: ${BACKEND_URL}`);
 logInfo(`[Gateway] Gateway Origin: ${GATEWAY_ORIGIN}`);
 logInfo(`[Gateway] Connection limits: ${MAX_CONNECTIONS_PER_IP} per IP, ${MAX_TOTAL_SESSIONS} total`);
+logInfo(`[Gateway] Max message size: ${MAX_MESSAGE_SIZE} bytes`);
 logInfo(`[Gateway] Registered handlers for ${handlers.size} game types`);

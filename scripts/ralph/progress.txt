@@ -918,3 +918,23 @@ Target: Testnet Production
   - This also marks US-102 as complete since it was a duplicate story
 
 ---
+
+## 2026-01-06 - US-044: Add gateway message size limit tests
+
+- What was implemented:
+  - Added `MAX_MESSAGE_SIZE` constant (64KB default, configurable via `GATEWAY_MAX_MESSAGE_SIZE`)
+  - Added size check before `JSON.parse` in `handleMessage` function
+  - Oversized messages rejected with `INVALID_MESSAGE` error code and informative message
+  - Added startup log showing configured max message size
+  - Created 4 integration tests for size limit enforcement
+- Files changed:
+  - `gateway/src/index.ts` - Added MAX_MESSAGE_SIZE constant, size check in handleMessage, startup log
+  - `gateway/tests/integration/message-size.test.ts` - Created with 4 tests
+- **Learnings:**
+  - DoS prevention: Always validate input size BEFORE parsing
+  - 64KB is plenty for game messages - largest would be multi-bet Craps (~10KB max)
+  - Pattern: Check `rawData.length > MAX_MESSAGE_SIZE` before `JSON.parse(rawData.toString())`
+  - Error message includes both actual size and limit for debugging
+  - Connection stays open after rejection, allowing recovery
+
+---

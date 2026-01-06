@@ -452,8 +452,8 @@
 				"Prevent memory exhaustion DoS attack"
 			],
 			"priority": 35,
-			"passes": false,
-			"notes": "CRITICAL GAP: gateway/src/index.ts:152-161 - no size check on rawData before JSON.parse. DoS vector."
+			"passes": true,
+			"notes": "FIXED: Added MAX_MESSAGE_SIZE check (64KB default, configurable via GATEWAY_MAX_MESSAGE_SIZE) before JSON.parse in handleMessage. Messages exceeding limit are rejected with INVALID_MESSAGE error code. Created message-size.test.ts with 4 integration tests: boundary acceptance, oversized rejection, huge payload rejection, and connection recovery after rejection."
 		},
 		{
 			"id": "US-045",
