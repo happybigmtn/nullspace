@@ -335,8 +335,8 @@
 				"Test balance=0 message displayed to user"
 			],
 			"priority": 26,
-			"passes": false,
-			"notes": "VERIFIED GAP: No tests for empty balance UX. User could see confusing state on new account."
+			"passes": true,
+			"notes": "FIXED: Created ZeroBalanceEdgeCases.test.tsx with 14 tests. Tests verify: chip placement rejection (placeChip returns false), DEAL disabled when bet=0, faucet restoration flow, balance prompt displayed, bet preservation when balance drops, new account experience. ChipSelector behavior tested via placeChip mock since GestureDetector unreliable in tests."
 		},
 		{
 			"id": "US-036",
