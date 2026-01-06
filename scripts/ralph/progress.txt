@@ -614,3 +614,70 @@ Target: Testnet Production
   - Boundary tests (max u64, max valid enum, zero-length) are valuable for catching off-by-one errors
 
 ---
+
+## 2026-01-06 - US-030: Add crypto signing integration tests
+
+- What was implemented:
+  - Completely rewrote `crypto.test.ts` to use real `@noble/curves/ed25519` operations
+  - Removed `jest.mock('@noble/curves/ed25519')` that was mocking all crypto operations
+  - Added 26 tests in 5 categories using real cryptographic operations:
+    - Signature generation (4 tests): 64-byte signatures, determinism, different keys/messages
+    - Signature verification round-trip (6 tests): valid/invalid signatures, tampered data, empty/large messages
+    - Key generation (4 tests): 32-byte keys, unique pairs, deterministic derivation
+    - Hex encoding round-trip (2 tests): encode/decode, signing after serialization
+    - Vault key export/import (8 tests): create/export, identity preservation, lock/unlock cycles
+    - Cross-platform compatibility (2 tests): Ed25519 standard format, deterministic derivation
+- Files changed:
+  - `mobile/src/services/__tests__/crypto.test.ts` - Complete rewrite with real crypto operations
+- **Learnings:**
+  - `@noble/curves/ed25519` uses pure JavaScript implementation - no WASM dependency
+  - Ed25519 signatures are deterministic: same key + message = same 64-byte signature
+  - Signature structure: R (32 bytes) + S (32 bytes) = 64 bytes total
+  - `webcrypto` from Node.js `crypto` module provides `crypto.getRandomValues` for tests
+  - Vault uses XChaCha20-Poly1305 with PBKDF2 (250k iterations) for key encryption
+  - Key export/import preserves identity: public key derived from private key is deterministic
+  - Tests now validate real cryptographic operations rather than mocked behavior
+
+---
+
+## 2026-01-06 - US-031: Add useBetSubmission unit tests
+
+- What was implemented:
+  - Created `useBetSubmission.test.tsx` with 16 comprehensive unit tests
+  - Tests cover all acceptance criteria: double-tap rejection, timeout recovery, clearSubmission, send failure
+  - Tests organized into 5 describe blocks: double-tap rejection, timeout auto-recovery, clearSubmission, send failure, concurrent scenarios
+  - Uses `jest.useFakeTimers()` for precise timeout testing
+  - Custom `renderHook` helper follows codebase pattern from useChipBetting.test.tsx
+- Files changed:
+  - `mobile/src/hooks/__tests__/useBetSubmission.test.tsx` - New file with 16 tests
+- **Learnings:**
+  - When testing rapid-fire scenarios, each tap must be in separate `act()` calls for React to process state updates
+  - `jest.useFakeTimers()` with `jest.advanceTimersByTime()` allows precise testing of timeout behavior
+  - Pattern for timeout boundary testing: advance to 4999ms (still active), then 1ms more (should trigger)
+  - `clearSubmission` should be safe to call multiple times - idempotent cleanup
+  - Send failure should NOT set isSubmitting flag - allows immediate retry without waiting for timeout
+
+---
+
+## 2026-01-06 - US-032: Add server bet rejection tests
+
+- What was implemented:
+  - Created `BetRejectionHandling.test.tsx` with 14 comprehensive tests covering bet rejection scenarios
+  - Tests organized into 6 describe blocks: error message handling, insufficient balance, below minimum bet, UI recovery, game in progress, backend errors
+  - Tests verify `clearSubmission()` is called on error messages to re-enable DEAL button
+  - Tests verify error messages are displayed to user (with fallback to "Action failed")
+  - Tests verify sequential error messages update correctly
+  - Tests cover all gateway error codes: INSUFFICIENT_BALANCE, INVALID_BET, GAME_IN_PROGRESS, BACKEND_UNAVAILABLE, NONCE_MISMATCH, TRANSACTION_REJECTED
+- Files changed:
+  - `mobile/src/screens/games/__tests__/BetRejectionHandling.test.tsx` - New file with 14 tests
+- **Learnings:**
+  - Gateway sends error responses as `{ type: 'error', code: ErrorCode, message: string }` format
+  - Error codes defined in `gateway/src/types/errors.ts` - includes client errors (4xx) and backend errors (5xx)
+  - `clearSubmission()` must be called on ANY error response to re-enable the DEAL button
+  - BlackjackScreen uses `lastMessage.type === 'error'` to detect rejections (line 163-169)
+  - Error message display: `lastMessage.message || 'Action failed'` provides fallback for missing message field
+  - Mock pattern: Override `useBetSubmission` hook with controlled `isSubmitting` state using `jest.mock('../../../hooks/useBetSubmission')`
+  - Test `mockIsSubmitting = true` then `false` to verify button disabled/enabled state transitions
+  - All game screens share same error handling pattern (inherited from BlackjackScreen architecture)
+
+---

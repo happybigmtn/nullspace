@@ -128,8 +128,8 @@
 				"Remove jest.mock for @noble/curves/ed25519"
 			],
 			"priority": 10,
-			"passes": false,
-			"notes": "VERIFIED GAP: Mobile crypto.test.ts mocks all ed25519 operations. Real signing never validated."
+			"passes": true,
+			"notes": "FIXED: Completely rewrote crypto.test.ts to use real @noble/curves/ed25519 operations. 26 tests cover: signature generation (4), verification round-trip (6), key generation (4), hex encoding (2), vault export/import (8), cross-platform compatibility (2). All cryptographic operations now use real implementations - no mocks."
 		},
 		{
 			"id": "US-010",
@@ -283,8 +283,8 @@
 				"Test send failure returns false immediately"
 			],
 			"priority": 22,
-			"passes": false,
-			"notes": "CRITICAL GAP: useBetSubmission has NO unit tests. This hook prevents double-bet bugs."
+			"passes": true,
+			"notes": "FIXED: Added 16 unit tests covering all acceptance criteria. Tests verify: (1) isSubmitting flag prevents duplicate submissions, (2) 5-second timeout auto-clears state, (3) clearSubmission() properly resets state, (4) send() failure returns false immediately without setting isSubmitting. Additional tests cover unmount cleanup and rapid-fire tap scenarios."
 		},
 		{
 			"id": "US-032",
@@ -296,8 +296,8 @@
 				"Test UI recovery after rejection (re-enable DEAL button)"
 			],
 			"priority": 23,
-			"passes": false,
-			"notes": "VERIFIED GAP: No tests verify what happens when server rejects a bet. Could leave UI stuck."
+			"passes": true,
+			"notes": "FIXED: Created BetRejectionHandling.test.tsx with 14 tests covering all error types (INSUFFICIENT_BALANCE, INVALID_BET, GAME_IN_PROGRESS, BACKEND_UNAVAILABLE, NONCE_MISMATCH, TRANSACTION_REJECTED). Tests verify: error message display, fallback message for missing field, clearSubmission called on error, DEAL button re-enabled after rejection, sequential error handling, retry capability."
 		},
 		{
 			"id": "US-033",
@@ -857,6 +857,227 @@
 			"priority": 66,
 			"passes": false,
 			"notes": "CRITICAL GAP: useBetSubmission.ts timeout at 5s never tested. Could leave UI stuck."
+		},
+		{
+			"id": "US-076",
+			"title": "Add session ID update after game start test",
+			"acceptanceCriteria": [
+				"Test mobile updates activeGameId when server sends different sessionId in game_started",
+				"Test subsequent moves use server-assigned sessionId, not client-generated",
+				"Test NO_ACTIVE_GAME error if mobile uses stale sessionId",
+				"Verify session ID flow: mobile generates → server assigns → mobile updates"
+			],
+			"priority": 67,
+			"passes": false,
+			"notes": "CRITICAL GAP: base.ts:126-128 updates activeGameId from backend event. Mobile could use wrong sessionId in subsequent moves if not updated."
+		},
+		{
+			"id": "US-077",
+			"title": "Add BigInt balance precision test",
+			"acceptanceCriteria": [
+				"Test balance at Number.MAX_SAFE_INTEGER boundary (2^53)",
+				"Test balance > 2^53 doesn't lose precision in parseNumeric()",
+				"Test balance as string '9007199254740992' parsed correctly",
+				"Verify no silent precision loss in mobile UI display"
+			],
+			"priority": 68,
+			"passes": false,
+			"notes": "CRITICAL GAP: Gateway sends balance as string for BigInt safety. Mobile parseNumeric() may lose precision for large values."
+		},
+		{
+			"id": "US-078",
+			"title": "Add state blob truncation handling test",
+			"acceptanceCriteria": [
+				"Test gateway handles state blob 1 byte short without crashing",
+				"Test StateReader.remaining() returns None for truncated data",
+				"Test mobile receives error message, not undefined behavior",
+				"Verify 8-deck Blackjack state blob doesn't exceed payload limits"
+			],
+			"priority": 69,
+			"passes": false,
+			"notes": "CRITICAL GAP: StateReader silently returns None on truncated data. Gateway could crash or return corrupted state."
+		},
+		{
+			"id": "US-079",
+			"title": "Add phase naming consistency tests across layers",
+			"acceptanceCriteria": [
+				"Test Blackjack: mobile 'dealer_turn' maps correctly from Rust 'AwaitingReveal'",
+				"Test Craps: single-player phase enum vs live-table phase vocabulary",
+				"Document canonical phase naming in /types/messages.ts",
+				"Test unknown phase values handled gracefully (not undefined)"
+			],
+			"priority": 70,
+			"passes": false,
+			"notes": "CRITICAL GAP: Mobile uses 'dealer_turn', Rust uses 'AwaitingReveal'. Craps has 5 live-table phases vs 2 single-player phases."
+		},
+		{
+			"id": "US-080",
+			"title": "Add action mask cross-hand consistency test",
+			"acceptanceCriteria": [
+				"Test actionMask bits match actual game state (card count, hand status)",
+				"Test actionMask changes when active_hand_idx changes after split",
+				"Test canDouble=false when hand has >2 cards despite bit 2 set",
+				"Verify actionMask reflects current hand, not previous hand"
+			],
+			"priority": 71,
+			"passes": false,
+			"notes": "CRITICAL GAP: Mobile interprets actionMask bits without validating against card count. Split creates new hand with different valid actions."
+		},
+		{
+			"id": "US-081",
+			"title": "Add custodial signing architecture integration test",
+			"acceptanceCriteria": [
+				"Document custodial model: gateway signs on-chain txs with ephemeral keys, backend verifies",
+				"Document entitlements: mobile signs with vault key, auth server verifies",
+				"Test WebSocket connection isolation prevents cross-session impersonation",
+				"Test ephemeral key loss on reconnect is handled gracefully"
+			],
+			"priority": 72,
+			"passes": false,
+			"notes": "ARCHITECTURE: Gateway uses custodial signing (ephemeral keys per session). Mobile vault keys used for auth service only. WebSocket identity is the auth boundary for game messages."
+		},
+		{
+			"id": "US-082",
+			"title": "Add session expiration notification test",
+			"acceptanceCriteria": [
+				"Test gateway sends SESSION_EXPIRED message when idle > 30 minutes",
+				"Test mobile receives and handles expiration during active game",
+				"Test mobile redirects to auth screen on expiration",
+				"Test auto-reconnect doesn't loop infinitely on expired session"
+			],
+			"priority": 73,
+			"passes": false,
+			"notes": "CRITICAL GAP: cleanupIdleSessions() destroys session without notifying client. Mobile continues playing against dead session."
+		},
+		{
+			"id": "US-083",
+			"title": "Add vault lock during active game test",
+			"acceptanceCriteria": [
+				"Test signMessage() throws 'vault_locked' during game move",
+				"Test mobile shows user-friendly error when vault locks mid-game",
+				"Test game state preserved when vault locks",
+				"Test user can unlock vault and continue game"
+			],
+			"priority": 74,
+			"passes": false,
+			"notes": "HIGH GAP: If vault auto-locks during game, signMessage() throws but mobile may not handle gracefully."
+		},
+		{
+			"id": "US-084",
+			"title": "Add nonce sync after backend restart test",
+			"acceptanceCriteria": [
+				"Test syncFromBackend() handles backend nonce reset to 0",
+				"Test nonce guard logic: if local > 0 and onChainNonce === 0, behavior is correct",
+				"Test subsequent transactions work after backend restart",
+				"Document nonce recovery behavior in edge cases"
+			],
+			"priority": 75,
+			"passes": false,
+			"notes": "HIGH GAP: nonce.ts:172-175 has guard for reset. If backend legitimately resets, unclear whether to use 0 or keep local value."
+		},
+		{
+			"id": "US-085",
+			"title": "Add balance field presence validation test",
+			"acceptanceCriteria": [
+				"Test game_started always includes balance field (even when 0)",
+				"Test game_move without balance/finalChips handled gracefully",
+				"Test mobile doesn't crash when balance field missing",
+				"Fix base.ts:486 conditional check that skips balance=0"
+			],
+			"priority": 76,
+			"passes": false,
+			"notes": "CRITICAL GAP: base.ts:486 'if (session.balance > 0n)' may skip balance field. Mobile can't update balance if field missing."
+		},
+		{
+			"id": "US-086",
+			"title": "Add message queue overflow notification test",
+			"acceptanceCriteria": [
+				"Test queue at MAX_QUEUE_SIZE (50) drops oldest message",
+				"Test user notified when critical messages (bets) dropped",
+				"Test queue FIFO order maintained under load",
+				"Add metrics for queue overflow events"
+			],
+			"priority": 77,
+			"passes": false,
+			"notes": "CRITICAL GAP: websocket.ts:225-232 drops oldest message silently. Bet could be lost without user knowing."
+		},
+		{
+			"id": "US-087",
+			"title": "Add error code distinction test (Rust → Gateway)",
+			"acceptanceCriteria": [
+				"Test InvalidPayload error maps to distinct code (not generic 9)",
+				"Test InvalidMove error maps to distinct code",
+				"Test DeckExhausted error propagates with meaningful message",
+				"Document full error code mapping table"
+			],
+			"priority": 78,
+			"passes": false,
+			"notes": "CRITICAL GAP: casino.rs:746-761 maps ALL GameError variants to ERROR_INVALID_MOVE (code 9). Client cannot distinguish error causes."
+		},
+		{
+			"id": "US-088",
+			"title": "Add reconnection with in-flight game state test",
+			"acceptanceCriteria": [
+				"Test disconnect during game preserves game state",
+				"Test reconnect resumes game with same sessionId",
+				"Test balance consistent after reconnect mid-game",
+				"Test nonce sequence maintained across reconnection"
+			],
+			"priority": 79,
+			"passes": false,
+			"notes": "CRITICAL GAP: On reconnect, gateway creates NEW session (new UUID). In-progress game state lost. No session resumption tokens."
+		},
+		{
+			"id": "US-089",
+			"title": "Add out-of-order balance update handling test",
+			"acceptanceCriteria": [
+				"Test balance messages arriving out of order use latest value",
+				"Test faucet response after get_balance response shows correct final",
+				"Add timestamp or sequence number to balance messages",
+				"Verify last-write-wins doesn't cause balance regression"
+			],
+			"priority": 80,
+			"passes": false,
+			"notes": "HIGH GAP: useGatewaySession updates balance from any message. If old balance message arrives after new one, balance regresses."
+		},
+		{
+			"id": "US-090",
+			"title": "Add concurrent bet validation lock test",
+			"acceptanceCriteria": [
+				"Test placeChip() locks during validation to prevent race",
+				"Test balance update arriving mid-validation is handled",
+				"Test bet rejected if balance changes between validation and submission",
+				"Verify no bet exceeds actual balance due to race"
+			],
+			"priority": 81,
+			"passes": false,
+			"notes": "CRITICAL GAP: useChipBetting.placeChip() uses getState() but doesn't lock. Concurrent setBalance() can cause bet > balance."
+		},
+		{
+			"id": "US-091",
+			"title": "Add atomic batch payload boundary test",
+			"acceptanceCriteria": [
+				"Test batch with N bets but N-0.5 bytes worth of data",
+				"Test bet type field swapped (Roulette format to Craps handler)",
+				"Test amount field endianness consistency",
+				"Verify truncated payloads return ERROR_INVALID_PAYLOAD, not crash"
+			],
+			"priority": 82,
+			"passes": false,
+			"notes": "HIGH GAP: Different games expect different payload formats (Craps: 10 bytes/bet, Baccarat: 9 bytes/bet). No cross-format validation."
+		},
+		{
+			"id": "US-092",
+			"title": "Add game result message format validation test",
+			"acceptanceCriteria": [
+				"Define TypeScript interface for game_result message",
+				"Test 'blackjack' field distinguishes natural 21 from regular win",
+				"Test all required fields present: won, push, hands, dealer",
+				"Create canonical GameMessage union type in /types/messages.ts"
+			],
+			"priority": 83,
+			"passes": false,
+			"notes": "HIGH GAP: No defined format for how GameResult enum maps to JSON fields. Mobile can't distinguish blackjack vs regular win."
 		}
 	]
 }
