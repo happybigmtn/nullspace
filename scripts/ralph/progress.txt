@@ -404,3 +404,30 @@ Target: Testnet Production
   - Integration tests run via `ts-node tests/integration/runTests.ts` against live gateway
 
 ---
+
+## 2026-01-06 - US-009: Web QA bet harness local environment setup
+
+- What was implemented:
+  - Created `website/README.md` with comprehensive documentation:
+    - Quick start instructions
+    - Environment variable reference with explanations
+    - QA Bet Harness usage (UI and Playwright automation)
+    - Troubleshooting for common errors (CHAIN OFFLINE, Missing VITE_IDENTITY, Vault locked)
+    - Local network requirements table
+  - Updated `configs/local/.env.local` with all QA testing variables:
+    - `VITE_GATEWAY_URL=ws://localhost:9010` (for session-based games)
+    - `VITE_AUTH_URL=http://localhost:4000` (for auth service)
+    - `VITE_QA_BETS=true` (enables QA harness panel)
+    - `VITE_ALLOW_LEGACY_KEYS=true` (for dev without vault)
+- Files changed:
+  - `website/README.md` - Created with 130+ lines of documentation
+  - `configs/local/.env.local` - Added 4 QA-related env vars
+- **Learnings:**
+  - "CHAIN OFFLINE" error comes from `ensureChainResponsive()` in `useChainTimeouts.ts`
+  - `ensureChainResponsive()` checks: (1) cached view, (2) queryLatestSeed, (3) waitForFirstSeed with 1.5s timeout
+  - Main README already correctly sets `ALLOWED_WS_ORIGINS` for localhost (lines 80-82)
+  - Simulator validates WebSocket origins in `simulator/src/api/ws.rs` via `validate_origin()`
+  - Gateway has defense-in-depth CORS in `gateway/src/middleware/security.ts` but allows all in dev mode
+  - QA Bet Harness exposes `window.__qa` API for Playwright: `runAllBets()`, `runGameBets(type)`, `getResults()`, `getLogs()`
+
+---
