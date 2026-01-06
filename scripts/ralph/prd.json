@@ -104,8 +104,8 @@
 				"No duplicate bets on double-tap"
 			],
 			"priority": 8,
-			"passes": false,
-			"notes": "VERIFIED: Game screens only check isDisconnected, not submission state"
+			"passes": true,
+			"notes": "COMPLETED: Created useBetSubmission hook with isSubmitting state, 5s timeout fallback. Integrated into all 10 game screens. Buttons disabled during submission, re-enabled on server response or timeout."
 		},
 		{
 			"id": "US-009",
@@ -505,6 +505,20 @@
 			"priority": 38,
 			"passes": false,
 			"notes": "GAP: No test verifies message ordering under rapid succession. Out-of-order could corrupt game state."
+		},
+		{
+			"id": "US-039",
+			"title": "Fix mobile integration test message type expectations",
+			"acceptanceCriteria": [
+				"Update mobile/tests/integration/games/*.ts to handle game_move instead of game_result",
+				"Fix timeout errors in Blackjack, Roulette, Craps, Baccarat, SicBo, VideoPoker, CasinoWar tests",
+				"Fix Three Card Poker and Ultimate Hold'em to handle game_started correctly",
+				"All 10 game tests pass against local gateway",
+				"Tests validate actual payout from game_move/game_result messages"
+			],
+			"priority": 39,
+			"passes": false,
+			"notes": "DISCOVERED 2026-01-06: Mobile integration tests timeout waiting for 'game_result'/'game_state' but gateway sends 'game_move'. Only Hi-Lo passes (1/10). Gateway all-bet-types (86/86) proves game logic works - this is a test framework bug."
 		}
 	]
 }

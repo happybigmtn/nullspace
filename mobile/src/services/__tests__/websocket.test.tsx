@@ -82,7 +82,7 @@ beforeEach(() => {
   snapshots.length = 0;
   MockWebSocket.instances.length = 0;
   (global as { WebSocket?: typeof MockWebSocket }).WebSocket = MockWebSocket as unknown as typeof WebSocket;
-  setDevMode(false);
+  setDevMode(true); // Default to dev mode to allow ws:// URLs in tests
   mockConstants.expoConfig = undefined;
   mockConstants.expoGoConfig = undefined;
   mockConstants.manifest = undefined;
@@ -155,6 +155,7 @@ describe('useWebSocket', () => {
   });
 
   it('handles clean close without scheduling reconnects', () => {
+    jest.spyOn(console, 'log').mockImplementation(() => {});
     act(() => {
       TestRenderer.create(<HookProbe url="ws://example.test" />);
     });
@@ -168,7 +169,8 @@ describe('useWebSocket', () => {
 
     const closed = snapshots.at(-1);
     expect(closed?.connectionState).toBe('disconnected');
-    expect(console.warn).toHaveBeenCalledWith(
+    // Clean close message is logged via console.log in __DEV__ mode
+    expect(console.log).toHaveBeenCalledWith(
       'WebSocket closed cleanly',
       expect.objectContaining({ code: 1000, reason: 'done' })
     );
@@ -180,16 +182,20 @@ describe('useWebSocket', () => {
     expect(MockWebSocket.instances.length).toBe(instanceCount);
   });
 
-  it('guards sends and logs invalid messages', () => {
+  it('queues messages when connecting and logs invalid messages', () => {
     jest.spyOn(console, 'error').mockImplementation(() => {});
+    jest.spyOn(console, 'log').mockImplementation(() => {});
     act(() => {
       TestRenderer.create(<HookProbe url="ws://example.test" />);
     });
 
     const socket = MockWebSocket.instances[0];
     const state = snapshots.at(-1);
-    expect(state?.send({ type: 'ping' })).toBe(false);
-    expect(console.warn).toHaveBeenCalledWith('WebSocket not connected, message not sent');
+    // Messages are queued when connecting (not dropped), returns true
+    expect(state?.send({ type: 'ping' })).toBe(true);
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringMatching(/Message queued/)
+    );
 
     act(() => {
       socket.onmessage?.({ data: '{not-json' });

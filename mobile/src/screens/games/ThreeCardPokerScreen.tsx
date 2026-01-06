@@ -10,7 +10,7 @@ import { ChipSelector } from '../../components/casino';
 import { GameLayout } from '../../components/game';
 import { TutorialOverlay, PrimaryButton } from '../../components/ui';
 import { haptics } from '../../services/haptics';
-import { useGameKeyboard, KEY_ACTIONS, useGameConnection } from '../../hooks';
+import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useBetSubmission } from '../../hooks';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS, SPRING } from '../../constants/theme';
 import { decodeCardList, decodeStateBytes, parseThreeCardState, parseNumeric } from '../../utils';
 import { useGameStore } from '../../stores/gameStore';
@@ -63,6 +63,7 @@ export function ThreeCardPokerScreen() {
   // Shared hook for connection (ThreeCardPoker has multi-bet so keeps custom bet state)
   const { isDisconnected, send, lastMessage, connectionStatusProps } = useGameConnection<GameMessage>();
   const { balance } = useGameStore();
+  const { isSubmitting, submitBet, clearSubmission } = useBetSubmission(send);
 
   const [state, setState] = useState<ThreeCardPokerState>({
     anteBet: 0,
@@ -97,6 +98,7 @@ export function ThreeCardPokerScreen() {
     if (!lastMessage) return;
 
     if (lastMessage.type === 'game_started' || lastMessage.type === 'game_move') {
+      clearSubmission(); // Clear bet submission state on server response
       const stateBytes = decodeStateBytes((lastMessage as { state?: unknown }).state);
       if (!stateBytes) return;
       InteractionManager.runAfterInteractions(() => {
@@ -131,6 +133,7 @@ export function ThreeCardPokerScreen() {
     }
 
     if (lastMessage.type === 'game_result') {
+      clearSubmission(); // Clear bet submission state on result
       const payload = lastMessage as Record<string, unknown>;
       const payout = parseNumeric(payload.totalReturn ?? payload.payout) ?? 0;
       const player = payload.player as { cards?: number[]; rank?: ThreeCardPokerHand } | undefined;
@@ -165,7 +168,7 @@ export function ThreeCardPokerScreen() {
         message: typeof payload.message === 'string' ? payload.message : payout > 0 ? 'You win!' : 'Dealer wins',
       }));
     }
-  }, [lastMessage, state.anteBet, state.pairPlusBet]);
+  }, [lastMessage, state.anteBet, state.pairPlusBet, clearSubmission]);
 
   const handleChipPlace = useCallback((value: ChipValue) => {
     if (state.phase !== 'betting') return;
@@ -201,10 +204,10 @@ export function ThreeCardPokerScreen() {
   }, [state.phase, activeBetType, state.anteBet, state.pairPlusBet, state.sixCardBet, state.progressiveBet, balance]);
 
   const handleDeal = useCallback(async () => {
-    if (state.anteBet === 0) return;
+    if (state.anteBet === 0 || isSubmitting) return;
     await haptics.betConfirm();
 
-    send({
+    const success = submitBet({
       type: 'three_card_poker_deal',
       ante: state.anteBet,
       pairPlus: state.pairPlusBet,
@@ -212,30 +215,36 @@ export function ThreeCardPokerScreen() {
       progressive: state.progressiveBet,
     });
 
-    setState((prev) => ({
-      ...prev,
-      message: 'Dealing...',
-    }));
-  }, [state.anteBet, state.pairPlusBet, state.sixCardBet, state.progressiveBet, send]);
+    if (success) {
+      setState((prev) => ({
+        ...prev,
+        message: 'Dealing...',
+      }));
+    }
+  }, [state.anteBet, state.pairPlusBet, state.sixCardBet, state.progressiveBet, submitBet, isSubmitting]);
 
   const handlePlay = useCallback(async () => {
+    if (isSubmitting) return;
     await haptics.betConfirm();
 
-    send({
+    const success = submitBet({
       type: 'three_card_poker_play',
     });
 
-    setState((prev) => ({
-      ...prev,
-      phase: 'showdown',
-      message: 'Revealing dealer...',
-    }));
-  }, [send]);
+    if (success) {
+      setState((prev) => ({
+        ...prev,
+        phase: 'showdown',
+        message: 'Revealing dealer...',
+      }));
+    }
+  }, [submitBet, isSubmitting]);
 
   const handleFold = useCallback(async () => {
+    if (isSubmitting) return;
     await haptics.buttonPress();
 
-    send({
+    submitBet({
       type: 'three_card_poker_fold',
     });
 
@@ -245,7 +254,7 @@ export function ThreeCardPokerScreen() {
       anteResult: 'loss',
       message: 'Folded',
     }));
-  }, [send]);
+  }, [submitBet, isSubmitting]);
 
   const handleNewGame = useCallback(() => {
     setState({
@@ -449,7 +458,7 @@ export function ThreeCardPokerScreen() {
           <PrimaryButton
             label="DEAL"
             onPress={handleDeal}
-            disabled={state.anteBet === 0 || isDisconnected}
+            disabled={state.anteBet === 0 || isDisconnected || isSubmitting}
             variant="primary"
             size="large"
           />
@@ -460,14 +469,14 @@ export function ThreeCardPokerScreen() {
             <PrimaryButton
               label={`PLAY ($${state.anteBet})`}
               onPress={handlePlay}
-              disabled={isDisconnected}
+              disabled={isDisconnected || isSubmitting}
               variant="primary"
               size="large"
             />
             <PrimaryButton
               label="FOLD"
               onPress={handleFold}
-              disabled={isDisconnected}
+              disabled={isDisconnected || isSubmitting}
               variant="danger"
             />
           </>

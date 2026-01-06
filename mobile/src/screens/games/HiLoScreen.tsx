@@ -10,7 +10,7 @@ import { ChipSelector } from '../../components/casino';
 import { GameLayout } from '../../components/game';
 import { TutorialOverlay, PrimaryButton } from '../../components/ui';
 import { haptics } from '../../services/haptics';
-import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useChipBetting } from '../../hooks';
+import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useChipBetting, useBetSubmission } from '../../hooks';
 import { COLORS, SPACING, TYPOGRAPHY, SPRING } from '../../constants/theme';
 import { decodeCardId, decodeStateBytes, parseHiLoState } from '../../utils';
 import type { ChipValue, TutorialStep, Suit, Rank } from '../../types';
@@ -40,9 +40,10 @@ const TUTORIAL_STEPS: TutorialStep[] = [
 ];
 
 export function HiLoScreen() {
-  // Shared hooks for connection and betting
+  // Shared hooks for connection, betting, and submission debouncing
   const { isDisconnected, send, lastMessage, connectionStatusProps } = useGameConnection<GameMessage>();
   const { bet, selectedChip, setSelectedChip, placeChip, clearBet, balance } = useChipBetting();
+  const { isSubmitting, submitBet, clearSubmission } = useBetSubmission(send);
 
   const [state, setState] = useState<HiLoState>({
     currentCard: null,
@@ -72,6 +73,7 @@ export function HiLoScreen() {
     if (!lastMessage) return;
 
     if (lastMessage.type === 'game_started' || lastMessage.type === 'game_move') {
+      clearSubmission(); // Clear bet submission state on server response
       const stateBytes = decodeStateBytes((lastMessage as { state?: unknown }).state);
       if (!stateBytes) return;
 
@@ -90,6 +92,7 @@ export function HiLoScreen() {
     }
 
     if (lastMessage.type === 'game_result') {
+      clearSubmission(); // Clear bet submission state on result
       const payload = lastMessage as Record<string, unknown>;
       const won = (payload.won as boolean | undefined) ?? false;
       const prevCardId = payload.previousCard ?? payload.card;
@@ -111,25 +114,27 @@ export function HiLoScreen() {
         message: typeof payload.message === 'string' ? payload.message : won ? 'You win!' : 'You lose',
       }));
     }
-  }, [lastMessage]);
+  }, [lastMessage, clearSubmission]);
 
   const handleBet = useCallback(async (choice: 'higher' | 'lower') => {
-    if (bet === 0 || state.phase !== 'betting') return;
+    if (bet === 0 || state.phase !== 'betting' || isSubmitting) return;
 
     await haptics.betConfirm();
 
-    send({
+    const success = submitBet({
       type: 'hilo_bet',
       amount: bet,
       choice,
     });
 
-    setState((prev) => ({
-      ...prev,
-      phase: 'playing',
-      message: choice === 'higher' ? 'Higher...' : 'Lower...',
-    }));
-  }, [bet, state.phase, send]);
+    if (success) {
+      setState((prev) => ({
+        ...prev,
+        phase: 'playing',
+        message: choice === 'higher' ? 'Higher...' : 'Lower...',
+      }));
+    }
+  }, [bet, state.phase, submitBet, isSubmitting]);
 
   const handleNewGame = useCallback(() => {
     clearBet();
@@ -230,14 +235,14 @@ export function HiLoScreen() {
               <PrimaryButton
                 label="HIGHER"
                 onPress={() => handleBet('higher')}
-                disabled={bet === 0 || isDisconnected}
+                disabled={bet === 0 || isDisconnected || isSubmitting}
                 variant="primary"
                 size="large"
               />
               <PrimaryButton
                 label="LOWER"
                 onPress={() => handleBet('lower')}
-                disabled={bet === 0 || isDisconnected}
+                disabled={bet === 0 || isDisconnected || isSubmitting}
                 variant="danger"
                 size="large"
               />

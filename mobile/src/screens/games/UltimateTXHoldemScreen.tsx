@@ -10,7 +10,7 @@ import { ChipSelector } from '../../components/casino';
 import { GameLayout } from '../../components/game';
 import { TutorialOverlay, PrimaryButton } from '../../components/ui';
 import { haptics } from '../../services/haptics';
-import { useGameKeyboard, KEY_ACTIONS, useGameConnection } from '../../hooks';
+import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useBetSubmission } from '../../hooks';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS, SPRING } from '../../constants/theme';
 import { decodeCardList, decodeStateBytes, parseNumeric, parseUltimateHoldemState } from '../../utils';
 import { useGameStore } from '../../stores/gameStore';
@@ -75,6 +75,7 @@ export function UltimateTXHoldemScreen() {
   // Shared hook for connection (UTH has multi-bet so keeps custom bet state)
   const { isDisconnected, send, lastMessage, connectionStatusProps } = useGameConnection<GameMessage>();
   const { balance } = useGameStore();
+  const { isSubmitting, submitBet, clearSubmission } = useBetSubmission(send);
 
   const [state, setState] = useState<UltimateTXState>({
     anteBet: 0,
@@ -115,6 +116,7 @@ export function UltimateTXHoldemScreen() {
     if (!lastMessage) return;
 
     if (lastMessage.type === 'game_started' || lastMessage.type === 'game_move') {
+      clearSubmission();
       const stateBytes = decodeStateBytes((lastMessage as { state?: unknown }).state);
       if (!stateBytes) return;
       InteractionManager.runAfterInteractions(() => {
@@ -148,6 +150,7 @@ export function UltimateTXHoldemScreen() {
     }
 
     if (lastMessage.type === 'game_result') {
+      clearSubmission();
       const payload = lastMessage as Record<string, unknown>;
       const payout = parseNumeric(payload.totalReturn ?? payload.payout) ?? 0;
       const player = payload.player as { cards?: number[]; rank?: PokerHand } | undefined;
@@ -189,7 +192,7 @@ export function UltimateTXHoldemScreen() {
         message: typeof payload.message === 'string' ? payload.message : payout > 0 ? 'You win!' : 'Dealer wins',
       }));
     }
-  }, [lastMessage, state.anteBet, state.blindBet, state.playBet, state.tripsBet]);
+  }, [lastMessage, state.anteBet, state.blindBet, state.playBet, state.tripsBet, clearSubmission]);
 
   const handleTripsChip = useCallback((value: ChipValue) => {
     if (state.phase !== 'betting') return;
@@ -292,10 +295,10 @@ export function UltimateTXHoldemScreen() {
   ]);
 
   const handleDeal = useCallback(async () => {
-    if (state.anteBet === 0) return;
+    if (state.anteBet === 0 || isSubmitting) return;
     await haptics.betConfirm();
 
-    send({
+    const success = submitBet({
       type: 'ultimate_tx_deal',
       ante: state.anteBet,
       blind: state.blindBet,
@@ -304,54 +307,65 @@ export function UltimateTXHoldemScreen() {
       progressive: state.progressiveBet,
     });
 
-    setState((prev) => ({
-      ...prev,
-      message: 'Dealing...',
-    }));
-  }, [state.anteBet, state.blindBet, state.tripsBet, state.sixCardBet, state.progressiveBet, send]);
+    if (success) {
+      setState((prev) => ({
+        ...prev,
+        message: 'Dealing...',
+      }));
+    }
+  }, [state.anteBet, state.blindBet, state.tripsBet, state.sixCardBet, state.progressiveBet, isSubmitting, submitBet]);
 
   const handleBet = useCallback(async (multiplier: number) => {
+    if (isSubmitting) return;
     await haptics.betConfirm();
 
-    send({
+    const success = submitBet({
       type: 'ultimate_tx_bet',
       multiplier,
     });
 
-    setState((prev) => ({
-      ...prev,
-      playBet: state.anteBet * multiplier,
-      message: 'Waiting for cards...',
-    }));
-  }, [state.anteBet, send]);
+    if (success) {
+      setState((prev) => ({
+        ...prev,
+        playBet: state.anteBet * multiplier,
+        message: 'Waiting for cards...',
+      }));
+    }
+  }, [state.anteBet, isSubmitting, submitBet]);
 
   const handleCheck = useCallback(async () => {
+    if (isSubmitting) return;
     await haptics.buttonPress();
 
-    send({
+    const success = submitBet({
       type: 'ultimate_tx_check',
     });
 
-    setState((prev) => ({
-      ...prev,
-      hasChecked: true,
-      message: 'Checking...',
-    }));
-  }, [send]);
+    if (success) {
+      setState((prev) => ({
+        ...prev,
+        hasChecked: true,
+        message: 'Checking...',
+      }));
+    }
+  }, [isSubmitting, submitBet]);
 
   const handleFold = useCallback(async () => {
+    if (isSubmitting) return;
     await haptics.buttonPress();
 
-    send({
+    const success = submitBet({
       type: 'ultimate_tx_fold',
     });
 
-    setState((prev) => ({
-      ...prev,
-      phase: 'result',
-      message: 'Folded',
-    }));
-  }, [send]);
+    if (success) {
+      setState((prev) => ({
+        ...prev,
+        phase: 'result',
+        message: 'Folded',
+      }));
+    }
+  }, [isSubmitting, submitBet]);
 
   const handleNewGame = useCallback(() => {
     setState({
@@ -595,7 +609,7 @@ export function UltimateTXHoldemScreen() {
           <PrimaryButton
             label="DEAL"
             onPress={handleDeal}
-            disabled={state.anteBet === 0 || isDisconnected}
+            disabled={state.anteBet === 0 || isDisconnected || isSubmitting}
             variant="primary"
             size="large"
           />
@@ -606,7 +620,7 @@ export function UltimateTXHoldemScreen() {
             <PrimaryButton
               label={`BET ${multiplier}x ($${state.anteBet * multiplier})`}
               onPress={() => handleBet(multiplier)}
-              disabled={isDisconnected}
+              disabled={isDisconnected || isSubmitting}
               variant="primary"
               size="large"
             />
@@ -614,14 +628,14 @@ export function UltimateTXHoldemScreen() {
               <PrimaryButton
                 label="CHECK"
                 onPress={handleCheck}
-                disabled={isDisconnected}
+                disabled={isDisconnected || isSubmitting}
                 variant="secondary"
               />
             ) : (
               <PrimaryButton
                 label="FOLD"
                 onPress={handleFold}
-                disabled={isDisconnected}
+                disabled={isDisconnected || isSubmitting}
                 variant="danger"
               />
             )}

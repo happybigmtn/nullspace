@@ -10,7 +10,7 @@ import { ChipSelector } from '../../components/casino';
 import { GameLayout } from '../../components/game';
 import { TutorialOverlay, PrimaryButton } from '../../components/ui';
 import { haptics } from '../../services/haptics';
-import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useChipBetting, useModalBackHandler } from '../../hooks';
+import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useChipBetting, useModalBackHandler, useBetSubmission } from '../../hooks';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS, SPRING } from '../../constants/theme';
 import { decodeStateBytes, parseNumeric, parseVideoPokerState } from '../../utils';
 import type { ChipValue, TutorialStep, PokerHand, Card as CardType } from '../../types';
@@ -67,9 +67,10 @@ const HAND_NAMES: Record<PokerHand, string> = {
 };
 
 export function VideoPokerScreen() {
-  // Shared hooks for connection and betting
+  // Shared hooks for connection, betting, and submission debouncing
   const { isDisconnected, send, lastMessage, connectionStatusProps } = useGameConnection<GameMessage>();
   const { bet, selectedChip, setSelectedChip, placeChip, clearBet, balance } = useChipBetting();
+  const { isSubmitting, submitBet, clearSubmission } = useBetSubmission(send);
 
   const [state, setState] = useState<VideoPokerState>({
     cards: [],
@@ -102,6 +103,7 @@ export function VideoPokerScreen() {
     if (!lastMessage) return;
 
     if (lastMessage.type === 'game_started' || lastMessage.type === 'game_move') {
+      clearSubmission(); // Clear bet submission state on server response
       const stateBytes = decodeStateBytes((lastMessage as { state?: unknown }).state);
       if (!stateBytes) return;
       InteractionManager.runAfterInteractions(() => {
@@ -119,6 +121,7 @@ export function VideoPokerScreen() {
     }
 
     if (lastMessage.type === 'game_result') {
+      clearSubmission(); // Clear bet submission state on result
       const payload = lastMessage as Record<string, unknown>;
       const payout = parseNumeric(payload.payout ?? payload.totalReturn) ?? 0;
       const hand = typeof payload.hand === 'string' ? payload.hand as PokerHand : null;
@@ -144,17 +147,17 @@ export function VideoPokerScreen() {
             : 'No winning hand',
       }));
     }
-  }, [lastMessage]);
+  }, [lastMessage, clearSubmission]);
 
   const handleDeal = useCallback(async () => {
-    if (bet === 0) return;
+    if (bet === 0 || isSubmitting) return;
     await haptics.betConfirm();
 
-    send({
+    submitBet({
       type: 'video_poker_deal',
       amount: bet,
     });
-  }, [bet, send]);
+  }, [bet, submitBet, isSubmitting]);
 
   const handleToggleHold = useCallback((index: number) => {
     if (state.phase !== 'initial') return;
@@ -168,19 +171,22 @@ export function VideoPokerScreen() {
   }, [state.phase]);
 
   const handleDraw = useCallback(async () => {
+    if (isSubmitting) return;
     await haptics.betConfirm();
 
-    send({
+    const success = submitBet({
       type: 'video_poker_draw',
       held: state.held,
     });
 
-    setState((prev) => ({
-      ...prev,
-      phase: 'final',
-      message: 'Drawing...',
-    }));
-  }, [state.held, send]);
+    if (success) {
+      setState((prev) => ({
+        ...prev,
+        phase: 'final',
+        message: 'Drawing...',
+      }));
+    }
+  }, [state.held, submitBet, isSubmitting]);
 
   const handleNewGame = useCallback(() => {
     clearBet();
@@ -311,7 +317,7 @@ export function VideoPokerScreen() {
           <PrimaryButton
             label="DEAL"
             onPress={handleDeal}
-            disabled={bet === 0 || isDisconnected}
+            disabled={bet === 0 || isDisconnected || isSubmitting}
             variant="primary"
             size="large"
           />
@@ -321,7 +327,7 @@ export function VideoPokerScreen() {
           <PrimaryButton
             label="DRAW"
             onPress={handleDraw}
-            disabled={isDisconnected}
+            disabled={isDisconnected || isSubmitting}
             variant="primary"
             size="large"
           />

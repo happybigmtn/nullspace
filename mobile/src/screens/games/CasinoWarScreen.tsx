@@ -10,7 +10,7 @@ import { ChipSelector } from '../../components/casino';
 import { GameLayout } from '../../components/game';
 import { TutorialOverlay, PrimaryButton } from '../../components/ui';
 import { haptics } from '../../services/haptics';
-import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useChipBetting } from '../../hooks';
+import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useChipBetting, useBetSubmission } from '../../hooks';
 import { COLORS, SPACING, TYPOGRAPHY, SPRING } from '../../constants/theme';
 import { decodeCardId, decodeStateBytes, parseCasinoWarState } from '../../utils';
 import type { ChipValue, TutorialStep, Card as CardType } from '../../types';
@@ -42,9 +42,10 @@ const TUTORIAL_STEPS: TutorialStep[] = [
 ];
 
 export function CasinoWarScreen() {
-  // Shared hooks for connection and betting
+  // Shared hooks for connection, betting, and submission debouncing
   const { isDisconnected, send, lastMessage, connectionStatusProps } = useGameConnection<GameMessage>();
   const { bet, selectedChip, setSelectedChip, placeChip, clearBet, balance } = useChipBetting();
+  const { isSubmitting, submitBet, clearSubmission } = useBetSubmission(send);
 
   const [state, setState] = useState<CasinoWarState>({
     playerCard: null,
@@ -79,6 +80,7 @@ export function CasinoWarScreen() {
     const parsedState = stateBytes ? parseCasinoWarState(stateBytes) : null;
 
     if (lastMessage.type === 'game_started' || lastMessage.type === 'game_move') {
+      clearSubmission(); // Clear bet submission state on server response
       if (parsedState) {
         InteractionManager.runAfterInteractions(() => {
           if (!isMounted.current) return;
@@ -107,6 +109,7 @@ export function CasinoWarScreen() {
     }
 
     if (lastMessage.type === 'game_result') {
+      clearSubmission(); // Clear bet submission state on result
       const won = (payload.won as boolean | undefined) ?? false;
       const playerCard = typeof payload.playerCard === 'number' ? decodeCardId(payload.playerCard) : null;
       const dealerCard = typeof payload.dealerCard === 'number' ? decodeCardId(payload.dealerCard) : null;
@@ -126,23 +129,25 @@ export function CasinoWarScreen() {
         message: typeof payload.message === 'string' ? payload.message : won ? 'You win!' : 'Dealer wins',
       }));
     }
-  }, [lastMessage]);
+  }, [lastMessage, clearSubmission]);
 
   const handleDeal = useCallback(async () => {
-    if (bet === 0) return;
+    if (bet === 0 || isSubmitting) return;
     await haptics.betConfirm();
 
-    send({
+    const success = submitBet({
       type: 'casino_war_deal',
       amount: bet,
       tieBet: state.tieBet,
     });
 
-    setState((prev) => ({
-      ...prev,
-      message: 'Dealing...',
-    }));
-  }, [bet, send, state.tieBet]);
+    if (success) {
+      setState((prev) => ({
+        ...prev,
+        message: 'Dealing...',
+      }));
+    }
+  }, [bet, submitBet, state.tieBet, isSubmitting]);
 
   const handleToggleTieBet = useCallback(async () => {
     if (state.phase !== 'betting') return;
@@ -157,24 +162,28 @@ export function CasinoWarScreen() {
   }, [state.phase, state.tieBet, selectedChip, bet, balance]);
 
   const handleWar = useCallback(async () => {
+    if (isSubmitting) return;
     await haptics.betConfirm();
 
-    send({
+    const success = submitBet({
       type: 'casino_war_war',
     });
 
-    setState((prev) => ({
-      ...prev,
-      phase: 'war',
-      warBet: bet,
-      message: 'Going to War!',
-    }));
-  }, [send, bet]);
+    if (success) {
+      setState((prev) => ({
+        ...prev,
+        phase: 'war',
+        warBet: bet,
+        message: 'Going to War!',
+      }));
+    }
+  }, [submitBet, bet, isSubmitting]);
 
   const handleSurrender = useCallback(async () => {
+    if (isSubmitting) return;
     await haptics.buttonPress();
 
-    send({
+    submitBet({
       type: 'casino_war_surrender',
     });
 
@@ -184,7 +193,7 @@ export function CasinoWarScreen() {
       lastResult: 'loss',
       message: 'Surrendered - Half bet returned',
     }));
-  }, [send]);
+  }, [submitBet, isSubmitting]);
 
   const handleNewGame = useCallback(() => {
     clearBet();
@@ -328,7 +337,7 @@ export function CasinoWarScreen() {
           <PrimaryButton
             label="DEAL"
             onPress={handleDeal}
-            disabled={bet === 0 || isDisconnected}
+            disabled={bet === 0 || isDisconnected || isSubmitting}
             variant="primary"
             size="large"
           />
@@ -339,14 +348,14 @@ export function CasinoWarScreen() {
             <PrimaryButton
               label="GO TO WAR"
               onPress={handleWar}
-              disabled={isDisconnected}
+              disabled={isDisconnected || isSubmitting}
               variant="primary"
               size="large"
             />
             <PrimaryButton
               label="SURRENDER"
               onPress={handleSurrender}
-              disabled={isDisconnected}
+              disabled={isDisconnected || isSubmitting}
               variant="danger"
             />
           </>

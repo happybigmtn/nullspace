@@ -17,7 +17,7 @@ import { ChipSelector } from '../../components/casino';
 import { GameLayout } from '../../components/game';
 import { TutorialOverlay, PrimaryButton } from '../../components/ui';
 import { haptics } from '../../services/haptics';
-import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useModalBackHandler } from '../../hooks';
+import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useModalBackHandler, useBetSubmission } from '../../hooks';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS, SPRING } from '../../constants/theme';
 import { useGameStore } from '../../stores/gameStore';
 import { getDieFace } from '../../utils/dice';
@@ -58,6 +58,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
 export function SicBoScreen() {
   // Shared hook for connection (SicBo has multi-bet so keeps custom bet state)
   const { isDisconnected, send, lastMessage, connectionStatusProps } = useGameConnection<GameMessage>();
+  const { isSubmitting, submitBet, clearSubmission } = useBetSubmission(send);
   const { balance } = useGameStore();
 
   const [state, setState] = useState<SicBoState>({
@@ -165,6 +166,7 @@ export function SicBoScreen() {
     }
 
     if (lastMessage.type === 'game_result') {
+      clearSubmission();
       const totalReturn = parseNumeric(payload.totalReturn ?? payload.payout) ?? 0;
       const totalWagered = parseNumeric(payload.totalWagered) ?? 0;
       const winAmount = Math.max(0, totalReturn - totalWagered);
@@ -186,6 +188,7 @@ export function SicBoScreen() {
     }
   }, [
     lastMessage,
+    clearSubmission,
     dice1Bounce,
     dice1OffsetX,
     dice1Spin,
@@ -320,20 +323,22 @@ export function SicBoScreen() {
   }, [comboMode, comboPicks, addBet]);
 
   const handleRoll = useCallback(async () => {
-    if (state.bets.length === 0) return;
+    if (state.bets.length === 0 || isSubmitting) return;
     await haptics.diceRoll();
 
-    send({
+    const success = submitBet({
       type: 'sic_bo_roll',
       bets: state.bets,
     });
 
-    setState((prev) => ({
-      ...prev,
-      phase: 'rolling',
-      message: 'Rolling...',
-    }));
-  }, [state.bets, send]);
+    if (success) {
+      setState((prev) => ({
+        ...prev,
+        phase: 'rolling',
+        message: 'Rolling...',
+      }));
+    }
+  }, [state.bets, submitBet, isSubmitting]);
 
   const handleNewGame = useCallback(() => {
     setState({
@@ -493,7 +498,7 @@ export function SicBoScreen() {
           <PrimaryButton
             label="ROLL"
             onPress={handleRoll}
-            disabled={state.bets.length === 0 || isDisconnected}
+            disabled={state.bets.length === 0 || isDisconnected || isSubmitting}
             variant="primary"
             size="large"
           />

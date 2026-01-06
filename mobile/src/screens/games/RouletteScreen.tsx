@@ -18,7 +18,7 @@ import { ChipSelector } from '../../components/casino';
 import { GameLayout } from '../../components/game';
 import { TutorialOverlay, PrimaryButton } from '../../components/ui';
 import { haptics } from '../../services/haptics';
-import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useModalBackHandler } from '../../hooks';
+import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useModalBackHandler, useBetSubmission } from '../../hooks';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS, GAME_DETAIL_COLORS, SPRING } from '../../constants/theme';
 import { parseNumeric } from '../../utils';
 import { useGameStore } from '../../stores/gameStore';
@@ -76,6 +76,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
 export function RouletteScreen() {
   // Shared hook for connection (Roulette has multi-bet array so keeps custom bet state)
   const { isDisconnected, send, lastMessage, connectionStatusProps } = useGameConnection<GameMessage>();
+  const { isSubmitting, submitBet, clearSubmission } = useBetSubmission(send);
   const { balance } = useGameStore();
 
   const [state, setState] = useState<RouletteState>({
@@ -114,6 +115,7 @@ export function RouletteScreen() {
     if (!lastMessage) return;
 
     if (lastMessage.type === 'game_result') {
+      clearSubmission();
       cancelAnimation(wheelRotation);
       const payload = lastMessage as Record<string, unknown>;
       const result = typeof payload.result === 'number' ? payload.result : 0;
@@ -144,7 +146,7 @@ export function RouletteScreen() {
         message: typeof payload.message === 'string' ? payload.message : won ? 'You win!' : 'No luck',
       }));
     }
-  }, [lastMessage, wheelRotation]);
+  }, [lastMessage, wheelRotation, clearSubmission]);
 
   useEffect(() => () => {
     cancelAnimation(wheelRotation);
@@ -192,27 +194,29 @@ export function RouletteScreen() {
   }, [state.phase, selectedChip, state.bets, balance]);
 
   const handleSpin = useCallback(async () => {
-    if (state.bets.length === 0) return;
+    if (state.bets.length === 0 || isSubmitting) return;
     await haptics.wheelSpin();
 
-    send({
+    const success = submitBet({
       type: 'roulette_spin',
       bets: state.bets,
     });
 
-    spinSeedRef.current = { extraSpins: 4 + Math.floor(Math.random() * 3) };
-    wheelRotation.value = withRepeat(
-      withTiming(360, { duration: 500, easing: Easing.linear }),
-      -1,
-      false
-    );
+    if (success) {
+      spinSeedRef.current = { extraSpins: 4 + Math.floor(Math.random() * 3) };
+      wheelRotation.value = withRepeat(
+        withTiming(360, { duration: 500, easing: Easing.linear }),
+        -1,
+        false
+      );
 
-    setState((prev) => ({
-      ...prev,
-      phase: 'spinning',
-      message: 'No more bets!',
-    }));
-  }, [state.bets, send, wheelRotation]);
+      setState((prev) => ({
+        ...prev,
+        phase: 'spinning',
+        message: 'No more bets!',
+      }));
+    }
+  }, [state.bets, submitBet, isSubmitting, wheelRotation]);
 
   const handleNewGame = useCallback(() => {
     setState((prev) => ({
@@ -345,7 +349,7 @@ export function RouletteScreen() {
           <PrimaryButton
             label="SPIN"
             onPress={handleSpin}
-            disabled={state.bets.length === 0 || isDisconnected}
+            disabled={state.bets.length === 0 || isDisconnected || isSubmitting}
             variant="primary"
             size="large"
           />

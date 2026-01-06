@@ -177,3 +177,25 @@ Target: Testnet Production
   - This is especially important for financial values like balance where stale checks = overdrafts
 
 ---
+
+## 2026-01-06 - US-008: Add bet submission debouncing
+
+- What was implemented:
+  - Created new `useBetSubmission` hook to centralize submission debouncing
+  - Hook provides: `isSubmitting`, `submitBet(message)`, `clearSubmission()`
+  - 5-second timeout fallback re-enables buttons if server doesn't respond
+  - Integrated into all 10 game screens (Blackjack, HiLo, VideoPoker, CasinoWar, ThreeCardPoker, UltimateTXHoldem, Baccarat, Roulette, SicBo, Craps)
+  - Also fixed websocket.test.tsx to expect console.log instead of console.warn (from US-006 change)
+- Files changed:
+  - `mobile/src/hooks/useBetSubmission.ts` - New hook created
+  - `mobile/src/hooks/index.ts` - Export new hook
+  - `mobile/src/screens/games/*.tsx` - All 10 game screens updated
+  - `mobile/src/services/__tests__/websocket.test.tsx` - Fixed test expectation
+- **Learnings:**
+  - Centralized hooks > per-screen state for cross-cutting concerns like submission tracking
+  - Pattern: `submitBet()` returns boolean so caller knows if submission was accepted
+  - `clearSubmission()` should be called in useEffect when server responds (game_started, game_move, game_result)
+  - Timeout fallback is safety net - don't rely on it, but it prevents permanent button disable on network issues
+  - Tests matter: the console.log/warn change from US-006 broke a test, caught immediately by running test suite
+
+---

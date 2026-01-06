@@ -17,7 +17,7 @@ import { ChipSelector } from '../../components/casino';
 import { GameLayout } from '../../components/game';
 import { TutorialOverlay, PrimaryButton } from '../../components/ui';
 import { haptics } from '../../services/haptics';
-import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useModalBackHandler } from '../../hooks';
+import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useModalBackHandler, useBetSubmission } from '../../hooks';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS, GAME_DETAIL_COLORS, SPRING } from '../../constants/theme';
 import { decodeStateBytes, parseCrapsState, parseNumeric } from '../../utils';
 import { useGameStore } from '../../stores/gameStore';
@@ -75,6 +75,7 @@ type LiveTablePhase = 'betting' | 'locked' | 'rolling' | 'payout' | 'cooldown';
 export function CrapsScreen() {
   // Shared hook for connection (Craps has multi-bet array so keeps custom bet state)
   const { isDisconnected, send, lastMessage, connectionStatusProps } = useGameConnection<GameMessage>();
+  const { isSubmitting, submitBet, clearSubmission } = useBetSubmission(send);
   const { balance } = useGameStore();
 
   const [state, setState] = useState<CrapsState>({
@@ -186,6 +187,7 @@ export function CrapsScreen() {
         label: typeof payload.message === 'string' ? payload.message : defaultLabel,
       });
       if (status === 'confirmed') {
+        clearSubmission();
         void haptics.betConfirm();
       }
       return;
@@ -255,6 +257,7 @@ export function CrapsScreen() {
     }
 
     if (lastMessage.type === 'live_table_result') {
+      clearSubmission();
       const netWin = parseNumeric(payload.netWin ?? payload.payout) ?? 0;
       const won = netWin > 0;
       if (won) {
@@ -318,6 +321,7 @@ export function CrapsScreen() {
     }
 
     if (lastMessage.type === 'game_result') {
+      clearSubmission();
       const totalReturn = parseNumeric(payload.totalReturn ?? payload.payout) ?? 0;
       const totalWagered = parseNumeric(payload.totalWagered) ?? 0;
       const winAmount = Math.max(0, totalReturn - totalWagered);
@@ -361,6 +365,7 @@ export function CrapsScreen() {
     }
   }, [
     lastMessage,
+    clearSubmission,
     die1Rotation,
     die2Rotation,
     die1OffsetX,
@@ -425,7 +430,7 @@ export function CrapsScreen() {
   }, [state.phase, selectedChip, state.bets, balance, liveTable.phase]);
 
   const handleRoll = useCallback(async () => {
-    if (state.bets.length === 0) return;
+    if (state.bets.length === 0 || isSubmitting) return;
     if (liveTable.phase !== 'betting') {
       setState((prev) => ({ ...prev, message: 'BETTING CLOSED' }));
       return;
@@ -435,7 +440,7 @@ export function CrapsScreen() {
       source: 'onchain',
       label: 'On-chain pending',
     });
-    send({
+    submitBet({
       type: 'craps_live_bet',
       bets: state.bets,
     });
@@ -443,7 +448,7 @@ export function CrapsScreen() {
       ...prev,
       message: 'BETS PLACED',
     }));
-  }, [state.bets, send, liveTable.phase]);
+  }, [state.bets, submitBet, liveTable.phase, isSubmitting]);
 
   const handleChipPlace = useCallback((value: ChipValue) => {
     addBet('PASS');
@@ -475,7 +480,7 @@ export function CrapsScreen() {
   // Keyboard controls
   const keyboardHandlers = useMemo(() => ({
     [KEY_ACTIONS.SPACE]: () => {
-      if (state.phase !== 'rolling' && state.bets.length > 0 && !isDisconnected) handleRoll();
+      if (state.phase !== 'rolling' && state.bets.length > 0 && !isDisconnected && !isSubmitting) handleRoll();
     },
     [KEY_ACTIONS.ESCAPE]: () => handleClearBets(),
     [KEY_ACTIONS.ONE]: () => state.phase !== 'rolling' && setSelectedChip(1 as ChipValue),
@@ -483,7 +488,7 @@ export function CrapsScreen() {
     [KEY_ACTIONS.THREE]: () => state.phase !== 'rolling' && setSelectedChip(25 as ChipValue),
     [KEY_ACTIONS.FOUR]: () => state.phase !== 'rolling' && setSelectedChip(100 as ChipValue),
     [KEY_ACTIONS.FIVE]: () => state.phase !== 'rolling' && setSelectedChip(500 as ChipValue),
-  }), [state.phase, state.bets.length, isDisconnected, handleRoll, handleClearBets]);
+  }), [state.phase, state.bets.length, isDisconnected, isSubmitting, handleRoll, handleClearBets]);
 
   useGameKeyboard(keyboardHandlers);
 
@@ -648,7 +653,7 @@ export function CrapsScreen() {
         <PrimaryButton
           label={liveTable.phase === 'betting' ? 'PLACE BETS' : 'BETTING CLOSED'}
           onPress={handleRoll}
-          disabled={state.bets.length === 0 || liveTable.phase !== 'betting' || isDisconnected}
+          disabled={state.bets.length === 0 || liveTable.phase !== 'betting' || isDisconnected || isSubmitting}
           variant="primary"
           size="large"
         />

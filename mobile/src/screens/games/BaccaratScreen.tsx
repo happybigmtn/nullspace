@@ -10,7 +10,7 @@ import { ChipSelector } from '../../components/casino';
 import { GameLayout } from '../../components/game';
 import { TutorialOverlay, PrimaryButton } from '../../components/ui';
 import { haptics } from '../../services/haptics';
-import { useGameKeyboard, KEY_ACTIONS, useGameConnection } from '../../hooks';
+import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useBetSubmission } from '../../hooks';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS, SPRING } from '../../constants/theme';
 import { decodeCardList } from '../../utils';
 import { useGameStore } from '../../stores/gameStore';
@@ -78,6 +78,7 @@ export function BaccaratScreen() {
   // Shared hook for connection (Baccarat has multi-bet so keeps custom bet state)
   const { isDisconnected, send, lastMessage, connectionStatusProps } = useGameConnection<GameMessage>();
   const { balance } = useGameStore();
+  const { isSubmitting, submitBet, clearSubmission } = useBetSubmission(send);
 
   const [state, setState] = useState<BaccaratState>({
     selection: 'PLAYER',
@@ -96,7 +97,11 @@ export function BaccaratScreen() {
 
   useEffect(() => {
     if (!lastMessage) return;
+    if (lastMessage.type === 'game_started' || lastMessage.type === 'game_move') {
+      clearSubmission();
+    }
     if (lastMessage.type === 'game_result') {
+      clearSubmission();
       const payload = lastMessage as Record<string, unknown>;
       const player = payload.player as { cards?: number[]; total?: number } | undefined;
       const banker = payload.banker as { cards?: number[]; total?: number } | undefined;
@@ -123,7 +128,7 @@ export function BaccaratScreen() {
         message: typeof payload.message === 'string' ? payload.message : winner ? `${winner} wins!` : 'Round complete',
       }));
     }
-  }, [lastMessage, state.mainBet, state.selection, state.sideBets]);
+  }, [lastMessage, state.mainBet, state.selection, state.sideBets, clearSubmission]);
 
   const handleMainSelect = useCallback((selection: 'PLAYER' | 'BANKER') => {
     if (state.phase !== 'betting') return;
@@ -174,6 +179,7 @@ export function BaccaratScreen() {
   }, [state.phase, state.mainBet, state.sideBets, selectedChip, balance]);
 
   const handleDeal = useCallback(async () => {
+    if (isSubmitting) return;
     const betList: BaccaratBet[] = [];
     if (state.mainBet > 0) {
       betList.push({ type: state.selection, amount: state.mainBet });
@@ -183,17 +189,19 @@ export function BaccaratScreen() {
     if (betList.length === 0) return;
     await haptics.betConfirm();
 
-    send({
+    const success = submitBet({
       type: 'baccarat_deal',
       bets: betList,
     });
 
-    setState((prev) => ({
-      ...prev,
-      phase: 'dealing',
-      message: 'Dealing...',
-    }));
-  }, [state.selection, state.mainBet, state.sideBets, send]);
+    if (success) {
+      setState((prev) => ({
+        ...prev,
+        phase: 'dealing',
+        message: 'Dealing...',
+      }));
+    }
+  }, [state.selection, state.mainBet, state.sideBets, isSubmitting, submitBet]);
 
   const handleNewGame = useCallback(() => {
     setState({
@@ -330,14 +338,14 @@ export function BaccaratScreen() {
               <Pressable
                 key={type}
                 onPress={() => handleMainSelect(type)}
-                disabled={state.phase !== 'betting' || isDisconnected}
+                disabled={state.phase !== 'betting' || isDisconnected || isSubmitting}
                 style={({ pressed }) => [
                   styles.mainBetButton,
                   type === 'PLAYER' && styles.playerBet,
                   type === 'BANKER' && styles.bankerBet,
                   state.selection === type && styles.mainBetSelected,
                   pressed && styles.betOptionPressed,
-                  isDisconnected && styles.betOptionDisabled,
+                  (isDisconnected || isSubmitting) && styles.betOptionDisabled,
                 ]}
               >
                 <Text style={styles.betOptionLabel}>{type}</Text>
@@ -359,11 +367,11 @@ export function BaccaratScreen() {
                 <Pressable
                   key={type}
                   onPress={() => addSideBet(type)}
-                  disabled={state.phase !== 'betting' || isDisconnected}
+                  disabled={state.phase !== 'betting' || isDisconnected || isSubmitting}
                   style={({ pressed }) => [
                     styles.sideBetButton,
                     pressed && styles.betOptionPressed,
-                    isDisconnected && styles.betOptionDisabled,
+                    (isDisconnected || isSubmitting) && styles.betOptionDisabled,
                   ]}
                 >
                   <Text style={styles.sideBetText}>{SIDE_BET_LABELS[type]}</Text>
@@ -382,7 +390,7 @@ export function BaccaratScreen() {
             <PrimaryButton
               label="DEAL"
               onPress={handleDeal}
-              disabled={totalBet === 0 || isDisconnected}
+              disabled={totalBet === 0 || isDisconnected || isSubmitting}
               variant="primary"
               size="large"
             />
