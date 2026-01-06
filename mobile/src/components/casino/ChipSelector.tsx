@@ -18,11 +18,12 @@ import type { ChipValue } from '../../types';
 interface ChipProps {
   value: ChipValue;
   selected: boolean;
+  disabled?: boolean;
   onSelect: (value: ChipValue) => void;
   onDrop: (value: ChipValue, position: { x: number; y: number }) => void;
 }
 
-const Chip = React.memo(function Chip({ value, selected, onSelect, onDrop }: ChipProps) {
+const Chip = React.memo(function Chip({ value, selected, disabled = false, onSelect, onDrop }: ChipProps) {
   const offset = useSharedValue({ x: 0, y: 0 });
   const scale = useSharedValue(1);
   const isDragging = useSharedValue(false);
@@ -32,6 +33,7 @@ const Chip = React.memo(function Chip({ value, selected, onSelect, onDrop }: Chi
   const triggerDropHaptic = () => haptics.betConfirm();
 
   const pan = Gesture.Pan()
+    .enabled(!disabled)
     .onBegin(() => {
       'worklet';
       isDragging.value = true;
@@ -67,11 +69,13 @@ const Chip = React.memo(function Chip({ value, selected, onSelect, onDrop }: Chi
       };
     });
 
-  const tap = Gesture.Tap().onEnd(() => {
-    'worklet';
-    runOnJS(onSelect)(value);
-    runOnJS(triggerHaptic)();
-  });
+  const tap = Gesture.Tap()
+    .enabled(!disabled)
+    .onEnd(() => {
+      'worklet';
+      runOnJS(onSelect)(value);
+      runOnJS(triggerHaptic)();
+    });
 
   const composedGesture = Gesture.Exclusive(pan, tap);
 
@@ -82,6 +86,7 @@ const Chip = React.memo(function Chip({ value, selected, onSelect, onDrop }: Chi
       { scale: scale.value },
     ],
     zIndex: isDragging.value ? 100 : 0,
+    opacity: disabled ? 0.4 : 1,
   }));
 
   // Chip color based on value
@@ -126,12 +131,14 @@ function getChipColor(value: ChipValue) {
 
 interface ChipSelectorProps {
   selectedValue: ChipValue;
+  disabled?: boolean;
   onSelect: (value: ChipValue) => void;
   onChipPlace: (value: ChipValue) => void;
 }
 
 export const ChipSelector = React.memo(function ChipSelector({
   selectedValue,
+  disabled = false,
   onSelect,
   onChipPlace,
 }: ChipSelectorProps) {
@@ -146,6 +153,7 @@ export const ChipSelector = React.memo(function ChipSelector({
           key={value}
           value={value}
           selected={selectedValue === value}
+          disabled={disabled}
           onSelect={onSelect}
           onDrop={handleDrop}
         />
