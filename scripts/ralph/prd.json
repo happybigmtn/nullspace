@@ -309,8 +309,8 @@
 				"Test bet > balance edge case after balance decrease"
 			],
 			"priority": 24,
-			"passes": false,
-			"notes": "VERIFIED GAP: useChipBetting tests don't verify getState() fix for stale balance. Race conditions untested."
+			"passes": true,
+			"notes": "FIXED: Added 6 tests in 'balance race conditions' describe block. Tests verify: getState() fresh balance (already existed + enhanced), balance update mid-betting, concurrent placements, balance decrease edge case, boundary condition (bet+chip=balance), balance below bet edge case, multiple balance fluctuations."
 		},
 		{
 			"id": "US-034",

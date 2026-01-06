@@ -681,3 +681,21 @@ Target: Testnet Production
   - All game screens share same error handling pattern (inherited from BlackjackScreen architecture)
 
 ---
+
+## 2026-01-06 - US-033: Add balance race condition tests
+
+- What was implemented:
+  - Added 6 new tests in `balance race conditions` describe block to useChipBetting.test.tsx
+  - Total tests now 14: 8 existing + 6 new race condition tests
+  - Tests cover: balance update during betting, concurrent placements, balance decrease edge case, boundary condition, balance below bet, multiple balance updates
+- Files changed:
+  - `mobile/src/hooks/__tests__/useChipBetting.test.tsx` - Added 6 tests in new `balance race conditions` describe block
+- **Learnings:**
+  - Key pattern: `useGameStore.getState().balance` in useChipBetting.ts:56 fetches fresh balance at validation time
+  - This avoids stale closure issue where balance captured at render time could be outdated
+  - Edge case: If balance drops below current bet, additional chips correctly fail but bet stays (user must clear manually)
+  - Boundary test: `bet + chip = balance` should succeed (using `>` not `>=` in comparison)
+  - Test pattern: Each chip placement in separate `act()` call for proper React state batching
+  - Zustand's `setState()` immediately updates store, allowing mid-test balance manipulation
+
+---
