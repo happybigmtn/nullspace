@@ -267,3 +267,140 @@ Target: Testnet Production
   - `queryLatestSeed` returns `{ found: false }` on timeout (graceful degradation) while critical paths throw
 
 ---
+
+## 2026-01-06 - US-003: Add JSON validation to explorer API responses
+
+- What was implemented:
+  - Created `ResponseValidationError` custom error class for typed error handling
+  - Implemented 5 type guard functions:
+    - `isExplorerBlock()` - validates block fields (height, view, block_digest, tx_hashes, tx_count, indexed_at_ms)
+    - `isExplorerTransaction()` - validates tx fields (hash, block_height, position, public_key, nonce, instruction)
+    - `isAccountActivity()` - validates account fields (public_key, txs, events)
+    - `isBlocksResponse()` - validates paginated blocks list with .every() check
+    - `isSearchResponse()` - validates discriminated union by type field
+  - Updated all 5 public functions to validate response before returning
+  - Each validation failure logs raw response with console.error for debugging
+- Files changed:
+  - `website/src/api/explorerClient.ts` - Added 94 lines of validation code
+- **Learnings:**
+  - Type guards (`(data: unknown): data is T`) provide both runtime safety AND TypeScript narrowing
+  - For lightweight validation, type guards are preferable to adding Zod/Yup dependencies
+  - Pattern: Cast to `Record<string, unknown>` after null/object check for type-safe property access
+  - `Array.isArray(obj.blocks) && obj.blocks.every(isExplorerBlock)` validates array contents efficiently
+  - Export the error class so consumers can catch `ResponseValidationError` specifically vs other errors
+
+---
+
+## 2026-01-06 - US-004: Add mobile session expiration
+
+- What was implemented:
+  - Added `SESSION_CREATED_AT` storage key for persisting session timestamp
+  - Added `sessionExpired` state to AuthContext interface
+  - Implemented `isSessionExpired()` helper (24-hour threshold via `SESSION_MAX_AGE_MS`)
+  - Implemented `clearSessionStorage()` to clean both session keys
+  - Added `checkSessionValidity()` callback that validates and clears expired sessions
+  - Added AppState listener for foreground detection (checks expiration on resume)
+  - Modified `authenticate()` to store timestamp via `setNumber()`
+  - Modified `logout()` to use `clearSessionStorage()` instead of single deleteKey
+  - Added 3 tests: login stores timestamp, 25h session expires, 12h session stays valid
+- Files changed:
+  - `mobile/src/services/storage.ts` - Added SESSION_CREATED_AT storage key
+  - `mobile/src/context/AuthContext.tsx` - Session expiration logic
+  - `mobile/src/context/__tests__/AuthContext.test.tsx` - Added mock functions and expiration tests
+- **Learnings:**
+  - AppState pattern: `useRef` for previous state + `addEventListener('change')` for transitions
+  - `getNumber(..., 0)` returning 0 means "no timestamp" - treat as legacy session, don't expire
+  - `useCallback` with no deps for `checkSessionValidity` since it only uses module-level helpers
+  - Mock reset in beforeEach needs default return values set AFTER reset
+
+---
+
+## 2026-01-06 - US-005: Setup Sentry error tracking for mobile
+
+- What was implemented:
+  - Installed `@sentry/react-native` v7.8.0 via pnpm
+  - Added Sentry.init() in App.tsx with conditional prod-only activation
+  - Created ErrorFallback component for Sentry.ErrorBoundary
+  - Wrapped app content with Sentry.ErrorBoundary (showDialog enabled)
+  - Added EXPO_PUBLIC_SENTRY_DSN and EXPO_PUBLIC_ENVIRONMENT to .env.example
+  - Configured 10% tracesSampleRate for performance monitoring
+- Files changed:
+  - `mobile/App.tsx` - Sentry init + ErrorBoundary + fallback UI
+  - `mobile/package.json` - Added @sentry/react-native dependency
+  - `mobile/.env.example` - Added Sentry env vars
+  - `pnpm-lock.yaml` - Updated lockfile
+- **Learnings:**
+  - `if (SENTRY_DSN && !__DEV__)` pattern ensures no Sentry overhead in development
+  - ErrorBoundary `showDialog` prop shows native Sentry crash dialog on error
+  - ErrorFallback receives `{ resetError }` prop to allow user retry
+  - Sentry requires native linking via `npx pod-install` on iOS (handled by Expo)
+  - `environment` tag helps filter prod vs staging errors in Sentry dashboard
+
+---
+
+## 2026-01-06 - US-006: Add bearer auth to Prometheus scrape config
+
+- What was implemented:
+  - Added `authorization` block with `credentials_file` to all 4 scrape jobs
+  - Added missing `gateway` job targeting port 9010 with `/metrics` path
+  - Updated docker-compose to mount `metrics_auth_token` file
+  - Added `GATEWAY_METRICS_TARGET` env var for host override
+  - Created `metrics_auth_token.example` with generation instructions
+  - Added `docker/observability/metrics_auth_token` to `.gitignore`
+- Files changed:
+  - `docker/observability/prometheus.yml` - Added auth + gateway job
+  - `docker/observability/docker-compose.yml` - Added volume mount + env var
+  - `docker/observability/metrics_auth_token.example` - Setup instructions
+  - `.gitignore` - Exclude secret token file
+- **Learnings:**
+  - Prometheus uses `credentials_file` not `bearer_token` when token is in a file
+  - Token file should contain just the raw token value, no formatting
+  - `authorization.type: Bearer` + `credentials_file` is the modern Prometheus auth pattern
+  - File-based secrets are more secure than env vars in docker-compose (no shell expansion)
+  - All services must share the same METRICS_AUTH_TOKEN value for auth to work
+
+---
+
+## 2026-01-06 - US-007: Add auth service failure alert rules
+
+- What was implemented:
+  - Added `auth_health` alert group with 2 new rules
+  - AuthServiceFailures: rate of failure/error counters > 0.05 for 5m (severity: critical)
+  - AuthSyncFailures: rate of freeroll.sync.failure > 0.05 for 5m (severity: warning)
+  - Alerts use regex matching on counter keys: `{key=~".*\\.failure|.*\\.error"}`
+- Files changed:
+  - `docker/observability/alerts.yml` - Added auth_health group with 2 alert rules
+- **Learnings:**
+  - Auth service uses counter-based metrics, not HTTP status codes
+  - Prometheus regex label matching: `{key=~"pattern"}` not `{key~="pattern"}`
+  - Escape dots in regex: `\\.failure` not `.failure` (dot is "any char" in regex)
+  - Alert naming convention: `<Service><Problem>` e.g., `AuthServiceFailures`
+  - Severity: "critical" for service-level issues, "warning" for degraded functionality
+
+---
+
+## 2026-01-06 - US-008: Fix mobile integration test message type expectations
+
+- What was implemented:
+  - Updated 9 game integration tests to use `waitForGameOutcome()` instead of `assertMessageReceived('game_result')`
+  - `waitForGameOutcome()` correctly handles both `game_move` and `game_result` message types
+  - HiLoTest and RouletteTest were already using correct pattern (passed before fix)
+  - CasinoWarTest refactored to use `outcome.type === 'move'` for tie detection instead of try/catch
+- Files changed:
+  - `mobile/tests/integration/games/BlackjackTest.ts` - 3 methods fixed
+  - `mobile/tests/integration/games/CrapsTest.ts` - 4 methods fixed
+  - `mobile/tests/integration/games/BaccaratTest.ts` - 4 methods fixed
+  - `mobile/tests/integration/games/SicBoTest.ts` - 4 methods fixed
+  - `mobile/tests/integration/games/VideoPokerTest.ts` - 4 methods fixed
+  - `mobile/tests/integration/games/CasinoWarTest.ts` - 4 methods refactored (tie detection)
+  - `mobile/tests/integration/games/ThreeCardTest.ts` - 4 methods fixed
+  - `mobile/tests/integration/games/UltimateHoldemTest.ts` - 4 methods fixed (kept game_move for intermediate states)
+  - `mobile/tests/integration/.gitignore` - Added to exclude test results
+- **Learnings:**
+  - Gateway sends `game_move` for atomic games that resolve immediately with state
+  - Gateway sends `game_result` for games with explicit end (like fold)
+  - `waitForGameOutcome()` uses `Promise.race()` to await either type - already existed in BaseGameTest
+  - CasinoWar tie detection: use `outcome.type === 'move'` instead of try/catch timeout pattern
+  - Integration tests run via `ts-node tests/integration/runTests.ts` against live gateway
+
+---
