@@ -322,8 +322,8 @@
 				"Test bet state preserved across reconnection"
 			],
 			"priority": 25,
-			"passes": false,
-			"notes": "VERIFIED GAP: Integration tests have testReconnection() but don't test mid-bet scenarios."
+			"passes": true,
+			"notes": "FIXED: Created NetworkFailureBetting.test.tsx with 16 tests. Enhanced test utilities with setGameConnectionState, setReconnectAttempt, getSendMock helpers. Tests verify: send() returns false when not connected, DEAL button disabled during disconnect/connecting/failed states, bet and chip selection persist through reconnection, full connection state transitions."
 		},
 		{
 			"id": "US-035",

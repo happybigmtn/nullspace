@@ -19,17 +19,19 @@ export const mockHaptics = {
 
 // Track state separately so we can return fresh objects on each mock call
 let currentLastMessage: unknown = null;
-const sendMock = jest.fn();
+let currentConnectionState: 'connecting' | 'connected' | 'disconnected' | 'failed' = 'connected';
+let currentReconnectAttempt = 0;
+const sendMock = jest.fn(() => currentConnectionState === 'connected');
 const onRetryMock = jest.fn();
 
 // Return a fresh object each call so React's useEffect sees changes
 export const mockUseGameConnection = jest.fn(() => ({
-  isDisconnected: false,
+  isDisconnected: currentConnectionState !== 'connected',
   send: sendMock,
   lastMessage: currentLastMessage,
   connectionStatusProps: {
-    connectionState: 'connected' as const,
-    reconnectAttempt: 0,
+    connectionState: currentConnectionState,
+    reconnectAttempt: currentReconnectAttempt,
     maxReconnectAttempts: 3,
     onRetry: onRetryMock,
   },
@@ -39,8 +41,26 @@ export function setGameConnectionMessage(message: unknown) {
   currentLastMessage = message;
 }
 
+export function setGameConnectionState(state: 'connecting' | 'connected' | 'disconnected' | 'failed') {
+  currentConnectionState = state;
+}
+
+export function setReconnectAttempt(attempt: number) {
+  currentReconnectAttempt = attempt;
+}
+
+export function getSendMock() {
+  return sendMock;
+}
+
+export function getOnRetryMock() {
+  return onRetryMock;
+}
+
 export function resetGameConnection() {
   currentLastMessage = null;
+  currentConnectionState = 'connected';
+  currentReconnectAttempt = 0;
   sendMock.mockClear();
   onRetryMock.mockClear();
 }

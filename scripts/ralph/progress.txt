@@ -699,3 +699,23 @@ Target: Testnet Production
   - Zustand's `setState()` immediately updates store, allowing mid-test balance manipulation
 
 ---
+
+## 2026-01-06 - US-034: Add network failure during bet submission tests
+
+- What was implemented:
+  - Created `NetworkFailureBetting.test.tsx` with 16 comprehensive tests for network failure scenarios
+  - Extended `gameScreenTestUtils.ts` with connection state control functions
+  - Tests organized into 5 describe blocks: send() behavior, DEAL button disable, reconnection recovery, bet state preservation, network transitions
+  - Enhanced `sendMock` to return false when disconnected (matches real WebSocket behavior)
+- Files changed:
+  - `mobile/src/screens/games/__tests__/NetworkFailureBetting.test.tsx` - New file with 16 tests
+  - `mobile/src/test-utils/gameScreenTestUtils.ts` - Added `setGameConnectionState`, `setReconnectAttempt`, `getSendMock`, `getOnRetryMock` helpers
+- **Learnings:**
+  - `isDisconnected = connectionState !== 'connected'` means connecting/failed also disable UI
+  - `send()` should return `false` when not connected (prevents optimistic state updates)
+  - Bet state (amount, chip selection) persists through disconnect/reconnect - not cleared
+  - Test pattern: Use `setGameConnectionState()` before each test to control mock behavior
+  - `resetGameConnection()` must reset all state including connection state and reconnect attempts
+  - Game screens check `isDisconnected` to disable action buttons, not just failed state
+
+---
