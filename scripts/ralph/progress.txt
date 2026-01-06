@@ -821,3 +821,27 @@ Target: Testnet Production
   - Pattern discovered: WebStorage failures are immediate/sync, AsyncStorage failures are async/silent
 
 ---
+
+## 2026-01-06 - US-040: Add vault corruption recovery tests
+
+- What was implemented:
+  - Created `vault.test.ts` with 47 comprehensive tests covering vault operations
+  - Added `VaultCorruptionReason` type to distinguish corruption causes: 'invalid_json', 'wrong_version', 'wrong_kind', 'missing_fields'
+  - Added `checkVaultCorruption()` function that detects corruption without throwing
+  - Added `getVaultCorruptionGuidance()` function providing user-friendly recovery messages
+  - Extended `getVaultStatus()` to include `corrupted: VaultCorruptionReason` field
+  - Tests verify backup/recovery via existing `exportVaultPrivateKey`/`importVaultPrivateKey` functions
+  - Tests cover: basic operations, invalid JSON parsing, wrong schema versions, corruption detection, export/import recovery, user guidance
+- Files changed:
+  - `mobile/src/services/vault.ts` - Added VaultCorruptionReason type, checkVaultCorruption(), getVaultCorruptionGuidance(), extended getVaultStatus()
+  - `mobile/src/services/__tests__/vault.test.ts` - New file with 47 tests
+- **Learnings:**
+  - `readVaultRecord()` silently returns null for both missing and corrupted vaults - this was the critical gap
+  - Solution: Add `checkVaultCorruption()` that reads raw data and reports specific corruption reason
+  - Recovery mechanism already existed: `exportVaultPrivateKey(password)` extracts key, `importVaultPrivateKey(password, key)` restores vault
+  - Identity (public key) is preserved across export/import cycles - even with different passwords
+  - VaultRecord schema validation: version must be 1, kind must be 'password', all hex fields must exist
+  - Pattern: UI calls `getVaultStatus()`, checks `corrupted` field, shows `getVaultCorruptionGuidance(corrupted)` if not null
+  - XChaCha20-Poly1305 decryption throws on corrupted ciphertext/salt/nonce - tests verify this
+
+---

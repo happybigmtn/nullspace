@@ -9,6 +9,17 @@ import { bytesToHex, hexToBytes } from '../utils/hex';
 const VAULT_RECORD_KEY = 'nullspace_vault_record_v1';
 const LEGACY_PRIVATE_KEY_KEY = 'nullspace_private_key';
 const PASSWORD_MIN_LENGTH = 8;
+
+/**
+ * Reasons why a vault might be corrupted.
+ * Used to provide specific user guidance for recovery.
+ */
+export type VaultCorruptionReason =
+  | 'invalid_json' // Storage contains data that isn't valid JSON
+  | 'wrong_version' // JSON valid but version !== 1
+  | 'wrong_kind' // JSON valid but kind !== 'password'
+  | 'missing_fields' // Required fields are missing
+  | null; // No corruption detected (or no vault exists)
 const PASSWORD_KDF_ITERATIONS = 250_000;
 const SALT_BYTES = 32;
 const NONCE_BYTES = 24;
@@ -123,6 +134,63 @@ async function readVaultRecord(): Promise<VaultRecord | null> {
   }
 }
 
+/**
+ * Checks if vault data exists but is corrupted.
+ * This helps distinguish between "no vault" and "lost vault due to corruption".
+ *
+ * Returns null if no corruption detected (either no vault exists, or vault is valid).
+ * Returns a VaultCorruptionReason if data exists but cannot be used.
+ */
+export async function checkVaultCorruption(): Promise<VaultCorruptionReason> {
+  const raw = await VaultStore.getItemAsync(VAULT_RECORD_KEY);
+
+  // No data at all = not corrupted (just missing)
+  if (!raw) return null;
+
+  // Try to parse as JSON
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return 'invalid_json';
+  }
+
+  // Must be an object
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return 'invalid_json';
+  }
+
+  const record = parsed as Record<string, unknown>;
+
+  // Check version
+  if (record.version !== 1) {
+    return 'wrong_version';
+  }
+
+  // Check kind
+  if (record.kind !== 'password') {
+    return 'wrong_kind';
+  }
+
+  // Check required fields exist
+  const requiredFields = [
+    'saltHex',
+    'nonceHex',
+    'ciphertextHex',
+    'publicKeyHex',
+    'createdAtMs',
+    'updatedAtMs',
+  ];
+  for (const field of requiredFields) {
+    if (!(field in record)) {
+      return 'missing_fields';
+    }
+  }
+
+  // All checks passed - not corrupted
+  return null;
+}
+
 async function writeVaultRecord(record: VaultRecord): Promise<void> {
   await VaultStore.setItemAsync(VAULT_RECORD_KEY, JSON.stringify(record));
 }
@@ -157,14 +225,17 @@ export async function getVaultStatus(): Promise<{
   enabled: boolean;
   unlocked: boolean;
   publicKeyHex: string | null;
+  corrupted: VaultCorruptionReason;
 }> {
   const record = await readVaultRecord();
   const publicKeyHex = record?.publicKeyHex ?? null;
   const unlocked = !!unlockedPrivateKey && unlockedPublicKeyHex === publicKeyHex;
+  const corrupted = await checkVaultCorruption();
   return {
     enabled: !!record,
     unlocked,
     publicKeyHex,
+    corrupted,
   };
 }
 
@@ -328,3 +399,24 @@ export async function importVaultPrivateKey(
 }
 
 export const VAULT_PASSWORD_MIN_LENGTH = PASSWORD_MIN_LENGTH;
+
+/**
+ * Returns user-friendly guidance message for vault corruption.
+ * Call this when getVaultStatus().corrupted is not null.
+ */
+export function getVaultCorruptionGuidance(reason: VaultCorruptionReason): string | null {
+  switch (reason) {
+    case 'invalid_json':
+      return 'Your vault data appears to be corrupted. If you have a recovery key backup, you can use it to restore your account. Otherwise, you may need to create a new account.';
+    case 'wrong_version':
+      return 'Your vault was created with an incompatible app version. Please update to the latest version, or restore from a recovery key backup.';
+    case 'wrong_kind':
+      return 'Your vault uses an unsupported authentication method. Please restore from a recovery key backup or create a new account.';
+    case 'missing_fields':
+      return 'Your vault data is incomplete. This may be due to storage corruption. If you have a recovery key backup, you can use it to restore your account.';
+    case null:
+      return null;
+    default:
+      return 'An unexpected error occurred with your vault. Please contact support.';
+  }
+}

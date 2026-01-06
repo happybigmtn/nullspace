@@ -400,8 +400,8 @@
 				"Add user guidance when vault corruption detected"
 			],
 			"priority": 31,
-			"passes": false,
-			"notes": "CRITICAL GAP: vault.ts:114-124 - corrupted vault returns null, user loses all funds permanently. No recovery mechanism."
+			"passes": true,
+			"notes": "FIXED: Created vault.test.ts with 47 tests. Added VaultCorruptionReason type, checkVaultCorruption() function, and getVaultCorruptionGuidance() for user-facing messages. getVaultStatus() now includes corrupted field. Backup/recovery already existed via exportVaultPrivateKey/importVaultPrivateKey - tests verify identity preservation across export/import cycle."
 		},
 		{
 			"id": "US-041",
