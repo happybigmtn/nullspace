@@ -9,6 +9,7 @@ services:
       METRICS_AUTH_TOKEN: ${METRICS_AUTH_TOKEN:-}
       SIMULATOR_METRICS_TARGET: ${SIMULATOR_METRICS_TARGET:-host.docker.internal:8080}
       AUTH_METRICS_TARGET: ${AUTH_METRICS_TARGET:-host.docker.internal:4000}
+      GATEWAY_METRICS_TARGET: ${GATEWAY_METRICS_TARGET:-host.docker.internal:9010}
       NODE_METRICS_TARGET_0: ${NODE_METRICS_TARGET_0:-host.docker.internal:9100}
       NODE_METRICS_TARGET_1: ${NODE_METRICS_TARGET_1:-host.docker.internal:9101}
       NODE_METRICS_TARGET_2: ${NODE_METRICS_TARGET_2:-host.docker.internal:9102}
@@ -17,6 +18,7 @@ services:
       - "9090:9090"
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./metrics_auth_token:/etc/prometheus/metrics_auth_token:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
