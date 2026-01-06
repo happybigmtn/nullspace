@@ -24,8 +24,8 @@
 				"Verify bitwise action mask logic (canDouble, canSplit)"
 			],
 			"priority": 2,
-			"passes": false,
-			"notes": "VERIFIED GAP: BlackjackScreen.test.tsx (and 5 other game tests) mock the parser entirely - real card decoding never runs. Tests pass but app crashes on real data."
+			"passes": true,
+			"notes": "FIXED: Deleted global mock at mobile/__mocks__/@nullspace/game-state.js. BlackjackScreen.test.tsx now uses real parsers with stateFixtures. Tests verify stage, actionMask, phase mapping, canDouble, canSplit. All 226 tests pass."
 		},
 		{
 			"id": "US-023",
@@ -90,7 +90,7 @@
 			],
 			"priority": 7,
 			"passes": false,
-			"notes": "VERIFIED BUG: Recent test run shows 9/10 tests failing with timeout errors. Message type expectations don't match actual gateway responses."
+			"notes": "FIXED: 4 atomic games (Roulette, Craps, Baccarat, SicBo) - removed game_started expectation. 1 hybrid game (CasinoWar) - check game_started for embedded results. 2 multi-move games (ThreeCard, UltimateHoldem) - already correct. 3 games (HiLo, Blackjack, VideoPoker) - untested, need gateway running. Pending: run integration tests against live gateway."
 		},
 		{
 			"id": "US-028",

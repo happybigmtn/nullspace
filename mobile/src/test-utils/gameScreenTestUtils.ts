@@ -17,28 +17,32 @@ export const mockHaptics = {
   win: jest.fn(resolved),
 };
 
-const gameConnectionState = {
+// Track state separately so we can return fresh objects on each mock call
+let currentLastMessage: unknown = null;
+const sendMock = jest.fn();
+const onRetryMock = jest.fn();
+
+// Return a fresh object each call so React's useEffect sees changes
+export const mockUseGameConnection = jest.fn(() => ({
   isDisconnected: false,
-  send: jest.fn(),
-  lastMessage: null as unknown,
+  send: sendMock,
+  lastMessage: currentLastMessage,
   connectionStatusProps: {
     connectionState: 'connected' as const,
     reconnectAttempt: 0,
     maxReconnectAttempts: 3,
-    onRetry: jest.fn(),
+    onRetry: onRetryMock,
   },
-};
-
-export const mockUseGameConnection = jest.fn(() => gameConnectionState);
+}));
 
 export function setGameConnectionMessage(message: unknown) {
-  gameConnectionState.lastMessage = message;
+  currentLastMessage = message;
 }
 
 export function resetGameConnection() {
-  gameConnectionState.lastMessage = null;
-  gameConnectionState.send.mockClear();
-  gameConnectionState.connectionStatusProps.onRetry.mockClear();
+  currentLastMessage = null;
+  sendMock.mockClear();
+  onRetryMock.mockClear();
 }
 
 export const mockUseChipBetting = jest.fn(() => ({
@@ -78,8 +82,8 @@ jest.mock('../hooks', () => {
   const actual = jest.requireActual('../hooks');
   return {
     ...actual,
-    useGameConnection: (...args: unknown[]) => mockUseGameConnection(...args),
-    useChipBetting: (...args: unknown[]) => mockUseChipBetting(...args),
+    useGameConnection: (...args: unknown[]) => mockUseGameConnection(...(args as [])),
+    useChipBetting: (...args: unknown[]) => mockUseChipBetting(...(args as [])),
     useGameKeyboard: (...args: unknown[]) => mockUseGameKeyboard(...args),
     useModalBackHandler: (...args: unknown[]) => mockUseModalBackHandler(...args),
   };

@@ -8,19 +8,15 @@ import {
   resetGameConnection,
   setGameConnectionMessage,
 } from '../../../test-utils/gameScreenTestUtils';
+import {
+  createBlackjackPlayerTurnState,
+  createBlackjackSplitableState,
+} from '../../../test-utils/stateFixtures';
 import { PrimaryButton } from '../../../components/ui';
-import { parseBlackjackState } from '../../../utils';
 import { BlackjackScreen } from '../BlackjackScreen';
-
-jest.mock('../../../utils', () => {
-  const actual = jest.requireActual('../../../utils');
-  return {
-    ...actual,
-    parseBlackjackState: jest.fn(),
-  };
-});
-
-const mockParseBlackjackState = parseBlackjackState as jest.Mock;
+import { parseBlackjackState as parseWrapper } from '../../../utils/state/blackjack';
+import { decodeStateBytes } from '../../../utils/stateBytes';
+import { parseBlackjackState as parseBlob } from '@nullspace/game-state';
 
 const textMatches = (value: unknown, target: string): boolean => {
   if (typeof value === 'string') return value === target;
@@ -35,15 +31,34 @@ describe('BlackjackScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     resetGameConnection();
-    mockParseBlackjackState.mockReset();
     jest.spyOn(InteractionManager, 'runAfterInteractions').mockImplementation((cb) => {
-      cb();
-      return { cancel: jest.fn() } as unknown as { cancel: () => void };
+      if (typeof cb === 'function') cb();
+      return { cancel: jest.fn(), then: jest.fn(), done: jest.fn() };
     });
   });
 
+  it('parses state bytes correctly with real parser', () => {
+    // Verify the parsing chain works with real parser (not mocked)
+    const stateBytes = createBlackjackPlayerTurnState();
+    const uint8 = decodeStateBytes(stateBytes);
+    expect(uint8).not.toBeNull();
+
+    // Test low-level parser from @nullspace/game-state
+    const blobResult = parseBlob(new Uint8Array(stateBytes));
+    expect(blobResult).not.toBeNull();
+    expect(blobResult!.stage).toBe(1); // player_turn
+    expect(blobResult!.actionMask).toBe(0b00000011); // hit + stand
+
+    // Test mobile wrapper parser
+    const wrapperResult = parseWrapper(uint8!);
+    expect(wrapperResult).not.toBeNull();
+    expect(wrapperResult!.phase).toBe('player_turn');
+    expect(wrapperResult!.canDouble).toBe(false); // bit 2 not set
+    expect(wrapperResult!.canSplit).toBe(false); // bit 3 not set
+  });
+
   it('renders and handles actions', async () => {
-    let tree: ReturnType<typeof create>;
+    let tree!: ReturnType<typeof create>;
     act(() => {
       tree = create(<BlackjackScreen />);
     });
@@ -87,32 +102,28 @@ describe('BlackjackScreen', () => {
 
   it('sends stand action and updates to dealer turn', async () => {
     const sendSpy = mockUseGameConnection().send;
-    mockParseBlackjackState.mockReturnValue({
-      playerCards: [{ suit: 'hearts', rank: '9' }],
-      dealerCards: [{ suit: 'spades', rank: 'K' }, { suit: 'clubs', rank: '5' }],
-      playerTotal: 9,
-      dealerTotal: 15,
-      canDouble: false,
-      canSplit: false,
-      dealerHidden: true,
-      phase: 'player_turn',
-    });
 
+    // Create the component first in betting phase
     let tree!: ReturnType<typeof create>;
-    act(() => {
+    await act(async () => {
       tree = create(<BlackjackScreen />);
     });
 
+    // Set up the game_started message with player turn state
+    const stateBytes = createBlackjackPlayerTurnState();
     setGameConnectionMessage({
       type: 'game_started',
-      state: [1, 2, 3],
+      state: stateBytes,
     });
 
-    act(() => {
+    // Trigger re-render to process the message
+    await act(async () => {
       tree.update(<BlackjackScreen />);
     });
 
     const standButton = findPrimaryButton(tree, 'STAND');
+    expect(standButton).toBeDefined();
+
     await act(async () => {
       await standButton?.props.onPress?.();
     });
@@ -126,35 +137,26 @@ describe('BlackjackScreen', () => {
 
   it('sends double and split actions when allowed', async () => {
     const sendSpy = mockUseGameConnection().send;
-    mockParseBlackjackState.mockReturnValue({
-      playerCards: [
-        { suit: 'hearts', rank: '8' },
-        { suit: 'diamonds', rank: '8' },
-      ],
-      dealerCards: [{ suit: 'spades', rank: '9' }, { suit: 'clubs', rank: 'A' }],
-      playerTotal: 16,
-      dealerTotal: 10,
-      canDouble: true,
-      canSplit: true,
-      dealerHidden: true,
-      phase: 'player_turn',
-    });
 
+    // Create the component first in betting phase
     let tree!: ReturnType<typeof create>;
-    act(() => {
+    await act(async () => {
       tree = create(<BlackjackScreen />);
     });
 
+    // Set up a splitable state (pair of 8s) where double and split are allowed
     setGameConnectionMessage({
       type: 'game_started',
-      state: [4, 5, 6],
+      state: createBlackjackSplitableState(),
     });
 
-    act(() => {
+    // Trigger re-render to process the message
+    await act(async () => {
       tree.update(<BlackjackScreen />);
     });
 
     const doubleButton = findPrimaryButton(tree, 'DOUBLE');
+    expect(doubleButton).toBeDefined();
     await act(async () => {
       await doubleButton?.props.onPress?.();
     });
@@ -162,6 +164,7 @@ describe('BlackjackScreen', () => {
     expect(sendSpy).toHaveBeenCalledWith({ type: 'blackjack_double' });
 
     const splitButton = findPrimaryButton(tree, 'SPLIT');
+    expect(splitButton).toBeDefined();
     await act(async () => {
       await splitButton?.props.onPress?.();
     });
