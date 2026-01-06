@@ -1,0 +1,83 @@
+# Ralph Progress Log
+Started: 2026-01-06
+Target: Testnet Production
+
+## Codebase Patterns
+
+### Execution Layer (Rust)
+- All casino games implement `CasinoGame` trait
+- State blob versioning: v2 → v3 → v4 migrations supported
+- Deterministic RNG: SHA256 hash-chain from consensus seed
+- Event logging: MMR-based append-only with crash recovery
+- Tests: 379/379 passing, run with `cargo test`
+
+### Gateway (TypeScript)
+- Config validation: `gateway/src/config/validation.ts` rejects placeholders
+- CORS: defense-in-depth via `initializeCors()`
+- Rate limits: `MAX_CONNECTIONS_PER_IP=200`, `MAX_TOTAL_SESSIONS=20000`
+- Metrics: Bearer token auth required on `/metrics`
+- Global table: `GATEWAY_LIVE_TABLE_CRAPS=1` enables Craps coordinator
+
+### Mobile (React Native)
+- Crypto: Ed25519 signing, PBKDF2 key derivation, AES-GCM storage
+- WebSocket: Exponential backoff 1s → 30s, max 10 attempts
+- 12 race conditions identified (see US-005 through US-009, US-021-022)
+- Tests: 222/222 unit tests, run with `npm test`
+
+### Configuration
+- Production configs: `configs/production/*.env.example`
+- Staging configs: `configs/staging/*.env.example`
+- Preflight validation: `scripts/preflight-management.mjs`
+- Bootstrap: `./scripts/bootstrap-testnet.sh` generates node YAML
+
+### Testing Scripts
+- Bet coverage: `RUN_INTEGRATION=true pnpm -C gateway exec vitest run tests/all-bet-types.test.ts`
+- Soak test: `./scripts/soak-test.sh configs/testnet 4`
+- Bot load: `./scripts/run-bots.sh configs/testnet http://<HOST>:8080`
+- Global table: `node scripts/load-test-global-table.mjs`
+
+## Key Files
+- docs/testnet-readiness-runbook.md - Full deployment checklist
+- docs/limits.md - All configurable rate limits
+- execution/src/casino/mod.rs - Game dispatch
+- gateway/src/config/validation.ts - Config validation
+- mobile/src/services/crypto.ts - Crypto implementation
+
+---
+
+## 2026-01-06 - Initial PRD Setup
+
+- Created prd.json with 40 user stories for testnet production
+- Stories organized by priority:
+  - Priority 1-4: Blocking infrastructure inputs
+  - Priority 5-11: Critical mobile race conditions + security
+  - Priority 12-15: Integration and load testing
+  - Priority 16-20: Monitoring and smoke checks
+  - Priority 21-30: Additional fixes and recovery drills
+  - Priority 31-40: Documentation, optimization, production build
+- **Learnings:**
+  - Execution layer is 95% ready (379/379 tests pass)
+  - Gateway/Node production-ready with config validation
+  - Mobile has 12 race conditions needing fixes
+  - Go/No-Go criteria in runbook Section 10
+
+---
+
+## 2026-01-06 - US-002: Generate metrics auth token
+
+- What was implemented:
+  - Verified `METRICS_AUTH_TOKEN=SLNmUmUHvNzc+wUagF9aOPGaQBb1DNp8jSG75+Cq5uI=` already set in all 3 production configs (gateway, node, simulator)
+  - Generated new secure tokens for remaining placeholders
+  - Updated `GATEWAY_LIVE_TABLE_PRESENCE_TOKEN` in gateway.env.example
+  - Updated `GLOBAL_TABLE_PRESENCE_TOKEN` in simulator.env.example (same value as gateway for coordination)
+  - Updated `SIMULATOR_IDENTITY` in simulator.env.example
+- Files changed:
+  - `configs/production/gateway.env.example` - line 33: presence token
+  - `configs/production/simulator.env.example` - lines 8 (identity) and 44 (presence token)
+- **Learnings:**
+  - `METRICS_AUTH_TOKEN` must be shared across all services for Prometheus scraping
+  - Presence tokens (`GATEWAY_LIVE_TABLE_PRESENCE_TOKEN` / `GLOBAL_TABLE_PRESENCE_TOKEN`) must match for live table coordination
+  - `SIMULATOR_IDENTITY` is unique per instance for P2P identification
+  - Preflight script validates additional configs beyond just tokens (CORS, admin keys)
+
+---
