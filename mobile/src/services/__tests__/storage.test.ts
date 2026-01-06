@@ -170,6 +170,7 @@ describe('storage fallback integration tests', () => {
       consoleWarnSpy.mockRestore();
     });
   });
+
 });
 
 /**
@@ -277,6 +278,57 @@ describe('storage service (web)', () => {
     storageModule.markTutorialCompleted('blackjack');
     storageModule.resetAllTutorials();
     expect(storageModule.isTutorialCompleted('blackjack')).toBe(false);
+  });
+
+  it('WebStorage.set() throws when localStorage quota exceeded', async () => {
+    // Create localStorage that throws on setItem
+    const quotaExceededStorage = buildLocalStorage();
+    const originalSetItem = quotaExceededStorage.setItem;
+    let setItemCalled = false;
+
+    quotaExceededStorage.setItem = (key: string, value: string) => {
+      if (setItemCalled) {
+        const error = new DOMException('QuotaExceededError', 'QuotaExceededError');
+        throw error;
+      }
+      setItemCalled = true;
+      originalSetItem.call(quotaExceededStorage, key, value);
+    };
+
+    global.localStorage = quotaExceededStorage as unknown as Storage;
+
+    const storageModule = getWebStorageModule();
+    await storageModule.initializeStorage();
+
+    // First set works
+    storageModule.setString('first.key', 'value');
+    expect(storageModule.getString('first.key')).toBe('value');
+
+    // Second set throws - WebStorage has NO try-catch, so this propagates
+    expect(() => {
+      storageModule.setString('second.key', 'value');
+    }).toThrow();
+  });
+
+  it('WebStorage quota exceeded can crash the app silently', async () => {
+    // This documents that WebStorage.set() has no error handling
+    // If localStorage.setItem throws, the error propagates up
+
+    const throwingStorage = buildLocalStorage();
+    throwingStorage.setItem = () => {
+      throw new DOMException('QuotaExceededError', 'QuotaExceededError');
+    };
+
+    global.localStorage = throwingStorage as unknown as Storage;
+
+    const storageModule = getWebStorageModule();
+    await storageModule.initializeStorage();
+
+    // CRITICAL: This will throw and could crash the app
+    // Unlike AsyncStorageAdapter, WebStorage has no try-catch
+    expect(() => {
+      storageModule.setBoolean(storageModule.STORAGE_KEYS.HAPTICS_ENABLED, true);
+    }).toThrow('QuotaExceededError');
   });
 
   it('throws when native storage is accessed before init', () => {

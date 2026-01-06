@@ -804,3 +804,20 @@ Target: Testnet Production
   - Critical safety: Stale game actions expiring prevents unexpected replays after reconnect
 
 ---
+
+## 2026-01-06 - US-039: Add storage quota exceeded tests
+
+- What was implemented:
+  - Added 2 WebStorage quota tests to document web storage failure behavior
+  - Test 1: 'WebStorage.set() throws when localStorage quota exceeded' - verifies errors propagate
+  - Test 2: 'WebStorage quota exceeded can crash the app silently' - documents missing try-catch
+- Files changed:
+  - `mobile/src/services/__tests__/storage.test.ts` - Added 2 quota tests in web storage describe block
+- **Learnings:**
+  - WebStorage (web platform) has NO try-catch around localStorage.setItem - throws QuotaExceededError directly
+  - AsyncStorageAdapter (Expo Go) uses fire-and-forget pattern with .catch() - fails silently
+  - Test mock limitations: Jest's module caching prevents reliable AsyncStorage mock after isolateModules is used
+  - Critical gap remains: Both platforms need user-facing error feedback when storage fails
+  - Pattern discovered: WebStorage failures are immediate/sync, AsyncStorage failures are async/silent
+
+---
