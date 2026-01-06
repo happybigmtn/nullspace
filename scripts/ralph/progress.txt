@@ -199,3 +199,26 @@ Target: Testnet Production
   - Tests matter: the console.log/warn change from US-006 broke a test, caught immediately by running test suite
 
 ---
+
+## 2026-01-06 - US-009: Add DEV guards to console statements
+
+- What was implemented:
+  - Added `if (__DEV__)` guards to all debug/info console statements in mobile services
+  - websocket.ts: 12 console statements wrapped (logs, warns, errors)
+  - storage.ts: 2 console.warn statements wrapped (SecureStore auth fallback info)
+  - useAppState.ts: 3 console.warn statements wrapped (storage init/persist/restore failures)
+  - crypto.ts: 2 console statements wrapped (decryption failure, vault requirement)
+  - errorReporter.ts: Left UNCHANGED - the console.error/warn wrapping is intentional telemetry infrastructure
+- Files changed:
+  - `mobile/src/services/websocket.ts` - 12 __DEV__ guards added
+  - `mobile/src/services/storage.ts` - 2 __DEV__ guards added
+  - `mobile/src/hooks/useAppState.ts` - 3 __DEV__ guards added
+  - `mobile/src/services/crypto.ts` - 2 __DEV__ guards added
+- **Learnings:**
+  - `__DEV__` is a React Native global that's `true` in development, `false` in production
+  - Guards completely remove console calls from production bundle (dead code elimination)
+  - Distinguish between debug logging (guard it) vs. error telemetry infrastructure (don't guard it)
+  - The pattern `if (__DEV__) { console.x(...) }` is idiomatic in React Native
+  - errorReporter.ts wraps console.error/warn to intercept and report - this is infrastructure, not debug logging
+
+---

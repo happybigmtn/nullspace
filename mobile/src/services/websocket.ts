@@ -89,7 +89,9 @@ export function useWebSocket<T extends GameMessage = GameMessage>(
     try {
       ws.current = new WebSocket(url);
     } catch (error) {
-      console.error('Failed to create WebSocket:', error);
+      if (__DEV__) {
+        console.error('Failed to create WebSocket:', error);
+      }
       setConnectionState('failed');
       isReconnectingRef.current = false;
       return;
@@ -109,14 +111,18 @@ export function useWebSocket<T extends GameMessage = GameMessage>(
       );
 
       if (validMessages.length > 0) {
-        console.log(
-          `[WebSocket] Flushing ${validMessages.length} queued messages (${messageQueueRef.current.length - validMessages.length} expired)`
-        );
+        if (__DEV__) {
+          console.log(
+            `[WebSocket] Flushing ${validMessages.length} queued messages (${messageQueueRef.current.length - validMessages.length} expired)`
+          );
+        }
         for (const item of validMessages) {
           try {
             ws.current?.send(JSON.stringify(item.message));
           } catch (error) {
-            console.error('[WebSocket] Failed to send queued message:', error);
+            if (__DEV__) {
+              console.error('[WebSocket] Failed to send queued message:', error);
+            }
           }
         }
       }
@@ -131,22 +137,28 @@ export function useWebSocket<T extends GameMessage = GameMessage>(
         // Validate that the message has the required base structure
         const baseResult = BaseMessageSchema.safeParse(raw);
         if (!baseResult.success) {
-          console.error('Invalid message format:', baseResult.error.message);
+          if (__DEV__) {
+            console.error('Invalid message format:', baseResult.error.message);
+          }
           return;
         }
         // Message has valid base structure, pass it through
         setLastMessage(raw as T);
       } catch (e) {
-        console.error('Failed to parse WebSocket message:', e);
+        if (__DEV__) {
+          console.error('Failed to parse WebSocket message:', e);
+        }
       }
     };
 
     ws.current.onerror = (error) => {
-      console.error('WebSocket error:', {
-        url,
-        readyState: ws.current?.readyState,
-        error,
-      });
+      if (__DEV__) {
+        console.error('WebSocket error:', {
+          url,
+          readyState: ws.current?.readyState,
+          error,
+        });
+      }
     };
 
     ws.current.onclose = (event) => {
@@ -170,11 +182,13 @@ export function useWebSocket<T extends GameMessage = GameMessage>(
       // Check if we've exceeded max attempts
       if (reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) {
         setConnectionState('failed');
-        console.error('WebSocket reconnection failed after max attempts', {
-          url,
-          code: event.code,
-          reason: event.reason,
-        });
+        if (__DEV__) {
+          console.error('WebSocket reconnection failed after max attempts', {
+            url,
+            code: event.code,
+            reason: event.reason,
+          });
+        }
         return;
       }
 
@@ -209,9 +223,11 @@ export function useWebSocket<T extends GameMessage = GameMessage>(
       // Queue message if we're connecting (will be flushed on reconnect)
       if (connectionState === 'connecting' || connectionState === 'disconnected') {
         if (messageQueueRef.current.length >= MAX_QUEUE_SIZE) {
-          console.warn(
-            `[WebSocket] Message queue full (${MAX_QUEUE_SIZE}), dropping oldest message`
-          );
+          if (__DEV__) {
+            console.warn(
+              `[WebSocket] Message queue full (${MAX_QUEUE_SIZE}), dropping oldest message`
+            );
+          }
           messageQueueRef.current.shift(); // Remove oldest message
         }
 
@@ -220,13 +236,17 @@ export function useWebSocket<T extends GameMessage = GameMessage>(
           timestamp: Date.now(),
         });
 
-        console.log(
-          `[WebSocket] Message queued (${messageQueueRef.current.length}/${MAX_QUEUE_SIZE})`
-        );
+        if (__DEV__) {
+          console.log(
+            `[WebSocket] Message queued (${messageQueueRef.current.length}/${MAX_QUEUE_SIZE})`
+          );
+        }
         return true; // Return true since message is queued
       }
 
-      console.warn('[WebSocket] Not connected and not reconnecting, message dropped');
+      if (__DEV__) {
+        console.warn('[WebSocket] Not connected and not reconnecting, message dropped');
+      }
       return false;
     }
 
@@ -234,7 +254,9 @@ export function useWebSocket<T extends GameMessage = GameMessage>(
       ws.current.send(JSON.stringify(message));
       return true;
     } catch (error) {
-      console.error('Failed to send WebSocket message:', error);
+      if (__DEV__) {
+        console.error('Failed to send WebSocket message:', error);
+      }
       return false;
     }
   }, [connectionState]);

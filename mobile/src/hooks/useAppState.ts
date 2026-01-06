@@ -29,7 +29,9 @@ function persistGameState(): void {
     storage.set(STORAGE_KEYS.LAST_SYNC, Date.now());
   } catch (error) {
     // Storage may not be initialized yet, silently fail
-    console.warn('[useAppState] Failed to persist game state:', error);
+    if (__DEV__) {
+      console.warn('[useAppState] Failed to persist game state:', error);
+    }
   }
 }
 
@@ -54,7 +56,9 @@ function restoreGameState(): void {
     }
   } catch (error) {
     // Storage may not be initialized yet, silently fail
-    console.warn('[useAppState] Failed to restore game state:', error);
+    if (__DEV__) {
+      console.warn('[useAppState] Failed to restore game state:', error);
+    }
   }
 }
 
@@ -106,7 +110,9 @@ export function useAppState(): void {
           appStateRef.current = nextAppState;
         });
       } catch (error) {
-        console.warn('[useAppState] Failed to initialize storage:', error);
+        if (__DEV__) {
+          console.warn('[useAppState] Failed to initialize storage:', error);
+        }
       }
     };
 

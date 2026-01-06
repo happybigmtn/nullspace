@@ -64,7 +64,9 @@ async function getOrCreateEncryptionKey(): Promise<string> {
     key = await SecureStore.getItemAsync(ENCRYPTION_KEY_ID, authOptions);
   } catch (error) {
     if (REQUIRE_SECURESTORE_AUTH) {
-      console.warn('[storage] SecureStore auth failed, retrying without auth:', error);
+      if (__DEV__) {
+        console.warn('[storage] SecureStore auth failed, retrying without auth:', error);
+      }
       key = await SecureStore.getItemAsync(ENCRYPTION_KEY_ID);
     } else {
       throw error;
@@ -84,7 +86,9 @@ async function getOrCreateEncryptionKey(): Promise<string> {
       });
     } catch (error) {
       if (REQUIRE_SECURESTORE_AUTH) {
-        console.warn('[storage] SecureStore auth failed, saving key without auth:', error);
+        if (__DEV__) {
+          console.warn('[storage] SecureStore auth failed, saving key without auth:', error);
+        }
         await SecureStore.setItemAsync(ENCRYPTION_KEY_ID, key, {
           keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
         });
