@@ -161,3 +161,19 @@ Target: Testnet Production
   - Changed console.warn to console.log with __DEV__ guard for cleaner prod logs
 
 ---
+
+## 2026-01-06 - US-007: Fix stale balance in useChipBetting hook
+
+- What was implemented:
+  - Changed placeChip callback to use `useGameStore.getState().balance`
+  - Removed `balance` from useCallback dependency array since it's read synchronously inside
+  - This ensures balance check uses current server value, not stale closure
+- Files changed:
+  - `mobile/src/hooks/useChipBetting.ts` - Fixed balance read in placeChip
+- **Learnings:**
+  - Zustand's `getState()` returns current store state synchronously (no re-render needed)
+  - Using `useStore()` in hook body + closure capture = stale if rapid updates
+  - Pattern: For values that must be fresh inside callbacks, use `store.getState().value`
+  - This is especially important for financial values like balance where stale checks = overdrafts
+
+---

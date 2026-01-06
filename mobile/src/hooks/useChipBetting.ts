@@ -52,7 +52,9 @@ export function useChipBetting(options: ChipBettingOptions = {}): ChipBettingRes
   const [selectedChip, setSelectedChip] = useState<ChipValue>(initialChip);
 
   const placeChip = useCallback((value: ChipValue): boolean => {
-    if (bet + value > balance) {
+    // Use getState() for fresh balance to avoid stale closure issues
+    const currentBalance = useGameStore.getState().balance;
+    if (bet + value > currentBalance) {
       haptics.error();
       return false;
     }
@@ -62,7 +64,7 @@ export function useChipBetting(options: ChipBettingOptions = {}): ChipBettingRes
     setBetInternal(newBet);
     onBetChange?.(newBet);
     return true;
-  }, [bet, balance, onBetChange]);
+  }, [bet, onBetChange]);
 
   const clearBet = useCallback(() => {
     setBetInternal(0);
