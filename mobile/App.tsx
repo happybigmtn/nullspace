@@ -9,15 +9,29 @@
  * - On-chain provably fair gaming
  */
 import './src/utils/cryptoPolyfill';
+import * as Sentry from '@sentry/react-native';
 import { initializeErrorReporter } from './src/services/errorReporter';
 import { registerRootComponent } from 'expo';
-import { StatusBar, StyleSheet } from 'react-native';
+import { StatusBar, StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { COLORS } from './src/constants/theme';
 import { useAppState, useGatewaySession, useWebSocketReconnectOnForeground } from './src/hooks';
 import { AuthProvider, WebSocketProvider } from './src/context';
 
+// Initialize Sentry for production error tracking
+const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN;
+if (SENTRY_DSN && !__DEV__) {
+  Sentry.init({
+    dsn: SENTRY_DSN,
+    tracesSampleRate: 0.1, // 10% of transactions for performance monitoring
+    enableAutoSessionTracking: true,
+    attachStacktrace: true,
+    environment: process.env.EXPO_PUBLIC_ENVIRONMENT ?? 'production',
+  });
+}
+
+// Dev-only error reporter (sends to local HTTP server)
 initializeErrorReporter();
 
 function GatewaySessionBridge({ children }: { children: React.ReactNode }) {
@@ -26,7 +40,7 @@ function GatewaySessionBridge({ children }: { children: React.ReactNode }) {
   return children;
 }
 
-function App() {
+function AppContent() {
   // Handle app lifecycle state persistence
   useAppState();
 
@@ -44,10 +58,71 @@ function App() {
   );
 }
 
+function ErrorFallback({ resetError }: { resetError: () => void }) {
+  return (
+    <GestureHandlerRootView style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorTitle}>Something went wrong</Text>
+        <Text style={styles.errorText}>
+          We've been notified and are working on a fix.
+        </Text>
+        <TouchableOpacity style={styles.retryButton} onPress={resetError}>
+          <Text style={styles.retryText}>Try Again</Text>
+        </TouchableOpacity>
+      </View>
+    </GestureHandlerRootView>
+  );
+}
+
+function App() {
+  // In production, wrap with Sentry error boundary
+  // In development, let errors bubble up naturally
+  if (SENTRY_DSN && !__DEV__) {
+    return (
+      <Sentry.ErrorBoundary fallback={ErrorFallback} showDialog>
+        <AppContent />
+      </Sentry.ErrorBoundary>
+    );
+  }
+
+  return <AppContent />;
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  errorTitle: {
+    color: '#FFFFFF',
+    fontSize: 24,
+    fontWeight: '600',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  errorText: {
+    color: '#999999',
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  retryButton: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
 
