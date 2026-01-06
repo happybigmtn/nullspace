@@ -2047,6 +2047,47 @@ mod tests {
         }
     }
 
+    fn state_with_bets(
+        phase: Phase,
+        main_point: u8,
+        bets: Vec<CrapsBet>,
+    ) -> CrapsState {
+        CrapsState {
+            phase,
+            main_point,
+            d1: 0,
+            d2: 0,
+            made_points_mask: 0,
+            epoch_point_established: phase == Phase::Point,
+            field_paytable: FieldPaytable::default(),
+            bets,
+        }
+    }
+
+    fn assert_single_result(
+        results: Vec<BetResult>,
+        expected_return: u64,
+        expected_wagered: u64,
+    ) {
+        assert_eq!(results.len(), 1);
+        let result = results.into_iter().next().unwrap();
+        assert!(result.resolved);
+        assert_eq!(result.return_amount, expected_return);
+        assert_eq!(result.wagered, expected_wagered);
+    }
+
+    fn atomic_payload(bets: &[(BetType, u8, u64)]) -> Vec<u8> {
+        let mut payload = Vec::with_capacity(2 + bets.len() * 10);
+        payload.push(4);
+        payload.push(bets.len() as u8);
+        for (bet_type, target, amount) in bets {
+            payload.push(*bet_type as u8);
+            payload.push(*target);
+            payload.extend_from_slice(&amount.to_be_bytes());
+        }
+        payload
+    }
+
     #[test]
     fn test_bet_serialization() {
         let bet = CrapsBet {
@@ -2201,6 +2242,27 @@ mod tests {
     }
 
     #[test]
+    fn test_next_bet_resolves_on_hit_and_miss() {
+        let amount = 25;
+        let bet = CrapsBet {
+            bet_type: BetType::Next,
+            target: 9,
+            status: BetStatus::On,
+            amount,
+            odds_amount: 0,
+        };
+
+        let mut state = state_with_bets(Phase::ComeOut, 0, vec![bet.clone()]);
+        let results = process_roll(&mut state, 4, 5); // 9 hits
+        let expected = calculate_next_payout(9, 9, amount);
+        assert_single_result(results, expected, amount);
+
+        let mut state = state_with_bets(Phase::ComeOut, 0, vec![bet]);
+        let results = process_roll(&mut state, 3, 4); // 7 misses
+        assert_single_result(results, 0, amount);
+    }
+
+    #[test]
     fn test_ats_small_completes_and_pays() {
         let mut state = CrapsState {
             phase: Phase::ComeOut,
@@ -2227,6 +2289,91 @@ mod tests {
                 assert_eq!(resolved[0].return_amount, 310); // 30:1 -> 31x total
                 assert_eq!(resolved[0].bet_idx, 0);
                 state.bets.clear();
+            } else {
+                assert!(resolved.is_empty());
+            }
+        }
+    }
+
+    #[test]
+    fn test_ats_tall_completes_and_pays() {
+        let amount = 10;
+        let mut state = CrapsState {
+            phase: Phase::ComeOut,
+            main_point: 0,
+            d1: 0,
+            d2: 0,
+            made_points_mask: 0,
+            epoch_point_established: false,
+            field_paytable: FieldPaytable::default(),
+            bets: vec![CrapsBet {
+                bet_type: BetType::AtsTall,
+                target: 0,
+                status: BetStatus::On,
+                amount,
+                odds_amount: 0,
+            }],
+        };
+
+        let rolls = [(4, 4, 8), (4, 5, 9), (5, 5, 10), (5, 6, 11), (6, 6, 12)];
+        for (d1, d2, total) in rolls {
+            let results = process_roll(&mut state, d1, d2);
+            let resolved: Vec<_> = results.into_iter().filter(|r| r.resolved).collect();
+            if total == 12 {
+                assert_eq!(resolved.len(), 1);
+                assert_eq!(
+                    resolved[0].return_amount,
+                    amount.saturating_mul(payouts::ATS_TALL.saturating_add(1))
+                );
+                assert_eq!(resolved[0].bet_idx, 0);
+            } else {
+                assert!(resolved.is_empty());
+            }
+        }
+    }
+
+    #[test]
+    fn test_ats_all_completes_and_pays() {
+        let amount = 10;
+        let mut state = CrapsState {
+            phase: Phase::ComeOut,
+            main_point: 0,
+            d1: 0,
+            d2: 0,
+            made_points_mask: 0,
+            epoch_point_established: false,
+            field_paytable: FieldPaytable::default(),
+            bets: vec![CrapsBet {
+                bet_type: BetType::AtsAll,
+                target: 0,
+                status: BetStatus::On,
+                amount,
+                odds_amount: 0,
+            }],
+        };
+
+        let rolls = [
+            (1, 1, 2),
+            (1, 2, 3),
+            (2, 2, 4),
+            (2, 3, 5),
+            (3, 3, 6),
+            (4, 4, 8),
+            (4, 5, 9),
+            (5, 5, 10),
+            (5, 6, 11),
+            (6, 6, 12),
+        ];
+        for (d1, d2, total) in rolls {
+            let results = process_roll(&mut state, d1, d2);
+            let resolved: Vec<_> = results.into_iter().filter(|r| r.resolved).collect();
+            if total == 12 {
+                assert_eq!(resolved.len(), 1);
+                assert_eq!(
+                    resolved[0].return_amount,
+                    amount.saturating_mul(payouts::ATS_ALL.saturating_add(1))
+                );
+                assert_eq!(resolved[0].bet_idx, 0);
             } else {
                 assert!(resolved.is_empty());
             }
@@ -2321,6 +2468,453 @@ mod tests {
     }
 
     #[test]
+    fn test_roll_without_bets_rejected() {
+        let seed = create_test_seed();
+        let mut session = create_test_session(100);
+        let mut rng = GameRng::new(&seed, session.id, 0);
+
+        Craps::init(&mut session, &mut rng);
+
+        let mut rng = GameRng::new(&seed, session.id, 1);
+        let result = Craps::process_move(&mut session, &[2], &mut rng);
+        assert!(matches!(result, Err(GameError::InvalidMove)));
+    }
+
+    #[test]
+    fn test_atomic_batch_win_resolves_all() {
+        let seed = create_test_seed();
+        let mut session = create_test_session(100);
+        let mut rng = GameRng::new(&seed, session.id, 0);
+
+        Craps::init(&mut session, &mut rng);
+
+        let payload = atomic_payload(&[(BetType::Pass, 0, 10), (BetType::Field, 0, 5)]);
+        let mut rng = GameRng::from_state([
+            2, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0,
+        ]);
+        let result = Craps::process_move(&mut session, &payload, &mut rng).expect("atomic batch");
+
+        match result {
+            GameResult::Win(payout, _) => assert_eq!(payout, 20),
+            _ => panic!("expected win from atomic batch"),
+        }
+
+        let state = parse_state(&session.state_blob).expect("Failed to parse state");
+        assert!(state.bets.is_empty());
+        assert!(session.is_complete);
+    }
+
+    #[test]
+    fn test_atomic_batch_loss_returns_loss() {
+        let seed = create_test_seed();
+        let mut session = create_test_session(100);
+        let mut rng = GameRng::new(&seed, session.id, 0);
+
+        Craps::init(&mut session, &mut rng);
+
+        let payload = atomic_payload(&[(BetType::Pass, 0, 10)]);
+        let mut rng = GameRng::from_state([
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0,
+        ]);
+        let result = Craps::process_move(&mut session, &payload, &mut rng).expect("atomic batch");
+
+        assert!(matches!(result, GameResult::Loss(_)));
+        assert!(session.is_complete);
+    }
+
+    #[test]
+    fn test_atomic_batch_sets_point_and_charges_wager() {
+        let seed = create_test_seed();
+        let mut session = create_test_session(100);
+        let mut rng = GameRng::new(&seed, session.id, 0);
+
+        Craps::init(&mut session, &mut rng);
+
+        let payload = atomic_payload(&[(BetType::Pass, 0, 10)]);
+        let mut rng = GameRng::from_state([
+            0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0,
+        ]);
+        let result = Craps::process_move(&mut session, &payload, &mut rng).expect("atomic batch");
+
+        match result {
+            GameResult::ContinueWithUpdate { payout, .. } => assert_eq!(payout, -10),
+            _ => panic!("expected ContinueWithUpdate with wager deduction"),
+        }
+
+        let state = parse_state(&session.state_blob).expect("Failed to parse state");
+        assert_eq!(state.phase, Phase::Point);
+        assert_eq!(state.main_point, 4);
+        assert_eq!(state.bets.len(), 1);
+        assert_eq!(state.bets[0].bet_type, BetType::Pass);
+        assert_eq!(state.bets[0].target, 4);
+    }
+
+    #[test]
+    fn test_atomic_batch_rejects_when_bets_exist() {
+        let seed = create_test_seed();
+        let mut session = create_test_session(100);
+        let mut rng = GameRng::new(&seed, session.id, 0);
+
+        Craps::init(&mut session, &mut rng);
+
+        let mut payload = vec![0, BetType::Field as u8, 0];
+        payload.extend_from_slice(&10u64.to_be_bytes());
+        let mut rng = GameRng::new(&seed, session.id, 1);
+        Craps::process_move(&mut session, &payload, &mut rng).expect("place bet");
+
+        let atomic = atomic_payload(&[(BetType::Pass, 0, 10)]);
+        let mut rng = GameRng::new(&seed, session.id, 2);
+        let result = Craps::process_move(&mut session, &atomic, &mut rng);
+        assert!(matches!(result, Err(GameError::InvalidMove)));
+    }
+
+    #[test]
+    fn test_atomic_batch_rejects_after_roll() {
+        let seed = create_test_seed();
+        let mut session = create_test_session(100);
+        let mut rng = GameRng::new(&seed, session.id, 0);
+
+        Craps::init(&mut session, &mut rng);
+
+        let mut payload = vec![0, BetType::Field as u8, 0];
+        payload.extend_from_slice(&10u64.to_be_bytes());
+        let mut rng = GameRng::new(&seed, session.id, 1);
+        Craps::process_move(&mut session, &payload, &mut rng).expect("place bet");
+
+        let mut rng = GameRng::new(&seed, session.id, 2);
+        Craps::process_move(&mut session, &[2], &mut rng).expect("roll");
+
+        let atomic = atomic_payload(&[(BetType::Pass, 0, 10)]);
+        let mut rng = GameRng::new(&seed, session.id, 3);
+        let result = Craps::process_move(&mut session, &atomic, &mut rng);
+        // After a roll that ends the game, atomic batch is rejected because game is complete
+        assert!(matches!(result, Err(GameError::GameAlreadyComplete)));
+    }
+
+    #[test]
+    fn test_atomic_batch_invalid_yes_target_rejected() {
+        let seed = create_test_seed();
+        let mut session = create_test_session(100);
+        let mut rng = GameRng::new(&seed, session.id, 0);
+
+        Craps::init(&mut session, &mut rng);
+        let before = session.state_blob.clone();
+
+        let atomic = atomic_payload(&[(BetType::Yes, 7, 10)]);
+        let mut rng = GameRng::new(&seed, session.id, 1);
+        let result = Craps::process_move(&mut session, &atomic, &mut rng);
+        assert!(matches!(result, Err(GameError::InvalidPayload)));
+        assert_eq!(session.state_blob, before);
+    }
+
+    #[test]
+    fn test_atomic_batch_over_max_bets_rejected() {
+        let seed = create_test_seed();
+        let mut session = create_test_session(100);
+        let mut rng = GameRng::new(&seed, session.id, 0);
+
+        Craps::init(&mut session, &mut rng);
+
+        let mut payload = Vec::with_capacity(2 + (limits::CRAPS_MAX_BETS + 1) * 10);
+        payload.push(4);
+        payload.push((limits::CRAPS_MAX_BETS + 1) as u8);
+        let mut rng = GameRng::new(&seed, session.id, 1);
+        let result = Craps::process_move(&mut session, &payload, &mut rng);
+        assert!(matches!(result, Err(GameError::InvalidPayload)));
+    }
+
+    #[test]
+    fn test_pass_line_come_out_resolution_matrix() {
+        let amount = 10;
+        let bets = vec![CrapsBet {
+            bet_type: BetType::Pass,
+            target: 0,
+            status: BetStatus::On,
+            amount,
+            odds_amount: 0,
+        }];
+
+        let cases = [
+            (3, 4, amount.saturating_mul(2)), // 7 wins
+            (5, 6, amount.saturating_mul(2)), // 11 wins
+            (1, 1, 0),                        // 2 loses
+            (1, 2, 0),                        // 3 loses
+            (6, 6, 0),                        // 12 loses
+        ];
+
+        for (d1, d2, expected) in cases {
+            let mut state = state_with_bets(Phase::ComeOut, 0, bets.clone());
+            let results = process_roll(&mut state, d1, d2);
+            assert_single_result(results, expected, amount);
+            assert_eq!(state.phase, Phase::ComeOut);
+            assert_eq!(state.main_point, 0);
+        }
+    }
+
+    #[test]
+    fn test_dont_pass_come_out_resolution_matrix() {
+        let amount = 10;
+        let bets = vec![CrapsBet {
+            bet_type: BetType::DontPass,
+            target: 0,
+            status: BetStatus::On,
+            amount,
+            odds_amount: 0,
+        }];
+
+        let cases = [
+            (1, 1, amount.saturating_mul(2)), // 2 wins
+            (1, 2, amount.saturating_mul(2)), // 3 wins
+            (6, 6, amount),                   // 12 pushes
+            (3, 4, 0),                         // 7 loses
+            (5, 6, 0),                         // 11 loses
+        ];
+
+        for (d1, d2, expected) in cases {
+            let mut state = state_with_bets(Phase::ComeOut, 0, bets.clone());
+            let results = process_roll(&mut state, d1, d2);
+            assert_single_result(results, expected, amount);
+            assert_eq!(state.phase, Phase::ComeOut);
+            assert_eq!(state.main_point, 0);
+        }
+    }
+
+    #[test]
+    fn test_dont_pass_bar_12_returns_push_result() {
+        let seed = create_test_seed();
+        let mut session = create_test_session(100);
+        let mut rng = GameRng::new(&seed, session.id, 0);
+
+        Craps::init(&mut session, &mut rng);
+
+        let mut payload = vec![0, BetType::DontPass as u8, 0];
+        payload.extend_from_slice(&10u64.to_be_bytes());
+        let mut rng = GameRng::new(&seed, session.id, 1);
+        Craps::process_move(&mut session, &payload, &mut rng).expect("place bet");
+
+        let mut rng_state = [0u8; 32];
+        rng_state[0] = 5;
+        rng_state[1] = 5;
+        let mut rng = GameRng::from_state(rng_state);
+        let result = Craps::process_move(&mut session, &[2], &mut rng).expect("roll");
+
+        match result {
+            GameResult::Push(amount, _) => assert_eq!(amount, 10),
+            _ => panic!("expected push result for bar 12"),
+        }
+        assert!(session.is_complete);
+    }
+
+    #[test]
+    fn test_come_bet_pending_immediate_resolution() {
+        let amount = 25;
+        let base_bet = CrapsBet {
+            bet_type: BetType::Come,
+            target: 0,
+            status: BetStatus::Pending,
+            amount,
+            odds_amount: 0,
+        };
+
+        let mut state = state_with_bets(Phase::Point, 6, vec![base_bet.clone()]);
+        let results = process_roll(&mut state, 3, 4); // 7
+        assert_single_result(results, amount.saturating_mul(2), amount);
+
+        let mut state = state_with_bets(Phase::Point, 6, vec![base_bet]);
+        let results = process_roll(&mut state, 6, 6); // 12
+        assert_single_result(results, 0, amount);
+    }
+
+    #[test]
+    fn test_dont_come_bet_pending_resolution() {
+        let amount = 25;
+        let base_bet = CrapsBet {
+            bet_type: BetType::DontCome,
+            target: 0,
+            status: BetStatus::Pending,
+            amount,
+            odds_amount: 0,
+        };
+
+        let mut state = state_with_bets(Phase::Point, 5, vec![base_bet.clone()]);
+        let results = process_roll(&mut state, 6, 6); // 12 pushes
+        assert_single_result(results, amount, amount);
+
+        let mut state = state_with_bets(Phase::Point, 5, vec![base_bet]);
+        let results = process_roll(&mut state, 3, 4); // 7 loses
+        assert_single_result(results, 0, amount);
+    }
+
+    #[test]
+    fn test_come_bet_on_resolves_on_target_and_seven() {
+        let amount = 10;
+        let odds = 20;
+        let bet = CrapsBet {
+            bet_type: BetType::Come,
+            target: 4,
+            status: BetStatus::On,
+            amount,
+            odds_amount: odds,
+        };
+
+        let mut state = state_with_bets(Phase::Point, 5, vec![bet.clone()]);
+        let results = process_roll(&mut state, 2, 2); // 4 hits
+        let expected = amount
+            .saturating_mul(2)
+            .saturating_add(odds)
+            .saturating_add(calculate_odds_payout(4, odds, true));
+        assert_single_result(
+            results,
+            expected,
+            amount.saturating_add(odds),
+        );
+
+        let mut state = state_with_bets(Phase::Point, 5, vec![bet]);
+        let results = process_roll(&mut state, 3, 4); // 7 out
+        assert_single_result(results, 0, amount.saturating_add(odds));
+    }
+
+    #[test]
+    fn test_dont_come_bet_on_resolves_on_seven_and_target() {
+        let amount = 10;
+        let odds = 20;
+        let bet = CrapsBet {
+            bet_type: BetType::DontCome,
+            target: 4,
+            status: BetStatus::On,
+            amount,
+            odds_amount: odds,
+        };
+
+        let mut state = state_with_bets(Phase::Point, 5, vec![bet.clone()]);
+        let results = process_roll(&mut state, 3, 4); // 7 wins
+        let expected = amount
+            .saturating_mul(2)
+            .saturating_add(odds)
+            .saturating_add(calculate_odds_payout(4, odds, false));
+        assert_single_result(
+            results,
+            expected,
+            amount.saturating_add(odds),
+        );
+
+        let mut state = state_with_bets(Phase::Point, 5, vec![bet]);
+        let results = process_roll(&mut state, 2, 2); // 4 loses
+        assert_single_result(results, 0, amount.saturating_add(odds));
+    }
+
+    #[test]
+    fn test_hardway_bet_resolves_on_hard_and_easy() {
+        let amount = 10;
+        let bet = CrapsBet {
+            bet_type: BetType::Hardway6,
+            target: 0,
+            status: BetStatus::On,
+            amount,
+            odds_amount: 0,
+        };
+
+        let mut state = state_with_bets(Phase::ComeOut, 0, vec![bet.clone()]);
+        let results = process_roll(&mut state, 3, 3); // hard 6
+        let expected = amount.saturating_add(amount.saturating_mul(payouts::HARDWAY_6_OR_8));
+        assert_single_result(results, expected, amount);
+
+        let mut state = state_with_bets(Phase::ComeOut, 0, vec![bet]);
+        let results = process_roll(&mut state, 4, 2); // easy 6
+        assert_single_result(results, 0, amount);
+    }
+
+    #[test]
+    fn test_yes_no_bets_resolve_on_target_and_seven() {
+        let amount = 40;
+        let yes_bet = CrapsBet {
+            bet_type: BetType::Yes,
+            target: 6,
+            status: BetStatus::On,
+            amount,
+            odds_amount: 0,
+        };
+        let mut state = state_with_bets(Phase::Point, 6, vec![yes_bet.clone()]);
+        let results = process_roll(&mut state, 3, 3);
+        assert_single_result(results, calculate_yes_payout(6, amount, true), amount);
+
+        let mut state = state_with_bets(Phase::Point, 6, vec![yes_bet]);
+        let results = process_roll(&mut state, 3, 4);
+        assert_single_result(results, 0, amount);
+
+        let no_bet = CrapsBet {
+            bet_type: BetType::No,
+            target: 4,
+            status: BetStatus::On,
+            amount,
+            odds_amount: 0,
+        };
+        let mut state = state_with_bets(Phase::Point, 4, vec![no_bet.clone()]);
+        let results = process_roll(&mut state, 3, 4);
+        assert_single_result(results, calculate_no_payout(4, amount, true), amount);
+
+        let mut state = state_with_bets(Phase::Point, 4, vec![no_bet]);
+        let results = process_roll(&mut state, 2, 2);
+        assert_single_result(results, 0, amount);
+    }
+
+    #[test]
+    fn test_pass_line_odds_payout_on_point_hit() {
+        let bet = CrapsBet {
+            bet_type: BetType::Pass,
+            target: 6,
+            status: BetStatus::On,
+            amount: 10,
+            odds_amount: 20,
+        };
+        let mut state = state_with_bets(Phase::Point, 6, vec![bet.clone()]);
+        let results = process_roll(&mut state, 3, 3);
+        let expected = calculate_pass_return(&bet, true, true);
+        assert_single_result(results, expected, bet.amount.saturating_add(bet.odds_amount));
+    }
+
+    #[test]
+    fn test_dont_pass_odds_payout_on_seven_out() {
+        let bet = CrapsBet {
+            bet_type: BetType::DontPass,
+            target: 6,
+            status: BetStatus::On,
+            amount: 10,
+            odds_amount: 20,
+        };
+        let mut state = state_with_bets(Phase::Point, 6, vec![bet.clone()]);
+        let results = process_roll(&mut state, 3, 4);
+        let expected = calculate_pass_return(&bet, true, false);
+        assert_single_result(results, expected, bet.amount.saturating_add(bet.odds_amount));
+    }
+
+    #[test]
+    fn test_max_bets_enforced() {
+        let seed = create_test_seed();
+        let mut session = create_test_session(100);
+        let mut rng = GameRng::new(&seed, session.id, 0);
+
+        Craps::init(&mut session, &mut rng);
+
+        for idx in 0..limits::CRAPS_MAX_BETS {
+            let mut payload = vec![0, BetType::Field as u8, 0];
+            payload.extend_from_slice(&1u64.to_be_bytes());
+            let mut rng = GameRng::new(&seed, session.id, (idx + 1) as u32);
+            let result = Craps::process_move(&mut session, &payload, &mut rng);
+            assert!(result.is_ok(), "bet {idx} should succeed");
+        }
+
+        let mut payload = vec![0, BetType::Field as u8, 0];
+        payload.extend_from_slice(&1u64.to_be_bytes());
+        let mut rng = GameRng::new(&seed, session.id, (limits::CRAPS_MAX_BETS + 1) as u32);
+        let result = Craps::process_move(&mut session, &payload, &mut rng);
+        assert!(matches!(result, Err(GameError::InvalidMove)));
+    }
+
+    #[test]
     fn test_pass_line_flow() {
         let seed = create_test_seed();
         let mut session = create_test_session(100);
@@ -2383,6 +2977,26 @@ mod tests {
     }
 
     #[test]
+    fn test_add_odds_without_contract_bet_fails() {
+        let seed = create_test_seed();
+        let mut session = create_test_session(100);
+        let mut rng = GameRng::new(&seed, session.id, 0);
+
+        Craps::init(&mut session, &mut rng);
+
+        let mut payload = vec![0, BetType::Field as u8, 0];
+        payload.extend_from_slice(&10u64.to_be_bytes());
+        let mut rng = GameRng::new(&seed, session.id, 1);
+        Craps::process_move(&mut session, &payload, &mut rng).expect("place bet");
+
+        let mut odds_payload = vec![1];
+        odds_payload.extend_from_slice(&50u64.to_be_bytes());
+        let mut rng = GameRng::new(&seed, session.id, 2);
+        let result = Craps::process_move(&mut session, &odds_payload, &mut rng);
+        assert!(matches!(result, Err(GameError::InvalidMove)));
+    }
+
+    #[test]
     fn test_come_bet_pending_to_on() {
         let seed = create_test_seed();
         let mut session = create_test_session(100);
@@ -2411,6 +3025,36 @@ mod tests {
         process_roll(&mut state, 3, 3);
         assert_eq!(state.bets[0].status, BetStatus::On);
         assert_eq!(state.bets[0].target, 6);
+    }
+
+    #[test]
+    fn test_clear_bets_refunds_total() {
+        let seed = create_test_seed();
+        let mut session = create_test_session(100);
+        let mut rng = GameRng::new(&seed, session.id, 0);
+
+        Craps::init(&mut session, &mut rng);
+
+        let mut payload = vec![0, BetType::Field as u8, 0];
+        payload.extend_from_slice(&10u64.to_be_bytes());
+        let mut rng = GameRng::new(&seed, session.id, 1);
+        Craps::process_move(&mut session, &payload, &mut rng).expect("place bet");
+
+        let mut payload = vec![0, BetType::Pass as u8, 0];
+        payload.extend_from_slice(&20u64.to_be_bytes());
+        let mut rng = GameRng::new(&seed, session.id, 2);
+        Craps::process_move(&mut session, &payload, &mut rng).expect("place bet");
+
+        let mut rng = GameRng::new(&seed, session.id, 3);
+        let result = Craps::process_move(&mut session, &[3], &mut rng).expect("clear bets");
+
+        match result {
+            GameResult::ContinueWithUpdate { payout, .. } => assert_eq!(payout, 30),
+            _ => panic!("expected refund payout"),
+        }
+
+        let state = parse_state(&session.state_blob).expect("Failed to parse state");
+        assert!(state.bets.is_empty());
     }
 
     #[test]
@@ -2823,5 +3467,353 @@ mod tests {
         let results = process_roll(&mut state, 3, 4); // seven resolves hot roller
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].return_amount, 60);
+    }
+
+    // ========================================================================
+    // Fire Bet Six Points Tests (US-052)
+    // ========================================================================
+
+    #[test]
+    fn test_fire_bet_six_points_999_to_1() {
+        // Test making all 6 unique points (4, 5, 6, 8, 9, 10) before sevening out
+        // should pay 999:1 (the highest Fire Bet payout).
+        let mut state = CrapsState {
+            phase: Phase::ComeOut,
+            main_point: 0,
+            d1: 0,
+            d2: 0,
+            made_points_mask: 0,
+            epoch_point_established: false,
+            field_paytable: FieldPaytable::default(),
+            bets: vec![CrapsBet {
+                bet_type: BetType::Fire,
+                target: 0,
+                status: BetStatus::On,
+                amount: 10,
+                odds_amount: 0,
+            }],
+        };
+
+        // Make all 6 points in sequence:
+        // Point 4: (2,2)=4 establishes, (2,2)=4 makes it
+        process_roll(&mut state, 2, 2); // Establish 4
+        process_roll(&mut state, 2, 2); // Make 4 (bit 0)
+        assert_eq!(state.made_points_mask, 0b000001, "After making 4");
+
+        // Point 5: (2,3)=5 establishes, (2,3)=5 makes it
+        process_roll(&mut state, 2, 3); // Establish 5
+        process_roll(&mut state, 2, 3); // Make 5 (bit 1)
+        assert_eq!(state.made_points_mask, 0b000011, "After making 4 and 5");
+
+        // Point 6: (3,3)=6 establishes, (3,3)=6 makes it
+        process_roll(&mut state, 3, 3); // Establish 6
+        process_roll(&mut state, 3, 3); // Make 6 (bit 2)
+        assert_eq!(state.made_points_mask, 0b000111, "After making 4, 5, and 6");
+
+        // Point 8: (4,4)=8 establishes, (4,4)=8 makes it
+        process_roll(&mut state, 4, 4); // Establish 8
+        process_roll(&mut state, 4, 4); // Make 8 (bit 3)
+        assert_eq!(state.made_points_mask, 0b001111, "After making 4, 5, 6, and 8");
+
+        // Point 9: (4,5)=9 establishes, (4,5)=9 makes it
+        process_roll(&mut state, 4, 5); // Establish 9
+        process_roll(&mut state, 4, 5); // Make 9 (bit 4)
+        assert_eq!(state.made_points_mask, 0b011111, "After making 4, 5, 6, 8, and 9");
+
+        // Point 10: (5,5)=10 establishes, (5,5)=10 makes it
+        process_roll(&mut state, 5, 5); // Establish 10
+        process_roll(&mut state, 5, 5); // Make 10 (bit 5)
+        assert_eq!(state.made_points_mask, 0b111111, "All 6 points made");
+
+        // Verify count
+        assert_eq!(state.made_points_mask.count_ones(), 6);
+
+        // Establish a new point and seven-out to resolve Fire bet
+        process_roll(&mut state, 2, 2); // Establish 4 again
+        let results = process_roll(&mut state, 3, 4); // 7 out
+
+        // Verify 999:1 payout: 10 * (999 + 1) = 10000
+        assert_eq!(results.len(), 1);
+        assert!(results[0].resolved);
+        assert_eq!(results[0].return_amount, 10_000, "6 points should pay 999:1");
+    }
+
+    #[test]
+    fn test_fire_bet_made_points_mask_bit_flags() {
+        // Verify each bit in made_points_mask corresponds to the correct point number.
+        // Bit 0 = 4, Bit 1 = 5, Bit 2 = 6, Bit 3 = 8, Bit 4 = 9, Bit 5 = 10
+        let mut state = CrapsState {
+            phase: Phase::ComeOut,
+            main_point: 0,
+            d1: 0,
+            d2: 0,
+            made_points_mask: 0,
+            epoch_point_established: false,
+            field_paytable: FieldPaytable::default(),
+            bets: Vec::new(),
+        };
+
+        // Make point 4 (bit 0)
+        process_roll(&mut state, 2, 2); // Establish 4
+        process_roll(&mut state, 2, 2); // Make 4
+        assert_eq!(state.made_points_mask & (1 << 0), 1 << 0, "Bit 0 should be set for point 4");
+
+        // Make point 10 (bit 5) - skip to verify bits are independent
+        process_roll(&mut state, 5, 5); // Establish 10
+        process_roll(&mut state, 5, 5); // Make 10
+        assert_eq!(state.made_points_mask & (1 << 5), 1 << 5, "Bit 5 should be set for point 10");
+
+        // Make point 6 (bit 2)
+        process_roll(&mut state, 3, 3); // Establish 6
+        process_roll(&mut state, 3, 3); // Make 6
+        assert_eq!(state.made_points_mask & (1 << 2), 1 << 2, "Bit 2 should be set for point 6");
+
+        // Verify full mask: bits 0, 2, 5 should be set = 0b100101 = 37
+        assert_eq!(state.made_points_mask, 0b100101, "Bits 0, 2, 5 set for points 4, 6, 10");
+        assert_eq!(state.made_points_mask.count_ones(), 3);
+    }
+
+    #[test]
+    fn test_fire_bet_five_points_249_to_1() {
+        // Test making 5 unique points should pay 249:1.
+        let mut state = CrapsState {
+            phase: Phase::ComeOut,
+            main_point: 0,
+            d1: 0,
+            d2: 0,
+            made_points_mask: 0,
+            epoch_point_established: false,
+            field_paytable: FieldPaytable::default(),
+            bets: vec![CrapsBet {
+                bet_type: BetType::Fire,
+                target: 0,
+                status: BetStatus::On,
+                amount: 100,
+                odds_amount: 0,
+            }],
+        };
+
+        // Make 5 points: 4, 5, 6, 8, 9 (skip 10)
+        for (d1, d2) in [
+            (2, 2), (2, 2), // Establish and make 4
+            (2, 3), (2, 3), // Establish and make 5
+            (3, 3), (3, 3), // Establish and make 6
+            (4, 4), (4, 4), // Establish and make 8
+            (4, 5), (4, 5), // Establish and make 9
+        ] {
+            process_roll(&mut state, d1, d2);
+        }
+        assert_eq!(state.made_points_mask.count_ones(), 5);
+        assert_eq!(state.made_points_mask, 0b011111, "Points 4, 5, 6, 8, 9 made");
+
+        // Establish a point and seven-out
+        process_roll(&mut state, 5, 5); // Establish 10
+        let results = process_roll(&mut state, 3, 4); // 7 out
+
+        // Verify 249:1 payout: 100 * (249 + 1) = 25000
+        assert_eq!(results.len(), 1);
+        assert!(results[0].resolved);
+        assert_eq!(results[0].return_amount, 25_000, "5 points should pay 249:1");
+    }
+
+    #[test]
+    fn test_fire_bet_duplicate_points_count_once() {
+        // Test that making the same point multiple times only counts once.
+        let mut state = CrapsState {
+            phase: Phase::ComeOut,
+            main_point: 0,
+            d1: 0,
+            d2: 0,
+            made_points_mask: 0,
+            epoch_point_established: false,
+            field_paytable: FieldPaytable::default(),
+            bets: vec![CrapsBet {
+                bet_type: BetType::Fire,
+                target: 0,
+                status: BetStatus::On,
+                amount: 10,
+                odds_amount: 0,
+            }],
+        };
+
+        // Make point 4 three times
+        for _ in 0..3 {
+            process_roll(&mut state, 2, 2); // Establish 4
+            process_roll(&mut state, 2, 2); // Make 4
+        }
+
+        // Only 1 unique point made
+        assert_eq!(state.made_points_mask.count_ones(), 1);
+        assert_eq!(state.made_points_mask, 0b000001);
+
+        // Seven-out should lose Fire bet (need 4+ unique points)
+        process_roll(&mut state, 2, 2); // Establish 4
+        let results = process_roll(&mut state, 3, 4); // 7 out
+        assert_eq!(results[0].return_amount, 0, "Repeated single point should lose");
+    }
+
+    #[test]
+    fn test_fire_bet_reverse_order_points() {
+        // Test making points in reverse order (10, 9, 8, 6, 5, 4) still works.
+        let mut state = CrapsState {
+            phase: Phase::ComeOut,
+            main_point: 0,
+            d1: 0,
+            d2: 0,
+            made_points_mask: 0,
+            epoch_point_established: false,
+            field_paytable: FieldPaytable::default(),
+            bets: vec![CrapsBet {
+                bet_type: BetType::Fire,
+                target: 0,
+                status: BetStatus::On,
+                amount: 1,
+                odds_amount: 0,
+            }],
+        };
+
+        // Make all 6 points in reverse order
+        for (d1, d2) in [
+            (5, 5), (5, 5), // 10
+            (4, 5), (4, 5), // 9
+            (4, 4), (4, 4), // 8
+            (3, 3), (3, 3), // 6
+            (2, 3), (2, 3), // 5
+            (2, 2), (2, 2), // 4
+        ] {
+            process_roll(&mut state, d1, d2);
+        }
+
+        assert_eq!(state.made_points_mask, 0b111111, "All 6 points made in reverse order");
+
+        // Establish and seven-out
+        process_roll(&mut state, 4, 5); // Establish 9
+        let results = process_roll(&mut state, 3, 4); // 7 out
+
+        // 1 * (999 + 1) = 1000
+        assert_eq!(results[0].return_amount, 1_000, "Reverse order should still pay 999:1");
+    }
+
+    #[test]
+    fn test_fire_bet_partial_payouts_all_tiers() {
+        // Test payout amounts for each tier: 4 points (24:1), 5 points (249:1), 6 points (999:1).
+        // Also verify 0-3 points pay nothing.
+
+        // Helper function to run Fire bet scenario
+        fn run_fire_bet_with_points(points_to_make: &[(u8, u8)], bet_amount: u64) -> u64 {
+            let mut state = CrapsState {
+                phase: Phase::ComeOut,
+                main_point: 0,
+                d1: 0,
+                d2: 0,
+                made_points_mask: 0,
+                epoch_point_established: false,
+                field_paytable: FieldPaytable::default(),
+                bets: vec![CrapsBet {
+                    bet_type: BetType::Fire,
+                    target: 0,
+                    status: BetStatus::On,
+                    amount: bet_amount,
+                    odds_amount: 0,
+                }],
+            };
+
+            // Establish and make each point
+            for &(d1, d2) in points_to_make {
+                process_roll(&mut state, d1, d2);
+                process_roll(&mut state, d1, d2);
+            }
+
+            // Establish a point and seven-out
+            process_roll(&mut state, 4, 5); // Establish 9
+            let results = process_roll(&mut state, 3, 4); // 7 out
+            results[0].return_amount
+        }
+
+        // 0 points (lose)
+        let result = run_fire_bet_with_points(&[], 10);
+        assert_eq!(result, 0, "0 points should lose");
+
+        // 1 point (lose)
+        let result = run_fire_bet_with_points(&[(2, 2)], 10); // Point 4 only
+        assert_eq!(result, 0, "1 point should lose");
+
+        // 2 points (lose)
+        let result = run_fire_bet_with_points(&[(2, 2), (2, 3)], 10); // Points 4, 5
+        assert_eq!(result, 0, "2 points should lose");
+
+        // 3 points (lose)
+        let result = run_fire_bet_with_points(&[(2, 2), (2, 3), (3, 3)], 10); // Points 4, 5, 6
+        assert_eq!(result, 0, "3 points should lose");
+
+        // 4 points (24:1)
+        let result = run_fire_bet_with_points(&[(2, 2), (2, 3), (3, 3), (4, 4)], 10);
+        assert_eq!(result, 250, "4 points should pay 24:1 (10 * 25)");
+
+        // 5 points (249:1)
+        let result = run_fire_bet_with_points(&[(2, 2), (2, 3), (3, 3), (4, 4), (5, 5)], 10);
+        assert_eq!(result, 2500, "5 points should pay 249:1 (10 * 250)");
+
+        // 6 points (999:1)
+        let result = run_fire_bet_with_points(&[(2, 2), (2, 3), (3, 3), (4, 4), (4, 5), (5, 5)], 10);
+        assert_eq!(result, 10_000, "6 points should pay 999:1 (10 * 1000)");
+    }
+
+    #[test]
+    fn test_fire_bet_large_amounts() {
+        // Test Fire bet with large bet amounts to verify no overflow issues.
+        let mut state = CrapsState {
+            phase: Phase::ComeOut,
+            main_point: 0,
+            d1: 0,
+            d2: 0,
+            made_points_mask: 0,
+            epoch_point_established: false,
+            field_paytable: FieldPaytable::default(),
+            bets: vec![CrapsBet {
+                bet_type: BetType::Fire,
+                target: 0,
+                status: BetStatus::On,
+                amount: 1_000_000, // 1 million
+                odds_amount: 0,
+            }],
+        };
+
+        // Make all 6 points
+        for (d1, d2) in [
+            (2, 2), (2, 2), // 4
+            (2, 3), (2, 3), // 5
+            (3, 3), (3, 3), // 6
+            (4, 4), (4, 4), // 8
+            (4, 5), (4, 5), // 9
+            (5, 5), (5, 5), // 10
+        ] {
+            process_roll(&mut state, d1, d2);
+        }
+
+        // Establish and seven-out
+        process_roll(&mut state, 4, 5); // Establish 9
+        let results = process_roll(&mut state, 3, 4); // 7 out
+
+        // 1,000,000 * 1000 = 1,000,000,000 (1 billion) - within u64 range
+        assert_eq!(results[0].return_amount, 1_000_000_000, "Large bet with 6 points");
+    }
+
+    #[test]
+    fn test_point_to_fire_bit_mapping() {
+        // Directly test the point_to_fire_bit function to ensure correct bit mapping.
+        assert_eq!(point_to_fire_bit(4), Some(0), "Point 4 -> bit 0");
+        assert_eq!(point_to_fire_bit(5), Some(1), "Point 5 -> bit 1");
+        assert_eq!(point_to_fire_bit(6), Some(2), "Point 6 -> bit 2");
+        assert_eq!(point_to_fire_bit(8), Some(3), "Point 8 -> bit 3");
+        assert_eq!(point_to_fire_bit(9), Some(4), "Point 9 -> bit 4");
+        assert_eq!(point_to_fire_bit(10), Some(5), "Point 10 -> bit 5");
+
+        // Non-point numbers return None
+        assert_eq!(point_to_fire_bit(2), None, "2 is not a point");
+        assert_eq!(point_to_fire_bit(3), None, "3 is not a point");
+        assert_eq!(point_to_fire_bit(7), None, "7 is not a point");
+        assert_eq!(point_to_fire_bit(11), None, "11 is not a point");
+        assert_eq!(point_to_fire_bit(12), None, "12 is not a point");
     }
 }
