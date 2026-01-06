@@ -784,3 +784,23 @@ Target: Testnet Production
   - Critical game actions (bets) can be silently lost if queue overflows - UI should use `droppedMessage` to warn users
 
 ---
+
+## 2026-01-06 - US-038: Add WebSocket message timeout tests
+
+- What was implemented:
+  - Added 5 tests in `message timeout on reconnect` describe block
+  - Tests cover all acceptance criteria for MESSAGE_TIMEOUT_MS (30s) filtering
+  - Verified stale game actions (hit/stand/double) don't replay after long outage
+  - Verified mixed valid/expired messages handled correctly
+  - Verified 30-second outage drops ALL queued actions
+- Files changed:
+  - `mobile/src/services/__tests__/websocket.test.tsx` - Added 5 tests in message timeout on reconnect describe block
+- **Learnings:**
+  - `MESSAGE_TIMEOUT_MS = 30000` (30 seconds) is the cutoff for message expiration
+  - Filtering happens in onopen handler: `now - item.timestamp < MESSAGE_TIMEOUT_MS`
+  - expiredMessages array is created alongside validMessages for notification purposes
+  - Only the LAST expired message is set in droppedMessage to avoid spam
+  - Pattern: Test time-sensitive behavior by advancing fake timers between message sends
+  - Critical safety: Stale game actions expiring prevents unexpected replays after reconnect
+
+---

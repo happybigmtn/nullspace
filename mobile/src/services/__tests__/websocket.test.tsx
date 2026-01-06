@@ -718,6 +718,277 @@ describe('useWebSocket', () => {
     });
   });
 
+  describe('message timeout on reconnect', () => {
+    it('filters messages older than 30s on reconnect and only sends valid ones', () => {
+      jest.spyOn(console, 'log').mockImplementation(() => {});
+      jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      act(() => {
+        TestRenderer.create(<HookProbe url="ws://example.test" />);
+      });
+
+      const state = snapshots.at(-1);
+
+      // Queue 3 messages
+      act(() => {
+        state?.send({ type: 'bet', id: 1, amount: 100 });
+      });
+      act(() => {
+        state?.send({ type: 'bet', id: 2, amount: 200 });
+      });
+      act(() => {
+        state?.send({ type: 'bet', id: 3, amount: 300 });
+      });
+
+      // Advance time past MESSAGE_TIMEOUT_MS (30s)
+      act(() => {
+        jest.advanceTimersByTime(31000);
+      });
+
+      // Queue one more message (this one is fresh)
+      act(() => {
+        state?.send({ type: 'bet', id: 4, amount: 400 });
+      });
+
+      // Connect - should only send message 4, others expired
+      const socket = MockWebSocket.instances[0];
+      act(() => {
+        socket.readyState = MockWebSocket.OPEN;
+        socket.onopen?.();
+      });
+
+      // Only the fresh message (id: 4) should be sent
+      expect(socket.send).toHaveBeenCalledTimes(1);
+      expect(JSON.parse(socket.send.mock.calls[0][0] as string)).toEqual({
+        type: 'bet',
+        id: 4,
+        amount: 400,
+      });
+
+      expect(console.warn).toHaveBeenCalledWith(
+        '[WebSocket] 3 queued message(s) expired (older than 30s)'
+      );
+    });
+
+    it('handles mix of valid and expired messages correctly', () => {
+      jest.spyOn(console, 'log').mockImplementation(() => {});
+      jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      act(() => {
+        TestRenderer.create(<HookProbe url="ws://example.test" />);
+      });
+
+      const state = snapshots.at(-1);
+
+      // Queue first batch of messages
+      act(() => {
+        state?.send({ type: 'old_msg', seq: 1 });
+      });
+      act(() => {
+        state?.send({ type: 'old_msg', seq: 2 });
+      });
+
+      // Wait 20 seconds (not expired yet)
+      act(() => {
+        jest.advanceTimersByTime(20000);
+      });
+
+      // Queue second batch
+      act(() => {
+        state?.send({ type: 'new_msg', seq: 3 });
+      });
+      act(() => {
+        state?.send({ type: 'new_msg', seq: 4 });
+      });
+
+      // Wait another 15 seconds (first batch now > 30s, second batch at 15s)
+      act(() => {
+        jest.advanceTimersByTime(15000);
+      });
+
+      // Connect
+      const socket = MockWebSocket.instances[0];
+      act(() => {
+        socket.readyState = MockWebSocket.OPEN;
+        socket.onopen?.();
+      });
+
+      // Only messages 3 and 4 should be sent (valid), messages 1 and 2 expired
+      expect(socket.send).toHaveBeenCalledTimes(2);
+
+      const sentMessages = socket.send.mock.calls.map(
+        (call) => JSON.parse(call[0] as string).seq
+      );
+      expect(sentMessages).toEqual([3, 4]);
+
+      expect(console.warn).toHaveBeenCalledWith(
+        '[WebSocket] 2 queued message(s) expired (older than 30s)'
+      );
+    });
+
+    it('prevents stale game actions from replaying', () => {
+      jest.spyOn(console, 'log').mockImplementation(() => {});
+      jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      act(() => {
+        TestRenderer.create(<HookProbe url="ws://example.test" />);
+      });
+
+      const socket = MockWebSocket.instances[0];
+
+      // Connect first
+      act(() => {
+        socket.readyState = MockWebSocket.OPEN;
+        socket.onopen?.();
+      });
+
+      // Disconnect
+      act(() => {
+        socket.readyState = MockWebSocket.CLOSED;
+        socket.onclose?.({ wasClean: false, code: 1006, reason: 'disconnect' });
+      });
+
+      const state = snapshots.at(-1);
+      expect(state?.connectionState).toBe('disconnected');
+
+      // Queue game actions during outage
+      act(() => {
+        state?.send({ type: 'game_action', action: 'hit' });
+      });
+      act(() => {
+        state?.send({ type: 'game_action', action: 'stand' });
+      });
+      act(() => {
+        state?.send({ type: 'game_action', action: 'double' });
+      });
+
+      // Long outage (35 seconds) - all actions should expire
+      act(() => {
+        jest.advanceTimersByTime(35000);
+      });
+
+      // Reconnect
+      const newSocket = MockWebSocket.instances.at(-1);
+      act(() => {
+        newSocket!.readyState = MockWebSocket.OPEN;
+        newSocket?.onopen?.();
+      });
+
+      // NO stale game actions should replay
+      expect(newSocket?.send).not.toHaveBeenCalled();
+
+      // droppedMessage should indicate expiration
+      const finalState = snapshots.at(-1);
+      expect(finalState?.droppedMessage?.reason).toBe('expired');
+    });
+
+    it('drops all queued actions after 30-second outage', () => {
+      jest.spyOn(console, 'log').mockImplementation(() => {});
+      jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      act(() => {
+        TestRenderer.create(<HookProbe url="ws://example.test" />);
+      });
+
+      const state = snapshots.at(-1);
+
+      // Queue many different action types
+      act(() => {
+        state?.send({ type: 'bet', amount: 100 });
+      });
+      act(() => {
+        state?.send({ type: 'game_action', action: 'hit' });
+      });
+      act(() => {
+        state?.send({ type: 'chat', message: 'hello' });
+      });
+      act(() => {
+        state?.send({ type: 'ping' });
+      });
+      act(() => {
+        state?.send({ type: 'request_faucet' });
+      });
+
+      // 30-second outage
+      act(() => {
+        jest.advanceTimersByTime(30001);
+      });
+
+      // Connect
+      const socket = MockWebSocket.instances[0];
+      act(() => {
+        socket.readyState = MockWebSocket.OPEN;
+        socket.onopen?.();
+      });
+
+      // ALL messages should be dropped (none sent)
+      expect(socket.send).not.toHaveBeenCalled();
+
+      expect(console.warn).toHaveBeenCalledWith(
+        '[WebSocket] 5 queued message(s) expired (older than 30s)'
+      );
+
+      // droppedMessage should be the last queued message
+      const finalState = snapshots.at(-1);
+      expect(finalState?.droppedMessage).toEqual({
+        message: { type: 'request_faucet' },
+        reason: 'expired',
+      });
+    });
+
+    it('logs flushed messages count excluding expired ones', () => {
+      jest.spyOn(console, 'log').mockImplementation(() => {});
+      jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      act(() => {
+        TestRenderer.create(<HookProbe url="ws://example.test" />);
+      });
+
+      const state = snapshots.at(-1);
+
+      // Queue 2 messages
+      act(() => {
+        state?.send({ type: 'expired', seq: 1 });
+      });
+      act(() => {
+        state?.send({ type: 'expired', seq: 2 });
+      });
+
+      // Age the first two
+      act(() => {
+        jest.advanceTimersByTime(25000);
+      });
+
+      // Queue 3 more fresh messages
+      act(() => {
+        state?.send({ type: 'fresh', seq: 3 });
+      });
+      act(() => {
+        state?.send({ type: 'fresh', seq: 4 });
+      });
+      act(() => {
+        state?.send({ type: 'fresh', seq: 5 });
+      });
+
+      // Age past 30s for first batch only
+      act(() => {
+        jest.advanceTimersByTime(6000);
+      });
+
+      // Connect
+      const socket = MockWebSocket.instances[0];
+      act(() => {
+        socket.readyState = MockWebSocket.OPEN;
+        socket.onopen?.();
+      });
+
+      // Should log flush with correct count (3 valid, 2 expired)
+      expect(console.log).toHaveBeenCalledWith(
+        '[WebSocket] Flushing 3 queued messages (2 expired)'
+      );
+    });
+  });
+
   describe('UI feedback for max attempts', () => {
     it('provides reconnectAttempt and maxReconnectAttempts for UI display', () => {
       jest.spyOn(console, 'log').mockImplementation(() => {});

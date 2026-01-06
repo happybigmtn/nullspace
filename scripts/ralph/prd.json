@@ -374,8 +374,8 @@
 				"Verify 30-second outage drops all queued actions"
 			],
 			"priority": 29,
-			"passes": false,
-			"notes": "CRITICAL GAP: websocket.ts:108-128 - MESSAGE_TIMEOUT_MS (30s) filtering on queue flush never tested."
+			"passes": true,
+			"notes": "FIXED: Added 5 tests in 'message timeout on reconnect' describe block. Tests verify: (1) messages >30s filtered and only fresh ones sent, (2) mix of valid/expired handled with correct counts, (3) stale game actions (hit/stand/double) don't replay after long outage, (4) 30s outage drops ALL queued actions (bets, game actions, faucet requests), (5) flush logging shows correct valid/expired counts."
 		},
 		{
 			"id": "US-039",
