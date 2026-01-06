@@ -98,3 +98,23 @@ Target: Testnet Production
   - `VITE_IDENTITY` is a 192-char hex keypair used by `WasmWrapper` for crypto operations
 
 ---
+
+## 2026-01-06 - US-004: Add security headers to website nginx.conf
+
+- What was implemented:
+  - Added Content-Security-Policy to both nginx.conf (dev) and nginx.ssl.conf (prod)
+  - CSP allows: 'self', 'wasm-unsafe-eval', Google Fonts, WebSocket connections
+  - Added X-Content-Type-Options: nosniff, X-Frame-Options: DENY, Referrer-Policy
+  - HSTS was already in nginx.ssl.conf (max-age=31536000; includeSubDomains; preload)
+  - Added Cache-Control headers for static assets with "immutable" for fingerprinted files
+- Files changed:
+  - `website/nginx.conf` - Added all security headers + cache control
+  - `website/nginx.ssl.conf` - Added CSP header + cache control sections
+- **Learnings:**
+  - `'wasm-unsafe-eval'` is the modern CSP directive for WebAssembly (replaces `'unsafe-eval'`)
+  - Vite fingerprints JS/CSS in `/assets/` dir, enabling `immutable` caching (1 year)
+  - Dev nginx.conf uses `ws:` in connect-src while prod uses only `wss:` for security
+  - nginx `add_header` in location blocks doesn't inherit from parent - must repeat X-Content-Type-Options
+  - Google Fonts requires whitelisting both fonts.googleapis.com (CSS) and fonts.gstatic.com (WOFF2 files)
+
+---

@@ -52,8 +52,8 @@
 				"Add Cache-Control headers for static assets"
 			],
 			"priority": 4,
-			"passes": false,
-			"notes": "CRITICAL: Agent found website/nginx.conf missing all security headers"
+			"passes": true,
+			"notes": "COMPLETED: Added CSP with wasm-unsafe-eval, Google Fonts whitelist, WebSocket support. Added HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy to both nginx.conf (dev) and nginx.ssl.conf (prod). Cache-Control with immutable for fingerprinted assets."
 		},
 		{
 			"id": "US-005",
