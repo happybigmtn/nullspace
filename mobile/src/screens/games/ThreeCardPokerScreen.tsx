@@ -3,7 +3,7 @@
  * Ante/Play with optional Pair Plus side bet
  */
 import { View, Text, StyleSheet, Pressable, InteractionManager } from 'react-native';
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import Animated, { FadeIn, SlideInUp } from 'react-native-reanimated';
 import { Card } from '../../components/casino';
 import { ChipSelector } from '../../components/casino';
@@ -85,6 +85,14 @@ export function ThreeCardPokerScreen() {
   const [showTutorial, setShowTutorial] = useState(false);
   const [activeBetType, setActiveBetType] = useState<'ante' | 'pairplus' | 'sixcard' | 'progressive'>('ante');
 
+  // Track mounted state to prevent setState after unmount
+  const isMounted = useRef(true);
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
   useEffect(() => {
     if (!lastMessage) return;
 
@@ -92,6 +100,7 @@ export function ThreeCardPokerScreen() {
       const stateBytes = decodeStateBytes((lastMessage as { state?: unknown }).state);
       if (!stateBytes) return;
       InteractionManager.runAfterInteractions(() => {
+        if (!isMounted.current) return;
         const parsed = parseThreeCardState(stateBytes);
         if (!parsed) return;
         setState((prev) => ({

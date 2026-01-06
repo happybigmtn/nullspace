@@ -118,3 +118,26 @@ Target: Testnet Production
   - Google Fonts requires whitelisting both fonts.googleapis.com (CSS) and fonts.gstatic.com (WOFF2 files)
 
 ---
+
+## 2026-01-06 - US-005: Fix mobile setState after unmount race
+
+- What was implemented:
+  - Added `isMounted` useRef flag to 6 game screens that use InteractionManager.runAfterInteractions
+  - Cleanup effect sets `isMounted.current = false` on unmount
+  - Guard `if (!isMounted.current) return;` added before setState in InteractionManager callbacks
+  - Verified other 4 screens (Baccarat, Craps, Roulette, SicBo) don't have the issue
+- Files changed:
+  - `mobile/src/screens/games/BlackjackScreen.tsx` - Added isMounted ref + guard
+  - `mobile/src/screens/games/HiLoScreen.tsx` - Added isMounted ref + guard
+  - `mobile/src/screens/games/VideoPokerScreen.tsx` - Added isMounted ref + guard
+  - `mobile/src/screens/games/CasinoWarScreen.tsx` - Added isMounted ref + guard
+  - `mobile/src/screens/games/ThreeCardPokerScreen.tsx` - Added isMounted ref + guard
+  - `mobile/src/screens/games/UltimateTXHoldemScreen.tsx` - Added isMounted ref + guard
+- **Learnings:**
+  - `InteractionManager.runAfterInteractions()` defers work until animations complete - can fire after unmount
+  - Pattern: `const isMounted = useRef(true); useEffect(() => () => { isMounted.current = false }, []);`
+  - Check `isMounted.current` before any setState in deferred callbacks
+  - React Native useRef doesn't cause re-renders - ideal for tracking mount state
+  - Only 6 of 10 game screens used InteractionManager - the others process messages synchronously
+
+---

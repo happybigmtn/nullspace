@@ -3,7 +3,7 @@
  * Hit/Stand always visible, Split/Double contextual
  */
 import { View, Text, StyleSheet, InteractionManager, Pressable } from 'react-native';
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import Animated, { SlideInRight } from 'react-native-reanimated';
 import { Card } from '../../components/casino';
 import { ChipSelector } from '../../components/casino';
@@ -64,6 +64,14 @@ export function BlackjackScreen() {
   const [showTutorial, setShowTutorial] = useState(false);
   const [sideBet21Plus3, setSideBet21Plus3] = useState(0);
 
+  // Track mounted state to prevent setState after unmount
+  const isMounted = useRef(true);
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
   // Wrap chip placement to check game phase
   const handleChipPlace = useCallback((value: ChipValue) => {
     if (state.phase !== 'betting') return;
@@ -78,6 +86,7 @@ export function BlackjackScreen() {
       if (!stateBytes) return;
 
       InteractionManager.runAfterInteractions(() => {
+        if (!isMounted.current) return;
         const parsed = parseBlackjackState(stateBytes);
         if (!parsed) return;
 

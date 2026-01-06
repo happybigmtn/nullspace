@@ -3,7 +3,7 @@
  * Multi-street betting with progressive Play bet options
  */
 import { View, Text, StyleSheet, ScrollView, InteractionManager, Pressable } from 'react-native';
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import Animated, { FadeIn, SlideInUp, SlideInDown } from 'react-native-reanimated';
 import { Card } from '../../components/casino';
 import { ChipSelector } from '../../components/casino';
@@ -103,6 +103,14 @@ export function UltimateTXHoldemScreen() {
   const [activeBetType, setActiveBetType] = useState<'main' | 'trips' | 'sixcard' | 'progressive'>('main');
   const [showTutorial, setShowTutorial] = useState(false);
 
+  // Track mounted state to prevent setState after unmount
+  const isMounted = useRef(true);
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
   useEffect(() => {
     if (!lastMessage) return;
 
@@ -110,6 +118,7 @@ export function UltimateTXHoldemScreen() {
       const stateBytes = decodeStateBytes((lastMessage as { state?: unknown }).state);
       if (!stateBytes) return;
       InteractionManager.runAfterInteractions(() => {
+        if (!isMounted.current) return;
         const parsed = parseUltimateHoldemState(stateBytes);
         if (!parsed) return;
         setState((prev) => ({

@@ -3,7 +3,7 @@
  * Simple binary choice: Higher or Lower
  */
 import { View, Text, StyleSheet, InteractionManager } from 'react-native';
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import Animated, { FadeIn, SlideInUp } from 'react-native-reanimated';
 import { Card } from '../../components/casino';
 import { ChipSelector } from '../../components/casino';
@@ -53,6 +53,14 @@ export function HiLoScreen() {
   });
   const [showTutorial, setShowTutorial] = useState(false);
 
+  // Track mounted state to prevent setState after unmount
+  const isMounted = useRef(true);
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
   // Wrap chip placement to check game phase
   const handleChipPlace = useCallback((value: ChipValue) => {
     if (state.phase !== 'betting') return;
@@ -68,6 +76,7 @@ export function HiLoScreen() {
       if (!stateBytes) return;
 
       InteractionManager.runAfterInteractions(() => {
+        if (!isMounted.current) return;
         const parsed = parseHiLoState(stateBytes);
         if (!parsed?.currentCard) return;
         setState((prev) => ({

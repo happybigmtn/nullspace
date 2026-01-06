@@ -3,7 +3,7 @@
  * Simplest card game - just deal and optional war
  */
 import { View, Text, StyleSheet, InteractionManager } from 'react-native';
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import Animated, { SlideInLeft, SlideInRight } from 'react-native-reanimated';
 import { Card } from '../../components/casino';
 import { ChipSelector } from '../../components/casino';
@@ -57,6 +57,14 @@ export function CasinoWarScreen() {
   });
   const [showTutorial, setShowTutorial] = useState(false);
 
+  // Track mounted state to prevent setState after unmount
+  const isMounted = useRef(true);
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
   // Wrap chip placement to check game phase
   const handleChipPlace = useCallback((value: ChipValue) => {
     if (state.phase !== 'betting') return;
@@ -73,6 +81,7 @@ export function CasinoWarScreen() {
     if (lastMessage.type === 'game_started' || lastMessage.type === 'game_move') {
       if (parsedState) {
         InteractionManager.runAfterInteractions(() => {
+          if (!isMounted.current) return;
           setState((prev) => {
             const nextPhase =
               parsedState.stage === 'war'

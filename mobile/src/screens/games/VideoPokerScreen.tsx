@@ -3,7 +3,7 @@
  * 5 card draw with hold selection, pay table modal
  */
 import { View, Text, StyleSheet, Pressable, Modal, InteractionManager } from 'react-native';
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { Card } from '../../components/casino';
 import { ChipSelector } from '../../components/casino';
@@ -84,6 +84,14 @@ export function VideoPokerScreen() {
 
   useModalBackHandler(showPayTable, () => setShowPayTable(false));
 
+  // Track mounted state to prevent setState after unmount
+  const isMounted = useRef(true);
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
   // Wrap chip placement to check game phase
   const handleChipPlace = useCallback((value: ChipValue) => {
     if (state.phase !== 'betting') return;
@@ -97,6 +105,7 @@ export function VideoPokerScreen() {
       const stateBytes = decodeStateBytes((lastMessage as { state?: unknown }).state);
       if (!stateBytes) return;
       InteractionManager.runAfterInteractions(() => {
+        if (!isMounted.current) return;
         const parsed = parseVideoPokerState(stateBytes);
         if (!parsed) return;
         setState((prev) => ({
