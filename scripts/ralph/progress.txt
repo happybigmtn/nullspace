@@ -1002,3 +1002,46 @@ Target: Testnet Production
   - Test coverage includes: odd amounts, even amounts, 3-card hands, tie/loss scenarios, non-6 wins
 
 ---
+
+## 2026-01-06 - US-048: Add Dragon Bonus margin loss tests
+
+- What was implemented:
+  - Added 4 comprehensive tests for Dragon Bonus margin-based payouts in baccarat.rs
+  - `test_dragon_bonus_margin_loss_small_margins`: 6 scenarios testing Player and Banker Dragon Bonus losing when side wins by 1-3 points (non-natural)
+  - `test_dragon_bonus_natural_wins_always_pay`: 5 scenarios proving natural wins (8 or 9 with 2 cards) always pay 1:1 regardless of margin
+  - `test_dragon_bonus_all_margin_values`: Full payout table verification for margins 1-9
+  - `test_dragon_bonus_loss_when_side_loses`: 3 scenarios for side loss and non-natural tie
+- Files changed:
+  - `execution/src/casino/baccarat.rs` - Added 4 tests after existing test_dragon_bonus_margin_payouts (181 lines)
+- **Learnings:**
+  - Dragon Bonus is margin-based, not just win/lose - this is counterintuitive for players
+  - Non-natural wins by 1-3 points LOSE the Dragon Bonus (margins < 4 return 0 multiplier)
+  - Natural wins (8 or 9 with exactly 2 cards) always pay 1:1 regardless of margin
+  - Payout table: margin 4=1:1, 5=2:1, 6=4:1, 7=6:1, 8=10:1, 9=30:1
+  - Pattern: `make_outcome(player_total, banker_total, ..., player_cards_len, banker_cards_len)` controls natural detection
+  - Natural detection: `cards_len == 2 && (total == 8 || total == 9)`
+  - Test assertions should include descriptive message for debugging: `assert_eq!(payout, -100, "Win by 1 should lose")`
+
+---
+
+## 2026-01-06 - US-049: Add atomic batch overflow tests
+
+- What was implemented:
+  - Added 10 new tests for Baccarat atomic batch overflow handling
+  - Tests cover: u64 wager sum overflow, duplicate bet merge overflow, cumulative overflow with multiple bets
+  - Tests verify boundary conditions: exactly u64::MAX accepted, u64::MAX+1 rejected
+  - Tests document i64 conversion bug: bets > i64::MAX cause panic in debug mode
+  - Added `#[should_panic]` test to document the existing overflow bug
+- Files changed:
+  - `execution/src/casino/baccarat.rs` - Added 10 tests in "Atomic Batch Overflow Tests (US-049)" section
+- **Learnings:**
+  - `checked_add` on lines 908-910 and 916-919 properly rejects u64 overflow in total_wager
+  - **BUG FOUND**: `-(bet.amount as i64)` at lines 360, 367, 374, 383, etc. panics when amount > i64::MAX
+  - The bug occurs because `u64 as i64` wraps to negative, then `-` negation of i64::MIN overflows
+  - Workaround: Limit bet amounts to i64::MAX in upstream validation (gateway/mobile)
+  - Fix needed: Use `i64::try_from(bet.amount).map_err(|_| GameError::InvalidPayload)?` instead of cast
+  - `saturating_mul` (line 358, 365, etc.) correctly handles win multiplier overflow
+  - `saturating_add` on net_payout (line 983) correctly bounds accumulated payouts
+  - Test pattern: Use `#[should_panic(expected = "...")]` to document known bugs pending fix
+
+---

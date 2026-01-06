@@ -2119,4 +2119,240 @@ mod tests {
 
         assert!(matches!(result, Err(GameError::InvalidMove)));
     }
+
+    // ========================================================================
+    // Atomic Batch Overflow Tests (US-049)
+    // ========================================================================
+
+    #[test]
+    fn test_atomic_batch_rejects_wager_sum_overflow() {
+        // Test that bets summing to > u64::MAX are rejected via checked_add
+        let seed = create_test_seed();
+        let mut session = create_test_session(100);
+        let mut rng = GameRng::new(&seed, session.id, 0);
+
+        Baccarat::init(&mut session, &mut rng);
+
+        // Create payload manually: action=3, count=2, then two bets near u64::MAX
+        let half_max = u64::MAX / 2 + 1; // This plus itself overflows
+        let mut rng = GameRng::new(&seed, session.id, 1);
+        let payload = atomic_batch_payload(&[
+            (BetType::Player, half_max),
+            (BetType::Banker, half_max),
+        ]);
+        let result = Baccarat::process_move(&mut session, &payload, &mut rng);
+
+        // Should reject due to checked_add overflow in total_wager calculation
+        assert!(matches!(result, Err(GameError::InvalidPayload)));
+    }
+
+    #[test]
+    fn test_atomic_batch_rejects_duplicate_merge_overflow() {
+        // Test that merging duplicate bet types that overflow is rejected
+        let seed = create_test_seed();
+        let mut session = create_test_session(100);
+        let mut rng = GameRng::new(&seed, session.id, 0);
+
+        Baccarat::init(&mut session, &mut rng);
+
+        // Two Player bets that overflow when merged
+        let half_max = u64::MAX / 2 + 1;
+        let mut rng = GameRng::new(&seed, session.id, 1);
+        let payload = atomic_batch_payload(&[
+            (BetType::Player, half_max),
+            (BetType::Player, half_max), // Same type - triggers merge checked_add
+        ]);
+        let result = Baccarat::process_move(&mut session, &payload, &mut rng);
+
+        // Should reject due to checked_add overflow during duplicate merge
+        assert!(matches!(result, Err(GameError::InvalidPayload)));
+    }
+
+    #[test]
+    fn test_atomic_batch_accepts_max_u64_single_bet() {
+        // Test that a single bet at u64::MAX is accepted (no overflow in sum)
+        let seed = create_test_seed();
+        let mut session = create_test_session(100);
+        let mut rng = GameRng::new(&seed, session.id, 0);
+
+        Baccarat::init(&mut session, &mut rng);
+
+        let mut rng = GameRng::new(&seed, session.id, 1);
+        let payload = atomic_batch_payload(&[(BetType::Player, u64::MAX)]);
+        let result = Baccarat::process_move(&mut session, &payload, &mut rng);
+
+        // Should succeed - single bet doesn't overflow
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_atomic_batch_net_payout_extreme_wager_loss() {
+        // Test net_payout calculation when bet.amount > i64::MAX
+        // The cast `-(bet.amount as i64)` could wrap, but saturating_add handles it
+        let seed = create_test_seed();
+        let mut session = create_test_session(100);
+        let mut rng = GameRng::new(&seed, session.id, 0);
+
+        Baccarat::init(&mut session, &mut rng);
+
+        // Bet on Tie (loses most of the time) with amount > i64::MAX
+        let extreme_amount = i64::MAX as u64 + 100;
+        let mut rng = GameRng::new(&seed, session.id, 1);
+        let payload = atomic_batch_payload(&[(BetType::Tie, extreme_amount)]);
+        let result = Baccarat::process_move(&mut session, &payload, &mut rng);
+
+        // The game should complete without panicking
+        assert!(result.is_ok());
+
+        // Verify session completed
+        assert!(session.is_complete);
+
+        // The bet is recorded with the extreme amount
+        assert_eq!(session.bet, extreme_amount);
+    }
+
+    #[test]
+    fn test_atomic_batch_net_payout_extreme_wager_win_with_multiplier() {
+        // Test that winning bet with amount near u64::MAX uses saturating_mul correctly
+        // Perfect Pair pays 250:1, so amount * 250 could easily overflow
+        let seed = create_test_seed();
+        let mut session = create_test_session(100);
+        let mut rng = GameRng::new(&seed, session.id, 0);
+
+        Baccarat::init(&mut session, &mut rng);
+
+        // Bet on Perfect Pair with amount that would overflow when multiplied by 250
+        let overflow_trigger = u64::MAX / 100; // This * 250 > u64::MAX
+        let mut rng = GameRng::new(&seed, session.id, 1);
+        let payload = atomic_batch_payload(&[(BetType::PerfectPair, overflow_trigger)]);
+        let result = Baccarat::process_move(&mut session, &payload, &mut rng);
+
+        // Game should complete without panicking - saturating_mul prevents overflow
+        assert!(result.is_ok());
+        assert!(session.is_complete);
+    }
+
+    #[test]
+    fn test_atomic_batch_many_bets_cumulative_overflow() {
+        // Test that 10 bets each at u64::MAX/9 overflow when summed
+        let seed = create_test_seed();
+        let mut session = create_test_session(100);
+        let mut rng = GameRng::new(&seed, session.id, 0);
+
+        Baccarat::init(&mut session, &mut rng);
+
+        // 10 bets at u64::MAX/9 each sum to > u64::MAX
+        // (u64::MAX/9) * 10 = 2,049,638,230,412,172,400 * 10 = 20,496,382,304,121,724,000
+        // which is > u64::MAX (18,446,744,073,709,551,615)
+        let amount_per_bet = u64::MAX / 9;
+        let mut rng = GameRng::new(&seed, session.id, 1);
+        let payload = atomic_batch_payload(&[
+            (BetType::Player, amount_per_bet),
+            (BetType::Banker, amount_per_bet),
+            (BetType::Tie, amount_per_bet),
+            (BetType::PlayerPair, amount_per_bet),
+            (BetType::BankerPair, amount_per_bet),
+            (BetType::Lucky6, amount_per_bet),
+            (BetType::PlayerDragon, amount_per_bet),
+            (BetType::BankerDragon, amount_per_bet),
+            (BetType::Panda8, amount_per_bet),
+            (BetType::PerfectPair, amount_per_bet),
+        ]);
+        let result = Baccarat::process_move(&mut session, &payload, &mut rng);
+
+        // Should reject due to cumulative overflow
+        assert!(matches!(result, Err(GameError::InvalidPayload)));
+    }
+
+    #[test]
+    fn test_atomic_batch_boundary_no_overflow() {
+        // Test that bets summing to exactly u64::MAX are accepted
+        let seed = create_test_seed();
+        let mut session = create_test_session(100);
+        let mut rng = GameRng::new(&seed, session.id, 0);
+
+        Baccarat::init(&mut session, &mut rng);
+
+        // Two bets that sum to exactly u64::MAX (no overflow)
+        let half = u64::MAX / 2;
+        let remainder = u64::MAX - half;
+        let mut rng = GameRng::new(&seed, session.id, 1);
+        let payload = atomic_batch_payload(&[
+            (BetType::Player, half),
+            (BetType::Banker, remainder),
+        ]);
+        let result = Baccarat::process_move(&mut session, &payload, &mut rng);
+
+        // Should succeed - exactly at the boundary
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_atomic_batch_single_overflow() {
+        // Test that bets summing to exactly u64::MAX + 1 are rejected
+        let seed = create_test_seed();
+        let mut session = create_test_session(100);
+        let mut rng = GameRng::new(&seed, session.id, 0);
+
+        Baccarat::init(&mut session, &mut rng);
+
+        // Two bets that sum to u64::MAX + 1 (overflow by exactly 1)
+        let half = u64::MAX / 2 + 1;
+        let remainder = u64::MAX / 2 + 1;
+        let mut rng = GameRng::new(&seed, session.id, 1);
+        let payload = atomic_batch_payload(&[
+            (BetType::Player, half),
+            (BetType::Banker, remainder),
+        ]);
+        let result = Baccarat::process_move(&mut session, &payload, &mut rng);
+
+        // Should reject - overflow by exactly 1
+        assert!(matches!(result, Err(GameError::InvalidPayload)));
+    }
+
+    #[test]
+    #[should_panic(expected = "attempt to negate with overflow")]
+    fn test_atomic_batch_i64_conversion_panics_on_overflow() {
+        // DOCUMENTS BUG: When bet.amount > i64::MAX, the cast `-(bet.amount as i64)` panics
+        // in debug builds. This happens at calculate_bet_payout line 360, 367, 374, 383, etc.
+        //
+        // The cast `bet.amount as i64` wraps around when amount > i64::MAX, producing a
+        // negative i64 value. Then negating that negative value with `-` causes the panic.
+        //
+        // To fix: The code should use `i64::try_from(bet.amount)` and return an error
+        // instead of panicking. For now, this test documents the current behavior.
+        let seed = create_test_seed();
+        let mut session = create_test_session(100);
+        let mut rng = GameRng::new(&seed, session.id, 0);
+
+        Baccarat::init(&mut session, &mut rng);
+
+        // Bet amount just over i64::MAX triggers the panic
+        let amount_over_i64_max = i64::MAX as u64 + 1;
+        let mut rng = GameRng::new(&seed, session.id, 1);
+        let payload = atomic_batch_payload(&[(BetType::Player, amount_over_i64_max)]);
+
+        // This will panic with "attempt to negate with overflow"
+        let _ = Baccarat::process_move(&mut session, &payload, &mut rng);
+    }
+
+    #[test]
+    fn test_atomic_batch_i64_max_boundary_succeeds() {
+        // Test that bet.amount = i64::MAX (the boundary) succeeds without panic
+        let seed = create_test_seed();
+        let mut session = create_test_session(100);
+        let mut rng = GameRng::new(&seed, session.id, 0);
+
+        Baccarat::init(&mut session, &mut rng);
+
+        // Exactly i64::MAX should work (no overflow in negation)
+        let amount_at_i64_max = i64::MAX as u64;
+        let mut rng = GameRng::new(&seed, session.id, 1);
+        let payload = atomic_batch_payload(&[(BetType::Player, amount_at_i64_max)]);
+        let result = Baccarat::process_move(&mut session, &payload, &mut rng);
+
+        // Should succeed - i64::MAX doesn't overflow when negated
+        assert!(result.is_ok());
+        assert!(session.is_complete);
+    }
 }

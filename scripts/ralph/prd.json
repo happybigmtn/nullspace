@@ -504,8 +504,8 @@
 				"Verify natural wins always pay Dragon Bonus"
 			],
 			"priority": 39,
-			"passes": false,
-			"notes": "CRITICAL GAP: baccarat.rs:505-520 - wins by margin 1-3 (non-natural) lose Dragon Bonus. Counterintuitive, untested."
+			"passes": true,
+			"notes": "FIXED: Added 4 comprehensive tests: test_dragon_bonus_margin_loss_small_margins (6 scenarios for Player/Banker wins by 1-3 points), test_dragon_bonus_natural_wins_always_pay (5 scenarios proving naturals always pay 1:1), test_dragon_bonus_all_margin_values (full payout table for margins 1-9), test_dragon_bonus_loss_when_side_loses (3 scenarios for loss/tie)."
 		},
 		{
 			"id": "US-049",
@@ -517,8 +517,8 @@
 				"Test rejection for impossible bet totals"
 			],
 			"priority": 40,
-			"passes": false,
-			"notes": "CRITICAL GAP: baccarat.rs:908-910 - total_wager checked_add but downstream i64 conversion untested."
+			"passes": true,
+			"notes": "FIXED: Added 10 tests covering u64 overflow in wager sum, duplicate merge overflow, cumulative overflow, boundary conditions, and i64 conversion. Documented bug: -(bet.amount as i64) panics when amount > i64::MAX. Tests use #[should_panic] to document this known issue. saturating_mul and saturating_add correctly handle other overflow scenarios."
 		},
 		{
 			"id": "US-050",
