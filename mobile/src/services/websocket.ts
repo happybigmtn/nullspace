@@ -21,11 +21,19 @@ export interface WebSocketManager<T = GameMessage> {
   lastMessage: T | null;
   send: (message: object) => boolean;
   reconnect: () => void;
+  isReconnecting: boolean;
 }
 
 const MAX_RECONNECT_ATTEMPTS = 10;
 const MAX_RECONNECT_DELAY_MS = 30000;
 const BASE_RECONNECT_DELAY_MS = 1000;
+const MAX_QUEUE_SIZE = 50;
+const MESSAGE_TIMEOUT_MS = 30000; // 30 seconds
+
+interface QueuedMessage {
+  message: object;
+  timestamp: number;
+}
 
 /**
  * WebSocket hook with automatic reconnection and type-safe messages
@@ -40,8 +48,31 @@ export function useWebSocket<T extends GameMessage = GameMessage>(
   const [reconnectAttempt, setReconnectAttempt] = useState(0);
   const reconnectAttemptsRef = useRef(0);
   const reconnectTimeoutId = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const messageQueueRef = useRef<QueuedMessage[]>([]);
+  // Track if we're currently in the process of connecting to prevent double-reconnect races
+  const isReconnectingRef = useRef(false);
 
   const connect = useCallback(() => {
+    // Prevent double-reconnect races
+    if (isReconnectingRef.current) {
+      if (__DEV__) {
+        console.log('[WebSocket] Already reconnecting, skipping duplicate connect()');
+      }
+      return;
+    }
+    isReconnectingRef.current = true;
+
+    // Security: Enforce wss:// in production
+    if (!__DEV__ && !url.startsWith('wss://')) {
+      const error = new Error(
+        `Production requires secure WebSocket (wss://). Got: ${url}`
+      );
+      console.error('[WebSocket Security]', error.message);
+      setConnectionState('failed');
+      isReconnectingRef.current = false;
+      throw error;
+    }
+
     // Clear any pending reconnect
     if (reconnectTimeoutId.current) {
       clearTimeout(reconnectTimeoutId.current);
@@ -60,14 +91,38 @@ export function useWebSocket<T extends GameMessage = GameMessage>(
     } catch (error) {
       console.error('Failed to create WebSocket:', error);
       setConnectionState('failed');
+      isReconnectingRef.current = false;
       return;
     }
 
     ws.current.onopen = () => {
+      isReconnectingRef.current = false;
       setIsConnected(true);
       setConnectionState('connected');
       reconnectAttemptsRef.current = 0;
       setReconnectAttempt(0);
+
+      // Flush queued messages
+      const now = Date.now();
+      const validMessages = messageQueueRef.current.filter(
+        (item) => now - item.timestamp < MESSAGE_TIMEOUT_MS
+      );
+
+      if (validMessages.length > 0) {
+        console.log(
+          `[WebSocket] Flushing ${validMessages.length} queued messages (${messageQueueRef.current.length - validMessages.length} expired)`
+        );
+        for (const item of validMessages) {
+          try {
+            ws.current?.send(JSON.stringify(item.message));
+          } catch (error) {
+            console.error('[WebSocket] Failed to send queued message:', error);
+          }
+        }
+      }
+
+      // Clear the queue
+      messageQueueRef.current = [];
     };
 
     ws.current.onmessage = (event) => {
@@ -95,16 +150,20 @@ export function useWebSocket<T extends GameMessage = GameMessage>(
     };
 
     ws.current.onclose = (event) => {
+      // Clear reconnecting flag so subsequent attempts can proceed
+      isReconnectingRef.current = false;
       setIsConnected(false);
 
       // Don't reconnect if it was a clean close
       if (event.wasClean) {
         setConnectionState('disconnected');
-        console.warn('WebSocket closed cleanly', {
-          url,
-          code: event.code,
-          reason: event.reason,
-        });
+        if (__DEV__) {
+          console.log('WebSocket closed cleanly', {
+            url,
+            code: event.code,
+            reason: event.reason,
+          });
+        }
         return;
       }
 
@@ -133,21 +192,44 @@ export function useWebSocket<T extends GameMessage = GameMessage>(
         connect();
       }, delay);
 
-      console.warn('WebSocket disconnected, scheduling reconnect', {
-        url,
-        code: event.code,
-        reason: event.reason,
-        attempt: reconnectAttemptsRef.current + 1,
-        delay,
-      });
+      if (__DEV__) {
+        console.log('WebSocket disconnected, scheduling reconnect', {
+          url,
+          code: event.code,
+          reason: event.reason,
+          attempt: reconnectAttemptsRef.current + 1,
+          delay,
+        });
+      }
     };
   }, [url]);
 
   const send = useCallback((message: object): boolean => {
     if (ws.current?.readyState !== WebSocket.OPEN) {
-      console.warn('WebSocket not connected, message not sent');
+      // Queue message if we're connecting (will be flushed on reconnect)
+      if (connectionState === 'connecting' || connectionState === 'disconnected') {
+        if (messageQueueRef.current.length >= MAX_QUEUE_SIZE) {
+          console.warn(
+            `[WebSocket] Message queue full (${MAX_QUEUE_SIZE}), dropping oldest message`
+          );
+          messageQueueRef.current.shift(); // Remove oldest message
+        }
+
+        messageQueueRef.current.push({
+          message,
+          timestamp: Date.now(),
+        });
+
+        console.log(
+          `[WebSocket] Message queued (${messageQueueRef.current.length}/${MAX_QUEUE_SIZE})`
+        );
+        return true; // Return true since message is queued
+      }
+
+      console.warn('[WebSocket] Not connected and not reconnecting, message dropped');
       return false;
     }
+
     try {
       ws.current.send(JSON.stringify(message));
       return true;
@@ -155,7 +237,7 @@ export function useWebSocket<T extends GameMessage = GameMessage>(
       console.error('Failed to send WebSocket message:', error);
       return false;
     }
-  }, []);
+  }, [connectionState]);
 
   const reconnect = useCallback(() => {
     reconnectAttemptsRef.current = 0;
@@ -181,6 +263,7 @@ export function useWebSocket<T extends GameMessage = GameMessage>(
     send,
     lastMessage,
     reconnect,
+    isReconnecting: isReconnectingRef.current,
   };
 }
 
