@@ -1242,7 +1242,7 @@ mod tests {
 
         // Target: ~2.7x expected (down from 3.1x)
         println!("Baccarat avg mult: {:.2}x", avg);
-        assert!(avg >= 2.4 && avg <= 3.0,
+        assert!((2.4..=3.0).contains(&avg),
                 "Baccarat avg {:.2}x outside target range [2.4, 3.0]", avg);
     }
 
@@ -1253,7 +1253,7 @@ mod tests {
 
         // Target: ~2.6x expected (RTP-adjusted)
         println!("Blackjack avg mult: {:.2}x", avg);
-        assert!(avg >= 2.3 && avg <= 3.0,
+        assert!((2.3..=3.0).contains(&avg),
                 "Blackjack avg {:.2}x outside target range [2.3, 3.0]", avg);
     }
 
@@ -1264,7 +1264,7 @@ mod tests {
 
         // Target: ~90x expected (down from ~140x)
         println!("Roulette avg mult: {:.2}x", avg);
-        assert!(avg >= 70.0 && avg <= 120.0,
+        assert!((70.0..=120.0).contains(&avg),
                 "Roulette avg {:.2}x outside target range [70, 120]", avg);
     }
 
@@ -1275,7 +1275,7 @@ mod tests {
 
         // Target: ~4x expected (RTP-adjusted)
         println!("Craps avg mult: {:.2}x", avg);
-        assert!(avg >= 3.0 && avg <= 6.0,
+        assert!((3.0..=6.0).contains(&avg),
                 "Craps avg {:.2}x outside target range [3.0, 6.0]", avg);
     }
 
@@ -1286,7 +1286,7 @@ mod tests {
 
         // Target: ~10x expected (RTP-adjusted)
         println!("Sic Bo avg mult: {:.2}x", avg);
-        assert!(avg >= 6.0 && avg <= 15.0,
+        assert!((6.0..=15.0).contains(&avg),
                 "Sic Bo avg {:.2}x outside target range [6.0, 15.0]", avg);
     }
 
@@ -1320,7 +1320,8 @@ mod tests {
         let rounds = 100_000u64;
 
         // Test all generators
-        let games: [(&str, fn(&mut GameRng) -> Vec<SuperMultiplier>); 5] = [
+        type GameGenerator = fn(&mut GameRng) -> Vec<SuperMultiplier>;
+        let games: [(&str, GameGenerator); 5] = [
             ("Baccarat", generate_baccarat_multipliers),
             ("Blackjack", generate_blackjack_multipliers),
             ("Roulette", generate_roulette_multipliers),
@@ -1342,5 +1343,291 @@ mod tests {
         }
 
         println!("\n============================================================\n");
+    }
+
+    // ==========================================================================
+    // Super Mode Stacking Overflow Tests (US-050)
+    // ==========================================================================
+    //
+    // These tests verify the behavior of multiplicative stacking when high
+    // multipliers could cause u64 overflow. The apply_super_multiplier_cards()
+    // function uses saturating_mul which prevents panics but may produce
+    // clamped results.
+
+    #[test]
+    fn test_super_stacking_multiple_8x_multipliers() {
+        // Test 4x 8x multipliers stacking: 8^4 = 4,096x
+        let multipliers = vec![
+            SuperMultiplier { id: 0, multiplier: 8, super_type: SuperType::Card },
+            SuperMultiplier { id: 1, multiplier: 8, super_type: SuperType::Card },
+            SuperMultiplier { id: 2, multiplier: 8, super_type: SuperType::Card },
+            SuperMultiplier { id: 3, multiplier: 8, super_type: SuperType::Card },
+        ];
+
+        // All 4 cards match, base payout 1000
+        let payout = apply_super_multiplier_cards(&[0, 1, 2, 3], &multipliers, 1_000);
+        assert_eq!(payout, 4_096_000, "8^4 * 1000 = 4,096,000");
+
+        // 5x 8x multipliers: 8^5 = 32,768x (max Baccarat scenario per docs)
+        let mults5 = vec![
+            SuperMultiplier { id: 0, multiplier: 8, super_type: SuperType::Card },
+            SuperMultiplier { id: 1, multiplier: 8, super_type: SuperType::Card },
+            SuperMultiplier { id: 2, multiplier: 8, super_type: SuperType::Card },
+            SuperMultiplier { id: 3, multiplier: 8, super_type: SuperType::Card },
+            SuperMultiplier { id: 4, multiplier: 8, super_type: SuperType::Card },
+        ];
+        let payout5 = apply_super_multiplier_cards(&[0, 1, 2, 3, 4], &mults5, 1_000);
+        assert_eq!(payout5, 32_768_000, "8^5 * 1000 = 32,768,000");
+    }
+
+    #[test]
+    fn test_super_stacking_extreme_payouts_with_high_base() {
+        // Test high base payout with multiple multipliers
+        // Max table bet might be 100,000 with 5x 8x multipliers = 3.2 billion (fits in u64)
+        let multipliers = vec![
+            SuperMultiplier { id: 0, multiplier: 8, super_type: SuperType::Card },
+            SuperMultiplier { id: 1, multiplier: 8, super_type: SuperType::Card },
+            SuperMultiplier { id: 2, multiplier: 8, super_type: SuperType::Card },
+            SuperMultiplier { id: 3, multiplier: 8, super_type: SuperType::Card },
+            SuperMultiplier { id: 4, multiplier: 8, super_type: SuperType::Card },
+        ];
+
+        let high_base = 100_000u64;
+        let payout = apply_super_multiplier_cards(&[0, 1, 2, 3, 4], &multipliers, high_base);
+        assert_eq!(payout, 3_276_800_000, "8^5 * 100,000 = 3.2768 billion");
+
+        // Even higher: 1 million base (still fits: 32.768 billion)
+        let very_high_base = 1_000_000u64;
+        let payout_big = apply_super_multiplier_cards(&[0, 1, 2, 3, 4], &multipliers, very_high_base);
+        assert_eq!(payout_big, 32_768_000_000, "8^5 * 1,000,000 = 32.768 billion");
+    }
+
+    #[test]
+    fn test_super_stacking_saturating_mul_at_boundary() {
+        // Create scenario that hits saturating_mul boundary
+        // u64::MAX = 18,446,744,073,709,551,615
+        // With multiplier stacking: total_mult can grow very large
+        // Test that saturating_mul prevents panic but correctly saturates
+
+        let huge_multipliers = vec![
+            SuperMultiplier { id: 0, multiplier: u16::MAX, super_type: SuperType::Card }, // 65535
+            SuperMultiplier { id: 1, multiplier: u16::MAX, super_type: SuperType::Card }, // 65535
+            SuperMultiplier { id: 2, multiplier: u16::MAX, super_type: SuperType::Card }, // 65535
+        ];
+
+        // 65535^3 = 281,462,092,005,375 (fits in u64)
+        // With base 100, result = 28,146,209,200,537,500 (still fits)
+        let payout = apply_super_multiplier_cards(&[0, 1, 2], &huge_multipliers, 100);
+        let expected = 65535u64 * 65535u64 * 65535u64 * 100u64;
+        assert_eq!(payout, expected, "65535^3 * 100 should compute correctly");
+    }
+
+    #[test]
+    fn test_super_stacking_saturates_at_u64_max() {
+        // Force saturation by using impossibly high multipliers
+        // Note: SuperMultiplier.multiplier is u16, max 65535
+        // 4x u16::MAX = 65535^4 = 18,445,618,173,802,708,225 (close to u64::MAX)
+        // With any base > 1, this will saturate
+
+        let max_multipliers = vec![
+            SuperMultiplier { id: 0, multiplier: u16::MAX, super_type: SuperType::Card },
+            SuperMultiplier { id: 1, multiplier: u16::MAX, super_type: SuperType::Card },
+            SuperMultiplier { id: 2, multiplier: u16::MAX, super_type: SuperType::Card },
+            SuperMultiplier { id: 3, multiplier: u16::MAX, super_type: SuperType::Card },
+        ];
+
+        // This will overflow: 65535^4 * base = overflow
+        let payout = apply_super_multiplier_cards(&[0, 1, 2, 3], &max_multipliers, 1);
+        // 65535^4 = 18,445,618,173,802,708,225 which is < u64::MAX, so no saturation yet
+        let expected = 65535u64.pow(4);
+        assert_eq!(payout, expected, "65535^4 * 1 should fit in u64");
+
+        // Now with base 2, we exceed u64::MAX
+        let payout_overflow = apply_super_multiplier_cards(&[0, 1, 2, 3], &max_multipliers, 2);
+        // 65535^4 * 2 = 36,891,236,347,605,416,450 > u64::MAX = 18,446,744,073,709,551,615
+        // saturating_mul should clamp to u64::MAX
+        assert_eq!(payout_overflow, u64::MAX, "65535^4 * 2 should saturate to u64::MAX");
+    }
+
+    #[test]
+    fn test_super_stacking_logs_warning_on_saturation() {
+        // Document: currently no logging when saturation occurs
+        // This is a gap - large payouts silently clamp to u64::MAX
+        // In production, this could cause incorrect payouts
+
+        // Create saturation scenario
+        let max_multipliers = vec![
+            SuperMultiplier { id: 0, multiplier: u16::MAX, super_type: SuperType::Card },
+            SuperMultiplier { id: 1, multiplier: u16::MAX, super_type: SuperType::Card },
+            SuperMultiplier { id: 2, multiplier: u16::MAX, super_type: SuperType::Card },
+            SuperMultiplier { id: 3, multiplier: u16::MAX, super_type: SuperType::Card },
+        ];
+
+        // This SHOULD log a warning but currently doesn't
+        // The function uses saturating_mul which silently clamps
+        let result = apply_super_multiplier_cards(&[0, 1, 2, 3], &max_multipliers, 1_000_000);
+
+        // Document: result is clamped, no warning logged
+        assert_eq!(result, u64::MAX, "Saturation should occur with extreme multipliers");
+
+        // TODO: Add eprintln! or log::warn! when saturation detected:
+        // if total_mult == u64::MAX || result == u64::MAX {
+        //     eprintln!("WARNING: Super mode payout saturated to u64::MAX");
+        // }
+    }
+
+    #[test]
+    fn test_super_stacking_4_matching_cards_realistic_scenario() {
+        // Realistic Baccarat scenario: 4 Aura cards in winning hand
+        // Per docs: 3-5 Aura Cards with multipliers 2-8x
+
+        // Best case: 4 cards with 8x each = 4096x
+        let multipliers = vec![
+            SuperMultiplier { id: 10, multiplier: 8, super_type: SuperType::Card },
+            SuperMultiplier { id: 20, multiplier: 8, super_type: SuperType::Card },
+            SuperMultiplier { id: 30, multiplier: 8, super_type: SuperType::Card },
+            SuperMultiplier { id: 40, multiplier: 8, super_type: SuperType::Card },
+        ];
+
+        // Player wins with all 4 cards in hand (unlikely but possible in Baccarat)
+        let base = 10_000u64;
+        let payout = apply_super_multiplier_cards(&[10, 20, 30, 40], &multipliers, base);
+        assert_eq!(payout, 40_960_000, "4x 8x multipliers with $10K bet = $40.96M");
+
+        // Verify this doesn't overflow
+        assert!(payout < u64::MAX, "Realistic scenario should not saturate");
+    }
+
+    #[test]
+    fn test_super_stacking_intermediate_overflow() {
+        // Test that intermediate overflow in total_mult is handled
+        // even before applying to base_payout
+
+        // Create scenario where total_mult overflows before base multiplication
+        let huge_mults = vec![
+            SuperMultiplier { id: 0, multiplier: u16::MAX, super_type: SuperType::Card },
+            SuperMultiplier { id: 1, multiplier: u16::MAX, super_type: SuperType::Card },
+            SuperMultiplier { id: 2, multiplier: u16::MAX, super_type: SuperType::Card },
+            SuperMultiplier { id: 3, multiplier: u16::MAX, super_type: SuperType::Card },
+            SuperMultiplier { id: 4, multiplier: u16::MAX, super_type: SuperType::Card },
+        ];
+
+        // 65535^5 = far exceeds u64::MAX (1.21e24 vs 1.84e19)
+        // Intermediate total_mult will saturate during stacking
+        let payout = apply_super_multiplier_cards(&[0, 1, 2, 3, 4], &huge_mults, 1);
+
+        // Due to saturating_mul, total_mult caps at u64::MAX
+        // Then base_payout.saturating_mul(u64::MAX) for base=1 returns u64::MAX
+        assert_eq!(payout, u64::MAX, "5x u16::MAX should saturate intermediate total_mult");
+    }
+
+    #[test]
+    fn test_super_stacking_partial_match_no_overflow() {
+        // Only some cards match multipliers - verify stacking is selective
+
+        let multipliers = vec![
+            SuperMultiplier { id: 0, multiplier: 8, super_type: SuperType::Card },
+            SuperMultiplier { id: 1, multiplier: 8, super_type: SuperType::Card },
+            SuperMultiplier { id: 2, multiplier: 8, super_type: SuperType::Card },
+            SuperMultiplier { id: 3, multiplier: 8, super_type: SuperType::Card },
+        ];
+
+        // Only 2 of 4 cards match
+        let payout = apply_super_multiplier_cards(&[0, 1, 50, 51], &multipliers, 1_000);
+        assert_eq!(payout, 64_000, "2x 8x = 64x = $64K");
+
+        // Only 1 card matches
+        let payout1 = apply_super_multiplier_cards(&[0, 50, 51, 49], &multipliers, 1_000);
+        assert_eq!(payout1, 8_000, "1x 8x = 8x = $8K");
+
+        // No cards match
+        let payout0 = apply_super_multiplier_cards(&[50, 51, 49, 48], &multipliers, 1_000);
+        assert_eq!(payout0, 1_000, "No match = 1x = $1K");
+    }
+
+    #[test]
+    fn test_super_stacking_rank_type_multipliers() {
+        // Test rank-based multipliers (any suit matches)
+        // This allows more matches than card-based
+
+        let multipliers = vec![
+            SuperMultiplier { id: 0, multiplier: 8, super_type: SuperType::Rank },  // Aces
+            SuperMultiplier { id: 12, multiplier: 8, super_type: SuperType::Rank }, // Kings
+        ];
+
+        // Ace of spades (0) + Ace of hearts (13) + King of spades (12) + King of hearts (25)
+        // All 4 match rank multipliers: 8^4 = 4096x
+        let payout = apply_super_multiplier_cards(&[0, 13, 12, 25], &multipliers, 1_000);
+        assert_eq!(payout, 4_096_000, "4 rank matches with 8x each = 4096x");
+    }
+
+    #[test]
+    fn test_super_stacking_suit_type_multipliers() {
+        // Test suit-based multipliers (13 cards per suit)
+
+        let multipliers = vec![
+            SuperMultiplier { id: 0, multiplier: 4, super_type: SuperType::Suit }, // Spades (cards 0-12)
+            SuperMultiplier { id: 1, multiplier: 4, super_type: SuperType::Suit }, // Hearts (cards 13-25)
+        ];
+
+        // 3 spades + 2 hearts = 5 matches = 4^5 = 1024x
+        let cards = [0, 5, 10, 13, 20]; // 3 spades, 2 hearts
+        let payout = apply_super_multiplier_cards(&cards, &multipliers, 1_000);
+        assert_eq!(payout, 1_024_000, "5 suit matches with 4x each = 1024x");
+    }
+
+    #[test]
+    fn test_video_poker_mega_multiplier_count_stacking() {
+        // Video Poker uses count-based multipliers, not stacking
+        // Verify the count-based system doesn't have overflow issues
+
+        let multipliers = vec![
+            SuperMultiplier { id: 0, multiplier: 1, super_type: SuperType::Card },
+            SuperMultiplier { id: 1, multiplier: 1, super_type: SuperType::Card },
+            SuperMultiplier { id: 2, multiplier: 1, super_type: SuperType::Card },
+            SuperMultiplier { id: 3, multiplier: 1, super_type: SuperType::Card },
+        ];
+
+        // 4 Mega Cards in hand (max): 500x (RTP-adjusted from 1000x)
+        let payout = apply_video_poker_mega_multiplier(&[0, 1, 2, 3, 4], &multipliers, 1_000_000, false);
+        assert_eq!(payout, 500_000_000, "4 Mega Cards = 500x = $500M");
+
+        // Royal Flush with Mega: 500x (RTP-adjusted)
+        let royal = apply_video_poker_mega_multiplier(&[0, 1, 2, 3, 4], &multipliers, 4_000, true);
+        assert_eq!(royal, 2_000_000, "Royal with Mega = 500x = $2M");
+    }
+
+    #[test]
+    fn test_hilo_ace_bonus_stacking_with_high_streak() {
+        // HiLo: streak 10 = 120x, Ace bonus = 2x, total = 240x
+        // Verify this doesn't overflow with reasonable base
+
+        let base = 10_000_000_000u64; // 10 billion (high but realistic)
+        let payout = apply_hilo_streak_multiplier(base, 10, true);
+
+        // Expected: base * 1200 * 2 / 10 = base * 240
+        // Uses saturating_mul internally so should handle correctly
+        let mult = 1200u64 * 2; // 2400 (10x stored + ace bonus)
+        let expected = base.saturating_mul(mult) / 10;
+        assert_eq!(payout, expected, "HiLo max streak with ace should calculate correctly");
+        assert!(payout > base, "HiLo payout should exceed base");
+        assert_eq!(payout, 2_400_000_000_000, "10B * 240 = 2.4 trillion");
+    }
+
+    #[test]
+    fn test_hilo_streak_saturation_at_extreme_base() {
+        // Test HiLo with extreme base that could cause saturation
+        // The function uses saturating_mul internally
+
+        // Use base that when multiplied by max streak mult (1200*2=2400) / 10 = 240x
+        // would approach u64::MAX
+        let extreme_base = u64::MAX / 300; // ~61 quadrillion
+        let payout = apply_hilo_streak_multiplier(extreme_base, 10, true);
+
+        // saturating_mul should handle this without panic
+        // The exact behavior depends on order of operations in apply_hilo_streak_multiplier
+        // which does: base * (mult * 2) / 10 = base * 2400 / 10
+        // With saturating_mul: base.saturating_mul(2400) / 10
+        assert!(payout >= extreme_base, "Even with saturation, payout should be >= base");
     }
 }

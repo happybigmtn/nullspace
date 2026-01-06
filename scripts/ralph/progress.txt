@@ -1045,3 +1045,30 @@ Target: Testnet Production
   - Test pattern: Use `#[should_panic(expected = "...")]` to document known bugs pending fix
 
 ---
+
+## 2026-01-06 - US-050: Add Super Mode stacking overflow tests
+
+- What was implemented:
+  - Added 13 tests to super_mode.rs covering multiplicative stacking overflow scenarios
+  - Tests verify 4x and 5x 8x multipliers stacking correctly (4096x and 32768x)
+  - Tests verify high base payouts (up to 1 million) with 5x 8x multipliers = 32.768 billion
+  - Tests verify saturating_mul boundary behavior with u16::MAX multipliers (65535)
+  - Tests verify saturation at u64::MAX with 4x u16::MAX multipliers * base > 1
+  - Tests verify intermediate overflow when total_mult exceeds u64::MAX before base multiplication
+  - Tests verify partial matches (0-4 cards matching) calculate correctly
+  - Tests verify rank-based and suit-based multiplier types
+  - Tests verify Video Poker count-based multiplier system (not stacking)
+  - Tests verify HiLo streak multipliers with ace bonus
+- Files changed:
+  - `execution/src/casino/super_mode.rs` - Added 13 tests in "Super Mode Stacking Overflow Tests (US-050)" section
+- **Learnings:**
+  - `apply_super_multiplier_cards()` uses multiplicative stacking: `total_mult = total_mult.saturating_mul(m.multiplier)`
+  - `SuperMultiplier.multiplier` is `u16`, max value 65535
+  - 65535^4 = 18,445,618,173,802,708,225 which is LESS than u64::MAX (18,446,744,073,709,551,615)
+  - 65535^4 * 2 exceeds u64::MAX, causing saturation via `saturating_mul`
+  - **WARNING GAP**: No logging when saturation occurs - extreme payouts silently clamp to u64::MAX
+  - Realistic scenarios (8x multipliers, max 5 cards) produce up to 32,768x which is safe even with $1M base
+  - Video Poker uses count-based multipliers (1-4 Mega Cards = different multipliers), not stacking
+  - HiLo uses streak-based multipliers stored as x10 for fractional values (13 = 1.3x)
+
+---
