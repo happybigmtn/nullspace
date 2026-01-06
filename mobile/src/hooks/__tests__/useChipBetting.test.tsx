@@ -132,4 +132,102 @@ describe('useChipBetting', () => {
     expect(onBetChange).toHaveBeenCalledWith(0);
     unmount();
   });
+
+  it('rejects chip when cumulative bet would exceed balance', () => {
+    // Balance of 50, try to place two 25 chips then a third
+    useGameStore.setState({ balance: 50 });
+    const { getResult, unmount } = renderHook(() => useChipBetting());
+
+    // First chip should succeed
+    let ok = false;
+    act(() => {
+      ok = getResult().placeChip(25);
+    });
+    expect(ok).toBe(true);
+    expect(getResult().bet).toBe(25);
+
+    // Second chip should succeed (25 + 25 = 50 = balance)
+    act(() => {
+      ok = getResult().placeChip(25);
+    });
+    expect(ok).toBe(true);
+    expect(getResult().bet).toBe(50);
+
+    // Third chip should fail (50 + 25 = 75 > 50)
+    act(() => {
+      ok = getResult().placeChip(25);
+    });
+    expect(ok).toBe(false);
+    expect(getResult().bet).toBe(50); // unchanged
+    expect(haptics.error).toHaveBeenCalled();
+    unmount();
+  });
+
+  it('rejects all chips when balance is zero', () => {
+    useGameStore.setState({ balance: 0 });
+    const { getResult, unmount } = renderHook(() => useChipBetting());
+
+    // Even $1 chip should be rejected
+    let ok = true;
+    act(() => {
+      ok = getResult().placeChip(1);
+    });
+    expect(ok).toBe(false);
+    expect(getResult().bet).toBe(0);
+    expect(haptics.error).toHaveBeenCalledTimes(1);
+
+    // $25 chip also rejected
+    act(() => {
+      ok = getResult().placeChip(25);
+    });
+    expect(ok).toBe(false);
+    expect(getResult().bet).toBe(0);
+    expect(haptics.error).toHaveBeenCalledTimes(2);
+    unmount();
+  });
+
+  it('uses fresh balance from getState() not stale closure', () => {
+    // Start with balance of 100
+    useGameStore.setState({ balance: 100 });
+    const { getResult, unmount } = renderHook(() => useChipBetting());
+
+    // Place 50, should succeed
+    let ok = false;
+    act(() => {
+      ok = getResult().placeChip(50);
+    });
+    expect(ok).toBe(true);
+    expect(getResult().bet).toBe(50);
+
+    // Simulate balance update (e.g., server adjusted balance down)
+    // This mimics what happens when another transaction consumes balance
+    act(() => {
+      useGameStore.setState({ balance: 60 });
+    });
+
+    // Try to place another 50, should fail (50 + 50 = 100 > new balance 60)
+    act(() => {
+      ok = getResult().placeChip(50);
+    });
+    expect(ok).toBe(false);
+    expect(getResult().bet).toBe(50); // unchanged
+    expect(haptics.error).toHaveBeenCalled();
+    unmount();
+  });
+
+  it('reports balance correctly from store', () => {
+    useGameStore.setState({ balance: 500 });
+    const { getResult, unmount } = renderHook(() => useChipBetting());
+
+    expect(getResult().balance).toBe(500);
+
+    // Update store balance
+    act(() => {
+      useGameStore.setState({ balance: 250 });
+    });
+
+    // Hook should reflect updated balance
+    expect(getResult().balance).toBe(250);
+    unmount();
+  });
 });

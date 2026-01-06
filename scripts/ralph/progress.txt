@@ -574,3 +574,22 @@ Target: Testnet Production
   - Running full test suite with `npx tsx tests/integration/runTests.ts` (not ts-node)
 
 ---
+
+## 2026-01-06 - US-028: Add chip betting balance validation tests
+
+- What was implemented:
+  - Added 4 new tests to `useChipBetting.test.tsx` (total now 8 tests)
+  - Test: cumulative bet exceeding balance is rejected (place 2x25, then 3rd fails at balance=50)
+  - Test: zero balance rejects all chip placements with `haptics.error()`
+  - Test: fresh balance via `getState()` detects mid-betting balance updates
+  - Test: balance correctly reflects store state changes
+- Files changed:
+  - `mobile/src/hooks/__tests__/useChipBetting.test.tsx` - Added 4 new balance validation tests
+- **Learnings:**
+  - Existing tests already covered basic over-balance rejection and `haptics.error()` calls
+  - The gap was edge cases: cumulative bets, zero balance, and fresh balance validation
+  - `useGameStore.getState().balance` in the hook ensures fresh value, not stale closure
+  - Zustand `setState` inside tests must be wrapped in `act()` to avoid React warnings
+  - UI disabled state is effectively tested through `placeChip()` returning `false` + `haptics.error()` trigger
+
+---

@@ -102,8 +102,8 @@
 				"Use real useChipBetting hook with controlled gameStore"
 			],
 			"priority": 8,
-			"passes": false,
-			"notes": "VERIFIED GAP: mockUseChipBetting always returns placeChip: true. Over-betting scenarios never tested."
+			"passes": true,
+			"notes": "FIXED: Added 4 new tests to useChipBetting.test.tsx: (1) cumulative bet exceeding balance rejected, (2) zero balance rejects all chips with haptics.error, (3) fresh balance from getState() catches mid-betting balance updates, (4) balance correctly reflects store changes. Total 8 tests cover all validation scenarios. UI disabled state tested via acceptance criteria 1-2 (placeChip returns false + haptics.error triggers)."
 		},
 		{
 			"id": "US-029",
