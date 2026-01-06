@@ -1072,3 +1072,26 @@ Target: Testnet Production
   - HiLo uses streak-based multipliers stored as x10 for fractional values (13 = 1.3x)
 
 ---
+
+## 2026-01-06 - US-051: Add Lucky Ladies dealer blackjack tests
+
+- What was implemented:
+  - Added 6 comprehensive tests for Lucky Ladies side bet covering dealer blackjack scenarios
+  - `test_lucky_ladies_queen_hearts_dealer_blackjack_200_to_1`: Tests the highest payout (200:1) with and without dealer BJ
+  - `test_lucky_ladies_dealer_blackjack_parameter_passed`: Verifies `is_blackjack()` correctly identifies dealer BJ scenarios
+  - `test_lucky_ladies_all_payout_tiers`: Tests all 5 payout levels (loss, 4:1, 10:1, 25:1, 200:1)
+  - `test_lucky_ladies_200_to_1_triggers_correctly`: Verifies BOTH conditions required (Q♥ pair + dealer BJ)
+  - `test_lucky_ladies_edge_cases`: Tests zero bet, invalid cards (>=52), and large bet amounts
+  - `test_lucky_ladies_integration_with_is_blackjack`: Tests dealer blackjack detection (A+10/J/Q/K, 2 cards only)
+- Files changed:
+  - `execution/src/casino/blackjack.rs` - Added 6 tests in "Lucky Ladies Dealer Blackjack Tests (US-051)" section
+- **Learnings:**
+  - Card encoding: `card = suit * 13 + rank` where suit 0=Spades, 1=Hearts, 2=Diamonds, 3=Clubs
+  - Queen of Hearts = `1*13 + 11 = 24`, Queen of Spades = `0*13 + 11 = 11`
+  - `eval_lucky_ladies_multiplier()` checks: (1) total==20, (2) both cards are queens, (3) both hearts, (4) dealer BJ
+  - 200:1 payout requires ALL conditions: Q♥ pair (card 24 + card 24) AND dealer_blackjack=true
+  - Existing test only covered one scenario with bet=10; new tests cover bet=1, bet=100, bet=1_000_000
+  - `is_blackjack()` requires exactly 2 cards with total 21 (not 3+ cards even if total is 21)
+  - Invalid cards (>=52) return 0 due to check in `resolve_lucky_ladies_return()` line 450-452
+
+---

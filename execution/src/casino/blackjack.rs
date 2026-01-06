@@ -1529,6 +1529,22 @@ mod tests {
     use nullspace_types::casino::SuperModeState;
     use rand::{rngs::StdRng, Rng as _, SeedableRng as _};
 
+    fn base_side_bet_state() -> BlackjackState {
+        BlackjackState {
+            stage: Stage::PlayerTurn,
+            side_bet_21plus3: 0,
+            side_bet_lucky_ladies: 0,
+            side_bet_perfect_pairs: 0,
+            side_bet_bust_it: 0,
+            side_bet_royal_match: 0,
+            initial_player_cards: [CARD_UNKNOWN, CARD_UNKNOWN],
+            active_hand_idx: 0,
+            hands: Vec::new(),
+            dealer_cards: Vec::new(),
+            rules: BlackjackRules::default(),
+        }
+    }
+
     #[test]
     fn test_21plus3_multiplier_table() {
         // Suited trips (three identical cards)
@@ -1563,6 +1579,295 @@ mod tests {
     }
 
     #[test]
+    fn test_21plus3_returns() {
+        let mut state = base_side_bet_state();
+        state.side_bet_21plus3 = 10;
+
+        // Straight flush A-2-3 spades.
+        state.initial_player_cards = [0, 1];
+        state.dealer_cards = vec![2];
+        assert_eq!(resolve_21plus3_return(&state), 410);
+
+        // Non-qualifying hand returns 0.
+        state.initial_player_cards = [0, 13]; // A♠ A♥
+        state.dealer_cards = vec![5]; // 6♠
+        assert_eq!(resolve_21plus3_return(&state), 0);
+    }
+
+    #[test]
+    fn test_royal_match_returns() {
+        let mut state = base_side_bet_state();
+        state.side_bet_royal_match = 10;
+
+        // Suited KQ pays 25:1.
+        state.initial_player_cards = [12, 11]; // K♠ Q♠
+        assert_eq!(resolve_royal_match_return(&state), 260);
+
+        // Suited non-KQ pays 5:1.
+        state.initial_player_cards = [0, 1]; // A♠ 2♠
+        assert_eq!(resolve_royal_match_return(&state), 60);
+
+        // Off-suit pays 0.
+        state.initial_player_cards = [12, 25]; // K♠ Q♥
+        assert_eq!(resolve_royal_match_return(&state), 0);
+    }
+
+    #[test]
+    fn test_lucky_ladies_returns() {
+        let mut state = base_side_bet_state();
+        state.side_bet_lucky_ladies = 10;
+
+        // Total 20 with non-queens pays 4:1.
+        state.initial_player_cards = [9, 22]; // 10 + 10
+        assert_eq!(resolve_lucky_ladies_return(&state, false), 50);
+
+        // Queen pair (non-hearts) pays 10:1.
+        state.initial_player_cards = [11, 50]; // Q spades + Q clubs
+        assert_eq!(resolve_lucky_ladies_return(&state, false), 110);
+
+        // Queen hearts with dealer blackjack pays 200:1.
+        state.initial_player_cards = [24, 24]; // Q hearts
+        assert_eq!(resolve_lucky_ladies_return(&state, true), 2010);
+    }
+
+    // ========================
+    // Lucky Ladies Dealer Blackjack Tests (US-051)
+    // ========================
+
+    #[test]
+    fn test_lucky_ladies_queen_hearts_dealer_blackjack_200_to_1() {
+        // This is the highest payout in Lucky Ladies: 200:1
+        // Requires: player has Queen of Hearts pair AND dealer has blackjack
+        let mut state = base_side_bet_state();
+        state.side_bet_lucky_ladies = 100;
+        state.initial_player_cards = [24, 24]; // Q♥ + Q♥
+
+        // With dealer blackjack: 200:1 payout = 100 * 201 = 20100
+        assert_eq!(
+            resolve_lucky_ladies_return(&state, true),
+            20100,
+            "Queen of Hearts pair with dealer blackjack should pay 200:1"
+        );
+
+        // Without dealer blackjack: 25:1 payout = 100 * 26 = 2600
+        assert_eq!(
+            resolve_lucky_ladies_return(&state, false),
+            2600,
+            "Queen of Hearts pair without dealer blackjack should pay 25:1"
+        );
+    }
+
+    #[test]
+    fn test_lucky_ladies_dealer_blackjack_parameter_passed() {
+        // Verify dealer_blackjack is correctly determined from dealer cards
+        let mut state = base_side_bet_state();
+        state.side_bet_lucky_ladies = 10;
+        state.initial_player_cards = [24, 24]; // Q♥ + Q♥
+
+        // Dealer blackjack: A♠ + 10♠ = 21 with 2 cards
+        state.dealer_cards = vec![0, 9]; // A♠ + 10♠
+        assert!(is_blackjack(&state.dealer_cards));
+
+        // Dealer 20: K♠ + 10♠ (not blackjack)
+        state.dealer_cards = vec![12, 9]; // K♠ + 10♠
+        assert!(!is_blackjack(&state.dealer_cards));
+
+        // Dealer 21 with 3 cards (not blackjack)
+        state.dealer_cards = vec![6, 7, 6]; // 7 + 8 + 6 = 21
+        assert!(!is_blackjack(&state.dealer_cards));
+    }
+
+    #[test]
+    fn test_lucky_ladies_all_payout_tiers() {
+        let mut state = base_side_bet_state();
+        state.side_bet_lucky_ladies = 10;
+
+        // Tier 1: Non-20 total = 0 (loss)
+        state.initial_player_cards = [0, 1]; // A + 2 = 13 (soft) or 3
+        assert_eq!(
+            resolve_lucky_ladies_return(&state, false),
+            0,
+            "Non-20 total should lose"
+        );
+
+        // Tier 2: 20 with non-queens = 4:1
+        state.initial_player_cards = [9, 22]; // 10♠ + 10♥ = 20
+        assert_eq!(
+            resolve_lucky_ladies_return(&state, false),
+            50,
+            "20 with non-queens should pay 4:1"
+        );
+
+        // Also test 20 with K+K
+        state.initial_player_cards = [12, 25]; // K♠ + K♥ = 20
+        assert_eq!(
+            resolve_lucky_ladies_return(&state, false),
+            50,
+            "K+K (20) should pay 4:1"
+        );
+
+        // Tier 3: Queen pair (non-hearts) = 10:1
+        state.initial_player_cards = [11, 50]; // Q♠ + Q♣ = 20
+        assert_eq!(
+            resolve_lucky_ladies_return(&state, false),
+            110,
+            "Queen pair (non-hearts) should pay 10:1"
+        );
+
+        // Test Q♦ + Q♦
+        state.initial_player_cards = [37, 37]; // Q♦ + Q♦
+        assert_eq!(
+            resolve_lucky_ladies_return(&state, false),
+            110,
+            "Q♦ pair should pay 10:1"
+        );
+
+        // Tier 4: Queen of Hearts pair (no dealer BJ) = 25:1
+        state.initial_player_cards = [24, 24]; // Q♥ + Q♥
+        assert_eq!(
+            resolve_lucky_ladies_return(&state, false),
+            260,
+            "Q♥ pair without dealer BJ should pay 25:1"
+        );
+
+        // Tier 5: Queen of Hearts pair + dealer blackjack = 200:1
+        assert_eq!(
+            resolve_lucky_ladies_return(&state, true),
+            2010,
+            "Q♥ pair with dealer BJ should pay 200:1"
+        );
+    }
+
+    #[test]
+    fn test_lucky_ladies_200_to_1_triggers_correctly() {
+        // The 200:1 payout requires BOTH conditions:
+        // 1. Player has Queen of Hearts pair (both cards are Q♥)
+        // 2. Dealer has blackjack (21 with exactly 2 cards)
+
+        let mut state = base_side_bet_state();
+        state.side_bet_lucky_ladies = 1; // Minimum bet to verify multiplier math
+
+        // Case 1: Q♥ + Q♥ with dealer blackjack = 200:1 (201 return on 1 bet)
+        state.initial_player_cards = [24, 24];
+        assert_eq!(
+            resolve_lucky_ladies_return(&state, true),
+            201,
+            "1 unit bet should return 201 (200:1 payout + stake)"
+        );
+
+        // Case 2: Q♥ + Q♠ with dealer blackjack = 10:1 (not both hearts)
+        state.initial_player_cards = [24, 11]; // Q♥ + Q♠
+        assert_eq!(
+            resolve_lucky_ladies_return(&state, true),
+            11,
+            "Mixed queen pair should pay 10:1 even with dealer BJ"
+        );
+
+        // Case 3: Q♥ + Q♥ without dealer blackjack = 25:1
+        state.initial_player_cards = [24, 24];
+        assert_eq!(
+            resolve_lucky_ladies_return(&state, false),
+            26,
+            "Q♥ pair without dealer BJ should pay 25:1"
+        );
+
+        // Case 4: Q♥ + Q♦ with dealer blackjack = 10:1 (not both hearts)
+        state.initial_player_cards = [24, 37]; // Q♥ + Q♦
+        assert_eq!(
+            resolve_lucky_ladies_return(&state, true),
+            11,
+            "Q♥ + Q♦ should pay 10:1 even with dealer BJ"
+        );
+    }
+
+    #[test]
+    fn test_lucky_ladies_edge_cases() {
+        let mut state = base_side_bet_state();
+        state.side_bet_lucky_ladies = 10;
+
+        // Edge: Zero bet returns zero regardless of hand
+        state.side_bet_lucky_ladies = 0;
+        state.initial_player_cards = [24, 24]; // Best possible hand
+        assert_eq!(
+            resolve_lucky_ladies_return(&state, true),
+            0,
+            "Zero bet should return zero"
+        );
+
+        // Edge: Invalid card (>= 52) returns zero
+        state.side_bet_lucky_ladies = 10;
+        state.initial_player_cards = [255, 24]; // Invalid + Q♥
+        assert_eq!(
+            resolve_lucky_ladies_return(&state, true),
+            0,
+            "Invalid card should return zero"
+        );
+
+        // Edge: Large bet amounts work correctly
+        state.side_bet_lucky_ladies = 1_000_000;
+        state.initial_player_cards = [24, 24]; // Q♥ + Q♥
+        // 200:1 = 1_000_000 * 201 = 201_000_000
+        assert_eq!(
+            resolve_lucky_ladies_return(&state, true),
+            201_000_000,
+            "Large bet should calculate correctly"
+        );
+    }
+
+    #[test]
+    fn test_lucky_ladies_integration_with_is_blackjack() {
+        // Test that the is_blackjack function correctly identifies dealer blackjacks
+        // This ensures dealer_blackjack parameter is computed correctly in practice
+
+        // Dealer blackjack scenarios (A + 10-value)
+        assert!(is_blackjack(&[0, 9]), "A♠ + 10♠ should be blackjack");
+        assert!(is_blackjack(&[0, 10]), "A♠ + J♠ should be blackjack");
+        assert!(is_blackjack(&[0, 11]), "A♠ + Q♠ should be blackjack");
+        assert!(is_blackjack(&[0, 12]), "A♠ + K♠ should be blackjack");
+        assert!(is_blackjack(&[13, 22]), "A♥ + 10♥ should be blackjack");
+        assert!(is_blackjack(&[9, 0]), "10♠ + A♠ should be blackjack (reversed)");
+
+        // Not blackjack scenarios
+        assert!(!is_blackjack(&[9, 10]), "10 + J = 20, not blackjack");
+        assert!(!is_blackjack(&[0, 1, 8]), "A + 2 + 9 = 21 with 3 cards, not blackjack");
+        assert!(!is_blackjack(&[0, 0]), "A + A = 12, not blackjack");
+        assert!(!is_blackjack(&[0]), "Single ace, not blackjack");
+        assert!(!is_blackjack(&[]), "Empty hand, not blackjack");
+    }
+
+    #[test]
+    fn test_perfect_pairs_returns() {
+        let mut state = base_side_bet_state();
+        state.side_bet_perfect_pairs = 10;
+
+        // Perfect pair (same suit) pays 25:1.
+        state.initial_player_cards = [0, 0]; // A spades twice
+        assert_eq!(resolve_perfect_pairs_return(&state), 260);
+
+        // Colored pair (same color) pays 10:1.
+        state.initial_player_cards = [0, 39]; // A spades + A clubs
+        assert_eq!(resolve_perfect_pairs_return(&state), 110);
+
+        // Mixed pair pays 5:1.
+        state.initial_player_cards = [0, 13]; // A spades + A hearts
+        assert_eq!(resolve_perfect_pairs_return(&state), 60);
+    }
+
+    #[test]
+    fn test_bust_it_returns_by_bust_size() {
+        let mut state = base_side_bet_state();
+        state.side_bet_bust_it = 10;
+
+        // Dealer busts with 3 cards pays 1:1.
+        state.dealer_cards = vec![9, 22, 35]; // 10 + 10 + 10
+        assert_eq!(resolve_bust_it_return(&state), 20);
+
+        // Dealer busts with 6 cards pays 50:1.
+        state.dealer_cards = vec![9, 22, 35, 48, 10, 23];
+        assert_eq!(resolve_bust_it_return(&state), 510);
+    }
+
+    #[test]
     fn test_split_hand_is_not_natural_blackjack() {
         let hand = HandState {
             cards: vec![0, 9], // A + 10
@@ -1583,11 +1888,16 @@ mod tests {
             was_split: false,
         };
 
-        let mut rules = BlackjackRules::default();
-        rules.blackjack_pays_six_five = true;
+        let rules = BlackjackRules {
+            blackjack_pays_six_five: true,
+            ..Default::default()
+        };
         assert_eq!(resolve_hand_return(bet, &hand, 20, false, rules), 220);
 
-        rules.blackjack_pays_six_five = false;
+        let rules = BlackjackRules {
+            blackjack_pays_six_five: false,
+            ..Default::default()
+        };
         assert_eq!(resolve_hand_return(bet, &hand, 20, false, rules), 250);
     }
 
@@ -1663,8 +1973,10 @@ mod tests {
         let seed = crate::mocks::create_seed(&network_secret, 2);
         let (_, public) = crate::mocks::create_account_keypair(2);
 
-        let mut rules = BlackjackRules::default();
-        rules.resplit_aces = false;
+        let rules = BlackjackRules {
+            resplit_aces: false,
+            ..Default::default()
+        };
         let state = BlackjackState {
             stage: Stage::PlayerTurn,
             side_bet_21plus3: 0,
@@ -1710,8 +2022,10 @@ mod tests {
         let seed = crate::mocks::create_seed(&network_secret, 3);
         let (_, public) = crate::mocks::create_account_keypair(3);
 
-        let mut rules = BlackjackRules::default();
-        rules.hit_split_aces = false;
+        let rules = BlackjackRules {
+            hit_split_aces: false,
+            ..Default::default()
+        };
         let state = BlackjackState {
             stage: Stage::PlayerTurn,
             side_bet_21plus3: 0,
