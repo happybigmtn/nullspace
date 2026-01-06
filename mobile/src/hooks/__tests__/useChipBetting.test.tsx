@@ -39,7 +39,7 @@ jest.mock('../../services/haptics', () => ({
 const initialState = {
   balance: 0,
   balanceReady: false,
-  selectedChip: 25,
+  selectedChip: 25 as const,
   sessionId: null,
   publicKey: null,
   registered: false,
@@ -88,8 +88,12 @@ describe('useChipBetting', () => {
     expect(getResult().bet).toBe(25);
     expect(onBetChange).toHaveBeenCalledWith(25);
 
+    // Place 25 twice to add 50 more (25 + 25 + 25 = 75)
     act(() => {
-      getResult().placeChip(50);
+      getResult().placeChip(25);
+    });
+    act(() => {
+      getResult().placeChip(25);
     });
 
     expect(getResult().bet).toBe(75);
@@ -191,10 +195,13 @@ describe('useChipBetting', () => {
     useGameStore.setState({ balance: 100 });
     const { getResult, unmount } = renderHook(() => useChipBetting());
 
-    // Place 50, should succeed
+    // Place 25 twice = 50, should succeed
     let ok = false;
     act(() => {
-      ok = getResult().placeChip(50);
+      ok = getResult().placeChip(25);
+    });
+    act(() => {
+      ok = getResult().placeChip(25);
     });
     expect(ok).toBe(true);
     expect(getResult().bet).toBe(50);
@@ -205,9 +212,9 @@ describe('useChipBetting', () => {
       useGameStore.setState({ balance: 60 });
     });
 
-    // Try to place another 50, should fail (50 + 50 = 100 > new balance 60)
+    // Try to place another 25, should fail (50 + 25 = 75 > new balance 60)
     act(() => {
-      ok = getResult().placeChip(50);
+      ok = getResult().placeChip(25);
     });
     expect(ok).toBe(false);
     expect(getResult().bet).toBe(50); // unchanged
@@ -301,12 +308,9 @@ describe('useChipBetting', () => {
       useGameStore.setState({ balance: 150 });
       const { getResult, unmount } = renderHook(() => useChipBetting());
 
-      // Place some chips
+      // Place 100, should succeed
       act(() => {
-        getResult().placeChip(50);
-      });
-      act(() => {
-        getResult().placeChip(50);
+        getResult().placeChip(100);
       });
       expect(getResult().bet).toBe(100);
 
@@ -337,16 +341,22 @@ describe('useChipBetting', () => {
       useGameStore.setState({ balance: 100 });
       const { getResult, unmount } = renderHook(() => useChipBetting());
 
-      // Place chips to reach exactly balance
+      // Place 25 twice to get 50
       act(() => {
-        getResult().placeChip(50);
+        getResult().placeChip(25);
+      });
+      act(() => {
+        getResult().placeChip(25);
       });
       expect(getResult().bet).toBe(50);
 
-      // This should succeed: 50 + 50 = 100 = balance (exactly at limit)
+      // This should succeed: 50 + 25 + 25 = 100 = balance (exactly at limit)
       let ok = false;
       act(() => {
-        ok = getResult().placeChip(50);
+        ok = getResult().placeChip(25);
+      });
+      act(() => {
+        ok = getResult().placeChip(25);
       });
       expect(ok).toBe(true);
       expect(getResult().bet).toBe(100);
@@ -410,9 +420,12 @@ describe('useChipBetting', () => {
         useGameStore.setState({ balance: 100 });
       });
 
-      // Second chip now works
+      // Second chip now works (place 25 twice to get 75 total)
       act(() => {
-        getResult().placeChip(50);
+        getResult().placeChip(25);
+      });
+      act(() => {
+        getResult().placeChip(25);
       });
       expect(getResult().bet).toBe(75);
 

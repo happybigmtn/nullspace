@@ -348,8 +348,8 @@
 				"Test UI shows appropriate message when max attempts reached"
 			],
 			"priority": 27,
-			"passes": false,
-			"notes": "CRITICAL GAP: websocket.ts:183-193 - when reconnection reaches MAX_RECONNECT_ATTEMPTS, state goes to 'failed' but no test verifies recovery path."
+			"passes": true,
+			"notes": "FIXED: Added 7 tests to websocket.test.tsx covering: (1) 'failed' state after 10 reconnect attempts, (2) maxReconnectAttempts=10 exposed to UI, (3) exponential backoff 1s→2s→4s→8s→16s→30s cap, (4) manual reconnect() resets attempt counter, (5) successful connection after manual reconnect, (6) reconnectAttempt/maxReconnectAttempts for UI display, (7) error log when max attempts reached."
 		},
 		{
 			"id": "US-037",
@@ -842,8 +842,8 @@
 				"Test UI shows pending state during submission"
 			],
 			"priority": 65,
-			"passes": false,
-			"notes": "CRITICAL GAP: Concurrent submission race could cause double-bet. useBetSubmission has no tests."
+			"passes": true,
+			"notes": "COVERED BY US-031: useBetSubmission.test.tsx includes tests for isSubmitting flag preventing duplicates and rapid-fire tap scenarios."
 		},
 		{
 			"id": "US-075",
@@ -855,8 +855,8 @@
 				"Test subsequent bet submission works after timeout"
 			],
 			"priority": 66,
-			"passes": false,
-			"notes": "CRITICAL GAP: useBetSubmission.ts timeout at 5s never tested. Could leave UI stuck."
+			"passes": true,
+			"notes": "COVERED BY US-031: useBetSubmission.test.tsx tests 5-second timeout auto-clears state and UI recovery. 16 tests cover all timeout scenarios."
 		},
 		{
 			"id": "US-076",

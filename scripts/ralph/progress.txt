@@ -737,3 +737,26 @@ Target: Testnet Production
   - Faucet restoration flow: balance update -> chip placement succeeds -> DEAL enabled
 
 ---
+
+## 2026-01-06 - US-036: Add WebSocket max reconnect attempts tests
+
+- What was implemented:
+  - Added 7 new tests to `websocket.test.tsx` in 4 describe blocks covering max reconnect attempts
+  - `max reconnect attempts` (2 tests): state transitions to 'failed' after 10 attempts, maxReconnectAttempts=10 exposed
+  - `exponential backoff calculation` (1 test): verifies 1s→2s→4s→8s→16s→30s cap through all 10 attempts
+  - `manual reconnect from failed state` (2 tests): reconnect() resets counter, allows successful connection after
+  - `UI feedback for max attempts` (2 tests): reconnectAttempt/maxReconnectAttempts for UI display, error log when max reached
+  - Also fixed TypeScript errors in useChipBetting.test.tsx (invalid chip value 50 → valid values 25/100)
+- Files changed:
+  - `mobile/src/services/__tests__/websocket.test.tsx` - Added 7 tests in 4 describe blocks
+  - `mobile/src/hooks/__tests__/useChipBetting.test.tsx` - Fixed chip values (50→25 as const), selectedChip type
+- **Learnings:**
+  - WebSocket reconnection uses `MAX_RECONNECT_ATTEMPTS = 10` constant (websocket.ts:16)
+  - Exponential backoff formula: `Math.min(1000 * Math.pow(2, attempt), 30000)` - caps at 30 seconds
+  - `connectionState: 'failed'` is final state after exhausting reconnects - requires manual `reconnect()` call
+  - `reconnect()` from failed state resets attempt counter to 0 and starts fresh
+  - `ChipValue` is union type `1 | 5 | 25 | 100 | 500 | 1000` - can't use arbitrary numbers like 50
+  - Use `25 as const` for type inference to match Zustand store's `selectedChip: ChipValue` type
+  - MockWebSocket class pattern: track instances array, expose OPEN/CLOSED constants, simulate events
+
+---
