@@ -12,8 +12,8 @@
 				"Verify .gitignore properly excludes .env files"
 			],
 			"priority": 1,
-			"passes": false,
-			"notes": "CRITICAL: Agent found website/.env committed with VITE_IDENTITY=92b050b6..."
+			"passes": true,
+			"notes": "VERIFIED SAFE: .env, .env.local, .env.network were NEVER committed to git. Root .gitignore:18-19 properly excludes all .env files (confirmed via git check-ignore). Original finding was a false positive - files exist locally but are gitignored."
 		},
 		{
 			"id": "US-002",
@@ -375,6 +375,136 @@
 			"priority": 29,
 			"passes": false,
 			"notes": "Final production iOS build"
+		},
+		{
+			"id": "US-030",
+			"title": "Create E2E full game round integration test",
+			"acceptanceCriteria": [
+				"Create tests/e2e/full-game-round.test.ts",
+				"Test flow: mobile client → gateway → execution → result → payout",
+				"Verify bet deducted from balance",
+				"Verify result matches execution output",
+				"Verify payout credited correctly",
+				"Test for at least 3 games (Blackjack, Roulette, Craps)"
+			],
+			"priority": 30,
+			"passes": false,
+			"notes": "GAP: No cross-component test verifies full bet→process→payout flow. Individual components tested in isolation."
+		},
+		{
+			"id": "US-031",
+			"title": "Create WebSocket reconnection recovery test",
+			"acceptanceCriteria": [
+				"Create tests/e2e/reconnection-recovery.test.ts",
+				"Start a game (Blackjack player_turn phase)",
+				"Force disconnect WebSocket mid-game",
+				"Reconnect with same session",
+				"Verify game state is restored (cards, bet, phase)",
+				"Complete the game and verify result"
+			],
+			"priority": 31,
+			"passes": false,
+			"notes": "GAP: Only unit test for reconnect hook exists. No test verifies active game state persists across disconnect/reconnect."
+		},
+		{
+			"id": "US-032",
+			"title": "Create session lifecycle integration test",
+			"acceptanceCriteria": [
+				"Create tests/e2e/session-lifecycle.test.ts",
+				"Test: create session → authenticate → place bet → disconnect → reconnect → verify state",
+				"Verify session ID persists across reconnection",
+				"Verify balance consistency throughout",
+				"Test session timeout behavior"
+			],
+			"priority": 32,
+			"passes": false,
+			"notes": "GAP: Gateway tests session create/disconnect separately. No integrated cross-component session lifecycle test."
+		},
+		{
+			"id": "US-033",
+			"title": "Create multi-player Craps stress test",
+			"acceptanceCriteria": [
+				"Create tests/e2e/multi-player-craps.test.ts",
+				"Connect 10+ concurrent players to global table",
+				"All players place bets in betting phase",
+				"Verify all players receive phase transition broadcasts",
+				"Verify all players receive dice roll result",
+				"Verify correct payouts for each player"
+			],
+			"priority": 33,
+			"passes": false,
+			"notes": "GAP: live-table.test.ts tests 2-3 players. No stress test with 10+ concurrent players."
+		},
+		{
+			"id": "US-034",
+			"title": "Create network resilience test suite",
+			"acceptanceCriteria": [
+				"Create tests/e2e/network-resilience.test.ts",
+				"Test high latency (5s message delay)",
+				"Test temporary connection drop (3s)",
+				"Test packet loss simulation",
+				"Verify game state recovers correctly in each scenario",
+				"No duplicate bets or lost payouts"
+			],
+			"priority": 34,
+			"passes": false,
+			"notes": "GAP: No tests simulate network failures. Critical for mobile users with unstable connections."
+		},
+		{
+			"id": "US-035",
+			"title": "Create cross-game balance consistency test",
+			"acceptanceCriteria": [
+				"Create tests/e2e/cross-game-balance.test.ts",
+				"Play all 10 games in sequence in same session",
+				"Track expected balance after each game",
+				"Verify actual balance matches expected after each game",
+				"No balance drift across game switches"
+			],
+			"priority": 35,
+			"passes": false,
+			"notes": "GAP: all-bet-types.test.ts tests one game at a time. No test verifies balance consistency across all games."
+		},
+		{
+			"id": "US-036",
+			"title": "Create vault-to-session integration test",
+			"acceptanceCriteria": [
+				"Create tests/e2e/vault-session.test.ts",
+				"Test: create vault → unlock → create session → place bet",
+				"Test: lock vault → verify session invalid",
+				"Test: export key → reimport → session works",
+				"Verify crypto keys properly flow from vault to session"
+			],
+			"priority": 36,
+			"passes": false,
+			"notes": "GAP: Vault and session tested separately. No integration test for vault→session flow."
+		},
+		{
+			"id": "US-037",
+			"title": "Create concurrent operations test",
+			"acceptanceCriteria": [
+				"Create tests/e2e/concurrent-operations.test.ts",
+				"Test rapid bet placement (10 bets in <1s)",
+				"Test simultaneous game starts (should reject second)",
+				"Test bet cancellation race conditions",
+				"Verify no double-charges or lost bets"
+			],
+			"priority": 37,
+			"passes": false,
+			"notes": "GAP: No test for race conditions when user performs rapid/concurrent operations."
+		},
+		{
+			"id": "US-038",
+			"title": "Create message ordering test",
+			"acceptanceCriteria": [
+				"Create tests/e2e/message-ordering.test.ts",
+				"Send rapid succession of game moves",
+				"Verify server processes in correct order",
+				"Verify client receives responses in order",
+				"Test with simulated network jitter"
+			],
+			"priority": 38,
+			"passes": false,
+			"notes": "GAP: No test verifies message ordering under rapid succession. Out-of-order could corrupt game state."
 		}
 	]
 }

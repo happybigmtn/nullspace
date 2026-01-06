@@ -81,3 +81,20 @@ Target: Testnet Production
   - Preflight script validates additional configs beyond just tokens (CORS, admin keys)
 
 ---
+
+## 2026-01-06 - US-001: Remove committed .env secrets from website
+
+- What was implemented:
+  - VERIFIED FALSE POSITIVE: .env, .env.local, .env.network were never committed to git
+  - Root `.gitignore` lines 18-19 already exclude `.env` and `.env.*` (with exceptions for `.example`)
+  - `git check-ignore -v website/.env*` confirms all 3 files are being ignored
+  - `git log --all -- website/.env*` shows no commit history for these files
+- Files changed:
+  - None - existing configuration was already correct
+- **Learnings:**
+  - Always verify findings with `git ls-files` and `git log --all` before taking action
+  - Root `.gitignore` in nullspace properly covers all subpackages (website, mobile, gateway)
+  - `git check-ignore -v <file>` shows which `.gitignore` rule is matching a file
+  - `VITE_IDENTITY` is a 192-char hex keypair used by `WasmWrapper` for crypto operations
+
+---
