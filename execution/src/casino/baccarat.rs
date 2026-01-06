@@ -1370,6 +1370,7 @@ mod tests {
         assert!(state.bets.is_empty());
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn make_outcome(
         player_total: u8,
         banker_total: u8,
@@ -1412,6 +1413,179 @@ mod tests {
         assert_eq!(payout, 100);
     }
 
+    /// US-047: Tests banker six rounding behavior for odd bet amounts.
+    ///
+    /// When Banker wins with 6, the payout is 0.5:1 (half the bet).
+    /// For odd amounts, integer division rounds DOWN:
+    /// - amount=1: 1 * 1 / 2 = 0 → treated as push
+    /// - amount=3: 3 * 1 / 2 = 1 → wins 1 chip
+    /// - amount=5: 5 * 1 / 2 = 2 → wins 2 chips
+    /// - amount=7: 7 * 1 / 2 = 3 → wins 3 chips
+    /// - amount=9: 9 * 1 / 2 = 4 → wins 4 chips
+    ///
+    /// This is the documented behavior: odd amounts lose the fractional part.
+    #[test]
+    fn test_banker_six_rounding_odd_amounts() {
+        // Banker wins with 6 (player has 4)
+        let outcome = make_outcome(4, 6, false, false, false, false, 2, 2);
+
+        // amount=1: 1/2 = 0, treated as push
+        let bet = BaccaratBet { bet_type: BetType::Banker, amount: 1 };
+        let (payout, is_push) = calculate_bet_payout(&bet, &outcome);
+        assert!(is_push, "amount=1 should be treated as push when winnings round to 0");
+        assert_eq!(payout, 0, "amount=1: payout should be 0 (push)");
+
+        // amount=3: 3/2 = 1
+        let bet = BaccaratBet { bet_type: BetType::Banker, amount: 3 };
+        let (payout, is_push) = calculate_bet_payout(&bet, &outcome);
+        assert!(!is_push, "amount=3 should not be a push");
+        assert_eq!(payout, 1, "amount=3: 3/2 = 1");
+
+        // amount=5: 5/2 = 2
+        let bet = BaccaratBet { bet_type: BetType::Banker, amount: 5 };
+        let (payout, is_push) = calculate_bet_payout(&bet, &outcome);
+        assert!(!is_push, "amount=5 should not be a push");
+        assert_eq!(payout, 2, "amount=5: 5/2 = 2");
+
+        // amount=7: 7/2 = 3
+        let bet = BaccaratBet { bet_type: BetType::Banker, amount: 7 };
+        let (payout, is_push) = calculate_bet_payout(&bet, &outcome);
+        assert!(!is_push, "amount=7 should not be a push");
+        assert_eq!(payout, 3, "amount=7: 7/2 = 3");
+
+        // amount=9: 9/2 = 4
+        let bet = BaccaratBet { bet_type: BetType::Banker, amount: 9 };
+        let (payout, is_push) = calculate_bet_payout(&bet, &outcome);
+        assert!(!is_push, "amount=9 should not be a push");
+        assert_eq!(payout, 4, "amount=9: 9/2 = 4");
+    }
+
+    /// US-047: Verifies consistent rounding across even amounts.
+    /// Even amounts should have clean division with no rounding.
+    #[test]
+    fn test_banker_six_rounding_even_amounts() {
+        // Banker wins with 6 (player has 4)
+        let outcome = make_outcome(4, 6, false, false, false, false, 2, 2);
+
+        // Test even amounts: 2, 4, 6, 8, 10
+        for amount in [2, 4, 6, 8, 10, 100, 1000] {
+            let bet = BaccaratBet { bet_type: BetType::Banker, amount };
+            let (payout, is_push) = calculate_bet_payout(&bet, &outcome);
+            assert!(!is_push, "amount={amount} should not be a push");
+            assert_eq!(payout, (amount / 2) as i64, "amount={amount}: should be exactly half");
+        }
+    }
+
+    /// US-047: Verifies banker six with 2-card vs 3-card hands.
+    /// The 0.5:1 payout applies regardless of card count.
+    #[test]
+    fn test_banker_six_three_card_hand() {
+        // Banker wins with 6 using 3 cards (player has 5)
+        let outcome = make_outcome(5, 6, false, false, false, false, 2, 3);
+
+        let bet = BaccaratBet { bet_type: BetType::Banker, amount: 100 };
+        let (payout, is_push) = calculate_bet_payout(&bet, &outcome);
+        assert!(!is_push);
+        assert_eq!(payout, 50, "3-card banker six should still pay 0.5:1");
+
+        // Also test odd amount with 3-card
+        let bet = BaccaratBet { bet_type: BetType::Banker, amount: 5 };
+        let (payout, is_push) = calculate_bet_payout(&bet, &outcome);
+        assert!(!is_push);
+        assert_eq!(payout, 2, "3-card banker six with amount=5: 5/2 = 2");
+    }
+
+    /// US-047: Documents that banker six rule only applies to winning banker bets.
+    /// Ties and losses are unaffected by the six rule.
+    #[test]
+    fn test_banker_six_only_applies_to_wins() {
+        // Tie at 6-6: should push regardless of banker six
+        let outcome = make_outcome(6, 6, false, false, false, false, 2, 2);
+        let bet = BaccaratBet { bet_type: BetType::Banker, amount: 100 };
+        let (payout, is_push) = calculate_bet_payout(&bet, &outcome);
+        assert!(is_push, "Tie at 6-6 should push, not apply banker six rule");
+        assert_eq!(payout, 0);
+
+        // Banker loses at 6: no payout reduction
+        let outcome = make_outcome(7, 6, false, false, false, false, 2, 2);
+        let (payout, is_push) = calculate_bet_payout(&bet, &outcome);
+        assert!(!is_push);
+        assert_eq!(payout, -100, "Banker loses full amount when player wins");
+    }
+
+    /// US-047: Verifies payout consistency across non-6 banker wins.
+    /// Banker wins with totals other than 6 should pay full 1:1.
+    #[test]
+    fn test_banker_non_six_wins_pay_full() {
+        // Banker wins with various totals (5, 7, 8, 9)
+        for banker_total in [5, 7, 8, 9] {
+            let outcome = make_outcome(4, banker_total, false, false, false, false, 2, 2);
+            let bet = BaccaratBet { bet_type: BetType::Banker, amount: 100 };
+            let (payout, is_push) = calculate_bet_payout(&bet, &outcome);
+            assert!(!is_push);
+            assert_eq!(payout, 100, "Banker win with {banker_total} should pay full 1:1");
+        }
+
+        // Also test odd amount - should get full payout
+        let outcome = make_outcome(4, 7, false, false, false, false, 2, 2);
+        let bet = BaccaratBet { bet_type: BetType::Banker, amount: 5 };
+        let (payout, is_push) = calculate_bet_payout(&bet, &outcome);
+        assert!(!is_push);
+        assert_eq!(payout, 5, "Banker win with 7 pays full amount even for odd bets");
+    }
+
+    #[test]
+    fn test_player_bet_win_loss_push() {
+        let bet = BaccaratBet {
+            bet_type: BetType::Player,
+            amount: 100,
+        };
+
+        // Player win.
+        let outcome = make_outcome(7, 5, false, false, false, false, 2, 2);
+        let (payout, is_push) = calculate_bet_payout(&bet, &outcome);
+        assert!(!is_push);
+        assert_eq!(payout, 100);
+
+        // Player loss.
+        let outcome = make_outcome(4, 8, false, false, false, false, 2, 2);
+        let (payout, is_push) = calculate_bet_payout(&bet, &outcome);
+        assert!(!is_push);
+        assert_eq!(payout, -100);
+
+        // Push on tie.
+        let outcome = make_outcome(6, 6, false, false, false, false, 2, 2);
+        let (payout, is_push) = calculate_bet_payout(&bet, &outcome);
+        assert!(is_push);
+        assert_eq!(payout, 0);
+    }
+
+    #[test]
+    fn test_banker_bet_win_loss_push() {
+        let bet = BaccaratBet {
+            bet_type: BetType::Banker,
+            amount: 100,
+        };
+
+        // Banker win (non-6).
+        let outcome = make_outcome(4, 7, false, false, false, false, 2, 2);
+        let (payout, is_push) = calculate_bet_payout(&bet, &outcome);
+        assert!(!is_push);
+        assert_eq!(payout, 100);
+
+        // Banker loss.
+        let outcome = make_outcome(9, 4, false, false, false, false, 2, 2);
+        let (payout, is_push) = calculate_bet_payout(&bet, &outcome);
+        assert!(!is_push);
+        assert_eq!(payout, -100);
+
+        // Push on tie.
+        let outcome = make_outcome(7, 7, false, false, false, false, 2, 2);
+        let (payout, is_push) = calculate_bet_payout(&bet, &outcome);
+        assert!(is_push);
+        assert_eq!(payout, 0);
+    }
+
 
 
     #[test]
@@ -1437,6 +1611,18 @@ mod tests {
             amount: 100,
         };
         let outcome = make_outcome(5, 7, true, false, false, false, 2, 2);
+        let (payout, _) = calculate_bet_payout(&bet, &outcome);
+        assert_eq!(payout, 1200); // 12x winnings
+    }
+
+    #[test]
+    fn test_banker_pair_payout() {
+        let bet = BaccaratBet {
+            bet_type: BetType::BankerPair,
+            amount: 100,
+        };
+
+        let outcome = make_outcome(5, 7, false, true, false, false, 2, 2);
         let (payout, _) = calculate_bet_payout(&bet, &outcome);
         assert_eq!(payout, 1200); // 12x winnings
     }

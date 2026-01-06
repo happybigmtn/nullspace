@@ -982,3 +982,23 @@ Target: Testnet Production
   - Balance refresh returns null if account not found (not an error)
 
 ---
+
+## 2026-01-06 - US-047: Add Baccarat banker six rounding tests
+
+- What was implemented:
+  - Added 5 comprehensive tests for banker six payout edge cases in baccarat.rs
+  - `test_banker_six_rounding_odd_amounts`: Tests all odd amounts (1, 3, 5, 7, 9) showing integer division behavior
+  - `test_banker_six_rounding_even_amounts`: Verifies clean division for even amounts (2, 4, 6, 8, 10, 100, 1000)
+  - `test_banker_six_three_card_hand`: Confirms 0.5:1 payout applies regardless of 2-card vs 3-card hand
+  - `test_banker_six_only_applies_to_wins`: Documents ties and losses unaffected by banker six rule
+  - `test_banker_non_six_wins_pay_full`: Confirms banker wins with totals 5, 7, 8, 9 pay full 1:1
+- Files changed:
+  - `execution/src/casino/baccarat.rs` - Added 5 tests after existing test_banker_half_payout_on_six
+- **Learnings:**
+  - Banker six payout uses `amount.saturating_mul(1).saturating_div(2)` for safety
+  - When `winnings == 0` (amount=1), the code treats this as a PUSH (stake returned), not a loss
+  - This is player-friendly behavior: small odd bets don't lose entirely due to rounding
+  - The existing `test_banker_half_payout_on_six` only tested amount=100 (even number), missing edge cases
+  - Test coverage includes: odd amounts, even amounts, 3-card hands, tie/loss scenarios, non-6 wins
+
+---
