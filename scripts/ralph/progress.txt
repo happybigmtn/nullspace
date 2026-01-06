@@ -453,6 +453,28 @@ Target: Testnet Production
 
 ---
 
+## 2026-01-06 - US-024: Add protocol round-trip tests for mobile state decoders
+
+- What was implemented:
+  - Created `game-round-trip` Rust binary in `node/src/bin/game_round_trip.rs`
+  - Binary initializes game, processes TypeScript-encoded payloads, outputs state blob hex
+  - Added TypeScript round-trip test `packages/protocol/test/round-trip.test.ts`
+  - Tests cover all 10 game types: Blackjack, Roulette, Craps, Baccarat, SicBo, HiLo, VideoPoker, CasinoWar, ThreeCard, UltimateHoldem
+  - Each test: TypeScript encodes → Rust processes → TypeScript decodes state blob
+  - Tests verify structural correctness (card counts, dice values, stage values, etc.)
+- Files changed:
+  - `node/src/bin/game_round_trip.rs` - New Rust binary for round-trip testing
+  - `node/Cargo.toml` - Added [[bin]] entry for game-round-trip
+  - `packages/protocol/test/round-trip.test.ts` - New TypeScript test file (11 tests)
+- **Learnings:**
+  - Games have different auto-resolve behaviors: Roulette/Craps/SicBo auto-roll on bet; HiLo/VideoPoker auto-deal
+  - ThreeCard Deal is opcode 2, UltimateHoldem Deal is opcode 5 (not 0 like most games)
+  - spawnSync is simpler than exec for synchronous binary execution in tests
+  - Round-trip tests catch protocol drift that golden vectors alone can't (missing fields, wrong byte order)
+  - Binary output is JSON for easy parsing in TypeScript tests
+
+---
+
 ## 2026-01-06 - US-023: Fix blocking haptics pattern across all game screens
 
 - What was implemented:

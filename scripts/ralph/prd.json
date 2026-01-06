@@ -50,8 +50,8 @@
 				"Run as part of CI to catch protocol drift"
 			],
 			"priority": 4,
-			"passes": false,
-			"notes": "VERIFIED GAP: Rust has protocol_round_trip_tests.rs but only validates Rust-side parsing. No test validates TypeScript can decode what Rust produces."
+			"passes": true,
+			"notes": "FIXED: Created game-round-trip Rust binary that processes TypeScript-encoded payloads and outputs state blobs. Added round-trip.test.ts that tests all 10 game types: Blackjack, Roulette, Craps, Baccarat, SicBo, HiLo, VideoPoker, CasinoWar, ThreeCard, UltimateHoldem. Tests verify state blob decoding matches expected structure. Runs via `pnpm test` in packages/protocol."
 		},
 		{
 			"id": "US-025",
@@ -337,6 +337,331 @@
 			"priority": 26,
 			"passes": false,
 			"notes": "VERIFIED GAP: No tests for empty balance UX. User could see confusing state on new account."
+		},
+		{
+			"id": "US-036",
+			"title": "Add WebSocket max reconnect attempts tests",
+			"acceptanceCriteria": [
+				"Test connectionState transitions to 'failed' after 10 attempts",
+				"Test exponential backoff calculation through all attempts",
+				"Test manual reconnect() resets attempt counter from 'failed' state",
+				"Test UI shows appropriate message when max attempts reached"
+			],
+			"priority": 27,
+			"passes": false,
+			"notes": "CRITICAL GAP: websocket.ts:183-193 - when reconnection reaches MAX_RECONNECT_ATTEMPTS, state goes to 'failed' but no test verifies recovery path."
+		},
+		{
+			"id": "US-037",
+			"title": "Add WebSocket message queue overflow tests",
+			"acceptanceCriteria": [
+				"Test queue correctly drops oldest messages at MAX_QUEUE_SIZE (50)",
+				"Test critical game actions (bets, moves) can be lost during disconnection",
+				"Test queue FIFO behavior is maintained",
+				"Add user feedback when messages are dropped"
+			],
+			"priority": 28,
+			"passes": false,
+			"notes": "CRITICAL GAP: websocket.ts:225-232 - message queue drops oldest message silently. Bets could be lost without user knowing."
+		},
+		{
+			"id": "US-038",
+			"title": "Add WebSocket message timeout tests",
+			"acceptanceCriteria": [
+				"Test messages older than 30s are filtered on reconnect",
+				"Test mix of valid and expired messages handled correctly",
+				"Test stale game actions don't replay unexpectedly",
+				"Verify 30-second outage drops all queued actions"
+			],
+			"priority": 29,
+			"passes": false,
+			"notes": "CRITICAL GAP: websocket.ts:108-128 - MESSAGE_TIMEOUT_MS (30s) filtering on queue flush never tested."
+		},
+		{
+			"id": "US-039",
+			"title": "Add storage quota exceeded tests",
+			"acceptanceCriteria": [
+				"Test AsyncStorageAdapter.set() behavior when quota exceeded",
+				"Test WebStorage.set() behavior when localStorage full",
+				"Verify cache/storage divergence doesn't cause data loss",
+				"Add user feedback when storage fails"
+			],
+			"priority": 30,
+			"passes": false,
+			"notes": "CRITICAL GAP: storage.ts:57-62 - set() fails silently with console.warn. In-memory cache updates but persistence fails."
+		},
+		{
+			"id": "US-040",
+			"title": "Add vault corruption recovery tests",
+			"acceptanceCriteria": [
+				"Test readVaultRecord() behavior with invalid JSON",
+				"Test readVaultRecord() behavior with wrong schema version",
+				"Implement backup/recovery mechanism for corrupted vaults",
+				"Add user guidance when vault corruption detected"
+			],
+			"priority": 31,
+			"passes": false,
+			"notes": "CRITICAL GAP: vault.ts:114-124 - corrupted vault returns null, user loses all funds permanently. No recovery mechanism."
+		},
+		{
+			"id": "US-041",
+			"title": "Add ChipSelector disabled state tests",
+			"acceptanceCriteria": [
+				"Add disabled prop to ChipSelector and Chip components",
+				"Test chips cannot be selected when disabled",
+				"Test chips cannot be dragged when disabled",
+				"Test disabled state during game rounds and insufficient balance"
+			],
+			"priority": 32,
+			"passes": false,
+			"notes": "CRITICAL GAP: ChipSelector.tsx has NO disabled functionality. Users could place bets during locked game phases."
+		},
+		{
+			"id": "US-042",
+			"title": "Add state parsing failure user feedback",
+			"acceptanceCriteria": [
+				"Test parseXxxState(null) displays error message to user",
+				"Test parseXxxState(corrupted) displays error message",
+				"Add error state and recovery path in game screens",
+				"Log parsing failures for debugging"
+			],
+			"priority": 33,
+			"passes": false,
+			"notes": "CRITICAL GAP: All game screens return early on parse failure with no user feedback. Game freezes silently."
+		},
+		{
+			"id": "US-043",
+			"title": "Add isMounted pattern to all game screens",
+			"acceptanceCriteria": [
+				"Add isMounted ref to BaccaratScreen, CasinoWarScreen, HiLoScreen, RouletteScreen, SicBoScreen",
+				"Verify no setState after unmount during async operations",
+				"Test unmount during InteractionManager callbacks",
+				"No memory leak warnings in any game screen"
+			],
+			"priority": 34,
+			"passes": false,
+			"notes": "CRITICAL GAP: Only some screens use isMounted pattern. Memory leaks possible on navigation during async ops."
+		},
+		{
+			"id": "US-044",
+			"title": "Add gateway message size limit tests",
+			"acceptanceCriteria": [
+				"Add size check before JSON.parse in handleMessage",
+				"Test large payload rejection with appropriate error code",
+				"Test boundary at MAX_MESSAGE_SIZE",
+				"Prevent memory exhaustion DoS attack"
+			],
+			"priority": 35,
+			"passes": false,
+			"notes": "CRITICAL GAP: gateway/src/index.ts:152-161 - no size check on rawData before JSON.parse. DoS vector."
+		},
+		{
+			"id": "US-045",
+			"title": "Add gateway nonce concurrency tests",
+			"acceptanceCriteria": [
+				"Test concurrent transactions from same session use sequential nonces",
+				"Test withLock prevents race conditions between check and set",
+				"Test nonce recovery after backend reset (chain reorg)",
+				"Verify no transaction rejections from nonce mismatch"
+			],
+			"priority": 36,
+			"passes": false,
+			"notes": "CRITICAL GAP: nonce.ts:103-124 - race window between checking pending lock and setting new one."
+		},
+		{
+			"id": "US-046",
+			"title": "Add gateway session cleanup tests",
+			"acceptanceCriteria": [
+				"Test session removed from maps on initializePlayer failure",
+				"Test connection count decremented on registration failure",
+				"Test orphaned session cleanup during health checks",
+				"Prevent memory leaks from failed registrations"
+			],
+			"priority": 37,
+			"passes": false,
+			"notes": "CRITICAL GAP: manager.ts:142-150 - failed registration leaves orphaned session in tracking maps."
+		},
+		{
+			"id": "US-047",
+			"title": "Add Baccarat banker six rounding tests",
+			"acceptanceCriteria": [
+				"Test banker bet with amount=1 when banker wins with 6",
+				"Document expected rounding behavior (push vs 0.5 win)",
+				"Test all odd amounts (1, 3, 5, 7, 9) for banker six",
+				"Verify payout consistency with documented rules"
+			],
+			"priority": 38,
+			"passes": false,
+			"notes": "CRITICAL GAP: baccarat.rs:390-399 - amount * 1 / 2 rounds to 0 for odd amounts, treated as push."
+		},
+		{
+			"id": "US-048",
+			"title": "Add Dragon Bonus margin loss tests",
+			"acceptanceCriteria": [
+				"Test Player/Banker Dragon bet when side wins by 1-3 points (non-natural)",
+				"Document that Dragon Bonus loses on small margins despite side winning",
+				"Test all margin values (1, 2, 3, 4-9) for correct payout",
+				"Verify natural wins always pay Dragon Bonus"
+			],
+			"priority": 39,
+			"passes": false,
+			"notes": "CRITICAL GAP: baccarat.rs:505-520 - wins by margin 1-3 (non-natural) lose Dragon Bonus. Counterintuitive, untested."
+		},
+		{
+			"id": "US-049",
+			"title": "Add atomic batch overflow tests",
+			"acceptanceCriteria": [
+				"Test batch with bets summing near u64::MAX",
+				"Test net_payout calculation with extreme wager sums",
+				"Verify saturating arithmetic doesn't produce incorrect results",
+				"Test rejection for impossible bet totals"
+			],
+			"priority": 40,
+			"passes": false,
+			"notes": "CRITICAL GAP: baccarat.rs:908-910 - total_wager checked_add but downstream i64 conversion untested."
+		},
+		{
+			"id": "US-050",
+			"title": "Add Super Mode stacking overflow tests",
+			"acceptanceCriteria": [
+				"Test multiple high multipliers (8x each) stacking",
+				"Test 4+ matching cards with super multipliers",
+				"Verify saturating_mul behavior with extreme payouts",
+				"Log warning when saturation occurs"
+			],
+			"priority": 41,
+			"passes": false,
+			"notes": "HIGH GAP: super_mode.rs:666-688 - multiplicative stacking could hit u64::MAX with 4+ 8x multipliers."
+		},
+		{
+			"id": "US-051",
+			"title": "Add Lucky Ladies dealer blackjack tests",
+			"acceptanceCriteria": [
+				"Test Queen of Hearts pair vs dealer blackjack (200:1)",
+				"Test dealer_blackjack parameter correctly passed during resolution",
+				"Test all Lucky Ladies payout tiers with correct conditions",
+				"Verify 200:1 payout triggers correctly"
+			],
+			"priority": 42,
+			"passes": false,
+			"notes": "HIGH GAP: blackjack.rs:385-408 - highest Lucky Ladies payout (200:1) needs explicit dealer blackjack testing."
+		},
+		{
+			"id": "US-052",
+			"title": "Add Fire Bet six points tests",
+			"acceptanceCriteria": [
+				"Test making all 6 unique points (4,5,6,8,9,10) before sevening out",
+				"Verify made_points_mask bit flags for all 6 points",
+				"Test 999:1 payout (FIRE_6_POINTS) triggers correctly",
+				"Test partial point completion (3,4,5 points) payouts"
+			],
+			"priority": 43,
+			"passes": false,
+			"notes": "HIGH GAP: craps.rs - Fire Bet 999:1 payout is highest in craps. Bit masking logic needs explicit testing."
+		},
+		{
+			"id": "US-053",
+			"title": "Add gateway backend timeout tests",
+			"acceptanceCriteria": [
+				"Test submission timeout doesn't hang indefinitely",
+				"Test nonce lock released on backend timeout",
+				"Test appropriate error returned to player",
+				"Test subsequent transactions still work after timeout"
+			],
+			"priority": 44,
+			"passes": false,
+			"notes": "HIGH GAP: handlers/base.ts:95-106 - slow backend could hold nonce lock indefinitely, blocking all player transactions."
+		},
+		{
+			"id": "US-054",
+			"title": "Add Card component full coverage tests",
+			"acceptanceCriteria": [
+				"Test all 4 suits with correct colors (red: hearts/diamonds, black: clubs/spades)",
+				"Test all 13 ranks (A, 2-10, J, Q, K)",
+				"Test all size variants (small, normal, large)",
+				"Test onFlipComplete callback behavior"
+			],
+			"priority": 45,
+			"passes": false,
+			"notes": "HIGH GAP: Card.test.tsx only tests hearts and spades. Missing diamonds/clubs and most ranks."
+		},
+		{
+			"id": "US-055",
+			"title": "Add TutorialOverlay storage failure tests",
+			"acceptanceCriteria": [
+				"Test behavior when isTutorialCompleted throws",
+				"Test behavior when markTutorialCompleted throws",
+				"Test tutorial shown again after storage failure",
+				"Verify onComplete still fires despite storage errors"
+			],
+			"priority": 46,
+			"passes": false,
+			"notes": "HIGH GAP: TutorialOverlay.tsx:33-40 - try-catch blocks exist but never tested. Tutorial could repeat on failure."
+		},
+		{
+			"id": "US-056",
+			"title": "Add GameErrorBoundary retry tests",
+			"acceptanceCriteria": [
+				"Test children re-render after retry button click",
+				"Test persistent error handling (retry -> error again)",
+				"Test multiple rapid retries don't cause issues",
+				"Verify state fully reset on retry"
+			],
+			"priority": 47,
+			"passes": false,
+			"notes": "HIGH GAP: GameErrorBoundary.tsx:29-31 - retry mechanism not tested. Could cause infinite error loops."
+		},
+		{
+			"id": "US-057",
+			"title": "Add faucet status lifecycle tests",
+			"acceptanceCriteria": [
+				"Test faucet status resets to idle after success",
+				"Test error only attributed to faucet when faucetStatus=pending",
+				"Test subsequent faucet requests work after success",
+				"Add timeout to auto-reset stuck faucet status"
+			],
+			"priority": 48,
+			"passes": false,
+			"notes": "HIGH GAP: useGatewaySession.ts:87-90 - faucetStatus stays 'success' forever. No reset to 'idle'."
+		},
+		{
+			"id": "US-058",
+			"title": "Add bet amount validation tests (gateway)",
+			"acceptanceCriteria": [
+				"Test Infinity bet amount rejected",
+				"Test NaN bet amount rejected",
+				"Test Number.MAX_SAFE_INTEGER + 1 rejected",
+				"Test negative bet amount rejected"
+			],
+			"priority": 49,
+			"passes": false,
+			"notes": "HIGH GAP: craps.ts:1190-1197 - BigInt(Math.floor(bet.amount)) with no validation of input type/range."
+		},
+		{
+			"id": "US-059",
+			"title": "Add WalletBadge short key tests",
+			"acceptanceCriteria": [
+				"Test publicKey shorter than 10 characters",
+				"Test empty string publicKey",
+				"Test exactly 10 character publicKey",
+				"Verify no duplicate characters in shortened display"
+			],
+			"priority": 50,
+			"passes": false,
+			"notes": "HIGH GAP: WalletBadge.tsx:12 - slice(0,6)...slice(-4) untested for short keys."
+		},
+		{
+			"id": "US-060",
+			"title": "Add balance formatting edge case tests",
+			"acceptanceCriteria": [
+				"Test very large balances (> 1 million) with toLocaleString",
+				"Test zero balance formatting",
+				"Test decimal balance handling",
+				"Test negative balance display (if allowed)"
+			],
+			"priority": 51,
+			"passes": false,
+			"notes": "HIGH GAP: GameHeader.tsx:21,31 - balance formatting untested for edge cases."
 		}
 	]
 }
