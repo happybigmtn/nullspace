@@ -431,3 +431,24 @@ Target: Testnet Production
   - QA Bet Harness exposes `window.__qa` API for Playwright: `runAllBets()`, `runGameBets(type)`, `getResults()`, `getLogs()`
 
 ---
+
+## 2026-01-06 - US-021: Add golden vectors for state parsing (server→client)
+
+- What was implemented:
+  - Added `stateParsingVectors` section to `golden-vectors.json` with vectors for all 10 game types
+  - Created test file in `packages/game-state/test/game-state.test.ts` that validates parsers against vectors
+  - Vectors cover: Blackjack (v4), HiLo, VideoPoker, CasinoWar (v1), Baccarat, Roulette (v2), SicBo, Craps (v2), ThreeCard (v3), UltimateHoldem (v3)
+  - Each vector includes expected parsed output and raw hex bytes matching Rust serialization format
+  - Tests load vectors and validate parser output matches expected values
+- Files changed:
+  - `packages/protocol/test/fixtures/golden-vectors.json` - Added stateParsingVectors section
+  - `packages/game-state/test/fixtures/golden-vectors.json` - Copy of protocol vectors
+  - `packages/game-state/test/game-state.test.ts` - Added golden vector validation tests
+- **Learnings:**
+  - Rust state serialization uses big-endian byte order for multi-byte values (u64, i64, u32)
+  - Blackjack v4 header is 46 bytes: version(1) + stage(1) + 5 side bets(40) + initCards(2) + activeHandIdx(1) + handCount(1)
+  - HIDDEN_CARD constant is 0xFF (255) used for unknown/hidden cards
+  - HiLo state includes pre-computed multipliers (u32 BE) for next guess options
+  - Golden vectors must be generated from exact Rust binary format, not manually approximated
+
+---

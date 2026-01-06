@@ -205,3 +205,242 @@ describe('game-state parsers', () => {
     expect(parseUltimateHoldemState(new Uint8Array())).toBeNull();
   });
 });
+
+/**
+ * Golden vector tests (server→client state parsing)
+ *
+ * These tests validate that TypeScript parsers correctly decode state blobs
+ * in the exact format that Rust's serialize_state() functions produce.
+ */
+describe('golden vector state parsing', () => {
+  // Load golden vectors from fixtures
+  const goldenVectors = (() => {
+    try {
+      return require('./fixtures/golden-vectors.json');
+    } catch {
+      console.warn('Golden vectors not found');
+      return { stateParsingVectors: {} };
+    }
+  })();
+
+  const hexToBytes = (hex: string): Uint8Array => {
+    const bytes = new Uint8Array(hex.length / 2);
+    for (let i = 0; i < hex.length; i += 2) {
+      bytes[i / 2] = parseInt(hex.substring(i, i + 2), 16);
+    }
+    return bytes;
+  };
+
+  describe('blackjack state vectors', () => {
+    const vectors = goldenVectors.stateParsingVectors?.blackjack || [];
+
+    vectors.forEach((vector: { description: string; expected: Record<string, unknown>; hex: string }) => {
+      it(vector.description, () => {
+        const bytes = hexToBytes(vector.hex);
+        const parsed = parseBlackjackState(bytes);
+
+        expect(parsed).not.toBeNull();
+        expect(parsed?.version).toBe(vector.expected.version);
+        expect(parsed?.stage).toBe(vector.expected.stage);
+        expect(parsed?.sideBet21Plus3).toBe(vector.expected.sideBet21Plus3);
+        expect(parsed?.sideBetLuckyLadies).toBe(vector.expected.sideBetLuckyLadies);
+        expect(parsed?.sideBetPerfectPairs).toBe(vector.expected.sideBetPerfectPairs);
+        expect(parsed?.sideBetBustIt).toBe(vector.expected.sideBetBustIt);
+        expect(parsed?.sideBetRoyalMatch).toBe(vector.expected.sideBetRoyalMatch);
+        expect(parsed?.initPlayerCards).toEqual(vector.expected.initPlayerCards);
+        expect(parsed?.activeHandIndex).toBe(vector.expected.activeHandIndex);
+        expect(parsed?.hands.length).toBe((vector.expected.hands as unknown[]).length);
+
+        // Validate each hand
+        const expectedHands = vector.expected.hands as { betMult: number; status: number; wasSplit: number; cards: number[] }[];
+        parsed?.hands.forEach((hand, idx) => {
+          expect(hand.betMult).toBe(expectedHands[idx].betMult);
+          expect(hand.status).toBe(expectedHands[idx].status);
+          expect(hand.wasSplit).toBe(expectedHands[idx].wasSplit);
+          expect(hand.cards).toEqual(expectedHands[idx].cards);
+        });
+
+        expect(parsed?.dealerCards).toEqual(vector.expected.dealerCards);
+        expect(parsed?.playerValue).toBe(vector.expected.playerValue);
+        expect(parsed?.dealerValue).toBe(vector.expected.dealerValue);
+        expect(parsed?.actionMask).toBe(vector.expected.actionMask);
+      });
+    });
+  });
+
+  describe('hilo state vectors', () => {
+    const vectors = goldenVectors.stateParsingVectors?.hilo || [];
+
+    vectors.forEach((vector: { description: string; expected: Record<string, unknown>; hex: string }) => {
+      it(vector.description, () => {
+        const bytes = hexToBytes(vector.hex);
+        const parsed = parseHiLoState(bytes);
+
+        expect(parsed).not.toBeNull();
+        expect(parsed?.cardId).toBe(vector.expected.cardId);
+        expect(parsed?.accumulatorBasisPoints).toBe(BigInt(vector.expected.accumulatorBasisPoints as string));
+        expect(parsed?.rulesByte).toBe(vector.expected.rulesByte);
+
+        const expectedMultipliers = vector.expected.nextMultipliers as { higher: number; lower: number; same: number } | null;
+        if (expectedMultipliers) {
+          expect(parsed?.nextMultipliers).toEqual(expectedMultipliers);
+        }
+      });
+    });
+  });
+
+  describe('videoPoker state vectors', () => {
+    const vectors = goldenVectors.stateParsingVectors?.videoPoker || [];
+
+    vectors.forEach((vector: { description: string; expected: Record<string, unknown>; hex: string }) => {
+      it(vector.description, () => {
+        const bytes = hexToBytes(vector.hex);
+        const parsed = parseVideoPokerState(bytes);
+
+        expect(parsed).not.toBeNull();
+        expect(parsed?.stage).toBe(vector.expected.stage);
+        expect(parsed?.cards).toEqual(vector.expected.cards);
+      });
+    });
+  });
+
+  describe('casinoWar state vectors', () => {
+    const vectors = goldenVectors.stateParsingVectors?.casinoWar || [];
+
+    vectors.forEach((vector: { description: string; expected: Record<string, unknown>; hex: string }) => {
+      it(vector.description, () => {
+        const bytes = hexToBytes(vector.hex);
+        const parsed = parseCasinoWarState(bytes);
+
+        expect(parsed).not.toBeNull();
+        expect(parsed?.version).toBe(vector.expected.version);
+        expect(parsed?.stage).toBe(vector.expected.stage);
+        expect(parsed?.playerCard).toBe(vector.expected.playerCard);
+        expect(parsed?.dealerCard).toBe(vector.expected.dealerCard);
+        expect(parsed?.tieBet).toBe(BigInt(vector.expected.tieBet as string));
+      });
+    });
+  });
+
+  describe('baccarat state vectors', () => {
+    const vectors = goldenVectors.stateParsingVectors?.baccarat || [];
+
+    vectors.forEach((vector: { description: string; expected: Record<string, unknown>; hex: string }) => {
+      it(vector.description, () => {
+        const bytes = hexToBytes(vector.hex);
+        const parsed = parseBaccaratState(bytes);
+
+        expect(parsed).not.toBeNull();
+        expect(parsed?.betCount).toBe(vector.expected.betCount);
+        expect(parsed?.playerCards).toEqual(vector.expected.playerCards);
+        expect(parsed?.bankerCards).toEqual(vector.expected.bankerCards);
+      });
+    });
+  });
+
+  describe('roulette state vectors', () => {
+    const vectors = goldenVectors.stateParsingVectors?.roulette || [];
+
+    vectors.forEach((vector: { description: string; expected: Record<string, unknown>; hex: string }) => {
+      it(vector.description, () => {
+        const bytes = hexToBytes(vector.hex);
+        const parsed = parseRouletteState(bytes);
+
+        expect(parsed).not.toBeNull();
+        expect(parsed?.betCount).toBe(vector.expected.betCount);
+        expect(parsed?.zeroRule).toBe(vector.expected.zeroRule);
+        expect(parsed?.phase).toBe(vector.expected.phase);
+        expect(parsed?.result).toBe(vector.expected.result);
+      });
+    });
+  });
+
+  describe('sicBo state vectors', () => {
+    const vectors = goldenVectors.stateParsingVectors?.sicBo || [];
+
+    vectors.forEach((vector: { description: string; expected: Record<string, unknown>; hex: string }) => {
+      it(vector.description, () => {
+        const bytes = hexToBytes(vector.hex);
+        const parsed = parseSicBoState(bytes);
+
+        expect(parsed).not.toBeNull();
+        expect(parsed?.betCount).toBe(vector.expected.betCount);
+        expect(parsed?.dice).toEqual(vector.expected.dice);
+      });
+    });
+  });
+
+  describe('craps state vectors', () => {
+    const vectors = goldenVectors.stateParsingVectors?.craps || [];
+
+    vectors.forEach((vector: { description: string; expected: Record<string, unknown>; hex: string }) => {
+      it(vector.description, () => {
+        const bytes = hexToBytes(vector.hex);
+        const parsed = parseCrapsState(bytes);
+
+        expect(parsed).not.toBeNull();
+        expect(parsed?.version).toBe(vector.expected.version);
+        expect(parsed?.phase).toBe(vector.expected.phase);
+        expect(parsed?.mainPoint).toBe(vector.expected.mainPoint);
+        expect(parsed?.dice).toEqual(vector.expected.dice);
+        expect(parsed?.madePointsMask).toBe(vector.expected.madePointsMask);
+        expect(parsed?.epochPointEstablished).toBe(vector.expected.epochPointEstablished);
+        expect(parsed?.betCount).toBe(vector.expected.betCount);
+
+        // Validate bets if present
+        const expectedBets = vector.expected.bets as { betType: number; target: number; status: number; amount: number; oddsAmount: number }[];
+        expect(parsed?.bets.length).toBe(expectedBets.length);
+        parsed?.bets.forEach((bet, idx) => {
+          expect(bet.betType).toBe(expectedBets[idx].betType);
+          expect(bet.target).toBe(expectedBets[idx].target);
+          expect(bet.status).toBe(expectedBets[idx].status);
+          expect(bet.amount).toBe(expectedBets[idx].amount);
+          expect(bet.oddsAmount).toBe(expectedBets[idx].oddsAmount);
+        });
+      });
+    });
+  });
+
+  describe('threeCard state vectors', () => {
+    const vectors = goldenVectors.stateParsingVectors?.threeCard || [];
+
+    vectors.forEach((vector: { description: string; expected: Record<string, unknown>; hex: string }) => {
+      it(vector.description, () => {
+        const bytes = hexToBytes(vector.hex);
+        const parsed = parseThreeCardState(bytes);
+
+        expect(parsed).not.toBeNull();
+        expect(parsed?.version).toBe(vector.expected.version);
+        expect(parsed?.stage).toBe(vector.expected.stage);
+        expect(parsed?.playerCards).toEqual(vector.expected.playerCards);
+        expect(parsed?.dealerCards).toEqual(vector.expected.dealerCards);
+        expect(parsed?.pairPlusBet).toBe(vector.expected.pairPlusBet);
+        expect(parsed?.sixCardBonusBet).toBe(vector.expected.sixCardBonusBet);
+        expect(parsed?.progressiveBet).toBe(vector.expected.progressiveBet);
+      });
+    });
+  });
+
+  describe('ultimateHoldem state vectors', () => {
+    const vectors = goldenVectors.stateParsingVectors?.ultimateHoldem || [];
+
+    vectors.forEach((vector: { description: string; expected: Record<string, unknown>; hex: string }) => {
+      it(vector.description, () => {
+        const bytes = hexToBytes(vector.hex);
+        const parsed = parseUltimateHoldemState(bytes);
+
+        expect(parsed).not.toBeNull();
+        expect(parsed?.version).toBe(vector.expected.version);
+        expect(parsed?.stage).toBe(vector.expected.stage);
+        expect(parsed?.playerCards).toEqual(vector.expected.playerCards);
+        expect(parsed?.communityCards).toEqual(vector.expected.communityCards);
+        expect(parsed?.dealerCards).toEqual(vector.expected.dealerCards);
+        expect(parsed?.playMultiplier).toBe(vector.expected.playMultiplier);
+        expect(parsed?.bonusCards).toEqual(vector.expected.bonusCards);
+        expect(parsed?.tripsBet).toBe(vector.expected.tripsBet);
+        expect(parsed?.sixCardBonusBet).toBe(vector.expected.sixCardBonusBet);
+        expect(parsed?.progressiveBet).toBe(vector.expected.progressiveBet);
+      });
+    });
+  });
+});

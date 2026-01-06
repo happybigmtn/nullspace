@@ -2,121 +2,134 @@
 	"branchName": "ralph/testnet-production",
 	"userStories": [
 		{
-			"id": "US-001",
-			"title": "Configure production CORS and backend URLs",
+			"id": "US-021",
+			"title": "Add golden vectors for state parsing (server→client)",
 			"acceptanceCriteria": [
-				"Set GATEWAY_ALLOWED_ORIGINS to actual HTTPS domains",
-				"Set BACKEND_URL to actual indexer endpoint",
-				"Remove example.com placeholder URLs",
-				"Run scripts/preflight-management.mjs to validate"
+				"Add golden vectors for parseBlackjackState, parseHiLoState, etc. to golden-vectors.json",
+				"Include vectors for all 10 game types with real server state bytes",
+				"Test vectors cover edge cases: empty hands, max cards, boundary totals",
+				"Mobile tests import and validate against these vectors"
 			],
 			"priority": 1,
 			"passes": true,
-			"notes": "FIXED: Replaced example.com with REPLACE_WITH_YOUR_* placeholders, added GATEWAY_ORIGIN and live table admin key config. Preflight passes."
+			"notes": "ROOT CAUSE: Current golden-vectors.json only has encoding vectors (client→server). No vectors exist for parsing server state, which is where the blackjack crash occurred."
 		},
 		{
-			"id": "US-002",
-			"title": "Add timeout to website API fetch calls",
+			"id": "US-022",
+			"title": "Replace mocked state parsers with real implementations in unit tests",
 			"acceptanceCriteria": [
-				"Add AbortController with 10s timeout to website/src/api/explorerClient.ts getJson()",
-				"Add timeout to website/src/api/client.js fetch() calls at lines 228,299,350,384",
-				"Handle timeout errors with user-friendly message",
-				"Test with slow network simulation"
+				"Remove jest.mock for parseBlackjackState and similar parsers",
+				"Use real parseXxxState functions with golden vector byte arrays",
+				"Test card decoding, Ace total calculation, phase mapping",
+				"Verify bitwise action mask logic (canDouble, canSplit)"
 			],
 			"priority": 2,
-			"passes": true,
-			"notes": "FIXED: Added FETCH_TIMEOUT_MS=10000 with AbortController to explorerClient.ts getJson() and client.js (submitTransaction, queryState, querySeed, queryLatestSeed). JSON parse errors handled gracefully."
+			"passes": false,
+			"notes": "VERIFIED GAP: BlackjackScreen.test.tsx (and 5 other game tests) mock the parser entirely - real card decoding never runs. Tests pass but app crashes on real data."
 		},
 		{
-			"id": "US-003",
-			"title": "Add JSON validation to explorer API responses",
+			"id": "US-023",
+			"title": "Fix blocking haptics pattern across all game screens",
 			"acceptanceCriteria": [
-				"Wrap res.json() in try-catch in explorerClient.ts:37",
-				"Validate response shape matches expected types",
-				"Return graceful error for malformed responses",
-				"Log parsing errors for debugging"
+				"Audit all game screens for 'await haptics.xxx()' patterns",
+				"Convert to fire-and-forget: 'haptics.xxx().catch(() => {})'",
+				"No remaining blocking haptic calls in production code",
+				"Add lint rule to prevent future blocking haptic calls"
 			],
 			"priority": 3,
-			"passes": true,
-			"notes": "FIXED: Added type guards for all response types (ExplorerBlock, ExplorerTransaction, AccountActivity, BlocksResponse, SearchResponse). Each public function validates with console.error + ResponseValidationError."
+			"passes": false,
+			"notes": "VERIFIED BUG: 22 blocking haptics calls fixed across 9 game screens. Need verification test passes."
 		},
 		{
-			"id": "US-004",
-			"title": "Add mobile session expiration",
+			"id": "US-024",
+			"title": "Add protocol round-trip tests for mobile state decoders",
 			"acceptanceCriteria": [
-				"Add session timestamp to AuthContext",
-				"Check session age on app foreground",
-				"Prompt re-auth after 24 hours",
-				"Clear session on expiration"
+				"Create tests that: TypeScript encodes → Rust processes → TypeScript decodes",
+				"Verify decoded state matches expected values after processing",
+				"Cover all game types: blackjack, roulette, craps, baccarat, sic_bo, hilo, etc.",
+				"Run as part of CI to catch protocol drift"
 			],
 			"priority": 4,
-			"passes": true,
-			"notes": "FIXED: Added SESSION_CREATED_AT storage key, checkSessionValidity() helper, AppState listener for foreground check, sessionExpired state flag. Tests added for 24h expiration."
+			"passes": false,
+			"notes": "VERIFIED GAP: Rust has protocol_round_trip_tests.rs but only validates Rust-side parsing. No test validates TypeScript can decode what Rust produces."
 		},
 		{
-			"id": "US-005",
-			"title": "Setup Sentry error tracking for mobile",
+			"id": "US-025",
+			"title": "Add storage fallback integration tests",
 			"acceptanceCriteria": [
-				"npm install @sentry/react-native",
-				"Configure DSN in app entry point",
-				"Wrap app with Sentry.ErrorBoundary",
-				"Verify errors captured in Sentry dashboard"
+				"Test MMKV → AsyncStorage fallback behavior in Expo Go",
+				"Test storage initialization error handling",
+				"Test tutorial state persistence across app restarts",
+				"Test encryption key generation failures"
 			],
 			"priority": 5,
-			"passes": true,
-			"notes": "FIXED: Installed @sentry/react-native, configured Sentry.init() with EXPO_PUBLIC_SENTRY_DSN, wrapped app with ErrorBoundary + fallback UI. Dashboard verification requires Sentry account setup - code is ready."
+			"passes": false,
+			"notes": "VERIFIED GAP: Storage service mock always succeeds. Real code has 3 backends (MMKV, AsyncStorage, WebStorage) that are never tested."
 		},
 		{
-			"id": "US-006",
-			"title": "Add bearer auth to Prometheus scrape config",
+			"id": "US-026",
+			"title": "Add WebSocket reconnection integration tests",
 			"acceptanceCriteria": [
-				"Add authorization header with bearer_token to prometheus.yml scrape_configs",
-				"Add gateway job (missing from current config)",
-				"Use METRICS_AUTH_TOKEN env var",
-				"Verify all targets show as UP in Prometheus UI"
+				"Test session persistence after reconnect",
+				"Test game state recovery after mid-game disconnect",
+				"Test nonce continuity after reconnection",
+				"Test balance consistency after network failure"
 			],
 			"priority": 6,
-			"passes": true,
-			"notes": "FIXED: Added authorization block with credentials_file to all jobs (simulator, auth, gateway, node). Gateway job added on port 9010. Token file mounted in docker-compose. UI verification requires running stack."
+			"passes": false,
+			"notes": "VERIFIED GAP: useGameConnection is completely mocked in unit tests. Real reconnection logic never exercised."
 		},
 		{
-			"id": "US-007",
-			"title": "Add auth service 5xx alert rule",
+			"id": "US-027",
+			"title": "Fix mobile integration test message type mismatches",
 			"acceptanceCriteria": [
-				"Add alert for auth service 5xx spike in alerts.yml",
-				"Threshold: rate of 5xx > 0.05 for 5m",
-				"Severity: critical",
-				"Test alert fires correctly"
+				"All 10 game integration tests pass against local gateway",
+				"Fix game_started vs game_result message type expectations",
+				"Update waitForGameOutcome to handle all message types",
+				"Add timeout with diagnostic info on failure"
 			],
 			"priority": 7,
-			"passes": true,
-			"notes": "FIXED: Added AuthServiceFailures (failure/error counters) and AuthSyncFailures alerts. Auth uses counters not HTTP status, so alerts use nullspace_auth_counter_total{key=~.*failure.*}. Testing requires running stack."
+			"passes": false,
+			"notes": "VERIFIED BUG: Recent test run shows 9/10 tests failing with timeout errors. Message type expectations don't match actual gateway responses."
 		},
 		{
-			"id": "US-008",
-			"title": "Fix mobile integration test message type expectations",
+			"id": "US-028",
+			"title": "Add chip betting balance validation tests",
 			"acceptanceCriteria": [
-				"Update mobile/tests/integration/games/*.ts to handle game_move message type",
-				"Fix timeout errors in Blackjack, Roulette, Craps, Baccarat, SicBo, VideoPoker, CasinoWar tests",
-				"Fix Three Card Poker and Ultimate Hold'em to handle game_started correctly",
-				"All 10 game tests pass against local gateway"
+				"Test placeChip() returns false when bet exceeds balance",
+				"Test haptics.error() is called on failed chip placement",
+				"Test UI disables bet buttons when balance exhausted",
+				"Use real useChipBetting hook with controlled gameStore"
 			],
 			"priority": 8,
-			"passes": true,
-			"notes": "FIXED: Updated all 9 failing tests to use waitForGameOutcome() which handles both game_move and game_result. HiLo and Roulette already passed."
+			"passes": false,
+			"notes": "VERIFIED GAP: mockUseChipBetting always returns placeChip: true. Over-betting scenarios never tested."
 		},
 		{
-			"id": "US-009",
-			"title": "Web QA bet harness local environment setup",
+			"id": "US-029",
+			"title": "Add corrupted protocol data tests",
 			"acceptanceCriteria": [
-				"Document required env vars for web QA testing",
-				"Ensure ALLOWED_WS_ORIGINS includes localhost for local dev",
-				"Fix local network consensus node communication",
-				"Web QA bet harness passes against local network"
+				"Test decoder handles truncated messages gracefully",
+				"Test decoder handles extra bytes after valid data",
+				"Test decoder handles varint overflow",
+				"Test decoder handles invalid UTF-8 in string fields"
 			],
 			"priority": 9,
-			"passes": true,
-			"notes": "FIXED: Created website/README.md with QA testing documentation, updated configs/local/.env.local with QA env vars (VITE_QA_BETS, VITE_GATEWAY_URL, VITE_AUTH_URL, VITE_ALLOW_LEGACY_KEYS). Main README already documents ALLOWED_WS_ORIGINS setup correctly."
+			"passes": false,
+			"notes": "VERIFIED GAP: No negative tests for deliberately corrupted binary data in protocol tests."
+		},
+		{
+			"id": "US-030",
+			"title": "Add crypto signing integration tests",
+			"acceptanceCriteria": [
+				"Test real Ed25519 signature generation (not mocked)",
+				"Test signature verification round-trip",
+				"Test vault key export/import functionality",
+				"Remove jest.mock for @noble/curves/ed25519"
+			],
+			"priority": 10,
+			"passes": false,
+			"notes": "VERIFIED GAP: Mobile crypto.test.ts mocks all ed25519 operations. Real signing never validated."
 		},
 		{
 			"id": "US-010",
@@ -127,7 +140,7 @@
 				"No crashes or deadlocks",
 				"Memory usage stable"
 			],
-			"priority": 10,
+			"priority": 11,
 			"passes": false,
 			"notes": "MANUAL: Script exists at scripts/soak-test.sh, needs staging deployment"
 		},
@@ -140,7 +153,7 @@
 				"No sustained errors",
 				"Response times acceptable"
 			],
-			"priority": 11,
+			"priority": 12,
 			"passes": false,
 			"notes": "MANUAL: Script exists at scripts/run-bots.sh, needs staging deployment"
 		},
@@ -153,7 +166,7 @@
 				"Events broadcast to all clients",
 				"No message loss"
 			],
-			"priority": 12,
+			"priority": 13,
 			"passes": false,
 			"notes": "MANUAL: Script exists at scripts/load-test-global-table.mjs, needs staging"
 		},
@@ -165,7 +178,7 @@
 				"GET http://<GATEWAY>:9010/healthz returns 200",
 				"All services respond within 5s"
 			],
-			"priority": 13,
+			"priority": 14,
 			"passes": false,
 			"notes": "MANUAL: Basic smoke check per runbook, needs staging deployment"
 		},
@@ -178,7 +191,7 @@
 				"Balance updates correctly",
 				"Can place and resolve bet"
 			],
-			"priority": 14,
+			"priority": 15,
 			"passes": false,
 			"notes": "MANUAL: Core testnet user journey on staging"
 		},
@@ -191,7 +204,7 @@
 				"Export recovery key",
 				"Reimport on fresh install"
 			],
-			"priority": 15,
+			"priority": 16,
 			"passes": false,
 			"notes": "MANUAL: Go/No-Go criteria per runbook Section 10"
 		},
@@ -204,7 +217,7 @@
 				"Export recovery key",
 				"Reimport on fresh install"
 			],
-			"priority": 16,
+			"priority": 17,
 			"passes": false,
 			"notes": "MANUAL: Go/No-Go criteria per runbook Section 10"
 		},
@@ -217,7 +230,7 @@
 				"Node rejoins consensus",
 				"No transaction loss"
 			],
-			"priority": 17,
+			"priority": 18,
 			"passes": false,
 			"notes": "MANUAL: Recovery drill per runbook Section 7"
 		},
@@ -230,7 +243,7 @@
 				"Sessions re-register",
 				"Nonces persist correctly"
 			],
-			"priority": 18,
+			"priority": 19,
 			"passes": false,
 			"notes": "MANUAL: Recovery drill per runbook Section 7"
 		},
@@ -243,7 +256,7 @@
 				"Install on real device",
 				"Verify WSS connection works"
 			],
-			"priority": 19,
+			"priority": 20,
 			"passes": false,
 			"notes": "MANUAL: Final production Android build"
 		},
@@ -256,7 +269,7 @@
 				"Install via TestFlight",
 				"Verify WSS connection works"
 			],
-			"priority": 20,
+			"priority": 21,
 			"passes": false,
 			"notes": "MANUAL: Final production iOS build"
 		}
