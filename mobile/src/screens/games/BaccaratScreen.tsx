@@ -112,9 +112,9 @@ export function BaccaratScreen() {
           || (winner !== 'TIE' && state.selection === winner && state.mainBet > 0));
 
       if (betOnWinner) {
-        haptics.win();
+        haptics.win().catch(() => {});
       } else {
-        haptics.loss();
+        haptics.loss().catch(() => {});
       }
 
       setState((prev) => ({
@@ -132,7 +132,7 @@ export function BaccaratScreen() {
 
   const handleMainSelect = useCallback((selection: 'PLAYER' | 'BANKER') => {
     if (state.phase !== 'betting') return;
-    haptics.buttonPress();
+    haptics.buttonPress().catch(() => {});
     setState((prev) => ({ ...prev, selection }));
   }, [state.phase]);
 
@@ -140,11 +140,11 @@ export function BaccaratScreen() {
     if (state.phase !== 'betting') return;
     const sideTotal = state.sideBets.reduce((sum, bet) => sum + bet.amount, 0);
     if (state.mainBet + sideTotal + selectedChip > balance) {
-      haptics.error();
+      haptics.error().catch(() => {});
       return;
     }
 
-    haptics.chipPlace();
+    haptics.chipPlace().catch(() => {});
     setState((prev) => ({
       ...prev,
       mainBet: prev.mainBet + selectedChip,
@@ -155,11 +155,11 @@ export function BaccaratScreen() {
     if (state.phase !== 'betting') return;
     const currentTotal = state.mainBet + state.sideBets.reduce((sum, bet) => sum + bet.amount, 0);
     if (currentTotal + selectedChip > balance) {
-      haptics.error();
+      haptics.error().catch(() => {});
       return;
     }
 
-    haptics.chipPlace();
+    haptics.chipPlace().catch(() => {});
     setState((prev) => {
       const existingIndex = prev.sideBets.findIndex((bet) => bet.type === type);
       if (existingIndex >= 0) {
@@ -178,7 +178,7 @@ export function BaccaratScreen() {
     });
   }, [state.phase, state.mainBet, state.sideBets, selectedChip, balance]);
 
-  const handleDeal = useCallback(async () => {
+  const handleDeal = useCallback(() => {
     if (isSubmitting) return;
     const betList: BaccaratBet[] = [];
     if (state.mainBet > 0) {
@@ -187,7 +187,7 @@ export function BaccaratScreen() {
     betList.push(...state.sideBets.filter((bet) => bet.amount > 0));
 
     if (betList.length === 0) return;
-    await haptics.betConfirm();
+    haptics.betConfirm().catch(() => {});
 
     const success = submitBet({
       type: 'baccarat_deal',

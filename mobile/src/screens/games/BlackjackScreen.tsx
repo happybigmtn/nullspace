@@ -131,11 +131,11 @@ export function BlackjackScreen() {
       const push = (payload.push as boolean | undefined) ?? false;
 
       if (won) {
-        haptics.win();
+        haptics.win().catch(() => {});
       } else if (push) {
-        haptics.push();
+        haptics.push().catch(() => {});
       } else {
-        haptics.loss();
+        haptics.loss().catch(() => {});
       }
 
       setState((prev) => ({
@@ -169,9 +169,9 @@ export function BlackjackScreen() {
     }
   }, [lastMessage, clearSubmission]);
 
-  const handleDeal = useCallback(async () => {
+  const handleDeal = useCallback(() => {
     if (bet === 0 || isSubmitting) return;
-    await haptics.betConfirm();
+    haptics.betConfirm().catch(() => {});
 
     const success = submitBet({
       type: 'blackjack_deal',
@@ -188,13 +188,13 @@ export function BlackjackScreen() {
     }
   }, [bet, submitBet, sideBet21Plus3, isSubmitting]);
 
-  const handleHit = useCallback(async () => {
-    await haptics.buttonPress();
+  const handleHit = useCallback(() => {
+    haptics.buttonPress().catch(() => {});
     send({ type: 'blackjack_hit' });
   }, [send]);
 
-  const handleStand = useCallback(async () => {
-    await haptics.buttonPress();
+  const handleStand = useCallback(() => {
+    haptics.buttonPress().catch(() => {});
     send({ type: 'blackjack_stand' });
     setState((prev) => ({
       ...prev,
@@ -203,26 +203,26 @@ export function BlackjackScreen() {
     }));
   }, [send]);
 
-  const handleDouble = useCallback(async () => {
-    await haptics.betConfirm();
+  const handleDouble = useCallback(() => {
+    haptics.betConfirm().catch(() => {});
     send({ type: 'blackjack_double' });
     setBet(bet * 2);
   }, [send, bet, setBet]);
 
-  const handleSplit = useCallback(async () => {
-    await haptics.betConfirm();
+  const handleSplit = useCallback(() => {
+    haptics.betConfirm().catch(() => {});
     send({ type: 'blackjack_split' });
   }, [send]);
 
-  const handleToggle21Plus3 = useCallback(async () => {
+  const handleToggle21Plus3 = useCallback(() => {
     if (state.phase !== 'betting') return;
     const nextAmount = sideBet21Plus3 > 0 ? 0 : selectedChip;
     if (bet + nextAmount > balance) {
-      haptics.error();
+      haptics.error().catch(() => {});
       setState((prev) => ({ ...prev, message: 'Insufficient balance' }));
       return;
     }
-    await haptics.buttonPress();
+    haptics.buttonPress().catch(() => {});
     setSideBet21Plus3(nextAmount);
   }, [state.phase, sideBet21Plus3, selectedChip, bet, balance]);
 

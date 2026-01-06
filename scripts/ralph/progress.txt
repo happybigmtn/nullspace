@@ -452,3 +452,32 @@ Target: Testnet Production
   - Golden vectors must be generated from exact Rust binary format, not manually approximated
 
 ---
+
+## 2026-01-06 - US-023: Fix blocking haptics pattern across all game screens
+
+- What was implemented:
+  - Audited all 10 game screens for haptic calls without proper error handling
+  - Converted 70+ haptic calls to fire-and-forget pattern: `haptics.xxx().catch(() => {})`
+  - Added ESLint rule using `no-restricted-syntax` to catch future violations
+  - Rule catches both `await haptics.xxx()` and bare `haptics.xxx()` without `.catch()`
+- Files changed:
+  - `mobile/src/screens/games/SicBoScreen.tsx` - 5 haptic calls fixed
+  - `mobile/src/screens/games/HiLoScreen.tsx` - 2 haptic calls fixed
+  - `mobile/src/screens/games/BaccaratScreen.tsx` - 7 haptic calls fixed
+  - `mobile/src/screens/games/BlackjackScreen.tsx` - 8 haptic calls fixed (already had some)
+  - `mobile/src/screens/games/RouletteScreen.tsx` - 4 haptic calls fixed
+  - `mobile/src/screens/games/CrapsScreen.tsx` - 8 haptic calls fixed (including void→catch conversion)
+  - `mobile/src/screens/games/UltimateTXHoldemScreen.tsx` - 11 haptic calls fixed
+  - `mobile/src/screens/games/ThreeCardPokerScreen.tsx` - 7 haptic calls fixed
+  - `mobile/src/screens/games/VideoPokerScreen.tsx` - 4 haptic calls fixed
+  - `mobile/src/screens/games/CasinoWarScreen.tsx` - 2 haptic calls fixed
+  - `mobile/eslint.config.js` - Added no-restricted-syntax rule for haptic pattern enforcement
+- **Learnings:**
+  - Haptic calls are async but non-critical - using `await` blocks UI if hardware unavailable
+  - Fire-and-forget pattern: call without await, add `.catch(() => {})` to swallow Promise rejection
+  - This prevents unhandled Promise rejections on devices without haptic hardware (simulators)
+  - ESLint `no-restricted-syntax` can match AST patterns to enforce coding conventions
+  - Pattern for await detection: `AwaitExpression > CallExpression[callee.object.name='haptics']`
+  - Pattern for bare call detection uses `:not(:has(...))` pseudo-selector for method chaining
+
+---

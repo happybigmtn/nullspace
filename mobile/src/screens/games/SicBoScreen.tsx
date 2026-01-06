@@ -137,7 +137,7 @@ export function SicBoScreen() {
         withTiming(180, { duration: 180 }),
         withSpring(0, SPRING.diceTumble)
       );
-      haptics.diceRoll();
+      haptics.diceRoll().catch(() => {});
     }
 
     if (lastMessage.type === 'game_started') {
@@ -172,9 +172,9 @@ export function SicBoScreen() {
       const winAmount = Math.max(0, totalReturn - totalWagered);
       const won = winAmount > 0;
       if (won) {
-        haptics.win();
+        haptics.win().catch(() => {});
       } else {
-        haptics.loss();
+        haptics.loss().catch(() => {});
       }
 
       setState((prev) => ({
@@ -232,11 +232,11 @@ export function SicBoScreen() {
     // Calculate current total bet
     const currentTotalBet = state.bets.reduce((sum, b) => sum + b.amount, 0);
     if (currentTotalBet + selectedChip > balance) {
-      haptics.error();
+      haptics.error().catch(() => {});
       return;
     }
 
-    haptics.chipPlace();
+    haptics.chipPlace().catch(() => {});
 
     setState((prev) => {
       const existingIndex = prev.bets.findIndex(
@@ -322,9 +322,9 @@ export function SicBoScreen() {
     }
   }, [comboMode, comboPicks, addBet]);
 
-  const handleRoll = useCallback(async () => {
+  const handleRoll = useCallback(() => {
     if (state.bets.length === 0 || isSubmitting) return;
-    await haptics.diceRoll();
+    haptics.diceRoll().catch(() => {});
 
     const success = submitBet({
       type: 'sic_bo_roll',

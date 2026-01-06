@@ -145,12 +145,12 @@ export function ThreeCardPokerScreen() {
 
       if (payout > 0) {
         if (player?.rank === 'STRAIGHT_FLUSH') {
-          haptics.jackpot();
+          haptics.jackpot().catch(() => {});
         } else {
-          haptics.win();
+          haptics.win().catch(() => {});
         }
       } else {
-        haptics.loss();
+        haptics.loss().catch(() => {});
       }
 
       setState((prev) => ({
@@ -178,10 +178,10 @@ export function ThreeCardPokerScreen() {
     if (activeBetType === 'progressive') {
       const progressiveUnit = 1;
       if (currentTotalBet + (state.progressiveBet > 0 ? 0 : progressiveUnit) > balance) {
-        haptics.error();
+        haptics.error().catch(() => {});
         return;
       }
-      haptics.chipPlace();
+      haptics.chipPlace().catch(() => {});
       setState((prev) => ({
         ...prev,
         progressiveBet: prev.progressiveBet > 0 ? 0 : progressiveUnit,
@@ -189,11 +189,11 @@ export function ThreeCardPokerScreen() {
       return;
     }
     if (currentTotalBet + value > balance) {
-      haptics.error();
+      haptics.error().catch(() => {});
       return;
     }
 
-    haptics.chipPlace();
+    haptics.chipPlace().catch(() => {});
 
     setState((prev) => ({
       ...prev,
@@ -203,9 +203,9 @@ export function ThreeCardPokerScreen() {
     }));
   }, [state.phase, activeBetType, state.anteBet, state.pairPlusBet, state.sixCardBet, state.progressiveBet, balance]);
 
-  const handleDeal = useCallback(async () => {
+  const handleDeal = useCallback(() => {
     if (state.anteBet === 0 || isSubmitting) return;
-    await haptics.betConfirm();
+    haptics.betConfirm().catch(() => {});
 
     const success = submitBet({
       type: 'three_card_poker_deal',
@@ -223,9 +223,9 @@ export function ThreeCardPokerScreen() {
     }
   }, [state.anteBet, state.pairPlusBet, state.sixCardBet, state.progressiveBet, submitBet, isSubmitting]);
 
-  const handlePlay = useCallback(async () => {
+  const handlePlay = useCallback(() => {
     if (isSubmitting) return;
-    await haptics.betConfirm();
+    haptics.betConfirm().catch(() => {});
 
     const success = submitBet({
       type: 'three_card_poker_play',
@@ -240,9 +240,9 @@ export function ThreeCardPokerScreen() {
     }
   }, [submitBet, isSubmitting]);
 
-  const handleFold = useCallback(async () => {
+  const handleFold = useCallback(() => {
     if (isSubmitting) return;
-    await haptics.buttonPress();
+    haptics.buttonPress().catch(() => {});
 
     submitBet({
       type: 'three_card_poker_fold',

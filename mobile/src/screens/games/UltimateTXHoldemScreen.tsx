@@ -167,12 +167,12 @@ export function UltimateTXHoldemScreen() {
 
       if (payout > 0) {
         if (player?.rank === 'ROYAL_FLUSH') {
-          haptics.jackpot();
+          haptics.jackpot().catch(() => {});
         } else {
-          haptics.win();
+          haptics.win().catch(() => {});
         }
       } else {
-        haptics.loss();
+        haptics.loss().catch(() => {});
       }
 
       setState((prev) => ({
@@ -201,11 +201,11 @@ export function UltimateTXHoldemScreen() {
     const currentTotalBet =
       state.anteBet + state.blindBet + state.tripsBet + state.sixCardBet + state.progressiveBet;
     if (currentTotalBet + value > balance) {
-      haptics.error();
+      haptics.error().catch(() => {});
       return;
     }
 
-    haptics.chipPlace();
+    haptics.chipPlace().catch(() => {});
 
     setState((prev) => ({
       ...prev,
@@ -219,11 +219,11 @@ export function UltimateTXHoldemScreen() {
     const currentTotalBet =
       state.anteBet + state.blindBet + state.tripsBet + state.sixCardBet + state.progressiveBet;
     if (currentTotalBet + value > balance) {
-      haptics.error();
+      haptics.error().catch(() => {});
       return;
     }
 
-    haptics.chipPlace();
+    haptics.chipPlace().catch(() => {});
 
     setState((prev) => ({
       ...prev,
@@ -238,11 +238,11 @@ export function UltimateTXHoldemScreen() {
       state.anteBet + state.blindBet + state.tripsBet + state.sixCardBet + state.progressiveBet;
     const progressiveUnit = 1;
     if (currentTotalBet + (state.progressiveBet > 0 ? 0 : progressiveUnit) > balance) {
-      haptics.error();
+      haptics.error().catch(() => {});
       return;
     }
 
-    haptics.chipPlace();
+    haptics.chipPlace().catch(() => {});
     setState((prev) => ({
       ...prev,
       progressiveBet: prev.progressiveBet > 0 ? 0 : progressiveUnit,
@@ -268,11 +268,11 @@ export function UltimateTXHoldemScreen() {
     const currentTotalBet =
       state.anteBet + state.blindBet + state.tripsBet + state.sixCardBet + state.progressiveBet;
     if (currentTotalBet + (value * 2) > balance) {
-      haptics.error();
+      haptics.error().catch(() => {});
       return;
     }
 
-    haptics.chipPlace();
+    haptics.chipPlace().catch(() => {});
 
     // Ante and Blind are always equal
     setState((prev) => ({
@@ -294,9 +294,9 @@ export function UltimateTXHoldemScreen() {
     balance,
   ]);
 
-  const handleDeal = useCallback(async () => {
+  const handleDeal = useCallback(() => {
     if (state.anteBet === 0 || isSubmitting) return;
-    await haptics.betConfirm();
+    haptics.betConfirm().catch(() => {});
 
     const success = submitBet({
       type: 'ultimate_tx_deal',
@@ -315,9 +315,9 @@ export function UltimateTXHoldemScreen() {
     }
   }, [state.anteBet, state.blindBet, state.tripsBet, state.sixCardBet, state.progressiveBet, isSubmitting, submitBet]);
 
-  const handleBet = useCallback(async (multiplier: number) => {
+  const handleBet = useCallback((multiplier: number) => {
     if (isSubmitting) return;
-    await haptics.betConfirm();
+    haptics.betConfirm().catch(() => {});
 
     const success = submitBet({
       type: 'ultimate_tx_bet',
@@ -333,9 +333,9 @@ export function UltimateTXHoldemScreen() {
     }
   }, [state.anteBet, isSubmitting, submitBet]);
 
-  const handleCheck = useCallback(async () => {
+  const handleCheck = useCallback(() => {
     if (isSubmitting) return;
-    await haptics.buttonPress();
+    haptics.buttonPress().catch(() => {});
 
     const success = submitBet({
       type: 'ultimate_tx_check',
@@ -350,9 +350,9 @@ export function UltimateTXHoldemScreen() {
     }
   }, [isSubmitting, submitBet]);
 
-  const handleFold = useCallback(async () => {
+  const handleFold = useCallback(() => {
     if (isSubmitting) return;
-    await haptics.buttonPress();
+    haptics.buttonPress().catch(() => {});
 
     const success = submitBet({
       type: 'ultimate_tx_fold',

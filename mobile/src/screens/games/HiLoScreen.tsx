@@ -101,9 +101,9 @@ export function HiLoScreen() {
       const nextCard = typeof nextCardId === 'number' ? decodeCardId(nextCardId) : null;
 
       if (won) {
-        haptics.win();
+        haptics.win().catch(() => {});
       } else {
-        haptics.loss();
+        haptics.loss().catch(() => {});
       }
       setState((prev) => ({
         ...prev,
@@ -116,10 +116,10 @@ export function HiLoScreen() {
     }
   }, [lastMessage, clearSubmission]);
 
-  const handleBet = useCallback(async (choice: 'higher' | 'lower') => {
+  const handleBet = useCallback((choice: 'higher' | 'lower') => {
     if (bet === 0 || state.phase !== 'betting' || isSubmitting) return;
 
-    await haptics.betConfirm();
+    haptics.betConfirm().catch(() => {});
 
     const success = submitBet({
       type: 'hilo_bet',

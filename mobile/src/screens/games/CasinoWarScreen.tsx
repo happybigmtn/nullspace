@@ -115,9 +115,9 @@ export function CasinoWarScreen() {
       const dealerCard = typeof payload.dealerCard === 'number' ? decodeCardId(payload.dealerCard) : null;
 
       if (won) {
-        haptics.win();
+        haptics.win().catch(() => {});
       } else {
-        haptics.loss();
+        haptics.loss().catch(() => {});
       }
 
       setState((prev) => ({
@@ -131,9 +131,9 @@ export function CasinoWarScreen() {
     }
   }, [lastMessage, clearSubmission]);
 
-  const handleDeal = useCallback(async () => {
+  const handleDeal = useCallback(() => {
     if (bet === 0 || isSubmitting) return;
-    await haptics.betConfirm();
+    haptics.betConfirm().catch(() => {});
 
     const success = submitBet({
       type: 'casino_war_deal',
@@ -149,21 +149,21 @@ export function CasinoWarScreen() {
     }
   }, [bet, submitBet, state.tieBet, isSubmitting]);
 
-  const handleToggleTieBet = useCallback(async () => {
+  const handleToggleTieBet = useCallback(() => {
     if (state.phase !== 'betting') return;
     const nextAmount = state.tieBet > 0 ? 0 : selectedChip;
     if (bet + nextAmount > balance) {
-      haptics.error();
+      haptics.error().catch(() => {});
       setState((prev) => ({ ...prev, message: 'Insufficient balance' }));
       return;
     }
-    await haptics.buttonPress();
+    haptics.buttonPress().catch(() => {});
     setState((prev) => ({ ...prev, tieBet: nextAmount }));
   }, [state.phase, state.tieBet, selectedChip, bet, balance]);
 
-  const handleWar = useCallback(async () => {
+  const handleWar = useCallback(() => {
     if (isSubmitting) return;
-    await haptics.betConfirm();
+    haptics.betConfirm().catch(() => {});
 
     const success = submitBet({
       type: 'casino_war_war',
@@ -179,9 +179,9 @@ export function CasinoWarScreen() {
     }
   }, [submitBet, bet, isSubmitting]);
 
-  const handleSurrender = useCallback(async () => {
+  const handleSurrender = useCallback(() => {
     if (isSubmitting) return;
-    await haptics.buttonPress();
+    haptics.buttonPress().catch(() => {});
 
     submitBet({
       type: 'casino_war_surrender',

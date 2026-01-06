@@ -133,9 +133,9 @@ export function RouletteScreen() {
       const totalWagered = parseNumeric(payload.totalWagered) ?? 0;
       const winAmount = Math.max(0, totalReturn - totalWagered);
       if (won) {
-        haptics.win();
+        haptics.win().catch(() => {});
       } else {
-        haptics.loss();
+        haptics.loss().catch(() => {});
       }
 
       setState((prev) => ({
@@ -162,11 +162,11 @@ export function RouletteScreen() {
     // Calculate current total bet
     const currentTotalBet = state.bets.reduce((sum, b) => sum + b.amount, 0);
     if (currentTotalBet + selectedChip > balance) {
-      haptics.error();
+      haptics.error().catch(() => {});
       return;
     }
 
-    haptics.chipPlace();
+    haptics.chipPlace().catch(() => {});
 
     setState((prev) => {
       const existingIndex = prev.bets.findIndex(
@@ -193,9 +193,9 @@ export function RouletteScreen() {
     });
   }, [state.phase, selectedChip, state.bets, balance]);
 
-  const handleSpin = useCallback(async () => {
+  const handleSpin = useCallback(() => {
     if (state.bets.length === 0 || isSubmitting) return;
-    await haptics.wheelSpin();
+    haptics.wheelSpin().catch(() => {});
 
     const success = submitBet({
       type: 'roulette_spin',

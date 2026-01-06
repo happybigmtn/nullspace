@@ -127,12 +127,12 @@ export function VideoPokerScreen() {
       const hand = typeof payload.hand === 'string' ? payload.hand as PokerHand : null;
       if (payout > 0) {
         if (hand === 'ROYAL_FLUSH') {
-          haptics.jackpot();
+          haptics.jackpot().catch(() => {});
         } else {
-          haptics.win();
+          haptics.win().catch(() => {});
         }
       } else {
-        haptics.loss();
+        haptics.loss().catch(() => {});
       }
 
       setState((prev) => ({
@@ -149,9 +149,9 @@ export function VideoPokerScreen() {
     }
   }, [lastMessage, clearSubmission]);
 
-  const handleDeal = useCallback(async () => {
+  const handleDeal = useCallback(() => {
     if (bet === 0 || isSubmitting) return;
-    await haptics.betConfirm();
+    haptics.betConfirm().catch(() => {});
 
     submitBet({
       type: 'video_poker_deal',
@@ -161,7 +161,7 @@ export function VideoPokerScreen() {
 
   const handleToggleHold = useCallback((index: number) => {
     if (state.phase !== 'initial') return;
-    haptics.selectionChange();
+    haptics.selectionChange().catch(() => {});
 
     setState((prev) => {
       const newHeld = [...prev.held];
@@ -170,9 +170,9 @@ export function VideoPokerScreen() {
     });
   }, [state.phase]);
 
-  const handleDraw = useCallback(async () => {
+  const handleDraw = useCallback(() => {
     if (isSubmitting) return;
-    await haptics.betConfirm();
+    haptics.betConfirm().catch(() => {});
 
     const success = submitBet({
       type: 'video_poker_draw',

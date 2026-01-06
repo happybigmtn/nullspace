@@ -37,8 +37,8 @@
 				"Add lint rule to prevent future blocking haptic calls"
 			],
 			"priority": 3,
-			"passes": false,
-			"notes": "VERIFIED BUG: 22 blocking haptics calls fixed across 9 game screens. Need verification test passes."
+			"passes": true,
+			"notes": "FIXED: All 70+ haptic calls across 10 game screens now use fire-and-forget pattern. Added ESLint rule using no-restricted-syntax to catch both await haptics and bare haptics calls without .catch()."
 		},
 		{
 			"id": "US-024",
@@ -272,6 +272,71 @@
 			"priority": 21,
 			"passes": false,
 			"notes": "MANUAL: Final production iOS build"
+		},
+		{
+			"id": "US-031",
+			"title": "Add useBetSubmission unit tests",
+			"acceptanceCriteria": [
+				"Test double-tap rejection (isSubmitting flag)",
+				"Test timeout auto-recovery (5s fallback)",
+				"Test clearSubmission() on response",
+				"Test send failure returns false immediately"
+			],
+			"priority": 22,
+			"passes": false,
+			"notes": "CRITICAL GAP: useBetSubmission has NO unit tests. This hook prevents double-bet bugs."
+		},
+		{
+			"id": "US-032",
+			"title": "Add server bet rejection tests",
+			"acceptanceCriteria": [
+				"Test handling of 'bet_rejected' message type",
+				"Test insufficient balance rejection",
+				"Test below-minimum bet rejection",
+				"Test UI recovery after rejection (re-enable DEAL button)"
+			],
+			"priority": 23,
+			"passes": false,
+			"notes": "VERIFIED GAP: No tests verify what happens when server rejects a bet. Could leave UI stuck."
+		},
+		{
+			"id": "US-033",
+			"title": "Add balance race condition tests",
+			"acceptanceCriteria": [
+				"Test placeChip uses fresh balance (getState() not stale closure)",
+				"Test balance update during betting phase",
+				"Test concurrent chip placements",
+				"Test bet > balance edge case after balance decrease"
+			],
+			"priority": 24,
+			"passes": false,
+			"notes": "VERIFIED GAP: useChipBetting tests don't verify getState() fix for stale balance. Race conditions untested."
+		},
+		{
+			"id": "US-034",
+			"title": "Add network failure during bet submission tests",
+			"acceptanceCriteria": [
+				"Test send() returns false when disconnected",
+				"Test UI disables DEAL when isDisconnected=true",
+				"Test reconnection recovery during betting",
+				"Test bet state preserved across reconnection"
+			],
+			"priority": 25,
+			"passes": false,
+			"notes": "VERIFIED GAP: Integration tests have testReconnection() but don't test mid-bet scenarios."
+		},
+		{
+			"id": "US-035",
+			"title": "Add zero balance edge case tests",
+			"acceptanceCriteria": [
+				"Test ChipSelector disabled when balance=0",
+				"Test DEAL button disabled when bet=0",
+				"Test faucet flow restores betting capability",
+				"Test balance=0 message displayed to user"
+			],
+			"priority": 26,
+			"passes": false,
+			"notes": "VERIFIED GAP: No tests for empty balance UX. User could see confusing state on new account."
 		}
 	]
 }

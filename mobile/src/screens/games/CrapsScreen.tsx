@@ -167,7 +167,7 @@ export function CrapsScreen() {
         withTiming(lift(), { duration: 120 }),
         withSpring(0, SPRING.diceTumble)
       );
-      haptics.diceRoll();
+      haptics.diceRoll().catch(() => {});
     }
 
     if (lastMessage.type === 'live_table_confirmation') {
@@ -188,7 +188,7 @@ export function CrapsScreen() {
       });
       if (status === 'confirmed') {
         clearSubmission();
-        void haptics.betConfirm();
+        haptics.betConfirm().catch(() => {});
       }
       return;
     }
@@ -261,9 +261,9 @@ export function CrapsScreen() {
       const netWin = parseNumeric(payload.netWin ?? payload.payout) ?? 0;
       const won = netWin > 0;
       if (won) {
-        haptics.win();
+        haptics.win().catch(() => {});
       } else {
-        haptics.loss();
+        haptics.loss().catch(() => {});
       }
 
       const nextBets = Array.isArray(payload.myBets)
@@ -328,9 +328,9 @@ export function CrapsScreen() {
       const won = winAmount > 0;
 
       if (won) {
-        haptics.win();
+        haptics.win().catch(() => {});
       } else {
-        haptics.loss();
+        haptics.loss().catch(() => {});
       }
 
       setState((prev) => ({
@@ -400,11 +400,11 @@ export function CrapsScreen() {
     // Calculate current total bet
     const currentTotalBet = state.bets.reduce((sum, b) => sum + b.amount, 0);
     if (currentTotalBet + selectedChip > balance) {
-      haptics.error();
+      haptics.error().catch(() => {});
       return;
     }
 
-    haptics.chipPlace();
+    haptics.chipPlace().catch(() => {});
 
     setState((prev) => {
       const existingIndex = prev.bets.findIndex((b) => b.type === type && b.target === target);
