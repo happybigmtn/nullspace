@@ -186,16 +186,26 @@ export abstract class BaseGameTest {
    * Useful for games that might send either depending on game state.
    * Atomic games may return game_move (with final state) or game_result.
    * Returns the message along with which type it was.
+   * Also handles error messages for better diagnostics.
    */
   protected async waitForGameOutcome(
     timeoutMs: number = 5000
-  ): Promise<{ type: 'move' | 'result'; message: GameMessage }> {
+  ): Promise<{ type: 'move' | 'result' | 'error'; message: GameMessage }> {
     try {
       const result = await Promise.race([
         this.client.waitForMessage('game_move', timeoutMs).then(msg => ({ type: 'move' as const, message: msg })),
         this.client.waitForMessage('game_result', timeoutMs).then(msg => ({ type: 'result' as const, message: msg })),
+        this.client.waitForMessage('error', timeoutMs).then(msg => ({ type: 'error' as const, message: msg })),
       ]);
-      this.logger.success(`Received game_${result.type}`);
+
+      if (result.type === 'error') {
+        const errorMsg = `Game error: ${JSON.stringify(result.message)}`;
+        this.logger.error(errorMsg);
+        this.errors.push(errorMsg);
+        // Still return the result so tests can inspect error details
+      } else {
+        this.logger.success(`Received game_${result.type}`);
+      }
       return result;
     } catch (error) {
       const errorMsg = `Failed to receive game outcome: ${error}`;

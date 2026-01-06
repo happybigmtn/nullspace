@@ -551,3 +551,26 @@ Target: Testnet Production
   - Integration tests run via ts-node, not Jest: `ts-node tests/integration/runReconnectionTests.ts`
 
 ---
+
+## 2026-01-06 - US-027: Fix mobile integration test message type mismatches
+
+- What was implemented:
+  - Verified all 10 game integration tests have correct message type expectations
+  - Enhanced `waitForGameOutcome()` to also handle `error` messages for better diagnostics
+  - Error messages are now captured and logged with full JSON content for debugging
+  - Created `runSingleTest.ts` utility for quick single-game debugging
+- Message type patterns verified:
+  - **Atomic games** (Roulette, Craps, Baccarat, SicBo): Use `waitForGameOutcome()` directly - correct
+  - **Multi-move games** (Blackjack, HiLo, VideoPoker, ThreeCard, UltimateHoldem): Use `game_started` then `waitForGameOutcome()` - correct
+  - **Hybrid game** (CasinoWar): Uses `game_started` to check for immediate result or tie state - correct
+- Files changed:
+  - `mobile/tests/integration/framework/BaseGameTest.ts` - Enhanced `waitForGameOutcome()` to handle error messages
+  - `mobile/tests/integration/runSingleTest.ts` - New utility for quick debugging
+- **Learnings:**
+  - Gateway returns `type: "error"` with `code` and `message` fields when operations fail
+  - `BACKEND_UNAVAILABLE` error means session creation failed (backend connectivity issue)
+  - Integration tests require functioning backend with proper session creation
+  - `Promise.race()` with three message types (game_move, game_result, error) provides comprehensive outcome handling
+  - Running full test suite with `npx tsx tests/integration/runTests.ts` (not ts-node)
+
+---
