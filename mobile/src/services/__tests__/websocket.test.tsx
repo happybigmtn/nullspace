@@ -66,7 +66,10 @@ class MockWebSocket {
   }
 }
 
-type HookSnapshot = WebSocketManager & { lastMessage: { type: string } | null };
+type HookSnapshot = WebSocketManager & {
+  lastMessage: { type: string } | null;
+  droppedMessage: { message: object; reason: 'queue_full' | 'expired' } | null;
+};
 
 const snapshots: HookSnapshot[] = [];
 
@@ -401,6 +404,317 @@ describe('useWebSocket', () => {
       expect(connectedState?.connectionState).toBe('connected');
       expect(connectedState?.reconnectAttempt).toBe(0);
       expect(connectedState?.isConnected).toBe(true);
+    });
+  });
+
+  describe('message queue overflow', () => {
+    it('drops oldest message when queue reaches MAX_QUEUE_SIZE (50)', () => {
+      jest.spyOn(console, 'log').mockImplementation(() => {});
+      jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      act(() => {
+        TestRenderer.create(<HookProbe url="ws://example.test" />);
+      });
+
+      // Socket is in 'connecting' state, messages get queued
+      const state = snapshots.at(-1);
+      expect(state?.connectionState).toBe('connecting');
+
+      // Queue 50 messages (MAX_QUEUE_SIZE)
+      for (let i = 0; i < 50; i++) {
+        act(() => {
+          state?.send({ type: 'queued_msg', index: i });
+        });
+      }
+
+      // All 50 should be queued
+      expect(console.log).toHaveBeenCalledWith(
+        '[WebSocket] Message queued (50/50)'
+      );
+
+      // Queue one more - should drop oldest and warn
+      act(() => {
+        state?.send({ type: 'queued_msg', index: 50 });
+      });
+
+      expect(console.warn).toHaveBeenCalledWith(
+        '[WebSocket] Message queue full (50), dropping oldest message'
+      );
+
+      // Now connect and verify FIFO order - message 0 should be dropped
+      const socket = MockWebSocket.instances[0];
+      act(() => {
+        socket.readyState = MockWebSocket.OPEN;
+        socket.onopen?.();
+      });
+
+      // First message sent should be index 1 (0 was dropped)
+      const sentMessages = socket.send.mock.calls;
+      const firstSent = JSON.parse(sentMessages[0][0] as string);
+      expect(firstSent.index).toBe(1);
+
+      // Last message sent should be index 50
+      const lastSent = JSON.parse(sentMessages[sentMessages.length - 1][0] as string);
+      expect(lastSent.index).toBe(50);
+
+      // Should have sent exactly 50 messages (not 51)
+      expect(sentMessages.length).toBe(50);
+    });
+
+    it('warns about critical game actions that can be lost during disconnection', () => {
+      jest.spyOn(console, 'log').mockImplementation(() => {});
+      jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      act(() => {
+        TestRenderer.create(<HookProbe url="ws://example.test" />);
+      });
+
+      const socket = MockWebSocket.instances[0];
+
+      // Connect first, then disconnect
+      act(() => {
+        socket.readyState = MockWebSocket.OPEN;
+        socket.onopen?.();
+      });
+
+      // Simulate disconnection (unclean close)
+      act(() => {
+        socket.readyState = MockWebSocket.CLOSED;
+        socket.onclose?.({ wasClean: false, code: 1006, reason: 'network failure' });
+      });
+
+      const state = snapshots.at(-1);
+      expect(state?.connectionState).toBe('disconnected');
+
+      // Queue 50 bet messages during disconnection
+      for (let i = 0; i < 50; i++) {
+        act(() => {
+          state?.send({ type: 'game_action', action: 'bet', amount: 100, nonce: i });
+        });
+      }
+
+      // Queue one more bet - this drops the first bet!
+      act(() => {
+        state?.send({ type: 'game_action', action: 'bet', amount: 200, nonce: 50 });
+      });
+
+      expect(console.warn).toHaveBeenCalledWith(
+        '[WebSocket] Message queue full (50), dropping oldest message'
+      );
+
+      // CRITICAL: The first bet (nonce: 0) was silently dropped
+      // This is the behavior we're documenting - users could lose bets
+    });
+
+    it('maintains FIFO order when queue overflows multiple times', () => {
+      jest.spyOn(console, 'log').mockImplementation(() => {});
+      jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      act(() => {
+        TestRenderer.create(<HookProbe url="ws://example.test" />);
+      });
+
+      const state = snapshots.at(-1);
+
+      // Queue 55 messages (overflow by 5)
+      for (let i = 0; i < 55; i++) {
+        act(() => {
+          state?.send({ type: 'msg', seq: i });
+        });
+      }
+
+      // Should have warned 5 times (once for each overflow)
+      expect(console.warn).toHaveBeenCalledTimes(5);
+
+      // Connect and verify order
+      const socket = MockWebSocket.instances[0];
+      act(() => {
+        socket.readyState = MockWebSocket.OPEN;
+        socket.onopen?.();
+      });
+
+      const sentMessages = socket.send.mock.calls.map(
+        (call) => JSON.parse(call[0] as string).seq
+      );
+
+      // Messages 0-4 were dropped, 5-54 remain
+      expect(sentMessages[0]).toBe(5);
+      expect(sentMessages[sentMessages.length - 1]).toBe(54);
+      expect(sentMessages.length).toBe(50);
+
+      // Verify strict FIFO order
+      for (let i = 0; i < sentMessages.length - 1; i++) {
+        expect(sentMessages[i + 1]).toBe(sentMessages[i] + 1);
+      }
+    });
+
+    it('returns true for queued messages even when oldest is dropped', () => {
+      jest.spyOn(console, 'log').mockImplementation(() => {});
+      jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      act(() => {
+        TestRenderer.create(<HookProbe url="ws://example.test" />);
+      });
+
+      const state = snapshots.at(-1);
+
+      // Queue 50 messages
+      for (let i = 0; i < 50; i++) {
+        const result = state?.send({ type: 'msg', index: i });
+        expect(result).toBe(true);
+      }
+
+      // 51st message - still returns true (queued), but oldest was dropped
+      let result: boolean | undefined;
+      act(() => {
+        result = state?.send({ type: 'msg', index: 50 });
+      });
+
+      expect(result).toBe(true);
+      // Note: This is misleading to callers - the first message was lost
+      // but send() still returns true for the new message
+    });
+
+    it('does not queue messages when connectionState is failed', () => {
+      jest.spyOn(console, 'log').mockImplementation(() => {});
+      jest.spyOn(console, 'warn').mockImplementation(() => {});
+      jest.spyOn(console, 'error').mockImplementation(() => {});
+
+      act(() => {
+        TestRenderer.create(<HookProbe url="ws://example.test" />);
+      });
+
+      // Exhaust reconnect attempts to reach failed state
+      for (let attempt = 0; attempt < 10; attempt++) {
+        const socket = MockWebSocket.instances.at(-1);
+        act(() => {
+          socket?.onclose?.({ wasClean: false, code: 1006, reason: 'reset' });
+        });
+        act(() => {
+          jest.advanceTimersByTime(Math.min(1000 * Math.pow(2, attempt), 30000));
+        });
+      }
+      const failedSocket = MockWebSocket.instances.at(-1);
+      act(() => {
+        failedSocket?.onclose?.({ wasClean: false, code: 1006, reason: 'reset' });
+      });
+
+      const failedState = snapshots.at(-1);
+      expect(failedState?.connectionState).toBe('failed');
+
+      // Try to send when failed - should NOT queue, returns false
+      let result: boolean | undefined;
+      act(() => {
+        result = failedState?.send({ type: 'msg' });
+      });
+
+      expect(result).toBe(false);
+      expect(console.warn).toHaveBeenCalledWith(
+        '[WebSocket] Not connected and not reconnecting, message dropped'
+      );
+    });
+
+    it('sets droppedMessage with queue_full reason when oldest is dropped', () => {
+      jest.spyOn(console, 'log').mockImplementation(() => {});
+      jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      act(() => {
+        TestRenderer.create(<HookProbe url="ws://example.test" />);
+      });
+
+      const initialState = snapshots.at(-1);
+
+      // Initially no dropped messages
+      expect(initialState?.droppedMessage).toBeNull();
+
+      // Queue 50 messages
+      for (let i = 0; i < 50; i++) {
+        act(() => {
+          initialState?.send({ type: 'bet', nonce: i });
+        });
+      }
+
+      // No message dropped yet
+      let stateAfter50 = snapshots.at(-1);
+      expect(stateAfter50?.droppedMessage).toBeNull();
+
+      // Queue 51st message - should trigger drop of message 0
+      act(() => {
+        initialState?.send({ type: 'bet', nonce: 50 });
+      });
+
+      const stateAfterDrop = snapshots.at(-1);
+      expect(stateAfterDrop?.droppedMessage).toEqual({
+        message: { type: 'bet', nonce: 0 },
+        reason: 'queue_full',
+      });
+    });
+
+    it('updates droppedMessage for each subsequent overflow', () => {
+      jest.spyOn(console, 'log').mockImplementation(() => {});
+      jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      act(() => {
+        TestRenderer.create(<HookProbe url="ws://example.test" />);
+      });
+
+      const state = snapshots.at(-1);
+
+      // Queue 52 messages (2 overflows)
+      for (let i = 0; i < 52; i++) {
+        act(() => {
+          state?.send({ type: 'msg', seq: i });
+        });
+      }
+
+      // droppedMessage should be the last dropped one (seq: 1)
+      const finalState = snapshots.at(-1);
+      expect(finalState?.droppedMessage).toEqual({
+        message: { type: 'msg', seq: 1 },
+        reason: 'queue_full',
+      });
+    });
+
+    it('sets droppedMessage with expired reason when messages timeout on reconnect', () => {
+      jest.spyOn(console, 'log').mockImplementation(() => {});
+      jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      act(() => {
+        TestRenderer.create(<HookProbe url="ws://example.test" />);
+      });
+
+      const state = snapshots.at(-1);
+
+      // Queue some messages
+      act(() => {
+        state?.send({ type: 'old_bet', amount: 100 });
+      });
+      act(() => {
+        state?.send({ type: 'old_bet', amount: 200 });
+      });
+
+      // Advance time past MESSAGE_TIMEOUT_MS (30 seconds)
+      act(() => {
+        jest.advanceTimersByTime(31000);
+      });
+
+      // Now connect - should detect expired messages
+      const socket = MockWebSocket.instances[0];
+      act(() => {
+        socket.readyState = MockWebSocket.OPEN;
+        socket.onopen?.();
+      });
+
+      const stateAfterConnect = snapshots.at(-1);
+      expect(stateAfterConnect?.droppedMessage).toEqual({
+        message: { type: 'old_bet', amount: 200 },
+        reason: 'expired',
+      });
+
+      // Expired messages should have logged a warning
+      expect(console.warn).toHaveBeenCalledWith(
+        '[WebSocket] 2 queued message(s) expired (older than 30s)'
+      );
     });
   });
 

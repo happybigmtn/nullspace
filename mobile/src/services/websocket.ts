@@ -13,6 +13,11 @@ export interface GameMessage {
 
 export type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'failed';
 
+export interface DroppedMessage {
+  message: object;
+  reason: 'queue_full' | 'expired';
+}
+
 export interface WebSocketManager<T = GameMessage> {
   isConnected: boolean;
   connectionState: ConnectionState;
@@ -22,6 +27,7 @@ export interface WebSocketManager<T = GameMessage> {
   send: (message: object) => boolean;
   reconnect: () => void;
   isReconnecting: boolean;
+  droppedMessage: DroppedMessage | null;
 }
 
 const MAX_RECONNECT_ATTEMPTS = 10;
@@ -46,6 +52,7 @@ export function useWebSocket<T extends GameMessage = GameMessage>(
   const [lastMessage, setLastMessage] = useState<T | null>(null);
   const [connectionState, setConnectionState] = useState<ConnectionState>('disconnected');
   const [reconnectAttempt, setReconnectAttempt] = useState(0);
+  const [droppedMessage, setDroppedMessage] = useState<DroppedMessage | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const reconnectTimeoutId = useRef<ReturnType<typeof setTimeout> | null>(null);
   const messageQueueRef = useRef<QueuedMessage[]>([]);
@@ -109,11 +116,25 @@ export function useWebSocket<T extends GameMessage = GameMessage>(
       const validMessages = messageQueueRef.current.filter(
         (item) => now - item.timestamp < MESSAGE_TIMEOUT_MS
       );
+      const expiredMessages = messageQueueRef.current.filter(
+        (item) => now - item.timestamp >= MESSAGE_TIMEOUT_MS
+      );
+
+      // Notify about expired messages (only the last one to avoid spamming)
+      if (expiredMessages.length > 0) {
+        const lastExpired = expiredMessages[expiredMessages.length - 1];
+        setDroppedMessage({ message: lastExpired.message, reason: 'expired' });
+        if (__DEV__) {
+          console.warn(
+            `[WebSocket] ${expiredMessages.length} queued message(s) expired (older than ${MESSAGE_TIMEOUT_MS / 1000}s)`
+          );
+        }
+      }
 
       if (validMessages.length > 0) {
         if (__DEV__) {
           console.log(
-            `[WebSocket] Flushing ${validMessages.length} queued messages (${messageQueueRef.current.length - validMessages.length} expired)`
+            `[WebSocket] Flushing ${validMessages.length} queued messages (${expiredMessages.length} expired)`
           );
         }
         for (const item of validMessages) {
@@ -228,7 +249,10 @@ export function useWebSocket<T extends GameMessage = GameMessage>(
               `[WebSocket] Message queue full (${MAX_QUEUE_SIZE}), dropping oldest message`
             );
           }
-          messageQueueRef.current.shift(); // Remove oldest message
+          const droppedItem = messageQueueRef.current.shift(); // Remove oldest message
+          if (droppedItem) {
+            setDroppedMessage({ message: droppedItem.message, reason: 'queue_full' });
+          }
         }
 
         messageQueueRef.current.push({
@@ -286,6 +310,7 @@ export function useWebSocket<T extends GameMessage = GameMessage>(
     lastMessage,
     reconnect,
     isReconnecting: isReconnectingRef.current,
+    droppedMessage,
   };
 }
 

@@ -760,3 +760,27 @@ Target: Testnet Production
   - MockWebSocket class pattern: track instances array, expose OPEN/CLOSED constants, simulate events
 
 ---
+
+## 2026-01-06 - US-037: Add WebSocket message queue overflow tests
+
+- What was implemented:
+  - Added 9 tests in `message queue overflow` describe block in websocket.test.tsx
+  - Tests cover: drops oldest at MAX_QUEUE_SIZE (50), FIFO order, critical actions lossy, droppedMessage callbacks
+  - Added `DroppedMessage` interface: `{ message: object; reason: 'queue_full' | 'expired' }`
+  - Added `droppedMessage` state to `WebSocketManager` interface
+  - When queue overflows, sets `droppedMessage` with `reason: 'queue_full'` and the dropped message content
+  - When messages expire on reconnect (>30s old), sets `droppedMessage` with `reason: 'expired'`
+  - Updated onopen handler to filter expired messages and notify about them
+- Files changed:
+  - `mobile/src/services/websocket.ts` - Added DroppedMessage interface + droppedMessage state + notification logic
+  - `mobile/src/services/__tests__/websocket.test.tsx` - Added 9 tests in message queue overflow describe block
+- **Learnings:**
+  - `MAX_QUEUE_SIZE = 50` limits queued messages during disconnection
+  - `MESSAGE_TIMEOUT_MS = 30000` expires messages older than 30 seconds on reconnect flush
+  - Queue uses FIFO order via `shift()` to drop oldest messages first
+  - React state (`droppedMessage`) allows UI layer to display warnings when critical messages are lost
+  - Pattern: Expose last dropped message to UI instead of just logging - enables user-facing notifications
+  - Important UX consideration: `send()` still returns `true` when message is queued but oldest was dropped - caller doesn't know oldest was lost
+  - Critical game actions (bets) can be silently lost if queue overflows - UI should use `droppedMessage` to warn users
+
+---

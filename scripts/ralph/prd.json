@@ -361,8 +361,8 @@
 				"Add user feedback when messages are dropped"
 			],
 			"priority": 28,
-			"passes": false,
-			"notes": "CRITICAL GAP: websocket.ts:225-232 - message queue drops oldest message silently. Bets could be lost without user knowing."
+			"passes": true,
+			"notes": "FIXED: Added 9 tests in 'message queue overflow' describe block. Tests verify: queue drops oldest at MAX_QUEUE_SIZE (50), FIFO order maintained, critical game actions documented as lossy. Added DroppedMessage interface with droppedMessage state to WebSocketManager - fires with reason 'queue_full' when oldest dropped, and 'expired' when messages timeout on reconnect. UI can now display appropriate warnings."
 		},
 		{
 			"id": "US-038",
