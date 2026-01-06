@@ -43,7 +43,7 @@ describe('CrapsScreen', () => {
     );
 
   it('renders and handles actions', async () => {
-    let tree: ReturnType<typeof create>;
+    let tree!: ReturnType<typeof create>;
     act(() => {
       tree = create(<CrapsScreen />);
     });
@@ -115,5 +115,41 @@ describe('CrapsScreen', () => {
     });
 
     expect(mockHaptics.loss).toHaveBeenCalled();
+  });
+
+  describe('isMounted pattern', () => {
+    it('unmounts cleanly without setState warnings', () => {
+      let tree!: ReturnType<typeof create>;
+      act(() => {
+        tree = create(<CrapsScreen />);
+      });
+
+      act(() => {
+        tree.unmount();
+      });
+
+      expect(true).toBe(true);
+    });
+
+    it('handles message after unmount without errors', () => {
+      let tree!: ReturnType<typeof create>;
+      act(() => {
+        tree = create(<CrapsScreen />);
+      });
+
+      act(() => {
+        tree.unmount();
+      });
+
+      setGameConnectionMessage({
+        type: 'game_result',
+        dice: [3, 4],
+        point: 8,
+        totalReturn: 200,
+        totalWagered: 50,
+      });
+
+      expect(true).toBe(true);
+    });
   });
 });

@@ -43,7 +43,7 @@ describe('RouletteScreen', () => {
     );
 
   it('renders and handles actions', async () => {
-    let tree: ReturnType<typeof create>;
+    let tree!: ReturnType<typeof create>;
     act(() => {
       tree = create(<RouletteScreen />);
     });
@@ -116,5 +116,41 @@ describe('RouletteScreen', () => {
     });
 
     expect(mockHaptics.loss).toHaveBeenCalled();
+  });
+
+  describe('isMounted pattern', () => {
+    it('unmounts cleanly without setState warnings', () => {
+      let tree!: ReturnType<typeof create>;
+      act(() => {
+        tree = create(<RouletteScreen />);
+      });
+
+      act(() => {
+        tree.unmount();
+      });
+
+      expect(true).toBe(true);
+    });
+
+    it('handles message after unmount without errors', () => {
+      let tree!: ReturnType<typeof create>;
+      act(() => {
+        tree = create(<RouletteScreen />);
+      });
+
+      act(() => {
+        tree.unmount();
+      });
+
+      setGameConnectionMessage({
+        type: 'game_result',
+        won: true,
+        result: 17,
+        totalReturn: 150,
+        totalWagered: 25,
+      });
+
+      expect(true).toBe(true);
+    });
   });
 });

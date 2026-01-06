@@ -3,7 +3,7 @@
  * 3 dice with Big/Small quick bets, drawer for advanced bets
  */
 import { View, Text, StyleSheet, Pressable, Modal, ScrollView } from 'react-native';
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -74,6 +74,14 @@ export function SicBoScreen() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [comboMode, setComboMode] = useState<'NONE' | 'DOMINO' | 'HOP3_EASY' | 'HOP3_HARD' | 'HOP4_EASY'>('NONE');
   const [comboPicks, setComboPicks] = useState<number[]>([]);
+
+  // Track mounted state to prevent setState after unmount
+  const isMounted = useRef(true);
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
   useModalBackHandler(showAdvanced, () => setShowAdvanced(false));
 

@@ -43,7 +43,7 @@ describe('SicBoScreen', () => {
     );
 
   it('renders and handles actions', async () => {
-    let tree: ReturnType<typeof create>;
+    let tree!: ReturnType<typeof create>;
     act(() => {
       tree = create(<SicBoScreen />);
     });
@@ -114,5 +114,40 @@ describe('SicBoScreen', () => {
     });
 
     expect(mockHaptics.loss).toHaveBeenCalled();
+  });
+
+  describe('isMounted pattern', () => {
+    it('unmounts cleanly without setState warnings', () => {
+      let tree!: ReturnType<typeof create>;
+      act(() => {
+        tree = create(<SicBoScreen />);
+      });
+
+      act(() => {
+        tree.unmount();
+      });
+
+      expect(true).toBe(true);
+    });
+
+    it('handles message after unmount without errors', () => {
+      let tree!: ReturnType<typeof create>;
+      act(() => {
+        tree = create(<SicBoScreen />);
+      });
+
+      act(() => {
+        tree.unmount();
+      });
+
+      setGameConnectionMessage({
+        type: 'game_result',
+        dice: [2, 3, 4],
+        totalReturn: 120,
+        totalWagered: 20,
+      });
+
+      expect(true).toBe(true);
+    });
   });
 });

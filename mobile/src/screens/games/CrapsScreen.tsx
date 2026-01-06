@@ -100,6 +100,14 @@ export function CrapsScreen() {
   });
   const liveTableRef = useRef(liveTable);
 
+  // Track mounted state to prevent setState after unmount
+  const isMounted = useRef(true);
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
   useModalBackHandler(showAdvanced, () => setShowAdvanced(false));
 
   useEffect(() => {

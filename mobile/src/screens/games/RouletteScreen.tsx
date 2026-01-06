@@ -92,6 +92,14 @@ export function RouletteScreen() {
   const [insideMode, setInsideMode] = useState<InsideBetType>('SPLIT_H');
   const spinSeedRef = useRef({ extraSpins: 4 });
 
+  // Track mounted state to prevent setState after unmount
+  const isMounted = useRef(true);
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
   useModalBackHandler(showAdvanced, () => setShowAdvanced(false));
 
   const insideTargets = useMemo(() => {

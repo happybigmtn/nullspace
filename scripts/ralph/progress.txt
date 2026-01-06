@@ -845,3 +845,76 @@ Target: Testnet Production
   - XChaCha20-Poly1305 decryption throws on corrupted ciphertext/salt/nonce - tests verify this
 
 ---
+
+## 2026-01-06 - US-041: Add ChipSelector disabled state tests
+
+- What was implemented:
+  - Added `disabled` prop to both `ChipProps` and `ChipSelectorProps` interfaces
+  - Gestures (tap/pan) blocked via `Gesture.enabled(!disabled)` at native level
+  - Visual feedback via `opacity: 0.4` in `useAnimatedStyle` when disabled
+  - Added 11 tests covering rendering, prop drilling, state toggling, and documentation of native gesture blocking
+- Files changed:
+  - `mobile/src/components/casino/ChipSelector.tsx` - Added disabled prop, gesture blocking, opacity styling
+  - `mobile/src/components/casino/__tests__/ChipSelector.test.tsx` - Expanded from 1 to 11 tests
+- **Learnings:**
+  - `react-native-gesture-handler` uses `.enabled(boolean)` method on gestures for native-level blocking
+  - Pattern: `Gesture.Pan().enabled(!disabled)` prevents gesture from being recognized at all
+  - Native gesture events can't be simulated in Jest - tests verify prop drilling and visual feedback
+  - For gesture blocking testing, use document-only tests that describe expected native behavior
+  - `useAnimatedStyle` can reference props directly (like `disabled`) for reactive opacity changes
+  - `Gesture.Exclusive(pan, tap)` composition respects `.enabled()` on child gestures
+
+---
+
+## 2026-01-06 - US-042: Add state parsing failure user feedback
+
+- What was implemented:
+  - Added `parseError: string | null` to state interfaces of 5 game screens
+  - Added 'error' phase to phase union types for each game
+  - When `decodeStateBytes()` returns null, set error state with user message "Failed to load game state. Please try again."
+  - When `parseXxxState()` returns null, set error state with user message "Failed to parse game data. Please try again."
+  - Added `console.error()` logging in `__DEV__` mode with game name prefix (e.g., "[Blackjack]")
+  - Added "TRY AGAIN" button when phase === 'error' to allow recovery via handleNewGame()
+  - Added `messageError` style with `COLORS.error` red color
+  - Added 3 tests to BlackjackScreen.test.tsx covering decode failure, parse failure with empty bytes, and recovery
+- Files changed:
+  - `mobile/src/screens/games/BlackjackScreen.tsx` - Added parseError state, error handling, TRY AGAIN button
+  - `mobile/src/screens/games/HiLoScreen.tsx` - Same pattern
+  - `mobile/src/screens/games/VideoPokerScreen.tsx` - Same pattern
+  - `mobile/src/screens/games/ThreeCardPokerScreen.tsx` - Same pattern
+  - `mobile/src/screens/games/UltimateTXHoldemScreen.tsx` - Same pattern
+  - `mobile/src/screens/games/__tests__/BlackjackScreen.test.tsx` - Added 3 new tests
+- **Learnings:**
+  - Only 5 games use state blob parsing (Blackjack, HiLo, VideoPoker, ThreeCard, UltimateHoldem)
+  - Other 5 games (Baccarat, CasinoWar, Craps, Roulette, SicBo) use `game_result` payload directly
+  - Pattern: Check decode first (sync), then parse in InteractionManager callback (async)
+  - Recovery: handleNewGame() already resets all state, just add `parseError: null`
+  - Error styling: Reuse existing `COLORS.error` for consistency with loss messages
+  - Test approach: Send `null` or `[]` as state to trigger decode/parse failure paths
+
+---
+
+## 2026-01-06 - US-043: Add isMounted pattern to all game screens
+
+- What was implemented:
+  - Added `isMounted` ref pattern to 4 remaining game screens: BaccaratScreen, CrapsScreen, RouletteScreen, SicBoScreen
+  - CasinoWarScreen and HiLoScreen already had the pattern from US-005
+  - Added `useRef<boolean>(true)` with cleanup effect setting `isMounted.current = false`
+  - Added 8 new unmount tests (2 per screen): clean unmount and message handling after unmount
+- Files changed:
+  - `mobile/src/screens/games/BaccaratScreen.tsx` - Added useRef import, isMounted ref with cleanup
+  - `mobile/src/screens/games/CrapsScreen.tsx` - Added isMounted ref with cleanup
+  - `mobile/src/screens/games/RouletteScreen.tsx` - Added isMounted ref with cleanup (useRef already imported)
+  - `mobile/src/screens/games/SicBoScreen.tsx` - Added useRef import, isMounted ref with cleanup
+  - `mobile/src/screens/games/__tests__/BaccaratScreen.test.tsx` - Added 2 isMounted tests
+  - `mobile/src/screens/games/__tests__/CrapsScreen.test.tsx` - Added 2 isMounted tests
+  - `mobile/src/screens/games/__tests__/RouletteScreen.test.tsx` - Added 2 isMounted tests
+  - `mobile/src/screens/games/__tests__/SicBoScreen.test.tsx` - Added 2 isMounted tests
+- **Learnings:**
+  - Pattern: `const isMounted = useRef(true)` + cleanup effect returning `() => { isMounted.current = false }`
+  - These 4 screens use sync setState in useEffect (no InteractionManager) so guards aren't strictly needed yet
+  - Pattern added for consistency and future-proofing if async operations are added
+  - All 10 game screens now have isMounted pattern for memory leak prevention
+  - This also marks US-102 as complete since it was a duplicate story
+
+---

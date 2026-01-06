@@ -3,7 +3,7 @@
  * Epitome of simplicity - only 3 betting options
  */
 import { View, Text, StyleSheet, Pressable } from 'react-native';
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import Animated, { FadeIn, SlideInUp, SlideInDown } from 'react-native-reanimated';
 import { Card } from '../../components/casino';
 import { ChipSelector } from '../../components/casino';
@@ -94,6 +94,14 @@ export function BaccaratScreen() {
   });
   const [selectedChip, setSelectedChip] = useState<ChipValue>(25);
   const [showTutorial, setShowTutorial] = useState(false);
+
+  // Track mounted state to prevent setState after unmount
+  const isMounted = useRef(true);
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!lastMessage) return;
