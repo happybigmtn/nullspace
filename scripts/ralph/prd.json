@@ -478,8 +478,8 @@
 				"Prevent memory leaks from failed registrations"
 			],
 			"priority": 37,
-			"passes": false,
-			"notes": "CRITICAL GAP: manager.ts:142-150 - failed registration leaves orphaned session in tracking maps."
+			"passes": true,
+			"notes": "FIXED: Created session-manager.test.ts with 24 unit tests covering: (1) session creation and map tracking, (2) session marked unregistered on backend rejection, (3) connection count decrement on destroy, (4) byPublicKey map cleanup, (5) balance refresh interval cleanup, (6) cleanupIdleSessions() removes stale sessions with proper ws.close() calls, (7) graceful handling of close errors, (8) rate limiting per IP, (9) faucet cooldown, (10) memory leak prevention via 100-session churn test. Tests mock UpdatesClient to avoid network calls."
 		},
 		{
 			"id": "US-047",

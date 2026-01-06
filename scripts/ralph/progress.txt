@@ -957,3 +957,28 @@ Target: Testnet Production
   - Lock release in finally block ensures cleanup even on error
 
 ---
+
+## 2026-01-06 - US-046: Add gateway session cleanup tests
+
+- What was implemented:
+  - Created `session-manager.test.ts` with 24 comprehensive unit tests for SessionManager class
+  - Mocked `UpdatesClient` to avoid network calls during tests (vi.mock pattern)
+  - Tests cover session lifecycle: creation, tracking, destruction, and map cleanup
+  - Tests verify registration failure behavior: session returned but marked unregistered
+  - Tests verify `cleanupIdleSessions()` properly closes WebSocket and removes from both maps
+  - Tests verify rate limiting per IP (default 10 sessions/hour)
+  - Tests verify faucet cooldown enforcement
+  - Tests verify balance refresh from backend
+  - Memory leak prevention tested via 100-session churn test
+- Files changed:
+  - `gateway/tests/unit/session-manager.test.ts` - New file with 24 unit tests
+- **Learnings:**
+  - vi.mock() must be placed BEFORE imports of the mocked module for ESM hoisting
+  - MockWebSocket extends EventEmitter to simulate real WebSocket behavior
+  - Sessions are tracked in two maps: `sessions` (ws→Session) and `byPublicKey` (hex→Session)
+  - Failed `initializePlayer()` still returns session (logged, not thrown) - session stays in maps
+  - `cleanupIdleSessions()` takes idle threshold in ms and returns count of cleaned sessions
+  - Rate limiter uses in-memory Map, resets on gateway restart
+  - Balance refresh returns null if account not found (not an error)
+
+---
