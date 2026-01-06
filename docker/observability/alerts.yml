@@ -83,6 +83,24 @@ groups:
         annotations:
           summary: "Node mempool trimming per-account backlog"
           description: "Per-account mempool backlog limit is trimming queued transactions."
+  - name: auth_health
+    rules:
+      - alert: AuthServiceFailures
+        expr: rate(nullspace_auth_counter_total{key=~".*\\.failure|.*\\.error"}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Auth service experiencing failures"
+          description: "Auth service failure counters are elevated. Check auth service logs for errors and service health."
+      - alert: AuthSyncFailures
+        expr: rate(nullspace_auth_counter_total{key="freeroll.sync.failure"}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Auth freeroll sync failures detected"
+          description: "Freeroll sync to casino is failing. Check Convex connectivity and service tokens."
   - name: casino_activity
     rules:
       - alert: CasinoErrorSpike
