@@ -63,8 +63,8 @@
 				"Test encryption key generation failures"
 			],
 			"priority": 5,
-			"passes": false,
-			"notes": "VERIFIED GAP: Storage service mock always succeeds. Real code has 3 backends (MMKV, AsyncStorage, WebStorage) that are never tested."
+			"passes": true,
+			"notes": "FIXED: Added 11 integration tests covering all fallback paths. Key changes: (1) Added _resetStorageForTesting() to storage.ts for singleton reset between tests, (2) Added failure simulation flags to jest/setup.js global mocks (mmkvShouldThrow, secureStoreGetShouldThrow, etc.), (3) Restructured tests with integration tests before web tests to avoid Jest mock corruption."
 		},
 		{
 			"id": "US-026",
@@ -76,8 +76,8 @@
 				"Test balance consistency after network failure"
 			],
 			"priority": 6,
-			"passes": false,
-			"notes": "VERIFIED GAP: useGameConnection is completely mocked in unit tests. Real reconnection logic never exercised."
+			"passes": true,
+			"notes": "FIXED: Created WebSocketReconnectionTest.ts with 6 comprehensive tests covering all acceptance criteria: (1) Session persistence - verifies publicKey remains constant after reconnect, (2) Balance consistency - verifies balance unchanged after disconnect/reconnect cycle, (3) Mid-game disconnect - tests game state recovery or graceful failure with new game capability, (4) Nonce continuity - verifies transactions work after reconnect, (5) Message queue flush - tests messages processed after reconnect, (6) Rapid reconnections - stress tests multiple reconnect cycles. Run via: ts-node tests/integration/runReconnectionTests.ts"
 		},
 		{
 			"id": "US-027",
@@ -662,6 +662,201 @@
 			"priority": 51,
 			"passes": false,
 			"notes": "HIGH GAP: GameHeader.tsx:21,31 - balance formatting untested for edge cases."
+		},
+		{
+			"id": "US-061",
+			"title": "Add E2E bet placement flow integration test",
+			"acceptanceCriteria": [
+				"Test full round-trip: chip selection → placeChip() → DEAL press → WS send → server response → balance update",
+				"Verify each step triggers correctly without mocks",
+				"Test flow with real WebSocket connection to local gateway",
+				"Verify UI state transitions match expected sequence"
+			],
+			"priority": 52,
+			"passes": false,
+			"notes": "CRITICAL GAP: No integration test covers the complete bet placement user journey. Each step tested in isolation but not together."
+		},
+		{
+			"id": "US-062",
+			"title": "Add game screen phase reversion after error",
+			"acceptanceCriteria": [
+				"Test phase reverts from 'playing' to 'betting' after bet rejection",
+				"Test phase reverts after network error during submission",
+				"Test DEAL button re-enabled after error recovery",
+				"Apply fix to all game screens with multi-phase state"
+			],
+			"priority": 53,
+			"passes": false,
+			"notes": "CRITICAL GAP: BlackjackScreen.tsx:119-137 - phase not reverted after error, UI stuck in partially-recoverable state."
+		},
+		{
+			"id": "US-063",
+			"title": "Add error code translation layer tests",
+			"acceptanceCriteria": [
+				"Test Rust numeric error codes (u8) map to correct Gateway string codes",
+				"Test Gateway string codes map to correct mobile user-friendly messages",
+				"Test unknown error codes handled gracefully",
+				"Document full error code mapping table"
+			],
+			"priority": 54,
+			"passes": false,
+			"notes": "CRITICAL GAP: Error codes pass through 3 layers but translation is never tested end-to-end."
+		},
+		{
+			"id": "US-064",
+			"title": "Add gateway health check backend connectivity test",
+			"acceptanceCriteria": [
+				"Test /healthz returns 503 when backend is unreachable",
+				"Test /healthz returns 503 when indexer is down",
+				"Test /healthz returns 200 only when all dependencies healthy",
+				"Add readiness vs liveness probe distinction"
+			],
+			"priority": 55,
+			"passes": false,
+			"notes": "CRITICAL GAP: gateway/src/index.ts:304-309 - health check always returns 200 even if backend is down."
+		},
+		{
+			"id": "US-065",
+			"title": "Add password timing attack resistance test",
+			"acceptanceCriteria": [
+				"Test vault password comparison uses constant-time comparison",
+				"Verify timing doesn't leak password length information",
+				"Test with multiple password lengths and measure timing variance",
+				"Use crypto.subtle.timingSafeEqual or equivalent"
+			],
+			"priority": 56,
+			"passes": false,
+			"notes": "SECURITY GAP: Vault password comparison may be vulnerable to timing attacks if using string equality."
+		},
+		{
+			"id": "US-066",
+			"title": "Add observability failure handling tests",
+			"acceptanceCriteria": [
+				"Test analytics service failures don't crash app",
+				"Test analytics errors are logged but swallowed",
+				"Test notification service failures handled gracefully",
+				"Verify core game functionality works when telemetry fails"
+			],
+			"priority": 57,
+			"passes": false,
+			"notes": "HIGH GAP: Silent analytics/notification failures could hide issues. No tests verify graceful degradation."
+		},
+		{
+			"id": "US-067",
+			"title": "Add multi-game session preservation test",
+			"acceptanceCriteria": [
+				"Test navigating between games preserves session state",
+				"Test balance consistent across game transitions",
+				"Test WebSocket connection maintained during navigation",
+				"Test returning to game shows correct state (not stale)"
+			],
+			"priority": 58,
+			"passes": false,
+			"notes": "HIGH GAP: No tests verify session integrity when user switches between different games."
+		},
+		{
+			"id": "US-068",
+			"title": "Add SESSION_EXPIRED handling tests",
+			"acceptanceCriteria": [
+				"Test mobile receives and handles SESSION_EXPIRED message",
+				"Test user redirected to login/auth screen on expiration",
+				"Test session expiration during active game shows appropriate message",
+				"Test auto-reconnect doesn't loop on expired session"
+			],
+			"priority": 59,
+			"passes": false,
+			"notes": "HIGH GAP: SESSION_EXPIRED message type handling not tested. User could see confusing state."
+		},
+		{
+			"id": "US-069",
+			"title": "Add animation state race condition tests",
+			"acceptanceCriteria": [
+				"Test rapid bet placement doesn't cause animation overlap",
+				"Test unmount during animation doesn't cause memory leak",
+				"Test animation completion callback fires correctly",
+				"Test Animated.Value cleanup on component unmount"
+			],
+			"priority": 60,
+			"passes": false,
+			"notes": "HIGH GAP: Animation timing races could cause visual glitches or memory leaks."
+		},
+		{
+			"id": "US-070",
+			"title": "Add nonce timestamp clock skew tolerance test",
+			"acceptanceCriteria": [
+				"Test nonce validation with system clock 5s ahead",
+				"Test nonce validation with system clock 5s behind",
+				"Test appropriate tolerance window (e.g., ±30s)",
+				"Test rejection of nonces outside tolerance"
+			],
+			"priority": 61,
+			"passes": false,
+			"notes": "HIGH GAP: Mobile/server clock skew could cause valid transactions to be rejected."
+		},
+		{
+			"id": "US-071",
+			"title": "Add rate limiting metrics tests",
+			"acceptanceCriteria": [
+				"Test rate limit hit counter increments correctly",
+				"Test rate limit metrics exposed via /metrics endpoint",
+				"Test per-IP and per-session rate limit tracking",
+				"Test rate limit reset after window expires"
+			],
+			"priority": 62,
+			"passes": false,
+			"notes": "HIGH GAP: Rate limiting exists but metrics/observability for monitoring not tested."
+		},
+		{
+			"id": "US-072",
+			"title": "Add player name validation tests",
+			"acceptanceCriteria": [
+				"Test player name length limits (min/max)",
+				"Test player name character restrictions",
+				"Test empty/whitespace-only names rejected",
+				"Test XSS/injection characters sanitized"
+			],
+			"priority": 63,
+			"passes": false,
+			"notes": "HIGH GAP: Player name validation not tested. Could allow invalid or malicious names."
+		},
+		{
+			"id": "US-073",
+			"title": "Add WebCryptoStore initialization failure tests",
+			"acceptanceCriteria": [
+				"Test behavior when crypto.subtle unavailable (HTTP context)",
+				"Test behavior when IndexedDB unavailable",
+				"Test fallback storage mechanism activates correctly",
+				"Test user notified of degraded security mode"
+			],
+			"priority": 64,
+			"passes": false,
+			"notes": "HIGH GAP: WebCryptoStore assumes browser crypto APIs available. No fallback tested."
+		},
+		{
+			"id": "US-074",
+			"title": "Add concurrent bet submission race test",
+			"acceptanceCriteria": [
+				"Test rapid double-tap on DEAL button handled correctly",
+				"Test useBetSubmission.isSubmitting flag prevents duplicates",
+				"Test server receives exactly one bet for rapid taps",
+				"Test UI shows pending state during submission"
+			],
+			"priority": 65,
+			"passes": false,
+			"notes": "CRITICAL GAP: Concurrent submission race could cause double-bet. useBetSubmission has no tests."
+		},
+		{
+			"id": "US-075",
+			"title": "Add bet submission timeout recovery test",
+			"acceptanceCriteria": [
+				"Test 5-second timeout triggers correctly",
+				"Test UI recovers after timeout (DEAL button re-enabled)",
+				"Test user shown appropriate timeout message",
+				"Test subsequent bet submission works after timeout"
+			],
+			"priority": 66,
+			"passes": false,
+			"notes": "CRITICAL GAP: useBetSubmission.ts timeout at 5s never tested. Could leave UI stuck."
 		}
 	]
 }

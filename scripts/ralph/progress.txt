@@ -503,3 +503,51 @@ Target: Testnet Production
   - Pattern for bare call detection uses `:not(:has(...))` pseudo-selector for method chaining
 
 ---
+
+## 2026-01-06 - US-025: Add storage fallback integration tests
+
+- What was implemented:
+  - Added 11 integration tests for storage fallback behavior across MMKV, AsyncStorage, and WebStorage backends
+  - Added `_resetStorageForTesting()` function to storage.ts for resetting singleton state between tests
+  - Added failure simulation flags to jest/setup.js global mocks (`mmkvShouldThrow`, `secureStoreGetShouldThrow`, etc.)
+  - Tests cover: MMKV→AsyncStorage fallback, AsyncStorage init errors, SecureStore errors, tutorial persistence, encryption key generation/reuse
+  - Web storage tests use `jest.isolateModules` with `jest.doMock` for platform-specific behavior
+- Files changed:
+  - `mobile/src/services/storage.ts` - Added `_resetStorageForTesting()` export function
+  - `mobile/jest/setup.js` - Added failure flags to `globalThis.__testMocks__` + conditional throw logic in MMKV, SecureStore, AsyncStorage mocks
+  - `mobile/src/services/__tests__/storage.test.ts` - Complete rewrite with 2 describe blocks (integration + web)
+- **Learnings:**
+  - Jest module caching: Singleton pattern (`let storageInstance`) retains state across tests unless explicitly reset
+  - Solution: Export a test-only reset function like `_resetStorageForTesting()` to null the singleton
+  - `jest.isolateModules` with `jest.doMock` can corrupt global mock state for later tests
+  - Order matters: Run integration tests (using global mocks) BEFORE tests using `isolateModules`
+  - Global test mocks via `globalThis.__testMocks__` allow tests to control mock behavior per-test without re-mocking
+  - Pattern: `globalThis.__testMocks__.mmkvShouldThrow = true` before calling code under test
+  - Dynamic imports (`await import()`) require `--experimental-vm-modules` in Jest - use `require()` instead
+
+---
+
+## 2026-01-06 - US-026: Add WebSocket reconnection integration tests
+
+- What was implemented:
+  - Created `WebSocketReconnectionTest.ts` with 6 comprehensive integration tests
+  - Test 1: Session persistence - verifies publicKey remains constant after reconnect (sessionId may change, which is expected)
+  - Test 2: Balance consistency - verifies balance unchanged after disconnect/reconnect cycle
+  - Test 3: Mid-game disconnect - tests game state recovery or graceful failure with new game capability
+  - Test 4: Nonce continuity - verifies transactions work after reconnect by completing games before and after
+  - Test 5: Message queue flush - tests messages processed after reconnect
+  - Test 6: Rapid reconnections - stress tests 3 rapid reconnect cycles
+  - Created `runReconnectionTests.ts` standalone runner for the reconnection test suite
+- Files changed:
+  - `mobile/tests/integration/framework/WebSocketReconnectionTest.ts` - New test class with 6 tests
+  - `mobile/tests/integration/runReconnectionTests.ts` - Standalone runner for reconnection tests
+- **Learnings:**
+  - Integration tests use real WebSocket connections via `ws` package to actual gateway
+  - Session ID changing after reconnect is expected behavior (server creates new session)
+  - Public key should remain constant (same client identity across reconnects)
+  - Mid-game disconnect recovery is acceptable even if game is abandoned - key is system recovers
+  - Nonce continuity is managed server-side; test verifies transactions work, not nonce values
+  - `Promise.race()` is useful for testing multiple message types (game_move vs game_result vs error)
+  - Integration tests run via ts-node, not Jest: `ts-node tests/integration/runReconnectionTests.ts`
+
+---
