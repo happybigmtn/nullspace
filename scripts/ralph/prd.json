@@ -115,8 +115,8 @@
 				"Test decoder handles invalid UTF-8 in string fields"
 			],
 			"priority": 9,
-			"passes": false,
-			"notes": "VERIFIED GAP: No negative tests for deliberately corrupted binary data in protocol tests."
+			"passes": true,
+			"notes": "FIXED: Created packages/protocol/test/corrupted-data.test.ts with 35 tests covering: (1) truncated messages for decodeCard, decodeCards, decodeGameResult, decodeBlackjackState, (2) extra bytes after valid data, (3) invalid enum/boundary values, (4) invalid UTF-8 with replacement char handling, (5) boundary value tests. Created gateway/tests/unit/corrupted-events.test.ts with 20 tests covering: (1) varint overflow attacks (never-terminating, exceeding 32-bit, shift=35 boundary), (2) truncated Update messages, (3) invalid Vec lengths, (4) global table corruption, (5) extra bytes after valid update."
 		},
 		{
 			"id": "US-030",

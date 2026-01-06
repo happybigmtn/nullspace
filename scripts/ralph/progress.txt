@@ -593,3 +593,24 @@ Target: Testnet Production
   - UI disabled state is effectively tested through `placeChip()` returning `false` + `haptics.error()` trigger
 
 ---
+
+## 2026-01-06 - US-029: Add corrupted protocol data tests
+
+- What was implemented:
+  - Created `packages/protocol/test/corrupted-data.test.ts` with 35 tests for protocol decoder robustness
+  - Created `gateway/tests/unit/corrupted-events.test.ts` with 20 tests for gateway event decoder robustness
+  - Protocol tests cover: truncated messages, extra bytes, invalid enum values, invalid UTF-8
+  - Gateway tests cover: varint overflow attacks, truncated updates, invalid Vec lengths
+- Files changed:
+  - `packages/protocol/test/corrupted-data.test.ts` - New file with 35 tests
+  - `gateway/tests/unit/corrupted-events.test.ts` - New file with 20 tests
+- **Learnings:**
+  - Protocol layer uses fixed-width decoding (DataView) while gateway uses BinaryReader with varint
+  - Varint decoder already has overflow protection at `shift > 35` (line 266 in events.ts)
+  - TextDecoder with default options replaces invalid UTF-8 with U+FFFD (replacement character)
+  - Gateway's `extractCasinoEvents` has fallback scanning after structured decode fails
+  - `ProtocolError` is the custom error class for decode failures in @nullspace/protocol
+  - Pattern: Test both the "happy path" corruption (returns empty/null) and "explicit throw" cases
+  - Boundary tests (max u64, max valid enum, zero-length) are valuable for catching off-by-one errors
+
+---
