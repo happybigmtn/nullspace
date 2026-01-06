@@ -22,11 +22,12 @@ interface BlackjackState {
   dealerHidden: boolean;
   playerTotal: number;
   dealerTotal: number;
-  phase: 'betting' | 'player_turn' | 'dealer_turn' | 'result';
+  phase: 'betting' | 'player_turn' | 'dealer_turn' | 'result' | 'error';
   message: string;
   canDouble: boolean;
   canSplit: boolean;
   lastResult: 'win' | 'loss' | 'push' | 'blackjack' | null;
+  parseError: string | null;
 }
 
 const TUTORIAL_STEPS: TutorialStep[] = [
@@ -61,6 +62,7 @@ export function BlackjackScreen() {
     canDouble: false,
     canSplit: false,
     lastResult: null,
+    parseError: null,
   });
   const [showTutorial, setShowTutorial] = useState(false);
   const [sideBet21Plus3, setSideBet21Plus3] = useState(0);
@@ -85,12 +87,34 @@ export function BlackjackScreen() {
     if (lastMessage.type === 'game_started' || lastMessage.type === 'game_move') {
       clearSubmission(); // Clear bet submission state on server response
       const stateBytes = decodeStateBytes((lastMessage as { state?: unknown }).state);
-      if (!stateBytes) return;
+      if (!stateBytes) {
+        if (__DEV__) {
+          console.error('[Blackjack] Failed to decode state bytes from message');
+        }
+        setState((prev) => ({
+          ...prev,
+          phase: 'error',
+          message: 'Failed to load game state. Please try again.',
+          parseError: 'decode_failed',
+        }));
+        return;
+      }
 
       InteractionManager.runAfterInteractions(() => {
         if (!isMounted.current) return;
         const parsed = parseBlackjackState(stateBytes);
-        if (!parsed) return;
+        if (!parsed) {
+          if (__DEV__) {
+            console.error('[Blackjack] Failed to parse state blob');
+          }
+          setState((prev) => ({
+            ...prev,
+            phase: 'error',
+            message: 'Failed to parse game data. Please try again.',
+            parseError: 'parse_failed',
+          }));
+          return;
+        }
 
         setState((prev) => ({
           ...prev,
@@ -103,6 +127,7 @@ export function BlackjackScreen() {
           dealerHidden: parsed.dealerHidden,
           phase: parsed.phase,
           lastResult: parsed.phase === 'result' ? prev.lastResult : null,
+          parseError: null,
           message: parsed.phase === 'betting'
             ? 'Place your bet'
             : parsed.phase === 'player_turn'
@@ -240,6 +265,7 @@ export function BlackjackScreen() {
       canDouble: false,
       canSplit: false,
       lastResult: null,
+      parseError: null,
     });
   }, [clearBet]);
 
@@ -307,6 +333,7 @@ export function BlackjackScreen() {
               state.lastResult === 'blackjack' && styles.messageBlackjack,
               state.lastResult === 'loss' && styles.messageLoss,
               state.lastResult === 'push' && styles.messagePush,
+              state.phase === 'error' && styles.messageError,
             ]}
           >
             {state.message}
@@ -407,6 +434,15 @@ export function BlackjackScreen() {
               size="large"
             />
           )}
+
+          {state.phase === 'error' && (
+            <PrimaryButton
+              label="TRY AGAIN"
+              onPress={handleNewGame}
+              variant="primary"
+              size="large"
+            />
+          )}
         </View>
 
         {/* Chip Selector */}
@@ -471,6 +507,9 @@ const styles = StyleSheet.create({
   },
   messagePush: {
     color: COLORS.warning,
+  },
+  messageError: {
+    color: COLORS.error,
   },
   betContainer: {
     alignItems: 'center',

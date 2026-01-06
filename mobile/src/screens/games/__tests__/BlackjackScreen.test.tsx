@@ -171,4 +171,95 @@ describe('BlackjackScreen', () => {
 
     expect(sendSpy).toHaveBeenCalledWith({ type: 'blackjack_split' });
   });
+
+  it('shows error message and TRY AGAIN button when state decode fails', async () => {
+    let tree!: ReturnType<typeof create>;
+    await act(async () => {
+      tree = create(<BlackjackScreen />);
+    });
+
+    // Send a message with invalid state bytes (null/undefined)
+    setGameConnectionMessage({
+      type: 'game_started',
+      state: null,
+    });
+
+    await act(async () => {
+      tree.update(<BlackjackScreen />);
+    });
+
+    // Should show error message
+    const hasErrorMessage = tree.root
+      .findAllByType(Text)
+      .some((node) => textMatches(node.props.children, 'Failed to load game state. Please try again.'));
+    expect(hasErrorMessage).toBe(true);
+
+    // Should show TRY AGAIN button
+    const tryAgainButton = findPrimaryButton(tree, 'TRY AGAIN');
+    expect(tryAgainButton).toBeDefined();
+  });
+
+  it('shows error message when state parse fails with empty bytes', async () => {
+    let tree!: ReturnType<typeof create>;
+    await act(async () => {
+      tree = create(<BlackjackScreen />);
+    });
+
+    // Send a message with empty state bytes array (will decode but fail to parse)
+    setGameConnectionMessage({
+      type: 'game_started',
+      state: [],
+    });
+
+    await act(async () => {
+      tree.update(<BlackjackScreen />);
+    });
+
+    // Should show error message (either decode or parse failed)
+    const hasErrorMessage = tree.root
+      .findAllByType(Text)
+      .some((node) =>
+        textMatches(node.props.children, 'Failed to load game state. Please try again.') ||
+        textMatches(node.props.children, 'Failed to parse game data. Please try again.')
+      );
+    expect(hasErrorMessage).toBe(true);
+
+    // Should show TRY AGAIN button
+    const tryAgainButton = findPrimaryButton(tree, 'TRY AGAIN');
+    expect(tryAgainButton).toBeDefined();
+  });
+
+  it('recovers from error state when TRY AGAIN is pressed', async () => {
+    let tree!: ReturnType<typeof create>;
+    await act(async () => {
+      tree = create(<BlackjackScreen />);
+    });
+
+    // Put into error state
+    setGameConnectionMessage({
+      type: 'game_started',
+      state: null,
+    });
+
+    await act(async () => {
+      tree.update(<BlackjackScreen />);
+    });
+
+    // Press TRY AGAIN
+    const tryAgainButton = findPrimaryButton(tree, 'TRY AGAIN');
+    expect(tryAgainButton).toBeDefined();
+    await act(async () => {
+      await tryAgainButton?.props.onPress?.();
+    });
+
+    // Should be back in betting phase with normal message
+    const hasBettingMessage = tree.root
+      .findAllByType(Text)
+      .some((node) => textMatches(node.props.children, 'Place your bet'));
+    expect(hasBettingMessage).toBe(true);
+
+    // Should show DEAL button (betting phase)
+    const dealButton = findPrimaryButton(tree, 'DEAL');
+    expect(dealButton).toBeDefined();
+  });
 });

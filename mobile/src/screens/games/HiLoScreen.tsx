@@ -19,9 +19,10 @@ import type { GameMessage } from '@nullspace/protocol/mobile';
 interface HiLoState {
   currentCard: { suit: Suit; rank: Rank } | null;
   nextCard: { suit: Suit; rank: Rank } | null;
-  phase: 'betting' | 'playing' | 'result';
+  phase: 'betting' | 'playing' | 'result' | 'error';
   message: string;
   lastResult: 'win' | 'loss' | null;
+  parseError: string | null;
 }
 
 const TUTORIAL_STEPS: TutorialStep[] = [
@@ -51,6 +52,7 @@ export function HiLoScreen() {
     phase: 'betting',
     message: 'Place your bet',
     lastResult: null,
+    parseError: null,
   });
   const [showTutorial, setShowTutorial] = useState(false);
 
@@ -75,17 +77,40 @@ export function HiLoScreen() {
     if (lastMessage.type === 'game_started' || lastMessage.type === 'game_move') {
       clearSubmission(); // Clear bet submission state on server response
       const stateBytes = decodeStateBytes((lastMessage as { state?: unknown }).state);
-      if (!stateBytes) return;
+      if (!stateBytes) {
+        if (__DEV__) {
+          console.error('[HiLo] Failed to decode state bytes from message');
+        }
+        setState((prev) => ({
+          ...prev,
+          phase: 'error',
+          message: 'Failed to load game state. Please try again.',
+          parseError: 'decode_failed',
+        }));
+        return;
+      }
 
       InteractionManager.runAfterInteractions(() => {
         if (!isMounted.current) return;
         const parsed = parseHiLoState(stateBytes);
-        if (!parsed?.currentCard) return;
+        if (!parsed?.currentCard) {
+          if (__DEV__) {
+            console.error('[HiLo] Failed to parse state blob');
+          }
+          setState((prev) => ({
+            ...prev,
+            phase: 'error',
+            message: 'Failed to parse game data. Please try again.',
+            parseError: 'parse_failed',
+          }));
+          return;
+        }
         setState((prev) => ({
           ...prev,
           currentCard: parsed.currentCard,
           phase: 'playing',
           message: 'Make your call',
+          parseError: null,
         }));
       });
       return;
@@ -144,6 +169,7 @@ export function HiLoScreen() {
       nextCard: null,
       message: 'Place your bet',
       lastResult: null,
+      parseError: null,
     }));
   }, [clearBet]);
 
@@ -214,6 +240,7 @@ export function HiLoScreen() {
               styles.message,
               state.lastResult === 'win' && styles.messageWin,
               state.lastResult === 'loss' && styles.messageLoss,
+              state.phase === 'error' && styles.messageError,
             ]}
           >
             {state.message}
@@ -252,6 +279,15 @@ export function HiLoScreen() {
           {state.phase === 'result' && (
             <PrimaryButton
               label="NEW GAME"
+              onPress={handleNewGame}
+              variant="primary"
+              size="large"
+            />
+          )}
+
+          {state.phase === 'error' && (
+            <PrimaryButton
+              label="TRY AGAIN"
               onPress={handleNewGame}
               variant="primary"
               size="large"
@@ -311,6 +347,9 @@ const styles = StyleSheet.create({
     color: COLORS.success,
   },
   messageLoss: {
+    color: COLORS.error,
+  },
+  messageError: {
     color: COLORS.error,
   },
   betContainer: {

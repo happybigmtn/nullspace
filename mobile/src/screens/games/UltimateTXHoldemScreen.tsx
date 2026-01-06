@@ -17,7 +17,7 @@ import { useGameStore } from '../../stores/gameStore';
 import type { ChipValue, TutorialStep, PokerHand, Card as CardType } from '../../types';
 import type { GameMessage } from '@nullspace/protocol/mobile';
 
-type GamePhase = 'betting' | 'preflop' | 'flop' | 'river' | 'showdown' | 'result';
+type GamePhase = 'betting' | 'preflop' | 'flop' | 'river' | 'showdown' | 'result' | 'error';
 
 interface UltimateTXState {
   anteBet: number;
@@ -41,6 +41,7 @@ interface UltimateTXState {
   tripsResult: 'win' | 'loss' | null;
   payout: number;
   hasChecked: boolean;
+  parseError: string | null;
 }
 
 const TUTORIAL_STEPS: TutorialStep[] = [
@@ -99,6 +100,7 @@ export function UltimateTXHoldemScreen() {
     tripsResult: null,
     payout: 0,
     hasChecked: false,
+    parseError: null,
   });
   const [selectedChip, setSelectedChip] = useState<ChipValue>(25);
   const [activeBetType, setActiveBetType] = useState<'main' | 'trips' | 'sixcard' | 'progressive'>('main');
@@ -118,11 +120,33 @@ export function UltimateTXHoldemScreen() {
     if (lastMessage.type === 'game_started' || lastMessage.type === 'game_move') {
       clearSubmission();
       const stateBytes = decodeStateBytes((lastMessage as { state?: unknown }).state);
-      if (!stateBytes) return;
+      if (!stateBytes) {
+        if (__DEV__) {
+          console.error('[UltimateTXHoldem] Failed to decode state bytes from message');
+        }
+        setState((prev) => ({
+          ...prev,
+          phase: 'error',
+          message: 'Failed to load game state. Please try again.',
+          parseError: 'decode_failed',
+        }));
+        return;
+      }
       InteractionManager.runAfterInteractions(() => {
         if (!isMounted.current) return;
         const parsed = parseUltimateHoldemState(stateBytes);
-        if (!parsed) return;
+        if (!parsed) {
+          if (__DEV__) {
+            console.error('[UltimateTXHoldem] Failed to parse state blob');
+          }
+          setState((prev) => ({
+            ...prev,
+            phase: 'error',
+            message: 'Failed to parse game data. Please try again.',
+            parseError: 'parse_failed',
+          }));
+          return;
+        }
         setState((prev) => ({
           ...prev,
           playerCards: parsed.playerCards.length > 0 ? parsed.playerCards : prev.playerCards,
@@ -132,6 +156,7 @@ export function UltimateTXHoldemScreen() {
           sixCardBet: parsed.sixCardBonusBet > 0 ? parsed.sixCardBonusBet : prev.sixCardBet,
           progressiveBet: parsed.progressiveBet > 0 ? parsed.progressiveBet : prev.progressiveBet,
           dealerRevealed: parsed.stage === 'showdown' || parsed.stage === 'result',
+          parseError: null,
           phase: parsed.stage,
           message: parsed.stage === 'preflop'
             ? 'Bet 4x or Check'
@@ -390,6 +415,7 @@ export function UltimateTXHoldemScreen() {
       tripsResult: null,
       payout: 0,
       hasChecked: false,
+      parseError: null,
     });
     setActiveBetType('main');
   }, []);
@@ -531,6 +557,7 @@ export function UltimateTXHoldemScreen() {
           style={[
             styles.message,
             state.payout > 0 && styles.messageWin,
+            state.phase === 'error' && styles.messageError,
           ]}
         >
           {state.message}
@@ -645,6 +672,15 @@ export function UltimateTXHoldemScreen() {
         {state.phase === 'result' && (
           <PrimaryButton
             label="NEW GAME"
+            onPress={handleNewGame}
+            variant="primary"
+            size="large"
+          />
+        )}
+
+        {state.phase === 'error' && (
+          <PrimaryButton
+            label="TRY AGAIN"
             onPress={handleNewGame}
             variant="primary"
             size="large"
@@ -822,6 +858,9 @@ const styles = StyleSheet.create({
   },
   messageWin: {
     color: COLORS.success,
+  },
+  messageError: {
+    color: COLORS.error,
   },
   payout: {
     color: COLORS.gold,

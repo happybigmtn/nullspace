@@ -25,7 +25,7 @@ interface ThreeCardPokerState {
   playerCards: CardType[];
   dealerCards: CardType[];
   dealerRevealed: boolean;
-  phase: 'betting' | 'dealt' | 'showdown' | 'result';
+  phase: 'betting' | 'dealt' | 'showdown' | 'result' | 'error';
   message: string;
   playerHand: ThreeCardPokerHand | null;
   dealerHand: ThreeCardPokerHand | null;
@@ -33,6 +33,7 @@ interface ThreeCardPokerState {
   anteResult: 'win' | 'loss' | 'push' | null;
   pairPlusResult: 'win' | 'loss' | null;
   payout: number;
+  parseError: string | null;
 }
 
 const TUTORIAL_STEPS: TutorialStep[] = [
@@ -81,6 +82,7 @@ export function ThreeCardPokerScreen() {
     anteResult: null,
     pairPlusResult: null,
     payout: 0,
+    parseError: null,
   });
   const [selectedChip, setSelectedChip] = useState<ChipValue>(25);
   const [showTutorial, setShowTutorial] = useState(false);
@@ -100,11 +102,33 @@ export function ThreeCardPokerScreen() {
     if (lastMessage.type === 'game_started' || lastMessage.type === 'game_move') {
       clearSubmission(); // Clear bet submission state on server response
       const stateBytes = decodeStateBytes((lastMessage as { state?: unknown }).state);
-      if (!stateBytes) return;
+      if (!stateBytes) {
+        if (__DEV__) {
+          console.error('[ThreeCardPoker] Failed to decode state bytes from message');
+        }
+        setState((prev) => ({
+          ...prev,
+          phase: 'error',
+          message: 'Failed to load game state. Please try again.',
+          parseError: 'decode_failed',
+        }));
+        return;
+      }
       InteractionManager.runAfterInteractions(() => {
         if (!isMounted.current) return;
         const parsed = parseThreeCardState(stateBytes);
-        if (!parsed) return;
+        if (!parsed) {
+          if (__DEV__) {
+            console.error('[ThreeCardPoker] Failed to parse state blob');
+          }
+          setState((prev) => ({
+            ...prev,
+            phase: 'error',
+            message: 'Failed to parse game data. Please try again.',
+            parseError: 'parse_failed',
+          }));
+          return;
+        }
         setState((prev) => ({
           ...prev,
           playerCards: parsed.playerCards.length > 0 ? parsed.playerCards : prev.playerCards,
@@ -113,6 +137,7 @@ export function ThreeCardPokerScreen() {
           sixCardBet: parsed.sixCardBonusBet > 0 ? parsed.sixCardBonusBet : prev.sixCardBet,
           progressiveBet: parsed.progressiveBet > 0 ? parsed.progressiveBet : prev.progressiveBet,
           dealerRevealed: parsed.stage === 'awaiting' || parsed.stage === 'complete',
+          parseError: null,
           phase: parsed.stage === 'decision'
             ? 'dealt'
             : parsed.stage === 'awaiting'
@@ -273,6 +298,7 @@ export function ThreeCardPokerScreen() {
       anteResult: null,
       pairPlusResult: null,
       payout: 0,
+      parseError: null,
     });
     setActiveBetType('ante');
   }, []);
@@ -358,6 +384,7 @@ export function ThreeCardPokerScreen() {
             styles.message,
             state.payout > 0 && styles.messageWin,
             state.anteResult === 'loss' && styles.messageLoss,
+            state.phase === 'error' && styles.messageError,
           ]}
         >
           {state.message}
@@ -490,6 +517,15 @@ export function ThreeCardPokerScreen() {
             size="large"
           />
         )}
+
+        {state.phase === 'error' && (
+          <PrimaryButton
+            label="TRY AGAIN"
+            onPress={handleNewGame}
+            variant="primary"
+            size="large"
+          />
+        )}
       </View>
 
       {/* Chip Selector */}
@@ -560,6 +596,9 @@ const styles = StyleSheet.create({
     color: COLORS.success,
   },
   messageLoss: {
+    color: COLORS.error,
+  },
+  messageError: {
     color: COLORS.error,
   },
   payout: {

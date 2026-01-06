@@ -19,10 +19,11 @@ import type { GameMessage } from '@nullspace/protocol/mobile';
 interface VideoPokerState {
   cards: CardType[];
   held: boolean[];
-  phase: 'betting' | 'initial' | 'final' | 'result';
+  phase: 'betting' | 'initial' | 'final' | 'result' | 'error';
   message: string;
   hand: PokerHand | null;
   payout: number;
+  parseError: string | null;
 }
 
 const TUTORIAL_STEPS: TutorialStep[] = [
@@ -79,6 +80,7 @@ export function VideoPokerScreen() {
     message: 'Place your bet',
     hand: null,
     payout: 0,
+    parseError: null,
   });
   const [showTutorial, setShowTutorial] = useState(false);
   const [showPayTable, setShowPayTable] = useState(false);
@@ -105,16 +107,39 @@ export function VideoPokerScreen() {
     if (lastMessage.type === 'game_started' || lastMessage.type === 'game_move') {
       clearSubmission(); // Clear bet submission state on server response
       const stateBytes = decodeStateBytes((lastMessage as { state?: unknown }).state);
-      if (!stateBytes) return;
+      if (!stateBytes) {
+        if (__DEV__) {
+          console.error('[VideoPoker] Failed to decode state bytes from message');
+        }
+        setState((prev) => ({
+          ...prev,
+          phase: 'error',
+          message: 'Failed to load game state. Please try again.',
+          parseError: 'decode_failed',
+        }));
+        return;
+      }
       InteractionManager.runAfterInteractions(() => {
         if (!isMounted.current) return;
         const parsed = parseVideoPokerState(stateBytes);
-        if (!parsed) return;
+        if (!parsed) {
+          if (__DEV__) {
+            console.error('[VideoPoker] Failed to parse state blob');
+          }
+          setState((prev) => ({
+            ...prev,
+            phase: 'error',
+            message: 'Failed to parse game data. Please try again.',
+            parseError: 'parse_failed',
+          }));
+          return;
+        }
         setState((prev) => ({
           ...prev,
           cards: parsed.cards,
           phase: parsed.stage === 'draw' ? 'initial' : 'betting',
           message: parsed.stage === 'draw' ? 'Tap cards to HOLD, then DRAW' : 'Place your bet',
+          parseError: null,
         }));
       });
       return;
@@ -197,6 +222,7 @@ export function VideoPokerScreen() {
       message: 'Place your bet',
       hand: null,
       payout: 0,
+      parseError: null,
     });
   }, [clearBet]);
 
@@ -292,6 +318,7 @@ export function VideoPokerScreen() {
           style={[
             styles.message,
             state.payout > 0 && styles.messageWin,
+            state.phase === 'error' && styles.messageError,
           ]}
         >
           {state.message}
@@ -336,6 +363,15 @@ export function VideoPokerScreen() {
         {state.phase === 'result' && (
           <PrimaryButton
             label="NEW GAME"
+            onPress={handleNewGame}
+            variant="primary"
+            size="large"
+          />
+        )}
+
+        {state.phase === 'error' && (
+          <PrimaryButton
+            label="TRY AGAIN"
             onPress={handleNewGame}
             variant="primary"
             size="large"
@@ -444,6 +480,9 @@ const styles = StyleSheet.create({
   },
   messageWin: {
     color: COLORS.success,
+  },
+  messageError: {
+    color: COLORS.error,
   },
   payout: {
     color: COLORS.gold,
