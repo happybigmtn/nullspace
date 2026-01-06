@@ -222,3 +222,48 @@ Target: Testnet Production
   - errorReporter.ts wraps console.error/warn to intercept and report - this is infrastructure, not debug logging
 
 ---
+
+## 2026-01-06 - US-001: Configure production CORS and backend URLs
+
+- What was implemented:
+  - Replaced ambiguous `example.com` placeholder URLs with clearly-named `REPLACE_WITH_YOUR_*` placeholders
+  - Added missing `GATEWAY_ORIGIN` config (required for nonce signing)
+  - Added `GATEWAY_LIVE_TABLE_CRAPS=1` and admin key file configuration
+  - Updated all three production config files (gateway, simulator, ops)
+  - Verified all configs pass `scripts/preflight-management.mjs` validation
+- Files changed:
+  - `configs/production/gateway.env.example` - Added GATEWAY_ORIGIN, replaced BACKEND_URL/ALLOWED_ORIGINS placeholders, added live table config
+  - `configs/production/simulator.env.example` - Replaced db/redis/CORS placeholders
+  - `configs/production/ops.env.example` - Replaced OPS_ALLOWED_ORIGINS placeholder
+- **Learnings:**
+  - `.env.example` files should use obviously-fake placeholders that operators MUST replace
+  - `GATEWAY_ORIGIN` is the gateway's public URL, used for nonce signing - distinct from `GATEWAY_ALLOWED_ORIGINS`
+  - `GATEWAY_LIVE_TABLE_ADMIN_KEY_FILE` must point to hex-encoded Ed25519 key for global table bet signing
+  - Preflight script (`scripts/preflight-management.mjs`) validates required keys but not placeholder content
+  - Runtime validation in `gateway/src/config/validation.ts` rejects values containing 'example' in production
+
+---
+
+## 2026-01-06 - US-002: Add timeout to website API fetch calls
+
+- What was implemented:
+  - Added 10-second AbortController timeout to `explorerClient.ts` getJson() function
+  - Created `FetchTimeoutError` custom error class for typed timeout handling
+  - Added JSON parsing error handling with user-friendly message
+  - Added timeout to `client.js` in 4 locations:
+    - `submitTransaction()` - POST transaction submissions
+    - `queryState()` - State queries (inside retry loop)
+    - `querySeed()` - Seed queries by view (inside retry loop)
+    - `queryLatestSeed()` - Latest seed queries
+  - All timeouts use consistent `FETCH_TIMEOUT_MS = 10000` constant
+- Files changed:
+  - `website/src/api/explorerClient.ts` - Added AbortController + FetchTimeoutError + JSON try-catch
+  - `website/src/api/client.js` - Added FETCH_TIMEOUT_MS constant, AbortController to 4 fetch calls
+- **Learnings:**
+  - `AbortController` + `signal` is the standard browser way to timeout fetch requests
+  - Always `clearTimeout()` on both success AND error paths to avoid memory leaks
+  - In retry loops, create new AbortController per iteration (can't reuse aborted controller)
+  - Check `error.name === 'AbortError'` to distinguish timeout from network failure
+  - `queryLatestSeed` returns `{ found: false }` on timeout (graceful degradation) while critical paths throw
+
+---

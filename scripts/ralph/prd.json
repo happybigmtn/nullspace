@@ -3,33 +3,6 @@
 	"userStories": [
 		{
 			"id": "US-001",
-			"title": "Remove committed .env secrets from website",
-			"acceptanceCriteria": [
-				"Remove website/.env from git tracking: git rm --cached website/.env",
-				"Remove website/.env.local from git tracking",
-				"Remove website/.env.network from git tracking",
-				"Rotate exposed VITE_IDENTITY credential",
-				"Verify .gitignore properly excludes .env files"
-			],
-			"priority": 1,
-			"passes": true,
-			"notes": "VERIFIED SAFE: .env, .env.local, .env.network were NEVER committed to git. Root .gitignore:18-19 properly excludes all .env files (confirmed via git check-ignore). Original finding was a false positive - files exist locally but are gitignored."
-		},
-		{
-			"id": "US-002",
-			"title": "Generate metrics auth token",
-			"acceptanceCriteria": [
-				"Generate 32-byte base64 token: openssl rand -base64 32",
-				"Update METRICS_AUTH_TOKEN in configs/production/*.env files",
-				"Replace all REPLACE_WITH_SECURE_TOKEN placeholders",
-				"All services share same token"
-			],
-			"priority": 2,
-			"passes": true,
-			"notes": "COMPLETED: METRICS_AUTH_TOKEN=SLNmUmUHvNzc+wUagF9aOPGaQBb1DNp8jSG75+Cq5uI= shared across gateway/node/simulator. All REPLACE_WITH_SECURE_TOKEN placeholders replaced in production configs."
-		},
-		{
-			"id": "US-003",
 			"title": "Configure production CORS and backend URLs",
 			"acceptanceCriteria": [
 				"Set GATEWAY_ALLOWED_ORIGINS to actual HTTPS domains",
@@ -37,104 +10,25 @@
 				"Remove example.com placeholder URLs",
 				"Run scripts/preflight-management.mjs to validate"
 			],
-			"priority": 3,
-			"passes": false,
-			"notes": "VERIFIED: configs/production/*.env.example have example.com placeholders"
-		},
-		{
-			"id": "US-004",
-			"title": "Add security headers to website nginx.conf",
-			"acceptanceCriteria": [
-				"Add Content-Security-Policy header",
-				"Add X-Content-Type-Options: nosniff",
-				"Add X-Frame-Options: DENY",
-				"Add Strict-Transport-Security for HSTS",
-				"Add Cache-Control headers for static assets"
-			],
-			"priority": 4,
+			"priority": 1,
 			"passes": true,
-			"notes": "COMPLETED: Added CSP with wasm-unsafe-eval, Google Fonts whitelist, WebSocket support. Added HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy to both nginx.conf (dev) and nginx.ssl.conf (prod). Cache-Control with immutable for fingerprinted assets."
+			"notes": "FIXED: Replaced example.com with REPLACE_WITH_YOUR_* placeholders, added GATEWAY_ORIGIN and live table admin key config. Preflight passes."
 		},
 		{
-			"id": "US-005",
-			"title": "Fix mobile setState after unmount race",
-			"acceptanceCriteria": [
-				"Add useRef mounted flag to all 10 game screens",
-				"Guard setState calls in InteractionManager.runAfterInteractions with mounted check",
-				"No React warnings about setState on unmounted component",
-				"Test rapid navigation between games"
-			],
-			"priority": 5,
-			"passes": true,
-			"notes": "COMPLETED: Added isMounted useRef flag to 6 screens that had InteractionManager.runAfterInteractions: BlackjackScreen, HiLoScreen, VideoPokerScreen, CasinoWarScreen, ThreeCardPokerScreen, UltimateTXHoldemScreen. Guard added before setState calls. Other 4 game screens (Baccarat, Craps, Roulette, SicBo) don't use InteractionManager."
-		},
-		{
-			"id": "US-006",
-			"title": "Fix double WebSocket reconnect race",
-			"acceptanceCriteria": [
-				"Add isReconnecting ref to websocket.ts",
-				"Check isReconnecting before calling connect() in reconnect()",
-				"useWebSocketReconnectOnForeground checks reconnecting state",
-				"No duplicate WebSocket connections on foreground resume"
-			],
-			"priority": 6,
-			"passes": true,
-			"notes": "COMPLETED: Added isReconnectingRef to websocket.ts, guards connect() at entry, clears on open/close/error. Exposed isReconnecting in WebSocketManager interface. Updated useWebSocketReconnectOnForeground to check isReconnecting before calling reconnect()."
-		},
-		{
-			"id": "US-007",
-			"title": "Fix stale balance in useChipBetting hook",
-			"acceptanceCriteria": [
-				"Change useChipBetting.ts:49 to use useGameStore.getState().balance in placeChip",
-				"Or use useCallback with fresh selector read",
-				"Verify balance check uses current server value",
-				"Test rapid betting doesn't allow over-balance bets"
-			],
-			"priority": 7,
-			"passes": true,
-			"notes": "COMPLETED: Changed placeChip to use useGameStore.getState().balance for fresh value. Removed balance from useCallback deps since it's now read synchronously inside."
-		},
-		{
-			"id": "US-008",
-			"title": "Add bet submission debouncing",
-			"acceptanceCriteria": [
-				"Add isSubmitting state to game screens",
-				"Disable bet buttons while submission in flight",
-				"Re-enable after server response or 5s timeout",
-				"No duplicate bets on double-tap"
-			],
-			"priority": 8,
-			"passes": true,
-			"notes": "COMPLETED: Created useBetSubmission hook with isSubmitting state, 5s timeout fallback. Integrated into all 10 game screens. Buttons disabled during submission, re-enabled on server response or timeout."
-		},
-		{
-			"id": "US-009",
-			"title": "Add DEV guards to console statements",
-			"acceptanceCriteria": [
-				"Wrap console.log/warn/error in mobile/src/services/websocket.ts with if (__DEV__)",
-				"Same for errorReporter.ts, useAppState.ts, storage.ts, crypto.ts",
-				"Storage.ts lines 67,87 especially expose auth fallback info",
-				"Build production and verify no console output"
-			],
-			"priority": 9,
-			"passes": true,
-			"notes": "COMPLETED: Added __DEV__ guards to websocket.ts (12 statements), storage.ts (2 statements), useAppState.ts (3 statements), crypto.ts (2 statements). errorReporter.ts left unchanged - its console wrapping is intentional infrastructure for error telemetry."
-		},
-		{
-			"id": "US-010",
+			"id": "US-002",
 			"title": "Add timeout to website API fetch calls",
 			"acceptanceCriteria": [
-				"Add AbortController with 10s timeout to website/src/api/explorerClient.ts:33",
-				"Add timeout to website/src/api/client.js submit() at line 224",
+				"Add AbortController with 10s timeout to website/src/api/explorerClient.ts getJson()",
+				"Add timeout to website/src/api/client.js fetch() calls at lines 228,299,350,384",
 				"Handle timeout errors with user-friendly message",
 				"Test with slow network simulation"
 			],
-			"priority": 10,
-			"passes": false,
-			"notes": "VERIFIED: explorerClient.ts and client.js fetch() calls have no timeout"
+			"priority": 2,
+			"passes": true,
+			"notes": "FIXED: Added FETCH_TIMEOUT_MS=10000 with AbortController to explorerClient.ts getJson() and client.js (submitTransaction, queryState, querySeed, queryLatestSeed). JSON parse errors handled gracefully."
 		},
 		{
-			"id": "US-011",
+			"id": "US-003",
 			"title": "Add JSON validation to explorer API responses",
 			"acceptanceCriteria": [
 				"Wrap res.json() in try-catch in explorerClient.ts:37",
@@ -142,75 +36,12 @@
 				"Return graceful error for malformed responses",
 				"Log parsing errors for debugging"
 			],
-			"priority": 11,
+			"priority": 3,
 			"passes": false,
-			"notes": "VERIFIED: explorerClient.ts:37 res.json() can throw SyntaxError, not caught"
+			"notes": "VERIFIED FAILING: explorerClient.ts:37 res.json() can throw SyntaxError, no try-catch"
 		},
 		{
-			"id": "US-012",
-			"title": "Run execution layer tests",
-			"acceptanceCriteria": [
-				"cd execution && cargo test",
-				"379/379 tests pass",
-				"No warnings or failures"
-			],
-			"priority": 12,
-			"passes": true,
-			"notes": "VERIFIED 2026-01-06: 379/380 passed (1 ignored) in 0.25s. All casino games, state transitions, protocol encoding tested."
-		},
-		{
-			"id": "US-013",
-			"title": "Run bet coverage integration test",
-			"acceptanceCriteria": [
-				"RUN_INTEGRATION=true pnpm -C gateway exec vitest run tests/integration/all-bet-types.test.ts",
-				"All bet types pass",
-				"No test failures or timeouts"
-			],
-			"priority": 13,
-			"passes": true,
-			"notes": "VERIFIED 2026-01-06: 86/86 bet types PASS against full local network (4 nodes + simulator). Baccarat(10), Craps(20), Roulette(15), SicBo(12), ThreeCard(5), UltimateHoldem(5), Blackjack(2), HiLo(1), VideoPoker(1), CasinoWar(2)."
-		},
-		{
-			"id": "US-014",
-			"title": "Execute soak test",
-			"acceptanceCriteria": [
-				"./scripts/soak-test.sh configs/testnet 4",
-				"DURATION_SECONDS=600 (10 minutes)",
-				"No crashes or deadlocks",
-				"Memory usage stable"
-			],
-			"priority": 14,
-			"passes": false,
-			"notes": "VERIFIED: Script exists at scripts/soak-test.sh"
-		},
-		{
-			"id": "US-015",
-			"title": "Execute bot load test",
-			"acceptanceCriteria": [
-				"./scripts/run-bots.sh configs/testnet http://<HOST>:8080",
-				"NUM_BOTS=300 DURATION_SECONDS=300",
-				"No sustained errors",
-				"Response times acceptable"
-			],
-			"priority": 15,
-			"passes": false,
-			"notes": "VERIFIED: Script exists at scripts/run-bots.sh"
-		},
-		{
-			"id": "US-016",
-			"title": "Execute global table fanout test",
-			"acceptanceCriteria": [
-				"node scripts/load-test-global-table.mjs",
-				"URL=ws://<GATEWAY>:9010 TOTAL=5000 DURATION=300",
-				"Events broadcast to all clients",
-				"No message loss"
-			],
-			"priority": 16,
-			"passes": false,
-			"notes": "VERIFIED: Script exists at scripts/load-test-global-table.mjs"
-		},
-		{
-			"id": "US-017",
+			"id": "US-004",
 			"title": "Add mobile session expiration",
 			"acceptanceCriteria": [
 				"Add session timestamp to AuthContext",
@@ -218,50 +49,128 @@
 				"Prompt re-auth after 24 hours",
 				"Clear session on expiration"
 			],
-			"priority": 17,
+			"priority": 4,
 			"passes": false,
-			"notes": "VERIFIED: AuthContext.tsx:40 has comment about expiration but no implementation"
+			"notes": "VERIFIED FAILING: AuthContext.tsx:40 has comment about expiration but no implementation"
 		},
 		{
-			"id": "US-018",
-			"title": "Setup Sentry error tracking",
+			"id": "US-005",
+			"title": "Setup Sentry error tracking for mobile",
 			"acceptanceCriteria": [
 				"npm install @sentry/react-native",
 				"Configure DSN in app entry point",
 				"Wrap app with Sentry.ErrorBoundary",
 				"Verify errors captured in Sentry dashboard"
 			],
-			"priority": 18,
+			"priority": 5,
 			"passes": false,
-			"notes": "VERIFIED: No Sentry package or configuration found in mobile/"
+			"notes": "VERIFIED FAILING: No @sentry package or configuration found in mobile/"
 		},
 		{
-			"id": "US-019",
-			"title": "Setup Prometheus scrape jobs",
+			"id": "US-006",
+			"title": "Add bearer auth to Prometheus scrape config",
 			"acceptanceCriteria": [
-				"Configure prometheus.yml with gateway, simulator, node targets",
-				"Include METRICS_AUTH_TOKEN in Authorization header",
-				"All targets show as UP in Prometheus UI",
-				"Metrics visible in Grafana"
+				"Add authorization header with bearer_token to prometheus.yml scrape_configs",
+				"Add gateway job (missing from current config)",
+				"Use METRICS_AUTH_TOKEN env var",
+				"Verify all targets show as UP in Prometheus UI"
 			],
-			"priority": 19,
+			"priority": 6,
 			"passes": false,
-			"notes": "Required for production monitoring per docs/testnet-readiness-runbook.md"
+			"notes": "VERIFIED FAILING: docker/observability/prometheus.yml has no authorization header, gateway job missing"
 		},
 		{
-			"id": "US-020",
+			"id": "US-007",
+			"title": "Add auth service 5xx alert rule",
+			"acceptanceCriteria": [
+				"Add alert for auth service 5xx spike in alerts.yml",
+				"Threshold: rate of 5xx > 0.05 for 5m",
+				"Severity: critical",
+				"Test alert fires correctly"
+			],
+			"priority": 7,
+			"passes": false,
+			"notes": "VERIFIED FAILING: docker/observability/alerts.yml has WS/rate-limit alerts but missing auth 5xx alert"
+		},
+		{
+			"id": "US-008",
+			"title": "Fix mobile integration test message type expectations",
+			"acceptanceCriteria": [
+				"Update mobile/tests/integration/games/*.ts to handle game_move message type",
+				"Fix timeout errors in Blackjack, Roulette, Craps, Baccarat, SicBo, VideoPoker, CasinoWar tests",
+				"Fix Three Card Poker and Ultimate Hold'em to handle game_started correctly",
+				"All 10 game tests pass against local gateway"
+			],
+			"priority": 8,
+			"passes": false,
+			"notes": "VERIFIED FAILING: Tests wait for game_result but gateway sends game_move. Only Hi-Lo passes (1/10)."
+		},
+		{
+			"id": "US-009",
+			"title": "Web QA bet harness local environment setup",
+			"acceptanceCriteria": [
+				"Document required env vars for web QA testing",
+				"Ensure ALLOWED_WS_ORIGINS includes localhost for local dev",
+				"Fix local network consensus node communication",
+				"Web QA bet harness passes against local network"
+			],
+			"priority": 9,
+			"passes": false,
+			"notes": "VERIFIED FAILING: Web QA fails with CHAIN OFFLINE due to env setup and P2P communication issues"
+		},
+		{
+			"id": "US-010",
+			"title": "Execute soak test",
+			"acceptanceCriteria": [
+				"./scripts/soak-test.sh configs/testnet 4",
+				"DURATION_SECONDS=600 (10 minutes)",
+				"No crashes or deadlocks",
+				"Memory usage stable"
+			],
+			"priority": 10,
+			"passes": false,
+			"notes": "MANUAL: Script exists at scripts/soak-test.sh, needs staging deployment"
+		},
+		{
+			"id": "US-011",
+			"title": "Execute bot load test",
+			"acceptanceCriteria": [
+				"./scripts/run-bots.sh configs/testnet http://<HOST>:8080",
+				"NUM_BOTS=300 DURATION_SECONDS=300",
+				"No sustained errors",
+				"Response times acceptable"
+			],
+			"priority": 11,
+			"passes": false,
+			"notes": "MANUAL: Script exists at scripts/run-bots.sh, needs staging deployment"
+		},
+		{
+			"id": "US-012",
+			"title": "Execute global table fanout test",
+			"acceptanceCriteria": [
+				"node scripts/load-test-global-table.mjs",
+				"URL=ws://<GATEWAY>:9010 TOTAL=5000 DURATION=300",
+				"Events broadcast to all clients",
+				"No message loss"
+			],
+			"priority": 12,
+			"passes": false,
+			"notes": "MANUAL: Script exists at scripts/load-test-global-table.mjs, needs staging"
+		},
+		{
+			"id": "US-013",
 			"title": "Verify health endpoints",
 			"acceptanceCriteria": [
 				"GET http://<INDEXER>:8080/healthz returns 200",
 				"GET http://<GATEWAY>:9010/healthz returns 200",
 				"All services respond within 5s"
 			],
-			"priority": 20,
+			"priority": 13,
 			"passes": false,
-			"notes": "Basic smoke check per runbook"
+			"notes": "MANUAL: Basic smoke check per runbook, needs staging deployment"
 		},
 		{
-			"id": "US-021",
+			"id": "US-014",
 			"title": "Test faucet flow end-to-end",
 			"acceptanceCriteria": [
 				"Register new user via mobile app",
@@ -269,12 +178,12 @@
 				"Balance updates correctly",
 				"Can place and resolve bet"
 			],
-			"priority": 21,
+			"priority": 14,
 			"passes": false,
-			"notes": "Core testnet user journey"
+			"notes": "MANUAL: Core testnet user journey on staging"
 		},
 		{
-			"id": "US-022",
+			"id": "US-015",
 			"title": "Test vault-only login on iOS",
 			"acceptanceCriteria": [
 				"Set VITE_ALLOW_LEGACY_KEYS=0",
@@ -282,12 +191,12 @@
 				"Export recovery key",
 				"Reimport on fresh install"
 			],
-			"priority": 22,
+			"priority": 15,
 			"passes": false,
-			"notes": "Go/No-Go criteria per runbook Section 10"
+			"notes": "MANUAL: Go/No-Go criteria per runbook Section 10"
 		},
 		{
-			"id": "US-023",
+			"id": "US-016",
 			"title": "Test vault-only login on Android",
 			"acceptanceCriteria": [
 				"Set VITE_ALLOW_LEGACY_KEYS=0",
@@ -295,24 +204,12 @@
 				"Export recovery key",
 				"Reimport on fresh install"
 			],
-			"priority": 23,
+			"priority": 16,
 			"passes": false,
-			"notes": "Go/No-Go criteria per runbook Section 10"
+			"notes": "MANUAL: Go/No-Go criteria per runbook Section 10"
 		},
 		{
-			"id": "US-024",
-			"title": "Run mobile unit test suite",
-			"acceptanceCriteria": [
-				"cd mobile && npm test",
-				"All tests pass",
-				"No skipped or failing tests"
-			],
-			"priority": 24,
-			"passes": true,
-			"notes": "VERIFIED 2026-01-06: 222/222 tests passed in 8.3s across 83 test suites. Covers services, hooks, contexts, screens (all 10 games), components, utils."
-		},
-		{
-			"id": "US-025",
+			"id": "US-017",
 			"title": "Test validator restart recovery",
 			"acceptanceCriteria": [
 				"Stop one validator node",
@@ -320,12 +217,12 @@
 				"Node rejoins consensus",
 				"No transaction loss"
 			],
-			"priority": 25,
+			"priority": 17,
 			"passes": false,
-			"notes": "Recovery drill per runbook Section 7"
+			"notes": "MANUAL: Recovery drill per runbook Section 7"
 		},
 		{
-			"id": "US-026",
+			"id": "US-018",
 			"title": "Test gateway restart recovery",
 			"acceptanceCriteria": [
 				"Stop gateway service",
@@ -333,25 +230,12 @@
 				"Sessions re-register",
 				"Nonces persist correctly"
 			],
-			"priority": 26,
+			"priority": 18,
 			"passes": false,
-			"notes": "Recovery drill per runbook Section 7"
+			"notes": "MANUAL: Recovery drill per runbook Section 7"
 		},
 		{
-			"id": "US-027",
-			"title": "Configure alert rules",
-			"acceptanceCriteria": [
-				"Add alert for WS send errors > threshold",
-				"Add alert for auth 5xx spike",
-				"Add alert for rate-limit reject spike",
-				"Test alerts fire correctly"
-			],
-			"priority": 27,
-			"passes": false,
-			"notes": "Per runbook Section 8"
-		},
-		{
-			"id": "US-028",
+			"id": "US-019",
 			"title": "Build production mobile APK",
 			"acceptanceCriteria": [
 				"Configure EAS secrets for production endpoints",
@@ -359,12 +243,12 @@
 				"Install on real device",
 				"Verify WSS connection works"
 			],
-			"priority": 28,
+			"priority": 19,
 			"passes": false,
-			"notes": "Final production Android build"
+			"notes": "MANUAL: Final production Android build"
 		},
 		{
-			"id": "US-029",
+			"id": "US-020",
 			"title": "Build production mobile IPA",
 			"acceptanceCriteria": [
 				"Configure EAS secrets for production endpoints",
@@ -372,153 +256,9 @@
 				"Install via TestFlight",
 				"Verify WSS connection works"
 			],
-			"priority": 29,
+			"priority": 20,
 			"passes": false,
-			"notes": "Final production iOS build"
-		},
-		{
-			"id": "US-030",
-			"title": "Create E2E full game round integration test",
-			"acceptanceCriteria": [
-				"Create tests/e2e/full-game-round.test.ts",
-				"Test flow: mobile client → gateway → execution → result → payout",
-				"Verify bet deducted from balance",
-				"Verify result matches execution output",
-				"Verify payout credited correctly",
-				"Test for at least 3 games (Blackjack, Roulette, Craps)"
-			],
-			"priority": 30,
-			"passes": false,
-			"notes": "GAP: No cross-component test verifies full bet→process→payout flow. Individual components tested in isolation."
-		},
-		{
-			"id": "US-031",
-			"title": "Create WebSocket reconnection recovery test",
-			"acceptanceCriteria": [
-				"Create tests/e2e/reconnection-recovery.test.ts",
-				"Start a game (Blackjack player_turn phase)",
-				"Force disconnect WebSocket mid-game",
-				"Reconnect with same session",
-				"Verify game state is restored (cards, bet, phase)",
-				"Complete the game and verify result"
-			],
-			"priority": 31,
-			"passes": false,
-			"notes": "GAP: Only unit test for reconnect hook exists. No test verifies active game state persists across disconnect/reconnect."
-		},
-		{
-			"id": "US-032",
-			"title": "Create session lifecycle integration test",
-			"acceptanceCriteria": [
-				"Create tests/e2e/session-lifecycle.test.ts",
-				"Test: create session → authenticate → place bet → disconnect → reconnect → verify state",
-				"Verify session ID persists across reconnection",
-				"Verify balance consistency throughout",
-				"Test session timeout behavior"
-			],
-			"priority": 32,
-			"passes": false,
-			"notes": "GAP: Gateway tests session create/disconnect separately. No integrated cross-component session lifecycle test."
-		},
-		{
-			"id": "US-033",
-			"title": "Create multi-player Craps stress test",
-			"acceptanceCriteria": [
-				"Create tests/e2e/multi-player-craps.test.ts",
-				"Connect 10+ concurrent players to global table",
-				"All players place bets in betting phase",
-				"Verify all players receive phase transition broadcasts",
-				"Verify all players receive dice roll result",
-				"Verify correct payouts for each player"
-			],
-			"priority": 33,
-			"passes": false,
-			"notes": "GAP: live-table.test.ts tests 2-3 players. No stress test with 10+ concurrent players."
-		},
-		{
-			"id": "US-034",
-			"title": "Create network resilience test suite",
-			"acceptanceCriteria": [
-				"Create tests/e2e/network-resilience.test.ts",
-				"Test high latency (5s message delay)",
-				"Test temporary connection drop (3s)",
-				"Test packet loss simulation",
-				"Verify game state recovers correctly in each scenario",
-				"No duplicate bets or lost payouts"
-			],
-			"priority": 34,
-			"passes": false,
-			"notes": "GAP: No tests simulate network failures. Critical for mobile users with unstable connections."
-		},
-		{
-			"id": "US-035",
-			"title": "Create cross-game balance consistency test",
-			"acceptanceCriteria": [
-				"Create tests/e2e/cross-game-balance.test.ts",
-				"Play all 10 games in sequence in same session",
-				"Track expected balance after each game",
-				"Verify actual balance matches expected after each game",
-				"No balance drift across game switches"
-			],
-			"priority": 35,
-			"passes": false,
-			"notes": "GAP: all-bet-types.test.ts tests one game at a time. No test verifies balance consistency across all games."
-		},
-		{
-			"id": "US-036",
-			"title": "Create vault-to-session integration test",
-			"acceptanceCriteria": [
-				"Create tests/e2e/vault-session.test.ts",
-				"Test: create vault → unlock → create session → place bet",
-				"Test: lock vault → verify session invalid",
-				"Test: export key → reimport → session works",
-				"Verify crypto keys properly flow from vault to session"
-			],
-			"priority": 36,
-			"passes": false,
-			"notes": "GAP: Vault and session tested separately. No integration test for vault→session flow."
-		},
-		{
-			"id": "US-037",
-			"title": "Create concurrent operations test",
-			"acceptanceCriteria": [
-				"Create tests/e2e/concurrent-operations.test.ts",
-				"Test rapid bet placement (10 bets in <1s)",
-				"Test simultaneous game starts (should reject second)",
-				"Test bet cancellation race conditions",
-				"Verify no double-charges or lost bets"
-			],
-			"priority": 37,
-			"passes": false,
-			"notes": "GAP: No test for race conditions when user performs rapid/concurrent operations."
-		},
-		{
-			"id": "US-038",
-			"title": "Create message ordering test",
-			"acceptanceCriteria": [
-				"Create tests/e2e/message-ordering.test.ts",
-				"Send rapid succession of game moves",
-				"Verify server processes in correct order",
-				"Verify client receives responses in order",
-				"Test with simulated network jitter"
-			],
-			"priority": 38,
-			"passes": false,
-			"notes": "GAP: No test verifies message ordering under rapid succession. Out-of-order could corrupt game state."
-		},
-		{
-			"id": "US-039",
-			"title": "Fix mobile integration test message type expectations",
-			"acceptanceCriteria": [
-				"Update mobile/tests/integration/games/*.ts to handle game_move instead of game_result",
-				"Fix timeout errors in Blackjack, Roulette, Craps, Baccarat, SicBo, VideoPoker, CasinoWar tests",
-				"Fix Three Card Poker and Ultimate Hold'em to handle game_started correctly",
-				"All 10 game tests pass against local gateway",
-				"Tests validate actual payout from game_move/game_result messages"
-			],
-			"priority": 39,
-			"passes": false,
-			"notes": "DISCOVERED 2026-01-06: Mobile integration tests timeout waiting for 'game_result'/'game_state' but gateway sends 'game_move'. Only Hi-Lo passes (1/10). Gateway all-bet-types (86/86) proves game logic works - this is a test framework bug."
+			"notes": "MANUAL: Final production iOS build"
 		}
 	]
 }

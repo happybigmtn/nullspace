@@ -6,6 +6,8 @@ import { logDebug } from '../utils/logger.js';
 
 // Delay between fetch retries
 const FETCH_RETRY_DELAY_MS = 1000;
+// Timeout for individual fetch requests
+const FETCH_TIMEOUT_MS = 10000;
 const makeRequestId = () => {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     return crypto.randomUUID();
@@ -225,14 +227,28 @@ export class CasinoClient {
     // Wrap transaction in Submission enum
     const submission = this.wasm.wrapTransactionSubmission(transaction);
 
-    const response = await fetch(`${this.baseUrl}/submit`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/octet-stream',
-        'x-request-id': makeRequestId()
-      },
-      body: submission
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+    let response;
+    try {
+      response = await fetch(`${this.baseUrl}/submit`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/octet-stream',
+          'x-request-id': makeRequestId()
+        },
+        body: submission,
+        signal: controller.signal
+      });
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('Transaction submission timed out. Please try again.');
+      }
+      throw error;
+    }
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -296,11 +312,24 @@ export class CasinoClient {
 
     let response;
     while (true) {
-      response = await fetch(`${this.baseUrl}/state/${hexKey}`, {
-        headers: {
-          'x-request-id': makeRequestId()
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+      try {
+        response = await fetch(`${this.baseUrl}/state/${hexKey}`, {
+          headers: {
+            'x-request-id': makeRequestId()
+          },
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+      } catch (error) {
+        clearTimeout(timeoutId);
+        if (error.name === 'AbortError') {
+          throw new Error('State query timed out. Please try again.');
         }
-      });
+        throw error;
+      }
 
       if (response.status === 404) {
         return { found: false, value: null };
@@ -347,11 +376,24 @@ export class CasinoClient {
 
     let response;
     while (true) {
-      response = await fetch(`${this.baseUrl}/seed/${hexQuery}`, {
-        headers: {
-          'x-request-id': makeRequestId()
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+      try {
+        response = await fetch(`${this.baseUrl}/seed/${hexQuery}`, {
+          headers: {
+            'x-request-id': makeRequestId()
+          },
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+      } catch (error) {
+        clearTimeout(timeoutId);
+        if (error.name === 'AbortError') {
+          throw new Error('Seed query timed out. Please try again.');
         }
-      });
+        throw error;
+      }
 
       if (response.status === 404) {
         return { found: false };
@@ -381,11 +423,26 @@ export class CasinoClient {
     const queryBytes = this.wasm.encodeQuery('latest');
     const hexQuery = this.wasm.bytesToHex(queryBytes);
 
-    const response = await fetch(`${this.baseUrl}/seed/${hexQuery}`, {
-      headers: {
-        'x-request-id': makeRequestId()
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+    let response;
+    try {
+      response = await fetch(`${this.baseUrl}/seed/${hexQuery}`, {
+        headers: {
+          'x-request-id': makeRequestId()
+        },
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+    } catch (error) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        logDebug('Latest seed query timed out');
+        return { found: false };
       }
-    });
+      throw error;
+    }
 
     if (response.status === 404) {
       return { found: false };
