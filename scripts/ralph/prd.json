@@ -179,8 +179,8 @@
 				"Verify no bet exceeds actual balance due to race"
 			],
 			"priority": 14,
-			"passes": false,
-			"notes": "CRITICAL GAP: useChipBetting.placeChip() uses getState() but doesn't lock. Concurrent setBalance() can cause bet > balance."
+			"passes": true,
+			"notes": "IMPLEMENTED: Added atomic bet validation with balance locking. gameStore has betValidationLocked flag and pendingBalanceUpdate for queued updates. validateAndLockBet(amount) atomically validates and locks. setBalanceWithSeq() queues updates when locked. useBetSubmission accepts optional {amount} for validation. All 10 game screens pass bet amount. 9 new tests verify: (1) lock prevents concurrent balance updates, (2) pending updates applied after unlock, (3) bet rejected if balance insufficient, (4) backward compat without amount. Files: gameStore.ts, useBetSubmission.ts, all game screens."
 		},
 		{
 			"id": "US-091",

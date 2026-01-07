@@ -1963,3 +1963,55 @@ Target: Testnet Production
   - Pattern: Use `parseInt(str, 10)` with `!isNaN && isFinite` checks for robust string-to-number parsing
 
 ---
+
+## 2026-01-06 - US-090: Add concurrent bet validation lock test
+
+- What was implemented:
+  - Added atomic bet validation with balance locking to prevent race conditions where balance updates arrive between validation and bet submission
+  - **gameStore changes:**
+    - Added `betValidationLocked: boolean` flag to track when bet submission is in progress
+    - Added `pendingBalanceUpdate: { balance, balanceSeq } | null` to queue updates during lock
+    - Added `validateAndLockBet(amount)` action - atomically validates bet <= balance and acquires lock
+    - Added `unlockBetValidation()` action - releases lock and applies any pending balance update
+    - Modified `setBalanceWithSeq()` to queue updates when locked instead of applying immediately
+  - **useBetSubmission changes:**
+    - Added optional `{ amount }` parameter to `submitBet()` for atomic validation
+    - If amount provided, calls `validateAndLockBet()` before sending
+    - Releases lock on send failure, timeout, or `clearSubmission()`
+  - **All 10 game screens updated:**
+    - BlackjackScreen, HiLoScreen, VideoPokerScreen, CasinoWarScreen, BaccaratScreen
+    - RouletteScreen, SicBoScreen, ThreeCardPokerScreen, UltimateTXHoldemScreen, CrapsScreen
+    - Each passes total bet amount to `submitBet({ msg }, { amount: totalBet })`
+  - **Tests (9 new):**
+    1. `validates bet amount against balance when amount provided`
+    2. `rejects bet when amount exceeds balance`
+    3. `locks during validation to prevent concurrent balance updates`
+    4. `applies pending balance update after clearSubmission`
+    5. `unlocks on send failure`
+    6. `unlocks on timeout`
+    7. `rejects bet if balance changes between chip placement and submission`
+    8. `backward compat: submits without amount validation when amount not provided`
+    9. `no bet exceeds actual balance due to race`
+- Files changed:
+  - `mobile/src/stores/gameStore.ts` - Added lock mechanism
+  - `mobile/src/hooks/useBetSubmission.ts` - Added amount validation
+  - `mobile/src/hooks/__tests__/useBetSubmission.test.tsx` - 9 new tests
+  - `mobile/src/screens/games/*.tsx` - All 10 game screens
+  - `mobile/src/test-utils/gameScreenTestUtils.ts` - Mock for useBetSubmission
+- **Learnings:**
+  - **The Race Condition:**
+    - User places chips (each validated against `getState().balance`)
+    - User clicks DEAL → balance could change before submission!
+    - Solution: Lock balance during submission, queue any updates
+  - **Lock Lifecycle:**
+    1. `submitBet({ msg }, { amount: 80 })` → `validateAndLockBet(80)` → lock acquired
+    2. Balance updates during lock → queued in `pendingBalanceUpdate`
+    3. Server responds → `clearSubmission()` → `unlockBetValidation()` → pending applied
+  - **Design Decisions:**
+    - Made `amount` optional for backward compatibility
+    - Lock is per-session, not global (each user session has own lock)
+    - `setBalanceWithSeq()` returns false when locked (caller knows update was queued)
+  - Pattern: Use Zustand `get()` for atomic state reads + `set()` for atomic state updates
+  - Pattern: Test mocks need to match real module exports (added `mockUseBetSubmission` to test utils)
+
+---
