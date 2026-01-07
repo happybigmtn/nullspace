@@ -1,18 +1,15 @@
 /**
  * Splash Screen - Jony Ive Redesigned
  * Minimal branding with biometric authentication prompt
+ *
+ * Premium features (US-113):
+ * - Skeleton shimmer loader instead of plain dots
  */
 import { View, Text, StyleSheet } from 'react-native';
 import { useEffect, useCallback } from 'react';
-import Animated, {
-  FadeIn,
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withTiming,
-  Easing,
-} from 'react-native-reanimated';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
+import { SkeletonShimmer } from '../components/ui/MicroInteractions';
 import { authenticateWithBiometrics, initializeAuth } from '../services/auth';
 import { getPublicKey } from '../services/crypto';
 import { initializeStorage } from '../services';
@@ -20,7 +17,6 @@ import { useAuth } from '../context';
 import type { SplashScreenProps } from '../navigation/types';
 
 export function SplashScreen({ navigation }: SplashScreenProps) {
-  const pulseOpacity = useSharedValue(0.5);
   const { authenticate } = useAuth();
 
   const initializeApp = useCallback(async () => {
@@ -54,18 +50,8 @@ export function SplashScreen({ navigation }: SplashScreenProps) {
   }, [authenticate, navigation]);
 
   useEffect(() => {
-    pulseOpacity.value = withRepeat(
-      withTiming(1, { duration: 1000, easing: Easing.inOut(Easing.ease) }),
-      -1,
-      true
-    );
-
     initializeApp();
-  }, [initializeApp, pulseOpacity]);
-
-  const pulseStyle = useAnimatedStyle(() => ({
-    opacity: pulseOpacity.value,
-  }));
+  }, [initializeApp]);
 
   return (
     <View style={styles.container}>
@@ -82,12 +68,12 @@ export function SplashScreen({ navigation }: SplashScreenProps) {
           <Text style={styles.tagline}>Provably Fair Casino</Text>
         </View>
 
-        {/* Loading indicator */}
-        <Animated.View style={[styles.loadingContainer, pulseStyle]}>
-          <View style={styles.loadingDot} />
-          <View style={styles.loadingDot} />
-          <View style={styles.loadingDot} />
-        </Animated.View>
+        {/* Premium skeleton shimmer loader */}
+        <View style={styles.loadingContainer}>
+          <SkeletonShimmer width={8} height={8} variant="circle" />
+          <SkeletonShimmer width={8} height={8} variant="circle" />
+          <SkeletonShimmer width={8} height={8} variant="circle" />
+        </View>
       </Animated.View>
     </View>
   );
@@ -133,12 +119,6 @@ const styles = StyleSheet.create({
   },
   loadingContainer: {
     flexDirection: 'row',
-    gap: SPACING.xs,
-  },
-  loadingDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: COLORS.primary,
+    gap: SPACING.sm,
   },
 });

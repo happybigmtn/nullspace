@@ -34,8 +34,11 @@ Target: Testnet Production
 - Font loading: `useFonts()` in App.tsx holds splash screen until fonts ready
 - Premium cards: Multi-layer shadows (`shadowContact` + `shadowDiffuse`), gold/silver rim by suit, scale pop animation
 - Textures: Linen pattern via semi-transparent View lines (avoid SVG for performance)
+- Glassmorphism: `expo-blur` BlurView with GLASS constants (blur.medium=20, backdropOpacity.medium=0.6)
+- Glass components: `GlassView`, `GlassOverlay`, `GlassModal`, `GlassSheet` in `components/ui/`
+- Inner glow: Thin View element with rgba background at top edge of elevated surfaces
 - 12 race conditions identified (see US-005 through US-009, US-021-022)
-- Tests: 252/252 unit tests, run with `npm test`
+- Tests: 280/280 unit tests, run with `npm test`
 
 ### Configuration
 - Production configs: `configs/production/*.env.example`
@@ -2456,3 +2459,108 @@ Target: Testnet Production
   - Deterministic randomness for stack rotation uses chip value as seed: `(value * 17 + 3) % 17 - 8`
   - withRepeat(-1, false) creates infinite non-alternating animation loops
   - chipSettle uses high stiffness (400) with medium damping (20) for quick but visible bounce
+
+---
+
+## 2026-01-07 - US-111: Win celebration with particle effects and balance animation
+
+- What was implemented:
+  - Created `GoldParticles.tsx` - Animated gold particle burst using react-native-reanimated
+    - Particles burst from center with gravity effect, randomized angles/sizes
+    - Intensity scales with win multiplier (8/16/24/40 particles)
+  - Created `AnimatedBalance.tsx` - Balance display with slot-machine roller effect
+    - Each digit animates with staggered delay (roller effect)
+    - Shimmer wave sweeps across on win
+    - Scale pop animation based on intensity
+    - Delta badge (+$amount) fades after 2s
+  - Created `CelebrationOverlay.tsx` - Orchestrates effects in GameLayout
+  - Created `useCelebration.ts` - Core celebration state management
+  - Created `useWinCelebration.ts` - Simple drop-in hook for game screens
+  - Enhanced `haptics.ts` with `bigWin()` and extended `jackpot()` patterns
+  - Updated `GameHeader.tsx` to use AnimatedBalance
+  - Updated `GameLayout.tsx` to accept celebrationState prop
+  - Integrated into `CasinoWarScreen.tsx` as demonstration
+
+- Files changed:
+  - `mobile/src/components/celebration/` - New directory with 4 files
+  - `mobile/src/hooks/useCelebration.ts` - New
+  - `mobile/src/hooks/useWinCelebration.ts` - New
+  - `mobile/src/hooks/index.ts` - Added exports
+  - `mobile/src/components/game/GameHeader.tsx` - Uses AnimatedBalance
+  - `mobile/src/components/game/GameLayout.tsx` - Added celebrationState prop
+  - `mobile/src/services/haptics.ts` - Added bigWin(), extended jackpot()
+  - `mobile/src/screens/games/CasinoWarScreen.tsx` - Integration demo
+  - Tests updated for GameHeader and haptics
+
+- **Learnings:**
+  - Animation cleanup: useEffect must return cleanup or undefined in all paths
+  - Test isolation: Mock AnimatedBalance in tests to avoid timer conflicts
+  - Celebration intensity thresholds: 1.5x=medium, 3x=big, 5x=jackpot
+  - Particle gravity: Quadratic progress (progress²) creates realistic fall
+  - Stagger effect: 30ms delay per digit creates casino roller feel
+  - Haptic patterns: Use scheduleHaptic with AbortController for cancellable sequences
+
+---
+
+## 2026-01-07 - US-112: Glass morphism overlays and modals
+
+- What was implemented:
+  - Installed `expo-blur` package for native blur effects
+  - Created `GlassView` component with configurable blur intensity (light/medium/heavy)
+  - Created `GlassOverlay` for full-screen frosted backdrop
+  - Created `GlassModal` and `GlassSheet` for premium modal backgrounds
+  - Added `GLASS` constants to theme.ts (blur levels, opacity, border colors, innerGlow)
+  - Updated `TutorialOverlay` to use glassmorphism with BlurView backdrop
+  - Added inner glow effect via thin View with rgba background
+  - All components are theme-aware (light/dark mode)
+- Files changed:
+  - `mobile/package.json` - Added expo-blur dependency
+  - `mobile/src/components/ui/GlassView.tsx` - New: GlassView + GlassOverlay
+  - `mobile/src/components/ui/GlassModal.tsx` - New: GlassModal + GlassSheet
+  - `mobile/src/components/ui/TutorialOverlay.tsx` - Updated with glassmorphism
+  - `mobile/src/components/ui/index.ts` - Exports new components
+  - `mobile/src/constants/theme.ts` - Added GLASS constants
+  - `mobile/src/components/ui/__tests__/GlassView.test.tsx` - 11 tests
+  - `mobile/src/components/ui/__tests__/GlassModal.test.tsx` - 9 tests
+  - `mobile/src/components/ui/__tests__/TutorialOverlay.test.tsx` - Updated mocks
+- **Learnings:**
+  - `expo-blur` uses native UIVisualEffectView (iOS) and RenderScript (Android) for performance
+  - expo-blur BlurView requires `intensity` (0-100) and `tint` ('light' | 'dark') props
+  - Inner glow effect: position:absolute View at top with height:1 and rgba white background
+  - Theme hooks: `useTheme()` returns isDark/colorScheme, `useThemedColors()` returns color palette
+  - Tests need mocks for expo-blur, react-native-reanimated, and ThemeContext
+  - BlurView mock: return plain View with data-intensity/data-tint props for assertions
+
+---
+
+## 2026-01-07 - US-113: Refined micro-interactions for buttons and selections
+
+- What was implemented:
+  - Created `MicroInteractions.tsx` with premium animation components:
+    - `AnimatedSelectionRing`: Expanding ring on selection (animates outward via scale + opacity)
+    - `SkeletonShimmer`: Premium loading state with traveling highlight
+    - `SkeletonRow`: Convenience component for multiple skeleton lines
+    - `PulseRing`: Expanding pulse rings for attention (connection status)
+    - `FloatAnimation`: Subtle idle movement for interactive elements
+  - Enhanced `PrimaryButton.tsx` with depth simulation:
+    - Y-translate (2px) on press to simulate "sinking into surface"
+    - Shadow reduction (radius 6→2, offset 3→1, opacity 0.25→0.1)
+    - Combines with subtle scale (0.98) for tactile feel
+  - Updated `ConnectionStatusBanner.tsx` to use PulseRing during connecting state
+  - Updated `SplashScreen.tsx` to use SkeletonShimmer instead of plain pulsing dots
+  - Updated `HelpButton.tsx` with FloatAnimation (3px, 2500ms cycle)
+- Files changed:
+  - `mobile/src/components/ui/MicroInteractions.tsx` (NEW) - 490 lines
+  - `mobile/src/components/ui/PrimaryButton.tsx` - Depth animation
+  - `mobile/src/components/ui/ConnectionStatusBanner.tsx` - PulseRing integration
+  - `mobile/src/components/ui/HelpButton.tsx` - FloatAnimation integration
+  - `mobile/src/components/ui/index.ts` - Exports
+  - `mobile/src/screens/SplashScreen.tsx` - SkeletonShimmer loading
+- **Learnings:**
+  - Depth simulation uses `pressProgress` shared value (0→1) to drive multiple interpolations simultaneously
+  - `interpolate()` + `Extrapolation.CLAMP` is the pattern for driving multi-property animations from one value
+  - `withSequence()` with staggered delays creates layered pulse effects (ring1 immediate, ring2 +400ms, ring3 +800ms)
+  - `DimensionValue` type for React Native widths accepts numbers and percentage strings like '100%'
+  - Float animation should be disabled during press to avoid conflicting transforms
+
+---

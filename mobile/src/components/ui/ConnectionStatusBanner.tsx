@@ -1,19 +1,14 @@
 /**
  * ConnectionStatusBanner - Shows connection status with reconnection feedback
  * Displays when disconnected or reconnecting, hidden when connected
+ *
+ * Premium features (US-113):
+ * - PulseRing animation on status indicator during connection
  */
 import { View, Text, StyleSheet, Pressable } from 'react-native';
-import Animated, {
-  FadeIn,
-  FadeOut,
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withTiming,
-  Easing,
-} from 'react-native-reanimated';
-import { useEffect } from 'react';
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS } from '../../constants/theme';
+import { PulseRing } from './MicroInteractions';
 import type { ConnectionState } from '../../services/websocket';
 
 interface ConnectionStatusBannerProps {
@@ -29,24 +24,6 @@ export function ConnectionStatusBanner({
   maxReconnectAttempts,
   onRetry,
 }: ConnectionStatusBannerProps) {
-  const pulseOpacity = useSharedValue(1);
-
-  useEffect(() => {
-    if (connectionState === 'connecting') {
-      pulseOpacity.value = withRepeat(
-        withTiming(0.4, { duration: 1000, easing: Easing.inOut(Easing.ease) }),
-        -1,
-        true
-      );
-    } else {
-      pulseOpacity.value = 1;
-    }
-  }, [connectionState, pulseOpacity]);
-
-  const pulseStyle = useAnimatedStyle(() => ({
-    opacity: pulseOpacity.value,
-  }));
-
   if (connectionState === 'connected') {
     return null;
   }
@@ -68,7 +45,15 @@ export function ConnectionStatusBanner({
       style={[styles.container, isFailed && styles.containerFailed]}
     >
       <View style={styles.content}>
-        <Animated.View style={[styles.indicator, pulseStyle, { backgroundColor: statusColor }]} />
+        {/* PulseRing draws attention during connecting state */}
+        <PulseRing
+          isActive={isConnecting}
+          size={6}
+          color={statusColor}
+          rings={isConnecting ? 2 : 1}
+        >
+          <View style={[styles.indicator, { backgroundColor: statusColor }]} />
+        </PulseRing>
         <Text style={styles.message}>{getMessage()}</Text>
         {reconnectAttempt > 0 && (
             <Text style={styles.count}>({reconnectAttempt}/{maxReconnectAttempts})</Text>
