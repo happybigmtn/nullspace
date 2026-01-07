@@ -8,7 +8,7 @@ import Animated, { SlideInRight } from 'react-native-reanimated';
 import { Card } from '../../components/casino';
 import { ChipSelector } from '../../components/casino';
 import { GameLayout } from '../../components/game';
-import { TutorialOverlay, PrimaryButton } from '../../components/ui';
+import { TutorialOverlay, PrimaryButton, BlackjackSkeleton } from '../../components/ui';
 import { haptics } from '../../services/haptics';
 import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useChipBetting, useBetSubmission } from '../../hooks';
 import {
@@ -77,6 +77,8 @@ export function BlackjackScreen() {
   });
   const [showTutorial, setShowTutorial] = useState(false);
   const [sideBet21Plus3, setSideBet21Plus3] = useState(0);
+  // US-115: Track loading state during InteractionManager parsing
+  const [isParsingState, setIsParsingState] = useState(false);
 
   // Track mounted state to prevent setState after unmount
   const isMounted = useRef(true);
@@ -111,6 +113,9 @@ export function BlackjackScreen() {
         return;
       }
 
+      // US-115: Show skeleton during state parsing
+      setIsParsingState(true);
+
       InteractionManager.runAfterInteractions(() => {
         if (!isMounted.current) return;
         const parsed = parseBlackjackState(stateBytes);
@@ -118,6 +123,7 @@ export function BlackjackScreen() {
           if (__DEV__) {
             console.error('[Blackjack] Failed to parse state blob');
           }
+          setIsParsingState(false);
           setState((prev) => ({
             ...prev,
             phase: 'error',
@@ -147,6 +153,7 @@ export function BlackjackScreen() {
                 ? 'Dealer\'s turn'
                 : 'Round complete',
         }));
+        setIsParsingState(false);
       });
       return;
     }
@@ -319,6 +326,11 @@ export function BlackjackScreen() {
         onHelpPress={() => setShowTutorial(true)}
         connectionStatus={connectionStatusProps}
       >
+        {/* US-115: Show skeleton during state parsing */}
+        {isParsingState ? (
+          <BlackjackSkeleton />
+        ) : (
+        <>
         {/* Game Area */}
         <View style={GAME_LAYOUT_STYLES.gameArea}>
           {/* Dealer's Hand */}
@@ -470,6 +482,8 @@ export function BlackjackScreen() {
             onSelect={setSelectedChip}
             onChipPlace={handleChipPlace}
           />
+        )}
+        </>
         )}
       </GameLayout>
 

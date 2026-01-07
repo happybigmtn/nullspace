@@ -37,6 +37,9 @@ Target: Testnet Production
 - Glassmorphism: `expo-blur` BlurView with GLASS constants (blur.medium=20, backdropOpacity.medium=0.6)
 - Glass components: `GlassView`, `GlassOverlay`, `GlassModal`, `GlassSheet` in `components/ui/`
 - Inner glow: Thin View element with rgba background at top edge of elevated surfaces
+- Navigation: `@react-navigation/stack` for custom CardStyleInterpolators (parallax depth effects)
+- Parallax presets: `ParallaxTransitionPresets.slideWithParallax`, `modalWithParallax`, `fadeWithDepth`
+- Depth perception: outgoing screens scale to 0.92 + 60% opacity, incoming overshoot 1.02→1.0
 - 12 race conditions identified (see US-005 through US-009, US-021-022)
 - Tests: 280/280 unit tests, run with `npm test`
 
@@ -2562,5 +2565,65 @@ Target: Testnet Production
   - `withSequence()` with staggered delays creates layered pulse effects (ring1 immediate, ring2 +400ms, ring3 +800ms)
   - `DimensionValue` type for React Native widths accepts numbers and percentage strings like '100%'
   - Float animation should be disabled during press to avoid conflicting transforms
+
+---
+
+## 2026-01-07 - US-114: Screen transitions with parallax depth effect
+
+- What was implemented:
+  - Replaced basic `fade` and `slide_from_right` with custom parallax CardStyleInterpolators
+  - Created `parallaxTransitions.ts` with three transition presets:
+    - `forParallaxHorizontal`: Outgoing scales to 0.92 + dims to 60% + parallax translate (-30%), incoming slides with 1.02→1.0 overshoot
+    - `forParallaxVertical`: Modal-style slide from bottom with background scale-down
+    - `forFadeWithDepth`: Subtle fade + scale for auth flow transitions
+  - Shadow animates via `shadowStyle` property for depth perception
+  - Non-linear easing via `Easing.bezier(0.16, 1, 0.3, 1)` (easeOutExpo) for momentum feel
+  - Updated `RootNavigator.tsx` from `@react-navigation/native-stack` to `@react-navigation/stack`
+  - Auth flow (Splash→Auth→Lobby) uses `fadeWithDepth`, game navigation uses `slideWithParallax`
+- Files changed:
+  - `mobile/package.json` - Added @react-navigation/stack@^7.6.13
+  - `mobile/src/navigation/parallaxTransitions.ts` (NEW) - 349 lines
+  - `mobile/src/navigation/RootNavigator.tsx` - Use JS stack + parallax presets
+  - `mobile/src/navigation/index.ts` - Export parallax presets
+  - `mobile/src/navigation/__tests__/RootNavigator.test.tsx` - Updated mock for stack
+  - `mobile/src/navigation/__tests__/parallaxTransitions.test.ts` (NEW) - 19 tests
+- **Learnings:**
+  - `@react-navigation/native-stack` uses native transitions; `@react-navigation/stack` is JS-based and allows custom CardStyleInterpolators
+  - `StackCardInterpolatedStyle` has separate properties: `cardStyle`, `shadowStyle`, `overlayStyle`, `containerStyle`
+  - `current.progress` animates 0→1 for incoming screen; `next.progress` animates 0→1 when this screen goes to background
+  - `inverted` animated value handles RTL layouts - multiply translateX by it
+  - Shadow properties in `cardStyle` are ignored; use `shadowStyle` property instead
+  - Tests need to mock `@react-navigation/stack` not `@react-navigation/native-stack` after migration
+
+---
+
+## 2026-01-07 - US-115: Casino-themed skeleton loaders for game screens
+
+- What was implemented:
+  - Created `GameSkeletons.tsx` with 16 exported components:
+    - Primitive skeletons: `CardSkeleton`, `ChipSkeleton`, `TableAreaSkeleton`, `TextSkeleton`, `ButtonSkeleton`
+    - Composite skeletons: `HandSkeleton`, `ChipRowSkeleton`
+    - Game-specific: `BlackjackSkeleton`, `HiLoSkeleton`, `RouletteSkeleton`, `VideoPokerSkeleton`, `CrapsSkeleton`, `SicBoSkeleton`, `BaccaratSkeleton`, `GenericGameSkeleton`
+    - Wrapper: `GameSkeletonLoader` - auto-selects skeleton based on game type
+  - Shimmer animation via `useSharedValue` + `withRepeat(withTiming(...))` traveling highlight effect
+  - Card dimensions match `Card.tsx`: small=56x84, normal=80x120, large=100x150
+  - Progressive reveal via reanimated `FadeIn/FadeOut` entering/exiting animations
+  - Integrated into `BlackjackScreen.tsx` to demonstrate pattern:
+    - Added `isParsingState` state variable
+    - Set `true` before `InteractionManager.runAfterInteractions()`, `false` after parsing completes
+    - Conditional render shows `BlackjackSkeleton` while parsing
+  - Added 42 unit tests covering all skeleton variants and loader behavior
+- Files changed:
+  - `mobile/src/components/ui/GameSkeletons.tsx` (NEW) - 572 lines, all skeleton components
+  - `mobile/src/components/ui/index.ts` - Export all skeleton components
+  - `mobile/src/screens/games/BlackjackScreen.tsx` - Demo integration with isParsingState
+  - `mobile/src/components/ui/__tests__/GameSkeletons.test.tsx` (NEW) - 42 tests
+- **Learnings:**
+  - `InteractionManager.runAfterInteractions()` defers work but doesn't provide loading state - must track manually
+  - Reanimated mock in `jest/setup.js` causes issues if re-mocked in individual test files
+  - React 19 requires `act()` wrapper for all renders that trigger useEffect state updates
+  - `useSkeletonShimmer()` custom hook encapsulates animation logic for reuse across skeleton variants
+  - Game-specific skeletons match actual game layouts (dealer/player hands, bet areas, chip selectors)
+  - Card games (blackjack, casino_war, three_card_poker, ultimate_texas_holdem) share similar layouts → reuse `BlackjackSkeleton`
 
 ---
