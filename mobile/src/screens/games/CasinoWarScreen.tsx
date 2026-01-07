@@ -10,7 +10,7 @@ import { ChipSelector } from '../../components/casino';
 import { GameLayout } from '../../components/game';
 import { TutorialOverlay, PrimaryButton } from '../../components/ui';
 import { haptics } from '../../services/haptics';
-import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useChipBetting, useBetSubmission } from '../../hooks';
+import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useChipBetting, useBetSubmission, useWinCelebration } from '../../hooks';
 import { COLORS, SPACING, TYPOGRAPHY, SPRING } from '../../constants/theme';
 import { decodeCardId, decodeStateBytes, parseCasinoWarState } from '../../utils';
 import type { ChipValue, TutorialStep, Card as CardType } from '../../types';
@@ -46,6 +46,7 @@ export function CasinoWarScreen() {
   const { isDisconnected, send, lastMessage, connectionStatusProps } = useGameConnection<GameMessage>();
   const { bet, selectedChip, setSelectedChip, placeChip, clearBet, balance } = useChipBetting();
   const { isSubmitting, submitBet, clearSubmission } = useBetSubmission(send);
+  const { celebrationState, triggerWin, clearCelebration } = useWinCelebration();
 
   const [state, setState] = useState<CasinoWarState>({
     playerCard: null,
@@ -114,8 +115,16 @@ export function CasinoWarScreen() {
       const playerCard = typeof payload.playerCard === 'number' ? decodeCardId(payload.playerCard) : null;
       const dealerCard = typeof payload.dealerCard === 'number' ? decodeCardId(payload.dealerCard) : null;
 
+      // Calculate win amount from payout field if available
+      const payout = typeof payload.payout === 'number' ? payload.payout : 0;
+      const totalBet = bet + state.tieBet + state.warBet;
+
       if (won) {
         haptics.win().catch(() => {});
+        // Trigger win celebration with particles and balance animation
+        if (payout > 0) {
+          triggerWin(payout, totalBet);
+        }
       } else {
         haptics.loss().catch(() => {});
       }
@@ -129,7 +138,7 @@ export function CasinoWarScreen() {
         message: typeof payload.message === 'string' ? payload.message : won ? 'You win!' : 'Dealer wins',
       }));
     }
-  }, [lastMessage, clearSubmission]);
+  }, [lastMessage, clearSubmission, bet, state.tieBet, state.warBet, triggerWin]);
 
   const handleDeal = useCallback(() => {
     if (bet === 0 || isSubmitting) return;
@@ -202,6 +211,7 @@ export function CasinoWarScreen() {
 
   const handleNewGame = useCallback(() => {
     clearBet();
+    clearCelebration();
     setState({
       playerCard: null,
       dealerCard: null,
@@ -211,7 +221,7 @@ export function CasinoWarScreen() {
       warBet: 0,
       tieBet: 0,
     });
-  }, [clearBet]);
+  }, [clearBet, clearCelebration]);
 
   const handleClearBets = useCallback(() => {
     clearBet();
@@ -253,6 +263,7 @@ export function CasinoWarScreen() {
         balance={balance}
         onHelpPress={() => setShowTutorial(true)}
         connectionStatus={connectionStatusProps}
+        celebrationState={celebrationState}
       >
         {/* Game Area */}
         <View style={styles.gameArea}>

@@ -15,3 +15,6 @@ export { useEntitlements } from './useEntitlements';
 export { useModalBackHandler } from './useModalBackHandler';
 export { useWebSocketReconnectOnForeground } from './useWebSocketReconnectOnForeground';
 export { useThemedColors, useGlow } from './useThemedColors';
+export { useCelebration } from './useCelebration';
+export type { CelebrationState, CelebrationIntensity, CelebrationConfig } from './useCelebration';
+export { useWinCelebration } from './useWinCelebration';

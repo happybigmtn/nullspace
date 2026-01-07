@@ -58,19 +58,27 @@ describe('haptics service', () => {
     await haptics.jackpot();
     expect(mockImpactAsync).toHaveBeenCalledWith('Heavy');
 
+    // Extended jackpot pattern: Heavy x3 at 0ms, 100ms, 200ms
     jest.advanceTimersByTime(100);
     await Promise.resolve();
     expect(mockImpactAsync).toHaveBeenCalledTimes(2);
 
     jest.advanceTimersByTime(100);
     await Promise.resolve();
+    expect(mockImpactAsync).toHaveBeenCalledTimes(3);
+
+    // Success notification at 350ms
+    jest.advanceTimersByTime(150);
+    await Promise.resolve();
     expect(mockNotificationAsync).toHaveBeenCalledWith('Success');
 
+    // Reset and test cleanup stops remaining scheduled haptics
     await haptics.jackpot();
     haptics.cleanup();
-    jest.advanceTimersByTime(250);
+    jest.advanceTimersByTime(700);
     await Promise.resolve();
-    expect(mockImpactAsync).toHaveBeenCalledTimes(3);
+    // After cleanup, no additional haptics should fire (only 4 from initial + restart heavy)
+    expect(mockImpactAsync).toHaveBeenCalledTimes(4);
 
     jest.useRealTimers();
   });

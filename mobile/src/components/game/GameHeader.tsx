@@ -6,7 +6,9 @@ import { useNavigation } from '@react-navigation/native';
 import { HelpButton } from '../ui/HelpButton';
 import { WalletBadge } from '../ui/WalletBadge';
 import { EventBadge } from './EventBadge';
+import { AnimatedBalance } from '../celebration/AnimatedBalance';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS } from '../../constants/theme';
+import type { CelebrationIntensity } from '../../hooks/useCelebration';
 
 interface GameHeaderProps {
   title: string;
@@ -14,9 +16,22 @@ interface GameHeaderProps {
   sessionDelta?: number;
   onHelp?: () => void;
   rightContent?: React.ReactNode;
+  /** Celebration state for animated balance */
+  isWinCelebrating?: boolean;
+  celebrationIntensity?: CelebrationIntensity;
+  winAmount?: number;
 }
 
-export function GameHeader({ title, balance, sessionDelta = 0, onHelp, rightContent }: GameHeaderProps) {
+export function GameHeader({
+  title,
+  balance,
+  sessionDelta = 0,
+  onHelp,
+  rightContent,
+  isWinCelebrating = false,
+  celebrationIntensity = 'small',
+  winAmount = 0,
+}: GameHeaderProps) {
   const navigation = useNavigation();
   const sessionLabel = sessionDelta === 0 ? '$0' : `${sessionDelta > 0 ? '+' : ''}$${Math.abs(sessionDelta).toLocaleString()}`;
 
@@ -28,7 +43,12 @@ export function GameHeader({ title, balance, sessionDelta = 0, onHelp, rightCont
         </Pressable>
         <View style={styles.balanceContainer}>
           <Text style={styles.balanceLabel}>Balance</Text>
-          <Text style={styles.balance}>${balance.toLocaleString()}</Text>
+          <AnimatedBalance
+            balance={balance}
+            isWinActive={isWinCelebrating}
+            intensity={celebrationIntensity}
+            winAmount={winAmount}
+          />
           <Text style={[styles.sessionDelta, sessionDelta > 0 ? styles.sessionPositive : sessionDelta < 0 ? styles.sessionNegative : styles.sessionNeutral]}>
             Session {sessionLabel}
           </Text>
@@ -80,10 +100,6 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     ...TYPOGRAPHY.caption,
     textTransform: 'uppercase',
-  },
-  balance: {
-    color: COLORS.primary,
-    ...TYPOGRAPHY.h2,
   },
   sessionDelta: {
     marginTop: 2,

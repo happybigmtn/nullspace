@@ -28,6 +28,16 @@ jest.mock('../../ui/WalletBadge', () => {
   return { WalletBadge: () => React.createElement(Text, null, 'Wallet') };
 });
 
+// Mock AnimatedBalance to use simple text rendering for tests
+jest.mock('../../celebration/AnimatedBalance', () => {
+  const React = require('react');
+  const { Text } = require('react-native');
+  return {
+    AnimatedBalance: ({ balance }: { balance: number }) =>
+      React.createElement(Text, { testID: 'animated-balance' }, `$${balance.toLocaleString()}`),
+  };
+});
+
 describe('GameHeader', () => {
   beforeEach(() => {
     mockGoBack.mockReset();

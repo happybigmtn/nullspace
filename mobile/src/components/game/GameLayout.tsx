@@ -6,8 +6,10 @@ import React, { ReactNode, useState } from 'react';
 import { View, StyleSheet, SafeAreaView } from 'react-native';
 import { GameHeader } from './GameHeader';
 import { ConnectionStatusBanner } from '../ui/ConnectionStatusBanner';
+import { CelebrationOverlay } from '../celebration/CelebrationOverlay';
 import { COLORS } from '../../constants/theme';
 import type { ConnectionState } from '../../services/websocket';
+import type { CelebrationState } from '../../hooks/useCelebration';
 
 const SCANLINE_ROWS = Array.from({ length: 80 }, (_, index) => index);
 
@@ -25,6 +27,10 @@ interface GameLayoutProps {
   headerRightContent?: ReactNode;
   connectionStatus?: ConnectionStatus;
   children: ReactNode;
+  /** Celebration state for win effects */
+  celebrationState?: CelebrationState;
+  /** Callback when celebration animation completes */
+  onCelebrationComplete?: () => void;
 }
 
 export function GameLayout({
@@ -34,6 +40,8 @@ export function GameLayout({
   headerRightContent,
   connectionStatus,
   children,
+  celebrationState,
+  onCelebrationComplete,
 }: GameLayoutProps) {
   const [sessionStartBalance] = useState(balance);
   const sessionDelta = balance - sessionStartBalance;
@@ -45,6 +53,9 @@ export function GameLayout({
           <View key={row} style={styles.scanline} />
         ))}
       </View>
+      {celebrationState && (
+        <CelebrationOverlay state={celebrationState} onComplete={onCelebrationComplete} />
+      )}
       {connectionStatus && (
         <ConnectionStatusBanner
           connectionState={connectionStatus.connectionState}
@@ -59,6 +70,9 @@ export function GameLayout({
         sessionDelta={sessionDelta}
         onHelp={onHelpPress}
         rightContent={headerRightContent}
+        isWinCelebrating={celebrationState?.isActive}
+        celebrationIntensity={celebrationState?.intensity}
+        winAmount={celebrationState?.winAmount}
       />
       <View style={styles.content}>{children}</View>
     </SafeAreaView>

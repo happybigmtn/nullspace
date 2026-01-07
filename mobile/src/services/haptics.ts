@@ -100,7 +100,7 @@ export class HapticsService {
   }
 
   /**
-   * Celebratory pattern for jackpots
+   * Celebratory pattern for jackpots - extended multi-burst
    */
   async jackpot(): Promise<void> {
     if (!this.canVibrate()) return;
@@ -110,7 +110,7 @@ export class HapticsService {
     this.abortController = new AbortController();
     const { signal } = this.abortController;
 
-    // Celebratory pattern
+    // Extended celebratory pattern: Heavy x3 → Success → Medium burst
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     this.scheduleHaptic(
       () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy),
@@ -118,8 +118,48 @@ export class HapticsService {
       signal
     );
     this.scheduleHaptic(
-      () => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success),
+      () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy),
       200,
+      signal
+    );
+    this.scheduleHaptic(
+      () => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success),
+      350,
+      signal
+    );
+    this.scheduleHaptic(
+      () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium),
+      500,
+      signal
+    );
+    this.scheduleHaptic(
+      () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium),
+      600,
+      signal
+    );
+  }
+
+  /**
+   * Big win pattern - strong celebration for significant wins (3x+)
+   */
+  async bigWin(): Promise<void> {
+    if (!this.canVibrate()) return;
+
+    // Cancel any in-flight pattern
+    this.abortController?.abort();
+    this.abortController = new AbortController();
+    const { signal } = this.abortController;
+
+    // Ascending intensity: Medium → Heavy → Success
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    this.scheduleHaptic(
+      () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy),
+      120,
+      signal
+    );
+    this.scheduleHaptic(
+      () => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success),
+      280,
       signal
     );
   }
