@@ -30,10 +30,10 @@ const MONO_FONT = Platform.select({
 });
 
 /**
- * Color palette derived from design-tokens
+ * Light color palette derived from design-tokens
  * Maps semantic names to platform-appropriate values
  */
-export const COLORS = {
+export const LIGHT_COLORS = {
   // Titanium Palette (from design-tokens)
   background: TITANIUM[100],
   surface: '#FFFFFF',
@@ -63,6 +63,64 @@ export const COLORS = {
   glassLight: 'rgba(255, 255, 255, 0.75)',
   glassDark: 'rgba(28, 28, 30, 0.8)',
 } as const;
+
+/**
+ * OLED-optimized dark color palette
+ * Uses pure black (#000000) for maximum AMOLED battery savings
+ * Inverts the titanium scale for text/surface contrast
+ */
+export const DARK_COLORS = {
+  // OLED-optimized backgrounds - pure black saves battery
+  background: '#000000',
+  surface: TITANIUM[900], // Elevated surfaces use dark gray
+  surfaceElevated: TITANIUM[800], // Higher elevation = lighter
+  border: TITANIUM[700],
+
+  // Action Colors - same as light (brand colors)
+  primary: ACTION.indigo,
+  primaryDark: ACTION.indigoHover,
+  success: ACTION.success,
+  warning: ACTION.warning,
+  error: ACTION.error,
+  destructive: ACTION.error,
+  gold: '#FFCC00',
+
+  // Text hierarchy - inverted from light mode
+  textPrimary: TITANIUM[50], // Near-white for maximum contrast
+  textSecondary: TITANIUM[400],
+  textMuted: TITANIUM[500], // WCAG AA compliant on dark
+  textDisabled: TITANIUM[600],
+
+  // Card suits - adjusted for dark backgrounds
+  suitRed: '#FF6B6B', // Slightly brighter red for dark mode
+  suitBlack: TITANIUM[200], // Light for visibility on dark
+
+  // Glass - darker, higher contrast glass effect
+  glassLight: 'rgba(255, 255, 255, 0.08)',
+  glassDark: 'rgba(0, 0, 0, 0.85)',
+} as const;
+
+/** Color scheme type for theming */
+export type ColorScheme = 'light' | 'dark';
+
+/** Type for themed colors object - union of both palettes for flexibility */
+export type ThemedColors = typeof LIGHT_COLORS | typeof DARK_COLORS;
+
+/**
+ * Get colors for a specific color scheme
+ * @param scheme - 'light' or 'dark'
+ * @returns Themed color palette
+ */
+export function getColors(scheme: ColorScheme): ThemedColors {
+  return scheme === 'dark' ? DARK_COLORS : LIGHT_COLORS;
+}
+
+/**
+ * Legacy export for backwards compatibility
+ * Components should migrate to useTheme() + getColors() pattern
+ * @deprecated Use getColors(scheme) or useThemedColors() hook instead
+ */
+export const COLORS = LIGHT_COLORS;
 
 /**
  * Spacing scale from design-tokens
@@ -474,3 +532,67 @@ export const CHIP_AREA_STYLES = StyleSheet.create({
     paddingBottom: SPACING_SEMANTIC.lg,
   },
 });
+
+/**
+ * Dark mode ambient glow effects
+ * Applied to primary action buttons in dark mode for visual emphasis
+ * Uses box-shadow to create a soft halo around interactive elements
+ */
+export const DARK_MODE_GLOW = {
+  /** Primary action button glow (indigo) */
+  primary: {
+    shadowColor: ACTION.indigo,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  /** Success action glow (green) */
+  success: {
+    shadowColor: ACTION.success,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  /** Gold/highlight glow (for wins, special states) */
+  gold: {
+    shadowColor: '#FFCC00',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 14,
+    elevation: 8,
+  },
+  /** Error/destructive action glow */
+  error: {
+    shadowColor: ACTION.error,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  /** Subtle glow for less important interactive elements */
+  subtle: {
+    shadowColor: '#FFFFFF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+} as const;
+
+/** Glow style type for shadow properties */
+export type GlowStyle = (typeof DARK_MODE_GLOW)[keyof typeof DARK_MODE_GLOW];
+
+/**
+ * Get glow style for dark mode, or empty object for light mode
+ * @param isDark - Whether dark mode is active
+ * @param variant - Glow variant ('primary' | 'success' | 'gold' | 'error' | 'subtle')
+ * @returns Shadow style object or empty object
+ */
+export function getGlowStyle(
+  isDark: boolean,
+  variant: keyof typeof DARK_MODE_GLOW = 'primary'
+): GlowStyle | Record<string, never> {
+  return isDark ? DARK_MODE_GLOW[variant] : {};
+}

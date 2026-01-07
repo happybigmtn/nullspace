@@ -16,8 +16,8 @@ import { StatusBar, StyleSheet, View, Text, TouchableOpacity } from 'react-nativ
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { COLORS } from './src/constants/theme';
-import { useAppState, useGatewaySession, useWebSocketReconnectOnForeground } from './src/hooks';
-import { AuthProvider, WebSocketProvider } from './src/context';
+import { useAppState, useGatewaySession, useWebSocketReconnectOnForeground, useThemedColors } from './src/hooks';
+import { AuthProvider, WebSocketProvider, ThemeProvider, useTheme } from './src/context';
 
 // Initialize Sentry for production error tracking
 const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN;
@@ -40,13 +40,16 @@ function GatewaySessionBridge({ children }: { children: React.ReactNode }) {
   return children;
 }
 
-function AppContent() {
-  // Handle app lifecycle state persistence
-  useAppState();
+function ThemedContent() {
+  const { isDark } = useTheme();
+  const colors = useThemedColors();
 
   return (
-    <GestureHandlerRootView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
+    <GestureHandlerRootView style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar
+        barStyle={isDark ? 'light-content' : 'dark-content'}
+        backgroundColor={colors.background}
+      />
       <AuthProvider>
         <WebSocketProvider>
           <GatewaySessionBridge>
@@ -55,6 +58,17 @@ function AppContent() {
         </WebSocketProvider>
       </AuthProvider>
     </GestureHandlerRootView>
+  );
+}
+
+function AppContent() {
+  // Handle app lifecycle state persistence
+  useAppState();
+
+  return (
+    <ThemeProvider>
+      <ThemedContent />
+    </ThemeProvider>
   );
 }
 

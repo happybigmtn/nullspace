@@ -14,3 +14,4 @@ export { useGatewaySession } from './useGatewaySession';
 export { useEntitlements } from './useEntitlements';
 export { useModalBackHandler } from './useModalBackHandler';
 export { useWebSocketReconnectOnForeground } from './useWebSocketReconnectOnForeground';
+export { useThemedColors, useGlow } from './useThemedColors';
