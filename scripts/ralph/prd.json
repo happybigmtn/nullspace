@@ -306,8 +306,8 @@
         "Audit other split/corner bet edge cases"
       ],
       "priority": 71,
-      "passes": false,
-      "notes": "GAME-HIGH: Players could place invalid edge splits that behave incorrectly. execution/src/casino/roulette.rs"
+      "passes": true,
+      "notes": "COMPLETE: Validation already correct (1..=35, %3!=0). AC#2 was incorrect: 35-36 IS valid (35%3=2). Added 89 lines of boundary tests for all bet types. Documented that right-edge rejection works correctly."
     },
     {
       "id": "US-149",
