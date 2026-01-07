@@ -920,8 +920,8 @@
 				"Verify actionMask reflects current hand, not previous hand"
 			],
 			"priority": 71,
-			"passes": false,
-			"notes": "CRITICAL GAP: Mobile interprets actionMask bits without validating against card count. Split creates new hand with different valid actions."
+			"passes": true,
+			"notes": "FIXED: Added 13 tests to phase-naming-consistency.test.ts. Documents actionMask bit layout (HIT=0x01, STAND=0x02, DOUBLE=0x04, SPLIT=0x08). Tests verify: (1) canDouble/canSplit bits interpreted correctly, (2) active hand switch changes displayed cards and valid actions, (3) mobile trusts Rust actionMask (documented design decision), (4) betting/dealer_turn/result phases have actionMask=0."
 		},
 		{
 			"id": "US-081",

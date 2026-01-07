@@ -1661,3 +1661,24 @@ Target: Testnet Production
   - Pattern: Use graceful fallback to safest/most permissive state for unknown values
 
 ---
+
+## 2026-01-06 - US-080: Add action mask cross-hand consistency tests
+
+- What was implemented:
+  - Added 13 tests to `phase-naming-consistency.test.ts` for actionMask cross-hand consistency
+  - Tests cover all 4 acceptance criteria for action mask validation
+  - Documents canonical actionMask bit layout (HIT=0x01, STAND=0x02, DOUBLE=0x04, SPLIT=0x08)
+  - Documents design decision: mobile trusts Rust actionMask without validation
+- Files changed:
+  - `mobile/src/utils/state/__tests__/phase-naming-consistency.test.ts` - Added actionMask tests
+- **Learnings:**
+  - ActionMask is computed by Rust execution layer in `action_mask()` function (blackjack.rs:559)
+  - Bit 2 (DOUBLE) requires: hand.cards.len() == 2 AND bet_mult == 1 AND (not split OR DAS allowed)
+  - Bit 3 (SPLIT) requires: hand.cards.len() == 2 AND cards are a pair AND hands < MAX_HANDS
+  - Mobile trusts actionMask - no duplicate validation (prevents logic divergence)
+  - After split, each hand may have different valid actions (pair vs non-pair)
+  - `active_hand_idx` determines which hand's cards are displayed and which mask applies
+  - Non-PlayerTurn phases always have actionMask=0 (no player actions allowed)
+  - Pattern: Source of truth for game rules should be execution layer, not UI
+
+---
