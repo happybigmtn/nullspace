@@ -1095,3 +1095,206 @@ Target: Testnet Production
   - Invalid cards (>=52) return 0 due to check in `resolve_lucky_ladies_return()` line 450-452
 
 ---
+
+## 2026-01-06 - US-052: Add Fire Bet six points tests
+
+- What was implemented:
+  - Added 8 comprehensive tests for Fire Bet high-payout scenarios in craps.rs
+  - `test_fire_bet_six_points_999_to_1`: Tests all 6 unique points (4,5,6,8,9,10) with step-by-step mask verification
+  - `test_fire_bet_made_points_mask_bit_flags`: Verifies bit mapping (bit 0=4, 1=5, 2=6, 3=8, 4=9, 5=10)
+  - `test_fire_bet_five_points_249_to_1`: Tests 5 points pays 249:1
+  - `test_fire_bet_duplicate_points_count_once`: Same point multiple times only counts once
+  - `test_fire_bet_reverse_order_points`: Order of making points doesn't matter
+  - `test_fire_bet_partial_payouts_all_tiers`: Full payout table for 0-6 points
+  - `test_fire_bet_large_amounts`: 1M bet with 6 points = 1B payout (no overflow)
+  - `test_point_to_fire_bit_mapping`: Direct function test for point→bit mapping
+- Files changed:
+  - `execution/src/casino/craps.rs` - Added 8 tests in "Fire Bet Six Points Tests (US-052)" section
+- **Learnings:**
+  - Fire Bet uses `made_points_mask` u8 bitmask to track unique points made: bit 0=4, 1=5, 2=6, 3=8, 4=9, 5=10
+  - Point is "made" when shooter rolls the point number again before sevening out
+  - `made_points_mask |= 1u8 << bit` sets the bit idempotently (repeated makes don't increase count)
+  - Fire Bet resolves ONLY on seven-out, not on natural/craps comeout rolls
+  - Payout table: 0-3 points=lose, 4 points=24:1, 5 points=249:1, 6 points=999:1
+  - Return includes original stake: `bet.amount.saturating_mul(mult.saturating_add(1))`
+  - `count_ones()` on the mask gives number of unique points made
+  - `point_to_fire_bit()` returns None for non-point numbers (2,3,7,11,12)
+  - mask resets to 0 on seven-out for next shooter
+
+---
+
+## 2026-01-06 - US-053: Add gateway backend timeout tests
+
+- What was implemented:
+  - Created `gateway/tests/unit/backend-timeout.test.ts` with 10 comprehensive tests
+  - MockUpdatesClient class simulates timeout behavior for testing
+  - Tests cover all acceptance criteria: timeout completion, lock release, error handling, subsequent transactions
+- Files changed:
+  - `gateway/tests/unit/backend-timeout.test.ts` - New file with 10 tests
+- **Learnings:**
+  - `waitForStartedOrError()` already has proper timeout via `setTimeout` + `reject`
+  - `NonceManager.withLock()` uses `finally` block so lock ALWAYS released even on throw
+  - Lock is per-publicKey so different players never block each other
+  - When submission succeeds but event times out, nonce is already consumed (correct behavior)
+  - `GATEWAY_EVENT_TIMEOUT_MS` env var allows customizing timeout (default 30s prod, 60s dev)
+  - Pattern: Use MockUpdatesClient that can toggle `shouldTimeout` to test timeout vs success paths
+  - vi.useFakeTimers() conflicts with real async operations - use vi.useRealTimers() for actual timeout tests
+  - Lock acquisition order is FIFO - second operation waits for first to complete before acquiring
+
+---
+
+## 2026-01-06 - US-054: Add Card component full coverage tests
+
+- What was implemented:
+  - Extended `mobile/src/components/casino/__tests__/Card.test.tsx` with 35 new tests
+  - Now covers all 4 suits, 13 ranks, 3 size variants, callbacks, and font scaling
+- Files changed:
+  - `mobile/src/components/casino/__tests__/Card.test.tsx` - Added full coverage tests
+- **Learnings:**
+  - React Native Card uses `SUIT_COLORS` mapping: hearts/diamonds → suitRed, clubs/spades → suitBlack
+  - Size variants: small (56x84, 0.7x font), normal (80x120, 1x font), large (100x150, 1.3x font)
+  - `test.each()` pattern with object array allows named parameters in test names: `$suit`, `$symbol`, `$colorName`
+  - Mock `../../../constants/theme` to set specific hex values for color assertions
+  - Style arrays need `expect.arrayContaining([expect.objectContaining(...)])` for partial matching
+  - Card uses `useRef` for `onFlipComplete` to avoid re-triggering animation when callback changes
+  - In test env, animation skipped (line 98: `if (process.env.NODE_ENV === 'test') return`)
+  - `HiddenCard` is separate export that just shows card back pattern
+
+---
+
+## 2026-01-06 - US-055: Add TutorialOverlay storage failure tests
+
+- What was implemented:
+  - Extended `mobile/src/components/ui/__tests__/TutorialOverlay.test.tsx` with 7 new tests
+  - Tests cover all try-catch blocks in TutorialOverlay.tsx lines 33-40 and 54-58
+- Files changed:
+  - `mobile/src/components/ui/__tests__/TutorialOverlay.test.tsx` - Added storage failure handling tests
+- **Learnings:**
+  - TutorialOverlay has defensive try-catch for storage: if storage fails, shows tutorial as fallback
+  - `mockImplementation(() => { throw new Error(...) })` simulates sync function throwing
+  - The pattern: try storage, catch → fallback behavior, then continue normally
+  - `forceShow` prop bypasses storage check entirely (useful for testing and help menus)
+  - Component returns null for: empty steps array OR when completed && !forceShow
+  - onComplete callback fires even when storage throws - user flow continues
+  - Storage failure = tutorial repeats on next visit (safe fallback, not silent bug)
+
+---
+
+## 2026-01-06 - US-056: Add GameErrorBoundary retry tests
+
+- What was implemented:
+  - Extended `mobile/src/components/__tests__/GameErrorBoundary.test.tsx` with 7 new tests
+  - Tests cover retry mechanism: re-render, persistent errors, multiple retries, state reset
+- Files changed:
+  - `mobile/src/components/__tests__/GameErrorBoundary.test.tsx` - Added retry mechanism tests
+- **Learnings:**
+  - React Error Boundaries may retry rendering multiple times before giving up - don't rely on render count
+  - Use external boolean/counter to control component throw behavior in tests
+  - `handleRetry = () => { this.setState({ hasError: false, error: undefined }); }` triggers re-render of children
+  - Class component `getDerivedStateFromError` returns new state synchronously
+  - `componentDidCatch` logs error details (useful for debugging/analytics)
+  - findRetryButton helper: find buttons, then filter by Text children containing "Try Again"
+  - Error boundary works with functional components + hooks (useState still initializes correctly on retry)
+
+---
+
+## 2026-01-06 - US-057: Add faucet status lifecycle tests
+
+- What was implemented:
+  - Added FAUCET_SUCCESS_RESET_MS (3000ms) constant for timeout configuration
+  - Added faucetResetTimeoutRef to track and cleanup timeout on unmount
+  - Auto-reset faucetStatus from 'success' to 'idle' after 3-second display period
+  - Guard uses getState() to check current status before resetting (prevents race conditions)
+  - Added 8 new tests (total 13) covering all acceptance criteria
+- Files changed:
+  - `mobile/src/hooks/useGatewaySession.ts` - Added timeout logic and cleanup effect
+  - `mobile/src/hooks/__tests__/useGatewaySession.test.tsx` - Added 8 tests in 'faucet status lifecycle' describe block
+- **Learnings:**
+  - Zustand's `useStore.getState()` is a static method for accessing store outside React lifecycle
+  - When mocking Zustand, must add `getState` method to mock function: `mockStore.getState = jest.fn()`
+  - Pattern for timeout with guard: `if (useGameStore.getState().faucetStatus === 'success')` prevents stale resets
+  - Cleanup effect should clear timeout via ref, not just on component unmount but also on re-trigger
+  - TypeScript typing for mock with extra properties: `jest.Mock & { getState: jest.Mock }`
+  - The bug was silent: users couldn't see faucetStatus='success' forever since UI just shows balance, but it prevented proper error attribution
+
+---
+
+## 2026-01-06 - US-058: Add bet amount validation tests (gateway)
+
+- What was implemented:
+  - Added input validation in normalizeBets() before BigInt conversion
+  - Validates: typeof === 'number', Number.isFinite(), >= 0, <= MAX_SAFE_INTEGER
+  - User-friendly error messages instead of cryptic BigInt conversion errors
+  - Created new test file with 22 unit tests
+- Files changed:
+  - `gateway/src/live-table/craps.ts` - Added validation checks before BigInt()
+  - `gateway/tests/unit/bet-amount-validation.test.ts` - New test file (22 tests)
+- **Learnings:**
+  - `BigInt(Infinity)` and `BigInt(NaN)` throw "Cannot convert X to a BigInt"
+  - `Number.isFinite()` catches both Infinity and NaN (returns false for both)
+  - `Number.MAX_SAFE_INTEGER + 1` doesn't throw but loses precision when converted to BigInt
+  - Negative numbers silently become negative BigInt, need explicit check
+  - Pattern: validate inputs at the boundary (where user data enters) before conversion
+  - Test file uses simulation of function logic to verify expected behavior without needing full integration test
+
+---
+
+## 2026-01-06 - US-059: Add WalletBadge short key tests
+
+- What was implemented:
+  - Added MIN_LENGTH_FOR_TRUNCATION constant (11 chars)
+  - Keys shorter than 11 chars now display in full (no ellipsis)
+  - Prevents duplicate character display (e.g., "1234" becoming "1234...1234")
+  - Added 7 new tests (9 total) for edge cases
+- Files changed:
+  - `mobile/src/components/ui/WalletBadge.tsx` - Added length check before truncation
+  - `mobile/src/components/ui/__tests__/WalletBadge.test.tsx` - Added 7 edge case tests
+- **Learnings:**
+  - String slicing with negative indices can cause overlap: `slice(0,6)` + `slice(-4)` on 8-char string produces 6+4=10 chars from 8-char input
+  - Minimum length for truncation = prefix + suffix + 1 (so at least 1 char is hidden by ellipsis)
+  - For 6-char prefix and 4-char suffix: 6 + 4 + 1 = 11 chars minimum
+  - Edge case testing should include: empty, single char, just below threshold, exactly at threshold, just above threshold, and normal case
+  - Test pattern: use .find() to locate specific text in render output, filtering out other elements
+
+---
+
+## 2026-01-06 - US-060: Add balance formatting edge case tests
+
+- What was implemented:
+  - Added 12 new tests (14 total) for GameHeader balance formatting
+  - Created helper functions to extract balance/session text from React tree
+  - Tested: large numbers, zero, decimals, negatives, MAX_SAFE_INTEGER, Infinity, NaN
+- Files changed:
+  - `mobile/src/components/game/__tests__/GameHeader.test.tsx` - Added edge case tests
+- **Learnings:**
+  - Template literals in React create array children: `${a}${b}` → `['$', '1,234']` as children
+  - Need to join array children to get the full text: `Array.isArray(children) ? children.join('') : children`
+  - `toLocaleString()` on numbers handles: thousands separators, decimals, negatives
+  - `Infinity.toLocaleString()` returns "∞" or "Infinity" (locale dependent)
+  - `NaN.toLocaleString()` returns "NaN" - not user-friendly, should be guarded
+  - Pattern: create helper functions in tests to extract specific text nodes for cleaner assertions
+
+---
+
+---
+
+## 2026-01-06 - US-062: Add game screen phase reversion after error
+
+- What was implemented:
+  - Fixed BlackjackScreen.tsx error handler to revert phase to 'betting' on error response
+  - Added `phase: 'betting'` to setState in error message handler
+  - Added 3 new tests (11 total) for phase reversion after error
+  - Fixed WalletBadge.test.tsx type error (use `unknown` as intermediate type for mock cast)
+- Files changed:
+  - `mobile/src/screens/games/BlackjackScreen.tsx` - Added phase reversion to error handler
+  - `mobile/src/screens/games/__tests__/BlackjackScreen.test.tsx` - Added 3 tests, fixed import for mockUseChipBetting
+  - `mobile/src/components/ui/__tests__/WalletBadge.test.tsx` - Fixed type error in mock cast
+- **Learnings:**
+  - Optimistic UI updates require rollback on error: when DEAL pressed, phase changes to 'player_turn' immediately
+  - Error response must revert phase to 'betting' so user can retry (otherwise UI stuck with HIT/STAND buttons but no game)
+  - Test pattern: use mockUseChipBetting.mockReturnValue({ bet: 100, ... }) to enable DEAL button
+  - Mock imports must be explicit: `mockUseChipBetting` must be imported from test utilities
+  - TypeScript type narrowing for Jest mocks: `useStore as unknown as jest.Mock` avoids overlap error
+  - setGameConnectionMessage() triggers useEffect to process new lastMessage in component
+  - tree.update() re-renders component with same props, triggering effect with new mock state
+

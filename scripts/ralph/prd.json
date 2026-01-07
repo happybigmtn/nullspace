@@ -556,8 +556,8 @@
 				"Test partial point completion (3,4,5 points) payouts"
 			],
 			"priority": 43,
-			"passes": false,
-			"notes": "HIGH GAP: craps.rs - Fire Bet 999:1 payout is highest in craps. Bit masking logic needs explicit testing."
+			"passes": true,
+			"notes": "FIXED: Added 8 tests covering all acceptance criteria: (1) test_fire_bet_six_points_999_to_1 - all 6 points with step-by-step mask verification, (2) test_fire_bet_made_points_mask_bit_flags - verifies bit 0=4, 1=5, 2=6, 3=8, 4=9, 5=10, (3) test_fire_bet_five_points_249_to_1 - 5 points pays 249:1, (4) test_fire_bet_duplicate_points_count_once - same point multiple times only counts once, (5) test_fire_bet_reverse_order_points - order doesn't matter, (6) test_fire_bet_partial_payouts_all_tiers - full payout table 0-6 points, (7) test_fire_bet_large_amounts - 1M bet with 6 points = 1B payout (no overflow), (8) test_point_to_fire_bit_mapping - direct function test for point→bit mapping."
 		},
 		{
 			"id": "US-053",
@@ -569,8 +569,8 @@
 				"Test subsequent transactions still work after timeout"
 			],
 			"priority": 44,
-			"passes": false,
-			"notes": "HIGH GAP: handlers/base.ts:95-106 - slow backend could hold nonce lock indefinitely, blocking all player transactions."
+			"passes": true,
+			"notes": "FIXED: Added 10 tests covering all acceptance criteria. Tests use MockUpdatesClient to simulate timeouts. Key findings: (1) waitForStartedOrError already has proper timeout, (2) withLock releases in finally block so lock always released, (3) different players use different keys so not blocked, (4) nonce consumed even on timeout (correct behavior for submitted txs). Tests verify: timeout completion <200ms, lock release after timeout, error contains 'timeout', subsequent ops work, concurrent timeouts handled."
 		},
 		{
 			"id": "US-054",
@@ -582,8 +582,8 @@
 				"Test onFlipComplete callback behavior"
 			],
 			"priority": 45,
-			"passes": false,
-			"notes": "HIGH GAP: Card.test.tsx only tests hearts and spades. Missing diamonds/clubs and most ranks."
+			"passes": true,
+			"notes": "FIXED: Added 35 new tests (38 total). Uses test.each for suits/ranks/sizes. Mock COLORS with hex values for color assertions. Key tests: all 4 suits with symbol/color verification, all 13 ranks, 3 size variants with dimensions, font scaling (0.7x/1x/1.3x), onFlipComplete ref storage, HiddenCard size prop, face up/down rendering."
 		},
 		{
 			"id": "US-055",
@@ -595,8 +595,8 @@
 				"Verify onComplete still fires despite storage errors"
 			],
 			"priority": 46,
-			"passes": false,
-			"notes": "HIGH GAP: TutorialOverlay.tsx:33-40 - try-catch blocks exist but never tested. Tutorial could repeat on failure."
+			"passes": true,
+			"notes": "FIXED: Added 7 new tests (9 total). Tests use mockImplementation(() => throw Error) to simulate storage failures. Key findings: (1) isTutorialCompleted throw → visible=true (fallback), (2) markTutorialCompleted throw → onComplete still fires, (3) storage failure means tutorial shows on next visit, (4) forceShow bypasses storage entirely, (5) empty steps → null."
 		},
 		{
 			"id": "US-056",
@@ -608,8 +608,8 @@
 				"Verify state fully reset on retry"
 			],
 			"priority": 47,
-			"passes": false,
-			"notes": "HIGH GAP: GameErrorBoundary.tsx:29-31 - retry mechanism not tested. Could cause infinite error loops."
+			"passes": true,
+			"notes": "FIXED: Added 7 new tests (9 total). Key pattern: use external boolean/counter to control component throw behavior (React retries can interfere with render-count-based approaches). Tests verify: (1) children re-render after retry, (2) persistent error shows error UI on retry, (3) multiple retries work, (4) state reset, (5) error details logged, (6) hooks work after retry, (7) retry button visible."
 		},
 		{
 			"id": "US-057",
@@ -621,8 +621,8 @@
 				"Add timeout to auto-reset stuck faucet status"
 			],
 			"priority": 48,
-			"passes": false,
-			"notes": "HIGH GAP: useGatewaySession.ts:87-90 - faucetStatus stays 'success' forever. No reset to 'idle'."
+			"passes": true,
+			"notes": "FIXED: Added FAUCET_SUCCESS_RESET_MS (3000ms) timeout that auto-resets faucetStatus from 'success' to 'idle'. Added 8 new tests covering: idle reset, error attribution when pending only, subsequent requests, unmount cleanup, race condition guard. Mock now includes getState() for Zustand direct access in timeout callback."
 		},
 		{
 			"id": "US-058",
@@ -634,8 +634,8 @@
 				"Test negative bet amount rejected"
 			],
 			"priority": 49,
-			"passes": false,
-			"notes": "HIGH GAP: craps.ts:1190-1197 - BigInt(Math.floor(bet.amount)) with no validation of input type/range."
+			"passes": true,
+			"notes": "FIXED: Added validation before BigInt conversion in normalizeBets(). Three checks: (1) isFinite for Infinity/NaN, (2) >= 0 for negatives, (3) <= MAX_SAFE_INTEGER for precision. Added 22 unit tests covering all edge cases. Errors are now user-friendly instead of cryptic BigInt errors."
 		},
 		{
 			"id": "US-059",
@@ -647,8 +647,8 @@
 				"Verify no duplicate characters in shortened display"
 			],
 			"priority": 50,
-			"passes": false,
-			"notes": "HIGH GAP: WalletBadge.tsx:12 - slice(0,6)...slice(-4) untested for short keys."
+			"passes": true,
+			"notes": "FIXED: Added MIN_LENGTH_FOR_TRUNCATION (11 chars). Keys shorter than 11 chars show in full, preventing duplicate chars. Added 7 new tests covering all edge cases: empty, 1 char, 4 chars, 8 chars, 10 chars (boundary), 11 chars (boundary), and normal 42-char addresses."
 		},
 		{
 			"id": "US-060",
@@ -660,8 +660,8 @@
 				"Test negative balance display (if allowed)"
 			],
 			"priority": 51,
-			"passes": false,
-			"notes": "HIGH GAP: GameHeader.tsx:21,31 - balance formatting untested for edge cases."
+			"passes": true,
+			"notes": "FIXED: Added 12 new tests (14 total) with helper functions to extract balance/session text from React tree. Covers: large numbers with separators, zero, decimals, negatives, MAX_SAFE_INTEGER, Infinity, NaN. Documents that NaN shows as '$NaN' (could be improved)."
 		},
 		{
 			"id": "US-061",
@@ -686,8 +686,8 @@
 				"Apply fix to all game screens with multi-phase state"
 			],
 			"priority": 53,
-			"passes": false,
-			"notes": "CRITICAL GAP: BlackjackScreen.tsx:119-137 - phase not reverted after error, UI stuck in partially-recoverable state."
+			"passes": true,
+			"notes": "FIXED: Added `phase: 'betting'` to error handler in BlackjackScreen.tsx to revert phase on error response. Added 3 new tests: (1) phase reverts to betting after bet rejection, (2) DEAL button re-enabled after error recovery, (3) maintains betting state after multiple error recoveries. Tests use mockUseChipBetting with bet: 100 to enable DEAL button."
 		},
 		{
 			"id": "US-063",
