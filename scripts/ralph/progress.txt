@@ -3337,3 +3337,21 @@ Target: Testnet Production
   - Use @id references (e.g., "#organization") to link schemas without duplication
   - Open Graph and Twitter Card meta tags provide social sharing previews
 
+
+---
+
+## 2026-01-07 - US-147: Validate Craps Fire Bet progress mask on deserialization
+
+- What was implemented:
+  - Added validation in `CrapsState::from_blob()` that rejects `made_points_mask > 0x3F`
+  - Bits 0-5 represent valid points (4, 5, 6, 8, 9, 10)
+  - Bits 6-7 are invalid and could allow corrupted Fire Bet payouts
+  - Added test `test_invalid_made_points_mask_rejected` validating boundary cases
+- Files changed:
+  - `execution/src/casino/craps.rs` - Added mask validation + test (72 lines)
+- **Learnings:**
+  - Fire Bet has 999:1 payout for making all 6 unique points - highest payout in craps
+  - Existing pattern: return None for invalid state, no logging (keeps code simple)
+  - `made_points_mask.count_ones()` is used to determine payout tier (4=24x, 5=249x, 6=999x)
+  - Corrupted mask with bits 6-7 set could claim all 6 points made when they weren't
+
