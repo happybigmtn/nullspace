@@ -520,4 +520,268 @@ mod tests {
 
         assert!(result.is_err());
     }
+
+    // =========================================================================
+    // US-087: Error code distinction tests (Rust → Gateway)
+    // =========================================================================
+
+    use crate::casino::GameError;
+
+    /// Test InvalidPayload error is returned for truncated/malformed payloads.
+    /// This maps to ERROR_INVALID_PAYLOAD (code 16).
+    #[test]
+    fn test_error_invalid_payload_blackjack_truncated() {
+        let seed = create_test_seed();
+        let mut session = create_session(GameType::Blackjack, 100, 1);
+
+        let mut rng = GameRng::new(&seed, session.id, 0);
+        init_game(&mut session, &mut rng);
+
+        // Deal first to get into player turn
+        let mut rng = GameRng::new(&seed, session.id, 1);
+        let _ = process_game_move(&mut session, &[4], &mut rng);
+
+        // Empty payload should be InvalidPayload
+        let mut rng = GameRng::new(&seed, session.id, 2);
+        let result = process_game_move(&mut session, &[], &mut rng);
+        assert!(matches!(result, Err(GameError::InvalidPayload)));
+    }
+
+    /// Test InvalidMove error is returned for wrong action in current state.
+    /// This maps to ERROR_INVALID_MOVE (code 9).
+    #[test]
+    fn test_error_invalid_move_blackjack_hit_before_deal() {
+        let seed = create_test_seed();
+        let mut session = create_session(GameType::Blackjack, 100, 1);
+
+        let mut rng = GameRng::new(&seed, session.id, 0);
+        init_game(&mut session, &mut rng);
+
+        // Try to hit (action 0) before dealing - should be InvalidMove
+        let mut rng = GameRng::new(&seed, session.id, 1);
+        let result = process_game_move(&mut session, &[0], &mut rng);
+        assert!(matches!(result, Err(GameError::InvalidMove)));
+    }
+
+    /// Test GameAlreadyComplete error is returned when game is over.
+    /// This maps to ERROR_SESSION_COMPLETE (code 8).
+    #[test]
+    fn test_error_game_already_complete_roulette() {
+        let seed = create_test_seed();
+        let mut session = create_session(GameType::Roulette, 100, 1);
+
+        let mut rng = GameRng::new(&seed, session.id, 0);
+        init_game(&mut session, &mut rng);
+
+        // Place bet and spin to complete
+        let mut bet_payload = vec![0, 1, 0];
+        bet_payload.extend_from_slice(&100u64.to_be_bytes());
+        let mut rng = GameRng::new(&seed, session.id, 1);
+        process_game_move(&mut session, &bet_payload, &mut rng).unwrap();
+
+        let mut rng = GameRng::new(&seed, session.id, 2);
+        process_game_move(&mut session, &[1], &mut rng).unwrap();
+
+        assert!(session.is_complete);
+
+        // Any action on completed game should be GameAlreadyComplete
+        let mut rng = GameRng::new(&seed, session.id, 3);
+        let result = process_game_move(&mut session, &[0, 1, 0, 0, 0, 0, 0, 0, 0, 100], &mut rng);
+        assert!(matches!(result, Err(GameError::GameAlreadyComplete)));
+    }
+
+    /// Test InvalidPayload vs InvalidMove distinction for Craps.
+    #[test]
+    fn test_error_distinction_craps() {
+        let seed = create_test_seed();
+
+        // Test InvalidPayload: truncated bet array
+        {
+            let mut session = create_session(GameType::Craps, 100, 1);
+            let mut rng = GameRng::new(&seed, session.id, 0);
+            init_game(&mut session, &mut rng);
+
+            // Truncated payload (bet array incomplete)
+            let mut rng = GameRng::new(&seed, session.id, 1);
+            let result = process_game_move(&mut session, &[0, 1], &mut rng);
+            assert!(
+                matches!(result, Err(GameError::InvalidPayload)),
+                "Truncated Craps bet should return InvalidPayload"
+            );
+        }
+
+        // Test InvalidMove: roll without placing bets
+        {
+            let mut session = create_session(GameType::Craps, 100, 2);
+            let mut rng = GameRng::new(&seed, session.id, 0);
+            init_game(&mut session, &mut rng);
+
+            // Try to roll (action 2 in Craps) without placing any bets
+            let mut rng = GameRng::new(&seed, session.id, 1);
+            let result = process_game_move(&mut session, &[2], &mut rng);
+            assert!(
+                matches!(result, Err(GameError::InvalidMove)),
+                "Rolling without bets should return InvalidMove"
+            );
+        }
+    }
+
+    /// Test InvalidPayload vs InvalidMove distinction for Baccarat.
+    #[test]
+    fn test_error_distinction_baccarat() {
+        let seed = create_test_seed();
+
+        // Test InvalidPayload: truncated bet
+        {
+            let mut session = create_session(GameType::Baccarat, 100, 1);
+            let mut rng = GameRng::new(&seed, session.id, 0);
+            init_game(&mut session, &mut rng);
+
+            // Truncated payload
+            let mut rng = GameRng::new(&seed, session.id, 1);
+            let result = process_game_move(&mut session, &[0, 1], &mut rng);
+            assert!(
+                matches!(result, Err(GameError::InvalidPayload)),
+                "Truncated Baccarat bet should return InvalidPayload"
+            );
+        }
+
+        // Test InvalidMove: deal without placing bets
+        {
+            let mut session = create_session(GameType::Baccarat, 100, 2);
+            let mut rng = GameRng::new(&seed, session.id, 0);
+            init_game(&mut session, &mut rng);
+
+            // Try to deal (action 1) without placing any bets
+            let mut rng = GameRng::new(&seed, session.id, 1);
+            let result = process_game_move(&mut session, &[1], &mut rng);
+            assert!(
+                matches!(result, Err(GameError::InvalidMove)),
+                "Dealing without bets should return InvalidMove"
+            );
+        }
+    }
+
+    /// Test InvalidPayload vs InvalidMove distinction for SicBo.
+    #[test]
+    fn test_error_distinction_sic_bo() {
+        let seed = create_test_seed();
+
+        // Test InvalidPayload: truncated bet
+        {
+            let mut session = create_session(GameType::SicBo, 100, 1);
+            let mut rng = GameRng::new(&seed, session.id, 0);
+            init_game(&mut session, &mut rng);
+
+            // Truncated payload
+            let mut rng = GameRng::new(&seed, session.id, 1);
+            let result = process_game_move(&mut session, &[0, 1], &mut rng);
+            assert!(
+                matches!(result, Err(GameError::InvalidPayload)),
+                "Truncated SicBo bet should return InvalidPayload"
+            );
+        }
+
+        // Test InvalidPayload: roll without placing bets
+        // Note: SicBo considers "no bets" as InvalidPayload, not InvalidMove
+        {
+            let mut session = create_session(GameType::SicBo, 100, 2);
+            let mut rng = GameRng::new(&seed, session.id, 0);
+            init_game(&mut session, &mut rng);
+
+            // Try to roll (action 1) without placing any bets
+            let mut rng = GameRng::new(&seed, session.id, 1);
+            let result = process_game_move(&mut session, &[1], &mut rng);
+            assert!(
+                matches!(result, Err(GameError::InvalidPayload)),
+                "Rolling without bets in SicBo returns InvalidPayload"
+            );
+        }
+    }
+
+    /// Test all error variants have distinct codes.
+    /// Documents the error code mapping table.
+    #[test]
+    fn test_error_code_mapping_table() {
+        // This test documents the authoritative error code mapping.
+        // ERROR_INVALID_PAYLOAD (16) ← GameError::InvalidPayload
+        // ERROR_INVALID_MOVE (9)     ← GameError::InvalidMove
+        // ERROR_SESSION_COMPLETE (8) ← GameError::GameAlreadyComplete
+        // ERROR_INVALID_STATE (17)   ← GameError::InvalidState
+        // ERROR_DECK_EXHAUSTED (18)  ← GameError::DeckExhausted
+
+        use nullspace_types::casino::{
+            ERROR_DECK_EXHAUSTED, ERROR_INVALID_MOVE, ERROR_INVALID_PAYLOAD, ERROR_INVALID_STATE,
+            ERROR_SESSION_COMPLETE,
+        };
+
+        // Verify codes are distinct
+        let codes = [
+            ERROR_INVALID_PAYLOAD,
+            ERROR_INVALID_MOVE,
+            ERROR_SESSION_COMPLETE,
+            ERROR_INVALID_STATE,
+            ERROR_DECK_EXHAUSTED,
+        ];
+        let unique: std::collections::HashSet<_> = codes.iter().collect();
+        assert_eq!(
+            unique.len(),
+            codes.len(),
+            "All error codes must be distinct"
+        );
+
+        // Verify expected values
+        assert_eq!(ERROR_INVALID_PAYLOAD, 16);
+        assert_eq!(ERROR_INVALID_MOVE, 9);
+        assert_eq!(ERROR_SESSION_COMPLETE, 8);
+        assert_eq!(ERROR_INVALID_STATE, 17);
+        assert_eq!(ERROR_DECK_EXHAUSTED, 18);
+    }
+
+    /// Test InvalidPayload with out-of-range action byte.
+    #[test]
+    fn test_error_invalid_payload_unknown_action() {
+        let seed = create_test_seed();
+        let mut session = create_session(GameType::Blackjack, 100, 1);
+
+        let mut rng = GameRng::new(&seed, session.id, 0);
+        init_game(&mut session, &mut rng);
+
+        // Action 255 is not valid for any game
+        let mut rng = GameRng::new(&seed, session.id, 1);
+        let result = process_game_move(&mut session, &[255], &mut rng);
+
+        // Should be InvalidPayload or InvalidMove depending on game implementation
+        assert!(
+            matches!(result, Err(GameError::InvalidPayload) | Err(GameError::InvalidMove)),
+            "Unknown action should return InvalidPayload or InvalidMove"
+        );
+    }
+
+    /// Test DeckExhausted can occur in theory.
+    /// Note: In practice, games are designed to prevent this, but we document the code.
+    #[test]
+    fn test_deck_exhausted_code_exists() {
+        use nullspace_types::casino::ERROR_DECK_EXHAUSTED;
+        assert_eq!(
+            ERROR_DECK_EXHAUSTED, 18,
+            "ERROR_DECK_EXHAUSTED should be code 18"
+        );
+
+        // GameError::DeckExhausted exists in the enum
+        let _: GameError = GameError::DeckExhausted;
+    }
+
+    /// Test InvalidState code exists for corrupted state handling.
+    #[test]
+    fn test_invalid_state_code_exists() {
+        use nullspace_types::casino::ERROR_INVALID_STATE;
+        assert_eq!(
+            ERROR_INVALID_STATE, 17,
+            "ERROR_INVALID_STATE should be code 17"
+        );
+
+        // GameError::InvalidState exists in the enum
+        let _: GameError = GameError::InvalidState;
+    }
 }

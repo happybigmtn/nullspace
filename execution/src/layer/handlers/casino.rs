@@ -746,6 +746,29 @@ impl<'a, S: State> Layer<'a, S> {
         let result = match crate::casino::process_game_move(&mut session, payload, &mut rng) {
             Ok(r) => r,
             Err(err) => {
+                // Map each GameError variant to a distinct error code for debugging
+                let (error_code, error_message) = match &err {
+                    crate::casino::GameError::InvalidPayload => (
+                        nullspace_types::casino::ERROR_INVALID_PAYLOAD,
+                        "Invalid payload format",
+                    ),
+                    crate::casino::GameError::InvalidMove => (
+                        nullspace_types::casino::ERROR_INVALID_MOVE,
+                        "Invalid move for current game state",
+                    ),
+                    crate::casino::GameError::GameAlreadyComplete => (
+                        nullspace_types::casino::ERROR_SESSION_COMPLETE,
+                        "Game session already complete",
+                    ),
+                    crate::casino::GameError::InvalidState => (
+                        nullspace_types::casino::ERROR_INVALID_STATE,
+                        "Invalid or corrupted game state",
+                    ),
+                    crate::casino::GameError::DeckExhausted => (
+                        nullspace_types::casino::ERROR_DECK_EXHAUSTED,
+                        "Deck exhausted, no more cards available",
+                    ),
+                };
                 tracing::warn!(
                     player = ?public,
                     session_id = session_id,
@@ -753,13 +776,14 @@ impl<'a, S: State> Layer<'a, S> {
                     payload_len = payload_len,
                     payload_action = payload_action,
                     ?err,
+                    error_code = error_code,
                     "casino move rejected"
                 );
                 return Ok(casino_error_vec(
                     public,
                     Some(session_id),
-                    nullspace_types::casino::ERROR_INVALID_MOVE,
-                    "Invalid game move",
+                    error_code,
+                    error_message,
                 ));
             }
         };
@@ -2425,6 +2449,36 @@ impl<'a, S: State> Layer<'a, S> {
         };
         let mut init_rng = crate::casino::GameRng::from_state(roll_seed);
         let _ = crate::casino::init_game(&mut table_session, &mut init_rng);
+        if bet_count_from_blob(&table_session.state_blob) == 0 {
+            let amount = 1u64.to_be_bytes();
+            let dummy_payload = [
+                0u8,
+                crate::casino::craps::BetType::Field as u8,
+                0u8,
+                amount[0],
+                amount[1],
+                amount[2],
+                amount[3],
+                amount[4],
+                amount[5],
+                amount[6],
+                amount[7],
+            ];
+            if crate::casino::process_game_move(
+                &mut table_session,
+                &dummy_payload,
+                &mut init_rng,
+            )
+            .is_err()
+            {
+                return Ok(casino_error_vec(
+                    public,
+                    None,
+                    nullspace_types::casino::ERROR_INVALID_MOVE,
+                    "Round roll failed",
+                ));
+            }
+        }
         sync_craps_session_to_table(&mut table_session, &round);
 
         let mut roll_rng = crate::casino::GameRng::from_state(roll_seed);

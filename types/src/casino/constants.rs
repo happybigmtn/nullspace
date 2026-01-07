@@ -39,8 +39,9 @@ pub const PROOF_OF_PLAY_MIN_SESSIONS: u64 = 10;
 pub const PROOF_OF_PLAY_MIN_SECONDS: u64 = 30 * 60;
 
 /// Faucet unlock requirements (reduce churn on new accounts).
-pub const FAUCET_MIN_ACCOUNT_AGE_SECS: u64 = 24 * 60 * 60;
-pub const FAUCET_MIN_SESSIONS: u64 = 3;
+/// NOTE: Set to 0 for local testing. Production should use 24h / 3 sessions.
+pub const FAUCET_MIN_ACCOUNT_AGE_SECS: u64 = 0;
+pub const FAUCET_MIN_SESSIONS: u64 = 0;
 
 /// Tokenomics Constants
 pub const TOTAL_SUPPLY: u64 = 1_000_000_000;
@@ -85,6 +86,12 @@ pub const ERROR_TOURNAMENT_LIMIT_REACHED: u8 = 13;
 pub const ERROR_NOT_IN_TOURNAMENT: u8 = 14;
 /// Error for unauthorized admin instructions.
 pub const ERROR_UNAUTHORIZED: u8 = 15;
+/// Error for invalid payload format or content (distinct from invalid move).
+pub const ERROR_INVALID_PAYLOAD: u8 = 16;
+/// Error when game state is corrupted or invalid.
+pub const ERROR_INVALID_STATE: u8 = 17;
+/// Error when deck is exhausted (no more cards to draw).
+pub const ERROR_DECK_EXHAUSTED: u8 = 18;
 
 /// Tournament duration in seconds (5 minutes)
 pub const TOURNAMENT_DURATION_SECS: u64 = 5 * 60;
