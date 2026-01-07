@@ -660,8 +660,8 @@
         "Export from design-tokens package index"
       ],
       "priority": 53,
-      "passes": false,
-      "notes": "DESIGN-SYSTEM: No opacity tokens exist. Found hardcoded: rgba(0,0,0,0.85) TutorialOverlay, rgba(0,0,0,0.5) RouletteScreen, etc."
+      "passes": true,
+      "notes": "COMPLETE: opacity.ts has OPACITY (xs-3xl) and OPACITY_SEMANTIC (disabled, placeholder, hover, pressed, glass, backdrop, tutorial). Used in theme.ts (glassLight/glassDark, backdrop), TutorialOverlay.tsx (OPACITY.xl, OPACITY.lg). Full JSDoc documentation."
     },
     {
       "id": "US-131",

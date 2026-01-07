@@ -3071,3 +3071,28 @@ Target: Testnet Production
   - Dot stagger formula: `:nth-child(n) { animation-delay: (n-1) * 0.15s }`
 
 ---
+
+## 2026-01-07 - US-130: Add opacity scale tokens to design-tokens package
+
+- What was implemented:
+  - VERIFIED: Full opacity.ts in design-tokens package
+  - `OPACITY` scale: xs(0.08), sm(0.12), md(0.24), lg(0.38), xl(0.56), 2xl(0.72), 3xl(0.85)
+  - `OPACITY_SEMANTIC`: disabled, placeholder, hover, pressed, glass, backdrop, tutorial
+  - Comprehensive JSDoc with usage guidelines for glassmorphism
+  - Exported from design-tokens index.ts
+  - Used in mobile theme.ts: glassLight, glassDark, backdrop colors
+  - Used in TutorialOverlay.tsx: OPACITY.xl, OPACITY.lg for blur states
+  - Type exports: OpacityKey, OpacityValue, OpacitySemanticKey, OpacitySemanticValue
+- Files changed:
+  - `packages/design-tokens/src/opacity.ts` - 63 lines (existing)
+  - `packages/design-tokens/src/index.ts` - Exports (existing)
+  - `mobile/src/constants/theme.ts` - Uses tokens (existing)
+  - `mobile/src/components/ui/TutorialOverlay.tsx` - Uses tokens (existing)
+- **Learnings:**
+  - T-shirt sizing (xs-3xl) is more intuitive than numbered scales
+  - Semantic aliases map common UI patterns to raw values
+  - 0.38 is iOS's standard disabled opacity
+  - 0.56 is a good modal backdrop - dark enough to focus but not oppressive
+  - `as const` enables type inference for the scale values
+
+---
