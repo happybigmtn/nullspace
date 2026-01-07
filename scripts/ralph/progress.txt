@@ -2924,3 +2924,29 @@ Target: Testnet Production
   - All patterns cancel in-flight sequences when starting new pattern
 
 ---
+
+## 2026-01-07 - US-124: First-time user onboarding sequence
+
+- What was implemented:
+  - VERIFIED: Full OnboardingScreen already implemented in OnboardingScreen.tsx
+  - `DealerAvatar` component: geometric character with breathing + wave animations
+  - `GameTeaserCard` carousel: 4 featured games (Blackjack, Roulette, Video Poker, Hi-Lo)
+  - `ChipStackReveal`: 5 chips with staggered FadeInUp entrance
+  - Auto-cycling carousel with active game highlighting
+  - Staggered button reveals after 1.8s delay
+  - `haptics.jackpot()` on "Start Playing" button press
+  - `haptics.roundStart()` when buttons reveal
+  - Navigation: marks onboarding complete, routes to Lobby
+  - 7 tests verify welcome text, featured games, haptics, badge
+- Files changed:
+  - `mobile/src/screens/OnboardingScreen.tsx` - 685 lines (existing implementation)
+  - `mobile/src/screens/__tests__/OnboardingScreen.test.tsx` - 7 tests (existing)
+- **Learnings:**
+  - Dealer character built with pure Views (no SVG) - 20+ style rules for face, vest, bowtie
+  - `transformOrigin: 'bottom center'` enables arm wave rotation from shoulder pivot
+  - Carousel auto-cycles via `setInterval` in useEffect with proper cleanup
+  - `markOnboardingCompleted()` persists to AsyncStorage, checked on SplashScreen
+  - `GAME_COLORS` object provides consistent game-themed colors across app
+  - Pattern: `withSequence(withDelay(500, ...), withDelay(800, ...))` for wave gesture
+
+---

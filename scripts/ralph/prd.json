@@ -576,8 +576,8 @@
         "Pre-game ceremony: dealer animation, chip stack reveal"
       ],
       "priority": 47,
-      "passes": false,
-      "notes": "UX-MEDIUM: SplashScreen has pulsing dots, AuthScreen is minimal. No immersive onboarding experience."
+      "passes": true,
+      "notes": "COMPLETE: OnboardingScreen.tsx with DealerAvatar (breathing+wave), GameTeaserCard carousel (4 games), ChipStackReveal, haptics.jackpot() on Start, haptics.roundStart() on reveal. 7 tests passing."
     },
     {
       "id": "US-125",
