@@ -1,3 +1,5 @@
+import { timingSafeEqual } from 'node:crypto';
+
 export const AUTH_CHALLENGE_PREFIX = 'nullspace-auth:';
 export const EVM_LINK_PREFIX = 'nullspace-evm-link';
 
@@ -128,3 +130,34 @@ export const bytesToHex = (bytes: Uint8Array): string =>
   Array.from(bytes)
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
+
+/**
+ * Constant-time string comparison to prevent timing attacks (US-139)
+ *
+ * Uses crypto.timingSafeEqual() which always compares all bytes regardless
+ * of where the first mismatch occurs. This prevents attackers from measuring
+ * response time to deduce the correct value byte-by-byte.
+ *
+ * @param a - First string to compare
+ * @param b - Second string to compare
+ * @returns true if strings are equal, false otherwise
+ */
+export const timingSafeStringEqual = (a: string | undefined | null, b: string | undefined | null): boolean => {
+  // Handle null/undefined cases - timing doesn't matter for null checks
+  if (a == null || b == null) {
+    return false;
+  }
+
+  // Convert to buffers for comparison
+  const bufA = Buffer.from(a, 'utf8');
+  const bufB = Buffer.from(b, 'utf8');
+
+  // Different byte lengths cannot be equal - this is safe to leak
+  // because timing attacks need the ability to guess byte-by-byte
+  // Note: We check byte length, not string length, due to multi-byte UTF-8 characters
+  if (bufA.length !== bufB.length) {
+    return false;
+  }
+
+  return timingSafeEqual(bufA, bufB);
+};

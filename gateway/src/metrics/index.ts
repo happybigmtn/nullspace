@@ -2,9 +2,12 @@
  * Metrics Collection and Authenticated Endpoint
  *
  * Provides operational metrics for monitoring with Bearer token authentication.
+ *
+ * US-139: Uses timing-safe comparison for bearer token validation
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { timingSafeStringEqual } from '../utils/crypto.js';
 
 /**
  * In-memory metrics store
@@ -83,9 +86,9 @@ export function requireMetricsAuth(req: IncomingMessage, res: ServerResponse): b
     return false;
   }
 
-  // Extract and validate token
+  // Extract and validate token using timing-safe comparison (US-139)
   const token = authHeader.slice(7); // Remove 'Bearer ' prefix
-  if (token !== expectedToken) {
+  if (!timingSafeStringEqual(token, expectedToken)) {
     res.statusCode = 403;
     res.setHeader('Content-Type', 'application/json');
     res.end(JSON.stringify({ error: 'Invalid metrics token' }));

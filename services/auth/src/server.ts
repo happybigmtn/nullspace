@@ -16,6 +16,7 @@ import {
   isHex,
   normalizeHex,
   parseChainId,
+  timingSafeStringEqual,
 } from "./utils.js";
 
 // Avoid pulling Convex source files into the auth build output.
@@ -163,7 +164,8 @@ const requireMetricsAuth: express.RequestHandler = (req, res, next) => {
     typeof req.headers["x-metrics-token"] === "string"
       ? req.headers["x-metrics-token"]
       : null;
-  if (bearerToken === metricsAuthToken || headerToken === metricsAuthToken) {
+  // US-139: Use timing-safe comparison to prevent timing attacks
+  if (timingSafeStringEqual(bearerToken, metricsAuthToken) || timingSafeStringEqual(headerToken, metricsAuthToken)) {
     next();
     return;
   }

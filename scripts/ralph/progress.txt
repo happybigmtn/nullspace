@@ -3149,3 +3149,38 @@ Target: Testnet Production
   - JSDoc on theme constants enables IDE documentation in consumer files
 
 ---
+
+## 2026-01-07 - US-135, US-136 Verification
+
+- What was verified:
+  - US-135 (FeltBackground) was already implemented in commit 6cd1643
+  - US-136 (AudioService skeleton) was already implemented in commit 00eed71
+  - Both marked as passes: true in prd.json
+- **Learnings:**
+  - Always check git log before implementing to avoid duplicate work
+  - Batch verification commits may leave prd.json out of sync
+
+---
+
+## 2026-01-07 - US-139: Fix Timing Attack Vulnerability
+
+- What was implemented:
+  - Created timingSafeStringEqual() utility function using crypto.timingSafeEqual()
+  - Fixed gateway/src/metrics/index.ts:91 - bearer token comparison
+  - Fixed services/auth/src/server.ts:168 - metrics auth comparison
+  - Added 11 security tests validating constant-time behavior
+  - Fixed multi-byte UTF-8 handling (check byte length, not string length)
+- Files changed:
+  - `gateway/src/utils/crypto.ts` - New timing-safe comparison utility
+  - `gateway/src/metrics/index.ts` - Import and use timingSafeStringEqual
+  - `gateway/tests/unit/timing-safe-comparison.test.ts` - 11 security tests
+  - `services/auth/src/utils.ts` - Added timingSafeStringEqual export
+  - `services/auth/src/server.ts` - Import and use timing-safe comparison
+- **Learnings:**
+  - crypto.timingSafeEqual() requires equal byte lengths (throws RangeError otherwise)
+  - String length != byte length for multi-byte UTF-8 characters (é is 2 bytes)
+  - Convert strings to Buffer with utf8 encoding before comparison
+  - Length check before timingSafeEqual is safe - doesn't leak byte values
+  - Bearer token timing attacks can deduce tokens byte-by-byte by measuring response times
+
+---
