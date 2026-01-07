@@ -3047,3 +3047,27 @@ Target: Testnet Production
   - Card premium pattern: translateY + slight rotation creates floating effect
 
 ---
+
+## 2026-01-07 - US-129: Website premium loading screen
+
+- What was implemented:
+  - VERIFIED: Full LoadingScreen.jsx (72 lines)
+  - Dual conic-gradient spinners with radial-gradient mask for ring effect
+  - Counter-rotating inner spinner (reverse animation)
+  - Glow ring via `loading-spinner-glow` + glowPulseSpinner keyframes
+  - 5-dot animated trail with staggered delays (0.15s increments)
+  - `loading-bg-shift` creates slow gradient background animation
+  - Premium typography: `tracking-[0.5em]`, `font-display`, `font-black`
+  - Center hub with gradient + pulse + shadow
+  - CSS keyframes: spinnerRotate (1.5s), glowPulseSpinner (2s), dotTrail (1.5s), backgroundShift (8s)
+- Files changed:
+  - `website/src/components/LoadingScreen.jsx` - 72 lines (existing)
+  - `website/src/index.css` - Lines 1228-1321 keyframes (existing)
+- **Learnings:**
+  - Conic-gradient + radial-gradient mask creates ring spinner (no SVG needed)
+  - `mask: radial-gradient(farthest-side, transparent calc(100% - 3px), black calc(100% - 3px))`
+  - Counter-rotating layers create depth via `animation: ... reverse`
+  - `background-size: 200% 200%` + `background-position` animation for smooth gradient shift
+  - Dot stagger formula: `:nth-child(n) { animation-delay: (n-1) * 0.15s }`
+
+---
