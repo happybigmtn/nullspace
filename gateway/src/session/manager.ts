@@ -139,6 +139,7 @@ export class SessionManager {
 			registered: false,
 			hasBalance: false,
 			balance: 0n,
+			balanceSeq: 0n,
 			activeGameId: null,
 			gameType: null,
 			gameSessionCounter: 0n,
@@ -425,6 +426,19 @@ export class SessionManager {
 	 */
 	touchSession(session: Session): void {
 		session.lastActivityAt = Date.now();
+	}
+
+	/**
+	 * Get balance with sequence number for sending to client.
+	 * Increments balanceSeq to prevent out-of-order balance regression.
+	 * See US-089 for rationale.
+	 */
+	getBalanceWithSeq(session: Session): { balance: string; balanceSeq: string } {
+		session.balanceSeq++;
+		return {
+			balance: session.balance.toString(),
+			balanceSeq: session.balanceSeq.toString(),
+		};
 	}
 
 	/**

@@ -36,6 +36,13 @@ export interface Session {
   /** Current balance (tracked locally) */
   balance: bigint;
 
+  /**
+   * Balance sequence number (monotonically increasing)
+   * Used by mobile to ignore out-of-order balance updates.
+   * Incremented every time balance is sent to client.
+   */
+  balanceSeq: bigint;
+
   /** Active game session ID (null if no game) */
   activeGameId: bigint | null;
 

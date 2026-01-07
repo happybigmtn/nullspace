@@ -141,6 +141,7 @@ export abstract class GameHandler {
         session.lastGameBet = bet;
         session.lastGameStartChips = session.balance;
         session.lastGameStartedAt = Date.now();
+        session.balanceSeq++;
         return {
           success: true,
           response: {
@@ -149,6 +150,7 @@ export abstract class GameHandler {
             sessionId: gameSessionId.toString(),
             bet: bet.toString(),
             balance: session.balance.toString(),
+            balanceSeq: session.balanceSeq.toString(),
           },
         };
       }
@@ -192,6 +194,7 @@ export abstract class GameHandler {
             session.lastGameBet = bet;
             session.lastGameStartChips = session.balance;
             session.lastGameStartedAt = Date.now();
+            session.balanceSeq++;
             return {
               success: true,
               response: {
@@ -200,6 +203,7 @@ export abstract class GameHandler {
                 sessionId: gameSessionId.toString(),
                 bet: bet.toString(),
                 balance: session.balance.toString(),
+                balanceSeq: session.balanceSeq.toString(),
               },
             };
           }
@@ -485,7 +489,9 @@ export abstract class GameHandler {
 
     // Always include balance field so mobile can update its display
     // (even when balance is 0 - player needs to know they're broke)
+    session.balanceSeq++;
     response.balance = session.balance.toString();
+    response.balanceSeq = session.balanceSeq.toString();
 
     return response;
   }
@@ -514,7 +520,9 @@ export abstract class GameHandler {
     }
 
     if (event.balanceSnapshot) {
+      session.balanceSeq++;
       response.balance = event.balanceSnapshot.chips.toString();
+      response.balanceSeq = session.balanceSeq.toString();
     }
 
     return response;
@@ -555,9 +563,13 @@ export abstract class GameHandler {
     }
 
     if (event.finalChips !== undefined) {
+      session.balanceSeq++;
       response.balance = event.finalChips.toString();
+      response.balanceSeq = session.balanceSeq.toString();
     } else if (event.balanceSnapshot) {
+      session.balanceSeq++;
       response.balance = event.balanceSnapshot.chips.toString();
+      response.balanceSeq = session.balanceSeq.toString();
     }
 
     return response;

@@ -166,8 +166,8 @@
 				"Verify last-write-wins doesn't cause balance regression"
 			],
 			"priority": 13,
-			"passes": false,
-			"notes": "HIGH GAP: useGatewaySession updates balance from any message. If old balance message arrives after new one, balance regresses."
+			"passes": true,
+			"notes": "IMPLEMENTED: Added balanceSeq monotonic sequence number to all balance messages. Gateway increments balanceSeq on every balance send. Mobile setBalanceWithSeq() rejects updates with seq <= lastBalanceSeq. Tests verify: (1) out-of-order messages rejected, (2) stale get_balance after game_result rejected, (3) stale balance after game_started rejected, (4) backward compat with no balanceSeq. Files: gateway/src/types/session.ts, gateway/src/session/manager.ts, gateway/src/index.ts, gateway/src/handlers/base.ts, gateway/src/live-table/craps.ts, mobile/src/stores/gameStore.ts, mobile/src/hooks/useGatewaySession.ts, mobile/src/hooks/__tests__/useGatewaySession.test.tsx."
 		},
 		{
 			"id": "US-090",
@@ -338,6 +338,32 @@
 			"priority": 26,
 			"passes": false,
 			"notes": "CODE-QUALITY (agent-verified): Multiple unsafe 'as' casts without validation. Runtime type errors possible on malformed server messages."
+		},
+		{
+			"id": "US-104",
+			"title": "Document or fix Baccarat Banker Six minimum bet edge case",
+			"acceptanceCriteria": [
+				"Verify 1-chip Banker bet with Banker-6 win returns 1 (not 0)",
+				"Document minimum viable bet amount in UI if rounding is by design",
+				"Add test case for odd-amount Banker Six payouts",
+				"Consider ceiling division or minimum 1-chip payout guarantee"
+			],
+			"priority": 27,
+			"passes": false,
+			"notes": "EDGE-CASE (code-verified): baccarat.rs:391-399 uses floor division for Banker Six (1*1/2=0). Bet of 1 chip becomes push instead of win. May confuse users betting minimum."
+		},
+		{
+			"id": "US-105",
+			"title": "Clean up session on registration failure",
+			"acceptanceCriteria": [
+				"Remove session from sessions Map if initializePlayer fails",
+				"Remove session from byPublicKey Map on failure",
+				"Add test for session cleanup after registration failure",
+				"Verify no orphaned sessions after failed registration attempts"
+			],
+			"priority": 28,
+			"passes": false,
+			"notes": "MEMORY-LEAK (code-verified): manager.ts:150-158 adds session to maps before registration, but doesn't remove on failure. Orphaned sessions accumulate until gateway restart."
 		}
 	]
 }

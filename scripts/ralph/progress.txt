@@ -1919,3 +1919,47 @@ Target: Testnet Production
   - Pattern: Document architecture behavior with `finding` field in test results
 
 ---
+
+## 2026-01-06 - US-089: Add out-of-order balance update handling
+
+- What was implemented:
+  - Added `balanceSeq` monotonic sequence number to prevent out-of-order balance regression
+  - **Gateway changes:**
+    - `session.ts`: Added `balanceSeq: bigint` to Session interface
+    - `manager.ts`: Initialize `balanceSeq: 0n`, added `getBalanceWithSeq()` helper that increments seq and returns both
+    - `index.ts`: Updated `get_balance` and `faucet_claim` handlers to use getBalanceWithSeq()
+    - `handlers/base.ts`: Updated all game response builders (game_started, game_move, game_result) to include balanceSeq
+    - `live-table/craps.ts`: Updated live table balance messages to include balanceSeq
+  - **Mobile changes:**
+    - `gameStore.ts`: Added `lastBalanceSeq: number` state and `setBalanceWithSeq(balance, seq)` action that rejects seq <= lastBalanceSeq
+    - `useGatewaySession.ts`: Added `updateBalanceFromMessage()` helper that uses setBalanceWithSeq when balanceSeq present, falls back to setBalance for backward compat
+  - **Tests (5 new, 3 updated):**
+    - `balance messages arriving out of order should use balanceSeq to determine latest` - verifies stale messages rejected
+    - `game_result balance should not be overwritten by stale get_balance response` - verifies game result preserved
+    - `game_started deducts balance correctly even with out-of-order messages` - verifies bet deduction preserved
+    - `messages without balanceSeq use last-write-wins (backward compatible)` - verifies legacy support
+- Files changed:
+  - `gateway/src/types/session.ts` - Added balanceSeq field
+  - `gateway/src/session/manager.ts` - Added getBalanceWithSeq() helper
+  - `gateway/src/index.ts` - Updated get_balance and faucet_claim handlers
+  - `gateway/src/handlers/base.ts` - Updated game response builders (4 locations)
+  - `gateway/src/live-table/craps.ts` - Updated live table balance messages (2 locations)
+  - `mobile/src/stores/gameStore.ts` - Added lastBalanceSeq and setBalanceWithSeq
+  - `mobile/src/hooks/useGatewaySession.ts` - Added updateBalanceFromMessage helper
+  - `mobile/src/hooks/__tests__/useGatewaySession.test.tsx` - Added/updated 5 tests
+- **Learnings:**
+  - **Sequence number pattern:**
+    - Gateway increments `session.balanceSeq++` on every balance send
+    - Mobile tracks `lastBalanceSeq` in store, only accepts updates where `seq > lastBalanceSeq`
+    - This prevents stale messages from regressing balance even if they arrive out of order
+  - **Backward compatibility:**
+    - If `balanceSeq` is missing or invalid, falls back to direct `setBalance()` (last-write-wins)
+    - Allows gradual rollout without breaking older gateway versions
+  - **Common race scenarios fixed:**
+    - `get_balance` response arriving after `game_result` → stale balance rejected
+    - `game_started` bet deduction followed by stale balance → deduction preserved
+    - Multiple concurrent game messages → higher seq always wins
+  - Pattern: Return boolean from state update functions to indicate success (setBalanceWithSeq returns false for stale)
+  - Pattern: Use `parseInt(str, 10)` with `!isNaN && isFinite` checks for robust string-to-number parsing
+
+---

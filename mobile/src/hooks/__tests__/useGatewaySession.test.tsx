@@ -56,17 +56,27 @@ describe('useGatewaySession', () => {
   let store: {
     setBalance: jest.Mock;
     setBalanceReady: jest.Mock;
+    setBalanceWithSeq: jest.Mock;
     setSessionInfo: jest.Mock;
     setFaucetStatus: jest.Mock;
     setSessionExpired: jest.Mock;
     faucetStatus: 'idle' | 'pending' | 'success' | 'error';
     sessionExpired: boolean;
+    lastBalanceSeq: number;
   };
 
   beforeEach(() => {
     store = {
       setBalance: jest.fn(),
       setBalanceReady: jest.fn(),
+      setBalanceWithSeq: jest.fn((balance: number, balanceSeq: number) => {
+        // Mimic the real store behavior: only accept if seq > lastBalanceSeq
+        if (balanceSeq > store.lastBalanceSeq) {
+          store.lastBalanceSeq = balanceSeq;
+          return true;
+        }
+        return false;
+      }),
       setSessionInfo: jest.fn(),
       setFaucetStatus: jest.fn((status: typeof store.faucetStatus) => {
         store.faucetStatus = status;
@@ -76,6 +86,7 @@ describe('useGatewaySession', () => {
       }),
       faucetStatus: 'idle',
       sessionExpired: false,
+      lastBalanceSeq: 0,
     };
 
     mockUseGameStore.mockImplementation((selector: (state: typeof store) => unknown) => selector(store));
@@ -569,6 +580,242 @@ describe('useGatewaySession', () => {
       expect(store.setSessionExpired).toHaveBeenCalledWith(true, 'Session expired');
       // Should NOT set faucet error
       expect(store.setFaucetStatus).not.toHaveBeenCalledWith('error', expect.any(String));
+      unmount();
+    });
+  });
+
+  describe('Out-of-order balance update handling (US-089)', () => {
+    it('balance messages arriving out of order should use balanceSeq to determine latest', () => {
+      const send = jest.fn();
+      const disconnect = jest.fn();
+
+      // First message with seq 2 and balance 900
+      mockUseWebSocketContext.mockReturnValue({
+        connectionState: 'connected',
+        send,
+        lastMessage: {
+          type: 'balance',
+          publicKey: 'pub',
+          registered: true,
+          hasBalance: true,
+          balance: '900',
+          balanceSeq: '2',
+        },
+        disconnect,
+      });
+
+      const { rerender, unmount } = renderHook(() => useGatewaySession());
+      // setBalanceWithSeq is called (not setBalance) when balanceSeq is present
+      expect(store.setBalanceWithSeq).toHaveBeenLastCalledWith(900, 2);
+      expect(store.lastBalanceSeq).toBe(2);
+
+      // Second message with LOWER seq 1 and balance 1000 (older message arrived late)
+      store.setBalanceWithSeq.mockClear();
+      mockUseWebSocketContext.mockReturnValue({
+        connectionState: 'connected',
+        send,
+        lastMessage: {
+          type: 'balance',
+          publicKey: 'pub',
+          registered: true,
+          hasBalance: true,
+          balance: '1000',
+          balanceSeq: '1', // Lower seq = older message
+        },
+        disconnect,
+      });
+
+      rerender();
+
+      // With proper sequencing (US-089), the stale message is IGNORED
+      // setBalanceWithSeq returns false, so balance is not updated
+      expect(store.setBalanceWithSeq).toHaveBeenCalledWith(1000, 1);
+      expect(store.lastBalanceSeq).toBe(2); // Unchanged - stale message rejected
+      unmount();
+    });
+
+    it('faucet response after get_balance response shows correct final (race condition)', () => {
+      const send = jest.fn();
+      const disconnect = jest.fn();
+
+      // User requests faucet
+      // Then balance response arrives (from earlier get_balance)
+      // Then faucet response arrives (should be used)
+
+      // First: Old balance response arrives
+      mockUseWebSocketContext.mockReturnValue({
+        connectionState: 'connected',
+        send,
+        lastMessage: {
+          type: 'balance',
+          publicKey: 'pub',
+          registered: true,
+          hasBalance: true,
+          balance: '500', // Old balance before faucet
+        },
+        disconnect,
+      });
+
+      const { rerender, unmount } = renderHook(() => useGatewaySession());
+      expect(store.setBalance).toHaveBeenLastCalledWith(500);
+
+      // Then: Faucet response arrives (should override)
+      store.setBalance.mockClear();
+      mockUseWebSocketContext.mockReturnValue({
+        connectionState: 'connected',
+        send,
+        lastMessage: {
+          type: 'balance',
+          publicKey: 'pub',
+          registered: true,
+          hasBalance: true,
+          balance: '1500', // New balance after faucet
+          message: 'FAUCET_CLAIMED',
+        },
+        disconnect,
+      });
+
+      rerender();
+      expect(store.setBalance).toHaveBeenCalledWith(1500);
+      unmount();
+    });
+
+    it('game_result balance should not be overwritten by stale get_balance response', () => {
+      const send = jest.fn();
+      const disconnect = jest.fn();
+
+      // game_result arrives with authoritative balance after bet
+      mockUseWebSocketContext.mockReturnValue({
+        connectionState: 'connected',
+        send,
+        lastMessage: {
+          type: 'game_result',
+          gameType: 'blackjack',
+          won: true,
+          payout: '50',
+          finalChips: '950',
+          sessionId: 'session-1',
+          balance: '950',
+          balanceSeq: '5',
+        },
+        disconnect,
+      });
+
+      const { rerender, unmount } = renderHook(() => useGatewaySession());
+      expect(store.setBalanceWithSeq).toHaveBeenLastCalledWith(950, 5);
+      expect(store.lastBalanceSeq).toBe(5);
+
+      // Then stale get_balance response arrives
+      store.setBalanceWithSeq.mockClear();
+      mockUseWebSocketContext.mockReturnValue({
+        connectionState: 'connected',
+        send,
+        lastMessage: {
+          type: 'balance',
+          publicKey: 'pub',
+          registered: true,
+          hasBalance: true,
+          balance: '1000', // Stale - from before game started
+          balanceSeq: '2', // Lower seq than game_result
+        },
+        disconnect,
+      });
+
+      rerender();
+
+      // US-089 FIX: stale message is rejected, balance stays at 950
+      expect(store.setBalanceWithSeq).toHaveBeenCalledWith(1000, 2);
+      expect(store.lastBalanceSeq).toBe(5); // Unchanged - stale rejected
+      unmount();
+    });
+
+    it('game_started deducts balance correctly even with out-of-order messages', () => {
+      const send = jest.fn();
+      const disconnect = jest.fn();
+
+      // game_started with bet deducted
+      mockUseWebSocketContext.mockReturnValue({
+        connectionState: 'connected',
+        send,
+        lastMessage: {
+          type: 'game_started',
+          gameType: 'blackjack',
+          bet: '100',
+          sessionId: 'session-1',
+          balance: '900', // 1000 - 100 bet
+          balanceSeq: '3',
+        },
+        disconnect,
+      });
+
+      const { rerender, unmount } = renderHook(() => useGatewaySession());
+      expect(store.setBalanceWithSeq).toHaveBeenLastCalledWith(900, 3);
+      expect(store.lastBalanceSeq).toBe(3);
+
+      // Stale balance arrives (from before game started)
+      store.setBalanceWithSeq.mockClear();
+      mockUseWebSocketContext.mockReturnValue({
+        connectionState: 'connected',
+        send,
+        lastMessage: {
+          type: 'balance',
+          publicKey: 'pub',
+          registered: true,
+          hasBalance: true,
+          balance: '1000',
+          balanceSeq: '1', // Older sequence
+        },
+        disconnect,
+      });
+
+      rerender();
+
+      // US-089 FIX: stale balance is rejected, bet deduction preserved
+      expect(store.setBalanceWithSeq).toHaveBeenCalledWith(1000, 1);
+      expect(store.lastBalanceSeq).toBe(3); // Unchanged - stale rejected
+      unmount();
+    });
+
+    it('messages without balanceSeq use last-write-wins (backward compatible)', () => {
+      const send = jest.fn();
+      const disconnect = jest.fn();
+
+      // Legacy message without balanceSeq
+      mockUseWebSocketContext.mockReturnValue({
+        connectionState: 'connected',
+        send,
+        lastMessage: {
+          type: 'balance',
+          publicKey: 'pub',
+          registered: true,
+          hasBalance: true,
+          balance: '500',
+          // No balanceSeq field
+        },
+        disconnect,
+      });
+
+      const { rerender, unmount } = renderHook(() => useGatewaySession());
+      expect(store.setBalance).toHaveBeenLastCalledWith(500);
+
+      // Another legacy message
+      store.setBalance.mockClear();
+      mockUseWebSocketContext.mockReturnValue({
+        connectionState: 'connected',
+        send,
+        lastMessage: {
+          type: 'balance',
+          publicKey: 'pub',
+          registered: true,
+          hasBalance: true,
+          balance: '600',
+          // No balanceSeq field
+        },
+        disconnect,
+      });
+
+      rerender();
+      expect(store.setBalance).toHaveBeenCalledWith(600);
       unmount();
     });
   });

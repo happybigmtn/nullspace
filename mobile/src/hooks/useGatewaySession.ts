@@ -19,12 +19,43 @@ export function useGatewaySession() {
     disconnect,
   } = useWebSocketContext(); // Returns WebSocketManager<GameMessage>
   const setBalance = useGameStore((state) => state.setBalance);
+  const setBalanceWithSeq = useGameStore((state) => state.setBalanceWithSeq);
   const setBalanceReady = useGameStore((state) => state.setBalanceReady);
   const setSessionInfo = useGameStore((state) => state.setSessionInfo);
   const setFaucetStatus = useGameStore((state) => state.setFaucetStatus);
   const faucetStatus = useGameStore((state) => state.faucetStatus);
   const setSessionExpired = useGameStore((state) => state.setSessionExpired);
   const sessionExpired = useGameStore((state) => state.sessionExpired);
+
+  /**
+   * Update balance from message, checking sequence to prevent regression.
+   * If balanceSeq is present, only accepts updates with higher sequence.
+   * Falls back to direct update for backward compatibility.
+   */
+  const updateBalanceFromMessage = useCallback((
+    balanceStr: string | undefined,
+    balanceSeqStr?: string
+  ): void => {
+    if (balanceStr === undefined) return;
+    const balanceValue = parseNumeric(balanceStr);
+    if (balanceValue === null) return;
+
+    if (balanceSeqStr !== undefined) {
+      const balanceSeq = parseInt(balanceSeqStr, 10);
+      if (!isNaN(balanceSeq) && isFinite(balanceSeq)) {
+        // Use sequence-checked update (US-089)
+        if (setBalanceWithSeq(balanceValue, balanceSeq)) {
+          setBalanceReady(true);
+        }
+        // If setBalanceWithSeq returns false, update was stale - silently ignore
+        return;
+      }
+    }
+
+    // Fallback: no sequence number, use direct update (backward compatible)
+    setBalance(balanceValue);
+    setBalanceReady(true);
+  }, [setBalance, setBalanceWithSeq, setBalanceReady]);
 
   const lastSessionIdRef = useRef<string | null>(null);
   const faucetResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -60,6 +91,7 @@ export function useGatewaySession() {
         registered: boolean;
         hasBalance: boolean;
         balance: string;
+        balanceSeq?: string;
       };
 
       lastSessionIdRef.current = msg.sessionId;
@@ -75,11 +107,7 @@ export function useGatewaySession() {
         registered: msg.registered,
         hasBalance: msg.hasBalance,
       });
-      const readyBalance = parseNumeric(msg.balance);
-      if (readyBalance !== null) {
-        setBalance(readyBalance);
-        setBalanceReady(true);
-      }
+      updateBalanceFromMessage(msg.balance, msg.balanceSeq);
       send({ type: 'get_balance' });
       return;
     }
@@ -91,6 +119,7 @@ export function useGatewaySession() {
         registered: boolean;
         hasBalance: boolean;
         balance: string;
+        balanceSeq?: string;
         message?: string;
       };
 
@@ -99,11 +128,7 @@ export function useGatewaySession() {
         registered: msg.registered,
         hasBalance: msg.hasBalance,
       });
-      const balanceValue = parseNumeric(msg.balance);
-      if (balanceValue !== null) {
-        setBalance(balanceValue);
-        setBalanceReady(true);
-      }
+      updateBalanceFromMessage(msg.balance, msg.balanceSeq);
       if (msg.message === 'FAUCET_CLAIMED') {
         setFaucetStatus('success', 'Faucet claimed');
         void track('casino.faucet.claimed', { source: 'mobile' });
@@ -132,6 +157,7 @@ export function useGatewaySession() {
         bet: string;
         sessionId: string;
         balance: string;
+        balanceSeq?: string;
       };
 
       void track('casino.game.started', {
@@ -140,11 +166,7 @@ export function useGatewaySession() {
         bet: parseNumeric(msg.bet),
         sessionId: msg.sessionId,
       });
-      const balanceValue = parseNumeric(msg.balance);
-      if (balanceValue !== null) {
-        setBalance(balanceValue);
-        setBalanceReady(true);
-      }
+      updateBalanceFromMessage(msg.balance, msg.balanceSeq);
       return;
     }
 
@@ -156,13 +178,10 @@ export function useGatewaySession() {
       // Type assertion: live table messages have balance field
       const msg = lastMessage as typeof lastMessage & {
         balance: string;
+        balanceSeq?: string;
       };
 
-      const balanceValue = parseNumeric(msg.balance);
-      if (balanceValue !== null) {
-        setBalance(balanceValue);
-        setBalanceReady(true);
-      }
+      updateBalanceFromMessage(msg.balance, msg.balanceSeq);
       return;
     }
 
@@ -176,6 +195,7 @@ export function useGatewaySession() {
           finalChips: string;
           sessionId: string;
           balance?: string;
+          balanceSeq?: string;
         };
 
         void track('casino.game.completed', {
@@ -187,23 +207,20 @@ export function useGatewaySession() {
           sessionId: msg.sessionId,
         });
 
-        const balanceValue = parseNumeric(msg.balance ?? msg.finalChips);
-        if (balanceValue !== null) {
-          setBalance(balanceValue);
-          setBalanceReady(true);
-        }
+        // Use balance if present, otherwise fall back to finalChips (legacy support)
+        const balanceStr = msg.balance ?? msg.finalChips;
+        updateBalanceFromMessage(balanceStr, msg.balanceSeq);
       } else {
         // game_move
         const msg = lastMessage as typeof lastMessage & {
           balance?: string;
+          balanceSeq?: string;
           finalChips?: string;
         };
 
-        const balanceValue = parseNumeric(msg.balance ?? msg.finalChips);
-        if (balanceValue !== null) {
-          setBalance(balanceValue);
-          setBalanceReady(true);
-        }
+        // Use balance if present, otherwise fall back to finalChips (legacy support)
+        const balanceStr = msg.balance ?? msg.finalChips;
+        updateBalanceFromMessage(balanceStr, msg.balanceSeq);
       }
     }
 
@@ -241,7 +258,7 @@ export function useGatewaySession() {
         setFaucetStatus('error', msg.message ?? 'Request failed');
       }
     }
-  }, [lastMessage, send, setBalance, setBalanceReady, setSessionInfo, setFaucetStatus, faucetStatus, setSessionExpired, disconnect]);
+  }, [lastMessage, send, setBalance, setBalanceReady, setSessionInfo, setFaucetStatus, faucetStatus, setSessionExpired, disconnect, updateBalanceFromMessage]);
 
   const requestFaucet = useCallback((amount?: number) => {
     setFaucetStatus('pending', 'Requesting faucet...');

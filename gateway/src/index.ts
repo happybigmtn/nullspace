@@ -186,12 +186,14 @@ async function handleMessage(ws: WebSocket, rawData: Buffer): Promise<void> {
     const session = sessionManager.getSession(ws);
     if (session) {
       await sessionManager.refreshBalance(session);
+      const { balance, balanceSeq } = sessionManager.getBalanceWithSeq(session);
       send(ws, {
         type: 'balance',
         registered: session.registered,
         hasBalance: session.hasBalance,
         publicKey: session.publicKeyHex,
-        balance: session.balance.toString(),
+        balance,
+        balanceSeq,
       });
     } else {
       sendError(ws, ErrorCodes.SESSION_EXPIRED, 'No active session');
@@ -216,12 +218,14 @@ async function handleMessage(ws: WebSocket, rawData: Buffer): Promise<void> {
     }
 
     await sessionManager.refreshBalance(session);
+    const { balance, balanceSeq } = sessionManager.getBalanceWithSeq(session);
     send(ws, {
       type: 'balance',
       registered: session.registered,
       hasBalance: session.hasBalance,
       publicKey: session.publicKeyHex,
-      balance: session.balance.toString(),
+      balance,
+      balanceSeq,
       message: 'FAUCET_CLAIMED',
     });
     trackGatewayFaucet(session, amount);

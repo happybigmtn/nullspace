@@ -982,9 +982,11 @@ export class OnchainCrapsTable {
             let payloadJson = payloadByKey.get(session.publicKeyHex);
             if (!payloadJson) {
               const myBets = this.serializePlayerBets(session.publicKeyHex);
+              session.balanceSeq++;
               const payload: Record<string, unknown> = {
                 ...base,
                 balance: session.balance.toString(),
+                balanceSeq: session.balanceSeq.toString(),
               };
               if (myBets.length > 0) {
                 payload.myBets = myBets;
@@ -1013,9 +1015,11 @@ export class OnchainCrapsTable {
 
   private sendStateToSession(session: Session): void {
     const myBets = this.serializePlayerBets(session.publicKeyHex);
+    session.balanceSeq++;
     const payload: Record<string, unknown> = {
       ...this.buildStatePayload(),
       balance: session.balance.toString(),
+      balanceSeq: session.balanceSeq.toString(),
     };
     if (myBets.length > 0) {
       payload.myBets = myBets;
