@@ -101,11 +101,11 @@ export const ModeSelectView: React.FC<ModeSelectViewProps> = ({ onSelect }) => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 relative z-10">
           <button
-            className="group text-left p-8 rounded-[32px] border hover:shadow-float hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 mode-panel"
+            className="group text-left p-8 rounded-[32px] border card-premium hover-glow-success hover-gradient-overlay mode-panel"
             style={{ backgroundColor: palette.panel, borderColor: palette.border }}
             onClick={() => onSelect('CASH')}
           >
-            <div className="w-12 h-12 rounded-2xl bg-action-success flex items-center justify-center text-white mb-6 shadow-lg shadow-green-500/20 group-hover:rotate-3 transition-transform">
+            <div className="w-12 h-12 rounded-2xl bg-action-success flex items-center justify-center text-white mb-6 shadow-lg shadow-green-500/20 group-hover:rotate-6 group-hover:scale-110 transition-transform">
                 <span className="text-xl font-bold">$</span>
             </div>
             <div className="text-lg font-bold mb-2">Cash Game</div>
@@ -121,11 +121,11 @@ export const ModeSelectView: React.FC<ModeSelectViewProps> = ({ onSelect }) => {
           </button>
 
           <button
-            className="group text-left p-8 rounded-[32px] border hover:shadow-float hover:scale-[1.02] active:scale-[0.98] transition-all duration-300 mode-panel"
+            className="group text-left p-8 rounded-[32px] border card-premium hover-glow hover-gradient-overlay mode-panel"
             style={{ backgroundColor: palette.panel, borderColor: palette.border }}
             onClick={() => onSelect('FREEROLL')}
           >
-            <div className="w-12 h-12 rounded-2xl bg-action-primary flex items-center justify-center text-white mb-6 shadow-lg shadow-blue-500/20 group-hover:-rotate-3 transition-transform">
+            <div className="w-12 h-12 rounded-2xl bg-action-primary flex items-center justify-center text-white mb-6 shadow-lg shadow-blue-500/20 group-hover:-rotate-6 group-hover:scale-110 transition-transform">
                 <span className="text-xl font-bold">★</span>
             </div>
             <div className="text-lg font-bold mb-2">Tournament</div>
