@@ -1820,3 +1820,26 @@ Target: Testnet Production
   - Pattern: Fields that indicate state (like balance) should always be present, not conditional
 
 ---
+
+## 2026-01-06 - US-086
+
+- What was implemented:
+  - Added analytics tracking for WebSocket message queue overflow events
+  - Enhanced `websocket.ts` to call `track('websocket_queue_overflow', ...)` when:
+    1. Messages are dropped due to queue full (queue_full reason)
+    2. Messages expire on reconnect (expired reason)
+  - Tracks message type and flags critical messages (bet, game_action, request_faucet)
+  - Added 10 new tests in the 'queue overflow notification and metrics (US-086)' describe block
+- Files changed:
+  - `mobile/src/services/websocket.ts` - Added analytics import and track() calls
+  - `mobile/src/services/__tests__/websocket.test.tsx` - Added analytics mock and 10 tests
+- **Learnings:**
+  - `track()` is fire-and-forget with `.catch(() => {})` to avoid blocking WebSocket operations
+  - Critical message types (`bet`, `game_action`, `request_faucet`) are flagged with `isCritical: true`
+  - For queue_full: tracks individual dropped message type
+  - For expired: tracks count of expired messages and critical count
+  - `droppedMessage` state already existed (from US-037) for UI notification
+  - Analytics events enable server-side monitoring of queue health
+  - Pattern: Always mock analytics in tests to verify tracking calls without network
+
+---

@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Constants from 'expo-constants';
 import { BaseMessageSchema } from '@nullspace/protocol/mobile';
+import { track } from './analytics';
 
 // Base message type for all game communications
 export interface GameMessage {
@@ -130,6 +131,17 @@ export function useWebSocket<T extends GameMessage = GameMessage>(
             `[WebSocket] ${expiredMessages.length} queued message(s) expired (older than ${MESSAGE_TIMEOUT_MS / 1000}s)`
           );
         }
+        // Track expired messages for metrics/analytics
+        const criticalCount = expiredMessages.filter((item) => {
+          const type = (item.message as { type?: string }).type ?? '';
+          return ['bet', 'game_action', 'request_faucet'].includes(type);
+        }).length;
+        track('websocket_queue_overflow', {
+          reason: 'expired',
+          expiredCount: expiredMessages.length,
+          criticalCount,
+          timeoutMs: MESSAGE_TIMEOUT_MS,
+        }).catch(() => {}); // Fire and forget
       }
 
       if (validMessages.length > 0) {
@@ -253,6 +265,15 @@ export function useWebSocket<T extends GameMessage = GameMessage>(
           const droppedItem = messageQueueRef.current.shift(); // Remove oldest message
           if (droppedItem) {
             setDroppedMessage({ message: droppedItem.message, reason: 'queue_full' });
+            // Track queue overflow for metrics/analytics
+            const droppedType = (droppedItem.message as { type?: string }).type ?? 'unknown';
+            const isCritical = ['bet', 'game_action', 'request_faucet'].includes(droppedType);
+            track('websocket_queue_overflow', {
+              reason: 'queue_full',
+              messageType: droppedType,
+              isCritical,
+              queueSize: MAX_QUEUE_SIZE,
+            }).catch(() => {}); // Fire and forget
           }
         }
 

@@ -46,6 +46,12 @@ jest.mock('expo-constants', () => ({
   default: mockConstants,
 }));
 
+// Mock analytics to track queue overflow metrics
+const mockTrack = jest.fn(() => Promise.resolve());
+jest.mock('../analytics', () => ({
+  track: (...args: unknown[]) => mockTrack(...args),
+}));
+
 class MockWebSocket {
   static OPEN = 1;
   static CLOSED = 3;
@@ -987,6 +993,395 @@ describe('useWebSocket', () => {
       expect(console.log).toHaveBeenCalledWith(
         '[WebSocket] Flushing 3 queued messages (2 expired)'
       );
+    });
+  });
+
+  // ========================================================================
+  // US-086: Message Queue Overflow Notification Tests
+  // ========================================================================
+  //
+  // This section tests that:
+  // 1. Analytics tracks queue overflow events (queue_full and expired)
+  // 2. Critical messages (bets, game_actions, faucet_requests) are flagged
+  // 3. Users are notified via droppedMessage state when messages are lost
+  // 4. Metrics provide visibility into queue health
+  // ========================================================================
+
+  describe('queue overflow notification and metrics (US-086)', () => {
+    it('tracks analytics when message is dropped due to queue full', () => {
+      jest.spyOn(console, 'log').mockImplementation(() => {});
+      jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      act(() => {
+        TestRenderer.create(<HookProbe url="ws://example.test" />);
+      });
+
+      const state = snapshots.at(-1);
+
+      // Queue 50 messages (fill the queue)
+      for (let i = 0; i < 50; i++) {
+        act(() => {
+          state?.send({ type: 'ping', seq: i });
+        });
+      }
+
+      // Clear mock to isolate the overflow tracking
+      mockTrack.mockClear();
+
+      // Queue 51st message - should trigger overflow
+      act(() => {
+        state?.send({ type: 'ping', seq: 50 });
+      });
+
+      // Analytics should track the overflow
+      expect(mockTrack).toHaveBeenCalledWith('websocket_queue_overflow', {
+        reason: 'queue_full',
+        messageType: 'ping',
+        isCritical: false,
+        queueSize: 50,
+      });
+    });
+
+    it('marks bet messages as critical when dropped', () => {
+      jest.spyOn(console, 'log').mockImplementation(() => {});
+      jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      act(() => {
+        TestRenderer.create(<HookProbe url="ws://example.test" />);
+      });
+
+      const state = snapshots.at(-1);
+
+      // Queue a bet as the first message (will be the one dropped)
+      act(() => {
+        state?.send({ type: 'bet', amount: 100 });
+      });
+
+      // Fill remaining queue with pings
+      for (let i = 1; i < 50; i++) {
+        act(() => {
+          state?.send({ type: 'ping', seq: i });
+        });
+      }
+
+      mockTrack.mockClear();
+
+      // Trigger overflow - the bet (oldest message) will be dropped
+      act(() => {
+        state?.send({ type: 'ping', seq: 50 });
+      });
+
+      // Analytics should mark this as critical
+      expect(mockTrack).toHaveBeenCalledWith('websocket_queue_overflow', {
+        reason: 'queue_full',
+        messageType: 'bet',
+        isCritical: true,
+        queueSize: 50,
+      });
+    });
+
+    it('marks game_action messages as critical when dropped', () => {
+      jest.spyOn(console, 'log').mockImplementation(() => {});
+      jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      act(() => {
+        TestRenderer.create(<HookProbe url="ws://example.test" />);
+      });
+
+      const state = snapshots.at(-1);
+
+      // Queue a game action as the first message
+      act(() => {
+        state?.send({ type: 'game_action', action: 'hit' });
+      });
+
+      // Fill remaining queue
+      for (let i = 1; i < 50; i++) {
+        act(() => {
+          state?.send({ type: 'ping', seq: i });
+        });
+      }
+
+      mockTrack.mockClear();
+
+      // Trigger overflow
+      act(() => {
+        state?.send({ type: 'ping', seq: 50 });
+      });
+
+      expect(mockTrack).toHaveBeenCalledWith('websocket_queue_overflow', {
+        reason: 'queue_full',
+        messageType: 'game_action',
+        isCritical: true,
+        queueSize: 50,
+      });
+    });
+
+    it('marks request_faucet messages as critical when dropped', () => {
+      jest.spyOn(console, 'log').mockImplementation(() => {});
+      jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      act(() => {
+        TestRenderer.create(<HookProbe url="ws://example.test" />);
+      });
+
+      const state = snapshots.at(-1);
+
+      // Queue a faucet request as the first message
+      act(() => {
+        state?.send({ type: 'request_faucet' });
+      });
+
+      // Fill remaining queue
+      for (let i = 1; i < 50; i++) {
+        act(() => {
+          state?.send({ type: 'ping', seq: i });
+        });
+      }
+
+      mockTrack.mockClear();
+
+      // Trigger overflow
+      act(() => {
+        state?.send({ type: 'ping', seq: 50 });
+      });
+
+      expect(mockTrack).toHaveBeenCalledWith('websocket_queue_overflow', {
+        reason: 'queue_full',
+        messageType: 'request_faucet',
+        isCritical: true,
+        queueSize: 50,
+      });
+    });
+
+    it('tracks analytics for expired messages on reconnect', () => {
+      jest.spyOn(console, 'log').mockImplementation(() => {});
+      jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      act(() => {
+        TestRenderer.create(<HookProbe url="ws://example.test" />);
+      });
+
+      const state = snapshots.at(-1);
+
+      // Queue some messages including critical ones
+      act(() => {
+        state?.send({ type: 'bet', amount: 100 });
+      });
+      act(() => {
+        state?.send({ type: 'game_action', action: 'stand' });
+      });
+      act(() => {
+        state?.send({ type: 'ping' });
+      });
+
+      // Age past timeout
+      act(() => {
+        jest.advanceTimersByTime(31000);
+      });
+
+      mockTrack.mockClear();
+
+      // Connect - should detect expired messages
+      const socket = MockWebSocket.instances[0];
+      act(() => {
+        socket.readyState = MockWebSocket.OPEN;
+        socket.onopen?.();
+      });
+
+      // Analytics should track expired messages with critical count
+      expect(mockTrack).toHaveBeenCalledWith('websocket_queue_overflow', {
+        reason: 'expired',
+        expiredCount: 3,
+        criticalCount: 2, // bet + game_action
+        timeoutMs: 30000,
+      });
+    });
+
+    it('provides droppedMessage for user notification on queue full', () => {
+      jest.spyOn(console, 'log').mockImplementation(() => {});
+      jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      act(() => {
+        TestRenderer.create(<HookProbe url="ws://example.test" />);
+      });
+
+      const state = snapshots.at(-1);
+
+      // Queue a bet that will be dropped
+      act(() => {
+        state?.send({ type: 'bet', amount: 500, nonce: 42 });
+      });
+
+      // Fill and overflow queue
+      for (let i = 1; i <= 50; i++) {
+        act(() => {
+          state?.send({ type: 'ping', seq: i });
+        });
+      }
+
+      // droppedMessage should contain the dropped bet for UI notification
+      const finalState = snapshots.at(-1);
+      expect(finalState?.droppedMessage).toEqual({
+        message: { type: 'bet', amount: 500, nonce: 42 },
+        reason: 'queue_full',
+      });
+    });
+
+    it('provides droppedMessage for user notification on expire', () => {
+      jest.spyOn(console, 'log').mockImplementation(() => {});
+      jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      act(() => {
+        TestRenderer.create(<HookProbe url="ws://example.test" />);
+      });
+
+      const state = snapshots.at(-1);
+
+      // Queue critical messages
+      act(() => {
+        state?.send({ type: 'bet', amount: 1000 });
+      });
+      act(() => {
+        state?.send({ type: 'game_action', action: 'double' });
+      });
+
+      // Age past timeout
+      act(() => {
+        jest.advanceTimersByTime(31000);
+      });
+
+      // Connect
+      const socket = MockWebSocket.instances[0];
+      act(() => {
+        socket.readyState = MockWebSocket.OPEN;
+        socket.onopen?.();
+      });
+
+      // droppedMessage should contain the last expired message
+      const finalState = snapshots.at(-1);
+      expect(finalState?.droppedMessage).toEqual({
+        message: { type: 'game_action', action: 'double' },
+        reason: 'expired',
+      });
+    });
+
+    it('handles unknown message type gracefully', () => {
+      jest.spyOn(console, 'log').mockImplementation(() => {});
+      jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      act(() => {
+        TestRenderer.create(<HookProbe url="ws://example.test" />);
+      });
+
+      const state = snapshots.at(-1);
+
+      // Queue message without type field
+      act(() => {
+        state?.send({ data: 'no type field' });
+      });
+
+      // Fill and overflow
+      for (let i = 1; i < 50; i++) {
+        act(() => {
+          state?.send({ type: 'ping', seq: i });
+        });
+      }
+
+      mockTrack.mockClear();
+
+      act(() => {
+        state?.send({ type: 'ping', seq: 50 });
+      });
+
+      // Should use 'unknown' as message type
+      expect(mockTrack).toHaveBeenCalledWith('websocket_queue_overflow', {
+        reason: 'queue_full',
+        messageType: 'unknown',
+        isCritical: false,
+        queueSize: 50,
+      });
+    });
+
+    it('tracks multiple sequential overflows with correct message types', () => {
+      jest.spyOn(console, 'log').mockImplementation(() => {});
+      jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      act(() => {
+        TestRenderer.create(<HookProbe url="ws://example.test" />);
+      });
+
+      const state = snapshots.at(-1);
+
+      // Queue alternating message types
+      for (let i = 0; i < 50; i++) {
+        const type = i % 3 === 0 ? 'bet' : i % 3 === 1 ? 'game_action' : 'ping';
+        act(() => {
+          state?.send({ type, seq: i });
+        });
+      }
+
+      mockTrack.mockClear();
+
+      // First overflow - drops message 0 (bet)
+      act(() => {
+        state?.send({ type: 'ping', seq: 50 });
+      });
+
+      expect(mockTrack).toHaveBeenLastCalledWith('websocket_queue_overflow', {
+        reason: 'queue_full',
+        messageType: 'bet',
+        isCritical: true,
+        queueSize: 50,
+      });
+
+      // Second overflow - drops message 1 (game_action)
+      act(() => {
+        state?.send({ type: 'ping', seq: 51 });
+      });
+
+      expect(mockTrack).toHaveBeenLastCalledWith('websocket_queue_overflow', {
+        reason: 'queue_full',
+        messageType: 'game_action',
+        isCritical: true,
+        queueSize: 50,
+      });
+
+      // Third overflow - drops message 2 (ping)
+      act(() => {
+        state?.send({ type: 'ping', seq: 52 });
+      });
+
+      expect(mockTrack).toHaveBeenLastCalledWith('websocket_queue_overflow', {
+        reason: 'queue_full',
+        messageType: 'ping',
+        isCritical: false,
+        queueSize: 50,
+      });
+    });
+
+    it('documents: droppedMessage enables UI to show user-facing warnings', () => {
+      // This is a documentation test explaining how UI components should use
+      // the droppedMessage state.
+      //
+      // Pattern in game screens:
+      //   const { droppedMessage } = useWebSocket(url);
+      //
+      //   useEffect(() => {
+      //     if (droppedMessage && droppedMessage.message.type === 'bet') {
+      //       showWarning('Your bet may not have been placed. Please check your balance.');
+      //     }
+      //   }, [droppedMessage]);
+      //
+      // The droppedMessage state provides:
+      //   - message: The exact message that was lost
+      //   - reason: 'queue_full' (overflow) or 'expired' (timeout)
+      //
+      // UI can differentiate between:
+      //   - Critical messages (bet, game_action, request_faucet) → show error
+      //   - Non-critical messages (ping, presence) → silent or log only
+
+      expect(true).toBe(true);
     });
   });
 

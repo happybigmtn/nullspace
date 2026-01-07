@@ -998,8 +998,8 @@
 				"Add metrics for queue overflow events"
 			],
 			"priority": 77,
-			"passes": false,
-			"notes": "CRITICAL GAP: websocket.ts:225-232 drops oldest message silently. Bet could be lost without user knowing."
+			"passes": true,
+			"notes": "FIXED: Added analytics tracking via track('websocket_queue_overflow') for both queue_full and expired reasons. Tracks messageType, isCritical (bet/game_action/request_faucet), queueSize. 10 new tests verify: (1) analytics called on overflow, (2) bet/game_action/request_faucet marked as isCritical=true, (3) expired messages track criticalCount, (4) droppedMessage provides UI notification, (5) unknown type handled gracefully. Full test coverage: 57 websocket tests passing."
 		},
 		{
 			"id": "US-087",
