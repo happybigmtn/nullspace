@@ -674,8 +674,8 @@
         "Test no z-index conflicts in complex game screens"
       ],
       "priority": 54,
-      "passes": false,
-      "notes": "DESIGN-SYSTEM: No z-index tokens. ChipSelector uses isDragging ? 100 : 0 inline. Risk of layer conflicts."
+      "passes": true,
+      "notes": "COMPLETE: zindex.ts has Z_INDEX scale (base→dragging) and Z_INDEX_GAME for game-specific layers. JSDoc documents hierarchy. Type exports for all keys. Exported from index.ts."
     },
     {
       "id": "US-132",
@@ -688,8 +688,8 @@
         "Verify WCAG 2.1 focus indicator requirements"
       ],
       "priority": 55,
-      "passes": false,
-      "notes": "DESIGN-SYSTEM: No focus ring tokens. Web has no keyboard focus styling. Accessibility gap for keyboard users."
+      "passes": true,
+      "notes": "COMPLETE: focus.ts has FOCUS variants (button, input, interactive, error, subtle), FOCUS_COLORS, FOCUS_WIDTH, FOCUS_OFFSET scales. Web index.css has focus-visible styles meeting WCAG 2.1. Type exports included."
     },
     {
       "id": "US-133",
@@ -702,8 +702,8 @@
         "Document when to use colored vs neutral shadows"
       ],
       "priority": 56,
-      "passes": false,
-      "notes": "DESIGN-SYSTEM: GLOW tokens defined but unused (0/33 files). All shadows are black. No brand-colored shadows."
+      "passes": true,
+      "notes": "COMPLETE: shadows.ts has SHADOW_COLORED (indigoGlow, goldAccent, successGlow, errorGlow, warmShadow, coolShadow), SHADOW_INSET (sm/md/lg), GLOW variants. Full JSDoc usage guidelines. Exported from index.ts."
     },
     {
       "id": "US-134",
@@ -758,8 +758,8 @@
         "Test refresh behavior with slow network"
       ],
       "priority": 60,
-      "passes": false,
-      "notes": "UX-LOWER: No pull-to-refresh or scroll enhancements on Lobby. Standard scrolling only."
+      "passes": true,
+      "notes": "COMPLETE: LobbyScreen.tsx has RefreshControl with haptics.selectionChange() at start, refreshFadeValue animation, re-fetches league and referral data. Branded tintColor/colors. Already committed in db4c2e8."
     },
     {
       "id": "US-138",
@@ -772,8 +772,8 @@
         "Shake animation on submission failure"
       ],
       "priority": 61,
-      "passes": false,
-      "notes": "UX-LOWER: VaultScreen.tsx uses basic TextInput styling. No focus animations or validation feedback."
+      "passes": true,
+      "notes": "COMPLETE: PremiumInput.tsx has animated underline (scaleX), floating label (translateY + scale), background interpolateColor, checkmark with opacity/scale, shake via withSequence. forwardRef allows parent to call ref.shake()."
     }
   ]
 }

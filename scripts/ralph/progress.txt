@@ -3096,3 +3096,41 @@ Target: Testnet Production
   - `as const` enables type inference for the scale values
 
 ---
+
+## 2026-01-07 - Batch Verification: US-131 through US-138
+
+### US-131: Z-Index Management System
+- zindex.ts has Z_INDEX scale (base→dragging) and Z_INDEX_GAME for game-specific layers
+- JSDoc documents hierarchy. Type exports for all keys
+
+### US-132: Focus Ring Tokens for Accessibility
+- focus.ts has FOCUS variants (button, input, interactive, error, subtle)
+- FOCUS_COLORS, FOCUS_WIDTH, FOCUS_OFFSET scales
+- Web index.css has focus-visible styles meeting WCAG 2.1
+
+### US-133: Colored Shadow Variants
+- shadows.ts has SHADOW_COLORED (indigoGlow, goldAccent, successGlow, errorGlow, warmShadow, coolShadow)
+- SHADOW_INSET (sm/md/lg) for pressed states
+- Full JSDoc usage guidelines
+
+### US-137: Pull-to-Refresh on Lobby
+- LobbyScreen.tsx has RefreshControl with haptics.selectionChange()
+- refreshFadeValue animation for content fade-in
+- Re-fetches league and referral data
+
+### US-138: Premium Input Field Styling
+- PremiumInput.tsx has all animations:
+  - Animated underline (scaleX from left)
+  - Floating label (translateY + scale)
+  - Background interpolateColor on focus
+  - Checkmark opacity + scale on valid
+  - Shake via withSequence on error
+- forwardRef allows parent to trigger shake()
+
+**Learnings:**
+- T-shirt sizing (xs-3xl) is more intuitive than numbered scales
+- Design tokens should be platform-agnostic raw values
+- Semantic aliases map common patterns to raw values
+- JSDoc on every export enables IDE autocomplete documentation
+
+---
