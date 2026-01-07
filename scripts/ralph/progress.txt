@@ -2764,3 +2764,38 @@ Target: Testnet Production
   - For payout multiplier display, calculate `(payout + bet) / bet` for total return ratio
 
 ---
+
+## 2026-01-07 - US-120: Error state recovery UX with visual feedback
+
+- What was implemented:
+  - `ErrorRecoveryOverlay` component with slide-in banner animation from top
+  - Dim/desaturate background overlay with `rgba(0, 0, 0, 0.6)` semi-transparent color
+  - Error type icons for: network (wifi), parse (alert), server (cloud), timeout (clock), unknown (warning)
+  - Error-specific titles: "Connection Lost", "Data Error", "Server Error", "Request Timeout", "Error"
+  - Recovery action buttons: Reconnect (for network/timeout), Retry (for parse/server), Go to Lobby
+  - `PulseRing` animation wrapping error icon during "recovering" state
+  - `SuccessFlash` component with scale/fade animation when recovery succeeds
+  - Auto-dismiss with `onDismiss` callback after 600ms success animation
+  - Haptic feedback: `error()` when showing error, `buttonPress()` on actions, `win()` on success
+  - `useErrorRecovery` hook with state machine: idle → error (via showError) → recovering → success/failed
+  - Integration into `GameLayout` - maps both connection errors and game errors to overlay
+  - `GameErrorState` interface for game-specific errors passed via `gameError` prop
+  - 30 unit tests covering visibility, error types, action buttons, recovery state transitions
+- Files changed:
+  - `mobile/src/components/ui/ErrorRecoveryOverlay.tsx` (NEW) - 560 lines
+  - `mobile/src/components/ui/__tests__/ErrorRecoveryOverlay.test.tsx` (NEW) - 30 tests
+  - `mobile/src/components/game/GameLayout.tsx` - Added GameErrorState, error overlay integration
+  - `mobile/src/components/game/__tests__/GameLayout.test.tsx` - Added mock for ErrorRecoveryOverlay
+- **Learnings:**
+  - Haptics service uses named export pattern: `import { haptics }` not `import * as haptics`
+  - Available haptics methods: `buttonPress()`, `error()`, `win()` - NOT `buttonTap()` or `success()`
+  - For jest.fn() mocks that receive props, define parameter: `jest.fn((_props: Record<string, unknown>) => null)`
+  - `BlurView` from expo-blur needs mock in tests: `jest.mock('expo-blur', () => ({ BlurView: ({ children }) => children }))`
+  - react-test-renderer `findByProps({ testID: 'x' })` throws if not found - wrap in try/catch or use `findAll`
+  - Auto-dismiss with setTimeout in useEffect needs cleanup return: `return () => clearTimeout(timer)`
+  - `ReturnType<typeof create>` with non-null assertion (`!`) cleaner than `ReactTestRenderer | null` for test trees
+  - Animation value type for interpolateColor: Use `SharedValue<number>` from 'react-native-reanimated'
+  - `runOnJS()` required to call JS callbacks (like onDismiss) from animation callbacks
+  - Async state updates in tests can cause "Cannot log after tests are done" - harmless warning
+
+---

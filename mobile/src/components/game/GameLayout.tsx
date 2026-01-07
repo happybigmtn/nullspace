@@ -1,12 +1,15 @@
 /**
  * GameLayout - Shared layout component for game screens
- * Provides consistent header, connection status, and content area
+ * Provides consistent header, connection status, error recovery, and content area
+ *
+ * US-120: Enhanced error state recovery UX with visual feedback
  */
-import React, { ReactNode, useState } from 'react';
+import React, { ReactNode, useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, SafeAreaView } from 'react-native';
 import { GameHeader } from './GameHeader';
 import { ConnectionStatusBanner } from '../ui/ConnectionStatusBanner';
 import { CelebrationOverlay } from '../celebration/CelebrationOverlay';
+import { ErrorRecoveryOverlay, ErrorType, RecoveryState } from '../ui/ErrorRecoveryOverlay';
 import { COLORS } from '../../constants/theme';
 import type { ConnectionState } from '../../services/websocket';
 import type { CelebrationState } from '../../hooks/useCelebration';
@@ -20,6 +23,22 @@ interface ConnectionStatus {
   onRetry?: () => void;
 }
 
+/**
+ * Game error state for error recovery overlay (US-120)
+ */
+export interface GameErrorState {
+  /** Whether there's an active error */
+  hasError: boolean;
+  /** Type of error for appropriate UI */
+  errorType: ErrorType;
+  /** Error message to display */
+  message: string;
+  /** Callback when retry is pressed */
+  onRetry?: () => void;
+  /** Callback to navigate back to lobby */
+  onGoToLobby?: () => void;
+}
+
 interface GameLayoutProps {
   title: string;
   balance: number;
@@ -31,6 +50,8 @@ interface GameLayoutProps {
   celebrationState?: CelebrationState;
   /** Callback when celebration animation completes */
   onCelebrationComplete?: () => void;
+  /** Game error state for error recovery overlay (US-120) */
+  gameError?: GameErrorState;
 }
 
 export function GameLayout({
@@ -42,9 +63,61 @@ export function GameLayout({
   children,
   celebrationState,
   onCelebrationComplete,
+  gameError,
 }: GameLayoutProps) {
   const [sessionStartBalance] = useState(balance);
   const sessionDelta = balance - sessionStartBalance;
+
+  // Derive error overlay state from connection status and/or game error
+  const [recoveryState, setRecoveryState] = useState<RecoveryState>('idle');
+
+  // Map connection state to error overlay when disconnected
+  const isConnectionError = connectionStatus &&
+    (connectionStatus.connectionState === 'failed' ||
+     connectionStatus.connectionState === 'disconnected');
+
+  const isConnecting = connectionStatus?.connectionState === 'connecting';
+
+  // Determine what error to show (game error takes precedence over connection)
+  const hasError = gameError?.hasError || isConnectionError;
+  const errorType: ErrorType = gameError?.hasError
+    ? gameError.errorType
+    : isConnectionError
+      ? 'network'
+      : 'unknown';
+  const errorMessage = gameError?.hasError
+    ? gameError.message
+    : isConnectionError
+      ? 'Unable to connect to game server'
+      : '';
+
+  // Update recovery state based on connection changes
+  useEffect(() => {
+    if (isConnecting) {
+      setRecoveryState('recovering');
+    } else if (connectionStatus?.connectionState === 'connected' && recoveryState === 'recovering') {
+      setRecoveryState('success');
+    } else if (isConnectionError) {
+      setRecoveryState('idle');
+    }
+  }, [connectionStatus?.connectionState, isConnecting, isConnectionError, recoveryState]);
+
+  // Handle error overlay actions
+  const handleReconnect = useCallback(() => {
+    connectionStatus?.onRetry?.();
+  }, [connectionStatus]);
+
+  const handleRetry = useCallback(() => {
+    gameError?.onRetry?.();
+  }, [gameError]);
+
+  const handleGoToLobby = useCallback(() => {
+    gameError?.onGoToLobby?.();
+  }, [gameError]);
+
+  const handleErrorDismiss = useCallback(() => {
+    setRecoveryState('idle');
+  }, []);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -56,7 +129,8 @@ export function GameLayout({
       {celebrationState && (
         <CelebrationOverlay state={celebrationState} onComplete={onCelebrationComplete} />
       )}
-      {connectionStatus && (
+      {/* ConnectionStatusBanner for simple connection feedback */}
+      {connectionStatus && !hasError && (
         <ConnectionStatusBanner
           connectionState={connectionStatus.connectionState}
           reconnectAttempt={connectionStatus.reconnectAttempt}
@@ -75,6 +149,19 @@ export function GameLayout({
         winAmount={celebrationState?.winAmount}
       />
       <View style={styles.content}>{children}</View>
+
+      {/* Error recovery overlay (US-120) */}
+      <ErrorRecoveryOverlay
+        isVisible={hasError ?? false}
+        errorType={errorType}
+        message={errorMessage}
+        recoveryState={recoveryState}
+        onReconnect={isConnectionError ? handleReconnect : undefined}
+        onRetry={gameError?.hasError ? handleRetry : undefined}
+        onGoToLobby={handleGoToLobby}
+        onDismiss={handleErrorDismiss}
+        testID="game-error-overlay"
+      />
     </SafeAreaView>
   );
 }
