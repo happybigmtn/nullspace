@@ -656,3 +656,37 @@ export function getGlowStyle(
 ): GlowStyle | Record<string, never> {
   return isDark ? DARK_MODE_GLOW[variant] : {};
 }
+
+/**
+ * Glassmorphism configuration constants
+ *
+ * Used by GlassView, GlassModal, and other glass-effect components.
+ * Defines blur intensity levels and overlay opacities.
+ */
+export const GLASS = {
+  /** Blur intensity values for expo-blur (0-100) */
+  blur: {
+    light: 15,
+    medium: 20,
+    heavy: 30,
+  },
+  /** Backdrop overlay opacity values */
+  backdropOpacity: {
+    light: 0.4,
+    medium: 0.6,
+    heavy: 0.75,
+  },
+  /** Inner border colors for glass cards */
+  border: {
+    light: 'rgba(255, 255, 255, 0.3)',
+    dark: 'rgba(255, 255, 255, 0.1)',
+  },
+  /** Inner glow colors for elevated surfaces */
+  innerGlow: {
+    light: 'rgba(255, 255, 255, 0.3)',
+    dark: 'rgba(255, 255, 255, 0.05)',
+  },
+} as const;
+
+/** Type for glass blur intensity */
+export type GlassBlurIntensity = keyof typeof GLASS.blur;

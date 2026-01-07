@@ -1,8 +1,43 @@
 import React from 'react';
 import { act, create } from 'react-test-renderer';
-import { Text } from 'react-native';
+import { Text, View } from 'react-native';
 import { isTutorialCompleted, markTutorialCompleted } from '../../../services/storage';
 import { TutorialOverlay } from '../TutorialOverlay';
+
+// Mock expo-blur
+jest.mock('expo-blur', () => {
+  const { View } = require('react-native');
+  return {
+    BlurView: (props: { children?: React.ReactNode; intensity: number; tint: string }) => (
+      <View testID="blur-view" data-intensity={props.intensity} data-tint={props.tint}>
+        {props.children}
+      </View>
+    ),
+  };
+});
+
+// Mock react-native-reanimated
+jest.mock('react-native-reanimated', () => {
+  const Reanimated = require('react-native-reanimated/mock');
+  const { View } = require('react-native');
+  return {
+    ...Reanimated,
+    FadeIn: { duration: jest.fn().mockReturnValue({}) },
+    FadeOut: { duration: jest.fn().mockReturnValue({}) },
+    SlideInDown: {
+      springify: jest.fn().mockReturnValue({
+        damping: jest.fn().mockReturnValue({
+          stiffness: jest.fn().mockReturnValue({}),
+        }),
+      }),
+      duration: jest.fn().mockReturnValue({}),
+    },
+    default: {
+      View,
+      createAnimatedComponent: (Component: React.ComponentType) => Component,
+    },
+  };
+});
 
 jest.mock('../../../services/haptics', () => ({
   haptics: { buttonPress: jest.fn().mockResolvedValue(undefined) },
@@ -11,6 +46,30 @@ jest.mock('../../../services/haptics', () => ({
 jest.mock('../../../services/storage', () => ({
   isTutorialCompleted: jest.fn(),
   markTutorialCompleted: jest.fn(),
+}));
+
+// Mock ThemeContext
+jest.mock('../../../context/ThemeContext', () => ({
+  useTheme: jest.fn(() => ({
+    isDark: false,
+    colorScheme: 'light',
+    colorSchemePreference: 'system',
+    setColorSchemePreference: jest.fn(),
+    toggleColorScheme: jest.fn(),
+  })),
+}));
+
+// Mock useThemedColors
+jest.mock('../../../hooks/useThemedColors', () => ({
+  useThemedColors: jest.fn(() => ({
+    background: '#FFFFFF',
+    surface: '#FFFFFF',
+    textPrimary: '#1C1C1E',
+    textSecondary: '#8E8E93',
+    textMuted: '#AEAEB2',
+    primary: '#6366F1',
+    border: '#E5E5EA',
+  })),
 }));
 
 describe('TutorialOverlay', () => {
