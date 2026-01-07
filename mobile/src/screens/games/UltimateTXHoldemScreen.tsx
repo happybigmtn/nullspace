@@ -496,6 +496,7 @@ export function UltimateTXHoldemScreen() {
         balance={balance}
         onHelpPress={() => setShowTutorial(true)}
         connectionStatus={connectionStatusProps}
+        gameId="ultimateHoldem"
       >
         {/* Game Area */}
       <ScrollView style={styles.gameArea} contentContainerStyle={styles.gameContent}>

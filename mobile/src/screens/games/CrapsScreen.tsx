@@ -530,6 +530,7 @@ export function CrapsScreen() {
             <Text style={styles.moreBetsText}>Bets ▾</Text>
           </Pressable>
         }
+        gameId="craps"
       >
         {/* Point Display */}
       {state.point && (

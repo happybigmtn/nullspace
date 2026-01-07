@@ -416,6 +416,7 @@ export function SicBoScreen() {
             <Text style={styles.moreBetsText}>Bets ▾</Text>
           </Pressable>
         }
+        gameId="sicBo"
       >
         {/* Dice Display */}
       <View style={styles.diceContainer}>

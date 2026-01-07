@@ -282,6 +282,7 @@ export function VideoPokerScreen() {
             <Text style={styles.payTableText}>Pay Table</Text>
           </Pressable>
         }
+        gameId="videoPoker"
       >
         {/* Game Area */}
       <View style={styles.gameArea}>

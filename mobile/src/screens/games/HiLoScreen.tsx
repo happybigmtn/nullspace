@@ -218,6 +218,7 @@ export function HiLoScreen() {
         balance={balance}
         onHelpPress={() => setShowTutorial(true)}
         connectionStatus={connectionStatusProps}
+        gameId="hiLo"
       >
         {/* Game Area */}
         <View style={GAME_LAYOUT_STYLES.gameAreaCentered}>

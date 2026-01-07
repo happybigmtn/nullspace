@@ -316,6 +316,7 @@ export function RouletteScreen() {
             <Text style={INTERACTIVE_STYLES.moreBetsText}>Bets ▾</Text>
           </Pressable>
         }
+        gameId="roulette"
       >
         {/* Wheel Display */}
       <View style={styles.wheelContainer}>

@@ -3184,3 +3184,30 @@ Target: Testnet Production
   - Bearer token timing attacks can deduce tokens byte-by-byte by measuring response times
 
 ---
+
+## 2026-01-07 - US-135: Add Table Felt Texture Backgrounds Per Game
+
+- What was implemented:
+  - Added gameId prop to all 9 remaining game screens' GameLayout components
+  - FeltBackground component and GameLayout integration already existed
+  - Connected game screens to their themed felt backgrounds via GAME design tokens
+- Files changed:
+  - `mobile/src/screens/games/BaccaratScreen.tsx` - Added gameId="baccarat"
+  - `mobile/src/screens/games/CasinoWarScreen.tsx` - Added gameId="casinoWar"
+  - `mobile/src/screens/games/CrapsScreen.tsx` - Added gameId="craps"
+  - `mobile/src/screens/games/HiLoScreen.tsx` - Added gameId="hiLo"
+  - `mobile/src/screens/games/RouletteScreen.tsx` - Added gameId="roulette"
+  - `mobile/src/screens/games/SicBoScreen.tsx` - Added gameId="sicBo"
+  - `mobile/src/screens/games/ThreeCardPokerScreen.tsx` - Added gameId="threeCard"
+  - `mobile/src/screens/games/UltimateTXHoldemScreen.tsx` - Added gameId="ultimateHoldem"
+  - `mobile/src/screens/games/VideoPokerScreen.tsx` - Added gameId="videoPoker"
+- **Learnings:**
+  - GameId type from @nullspace/design-tokens uses camelCase (hiLo, videoPoker, sicBo)
+  - FeltBackground was already implemented but game screens weren't using it
+  - Without gameId prop, GameLayout falls back to generic scanline overlay
+  - GAME colors define primary (background) and accent (highlights) per game
+  - Woven texture uses checkerboard pattern with accent color borders
+  - Scanline intensity varies with connection state (0.08 connected, 0.15 disconnected)
+  - 45-second gradient shift animation adds subtle visual interest
+
+---

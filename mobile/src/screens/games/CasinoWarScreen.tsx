@@ -264,6 +264,7 @@ export function CasinoWarScreen() {
         onHelpPress={() => setShowTutorial(true)}
         connectionStatus={connectionStatusProps}
         celebrationState={celebrationState}
+        gameId="casinoWar"
       >
         {/* Game Area */}
         <View style={styles.gameArea}>

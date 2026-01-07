@@ -350,6 +350,7 @@ export function ThreeCardPokerScreen() {
         balance={balance}
         onHelpPress={() => setShowTutorial(true)}
         connectionStatus={connectionStatusProps}
+        gameId="threeCard"
       >
         {/* Game Area */}
       <View style={styles.gameArea}>

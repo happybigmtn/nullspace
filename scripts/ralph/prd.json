@@ -155,7 +155,7 @@
       ],
       "priority": 58,
       "passes": true,
-      "notes": "UX-LOWER: FeltBackground component with woven texture, game-specific colors from GAME palette, connection-aware scanline intensity, 45s gradient animation. Uses View-based pattern (not SVG) for better performance."
+      "notes": "COMPLETE: FeltBackground component with woven texture, game-specific colors from GAME palette, connection-aware scanline intensity, 45s gradient animation. All 10 game screens now pass gameId prop to GameLayout. Uses View-based pattern (not SVG) for better performance."
     },
     {
       "id": "US-136",

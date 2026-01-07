@@ -277,6 +277,7 @@ export function BaccaratScreen() {
         balance={balance}
         onHelpPress={() => setShowTutorial(true)}
         connectionStatus={connectionStatusProps}
+        gameId="baccarat"
       >
         {/* Game Area */}
         <View style={styles.gameArea}>
