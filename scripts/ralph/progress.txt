@@ -3355,3 +3355,21 @@ Target: Testnet Production
   - `made_points_mask.count_ones()` is used to determine payout tier (4=24x, 5=249x, 6=999x)
   - Corrupted mask with bits 6-7 set could claim all 6 points made when they weren't
 
+
+---
+
+## 2026-01-07 - US-148: Fix Roulette SplitH bet validation for right edge
+
+- What was implemented:
+  - Audited existing validation: `(1..=35).contains(&number) && number % 3 != 0` is CORRECT
+  - Added `test_edge_bet_boundary_validation` with 45+ assertions covering all bet types
+  - Added `test_splith_35_36_is_valid` documenting that 35-36 IS a valid split
+  - Corrected acceptance criteria: 35-36 is valid because 35 is in column 2 (35%3=2)
+- Files changed:
+  - `execution/src/casino/roulette.rs` - Added 89 lines of boundary tests
+- **Learnings:**
+  - Roulette layout: 3 columns (1-2-3, 4-5-6, ..., 34-35-36)
+  - Right edge = multiples of 3 (3, 6, 9, ..., 36) - no horizontal neighbor
+  - SplitH number param is LEFT cell of pair, so 35 covers 35-36 (valid)
+  - Validation was already correct; acceptance criteria #2 was incorrect
+
