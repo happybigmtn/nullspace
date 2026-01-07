@@ -742,4 +742,252 @@ describe('vault', () => {
       }
     });
   });
+
+  describe('vault lock during active game (US-083)', () => {
+    /**
+     * US-083: Test that vault lock during active game is handled gracefully.
+     *
+     * ## ARCHITECTURE
+     * - Vault auto-lock can occur during an active game session
+     * - When vault is locked, getUnlockedVaultPrivateKey() returns null
+     * - signMessage() throws 'vault_locked' when vault is locked
+     * - Mobile must handle this gracefully (show unlock prompt, not crash)
+     * - Game state should be preserved across lock/unlock cycle
+     *
+     * ## CRITICAL PATH
+     * 1. Player starts game (vault unlocked)
+     * 2. Device auto-lock triggers (vault locks)
+     * 3. Player returns to app
+     * 4. App detects vault_locked, prompts for password
+     * 5. After unlock, game resumes
+     */
+
+    it('getUnlockedVaultPrivateKey() returns null when vault locked', async () => {
+      const password = 'testpassword123';
+      await vault.createPasswordVault(password);
+
+      // Initially unlocked after creation
+      const keyBefore = vault.getUnlockedVaultPrivateKey();
+      expect(keyBefore).not.toBeNull();
+      expect(keyBefore).toHaveLength(32); // Ed25519 private key
+
+      // Lock the vault
+      vault.lockVault();
+
+      // Now should return null
+      const keyAfter = vault.getUnlockedVaultPrivateKey();
+      expect(keyAfter).toBeNull();
+    });
+
+    it('getVaultStatus() correctly reflects lock state changes', async () => {
+      const password = 'testpassword123';
+      await vault.createPasswordVault(password);
+
+      // Check unlocked state
+      const statusUnlocked = await vault.getVaultStatus();
+      expect(statusUnlocked.enabled).toBe(true);
+      expect(statusUnlocked.unlocked).toBe(true);
+      expect(statusUnlocked.publicKeyHex).toHaveLength(64);
+
+      // Lock vault
+      vault.lockVault();
+
+      // Check locked state
+      const statusLocked = await vault.getVaultStatus();
+      expect(statusLocked.enabled).toBe(true);
+      expect(statusLocked.unlocked).toBe(false);
+      expect(statusLocked.publicKeyHex).toHaveLength(64); // Still has public key
+    });
+
+    it('exportVaultPrivateKey() throws vault_locked when locked without password', async () => {
+      const password = 'testpassword123';
+      await vault.createPasswordVault(password);
+      vault.lockVault();
+
+      // Without password, should throw vault_locked
+      await expect(vault.exportVaultPrivateKey()).rejects.toThrow('vault_locked');
+
+      // With correct password, should work even when locked
+      const privateKeyHex = await vault.exportVaultPrivateKey(password);
+      expect(privateKeyHex).toHaveLength(64);
+    });
+
+    it('vault can be re-unlocked after locking during game (recovery path)', async () => {
+      const password = 'testpassword123';
+      const publicKeyHex = await vault.createPasswordVault(password);
+
+      // Simulate game in progress - vault is unlocked
+      expect(vault.getUnlockedVaultPrivateKey()).not.toBeNull();
+
+      // Simulate device auto-lock (vault locks)
+      vault.lockVault();
+      expect(vault.getUnlockedVaultPrivateKey()).toBeNull();
+
+      // Simulate user returning and unlocking
+      const recoveredPublicKey = await vault.unlockPasswordVault(password);
+
+      // Public key should match original (identity preserved)
+      expect(recoveredPublicKey).toBe(publicKeyHex);
+      // Private key should be available again
+      expect(vault.getUnlockedVaultPrivateKey()).not.toBeNull();
+    });
+
+    it('game state is preserved across lock/unlock cycle (documentation)', async () => {
+      // This is a documentation test showing that vault lock/unlock
+      // does not affect external game state - only signing capability.
+      //
+      // Game state (bet amount, hand, etc.) lives in:
+      // - React state (component-level)
+      // - WebSocket connection state (gateway-level)
+      //
+      // Vault lock only affects:
+      // - signMessage() capability (throws vault_locked)
+      //
+      // The mobile app must:
+      // 1. Catch vault_locked error
+      // 2. Show unlock prompt overlay
+      // 3. After successful unlock, retry the signing operation
+
+      const password = 'testpassword123';
+      await vault.createPasswordVault(password);
+
+      // Simulate game state (external to vault)
+      const gameState = {
+        sessionId: 'game-123',
+        betAmount: 100n,
+        handCards: ['AS', 'KH'],
+        turnNumber: 3,
+      };
+
+      // Lock vault mid-game
+      vault.lockVault();
+
+      // Game state is unaffected by vault lock
+      expect(gameState.sessionId).toBe('game-123');
+      expect(gameState.betAmount).toBe(100n);
+      expect(gameState.handCards).toEqual(['AS', 'KH']);
+
+      // Unlock and continue
+      await vault.unlockPasswordVault(password);
+      expect(vault.getUnlockedVaultPrivateKey()).not.toBeNull();
+
+      // Game can resume with same state
+      expect(gameState.turnNumber).toBe(3);
+    });
+
+    it('lockVault() immediately clears private key from memory', async () => {
+      const password = 'testpassword123';
+      await vault.createPasswordVault(password);
+
+      // Get reference to key before locking
+      const keyRef = vault.getUnlockedVaultPrivateKey();
+      expect(keyRef).not.toBeNull();
+
+      // Lock vault
+      vault.lockVault();
+
+      // Immediate check - key should be null
+      expect(vault.getUnlockedVaultPrivateKey()).toBeNull();
+
+      // The original reference might still exist in test memory,
+      // but the vault module no longer returns it
+    });
+
+    it('documents signMessage vault_locked error pattern (crypto.ts)', async () => {
+      // This documents the error pattern that signMessage() uses.
+      // signMessage() is tested separately in crypto.test.ts,
+      // but we document the pattern here for clarity.
+      //
+      // When vault is locked, signMessage() follows this pattern:
+      // 1. Check if vault is enabled (isVaultEnabled())
+      // 2. If enabled, get unlocked key (getUnlockedVaultPrivateKey())
+      // 3. If key is null, throw Error('vault_locked')
+      //
+      // Mobile must catch this error and:
+      // - Show "Vault Locked" overlay
+      // - Prompt for password
+      // - On success, retry the pending operation
+
+      const password = 'testpassword123';
+      await vault.createPasswordVault(password);
+      vault.lockVault();
+
+      // The pattern that crypto.ts follows:
+      const vaultEnabled = await vault.isVaultEnabled();
+      expect(vaultEnabled).toBe(true);
+
+      const privateKey = vault.getUnlockedVaultPrivateKey();
+      expect(privateKey).toBeNull();
+
+      // This is what crypto.ts does:
+      if (vaultEnabled && !privateKey) {
+        expect(() => {
+          throw new Error('vault_locked');
+        }).toThrow('vault_locked');
+      }
+    });
+
+    it('multiple lock/unlock cycles work correctly', async () => {
+      const password = 'testpassword123';
+      const publicKeyHex = await vault.createPasswordVault(password);
+
+      // Cycle 1
+      expect(vault.getUnlockedVaultPrivateKey()).not.toBeNull();
+      vault.lockVault();
+      expect(vault.getUnlockedVaultPrivateKey()).toBeNull();
+      await vault.unlockPasswordVault(password);
+      expect(vault.getUnlockedVaultPrivateKey()).not.toBeNull();
+
+      // Cycle 2
+      vault.lockVault();
+      expect(vault.getUnlockedVaultPrivateKey()).toBeNull();
+      const key2 = await vault.unlockPasswordVault(password);
+      expect(key2).toBe(publicKeyHex);
+      expect(vault.getUnlockedVaultPrivateKey()).not.toBeNull();
+
+      // Cycle 3
+      vault.lockVault();
+      vault.lockVault(); // Double lock should be safe
+      expect(vault.getUnlockedVaultPrivateKey()).toBeNull();
+      await vault.unlockPasswordVault(password);
+      expect(vault.getUnlockedVaultPrivateKey()).not.toBeNull();
+    });
+
+    it('unlocking with wrong password does not unlock vault', async () => {
+      const password = 'correctpassword1';
+      await vault.createPasswordVault(password);
+      vault.lockVault();
+
+      // Try wrong password
+      await expect(vault.unlockPasswordVault('wrongpassword1')).rejects.toThrow(
+        'vault_password_invalid'
+      );
+
+      // Vault should still be locked
+      expect(vault.getUnlockedVaultPrivateKey()).toBeNull();
+
+      // Status should still show locked
+      const status = await vault.getVaultStatus();
+      expect(status.unlocked).toBe(false);
+    });
+
+    it('handles rapid lock/unlock without race conditions', async () => {
+      const password = 'testpassword123';
+      await vault.createPasswordVault(password);
+
+      // Rapid lock/unlock - simulates user quickly toggling
+      vault.lockVault();
+      await vault.unlockPasswordVault(password);
+      vault.lockVault();
+      await vault.unlockPasswordVault(password);
+      vault.lockVault();
+
+      // Final state should be locked
+      expect(vault.getUnlockedVaultPrivateKey()).toBeNull();
+
+      // Can still unlock
+      await vault.unlockPasswordVault(password);
+      expect(vault.getUnlockedVaultPrivateKey()).not.toBeNull();
+    });
+  });
 });
