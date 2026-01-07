@@ -2976,3 +2976,26 @@ Target: Testnet Production
   - prefers-reduced-motion query sets `animation-duration: 0.01ms` as polite disable
 
 ---
+
+## 2026-01-07 - US-126: Website hero section with animated gradient background
+
+- What was implemented:
+  - VERIFIED: Full implementation already exists
+  - `FloatingParticles` component: 12 particles with staggered duration/delay/drift
+  - Three layered gradient blobs with `hero-glow-pulse` + `hero-gradient-drift`
+  - `hero-banner` full-width animated gradient at top
+  - CSS keyframes: `gradientDrift` (8s), `glowPulse` (4s), `floatParticle` (variable)
+  - `-alt` variants have reverse direction and offset timing
+  - `useMemo` prevents particle array regeneration
+  - CSS custom properties: `--particle-duration`, `--particle-delay`, `--drift-x`
+- Files changed:
+  - `website/src/components/casino/ModeSelectView.tsx` - 153 lines (existing)
+  - `website/src/index.css` - Lines 1001-1104 keyframes (existing)
+- **Learnings:**
+  - Particle positions use mod arithmetic: `10 + (i * 7) % 80` for pseudo-random distribution
+  - Alternating drift: `(i % 2 === 0 ? 1 : -1)` creates natural left/right movement
+  - Color variety: cycle through primary, success, and neutral based on `i % 3`
+  - Background gradients overflow container with negative margins: `-mr-40 -mt-40`
+  - `blur(48px)` to `blur(64px)` in glowPulse creates breathing depth effect
+
+---

@@ -604,8 +604,8 @@
         "Create full-width animated banner above mode select"
       ],
       "priority": 49,
-      "passes": false,
-      "notes": "WEB-UX: ModeSelectView.tsx:44-50 has subtle accent circles but generic. No animated gradients or particles."
+      "passes": true,
+      "notes": "COMPLETE: ModeSelectView.tsx has FloatingParticles (12 particles with staggered timing), 3 layered gradient blobs with hero-glow-pulse/hero-gradient-drift classes, hero-banner full-width animated gradient. CSS keyframes in index.css: gradientDrift, glowPulse, floatParticle."
     },
     {
       "id": "US-127",
