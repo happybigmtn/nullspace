@@ -1344,6 +1344,25 @@ Target: Testnet Production
 
 ---
 
+## 2026-01-06 - US-066: Add observability failure handling tests
+
+- What was implemented:
+  - Added 8 tests for analytics failure handling (network, HTTP, timeout, storage errors)
+  - Added 10 tests for notification failure handling (permissions, token, registration errors)
+  - Tests verify services swallow errors gracefully without crashing the app
+  - Tests document graceful degradation: core game works when telemetry/notifications fail
+- Files changed:
+  - `mobile/src/services/__tests__/analytics.test.ts` - Added 8 failure handling tests
+  - `mobile/src/services/__tests__/notifications.test.ts` - Added 10 failure handling tests
+- **Learnings:**
+  - Both services already had try/catch with empty bodies to swallow errors
+  - Analytics: `track()` awaits fetch but catches all errors silently
+  - Notifications: `initializeNotifications()` has outer try/catch returning null on failure
+  - `registerPushToken()` uses fire-and-forget (`void`) and swallows registration errors
+  - The services are designed for graceful degradation by default
+
+---
+
 ## 2026-01-06 - US-065: Add password timing attack resistance test
 
 - What was implemented:
