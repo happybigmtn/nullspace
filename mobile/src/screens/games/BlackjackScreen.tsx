@@ -4,8 +4,7 @@
  */
 import { View, Text, StyleSheet, InteractionManager, Pressable, Dimensions } from 'react-native';
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { DealtCard, DealtHiddenCard } from '../../components/casino';
-import { ChipSelector } from '../../components/casino';
+import { DealtCard, DealtHiddenCard, ChipSelector, ChipPile } from '../../components/casino';
 import { GameLayout } from '../../components/game';
 import { TutorialOverlay, PrimaryButton, BlackjackSkeleton, BetConfirmationModal } from '../../components/ui';
 import { haptics } from '../../services/haptics';
@@ -57,7 +56,7 @@ const TUTORIAL_STEPS: TutorialStep[] = [
 export function BlackjackScreen() {
   // Shared hooks for connection, betting, and submission debouncing
   const { isDisconnected, send, lastMessage, connectionStatusProps } = useGameConnection<GameMessage>();
-  const { bet, selectedChip, setSelectedChip, placeChip, clearBet, setBet, balance } = useChipBetting();
+  const { bet, selectedChip, setSelectedChip, placeChip, clearBet, setBet, balance, placedChips } = useChipBetting();
   const { isSubmitting, submitBet, clearSubmission } = useBetSubmission(send);
 
   const [state, setState] = useState<BlackjackState>({
@@ -431,8 +430,16 @@ export function BlackjackScreen() {
             </View>
           </View>
 
-          {/* Bet Display */}
-          {bet > 0 && (
+          {/* Bet Display - ChipPile visualization (US-122) */}
+          {state.phase === 'betting' && (
+            <ChipPile
+              chips={placedChips}
+              totalBet={bet}
+              showCounter={true}
+              testID="blackjack-chip-pile"
+            />
+          )}
+          {state.phase !== 'betting' && bet > 0 && (
             <View style={BET_STYLES.betContainer}>
               <Text style={BET_STYLES.betLabel}>Bet</Text>
               <Text style={BET_STYLES.betAmount}>${bet}</Text>

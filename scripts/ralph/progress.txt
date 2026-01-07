@@ -48,8 +48,19 @@ Target: Testnet Production
 - Outcome colors: win=success, blackjack=gold, loss=error, push/war=warning (see OUTCOME_COLORS in ResultReveal.tsx)
 - Stagger timing: TIMING constants define delays for outcome (100ms) → payout (500ms) → delta (800ms)
 - Haptics by outcome: wins handled by celebration system, loss uses `haptics.error()`, push uses `haptics.push()`
+- Card dealing trajectory: `DealtCard` wraps `Card` with arc trajectory from dealer position (US-121)
+- Arc animation: Use parabolic Y offset `4 * progress * (1 - progress)` for natural arc
+- Landing bounce: `withSequence` for scale 0.85 → 1.08 (overshoot) → 1.0 with spring physics
+- Trajectory rotation: interpolate [0, 0.3, 0.7, 1] → [8°, 12°, -4°, 0°] for mid-flight rotation
+- Haptic sync: Use `runOnJS(callback)()` in spring completion callback to trigger haptic on landing
+- ChipPile: `ChipPile` component visualizes stacked chips with 3D rotation, compression, and trails (US-122)
+- Placed chips tracking: `useChipBetting()` returns `placedChips: PlacedChip[]` for pile visualization
+- PlacedChip structure: `{ id, value, rotation: -15 to 15, placedAt }` for animation sequencing
+- Stack compression: Bottom chips compress to 70% height, top chips full size (COMPRESSION_FACTOR=0.7)
+- Flight animation: 3D rotateX tilt during flight, spring landing with scale overshoot (1.1→1.0)
+- Color trails: Semi-transparent trail during chip flight using chip color with 0.6 opacity
 - 12 race conditions identified (see US-005 through US-009, US-021-022)
-- Tests: Run with `npm test` (386+ unit tests after US-119)
+- Tests: Run with `npm test` (432+ unit tests after US-122)
 
 ### Configuration
 - Production configs: `configs/production/*.env.example`
@@ -2797,5 +2808,67 @@ Target: Testnet Production
   - Animation value type for interpolateColor: Use `SharedValue<number>` from 'react-native-reanimated'
   - `runOnJS()` required to call JS callbacks (like onDismiss) from animation callbacks
   - Async state updates in tests can cause "Cannot log after tests are done" - harmless warning
+
+---
+
+## 2026-01-07 - US-121: Card dealing trajectory animation
+
+- What was implemented:
+  - `DealtCard` component wrapping `Card` with casino-style dealing animation
+  - Arc trajectory from dealer position (top-center) using parabolic Y offset formula
+  - ±8° rotation mid-flight that settles to 0° on landing
+  - Scale bounce landing: 0.85 → 1.08 (overshoot) → 1.0 with spring physics
+  - Staggered timing via `dealIndex` prop (120ms default between cards)
+  - `DealtHiddenCard` variant for dealer's face-down cards
+  - Haptic feedback (`haptics.cardDeal()`) synced to landing moment via `runOnJS`
+  - Opacity fade-in during first 20% of animation
+  - 28 new tests covering rendering, size variants, animation props, callbacks
+  - Updated BlackjackScreen to use DealtCard instead of Animated.View+SlideInRight
+- Files changed:
+  - `mobile/src/components/casino/DealtCard.tsx` (NEW) - 339 lines
+  - `mobile/src/components/casino/__tests__/DealtCard.test.tsx` (NEW) - 28 tests
+  - `mobile/src/components/casino/index.ts` - Added DealtCard exports
+  - `mobile/src/screens/games/BlackjackScreen.tsx` - Replaced Card with DealtCard
+- **Learnings:**
+  - Arc trajectory formula: `arcOffset = -arcHeight * 4 * progress * (1 - progress)` peaks at progress=0.5
+  - Spring overshoot: Use `withSequence` for multi-phase animations (flight → overshoot → settle)
+  - Haptic sync: `runOnJS(callback)()` in spring completion callback triggers at exact landing moment
+  - Interpolate rotation with 4 keyframes [0, 0.3, 0.7, 1] for realistic mid-flight rotation feel
+  - `Dimensions.get('window').width` for dynamic dealer position calculation
+  - `onLayout` captures final card position for trajectory calculation
+  - Don't mock entire `react-native` module in tests - causes TurboModule errors
+  - Use `skipAnimation` prop for testing and for cards already on table
+
+---
+
+## 2026-01-07 - US-122: Chip pile stacking visualization
+
+- What was implemented:
+  - `ChipPile` component for visualizing stacked chips in betting areas
+  - 3D rotation animation during chip flight (rotateX tilt 30°→0°)
+  - Random rotation offsets per chip (-15° to +15°) for natural pile look
+  - Stack height growth with compression (bottom chips compress to 70%)
+  - Live cumulative bet counter with pop animation on value change
+  - Color-coded chip trails during flight animation
+  - `useChipBetting` hook now returns `placedChips: PlacedChip[]` for visualization
+  - `createPlacedChip()` helper generates chip with unique ID, rotation, timestamp
+  - Integrated into BlackjackScreen as demonstration
+  - 18 new ChipPile tests + 4 new useChipBetting tests (35 total new tests)
+- Files changed:
+  - `mobile/src/components/casino/ChipPile.tsx` (NEW) - 460 lines
+  - `mobile/src/components/casino/__tests__/ChipPile.test.tsx` (NEW) - 18 tests
+  - `mobile/src/components/casino/index.ts` - Added ChipPile exports
+  - `mobile/src/hooks/useChipBetting.ts` - Added PlacedChip tracking
+  - `mobile/src/hooks/__tests__/useChipBetting.test.tsx` - Added 4 tests for placedChips
+  - `mobile/src/screens/games/BlackjackScreen.tsx` - Integrated ChipPile component
+- **Learnings:**
+  - Stack compression formula: positionFromBottom / maxCompression gives gradient from 0.7→1.0
+  - `MAX_VISIBLE_CHIPS = 10` prevents visual clutter while showing pile growth
+  - Flight animation: `withSpring(SPRING.chipToss)` for main trajectory, `SPRING.chipSettle` for landing
+  - Trail effect: Semi-transparent View with chip color at 0.6 opacity, fades during flight
+  - Counter text `${value}` in JSX may create array children in test render - use helper to join
+  - `useEffect` with early return (`if (!isNew) return`) avoids TS error about inconsistent cleanup
+  - `COLORS.muted` doesn't exist - use `COLORS.textMuted` for muted text colors
+  - `perspective: 500` in transform array enables 3D rotation effects
 
 ---

@@ -62,6 +62,7 @@ describe('useChipBetting', () => {
     expect(getResult().bet).toBe(0);
     expect(getResult().selectedChip).toBe(25);
     expect(getResult().balance).toBe(100);
+    expect(getResult().placedChips).toEqual([]);
 
     act(() => {
       getResult().setSelectedChip(100);
@@ -134,6 +135,77 @@ describe('useChipBetting', () => {
 
     expect(getResult().bet).toBe(0);
     expect(onBetChange).toHaveBeenCalledWith(0);
+    unmount();
+  });
+
+  it('tracks placed chips for pile visualization (US-122)', () => {
+    useGameStore.setState({ balance: 500 });
+    const { getResult, unmount } = renderHook(() => useChipBetting());
+
+    // Initially empty
+    expect(getResult().placedChips).toEqual([]);
+
+    // Place first chip
+    act(() => {
+      getResult().placeChip(25);
+    });
+    expect(getResult().placedChips).toHaveLength(1);
+    expect(getResult().placedChips[0]?.value).toBe(25);
+    expect(getResult().placedChips[0]?.id).toBeDefined();
+    expect(getResult().placedChips[0]?.rotation).toBeDefined();
+    expect(getResult().placedChips[0]?.placedAt).toBeDefined();
+
+    // Place second chip
+    act(() => {
+      getResult().placeChip(100);
+    });
+    expect(getResult().placedChips).toHaveLength(2);
+    expect(getResult().placedChips[1]?.value).toBe(100);
+
+    // Each chip has unique id
+    expect(getResult().placedChips[0]?.id).not.toBe(getResult().placedChips[1]?.id);
+
+    // Clear bet also clears placedChips
+    act(() => {
+      getResult().clearBet();
+    });
+    expect(getResult().placedChips).toEqual([]);
+
+    unmount();
+  });
+
+  it('placedChips rotation is between -15 and 15 degrees', () => {
+    useGameStore.setState({ balance: 1000 });
+    const { getResult, unmount } = renderHook(() => useChipBetting());
+
+    // Place multiple chips
+    act(() => {
+      for (let i = 0; i < 10; i++) {
+        getResult().placeChip(25);
+      }
+    });
+
+    // All rotations should be within bounds
+    getResult().placedChips.forEach((chip) => {
+      expect(chip.rotation).toBeGreaterThanOrEqual(-15);
+      expect(chip.rotation).toBeLessThanOrEqual(15);
+    });
+
+    unmount();
+  });
+
+  it('rejected chip does not add to placedChips', () => {
+    useGameStore.setState({ balance: 10 });
+    const { getResult, unmount } = renderHook(() => useChipBetting());
+
+    // Try to place chip that exceeds balance
+    act(() => {
+      getResult().placeChip(25); // Should fail
+    });
+
+    expect(getResult().bet).toBe(0);
+    expect(getResult().placedChips).toEqual([]);
+
     unmount();
   });
 
