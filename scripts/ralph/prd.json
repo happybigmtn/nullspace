@@ -366,8 +366,8 @@
 				"Add scale pop at flip midpoint for weight perception"
 			],
 			"priority": 32,
-			"passes": false,
-			"notes": "UX-MEDIUM: Card.tsx has basic flat design. Premium casinos use textured cards with depth. Current back is solid blue with simple border."
+			"passes": true,
+			"notes": "COMPLETE: Enhanced Card.tsx with linen texture (horizontal/vertical line pattern), multi-layered shadows (contact + diffuse), gold/silver metallic rim based on suit color, damask-inspired diamond lattice back pattern with corner flourishes, and scale pop animation (1→1.05→1) at flip midpoint."
 		},
 		{
 			"id": "US-110",
@@ -380,8 +380,8 @@
 				"Include subtle rotation randomness on stack"
 			],
 			"priority": 33,
-			"passes": false,
-			"notes": "UX-MEDIUM: ChipSelector.tsx chips are flat circles with solid colors. Real casino chips have edge grooves and surface texture. Current design lacks tactile premium feel."
+			"passes": true,
+			"notes": "COMPLETE: Added ChipEdgeRings (3 concentric rings), ChipDomeEffect (highlight/shadow), MetallicSheen animation for gold chip, micro-bounce via withSequence+chipSettle spring, and deterministic rotation randomness (-8° to +8°)."
 		},
 		{
 			"id": "US-111",

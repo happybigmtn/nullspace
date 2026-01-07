@@ -32,6 +32,8 @@ Target: Testnet Production
 - Typography: `FONT_DISPLAY` (Outfit) for headlines, `FONT_BODY` (Plus Jakarta Sans) for body text (US-108)
 - Tabular figures: Use `fontVariant: ['tabular-nums']` for balance/bet displays to prevent number jumping
 - Font loading: `useFonts()` in App.tsx holds splash screen until fonts ready
+- Premium cards: Multi-layer shadows (`shadowContact` + `shadowDiffuse`), gold/silver rim by suit, scale pop animation
+- Textures: Linen pattern via semi-transparent View lines (avoid SVG for performance)
 - 12 race conditions identified (see US-005 through US-009, US-021-022)
 - Tests: 252/252 unit tests, run with `npm test`
 
@@ -2402,3 +2404,55 @@ Target: Testnet Production
   - JetBrains Mono skipped (would add ~200KB) - platform monospace fonts used instead
 
 ---
+
+---
+
+## 2026-01-07 - US-109: Premium card design with texture and depth
+
+- What was implemented:
+  - Added `LinenTexture` component with horizontal/vertical semi-transparent lines (2% opacity)
+  - Implemented multi-layered shadow system:
+    - `shadowDiffuse`: soft spread shadow (8px offset, 15% opacity, 16px radius) for ambient occlusion
+    - `shadowContact`: tight dark shadow (2px offset, 25% opacity, 4px radius) for surface connection
+  - Added metallic rim based on suit: gold (#D4AF37) for hearts/diamonds, silver (#C0C0C0) for clubs/spades
+  - Designed premium card back with damask-inspired pattern:
+    - Deep casino blue gradient (#0F1E4A → #1E3A7B)
+    - Gold thread borders (#B8860B) with inner/outer frames
+    - 3x5 diamond lattice grid with 45° rotated diamonds
+    - Corner flourishes using L-shaped border segments
+  - Added scale pop animation using `withSequence`:
+    - Scale up to 1.05 over 150ms with ease-out
+    - Scale back to 1 over 150ms with ease-in
+    - Synchronized with flip animation for weight perception
+- Files changed:
+  - `mobile/src/components/casino/Card.tsx` - Added CARD_PREMIUM colors, LinenTexture, premium CardBack, shadows, scale animation
+- **Learnings:**
+  - Pattern: Use `Platform.select()` for shadow styling - iOS uses shadowColor/Offset/Opacity/Radius, Android uses elevation
+  - Multi-layer shadows: Combine tight "contact shadow" for grounding + spread "diffuse shadow" for ambient depth
+  - Linen texture: Semi-transparent (2%) lines at regular intervals create woven fabric appearance without SVG
+  - Diamond pattern: `transform: [{ rotate: '45deg' }]` on square Views creates diamond shapes efficiently
+  - Scale animation timing: 150ms each direction (300ms total) syncs well with spring-based flip animation
+  - Z-index: Add `zIndex: 1` to text content to ensure visibility above texture overlays
+
+---
+
+## 2026-01-07 - US-110: Luxury chip design with edge detail and metallic sheen
+
+- What was implemented:
+  - Added ChipEdgeRings component with 3 concentric rings (outer/middle/inner) for grooved edge effect
+  - Created ChipDomeEffect component with top-left highlight and bottom-right shadow for dome simulation
+  - Implemented MetallicSheen component with withRepeat animation for gold ($1000) chip diagonal sweep
+  - Added micro-bounce settling via withSequence(scale 1.05 → 1) using chipSettle spring
+  - Added subtle rotation randomness (-8° to +8°) using deterministic seeding (value * 17 + 3)
+  - Added chipSettle spring config to design-tokens: { mass: 0.4, stiffness: 400, damping: 20 }
+  - Extracted comprehensive CHIP_COLORS palette with base/edge/edgeDark/highlight/text/border per denomination
+- Files changed:
+  - `mobile/src/components/casino/ChipSelector.tsx` - Complete premium redesign (199→490 lines)
+  - `packages/design-tokens/src/animations.ts` - Added chipSettle spring
+- **Learnings:**
+  - Radial gradients are expensive in RN; simulate with highlight/shadow View overlays instead
+  - Use pointerEvents="none" on decoration layers to avoid intercepting gestures
+  - Reanimated's SharedValue type import: `import { SharedValue } from 'react-native-reanimated'`
+  - Deterministic randomness for stack rotation uses chip value as seed: `(value * 17 + 3) % 17 - 8`
+  - withRepeat(-1, false) creates infinite non-alternating animation loops
+  - chipSettle uses high stiffness (400) with medium damping (20) for quick but visible bounce

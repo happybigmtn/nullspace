@@ -20,6 +20,7 @@ export const SPRING = {
     cardDeal: { mass: 0.7, stiffness: 280, damping: 22 },
     chipStack: { mass: 0.8, stiffness: 300, damping: 25 },
     chipToss: { mass: 0.6, stiffness: 250, damping: 18 },
+    chipSettle: { mass: 0.4, stiffness: 400, damping: 20 }, // Micro-bounce when chip lands
     wheelSpin: { mass: 2, stiffness: 50, damping: 10 },
     diceTumble: { mass: 1.2, stiffness: 150, damping: 15 },
     // Feedback animations

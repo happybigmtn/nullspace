@@ -50,6 +50,11 @@ export declare const SPRING: {
         readonly stiffness: 250;
         readonly damping: 18;
     };
+    readonly chipSettle: {
+        readonly mass: 0.4;
+        readonly stiffness: 400;
+        readonly damping: 20;
+    };
     readonly wheelSpin: {
         readonly mass: 2;
         readonly stiffness: 50;
