@@ -3373,3 +3373,32 @@ Target: Testnet Production
   - SplitH number param is LEFT cell of pair, so 35 covers 35-36 (valid)
   - Validation was already correct; acceptance criteria #2 was incorrect
 
+---
+
+## 2026-01-07 - US-142: Implement secrets management solution
+
+- What was implemented:
+  - Selected SOPS + Age encryption over HashiCorp Vault, AWS SM, and Doppler
+  - Created `.sops.yaml` with per-environment encryption rules
+  - Created `secrets/` directory with `.gitignore`, template, and per-env READMEs
+  - Created `scripts/setup-secrets.sh` for key generation and encryption
+  - Created `scripts/decrypt-secrets.sh` for deployment-time decryption
+  - Created `.github/workflows/deploy-staging.yml` deployment workflow example
+  - Documented in `docs/updates.md` with quick start and migration path
+- Files changed:
+  - `.sops.yaml` - SOPS configuration
+  - `secrets/.gitignore` - Ignore unencrypted secrets
+  - `secrets/secrets.template.yaml` - Template with all required secrets
+  - `secrets/{production,staging,development}/README.md` - Per-environment guides
+  - `scripts/setup-secrets.sh` - Key generation and encryption helper
+  - `scripts/decrypt-secrets.sh` - Deployment decryption script
+  - `.github/workflows/deploy-staging.yml` - Example deployment workflow
+  - `docs/updates.md` - Full documentation
+- **Learnings:**
+  - SOPS + Age chosen: git-native, no external deps, free, CI/CD friendly
+  - Age keys per environment enable access control (dev vs prod)
+  - `secrets.template.yaml` organizes secrets by service (auth, gateway, stripe, etc.)
+  - yq utility enables converting YAML to per-service .env files
+  - Production keys must be stored in secure storage (password manager, HSM)
+  - `.env.example` files remain as documentation; actual secrets go in encrypted files
+
