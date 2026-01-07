@@ -17,9 +17,19 @@ pub mod blackjack;
 pub(crate) mod cards;
 pub mod casino_war;
 pub mod craps;
+#[cfg(test)]
+pub(crate) mod event_encoding;
 pub mod hilo;
 #[cfg(test)]
 mod integration_tests;
+#[cfg(test)]
+mod migration_tests;
+#[cfg(test)]
+mod bridge_abi_tests;
+#[cfg(test)]
+mod protocol_round_trip_tests;
+#[cfg(test)]
+mod batch_boundary_tests;
 pub(crate) mod logging;
 pub mod limits;
 pub(crate) mod payload;
@@ -595,7 +605,7 @@ mod tests {
         // Test f32 values are in range [0.0, 1.0)
         for _ in 0..10_000 {
             let value = rng.next_f32();
-            assert!(value >= 0.0 && value < 1.0, "f32 out of range: {}", value);
+            assert!((0.0..1.0).contains(&value), "f32 out of range: {}", value);
         }
 
         // Test that we get more than 256 distinct values (proving > 8-bit precision)

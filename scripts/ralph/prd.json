@@ -192,8 +192,8 @@
 				"Verify truncated payloads return ERROR_INVALID_PAYLOAD, not crash"
 			],
 			"priority": 15,
-			"passes": false,
-			"notes": "HIGH GAP: Different games expect different payload formats (Craps: 10 bytes/bet, Baccarat: 9 bytes/bet). No cross-format validation."
+			"passes": true,
+			"notes": "IMPLEMENTED: Created batch_boundary_tests.rs with 18 tests covering: (1) Truncated payloads for Craps/Baccarat/Roulette/SicBo, (2) Cross-format validation (Baccarat 9-byte to Craps 10-byte handler), (3) Big-endian amount verification, (4) Edge cases (empty, zero-bets, excessive count, invalid bet type, zero amount), (5) Fuzz-style test for panic safety with malformed payloads. All games properly reject truncated/malformed payloads with InvalidPayload error. Run: cargo test -p nullspace-execution batch_boundary"
 		},
 		{
 			"id": "US-092",
@@ -364,6 +364,117 @@
 			"priority": 28,
 			"passes": false,
 			"notes": "MEMORY-LEAK (code-verified): manager.ts:150-158 adds session to maps before registration, but doesn't remove on failure. Orphaned sessions accumulate until gateway restart."
+		},
+		{
+			"id": "US-106",
+			"title": "Replace emojis with monochrome icon set in lobby",
+			"acceptanceCriteria": [
+				"Create custom SVG icon set for all 10 games (consistent stroke weight)",
+				"Replace emoji strings in GAMES array with icon components",
+				"Icons work in both light and dark color schemes",
+				"Remove chatbot aesthetic, achieve premium app feel"
+			],
+			"priority": 29,
+			"passes": false,
+			"notes": "UX-CRITICAL: LobbyScreen.tsx:36-107 uses emojis (🎲🃏🎡👑⚔️🎰🀄🎴🤠) which create cheap chatbot feel. Premium casino apps use refined monochrome icons."
+		},
+		{
+			"id": "US-107",
+			"title": "Implement dark mode with OLED-optimized palette",
+			"acceptanceCriteria": [
+				"Add useColorScheme hook integration in theme.ts",
+				"Create DARK_COLORS palette with pure black (#000) background",
+				"Add ambient glow effects on primary actions in dark mode",
+				"Test all screens render correctly in both modes",
+				"Persist user preference in storage"
+			],
+			"priority": 30,
+			"passes": false,
+			"notes": "UX-HIGH: No dark mode implementation found (grep colorScheme/darkMode returns nothing). Modern users expect dark mode, especially for casino/gaming apps used at night."
+		},
+		{
+			"id": "US-108",
+			"title": "Upgrade typography with premium display font",
+			"acceptanceCriteria": [
+				"Add expo-google-fonts or custom font loading (Geist, Satoshi, or similar)",
+				"Apply display font to headings and balance displays",
+				"Use tabular figures for numeric displays (balance, bet amounts)",
+				"Refine letter-spacing on uppercase labels (+2% tracking)",
+				"Ensure fonts load before splash screen dismisses"
+			],
+			"priority": 31,
+			"passes": false,
+			"notes": "UX-HIGH: theme.ts:20-30 uses only system fonts. Premium apps use distinctive typography. No custom font loading detected in codebase."
+		},
+		{
+			"id": "US-109",
+			"title": "Premium card design with texture and depth",
+			"acceptanceCriteria": [
+				"Add subtle linen texture to card face background",
+				"Implement multi-layered shadow (contact + diffuse)",
+				"Add 1px gold/silver rim on card edges",
+				"Design premium card back pattern (damask or geometric)",
+				"Add scale pop at flip midpoint for weight perception"
+			],
+			"priority": 32,
+			"passes": false,
+			"notes": "UX-MEDIUM: Card.tsx has basic flat design. Premium casinos use textured cards with depth. Current back is solid blue with simple border."
+		},
+		{
+			"id": "US-110",
+			"title": "Luxury chip design with edge detail and metallic sheen",
+			"acceptanceCriteria": [
+				"Add concentric ring detail suggesting grooved edges",
+				"Apply radial gradient for dome effect on chip surface",
+				"Implement metallic sheen animation on gold ($1000) chip",
+				"Add micro-bounce settling animation when chip lands",
+				"Include subtle rotation randomness on stack"
+			],
+			"priority": 33,
+			"passes": false,
+			"notes": "UX-MEDIUM: ChipSelector.tsx chips are flat circles with solid colors. Real casino chips have edge grooves and surface texture. Current design lacks tactile premium feel."
+		},
+		{
+			"id": "US-111",
+			"title": "Win celebration with particle effects and balance animation",
+			"acceptanceCriteria": [
+				"Create gold particle burst effect on win",
+				"Animate balance digits with slot-machine roller effect",
+				"Add shimmer wave across balance on change",
+				"Scale celebration intensity with win amount",
+				"Include haptic jackpot pattern for big wins"
+			],
+			"priority": 34,
+			"passes": false,
+			"notes": "UX-MEDIUM: No particle effects or balance animations exist. Win feedback is limited to color change and haptic. Premium casino feel requires celebratory visual reward."
+		},
+		{
+			"id": "US-112",
+			"title": "Glass morphism overlays and modals",
+			"acceptanceCriteria": [
+				"Install expo-blur for BlurView component",
+				"Apply 60% opacity + 20px blur to modal backgrounds",
+				"Add frosted treatment to status bars and overlays",
+				"Implement subtle inner glow on elevated surfaces",
+				"Test performance on low-end devices"
+			],
+			"priority": 35,
+			"passes": false,
+			"notes": "UX-LOWER: No blur/glassmorphism effects found (grep BlurView/LinearGradient returns nothing). Modern premium apps use frosted glass aesthetic for depth hierarchy."
+		},
+		{
+			"id": "US-113",
+			"title": "Refined micro-interactions for buttons and selections",
+			"acceptanceCriteria": [
+				"Add depth simulation on buttons (y-translate on press)",
+				"Implement animated ring expansion on selection (not instant)",
+				"Replace loading dots with skeleton shimmer",
+				"Add pulse ring animation to connection status indicator",
+				"Include subtle float animation on idle interactive elements"
+			],
+			"priority": 36,
+			"passes": false,
+			"notes": "UX-LOWER: PrimaryButton.tsx uses basic scale (0.96) on press. Premium apps simulate physical depth with y-translation and shadow changes. Loading is simple dots per SplashScreen.tsx."
 		}
 	]
 }

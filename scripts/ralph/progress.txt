@@ -2015,3 +2015,31 @@ Target: Testnet Production
   - Pattern: Test mocks need to match real module exports (added `mockUseBetSubmission` to test utils)
 
 ---
+
+## 2026-01-06 - US-091: Add atomic batch payload boundary test
+
+- What was implemented:
+  - Created `execution/src/casino/batch_boundary_tests.rs` with 18 comprehensive tests
+  - Tests cover all 4 acceptance criteria:
+    1. **Truncated payloads**: Tests for Craps (10 bytes/bet), Baccarat (9 bytes/bet), Roulette, SicBo
+    2. **Cross-format validation**: Baccarat format → Craps handler, Craps format → Baccarat handler
+    3. **Endianness consistency**: Big-endian (network order) verification
+    4. **Crash prevention**: Fuzz-style test with 10 malformed payloads, none panic
+- Files changed:
+  - `execution/src/casino/batch_boundary_tests.rs` - New test file (460 lines)
+  - `execution/src/casino/mod.rs` - Added `#[cfg(test)] mod batch_boundary_tests;`
+- **Learnings:**
+  - **Payload Formats Differ Per Game:**
+    - Craps/Roulette/SicBo: 10 bytes/bet = [betType:u8, target:u8, amount:u64 BE]
+    - Baccarat: 9 bytes/bet = [betType:u8, amount:u64 BE] (no target field)
+  - **Current Validation is Robust:**
+    - All games use `payload.len() < expected_len` check
+    - `try_into()` for slice-to-array conversion prevents panics
+    - Zero-bet, invalid-bet-type, zero-amount all properly rejected
+  - **Hex String Gotcha:**
+    - `hex_to_bytes()` requires even-length strings (2 chars = 1 byte)
+    - Odd-length hex strings cause panic before reaching game logic
+  - Pattern: Use `matches!(result, Err(GameError::InvalidPayload))` for error assertions
+  - Pattern: Create helper functions for test setup (`create_test_session`, `create_test_rng`)
+
+---
