@@ -1,0 +1,10 @@
+# https://www.robotstxt.org/robotstxt.html
+User-agent: *
+Allow: /
+
+# Main sitemap
+Sitemap: https://nullspace.casino/sitemap.xml
+
+# Disallow API and internal routes
+Disallow: /api/
+Disallow: /_*

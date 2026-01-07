@@ -35,6 +35,51 @@
   <meta name="twitter:creator" content="@commonwarexyz">
   <meta name="twitter:creator:id" content="@commonwarexyz">
 
+  <!-- JSON-LD Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://nullspace.casino/#organization",
+        "name": "null/space",
+        "url": "https://nullspace.casino",
+        "logo": "https://nullspace.casino/favicon.ico",
+        "sameAs": [
+          "https://twitter.com/commonwarexyz"
+        ]
+      },
+      {
+        "@type": "WebApplication",
+        "@id": "https://nullspace.casino/#app",
+        "name": "null/space Casino",
+        "url": "https://nullspace.casino",
+        "applicationCategory": "GameApplication",
+        "operatingSystem": "Web Browser",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "description": "Onchain casino secured by VRF and Timelock Encryption. Play blackjack, roulette, craps, and more with cryptographic fairness.",
+        "publisher": {
+          "@id": "https://nullspace.casino/#organization"
+        }
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://nullspace.casino/#website",
+        "url": "https://nullspace.casino",
+        "name": "null/space",
+        "publisher": {
+          "@id": "https://nullspace.casino/#organization"
+        }
+      }
+    ]
+  }
+  </script>
+
   <!-- Preload critical resources with high priority -->
   <link rel="modulepreload" href="/src/api/client.js" fetchpriority="high" />
   <link rel="modulepreload" href="/src/api/wasm.js" fetchpriority="high" />

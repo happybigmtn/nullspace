@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <!-- Main casino app -->
+  <url>
+    <loc>https://nullspace.casino/</loc>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+
+  <!-- Economy -->
+  <url>
+    <loc>https://nullspace.casino/economy</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- Swap/Trade -->
+  <url>
+    <loc>https://nullspace.casino/swap</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+  <!-- Staking -->
+  <url>
+    <loc>https://nullspace.casino/stake</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+  <!-- Liquidity -->
+  <url>
+    <loc>https://nullspace.casino/liquidity</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+
+  <!-- Bridge -->
+  <url>
+    <loc>https://nullspace.casino/bridge</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+
+  <!-- Security -->
+  <url>
+    <loc>https://nullspace.casino/security</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+
+  <!-- Explorer -->
+  <url>
+    <loc>https://nullspace.casino/explorer</loc>
+    <changefreq>hourly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+  <url>
+    <loc>https://nullspace.casino/explorer/tokens</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.5</priority>
+  </url>
+</urlset>
