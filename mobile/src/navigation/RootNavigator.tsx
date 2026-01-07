@@ -1,12 +1,21 @@
 /**
- * Root navigation structure
+ * Root navigation structure with parallax depth transitions
+ *
+ * Uses JS-based @react-navigation/stack instead of native-stack
+ * to enable custom CardStyleInterpolators for premium parallax effects.
+ *
+ * Transition behavior:
+ * - Splash → Auth: Fade with depth (subtle, no gesture)
+ * - Auth → Lobby: Fade with depth (subtle, no gesture)
+ * - Lobby → Game: Horizontal parallax (outgoing scales down, incoming slides + scales up)
+ * - Lobby → Vault: Horizontal parallax
  */
 import {
   NavigationContainer,
   LinkingOptions,
   getStateFromPath,
 } from '@react-navigation/native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { createStackNavigator } from '@react-navigation/stack';
 import * as Linking from 'expo-linking';
 
 import { SplashScreen } from '../screens/SplashScreen';
@@ -17,6 +26,7 @@ import { GameScreen } from '../screens/GameScreen';
 import { RootStackParamList } from './types';
 import { COLORS } from '../constants/theme';
 import { useAuth } from '../context';
+import { ParallaxTransitionPresets } from './parallaxTransitions';
 
 const linkingConfig = {
   screens: {
@@ -26,7 +36,7 @@ const linkingConfig = {
   },
 };
 
-const Stack = createNativeStackNavigator<RootStackParamList>();
+const Stack = createStackNavigator<RootStackParamList>();
 
 export function RootNavigator() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -69,22 +79,35 @@ export function RootNavigator() {
         initialRouteName={isAuthenticated ? 'Lobby' : 'Splash'}
         screenOptions={{
           headerShown: false,
-          animation: 'fade',
-          contentStyle: {
+          cardStyle: {
             backgroundColor: COLORS.background,
           },
+          // Default to parallax horizontal slide
+          ...ParallaxTransitionPresets.slideWithParallax,
         }}
       >
-        <Stack.Screen name="Splash" component={SplashScreen} />
-        <Stack.Screen name="Auth" component={AuthScreen} />
+        {/* Auth flow screens use subtle fade with depth */}
+        <Stack.Screen
+          name="Splash"
+          component={SplashScreen}
+          options={ParallaxTransitionPresets.fadeWithDepth}
+        />
+        <Stack.Screen
+          name="Auth"
+          component={AuthScreen}
+          options={ParallaxTransitionPresets.fadeWithDepth}
+        />
+        {/* Lobby is the hub - uses default parallax for push transitions */}
         <Stack.Screen name="Lobby" component={LobbyScreen} />
+        {/* Settings/utility screens use horizontal parallax */}
         <Stack.Screen name="Vault" component={VaultScreen} />
+        {/* Game screen uses parallax but disables gesture during gameplay */}
         <Stack.Screen
           name="Game"
           component={GameScreen}
           options={{
+            ...ParallaxTransitionPresets.slideWithParallax,
             gestureEnabled: false, // Prevent swipe-back during game
-            animation: 'slide_from_right',
           }}
         />
       </Stack.Navigator>

@@ -13,8 +13,8 @@ jest.mock('@react-navigation/native', () => ({
   getStateFromPath: (...args: unknown[]) => mockGetStateFromPath(...args),
 }));
 
-jest.mock('@react-navigation/native-stack', () => ({
-  createNativeStackNavigator: () => ({
+jest.mock('@react-navigation/stack', () => ({
+  createStackNavigator: () => ({
     Navigator: ({ children }: { children: React.ReactNode }) => <>{children}</>,
     Screen: () => null,
   }),
