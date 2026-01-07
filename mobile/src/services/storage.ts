@@ -268,6 +268,10 @@ export const STORAGE_KEYS = {
   REWARDS_LAST_CLAIM: 'rewards.last_claim',
   REWARDS_STREAK: 'rewards.streak',
   REWARDS_CLUB_JOINED: 'rewards.club_joined',
+
+  // Onboarding
+  ONBOARDING_COMPLETED: 'onboarding.completed',
+  FIRST_GAME_PLAYED: 'onboarding.first_game_played',
 } as const;
 
 /**
@@ -381,4 +385,32 @@ export function resetAllTutorials(): void {
   Object.values(STORAGE_KEYS)
     .filter((key) => key.startsWith('tutorial.'))
     .forEach((key) => deleteKey(key));
+}
+
+/**
+ * Check if onboarding has been completed
+ */
+export function isOnboardingCompleted(): boolean {
+  return getBoolean(STORAGE_KEYS.ONBOARDING_COMPLETED, false);
+}
+
+/**
+ * Mark onboarding as completed
+ */
+export function markOnboardingCompleted(): void {
+  setBoolean(STORAGE_KEYS.ONBOARDING_COMPLETED, true);
+}
+
+/**
+ * Check if user has played their first game
+ */
+export function hasPlayedFirstGame(): boolean {
+  return getBoolean(STORAGE_KEYS.FIRST_GAME_PLAYED, false);
+}
+
+/**
+ * Mark that user has played their first game
+ */
+export function markFirstGamePlayed(): void {
+  setBoolean(STORAGE_KEYS.FIRST_GAME_PLAYED, true);
 }

@@ -20,6 +20,7 @@ import * as Linking from 'expo-linking';
 
 import { SplashScreen } from '../screens/SplashScreen';
 import { AuthScreen } from '../screens/AuthScreen';
+import { OnboardingScreen } from '../screens/OnboardingScreen';
 import { LobbyScreen } from '../screens/LobbyScreen';
 import { VaultScreen } from '../screens/VaultScreen';
 import { GameScreen } from '../screens/GameScreen';
@@ -95,6 +96,12 @@ export function RootNavigator() {
         <Stack.Screen
           name="Auth"
           component={AuthScreen}
+          options={ParallaxTransitionPresets.fadeWithDepth}
+        />
+        {/* Onboarding for first-time users - uses fade with depth like auth flow */}
+        <Stack.Screen
+          name="Onboarding"
+          component={OnboardingScreen}
           options={ParallaxTransitionPresets.fadeWithDepth}
         />
         {/* Lobby is the hub - uses default parallax for push transitions */}

@@ -9,6 +9,7 @@ import { GAME_DISPLAY_NAMES } from '@nullspace/constants/games';
 export type RootStackParamList = {
   Splash: undefined;
   Auth: undefined;
+  Onboarding: undefined;
   Lobby: undefined;
   Vault: undefined;
   Game: {
@@ -19,6 +20,7 @@ export type RootStackParamList = {
 // Screen props types
 export type SplashScreenProps = NativeStackScreenProps<RootStackParamList, 'Splash'>;
 export type AuthScreenProps = NativeStackScreenProps<RootStackParamList, 'Auth'>;
+export type OnboardingScreenProps = NativeStackScreenProps<RootStackParamList, 'Onboarding'>;
 export type LobbyScreenProps = NativeStackScreenProps<RootStackParamList, 'Lobby'>;
 export type VaultScreenProps = NativeStackScreenProps<RootStackParamList, 'Vault'>;
 export type GameScreenProps = NativeStackScreenProps<RootStackParamList, 'Game'>;

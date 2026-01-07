@@ -9,6 +9,7 @@ import { PrimaryButton } from '../components/ui';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS } from '../constants/theme';
 import { authenticateWithBiometrics, getBiometricType } from '../services/auth';
 import { haptics } from '../services/haptics';
+import { isOnboardingCompleted } from '../services';
 import { useAuth } from '../context';
 import type { AuthScreenProps } from '../navigation/types';
 
@@ -28,7 +29,9 @@ export function AuthScreen({ navigation }: AuthScreenProps) {
       if (success) {
         haptics.win();
         authenticate(); // Mark session as authenticated
-        navigation.replace('Lobby');
+        // First-time users see onboarding, returning users go to lobby
+        const nextScreen = isOnboardingCompleted() ? 'Lobby' : 'Onboarding';
+        navigation.replace(nextScreen);
       } else {
         haptics.loss();
         setError('Authentication failed. Please try again.');
@@ -45,7 +48,9 @@ export function AuthScreen({ navigation }: AuthScreenProps) {
     // Allow skipping in development/demo mode
     haptics.buttonPress();
     authenticate(); // Mark session as authenticated even in demo
-    navigation.replace('Lobby');
+    // First-time users see onboarding, returning users go to lobby
+    const nextScreen = isOnboardingCompleted() ? 'Lobby' : 'Onboarding';
+    navigation.replace(nextScreen);
   }, [navigation, authenticate]);
 
   const getBiometricLabel = () => {

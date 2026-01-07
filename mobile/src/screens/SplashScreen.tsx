@@ -12,7 +12,7 @@ import { COLORS, SPACING, TYPOGRAPHY } from '../constants/theme';
 import { SkeletonShimmer } from '../components/ui/MicroInteractions';
 import { authenticateWithBiometrics, initializeAuth } from '../services/auth';
 import { getPublicKey } from '../services/crypto';
-import { initializeStorage } from '../services';
+import { initializeStorage, isOnboardingCompleted } from '../services';
 import { useAuth } from '../context';
 import type { SplashScreenProps } from '../navigation/types';
 
@@ -34,7 +34,9 @@ export function SplashScreen({ navigation }: SplashScreenProps) {
         const authenticated = await authenticateWithBiometrics();
         if (authenticated) {
           authenticate(); // Mark session as authenticated
-          navigation.replace('Lobby');
+          // First-time users see onboarding, returning users go to lobby
+          const nextScreen = isOnboardingCompleted() ? 'Lobby' : 'Onboarding';
+          navigation.replace(nextScreen);
         } else {
           // Stay on splash, user can retry
           navigation.replace('Auth');

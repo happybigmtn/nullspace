@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS, GAME_COLORS } from '../constants/theme';
 import { haptics } from '../services/haptics';
-import { initializeNotifications } from '../services';
+import { initializeNotifications, hasPlayedFirstGame, markFirstGamePlayed } from '../services';
 import { useGameStore } from '../stores/gameStore';
 import { useEntitlements, useGatewaySession } from '../hooks';
 import { stripTrailingSlash } from '../utils/url';
@@ -160,7 +160,13 @@ export function LobbyScreen({ navigation }: LobbyScreenProps) {
   }, [opsBase, publicKey]);
 
   const handleGameSelect = useCallback((gameId: GameId) => {
-    haptics.selectionChange();
+    // First game ever - celebratory haptic feedback
+    if (!hasPlayedFirstGame()) {
+      markFirstGamePlayed();
+      haptics.jackpot();
+    } else {
+      haptics.selectionChange();
+    }
     navigation.navigate('Game', { gameId });
   }, [navigation]);
 

@@ -28,20 +28,28 @@ jest.mock('../../services/haptics', () => ({
   },
 }));
 
+const mockIsOnboardingCompleted = jest.fn();
+jest.mock('../../services', () => ({
+  isOnboardingCompleted: () => mockIsOnboardingCompleted(),
+}));
+
 describe('AuthScreen', () => {
   const renderScreen = (navigation: { replace: jest.Mock }) => {
-    const route = { key: 'Auth', name: 'Auth' } as const;
-    let tree: ReturnType<typeof create>;
+    const route = { key: 'Auth', name: 'Auth' as const };
+    let tree!: ReturnType<typeof create>;
     act(() => {
-      tree = create(<AuthScreen navigation={navigation} route={route} />);
+      tree = create(<AuthScreen navigation={navigation as any} route={route as any} />);
     });
-    return tree!;
+    return tree;
   };
 
   beforeEach(() => {
     mockAuthenticate.mockReset();
     mockAuthenticateWithBiometrics.mockReset();
     mockGetBiometricType.mockReset();
+    mockIsOnboardingCompleted.mockReset();
+    // Default: onboarding is completed (returning user)
+    mockIsOnboardingCompleted.mockReturnValue(true);
   });
 
   it('renders biometric label based on type', () => {
@@ -98,5 +106,34 @@ describe('AuthScreen', () => {
     expect(haptics.buttonPress).toHaveBeenCalled();
     expect(mockAuthenticate).toHaveBeenCalled();
     expect(navigation.replace).toHaveBeenCalledWith('Lobby');
+  });
+
+  it('navigates to onboarding for first-time users', async () => {
+    mockGetBiometricType.mockReturnValue('FACE_ID');
+    mockAuthenticateWithBiometrics.mockResolvedValue(true);
+    mockIsOnboardingCompleted.mockReturnValue(false);
+    const navigation = { replace: jest.fn() } as const;
+    const tree = renderScreen(navigation);
+
+    const button = tree.root.findAllByType(PrimaryButton)[0];
+    await act(async () => {
+      await button.props.onPress();
+    });
+
+    expect(navigation.replace).toHaveBeenCalledWith('Onboarding');
+  });
+
+  it('navigates to lobby when skipping for first-time users (shows onboarding)', () => {
+    mockGetBiometricType.mockReturnValue('FACE_ID');
+    mockIsOnboardingCompleted.mockReturnValue(false);
+    const navigation = { replace: jest.fn() } as const;
+    const tree = renderScreen(navigation);
+
+    const skipButton = tree.root.findAllByType(PrimaryButton)[1];
+    act(() => {
+      skipButton.props.onPress();
+    });
+
+    expect(navigation.replace).toHaveBeenCalledWith('Onboarding');
   });
 });
