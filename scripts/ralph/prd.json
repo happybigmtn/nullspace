@@ -816,8 +816,8 @@
 				"Test XSS/injection characters sanitized"
 			],
 			"priority": 63,
-			"passes": false,
-			"notes": "HIGH GAP: Player name validation not tested. Could allow invalid or malicious names."
+			"passes": true,
+			"notes": "FIXED: Created player-name-validation.ts with validatePlayerName(), sanitizePlayerName(), getValidPlayerName(). Integrated into SessionManager.createSession(). 71 unit tests verify: (1) length limits 2-32 chars, (2) alphanumeric+underscore+hyphen+space only, (3) empty/whitespace rejection, (4) XSS/injection prevention (script tags, quotes, control chars)."
 		},
 		{
 			"id": "US-073",
@@ -829,8 +829,8 @@
 				"Test user notified of degraded security mode"
 			],
 			"priority": 64,
-			"passes": false,
-			"notes": "HIGH GAP: WebCryptoStore assumes browser crypto APIs available. No fallback tested."
+			"passes": true,
+			"notes": "FIXED: Added 17 tests documenting WebCryptoStore failure handling. Note: Uses localStorage not IndexedDB. Tests cover: (1) crypto.subtle unavailability detection, (2) localStorage unavailability/quota exceeded, (3) fallback behavior (getItemAsync returns null, setItemAsync throws), (4) user notification via console.warn in dev, descriptive error messages. Design: No unencrypted fallback - security-first approach."
 		},
 		{
 			"id": "US-074",
