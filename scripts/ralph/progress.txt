@@ -23,6 +23,10 @@ Target: Testnet Production
 - Crypto: Ed25519 signing, PBKDF2 key derivation, AES-GCM storage
 - WebSocket: Exponential backoff 1s → 30s, max 10 attempts
 - WebSocket idempotency: Messages get unique IDs, sentMessageIdsRef deduplicates on reconnect
+- WebSocket validation: `GameMessageSchema.safeParse()` validates all server messages (US-103)
+- Type guards: `isGameResultMessage()`, `isErrorMessage()`, etc. in `@nullspace/protocol/mobile`
+- Safe parsing: `parseServerMessage()` returns discriminated union with error details
+- Shared styles: `theme.ts` exports GAME_LAYOUT_STYLES, MESSAGE_STYLES, BET_STYLES, ACTION_STYLES, DRAWER_STYLES, HAND_STYLES, INTERACTIVE_STYLES, CHIP_AREA_STYLES
 - 12 race conditions identified (see US-005 through US-009, US-021-022)
 - Tests: 222/222 unit tests, run with `npm test`
 
@@ -2201,5 +2205,74 @@ Target: Testnet Production
   - Use `useRef` + `useEffect` pattern to keep callback ref fresh without dependencies
   - `isCritical` flag allows callers to prioritize user notifications
   - Test each callback invocation separately (queue_full vs expired, critical vs non-critical)
+
+---
+
+## 2026-01-07 - US-101: Consolidate duplicated stylesheet definitions
+
+- What was implemented:
+  - Added 8 shared style primitive exports to `mobile/src/constants/theme.ts`:
+    - `GAME_LAYOUT_STYLES`: gameArea, gameAreaCentered, handContainer, cardWrapper, cards, cardsWithGap
+    - `MESSAGE_STYLES`: message, messageWin, messageLoss, messagePush, messageError, messageBlackjack, messageTie
+    - `BET_STYLES`: betContainer, betLabel, betAmount, winAmount
+    - `ACTION_STYLES`: actions, actionsCentered
+    - `DRAWER_STYLES`: drawerOverlay, drawer, drawerHeader, drawerHandle, drawerHandleText, sectionTitle, betRow, advancedBet, advancedBetText
+    - `HAND_STYLES`: handLabel, handTotal, handHeader
+    - `INTERACTIVE_STYLES`: pressed, disabled, moreBetsButton, moreBetsText
+    - `CHIP_AREA_STYLES`: chipArea
+  - Updated BlackjackScreen to use GAME_LAYOUT_STYLES, MESSAGE_STYLES, BET_STYLES, ACTION_STYLES, HAND_STYLES
+  - Updated HiLoScreen to use all shared primitives (removed all local styles)
+  - Updated RouletteScreen to use MESSAGE_STYLES, BET_STYLES, ACTION_STYLES, DRAWER_STYLES, INTERACTIVE_STYLES
+
+- Files changed:
+  - `mobile/src/constants/theme.ts` - Added 8 StyleSheet exports (+270 lines)
+  - `mobile/src/screens/games/BlackjackScreen.tsx` - Use shared primitives (-55 lines)
+  - `mobile/src/screens/games/HiLoScreen.tsx` - Use shared primitives (-50 lines)
+  - `mobile/src/screens/games/RouletteScreen.tsx` - Use shared primitives (-53 lines)
+  - `scripts/ralph/prd.json` - Updated US-101 to passes: true
+
+- **Learnings:**
+  - StyleSheet.create() can be exported and shared across files without issues
+  - Use semantic naming: `GAME_LAYOUT_STYLES` not `gameStyles` for clarity
+  - Some styles like `message` need to stay generic (no marginBottom) for composability
+  - Removing StyleSheet import when no local styles = cleaner file
+  - `fontWeight` needs `as const` cast to satisfy RN's strict typing
+
+---
+
+## 2026-01-07 - US-103: Add type-safe message parsing with validation
+
+- What was implemented:
+  - Added type guards to `packages/protocol/src/schema/mobile.ts`:
+    - `isGameResultMessage()`, `isGameStartedMessage()`, `isGameMoveMessage()`
+    - `isErrorMessage()`, `isSessionReadyMessage()`, `isBalanceMessage()`
+    - `isLiveTableStateMessage()`, `isLiveTableResultMessage()`
+  - Added safe parsing utilities:
+    - `parseServerMessage()` - validates with full `GameMessageSchema`, returns discriminated union
+    - `parseBaseGameResult()` - validates game_result messages
+    - `safeGetField()` - type-safe field extraction with fallback
+    - `withValidation()` - wrap handlers with schema validation
+  - Updated `mobile/src/services/websocket.ts`:
+    - Changed from `BaseMessageSchema` to full `GameMessageSchema` validation
+    - Invalid messages logged with details and tracked via analytics
+    - Messages silently dropped instead of causing runtime crashes
+  - Added 33 new tests in `packages/protocol/test/mobile-validation.test.ts`
+  - Added 8 new tests in `mobile/src/services/__tests__/websocket.test.tsx` for malformed message handling
+  - Fixed existing tests to use valid message schemas (US-067 tests)
+
+- Files changed:
+  - `packages/protocol/src/schema/mobile.ts` - Added type guards and parsing utilities (+180 lines)
+  - `mobile/src/services/websocket.ts` - Use full schema validation (~15 lines changed)
+  - `packages/protocol/test/mobile-validation.test.ts` - New test file (292 lines)
+  - `mobile/src/services/__tests__/websocket.test.tsx` - Added US-103 tests, fixed US-067 tests (~50 lines)
+  - `scripts/ralph/prd.json` - Updated US-103 to passes: true
+
+- **Learnings:**
+  - Zod's `discriminatedUnion` on 'type' field enables strict validation of all message types
+  - `passthrough()` allows additional fields for backward compatibility but still validates required fields
+  - Type guards should validate with schema.safeParse(), not just check type field
+  - When tests use mock messages, they must match the actual schema to avoid validation failures
+  - Analytics tracking of invalid messages enables server-side debugging without client crashes
+  - `ParseResult<T>` discriminated union pattern enables exhaustive error handling
 
 ---

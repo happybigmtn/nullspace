@@ -604,4 +604,152 @@ export function validateMessage(raw, schema) {
     }
     return { success: false, error: result.error };
 }
+// =============================================================================
+// TYPE GUARDS (US-103)
+// =============================================================================
+/**
+ * Type guard for game_result messages.
+ * Use this instead of unsafe `as` casts when processing server messages.
+ */
+export function isGameResultMessage(msg) {
+    return GameResultMessageSchema.safeParse(msg).success;
+}
+/**
+ * Type guard for game_started messages.
+ */
+export function isGameStartedMessage(msg) {
+    return GameStartedMessageSchema.safeParse(msg).success;
+}
+/**
+ * Type guard for game_move messages.
+ */
+export function isGameMoveMessage(msg) {
+    return GameMoveMessageSchema.safeParse(msg).success;
+}
+/**
+ * Type guard for error messages.
+ */
+export function isErrorMessage(msg) {
+    return ErrorMessageSchema.safeParse(msg).success;
+}
+/**
+ * Type guard for session_ready messages.
+ */
+export function isSessionReadyMessage(msg) {
+    return SessionReadyMessageSchema.safeParse(msg).success;
+}
+/**
+ * Type guard for balance messages.
+ */
+export function isBalanceMessage(msg) {
+    return BalanceMessageSchema.safeParse(msg).success;
+}
+/**
+ * Type guard for live_table_state messages.
+ */
+export function isLiveTableStateMessage(msg) {
+    return LiveTableStateMessageSchema.safeParse(msg).success;
+}
+/**
+ * Type guard for live_table_result messages.
+ */
+export function isLiveTableResultMessage(msg) {
+    return LiveTableResultMessageSchema.safeParse(msg).success;
+}
+/**
+ * Parse and validate a server message with full GameMessageSchema validation.
+ * Returns a discriminated union result for type-safe handling of validation failures.
+ *
+ * @example
+ * ```typescript
+ * const result = parseServerMessage(raw);
+ * if (!result.success) {
+ *   console.error('Invalid message:', result.error);
+ *   return;
+ * }
+ * // result.data is now typed as GameMessage
+ * if (result.data.type === 'game_result') {
+ *   // TypeScript knows this is a GameResultMessage
+ * }
+ * ```
+ */
+export function parseServerMessage(raw) {
+    const result = GameMessageSchema.safeParse(raw);
+    if (result.success) {
+        return { success: true, data: result.data };
+    }
+    return {
+        success: false,
+        error: result.error.message,
+        raw,
+    };
+}
+/**
+ * Parse a game_result message with validation (base schema).
+ * Returns the validated message or null if invalid.
+ *
+ * Note: For blackjack-specific result parsing with detailed hand info,
+ * use parseGameResultMessage from schema/game-results.ts instead.
+ */
+export function parseBaseGameResult(raw) {
+    const result = GameResultMessageSchema.safeParse(raw);
+    return result.success ? result.data : null;
+}
+/**
+ * Safely extract a typed field from a message with fallback.
+ * Use this for optional fields that may be missing or have wrong type.
+ *
+ * @example
+ * ```typescript
+ * const won = safeGetField(payload, 'won', false); // boolean
+ * const payout = safeGetField(payload, 'payout', '0'); // string
+ * ```
+ */
+export function safeGetField(obj, key, fallback) {
+    const value = obj[key];
+    if (value === undefined || value === null) {
+        return fallback;
+    }
+    // Type check based on fallback type
+    if (typeof fallback === 'boolean' && typeof value === 'boolean') {
+        return value;
+    }
+    if (typeof fallback === 'number' && typeof value === 'number') {
+        return value;
+    }
+    if (typeof fallback === 'string' && typeof value === 'string') {
+        return value;
+    }
+    // For arrays, check if value is an array
+    if (Array.isArray(fallback) && Array.isArray(value)) {
+        return value;
+    }
+    return fallback;
+}
+/**
+ * Type-safe message handler that validates before processing.
+ * Wraps a handler function with validation, returning undefined if message is invalid.
+ *
+ * @example
+ * ```typescript
+ * const handleResult = withValidation(GameResultMessageSchema, (msg) => {
+ *   // msg is typed as GameResultMessage here
+ *   return msg.won ? 'You win!' : 'You lose';
+ * });
+ *
+ * const result = handleResult(rawMessage);
+ * if (result !== undefined) {
+ *   showMessage(result);
+ * }
+ * ```
+ */
+export function withValidation(schema, handler) {
+    return (raw) => {
+        const result = schema.safeParse(raw);
+        if (result.success) {
+            return handler(result.data);
+        }
+        return undefined;
+    };
+}
 //# sourceMappingURL=mobile.js.map

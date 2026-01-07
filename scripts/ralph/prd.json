@@ -284,8 +284,8 @@
 				"Use zod or io-ts for message schema validation"
 			],
 			"priority": 26,
-			"passes": false,
-			"notes": "CODE-QUALITY (agent-verified): Multiple unsafe 'as' casts without validation. Runtime type errors possible on malformed server messages."
+			"passes": true,
+			"notes": "CODE-QUALITY: Added type guards (isGameResultMessage, etc.), parseServerMessage(), safeGetField() to protocol/schema/mobile.ts. WebSocket now uses GameMessageSchema validation. Added 33 tests in mobile-validation.test.ts, 8 tests in websocket.test.tsx for malformed message handling."
 		},
 		{
 			"id": "US-104",

@@ -56,7 +56,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Constants from 'expo-constants';
-import { BaseMessageSchema } from '@nullspace/protocol/mobile';
+import { GameMessageSchema, type GameMessage as ProtocolGameMessage } from '@nullspace/protocol/mobile';
 import { track } from './analytics';
 
 // Base message type for all game communications
@@ -293,16 +293,26 @@ export function useWebSocket<T extends GameMessage = GameMessage>(
     ws.current.onmessage = (event) => {
       try {
         const raw = JSON.parse(event.data);
-        // Validate that the message has the required base structure
-        const baseResult = BaseMessageSchema.safeParse(raw);
-        if (!baseResult.success) {
+        // US-103: Full schema validation to prevent runtime crashes from malformed messages
+        const validationResult = GameMessageSchema.safeParse(raw);
+        if (!validationResult.success) {
           if (__DEV__) {
-            console.error('Invalid message format:', baseResult.error.message);
+            console.error(
+              'Invalid message format:',
+              validationResult.error.message,
+              '\nRaw message:',
+              JSON.stringify(raw).slice(0, 200)
+            );
           }
+          // Track validation failures for monitoring
+          track('websocket_invalid_message', {
+            messageType: typeof raw === 'object' && raw !== null ? (raw as { type?: string }).type : 'unknown',
+            error: validationResult.error.message.slice(0, 100),
+          }).catch(() => {}); // Fire and forget
           return;
         }
-        // Message has valid base structure, pass it through
-        setLastMessage(raw as T);
+        // Message validated successfully - safe to use with type narrowing
+        setLastMessage(validationResult.data as T);
       } catch (e) {
         if (__DEV__) {
           console.error('Failed to parse WebSocket message:', e);

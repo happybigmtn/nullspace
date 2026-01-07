@@ -769,3 +769,180 @@ export function validateMessage<T>(
   }
   return { success: false, error: result.error };
 }
+
+// =============================================================================
+// TYPE GUARDS (US-103)
+// =============================================================================
+
+/**
+ * Type guard for game_result messages.
+ * Use this instead of unsafe `as` casts when processing server messages.
+ */
+export function isGameResultMessage(msg: unknown): msg is z.infer<typeof GameResultMessageSchema> {
+  return GameResultMessageSchema.safeParse(msg).success;
+}
+
+/**
+ * Type guard for game_started messages.
+ */
+export function isGameStartedMessage(msg: unknown): msg is GameStartedMessage {
+  return GameStartedMessageSchema.safeParse(msg).success;
+}
+
+/**
+ * Type guard for game_move messages.
+ */
+export function isGameMoveMessage(msg: unknown): msg is GameMoveMessage {
+  return GameMoveMessageSchema.safeParse(msg).success;
+}
+
+/**
+ * Type guard for error messages.
+ */
+export function isErrorMessage(msg: unknown): msg is z.infer<typeof ErrorMessageSchema> {
+  return ErrorMessageSchema.safeParse(msg).success;
+}
+
+/**
+ * Type guard for session_ready messages.
+ */
+export function isSessionReadyMessage(msg: unknown): msg is SessionReadyMessage {
+  return SessionReadyMessageSchema.safeParse(msg).success;
+}
+
+/**
+ * Type guard for balance messages.
+ */
+export function isBalanceMessage(msg: unknown): msg is BalanceMessage {
+  return BalanceMessageSchema.safeParse(msg).success;
+}
+
+/**
+ * Type guard for live_table_state messages.
+ */
+export function isLiveTableStateMessage(msg: unknown): msg is LiveTableStateMessage {
+  return LiveTableStateMessageSchema.safeParse(msg).success;
+}
+
+/**
+ * Type guard for live_table_result messages.
+ */
+export function isLiveTableResultMessage(msg: unknown): msg is LiveTableResultMessage {
+  return LiveTableResultMessageSchema.safeParse(msg).success;
+}
+
+// =============================================================================
+// SAFE PARSING UTILITIES (US-103)
+// =============================================================================
+
+/** Result type for parseServerMessage - either valid data or error info */
+export type ParseResult<T> =
+  | { success: true; data: T }
+  | { success: false; error: string; raw: unknown };
+
+/**
+ * Parse and validate a server message with full GameMessageSchema validation.
+ * Returns a discriminated union result for type-safe handling of validation failures.
+ *
+ * @example
+ * ```typescript
+ * const result = parseServerMessage(raw);
+ * if (!result.success) {
+ *   console.error('Invalid message:', result.error);
+ *   return;
+ * }
+ * // result.data is now typed as GameMessage
+ * if (result.data.type === 'game_result') {
+ *   // TypeScript knows this is a GameResultMessage
+ * }
+ * ```
+ */
+export function parseServerMessage(raw: unknown): ParseResult<GameMessage> {
+  const result = GameMessageSchema.safeParse(raw);
+  if (result.success) {
+    return { success: true, data: result.data };
+  }
+  return {
+    success: false,
+    error: result.error.message,
+    raw,
+  };
+}
+
+/**
+ * Parse a game_result message with validation (base schema).
+ * Returns the validated message or null if invalid.
+ *
+ * Note: For blackjack-specific result parsing with detailed hand info,
+ * use parseGameResultMessage from schema/game-results.ts instead.
+ */
+export function parseBaseGameResult(raw: unknown): z.infer<typeof GameResultMessageSchema> | null {
+  const result = GameResultMessageSchema.safeParse(raw);
+  return result.success ? result.data : null;
+}
+
+/**
+ * Safely extract a typed field from a message with fallback.
+ * Use this for optional fields that may be missing or have wrong type.
+ *
+ * @example
+ * ```typescript
+ * const won = safeGetField(payload, 'won', false); // boolean
+ * const payout = safeGetField(payload, 'payout', '0'); // string
+ * ```
+ */
+export function safeGetField<T>(
+  obj: Record<string, unknown>,
+  key: string,
+  fallback: T
+): T {
+  const value = obj[key];
+  if (value === undefined || value === null) {
+    return fallback;
+  }
+  // Type check based on fallback type
+  if (typeof fallback === 'boolean' && typeof value === 'boolean') {
+    return value as T;
+  }
+  if (typeof fallback === 'number' && typeof value === 'number') {
+    return value as T;
+  }
+  if (typeof fallback === 'string' && typeof value === 'string') {
+    return value as T;
+  }
+  // For arrays, check if value is an array
+  if (Array.isArray(fallback) && Array.isArray(value)) {
+    return value as T;
+  }
+  return fallback;
+}
+
+/**
+ * Type-safe message handler that validates before processing.
+ * Wraps a handler function with validation, returning undefined if message is invalid.
+ *
+ * @example
+ * ```typescript
+ * const handleResult = withValidation(GameResultMessageSchema, (msg) => {
+ *   // msg is typed as GameResultMessage here
+ *   return msg.won ? 'You win!' : 'You lose';
+ * });
+ *
+ * const result = handleResult(rawMessage);
+ * if (result !== undefined) {
+ *   showMessage(result);
+ * }
+ * ```
+ */
+export function withValidation<T, R>(
+  schema: z.ZodSchema<T>,
+  handler: (msg: T) => R
+): (raw: unknown) => R | undefined {
+  return (raw: unknown) => {
+    const result = schema.safeParse(raw);
+    if (result.success) {
+      return handler(result.data);
+    }
+    return undefined;
+  };
+}

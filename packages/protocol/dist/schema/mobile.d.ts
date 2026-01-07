@@ -406,12 +406,12 @@ export declare const LiveTableTotalsSchema: z.ZodObject<{
     amount: z.ZodNumber;
     target: z.ZodOptional<z.ZodNumber>;
 }, "strip", z.ZodTypeAny, {
-    amount: number;
     type: string;
+    amount: number;
     target?: number | undefined;
 }, {
-    amount: number;
     type: string;
+    amount: number;
     target?: number | undefined;
 }>;
 export declare const LiveTableStateMessageSchema: z.ZodObject<{} & {
@@ -428,12 +428,12 @@ export declare const LiveTableStateMessageSchema: z.ZodObject<{} & {
         amount: z.ZodNumber;
         target: z.ZodOptional<z.ZodNumber>;
     }, "strip", z.ZodTypeAny, {
-        amount: number;
         type: string;
+        amount: number;
         target?: number | undefined;
     }, {
-        amount: number;
         type: string;
+        amount: number;
         target?: number | undefined;
     }>, "many">>;
     myBets: z.ZodOptional<z.ZodArray<z.ZodObject<{
@@ -441,12 +441,12 @@ export declare const LiveTableStateMessageSchema: z.ZodObject<{} & {
         amount: z.ZodNumber;
         target: z.ZodOptional<z.ZodNumber>;
     }, "strip", z.ZodTypeAny, {
-        amount: number;
         type: string;
+        amount: number;
         target?: number | undefined;
     }, {
-        amount: number;
         type: string;
+        amount: number;
         target?: number | undefined;
     }>, "many">>;
     balance: z.ZodOptional<z.ZodUnion<[z.ZodNumber, z.ZodString]>>;
@@ -464,12 +464,12 @@ export declare const LiveTableStateMessageSchema: z.ZodObject<{} & {
         amount: z.ZodNumber;
         target: z.ZodOptional<z.ZodNumber>;
     }, "strip", z.ZodTypeAny, {
-        amount: number;
         type: string;
+        amount: number;
         target?: number | undefined;
     }, {
-        amount: number;
         type: string;
+        amount: number;
         target?: number | undefined;
     }>, "many">>;
     myBets: z.ZodOptional<z.ZodArray<z.ZodObject<{
@@ -477,12 +477,12 @@ export declare const LiveTableStateMessageSchema: z.ZodObject<{} & {
         amount: z.ZodNumber;
         target: z.ZodOptional<z.ZodNumber>;
     }, "strip", z.ZodTypeAny, {
-        amount: number;
         type: string;
+        amount: number;
         target?: number | undefined;
     }, {
-        amount: number;
         type: string;
+        amount: number;
         target?: number | undefined;
     }>, "many">>;
     balance: z.ZodOptional<z.ZodUnion<[z.ZodNumber, z.ZodString]>>;
@@ -500,12 +500,12 @@ export declare const LiveTableStateMessageSchema: z.ZodObject<{} & {
         amount: z.ZodNumber;
         target: z.ZodOptional<z.ZodNumber>;
     }, "strip", z.ZodTypeAny, {
-        amount: number;
         type: string;
+        amount: number;
         target?: number | undefined;
     }, {
-        amount: number;
         type: string;
+        amount: number;
         target?: number | undefined;
     }>, "many">>;
     myBets: z.ZodOptional<z.ZodArray<z.ZodObject<{
@@ -513,12 +513,12 @@ export declare const LiveTableStateMessageSchema: z.ZodObject<{} & {
         amount: z.ZodNumber;
         target: z.ZodOptional<z.ZodNumber>;
     }, "strip", z.ZodTypeAny, {
-        amount: number;
         type: string;
+        amount: number;
         target?: number | undefined;
     }, {
-        amount: number;
         type: string;
+        amount: number;
         target?: number | undefined;
     }>, "many">>;
     balance: z.ZodOptional<z.ZodUnion<[z.ZodNumber, z.ZodString]>>;
@@ -538,12 +538,12 @@ export declare const LiveTableResultMessageSchema: z.ZodObject<{} & {
         amount: z.ZodNumber;
         target: z.ZodOptional<z.ZodNumber>;
     }, "strip", z.ZodTypeAny, {
-        amount: number;
         type: string;
+        amount: number;
         target?: number | undefined;
     }, {
-        amount: number;
         type: string;
+        amount: number;
         target?: number | undefined;
     }>, "many">>;
     message: z.ZodOptional<z.ZodString>;
@@ -562,12 +562,12 @@ export declare const LiveTableResultMessageSchema: z.ZodObject<{} & {
         amount: z.ZodNumber;
         target: z.ZodOptional<z.ZodNumber>;
     }, "strip", z.ZodTypeAny, {
-        amount: number;
         type: string;
+        amount: number;
         target?: number | undefined;
     }, {
-        amount: number;
         type: string;
+        amount: number;
         target?: number | undefined;
     }>, "many">>;
     message: z.ZodOptional<z.ZodString>;
@@ -586,12 +586,12 @@ export declare const LiveTableResultMessageSchema: z.ZodObject<{} & {
         amount: z.ZodNumber;
         target: z.ZodOptional<z.ZodNumber>;
     }, "strip", z.ZodTypeAny, {
-        amount: number;
         type: string;
+        amount: number;
         target?: number | undefined;
     }, {
-        amount: number;
         type: string;
+        amount: number;
         target?: number | undefined;
     }>, "many">>;
     message: z.ZodOptional<z.ZodString>;
@@ -699,7 +699,7 @@ export declare const VideoPokerMessageSchema: z.ZodObject<{} & {
         suit: "hearts" | "diamonds" | "clubs" | "spades";
         rank: "2" | "3" | "A" | "4" | "5" | "6" | "7" | "8" | "9" | "10" | "J" | "Q" | "K";
     }[] | undefined;
-    hand?: "STRAIGHT" | "ROYAL_FLUSH" | "STRAIGHT_FLUSH" | "FOUR_OF_A_KIND" | "FULL_HOUSE" | "FLUSH" | "THREE_OF_A_KIND" | "TWO_PAIR" | "JACKS_OR_BETTER" | "NOTHING" | undefined;
+    hand?: "ROYAL_FLUSH" | "STRAIGHT_FLUSH" | "FOUR_OF_A_KIND" | "FULL_HOUSE" | "FLUSH" | "STRAIGHT" | "THREE_OF_A_KIND" | "TWO_PAIR" | "JACKS_OR_BETTER" | "NOTHING" | undefined;
 }, {
     type: "state_update" | "game_result" | "cards_dealt";
     message?: string | undefined;
@@ -709,7 +709,7 @@ export declare const VideoPokerMessageSchema: z.ZodObject<{} & {
         suit: "hearts" | "diamonds" | "clubs" | "spades";
         rank: "2" | "3" | "A" | "4" | "5" | "6" | "7" | "8" | "9" | "10" | "J" | "Q" | "K";
     }[] | undefined;
-    hand?: "STRAIGHT" | "ROYAL_FLUSH" | "STRAIGHT_FLUSH" | "FOUR_OF_A_KIND" | "FULL_HOUSE" | "FLUSH" | "THREE_OF_A_KIND" | "TWO_PAIR" | "JACKS_OR_BETTER" | "NOTHING" | undefined;
+    hand?: "ROYAL_FLUSH" | "STRAIGHT_FLUSH" | "FOUR_OF_A_KIND" | "FULL_HOUSE" | "FLUSH" | "STRAIGHT" | "THREE_OF_A_KIND" | "TWO_PAIR" | "JACKS_OR_BETTER" | "NOTHING" | undefined;
 }>;
 export declare const SicBoMessageSchema: z.ZodObject<{} & {
     type: z.ZodEnum<["state_update", "game_result", "dice_roll"]>;
@@ -777,8 +777,8 @@ export declare const ThreeCardPokerMessageSchema: z.ZodObject<{} & {
         suit: "hearts" | "diamonds" | "clubs" | "spades";
         rank: "2" | "3" | "A" | "4" | "5" | "6" | "7" | "8" | "9" | "10" | "J" | "Q" | "K";
     }[] | undefined;
-    playerHand?: "STRAIGHT" | "STRAIGHT_FLUSH" | "FLUSH" | "THREE_OF_A_KIND" | "PAIR" | "HIGH_CARD" | undefined;
-    dealerHand?: "STRAIGHT" | "STRAIGHT_FLUSH" | "FLUSH" | "THREE_OF_A_KIND" | "PAIR" | "HIGH_CARD" | undefined;
+    playerHand?: "STRAIGHT_FLUSH" | "FLUSH" | "STRAIGHT" | "THREE_OF_A_KIND" | "PAIR" | "HIGH_CARD" | undefined;
+    dealerHand?: "STRAIGHT_FLUSH" | "FLUSH" | "STRAIGHT" | "THREE_OF_A_KIND" | "PAIR" | "HIGH_CARD" | undefined;
     dealerQualifies?: boolean | undefined;
     anteResult?: "push" | "win" | "loss" | undefined;
     pairPlusResult?: "win" | "loss" | undefined;
@@ -795,8 +795,8 @@ export declare const ThreeCardPokerMessageSchema: z.ZodObject<{} & {
         suit: "hearts" | "diamonds" | "clubs" | "spades";
         rank: "2" | "3" | "A" | "4" | "5" | "6" | "7" | "8" | "9" | "10" | "J" | "Q" | "K";
     }[] | undefined;
-    playerHand?: "STRAIGHT" | "STRAIGHT_FLUSH" | "FLUSH" | "THREE_OF_A_KIND" | "PAIR" | "HIGH_CARD" | undefined;
-    dealerHand?: "STRAIGHT" | "STRAIGHT_FLUSH" | "FLUSH" | "THREE_OF_A_KIND" | "PAIR" | "HIGH_CARD" | undefined;
+    playerHand?: "STRAIGHT_FLUSH" | "FLUSH" | "STRAIGHT" | "THREE_OF_A_KIND" | "PAIR" | "HIGH_CARD" | undefined;
+    dealerHand?: "STRAIGHT_FLUSH" | "FLUSH" | "STRAIGHT" | "THREE_OF_A_KIND" | "PAIR" | "HIGH_CARD" | undefined;
     dealerQualifies?: boolean | undefined;
     anteResult?: "push" | "win" | "loss" | undefined;
     pairPlusResult?: "win" | "loss" | undefined;
@@ -1003,12 +1003,12 @@ export declare const GameMessageSchema: z.ZodDiscriminatedUnion<"type", [z.ZodOb
         amount: z.ZodNumber;
         target: z.ZodOptional<z.ZodNumber>;
     }, "strip", z.ZodTypeAny, {
-        amount: number;
         type: string;
+        amount: number;
         target?: number | undefined;
     }, {
-        amount: number;
         type: string;
+        amount: number;
         target?: number | undefined;
     }>, "many">>;
     myBets: z.ZodOptional<z.ZodArray<z.ZodObject<{
@@ -1016,12 +1016,12 @@ export declare const GameMessageSchema: z.ZodDiscriminatedUnion<"type", [z.ZodOb
         amount: z.ZodNumber;
         target: z.ZodOptional<z.ZodNumber>;
     }, "strip", z.ZodTypeAny, {
-        amount: number;
         type: string;
+        amount: number;
         target?: number | undefined;
     }, {
-        amount: number;
         type: string;
+        amount: number;
         target?: number | undefined;
     }>, "many">>;
     balance: z.ZodOptional<z.ZodUnion<[z.ZodNumber, z.ZodString]>>;
@@ -1039,12 +1039,12 @@ export declare const GameMessageSchema: z.ZodDiscriminatedUnion<"type", [z.ZodOb
         amount: z.ZodNumber;
         target: z.ZodOptional<z.ZodNumber>;
     }, "strip", z.ZodTypeAny, {
-        amount: number;
         type: string;
+        amount: number;
         target?: number | undefined;
     }, {
-        amount: number;
         type: string;
+        amount: number;
         target?: number | undefined;
     }>, "many">>;
     myBets: z.ZodOptional<z.ZodArray<z.ZodObject<{
@@ -1052,12 +1052,12 @@ export declare const GameMessageSchema: z.ZodDiscriminatedUnion<"type", [z.ZodOb
         amount: z.ZodNumber;
         target: z.ZodOptional<z.ZodNumber>;
     }, "strip", z.ZodTypeAny, {
-        amount: number;
         type: string;
+        amount: number;
         target?: number | undefined;
     }, {
-        amount: number;
         type: string;
+        amount: number;
         target?: number | undefined;
     }>, "many">>;
     balance: z.ZodOptional<z.ZodUnion<[z.ZodNumber, z.ZodString]>>;
@@ -1075,12 +1075,12 @@ export declare const GameMessageSchema: z.ZodDiscriminatedUnion<"type", [z.ZodOb
         amount: z.ZodNumber;
         target: z.ZodOptional<z.ZodNumber>;
     }, "strip", z.ZodTypeAny, {
-        amount: number;
         type: string;
+        amount: number;
         target?: number | undefined;
     }, {
-        amount: number;
         type: string;
+        amount: number;
         target?: number | undefined;
     }>, "many">>;
     myBets: z.ZodOptional<z.ZodArray<z.ZodObject<{
@@ -1088,12 +1088,12 @@ export declare const GameMessageSchema: z.ZodDiscriminatedUnion<"type", [z.ZodOb
         amount: z.ZodNumber;
         target: z.ZodOptional<z.ZodNumber>;
     }, "strip", z.ZodTypeAny, {
-        amount: number;
         type: string;
+        amount: number;
         target?: number | undefined;
     }, {
-        amount: number;
         type: string;
+        amount: number;
         target?: number | undefined;
     }>, "many">>;
     balance: z.ZodOptional<z.ZodUnion<[z.ZodNumber, z.ZodString]>>;
@@ -1112,12 +1112,12 @@ export declare const GameMessageSchema: z.ZodDiscriminatedUnion<"type", [z.ZodOb
         amount: z.ZodNumber;
         target: z.ZodOptional<z.ZodNumber>;
     }, "strip", z.ZodTypeAny, {
-        amount: number;
         type: string;
+        amount: number;
         target?: number | undefined;
     }, {
-        amount: number;
         type: string;
+        amount: number;
         target?: number | undefined;
     }>, "many">>;
     message: z.ZodOptional<z.ZodString>;
@@ -1136,12 +1136,12 @@ export declare const GameMessageSchema: z.ZodDiscriminatedUnion<"type", [z.ZodOb
         amount: z.ZodNumber;
         target: z.ZodOptional<z.ZodNumber>;
     }, "strip", z.ZodTypeAny, {
-        amount: number;
         type: string;
+        amount: number;
         target?: number | undefined;
     }, {
-        amount: number;
         type: string;
+        amount: number;
         target?: number | undefined;
     }>, "many">>;
     message: z.ZodOptional<z.ZodString>;
@@ -1160,12 +1160,12 @@ export declare const GameMessageSchema: z.ZodDiscriminatedUnion<"type", [z.ZodOb
         amount: z.ZodNumber;
         target: z.ZodOptional<z.ZodNumber>;
     }, "strip", z.ZodTypeAny, {
-        amount: number;
         type: string;
+        amount: number;
         target?: number | undefined;
     }, {
-        amount: number;
         type: string;
+        amount: number;
         target?: number | undefined;
     }>, "many">>;
     message: z.ZodOptional<z.ZodString>;
@@ -1236,8 +1236,8 @@ export declare const BlackjackDealRequestSchema: z.ZodObject<{
     sideBetBustIt: z.ZodOptional<z.ZodNumber>;
     sideBetRoyalMatch: z.ZodOptional<z.ZodNumber>;
 }, "strip", z.ZodTypeAny, {
-    amount: number;
     type: "blackjack_deal";
+    amount: number;
     sideBet21Plus3?: number | undefined;
     sideBet21p3?: number | undefined;
     sideBetLuckyLadies?: number | undefined;
@@ -1245,8 +1245,8 @@ export declare const BlackjackDealRequestSchema: z.ZodObject<{
     sideBetBustIt?: number | undefined;
     sideBetRoyalMatch?: number | undefined;
 }, {
-    amount: number;
     type: "blackjack_deal";
+    amount: number;
     sideBet21Plus3?: number | undefined;
     sideBet21p3?: number | undefined;
     sideBetLuckyLadies?: number | undefined;
@@ -1289,14 +1289,14 @@ export declare const RouletteBetSchema: z.ZodObject<{
     number: z.ZodOptional<z.ZodNumber>;
     value: z.ZodOptional<z.ZodNumber>;
 }, "strip", z.ZodTypeAny, {
-    amount: number;
     type: number | "STRAIGHT" | "RED" | "BLACK" | "EVEN" | "ODD" | "LOW" | "HIGH" | "DOZEN_1" | "DOZEN_2" | "DOZEN_3" | "COL_1" | "COL_2" | "COL_3" | "ZERO" | "SPLIT_H" | "SPLIT_V" | "STREET" | "CORNER" | "SIX_LINE";
+    amount: number;
     number?: number | undefined;
     value?: number | undefined;
     target?: number | undefined;
 }, {
-    amount: number;
     type: number | "STRAIGHT" | "RED" | "BLACK" | "EVEN" | "ODD" | "LOW" | "HIGH" | "DOZEN_1" | "DOZEN_2" | "DOZEN_3" | "COL_1" | "COL_2" | "COL_3" | "ZERO" | "SPLIT_H" | "SPLIT_V" | "STREET" | "CORNER" | "SIX_LINE";
+    amount: number;
     number?: number | undefined;
     value?: number | undefined;
     target?: number | undefined;
@@ -1310,14 +1310,14 @@ export declare const RouletteSpinRequestSchema: z.ZodObject<{
         number: z.ZodOptional<z.ZodNumber>;
         value: z.ZodOptional<z.ZodNumber>;
     }, "strip", z.ZodTypeAny, {
-        amount: number;
         type: number | "STRAIGHT" | "RED" | "BLACK" | "EVEN" | "ODD" | "LOW" | "HIGH" | "DOZEN_1" | "DOZEN_2" | "DOZEN_3" | "COL_1" | "COL_2" | "COL_3" | "ZERO" | "SPLIT_H" | "SPLIT_V" | "STREET" | "CORNER" | "SIX_LINE";
+        amount: number;
         number?: number | undefined;
         value?: number | undefined;
         target?: number | undefined;
     }, {
-        amount: number;
         type: number | "STRAIGHT" | "RED" | "BLACK" | "EVEN" | "ODD" | "LOW" | "HIGH" | "DOZEN_1" | "DOZEN_2" | "DOZEN_3" | "COL_1" | "COL_2" | "COL_3" | "ZERO" | "SPLIT_H" | "SPLIT_V" | "STREET" | "CORNER" | "SIX_LINE";
+        amount: number;
         number?: number | undefined;
         value?: number | undefined;
         target?: number | undefined;
@@ -1325,8 +1325,8 @@ export declare const RouletteSpinRequestSchema: z.ZodObject<{
 }, "strip", z.ZodTypeAny, {
     type: "roulette_spin";
     bets: {
-        amount: number;
         type: number | "STRAIGHT" | "RED" | "BLACK" | "EVEN" | "ODD" | "LOW" | "HIGH" | "DOZEN_1" | "DOZEN_2" | "DOZEN_3" | "COL_1" | "COL_2" | "COL_3" | "ZERO" | "SPLIT_H" | "SPLIT_V" | "STREET" | "CORNER" | "SIX_LINE";
+        amount: number;
         number?: number | undefined;
         value?: number | undefined;
         target?: number | undefined;
@@ -1334,8 +1334,8 @@ export declare const RouletteSpinRequestSchema: z.ZodObject<{
 }, {
     type: "roulette_spin";
     bets: {
-        amount: number;
         type: number | "STRAIGHT" | "RED" | "BLACK" | "EVEN" | "ODD" | "LOW" | "HIGH" | "DOZEN_1" | "DOZEN_2" | "DOZEN_3" | "COL_1" | "COL_2" | "COL_3" | "ZERO" | "SPLIT_H" | "SPLIT_V" | "STREET" | "CORNER" | "SIX_LINE";
+        amount: number;
         number?: number | undefined;
         value?: number | undefined;
         target?: number | undefined;
@@ -1346,12 +1346,12 @@ export declare const CrapsBetSchema: z.ZodObject<{
     amount: z.ZodNumber;
     target: z.ZodOptional<z.ZodNumber>;
 }, "strip", z.ZodTypeAny, {
-    amount: number;
     type: string | number;
+    amount: number;
     target?: number | undefined;
 }, {
-    amount: number;
     type: string | number;
+    amount: number;
     target?: number | undefined;
 }>;
 export declare const CrapsRollRequestSchema: z.ZodObject<{
@@ -1361,26 +1361,26 @@ export declare const CrapsRollRequestSchema: z.ZodObject<{
         amount: z.ZodNumber;
         target: z.ZodOptional<z.ZodNumber>;
     }, "strip", z.ZodTypeAny, {
-        amount: number;
         type: string | number;
+        amount: number;
         target?: number | undefined;
     }, {
-        amount: number;
         type: string | number;
+        amount: number;
         target?: number | undefined;
     }>, "many">;
 }, "strip", z.ZodTypeAny, {
     type: "craps_roll";
     bets: {
-        amount: number;
         type: string | number;
+        amount: number;
         target?: number | undefined;
     }[];
 }, {
     type: "craps_roll";
     bets: {
-        amount: number;
         type: string | number;
+        amount: number;
         target?: number | undefined;
     }[];
 }>;
@@ -1390,14 +1390,14 @@ export declare const CrapsSingleBetRequestSchema: z.ZodObject<{
     amount: z.ZodNumber;
     target: z.ZodOptional<z.ZodNumber>;
 }, "strip", z.ZodTypeAny, {
-    betType: string | number;
-    amount: number;
     type: "craps_bet";
+    amount: number;
+    betType: string | number;
     target?: number | undefined;
 }, {
-    betType: string | number;
-    amount: number;
     type: "craps_bet";
+    amount: number;
+    betType: string | number;
     target?: number | undefined;
 }>;
 export declare const CrapsLiveJoinRequestSchema: z.ZodObject<{
@@ -1421,26 +1421,26 @@ export declare const CrapsLiveBetRequestSchema: z.ZodObject<{
         amount: z.ZodNumber;
         target: z.ZodOptional<z.ZodNumber>;
     }, "strip", z.ZodTypeAny, {
-        amount: number;
         type: string | number;
+        amount: number;
         target?: number | undefined;
     }, {
-        amount: number;
         type: string | number;
+        amount: number;
         target?: number | undefined;
     }>, "many">;
 }, "strip", z.ZodTypeAny, {
     type: "craps_live_bet";
     bets: {
-        amount: number;
         type: string | number;
+        amount: number;
         target?: number | undefined;
     }[];
 }, {
     type: "craps_live_bet";
     bets: {
-        amount: number;
         type: string | number;
+        amount: number;
         target?: number | undefined;
     }[];
 }>;
@@ -1449,23 +1449,23 @@ export declare const HiLoBetRequestSchema: z.ZodObject<{
     amount: z.ZodNumber;
     choice: z.ZodEnum<["higher", "lower"]>;
 }, "strip", z.ZodTypeAny, {
-    amount: number;
     type: "hilo_bet";
+    amount: number;
     choice: "higher" | "lower";
 }, {
-    amount: number;
     type: "hilo_bet";
+    amount: number;
     choice: "higher" | "lower";
 }>;
 export declare const HiLoDealRequestSchema: z.ZodObject<{
     type: z.ZodLiteral<"hilo_deal">;
     amount: z.ZodNumber;
 }, "strip", z.ZodTypeAny, {
-    amount: number;
     type: "hilo_deal";
+    amount: number;
 }, {
-    amount: number;
     type: "hilo_deal";
+    amount: number;
 }>;
 export declare const HiLoHigherRequestSchema: z.ZodObject<{
     type: z.ZodLiteral<"hilo_higher">;
@@ -1499,11 +1499,11 @@ export declare const BaccaratBetSchema: z.ZodObject<{
     type: z.ZodEnum<["PLAYER", "BANKER", "TIE", "P_PAIR", "B_PAIR", "LUCKY6", "P_DRAGON", "B_DRAGON", "PANDA8", "PERFECT_PAIR"]>;
     amount: z.ZodNumber;
 }, "strip", z.ZodTypeAny, {
-    amount: number;
     type: "PLAYER" | "BANKER" | "TIE" | "P_PAIR" | "B_PAIR" | "LUCKY6" | "P_DRAGON" | "B_DRAGON" | "PANDA8" | "PERFECT_PAIR";
+    amount: number;
 }, {
-    amount: number;
     type: "PLAYER" | "BANKER" | "TIE" | "P_PAIR" | "B_PAIR" | "LUCKY6" | "P_DRAGON" | "B_DRAGON" | "PANDA8" | "PERFECT_PAIR";
+    amount: number;
 }>;
 export declare const BaccaratDealRequestSchema: z.ZodObject<{
     type: z.ZodLiteral<"baccarat_deal">;
@@ -1511,23 +1511,23 @@ export declare const BaccaratDealRequestSchema: z.ZodObject<{
         type: z.ZodEnum<["PLAYER", "BANKER", "TIE", "P_PAIR", "B_PAIR", "LUCKY6", "P_DRAGON", "B_DRAGON", "PANDA8", "PERFECT_PAIR"]>;
         amount: z.ZodNumber;
     }, "strip", z.ZodTypeAny, {
-        amount: number;
         type: "PLAYER" | "BANKER" | "TIE" | "P_PAIR" | "B_PAIR" | "LUCKY6" | "P_DRAGON" | "B_DRAGON" | "PANDA8" | "PERFECT_PAIR";
+        amount: number;
     }, {
-        amount: number;
         type: "PLAYER" | "BANKER" | "TIE" | "P_PAIR" | "B_PAIR" | "LUCKY6" | "P_DRAGON" | "B_DRAGON" | "PANDA8" | "PERFECT_PAIR";
+        amount: number;
     }>, "many">;
 }, "strip", z.ZodTypeAny, {
     type: "baccarat_deal";
     bets: {
-        amount: number;
         type: "PLAYER" | "BANKER" | "TIE" | "P_PAIR" | "B_PAIR" | "LUCKY6" | "P_DRAGON" | "B_DRAGON" | "PANDA8" | "PERFECT_PAIR";
+        amount: number;
     }[];
 }, {
     type: "baccarat_deal";
     bets: {
-        amount: number;
         type: "PLAYER" | "BANKER" | "TIE" | "P_PAIR" | "B_PAIR" | "LUCKY6" | "P_DRAGON" | "B_DRAGON" | "PANDA8" | "PERFECT_PAIR";
+        amount: number;
     }[];
 }>;
 export declare const CasinoWarDealRequestSchema: z.ZodObject<{
@@ -1535,12 +1535,12 @@ export declare const CasinoWarDealRequestSchema: z.ZodObject<{
     amount: z.ZodNumber;
     tieBet: z.ZodOptional<z.ZodNumber>;
 }, "strip", z.ZodTypeAny, {
-    amount: number;
     type: "casino_war_deal";
+    amount: number;
     tieBet?: number | undefined;
 }, {
-    amount: number;
     type: "casino_war_deal";
+    amount: number;
     tieBet?: number | undefined;
 }>;
 export declare const CasinoWarWarRequestSchema: z.ZodObject<{
@@ -1563,12 +1563,12 @@ export declare const CasinoWarLegacyDealRequestSchema: z.ZodObject<{
 } & {
     type: z.ZodLiteral<"casinowar_deal">;
 }, "strip", z.ZodTypeAny, {
-    amount: number;
     type: "casinowar_deal";
+    amount: number;
     tieBet?: number | undefined;
 }, {
-    amount: number;
     type: "casinowar_deal";
+    amount: number;
     tieBet?: number | undefined;
 }>;
 export declare const CasinoWarLegacyWarRequestSchema: z.ZodObject<{} & {
@@ -1589,11 +1589,11 @@ export declare const VideoPokerDealRequestSchema: z.ZodObject<{
     type: z.ZodLiteral<"video_poker_deal">;
     amount: z.ZodNumber;
 }, "strip", z.ZodTypeAny, {
-    amount: number;
     type: "video_poker_deal";
+    amount: number;
 }, {
-    amount: number;
     type: "video_poker_deal";
+    amount: number;
 }>;
 export declare const VideoPokerDrawRequestSchema: z.ZodObject<{
     type: z.ZodLiteral<"video_poker_draw">;
@@ -1610,11 +1610,11 @@ export declare const VideoPokerLegacyDealRequestSchema: z.ZodObject<{
 } & {
     type: z.ZodLiteral<"videopoker_deal">;
 }, "strip", z.ZodTypeAny, {
-    amount: number;
     type: "videopoker_deal";
+    amount: number;
 }, {
-    amount: number;
     type: "videopoker_deal";
+    amount: number;
 }>;
 export declare const VideoPokerLegacyHoldRequestSchema: z.ZodObject<{
     type: z.ZodLiteral<"videopoker_hold">;
@@ -1633,14 +1633,14 @@ export declare const SicBoBetSchema: z.ZodObject<{
     number: z.ZodOptional<z.ZodNumber>;
     value: z.ZodOptional<z.ZodNumber>;
 }, "strip", z.ZodTypeAny, {
-    amount: number;
     type: string | number;
+    amount: number;
     number?: number | undefined;
     value?: number | undefined;
     target?: number | undefined;
 }, {
-    amount: number;
     type: string | number;
+    amount: number;
     number?: number | undefined;
     value?: number | undefined;
     target?: number | undefined;
@@ -1654,14 +1654,14 @@ export declare const SicBoRollRequestSchema: z.ZodObject<{
         number: z.ZodOptional<z.ZodNumber>;
         value: z.ZodOptional<z.ZodNumber>;
     }, "strip", z.ZodTypeAny, {
-        amount: number;
         type: string | number;
+        amount: number;
         number?: number | undefined;
         value?: number | undefined;
         target?: number | undefined;
     }, {
-        amount: number;
         type: string | number;
+        amount: number;
         number?: number | undefined;
         value?: number | undefined;
         target?: number | undefined;
@@ -1669,8 +1669,8 @@ export declare const SicBoRollRequestSchema: z.ZodObject<{
 }, "strip", z.ZodTypeAny, {
     type: "sic_bo_roll";
     bets: {
-        amount: number;
         type: string | number;
+        amount: number;
         number?: number | undefined;
         value?: number | undefined;
         target?: number | undefined;
@@ -1678,8 +1678,8 @@ export declare const SicBoRollRequestSchema: z.ZodObject<{
 }, {
     type: "sic_bo_roll";
     bets: {
-        amount: number;
         type: string | number;
+        amount: number;
         number?: number | undefined;
         value?: number | undefined;
         target?: number | undefined;
@@ -1693,14 +1693,14 @@ export declare const SicBoLegacyRollRequestSchema: z.ZodObject<{
         number: z.ZodOptional<z.ZodNumber>;
         value: z.ZodOptional<z.ZodNumber>;
     }, "strip", z.ZodTypeAny, {
-        amount: number;
         type: string | number;
+        amount: number;
         number?: number | undefined;
         value?: number | undefined;
         target?: number | undefined;
     }, {
-        amount: number;
         type: string | number;
+        amount: number;
         number?: number | undefined;
         value?: number | undefined;
         target?: number | undefined;
@@ -1710,8 +1710,8 @@ export declare const SicBoLegacyRollRequestSchema: z.ZodObject<{
 }, "strip", z.ZodTypeAny, {
     type: "sicbo_roll";
     bets: {
-        amount: number;
         type: string | number;
+        amount: number;
         number?: number | undefined;
         value?: number | undefined;
         target?: number | undefined;
@@ -1719,8 +1719,8 @@ export declare const SicBoLegacyRollRequestSchema: z.ZodObject<{
 }, {
     type: "sicbo_roll";
     bets: {
-        amount: number;
         type: string | number;
+        amount: number;
         number?: number | undefined;
         value?: number | undefined;
         target?: number | undefined;
@@ -1919,8 +1919,8 @@ export declare const OutboundMessageSchema: z.ZodDiscriminatedUnion<"type", [z.Z
     sideBetBustIt: z.ZodOptional<z.ZodNumber>;
     sideBetRoyalMatch: z.ZodOptional<z.ZodNumber>;
 }, "strip", z.ZodTypeAny, {
-    amount: number;
     type: "blackjack_deal";
+    amount: number;
     sideBet21Plus3?: number | undefined;
     sideBet21p3?: number | undefined;
     sideBetLuckyLadies?: number | undefined;
@@ -1928,8 +1928,8 @@ export declare const OutboundMessageSchema: z.ZodDiscriminatedUnion<"type", [z.Z
     sideBetBustIt?: number | undefined;
     sideBetRoyalMatch?: number | undefined;
 }, {
-    amount: number;
     type: "blackjack_deal";
+    amount: number;
     sideBet21Plus3?: number | undefined;
     sideBet21p3?: number | undefined;
     sideBetLuckyLadies?: number | undefined;
@@ -1969,14 +1969,14 @@ export declare const OutboundMessageSchema: z.ZodDiscriminatedUnion<"type", [z.Z
         number: z.ZodOptional<z.ZodNumber>;
         value: z.ZodOptional<z.ZodNumber>;
     }, "strip", z.ZodTypeAny, {
-        amount: number;
         type: number | "STRAIGHT" | "RED" | "BLACK" | "EVEN" | "ODD" | "LOW" | "HIGH" | "DOZEN_1" | "DOZEN_2" | "DOZEN_3" | "COL_1" | "COL_2" | "COL_3" | "ZERO" | "SPLIT_H" | "SPLIT_V" | "STREET" | "CORNER" | "SIX_LINE";
+        amount: number;
         number?: number | undefined;
         value?: number | undefined;
         target?: number | undefined;
     }, {
-        amount: number;
         type: number | "STRAIGHT" | "RED" | "BLACK" | "EVEN" | "ODD" | "LOW" | "HIGH" | "DOZEN_1" | "DOZEN_2" | "DOZEN_3" | "COL_1" | "COL_2" | "COL_3" | "ZERO" | "SPLIT_H" | "SPLIT_V" | "STREET" | "CORNER" | "SIX_LINE";
+        amount: number;
         number?: number | undefined;
         value?: number | undefined;
         target?: number | undefined;
@@ -1984,8 +1984,8 @@ export declare const OutboundMessageSchema: z.ZodDiscriminatedUnion<"type", [z.Z
 }, "strip", z.ZodTypeAny, {
     type: "roulette_spin";
     bets: {
-        amount: number;
         type: number | "STRAIGHT" | "RED" | "BLACK" | "EVEN" | "ODD" | "LOW" | "HIGH" | "DOZEN_1" | "DOZEN_2" | "DOZEN_3" | "COL_1" | "COL_2" | "COL_3" | "ZERO" | "SPLIT_H" | "SPLIT_V" | "STREET" | "CORNER" | "SIX_LINE";
+        amount: number;
         number?: number | undefined;
         value?: number | undefined;
         target?: number | undefined;
@@ -1993,8 +1993,8 @@ export declare const OutboundMessageSchema: z.ZodDiscriminatedUnion<"type", [z.Z
 }, {
     type: "roulette_spin";
     bets: {
-        amount: number;
         type: number | "STRAIGHT" | "RED" | "BLACK" | "EVEN" | "ODD" | "LOW" | "HIGH" | "DOZEN_1" | "DOZEN_2" | "DOZEN_3" | "COL_1" | "COL_2" | "COL_3" | "ZERO" | "SPLIT_H" | "SPLIT_V" | "STREET" | "CORNER" | "SIX_LINE";
+        amount: number;
         number?: number | undefined;
         value?: number | undefined;
         target?: number | undefined;
@@ -2006,26 +2006,26 @@ export declare const OutboundMessageSchema: z.ZodDiscriminatedUnion<"type", [z.Z
         amount: z.ZodNumber;
         target: z.ZodOptional<z.ZodNumber>;
     }, "strip", z.ZodTypeAny, {
-        amount: number;
         type: string | number;
+        amount: number;
         target?: number | undefined;
     }, {
-        amount: number;
         type: string | number;
+        amount: number;
         target?: number | undefined;
     }>, "many">;
 }, "strip", z.ZodTypeAny, {
     type: "craps_roll";
     bets: {
-        amount: number;
         type: string | number;
+        amount: number;
         target?: number | undefined;
     }[];
 }, {
     type: "craps_roll";
     bets: {
-        amount: number;
         type: string | number;
+        amount: number;
         target?: number | undefined;
     }[];
 }>, z.ZodObject<{
@@ -2034,14 +2034,14 @@ export declare const OutboundMessageSchema: z.ZodDiscriminatedUnion<"type", [z.Z
     amount: z.ZodNumber;
     target: z.ZodOptional<z.ZodNumber>;
 }, "strip", z.ZodTypeAny, {
-    betType: string | number;
-    amount: number;
     type: "craps_bet";
+    amount: number;
+    betType: string | number;
     target?: number | undefined;
 }, {
-    betType: string | number;
-    amount: number;
     type: "craps_bet";
+    amount: number;
+    betType: string | number;
     target?: number | undefined;
 }>, z.ZodObject<{
     type: z.ZodLiteral<"craps_live_join">;
@@ -2062,26 +2062,26 @@ export declare const OutboundMessageSchema: z.ZodDiscriminatedUnion<"type", [z.Z
         amount: z.ZodNumber;
         target: z.ZodOptional<z.ZodNumber>;
     }, "strip", z.ZodTypeAny, {
-        amount: number;
         type: string | number;
+        amount: number;
         target?: number | undefined;
     }, {
-        amount: number;
         type: string | number;
+        amount: number;
         target?: number | undefined;
     }>, "many">;
 }, "strip", z.ZodTypeAny, {
     type: "craps_live_bet";
     bets: {
-        amount: number;
         type: string | number;
+        amount: number;
         target?: number | undefined;
     }[];
 }, {
     type: "craps_live_bet";
     bets: {
-        amount: number;
         type: string | number;
+        amount: number;
         target?: number | undefined;
     }[];
 }>, z.ZodObject<{
@@ -2089,22 +2089,22 @@ export declare const OutboundMessageSchema: z.ZodDiscriminatedUnion<"type", [z.Z
     amount: z.ZodNumber;
     choice: z.ZodEnum<["higher", "lower"]>;
 }, "strip", z.ZodTypeAny, {
-    amount: number;
     type: "hilo_bet";
+    amount: number;
     choice: "higher" | "lower";
 }, {
-    amount: number;
     type: "hilo_bet";
+    amount: number;
     choice: "higher" | "lower";
 }>, z.ZodObject<{
     type: z.ZodLiteral<"hilo_deal">;
     amount: z.ZodNumber;
 }, "strip", z.ZodTypeAny, {
-    amount: number;
     type: "hilo_deal";
+    amount: number;
 }, {
-    amount: number;
     type: "hilo_deal";
+    amount: number;
 }>, z.ZodObject<{
     type: z.ZodLiteral<"hilo_higher">;
 }, "strip", z.ZodTypeAny, {
@@ -2135,35 +2135,35 @@ export declare const OutboundMessageSchema: z.ZodDiscriminatedUnion<"type", [z.Z
         type: z.ZodEnum<["PLAYER", "BANKER", "TIE", "P_PAIR", "B_PAIR", "LUCKY6", "P_DRAGON", "B_DRAGON", "PANDA8", "PERFECT_PAIR"]>;
         amount: z.ZodNumber;
     }, "strip", z.ZodTypeAny, {
-        amount: number;
         type: "PLAYER" | "BANKER" | "TIE" | "P_PAIR" | "B_PAIR" | "LUCKY6" | "P_DRAGON" | "B_DRAGON" | "PANDA8" | "PERFECT_PAIR";
+        amount: number;
     }, {
-        amount: number;
         type: "PLAYER" | "BANKER" | "TIE" | "P_PAIR" | "B_PAIR" | "LUCKY6" | "P_DRAGON" | "B_DRAGON" | "PANDA8" | "PERFECT_PAIR";
+        amount: number;
     }>, "many">;
 }, "strip", z.ZodTypeAny, {
     type: "baccarat_deal";
     bets: {
-        amount: number;
         type: "PLAYER" | "BANKER" | "TIE" | "P_PAIR" | "B_PAIR" | "LUCKY6" | "P_DRAGON" | "B_DRAGON" | "PANDA8" | "PERFECT_PAIR";
+        amount: number;
     }[];
 }, {
     type: "baccarat_deal";
     bets: {
-        amount: number;
         type: "PLAYER" | "BANKER" | "TIE" | "P_PAIR" | "B_PAIR" | "LUCKY6" | "P_DRAGON" | "B_DRAGON" | "PANDA8" | "PERFECT_PAIR";
+        amount: number;
     }[];
 }>, z.ZodObject<{
     type: z.ZodLiteral<"casino_war_deal">;
     amount: z.ZodNumber;
     tieBet: z.ZodOptional<z.ZodNumber>;
 }, "strip", z.ZodTypeAny, {
-    amount: number;
     type: "casino_war_deal";
+    amount: number;
     tieBet?: number | undefined;
 }, {
-    amount: number;
     type: "casino_war_deal";
+    amount: number;
     tieBet?: number | undefined;
 }>, z.ZodObject<{
     type: z.ZodLiteral<"casino_war_war">;
@@ -2183,12 +2183,12 @@ export declare const OutboundMessageSchema: z.ZodDiscriminatedUnion<"type", [z.Z
 } & {
     type: z.ZodLiteral<"casinowar_deal">;
 }, "strip", z.ZodTypeAny, {
-    amount: number;
     type: "casinowar_deal";
+    amount: number;
     tieBet?: number | undefined;
 }, {
-    amount: number;
     type: "casinowar_deal";
+    amount: number;
     tieBet?: number | undefined;
 }>, z.ZodObject<{} & {
     type: z.ZodLiteral<"casinowar_war">;
@@ -2206,11 +2206,11 @@ export declare const OutboundMessageSchema: z.ZodDiscriminatedUnion<"type", [z.Z
     type: z.ZodLiteral<"video_poker_deal">;
     amount: z.ZodNumber;
 }, "strip", z.ZodTypeAny, {
-    amount: number;
     type: "video_poker_deal";
+    amount: number;
 }, {
-    amount: number;
     type: "video_poker_deal";
+    amount: number;
 }>, z.ZodObject<{
     type: z.ZodLiteral<"video_poker_draw">;
     held: z.ZodArray<z.ZodBoolean, "many">;
@@ -2225,11 +2225,11 @@ export declare const OutboundMessageSchema: z.ZodDiscriminatedUnion<"type", [z.Z
 } & {
     type: z.ZodLiteral<"videopoker_deal">;
 }, "strip", z.ZodTypeAny, {
-    amount: number;
     type: "videopoker_deal";
+    amount: number;
 }, {
-    amount: number;
     type: "videopoker_deal";
+    amount: number;
 }>, z.ZodObject<{
     type: z.ZodLiteral<"videopoker_hold">;
     holds: z.ZodArray<z.ZodBoolean, "many">;
@@ -2248,14 +2248,14 @@ export declare const OutboundMessageSchema: z.ZodDiscriminatedUnion<"type", [z.Z
         number: z.ZodOptional<z.ZodNumber>;
         value: z.ZodOptional<z.ZodNumber>;
     }, "strip", z.ZodTypeAny, {
-        amount: number;
         type: string | number;
+        amount: number;
         number?: number | undefined;
         value?: number | undefined;
         target?: number | undefined;
     }, {
-        amount: number;
         type: string | number;
+        amount: number;
         number?: number | undefined;
         value?: number | undefined;
         target?: number | undefined;
@@ -2263,8 +2263,8 @@ export declare const OutboundMessageSchema: z.ZodDiscriminatedUnion<"type", [z.Z
 }, "strip", z.ZodTypeAny, {
     type: "sic_bo_roll";
     bets: {
-        amount: number;
         type: string | number;
+        amount: number;
         number?: number | undefined;
         value?: number | undefined;
         target?: number | undefined;
@@ -2272,8 +2272,8 @@ export declare const OutboundMessageSchema: z.ZodDiscriminatedUnion<"type", [z.Z
 }, {
     type: "sic_bo_roll";
     bets: {
-        amount: number;
         type: string | number;
+        amount: number;
         number?: number | undefined;
         value?: number | undefined;
         target?: number | undefined;
@@ -2286,14 +2286,14 @@ export declare const OutboundMessageSchema: z.ZodDiscriminatedUnion<"type", [z.Z
         number: z.ZodOptional<z.ZodNumber>;
         value: z.ZodOptional<z.ZodNumber>;
     }, "strip", z.ZodTypeAny, {
-        amount: number;
         type: string | number;
+        amount: number;
         number?: number | undefined;
         value?: number | undefined;
         target?: number | undefined;
     }, {
-        amount: number;
         type: string | number;
+        amount: number;
         number?: number | undefined;
         value?: number | undefined;
         target?: number | undefined;
@@ -2303,8 +2303,8 @@ export declare const OutboundMessageSchema: z.ZodDiscriminatedUnion<"type", [z.Z
 }, "strip", z.ZodTypeAny, {
     type: "sicbo_roll";
     bets: {
-        amount: number;
         type: string | number;
+        amount: number;
         number?: number | undefined;
         value?: number | undefined;
         target?: number | undefined;
@@ -2312,8 +2312,8 @@ export declare const OutboundMessageSchema: z.ZodDiscriminatedUnion<"type", [z.Z
 }, {
     type: "sicbo_roll";
     bets: {
-        amount: number;
         type: string | number;
+        amount: number;
         number?: number | undefined;
         value?: number | undefined;
         target?: number | undefined;
@@ -2595,4 +2595,101 @@ export declare function validateMessage<T>(raw: unknown, schema: z.ZodSchema<T>)
     success: false;
     error: z.ZodError;
 };
+/**
+ * Type guard for game_result messages.
+ * Use this instead of unsafe `as` casts when processing server messages.
+ */
+export declare function isGameResultMessage(msg: unknown): msg is z.infer<typeof GameResultMessageSchema>;
+/**
+ * Type guard for game_started messages.
+ */
+export declare function isGameStartedMessage(msg: unknown): msg is GameStartedMessage;
+/**
+ * Type guard for game_move messages.
+ */
+export declare function isGameMoveMessage(msg: unknown): msg is GameMoveMessage;
+/**
+ * Type guard for error messages.
+ */
+export declare function isErrorMessage(msg: unknown): msg is z.infer<typeof ErrorMessageSchema>;
+/**
+ * Type guard for session_ready messages.
+ */
+export declare function isSessionReadyMessage(msg: unknown): msg is SessionReadyMessage;
+/**
+ * Type guard for balance messages.
+ */
+export declare function isBalanceMessage(msg: unknown): msg is BalanceMessage;
+/**
+ * Type guard for live_table_state messages.
+ */
+export declare function isLiveTableStateMessage(msg: unknown): msg is LiveTableStateMessage;
+/**
+ * Type guard for live_table_result messages.
+ */
+export declare function isLiveTableResultMessage(msg: unknown): msg is LiveTableResultMessage;
+/** Result type for parseServerMessage - either valid data or error info */
+export type ParseResult<T> = {
+    success: true;
+    data: T;
+} | {
+    success: false;
+    error: string;
+    raw: unknown;
+};
+/**
+ * Parse and validate a server message with full GameMessageSchema validation.
+ * Returns a discriminated union result for type-safe handling of validation failures.
+ *
+ * @example
+ * ```typescript
+ * const result = parseServerMessage(raw);
+ * if (!result.success) {
+ *   console.error('Invalid message:', result.error);
+ *   return;
+ * }
+ * // result.data is now typed as GameMessage
+ * if (result.data.type === 'game_result') {
+ *   // TypeScript knows this is a GameResultMessage
+ * }
+ * ```
+ */
+export declare function parseServerMessage(raw: unknown): ParseResult<GameMessage>;
+/**
+ * Parse a game_result message with validation (base schema).
+ * Returns the validated message or null if invalid.
+ *
+ * Note: For blackjack-specific result parsing with detailed hand info,
+ * use parseGameResultMessage from schema/game-results.ts instead.
+ */
+export declare function parseBaseGameResult(raw: unknown): z.infer<typeof GameResultMessageSchema> | null;
+/**
+ * Safely extract a typed field from a message with fallback.
+ * Use this for optional fields that may be missing or have wrong type.
+ *
+ * @example
+ * ```typescript
+ * const won = safeGetField(payload, 'won', false); // boolean
+ * const payout = safeGetField(payload, 'payout', '0'); // string
+ * ```
+ */
+export declare function safeGetField<T>(obj: Record<string, unknown>, key: string, fallback: T): T;
+/**
+ * Type-safe message handler that validates before processing.
+ * Wraps a handler function with validation, returning undefined if message is invalid.
+ *
+ * @example
+ * ```typescript
+ * const handleResult = withValidation(GameResultMessageSchema, (msg) => {
+ *   // msg is typed as GameResultMessage here
+ *   return msg.won ? 'You win!' : 'You lose';
+ * });
+ *
+ * const result = handleResult(rawMessage);
+ * if (result !== undefined) {
+ *   showMessage(result);
+ * }
+ * ```
+ */
+export declare function withValidation<T, R>(schema: z.ZodSchema<T>, handler: (msg: T) => R): (raw: unknown) => R | undefined;
 //# sourceMappingURL=mobile.d.ts.map

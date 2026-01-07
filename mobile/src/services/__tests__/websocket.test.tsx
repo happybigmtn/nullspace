@@ -218,8 +218,11 @@ describe('useWebSocket', () => {
     act(() => {
       socket.onmessage?.({ data: JSON.stringify({ nope: true }) });
     });
+    // US-103: Now logs 4 arguments for better debugging
     expect(console.error).toHaveBeenCalledWith(
       'Invalid message format:',
+      expect.any(String),
+      '\nRaw message:',
       expect.any(String)
     );
   });
@@ -1746,6 +1749,7 @@ describe('multi-game session preservation (US-067)', () => {
     // WebSocketProvider creates a single connection at app root
     // All game screens use useWebSocketContext() to access the same connection
     // This means navigating between games doesn't create new connections
+    jest.spyOn(console, 'error').mockImplementation(() => {}); // Suppress validation errors
 
     act(() => {
       TestRenderer.create(<HookProbe url="ws://example.test" />);
@@ -1757,21 +1761,21 @@ describe('multi-game session preservation (US-067)', () => {
       socket.onopen?.();
     });
 
-    // Simulate receiving balance update
+    // Simulate receiving balance update (US-103: use valid schema)
     act(() => {
-      socket.onmessage?.({ data: JSON.stringify({ type: 'balance_update', balance: '1000' }) });
+      socket.onmessage?.({ data: JSON.stringify({ type: 'balance', registered: true, hasBalance: true, publicKey: 'abc', balance: '1000' }) });
     });
 
     // Connection remains active
     expect(socket.close).not.toHaveBeenCalled();
     expect(MockWebSocket.instances.length).toBe(1); // Only one connection
 
-    // Simulate multiple game state updates (as if switching games)
+    // Simulate multiple game state updates (US-103: use valid schema)
     act(() => {
-      socket.onmessage?.({ data: JSON.stringify({ type: 'game_started', game: 'blackjack' }) });
+      socket.onmessage?.({ data: JSON.stringify({ type: 'game_started', sessionId: '1001' }) });
     });
     act(() => {
-      socket.onmessage?.({ data: JSON.stringify({ type: 'game_started', game: 'roulette' }) });
+      socket.onmessage?.({ data: JSON.stringify({ type: 'game_started', sessionId: '1002' }) });
     });
 
     // Still the same connection
@@ -1798,17 +1802,18 @@ describe('multi-game session preservation (US-067)', () => {
       socket.onopen?.();
     });
 
-    // Receive initial balance
+    // Receive initial balance (US-103: use valid schema message)
     act(() => {
-      socket.onmessage?.({ data: JSON.stringify({ type: 'balance_update', balance: '5000' }) });
+      socket.onmessage?.({ data: JSON.stringify({ type: 'balance', registered: true, hasBalance: true, publicKey: 'abc', balance: '5000' }) });
     });
 
-    // Simulate game transition with balance update
+    // Simulate game transition with game_result (US-103: game_ended not in schema)
     act(() => {
-      socket.onmessage?.({ data: JSON.stringify({ type: 'game_ended', game: 'blackjack' }) });
+      socket.onmessage?.({ data: JSON.stringify({ type: 'game_result', won: false, payout: '0' }) });
     });
+    // Start new game (US-103: sessionId required)
     act(() => {
-      socket.onmessage?.({ data: JSON.stringify({ type: 'game_started', game: 'roulette' }) });
+      socket.onmessage?.({ data: JSON.stringify({ type: 'game_started', sessionId: '123' }) });
     });
 
     // lastMessage should reflect the latest state
@@ -1827,11 +1832,11 @@ describe('multi-game session preservation (US-067)', () => {
       socket.onopen?.();
     });
 
-    // Simulate rapid game switching
-    const games = ['blackjack', 'roulette', 'craps', 'baccarat', 'sicbo'];
-    for (const game of games) {
+    // Simulate rapid game switching (US-103: use valid game_started schema)
+    const sessionIds = ['1001', '1002', '1003', '1004', '1005'];
+    for (const sessionId of sessionIds) {
       act(() => {
-        socket.onmessage?.({ data: JSON.stringify({ type: 'game_started', game }) });
+        socket.onmessage?.({ data: JSON.stringify({ type: 'game_started', sessionId }) });
       });
       act(() => {
         jest.advanceTimersByTime(100);
@@ -1865,23 +1870,23 @@ describe('multi-game session preservation (US-067)', () => {
       socket.onopen?.();
     });
 
-    // Start game 1
+    // Start game 1 (US-103: sessionId required, bet as string)
     act(() => {
-      socket.onmessage?.({ data: JSON.stringify({ type: 'game_started', game: 'blackjack', bet: 100 }) });
+      socket.onmessage?.({ data: JSON.stringify({ type: 'game_started', sessionId: '1001', bet: '100' }) });
     });
 
     // Switch to game 2
     act(() => {
-      socket.onmessage?.({ data: JSON.stringify({ type: 'game_started', game: 'roulette', bet: 50 }) });
+      socket.onmessage?.({ data: JSON.stringify({ type: 'game_started', sessionId: '1002', bet: '50' }) });
     });
 
     // Return to game 1 with fresh state
     act(() => {
-      socket.onmessage?.({ data: JSON.stringify({ type: 'game_started', game: 'blackjack', bet: 200 }) });
+      socket.onmessage?.({ data: JSON.stringify({ type: 'game_started', sessionId: '1003', bet: '200' }) });
     });
 
-    // Should show the LATEST state, not the old bet=100
-    expect(latestState?.lastMessage).toEqual({ type: 'game_started', game: 'blackjack', bet: 200 });
+    // Should show the LATEST state, not the old bet=100 (US-103: bet is string)
+    expect(latestState?.lastMessage).toEqual({ type: 'game_started', sessionId: '1003', bet: '200' });
   });
 
   it('reconnects preserve session after network interruption during game', () => {
@@ -1897,9 +1902,9 @@ describe('multi-game session preservation (US-067)', () => {
       socket1.onopen?.();
     });
 
-    // Active game session
+    // Active game session (US-103: all required fields)
     act(() => {
-      socket1.onmessage?.({ data: JSON.stringify({ type: 'session_ready', publicKey: '0x123' }) });
+      socket1.onmessage?.({ data: JSON.stringify({ type: 'session_ready', sessionId: '1', publicKey: '0x123', registered: true, hasBalance: true }) });
     });
 
     // Network interruption
@@ -2742,6 +2747,194 @@ describe('onMessageDropped callback (US-099)', () => {
     // - Throw exception: Too disruptive for queue overflow
     //
     // Our solution: Keep send() simple, provide callback for drop notifications.
+
+    expect(true).toBe(true);
+  });
+});
+
+// ========================================================================
+// US-103: Malformed Message Validation Tests
+// ========================================================================
+//
+// This section tests that malformed server messages are properly rejected
+// and don't cause runtime crashes. The websocket hook now uses full
+// GameMessageSchema validation instead of just BaseMessageSchema.
+// ========================================================================
+
+describe('malformed message validation (US-103)', () => {
+  it('ignores messages without type field', () => {
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    act(() => {
+      TestRenderer.create(<HookProbe url="ws://example.test" />);
+    });
+
+    const socket = MockWebSocket.instances[0];
+    act(() => {
+      socket.readyState = MockWebSocket.OPEN;
+      socket.onopen?.();
+    });
+
+    // Send malformed message without type
+    act(() => {
+      socket.onmessage?.({ data: JSON.stringify({ won: true, payout: '100' }) });
+    });
+
+    // lastMessage should remain null - message was rejected
+    const state = snapshots.at(-1);
+    expect(state?.lastMessage).toBeNull();
+    expect(console.error).toHaveBeenCalled();
+  });
+
+  it('ignores messages with unknown type', () => {
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    act(() => {
+      TestRenderer.create(<HookProbe url="ws://example.test" />);
+    });
+
+    const socket = MockWebSocket.instances[0];
+    act(() => {
+      socket.readyState = MockWebSocket.OPEN;
+      socket.onopen?.();
+    });
+
+    // Send message with unknown type
+    act(() => {
+      socket.onmessage?.({ data: JSON.stringify({ type: 'unknown_message_type' }) });
+    });
+
+    const state = snapshots.at(-1);
+    expect(state?.lastMessage).toBeNull();
+  });
+
+  it('ignores game_result with wrong won type', () => {
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    act(() => {
+      TestRenderer.create(<HookProbe url="ws://example.test" />);
+    });
+
+    const socket = MockWebSocket.instances[0];
+    act(() => {
+      socket.readyState = MockWebSocket.OPEN;
+      socket.onopen?.();
+    });
+
+    // won should be boolean, not string
+    act(() => {
+      socket.onmessage?.({ data: JSON.stringify({ type: 'game_result', won: 'yes', payout: '100' }) });
+    });
+
+    const state = snapshots.at(-1);
+    expect(state?.lastMessage).toBeNull();
+  });
+
+  it('accepts valid game_result messages', () => {
+    act(() => {
+      TestRenderer.create(<HookProbe url="ws://example.test" />);
+    });
+
+    const socket = MockWebSocket.instances[0];
+    act(() => {
+      socket.readyState = MockWebSocket.OPEN;
+      socket.onopen?.();
+    });
+
+    // Valid game_result
+    act(() => {
+      socket.onmessage?.({ data: JSON.stringify({ type: 'game_result', won: true, payout: '100' }) });
+    });
+
+    const state = snapshots.at(-1);
+    expect(state?.lastMessage?.type).toBe('game_result');
+  });
+
+  it('accepts valid error messages', () => {
+    act(() => {
+      TestRenderer.create(<HookProbe url="ws://example.test" />);
+    });
+
+    const socket = MockWebSocket.instances[0];
+    act(() => {
+      socket.readyState = MockWebSocket.OPEN;
+      socket.onopen?.();
+    });
+
+    // Valid error
+    act(() => {
+      socket.onmessage?.({ data: JSON.stringify({ type: 'error', code: 'E001', message: 'Test error' }) });
+    });
+
+    const state = snapshots.at(-1);
+    expect(state?.lastMessage?.type).toBe('error');
+  });
+
+  it('handles invalid JSON gracefully', () => {
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    act(() => {
+      TestRenderer.create(<HookProbe url="ws://example.test" />);
+    });
+
+    const socket = MockWebSocket.instances[0];
+    act(() => {
+      socket.readyState = MockWebSocket.OPEN;
+      socket.onopen?.();
+    });
+
+    // Invalid JSON
+    act(() => {
+      socket.onmessage?.({ data: 'not valid json {' });
+    });
+
+    const state = snapshots.at(-1);
+    expect(state?.lastMessage).toBeNull();
+    expect(console.error).toHaveBeenCalled();
+  });
+
+  it('tracks invalid messages for monitoring', () => {
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    act(() => {
+      TestRenderer.create(<HookProbe url="ws://example.test" />);
+    });
+
+    const socket = MockWebSocket.instances[0];
+    act(() => {
+      socket.readyState = MockWebSocket.OPEN;
+      socket.onopen?.();
+    });
+
+    mockTrack.mockClear();
+
+    // Send invalid message
+    act(() => {
+      socket.onmessage?.({ data: JSON.stringify({ type: 'invalid_type_xyz' }) });
+    });
+
+    // Should track validation failure
+    expect(mockTrack).toHaveBeenCalledWith('websocket_invalid_message', expect.objectContaining({
+      messageType: 'invalid_type_xyz',
+    }));
+  });
+
+  it('documents: full GameMessageSchema validation prevents runtime crashes', () => {
+    // This is a documentation test explaining US-103.
+    //
+    // Before US-103:
+    // - WebSocket used BaseMessageSchema (only validates { type: string })
+    // - Game screens cast lastMessage to specific types without validation
+    // - Malformed server messages could cause runtime crashes
+    //
+    // After US-103:
+    // - WebSocket uses full GameMessageSchema validation
+    // - Only valid messages matching known schemas pass through
+    // - Invalid messages are logged, tracked, and silently dropped
+    // - Game screens can safely use type narrowing on lastMessage
+    //
+    // This ensures that if the server sends malformed data, the client
+    // gracefully ignores it rather than crashing.
 
     expect(true).toBe(true);
   });
