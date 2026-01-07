@@ -2,9 +2,10 @@
  * Cryptographic utilities for secure operations
  *
  * US-139: Timing-safe comparison functions to prevent timing attacks
+ * US-140: Cryptographically secure random ID generation
  */
 
-import { timingSafeEqual } from 'node:crypto';
+import { timingSafeEqual, randomBytes } from 'node:crypto';
 
 /**
  * Constant-time string comparison to prevent timing attacks
@@ -43,4 +44,32 @@ export function timingSafeStringEqual(a: string | undefined | null, b: string | 
   }
 
   return timingSafeEqual(bufA, bufB);
+}
+
+/**
+ * Generate a cryptographically secure random ID
+ *
+ * Uses crypto.randomBytes() which provides cryptographically strong
+ * pseudo-random data. This is suitable for security-sensitive IDs like
+ * session tokens and connection IDs where unpredictability is critical.
+ *
+ * @param prefix - Optional prefix for the ID (e.g., 'conn', 'session')
+ * @param bytes - Number of random bytes to generate (default: 16 = 128 bits)
+ * @returns A random ID string in the format `${prefix}_${timestamp}_${randomHex}`
+ *
+ * @example
+ * ```ts
+ * // Generate a connection ID
+ * const connId = generateSecureId('conn');
+ * // => "conn_1704067200000_a3f2b8c1d4e5f6a7"
+ *
+ * // Generate a session ID with more entropy
+ * const sessionId = generateSecureId('session', 32);
+ * // => "session_1704067200000_a3f2b8c1d4e5f6a7b8c9d0e1f2a3b4c5"
+ * ```
+ */
+export function generateSecureId(prefix: string = 'id', bytes: number = 8): string {
+  const timestamp = Date.now();
+  const randomPart = randomBytes(bytes).toString('hex');
+  return `${prefix}_${timestamp}_${randomPart}`;
 }

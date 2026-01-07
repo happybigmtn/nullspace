@@ -25,6 +25,7 @@ import {
   validateCors,
   handleCorsPreflight,
 } from './middleware/security.js';
+import { generateSecureId } from './utils/crypto.js';
 
 const NODE_ENV = process.env.NODE_ENV ?? 'development';
 const IS_PROD = NODE_ENV === 'production';
@@ -404,7 +405,8 @@ wss.on('connection', async (ws: WebSocket, req) => {
   }
 
   // Generate a connection ID for tracking (will be replaced by session.id once created)
-  const connectionId = `conn_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  // US-140: Use cryptographically secure random ID to prevent session hijacking
+  const connectionId = generateSecureId('conn');
 
   // Register the connection
   connectionLimiter.registerConnection(clientIp, connectionId);

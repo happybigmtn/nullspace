@@ -196,8 +196,8 @@
         "Add tests validating cryptographic randomness"
       ],
       "priority": 63,
-      "passes": false,
-      "notes": "SECURITY-HIGH: Predictable IDs could enable session hijacking. Use crypto.getRandomValues() for all security-relevant IDs."
+      "passes": true,
+      "notes": "COMPLETE: Added generateSecureId() to gateway/utils/crypto.ts using crypto.randomBytes(). Updated gateway connection ID and website request ID. 9 tests validate format, uniqueness, and entropy distribution."
     },
     {
       "id": "US-141",

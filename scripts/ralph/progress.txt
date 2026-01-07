@@ -3211,3 +3211,24 @@ Target: Testnet Production
   - 45-second gradient shift animation adds subtle visual interest
 
 ---
+
+## 2026-01-07 - US-140: Replace Math.random() with crypto.getRandomValues()
+
+- What was implemented:
+  - Added generateSecureId() utility to gateway/src/utils/crypto.ts
+  - Updated gateway/src/index.ts:407 to use generateSecureId('conn')
+  - Updated website/src/api/client.js to use crypto.getRandomValues() fallback
+  - Added 9 new tests for generateSecureId() covering format, uniqueness, and entropy
+- Files changed:
+  - `gateway/src/utils/crypto.ts` - Added generateSecureId() function
+  - `gateway/src/index.ts` - Import and use generateSecureId('conn')
+  - `gateway/tests/unit/timing-safe-comparison.test.ts` - 9 new tests
+  - `website/src/api/client.js` - Updated makeRequestId() with crypto.getRandomValues fallback
+- **Learnings:**
+  - Node.js uses crypto.randomBytes() for CSPRNG (equivalent to browser's getRandomValues)
+  - 8 bytes = 64 bits of entropy is sufficient for connection IDs (birthday bound ~2^32)
+  - Website's crypto.randomUUID is already secure but getRandomValues is a better fallback than Math.random
+  - Hex encoding doubles the string length (8 bytes → 16 hex chars)
+  - Format: prefix_timestamp_randomHex enables debugging while maintaining security
+
+---

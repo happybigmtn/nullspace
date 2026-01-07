@@ -8,11 +8,25 @@ import { logDebug } from '../utils/logger.js';
 const FETCH_RETRY_DELAY_MS = 1000;
 // Timeout for individual fetch requests
 const FETCH_TIMEOUT_MS = 10000;
+/**
+ * Generate a cryptographically secure request ID
+ * US-140: Use crypto.getRandomValues() for unpredictable IDs
+ */
 const makeRequestId = () => {
+  // Prefer crypto.randomUUID (most modern browsers)
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     return crypto.randomUUID();
   }
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  // Fallback to crypto.getRandomValues (wider support than randomUUID)
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  }
+  // Last resort fallback (shouldn't happen in any modern browser)
+  console.warn('[Security] crypto API unavailable, using timestamp-based ID');
+  return `${Date.now().toString(36)}-fallback`;
 };
 
 /**
