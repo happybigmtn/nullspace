@@ -618,8 +618,8 @@
         "Test performance with long lists"
       ],
       "priority": 50,
-      "passes": false,
-      "notes": "WEB-UX: No scroll-triggered animations detected in website codebase. Content appears instantly."
+      "passes": true,
+      "notes": "COMPLETE: useScrollReveal.ts has 3 hooks - useScrollReveal (single element), useStaggeredScrollReveal (lists with per-item delay), useParallax (0.5x scroll speed). CSS: .scroll-hidden/.scroll-revealed classes. Used in RewardsDrawer. Intersection Observer is highly performant."
     },
     {
       "id": "US-128",

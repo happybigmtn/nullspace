@@ -2999,3 +2999,27 @@ Target: Testnet Production
   - `blur(48px)` to `blur(64px)` in glowPulse creates breathing depth effect
 
 ---
+
+## 2026-01-07 - US-127: Website scroll-triggered reveal animations
+
+- What was implemented:
+  - VERIFIED: Full implementation in useScrollReveal.ts (210 lines)
+  - `useScrollReveal<T>()` - single element with threshold, rootMargin, once, delay options
+  - `useStaggeredScrollReveal()` - for lists with per-item stagger delay
+  - `useParallax<T>()` - background parallax effect at configurable speed (default 0.5x)
+  - CSS classes: `.scroll-hidden` (opacity:0, translateY:20px), `.scroll-revealed` (opacity:1, translateY:0)
+  - Used in RewardsDrawer.tsx for reward item animations
+  - Intersection Observer with passive scroll listener for performance
+- Files changed:
+  - `website/src/hooks/useScrollReveal.ts` - 210 lines (existing)
+  - `website/src/index.css` - Lines 1107-1119 CSS classes (existing)
+  - `website/src/components/casino/RewardsDrawer.tsx` - Uses hooks (existing)
+- **Learnings:**
+  - `IntersectionObserver` is far more performant than scroll event handlers
+  - `passive: true` on scroll listener prevents blocking main thread
+  - `hasRevealedRef` useRef prevents re-triggering after `once: true`
+  - Parallax progress calculation: `(viewportHeight - rect.top) / (viewportHeight + rect.height)`
+  - Centered effect formula: `(progress - 0.5) * 2` normalizes to -1 to 1 range
+  - Stagger pattern: `setTimeout(..., index * staggerDelay)` creates cascade effect
+
+---
