@@ -1,6 +1,6 @@
-import { View, Text, StyleSheet, TextInput, ScrollView, Pressable } from 'react-native';
-import { useCallback, useEffect, useState } from 'react';
-import { PrimaryButton, PasswordStrengthIndicator } from '../components/ui';
+import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { PrimaryButton, PasswordStrengthIndicator, PremiumInput, type PremiumInputHandle } from '../components/ui';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS } from '../constants/theme';
 import {
   createPasswordVault,
@@ -58,6 +58,13 @@ export function VaultScreen({ navigation }: VaultScreenProps) {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Refs for shake animation on error
+  const createPasswordRef = useRef<PremiumInputHandle>(null);
+  const createConfirmRef = useRef<PremiumInputHandle>(null);
+  const unlockPasswordRef = useRef<PremiumInputHandle>(null);
+  const importKeyRef = useRef<PremiumInputHandle>(null);
+  const importPasswordRef = useRef<PremiumInputHandle>(null);
+
   const refreshStatus = useCallback(async () => {
     const status = await getVaultStatus();
     setVaultEnabled(status.enabled);
@@ -78,6 +85,7 @@ export function VaultScreen({ navigation }: VaultScreenProps) {
     resetMessages();
     if (createPassword !== createConfirm) {
       setError('Passwords do not match.');
+      createConfirmRef.current?.shake();
       return;
     }
     try {
@@ -89,6 +97,7 @@ export function VaultScreen({ navigation }: VaultScreenProps) {
       await refreshStatus();
     } catch (err) {
       setError(mapVaultError(err));
+      createPasswordRef.current?.shake();
     }
   }, [createPassword, createConfirm, refreshStatus]);
 
@@ -101,6 +110,7 @@ export function VaultScreen({ navigation }: VaultScreenProps) {
       await refreshStatus();
     } catch (err) {
       setError(mapVaultError(err));
+      unlockPasswordRef.current?.shake();
     }
   }, [unlockPassword, refreshStatus]);
 
@@ -132,6 +142,8 @@ export function VaultScreen({ navigation }: VaultScreenProps) {
       await refreshStatus();
     } catch (err) {
       setError(mapVaultError(err));
+      importKeyRef.current?.shake();
+      importPasswordRef.current?.shake();
     }
   }, [importPassword, importKey, refreshStatus]);
 
@@ -180,22 +192,24 @@ export function VaultScreen({ navigation }: VaultScreenProps) {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Create vault</Text>
           <Text style={styles.cardBody}>Encrypt your key with a password.</Text>
-          <TextInput
-            placeholder="Create password"
-            placeholderTextColor={COLORS.textMuted}
+          <PremiumInput
+            ref={createPasswordRef}
+            label="Create password"
             secureTextEntry
             value={createPassword}
             onChangeText={setCreatePassword}
-            style={styles.input}
+            showValidation
+            isValid={createPassword.length >= VAULT_PASSWORD_MIN_LENGTH}
           />
           <PasswordStrengthIndicator password={createPassword} />
-          <TextInput
-            placeholder="Confirm password"
-            placeholderTextColor={COLORS.textMuted}
+          <PremiumInput
+            ref={createConfirmRef}
+            label="Confirm password"
             secureTextEntry
             value={createConfirm}
             onChangeText={setCreateConfirm}
-            style={styles.input}
+            showValidation
+            isValid={createConfirm.length > 0 && createConfirm === createPassword}
           />
           <PrimaryButton label="Create vault" onPress={handleCreateVault} size="large" />
           <Text style={styles.helperText}>Minimum {VAULT_PASSWORD_MIN_LENGTH} characters.</Text>
@@ -205,13 +219,12 @@ export function VaultScreen({ navigation }: VaultScreenProps) {
       {vaultEnabled && !vaultUnlocked && (
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Unlock vault</Text>
-          <TextInput
-            placeholder="Vault password"
-            placeholderTextColor={COLORS.textMuted}
+          <PremiumInput
+            ref={unlockPasswordRef}
+            label="Vault password"
             secureTextEntry
             value={unlockPassword}
             onChangeText={setUnlockPassword}
-            style={styles.input}
           />
           <PrimaryButton label="Unlock" onPress={handleUnlock} size="large" />
         </View>
@@ -234,22 +247,24 @@ export function VaultScreen({ navigation }: VaultScreenProps) {
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Import recovery key</Text>
         <Text style={styles.cardBody}>Replaces any vault on this device.</Text>
-        <TextInput
-          placeholder="Recovery key (64 hex)"
-          placeholderTextColor={COLORS.textMuted}
+        <PremiumInput
+          ref={importKeyRef}
+          label="Recovery key (64 hex)"
           value={importKey}
           onChangeText={setImportKey}
           autoCapitalize="none"
           autoCorrect={false}
-          style={styles.input}
+          showValidation
+          isValid={importKey.length === 64 && /^[0-9a-fA-F]+$/.test(importKey)}
         />
-        <TextInput
-          placeholder="New vault password"
-          placeholderTextColor={COLORS.textMuted}
+        <PremiumInput
+          ref={importPasswordRef}
+          label="New vault password"
           secureTextEntry
           value={importPassword}
           onChangeText={setImportPassword}
-          style={styles.input}
+          showValidation
+          isValid={importPassword.length >= VAULT_PASSWORD_MIN_LENGTH}
         />
         <PasswordStrengthIndicator password={importPassword} />
         <PrimaryButton label="Import & replace" onPress={handleImport} variant="danger" />
@@ -307,15 +322,6 @@ const styles = StyleSheet.create({
   cardBody: {
     color: COLORS.textSecondary,
     ...TYPOGRAPHY.bodySmall,
-    marginBottom: SPACING.sm,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: RADIUS.md,
-    padding: SPACING.md,
-    color: COLORS.textPrimary,
-    backgroundColor: COLORS.background,
     marginBottom: SPACING.sm,
   },
   helperText: {
