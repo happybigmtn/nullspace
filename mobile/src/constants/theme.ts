@@ -172,13 +172,21 @@ export const SPACING = {
 
 /**
  * Border radius from design-tokens
- * Mobile uses slightly larger values for touch targets
+ *
+ * Direct mapping to tokens for platform consistency:
+ * - sm: 4px (subtle rounding for small elements)
+ * - md: 8px (standard rounding for cards, buttons)
+ * - lg: 12px (larger rounding for panels, containers)
+ * - xl: 16px (extra large for modals, overlays)
+ * - 2xl: 24px (glass-morphism containers, bottom sheets)
+ * - full: 9999px (circular elements, pills)
  */
 export const RADIUS = {
-  sm: TOKEN_RADIUS.md,  // 8px
-  md: TOKEN_RADIUS.lg,  // 12px
-  lg: 20,               // Mobile-specific
-  xl: TOKEN_RADIUS['2xl'], // 24px
+  sm: TOKEN_RADIUS.sm,    // 4px
+  md: TOKEN_RADIUS.md,    // 8px
+  lg: TOKEN_RADIUS.lg,    // 12px
+  xl: TOKEN_RADIUS.xl,    // 16px
+  '2xl': TOKEN_RADIUS['2xl'], // 24px - glass-morphism radius
   full: TOKEN_RADIUS.full,
 } as const;
 

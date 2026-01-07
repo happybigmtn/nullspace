@@ -38,7 +38,7 @@ interface GlassViewProps {
   withGlow?: boolean;
   /** Custom container style */
   style?: StyleProp<ViewStyle>;
-  /** Border radius (default: RADIUS.lg) */
+  /** Border radius (default: RADIUS['2xl'] for glass-morphism) */
   borderRadius?: number;
   /** Test ID for testing */
   testID?: string;
@@ -70,7 +70,7 @@ export function GlassView({
   tint = 'auto',
   withGlow = false,
   style,
-  borderRadius = RADIUS.lg,
+  borderRadius = RADIUS['2xl'],
   testID,
 }: GlassViewProps) {
   const { isDark } = useTheme();

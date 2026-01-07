@@ -215,13 +215,13 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   cardBottom: {
-    borderTopLeftRadius: RADIUS.xl,
-    borderTopRightRadius: RADIUS.xl,
+    borderTopLeftRadius: RADIUS['2xl'],
+    borderTopRightRadius: RADIUS['2xl'],
     padding: SPACING.lg,
     paddingBottom: SPACING.xxl,
   },
   cardCenter: {
-    borderRadius: RADIUS.lg,
+    borderRadius: RADIUS['2xl'],
     padding: SPACING.lg,
     maxWidth: '90%',
     width: 340,
@@ -229,8 +229,8 @@ const styles = StyleSheet.create({
   cardInnerBorder: {
     ...StyleSheet.absoluteFillObject,
     borderWidth: 1,
-    borderTopLeftRadius: RADIUS.xl,
-    borderTopRightRadius: RADIUS.xl,
+    borderTopLeftRadius: RADIUS['2xl'],
+    borderTopRightRadius: RADIUS['2xl'],
   },
   innerGlow: {
     position: 'absolute',
