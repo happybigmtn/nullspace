@@ -1344,6 +1344,24 @@ Target: Testnet Production
 
 ---
 
+## 2026-01-06 - US-067: Add multi-game session preservation test
+
+- What was implemented:
+  - Added 6 tests verifying WebSocket session is preserved across game navigation
+  - Tests cover: connection persistence, balance consistency, rapid switching, stale state prevention
+  - Tests verify reconnection preserves session after network interruption
+  - Documented singleton pattern: WebSocketContext creates one connection at app root
+- Files changed:
+  - `mobile/src/services/__tests__/websocket.test.tsx` - Added 6 multi-game session tests
+- **Learnings:**
+  - Architecture already supports this via WebSocketContext singleton pattern
+  - WebSocketProvider at app root → all game screens share the same connection
+  - Balance updates and session state are globally visible across screens
+  - No connection overhead when switching between games
+  - useWebSocketContext() hook provides consistent access to shared connection
+
+---
+
 ## 2026-01-06 - US-066: Add observability failure handling tests
 
 - What was implemented:

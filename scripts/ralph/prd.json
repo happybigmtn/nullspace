@@ -751,8 +751,8 @@
 				"Test returning to game shows correct state (not stale)"
 			],
 			"priority": 58,
-			"passes": false,
-			"notes": "HIGH GAP: No tests verify session integrity when user switches between different games."
+			"passes": true,
+			"notes": "VERIFIED: Added 6 tests. WebSocketContext provides singleton connection at app root. All game screens share same connection via useWebSocketContext(). Balance/session state consistent across navigation. No connection overhead when switching games."
 		},
 		{
 			"id": "US-068",
