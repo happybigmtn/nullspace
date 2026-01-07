@@ -712,8 +712,8 @@
 				"Add readiness vs liveness probe distinction"
 			],
 			"priority": 55,
-			"passes": false,
-			"notes": "CRITICAL GAP: gateway/src/index.ts:304-309 - health check always returns 200 even if backend is down."
+			"passes": true,
+			"notes": "FIXED: Added /livez (liveness, no deps), /healthz and /readyz (readiness, checks backend). Returns 503 when backend unreachable, 200 when connected. Created 13 unit tests and integration tests. SubmitClient.healthCheck() pings backend /healthz with 5s timeout."
 		},
 		{
 			"id": "US-065",

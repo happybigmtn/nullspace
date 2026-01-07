@@ -288,7 +288,7 @@ async function handleMessage(ws: WebSocket, rawData: Buffer): Promise<void> {
 }
 
 // Create HTTP server with healthz and metrics endpoints, then attach WebSocket server
-const server = createServer((req, res) => {
+const server = createServer(async (req, res) => {
   // Apply HTTPS redirect in production
   if (!enforceHttps(req, res)) {
     return; // Request was redirected
@@ -309,10 +309,26 @@ const server = createServer((req, res) => {
 
   const path = req.url?.split('?')[0];
 
-  if (req.method === 'GET' && path === '/healthz') {
+  // Liveness probe: Is the process running? Fast, no external dependencies.
+  if (req.method === 'GET' && path === '/livez') {
     res.statusCode = 200;
     res.setHeader('Content-Type', 'application/json');
     res.end(JSON.stringify({ ok: true }));
+    return;
+  }
+
+  // Readiness probe: Can we serve traffic? Checks backend connectivity.
+  if (req.method === 'GET' && (path === '/healthz' || path === '/readyz')) {
+    const backendHealthy = await submitClient.healthCheck();
+    if (backendHealthy) {
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ ok: true, backend: 'connected' }));
+    } else {
+      res.statusCode = 503;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ ok: false, backend: 'unreachable' }));
+    }
     return;
   }
 

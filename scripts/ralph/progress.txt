@@ -1298,3 +1298,74 @@ Target: Testnet Production
   - setGameConnectionMessage() triggers useEffect to process new lastMessage in component
   - tree.update() re-renders component with same props, triggering effect with new mock state
 
+---
+
+## 2026-01-06 - US-061: Add E2E bet placement flow integration test
+
+- What was implemented:
+  - Created `BetPlacementE2ETest.ts` with 4 comprehensive E2E tests
+  - Test 1: Complete Blackjack bet flow with 10 tracked steps:
+    - WebSocket connect → session_ready → balance check → chip selection → placeChip() → DEAL press → WS send → server response → game resolution → balance update
+  - Test 2: Roulette atomic game flow (demonstrates atomic game pattern)
+  - Test 3: Insufficient balance rejection (error handling path)
+  - Test 4: Sequential bets with balance tracking (3 games, verifies balance consistency)
+  - Created dedicated runner `runE2EBetPlacementTest.ts`
+  - Each step is timed and logged with detailed diagnostics
+- Files changed:
+  - `mobile/tests/integration/e2e/BetPlacementE2ETest.ts` - New test file (627 lines)
+  - `mobile/tests/integration/runE2EBetPlacementTest.ts` - Dedicated runner script
+- **Learnings:**
+  - E2E integration tests need real WebSocket connection (uses `ws` package)
+  - Steps 4-5 (chip selection, placeChip) are documented UI behaviors - tested via behavior, not direct calls
+  - Balance check should happen before placeChip() to match real useChipBetting behavior
+  - Atomic games (Roulette, Craps, SicBo) combine bet placement with resolution in single message
+  - Multi-move games (Blackjack, HiLo) require separate game_started then action messages
+  - FlowStep tracking pattern provides clear step-by-step progress visibility
+  - Test requires funded account for happy path - rejection tests work with zero balance
+
+---
+
+## 2026-01-06 - US-063: Add error code translation layer tests
+
+- What was implemented:
+  - Created `error-code-translation.test.ts` with 24 comprehensive tests
+  - Tests cover all 3 translation layers: Rust u8 → Gateway string → User message
+  - Documented the full error code mapping table (15 Rust codes + unknown handling)
+  - Helper functions `translateRustErrorCode()` and `getUserFriendlyMessage()` for reference
+- Files changed:
+  - `gateway/tests/unit/error-code-translation.test.ts` - New test file (320 lines)
+- **Learnings:**
+  - Rust layer emits u8 error codes (1-15 defined in types/src/casino/constants.rs)
+  - Gateway currently doesn't translate codes - passes through errorMessage as TRANSACTION_REJECTED
+  - The test documents EXPECTED behavior for proper translation (can be used to implement later)
+  - Key mappings: ERROR_INSUFFICIENT_FUNDS(3)→INSUFFICIENT_BALANCE, ERROR_INVALID_BET(4)→INVALID_BET
+  - Unknown codes (0, 255, 100+) should fall back to TRANSACTION_REJECTED with backend message
+  - Mobile layer expects Gateway string codes and converts to user-friendly messages
+
+---
+
+## 2026-01-06 - US-064: Add gateway health check backend connectivity test
+
+- What was implemented:
+  - Changed `/healthz` from always-200 to proper readiness probe that checks backend connectivity
+  - Added `/livez` endpoint for liveness probe (no external dependencies, always 200)
+  - Added `/readyz` endpoint as alias for `/healthz` (K8s compatibility)
+  - Made HTTP server callback async to support await in health check
+  - `/healthz` and `/readyz` now return 503 when `submitClient.healthCheck()` returns false
+  - Created unit tests (13 tests) covering SubmitClient.healthCheck() behavior
+  - Created integration tests for live backend scenarios
+- Files changed:
+  - `gateway/src/index.ts` - Refactored health endpoints with backend connectivity check
+  - `gateway/tests/unit/health-check.test.ts` - New file with 13 unit tests
+  - `gateway/tests/integration/health-check.test.ts` - New file with integration tests
+- **Learnings:**
+  - Kubernetes distinguishes between liveness and readiness probes:
+    - `/livez` (liveness): "Is the process running?" - Used to detect stuck processes
+    - `/readyz` (readiness): "Can the service handle traffic?" - Checks dependencies
+  - 503 Service Unavailable is the correct HTTP status for failed readiness check
+  - `SubmitClient.healthCheck()` already existed and pings backend's `/healthz` endpoint with 5s timeout
+  - Async HTTP callback in Node.js works fine with `createServer(async (req, res) => ...)`
+  - Response body includes `backend: 'connected'` or `backend: 'unreachable'` for debugging
+
+---
+
