@@ -2872,3 +2872,29 @@ Target: Testnet Production
   - `perspective: 500` in transform array enables 3D rotation effects
 
 ---
+
+## 2026-01-07 - TypeScript Strict Mode Compliance Fix
+
+- What was implemented:
+  - Fixed 160+ TypeScript errors in mobile test files to improve strict mode compliance
+  - websocket.test.tsx: Created `getSocket()` and `getLastSocket()` helper functions that safely access `MockWebSocket.instances` array with proper assertions
+  - encryptedWebStore.ts: Added non-null assertion to `Uint8Array` element access in `arrayBufferToBase64()` function
+  - encryptedWebStore.test.ts: Fixed mock encryption XOR operations and global mock type assertions
+  - gameStore.test.ts: Cast `selectedChip: 25` to `ChipValue` union type
+  - Rebuilt design-tokens package to include `SHADOW_COLORED` and `SHADOW_INSET` exports
+- Files changed:
+  - `mobile/src/services/__tests__/websocket.test.tsx` - Added helper functions, fixed ~60 array access sites
+  - `mobile/src/services/encryptedWebStore.ts` - Line 144 non-null assertion
+  - `mobile/src/services/__tests__/encryptedWebStore.test.ts` - Fixed mock types
+  - `mobile/src/stores/__tests__/gameStore.test.ts` - Added ChipValue import and cast
+  - `packages/design-tokens/dist/*` - Rebuilt to include SHADOW_COLORED/SHADOW_INSET
+- **Learnings:**
+  - TypeScript array element access (`arr[i]`) returns `T | undefined` in strict mode - use non-null assertion (`arr[i]!`) when bounds are guaranteed
+  - Test helper pattern: Wrap array access in throwing helper function rather than sprinkling `!` everywhere
+  - `global as unknown as { Type }` is the correct double-cast pattern for mocking globals
+  - Union types like `ChipValue = 1 | 5 | 25 | 100 | 500 | 1000` require explicit casting from plain numbers
+  - design-tokens dist folder IS tracked in git (unlike typical JS projects) - rebuild when adding exports
+  - Remaining ~140 errors are in test files with similar patterns - recommend batch fix in future PR
+  - Pattern: `const socket = getSocket()` is cleaner than `const socket = MockWebSocket.instances[0]!` throughout
+
+---

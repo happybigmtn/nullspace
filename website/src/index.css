@@ -1294,3 +1294,87 @@ a[href="#app-main"]:focus-visible {
   animation: confetti-burst var(--duration) cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
   animation-delay: var(--delay, 0s);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Reduced Motion Support (WCAG 2.1 Compliant)
+ *
+ * Respects user's prefers-reduced-motion setting for accessibility.
+ * Disables or reduces animations that could cause vestibular disorders.
+ * Essential feedback (opacity, color changes) are preserved.
+ * ───────────────────────────────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  /* Disable all CSS animations */
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* Disable transform-based animations but keep opacity */
+  .animate-scale-in,
+  .animate-slideIn,
+  .animate-fade-in-up,
+  .animate-fade-in-down,
+  .animate-slide-in-left,
+  .page-transition-enter,
+  .hero-gradient-drift,
+  .hero-gradient-drift-alt,
+  .hero-glow-pulse,
+  .hero-glow-pulse-alt,
+  .loading-spinner-premium,
+  .loading-spinner-glow,
+  .loading-bg-shift {
+    animation: none !important;
+  }
+
+  /* Disable hover elevation/rotation effects */
+  .hover-elevate:hover,
+  .hover-rotate:hover,
+  .hover-rotate-reverse:hover,
+  .card-premium:hover {
+    transform: none !important;
+  }
+
+  /* Keep hover glow as color-only feedback */
+  .hover-glow:hover,
+  .hover-glow-success:hover {
+    transition: border-color 0.01ms !important;
+  }
+
+  /* Disable parallax */
+  .parallax-bg {
+    transform: none !important;
+  }
+
+  /* Disable floating particles */
+  .hero-particle {
+    display: none;
+  }
+
+  /* Simplify confetti to instant disappear */
+  .confetti {
+    animation: none !important;
+    opacity: 0;
+  }
+
+  /* Keep focus ring pulse but make it static */
+  .focus-animated:focus-visible {
+    animation: none !important;
+  }
+
+  /* Disable scroll reveal animations */
+  .scroll-hidden {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* Loading dots: show all at once instead of staggered */
+  .loading-dot {
+    animation: none !important;
+    opacity: 1;
+  }
+}

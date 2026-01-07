@@ -1,0 +1,126 @@
+# Ralph2 QA Progress Log
+Started: 2026-01-07
+Target: E2E QA Testing of Casino Mobile App
+
+## Infrastructure
+
+### Local Network
+- Start: `./scripts/start-local-network.sh --fresh`
+- Simulator: http://localhost:8080
+- Health: http://localhost:8080/healthz
+
+### Mobile Web
+- Start: `cd mobile && npm run web`
+- URL: http://localhost:8081
+
+## Test Coverage Matrix
+
+| Game | Basic | Advanced | Edge Cases |
+|------|-------|----------|------------|
+| Hi-Lo | QA-006 | - | - |
+| Blackjack | QA-007 | QA-008 | - |
+| Roulette | QA-009 | - | - |
+| Baccarat | QA-010 | QA-011 | - |
+| Casino War | QA-012 | - | - |
+| Video Poker | QA-013 | - | - |
+| Sic Bo | QA-014 | - | - |
+| 3 Card Poker | QA-015 | - | - |
+| Ultimate Holdem | QA-016 | - | - |
+| Craps | QA-017 | QA-018 | - |
+
+## Key Learnings
+
+### Browser Automation
+- Use Playwright MCP tools for reliable E2E testing
+- Always take screenshots for visual verification
+- Wait for network requests before assertions
+
+### Game Mechanics
+- Each game has unique bet types and flows
+- Baccarat has 10 bet types (most complex betting)
+- Craps has multi-phase betting with point tracking
+- Video Poker requires card selection before draw
+
+---
+
+## 2026-01-07 - Initial Setup
+
+- Created prd2.json with 26 QA user stories
+- Stories organized by:
+  - Priority 1-2: Infrastructure setup
+  - Priority 3-5: Auth and lobby flows
+  - Priority 10-22: Game-specific tests
+  - Priority 25-26: UI component tests
+  - Priority 30-32: Edge case testing
+  - Priority 35: Vault/settings
+  - Priority 40-41: Bug tracking and visual baseline
+- **Learnings:**
+  - Mobile app has 10 games to test
+  - Playwright MCP provides browser automation
+  - Local network requires 4 consensus nodes + simulator
+
+---
+
+## 2026-01-07 - E2E Test Session 1
+
+### QA-001: Local Network Health
+**Result:** PASS
+- Simulator running at :8080
+- Gateway running at :9010
+- 4 consensus nodes active on ports 9000-9003
+
+### QA-002: Mobile Web Server
+**Result:** PASS
+- Expo dev server at :8081
+- Splash screen renders correctly
+
+### QA-003: Auth Flow
+**Result:** PASS
+- "Welcome Back" screen appears
+- AUTHENTICATE button visible (requires biometric)
+- SKIP (DEMO MODE) navigates to lobby
+- **Screenshots:** /tmp/qa-hilo-01-auth.png
+
+### QA-004: Lobby Navigation
+**Result:** PASS
+- All 10 game cards visible: Hi-Lo, Blackjack, Roulette, Craps, Baccarat, Casino War, Video Poker, Sic Bo, 3 Card Poker, Ultimate Holdem
+- "Good evening" greeting
+- Event badge: "Sic Bo Week - Ends in 4d 15h"
+- Testnet indicator visible
+- **Screenshots:** /tmp/qa-hilo-02-lobby.png
+
+### QA-005: Faucet Claim
+**Result:** PASS
+- "Claim now" button works
+- Balance updates from $0 to $1,000
+- Wallet address displayed (e.g., 301f45...2ebe)
+- Faucet shows "Faucet claimed" after use
+- **Screenshots:** /tmp/qa-hilo-03-faucet.png
+
+### QA-006: Hi-Lo Game
+**Result:** PASS
+- Game screen loads correctly
+- Tutorial overlay appears, dismissable via "SKIP TUTORIAL"
+- Chip selector visible: $1, $5, $25, $100, $500, $1000
+- **Key Finding:** Chips must be DRAGGED upward to place bet (tap only selects)
+- Placed $5 bet via drag → Clicked HIGHER → Won!
+- Balance: $1,000 → $1,995 (+$995 session profit)
+- "Make your call" state - ready for next prediction
+- **Screenshots:** /tmp/qa-hilo-game-01-initial.png, /tmp/qa-hilo-game-02-bet-placed.png, /tmp/qa-hilo-game-03-result.png
+
+---
+
+## Bugs Found
+
+### BUG-001 (Medium - UX)
+**Title:** Chip tap only selects, drag required to place bet
+**Impact:** UX discoverability - users expect tap to place bet
+**Resolution:** Tutorial says "tap to add to your bet" but actually requires drag
+**Recommendation:** Add tap-to-place or update tutorial copy
+
+### BUG-002 (High)
+**Title:** Session not persisted on full page reload
+**Impact:** Wallet regenerated on browser refresh, loses balance
+**Note:** SPA navigation via React Router works correctly
+
+---

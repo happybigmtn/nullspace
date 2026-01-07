@@ -3163,6 +3163,7 @@ dependencies = [
  "commonware-cryptography",
  "commonware-deployer",
  "commonware-macros",
+ "commonware-math",
  "commonware-p2p",
  "commonware-resolver",
  "commonware-runtime",

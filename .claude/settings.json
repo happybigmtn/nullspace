@@ -1,0 +1,5 @@
+{
+  "enabledPlugins": {
+    "browser-automation@browser-tools": true
+  }
+}

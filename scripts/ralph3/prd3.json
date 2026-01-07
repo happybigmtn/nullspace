@@ -1,0 +1,645 @@
+{
+  "project": "Nullspace Design System Implementation",
+  "version": "3.0",
+  "agent": "ralph3",
+  "description": "Comprehensive design system alignment across web and mobile platforms",
+  "phases": [
+    {
+      "id": "phase-1",
+      "name": "Token Alignment",
+      "priority": "critical",
+      "stories": []
+    },
+    {
+      "id": "phase-2",
+      "name": "Web Component Updates",
+      "priority": "high",
+      "stories": []
+    },
+    {
+      "id": "phase-3",
+      "name": "Mobile Component Updates",
+      "priority": "high",
+      "stories": []
+    },
+    {
+      "id": "phase-4",
+      "name": "Game Theming",
+      "priority": "medium",
+      "stories": []
+    },
+    {
+      "id": "phase-5",
+      "name": "Accessibility & Polish",
+      "priority": "medium",
+      "stories": []
+    }
+  ],
+  "stories": [
+    {
+      "id": "DS-001",
+      "phase": "phase-1",
+      "title": "Update Tailwind config to import design tokens",
+      "priority": 1,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/tailwind.config.js",
+        "/website/package.json"
+      ],
+      "description": "Refactor tailwind.config.js to import colors, spacing, and typography directly from @nullspace/design-tokens instead of hardcoded values",
+      "acceptance": [
+        "tailwind.config.js imports from @nullspace/design-tokens",
+        "TITANIUM colors exactly match token values",
+        "ACTION colors imported from tokens",
+        "No hardcoded color hex values remain",
+        "Build passes without errors"
+      ],
+      "implementation": [
+        "Add require/import for design-tokens at top of config",
+        "Replace titanium color object with TITANIUM import",
+        "Replace action color object with ACTION import",
+        "Keep glass colors as rgba (not in tokens)",
+        "Remove legacy terminal colors",
+        "Test build: cd website && pnpm build"
+      ],
+      "notes": "Tailwind requires CommonJS, use require() syntax. Token package exports ESM but Tailwind can handle it."
+    },
+    {
+      "id": "DS-002",
+      "phase": "phase-1",
+      "title": "Add TYPE_SCALE typography to Tailwind",
+      "priority": 2,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/tailwind.config.js"
+      ],
+      "description": "Add all TYPE_SCALE variants (micro, label, body, bodyLarge, heading, headingLarge, display, hero) to Tailwind fontSize config",
+      "acceptance": [
+        "All 8 TYPE_SCALE variants available as Tailwind classes",
+        "Each variant includes size, lineHeight, letterSpacing, and fontWeight",
+        "Classes work: text-micro, text-label, text-body, etc.",
+        "Build passes"
+      ],
+      "implementation": [
+        "Import TYPE_SCALE from @nullspace/design-tokens",
+        "Map TYPE_SCALE to Tailwind fontSize format",
+        "Format: 'variant': ['sizepx', { lineHeight: 'valuepx', letterSpacing: 'valuepx', fontWeight: weight }]",
+        "Test with sample component"
+      ],
+      "notes": "Tailwind fontSize can include lineHeight, letterSpacing, fontWeight in options object"
+    },
+    {
+      "id": "DS-003",
+      "phase": "phase-1",
+      "title": "Add SHADOW/ELEVATION to Tailwind boxShadow",
+      "priority": 3,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/tailwind.config.js"
+      ],
+      "description": "Add shadow tokens (sm, md, lg, xl, 2xl) and semantic elevation classes to Tailwind",
+      "acceptance": [
+        "shadow-sm through shadow-2xl match token values",
+        "Semantic classes: shadow-card, shadow-dropdown, shadow-modal, shadow-overlay",
+        "GLOW effects available as ring utilities",
+        "Build passes"
+      ],
+      "implementation": [
+        "Import SHADOW, ELEVATION, GLOW from design-tokens",
+        "Convert SHADOW objects to CSS box-shadow strings",
+        "Add elevation semantic mappings",
+        "Add glow ring utilities for focus states"
+      ],
+      "notes": "Format: `${offsetX}px ${offsetY}px ${blur}px ${spread}px rgba(0,0,0,${opacity})`"
+    },
+    {
+      "id": "DS-004",
+      "phase": "phase-1",
+      "title": "Add SPACING tokens to Tailwind",
+      "priority": 4,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/tailwind.config.js"
+      ],
+      "description": "Add semantic spacing (xs, sm, md, lg, xl, 2xl, 3xl) and RADIUS tokens",
+      "acceptance": [
+        "Spacing classes: p-xs, m-sm, gap-md, etc.",
+        "Border radius: rounded-sm through rounded-full match tokens",
+        "CONTAINER widths available",
+        "Build passes"
+      ],
+      "implementation": [
+        "Import SPACING_SEMANTIC, RADIUS, CONTAINER",
+        "Extend Tailwind spacing with semantic keys",
+        "Update borderRadius with token values",
+        "Add container max-widths"
+      ],
+      "notes": "Keep Tailwind default spacing (0-96) and ADD semantic keys"
+    },
+    {
+      "id": "DS-005",
+      "phase": "phase-1",
+      "title": "Add CSS custom properties for design tokens",
+      "priority": 5,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/src/index.css"
+      ],
+      "description": "Generate CSS custom properties from tokens for runtime access and dark mode support",
+      "acceptance": [
+        "CSS variables for all TITANIUM shades",
+        "CSS variables for ACTION colors",
+        "CSS variables for SPACING",
+        "Dark mode .dark class inverts appropriate values",
+        "Variables accessible in components"
+      ],
+      "implementation": [
+        "Add :root block with --color-titanium-*, --color-action-*, --spacing-*",
+        "Add .dark block with inverted titanium values",
+        "Add --shadow-* variables",
+        "Test dark mode toggle"
+      ],
+      "notes": "Dark mode: titanium-50 becomes titanium-950, etc. Keep action colors same."
+    },
+    {
+      "id": "DS-006",
+      "phase": "phase-1",
+      "title": "Add SHADOW exports to mobile theme.ts",
+      "priority": 6,
+      "status": "completed",
+      "passes": true,
+      "platform": "mobile",
+      "files": [
+        "/mobile/src/constants/theme.ts"
+      ],
+      "description": "Add React Native shadow styles derived from design tokens",
+      "acceptance": [
+        "SHADOWS export with sm, md, lg, xl, 2xl variants",
+        "Each variant has shadowOffset, shadowRadius, shadowOpacity, shadowColor",
+        "ELEVATION semantic mapping exported",
+        "No TypeScript errors"
+      ],
+      "implementation": [
+        "Import SHADOW, ELEVATION, GLOW from @nullspace/design-tokens",
+        "Convert to React Native shadow format",
+        "Export SHADOWS constant",
+        "Add iOS elevation property for Android compatibility"
+      ],
+      "notes": "Android uses elevation prop, iOS uses shadow* props. Include both."
+    },
+    {
+      "id": "DS-007",
+      "phase": "phase-1",
+      "title": "Align mobile TYPOGRAPHY with TYPE_SCALE",
+      "priority": 7,
+      "status": "completed",
+      "passes": true,
+      "platform": "mobile",
+      "files": [
+        "/mobile/src/constants/theme.ts"
+      ],
+      "description": "Update TYPOGRAPHY to use TYPE_SCALE values from design tokens",
+      "acceptance": [
+        "All TYPE_SCALE variants available in TYPOGRAPHY",
+        "Font sizes match token values exactly",
+        "Line heights and letter spacing included",
+        "No TypeScript errors"
+      ],
+      "implementation": [
+        "Import TYPE_SCALE from @nullspace/design-tokens",
+        "Map TYPE_SCALE to React Native format",
+        "Keep platform-specific fontFamily logic",
+        "Ensure font weights are strings ('400', '600', etc.)"
+      ],
+      "notes": "React Native fontWeight must be string, tokens have numbers"
+    },
+    {
+      "id": "DS-008",
+      "phase": "phase-2",
+      "title": "Update web Button components with token colors",
+      "priority": 8,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/src/components/"
+      ],
+      "description": "Update all button variants to use action colors and proper shadows",
+      "acceptance": [
+        "Primary buttons use bg-action-indigo",
+        "Hover states use hover:bg-action-indigoHover",
+        "Success/error variants use token colors",
+        "Focus rings use glow-indigo",
+        "All buttons have shadow-sm"
+      ],
+      "implementation": [
+        "Search for hardcoded #5E5CE6 or similar in components",
+        "Replace with Tailwind action color classes",
+        "Add shadow and focus ring classes",
+        "Test all button variants visually"
+      ],
+      "notes": "Use grep to find all color usages first"
+    },
+    {
+      "id": "DS-009",
+      "phase": "phase-2",
+      "title": "Update web Card components with elevation shadows",
+      "priority": 9,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/src/components/"
+      ],
+      "description": "Add proper elevation shadows to all card-like components",
+      "acceptance": [
+        "Cards use shadow-card (md level)",
+        "Elevated cards use shadow-dropdown (lg level)",
+        "Modal overlays use shadow-modal (xl level)",
+        "Hover states increase shadow level",
+        "Consistent visual hierarchy"
+      ],
+      "implementation": [
+        "Identify all card components",
+        "Add shadow-card class to base cards",
+        "Add hover:shadow-lg for interactive cards",
+        "Update modals to use shadow-modal"
+      ],
+      "notes": "Use Tailwind's transition-shadow for smooth hover effects"
+    },
+    {
+      "id": "DS-010",
+      "phase": "phase-2",
+      "title": "Update web typography usage",
+      "priority": 10,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/src/components/"
+      ],
+      "description": "Replace inline font styles with TYPE_SCALE Tailwind classes",
+      "acceptance": [
+        "Headlines use text-heading, text-headingLarge, or text-display",
+        "Body text uses text-body or text-bodyLarge",
+        "Labels use text-label",
+        "Numeric displays use font-mono",
+        "Consistent type hierarchy across app"
+      ],
+      "implementation": [
+        "Audit current typography usage",
+        "Create mapping from current to TYPE_SCALE",
+        "Search and replace font size classes",
+        "Verify visual consistency"
+      ],
+      "notes": "Start with high-impact screens: Lobby, Game screens"
+    },
+    {
+      "id": "DS-011",
+      "phase": "phase-2",
+      "title": "Add spring animations to web interactions",
+      "priority": 11,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/package.json",
+        "/website/src/components/"
+      ],
+      "description": "Add Framer Motion for spring physics animations",
+      "acceptance": [
+        "Framer Motion installed",
+        "Button press uses SPRING.button config",
+        "Modal open/close uses SPRING.modal",
+        "Card hover uses spring animation",
+        "Animations feel natural and responsive"
+      ],
+      "implementation": [
+        "Install framer-motion: pnpm add framer-motion",
+        "Create useSpring hook wrapper",
+        "Update interactive components with motion variants",
+        "Test on low-power devices for performance"
+      ],
+      "notes": "Import spring configs from design-tokens"
+    },
+    {
+      "id": "DS-012",
+      "phase": "phase-3",
+      "title": "Update PrimaryButton with shadows and springs",
+      "priority": 12,
+      "status": "completed",
+      "passes": true,
+      "platform": "mobile",
+      "files": [
+        "/mobile/src/components/ui/PrimaryButton.tsx"
+      ],
+      "description": "Enhance PrimaryButton with elevation shadows and spring press animation",
+      "acceptance": [
+        "Button has shadow-sm at rest",
+        "Press animation uses SPRING.button config",
+        "Shadow reduces on press (pressed state)",
+        "Release bounces back naturally",
+        "Haptic feedback on press"
+      ],
+      "implementation": [
+        "Import SHADOWS and SPRING from theme",
+        "Add shadow styles to button container",
+        "Use Reanimated withSpring for press",
+        "Add Haptics.impactAsync on press"
+      ],
+      "notes": "Use useAnimatedStyle for shadow interpolation"
+    },
+    {
+      "id": "DS-013",
+      "phase": "phase-3",
+      "title": "Add elevation to mobile card surfaces",
+      "priority": 13,
+      "status": "completed",
+      "passes": true,
+      "platform": "mobile",
+      "files": [
+        "/mobile/src/components/"
+      ],
+      "description": "Add proper shadows to all card-like surfaces on mobile",
+      "acceptance": [
+        "Game cards have shadow-card elevation",
+        "Modal sheets have shadow-modal elevation",
+        "Bottom sheets have shadow-lg",
+        "Shadows render on both iOS and Android"
+      ],
+      "implementation": [
+        "Import SHADOWS from theme",
+        "Add shadow styles to card components",
+        "Test on iOS and Android",
+        "Add elevation prop for Android"
+      ],
+      "notes": "Android elevation requires overflow visible on parent"
+    },
+    {
+      "id": "DS-014",
+      "phase": "phase-3",
+      "title": "Align mobile text components with TYPE_SCALE",
+      "priority": 14,
+      "status": "completed",
+      "passes": true,
+      "platform": "mobile",
+      "files": [
+        "/mobile/src/components/",
+        "/mobile/src/screens/"
+      ],
+      "description": "Update all text styling to use TYPE_SCALE from TYPOGRAPHY",
+      "acceptance": [
+        "Screen titles use TYPOGRAPHY.heading or headingLarge",
+        "Body text uses TYPOGRAPHY.body",
+        "Labels use TYPOGRAPHY.label",
+        "Balance displays use TYPOGRAPHY.display with mono font",
+        "Consistent hierarchy across screens"
+      ],
+      "implementation": [
+        "Audit current StyleSheet fontSize usage",
+        "Replace with TYPOGRAPHY spread: {...TYPOGRAPHY.body}",
+        "Update balance/number displays",
+        "Test readability on various screen sizes"
+      ],
+      "notes": "Spread TYPOGRAPHY objects into StyleSheet styles"
+    },
+    {
+      "id": "DS-015",
+      "phase": "phase-4",
+      "title": "Implement full game color themes - Web",
+      "priority": 15,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/src/components/casino/"
+      ],
+      "description": "Apply GAME color schemes to all casino game views",
+      "acceptance": [
+        "Each game screen uses GAME[gameId].primary as background gradient base",
+        "Active/highlight elements use GAME[gameId].accent",
+        "Consistent game identity across all 10 games",
+        "Transitions between games feel cohesive"
+      ],
+      "implementation": [
+        "Import GAME colors into game components",
+        "Create gradient backgrounds per game",
+        "Update accent color usage",
+        "Test visual distinction between games"
+      ],
+      "notes": "Use CSS gradient with primary color and slight overlay"
+    },
+    {
+      "id": "DS-016",
+      "phase": "phase-4",
+      "title": "Implement full game color themes - Mobile",
+      "priority": 16,
+      "status": "completed",
+      "passes": true,
+      "platform": "mobile",
+      "files": [
+        "/mobile/src/screens/games/"
+      ],
+      "description": "Apply GAME color schemes to all mobile game screens",
+      "acceptance": [
+        "Each game uses GAME[gameId].primary for background",
+        "Buttons and highlights use GAME[gameId].accent",
+        "Game-specific elements (chips, cards) styled appropriately",
+        "Consistent with web game themes"
+      ],
+      "implementation": [
+        "Import GAME from theme or directly from tokens",
+        "Update game screen backgrounds",
+        "Update accent element colors",
+        "Cross-reference with web for parity"
+      ],
+      "notes": "Use LinearGradient from expo-linear-gradient"
+    },
+    {
+      "id": "DS-017",
+      "phase": "phase-4",
+      "title": "Add game-specific animations",
+      "priority": 17,
+      "status": "completed",
+      "passes": true,
+      "platform": "both",
+      "files": [
+        "/website/src/components/casino/",
+        "/mobile/src/screens/games/"
+      ],
+      "description": "Implement game-specific spring animations for core mechanics",
+      "acceptance": [
+        "Card games use SPRING.cardDeal and cardFlip",
+        "Roulette uses SPRING.wheelSpin",
+        "Craps/Sic Bo use SPRING.diceTumble",
+        "Chip betting uses SPRING.chipToss",
+        "Win/loss feedback uses SPRING.success/error"
+      ],
+      "implementation": [
+        "Identify key animation moments per game",
+        "Apply appropriate spring config",
+        "Test timing and feel",
+        "Ensure animations don't block gameplay"
+      ],
+      "notes": "Start with Hi-Lo as simplest game to prototype"
+    },
+    {
+      "id": "DS-018",
+      "phase": "phase-5",
+      "title": "WCAG AA contrast audit",
+      "priority": 18,
+      "status": "pending",
+      "passes": false,
+      "platform": "both",
+      "files": [],
+      "description": "Verify all text meets WCAG AA contrast requirements",
+      "acceptance": [
+        "Normal text: 4.5:1 minimum contrast ratio",
+        "Large text (18px+): 3:1 minimum",
+        "Interactive elements clearly visible",
+        "Game table text readable on colored backgrounds",
+        "No contrast failures in automated testing"
+      ],
+      "implementation": [
+        "Run axe-core or similar on all screens",
+        "Document any failures",
+        "Adjust titanium shades if needed",
+        "Re-test after fixes"
+      ],
+      "notes": "Titanium-400 on white is borderline - may need darker for secondary text"
+    },
+    {
+      "id": "DS-019",
+      "phase": "phase-5",
+      "title": "Implement prefers-reduced-motion",
+      "priority": 19,
+      "status": "pending",
+      "passes": false,
+      "platform": "both",
+      "files": [
+        "/website/src/",
+        "/mobile/src/"
+      ],
+      "description": "Respect user preference for reduced motion",
+      "acceptance": [
+        "Web: @media (prefers-reduced-motion: reduce) disables animations",
+        "Mobile: AccessibilityInfo.isReduceMotionEnabled() respected",
+        "Essential feedback animations still work (color changes)",
+        "No jarring movements for users with vestibular disorders"
+      ],
+      "implementation": [
+        "Create useReducedMotion hook",
+        "Wrap spring animations with conditional",
+        "Fallback to opacity/color only transitions",
+        "Test with system setting enabled"
+      ],
+      "notes": "Some users get motion sickness from spring animations"
+    },
+    {
+      "id": "DS-020",
+      "phase": "phase-5",
+      "title": "Dark mode full implementation",
+      "priority": 20,
+      "status": "completed",
+      "passes": true,
+      "platform": "both",
+      "files": [
+        "/website/src/",
+        "/mobile/src/"
+      ],
+      "description": "Complete dark mode support with inverted titanium scale",
+      "acceptance": [
+        "Dark mode toggle works on both platforms",
+        "Titanium scale inverts (50↔950, 100↔900, etc.)",
+        "Game backgrounds work in dark mode",
+        "Shadows adjust for dark backgrounds",
+        "No pure white or pure black (use titanium-50/950)"
+      ],
+      "implementation": [
+        "Web: Ensure .dark class toggles CSS variables",
+        "Mobile: Create dark theme variant of COLORS",
+        "Add theme context/store",
+        "Test all screens in both modes"
+      ],
+      "notes": "Game backgrounds may need special dark variants"
+    },
+    {
+      "id": "DS-021",
+      "phase": "phase-5",
+      "title": "Visual regression test setup",
+      "priority": 21,
+      "status": "pending",
+      "passes": false,
+      "platform": "both",
+      "files": [],
+      "description": "Set up visual regression testing for design system changes",
+      "acceptance": [
+        "Screenshot tests for key screens",
+        "CI integration for visual diff",
+        "Baseline images captured",
+        "Threshold configured for acceptable drift"
+      ],
+      "implementation": [
+        "Use Playwright for web screenshots",
+        "Use Detox/Maestro for mobile screenshots",
+        "Set up comparison in CI",
+        "Document baseline update process"
+      ],
+      "notes": "Focus on Lobby, Game screens, Modals"
+    },
+    {
+      "id": "DS-022",
+      "phase": "phase-5",
+      "title": "Performance audit for animations",
+      "priority": 22,
+      "status": "pending",
+      "passes": false,
+      "platform": "both",
+      "files": [],
+      "description": "Ensure animations maintain 60fps on target devices",
+      "acceptance": [
+        "No animation jank on mid-range Android",
+        "iOS animations smooth at 120fps on ProMotion",
+        "Web animations smooth on 60Hz displays",
+        "Memory usage stable during extended play"
+      ],
+      "implementation": [
+        "Profile with React DevTools/Flipper",
+        "Test on low-end devices",
+        "Optimize any identified bottlenecks",
+        "Document performance baselines"
+      ],
+      "notes": "Spring animations can be expensive - use native driver"
+    }
+  ],
+  "bugTracker": [],
+  "dependencies": {
+    "web": [
+      "framer-motion"
+    ],
+    "mobile": [],
+    "shared": []
+  },
+  "testingStrategy": {
+    "visual": "Screenshot comparison via Playwright/Detox",
+    "accessibility": "axe-core automated scans",
+    "performance": "React DevTools profiler",
+    "manual": "Cross-device testing on iOS, Android, Chrome, Safari"
+  },
+  "successMetrics": {
+    "tokenCoverage": "100% of colors, spacing, typography from tokens",
+    "visualParity": "Web and mobile screens visually identical",
+    "accessibility": "Zero WCAG AA violations",
+    "performance": "60fps animations on all target devices"
+  }
+}

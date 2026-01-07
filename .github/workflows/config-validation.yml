@@ -1,0 +1,151 @@
+name: Configuration Validation
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - 'configs/**/*.env.example'
+      - 'configs/**/*.env'
+  pull_request:
+    paths:
+      - 'configs/**/*.env.example'
+      - 'configs/**/*.env'
+
+jobs:
+  validate-configs:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Check for placeholder tokens
+      run: |
+        echo "Checking for placeholder tokens in configuration files..."
+
+        # List of placeholder patterns that should not be in production configs
+        PLACEHOLDERS=(
+          "your_github_oauth_app_client_id_here"
+          "your_github_oauth_app_client_secret_here"
+          "your_google_oauth_app_client_id_here"
+          "your_google_oauth_app_client_secret_here"
+          "your_twitter_api_key_here"
+          "your_twitter_api_secret_here"
+          "your_secure_metrics_token_here"
+          "placeholder"
+          "changeme"
+        )
+
+        # Check production and staging configs
+        FOUND_ISSUES=0
+        for file in configs/production/*.env.example configs/staging/*.env.example; do
+          if [ -f "$file" ]; then
+            echo "Checking $file..."
+            for placeholder in "${PLACEHOLDERS[@]}"; do
+              if grep -qi "$placeholder" "$file"; then
+                echo "❌ ERROR: Found placeholder '$placeholder' in $file"
+                grep -n -i "$placeholder" "$file"
+                FOUND_ISSUES=1
+              fi
+            done
+          fi
+        done
+
+        if [ $FOUND_ISSUES -eq 1 ]; then
+          echo ""
+          echo "❌ Configuration validation failed!"
+          echo "Production configs must not contain placeholder values."
+          echo "Update these files with real credentials or remove placeholder comments."
+          exit 1
+        fi
+
+        echo "✅ No placeholder tokens found in production configs"
+
+    - name: Check for empty GATEWAY_ALLOWED_ORIGINS
+      run: |
+        echo "Checking GATEWAY_ALLOWED_ORIGINS configuration..."
+
+        FOUND_ISSUES=0
+        for file in configs/production/gateway.env.example configs/staging/gateway.env.example; do
+          if [ -f "$file" ]; then
+            echo "Checking $file..."
+
+            # Check if GATEWAY_ALLOWED_ORIGINS is set
+            if grep -q "^GATEWAY_ALLOWED_ORIGINS=$" "$file" || \
+               grep -q "^GATEWAY_ALLOWED_ORIGINS=\"\"$" "$file" || \
+               grep -q "^GATEWAY_ALLOWED_ORIGINS=''$" "$file"; then
+              echo "❌ ERROR: GATEWAY_ALLOWED_ORIGINS is empty in $file"
+              grep -n "GATEWAY_ALLOWED_ORIGINS" "$file"
+              FOUND_ISSUES=1
+            fi
+
+            # Check if GATEWAY_ALLOWED_ORIGINS exists at all
+            if ! grep -q "GATEWAY_ALLOWED_ORIGINS" "$file"; then
+              echo "⚠️  WARNING: GATEWAY_ALLOWED_ORIGINS not found in $file"
+            fi
+          fi
+        done
+
+        if [ $FOUND_ISSUES -eq 1 ]; then
+          echo ""
+          echo "❌ CORS validation failed!"
+          echo "GATEWAY_ALLOWED_ORIGINS must be set in production configs."
+          echo "Set to a comma-separated list of allowed origins (e.g., https://app.nullspace.io)"
+          exit 1
+        fi
+
+        echo "✅ GATEWAY_ALLOWED_ORIGINS validation passed"
+
+    - name: Check for weak secrets
+      run: |
+        echo "Checking for weak/short secrets..."
+
+        FOUND_ISSUES=0
+        SECRET_VARS=(
+          "JWT_SECRET"
+          "SESSION_SECRET"
+          "METRICS_AUTH_TOKEN"
+        )
+
+        for file in configs/production/*.env.example configs/staging/*.env.example; do
+          if [ -f "$file" ]; then
+            echo "Checking $file..."
+            for var in "${SECRET_VARS[@]}"; do
+              # Extract value after '=' sign
+              value=$(grep "^$var=" "$file" | cut -d'=' -f2- | tr -d '"'"'" | tr -d "'")
+
+              if [ -n "$value" ] && [ ${#value} -lt 8 ]; then
+                echo "❌ ERROR: $var is too short (< 8 characters) in $file"
+                FOUND_ISSUES=1
+              fi
+            done
+          fi
+        done
+
+        if [ $FOUND_ISSUES -eq 1 ]; then
+          echo ""
+          echo "❌ Secret strength validation failed!"
+          echo "All secret values must be at least 8 characters long."
+          exit 1
+        fi
+
+        echo "✅ Secret strength validation passed"
+
+    - name: Validate configuration format
+      run: |
+        echo "Validating configuration file format..."
+
+        # Check for common syntax errors
+        FOUND_ISSUES=0
+        for file in configs/**/*.env.example; do
+          if [ -f "$file" ]; then
+            echo "Checking $file..."
+
+            # Check for lines with unquoted values containing spaces (likely errors)
+            if grep -Pn '^[A-Z_]+=\S+\s+\S+' "$file"; then
+              echo "⚠️  WARNING: Possible unquoted value with spaces in $file"
+              echo "Consider quoting values that contain spaces."
+            fi
+          fi
+        done
+
+        echo "✅ Configuration format validation complete"

@@ -18,6 +18,10 @@ import {
   FONTS,
   OPACITY,
   OPACITY_SEMANTIC,
+  SHADOW,
+  ELEVATION,
+  GLOW,
+  TYPE_SCALE,
 } from '@nullspace/design-tokens';
 
 /**
@@ -191,7 +195,146 @@ export const RADIUS = {
 } as const;
 
 /**
- * Typography definitions - synced with @nullspace/design-tokens
+ * Shadow styles derived from @nullspace/design-tokens
+ *
+ * React Native uses a different shadow format than CSS:
+ * - iOS: shadowOffset, shadowRadius, shadowOpacity, shadowColor
+ * - Android: elevation (single value that determines shadow intensity)
+ *
+ * Each level includes both iOS shadow props and Android elevation for cross-platform.
+ */
+type ShadowToken = {
+  readonly offsetX: number;
+  readonly offsetY: number;
+  readonly blur: number;
+  readonly spread: number;
+  readonly opacity: number;
+};
+
+const toRNShadow = (shadow: ShadowToken, elevation: number) => ({
+  shadowColor: '#000000',
+  shadowOffset: { width: shadow.offsetX, height: shadow.offsetY },
+  shadowRadius: shadow.blur,
+  shadowOpacity: shadow.opacity,
+  elevation,
+});
+
+export const SHADOWS = {
+  /** No shadow */
+  none: toRNShadow(SHADOW.none, 0),
+  /** Subtle shadow for raised buttons */
+  sm: toRNShadow(SHADOW.sm, 2),
+  /** Standard card shadow */
+  md: toRNShadow(SHADOW.md, 4),
+  /** Dropdown/floating element shadow */
+  lg: toRNShadow(SHADOW.lg, 8),
+  /** Modal shadow */
+  xl: toRNShadow(SHADOW.xl, 12),
+  /** Overlay/heavy shadow */
+  '2xl': toRNShadow(SHADOW['2xl'], 16),
+} as const;
+
+/**
+ * Semantic elevation mappings for common UI patterns
+ * Maps design-token ELEVATION levels to SHADOWS
+ */
+export const ELEVATION_STYLES = {
+  /** Flat surface - no elevation */
+  flat: SHADOWS.none,
+  /** Slightly raised - button at rest */
+  raised: SHADOWS.sm,
+  /** Card surface */
+  card: SHADOWS.md,
+  /** Dropdown menus, floating buttons */
+  dropdown: SHADOWS.lg,
+  /** Modal dialogs */
+  modal: SHADOWS.xl,
+  /** Overlays, bottom sheets */
+  overlay: SHADOWS['2xl'],
+} as const;
+
+/**
+ * Glow effects for focus/highlight states from design tokens
+ * Used for focus rings, win animations, and interactive highlights
+ */
+export const GLOW_STYLES = {
+  /** Brand indigo glow - focused states */
+  indigo: {
+    shadowColor: GLOW.indigo.color,
+    shadowOffset: { width: 0, height: 0 },
+    shadowRadius: GLOW.indigo.blur,
+    shadowOpacity: GLOW.indigo.opacity,
+    elevation: 6,
+  },
+  /** Success/win glow */
+  success: {
+    shadowColor: GLOW.success.color,
+    shadowOffset: { width: 0, height: 0 },
+    shadowRadius: GLOW.success.blur,
+    shadowOpacity: GLOW.success.opacity,
+    elevation: 6,
+  },
+  /** Error/loss glow */
+  error: {
+    shadowColor: GLOW.error.color,
+    shadowOffset: { width: 0, height: 0 },
+    shadowRadius: GLOW.error.blur,
+    shadowOpacity: GLOW.error.opacity,
+    elevation: 6,
+  },
+  /** Gold/jackpot glow */
+  gold: {
+    shadowColor: GLOW.gold.color,
+    shadowOffset: { width: 0, height: 0 },
+    shadowRadius: GLOW.gold.blur,
+    shadowOpacity: GLOW.gold.opacity,
+    elevation: 8,
+  },
+} as const;
+
+/** Type for shadow style properties */
+export type ShadowStyle = (typeof SHADOWS)[keyof typeof SHADOWS];
+export type ElevationStyle = (typeof ELEVATION_STYLES)[keyof typeof ELEVATION_STYLES];
+export type GlowStyleType = (typeof GLOW_STYLES)[keyof typeof GLOW_STYLES];
+
+/**
+ * Helper to map TYPE_SCALE weight number to React Native font weight string
+ */
+const weightToString = (weight: number): '400' | '500' | '600' | '700' | '800' => {
+  const map: Record<number, '400' | '500' | '600' | '700' | '800'> = {
+    400: '400',
+    500: '500',
+    600: '600',
+    700: '700',
+    800: '800',
+  };
+  return map[weight] || '400';
+};
+
+/**
+ * Helper to get font family based on weight for display font
+ */
+const getDisplayFont = (weight: number) => {
+  if (weight >= 800) return FONT_DISPLAY.extrabold;
+  if (weight >= 700) return FONT_DISPLAY.bold;
+  if (weight >= 600) return FONT_DISPLAY.semibold;
+  if (weight >= 500) return FONT_DISPLAY.medium;
+  return FONT_DISPLAY.regular;
+};
+
+/**
+ * Helper to get font family based on weight for body font
+ */
+const getBodyFont = (weight: number) => {
+  if (weight >= 800) return FONT_BODY.extrabold;
+  if (weight >= 700) return FONT_BODY.bold;
+  if (weight >= 600) return FONT_BODY.semibold;
+  if (weight >= 500) return FONT_BODY.medium;
+  return FONT_BODY.regular;
+};
+
+/**
+ * Typography definitions - synced with @nullspace/design-tokens TYPE_SCALE
  *
  * Display variants use Outfit (display font) for visual impact
  * Body variants use Plus Jakarta Sans (body font) for readability
@@ -200,53 +343,110 @@ export const RADIUS = {
  * weight is determined by the loaded font variant (e.g., Outfit_700Bold)
  */
 export const TYPOGRAPHY = {
-  // Display variants - Outfit font for headlines and large text
+  // ─────────────────────────────────────────────────────────────────────────────
+  // TYPE_SCALE tokens from design system (exact match)
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /** Micro - 10px, labels, badges */
+  micro: {
+    fontSize: TYPE_SCALE.micro.size,
+    lineHeight: TYPE_SCALE.micro.lineHeight,
+    fontWeight: weightToString(TYPE_SCALE.micro.weight),
+    letterSpacing: TYPE_SCALE.micro.letterSpacing,
+    fontFamily: getBodyFont(TYPE_SCALE.micro.weight),
+  },
+  /** Label - 12px, form labels, section headers */
+  label: {
+    fontSize: TYPE_SCALE.label.size,
+    lineHeight: TYPE_SCALE.label.lineHeight,
+    fontWeight: weightToString(TYPE_SCALE.label.weight),
+    letterSpacing: TYPE_SCALE.label.letterSpacing,
+    fontFamily: getBodyFont(TYPE_SCALE.label.weight),
+  },
+  /** Body - 14px, standard body text */
+  body: {
+    fontSize: TYPE_SCALE.body.size,
+    lineHeight: TYPE_SCALE.body.lineHeight,
+    fontWeight: weightToString(TYPE_SCALE.body.weight),
+    letterSpacing: TYPE_SCALE.body.letterSpacing,
+    fontFamily: getBodyFont(TYPE_SCALE.body.weight),
+  },
+  /** Body Large - 16px, emphasized body text */
+  bodyLarge: {
+    fontSize: TYPE_SCALE.bodyLarge.size,
+    lineHeight: TYPE_SCALE.bodyLarge.lineHeight,
+    fontWeight: weightToString(TYPE_SCALE.bodyLarge.weight),
+    letterSpacing: TYPE_SCALE.bodyLarge.letterSpacing,
+    fontFamily: getBodyFont(TYPE_SCALE.bodyLarge.weight),
+  },
+  /** Heading - 20px, section headings */
+  heading: {
+    fontSize: TYPE_SCALE.heading.size,
+    lineHeight: TYPE_SCALE.heading.lineHeight,
+    fontWeight: weightToString(TYPE_SCALE.heading.weight),
+    letterSpacing: TYPE_SCALE.heading.letterSpacing,
+    fontFamily: getDisplayFont(TYPE_SCALE.heading.weight),
+  },
+  /** Heading Large - 24px, page titles */
+  headingLarge: {
+    fontSize: TYPE_SCALE.headingLarge.size,
+    lineHeight: TYPE_SCALE.headingLarge.lineHeight,
+    fontWeight: weightToString(TYPE_SCALE.headingLarge.weight),
+    letterSpacing: TYPE_SCALE.headingLarge.letterSpacing,
+    fontFamily: getDisplayFont(TYPE_SCALE.headingLarge.weight),
+  },
+  /** Display - 32px, hero sections */
+  display: {
+    fontSize: TYPE_SCALE.display.size,
+    lineHeight: TYPE_SCALE.display.lineHeight,
+    fontWeight: weightToString(TYPE_SCALE.display.weight),
+    letterSpacing: TYPE_SCALE.display.letterSpacing,
+    fontFamily: getDisplayFont(TYPE_SCALE.display.weight),
+  },
+  /** Hero - 48px, splash screens, large statements */
+  hero: {
+    fontSize: TYPE_SCALE.hero.size,
+    lineHeight: TYPE_SCALE.hero.lineHeight,
+    fontWeight: weightToString(TYPE_SCALE.hero.weight),
+    letterSpacing: TYPE_SCALE.hero.letterSpacing,
+    fontFamily: getDisplayFont(TYPE_SCALE.hero.weight),
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Legacy variants (backward compatibility)
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /** @deprecated Use 'hero' instead */
   displayLarge: {
-    fontSize: 48,
+    fontSize: TYPE_SCALE.hero.size,
     fontWeight: '800' as const,
-    letterSpacing: -1,
+    letterSpacing: TYPE_SCALE.hero.letterSpacing,
     fontFamily: FONT_DISPLAY.extrabold,
   },
+  /** @deprecated Use 'display' instead */
   displayMedium: {
     fontSize: 36,
     fontWeight: '700' as const,
     letterSpacing: -0.5,
     fontFamily: FONT_DISPLAY.bold,
   },
+  /** @deprecated Use 'headingLarge' instead */
   h1: {
     fontSize: 28,
     fontWeight: '700' as const,
     fontFamily: FONT_DISPLAY.bold,
   },
+  /** @deprecated Use 'headingLarge' instead */
   h2: {
-    fontSize: 24,
+    fontSize: TYPE_SCALE.headingLarge.size,
     fontWeight: '600' as const,
     fontFamily: FONT_DISPLAY.semibold,
   },
+  /** @deprecated Use 'heading' instead */
   h3: {
-    fontSize: 20,
+    fontSize: TYPE_SCALE.heading.size,
     fontWeight: '600' as const,
     fontFamily: FONT_DISPLAY.semibold,
-  },
-  // Body variants - Plus Jakarta Sans for readable text
-  bodyLarge: {
-    fontSize: 18,
-    fontWeight: '500' as const,
-    lineHeight: 28,
-    fontFamily: FONT_BODY.medium,
-  },
-  body: {
-    fontSize: 16,
-    fontWeight: '400' as const,
-    lineHeight: 24,
-    fontFamily: FONT_BODY.regular,
-  },
-  label: {
-    fontSize: 10,
-    fontWeight: '700' as const,
-    letterSpacing: 1.5,
-    fontFamily: FONT_BODY.bold,
-    textTransform: 'uppercase' as const,
   },
   // Mono for code and technical content
   mono: {

@@ -19,3 +19,4 @@ export { useCelebration } from './useCelebration';
 export type { CelebrationState, CelebrationIntensity, CelebrationConfig } from './useCelebration';
 export { useWinCelebration } from './useWinCelebration';
 export { useBetConfirmation } from './useBetConfirmation';
+export { useReducedMotion, getAccessibleAnimationConfig, getAccessibleSpringConfig } from './useReducedMotion';
