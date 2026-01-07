@@ -349,6 +349,7 @@ export function BlackjackScreen() {
         balance={balance}
         onHelpPress={() => setShowTutorial(true)}
         connectionStatus={connectionStatusProps}
+        gameId="blackjack"
       >
         {/* US-115: Show skeleton during state parsing */}
         {isParsingState ? (

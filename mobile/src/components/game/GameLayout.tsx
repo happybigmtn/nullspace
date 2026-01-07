@@ -3,6 +3,7 @@
  * Provides consistent header, connection status, error recovery, and content area
  *
  * US-120: Enhanced error state recovery UX with visual feedback
+ * US-135: Table felt texture backgrounds per game
  */
 import React, { ReactNode, useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet, SafeAreaView } from 'react-native';
@@ -10,11 +11,11 @@ import { GameHeader } from './GameHeader';
 import { ConnectionStatusBanner } from '../ui/ConnectionStatusBanner';
 import { CelebrationOverlay } from '../celebration/CelebrationOverlay';
 import { ErrorRecoveryOverlay, ErrorType, RecoveryState } from '../ui/ErrorRecoveryOverlay';
+import { FeltBackground } from './FeltBackground';
 import { COLORS } from '../../constants/theme';
 import type { ConnectionState } from '../../services/websocket';
 import type { CelebrationState } from '../../hooks/useCelebration';
-
-const SCANLINE_ROWS = Array.from({ length: 80 }, (_, index) => index);
+import type { GameId } from '@nullspace/design-tokens';
 
 interface ConnectionStatus {
   connectionState: ConnectionState;
@@ -52,6 +53,8 @@ interface GameLayoutProps {
   onCelebrationComplete?: () => void;
   /** Game error state for error recovery overlay (US-120) */
   gameError?: GameErrorState;
+  /** Game ID for themed felt background (US-135) */
+  gameId?: GameId;
 }
 
 export function GameLayout({
@@ -64,6 +67,7 @@ export function GameLayout({
   celebrationState,
   onCelebrationComplete,
   gameError,
+  gameId,
 }: GameLayoutProps) {
   const [sessionStartBalance] = useState(balance);
   const sessionDelta = balance - sessionStartBalance;
@@ -119,13 +123,26 @@ export function GameLayout({
     setRecoveryState('idle');
   }, []);
 
+  // Determine if connected for felt background scanline intensity
+  const isConnected = connectionStatus?.connectionState === 'connected' ||
+    connectionStatus?.connectionState === undefined;
+
   return (
     <SafeAreaView style={styles.container}>
-      <View pointerEvents="none" style={styles.scanlineOverlay}>
-        {SCANLINE_ROWS.map((row) => (
-          <View key={row} style={styles.scanline} />
-        ))}
-      </View>
+      {/* Game-specific felt background (US-135) or default scanlines */}
+      {gameId ? (
+        <FeltBackground
+          gameId={gameId}
+          isConnected={isConnected}
+          animateGradient={true}
+        />
+      ) : (
+        <View pointerEvents="none" style={styles.scanlineOverlay}>
+          {Array.from({ length: 80 }, (_, i) => (
+            <View key={i} style={styles.scanline} />
+          ))}
+        </View>
+      )}
       {celebrationState && (
         <CelebrationOverlay state={celebrationState} onComplete={onCelebrationComplete} />
       )}
