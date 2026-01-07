@@ -699,8 +699,8 @@
 				"Document full error code mapping table"
 			],
 			"priority": 54,
-			"passes": false,
-			"notes": "CRITICAL GAP: Error codes pass through 3 layers but translation is never tested end-to-end."
+			"passes": true,
+			"notes": "FIXED: Created error-code-translation.test.ts with 24 tests covering: (1) All 15 Rust error codes mapped to Gateway codes, (2) Gateway codes to user-friendly messages, (3) Unknown code graceful handling (0, 255, 100+), (4) End-to-end translation chain tests. Includes authoritative ERROR CODE MAPPING TABLE documenting all translations."
 		},
 		{
 			"id": "US-064",
