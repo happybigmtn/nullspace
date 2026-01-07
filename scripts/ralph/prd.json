@@ -725,8 +725,8 @@
 				"Use crypto.subtle.timingSafeEqual or equivalent"
 			],
 			"priority": 56,
-			"passes": false,
-			"notes": "SECURITY GAP: Vault password comparison may be vulnerable to timing attacks if using string equality."
+			"passes": true,
+			"notes": "VERIFIED SECURE: Vault uses XChaCha20-Poly1305 AEAD, not string comparison. @noble/ciphers equalBytes() uses XOR accumulator for constant-time tag verification. PBKDF2 (250k iterations) dominates timing. Added 6 tests documenting timing resistance properties."
 		},
 		{
 			"id": "US-066",

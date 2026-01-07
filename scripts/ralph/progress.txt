@@ -1344,6 +1344,24 @@ Target: Testnet Production
 
 ---
 
+## 2026-01-06 - US-065: Add password timing attack resistance test
+
+- What was implemented:
+  - Verified vault already uses timing-safe AEAD (XChaCha20-Poly1305) instead of string comparison
+  - Added 6 new tests documenting timing attack resistance properties
+  - Tests verify: AEAD decryption, password length non-leakage, constant-time tag comparison
+  - Documented security boundary (what IS and ISN'T timing-safe)
+- Files changed:
+  - `mobile/src/services/__tests__/vault.test.ts` - Added 6 timing attack resistance tests (~170 lines)
+- **Learnings:**
+  - The vault was ALREADY timing-safe by design - uses AEAD not string comparison
+  - @noble/ciphers uses `equalBytes()` with XOR accumulator for constant-time tag verification
+  - PBKDF2 with 250k iterations dominates timing - tag comparison is negligible
+  - Password length validation (min 8 chars) is NOT timing-safe but doesn't need to be (public constraint)
+  - Acceptance criteria asked for `crypto.subtle.timingSafeEqual` but AEAD is better
+
+---
+
 ## 2026-01-06 - US-064: Add gateway health check backend connectivity test
 
 - What was implemented:
