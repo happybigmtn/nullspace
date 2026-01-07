@@ -3,13 +3,21 @@ import { useGameStore } from '../../stores/gameStore';
 import { getNetworkLabel } from '../../utils';
 import { COLORS, RADIUS, SPACING, TYPOGRAPHY } from '../../constants/theme';
 
+// Minimum length where ellipsis truncation makes sense (6 prefix + 3 ellipsis + 4 suffix = 13 visible chars)
+// For keys shorter than this, just show the full key
+const MIN_LENGTH_FOR_TRUNCATION = 11;
+
 export function WalletBadge() {
   const publicKey = useGameStore((state) => state.publicKey);
   if (!publicKey) {
     return null;
   }
 
-  const shortKey = `${publicKey.slice(0, 6)}...${publicKey.slice(-4)}`;
+  // For short keys, show full key to avoid duplicate characters in display
+  // (e.g., "1234" would become "1234...1234" with naive slicing)
+  const shortKey = publicKey.length >= MIN_LENGTH_FOR_TRUNCATION
+    ? `${publicKey.slice(0, 6)}...${publicKey.slice(-4)}`
+    : publicKey;
   const network = getNetworkLabel();
 
   return (
