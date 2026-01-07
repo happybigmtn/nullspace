@@ -590,8 +590,8 @@
         "Test transitions don't cause layout shift"
       ],
       "priority": 48,
-      "passes": false,
-      "notes": "WEB-UX: CasinoApp.tsx has basic Suspense fallback. Only animate-scale-in exists, no route transitions."
+      "passes": true,
+      "notes": "COMPLETE: PageTransition.tsx wraps Outlet, uses key prop to re-trigger on route change. index.css has fadeInUp/fadeInDown/slideInLeft keyframes, stagger-1 through stagger-5 delay classes. Uses translateY(16px) for no layout shift. prefers-reduced-motion support included."
     },
     {
       "id": "US-126",

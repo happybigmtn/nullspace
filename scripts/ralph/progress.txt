@@ -2950,3 +2950,29 @@ Target: Testnet Production
   - Pattern: `withSequence(withDelay(500, ...), withDelay(800, ...))` for wave gesture
 
 ---
+
+## 2026-01-07 - US-125: Website page transition animations
+
+- What was implemented:
+  - VERIFIED: Full implementation already exists
+  - `PageTransition.tsx` component wraps Outlet with animation class
+  - Uses React `key` prop to re-trigger animation on pathname change
+  - `useLocation()` + `useRef` tracks previous path to detect changes
+  - CSS keyframes in index.css: `fadeInUp`, `fadeInDown`, `slideInLeft`
+  - Utility classes: `.animate-fade-in-up`, `.animate-fade-in-down`, `.animate-slide-in-left`
+  - Stagger delays: `.stagger-1` through `.stagger-5` (50ms increments)
+  - `.page-transition-enter` applies fadeInUp to route content
+  - `prefers-reduced-motion: reduce` media query disables animations for accessibility
+- Files changed:
+  - `website/src/components/ui/PageTransition.tsx` - 30 lines (existing)
+  - `website/src/components/AppLayout.jsx` - Wraps Outlet with PageTransition
+  - `website/src/index.css` - Lines 943-998 keyframes and utilities (existing)
+- **Learnings:**
+  - `key` prop trick: changing key forces React to remount, re-triggering CSS animation
+  - `animation: ... both` fill-mode keeps element in final state after animation
+  - `translateY(16px)` is small enough to avoid jarring visual shift
+  - CSS transforms don't trigger layout reflow - only composite layer changes
+  - `--motion-state: 300ms` and `--motion-ease` CSS vars ensure consistent timing
+  - prefers-reduced-motion query sets `animation-duration: 0.01ms` as polite disable
+
+---
