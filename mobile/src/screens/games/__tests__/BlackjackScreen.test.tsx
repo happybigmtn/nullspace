@@ -3,6 +3,7 @@ import { InteractionManager, Text } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import {
   mockHaptics,
+  mockUseChipBetting,
   mockUseGameConnection,
   pressAll,
   resetGameConnection,
@@ -261,5 +262,160 @@ describe('BlackjackScreen', () => {
     // Should show DEAL button (betting phase)
     const dealButton = findPrimaryButton(tree, 'DEAL');
     expect(dealButton).toBeDefined();
+  });
+
+  describe('phase reversion after error', () => {
+    beforeEach(() => {
+      // Set up a non-zero bet so DEAL button is enabled
+      mockUseChipBetting.mockReturnValue({
+        bet: 100,
+        selectedChip: 25,
+        balance: 1000,
+        setSelectedChip: jest.fn(),
+        placeChip: jest.fn(() => true),
+        clearBet: jest.fn(),
+        setBet: jest.fn(),
+      });
+    });
+
+    afterEach(() => {
+      // Reset to default
+      mockUseChipBetting.mockReturnValue({
+        bet: 0,
+        selectedChip: 25,
+        balance: 1000,
+        setSelectedChip: jest.fn(),
+        placeChip: jest.fn(() => true),
+        clearBet: jest.fn(),
+        setBet: jest.fn(),
+      });
+    });
+
+    it('reverts phase to betting after bet rejection error', async () => {
+      let tree!: ReturnType<typeof create>;
+
+      // Start in betting phase
+      await act(async () => {
+        tree = create(<BlackjackScreen />);
+      });
+
+      // Verify we're in betting phase with DEAL button
+      let dealButton = findPrimaryButton(tree, 'DEAL');
+      expect(dealButton).toBeDefined();
+
+      // Simulate user pressing DEAL (phase changes optimistically to player_turn)
+      await act(async () => {
+        await dealButton?.props.onPress?.();
+      });
+
+      // Verify phase changed to player_turn (HIT/STAND buttons appear)
+      const hitButton = findPrimaryButton(tree, 'HIT');
+      expect(hitButton).toBeDefined();
+
+      // Now simulate server rejecting the bet
+      setGameConnectionMessage({
+        type: 'error',
+        message: 'Insufficient balance',
+      });
+
+      await act(async () => {
+        tree.update(<BlackjackScreen />);
+      });
+
+      // Should revert to betting phase with DEAL button
+      dealButton = findPrimaryButton(tree, 'DEAL');
+      expect(dealButton).toBeDefined();
+
+      // Should show error message
+      const hasErrorMessage = tree.root
+        .findAllByType(Text)
+        .some((node) => textMatches(node.props.children, 'Insufficient balance'));
+      expect(hasErrorMessage).toBe(true);
+    });
+
+    it('DEAL button is re-enabled after error recovery', async () => {
+      let tree!: ReturnType<typeof create>;
+
+      await act(async () => {
+        tree = create(<BlackjackScreen />);
+      });
+
+      // Get DEAL button and check it's enabled (bet > 0 from beforeEach)
+      let dealButton = findPrimaryButton(tree, 'DEAL');
+      expect(dealButton).toBeDefined();
+      expect(dealButton?.props.disabled).toBeFalsy();
+
+      // Press DEAL
+      await act(async () => {
+        await dealButton?.props.onPress?.();
+      });
+
+      // Simulate error response
+      setGameConnectionMessage({
+        type: 'error',
+        message: 'Network error',
+      });
+
+      await act(async () => {
+        tree.update(<BlackjackScreen />);
+      });
+
+      // DEAL button should be back and enabled
+      dealButton = findPrimaryButton(tree, 'DEAL');
+      expect(dealButton).toBeDefined();
+      // isSubmitting should be cleared, so button should be enabled
+      expect(dealButton?.props.disabled).toBeFalsy();
+    });
+
+    it('maintains betting state after multiple error recoveries', async () => {
+      let tree!: ReturnType<typeof create>;
+
+      await act(async () => {
+        tree = create(<BlackjackScreen />);
+      });
+
+      // First attempt
+      let dealButton = findPrimaryButton(tree, 'DEAL');
+      await act(async () => {
+        await dealButton?.props.onPress?.();
+      });
+
+      setGameConnectionMessage({
+        type: 'error',
+        message: 'Error 1',
+      });
+
+      await act(async () => {
+        tree.update(<BlackjackScreen />);
+      });
+
+      // Should be back in betting phase
+      dealButton = findPrimaryButton(tree, 'DEAL');
+      expect(dealButton).toBeDefined();
+
+      // Second attempt
+      await act(async () => {
+        await dealButton?.props.onPress?.();
+      });
+
+      setGameConnectionMessage({
+        type: 'error',
+        message: 'Error 2',
+      });
+
+      await act(async () => {
+        tree.update(<BlackjackScreen />);
+      });
+
+      // Should still be in betting phase
+      dealButton = findPrimaryButton(tree, 'DEAL');
+      expect(dealButton).toBeDefined();
+
+      // Should show the latest error
+      const hasErrorMessage = tree.root
+        .findAllByType(Text)
+        .some((node) => textMatches(node.props.children, 'Error 2'));
+      expect(hasErrorMessage).toBe(true);
+    });
   });
 });

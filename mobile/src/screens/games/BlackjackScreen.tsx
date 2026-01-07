@@ -189,6 +189,8 @@ export function BlackjackScreen() {
       clearSubmission(); // Clear bet submission state on error
       setState((prev) => ({
         ...prev,
+        // Revert to betting phase so user can try again
+        phase: 'betting',
         message: typeof lastMessage.message === 'string' ? lastMessage.message : 'Action failed',
       }));
     }

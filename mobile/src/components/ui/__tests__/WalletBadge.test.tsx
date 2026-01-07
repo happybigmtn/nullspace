@@ -13,7 +13,7 @@ jest.mock('../../../utils', () => ({
   getNetworkLabel: jest.fn(),
 }));
 
-const mockUseGameStore = useGameStore as jest.Mock;
+const mockUseGameStore = useGameStore as unknown as jest.Mock;
 
 describe('WalletBadge', () => {
   beforeEach(() => {
