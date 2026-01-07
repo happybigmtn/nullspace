@@ -69,6 +69,7 @@ class MockWebSocket {
 type HookSnapshot = WebSocketManager & {
   lastMessage: { type: string } | null;
   droppedMessage: { message: object; reason: 'queue_full' | 'expired' } | null;
+  disconnect: () => void;
 };
 
 const snapshots: HookSnapshot[] = [];
@@ -1306,5 +1307,200 @@ describe('multi-game session preservation (US-067)', () => {
     // (The real test is that WebSocketProvider is at app root, not per-screen)
     const expected = 1;
     expect(MockWebSocket.instances.length).toBe(expected);
+  });
+});
+
+describe('disconnect function (US-068)', () => {
+  /**
+   * Tests for the disconnect() function added to support SESSION_EXPIRED handling.
+   * When a session expires, we need to cleanly close the connection without triggering
+   * auto-reconnect, as reconnecting would just get another SESSION_EXPIRED error.
+   */
+
+  it('closes WebSocket cleanly with code 1000', () => {
+    act(() => {
+      TestRenderer.create(<HookProbe url="ws://example.test" />);
+    });
+
+    const socket = MockWebSocket.instances[0];
+    act(() => {
+      socket.readyState = MockWebSocket.OPEN;
+      socket.onopen?.();
+    });
+
+    const state = snapshots.at(-1);
+    expect(state?.isConnected).toBe(true);
+
+    // Disconnect
+    act(() => {
+      state?.disconnect();
+    });
+
+    // Should close with code 1000 (clean close)
+    expect(socket.close).toHaveBeenCalledWith(1000, 'session_expired');
+  });
+
+  it('prevents auto-reconnect after disconnect', () => {
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    act(() => {
+      TestRenderer.create(<HookProbe url="ws://example.test" />);
+    });
+
+    const socket = MockWebSocket.instances[0];
+    act(() => {
+      socket.readyState = MockWebSocket.OPEN;
+      socket.onopen?.();
+    });
+
+    const state = snapshots.at(-1);
+    const instancesBefore = MockWebSocket.instances.length;
+
+    // Disconnect
+    act(() => {
+      state?.disconnect();
+    });
+
+    // Simulate the close event (wasClean=true because code 1000)
+    act(() => {
+      socket.onclose?.({ wasClean: true, code: 1000, reason: 'session_expired' });
+    });
+
+    // Wait for potential reconnect
+    act(() => {
+      jest.advanceTimersByTime(5000);
+    });
+
+    // Should NOT have created new connections
+    expect(MockWebSocket.instances.length).toBe(instancesBefore);
+  });
+
+  it('clears message queue on disconnect', () => {
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    act(() => {
+      TestRenderer.create(<HookProbe url="ws://example.test" />);
+    });
+
+    const state = snapshots.at(-1);
+
+    // Queue some messages
+    act(() => {
+      state?.send({ type: 'queued1' });
+      state?.send({ type: 'queued2' });
+    });
+
+    // Disconnect
+    act(() => {
+      state?.disconnect();
+    });
+
+    // Connect new socket
+    act(() => {
+      state?.reconnect();
+    });
+
+    const newSocket = MockWebSocket.instances.at(-1);
+    act(() => {
+      newSocket!.readyState = MockWebSocket.OPEN;
+      newSocket?.onopen?.();
+    });
+
+    // Queue should have been cleared - no messages sent
+    expect(newSocket?.send).not.toHaveBeenCalled();
+  });
+
+  it('cancels pending reconnect attempts on disconnect', () => {
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    act(() => {
+      TestRenderer.create(<HookProbe url="ws://example.test" />);
+    });
+
+    const socket = MockWebSocket.instances[0];
+
+    // Trigger an unclean close (which schedules reconnect)
+    act(() => {
+      socket.onclose?.({ wasClean: false, code: 1006, reason: 'network error' });
+    });
+
+    const instancesBeforeDisconnect = MockWebSocket.instances.length;
+
+    // Disconnect before reconnect timer fires
+    const state = snapshots.at(-1);
+    act(() => {
+      state?.disconnect();
+    });
+
+    // Advance past the reconnect delay
+    act(() => {
+      jest.advanceTimersByTime(5000);
+    });
+
+    // Should NOT have reconnected - the timer was cancelled
+    expect(MockWebSocket.instances.length).toBe(instancesBeforeDisconnect);
+  });
+
+  it('sets connection state to disconnected after disconnect', () => {
+    act(() => {
+      TestRenderer.create(<HookProbe url="ws://example.test" />);
+    });
+
+    const socket = MockWebSocket.instances[0];
+    act(() => {
+      socket.readyState = MockWebSocket.OPEN;
+      socket.onopen?.();
+    });
+
+    expect(snapshots.at(-1)?.connectionState).toBe('connected');
+
+    // Disconnect
+    act(() => {
+      snapshots.at(-1)?.disconnect();
+    });
+
+    const finalState = snapshots.at(-1);
+    expect(finalState?.connectionState).toBe('disconnected');
+    expect(finalState?.isConnected).toBe(false);
+  });
+
+  it('can reconnect after disconnect', () => {
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    act(() => {
+      TestRenderer.create(<HookProbe url="ws://example.test" />);
+    });
+
+    const socket = MockWebSocket.instances[0];
+    act(() => {
+      socket.readyState = MockWebSocket.OPEN;
+      socket.onopen?.();
+    });
+
+    // Disconnect
+    act(() => {
+      snapshots.at(-1)?.disconnect();
+    });
+
+    const instancesAfterDisconnect = MockWebSocket.instances.length;
+
+    // Manually reconnect
+    act(() => {
+      snapshots.at(-1)?.reconnect();
+    });
+
+    // Should have created a new connection
+    expect(MockWebSocket.instances.length).toBe(instancesAfterDisconnect + 1);
+
+    // Connect the new socket
+    const newSocket = MockWebSocket.instances.at(-1);
+    act(() => {
+      newSocket!.readyState = MockWebSocket.OPEN;
+      newSocket?.onopen?.();
+    });
+
+    const finalState = snapshots.at(-1);
+    expect(finalState?.isConnected).toBe(true);
+    expect(finalState?.connectionState).toBe('connected');
   });
 });

@@ -8,17 +8,23 @@ import type { GameMessage } from '@nullspace/protocol/mobile';
 // Time in ms before faucet status resets from 'success' to 'idle'
 const FAUCET_SUCCESS_RESET_MS = 3000;
 
+// Error code for session expiration (matches gateway/src/types/errors.ts)
+const ERROR_CODE_SESSION_EXPIRED = 'SESSION_EXPIRED';
+
 export function useGatewaySession() {
   const {
     connectionState,
     send,
     lastMessage,
+    disconnect,
   } = useWebSocketContext(); // Returns WebSocketManager<GameMessage>
   const setBalance = useGameStore((state) => state.setBalance);
   const setBalanceReady = useGameStore((state) => state.setBalanceReady);
   const setSessionInfo = useGameStore((state) => state.setSessionInfo);
   const setFaucetStatus = useGameStore((state) => state.setFaucetStatus);
   const faucetStatus = useGameStore((state) => state.faucetStatus);
+  const setSessionExpired = useGameStore((state) => state.setSessionExpired);
+  const sessionExpired = useGameStore((state) => state.sessionExpired);
 
   const lastSessionIdRef = useRef<string | null>(null);
   const faucetResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -201,15 +207,41 @@ export function useGatewaySession() {
       }
     }
 
-    if (lastMessage.type === 'error' && faucetStatus === 'pending') {
-      // Type assertion: error messages have message field
+    if (lastMessage.type === 'error') {
+      // Type assertion: error messages have code and message fields
       const msg = lastMessage as typeof lastMessage & {
+        code?: string;
         message?: string;
       };
 
-      setFaucetStatus('error', msg.message ?? 'Request failed');
+      // Handle SESSION_EXPIRED specially - this is a critical error
+      // that requires user re-authentication
+      if (msg.code === ERROR_CODE_SESSION_EXPIRED) {
+        void track('casino.session.expired', { source: 'mobile' });
+        setSessionExpired(
+          true,
+          msg.message ?? 'Your session has expired. Please log in again.'
+        );
+        // Clear session info to prevent stale state
+        setSessionInfo({
+          sessionId: null,
+          publicKey: null,
+          registered: false,
+          hasBalance: false,
+        });
+        setBalanceReady(false);
+        // Disconnect cleanly to prevent auto-reconnect loop
+        // A new connection would just get another SESSION_EXPIRED
+        disconnect();
+        return;
+      }
+
+      // Handle faucet errors
+      if (faucetStatus === 'pending') {
+        setFaucetStatus('error', msg.message ?? 'Request failed');
+      }
     }
-  }, [lastMessage, send, setBalance, setBalanceReady, setSessionInfo, setFaucetStatus, faucetStatus]);
+  }, [lastMessage, send, setBalance, setBalanceReady, setSessionInfo, setFaucetStatus, faucetStatus, setSessionExpired, disconnect]);
 
   const requestFaucet = useCallback((amount?: number) => {
     setFaucetStatus('pending', 'Requesting faucet...');
@@ -224,5 +256,6 @@ export function useGatewaySession() {
     requestFaucet,
     connectionState,
     sessionId: lastSessionIdRef.current,
+    sessionExpired,
   };
 }

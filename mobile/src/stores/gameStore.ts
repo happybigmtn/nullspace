@@ -11,6 +11,8 @@ interface GameState {
   hasBalance: boolean;
   faucetStatus: 'idle' | 'pending' | 'success' | 'error';
   faucetMessage: string | null;
+  sessionExpired: boolean;
+  sessionExpiredMessage: string | null;
 
   // Actions
   setBalance: (balance: number) => void;
@@ -23,6 +25,8 @@ interface GameState {
     hasBalance?: boolean;
   }) => void;
   setFaucetStatus: (status: GameState['faucetStatus'], message?: string | null) => void;
+  setSessionExpired: (expired: boolean, message?: string | null) => void;
+  clearSession: () => void;
 }
 
 export const useGameStore = create<GameState>((set) => ({
@@ -35,6 +39,8 @@ export const useGameStore = create<GameState>((set) => ({
   hasBalance: false,
   faucetStatus: 'idle',
   faucetMessage: null,
+  sessionExpired: false,
+  sessionExpiredMessage: null,
 
   setBalance: (balance) => set({ balance }),
   setBalanceReady: (ready) => set({ balanceReady: ready }),
@@ -50,5 +56,23 @@ export const useGameStore = create<GameState>((set) => ({
     set({
       faucetStatus: status,
       faucetMessage: message,
+    }),
+  setSessionExpired: (expired, message = null) =>
+    set({
+      sessionExpired: expired,
+      sessionExpiredMessage: message,
+    }),
+  clearSession: () =>
+    set({
+      sessionId: null,
+      publicKey: null,
+      registered: false,
+      hasBalance: false,
+      balanceReady: false,
+      balance: 0,
+      sessionExpired: false,
+      sessionExpiredMessage: null,
+      faucetStatus: 'idle',
+      faucetMessage: null,
     }),
 }));

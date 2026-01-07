@@ -26,6 +26,7 @@ export interface WebSocketManager<T = GameMessage> {
   lastMessage: T | null;
   send: (message: object) => boolean;
   reconnect: () => void;
+  disconnect: () => void;
   isReconnecting: boolean;
   droppedMessage: DroppedMessage | null;
 }
@@ -291,6 +292,22 @@ export function useWebSocket<T extends GameMessage = GameMessage>(
     connect();
   }, [connect]);
 
+  const disconnect = useCallback(() => {
+    // Cancel any pending reconnect
+    if (reconnectTimeoutId.current) {
+      clearTimeout(reconnectTimeoutId.current);
+      reconnectTimeoutId.current = null;
+    }
+    // Clear the message queue
+    messageQueueRef.current = [];
+    // Close the connection cleanly (wasClean=true prevents auto-reconnect)
+    if (ws.current) {
+      ws.current.close(1000, 'session_expired');
+    }
+    setConnectionState('disconnected');
+    setIsConnected(false);
+  }, []);
+
   useEffect(() => {
     connect();
     return () => {
@@ -309,6 +326,7 @@ export function useWebSocket<T extends GameMessage = GameMessage>(
     send,
     lastMessage,
     reconnect,
+    disconnect,
     isReconnecting: isReconnectingRef.current,
     droppedMessage,
   };

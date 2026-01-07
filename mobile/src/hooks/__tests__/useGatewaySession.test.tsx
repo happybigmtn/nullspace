@@ -58,7 +58,9 @@ describe('useGatewaySession', () => {
     setBalanceReady: jest.Mock;
     setSessionInfo: jest.Mock;
     setFaucetStatus: jest.Mock;
+    setSessionExpired: jest.Mock;
     faucetStatus: 'idle' | 'pending' | 'success' | 'error';
+    sessionExpired: boolean;
   };
 
   beforeEach(() => {
@@ -69,7 +71,11 @@ describe('useGatewaySession', () => {
       setFaucetStatus: jest.fn((status: typeof store.faucetStatus) => {
         store.faucetStatus = status;
       }),
+      setSessionExpired: jest.fn((expired: boolean) => {
+        store.sessionExpired = expired;
+      }),
       faucetStatus: 'idle',
+      sessionExpired: false,
     };
 
     mockUseGameStore.mockImplementation((selector: (state: typeof store) => unknown) => selector(store));
@@ -83,10 +89,12 @@ describe('useGatewaySession', () => {
 
   it('requests balance on connect and initializes analytics', () => {
     const send = jest.fn();
+    const disconnect = jest.fn();
     mockUseWebSocketContext.mockReturnValue({
       connectionState: 'connected',
       send,
       lastMessage: null,
+      disconnect,
     });
 
     const { unmount } = renderHook(() => useGatewaySession());
@@ -98,6 +106,7 @@ describe('useGatewaySession', () => {
 
   it('handles session_ready and balance updates', () => {
     const send = jest.fn();
+    const disconnect = jest.fn();
     const sessionMessage = {
       type: 'session_ready',
       sessionId: 'session-1',
@@ -110,6 +119,7 @@ describe('useGatewaySession', () => {
       connectionState: 'connected',
       send,
       lastMessage: sessionMessage,
+      disconnect,
     });
 
     const { getResult, rerender, unmount } = renderHook(() => useGatewaySession());
@@ -136,11 +146,13 @@ describe('useGatewaySession', () => {
 
   it('handles faucet claim and error state', () => {
     const send = jest.fn();
+    const disconnect = jest.fn();
     store.faucetStatus = 'pending';
     mockUseWebSocketContext.mockReturnValue({
       connectionState: 'connected',
       send,
       lastMessage: { type: 'error', message: 'Denied' },
+      disconnect,
     });
 
     renderHook(() => useGatewaySession());
@@ -150,6 +162,7 @@ describe('useGatewaySession', () => {
 
   it('tracks completed games and updates balance', () => {
     const send = jest.fn();
+    const disconnect = jest.fn();
     mockUseWebSocketContext.mockReturnValue({
       connectionState: 'connected',
       send,
@@ -161,6 +174,7 @@ describe('useGatewaySession', () => {
         finalChips: '150',
         sessionId: 'session-1',
       },
+      disconnect,
     });
 
     renderHook(() => useGatewaySession());
@@ -177,10 +191,12 @@ describe('useGatewaySession', () => {
 
   it('sends faucet requests with optional amount', () => {
     const send = jest.fn();
+    const disconnect = jest.fn();
     mockUseWebSocketContext.mockReturnValue({
       connectionState: 'disconnected',
       send,
       lastMessage: null,
+      disconnect,
     });
 
     const { getResult } = renderHook(() => useGatewaySession());
@@ -207,6 +223,7 @@ describe('useGatewaySession', () => {
 
     it('resets faucet status to idle after success', () => {
       const send = jest.fn();
+      const disconnect = jest.fn();
       mockUseWebSocketContext.mockReturnValue({
         connectionState: 'connected',
         send,
@@ -218,6 +235,7 @@ describe('useGatewaySession', () => {
           balance: '1000',
           message: 'FAUCET_CLAIMED',
         },
+        disconnect,
       });
 
       renderHook(() => useGatewaySession());
@@ -236,6 +254,7 @@ describe('useGatewaySession', () => {
 
     it('only attributes error to faucet when faucetStatus is pending', () => {
       const send = jest.fn();
+      const disconnect = jest.fn();
 
       // Case 1: faucetStatus is 'idle' - error should NOT update faucet status
       store.faucetStatus = 'idle';
@@ -243,6 +262,7 @@ describe('useGatewaySession', () => {
         connectionState: 'connected',
         send,
         lastMessage: { type: 'error', message: 'Some other error' },
+        disconnect,
       });
 
       const { unmount } = renderHook(() => useGatewaySession());
@@ -252,6 +272,7 @@ describe('useGatewaySession', () => {
 
     it('does not attribute error to faucet when status is success', () => {
       const send = jest.fn();
+      const disconnect = jest.fn();
 
       // faucetStatus is 'success' - error should NOT update faucet status
       store.faucetStatus = 'success';
@@ -259,6 +280,7 @@ describe('useGatewaySession', () => {
         connectionState: 'connected',
         send,
         lastMessage: { type: 'error', message: 'Some other error' },
+        disconnect,
       });
 
       const { unmount } = renderHook(() => useGatewaySession());
@@ -268,6 +290,7 @@ describe('useGatewaySession', () => {
 
     it('only attributes error to faucet when status is pending', () => {
       const send = jest.fn();
+      const disconnect = jest.fn();
 
       // faucetStatus is 'pending' - error SHOULD update faucet status
       store.faucetStatus = 'pending';
@@ -275,6 +298,7 @@ describe('useGatewaySession', () => {
         connectionState: 'connected',
         send,
         lastMessage: { type: 'error', message: 'Faucet denied' },
+        disconnect,
       });
 
       const { unmount } = renderHook(() => useGatewaySession());
@@ -284,12 +308,14 @@ describe('useGatewaySession', () => {
 
     it('subsequent faucet requests work after success', () => {
       const send = jest.fn();
+      const disconnect = jest.fn();
       store.faucetStatus = 'success';
 
       mockUseWebSocketContext.mockReturnValue({
         connectionState: 'connected',
         send,
         lastMessage: null,
+        disconnect,
       });
 
       const { getResult, unmount } = renderHook(() => useGatewaySession());
@@ -307,12 +333,14 @@ describe('useGatewaySession', () => {
 
     it('subsequent faucet requests work after error', () => {
       const send = jest.fn();
+      const disconnect = jest.fn();
       store.faucetStatus = 'error';
 
       mockUseWebSocketContext.mockReturnValue({
         connectionState: 'connected',
         send,
         lastMessage: null,
+        disconnect,
       });
 
       const { getResult, unmount } = renderHook(() => useGatewaySession());
@@ -330,6 +358,7 @@ describe('useGatewaySession', () => {
 
     it('timeout cleans up on unmount', () => {
       const send = jest.fn();
+      const disconnect = jest.fn();
       mockUseWebSocketContext.mockReturnValue({
         connectionState: 'connected',
         send,
@@ -341,6 +370,7 @@ describe('useGatewaySession', () => {
           balance: '1000',
           message: 'FAUCET_CLAIMED',
         },
+        disconnect,
       });
 
       const { unmount } = renderHook(() => useGatewaySession());
@@ -363,10 +393,12 @@ describe('useGatewaySession', () => {
 
     it('timeout does not reset if faucetStatus changed to pending again', () => {
       const send = jest.fn();
+      const disconnect = jest.fn();
       mockUseWebSocketContext.mockReturnValue({
         connectionState: 'connected',
         send,
         lastMessage: null,
+        disconnect,
       });
 
       const { getResult, unmount } = renderHook(() => useGatewaySession());
@@ -389,6 +421,154 @@ describe('useGatewaySession', () => {
 
       // Should NOT reset to idle since we're now pending
       expect(store.setFaucetStatus).not.toHaveBeenCalledWith('idle', null);
+      unmount();
+    });
+  });
+
+  describe('SESSION_EXPIRED handling (US-068)', () => {
+    it('handles SESSION_EXPIRED error message', () => {
+      const send = jest.fn();
+      const disconnect = jest.fn();
+      mockUseWebSocketContext.mockReturnValue({
+        connectionState: 'connected',
+        send,
+        lastMessage: {
+          type: 'error',
+          code: 'SESSION_EXPIRED',
+          message: 'Your session has timed out',
+        },
+        disconnect,
+      });
+
+      const { unmount } = renderHook(() => useGatewaySession());
+
+      // Should set session expired state
+      expect(store.setSessionExpired).toHaveBeenCalledWith(
+        true,
+        'Your session has timed out'
+      );
+      // Should track the event
+      expect(track).toHaveBeenCalledWith('casino.session.expired', { source: 'mobile' });
+      // Store's sessionExpired was set via the mock
+      expect(store.sessionExpired).toBe(true);
+      unmount();
+    });
+
+    it('clears session info on SESSION_EXPIRED', () => {
+      const send = jest.fn();
+      const disconnect = jest.fn();
+      mockUseWebSocketContext.mockReturnValue({
+        connectionState: 'connected',
+        send,
+        lastMessage: {
+          type: 'error',
+          code: 'SESSION_EXPIRED',
+          message: 'Session expired',
+        },
+        disconnect,
+      });
+
+      const { unmount } = renderHook(() => useGatewaySession());
+
+      // Should clear session info
+      expect(store.setSessionInfo).toHaveBeenCalledWith({
+        sessionId: null,
+        publicKey: null,
+        registered: false,
+        hasBalance: false,
+      });
+      expect(store.setBalanceReady).toHaveBeenCalledWith(false);
+      unmount();
+    });
+
+    it('disconnects WebSocket on SESSION_EXPIRED to prevent reconnect loop', () => {
+      const send = jest.fn();
+      const disconnect = jest.fn();
+      mockUseWebSocketContext.mockReturnValue({
+        connectionState: 'connected',
+        send,
+        lastMessage: {
+          type: 'error',
+          code: 'SESSION_EXPIRED',
+          message: 'Session expired',
+        },
+        disconnect,
+      });
+
+      const { unmount } = renderHook(() => useGatewaySession());
+
+      // Should call disconnect to prevent auto-reconnect
+      expect(disconnect).toHaveBeenCalled();
+      unmount();
+    });
+
+    it('uses default message when SESSION_EXPIRED has no message', () => {
+      const send = jest.fn();
+      const disconnect = jest.fn();
+      mockUseWebSocketContext.mockReturnValue({
+        connectionState: 'connected',
+        send,
+        lastMessage: {
+          type: 'error',
+          code: 'SESSION_EXPIRED',
+        },
+        disconnect,
+      });
+
+      const { unmount } = renderHook(() => useGatewaySession());
+
+      expect(store.setSessionExpired).toHaveBeenCalledWith(
+        true,
+        'Your session has expired. Please log in again.'
+      );
+      unmount();
+    });
+
+    it('does not handle SESSION_EXPIRED for other error codes', () => {
+      const send = jest.fn();
+      const disconnect = jest.fn();
+      store.faucetStatus = 'idle';
+      mockUseWebSocketContext.mockReturnValue({
+        connectionState: 'connected',
+        send,
+        lastMessage: {
+          type: 'error',
+          code: 'INSUFFICIENT_BALANCE',
+          message: 'Not enough chips',
+        },
+        disconnect,
+      });
+
+      const { unmount } = renderHook(() => useGatewaySession());
+
+      // Should NOT set session expired
+      expect(store.setSessionExpired).not.toHaveBeenCalled();
+      // Should NOT disconnect
+      expect(disconnect).not.toHaveBeenCalled();
+      unmount();
+    });
+
+    it('SESSION_EXPIRED takes priority over faucet error handling', () => {
+      const send = jest.fn();
+      const disconnect = jest.fn();
+      store.faucetStatus = 'pending';
+      mockUseWebSocketContext.mockReturnValue({
+        connectionState: 'connected',
+        send,
+        lastMessage: {
+          type: 'error',
+          code: 'SESSION_EXPIRED',
+          message: 'Session expired',
+        },
+        disconnect,
+      });
+
+      const { unmount } = renderHook(() => useGatewaySession());
+
+      // Should set session expired (not faucet error)
+      expect(store.setSessionExpired).toHaveBeenCalledWith(true, 'Session expired');
+      // Should NOT set faucet error
+      expect(store.setFaucetStatus).not.toHaveBeenCalledWith('error', expect.any(String));
       unmount();
     });
   });
