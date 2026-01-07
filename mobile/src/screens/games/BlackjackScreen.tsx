@@ -200,11 +200,16 @@ export function BlackjackScreen() {
     if (bet === 0 || isSubmitting) return;
     haptics.betConfirm().catch(() => {});
 
-    const success = submitBet({
-      type: 'blackjack_deal',
-      amount: bet,
-      sideBet21Plus3,
-    });
+    // US-090: Pass total bet amount for atomic validation to prevent race conditions
+    const totalBet = bet + sideBet21Plus3;
+    const success = submitBet(
+      {
+        type: 'blackjack_deal',
+        amount: bet,
+        sideBet21Plus3,
+      },
+      { amount: totalBet }
+    );
 
     if (success) {
       setState((prev) => ({

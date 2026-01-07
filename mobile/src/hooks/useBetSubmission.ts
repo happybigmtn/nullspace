@@ -1,16 +1,28 @@
 /**
  * useBetSubmission - Debounced bet submission to prevent double-tap duplicates
  * Tracks in-flight submissions and disables betting until response or timeout
+ *
+ * US-090: Now includes atomic bet validation with balance locking to prevent
+ * race conditions where balance changes between validation and submission.
  */
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { useGameStore } from '../stores/gameStore';
 
 const SUBMISSION_TIMEOUT_MS = 5000;
+
+interface BetSubmissionOptions {
+  /** Bet amount to validate against balance before sending (optional for backward compat) */
+  amount?: number;
+}
 
 interface BetSubmissionResult {
   /** Whether a bet submission is currently in flight */
   isSubmitting: boolean;
-  /** Submit a bet - returns false if already submitting or send failed */
-  submitBet: (message: object) => boolean;
+  /**
+   * Submit a bet - returns false if already submitting, validation fails, or send failed.
+   * If options.amount is provided, validates bet against current balance atomically.
+   */
+  submitBet: (message: object, options?: BetSubmissionOptions) => boolean;
   /** Manually clear submission state (call on response or phase change) */
   clearSubmission: () => void;
 }
@@ -60,18 +72,34 @@ export function useBetSubmission(
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
     }
+    // Release the bet validation lock if held (US-090)
+    useGameStore.getState().unlockBetValidation();
     setIsSubmitting(false);
   }, []);
 
-  const submitBet = useCallback((message: object): boolean => {
+  const submitBet = useCallback((message: object, options?: BetSubmissionOptions): boolean => {
     // Already submitting - reject duplicate
     if (isSubmitting) {
       return false;
     }
 
+    // US-090: If amount provided, validate and lock atomically
+    const amount = options?.amount;
+    if (amount !== undefined) {
+      const validationOk = useGameStore.getState().validateAndLockBet(amount);
+      if (!validationOk) {
+        // Bet exceeds current balance or already locked
+        return false;
+      }
+    }
+
     // Try to send
     const success = send(message);
     if (!success) {
+      // Release the lock on send failure
+      if (amount !== undefined) {
+        useGameStore.getState().unlockBetValidation();
+      }
       return false;
     }
 
@@ -80,6 +108,8 @@ export function useBetSubmission(
 
     // Set timeout to re-enable if no response (shouldn't happen in normal operation)
     timeoutRef.current = setTimeout(() => {
+      // Release the lock on timeout
+      useGameStore.getState().unlockBetValidation();
       setIsSubmitting(false);
       timeoutRef.current = null;
     }, SUBMISSION_TIMEOUT_MS);

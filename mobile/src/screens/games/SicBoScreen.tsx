@@ -334,10 +334,15 @@ export function SicBoScreen() {
     if (state.bets.length === 0 || isSubmitting) return;
     haptics.diceRoll().catch(() => {});
 
-    const success = submitBet({
-      type: 'sic_bo_roll',
-      bets: state.bets,
-    });
+    // US-090: Calculate total bet for atomic validation
+    const totalBet = state.bets.reduce((sum, b) => sum + b.amount, 0);
+    const success = submitBet(
+      {
+        type: 'sic_bo_roll',
+        bets: state.bets,
+      },
+      { amount: totalBet }
+    );
 
     if (success) {
       setState((prev) => ({

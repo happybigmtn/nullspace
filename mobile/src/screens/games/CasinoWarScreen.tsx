@@ -135,11 +135,16 @@ export function CasinoWarScreen() {
     if (bet === 0 || isSubmitting) return;
     haptics.betConfirm().catch(() => {});
 
-    const success = submitBet({
-      type: 'casino_war_deal',
-      amount: bet,
-      tieBet: state.tieBet,
-    });
+    // US-090: Pass total bet amount for atomic validation
+    const totalBet = bet + state.tieBet;
+    const success = submitBet(
+      {
+        type: 'casino_war_deal',
+        amount: bet,
+        tieBet: state.tieBet,
+      },
+      { amount: totalBet }
+    );
 
     if (success) {
       setState((prev) => ({

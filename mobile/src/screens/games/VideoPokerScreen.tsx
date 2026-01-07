@@ -178,10 +178,14 @@ export function VideoPokerScreen() {
     if (bet === 0 || isSubmitting) return;
     haptics.betConfirm().catch(() => {});
 
-    submitBet({
-      type: 'video_poker_deal',
-      amount: bet,
-    });
+    // US-090: Pass bet amount for atomic validation
+    submitBet(
+      {
+        type: 'video_poker_deal',
+        amount: bet,
+      },
+      { amount: bet }
+    );
   }, [bet, submitBet, isSubmitting]);
 
   const handleToggleHold = useCallback((index: number) => {

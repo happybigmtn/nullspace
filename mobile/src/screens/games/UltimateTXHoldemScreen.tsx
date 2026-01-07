@@ -323,14 +323,19 @@ export function UltimateTXHoldemScreen() {
     if (state.anteBet === 0 || isSubmitting) return;
     haptics.betConfirm().catch(() => {});
 
-    const success = submitBet({
-      type: 'ultimate_tx_deal',
-      ante: state.anteBet,
-      blind: state.blindBet,
-      trips: state.tripsBet,
-      sixCard: state.sixCardBet,
-      progressive: state.progressiveBet,
-    });
+    // US-090: Calculate total bet for atomic validation
+    const totalBet = state.anteBet + state.blindBet + state.tripsBet + state.sixCardBet + state.progressiveBet;
+    const success = submitBet(
+      {
+        type: 'ultimate_tx_deal',
+        ante: state.anteBet,
+        blind: state.blindBet,
+        trips: state.tripsBet,
+        sixCard: state.sixCardBet,
+        progressive: state.progressiveBet,
+      },
+      { amount: totalBet }
+    );
 
     if (success) {
       setState((prev) => ({

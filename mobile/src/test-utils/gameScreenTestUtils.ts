@@ -75,6 +75,12 @@ export const mockUseChipBetting = jest.fn(() => ({
   setBet: jest.fn(),
 }));
 
+export const mockUseBetSubmission = jest.fn(() => ({
+  isSubmitting: false,
+  submitBet: jest.fn(() => true),
+  clearSubmission: jest.fn(),
+}));
+
 export const mockUseGameKeyboard = jest.fn();
 export const mockUseModalBackHandler = jest.fn();
 
@@ -87,15 +93,35 @@ jest.mock('../services/storage', () => ({
   markTutorialCompleted: jest.fn(),
 }));
 
-const mockGameStoreState = { balance: 1000, publicKey: null };
+const mockGameStoreState = {
+  balance: 1000,
+  publicKey: null,
+  betValidationLocked: false,
+  pendingBalanceUpdate: null,
+  lastBalanceSeq: 0,
+};
 
-jest.mock('../stores/gameStore', () => ({
-  useGameStore: jest.fn((selector?: (state: typeof mockGameStoreState) => unknown) => {
+const mockGameStoreActions = {
+  validateAndLockBet: jest.fn((amount: number) => amount <= mockGameStoreState.balance),
+  unlockBetValidation: jest.fn(),
+  setBalanceWithSeq: jest.fn(() => true),
+};
+
+const mockUseGameStore = Object.assign(
+  jest.fn((selector?: (state: typeof mockGameStoreState) => unknown) => {
     if (selector) {
       return selector(mockGameStoreState);
     }
     return mockGameStoreState;
   }),
+  {
+    getState: jest.fn(() => ({ ...mockGameStoreState, ...mockGameStoreActions })),
+    setState: jest.fn(),
+  }
+);
+
+jest.mock('../stores/gameStore', () => ({
+  useGameStore: mockUseGameStore,
 }));
 
 jest.mock('../hooks', () => {
@@ -104,6 +130,7 @@ jest.mock('../hooks', () => {
     ...actual,
     useGameConnection: (...args: unknown[]) => mockUseGameConnection(...(args as [])),
     useChipBetting: (...args: unknown[]) => mockUseChipBetting(...(args as [])),
+    useBetSubmission: (...args: unknown[]) => mockUseBetSubmission(...(args as [])),
     useGameKeyboard: (...args: unknown[]) => mockUseGameKeyboard(...args),
     useModalBackHandler: (...args: unknown[]) => mockUseModalBackHandler(...args),
   };

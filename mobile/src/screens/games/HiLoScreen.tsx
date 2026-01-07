@@ -146,11 +146,15 @@ export function HiLoScreen() {
 
     haptics.betConfirm().catch(() => {});
 
-    const success = submitBet({
-      type: 'hilo_bet',
-      amount: bet,
-      choice,
-    });
+    // US-090: Pass bet amount for atomic validation
+    const success = submitBet(
+      {
+        type: 'hilo_bet',
+        amount: bet,
+        choice,
+      },
+      { amount: bet }
+    );
 
     if (success) {
       setState((prev) => ({

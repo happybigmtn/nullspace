@@ -205,10 +205,15 @@ export function RouletteScreen() {
     if (state.bets.length === 0 || isSubmitting) return;
     haptics.wheelSpin().catch(() => {});
 
-    const success = submitBet({
-      type: 'roulette_spin',
-      bets: state.bets,
-    });
+    // US-090: Calculate total bet for atomic validation
+    const totalBet = state.bets.reduce((sum, b) => sum + b.amount, 0);
+    const success = submitBet(
+      {
+        type: 'roulette_spin',
+        bets: state.bets,
+      },
+      { amount: totalBet }
+    );
 
     if (success) {
       spinSeedRef.current = { extraSpins: 4 + Math.floor(Math.random() * 3) };

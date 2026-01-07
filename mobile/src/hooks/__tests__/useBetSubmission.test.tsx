@@ -1,6 +1,7 @@
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 import { useBetSubmission } from '../useBetSubmission';
+import { useGameStore } from '../../stores/gameStore';
 
 type HookResult<T> = {
   getResult: () => T;
@@ -377,6 +378,204 @@ describe('useBetSubmission', () => {
 
       // Verify the exact message was sent
       expect(send).toHaveBeenCalledWith(message);
+
+      unmount();
+    });
+  });
+
+  // US-090: Concurrent bet validation lock tests
+  describe('concurrent bet validation lock (US-090)', () => {
+    beforeEach(() => {
+      // Reset game store to known state
+      useGameStore.setState({
+        balance: 100,
+        balanceReady: true,
+        lastBalanceSeq: 1,
+        betValidationLocked: false,
+        pendingBalanceUpdate: null,
+      });
+    });
+
+    it('validates bet amount against balance when amount provided', () => {
+      const send = jest.fn().mockReturnValue(true);
+      const { getResult, unmount } = renderHook(() => useBetSubmission(send));
+
+      // Bet within balance should succeed
+      let ok = false;
+      act(() => {
+        ok = getResult().submitBet({ type: 'test', amount: 50 }, { amount: 50 });
+      });
+      expect(ok).toBe(true);
+      expect(send).toHaveBeenCalled();
+
+      unmount();
+    });
+
+    it('rejects bet when amount exceeds balance', () => {
+      const send = jest.fn().mockReturnValue(true);
+      const { getResult, unmount } = renderHook(() => useBetSubmission(send));
+
+      // Bet exceeding balance should fail
+      let ok = false;
+      act(() => {
+        ok = getResult().submitBet({ type: 'test', amount: 150 }, { amount: 150 });
+      });
+      expect(ok).toBe(false);
+      expect(send).not.toHaveBeenCalled();
+      expect(getResult().isSubmitting).toBe(false);
+
+      unmount();
+    });
+
+    it('locks during validation to prevent concurrent balance updates', () => {
+      const send = jest.fn().mockReturnValue(true);
+      const { getResult, unmount } = renderHook(() => useBetSubmission(send));
+
+      // Submit bet - should lock
+      act(() => {
+        getResult().submitBet({ type: 'test', amount: 80 }, { amount: 80 });
+      });
+      expect(useGameStore.getState().betValidationLocked).toBe(true);
+
+      // Balance update during lock should be queued
+      act(() => {
+        useGameStore.getState().setBalanceWithSeq(50, 2);
+      });
+      expect(useGameStore.getState().balance).toBe(100); // Still 100, not applied
+      expect(useGameStore.getState().pendingBalanceUpdate).toEqual({ balance: 50, balanceSeq: 2 });
+
+      unmount();
+    });
+
+    it('applies pending balance update after clearSubmission', () => {
+      const send = jest.fn().mockReturnValue(true);
+      const { getResult, unmount } = renderHook(() => useBetSubmission(send));
+
+      // Submit bet - locks
+      act(() => {
+        getResult().submitBet({ type: 'test', amount: 80 }, { amount: 80 });
+      });
+
+      // Queue balance update
+      act(() => {
+        useGameStore.getState().setBalanceWithSeq(50, 2);
+      });
+      expect(useGameStore.getState().balance).toBe(100);
+
+      // Clear submission - should unlock and apply pending
+      act(() => {
+        getResult().clearSubmission();
+      });
+
+      expect(useGameStore.getState().betValidationLocked).toBe(false);
+      expect(useGameStore.getState().balance).toBe(50);
+      expect(useGameStore.getState().lastBalanceSeq).toBe(2);
+      expect(useGameStore.getState().pendingBalanceUpdate).toBeNull();
+
+      unmount();
+    });
+
+    it('unlocks on send failure', () => {
+      const send = jest.fn().mockReturnValue(false);
+      const { getResult, unmount } = renderHook(() => useBetSubmission(send));
+
+      act(() => {
+        getResult().submitBet({ type: 'test', amount: 50 }, { amount: 50 });
+      });
+
+      // Lock should be released on send failure
+      expect(useGameStore.getState().betValidationLocked).toBe(false);
+
+      unmount();
+    });
+
+    it('unlocks on timeout', () => {
+      const send = jest.fn().mockReturnValue(true);
+      const { getResult, unmount } = renderHook(() => useBetSubmission(send));
+
+      act(() => {
+        getResult().submitBet({ type: 'test', amount: 50 }, { amount: 50 });
+      });
+      expect(useGameStore.getState().betValidationLocked).toBe(true);
+
+      // Wait for timeout
+      act(() => {
+        jest.advanceTimersByTime(5000);
+      });
+
+      expect(useGameStore.getState().betValidationLocked).toBe(false);
+
+      unmount();
+    });
+
+    it('rejects bet if balance changes between chip placement and submission', () => {
+      const send = jest.fn().mockReturnValue(true);
+      const { getResult, unmount } = renderHook(() => useBetSubmission(send));
+
+      // User placed chips thinking balance was 100
+      // But balance dropped to 50 before they clicked submit
+
+      act(() => {
+        useGameStore.setState({ balance: 50 });
+      });
+
+      // Submission with old bet amount should fail
+      let ok = true;
+      act(() => {
+        ok = getResult().submitBet({ type: 'test', amount: 80 }, { amount: 80 });
+      });
+      expect(ok).toBe(false);
+      expect(send).not.toHaveBeenCalled();
+
+      unmount();
+    });
+
+    it('backward compat: submits without amount validation when amount not provided', () => {
+      const send = jest.fn().mockReturnValue(true);
+      const { getResult, unmount } = renderHook(() => useBetSubmission(send));
+
+      // No amount option - should bypass validation (backward compat)
+      let ok = false;
+      act(() => {
+        ok = getResult().submitBet({ type: 'test', amount: 999 }); // No options
+      });
+      expect(ok).toBe(true);
+      expect(send).toHaveBeenCalled();
+      expect(useGameStore.getState().betValidationLocked).toBe(false); // Not locked
+
+      unmount();
+    });
+
+    it('no bet exceeds actual balance due to race', () => {
+      // This test simulates the race condition scenario:
+      // 1. User has bet = 80, balance = 100
+      // 2. User clicks DEAL -> submitBet() called
+      // 3. Balance update arrives (balance = 50)
+      // 4. With the lock, balance update is queued, bet validation uses original balance
+
+      const send = jest.fn().mockReturnValue(true);
+      const { getResult, unmount } = renderHook(() => useBetSubmission(send));
+
+      // Simulate rapid sequence
+      act(() => {
+        // User submits bet
+        const success = getResult().submitBet({ type: 'test', amount: 80 }, { amount: 80 });
+        expect(success).toBe(true);
+        // Lock is held, balance update arrives
+        useGameStore.getState().setBalanceWithSeq(50, 2);
+      });
+
+      // Bet was sent successfully because balance was 100 at time of validation
+      expect(send).toHaveBeenCalledWith({ type: 'test', amount: 80 });
+      // Balance update was queued, not applied
+      expect(useGameStore.getState().balance).toBe(100);
+      expect(useGameStore.getState().pendingBalanceUpdate).toEqual({ balance: 50, balanceSeq: 2 });
+
+      // After server response, pending is applied
+      act(() => {
+        getResult().clearSubmission();
+      });
+      expect(useGameStore.getState().balance).toBe(50);
 
       unmount();
     });

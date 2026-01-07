@@ -197,10 +197,15 @@ export function BaccaratScreen() {
     if (betList.length === 0) return;
     haptics.betConfirm().catch(() => {});
 
-    const success = submitBet({
-      type: 'baccarat_deal',
-      bets: betList,
-    });
+    // US-090: Calculate total bet for atomic validation
+    const totalBet = betList.reduce((sum, b) => sum + b.amount, 0);
+    const success = submitBet(
+      {
+        type: 'baccarat_deal',
+        bets: betList,
+      },
+      { amount: totalBet }
+    );
 
     if (success) {
       setState((prev) => ({

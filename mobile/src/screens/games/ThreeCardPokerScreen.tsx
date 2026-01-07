@@ -232,13 +232,18 @@ export function ThreeCardPokerScreen() {
     if (state.anteBet === 0 || isSubmitting) return;
     haptics.betConfirm().catch(() => {});
 
-    const success = submitBet({
-      type: 'three_card_poker_deal',
-      ante: state.anteBet,
-      pairPlus: state.pairPlusBet,
-      sixCard: state.sixCardBet,
-      progressive: state.progressiveBet,
-    });
+    // US-090: Calculate total bet for atomic validation
+    const totalBet = state.anteBet + state.pairPlusBet + state.sixCardBet + state.progressiveBet;
+    const success = submitBet(
+      {
+        type: 'three_card_poker_deal',
+        ante: state.anteBet,
+        pairPlus: state.pairPlusBet,
+        sixCard: state.sixCardBet,
+        progressive: state.progressiveBet,
+      },
+      { amount: totalBet }
+    );
 
     if (success) {
       setState((prev) => ({
