@@ -189,6 +189,153 @@ export class HapticsService {
   }
 
   /**
+   * Sequential bets - rapid light taps as chips are placed
+   * Use for bulk chip placement or bet building
+   * @param count Number of taps (default 3)
+   */
+  async sequentialBets(count = 3): Promise<void> {
+    if (!this.canVibrate()) return;
+
+    // Cancel any in-flight pattern
+    this.abortController?.abort();
+    this.abortController = new AbortController();
+    const { signal } = this.abortController;
+
+    // Rapid light taps at 60ms intervals for tactile feedback
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    for (let i = 1; i < count; i++) {
+      this.scheduleHaptic(
+        () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light),
+        i * 60,
+        signal
+      );
+    }
+  }
+
+  /**
+   * Spin start - building intensity pattern for roulette/slot spins
+   * Ascending: Light → Light → Medium → Medium
+   */
+  async spinStart(): Promise<void> {
+    if (!this.canVibrate()) return;
+
+    // Cancel any in-flight pattern
+    this.abortController?.abort();
+    this.abortController = new AbortController();
+    const { signal } = this.abortController;
+
+    // Ascending intensity mimics spin acceleration
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    this.scheduleHaptic(
+      () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light),
+      80,
+      signal
+    );
+    this.scheduleHaptic(
+      () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium),
+      180,
+      signal
+    );
+    this.scheduleHaptic(
+      () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium),
+      300,
+      signal
+    );
+  }
+
+  /**
+   * Spin end - decelerating pattern as wheel/slot comes to rest
+   * Descending: Medium → Medium → Light → Heavy (landing)
+   */
+  async spinEnd(): Promise<void> {
+    if (!this.canVibrate()) return;
+
+    // Cancel any in-flight pattern
+    this.abortController?.abort();
+    this.abortController = new AbortController();
+    const { signal } = this.abortController;
+
+    // Decelerating pattern with heavy final "landing"
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    this.scheduleHaptic(
+      () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium),
+      100,
+      signal
+    );
+    this.scheduleHaptic(
+      () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light),
+      220,
+      signal
+    );
+    this.scheduleHaptic(
+      () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy),
+      380,
+      signal
+    );
+  }
+
+  /**
+   * Dealer action - subtle double-tap for dealer moves
+   * Used when dealer draws cards, reveals, or takes action
+   */
+  async dealerAction(): Promise<void> {
+    if (!this.canVibrate()) return;
+
+    // Cancel any in-flight pattern
+    this.abortController?.abort();
+    this.abortController = new AbortController();
+    const { signal } = this.abortController;
+
+    // Quick double-tap: medium intensity for authority
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    this.scheduleHaptic(
+      () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium),
+      80,
+      signal
+    );
+  }
+
+  /**
+   * Round start - ascending pattern to signal new round beginning
+   * Light → Light → Medium → Success notification
+   */
+  async roundStart(): Promise<void> {
+    if (!this.canVibrate()) return;
+
+    // Cancel any in-flight pattern
+    this.abortController?.abort();
+    this.abortController = new AbortController();
+    const { signal } = this.abortController;
+
+    // Ascending pattern with notification flourish
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    this.scheduleHaptic(
+      () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light),
+      100,
+      signal
+    );
+    this.scheduleHaptic(
+      () => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium),
+      220,
+      signal
+    );
+    this.scheduleHaptic(
+      () => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success),
+      380,
+      signal
+    );
+  }
+
+  /**
+   * All-in bet - strong warning-style single tap
+   * Signals high-stakes action, immediate feedback for gravity
+   */
+  async allInBet(): Promise<void> {
+    if (!this.canVibrate()) return;
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+  }
+
+  /**
    * Enable or disable haptics
    */
   setEnabled(enabled: boolean): void {
