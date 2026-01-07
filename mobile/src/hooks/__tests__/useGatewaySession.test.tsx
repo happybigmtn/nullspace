@@ -15,12 +15,17 @@ jest.mock('../../services/analytics', () => ({
   track: jest.fn(),
 }));
 
-jest.mock('../../stores/gameStore', () => ({
-  useGameStore: jest.fn(),
-}));
+jest.mock('../../stores/gameStore', () => {
+  const mockStore = jest.fn() as jest.Mock & { getState: jest.Mock };
+  // Add getState method for direct store access in timeout callback
+  mockStore.getState = jest.fn();
+  return {
+    useGameStore: mockStore,
+  };
+});
 
 const mockUseWebSocketContext = useWebSocketContext as jest.Mock;
-const mockUseGameStore = useGameStore as jest.Mock;
+const mockUseGameStore = useGameStore as unknown as jest.Mock & { getState: jest.Mock };
 
 type HookResult<T> = {
   getResult: () => T;
@@ -68,6 +73,8 @@ describe('useGatewaySession', () => {
     };
 
     mockUseGameStore.mockImplementation((selector: (state: typeof store) => unknown) => selector(store));
+    // Set up getState to return the store for direct access
+    mockUseGameStore.getState.mockImplementation(() => store);
     mockUseWebSocketContext.mockReset();
     (initAnalytics as jest.Mock).mockClear();
     (setAnalyticsContext as jest.Mock).mockClear();
@@ -187,5 +194,202 @@ describe('useGatewaySession', () => {
     expect(store.setFaucetStatus).toHaveBeenCalledWith('pending', 'Requesting faucet...');
     expect(send).toHaveBeenCalledWith({ type: 'faucet_claim' });
     expect(send).toHaveBeenCalledWith({ type: 'faucet_claim', amount: 500 });
+  });
+
+  describe('faucet status lifecycle', () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('resets faucet status to idle after success', () => {
+      const send = jest.fn();
+      mockUseWebSocketContext.mockReturnValue({
+        connectionState: 'connected',
+        send,
+        lastMessage: {
+          type: 'balance',
+          publicKey: 'pub',
+          registered: true,
+          hasBalance: true,
+          balance: '1000',
+          message: 'FAUCET_CLAIMED',
+        },
+      });
+
+      renderHook(() => useGatewaySession());
+
+      // Initially sets to success
+      expect(store.setFaucetStatus).toHaveBeenCalledWith('success', 'Faucet claimed');
+
+      // Advance timer to trigger reset
+      act(() => {
+        jest.advanceTimersByTime(3000);
+      });
+
+      // Should reset to idle after timeout
+      expect(store.setFaucetStatus).toHaveBeenCalledWith('idle', null);
+    });
+
+    it('only attributes error to faucet when faucetStatus is pending', () => {
+      const send = jest.fn();
+
+      // Case 1: faucetStatus is 'idle' - error should NOT update faucet status
+      store.faucetStatus = 'idle';
+      mockUseWebSocketContext.mockReturnValue({
+        connectionState: 'connected',
+        send,
+        lastMessage: { type: 'error', message: 'Some other error' },
+      });
+
+      const { unmount } = renderHook(() => useGatewaySession());
+      expect(store.setFaucetStatus).not.toHaveBeenCalledWith('error', expect.any(String));
+      unmount();
+    });
+
+    it('does not attribute error to faucet when status is success', () => {
+      const send = jest.fn();
+
+      // faucetStatus is 'success' - error should NOT update faucet status
+      store.faucetStatus = 'success';
+      mockUseWebSocketContext.mockReturnValue({
+        connectionState: 'connected',
+        send,
+        lastMessage: { type: 'error', message: 'Some other error' },
+      });
+
+      const { unmount } = renderHook(() => useGatewaySession());
+      expect(store.setFaucetStatus).not.toHaveBeenCalledWith('error', expect.any(String));
+      unmount();
+    });
+
+    it('only attributes error to faucet when status is pending', () => {
+      const send = jest.fn();
+
+      // faucetStatus is 'pending' - error SHOULD update faucet status
+      store.faucetStatus = 'pending';
+      mockUseWebSocketContext.mockReturnValue({
+        connectionState: 'connected',
+        send,
+        lastMessage: { type: 'error', message: 'Faucet denied' },
+      });
+
+      const { unmount } = renderHook(() => useGatewaySession());
+      expect(store.setFaucetStatus).toHaveBeenCalledWith('error', 'Faucet denied');
+      unmount();
+    });
+
+    it('subsequent faucet requests work after success', () => {
+      const send = jest.fn();
+      store.faucetStatus = 'success';
+
+      mockUseWebSocketContext.mockReturnValue({
+        connectionState: 'connected',
+        send,
+        lastMessage: null,
+      });
+
+      const { getResult, unmount } = renderHook(() => useGatewaySession());
+
+      // Request faucet even when status is 'success'
+      act(() => {
+        getResult().requestFaucet();
+      });
+
+      // Should set to pending (overwriting success)
+      expect(store.setFaucetStatus).toHaveBeenCalledWith('pending', 'Requesting faucet...');
+      expect(send).toHaveBeenCalledWith({ type: 'faucet_claim' });
+      unmount();
+    });
+
+    it('subsequent faucet requests work after error', () => {
+      const send = jest.fn();
+      store.faucetStatus = 'error';
+
+      mockUseWebSocketContext.mockReturnValue({
+        connectionState: 'connected',
+        send,
+        lastMessage: null,
+      });
+
+      const { getResult, unmount } = renderHook(() => useGatewaySession());
+
+      // Request faucet even when status is 'error'
+      act(() => {
+        getResult().requestFaucet(1000);
+      });
+
+      // Should set to pending (overwriting error)
+      expect(store.setFaucetStatus).toHaveBeenCalledWith('pending', 'Requesting faucet...');
+      expect(send).toHaveBeenCalledWith({ type: 'faucet_claim', amount: 1000 });
+      unmount();
+    });
+
+    it('timeout cleans up on unmount', () => {
+      const send = jest.fn();
+      mockUseWebSocketContext.mockReturnValue({
+        connectionState: 'connected',
+        send,
+        lastMessage: {
+          type: 'balance',
+          publicKey: 'pub',
+          registered: true,
+          hasBalance: true,
+          balance: '1000',
+          message: 'FAUCET_CLAIMED',
+        },
+      });
+
+      const { unmount } = renderHook(() => useGatewaySession());
+
+      // Initially sets to success
+      expect(store.setFaucetStatus).toHaveBeenCalledWith('success', 'Faucet claimed');
+      store.setFaucetStatus.mockClear();
+
+      // Unmount before timeout fires
+      unmount();
+
+      // Advance timer
+      act(() => {
+        jest.advanceTimersByTime(3000);
+      });
+
+      // Should NOT call setFaucetStatus after unmount
+      expect(store.setFaucetStatus).not.toHaveBeenCalled();
+    });
+
+    it('timeout does not reset if faucetStatus changed to pending again', () => {
+      const send = jest.fn();
+      mockUseWebSocketContext.mockReturnValue({
+        connectionState: 'connected',
+        send,
+        lastMessage: null,
+      });
+
+      const { getResult, unmount } = renderHook(() => useGatewaySession());
+
+      // Manually trigger success first (simulating previous claim)
+      store.faucetStatus = 'success';
+
+      // Immediately request another faucet (user clicked again quickly)
+      act(() => {
+        getResult().requestFaucet();
+      });
+
+      expect(store.setFaucetStatus).toHaveBeenCalledWith('pending', 'Requesting faucet...');
+
+      // Advance timer past the success reset timeout
+      store.setFaucetStatus.mockClear();
+      act(() => {
+        jest.advanceTimersByTime(3000);
+      });
+
+      // Should NOT reset to idle since we're now pending
+      expect(store.setFaucetStatus).not.toHaveBeenCalledWith('idle', null);
+      unmount();
+    });
   });
 });
