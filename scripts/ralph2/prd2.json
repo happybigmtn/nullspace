@@ -600,7 +600,26 @@
 		}
 	],
 	"bugTracker": {
-		"critical": [],
+		"critical": [
+			{
+				"id": "BUG-003",
+				"title": "BLOCKER: Missing SafeAreaProvider crashes web app",
+				"description": "The mobile web app fails to render entirely. ToastContainer uses useSafeAreaInsets() from react-native-safe-area-context, but SafeAreaProvider is not wrapping the component tree in App.tsx.",
+				"stepsToReproduce": [
+					"1. Start mobile web server: cd mobile && npm run web",
+					"2. Navigate to http://localhost:8081 in any browser",
+					"3. Observe blank white screen - app crashes before rendering"
+				],
+				"rootCause": "App.tsx line 75 wraps content with ToastProvider, which renders ToastContainer. ToastContainer (ToastContext.tsx:492) calls useSafeAreaInsets() which throws 'No safe area value available' error because there's no SafeAreaProvider ancestor.",
+				"expectedBehavior": "App should render splash screen, then auth/lobby screens",
+				"actualBehavior": "React crashes with error: 'No safe area value available. Make sure you are rendering <SafeAreaProvider> at the top of your app.'",
+				"fix": "Wrap <ThemedContent> or <AppContent> with <SafeAreaProvider> from react-native-safe-area-context",
+				"affectedFile": "mobile/App.tsx",
+				"blocksTests": ["QA-007", "QA-008", "QA-009", "QA-010", "QA-011", "QA-012", "QA-013", "QA-014", "QA-015", "QA-016", "QA-017", "QA-018", "QA-019", "QA-020", "QA-021", "QA-022", "QA-023", "QA-024"],
+				"foundDate": "2026-01-07",
+				"severity": "CRITICAL - All web QA testing blocked"
+			}
+		],
 		"high": [
 			{
 				"id": "BUG-002",

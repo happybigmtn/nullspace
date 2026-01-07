@@ -16,6 +16,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useCallback, useEffect, useState } from 'react';
 import { StatusBar, StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { COLORS } from './src/constants/theme';
 import { useAppState, useGatewaySession, useWebSocketReconnectOnForeground, useThemedColors } from './src/hooks';
@@ -67,21 +68,23 @@ function ThemedContent() {
   const colors = useThemedColors();
 
   return (
-    <GestureHandlerRootView style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar
-        barStyle={isDark ? 'light-content' : 'dark-content'}
-        backgroundColor={colors.background}
-      />
-      <ToastProvider>
-        <AuthProvider>
-          <WebSocketProvider>
-            <GatewaySessionBridge>
-              <RootNavigator />
-            </GatewaySessionBridge>
-          </WebSocketProvider>
-        </AuthProvider>
-      </ToastProvider>
-    </GestureHandlerRootView>
+    <SafeAreaProvider>
+      <GestureHandlerRootView style={[styles.container, { backgroundColor: colors.background }]}>
+        <StatusBar
+          barStyle={isDark ? 'light-content' : 'dark-content'}
+          backgroundColor={colors.background}
+        />
+        <ToastProvider>
+          <AuthProvider>
+            <WebSocketProvider>
+              <GatewaySessionBridge>
+                <RootNavigator />
+              </GatewaySessionBridge>
+            </WebSocketProvider>
+          </AuthProvider>
+        </ToastProvider>
+      </GestureHandlerRootView>
+    </SafeAreaProvider>
   );
 }
 
@@ -98,18 +101,20 @@ function AppContent() {
 
 function ErrorFallback({ resetError }: { resetError: () => void }) {
   return (
-    <GestureHandlerRootView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorTitle}>Something went wrong</Text>
-        <Text style={styles.errorText}>
-          We've been notified and are working on a fix.
-        </Text>
-        <TouchableOpacity style={styles.retryButton} onPress={resetError}>
-          <Text style={styles.retryText}>Try Again</Text>
-        </TouchableOpacity>
-      </View>
-    </GestureHandlerRootView>
+    <SafeAreaProvider>
+      <GestureHandlerRootView style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor={COLORS.background} />
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorTitle}>Something went wrong</Text>
+          <Text style={styles.errorText}>
+            We've been notified and are working on a fix.
+          </Text>
+          <TouchableOpacity style={styles.retryButton} onPress={resetError}>
+            <Text style={styles.retryText}>Try Again</Text>
+          </TouchableOpacity>
+        </View>
+      </GestureHandlerRootView>
+    </SafeAreaProvider>
   );
 }
 

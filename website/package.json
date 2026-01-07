@@ -27,7 +27,10 @@
     "e2e:layout": "node scripts/layout-smoke.mjs",
     "latency-test": "node scripts/latency-test.mjs",
     "latency-test:headed": "HEADED=1 node scripts/latency-test.mjs",
-    "qa:bet-suite": "node scripts/qa-bet-suite.mjs"
+    "qa:bet-suite": "node scripts/qa-bet-suite.mjs",
+    "visual:capture": "node scripts/visual-regression.mjs capture",
+    "visual:compare": "node scripts/visual-regression.mjs compare",
+    "visual:update": "VISUAL_UPDATE=1 node scripts/visual-regression.mjs capture"
   },
   "keywords": [],
   "author": "",

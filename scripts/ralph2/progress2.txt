@@ -123,4 +123,36 @@ Target: E2E QA Testing of Casino Mobile App
 **Impact:** Wallet regenerated on browser refresh, loses balance
 **Note:** SPA navigation via React Router works correctly
 
+### BUG-003 (CRITICAL - BLOCKER)
+**Title:** Missing SafeAreaProvider crashes web app
+**Impact:** ALL web QA testing blocked - app renders blank white screen
+**Root Cause:** ToastContainer calls useSafeAreaInsets() without SafeAreaProvider
+**Fix Required:** Add SafeAreaProvider wrapper in App.tsx
+
+---
+
+## 2026-01-07 - E2E Test Session 2
+
+### QA-007: Blackjack hit/stand flow
+**Result:** BLOCKED
+**Blocker:** BUG-003 - Web app crashes before rendering
+**Screenshots:** qa-blackjack-02-loading.png, qa-blackjack-03-after-wait.png (both blank)
+
+**Investigation:**
+1. Started infrastructure - simulator healthy at :8080
+2. Started mobile web server - Expo at :8081
+3. Navigated to http://localhost:8081 via Playwright
+4. Page loads but renders blank white screen
+5. Console error: "No safe area value available. Make sure you are rendering `<SafeAreaProvider>` at the top of your app."
+6. Root element (#root) is empty - React app crashes before mount
+
+**Technical Details:**
+- `App.tsx` wraps content with `ToastProvider` at line 75
+- `ToastProvider` renders `ToastContainer` component
+- `ToastContainer` (ToastContext.tsx:492) calls `useSafeAreaInsets()`
+- This hook requires `SafeAreaProvider` ancestor, which is missing
+- React throws error, entire app fails to render
+
+**All remaining web tests blocked until BUG-003 is fixed.**
+
 ---
