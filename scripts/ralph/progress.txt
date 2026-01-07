@@ -40,8 +40,12 @@ Target: Testnet Production
 - Navigation: `@react-navigation/stack` for custom CardStyleInterpolators (parallax depth effects)
 - Parallax presets: `ParallaxTransitionPresets.slideWithParallax`, `modalWithParallax`, `fadeWithDepth`
 - Depth perception: outgoing screens scale to 0.92 + 60% opacity, incoming overshoot 1.02→1.0
+- Toast notifications: `useToast()` hook returns info/success/error/warning methods, auto-dismiss + swipe-to-close
+- AnimatedBalance: `interpolateColor()` for color transitions, `isBigWinIntensity()` for medium/big/jackpot threshold
+- Color animation: For big wins use white→gold→primary via 3-point interpolation (0→0.5→1)
+- DeltaBadge: Supports both wins (green, +prefix) and losses (red, no prefix) with fade animation
 - 12 race conditions identified (see US-005 through US-009, US-021-022)
-- Tests: 280/280 unit tests, run with `npm test`
+- Tests: Run with `npm test` (318+ unit tests after US-117)
 
 ### Configuration
 - Production configs: `configs/production/*.env.example`
@@ -2625,5 +2629,63 @@ Target: Testnet Production
   - `useSkeletonShimmer()` custom hook encapsulates animation logic for reuse across skeleton variants
   - Game-specific skeletons match actual game layouts (dealer/player hands, bet areas, chip selectors)
   - Card games (blackjack, casino_war, three_card_poker, ultimate_texas_holdem) share similar layouts → reuse `BlackjackSkeleton`
+
+---
+
+## 2026-01-07 - US-116: Build floating toast notification system
+
+- What was implemented:
+  - Created `ToastContext.tsx` with comprehensive toast notification system:
+    - `ToastProvider` context with queue management and `useToast()` hook
+    - Slide-in from top animation using `SlideInUp` from react-native-reanimated
+    - 4 variants: info (indigo), success (green), error (red), warning (amber)
+    - Custom pure-RN icons for each variant (no external icon library)
+    - Glassmorphism styling via `expo-blur` BlurView + tinted overlay + border glow
+    - Auto-dismiss with configurable duration (default 4000ms, 0 = manual only)
+    - Swipe-to-close gesture via `Gesture.Pan()` - swipe up to dismiss
+    - Queue management: max 3 visible toasts, newest at top
+    - Stagger animation: 100ms delay between toast entrances
+    - Haptic feedback: win() for success, error() for error, push() for warning, selectionChange() for info
+  - Integrated `ToastProvider` into App.tsx inside `ThemedContent` wrapper
+  - Added 17 unit tests covering all functionality
+- Files changed:
+  - `mobile/src/context/ToastContext.tsx` (NEW) - 640 lines, full toast implementation
+  - `mobile/src/context/index.ts` - Export ToastProvider, useToast, ToastVariant, ToastOptions
+  - `mobile/App.tsx` - Wrap content with ToastProvider
+  - `mobile/src/context/__tests__/ToastContext.test.tsx` (NEW) - 17 tests
+- **Learnings:**
+  - useEffect must return `undefined` for all code paths, not just some - TypeScript TS7030 error
+  - `jest.mock()` hoists to top of file - can't reference variables defined before it in same scope
+  - Solution: Use `jest.requireMock()` AFTER imports to get reference to mocked module
+  - React 19 error boundary keeps component mounted after error - tests using `useHook()` outside provider pollute subsequent tests
+  - Pattern: Put "outside provider" error tests LAST in test file to avoid pollution
+  - expo-blur `BlurView` needs explicit `tint` prop ('dark' or 'light') based on theme
+  - For pure-RN icons: Use View + borderWidth for circles, rotated rectangles for checkmarks/X
+  - `Gesture.Pan().onUpdate().onEnd()` chain for swipe dismiss with spring-back on insufficient swipe
+  - `runOnJS()` required to call JS functions from gesture handlers (e.g., dismiss callback)
+  - `useSafeAreaInsets()` for proper positioning below notch on iOS
+  - Toast queue: prepend new toasts (newest first), slice to MAX_VISIBLE for rendering
+
+---
+
+## 2026-01-07 - US-117: Animated balance counter with win/loss delta
+
+- What was implemented:
+  - Added color animation for big wins: white → gold → primary via `interpolateColor()`
+  - `isBigWinIntensity()` helper detects medium/big/jackpot intensity thresholds
+  - `RollerDigit` now accepts `colorProgress` shared value and `isBigWin` flag
+  - `DeltaBadge` updated to handle both wins (green, +prefix) and losses (red, no prefix)
+  - Delta badge shows for `isWinActive` OR negative `winAmount`
+  - Created 21 tests covering all acceptance criteria
+- Files changed:
+  - `mobile/src/components/celebration/AnimatedBalance.tsx` - Added color animation logic
+  - `mobile/src/components/celebration/__tests__/AnimatedBalance.test.tsx` (NEW) - 21 tests
+- **Learnings:**
+  - `Animated.SharedValue<T>` type no longer exported from reanimated v4 - use `{ value: T }` instead
+  - `interpolateColor(value, [0, 0.5, 1], [white, gold, primary])` for 3-stage color animation
+  - Color animations should only trigger for "big" wins (medium/big/jackpot) - small wins stay default color
+  - `withSequence()` timing: fast flash to gold (300ms), hold briefly (200ms delay), slow settle to primary (600ms)
+  - In tests, `extractText()` joining Text nodes has spaces between - strip whitespace for assertions
+  - Shared value type in component props: Use `{ value: number }` not `Animated.SharedValue<number>`
 
 ---

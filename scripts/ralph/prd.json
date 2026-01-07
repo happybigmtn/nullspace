@@ -464,8 +464,8 @@
 				"Queue multiple toasts with stagger animation"
 			],
 			"priority": 39,
-			"passes": false,
-			"notes": "UX-HIGH: No toast/notification system exists. Error feedback is plain text, bet rejections have no visual ceremony."
+			"passes": true,
+			"notes": "DONE: Created ToastContext.tsx with ToastProvider, useToast hook, slide-in animations via react-native-reanimated, glassmorphism via expo-blur, 4 variants with pure RN icons, swipe-to-close gesture, auto-dismiss with configurable duration, queue management (max 3 visible), stagger animation, haptic feedback. 17 tests passing."
 		},
 		{
 			"id": "US-117",
@@ -478,8 +478,8 @@
 				"Add shimmer wave across balance on change"
 			],
 			"priority": 40,
-			"passes": false,
-			"notes": "UX-HIGH: GameHeader.tsx:31 uses basic toLocaleString(). Balance updates instantly with no animation or delta indication."
+			"passes": true,
+			"notes": "COMPLETE: AnimatedBalance.tsx now has color animation (white→gold→primary via interpolateColor), DeltaBadge handles wins/losses, 21 tests in AnimatedBalance.test.tsx."
 		},
 		{
 			"id": "US-118",
