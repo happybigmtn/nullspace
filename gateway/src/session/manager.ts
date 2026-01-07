@@ -10,6 +10,7 @@ import { NonceManager } from "./nonce.js";
 import { SubmitClient } from "../backend/http.js";
 import { UpdatesClient, type CasinoGameEvent } from "../backend/updates.js";
 import { logDebug, logError, logWarn } from "../logger.js";
+import { trackRateLimitHit, trackRateLimitReset } from "../metrics/index.js";
 import {
 	encodeCasinoRegister,
 	encodeCasinoDeposit,
@@ -76,11 +77,14 @@ export class SessionManager {
 		const now = Date.now();
 		const existing = this.sessionCreateAttempts.get(clientIp);
 		if (existing && existing.blockedUntil > now) {
+			trackRateLimitHit("session_rate_limit", clientIp);
 			throw new Error("Session creation rate limit exceeded");
 		}
 
 		const record = existing ?? { count: 0, windowStart: now, blockedUntil: 0 };
 		if (now - record.windowStart > SESSION_CREATE_LIMIT.durationMs) {
+			// Window expired, reset counter
+			trackRateLimitReset("session_rate_limit");
 			record.count = 0;
 			record.windowStart = now;
 		}
@@ -88,6 +92,7 @@ export class SessionManager {
 		if (record.count > SESSION_CREATE_LIMIT.points) {
 			record.blockedUntil = now + SESSION_CREATE_LIMIT.blockMs;
 			this.sessionCreateAttempts.set(clientIp, record);
+			trackRateLimitHit("session_rate_limit", clientIp);
 			throw new Error("Session creation rate limit exceeded");
 		}
 		this.sessionCreateAttempts.set(clientIp, record);

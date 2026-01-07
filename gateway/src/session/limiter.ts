@@ -1,4 +1,5 @@
 import { logDebug } from '../logger.js';
+import { trackRateLimitHit } from '../metrics/index.js';
 
 /**
  * Connection Limiter
@@ -34,8 +35,12 @@ export class ConnectionLimiter {
    * Check if a new connection from the given IP is allowed
    */
   canConnect(ip: string): LimitCheckResult {
+    // Normalize IP address (handle IPv4-mapped IPv6 addresses)
+    const normalizedIp = this.normalizeIp(ip);
+
     // Check global session cap
     if (this.totalConnections >= this.config.maxTotalSessions) {
+      trackRateLimitHit('session_cap', normalizedIp);
       return {
         allowed: false,
         reason: `Server at capacity (${this.config.maxTotalSessions} sessions)`,
@@ -43,14 +48,12 @@ export class ConnectionLimiter {
       };
     }
 
-    // Normalize IP address (handle IPv4-mapped IPv6 addresses)
-    const normalizedIp = this.normalizeIp(ip);
-
     // Check per-IP limit
     const ipConnections = this.connectionsByIp.get(normalizedIp);
     const currentCount = ipConnections?.size ?? 0;
 
     if (currentCount >= this.config.maxConnectionsPerIp) {
+      trackRateLimitHit('ip_limit', normalizedIp);
       return {
         allowed: false,
         reason: `Too many connections from this IP (max ${this.config.maxConnectionsPerIp})`,
