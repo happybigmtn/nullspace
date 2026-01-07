@@ -112,9 +112,121 @@ body.fonts-loaded {
   transition: opacity 0.3s ease-in;
 }
 
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Focus Ring System (WCAG 2.1 Compliant)
+ *
+ * These focus indicators meet WCAG 2.1 requirements:
+ * - Minimum 3:1 contrast ratio against adjacent colors
+ * - Clearly visible for keyboard navigation
+ * - Ring width at least 2px for visibility
+ *
+ * Variants: button, input, interactive, error, subtle
+ * ───────────────────────────────────────────────────────────────────────────── */
+
+/* CSS Custom Properties for focus tokens */
+:root {
+  --focus-color-primary: #5E5CE6;
+  --focus-color-success: #34C759;
+  --focus-color-error: #FF3B30;
+  --focus-color-warning: #FF9500;
+  --focus-color-muted: #737373;
+  --focus-color-high: #FFFFFF;
+}
+
+/* Default focus-visible - applied to all interactive elements */
 *:focus-visible {
-  outline: 2px solid #007AFF;
+  outline: 2px solid var(--focus-color-primary);
   outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(94, 92, 230, 0.2);
+}
+
+/* Remove default focus for non-keyboard navigation */
+*:focus:not(:focus-visible) {
+  outline: none;
+  box-shadow: none;
+}
+
+/* Button focus - standard interactive elements */
+.focus-button:focus-visible,
+button:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid var(--focus-color-primary);
+  outline-offset: 2px;
+  box-shadow: 0 0 8px rgba(94, 92, 230, 0.4);
+}
+
+/* Input focus - form fields */
+.focus-input:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--focus-color-primary);
+  outline-offset: 3px;
+  box-shadow: 0 0 10px rgba(94, 92, 230, 0.35);
+}
+
+/* Interactive focus - cards, list items, larger interactive regions */
+.focus-interactive:focus-visible {
+  outline: 3px solid var(--focus-color-primary);
+  outline-offset: 2px;
+  box-shadow: 0 0 12px rgba(94, 92, 230, 0.3);
+}
+
+/* Error focus - invalid form fields */
+.focus-error:focus-visible,
+input:invalid:focus-visible,
+[aria-invalid="true"]:focus-visible {
+  outline: 2px solid var(--focus-color-error);
+  outline-offset: 2px;
+  box-shadow: 0 0 8px rgba(255, 59, 48, 0.4);
+}
+
+/* Subtle focus - low-emphasis secondary elements */
+.focus-subtle:focus-visible {
+  outline: 1px solid var(--focus-color-muted);
+  outline-offset: 2px;
+  box-shadow: 0 0 4px rgba(115, 115, 115, 0.2);
+}
+
+/* Success focus - validated fields */
+.focus-success:focus-visible {
+  outline: 2px solid var(--focus-color-success);
+  outline-offset: 2px;
+  box-shadow: 0 0 8px rgba(52, 199, 89, 0.4);
+}
+
+/* High contrast focus (for dark backgrounds) */
+.focus-high:focus-visible {
+  outline: 2px solid var(--focus-color-high);
+  outline-offset: 2px;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+}
+
+/* Focus ring animation for enhanced visibility */
+@keyframes focusRingPulse {
+  0%, 100% { box-shadow: 0 0 0 4px rgba(94, 92, 230, 0.2); }
+  50% { box-shadow: 0 0 0 6px rgba(94, 92, 230, 0.3); }
+}
+
+.focus-animated:focus-visible {
+  animation: focusRingPulse 1.5s ease-in-out infinite;
+}
+
+/* Dark mode focus adjustments */
+.dark *:focus-visible {
+  box-shadow: 0 0 0 4px rgba(94, 92, 230, 0.35);
+}
+
+.dark .focus-subtle:focus-visible {
+  outline-color: #A3A3A3;
+  box-shadow: 0 0 4px rgba(163, 163, 163, 0.3);
+}
+
+/* Skip link focus (already exists, enhanced) */
+a[href="#app-main"]:focus-visible {
+  outline: 2px solid var(--focus-color-primary);
+  outline-offset: 2px;
+  box-shadow: 0 0 8px rgba(94, 92, 230, 0.4);
 }
 
 /* Global Game Perspective */

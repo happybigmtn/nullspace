@@ -17,4 +17,10 @@ export { SPACING, SPACING_SEMANTIC, RADIUS, CONTAINER, } from './spacing.js';
 export { SPRING, DURATION, EASING, STAGGER, } from './animations.js';
 // Shadows
 export { SHADOW, ELEVATION, GLOW, } from './shadows.js';
+// Opacity
+export { OPACITY, OPACITY_SEMANTIC, } from './opacity.js';
+// Z-Index
+export { Z_INDEX, Z_INDEX_GAME, } from './zindex.js';
+// Focus (Accessibility)
+export { FOCUS, FOCUS_COLORS, FOCUS_WIDTH, FOCUS_OFFSET, } from './focus.js';
 //# sourceMappingURL=index.js.map

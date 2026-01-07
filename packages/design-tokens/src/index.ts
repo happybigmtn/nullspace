@@ -91,3 +91,19 @@ export {
   type ZIndexGameKey,
   type ZIndexGameValue,
 } from './zindex.js';
+
+// Focus (Accessibility)
+export {
+  FOCUS,
+  FOCUS_COLORS,
+  FOCUS_WIDTH,
+  FOCUS_OFFSET,
+  type FocusVariant,
+  type FocusConfig,
+  type FocusColorKey,
+  type FocusColorValue,
+  type FocusWidthKey,
+  type FocusWidthValue,
+  type FocusOffsetKey,
+  type FocusOffsetValue,
+} from './focus.js';
