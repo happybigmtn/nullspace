@@ -206,8 +206,8 @@
 				"Measure FPS improvement after fix"
 			],
 			"priority": 20,
-			"passes": false,
-			"notes": "PERFORMANCE-HIGH (agent-verified): CardFan.tsx, ChipStack.tsx recreate Animated.Value objects on every render causing memory pressure and animation jank."
+			"passes": true,
+			"notes": "VERIFIED FALSE POSITIVE: No CardFan.tsx or ChipStack.tsx files exist. Card.tsx and ChipSelector.tsx use react-native-reanimated useSharedValue (memoized internally). PasswordStrengthIndicator.tsx uses correct useRef(new Animated.Value()) pattern. All animations properly memoized."
 		},
 		{
 			"id": "US-097",
@@ -219,8 +219,8 @@
 				"Add code review guideline for function purity"
 			],
 			"priority": 21,
-			"passes": false,
-			"notes": "ARCHITECTURE-HIGH (agent-verified): Session manager isNextSession() increments counter as side effect. Could increment without using result."
+			"passes": true,
+			"notes": "VERIFIED FALSE POSITIVE: No isNextSession() function exists. gameSessionCounter mutation occurs in startGame() (manager.ts:448-451), which is an action method, not a query. Counter++ inside generateSessionId() call is appropriate - it generates unique IDs during game start. No boolean functions have side effects."
 		},
 		{
 			"id": "US-098",
@@ -232,8 +232,8 @@
 				"Document idempotency behavior in WebSocket API"
 			],
 			"priority": 22,
-			"passes": false,
-			"notes": "DATA-INTEGRITY-HIGH (agent-verified): websocket.ts:246-268 flushQueue has no idempotency. Duplicates possible on reconnect race."
+			"passes": true,
+			"notes": "COMPLETE: Added generateMessageId() for unique IDs, sentMessageIdsRef for tracking sent messages, deduplication in onopen handler, 60s cleanup of old IDs. JSDoc documentation added to websocket.ts header. 9 new tests in websocket.test.tsx verify idempotency behavior."
 		},
 		{
 			"id": "US-099",

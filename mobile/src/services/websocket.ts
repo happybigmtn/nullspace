@@ -1,5 +1,32 @@
 /**
  * WebSocket connection manager with reconnection logic
+ *
+ * ## Idempotency Guarantees (US-098)
+ *
+ * This module provides client-side idempotency for queued messages:
+ *
+ * 1. **Message IDs**: Each queued message gets a unique ID (`{timestamp}-{counter}`)
+ * 2. **Sent Tracking**: Successfully sent message IDs are tracked in `sentMessageIdsRef`
+ * 3. **Deduplication**: On reconnect, messages already in `sentMessageIdsRef` are skipped
+ * 4. **Cleanup**: Old sent IDs (>60s) are cleaned up on each connect to prevent memory leaks
+ *
+ * ### Why Client-Side Idempotency?
+ *
+ * The server uses sequential nonces for idempotency, but client-side deduplication:
+ * - Reduces unnecessary network traffic on reconnect
+ * - Provides immediate feedback (no round-trip needed to detect duplicate)
+ * - Prevents UI confusion from duplicate sends
+ *
+ * ### Race Condition Scenario (prevented)
+ *
+ * ```
+ * 1. User places bet while connected
+ * 2. send() succeeds, message ID tracked
+ * 3. Connection drops immediately after
+ * 4. User sees "reconnecting" but bet was sent
+ * 5. On reconnect, queue flush skips the bet (already tracked as sent)
+ * 6. No double-bet!
+ * ```
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Constants from 'expo-constants';
@@ -37,8 +64,21 @@ const MAX_RECONNECT_DELAY_MS = 30000;
 const BASE_RECONNECT_DELAY_MS = 1000;
 const MAX_QUEUE_SIZE = 50;
 const MESSAGE_TIMEOUT_MS = 30000; // 30 seconds
+const SENT_ID_RETENTION_MS = 60000; // Keep sent IDs for 1 minute to prevent duplicates
+
+// Counter for generating unique message IDs
+let messageIdCounter = 0;
+
+/**
+ * Generate a unique message ID for idempotency tracking.
+ * Format: {timestamp}-{counter} ensures uniqueness within this session.
+ */
+function generateMessageId(): string {
+  return `${Date.now()}-${++messageIdCounter}`;
+}
 
 interface QueuedMessage {
+  id: string; // Unique message ID for idempotency
   message: object;
   timestamp: number;
 }
@@ -60,6 +100,8 @@ export function useWebSocket<T extends GameMessage = GameMessage>(
   const messageQueueRef = useRef<QueuedMessage[]>([]);
   // Track if we're currently in the process of connecting to prevent double-reconnect races
   const isReconnectingRef = useRef(false);
+  // Track sent message IDs for idempotency (prevents duplicate sends on reconnect)
+  const sentMessageIdsRef = useRef<Map<string, number>>(new Map());
 
   const connect = useCallback(() => {
     // Prevent double-reconnect races
@@ -113,8 +155,15 @@ export function useWebSocket<T extends GameMessage = GameMessage>(
       reconnectAttemptsRef.current = 0;
       setReconnectAttempt(0);
 
-      // Flush queued messages
+      // Cleanup old sent IDs to prevent memory leak
       const now = Date.now();
+      for (const [id, timestamp] of sentMessageIdsRef.current.entries()) {
+        if (now - timestamp > SENT_ID_RETENTION_MS) {
+          sentMessageIdsRef.current.delete(id);
+        }
+      }
+
+      // Flush queued messages (with idempotency check)
       const validMessages = messageQueueRef.current.filter(
         (item) => now - item.timestamp < MESSAGE_TIMEOUT_MS
       );
@@ -122,10 +171,18 @@ export function useWebSocket<T extends GameMessage = GameMessage>(
         (item) => now - item.timestamp >= MESSAGE_TIMEOUT_MS
       );
 
+      // Filter out already-sent messages (idempotency)
+      const unsentMessages = validMessages.filter(
+        (item) => !sentMessageIdsRef.current.has(item.id)
+      );
+      const duplicateCount = validMessages.length - unsentMessages.length;
+
       // Notify about expired messages (only the last one to avoid spamming)
       if (expiredMessages.length > 0) {
         const lastExpired = expiredMessages[expiredMessages.length - 1];
-        setDroppedMessage({ message: lastExpired.message, reason: 'expired' });
+        if (lastExpired) {
+          setDroppedMessage({ message: lastExpired.message, reason: 'expired' });
+        }
         if (__DEV__) {
           console.warn(
             `[WebSocket] ${expiredMessages.length} queued message(s) expired (older than ${MESSAGE_TIMEOUT_MS / 1000}s)`
@@ -144,15 +201,17 @@ export function useWebSocket<T extends GameMessage = GameMessage>(
         }).catch(() => {}); // Fire and forget
       }
 
-      if (validMessages.length > 0) {
+      if (unsentMessages.length > 0 || duplicateCount > 0) {
         if (__DEV__) {
           console.log(
-            `[WebSocket] Flushing ${validMessages.length} queued messages (${expiredMessages.length} expired)`
+            `[WebSocket] Flushing ${unsentMessages.length} queued messages (${expiredMessages.length} expired, ${duplicateCount} duplicates skipped)`
           );
         }
-        for (const item of validMessages) {
+        for (const item of unsentMessages) {
           try {
             ws.current?.send(JSON.stringify(item.message));
+            // Track this message as sent for idempotency
+            sentMessageIdsRef.current.set(item.id, now);
           } catch (error) {
             if (__DEV__) {
               console.error('[WebSocket] Failed to send queued message:', error);
@@ -253,6 +312,8 @@ export function useWebSocket<T extends GameMessage = GameMessage>(
   }, [url]);
 
   const send = useCallback((message: object): boolean => {
+    const messageId = generateMessageId();
+
     if (ws.current?.readyState !== WebSocket.OPEN) {
       // Queue message if we're connecting (will be flushed on reconnect)
       if (connectionState === 'connecting' || connectionState === 'disconnected') {
@@ -278,13 +339,14 @@ export function useWebSocket<T extends GameMessage = GameMessage>(
         }
 
         messageQueueRef.current.push({
+          id: messageId,
           message,
           timestamp: Date.now(),
         });
 
         if (__DEV__) {
           console.log(
-            `[WebSocket] Message queued (${messageQueueRef.current.length}/${MAX_QUEUE_SIZE})`
+            `[WebSocket] Message queued (${messageQueueRef.current.length}/${MAX_QUEUE_SIZE}), id=${messageId}`
           );
         }
         return true; // Return true since message is queued
@@ -298,6 +360,8 @@ export function useWebSocket<T extends GameMessage = GameMessage>(
 
     try {
       ws.current.send(JSON.stringify(message));
+      // Track direct sends for idempotency (in case message gets re-queued somehow)
+      sentMessageIdsRef.current.set(messageId, Date.now());
       return true;
     } catch (error) {
       if (__DEV__) {

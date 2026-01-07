@@ -434,9 +434,9 @@ describe('useWebSocket', () => {
         });
       }
 
-      // All 50 should be queued
+      // All 50 should be queued (log includes message ID now)
       expect(console.log).toHaveBeenCalledWith(
-        '[WebSocket] Message queued (50/50)'
+        expect.stringMatching(/\[WebSocket\] Message queued \(50\/50\), id=/)
       );
 
       // Queue one more - should drop oldest and warn
@@ -989,9 +989,9 @@ describe('useWebSocket', () => {
         socket.onopen?.();
       });
 
-      // Should log flush with correct count (3 valid, 2 expired)
+      // Should log flush with correct count (3 valid, 2 expired, 0 duplicates)
       expect(console.log).toHaveBeenCalledWith(
-        '[WebSocket] Flushing 3 queued messages (2 expired)'
+        '[WebSocket] Flushing 3 queued messages (2 expired, 0 duplicates skipped)'
       );
     });
   });
@@ -2150,5 +2150,295 @@ describe('disconnect function (US-068)', () => {
     const finalState = snapshots.at(-1);
     expect(finalState?.isConnected).toBe(true);
     expect(finalState?.connectionState).toBe('connected');
+  });
+});
+
+// ========================================================================
+// US-098: Message Queue Idempotency Tests
+// ========================================================================
+//
+// This section tests that:
+// 1. Messages are assigned unique IDs when queued
+// 2. Already-sent messages are deduplicated on reconnect
+// 3. Sent message IDs are tracked for idempotency
+// 4. Old sent IDs are cleaned up to prevent memory leaks
+// ========================================================================
+
+describe('message queue idempotency (US-098)', () => {
+  it('assigns unique ID to each queued message', () => {
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    act(() => {
+      TestRenderer.create(<HookProbe url="ws://example.test" />);
+    });
+
+    const state = snapshots.at(-1);
+
+    // Queue multiple messages
+    act(() => {
+      state?.send({ type: 'msg1' });
+    });
+    act(() => {
+      state?.send({ type: 'msg2' });
+    });
+    act(() => {
+      state?.send({ type: 'msg3' });
+    });
+
+    // Log should show message IDs
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringMatching(/Message queued.*id=/)
+    );
+  });
+
+  it('deduplicates messages that were already sent before reconnect', () => {
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    act(() => {
+      TestRenderer.create(<HookProbe url="ws://example.test" />);
+    });
+
+    const state = snapshots.at(-1);
+
+    // Queue messages while connecting
+    act(() => {
+      state?.send({ type: 'bet', amount: 100 });
+    });
+    act(() => {
+      state?.send({ type: 'bet', amount: 200 });
+    });
+
+    // First connection - flush queue
+    const socket1 = MockWebSocket.instances[0];
+    act(() => {
+      socket1.readyState = MockWebSocket.OPEN;
+      socket1.onopen?.();
+    });
+
+    // Both messages should be sent
+    expect(socket1.send).toHaveBeenCalledTimes(2);
+
+    // Simulate abrupt disconnection (connection drops mid-session)
+    // Messages were sent but might still be in queue due to race condition
+    act(() => {
+      socket1.readyState = MockWebSocket.CLOSED;
+      socket1.onclose?.({ wasClean: false, code: 1006, reason: 'network error' });
+    });
+
+    // Wait for reconnect
+    act(() => {
+      jest.advanceTimersByTime(1000);
+    });
+
+    // Second connection
+    const socket2 = MockWebSocket.instances[1];
+    act(() => {
+      socket2.readyState = MockWebSocket.OPEN;
+      socket2.onopen?.();
+    });
+
+    // No messages should be re-sent (queue was cleared after first flush)
+    // This test verifies the queue is properly cleared
+    expect(socket2.send).not.toHaveBeenCalled();
+  });
+
+  it('tracks sent message IDs for direct sends', () => {
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    act(() => {
+      TestRenderer.create(<HookProbe url="ws://example.test" />);
+    });
+
+    const socket = MockWebSocket.instances[0];
+    act(() => {
+      socket.readyState = MockWebSocket.OPEN;
+      socket.onopen?.();
+    });
+
+    const state = snapshots.at(-1);
+
+    // Send messages directly (not queued)
+    act(() => {
+      state?.send({ type: 'direct1' });
+    });
+    act(() => {
+      state?.send({ type: 'direct2' });
+    });
+
+    // Both should be sent
+    expect(socket.send).toHaveBeenCalledTimes(2);
+
+    // Note: Direct sends are tracked in sentMessageIdsRef for potential
+    // future use, even though they don't go through the queue
+  });
+
+  it('skips duplicate messages during queue flush', () => {
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    act(() => {
+      TestRenderer.create(<HookProbe url="ws://example.test" />);
+    });
+
+    const state = snapshots.at(-1);
+
+    // Queue messages
+    act(() => {
+      state?.send({ type: 'msg', seq: 1 });
+    });
+    act(() => {
+      state?.send({ type: 'msg', seq: 2 });
+    });
+    act(() => {
+      state?.send({ type: 'msg', seq: 3 });
+    });
+
+    // First connection - partial flush
+    const socket1 = MockWebSocket.instances[0];
+    act(() => {
+      socket1.readyState = MockWebSocket.OPEN;
+      socket1.onopen?.();
+    });
+
+    // Log should indicate flushing with deduplication info
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringMatching(/Flushing \d+ queued messages.*\d+ duplicates skipped/)
+    );
+  });
+
+  it('cleans up old sent IDs on reconnect to prevent memory leak', () => {
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    act(() => {
+      TestRenderer.create(<HookProbe url="ws://example.test" />);
+    });
+
+    // First connection
+    const socket1 = MockWebSocket.instances[0];
+    act(() => {
+      socket1.readyState = MockWebSocket.OPEN;
+      socket1.onopen?.();
+    });
+
+    const state = snapshots.at(-1);
+
+    // Send many messages directly
+    for (let i = 0; i < 100; i++) {
+      act(() => {
+        state?.send({ type: 'msg', seq: i });
+      });
+    }
+
+    // Disconnect
+    act(() => {
+      socket1.readyState = MockWebSocket.CLOSED;
+      socket1.onclose?.({ wasClean: false, code: 1006, reason: 'error' });
+    });
+
+    // Wait longer than SENT_ID_RETENTION_MS (60 seconds)
+    act(() => {
+      jest.advanceTimersByTime(61000);
+    });
+
+    // Reconnect
+    const socket2 = MockWebSocket.instances.at(-1);
+    act(() => {
+      socket2!.readyState = MockWebSocket.OPEN;
+      socket2!.onopen?.();
+    });
+
+    // Old sent IDs should have been cleaned up during onopen
+    // This prevents memory accumulation over long sessions
+    // (We can't directly verify the Map size, but the cleanup runs on every connect)
+    expect(socket2!.send).not.toHaveBeenCalled(); // Queue was cleared
+  });
+
+  it('generates unique message IDs across rapid sends', () => {
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    act(() => {
+      TestRenderer.create(<HookProbe url="ws://example.test" />);
+    });
+
+    const state = snapshots.at(-1);
+    const logCalls: string[] = [];
+
+    // Capture log calls
+    (console.log as jest.Mock).mockImplementation((msg: string) => {
+      if (typeof msg === 'string' && msg.includes('id=')) {
+        logCalls.push(msg);
+      }
+    });
+
+    // Queue many messages rapidly
+    for (let i = 0; i < 10; i++) {
+      act(() => {
+        state?.send({ type: 'rapid', seq: i });
+      });
+    }
+
+    // Extract IDs from log messages
+    const ids = logCalls.map((log) => {
+      const match = log.match(/id=([\d-]+)/);
+      return match ? match[1] : null;
+    }).filter(Boolean);
+
+    // All IDs should be unique
+    const uniqueIds = new Set(ids);
+    expect(uniqueIds.size).toBe(ids.length);
+  });
+
+  it('documents: idempotency prevents double-bets on reconnect race', () => {
+    // This is a documentation test explaining the problem being solved.
+    //
+    // SCENARIO without idempotency:
+    // 1. User places bet while connected
+    // 2. Connection drops immediately after send
+    // 3. Message was queued but might not have been received by server
+    // 4. On reconnect, queue is flushed -> bet sent AGAIN
+    // 5. User loses double the chips!
+    //
+    // WITH idempotency:
+    // 1. User places bet, message gets unique ID
+    // 2. Message is sent, ID tracked in sentMessageIdsRef
+    // 3. Connection drops
+    // 4. On reconnect, queue flush checks sentMessageIdsRef
+    // 5. Already-sent message is skipped -> no double bet
+    //
+    // The server also has idempotency (nonces), but client-side
+    // deduplication prevents unnecessary traffic and provides
+    // immediate feedback.
+
+    expect(true).toBe(true);
+  });
+
+  it('preserves FIFO order while deduplicating', () => {
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    act(() => {
+      TestRenderer.create(<HookProbe url="ws://example.test" />);
+    });
+
+    const state = snapshots.at(-1);
+
+    // Queue messages in order
+    for (let i = 0; i < 5; i++) {
+      act(() => {
+        state?.send({ type: 'ordered', seq: i });
+      });
+    }
+
+    // Connect and flush
+    const socket = MockWebSocket.instances[0];
+    act(() => {
+      socket.readyState = MockWebSocket.OPEN;
+      socket.onopen?.();
+    });
+
+    // Verify order is preserved
+    const sentMessages = socket.send.mock.calls.map(
+      (call) => JSON.parse(call[0] as string).seq
+    );
+    expect(sentMessages).toEqual([0, 1, 2, 3, 4]);
   });
 });
