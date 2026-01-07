@@ -90,6 +90,7 @@ const CONFIG = {
   settleBatchSize: readInt('GATEWAY_LIVE_TABLE_SETTLE_BATCH', 25),
   botBatchSize: readInt('GATEWAY_LIVE_TABLE_BOT_BATCH', 10),
   adminRetryMs: readMs('GATEWAY_LIVE_TABLE_ADMIN_RETRY_MS', 1500),
+  adminGraceMs: readMs('GATEWAY_LIVE_TABLE_ADMIN_GRACE_MS', 3000),
   botCount: readInt('GATEWAY_LIVE_TABLE_BOT_COUNT', IS_PROD ? 0 : 100),
   botBetMin: readInt('GATEWAY_LIVE_TABLE_BOT_BET_MIN', 5),
   botBetMax: readInt('GATEWAY_LIVE_TABLE_BOT_BET_MAX', 25),
@@ -595,14 +596,15 @@ export class OnchainCrapsTable {
     this.tickRunning = true;
     try {
       const now = Date.now();
+      const graceMs = CONFIG.adminGraceMs;
 
-      if (this.phase === 'betting' && now >= this.phaseEndsAt) {
+      if (this.phase === 'betting' && now >= this.phaseEndsAt + graceMs) {
         await this.attemptLockRound();
-      } else if (this.phase === 'locked' && now >= this.phaseEndsAt) {
+      } else if (this.phase === 'locked' && now >= this.phaseEndsAt + graceMs) {
         await this.attemptRevealRound();
-      } else if (this.phase === 'payout' && now >= this.phaseEndsAt) {
+      } else if (this.phase === 'payout' && now >= this.phaseEndsAt + graceMs) {
         await this.attemptFinalizeRound();
-      } else if (this.phase === 'cooldown' && now >= this.phaseEndsAt) {
+      } else if (this.phase === 'cooldown' && now >= this.phaseEndsAt + graceMs) {
         await this.attemptOpenRound();
       }
 
@@ -1185,6 +1187,17 @@ export class OnchainCrapsTable {
   ): { betType: number; target: number; amount: bigint }[] {
     const output: { betType: number; target: number; amount: bigint }[] = [];
     for (const bet of bets) {
+      // Validate bet amount before BigInt conversion to prevent crashes
+      if (typeof bet.amount !== 'number' || !Number.isFinite(bet.amount)) {
+        throw new Error('Bet amount must be a valid finite number');
+      }
+      if (bet.amount < 0) {
+        throw new Error('Bet amount cannot be negative');
+      }
+      if (bet.amount > Number.MAX_SAFE_INTEGER) {
+        throw new Error('Bet amount exceeds maximum safe integer');
+      }
+
       const amount = BigInt(Math.floor(bet.amount));
       if (amount <= 0n) continue;
       if (amount < CONFIG.minBet) {
