@@ -8,7 +8,7 @@ import { bytesToHex, hexToBytes } from '../utils/hex';
 
 const VAULT_RECORD_KEY = 'nullspace_vault_record_v1';
 const LEGACY_PRIVATE_KEY_KEY = 'nullspace_private_key';
-const PASSWORD_MIN_LENGTH = 8;
+const PASSWORD_MIN_LENGTH = 12;
 
 /**
  * Reasons why a vault might be corrupted.

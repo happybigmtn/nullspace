@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, TextInput, ScrollView, Pressable } from 'react-native';
 import { useCallback, useEffect, useState } from 'react';
-import { PrimaryButton } from '../components/ui';
+import { PrimaryButton, PasswordStrengthIndicator } from '../components/ui';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS } from '../constants/theme';
 import {
   createPasswordVault,
@@ -188,6 +188,7 @@ export function VaultScreen({ navigation }: VaultScreenProps) {
             onChangeText={setCreatePassword}
             style={styles.input}
           />
+          <PasswordStrengthIndicator password={createPassword} />
           <TextInput
             placeholder="Confirm password"
             placeholderTextColor={COLORS.textMuted}
@@ -250,6 +251,7 @@ export function VaultScreen({ navigation }: VaultScreenProps) {
           onChangeText={setImportPassword}
           style={styles.input}
         />
+        <PasswordStrengthIndicator password={importPassword} />
         <PrimaryButton label="Import & replace" onPress={handleImport} variant="danger" />
       </View>
 

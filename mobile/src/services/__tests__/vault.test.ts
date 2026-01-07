@@ -626,13 +626,13 @@ describe('vault', () => {
       // The actual timing test is implicit: all failures go through
       // the same PBKDF2 + decryption + tag-mismatch path
       const wrongPasswords = [
-        'xxxxxxxx',               // 8 chars (min), all wrong
-        'myxxxxxx',               // 2 chars match
-        'mySecxxx',               // 5 chars match
+        'xxxxxxxxxxxx',           // 12 chars (min), all wrong
+        'myxxxxxxxxxx',           // 2 chars match + padding
+        'mySecxxxxxxx',           // 5 chars match + padding
         'mySecurePass',           // 12 chars match
         'mySecurePassword123',    // 19 chars match
         'mySecurePassword123!!',  // All chars + extra
-        'completelyDifferent!',   // No matching prefix (must be 8+ chars)
+        'completelyDiff!',        // No matching prefix (must be 12+ chars)
       ];
 
       for (const wrongPassword of wrongPasswords) {
@@ -706,7 +706,7 @@ describe('vault', () => {
       // These are not security concerns because they check public/structural
       // properties, not the secret password content.
 
-      expect(vault.VAULT_PASSWORD_MIN_LENGTH).toBe(8);
+      expect(vault.VAULT_PASSWORD_MIN_LENGTH).toBe(12);
     });
 
     it('measures timing variance is acceptable', async () => {
@@ -725,10 +725,10 @@ describe('vault', () => {
       // We can't do a true timing attack test in unit tests, but we can
       // verify that the same error is returned regardless of input
       const testPasswords = [
-        'a'.repeat(8),   // min length
+        'a'.repeat(12),  // min length
         'a'.repeat(16),  // medium
         'a'.repeat(32),  // long
-        'z'.repeat(8),   // different chars
+        'z'.repeat(12),  // different chars
       ];
 
       for (const testPwd of testPasswords) {

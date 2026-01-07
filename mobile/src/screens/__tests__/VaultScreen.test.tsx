@@ -13,7 +13,7 @@ jest.mock('../../services/vault', () => ({
   importVaultPrivateKey: jest.fn(async () => undefined),
   lockVault: jest.fn(),
   unlockPasswordVault: jest.fn(async () => undefined),
-  VAULT_PASSWORD_MIN_LENGTH: 10,
+  VAULT_PASSWORD_MIN_LENGTH: 12,
 }));
 
 describe('VaultScreen', () => {
@@ -25,20 +25,22 @@ describe('VaultScreen', () => {
 
   it('renders vault screen', async () => {
     const navigation = { goBack: jest.fn() } as any;
+    const route = { key: 'vault-1', name: 'Vault' as const };
 
     let tree: ReturnType<typeof create> | null = null;
     await act(async () => {
-      tree = create(<VaultScreen navigation={navigation} />);
+      tree = create(<VaultScreen navigation={navigation} route={route} />);
       await flushPromises();
     });
-    expect(tree.toJSON()).toBeTruthy();
+    expect(tree!.toJSON()).toBeTruthy();
   });
 
   it('shows password mismatch error on create', async () => {
     const navigation = { goBack: jest.fn() } as any;
+    const route = { key: 'vault-1', name: 'Vault' as const };
     let tree: ReturnType<typeof create> | null = null;
     await act(async () => {
-      tree = create(<VaultScreen navigation={navigation} />);
+      tree = create(<VaultScreen navigation={navigation} route={route} />);
       await flushPromises();
     });
 
@@ -77,9 +79,10 @@ describe('VaultScreen', () => {
       publicKeyHex: 'abc123',
     });
     const navigation = { goBack: jest.fn() } as any;
+    const route = { key: 'vault-1', name: 'Vault' as const };
     let tree: ReturnType<typeof create> | null = null;
     await act(async () => {
-      tree = create(<VaultScreen navigation={navigation} />);
+      tree = create(<VaultScreen navigation={navigation} route={route} />);
       await flushPromises();
     });
 
@@ -101,5 +104,58 @@ describe('VaultScreen', () => {
     });
 
     expect(vault.unlockPasswordVault).toHaveBeenCalledWith('hunter2');
+  });
+
+  it('shows password strength indicator when typing', async () => {
+    const navigation = { goBack: jest.fn() } as any;
+    const route = { key: 'vault-1', name: 'Vault' as const };
+    let tree: ReturnType<typeof create> | null = null;
+    await act(async () => {
+      tree = create(<VaultScreen navigation={navigation} route={route} />);
+      await flushPromises();
+    });
+
+    const createInput = tree!.root
+      .findAllByType(TextInput)
+      .find((node) => node.props.placeholder === 'Create password')!;
+
+    act(() => {
+      createInput.props.onChangeText('shortpw');
+    });
+
+    // Should show "more characters needed" warning for passwords under 12 chars
+    const json = JSON.stringify(tree!.toJSON());
+    expect(json).toContain('more characters needed');
+  });
+
+  it('creates vault with valid 12+ character password', async () => {
+    const navigation = { goBack: jest.fn() } as any;
+    const route = { key: 'vault-1', name: 'Vault' as const };
+    let tree: ReturnType<typeof create> | null = null;
+    await act(async () => {
+      tree = create(<VaultScreen navigation={navigation} route={route} />);
+      await flushPromises();
+    });
+
+    const inputs = tree!.root.findAllByType(TextInput);
+    const createInput = inputs.find((node) => node.props.placeholder === 'Create password')!;
+    const confirmInput = inputs.find((node) => node.props.placeholder === 'Confirm password')!;
+    const validPassword = 'securepassword123';
+
+    act(() => {
+      createInput.props.onChangeText(validPassword);
+      confirmInput.props.onChangeText(validPassword);
+    });
+
+    const createButton = tree!.root
+      .findAllByType(PrimaryButton)
+      .find((node) => node.props.label === 'Create vault')!;
+
+    await act(async () => {
+      await createButton.props.onPress();
+      await flushPromises();
+    });
+
+    expect(vault.createPasswordVault).toHaveBeenCalledWith(validPassword, { migrateLegacyKey: true });
   });
 });

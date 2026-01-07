@@ -144,58 +144,6 @@
 			"notes": "MANUAL: Final production iOS build"
 		},
 		{
-			"id": "US-088",
-			"title": "Add reconnection with in-flight game state test",
-			"acceptanceCriteria": [
-				"Test disconnect during game preserves game state",
-				"Test reconnect resumes game with same sessionId",
-				"Test balance consistent after reconnect mid-game",
-				"Test nonce sequence maintained across reconnection"
-			],
-			"priority": 12,
-			"passes": true,
-			"notes": "ARCHITECTURE DOCUMENTED: Created InFlightGameStateTest.ts with 6 tests documenting current behavior: (1) Game state NOT preserved on disconnect (by design), (2) Reconnect creates NEW sessionId, (3) Balance consistent (on-chain persistence), (4) Nonce sequence maintained (server-side), (5) activeGameId null after reconnect, (6) New game can start after reconnect. Run via: npx tsx tests/integration/runInFlightGameStateTests.ts"
-		},
-		{
-			"id": "US-089",
-			"title": "Add out-of-order balance update handling test",
-			"acceptanceCriteria": [
-				"Test balance messages arriving out of order use latest value",
-				"Test faucet response after get_balance response shows correct final",
-				"Add timestamp or sequence number to balance messages",
-				"Verify last-write-wins doesn't cause balance regression"
-			],
-			"priority": 13,
-			"passes": true,
-			"notes": "IMPLEMENTED: Added balanceSeq monotonic sequence number to all balance messages. Gateway increments balanceSeq on every balance send. Mobile setBalanceWithSeq() rejects updates with seq <= lastBalanceSeq. Tests verify: (1) out-of-order messages rejected, (2) stale get_balance after game_result rejected, (3) stale balance after game_started rejected, (4) backward compat with no balanceSeq. Files: gateway/src/types/session.ts, gateway/src/session/manager.ts, gateway/src/index.ts, gateway/src/handlers/base.ts, gateway/src/live-table/craps.ts, mobile/src/stores/gameStore.ts, mobile/src/hooks/useGatewaySession.ts, mobile/src/hooks/__tests__/useGatewaySession.test.tsx."
-		},
-		{
-			"id": "US-090",
-			"title": "Add concurrent bet validation lock test",
-			"acceptanceCriteria": [
-				"Test placeChip() locks during validation to prevent race",
-				"Test balance update arriving mid-validation is handled",
-				"Test bet rejected if balance changes between validation and submission",
-				"Verify no bet exceeds actual balance due to race"
-			],
-			"priority": 14,
-			"passes": true,
-			"notes": "IMPLEMENTED: Added atomic bet validation with balance locking. gameStore has betValidationLocked flag and pendingBalanceUpdate for queued updates. validateAndLockBet(amount) atomically validates and locks. setBalanceWithSeq() queues updates when locked. useBetSubmission accepts optional {amount} for validation. All 10 game screens pass bet amount. 9 new tests verify: (1) lock prevents concurrent balance updates, (2) pending updates applied after unlock, (3) bet rejected if balance insufficient, (4) backward compat without amount. Files: gameStore.ts, useBetSubmission.ts, all game screens."
-		},
-		{
-			"id": "US-091",
-			"title": "Add atomic batch payload boundary test",
-			"acceptanceCriteria": [
-				"Test batch with N bets but N-0.5 bytes worth of data",
-				"Test bet type field swapped (Roulette format to Craps handler)",
-				"Test amount field endianness consistency",
-				"Verify truncated payloads return ERROR_INVALID_PAYLOAD, not crash"
-			],
-			"priority": 15,
-			"passes": true,
-			"notes": "IMPLEMENTED: Created batch_boundary_tests.rs with 18 tests covering: (1) Truncated payloads for Craps/Baccarat/Roulette/SicBo, (2) Cross-format validation (Baccarat 9-byte to Craps 10-byte handler), (3) Big-endian amount verification, (4) Edge cases (empty, zero-bets, excessive count, invalid bet type, zero amount), (5) Fuzz-style test for panic safety with malformed payloads. All games properly reject truncated/malformed payloads with InvalidPayload error. Run: cargo test -p nullspace-execution batch_boundary"
-		},
-		{
 			"id": "US-092",
 			"title": "Add game result message format validation test",
 			"acceptanceCriteria": [
@@ -205,8 +153,8 @@
 				"Create canonical GameMessage union type in /types/messages.ts"
 			],
 			"priority": 16,
-			"passes": false,
-			"notes": "HIGH GAP: No defined format for how GameResult enum maps to JSON fields. Mobile can't distinguish blackjack vs regular win."
+			"passes": true,
+			"notes": "COMPLETE: Created packages/protocol/src/schema/game-results.ts with BlackjackGameResultMessageSchema, helper functions, and 25 tests."
 		},
 		{
 			"id": "US-093",
@@ -232,8 +180,8 @@
 				"Add password strength indicator showing entropy"
 			],
 			"priority": 18,
-			"passes": false,
-			"notes": "SECURITY-HIGH (agent-verified): vault.ts:11 has PASSWORD_MIN_LENGTH=8, below NIST 2024 recommendations of 12+ characters."
+			"passes": true,
+			"notes": "COMPLETE: Updated PASSWORD_MIN_LENGTH to 12, added PasswordStrengthIndicator component with entropy calculation (bits), updated timing attack tests."
 		},
 		{
 			"id": "US-095",
@@ -394,17 +342,18 @@
 		},
 		{
 			"id": "US-108",
-			"title": "Upgrade typography with premium display font",
+			"title": "Sync mobile typography with design-tokens (Outfit, Plus Jakarta Sans)",
 			"acceptanceCriteria": [
-				"Add expo-google-fonts or custom font loading (Geist, Satoshi, or similar)",
-				"Apply display font to headings and balance displays",
-				"Use tabular figures for numeric displays (balance, bet amounts)",
-				"Refine letter-spacing on uppercase labels (+2% tracking)",
-				"Ensure fonts load before splash screen dismisses"
+				"Install @expo-google-fonts/outfit and @expo-google-fonts/plus-jakarta-sans",
+				"Load fonts in App.tsx using useFonts() hook before splash dismisses",
+				"Update theme.ts FONT_FAMILY to use Outfit (display) and Plus Jakarta Sans (body)",
+				"Import FONTS constant from @nullspace/design-tokens for consistency",
+				"Use tabular figures (font-variant-numeric) for balance/bet displays",
+				"Match website typography defined in website/src/index.css"
 			],
 			"priority": 31,
 			"passes": false,
-			"notes": "UX-HIGH: theme.ts:20-30 uses only system fonts. Premium apps use distinctive typography. No custom font loading detected in codebase."
+			"notes": "UX-HIGH (verified): design-tokens/typography.ts defines Outfit/Plus Jakarta Sans/JetBrains Mono. Website uses them via Google Fonts. Mobile theme.ts:20-30 uses Platform.select for system fonts only - parity gap."
 		},
 		{
 			"id": "US-109",
@@ -475,6 +424,356 @@
 			"priority": 36,
 			"passes": false,
 			"notes": "UX-LOWER: PrimaryButton.tsx uses basic scale (0.96) on press. Premium apps simulate physical depth with y-translation and shadow changes. Loading is simple dots per SplashScreen.tsx."
+		},
+		{
+			"id": "US-114",
+			"title": "Screen transitions with parallax depth effect",
+			"acceptanceCriteria": [
+				"Replace basic fade/slide_from_right with parallax CardStyleInterpolators",
+				"Outgoing screen scales down + blurs, incoming screen scales up",
+				"Add shadow/elevation changes during transition for depth perception",
+				"Use non-linear easing with momentum-based transitions",
+				"Test navigation stack performance with deep nesting"
+			],
+			"priority": 37,
+			"passes": false,
+			"notes": "UX-HIGH: RootNavigator.tsx:72,87 uses basic fade and slide_from_right. No parallax or depth simulation during navigation."
+		},
+		{
+			"id": "US-115",
+			"title": "Casino-themed skeleton loaders for game screens",
+			"acceptanceCriteria": [
+				"Create skeleton components matching card/chip/table shapes",
+				"Add shimmer animation across skeleton surfaces",
+				"Show skeleton during InteractionManager.runAfterInteractions",
+				"Progressive reveal animation when content loads",
+				"Match skeleton colors to game theme"
+			],
+			"priority": 38,
+			"passes": false,
+			"notes": "UX-HIGH: All game screens use InteractionManager but show nothing during load. No skeleton/placeholder states visible."
+		},
+		{
+			"id": "US-116",
+			"title": "Build floating toast notification system",
+			"acceptanceCriteria": [
+				"Create ToastProvider with slide-in from top animation",
+				"Support info/success/error/warning variants with icons",
+				"Add glassmorphism styling (frosted + border glow)",
+				"Auto-dismiss with swipe-to-close gesture",
+				"Queue multiple toasts with stagger animation"
+			],
+			"priority": 39,
+			"passes": false,
+			"notes": "UX-HIGH: No toast/notification system exists. Error feedback is plain text, bet rejections have no visual ceremony."
+		},
+		{
+			"id": "US-117",
+			"title": "Animated balance counter with win/loss delta",
+			"acceptanceCriteria": [
+				"Animate digits with slot-machine roller effect on change",
+				"Show +/- delta badge that fades after 2s",
+				"Color animation: white → gold → primary for big wins",
+				"Enlarge balance briefly on update, then settle",
+				"Add shimmer wave across balance on change"
+			],
+			"priority": 40,
+			"passes": false,
+			"notes": "UX-HIGH: GameHeader.tsx:31 uses basic toLocaleString(). Balance updates instantly with no animation or delta indication."
+		},
+		{
+			"id": "US-118",
+			"title": "Bet confirmation modal with countdown",
+			"acceptanceCriteria": [
+				"Show bet summary before submission with adjust option",
+				"Add countdown progress indicator (casino-style timer)",
+				"Display potential payout calculation",
+				"Visual danger zone when bet approaches balance limit",
+				"Allow cancel within countdown window"
+			],
+			"priority": 41,
+			"passes": false,
+			"notes": "UX-MEDIUM: Bets submit immediately without review. No confirmation step or payout preview before commitment."
+		},
+		{
+			"id": "US-119",
+			"title": "Staged result reveal choreography",
+			"acceptanceCriteria": [
+				"Fade in semi-transparent result card overlay",
+				"Stagger-animate: outcome text, payout amount, session delta",
+				"Highlight winning outcome with pulse/glow effect",
+				"Show payout calculation breakdown for complex wins",
+				"Different choreography for win vs loss vs push"
+			],
+			"priority": 42,
+			"passes": false,
+			"notes": "UX-MEDIUM: Results appear instantly as plain text. No theatrical reveal or visual hierarchy in result display."
+		},
+		{
+			"id": "US-120",
+			"title": "Error state recovery UX with visual feedback",
+			"acceptanceCriteria": [
+				"Slide-in error banner from top with icon",
+				"Dim/desaturate background on error state",
+				"Show recovery action buttons (reconnect, retry, lobby)",
+				"Pulse animation on 'Reconnecting...' status",
+				"Success flash animation when recovered"
+			],
+			"priority": 43,
+			"passes": false,
+			"notes": "UX-MEDIUM: Error states show plain text without ceremony. No visual distinction or recovery guidance."
+		},
+		{
+			"id": "US-121",
+			"title": "Card dealing trajectory animation",
+			"acceptanceCriteria": [
+				"Cards slide from dealer position (top-center) with arc trajectory",
+				"Add slight rotation mid-flight for realism",
+				"Land with scale bounce (spring overshoot)",
+				"Stagger multiple cards with timing offset",
+				"Sync haptic.cardDeal() with landing moment"
+			],
+			"priority": 44,
+			"passes": false,
+			"notes": "UX-MEDIUM: Card.tsx only has flip animation. No dealing trajectory - cards appear in place."
+		},
+		{
+			"id": "US-122",
+			"title": "Chip pile stacking visualization",
+			"acceptanceCriteria": [
+				"Chips animate to betting area with 3D rotation",
+				"Each chip rotates slightly different angle (0-15° random)",
+				"Stack height grows with pile, bottom chips compress",
+				"Show cumulative bet amount with live counter",
+				"Color-coded chip trails during animation"
+			],
+			"priority": 45,
+			"passes": false,
+			"notes": "UX-MEDIUM: ChipSelector.tsx:40-70 has drag animation but chips don't stack visually. No pile representation."
+		},
+		{
+			"id": "US-123",
+			"title": "Expanded haptic sequence patterns",
+			"acceptanceCriteria": [
+				"Add sequentialBets() - rapid light taps as chips placed",
+				"Add spinStart()/spinEnd() - intensity build for wheel spins",
+				"Add dealerAction() - subtle double-tap when dealer moves",
+				"Add roundStart() - ascending pattern to signal beginning",
+				"Add allInBet() - strong warning-style single tap"
+			],
+			"priority": 46,
+			"passes": false,
+			"notes": "UX-MEDIUM: haptics.ts has 11 basic methods. No multi-tap sequences or context-specific patterns."
+		},
+		{
+			"id": "US-124",
+			"title": "First-time user onboarding sequence",
+			"acceptanceCriteria": [
+				"Animated welcome with dealer avatar introduction",
+				"3-4 teaser animations showcasing core games",
+				"Staggered button reveals (Start Playing, Learn More)",
+				"Haptic celebration on first game selection",
+				"Pre-game ceremony: dealer animation, chip stack reveal"
+			],
+			"priority": 47,
+			"passes": false,
+			"notes": "UX-MEDIUM: SplashScreen has pulsing dots, AuthScreen is minimal. No immersive onboarding experience."
+		},
+		{
+			"id": "US-125",
+			"title": "Website page transition animations",
+			"acceptanceCriteria": [
+				"Add fadeInUp, fadeInDown, slideInLeft keyframes to index.css",
+				"Wrap route content in transition wrapper with coordinated timing",
+				"Add staggered animations for nested components on route change",
+				"Implement entrance animations on Outlet based on navigation",
+				"Test transitions don't cause layout shift"
+			],
+			"priority": 48,
+			"passes": false,
+			"notes": "WEB-UX: CasinoApp.tsx has basic Suspense fallback. Only animate-scale-in exists, no route transitions."
+		},
+		{
+			"id": "US-126",
+			"title": "Website hero section with animated gradient background",
+			"acceptanceCriteria": [
+				"Replace static blur accent circles with animated gradients",
+				"Add floating particle effects behind hero text",
+				"Use multiple layered radial gradients with different opacity curves",
+				"Add glow pulse animation to accent circles",
+				"Create full-width animated banner above mode select"
+			],
+			"priority": 49,
+			"passes": false,
+			"notes": "WEB-UX: ModeSelectView.tsx:44-50 has subtle accent circles but generic. No animated gradients or particles."
+		},
+		{
+			"id": "US-127",
+			"title": "Website scroll-triggered reveal animations",
+			"acceptanceCriteria": [
+				"Create useScrollReveal() hook with Intersection Observer",
+				"Apply staggered entrance to leaderboard entries, bet history",
+				"Use translateY(20px) + opacity:0 as initial state",
+				"Add parallax effect on backgrounds (0.5x scroll speed)",
+				"Test performance with long lists"
+			],
+			"priority": 50,
+			"passes": false,
+			"notes": "WEB-UX: No scroll-triggered animations detected in website codebase. Content appears instantly."
+		},
+		{
+			"id": "US-128",
+			"title": "Website premium hover states on interactive elements",
+			"acceptanceCriteria": [
+				"Add multi-step shadow elevation on hover (soft → float → 2xl)",
+				"Implement subtle rotation (0-2°) on card hovers",
+				"Add border glow effect on action buttons",
+				"Create pressed state with inset shadow effect",
+				"Add gradient overlay on mode selection cards"
+			],
+			"priority": 51,
+			"passes": false,
+			"notes": "WEB-UX: GameControlBar.tsx:36-74 has basic scale-110 hover. No layered depth or tactile feedback."
+		},
+		{
+			"id": "US-129",
+			"title": "Website premium loading screen",
+			"acceptanceCriteria": [
+				"Replace basic spinner with multi-layer gradient stroke animation",
+				"Add glow effects around spinner (box-shadow pulse)",
+				"Create animated dot trail instead of flat progress bar",
+				"Add subtle background animation (slow gradient shift)",
+				"Premium typography with refined letter-spacing"
+			],
+			"priority": 52,
+			"passes": false,
+			"notes": "WEB-UX: LoadingScreen.jsx:8-28 has utilitarian spinner and flat progress bar. No luxury feel."
+		},
+		{
+			"id": "US-130",
+			"title": "Add opacity scale tokens to design-tokens package",
+			"acceptanceCriteria": [
+				"Define OPACITY scale: xs(0.08), sm(0.12), md(0.24), lg(0.38), xl(0.56), 2xl(0.72), 3xl(0.85)",
+				"Replace hardcoded rgba values across mobile (0.4, 0.5, 0.8, 0.85)",
+				"Update TutorialOverlay, GameLayout, game screens to use tokens",
+				"Document opacity usage guidelines for glassmorphism",
+				"Export from design-tokens package index"
+			],
+			"priority": 53,
+			"passes": false,
+			"notes": "DESIGN-SYSTEM: No opacity tokens exist. Found hardcoded: rgba(0,0,0,0.85) TutorialOverlay, rgba(0,0,0,0.5) RouletteScreen, etc."
+		},
+		{
+			"id": "US-131",
+			"title": "Add z-index management system to design-tokens",
+			"acceptanceCriteria": [
+				"Define Z_INDEX scale: base(0), dropdown(10), sticky(20), overlay(40), modal(50), toast(60), dragging(100)",
+				"Replace hardcoded zIndex values (ChipSelector.tsx:88 uses 100)",
+				"Document z-index layer hierarchy",
+				"Add TypeScript type for valid z-index keys",
+				"Test no z-index conflicts in complex game screens"
+			],
+			"priority": 54,
+			"passes": false,
+			"notes": "DESIGN-SYSTEM: No z-index tokens. ChipSelector uses isDragging ? 100 : 0 inline. Risk of layer conflicts."
+		},
+		{
+			"id": "US-132",
+			"title": "Add focus ring tokens for accessibility",
+			"acceptanceCriteria": [
+				"Define FOCUS tokens: ring width, color, glow, offset",
+				"Create variants: button, input, interactive",
+				"Implement keyboard focus styling on web",
+				"Add visible focus indicators on mobile (TouchableOpacity)",
+				"Verify WCAG 2.1 focus indicator requirements"
+			],
+			"priority": 55,
+			"passes": false,
+			"notes": "DESIGN-SYSTEM: No focus ring tokens. Web has no keyboard focus styling. Accessibility gap for keyboard users."
+		},
+		{
+			"id": "US-133",
+			"title": "Add colored shadow variants for brand cohesion",
+			"acceptanceCriteria": [
+				"Add SHADOW_COLORED with indigoGlow and goldAccent variants",
+				"Create warm/cool shadow variants for day/night modes",
+				"Add inset shadows for card depth effect",
+				"Update ChipSelector selected state to use GLOW.indigo",
+				"Document when to use colored vs neutral shadows"
+			],
+			"priority": 56,
+			"passes": false,
+			"notes": "DESIGN-SYSTEM: GLOW tokens defined but unused (0/33 files). All shadows are black. No brand-colored shadows."
+		},
+		{
+			"id": "US-134",
+			"title": "Fix border radius inconsistency between platforms",
+			"acceptanceCriteria": [
+				"Align mobile RADIUS scale with design-tokens (currently offset by 1 level)",
+				"Remove custom 20px radius (theme.ts:86), use token value",
+				"Add glass-morphism radius variant for containers",
+				"Document radius usage guidelines",
+				"Test visual consistency between web and mobile"
+			],
+			"priority": 57,
+			"passes": false,
+			"notes": "DESIGN-SYSTEM: Mobile RADIUS.sm=8 but tokens RADIUS.sm=4. Mobile has custom 20px (lg) not in tokens. Parity gap."
+		},
+		{
+			"id": "US-135",
+			"title": "Add table felt texture backgrounds per game",
+			"acceptanceCriteria": [
+				"Create SVG woven texture pattern for game backgrounds",
+				"Vary texture color per game (green blackjack, red roulette)",
+				"Adjust scanline intensity based on connection state",
+				"Add subtle gradient shift over time (30-60s cycle)",
+				"Test texture rendering performance on low-end devices"
+			],
+			"priority": 58,
+			"passes": false,
+			"notes": "UX-LOWER: GameLayout uses solid COLORS.background with scanline overlay. No felt texture or game-specific theming."
+		},
+		{
+			"id": "US-136",
+			"title": "Add sound design service skeleton",
+			"acceptanceCriteria": [
+				"Create audio.ts service mirroring haptics.ts structure",
+				"Define hook methods: dealerSpeak, cardFlip, chipPlace, result",
+				"Audio disabled by default with settings toggle",
+				"Define sound categories: UI, game, celebration, error",
+				"Document audio integration points per game event"
+			],
+			"priority": 59,
+			"passes": false,
+			"notes": "UX-LOWER: No audio implementation found. Complete silence. Service skeleton prepares for future audio without implementing sounds."
+		},
+		{
+			"id": "US-137",
+			"title": "Add pull-to-refresh on Lobby with haptic feedback",
+			"acceptanceCriteria": [
+				"Implement RefreshControl with custom spinner animation",
+				"Add haptic feedback at drag threshold",
+				"Animate refreshed content fade-in",
+				"Show last refresh timestamp",
+				"Test refresh behavior with slow network"
+			],
+			"priority": 60,
+			"passes": false,
+			"notes": "UX-LOWER: No pull-to-refresh or scroll enhancements on Lobby. Standard scrolling only."
+		},
+		{
+			"id": "US-138",
+			"title": "Premium input field styling for Vault screens",
+			"acceptanceCriteria": [
+				"Add animated underline that extends on focus (left-to-right)",
+				"Implement floating label animation (moves above on focus)",
+				"Add background color shift on focus (subtle)",
+				"Green checkmark animates in on valid input",
+				"Shake animation on submission failure"
+			],
+			"priority": 61,
+			"passes": false,
+			"notes": "UX-LOWER: VaultScreen.tsx uses basic TextInput styling. No focus animations or validation feedback."
 		}
 	]
 }

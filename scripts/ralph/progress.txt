@@ -2043,3 +2043,58 @@ Target: Testnet Production
   - Pattern: Create helper functions for test setup (`create_test_session`, `create_test_rng`)
 
 ---
+
+## 2026-01-07 - US-092: Add game result message format validation test
+
+- What was implemented:
+  - Created `packages/protocol/src/schema/game-results.ts` with TypeScript interfaces for game result messages
+  - Defined `BlackjackHandStatusSchema` with BLACKJACK status to distinguish natural 21 from regular win
+  - Defined `BlackjackDealerSchema` with `blackjack: boolean` field for dealer natural 21
+  - Defined `BlackjackHandSchema` with all required fields: cards, value, soft, status, bet, return
+  - Created helper functions: `hasPlayerNaturalBlackjack()`, `hasDealerNaturalBlackjack()`, `getBlackjackOutcome()`
+  - Created canonical `GameResultMessage` union type
+  - Added 25 tests in `packages/protocol/test/game-result-format.test.ts`
+- Files changed:
+  - `packages/protocol/src/schema/game-results.ts` - New file (254 lines)
+  - `packages/protocol/src/mobile.ts` - Added export
+  - `packages/protocol/test/game-result-format.test.ts` - New test file (457 lines)
+- **Learnings:**
+  - **Rust JSON Log Structure:** The Rust execution layer (`blackjack.rs:1486`) generates detailed JSON logs including `dealer.blackjack` field. Gateway parses via `parseGameLog()` and merges into response.
+  - **Natural Blackjack Detection:**
+    - Player: `hands[].status === 'BLACKJACK'` (HandStatus enum in Rust)
+    - Dealer: `dealer.blackjack === true` (boolean computed by `is_blackjack()`)
+  - **Payout Implications:**
+    - Natural blackjack pays 3:2 (or 6:5 at some tables)
+    - Regular 21 from hitting pays 1:1
+    - Push when both have natural blackjack
+  - **Gateway Already Passes Data:** The gateway's `Object.assign(response, parsedLog)` merges all Rust log fields into the response. Issue was lack of TypeScript types for type-safe access.
+  - Pattern: Use Zod's `.passthrough()` for base schemas that allow additional game-specific fields
+
+---
+
+---
+
+## 2026-01-07 - US-094: Increase vault password minimum length to 12 characters
+
+- What was implemented:
+  - Updated `PASSWORD_MIN_LENGTH` from 8 to 12 in `vault.ts` (line 11)
+  - Created `PasswordStrengthIndicator` component with:
+    - 4-bar visual strength meter (Weak/Fair/Good/Strong based on entropy)
+    - Entropy display in bits: `length * log2(charset_size)`
+    - Warning message when password below 12-character minimum
+  - Integrated indicator in VaultScreen for both "Create vault" and "Import recovery key" flows
+  - Updated timing attack resistance tests to use new 12-char minimum
+- Files changed:
+  - `mobile/src/services/vault.ts` - Updated PASSWORD_MIN_LENGTH constant
+  - `mobile/src/services/__tests__/vault.test.ts` - Updated test passwords to 12+ chars
+  - `mobile/src/components/ui/PasswordStrengthIndicator.tsx` - New component
+  - `mobile/src/components/ui/__tests__/PasswordStrengthIndicator.test.tsx` - New tests
+  - `mobile/src/components/ui/index.ts` - Export new component
+  - `mobile/src/screens/VaultScreen.tsx` - Integrate strength indicator
+  - `mobile/src/screens/__tests__/VaultScreen.test.tsx` - New tests for indicator
+- **Learnings:**
+  - NIST 2024 recommends 12+ character passwords: entropy from length beats complexity
+  - Entropy calculation: `length * log2(charset)` where charset = sum of character classes (lower=26, upper=26, digit=10, special=32)
+  - When updating password length requirements, search for existing security tests (timing attacks, constant-time tests)
+  - React Test Renderer serializes children separately: `["56", " bits"]` not `"56 bits"` - use JSON.stringify matching
+  - Exported `VAULT_PASSWORD_MIN_LENGTH` allows tests to use the actual value via mock, keeping tests in sync
