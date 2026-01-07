@@ -293,8 +293,8 @@
         "Log warning for any rejected invalid states"
       ],
       "priority": 70,
-      "passes": false,
-      "notes": "GAME-CRITICAL: Fire Bet has 999:1 payout. Corrupted mask could drain house bankroll. High financial risk."
+      "passes": true,
+      "notes": "COMPLETE: Added validation in CrapsState::from_blob() rejecting masks >0x3F (bits 6-7 invalid). Test validates 0x40, 0x80, 0xC0, 0xFF rejection. Follows existing pattern of returning None (no logging)."
     },
     {
       "id": "US-148",
