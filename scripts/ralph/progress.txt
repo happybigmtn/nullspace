@@ -44,8 +44,12 @@ Target: Testnet Production
 - AnimatedBalance: `interpolateColor()` for color transitions, `isBigWinIntensity()` for medium/big/jackpot threshold
 - Color animation: For big wins use white→gold→primary via 3-point interpolation (0→0.5→1)
 - DeltaBadge: Supports both wins (green, +prefix) and losses (red, no prefix) with fade animation
+- ResultReveal: `useResultReveal()` hook for staged result reveals, `ResultReveal` component with glassmorphism + stagger animations
+- Outcome colors: win=success, blackjack=gold, loss=error, push/war=warning (see OUTCOME_COLORS in ResultReveal.tsx)
+- Stagger timing: TIMING constants define delays for outcome (100ms) → payout (500ms) → delta (800ms)
+- Haptics by outcome: wins handled by celebration system, loss uses `haptics.error()`, push uses `haptics.push()`
 - 12 race conditions identified (see US-005 through US-009, US-021-022)
-- Tests: Run with `npm test` (318+ unit tests after US-117)
+- Tests: Run with `npm test` (386+ unit tests after US-119)
 
 ### Configuration
 - Production configs: `configs/production/*.env.example`
@@ -2726,5 +2730,37 @@ Target: Testnet Production
   - Walk up parent tree from Text to find pressable with `onPress` prop
   - `runOnJS()` callback must be defined BEFORE the animation callback that calls it
   - GlassModal `closeOnBackdrop={false}` prevents accidental dismissal during bet confirmation
+
+---
+
+## 2026-01-07 - US-119: Staged result reveal choreography
+
+- What was implemented:
+  - Created `ResultReveal.tsx` component with glassmorphism overlay (expo-blur + semi-transparent color tint)
+  - Stagger animation sequence: outcome text (100ms) → payout amount (500ms) → session delta (800ms)
+  - `RevealElement` wrapper component with scale+fade+translateY spring animation
+  - `GlowPulse` component with looping shadow animation for win celebrations
+  - `AnimatedPayout` with counter animation effect
+  - Outcome-specific choreography: colors (OUTCOME_COLORS), haptics (error/push), and glow intensity
+  - `PayoutBreakdownItem[]` support for complex wins (sidebets, etc.)
+  - Session delta display with +/- prefix and color coding
+  - Auto-dismiss timer: 3000ms for wins, 2000ms for loss/push (configurable via autoDismissMs)
+  - Tap-to-dismiss with "Tap to continue" hint
+  - `useResultReveal()` hook for state management: `showResult()`, `hideResult()`, `resultState`
+  - Helper functions: `determineOutcome()`, `calculateIntensity()`
+  - 68 tests covering all acceptance criteria
+- Files changed:
+  - `mobile/src/components/celebration/ResultReveal.tsx` (NEW) - 396 lines
+  - `mobile/src/hooks/useResultReveal.ts` (NEW) - 141 lines
+  - `mobile/src/components/celebration/index.ts` - Export ResultReveal and types
+  - `mobile/src/components/celebration/__tests__/ResultReveal.test.tsx` (NEW) - 42 tests
+  - `mobile/src/hooks/__tests__/useResultReveal.test.tsx` (NEW) - 26 tests
+- **Learnings:**
+  - HapticsService doesn't have `light()` method - use `push()` for neutral haptic feedback
+  - `findAllByType(Pressable)` may not find Pressable wrapped in mocked Animated.View
+  - Fallback: `root.findAll((node) => typeof node.props?.onPress === 'function')` finds any pressable
+  - Animation timing constants should be in a `TIMING` object for easy choreography tuning
+  - Color interpolation via `interpolateColor()` requires exact color string format (no shortcuts)
+  - For payout multiplier display, calculate `(payout + bet) / bet` for total return ratio
 
 ---
