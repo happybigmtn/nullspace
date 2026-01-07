@@ -27,6 +27,32 @@
  * 5. On reconnect, queue flush skips the bet (already tracked as sent)
  * 6. No double-bet!
  * ```
+ *
+ * ## Message Drop Notifications (US-099)
+ *
+ * When messages are dropped (queue overflow or expiration), callers can be notified:
+ *
+ * 1. **droppedMessage state**: Contains the last dropped message (for UI display)
+ * 2. **onMessageDropped callback**: Called immediately for each dropped message
+ *
+ * ### Callback Usage
+ *
+ * ```typescript
+ * const { send, droppedMessage } = useWebSocket(url, {
+ *   onMessageDropped: (dropped, isCritical) => {
+ *     if (isCritical) {
+ *       // Show alert: "Your bet may have been lost. Please try again."
+ *       showNotification(`Message lost: ${dropped.reason}`);
+ *     }
+ *   }
+ * });
+ * ```
+ *
+ * ### Design Note: send() Return Value
+ *
+ * `send()` returns `true` when the NEW message is queued, even if an OLDER message
+ * was dropped to make room. This is semantically correct - the caller's message was
+ * accepted. Use the callback to know about previously-queued messages being lost.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Constants from 'expo-constants';
@@ -44,6 +70,26 @@ export type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'fai
 export interface DroppedMessage {
   message: object;
   reason: 'queue_full' | 'expired';
+}
+
+/**
+ * Callback invoked when a message is dropped from the queue.
+ * Use this to notify users about lost critical messages (bets, game actions).
+ *
+ * @param dropped - The dropped message details
+ * @param isCritical - True if the message type is bet, game_action, or request_faucet
+ */
+export type OnMessageDroppedCallback = (
+  dropped: DroppedMessage,
+  isCritical: boolean
+) => void;
+
+export interface WebSocketOptions {
+  /**
+   * Optional callback invoked when a message is dropped from the queue.
+   * Called both for queue overflow (oldest dropped) and message expiration.
+   */
+  onMessageDropped?: OnMessageDroppedCallback;
 }
 
 export interface WebSocketManager<T = GameMessage> {
@@ -83,12 +129,25 @@ interface QueuedMessage {
   timestamp: number;
 }
 
+// Helper to check if a message type is critical (affects user funds/actions)
+function isCriticalMessageType(type: string | undefined): boolean {
+  return ['bet', 'game_action', 'request_faucet'].includes(type ?? '');
+}
+
 /**
  * WebSocket hook with automatic reconnection and type-safe messages
  */
 export function useWebSocket<T extends GameMessage = GameMessage>(
-  url: string
+  url: string,
+  options?: WebSocketOptions
 ): WebSocketManager<T> {
+  const onMessageDroppedRef = useRef(options?.onMessageDropped);
+
+  // Keep callback ref updated when options change
+  useEffect(() => {
+    onMessageDroppedRef.current = options?.onMessageDropped;
+  }, [options?.onMessageDropped]);
+
   const ws = useRef<WebSocket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [lastMessage, setLastMessage] = useState<T | null>(null);
@@ -177,8 +236,9 @@ export function useWebSocket<T extends GameMessage = GameMessage>(
       );
       const duplicateCount = validMessages.length - unsentMessages.length;
 
-      // Notify about expired messages (only the last one to avoid spamming)
+      // Notify about expired messages
       if (expiredMessages.length > 0) {
+        // Set state for the last expired message (for UI display)
         const lastExpired = expiredMessages[expiredMessages.length - 1];
         if (lastExpired) {
           setDroppedMessage({ message: lastExpired.message, reason: 'expired' });
@@ -190,8 +250,8 @@ export function useWebSocket<T extends GameMessage = GameMessage>(
         }
         // Track expired messages for metrics/analytics
         const criticalCount = expiredMessages.filter((item) => {
-          const type = (item.message as { type?: string }).type ?? '';
-          return ['bet', 'game_action', 'request_faucet'].includes(type);
+          const type = (item.message as { type?: string }).type;
+          return isCriticalMessageType(type);
         }).length;
         track('websocket_queue_overflow', {
           reason: 'expired',
@@ -199,6 +259,12 @@ export function useWebSocket<T extends GameMessage = GameMessage>(
           criticalCount,
           timeoutMs: MESSAGE_TIMEOUT_MS,
         }).catch(() => {}); // Fire and forget
+        // Invoke callback for each expired message
+        for (const item of expiredMessages) {
+          const dropped: DroppedMessage = { message: item.message, reason: 'expired' };
+          const type = (item.message as { type?: string }).type;
+          onMessageDroppedRef.current?.(dropped, isCriticalMessageType(type));
+        }
       }
 
       if (unsentMessages.length > 0 || duplicateCount > 0) {
@@ -325,16 +391,19 @@ export function useWebSocket<T extends GameMessage = GameMessage>(
           }
           const droppedItem = messageQueueRef.current.shift(); // Remove oldest message
           if (droppedItem) {
-            setDroppedMessage({ message: droppedItem.message, reason: 'queue_full' });
+            const dropped: DroppedMessage = { message: droppedItem.message, reason: 'queue_full' };
+            setDroppedMessage(dropped);
             // Track queue overflow for metrics/analytics
-            const droppedType = (droppedItem.message as { type?: string }).type ?? 'unknown';
-            const isCritical = ['bet', 'game_action', 'request_faucet'].includes(droppedType);
+            const droppedType = (droppedItem.message as { type?: string }).type;
+            const isCritical = isCriticalMessageType(droppedType);
             track('websocket_queue_overflow', {
               reason: 'queue_full',
-              messageType: droppedType,
+              messageType: droppedType ?? 'unknown',
               isCritical,
               queueSize: MAX_QUEUE_SIZE,
             }).catch(() => {}); // Fire and forget
+            // Invoke callback for immediate notification
+            onMessageDroppedRef.current?.(dropped, isCritical);
           }
         }
 

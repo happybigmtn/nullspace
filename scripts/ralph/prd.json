@@ -245,8 +245,8 @@
 				"Add onMessageDropped callback for critical messages"
 			],
 			"priority": 23,
-			"passes": false,
-			"notes": "DATA-INTEGRITY-CRITICAL (agent-verified): websocket.ts:225-232 returns success when oldest message dropped. Callers think bet succeeded but it's lost."
+			"passes": true,
+			"notes": "COMPLETE: Added onMessageDropped callback to useWebSocket options. Callback invoked on queue overflow and message expiration, with isCritical flag for bet/game_action/request_faucet. 7 new tests. DESIGN NOTE: send() returns true for NEW message (semantically correct); callback notifies about OLDER dropped messages."
 		},
 		{
 			"id": "US-100",

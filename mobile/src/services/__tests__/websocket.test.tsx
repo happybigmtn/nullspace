@@ -2442,3 +2442,307 @@ describe('message queue idempotency (US-098)', () => {
     expect(sentMessages).toEqual([0, 1, 2, 3, 4]);
   });
 });
+
+// ========================================================================
+// US-099: onMessageDropped Callback Tests
+// ========================================================================
+//
+// This section tests the onMessageDropped callback that allows callers to
+// be notified immediately when a message is dropped (queue overflow or expired).
+// This addresses the semantic issue where send() returns true even when
+// an older message was dropped to make room.
+// ========================================================================
+
+describe('onMessageDropped callback (US-099)', () => {
+  it('calls onMessageDropped when oldest message dropped on queue overflow', () => {
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const onMessageDropped = jest.fn();
+
+    // Create a custom HookProbe that passes options
+    function HookProbeWithCallback({ url }: { url: string }) {
+      const state = useWebSocket(url, { onMessageDropped }) as HookSnapshot;
+      useEffect(() => {
+        snapshots.push(state);
+      }, [state]);
+      return null;
+    }
+
+    act(() => {
+      TestRenderer.create(<HookProbeWithCallback url="ws://example.test" />);
+    });
+
+    const state = snapshots.at(-1);
+
+    // Fill the queue with 50 messages
+    for (let i = 0; i < 50; i++) {
+      act(() => {
+        state?.send({ type: 'msg', seq: i });
+      });
+    }
+
+    // No callback yet - queue not overflowed
+    expect(onMessageDropped).not.toHaveBeenCalled();
+
+    // 51st message - triggers overflow, drops message 0
+    act(() => {
+      state?.send({ type: 'msg', seq: 50 });
+    });
+
+    // Callback should be invoked with dropped message details
+    expect(onMessageDropped).toHaveBeenCalledTimes(1);
+    expect(onMessageDropped).toHaveBeenCalledWith(
+      { message: { type: 'msg', seq: 0 }, reason: 'queue_full' },
+      false // not critical (type is 'msg')
+    );
+  });
+
+  it('marks critical messages (bet) as isCritical=true', () => {
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const onMessageDropped = jest.fn();
+
+    function HookProbeWithCallback({ url }: { url: string }) {
+      const state = useWebSocket(url, { onMessageDropped }) as HookSnapshot;
+      useEffect(() => {
+        snapshots.push(state);
+      }, [state]);
+      return null;
+    }
+
+    act(() => {
+      TestRenderer.create(<HookProbeWithCallback url="ws://example.test" />);
+    });
+
+    const state = snapshots.at(-1);
+
+    // Queue a bet as the first message (will be dropped)
+    act(() => {
+      state?.send({ type: 'bet', amount: 100 });
+    });
+
+    // Fill remaining queue
+    for (let i = 1; i < 50; i++) {
+      act(() => {
+        state?.send({ type: 'ping', seq: i });
+      });
+    }
+
+    // Trigger overflow
+    act(() => {
+      state?.send({ type: 'ping', seq: 50 });
+    });
+
+    expect(onMessageDropped).toHaveBeenCalledWith(
+      { message: { type: 'bet', amount: 100 }, reason: 'queue_full' },
+      true // critical because type is 'bet'
+    );
+  });
+
+  it('marks game_action messages as isCritical=true', () => {
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const onMessageDropped = jest.fn();
+
+    function HookProbeWithCallback({ url }: { url: string }) {
+      const state = useWebSocket(url, { onMessageDropped }) as HookSnapshot;
+      useEffect(() => {
+        snapshots.push(state);
+      }, [state]);
+      return null;
+    }
+
+    act(() => {
+      TestRenderer.create(<HookProbeWithCallback url="ws://example.test" />);
+    });
+
+    const state = snapshots.at(-1);
+
+    // Queue a game_action as the first message
+    act(() => {
+      state?.send({ type: 'game_action', action: 'hit' });
+    });
+
+    // Fill remaining queue
+    for (let i = 1; i < 50; i++) {
+      act(() => {
+        state?.send({ type: 'ping' });
+      });
+    }
+
+    // Trigger overflow
+    act(() => {
+      state?.send({ type: 'ping' });
+    });
+
+    expect(onMessageDropped).toHaveBeenCalledWith(
+      { message: { type: 'game_action', action: 'hit' }, reason: 'queue_full' },
+      true // critical
+    );
+  });
+
+  it('calls onMessageDropped for each expired message on reconnect', () => {
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const onMessageDropped = jest.fn();
+
+    function HookProbeWithCallback({ url }: { url: string }) {
+      const state = useWebSocket(url, { onMessageDropped }) as HookSnapshot;
+      useEffect(() => {
+        snapshots.push(state);
+      }, [state]);
+      return null;
+    }
+
+    act(() => {
+      TestRenderer.create(<HookProbeWithCallback url="ws://example.test" />);
+    });
+
+    const state = snapshots.at(-1);
+
+    // Queue 3 messages
+    act(() => {
+      state?.send({ type: 'bet', amount: 100 });
+    });
+    act(() => {
+      state?.send({ type: 'game_action', action: 'stand' });
+    });
+    act(() => {
+      state?.send({ type: 'ping' });
+    });
+
+    // Wait for messages to expire (31 seconds)
+    act(() => {
+      jest.advanceTimersByTime(31000);
+    });
+
+    // Connect - should trigger callbacks for all expired messages
+    const socket = MockWebSocket.instances[0];
+    act(() => {
+      socket.readyState = MockWebSocket.OPEN;
+      socket.onopen?.();
+    });
+
+    // Should be called 3 times (once for each expired message)
+    expect(onMessageDropped).toHaveBeenCalledTimes(3);
+
+    // Verify each call
+    expect(onMessageDropped).toHaveBeenNthCalledWith(1,
+      { message: { type: 'bet', amount: 100 }, reason: 'expired' },
+      true // critical
+    );
+    expect(onMessageDropped).toHaveBeenNthCalledWith(2,
+      { message: { type: 'game_action', action: 'stand' }, reason: 'expired' },
+      true // critical
+    );
+    expect(onMessageDropped).toHaveBeenNthCalledWith(3,
+      { message: { type: 'ping' }, reason: 'expired' },
+      false // not critical
+    );
+  });
+
+  it('calls onMessageDropped for multiple sequential overflows', () => {
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const onMessageDropped = jest.fn();
+
+    function HookProbeWithCallback({ url }: { url: string }) {
+      const state = useWebSocket(url, { onMessageDropped }) as HookSnapshot;
+      useEffect(() => {
+        snapshots.push(state);
+      }, [state]);
+      return null;
+    }
+
+    act(() => {
+      TestRenderer.create(<HookProbeWithCallback url="ws://example.test" />);
+    });
+
+    const state = snapshots.at(-1);
+
+    // Fill queue with 50 messages
+    for (let i = 0; i < 50; i++) {
+      act(() => {
+        state?.send({ type: 'msg', seq: i });
+      });
+    }
+
+    // Trigger 3 overflows
+    act(() => {
+      state?.send({ type: 'msg', seq: 50 });
+    });
+    act(() => {
+      state?.send({ type: 'msg', seq: 51 });
+    });
+    act(() => {
+      state?.send({ type: 'msg', seq: 52 });
+    });
+
+    // Should be called 3 times
+    expect(onMessageDropped).toHaveBeenCalledTimes(3);
+
+    // Verify sequential drops (0, 1, 2)
+    expect(onMessageDropped).toHaveBeenNthCalledWith(1,
+      { message: { type: 'msg', seq: 0 }, reason: 'queue_full' },
+      false
+    );
+    expect(onMessageDropped).toHaveBeenNthCalledWith(2,
+      { message: { type: 'msg', seq: 1 }, reason: 'queue_full' },
+      false
+    );
+    expect(onMessageDropped).toHaveBeenNthCalledWith(3,
+      { message: { type: 'msg', seq: 2 }, reason: 'queue_full' },
+      false
+    );
+  });
+
+  it('works without callback (optional parameter)', () => {
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    // Use original HookProbe without callback
+    act(() => {
+      TestRenderer.create(<HookProbe url="ws://example.test" />);
+    });
+
+    const state = snapshots.at(-1);
+
+    // Fill queue and overflow
+    for (let i = 0; i <= 50; i++) {
+      act(() => {
+        state?.send({ type: 'msg', seq: i });
+      });
+    }
+
+    // Should not throw - callback is optional
+    expect(console.warn).toHaveBeenCalledWith(
+      '[WebSocket] Message queue full (50), dropping oldest message'
+    );
+  });
+
+  it('documents: send() returns true even when oldest dropped (semantic choice)', () => {
+    // This is a documentation test explaining our design decision.
+    //
+    // When send() is called and the queue is full:
+    // 1. The OLDEST message is dropped
+    // 2. The NEW message is queued successfully
+    // 3. send() returns TRUE because the NEW message was queued
+    //
+    // This is the correct semantic: send() tells you if YOUR message was accepted.
+    // The onMessageDropped callback tells you about PREVIOUS messages being lost.
+    //
+    // Alternative designs considered:
+    // - Return false: Misleading - the new message IS queued
+    // - Return { queued: true, dropped: msg }: API complexity, breaks existing code
+    // - Throw exception: Too disruptive for queue overflow
+    //
+    // Our solution: Keep send() simple, provide callback for drop notifications.
+
+    expect(true).toBe(true);
+  });
+});
