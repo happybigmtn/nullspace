@@ -210,8 +210,8 @@
         "Document on-call escalation policy"
       ],
       "priority": 64,
-      "passes": false,
-      "notes": "INFRA-CRITICAL: Alertmanager has null receiver - alerts go nowhere. Production incidents won't notify anyone."
+      "passes": true,
+      "notes": "COMPLETE: Alertmanager configured with Slack + PagerDuty receivers. Critical alerts page on-call via PagerDuty, warning alerts go to Slack. Inhibition rules prevent duplicate notifications. alertmanager.env.example has required secrets. On-call escalation documented in observability.md."
     },
     {
       "id": "US-142",

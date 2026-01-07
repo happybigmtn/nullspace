@@ -3264,3 +3264,28 @@ Target: Testnet Production
   - Audio init is non-blocking - app continues even if it fails
 
 ---
+
+## 2026-01-07 - US-141: Configure Alertmanager with real notification receivers
+
+- What was implemented:
+  - Replaced null receiver with Slack + PagerDuty integration
+  - Critical alerts (severity=critical) route to both Slack #nullspace-critical and PagerDuty
+  - Warning alerts (severity=warning) route to Slack #nullspace-alerts only
+  - Added inhibition rules to prevent duplicate notifications when critical fires
+  - Created alertmanager.env.example for required secrets (SLACK_WEBHOOK_URL, PAGERDUTY_SERVICE_KEY)
+  - Documented alert routing and on-call escalation in docs/observability.md
+- Files changed:
+  - `docker/observability/alertmanager.yml` - Full production config with receivers
+  - `docker/observability/docker-compose.yml` - Added environment variables for secrets
+  - `docker/observability/alertmanager.env.example` - Secret template file
+  - `docs/observability.md` - Added Alertmanager Configuration section
+- **Learnings:**
+  - Alertmanager uses `${ENV_VAR}` syntax for environment variable substitution
+  - PagerDuty Events API v2 uses routing_key, not integration_key (v1 terminology)
+  - Inhibition rules use source_matchers/target_matchers to suppress duplicates
+  - group_wait for critical should be shorter (10s) than default (30s) for fast paging
+  - Docker compose passes env vars to alertmanager, but alertmanager.yml references them directly
+  - Slack actions field adds interactive buttons (Runbook link, Grafana link)
+  - Test alerts: `curl -H "Content-Type: application/json" -d '[{"labels":{"alertname":"Test","severity":"warning"}}]' http://localhost:9093/api/v1/alerts`
+
+---
