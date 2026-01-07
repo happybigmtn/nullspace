@@ -1424,3 +1424,42 @@ Target: Testnet Production
 
 ---
 
+
+## 2026-01-06 - US-068
+
+- **Implemented**: SESSION_EXPIRED handling for mobile WebSocket connection
+- **Files changed**:
+  - `mobile/src/stores/gameStore.ts` - Added sessionExpired state and clearSession action
+  - `mobile/src/services/websocket.ts` - Added disconnect() function for clean WebSocket close
+  - `mobile/src/hooks/useGatewaySession.ts` - Added SESSION_EXPIRED error handling
+  - `mobile/src/hooks/__tests__/useGatewaySession.test.tsx` - Added 6 tests for SESSION_EXPIRED
+  - `mobile/src/services/__tests__/websocket.test.tsx` - Added 6 tests for disconnect function
+- **Learnings:**
+  - SESSION_EXPIRED comes as error message with `code: 'SESSION_EXPIRED'`, not a WebSocket close
+  - Must call disconnect() to prevent auto-reconnect loop (reconnect would just get another SESSION_EXPIRED)
+  - WebSocket close with code 1000 counts as "clean close" → no auto-reconnect
+  - Mock store in tests needs `getState()` method for Zustand direct access pattern
+
+---
+
+## 2026-01-06 - US-069: Add animation state race condition tests
+
+- What was implemented:
+  - Created AnimationRaceConditions.test.tsx with 18 comprehensive tests
+  - Tests cover all 4 acceptance criteria:
+    1. Rapid bet placement animation overlap (3 tests: chip selections, re-renders, disabled toggles)
+    2. Unmount during animation memory leaks (4 tests: card flip, chip scale, staggered, InteractionManager)
+    3. Animation completion callback safety (4 tests: fire correctly, ref pattern, unmount guard, null handling)
+    4. Animated.Value (SharedValue) cleanup (4 tests: garbage collection, animated style cleanup, accumulation prevention)
+  - Added 3 edge case/stress tests for completeness
+- Files changed:
+  - `mobile/src/components/casino/__tests__/AnimationRaceConditions.test.tsx` - New file (18 tests)
+- **Learnings:**
+  - `react-native-reanimated/mock` makes all animations synchronous in Jest, limiting timing race testing to unit level
+  - The Card component uses a ref pattern (`onFlipCompleteRef`) to avoid re-triggering animations when callback identity changes
+  - SharedValues from `useSharedValue` are stable across renders (not recreated), preventing memory accumulation
+  - `withSpring` animation values are transient and automatically cleaned up
+  - Real timing race testing requires integration tests with actual devices
+  - Pattern: `process.env.NODE_ENV === 'test'` guards skip animations in Card.tsx for cleaner test behavior
+
+---
