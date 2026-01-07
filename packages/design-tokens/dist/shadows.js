@@ -96,4 +96,107 @@ export const GLOW = {
         opacity: 0.5,
     },
 };
+/**
+ * Colored shadow variants for brand cohesion
+ * Each variant has offset, blur, spread, color, and opacity
+ *
+ * Usage Guidelines:
+ * - indigoGlow: Selected states, focused elements, brand highlights
+ * - goldAccent: Win celebrations, achievements, premium features
+ * - successGlow: Success states, confirmations, positive feedback
+ * - errorGlow: Error states, warnings, destructive actions
+ * - warmShadow: Day mode, warm themes, inviting elements
+ * - coolShadow: Night mode, cool themes, calm elements
+ */
+export const SHADOW_COLORED = {
+    /** Brand indigo glow - selected states, focus */
+    indigoGlow: {
+        offsetX: 0,
+        offsetY: 4,
+        blur: 16,
+        spread: -2,
+        color: '#5E5CE6',
+        opacity: 0.4,
+    },
+    /** Gold accent - wins, achievements, premium */
+    goldAccent: {
+        offsetX: 0,
+        offsetY: 4,
+        blur: 20,
+        spread: -2,
+        color: '#FFD700',
+        opacity: 0.45,
+    },
+    /** Success glow - confirmations, positive feedback */
+    successGlow: {
+        offsetX: 0,
+        offsetY: 4,
+        blur: 16,
+        spread: -2,
+        color: '#34C759',
+        opacity: 0.4,
+    },
+    /** Error glow - warnings, destructive actions */
+    errorGlow: {
+        offsetX: 0,
+        offsetY: 4,
+        blur: 16,
+        spread: -2,
+        color: '#FF3B30',
+        opacity: 0.4,
+    },
+    /** Warm shadow - day mode, inviting elements */
+    warmShadow: {
+        offsetX: 0,
+        offsetY: 6,
+        blur: 20,
+        spread: -4,
+        color: '#8B4513',
+        opacity: 0.15,
+    },
+    /** Cool shadow - night mode, calm elements */
+    coolShadow: {
+        offsetX: 0,
+        offsetY: 6,
+        blur: 20,
+        spread: -4,
+        color: '#1E3A5F',
+        opacity: 0.2,
+    },
+};
+/**
+ * Inset shadow variants for card depth effects
+ * Used for pressed states, sunken panels, and debossed elements
+ *
+ * Usage Guidelines:
+ * - sm: Subtle depression, text fields, minor pressed states
+ * - md: Card insets, panel depressions, pressed buttons
+ * - lg: Deep insets, well containers, significant pressed states
+ */
+export const SHADOW_INSET = {
+    /** Subtle inset - text fields, minor pressed states */
+    sm: {
+        offsetX: 0,
+        offsetY: 1,
+        blur: 3,
+        spread: 0,
+        opacity: 0.1,
+    },
+    /** Medium inset - card wells, pressed buttons */
+    md: {
+        offsetX: 0,
+        offsetY: 2,
+        blur: 6,
+        spread: -1,
+        opacity: 0.15,
+    },
+    /** Large inset - deep wells, significant pressed states */
+    lg: {
+        offsetX: 0,
+        offsetY: 4,
+        blur: 10,
+        spread: -2,
+        opacity: 0.2,
+    },
+};
 //# sourceMappingURL=shadows.js.map

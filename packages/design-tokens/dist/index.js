@@ -16,7 +16,7 @@ export { SPACING, SPACING_SEMANTIC, RADIUS, CONTAINER, } from './spacing.js';
 // Animations
 export { SPRING, DURATION, EASING, STAGGER, } from './animations.js';
 // Shadows
-export { SHADOW, ELEVATION, GLOW, } from './shadows.js';
+export { SHADOW, ELEVATION, GLOW, SHADOW_COLORED, SHADOW_INSET, } from './shadows.js';
 // Opacity
 export { OPACITY, OPACITY_SEMANTIC, } from './opacity.js';
 // Z-Index

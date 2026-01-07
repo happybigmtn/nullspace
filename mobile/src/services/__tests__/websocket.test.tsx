@@ -47,7 +47,7 @@ jest.mock('expo-constants', () => ({
 }));
 
 // Mock analytics to track queue overflow metrics
-const mockTrack = jest.fn(() => Promise.resolve());
+const mockTrack = jest.fn((..._args: unknown[]) => Promise.resolve());
 jest.mock('../analytics', () => ({
   track: (...args: unknown[]) => mockTrack(...args),
 }));
@@ -88,10 +88,28 @@ function HookProbe({ url }: { url: string }) {
   return null;
 }
 
+/** Helper to get a MockWebSocket instance with assertion */
+function getSocket(index = 0): MockWebSocket {
+  const socket = MockWebSocket.instances[index];
+  if (!socket) {
+    throw new Error(`MockWebSocket.instances[${index}] is undefined`);
+  }
+  return socket;
+}
+
+/** Helper to get the last MockWebSocket instance with assertion */
+function getLastSocket(): MockWebSocket {
+  const socket = getLastSocket();
+  if (!socket) {
+    throw new Error('MockWebSocket.instances is empty');
+  }
+  return socket;
+}
+
 beforeEach(() => {
   snapshots.length = 0;
   MockWebSocket.instances.length = 0;
-  (global as { WebSocket?: typeof MockWebSocket }).WebSocket = MockWebSocket as unknown as typeof WebSocket;
+  (global as unknown as { WebSocket: typeof MockWebSocket }).WebSocket = MockWebSocket;
   setDevMode(true); // Default to dev mode to allow ws:// URLs in tests
   mockConstants.expoConfig = undefined;
   mockConstants.expoGoConfig = undefined;
@@ -110,7 +128,7 @@ afterEach(() => {
 });
 
 afterAll(() => {
-  delete (global as { WebSocket?: typeof MockWebSocket }).WebSocket;
+  delete (global as unknown as { WebSocket?: typeof MockWebSocket }).WebSocket;
 });
 
 describe('useWebSocket', () => {
@@ -119,7 +137,7 @@ describe('useWebSocket', () => {
       TestRenderer.create(<HookProbe url="ws://example.test" />);
     });
 
-    const socket = MockWebSocket.instances[0];
+    const socket = getSocket();
     expect(socket).toBeDefined();
 
     act(() => {
@@ -147,7 +165,7 @@ describe('useWebSocket', () => {
       TestRenderer.create(<HookProbe url="ws://example.test" />);
     });
 
-    const socket = MockWebSocket.instances[0];
+    const socket = getSocket();
     act(() => {
       socket.onclose?.({ wasClean: false, code: 1006, reason: 'reset' });
     });
@@ -170,7 +188,7 @@ describe('useWebSocket', () => {
       TestRenderer.create(<HookProbe url="ws://example.test" />);
     });
 
-    const socket = MockWebSocket.instances[0];
+    const socket = getSocket();
     const instanceCount = MockWebSocket.instances.length;
 
     act(() => {
@@ -199,7 +217,7 @@ describe('useWebSocket', () => {
       TestRenderer.create(<HookProbe url="ws://example.test" />);
     });
 
-    const socket = MockWebSocket.instances[0];
+    const socket = getSocket();
     const state = snapshots.at(-1);
     // Messages are queued when connecting (not dropped), returns true
     expect(state?.send({ type: 'ping' })).toBe(true);
@@ -238,7 +256,7 @@ describe('useWebSocket', () => {
 
       // Simulate 10 unclean disconnections and reconnect attempts
       for (let attempt = 0; attempt < 10; attempt++) {
-        const socket = MockWebSocket.instances.at(-1);
+        const socket = getLastSocket();
 
         // Trigger unclean close
         act(() => {
@@ -255,7 +273,7 @@ describe('useWebSocket', () => {
       }
 
       // The 11th socket attempt will not happen - instead state becomes 'failed'
-      const socket = MockWebSocket.instances.at(-1);
+      const socket = getLastSocket();
       act(() => {
         socket?.onclose?.({ wasClean: false, code: 1006, reason: 'reset' });
       });
@@ -288,7 +306,7 @@ describe('useWebSocket', () => {
       const reconnectTimes: number[] = [];
 
       for (let attempt = 0; attempt < 10; attempt++) {
-        const socket = MockWebSocket.instances.at(-1);
+        const socket = getLastSocket();
         const instancesBefore = MockWebSocket.instances.length;
 
         act(() => {
@@ -296,7 +314,7 @@ describe('useWebSocket', () => {
         });
 
         // Record what the expected delay is
-        const expectedDelay = expectedDelays[attempt];
+        const expectedDelay = expectedDelays[attempt]!;
 
         // Advance by expected delay - 1ms (should NOT reconnect yet)
         act(() => {
@@ -336,7 +354,7 @@ describe('useWebSocket', () => {
 
       // Exhaust reconnect attempts to reach failed state
       for (let attempt = 0; attempt < 10; attempt++) {
-        const socket = MockWebSocket.instances.at(-1);
+        const socket = getLastSocket();
         act(() => {
           socket?.onclose?.({ wasClean: false, code: 1006, reason: 'reset' });
         });
@@ -347,7 +365,7 @@ describe('useWebSocket', () => {
       }
 
       // Final close to trigger failed state
-      const failedSocket = MockWebSocket.instances.at(-1);
+      const failedSocket = getLastSocket();
       act(() => {
         failedSocket?.onclose?.({ wasClean: false, code: 1006, reason: 'reset' });
       });
@@ -382,7 +400,7 @@ describe('useWebSocket', () => {
 
       // Exhaust reconnects to failed state
       for (let attempt = 0; attempt < 10; attempt++) {
-        const socket = MockWebSocket.instances.at(-1);
+        const socket = getLastSocket();
         act(() => {
           socket?.onclose?.({ wasClean: false, code: 1006, reason: 'reset' });
         });
@@ -390,7 +408,7 @@ describe('useWebSocket', () => {
           jest.advanceTimersByTime(Math.min(1000 * Math.pow(2, attempt), 30000));
         });
       }
-      const failedSocket = MockWebSocket.instances.at(-1);
+      const failedSocket = getLastSocket();
       act(() => {
         failedSocket?.onclose?.({ wasClean: false, code: 1006, reason: 'reset' });
       });
@@ -404,7 +422,7 @@ describe('useWebSocket', () => {
       });
 
       // Simulate successful connection
-      const newSocket = MockWebSocket.instances.at(-1);
+      const newSocket = getLastSocket();
       act(() => {
         newSocket!.readyState = MockWebSocket.OPEN;
         newSocket?.onopen?.();
@@ -452,7 +470,7 @@ describe('useWebSocket', () => {
       );
 
       // Now connect and verify FIFO order - message 0 should be dropped
-      const socket = MockWebSocket.instances[0];
+      const socket = getSocket();
       act(() => {
         socket.readyState = MockWebSocket.OPEN;
         socket.onopen?.();
@@ -479,7 +497,7 @@ describe('useWebSocket', () => {
         TestRenderer.create(<HookProbe url="ws://example.test" />);
       });
 
-      const socket = MockWebSocket.instances[0];
+      const socket = getSocket();
 
       // Connect first, then disconnect
       act(() => {
@@ -537,7 +555,7 @@ describe('useWebSocket', () => {
       expect(console.warn).toHaveBeenCalledTimes(5);
 
       // Connect and verify order
-      const socket = MockWebSocket.instances[0];
+      const socket = getSocket();
       act(() => {
         socket.readyState = MockWebSocket.OPEN;
         socket.onopen?.();
@@ -596,7 +614,7 @@ describe('useWebSocket', () => {
 
       // Exhaust reconnect attempts to reach failed state
       for (let attempt = 0; attempt < 10; attempt++) {
-        const socket = MockWebSocket.instances.at(-1);
+        const socket = getLastSocket();
         act(() => {
           socket?.onclose?.({ wasClean: false, code: 1006, reason: 'reset' });
         });
@@ -604,7 +622,7 @@ describe('useWebSocket', () => {
           jest.advanceTimersByTime(Math.min(1000 * Math.pow(2, attempt), 30000));
         });
       }
-      const failedSocket = MockWebSocket.instances.at(-1);
+      const failedSocket = getLastSocket();
       act(() => {
         failedSocket?.onclose?.({ wasClean: false, code: 1006, reason: 'reset' });
       });
@@ -709,7 +727,7 @@ describe('useWebSocket', () => {
       });
 
       // Now connect - should detect expired messages
-      const socket = MockWebSocket.instances[0];
+      const socket = getSocket();
       act(() => {
         socket.readyState = MockWebSocket.OPEN;
         socket.onopen?.();
@@ -761,7 +779,7 @@ describe('useWebSocket', () => {
       });
 
       // Connect - should only send message 4, others expired
-      const socket = MockWebSocket.instances[0];
+      const socket = getSocket();
       act(() => {
         socket.readyState = MockWebSocket.OPEN;
         socket.onopen?.();
@@ -817,7 +835,7 @@ describe('useWebSocket', () => {
       });
 
       // Connect
-      const socket = MockWebSocket.instances[0];
+      const socket = getSocket();
       act(() => {
         socket.readyState = MockWebSocket.OPEN;
         socket.onopen?.();
@@ -844,7 +862,7 @@ describe('useWebSocket', () => {
         TestRenderer.create(<HookProbe url="ws://example.test" />);
       });
 
-      const socket = MockWebSocket.instances[0];
+      const socket = getSocket();
 
       // Connect first
       act(() => {
@@ -878,7 +896,7 @@ describe('useWebSocket', () => {
       });
 
       // Reconnect
-      const newSocket = MockWebSocket.instances.at(-1);
+      const newSocket = getLastSocket();
       act(() => {
         newSocket!.readyState = MockWebSocket.OPEN;
         newSocket?.onopen?.();
@@ -925,7 +943,7 @@ describe('useWebSocket', () => {
       });
 
       // Connect
-      const socket = MockWebSocket.instances[0];
+      const socket = getSocket();
       act(() => {
         socket.readyState = MockWebSocket.OPEN;
         socket.onopen?.();
@@ -986,7 +1004,7 @@ describe('useWebSocket', () => {
       });
 
       // Connect
-      const socket = MockWebSocket.instances[0];
+      const socket = getSocket();
       act(() => {
         socket.readyState = MockWebSocket.OPEN;
         socket.onopen?.();
@@ -1186,7 +1204,7 @@ describe('useWebSocket', () => {
       mockTrack.mockClear();
 
       // Connect - should detect expired messages
-      const socket = MockWebSocket.instances[0];
+      const socket = getSocket();
       act(() => {
         socket.readyState = MockWebSocket.OPEN;
         socket.onopen?.();
@@ -1255,7 +1273,7 @@ describe('useWebSocket', () => {
       });
 
       // Connect
-      const socket = MockWebSocket.instances[0];
+      const socket = getSocket();
       act(() => {
         socket.readyState = MockWebSocket.OPEN;
         socket.onopen?.();
@@ -1456,7 +1474,7 @@ describe('useWebSocket', () => {
       });
 
       // Connect
-      const socket = MockWebSocket.instances[0];
+      const socket = getSocket();
       act(() => {
         socket.readyState = MockWebSocket.OPEN;
         socket.onopen?.();
@@ -1499,7 +1517,7 @@ describe('useWebSocket', () => {
       });
 
       // Connect
-      const socket = MockWebSocket.instances[0];
+      const socket = getSocket();
       act(() => {
         socket.readyState = MockWebSocket.OPEN;
         socket.onopen?.();
@@ -1530,7 +1548,7 @@ describe('useWebSocket', () => {
       });
 
       // Connect
-      const socket = MockWebSocket.instances[0];
+      const socket = getSocket();
       act(() => {
         socket.readyState = MockWebSocket.OPEN;
         socket.onopen?.();
@@ -1562,7 +1580,7 @@ describe('useWebSocket', () => {
       });
 
       // Connect
-      const socket = MockWebSocket.instances[0];
+      const socket = getSocket();
       act(() => {
         socket.readyState = MockWebSocket.OPEN;
         socket.onopen?.();
@@ -1608,7 +1626,7 @@ describe('useWebSocket', () => {
 
       // Simulate rapid reconnection cycles with time passing
       for (let cycle = 0; cycle < 3; cycle++) {
-        const socket = MockWebSocket.instances.at(-1);
+        const socket = getLastSocket();
 
         // Connect briefly
         act(() => {
@@ -1628,7 +1646,7 @@ describe('useWebSocket', () => {
       }
 
       // Final connect within the 30s window
-      const finalSocket = MockWebSocket.instances.at(-1);
+      const finalSocket = getLastSocket();
       act(() => {
         finalSocket!.readyState = MockWebSocket.OPEN;
         finalSocket!.onopen?.();
@@ -1655,7 +1673,7 @@ describe('useWebSocket', () => {
       expect(initialState?.maxReconnectAttempts).toBe(10);
 
       // After first disconnect and reconnect attempt
-      const socket = MockWebSocket.instances.at(-1);
+      const socket = getLastSocket();
       act(() => {
         socket?.onclose?.({ wasClean: false, code: 1006, reason: 'reset' });
       });
@@ -1678,7 +1696,7 @@ describe('useWebSocket', () => {
 
       // Exhaust all attempts
       for (let attempt = 0; attempt < 10; attempt++) {
-        const socket = MockWebSocket.instances.at(-1);
+        const socket = getLastSocket();
         act(() => {
           socket?.onclose?.({ wasClean: false, code: 1006, reason: 'reset' });
         });
@@ -1688,7 +1706,7 @@ describe('useWebSocket', () => {
       }
 
       // Final close triggers failed state with error log
-      const failedSocket = MockWebSocket.instances.at(-1);
+      const failedSocket = getLastSocket();
       act(() => {
         failedSocket?.onclose?.({ wasClean: false, code: 1006, reason: 'reset' });
       });
@@ -1755,7 +1773,7 @@ describe('multi-game session preservation (US-067)', () => {
       TestRenderer.create(<HookProbe url="ws://example.test" />);
     });
 
-    const socket = MockWebSocket.instances[0];
+    const socket = getSocket();
     act(() => {
       socket.readyState = MockWebSocket.OPEN;
       socket.onopen?.();
@@ -1796,7 +1814,7 @@ describe('multi-game session preservation (US-067)', () => {
       TestRenderer.create(<BalanceTracker />);
     });
 
-    const socket = MockWebSocket.instances[0];
+    const socket = getSocket();
     act(() => {
       socket.readyState = MockWebSocket.OPEN;
       socket.onopen?.();
@@ -1817,8 +1835,8 @@ describe('multi-game session preservation (US-067)', () => {
     });
 
     // lastMessage should reflect the latest state
-    expect(latestState?.lastMessage?.type).toBe('game_started');
-    expect(latestState?.isConnected).toBe(true);
+    expect(latestState!.lastMessage?.type).toBe('game_started');
+    expect(latestState!.isConnected).toBe(true);
   });
 
   it('maintains connection during rapid game switching', () => {
@@ -1826,7 +1844,7 @@ describe('multi-game session preservation (US-067)', () => {
       TestRenderer.create(<HookProbe url="ws://example.test" />);
     });
 
-    const socket = MockWebSocket.instances[0];
+    const socket = getSocket();
     act(() => {
       socket.readyState = MockWebSocket.OPEN;
       socket.onopen?.();
@@ -1864,7 +1882,7 @@ describe('multi-game session preservation (US-067)', () => {
       TestRenderer.create(<StateTracker />);
     });
 
-    const socket = MockWebSocket.instances[0];
+    const socket = getSocket();
     act(() => {
       socket.readyState = MockWebSocket.OPEN;
       socket.onopen?.();
@@ -1886,7 +1904,7 @@ describe('multi-game session preservation (US-067)', () => {
     });
 
     // Should show the LATEST state, not the old bet=100 (US-103: bet is string)
-    expect(latestState?.lastMessage).toEqual({ type: 'game_started', sessionId: '1003', bet: '200' });
+    expect(latestState!.lastMessage).toEqual({ type: 'game_started', sessionId: '1003', bet: '200' });
   });
 
   it('reconnects preserve session after network interruption during game', () => {
@@ -1896,7 +1914,7 @@ describe('multi-game session preservation (US-067)', () => {
       TestRenderer.create(<HookProbe url="ws://example.test" />);
     });
 
-    const socket1 = MockWebSocket.instances[0];
+    const socket1 = getSocket();
     act(() => {
       socket1.readyState = MockWebSocket.OPEN;
       socket1.onopen?.();
@@ -1919,7 +1937,7 @@ describe('multi-game session preservation (US-067)', () => {
     });
 
     // New connection established
-    const socket2 = MockWebSocket.instances[1];
+    const socket2 = getSocket(1);
     act(() => {
       socket2.readyState = MockWebSocket.OPEN;
       socket2.onopen?.();
@@ -1975,7 +1993,7 @@ describe('disconnect function (US-068)', () => {
       TestRenderer.create(<HookProbe url="ws://example.test" />);
     });
 
-    const socket = MockWebSocket.instances[0];
+    const socket = getSocket();
     act(() => {
       socket.readyState = MockWebSocket.OPEN;
       socket.onopen?.();
@@ -2000,7 +2018,7 @@ describe('disconnect function (US-068)', () => {
       TestRenderer.create(<HookProbe url="ws://example.test" />);
     });
 
-    const socket = MockWebSocket.instances[0];
+    const socket = getSocket();
     act(() => {
       socket.readyState = MockWebSocket.OPEN;
       socket.onopen?.();
@@ -2053,7 +2071,7 @@ describe('disconnect function (US-068)', () => {
       state?.reconnect();
     });
 
-    const newSocket = MockWebSocket.instances.at(-1);
+    const newSocket = getLastSocket();
     act(() => {
       newSocket!.readyState = MockWebSocket.OPEN;
       newSocket?.onopen?.();
@@ -2070,7 +2088,7 @@ describe('disconnect function (US-068)', () => {
       TestRenderer.create(<HookProbe url="ws://example.test" />);
     });
 
-    const socket = MockWebSocket.instances[0];
+    const socket = getSocket();
 
     // Trigger an unclean close (which schedules reconnect)
     act(() => {
@@ -2099,7 +2117,7 @@ describe('disconnect function (US-068)', () => {
       TestRenderer.create(<HookProbe url="ws://example.test" />);
     });
 
-    const socket = MockWebSocket.instances[0];
+    const socket = getSocket();
     act(() => {
       socket.readyState = MockWebSocket.OPEN;
       socket.onopen?.();
@@ -2124,7 +2142,7 @@ describe('disconnect function (US-068)', () => {
       TestRenderer.create(<HookProbe url="ws://example.test" />);
     });
 
-    const socket = MockWebSocket.instances[0];
+    const socket = getSocket();
     act(() => {
       socket.readyState = MockWebSocket.OPEN;
       socket.onopen?.();
@@ -2146,7 +2164,7 @@ describe('disconnect function (US-068)', () => {
     expect(MockWebSocket.instances.length).toBe(instancesAfterDisconnect + 1);
 
     // Connect the new socket
-    const newSocket = MockWebSocket.instances.at(-1);
+    const newSocket = getLastSocket();
     act(() => {
       newSocket!.readyState = MockWebSocket.OPEN;
       newSocket?.onopen?.();
@@ -2214,7 +2232,7 @@ describe('message queue idempotency (US-098)', () => {
     });
 
     // First connection - flush queue
-    const socket1 = MockWebSocket.instances[0];
+    const socket1 = getSocket();
     act(() => {
       socket1.readyState = MockWebSocket.OPEN;
       socket1.onopen?.();
@@ -2236,7 +2254,7 @@ describe('message queue idempotency (US-098)', () => {
     });
 
     // Second connection
-    const socket2 = MockWebSocket.instances[1];
+    const socket2 = getSocket(1);
     act(() => {
       socket2.readyState = MockWebSocket.OPEN;
       socket2.onopen?.();
@@ -2254,7 +2272,7 @@ describe('message queue idempotency (US-098)', () => {
       TestRenderer.create(<HookProbe url="ws://example.test" />);
     });
 
-    const socket = MockWebSocket.instances[0];
+    const socket = getSocket();
     act(() => {
       socket.readyState = MockWebSocket.OPEN;
       socket.onopen?.();
@@ -2299,7 +2317,7 @@ describe('message queue idempotency (US-098)', () => {
     });
 
     // First connection - partial flush
-    const socket1 = MockWebSocket.instances[0];
+    const socket1 = getSocket();
     act(() => {
       socket1.readyState = MockWebSocket.OPEN;
       socket1.onopen?.();
@@ -2319,7 +2337,7 @@ describe('message queue idempotency (US-098)', () => {
     });
 
     // First connection
-    const socket1 = MockWebSocket.instances[0];
+    const socket1 = getSocket();
     act(() => {
       socket1.readyState = MockWebSocket.OPEN;
       socket1.onopen?.();
@@ -2346,7 +2364,7 @@ describe('message queue idempotency (US-098)', () => {
     });
 
     // Reconnect
-    const socket2 = MockWebSocket.instances.at(-1);
+    const socket2 = getLastSocket();
     act(() => {
       socket2!.readyState = MockWebSocket.OPEN;
       socket2!.onopen?.();
@@ -2434,7 +2452,7 @@ describe('message queue idempotency (US-098)', () => {
     }
 
     // Connect and flush
-    const socket = MockWebSocket.instances[0];
+    const socket = getSocket();
     act(() => {
       socket.readyState = MockWebSocket.OPEN;
       socket.onopen?.();
@@ -2626,7 +2644,7 @@ describe('onMessageDropped callback (US-099)', () => {
     });
 
     // Connect - should trigger callbacks for all expired messages
-    const socket = MockWebSocket.instances[0];
+    const socket = getSocket();
     act(() => {
       socket.readyState = MockWebSocket.OPEN;
       socket.onopen?.();
@@ -2769,7 +2787,7 @@ describe('malformed message validation (US-103)', () => {
       TestRenderer.create(<HookProbe url="ws://example.test" />);
     });
 
-    const socket = MockWebSocket.instances[0];
+    const socket = getSocket();
     act(() => {
       socket.readyState = MockWebSocket.OPEN;
       socket.onopen?.();
@@ -2793,7 +2811,7 @@ describe('malformed message validation (US-103)', () => {
       TestRenderer.create(<HookProbe url="ws://example.test" />);
     });
 
-    const socket = MockWebSocket.instances[0];
+    const socket = getSocket();
     act(() => {
       socket.readyState = MockWebSocket.OPEN;
       socket.onopen?.();
@@ -2815,7 +2833,7 @@ describe('malformed message validation (US-103)', () => {
       TestRenderer.create(<HookProbe url="ws://example.test" />);
     });
 
-    const socket = MockWebSocket.instances[0];
+    const socket = getSocket();
     act(() => {
       socket.readyState = MockWebSocket.OPEN;
       socket.onopen?.();
@@ -2835,7 +2853,7 @@ describe('malformed message validation (US-103)', () => {
       TestRenderer.create(<HookProbe url="ws://example.test" />);
     });
 
-    const socket = MockWebSocket.instances[0];
+    const socket = getSocket();
     act(() => {
       socket.readyState = MockWebSocket.OPEN;
       socket.onopen?.();
@@ -2855,7 +2873,7 @@ describe('malformed message validation (US-103)', () => {
       TestRenderer.create(<HookProbe url="ws://example.test" />);
     });
 
-    const socket = MockWebSocket.instances[0];
+    const socket = getSocket();
     act(() => {
       socket.readyState = MockWebSocket.OPEN;
       socket.onopen?.();
@@ -2877,7 +2895,7 @@ describe('malformed message validation (US-103)', () => {
       TestRenderer.create(<HookProbe url="ws://example.test" />);
     });
 
-    const socket = MockWebSocket.instances[0];
+    const socket = getSocket();
     act(() => {
       socket.readyState = MockWebSocket.OPEN;
       socket.onopen?.();
@@ -2900,7 +2918,7 @@ describe('malformed message validation (US-103)', () => {
       TestRenderer.create(<HookProbe url="ws://example.test" />);
     });
 
-    const socket = MockWebSocket.instances[0];
+    const socket = getSocket();
     act(() => {
       socket.readyState = MockWebSocket.OPEN;
       socket.onopen?.();

@@ -1,9 +1,10 @@
 import { useGameStore } from '../gameStore';
+import type { ChipValue } from '../../types';
 
 const initialState = {
   balance: 0,
   balanceReady: false,
-  selectedChip: 25,
+  selectedChip: 25 as ChipValue,
   sessionId: null,
   publicKey: null,
   registered: false,

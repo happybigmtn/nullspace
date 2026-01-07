@@ -39,7 +39,7 @@ class MockCryptoKey {
 function mockEncrypt(data: Uint8Array, iv: Uint8Array): Uint8Array {
   const result = new Uint8Array(data.length);
   for (let i = 0; i < data.length; i++) {
-    result[i] = data[i] ^ iv[i % iv.length];
+    result[i] = data[i]! ^ iv[i % iv.length]!;
   }
   return result;
 }
@@ -247,7 +247,7 @@ const mockIndexedDB = {
 // Setup global mocks
 beforeAll(() => {
   // Mock crypto
-  (global as unknown as { crypto: { subtle: typeof mockSubtleCrypto; getRandomValues: (arr: Uint8Array) => Uint8Array } }).crypto = {
+  (global as unknown as { crypto: { subtle: SubtleCrypto; getRandomValues: (arr: Uint8Array) => Uint8Array } }).crypto = {
     subtle: mockSubtleCrypto as unknown as SubtleCrypto,
     getRandomValues: (arr: Uint8Array) => {
       for (let i = 0; i < arr.length; i++) {
@@ -258,7 +258,7 @@ beforeAll(() => {
   };
 
   // Mock indexedDB
-  (global as unknown as { indexedDB: typeof mockIndexedDB }).indexedDB = mockIndexedDB as unknown as IDBFactory;
+  (global as unknown as { indexedDB: IDBFactory }).indexedDB = mockIndexedDB as unknown as IDBFactory;
 
   // Mock TextEncoder/TextDecoder
   if (typeof global.TextEncoder === 'undefined') {
