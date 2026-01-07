@@ -845,6 +845,112 @@ body.fonts-loaded {
   animation: fadeInUp var(--motion-state) var(--motion-ease) both;
 }
 
+/* Hero Animated Gradients */
+@keyframes gradientDrift {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.15;
+  }
+  25% {
+    transform: translate(10%, -5%) scale(1.1);
+    opacity: 0.2;
+  }
+  50% {
+    transform: translate(-5%, 10%) scale(0.95);
+    opacity: 0.12;
+  }
+  75% {
+    transform: translate(-10%, -10%) scale(1.05);
+    opacity: 0.18;
+  }
+}
+
+@keyframes glowPulse {
+  0%, 100% {
+    opacity: 0.1;
+    filter: blur(48px);
+  }
+  50% {
+    opacity: 0.25;
+    filter: blur(64px);
+  }
+}
+
+@keyframes floatParticle {
+  0%, 100% {
+    transform: translateY(0) translateX(0);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.6;
+  }
+  90% {
+    opacity: 0.6;
+  }
+  100% {
+    transform: translateY(-100px) translateX(var(--drift-x, 20px));
+    opacity: 0;
+  }
+}
+
+.hero-gradient-drift {
+  animation: gradientDrift 8s var(--motion-ease) infinite;
+}
+
+.hero-gradient-drift-alt {
+  animation: gradientDrift 10s var(--motion-ease) infinite reverse;
+}
+
+.hero-glow-pulse {
+  animation: glowPulse 4s ease-in-out infinite;
+}
+
+.hero-glow-pulse-alt {
+  animation: glowPulse 5s ease-in-out infinite;
+  animation-delay: 1s;
+}
+
+/* Floating particles container */
+.hero-particles {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.hero-particle {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: floatParticle var(--particle-duration, 6s) ease-out infinite;
+  animation-delay: var(--particle-delay, 0s);
+}
+
+/* Hero banner gradient */
+.hero-banner {
+  position: relative;
+  overflow: hidden;
+}
+
+.hero-banner::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    135deg,
+    transparent 0%,
+    var(--action-primary, #3b82f6) 25%,
+    var(--action-success, #22c55e) 50%,
+    var(--action-primary, #3b82f6) 75%,
+    transparent 100%
+  );
+  background-size: 400% 400%;
+  animation: gradientDrift 12s ease infinite;
+  opacity: 0.08;
+}
+
 /* Confetti Burst (CSS Only) */
 @keyframes confetti-burst {
   0% { transform: translateY(0) scale(1); opacity: 1; }

@@ -1,9 +1,43 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { PlaySwapStakeTabs } from '../PlaySwapStakeTabs';
 import { useTheme } from '../../hooks/useTheme';
 
 export type PlayMode = 'CASH' | 'FREEROLL';
+
+/** Generate floating particle elements with staggered timing */
+function FloatingParticles({ isDark }: { isDark: boolean }) {
+  const particles = useMemo(() => {
+    return Array.from({ length: 12 }, (_, i) => ({
+      id: i,
+      left: `${10 + (i * 7) % 80}%`,
+      bottom: `${5 + (i * 11) % 30}%`,
+      duration: `${5 + (i % 4) * 1.5}s`,
+      delay: `${(i * 0.5) % 3}s`,
+      driftX: `${(i % 2 === 0 ? 1 : -1) * (10 + (i % 5) * 8)}px`,
+      color: i % 3 === 0 ? 'var(--action-primary)' : i % 3 === 1 ? 'var(--action-success)' : (isDark ? '#a2a2a7' : '#636366'),
+    }));
+  }, [isDark]);
+
+  return (
+    <div className="hero-particles">
+      {particles.map((p) => (
+        <div
+          key={p.id}
+          className="hero-particle"
+          style={{
+            left: p.left,
+            bottom: p.bottom,
+            color: p.color,
+            ['--particle-duration' as string]: p.duration,
+            ['--particle-delay' as string]: p.delay,
+            ['--drift-x' as string]: p.driftX,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
 
 interface ModeSelectViewProps {
   onSelect: (mode: PlayMode) => void;
@@ -37,6 +71,9 @@ export const ModeSelectView: React.FC<ModeSelectViewProps> = ({ onSelect }) => {
       className="mode-select flex flex-col min-h-screen w-screen font-sans items-center justify-center p-6 md:p-12 overflow-auto"
       style={{ backgroundColor: palette.surface, color: palette.text }}
     >
+      {/* Full-width animated banner */}
+      <div className="hero-banner fixed top-0 left-0 right-0 h-1 z-50" />
+
       <div className="max-w-4xl w-full mb-8 flex justify-center scale-90 sm:scale-100">
         <PlaySwapStakeTabs className="mode-tabs" tone="mode" palette={palette} />
       </div>
@@ -45,9 +82,13 @@ export const ModeSelectView: React.FC<ModeSelectViewProps> = ({ onSelect }) => {
         className="mode-panel max-w-4xl w-full rounded-[48px] p-8 sm:p-12 md:p-16 shadow-float border relative overflow-hidden animate-scale-in"
         style={{ backgroundColor: palette.panel, borderColor: palette.border }}
       >
-        {/* Subtle Background Accent */}
-        <div className="absolute top-0 right-0 w-64 h-64 bg-action-primary/10 rounded-full -mr-32 -mt-32 blur-3xl" />
-        <div className="absolute bottom-0 left-0 w-64 h-64 bg-action-success/10 rounded-full -ml-32 -mb-32 blur-3xl" />
+        {/* Animated Background Gradients */}
+        <div className="absolute top-0 right-0 w-80 h-80 bg-action-primary rounded-full -mr-40 -mt-40 hero-glow-pulse hero-gradient-drift" />
+        <div className="absolute bottom-0 left-0 w-80 h-80 bg-action-success rounded-full -ml-40 -mb-40 hero-glow-pulse-alt hero-gradient-drift-alt" />
+        <div className="absolute top-1/2 left-1/2 w-96 h-96 -translate-x-1/2 -translate-y-1/2 bg-gradient-radial from-action-primary/5 to-transparent rounded-full hero-gradient-drift" />
+
+        {/* Floating Particles */}
+        <FloatingParticles isDark={isDark} />
 
         <div className="text-center mb-12 relative z-10">
           <div className="text-[10px] font-bold tracking-[0.4em] mb-4 uppercase mode-muted" style={{ color: palette.muted }}>
