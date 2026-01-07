@@ -156,6 +156,16 @@ export class SessionManager {
 			await this.initializePlayer(session);
 		} catch (err) {
 			logError(`Failed to initialize player ${playerName}:`, err);
+			// Clean up orphaned session on complete failure (US-105)
+			this.cleanupFailedSession(ws, session);
+			throw err;
+		}
+
+		// If registration failed (not exception, but rejected by backend), also cleanup
+		if (!session.registered) {
+			logWarn(`Registration failed for ${playerName}, cleaning up session`);
+			this.cleanupFailedSession(ws, session);
+			throw new Error(`Registration failed for player ${playerName}`);
 		}
 
 		return session;
@@ -419,6 +429,26 @@ export class SessionManager {
 			logDebug(`Session destroyed: ${session.playerName}`);
 		}
 		return session;
+	}
+
+	/**
+	 * Clean up a session that failed during initialization.
+	 * Removes from tracking maps and disconnects any partial resources.
+	 * US-105: Prevents orphaned sessions from accumulating after registration failures.
+	 */
+	private cleanupFailedSession(ws: WebSocket, session: Session): void {
+		// Disconnect any updates client that was connected
+		if (session.updatesClient) {
+			try {
+				session.updatesClient.disconnect();
+			} catch {
+				// Ignore disconnect errors
+			}
+		}
+		// Remove from both maps
+		this.byPublicKey.delete(session.publicKeyHex);
+		this.sessions.delete(ws);
+		logDebug(`Cleaned up failed session: ${session.playerName}`);
 	}
 
 	/**

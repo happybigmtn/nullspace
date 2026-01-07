@@ -106,8 +106,8 @@ describe('SessionManager', () => {
     });
   });
 
-  describe('Session Cleanup on initializePlayer Failure', () => {
-    it('should remove session from maps when initializePlayer fails completely', async () => {
+  describe('Session Cleanup on initializePlayer Failure (US-105)', () => {
+    it('should remove session from maps when registration rejected by backend', async () => {
       // Create a submit client that rejects all submissions
       const failingSubmitClient = createMockSubmitClient({
         submitResult: { accepted: false, error: 'Backend unavailable' },
@@ -121,19 +121,17 @@ describe('SessionManager', () => {
 
       const ws = new MockWebSocket() as unknown as import('ws').WebSocket;
 
-      // Session should still be created, but unregistered
-      const session = await failingManager.createSession(ws, {}, '127.0.0.1');
+      // US-105: createSession should throw when registration fails
+      await expect(
+        failingManager.createSession(ws, {}, '127.0.0.1')
+      ).rejects.toThrow(/Registration failed/);
 
-      // Session is returned but registration failed
-      expect(session.registered).toBe(false);
-      expect(session.hasBalance).toBe(false);
-
-      // Session should still be tracked (current behavior - see note below)
-      // NOTE: This test documents current behavior. The fix may change this.
-      expect(failingManager.getSessionCount()).toBe(1);
+      // Session should be cleaned up from both maps - no orphans
+      expect(failingManager.getSessionCount()).toBe(0);
+      expect(failingManager.getSession(ws)).toBeUndefined();
     });
 
-    it('should mark session as unregistered when backend rejects', async () => {
+    it('should remove session from byPublicKey map on registration failure', async () => {
       const failingSubmitClient = createMockSubmitClient({
         submitResult: { accepted: false, error: 'Invalid signature' },
       });
@@ -145,10 +143,41 @@ describe('SessionManager', () => {
       );
 
       const ws = new MockWebSocket() as unknown as import('ws').WebSocket;
-      const session = await failingManager.createSession(ws, {}, '127.0.0.1');
 
-      expect(session.registered).toBe(false);
-      expect(session.hasBalance).toBe(false);
+      // Should throw - registration failed
+      await expect(
+        failingManager.createSession(ws, {}, '127.0.0.1')
+      ).rejects.toThrow(/Registration failed/);
+
+      // Both maps should be empty
+      expect(failingManager.getSessionCount()).toBe(0);
+      expect(failingManager.getAllSessions()).toHaveLength(0);
+    });
+
+    it('should not leave orphaned sessions after multiple failed registrations', async () => {
+      const failingSubmitClient = createMockSubmitClient({
+        submitResult: { accepted: false, error: 'Service unavailable' },
+      });
+      const failingManager = new SessionManager(
+        failingSubmitClient,
+        'http://localhost:8080',
+        nonceManager,
+        'http://localhost:9010'
+      );
+
+      // Attempt to create multiple sessions that all fail
+      for (let i = 0; i < 5; i++) {
+        const ws = new MockWebSocket() as unknown as import('ws').WebSocket;
+        try {
+          await failingManager.createSession(ws, {}, `192.168.1.${i}`);
+        } catch {
+          // Expected to throw
+        }
+      }
+
+      // No orphaned sessions should accumulate
+      expect(failingManager.getSessionCount()).toBe(0);
+      expect(failingManager.getAllSessions()).toHaveLength(0);
     });
   });
 
