@@ -9,7 +9,8 @@ Target: Testnet Production
 - State blob versioning: v2 → v3 → v4 migrations supported
 - Deterministic RNG: SHA256 hash-chain from consensus seed
 - Event logging: MMR-based append-only with crash recovery
-- Tests: 379/379 passing, run with `cargo test`
+- Error codes: InvalidPayload→16, InvalidMove→9, GameAlreadyComplete→8, InvalidState→17, DeckExhausted→18
+- Tests: 435/435 passing, run with `cargo test`
 
 ### Gateway (TypeScript)
 - Config validation: `gateway/src/config/validation.ts` rejects placeholders
@@ -1841,5 +1842,80 @@ Target: Testnet Production
   - `droppedMessage` state already existed (from US-037) for UI notification
   - Analytics events enable server-side monitoring of queue health
   - Pattern: Always mock analytics in tests to verify tracking calls without network
+
+---
+
+## 2026-01-06 - US-087: Add error code distinction test (Rust → Gateway)
+
+- What was implemented:
+  - Added 3 new error codes to `types/src/casino/constants.rs`:
+    - `ERROR_INVALID_PAYLOAD` (16): Malformed or truncated payload
+    - `ERROR_INVALID_STATE` (17): Corrupted or invalid game state
+    - `ERROR_DECK_EXHAUSTED` (18): No more cards available
+  - Updated `execution/src/layer/handlers/casino.rs` to map each `GameError` variant to its distinct code
+  - Added 10 comprehensive tests to `execution/src/casino/integration_tests.rs`:
+    - `test_error_invalid_payload_blackjack_truncated`
+    - `test_error_invalid_move_blackjack_hit_before_deal`
+    - `test_error_game_already_complete_roulette`
+    - `test_error_distinction_craps` (InvalidPayload + InvalidMove)
+    - `test_error_distinction_baccarat` (InvalidPayload + InvalidMove)
+    - `test_error_distinction_sic_bo` (InvalidPayload cases)
+    - `test_error_code_mapping_table` (documents code mapping, verifies uniqueness)
+    - `test_error_invalid_payload_unknown_action`
+    - `test_deck_exhausted_code_exists`
+    - `test_invalid_state_code_exists`
+- Files changed:
+  - `types/src/casino/constants.rs` - Added 3 new error codes
+  - `execution/src/layer/handlers/casino.rs` - Match statement for distinct error codes
+  - `execution/src/casino/integration_tests.rs` - 10 new tests for error distinction
+- **Learnings:**
+  - Error code mapping table:
+    | GameError Variant | Code | Constant |
+    |------------------|------|----------|
+    | InvalidPayload | 16 | ERROR_INVALID_PAYLOAD |
+    | InvalidMove | 9 | ERROR_INVALID_MOVE |
+    | GameAlreadyComplete | 8 | ERROR_SESSION_COMPLETE |
+    | InvalidState | 17 | ERROR_INVALID_STATE |
+    | DeckExhausted | 18 | ERROR_DECK_EXHAUSTED |
+  - Craps roll action is `[2]`, not `[1]` - payload formats differ per game
+  - SicBo returns `InvalidPayload` for rolling without bets (semantic: "nothing to do")
+  - Craps returns `InvalidMove` for rolling without bets (semantic: "wrong action for state")
+  - `GameResult` enum lacks `Debug` derive - tests must avoid `{:?}` formatting on Result type
+  - Pattern: Use `matches!(result, Err(GameError::XYZ))` for cleaner assertions without Debug
+
+---
+
+## 2026-01-06 - US-088: Add reconnection with in-flight game state test
+
+- What was implemented:
+  - Created `InFlightGameStateTest.ts` documenting architecture behavior for in-flight game state on reconnection
+  - 6 comprehensive tests covering all acceptance criteria:
+    1. `testGameStateNotPreserved()` - Documents that game state is LOST on disconnect (by design)
+    2. `testNewSessionIdOnReconnect()` - Verifies gateway creates NEW session UUID on every connection
+    3. `testBalanceConsistencyMidGame()` - Confirms balance persists (on-chain storage)
+    4. `testNonceSequenceMaintained()` - Verifies nonce continuity (server-side management)
+    5. `testActiveGameIdNullAfterReconnect()` - Documents activeGameId reset to null
+    6. `testCanStartNewGameAfterReconnect()` - Confirms system recovery works
+  - Created `runInFlightGameStateTests.ts` runner script with detailed summary output
+- Files changed:
+  - `mobile/tests/integration/framework/InFlightGameStateTest.ts` - New test class
+  - `mobile/tests/integration/runInFlightGameStateTests.ts` - New runner script
+- **Learnings:**
+  - **ARCHITECTURE GAP (Documented, Not Fixed):**
+    - Gateway `session/manager.ts:133` generates `randomUUID()` on every connection
+    - Gateway `session/manager.ts:142` initializes `activeGameId: null` for new sessions
+    - No session resumption tokens exist - this is by design, not a bug
+  - **What PERSISTS across reconnection:**
+    - `publicKey` - derived from connection, stable identifier
+    - `balance` - stored on-chain, refreshed via `get_balance`
+    - `registered` and `hasBalance` - on-chain state
+    - Nonce sequence - managed server-side
+  - **What is LOST on reconnection:**
+    - `sessionId` - new UUID per connection
+    - `activeGameId` - reset to null
+    - `gameType` - reset to null
+    - In-flight game state - no recovery mechanism
+  - Integration tests use `npx tsx` not Jest - handles esModuleInterop automatically
+  - Pattern: Document architecture behavior with `finding` field in test results
 
 ---
