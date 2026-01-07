@@ -2,9 +2,9 @@
  * Lobby Screen - Jony Ive Redesigned
  * Game selection with balance display and minimal navigation
  */
-import { View, Text, StyleSheet, FlatList, Pressable, ListRenderItem, useWindowDimensions, Linking, Share } from 'react-native';
-import { useCallback, useEffect, useState } from 'react';
-import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
+import { View, Text, StyleSheet, FlatList, Pressable, ListRenderItem, useWindowDimensions, Linking, Share, RefreshControl } from 'react-native';
+import { useCallback, useEffect, useState, useRef } from 'react';
+import Animated, { FadeIn, FadeInUp, FadeInDown, useSharedValue, useAnimatedStyle, withSpring, withSequence, runOnJS } from 'react-native-reanimated';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS, GAME_COLORS } from '../constants/theme';
 import { haptics } from '../services/haptics';
 import { initializeNotifications, hasPlayedFirstGame, markFirstGamePlayed } from '../services';
@@ -62,6 +62,12 @@ export function LobbyScreen({ navigation }: LobbyScreenProps) {
   const [referralSummary, setReferralSummary] = useState<ReferralSummary | null>(null);
   const [referralError, setReferralError] = useState<string | null>(null);
   const [referralLoading, setReferralLoading] = useState(false);
+
+  // US-137: Pull-to-refresh state
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
+  const refreshFadeValue = useSharedValue(0);
+
   const faucetDisabled = faucetStatus === 'pending';
   const balanceLabel = balanceReady ? `$${balance.toLocaleString()}` : '...';
   const shortKey = publicKey ? `${publicKey.slice(0, 6)}...${publicKey.slice(-4)}` : 'Not connected';
@@ -170,6 +176,60 @@ export function LobbyScreen({ navigation }: LobbyScreenProps) {
     navigation.navigate('Game', { gameId });
   }, [navigation]);
 
+  /**
+   * US-137: Pull-to-refresh handler with haptic feedback
+   * Refreshes league data, referral summary, and triggers content fade-in
+   */
+  const handleRefresh = useCallback(async () => {
+    // Haptic feedback at refresh start
+    haptics.selectionChange();
+    setRefreshing(true);
+
+    // Prepare fade-in animation
+    refreshFadeValue.value = 0;
+
+    try {
+      // Re-fetch league data
+      if (opsBase) {
+        const leagueUrl = `${stripTrailingSlash(opsBase)}/api/ops/league`;
+        const leagueResp = await fetch(leagueUrl);
+        if (leagueResp.ok) {
+          const data = await leagueResp.json();
+          setLeagueEntries(data.entries ?? []);
+          setLeagueError(null);
+        }
+
+        // Re-fetch referral data
+        if (publicKey) {
+          const referralUrl = `${stripTrailingSlash(opsBase)}/api/ops/referrals/${publicKey}`;
+          const referralResp = await fetch(referralUrl);
+          if (referralResp.ok) {
+            const data = await referralResp.json();
+            setReferralSummary(data);
+            setReferralError(null);
+          }
+        }
+      }
+
+      // Update timestamp
+      setLastRefreshed(new Date());
+
+      // Trigger content fade-in animation
+      refreshFadeValue.value = withSequence(
+        withSpring(0.5, { damping: 15 }),
+        withSpring(1, { damping: 15 })
+      );
+
+      // Success haptic
+      haptics.win();
+    } catch {
+      // Silently fail - network issues shouldn't block UI
+      haptics.error();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [opsBase, publicKey, refreshFadeValue]);
+
   const handleClaimBonus = useCallback(() => {
     if (faucetDisabled) return;
     requestFaucet();
@@ -222,11 +282,28 @@ export function LobbyScreen({ navigation }: LobbyScreenProps) {
     <Text style={styles.sectionTitle}>Games</Text>
   ), []);
 
+  /** Format last refresh timestamp */
+  const formatLastRefreshed = useCallback((date: Date | null): string => {
+    if (!date) return '';
+    const now = new Date();
+    const diff = Math.floor((now.getTime() - date.getTime()) / 1000);
+    if (diff < 60) return 'Updated just now';
+    if (diff < 3600) return `Updated ${Math.floor(diff / 60)}m ago`;
+    return `Updated ${Math.floor(diff / 3600)}h ago`;
+  }, []);
+
   const ListFooter = useCallback(() => (
     <View style={styles.footer}>
       <Text style={styles.footerText}>Provably Fair • On-Chain</Text>
+      {lastRefreshed && (
+        <Animated.View entering={FadeInDown.delay(200)}>
+          <Text style={styles.lastRefreshedText}>
+            {formatLastRefreshed(lastRefreshed)}
+          </Text>
+        </Animated.View>
+      )}
     </View>
-  ), []);
+  ), [lastRefreshed, formatLastRefreshed]);
 
   return (
     <View style={styles.container}>
@@ -357,6 +434,15 @@ export function LobbyScreen({ navigation }: LobbyScreenProps) {
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={ListHeader}
         ListFooterComponent={ListFooter}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={COLORS.primary}
+            colors={[COLORS.primary]}
+            progressBackgroundColor={COLORS.surface}
+          />
+        }
       />
     </View>
   );
@@ -612,5 +698,11 @@ const styles = StyleSheet.create({
   footerText: {
     color: COLORS.textMuted,
     ...TYPOGRAPHY.caption,
+  },
+  lastRefreshedText: {
+    color: COLORS.textMuted,
+    ...TYPOGRAPHY.caption,
+    marginTop: SPACING.xs,
+    opacity: 0.7,
   },
 });
