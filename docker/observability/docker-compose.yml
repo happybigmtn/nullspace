@@ -24,6 +24,9 @@ services:
 
   alertmanager:
     image: prom/alertmanager:v0.27.0
+    environment:
+      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
+      PAGERDUTY_SERVICE_KEY: ${PAGERDUTY_SERVICE_KEY:-}
     ports:
       - "9093:9093"
     volumes:
