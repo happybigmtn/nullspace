@@ -1072,6 +1072,102 @@ body.fonts-loaded {
   box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.1);
 }
 
+/* Premium Loading Screen */
+@keyframes spinnerRotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes spinnerGradient {
+  0%, 100% {
+    background: conic-gradient(
+      from 0deg,
+      transparent 0deg,
+      var(--action-primary) 60deg,
+      var(--action-success) 120deg,
+      transparent 180deg
+    );
+  }
+  50% {
+    background: conic-gradient(
+      from 180deg,
+      transparent 0deg,
+      var(--action-success) 60deg,
+      var(--action-primary) 120deg,
+      transparent 180deg
+    );
+  }
+}
+
+@keyframes glowPulseSpinner {
+  0%, 100% {
+    box-shadow: 0 0 20px var(--action-primary),
+                0 0 40px rgba(59, 130, 246, 0.3),
+                0 0 60px rgba(59, 130, 246, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 30px var(--action-primary),
+                0 0 60px rgba(59, 130, 246, 0.4),
+                0 0 80px rgba(59, 130, 246, 0.2);
+  }
+}
+
+@keyframes dotTrail {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  20% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  80% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+}
+
+@keyframes backgroundShift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.loading-spinner-premium {
+  animation: spinnerRotate 1.5s linear infinite;
+}
+
+.loading-spinner-glow {
+  animation: glowPulseSpinner 2s ease-in-out infinite;
+}
+
+.loading-bg-shift {
+  background: linear-gradient(
+    135deg,
+    var(--mode-surface) 0%,
+    color-mix(in srgb, var(--mode-surface) 95%, var(--action-primary)) 50%,
+    var(--mode-surface) 100%
+  );
+  background-size: 200% 200%;
+  animation: backgroundShift 8s ease infinite;
+}
+
+.loading-dot {
+  animation: dotTrail 1.5s ease-in-out infinite;
+}
+
+.loading-dot:nth-child(2) { animation-delay: 0.15s; }
+.loading-dot:nth-child(3) { animation-delay: 0.3s; }
+.loading-dot:nth-child(4) { animation-delay: 0.45s; }
+.loading-dot:nth-child(5) { animation-delay: 0.6s; }
+
 /* Confetti Burst (CSS Only) */
 @keyframes confetti-burst {
   0% { transform: translateY(0) scale(1); opacity: 1; }
