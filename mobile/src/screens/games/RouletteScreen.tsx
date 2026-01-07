@@ -19,7 +19,19 @@ import { GameLayout } from '../../components/game';
 import { TutorialOverlay, PrimaryButton } from '../../components/ui';
 import { haptics } from '../../services/haptics';
 import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useModalBackHandler, useBetSubmission } from '../../hooks';
-import { COLORS, SPACING, TYPOGRAPHY, RADIUS, GAME_DETAIL_COLORS, SPRING } from '../../constants/theme';
+import {
+  COLORS,
+  SPACING,
+  TYPOGRAPHY,
+  RADIUS,
+  GAME_DETAIL_COLORS,
+  SPRING,
+  MESSAGE_STYLES,
+  BET_STYLES,
+  ACTION_STYLES,
+  DRAWER_STYLES,
+  INTERACTIVE_STYLES,
+} from '../../constants/theme';
 import { parseNumeric } from '../../utils';
 import { useGameStore } from '../../stores/gameStore';
 import type { ChipValue, TutorialStep, RouletteBetType } from '../../types';
@@ -299,9 +311,9 @@ export function RouletteScreen() {
         headerRightContent={
           <Pressable
             onPress={() => setShowAdvanced(true)}
-            style={styles.moreBetsButton}
+            style={INTERACTIVE_STYLES.moreBetsButton}
           >
-            <Text style={styles.moreBetsText}>Bets ▾</Text>
+            <Text style={INTERACTIVE_STYLES.moreBetsText}>Bets ▾</Text>
           </Pressable>
         }
       >
@@ -321,11 +333,11 @@ export function RouletteScreen() {
       </View>
 
       {/* Message */}
-      <Text style={styles.message}>{state.message}</Text>
+      <Text style={MESSAGE_STYLES.message}>{state.message}</Text>
 
       {/* Win Amount */}
       {state.winAmount > 0 && (
-        <Text style={styles.winAmount}>+${state.winAmount}</Text>
+        <Text style={BET_STYLES.winAmount}>+${state.winAmount}</Text>
       )}
 
       {/* Quick Bets */}
@@ -350,14 +362,14 @@ export function RouletteScreen() {
 
       {/* Bet Summary */}
       {totalBet > 0 && (
-        <View style={styles.betSummary}>
-          <Text style={styles.betLabel}>Total Bet</Text>
-          <Text style={styles.betAmount}>${totalBet}</Text>
+        <View style={BET_STYLES.betContainer}>
+          <Text style={BET_STYLES.betLabel}>Total Bet</Text>
+          <Text style={BET_STYLES.betAmount}>${totalBet}</Text>
         </View>
       )}
 
       {/* Actions */}
-      <View style={styles.actions}>
+      <View style={ACTION_STYLES.actionsCentered}>
         {state.phase === 'betting' && (
           <PrimaryButton
             label="SPIN"
@@ -390,66 +402,66 @@ export function RouletteScreen() {
 
       {/* Advanced Bets Drawer */}
       <Modal visible={showAdvanced} transparent animationType="slide">
-        <View style={styles.drawerOverlay}>
+        <View style={DRAWER_STYLES.drawerOverlay}>
           <Animated.View
             entering={drawerEnter}
             exiting={drawerExit}
-            style={styles.drawer}
+            style={DRAWER_STYLES.drawer}
           >
-            <View style={styles.drawerHeader}>
-              <Pressable onPress={() => setShowAdvanced(false)} style={styles.drawerHandle}>
-                <Text style={styles.drawerHandleText}>Bets ▾</Text>
+            <View style={DRAWER_STYLES.drawerHeader}>
+              <Pressable onPress={() => setShowAdvanced(false)} style={DRAWER_STYLES.drawerHandle}>
+                <Text style={DRAWER_STYLES.drawerHandleText}>Bets ▾</Text>
               </Pressable>
             </View>
 
             {/* Dozens */}
-            <Text style={styles.sectionTitle}>Dozens (2:1)</Text>
-            <View style={styles.betRow}>
+            <Text style={DRAWER_STYLES.sectionTitle}>Dozens (2:1)</Text>
+            <View style={DRAWER_STYLES.betRow}>
               <Pressable
-                style={styles.advancedBet}
+                style={DRAWER_STYLES.advancedBet}
                 onPress={() => addBet('DOZEN_1')}
               >
-                <Text style={styles.advancedBetText}>1-12</Text>
+                <Text style={DRAWER_STYLES.advancedBetText}>1-12</Text>
               </Pressable>
               <Pressable
-                style={styles.advancedBet}
+                style={DRAWER_STYLES.advancedBet}
                 onPress={() => addBet('DOZEN_2')}
               >
-                <Text style={styles.advancedBetText}>13-24</Text>
+                <Text style={DRAWER_STYLES.advancedBetText}>13-24</Text>
               </Pressable>
               <Pressable
-                style={styles.advancedBet}
+                style={DRAWER_STYLES.advancedBet}
                 onPress={() => addBet('DOZEN_3')}
               >
-                <Text style={styles.advancedBetText}>25-36</Text>
+                <Text style={DRAWER_STYLES.advancedBetText}>25-36</Text>
               </Pressable>
             </View>
 
             {/* Columns */}
-            <Text style={styles.sectionTitle}>Columns (2:1)</Text>
-            <View style={styles.betRow}>
+            <Text style={DRAWER_STYLES.sectionTitle}>Columns (2:1)</Text>
+            <View style={DRAWER_STYLES.betRow}>
               <Pressable
-                style={styles.advancedBet}
+                style={DRAWER_STYLES.advancedBet}
                 onPress={() => addBet('COL_1')}
               >
-                <Text style={styles.advancedBetText}>Col 1</Text>
+                <Text style={DRAWER_STYLES.advancedBetText}>Col 1</Text>
               </Pressable>
               <Pressable
-                style={styles.advancedBet}
+                style={DRAWER_STYLES.advancedBet}
                 onPress={() => addBet('COL_2')}
               >
-                <Text style={styles.advancedBetText}>Col 2</Text>
+                <Text style={DRAWER_STYLES.advancedBetText}>Col 2</Text>
               </Pressable>
               <Pressable
-                style={styles.advancedBet}
+                style={DRAWER_STYLES.advancedBet}
                 onPress={() => addBet('COL_3')}
               >
-                <Text style={styles.advancedBetText}>Col 3</Text>
+                <Text style={DRAWER_STYLES.advancedBetText}>Col 3</Text>
               </Pressable>
             </View>
 
             {/* Inside Bets */}
-            <Text style={styles.sectionTitle}>Inside Bets</Text>
+            <Text style={DRAWER_STYLES.sectionTitle}>Inside Bets</Text>
             <View style={styles.insideTabs}>
               {(['SPLIT_H', 'SPLIT_V', 'STREET', 'CORNER', 'SIX_LINE'] as InsideBetType[]).map((type) => (
                 <Pressable
@@ -474,7 +486,7 @@ export function RouletteScreen() {
             </View>
 
             {/* Straight Numbers */}
-            <Text style={styles.sectionTitle}>Straight Up (35:1)</Text>
+            <Text style={DRAWER_STYLES.sectionTitle}>Straight Up (35:1)</Text>
             <View style={styles.numberGrid}>
               {[0, ...Array.from({ length: 36 }, (_, i) => i + 1)].map((num) => (
                 <Pressable
@@ -504,17 +516,9 @@ export function RouletteScreen() {
   );
 }
 
+// Shared styles: MESSAGE_STYLES, BET_STYLES, ACTION_STYLES, DRAWER_STYLES, INTERACTIVE_STYLES
 const styles = StyleSheet.create({
-  moreBetsButton: {
-    paddingVertical: SPACING.xs,
-    paddingHorizontal: SPACING.sm,
-    backgroundColor: COLORS.surfaceElevated,
-    borderRadius: RADIUS.md,
-  },
-  moreBetsText: {
-    color: COLORS.textSecondary,
-    ...TYPOGRAPHY.bodySmall,
-  },
+  // Game-specific styles only
   wheelContainer: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -544,18 +548,6 @@ const styles = StyleSheet.create({
   },
   wheelPlaceholder: {
     fontSize: 48,
-  },
-  message: {
-    color: COLORS.textSecondary,
-    ...TYPOGRAPHY.h3,
-    textAlign: 'center',
-    marginBottom: SPACING.sm,
-  },
-  winAmount: {
-    color: COLORS.success,
-    ...TYPOGRAPHY.h2,
-    textAlign: 'center',
-    marginBottom: SPACING.md,
   },
   quickBets: {
     flexDirection: 'row',
@@ -591,63 +583,8 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     ...TYPOGRAPHY.label,
   },
-  betSummary: {
-    alignItems: 'center',
-    marginBottom: SPACING.md,
-  },
-  betLabel: {
-    color: COLORS.textMuted,
-    ...TYPOGRAPHY.caption,
-  },
-  betAmount: {
-    color: COLORS.gold,
-    ...TYPOGRAPHY.h2,
-  },
-  actions: {
-    alignItems: 'center',
-    marginBottom: SPACING.md,
-  },
-  drawerOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
-  drawer: {
-    backgroundColor: COLORS.surface,
-    borderTopLeftRadius: RADIUS.xl,
-    borderTopRightRadius: RADIUS.xl,
-    padding: SPACING.md,
-    maxHeight: '80%',
-  },
-  drawerHeader: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: SPACING.md,
-  },
-  drawerHandle: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: SPACING.xs,
-    paddingHorizontal: SPACING.md,
-    borderRadius: RADIUS.full,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.surfaceElevated,
-  },
-  drawerHandleText: {
-    color: COLORS.textSecondary,
-    ...TYPOGRAPHY.bodySmall,
-  },
-  sectionTitle: {
-    color: COLORS.textSecondary,
-    ...TYPOGRAPHY.label,
-    marginTop: SPACING.md,
-    marginBottom: SPACING.sm,
-  },
-  betRow: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-  },
+  // Note: betSummary, betLabel, betAmount, actions use shared BET_STYLES and ACTION_STYLES
+  // drawerOverlay, drawer, drawerHeader, drawerHandle, drawerHandleText, sectionTitle, betRow use DRAWER_STYLES
   insideTabs: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -670,17 +607,7 @@ const styles = StyleSheet.create({
     ...TYPOGRAPHY.caption,
     textTransform: 'uppercase',
   },
-  advancedBet: {
-    flex: 1,
-    paddingVertical: SPACING.sm,
-    backgroundColor: COLORS.surfaceElevated,
-    borderRadius: RADIUS.md,
-    alignItems: 'center',
-  },
-  advancedBetText: {
-    color: COLORS.textPrimary,
-    ...TYPOGRAPHY.label,
-  },
+  // advancedBet and advancedBetText use DRAWER_STYLES.advancedBet/advancedBetText
   numberGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',

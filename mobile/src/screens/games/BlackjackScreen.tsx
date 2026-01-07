@@ -11,7 +11,18 @@ import { GameLayout } from '../../components/game';
 import { TutorialOverlay, PrimaryButton } from '../../components/ui';
 import { haptics } from '../../services/haptics';
 import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useChipBetting, useBetSubmission } from '../../hooks';
-import { COLORS, SPACING, TYPOGRAPHY, SPRING, RADIUS } from '../../constants/theme';
+import {
+  COLORS,
+  SPACING,
+  TYPOGRAPHY,
+  SPRING,
+  RADIUS,
+  GAME_LAYOUT_STYLES,
+  MESSAGE_STYLES,
+  BET_STYLES,
+  ACTION_STYLES,
+  HAND_STYLES,
+} from '../../constants/theme';
 import { decodeCardList, decodeStateBytes, parseBlackjackState } from '../../utils';
 import type { ChipValue, TutorialStep, Card as CardType } from '../../types';
 import type { GameMessage } from '@nullspace/protocol/mobile';
@@ -309,18 +320,18 @@ export function BlackjackScreen() {
         connectionStatus={connectionStatusProps}
       >
         {/* Game Area */}
-        <View style={styles.gameArea}>
+        <View style={GAME_LAYOUT_STYLES.gameArea}>
           {/* Dealer's Hand */}
-          <View style={styles.handContainer}>
-            <Text style={styles.handLabel}>
+          <View style={GAME_LAYOUT_STYLES.handContainer}>
+            <Text style={HAND_STYLES.handLabel}>
               Dealer {state.phase === 'result' && `(${state.dealerTotal})`}
             </Text>
-            <View style={styles.cards}>
+            <View style={GAME_LAYOUT_STYLES.cards}>
               {state.dealerCards.map((card, i) => (
                 <Animated.View
                   key={i}
                   entering={cardEnter.delay(i * 100)}
-                  style={[styles.cardWrapper, { marginLeft: i > 0 ? -40 : 0 }]}
+                  style={[GAME_LAYOUT_STYLES.cardWrapper, { marginLeft: i > 0 ? -40 : 0 }]}
                 >
                   <Card
                     suit={card.suit}
@@ -335,28 +346,28 @@ export function BlackjackScreen() {
           {/* Message */}
           <Text
             style={[
-              styles.message,
-              state.lastResult === 'win' && styles.messageWin,
-              state.lastResult === 'blackjack' && styles.messageBlackjack,
-              state.lastResult === 'loss' && styles.messageLoss,
-              state.lastResult === 'push' && styles.messagePush,
-              state.phase === 'error' && styles.messageError,
+              MESSAGE_STYLES.message,
+              state.lastResult === 'win' && MESSAGE_STYLES.messageWin,
+              state.lastResult === 'blackjack' && MESSAGE_STYLES.messageBlackjack,
+              state.lastResult === 'loss' && MESSAGE_STYLES.messageLoss,
+              state.lastResult === 'push' && MESSAGE_STYLES.messagePush,
+              state.phase === 'error' && MESSAGE_STYLES.messageError,
             ]}
           >
             {state.message}
           </Text>
 
           {/* Player's Hand */}
-          <View style={styles.handContainer}>
-            <Text style={styles.handLabel}>
+          <View style={GAME_LAYOUT_STYLES.handContainer}>
+            <Text style={HAND_STYLES.handLabel}>
               You ({state.playerTotal})
             </Text>
-            <View style={styles.cards}>
+            <View style={GAME_LAYOUT_STYLES.cards}>
               {state.playerCards.map((card, i) => (
                 <Animated.View
                   key={i}
                   entering={cardEnter.delay(i * 100)}
-                  style={[styles.cardWrapper, { marginLeft: i > 0 ? -40 : 0 }]}
+                  style={[GAME_LAYOUT_STYLES.cardWrapper, { marginLeft: i > 0 ? -40 : 0 }]}
                 >
                   <Card suit={card.suit} rank={card.rank} faceUp={true} />
                 </Animated.View>
@@ -366,9 +377,9 @@ export function BlackjackScreen() {
 
           {/* Bet Display */}
           {bet > 0 && (
-            <View style={styles.betContainer}>
-              <Text style={styles.betLabel}>Bet</Text>
-              <Text style={styles.betAmount}>${bet}</Text>
+            <View style={BET_STYLES.betContainer}>
+              <Text style={BET_STYLES.betLabel}>Bet</Text>
+              <Text style={BET_STYLES.betAmount}>${bet}</Text>
             </View>
           )}
 
@@ -389,7 +400,7 @@ export function BlackjackScreen() {
         </View>
 
         {/* Actions */}
-        <View style={styles.actions}>
+        <View style={ACTION_STYLES.actions}>
           {state.phase === 'betting' && (
             <PrimaryButton
               label="DEAL"
@@ -474,61 +485,7 @@ export function BlackjackScreen() {
 }
 
 const styles = StyleSheet.create({
-  gameArea: {
-    flex: 1,
-    justifyContent: 'space-around',
-    paddingHorizontal: SPACING.md,
-  },
-  handContainer: {
-    alignItems: 'center',
-  },
-  handLabel: {
-    color: COLORS.textSecondary,
-    ...TYPOGRAPHY.label,
-    marginBottom: SPACING.sm,
-  },
-  cards: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  cardWrapper: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  message: {
-    color: COLORS.textSecondary,
-    ...TYPOGRAPHY.h3,
-    textAlign: 'center',
-  },
-  messageWin: {
-    color: COLORS.success,
-  },
-  messageBlackjack: {
-    color: COLORS.gold,
-  },
-  messageLoss: {
-    color: COLORS.error,
-  },
-  messagePush: {
-    color: COLORS.warning,
-  },
-  messageError: {
-    color: COLORS.error,
-  },
-  betContainer: {
-    alignItems: 'center',
-  },
-  betLabel: {
-    color: COLORS.textMuted,
-    ...TYPOGRAPHY.caption,
-  },
-  betAmount: {
-    color: COLORS.gold,
-    ...TYPOGRAPHY.h2,
-  },
+  // Game-specific styles only - shared styles come from theme primitives
   sideBetToggle: {
     alignSelf: 'center',
     marginTop: SPACING.sm,
@@ -551,13 +508,5 @@ const styles = StyleSheet.create({
   sideBetAmount: {
     color: COLORS.textPrimary,
     ...TYPOGRAPHY.caption,
-  },
-  actions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-    marginBottom: SPACING.md,
   },
 });

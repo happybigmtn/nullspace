@@ -271,8 +271,8 @@
 				"Test theme changes propagate to all screens"
 			],
 			"priority": 25,
-			"passes": false,
-			"notes": "CODE-QUALITY (agent-verified): ~175 LOC duplication across 10 game screen stylesheets. Same colors, dimensions repeated."
+			"passes": true,
+			"notes": "CODE-QUALITY: Added GAME_LAYOUT_STYLES, MESSAGE_STYLES, BET_STYLES, ACTION_STYLES, DRAWER_STYLES, HAND_STYLES, INTERACTIVE_STYLES, CHIP_AREA_STYLES primitives to theme.ts. Updated BlackjackScreen, HiLoScreen, RouletteScreen to use shared primitives."
 		},
 		{
 			"id": "US-103",

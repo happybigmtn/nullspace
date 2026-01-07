@@ -5,7 +5,7 @@
  * Imports raw tokens from @nullspace/design-tokens and applies platform-specific transforms
  */
 
-import { Platform } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 import { CHIP_VALUES } from '@nullspace/constants/chips';
 import {
   TITANIUM,
@@ -197,3 +197,280 @@ export const GAME_DETAIL_COLORS = {
     field: '#FFCC00',
   },
 } as const;
+
+/**
+ * Reusable style primitives for game screens
+ * Consolidates ~175 LOC of duplication across 10 game screen stylesheets
+ */
+
+/**
+ * Common game area layouts
+ */
+export const GAME_LAYOUT_STYLES = StyleSheet.create({
+  /** Main game area container - flex 1, centered content */
+  gameArea: {
+    flex: 1,
+    justifyContent: 'space-around',
+    paddingHorizontal: SPACING_SEMANTIC.md,
+  },
+  /** Variant: centered content (for HiLo, VideoPoker) */
+  gameAreaCentered: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: SPACING_SEMANTIC.md,
+  },
+  /** Hand container for card games */
+  handContainer: {
+    alignItems: 'center',
+  },
+  /** Card wrapper with shadow - use for individual cards */
+  cardWrapper: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  /** Cards row container */
+  cards: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  /** Cards row with gap (for HiLo style layouts) */
+  cardsWithGap: {
+    flexDirection: 'row',
+    gap: SPACING_SEMANTIC.lg,
+    marginBottom: SPACING_SEMANTIC.lg,
+  },
+});
+
+/**
+ * Message styles - status text shown during gameplay
+ */
+export const MESSAGE_STYLES = StyleSheet.create({
+  /** Base message style */
+  message: {
+    color: TITANIUM[500],
+    fontSize: 20,
+    fontWeight: '600' as const,
+    textAlign: 'center',
+  },
+  /** Win state */
+  messageWin: {
+    color: ACTION.success,
+  },
+  /** Loss state */
+  messageLoss: {
+    color: ACTION.error,
+  },
+  /** Push/tie state */
+  messagePush: {
+    color: ACTION.warning,
+  },
+  /** Error state */
+  messageError: {
+    color: ACTION.error,
+  },
+  /** Blackjack/special win */
+  messageBlackjack: {
+    color: '#FFCC00',
+  },
+  /** Tie (Baccarat style) */
+  messageTie: {
+    color: '#FFCC00',
+  },
+});
+
+/**
+ * Bet display styles
+ */
+export const BET_STYLES = StyleSheet.create({
+  /** Container for bet amount display */
+  betContainer: {
+    alignItems: 'center',
+  },
+  /** "Bet" or "Total Bet" label */
+  betLabel: {
+    color: TITANIUM[400],
+    fontSize: 12,
+    fontWeight: '400' as const,
+    lineHeight: 16,
+  },
+  /** Bet amount in gold */
+  betAmount: {
+    color: '#FFCC00',
+    fontSize: 24,
+    fontWeight: '600' as const,
+  },
+  /** Win amount display */
+  winAmount: {
+    color: ACTION.success,
+    fontSize: 24,
+    fontWeight: '600' as const,
+    textAlign: 'center',
+    marginBottom: SPACING_SEMANTIC.md,
+  },
+});
+
+/**
+ * Action button container styles
+ */
+export const ACTION_STYLES = StyleSheet.create({
+  /** Row of action buttons */
+  actions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: SPACING_SEMANTIC.sm,
+    paddingHorizontal: SPACING_SEMANTIC.md,
+    marginBottom: SPACING_SEMANTIC.md,
+  },
+  /** Centered single action */
+  actionsCentered: {
+    alignItems: 'center',
+    marginBottom: SPACING_SEMANTIC.md,
+  },
+});
+
+/**
+ * Drawer/modal styles - for advanced bet panels
+ */
+export const DRAWER_STYLES = StyleSheet.create({
+  /** Modal overlay with semi-transparent background */
+  drawerOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  /** Drawer container */
+  drawer: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: TOKEN_RADIUS['2xl'],
+    borderTopRightRadius: TOKEN_RADIUS['2xl'],
+    padding: SPACING_SEMANTIC.md,
+    maxHeight: '80%',
+  },
+  /** Drawer header */
+  drawerHeader: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: SPACING_SEMANTIC.md,
+  },
+  /** Drawer handle/close button */
+  drawerHandle: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING_SEMANTIC.xs,
+    paddingHorizontal: SPACING_SEMANTIC.md,
+    borderRadius: TOKEN_RADIUS.full,
+    borderWidth: 1,
+    borderColor: TITANIUM[200],
+    backgroundColor: '#FFFFFF',
+  },
+  /** Drawer handle text */
+  drawerHandleText: {
+    color: TITANIUM[500],
+    fontSize: 14,
+    fontWeight: '400' as const,
+    lineHeight: 20,
+  },
+  /** Section title in drawer */
+  sectionTitle: {
+    color: TITANIUM[500],
+    fontSize: 10,
+    fontWeight: '700' as const,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    marginTop: SPACING_SEMANTIC.md,
+    marginBottom: SPACING_SEMANTIC.sm,
+  },
+  /** Row of bet options */
+  betRow: {
+    flexDirection: 'row',
+    gap: SPACING_SEMANTIC.sm,
+  },
+  /** Individual advanced bet button */
+  advancedBet: {
+    flex: 1,
+    paddingVertical: SPACING_SEMANTIC.sm,
+    backgroundColor: '#FFFFFF',
+    borderRadius: TOKEN_RADIUS.lg,
+    alignItems: 'center',
+  },
+  /** Advanced bet text */
+  advancedBetText: {
+    color: TITANIUM[900],
+    fontSize: 10,
+    fontWeight: '700' as const,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+  },
+});
+
+/**
+ * Hand label styles - for card games (Blackjack, Baccarat)
+ */
+export const HAND_STYLES = StyleSheet.create({
+  /** Hand label (e.g., "Dealer", "Player") */
+  handLabel: {
+    color: TITANIUM[500],
+    fontSize: 10,
+    fontWeight: '700' as const,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    marginBottom: SPACING_SEMANTIC.sm,
+  },
+  /** Hand total display */
+  handTotal: {
+    color: TITANIUM[900],
+    fontSize: 24,
+    fontWeight: '600' as const,
+  },
+  /** Hand header row (label + total) */
+  handHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING_SEMANTIC.md,
+    marginBottom: SPACING_SEMANTIC.sm,
+  },
+});
+
+/**
+ * Common interactive element styles
+ */
+export const INTERACTIVE_STYLES = StyleSheet.create({
+  /** Pressed state opacity */
+  pressed: {
+    opacity: 0.7,
+  },
+  /** Disabled state opacity */
+  disabled: {
+    opacity: 0.5,
+  },
+  /** "More bets" header button */
+  moreBetsButton: {
+    paddingVertical: SPACING_SEMANTIC.xs,
+    paddingHorizontal: SPACING_SEMANTIC.sm,
+    backgroundColor: '#FFFFFF',
+    borderRadius: TOKEN_RADIUS.lg,
+  },
+  /** More bets button text */
+  moreBetsText: {
+    color: TITANIUM[500],
+    fontSize: 14,
+    fontWeight: '400' as const,
+    lineHeight: 20,
+  },
+});
+
+/**
+ * Chip area styles
+ */
+export const CHIP_AREA_STYLES = StyleSheet.create({
+  /** Container for chip selector + clear button */
+  chipArea: {
+    alignItems: 'center',
+    paddingBottom: SPACING_SEMANTIC.lg,
+  },
+});

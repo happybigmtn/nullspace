@@ -2,7 +2,7 @@
  * Hi-Lo Game Screen - Jony Ive Redesigned
  * Simple binary choice: Higher or Lower
  */
-import { View, Text, StyleSheet, InteractionManager } from 'react-native';
+import { View, Text, InteractionManager } from 'react-native';
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import Animated, { FadeIn, SlideInUp } from 'react-native-reanimated';
 import { Card } from '../../components/casino';
@@ -11,7 +11,14 @@ import { GameLayout } from '../../components/game';
 import { TutorialOverlay, PrimaryButton } from '../../components/ui';
 import { haptics } from '../../services/haptics';
 import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useChipBetting, useBetSubmission } from '../../hooks';
-import { COLORS, SPACING, TYPOGRAPHY, SPRING } from '../../constants/theme';
+import {
+  SPRING,
+  GAME_LAYOUT_STYLES,
+  MESSAGE_STYLES,
+  BET_STYLES,
+  ACTION_STYLES,
+  CHIP_AREA_STYLES,
+} from '../../constants/theme';
 import { decodeCardId, decodeStateBytes, parseHiLoState } from '../../utils';
 import type { ChipValue, TutorialStep, Suit, Rank } from '../../types';
 import type { GameMessage } from '@nullspace/protocol/mobile';
@@ -213,9 +220,9 @@ export function HiLoScreen() {
         connectionStatus={connectionStatusProps}
       >
         {/* Game Area */}
-        <View style={styles.gameArea}>
+        <View style={GAME_LAYOUT_STYLES.gameAreaCentered}>
           {/* Cards Display */}
-          <View style={styles.cardsContainer}>
+          <View style={GAME_LAYOUT_STYLES.cardsWithGap}>
             {state.currentCard && (
               <Animated.View entering={cardEnterFade}>
                 <Card
@@ -241,10 +248,10 @@ export function HiLoScreen() {
           {/* Message */}
           <Text
             style={[
-              styles.message,
-              state.lastResult === 'win' && styles.messageWin,
-              state.lastResult === 'loss' && styles.messageLoss,
-              state.phase === 'error' && styles.messageError,
+              MESSAGE_STYLES.message,
+              state.lastResult === 'win' && MESSAGE_STYLES.messageWin,
+              state.lastResult === 'loss' && MESSAGE_STYLES.messageLoss,
+              state.phase === 'error' && MESSAGE_STYLES.messageError,
             ]}
           >
             {state.message}
@@ -252,15 +259,15 @@ export function HiLoScreen() {
 
           {/* Bet Display */}
           {bet > 0 && (
-            <View style={styles.betContainer}>
-              <Text style={styles.betLabel}>Bet</Text>
-              <Text style={styles.betAmount}>${bet}</Text>
+            <View style={BET_STYLES.betContainer}>
+              <Text style={BET_STYLES.betLabel}>Bet</Text>
+              <Text style={BET_STYLES.betAmount}>${bet}</Text>
             </View>
           )}
         </View>
 
         {/* Actions */}
-        <View style={styles.actions}>
+        <View style={ACTION_STYLES.actions}>
           {state.phase === 'betting' && (
             <>
               <PrimaryButton
@@ -301,7 +308,7 @@ export function HiLoScreen() {
 
         {/* Chip Selector */}
         {state.phase === 'betting' && (
-          <View style={styles.chipArea}>
+          <View style={CHIP_AREA_STYLES.chipArea}>
             {bet > 0 && (
               <PrimaryButton
                 label="CLEAR"
@@ -329,53 +336,5 @@ export function HiLoScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  gameArea: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: SPACING.md,
-  },
-  cardsContainer: {
-    flexDirection: 'row',
-    gap: SPACING.lg,
-    marginBottom: SPACING.lg,
-  },
-  message: {
-    color: COLORS.textSecondary,
-    ...TYPOGRAPHY.h3,
-    textAlign: 'center',
-    marginBottom: SPACING.md,
-  },
-  messageWin: {
-    color: COLORS.success,
-  },
-  messageLoss: {
-    color: COLORS.error,
-  },
-  messageError: {
-    color: COLORS.error,
-  },
-  betContainer: {
-    alignItems: 'center',
-  },
-  betLabel: {
-    color: COLORS.textMuted,
-    ...TYPOGRAPHY.caption,
-  },
-  betAmount: {
-    color: COLORS.gold,
-    ...TYPOGRAPHY.h2,
-  },
-  actions: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: SPACING.md,
-    paddingHorizontal: SPACING.md,
-    marginBottom: SPACING.md,
-  },
-  chipArea: {
-    alignItems: 'center',
-    paddingBottom: SPACING.lg,
-  },
-});
+// All styles now come from shared theme primitives:
+// GAME_LAYOUT_STYLES, MESSAGE_STYLES, BET_STYLES, ACTION_STYLES, CHIP_AREA_STYLES
