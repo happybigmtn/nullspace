@@ -252,6 +252,8 @@ jobs:
       run: cd website && npm ci
     - name: Test compilation
       run: cd website && npm run build
+    - name: Check bundle sizes (US-145)
+      run: cd website && node scripts/check-bundle-sizes.mjs
     - name: Test website
       run: cd website && npm run test
 
