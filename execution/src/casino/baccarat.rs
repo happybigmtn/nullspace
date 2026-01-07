@@ -388,15 +388,15 @@ fn calculate_bet_payout(
                 (0, true) // Push on tie
             } else if outcome.banker_total > outcome.player_total {
                 if outcome.banker_total == 6 {
-                    let winnings = bet
+                    // Banker Six rule: payout is 0.5:1 (half the bet).
+                    // US-104: Guarantee minimum 1-chip payout for winning bets.
+                    // Without this, a 1-chip bet would round to 0 (confusing UX).
+                    let half_payout = bet
                         .amount
                         .saturating_mul(payouts::BANKER_SIX_NUMERATOR)
                         .saturating_div(payouts::BANKER_SIX_DENOMINATOR);
-                    if winnings > 0 {
-                        (winnings as i64, false)
-                    } else {
-                        (0, true) // Effectively a push if winnings round to 0
-                    }
+                    let winnings = half_payout.max(1); // Minimum 1-chip guarantee
+                    (winnings as i64, false)
                 } else {
                     (bet.amount as i64, false) // 1:1 payout
                 }
@@ -1413,51 +1413,50 @@ mod tests {
         assert_eq!(payout, 100);
     }
 
-    /// US-047: Tests banker six rounding behavior for odd bet amounts.
+    /// US-047 / US-104: Tests banker six rounding behavior for odd bet amounts.
     ///
     /// When Banker wins with 6, the payout is 0.5:1 (half the bet).
-    /// For odd amounts, integer division rounds DOWN:
-    /// - amount=1: 1 * 1 / 2 = 0 → treated as push
-    /// - amount=3: 3 * 1 / 2 = 1 → wins 1 chip
-    /// - amount=5: 5 * 1 / 2 = 2 → wins 2 chips
-    /// - amount=7: 7 * 1 / 2 = 3 → wins 3 chips
-    /// - amount=9: 9 * 1 / 2 = 4 → wins 4 chips
-    ///
-    /// This is the documented behavior: odd amounts lose the fractional part.
+    /// For odd amounts, integer division rounds DOWN, but:
+    /// - US-104: Minimum 1-chip payout guarantee prevents 0-chip wins
+    /// - amount=1: floor(1/2) = 0 → guaranteed minimum 1 chip
+    /// - amount=3: floor(3/2) = 1 → wins 1 chip
+    /// - amount=5: floor(5/2) = 2 → wins 2 chips
+    /// - amount=7: floor(7/2) = 3 → wins 3 chips
+    /// - amount=9: floor(9/2) = 4 → wins 4 chips
     #[test]
     fn test_banker_six_rounding_odd_amounts() {
         // Banker wins with 6 (player has 4)
         let outcome = make_outcome(4, 6, false, false, false, false, 2, 2);
 
-        // amount=1: 1/2 = 0, treated as push
+        // amount=1: floor(1/2) = 0, but minimum guarantee gives 1 chip
         let bet = BaccaratBet { bet_type: BetType::Banker, amount: 1 };
         let (payout, is_push) = calculate_bet_payout(&bet, &outcome);
-        assert!(is_push, "amount=1 should be treated as push when winnings round to 0");
-        assert_eq!(payout, 0, "amount=1: payout should be 0 (push)");
+        assert!(!is_push, "amount=1 should NOT be a push (minimum 1-chip guarantee)");
+        assert_eq!(payout, 1, "amount=1: minimum 1-chip payout guaranteed");
 
-        // amount=3: 3/2 = 1
+        // amount=3: floor(3/2) = 1
         let bet = BaccaratBet { bet_type: BetType::Banker, amount: 3 };
         let (payout, is_push) = calculate_bet_payout(&bet, &outcome);
         assert!(!is_push, "amount=3 should not be a push");
-        assert_eq!(payout, 1, "amount=3: 3/2 = 1");
+        assert_eq!(payout, 1, "amount=3: floor(3/2) = 1");
 
-        // amount=5: 5/2 = 2
+        // amount=5: floor(5/2) = 2
         let bet = BaccaratBet { bet_type: BetType::Banker, amount: 5 };
         let (payout, is_push) = calculate_bet_payout(&bet, &outcome);
         assert!(!is_push, "amount=5 should not be a push");
-        assert_eq!(payout, 2, "amount=5: 5/2 = 2");
+        assert_eq!(payout, 2, "amount=5: floor(5/2) = 2");
 
-        // amount=7: 7/2 = 3
+        // amount=7: floor(7/2) = 3
         let bet = BaccaratBet { bet_type: BetType::Banker, amount: 7 };
         let (payout, is_push) = calculate_bet_payout(&bet, &outcome);
         assert!(!is_push, "amount=7 should not be a push");
-        assert_eq!(payout, 3, "amount=7: 7/2 = 3");
+        assert_eq!(payout, 3, "amount=7: floor(7/2) = 3");
 
-        // amount=9: 9/2 = 4
+        // amount=9: floor(9/2) = 4
         let bet = BaccaratBet { bet_type: BetType::Banker, amount: 9 };
         let (payout, is_push) = calculate_bet_payout(&bet, &outcome);
         assert!(!is_push, "amount=9 should not be a push");
-        assert_eq!(payout, 4, "amount=9: 9/2 = 4");
+        assert_eq!(payout, 4, "amount=9: floor(9/2) = 4");
     }
 
     /// US-047: Verifies consistent rounding across even amounts.
