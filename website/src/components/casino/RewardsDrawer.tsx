@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { GameType, PlayerStats } from '../../types';
 import { Label } from './ui/Label';
 import { formatCountdownShort, useWeeklyEvent } from '../../hooks/useWeeklyEvent';
+import { useScrollReveal } from '../../hooks/useScrollReveal';
 
 type RewardsDrawerProps = {
   isOpen: boolean;
@@ -116,6 +117,79 @@ const readLocalPublicKey = () => {
 };
 
 const formatKey = (value: string) => `${value.slice(0, 6)}…${value.slice(-4)}`;
+
+/** Leaderboard entry with scroll reveal animation */
+function LeaderboardEntry({
+  entry,
+  index,
+  isYou,
+  staggerDelay,
+}: {
+  entry: LeagueEntry;
+  index: number;
+  isYou: boolean;
+  staggerDelay: number;
+}) {
+  const [ref, isRevealed] = useScrollReveal<HTMLDivElement>({ threshold: 0.2, delay: staggerDelay });
+
+  return (
+    <div
+      ref={ref}
+      className={`flex items-center justify-between rounded-xl border px-3 py-2 ${
+        isRevealed ? 'scroll-revealed' : 'scroll-hidden'
+      } ${isYou ? 'border-action-primary/40 bg-action-primary/10 text-action-primary' : 'border-titanium-200 dark:border-titanium-800'}`}
+    >
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] text-titanium-400">#{index + 1}</span>
+        <span className="font-mono">{formatKey(entry.publicKey)}</span>
+        {isYou ? <span className="text-[9px] font-bold uppercase">You</span> : null}
+      </div>
+      <div className="text-xs font-bold">{formatAmount(entry.points)}</div>
+    </div>
+  );
+}
+
+/** Leaderboard section with staggered scroll reveal */
+function LeaderboardSection({
+  leaderboard,
+  publicKeyHex,
+  leaderboardUpdatedAt,
+}: {
+  leaderboard: LeagueEntry[];
+  publicKeyHex: string | null;
+  leaderboardUpdatedAt: number | null;
+}) {
+  const [containerRef, isContainerRevealed] = useScrollReveal<HTMLDivElement>({ threshold: 0.1 });
+
+  return (
+    <div
+      ref={containerRef}
+      className={`rounded-3xl border border-titanium-200 bg-white p-5 shadow-soft dark:border-titanium-800 dark:bg-titanium-900/60 ${
+        isContainerRevealed ? 'scroll-revealed' : 'scroll-hidden'
+      }`}
+    >
+      <Label size="micro" variant="primary" className="mb-2 block">Weekly league</Label>
+      <div className="text-sm font-bold text-titanium-900 dark:text-titanium-100">Top players</div>
+      <div className="mt-3 space-y-2 text-[11px]">
+        {leaderboard.slice(0, 5).map((entry, index) => {
+          const isYou = publicKeyHex != null && entry.publicKey?.toLowerCase() === publicKeyHex;
+          return (
+            <LeaderboardEntry
+              key={entry.publicKey}
+              entry={entry}
+              index={index}
+              isYou={isYou}
+              staggerDelay={index * 50}
+            />
+          );
+        })}
+      </div>
+      <div className="mt-2 text-[10px] text-titanium-400">
+        {leaderboardUpdatedAt ? `Updated ${new Date(leaderboardUpdatedAt).toLocaleTimeString()}` : 'Updated recently'}
+      </div>
+    </div>
+  );
+}
 
 export const RewardsDrawer: React.FC<RewardsDrawerProps> = ({
   isOpen,
@@ -328,33 +402,11 @@ export const RewardsDrawer: React.FC<RewardsDrawerProps> = ({
             ) : null}
 
             {leaderboard.length > 0 ? (
-              <div className="rounded-3xl border border-titanium-200 bg-white p-5 shadow-soft dark:border-titanium-800 dark:bg-titanium-900/60">
-                <Label size="micro" variant="primary" className="mb-2 block">Weekly league</Label>
-                <div className="text-sm font-bold text-titanium-900 dark:text-titanium-100">Top players</div>
-                <div className="mt-3 space-y-2 text-[11px]">
-                  {leaderboard.slice(0, 5).map((entry, index) => {
-                    const isYou = publicKeyHex && entry.publicKey?.toLowerCase() === publicKeyHex;
-                    return (
-                      <div
-                        key={entry.publicKey}
-                        className={`flex items-center justify-between rounded-xl border px-3 py-2 ${
-                          isYou ? 'border-action-primary/40 bg-action-primary/10 text-action-primary' : 'border-titanium-200 dark:border-titanium-800'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] text-titanium-400">#{index + 1}</span>
-                          <span className="font-mono">{formatKey(entry.publicKey)}</span>
-                          {isYou ? <span className="text-[9px] font-bold uppercase">You</span> : null}
-                        </div>
-                        <div className="text-xs font-bold">{formatAmount(entry.points)}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="mt-2 text-[10px] text-titanium-400">
-                  {leaderboardUpdatedAt ? `Updated ${new Date(leaderboardUpdatedAt).toLocaleTimeString()}` : 'Updated recently'}
-                </div>
-              </div>
+              <LeaderboardSection
+                leaderboard={leaderboard}
+                publicKeyHex={publicKeyHex}
+                leaderboardUpdatedAt={leaderboardUpdatedAt}
+              />
             ) : leaderboardError ? (
               <div className="rounded-2xl border border-titanium-200 bg-titanium-50/70 p-4 text-[11px] text-titanium-500 dark:border-titanium-800 dark:bg-titanium-900/40">
                 {leaderboardError}

@@ -951,6 +951,27 @@ body.fonts-loaded {
   opacity: 0.08;
 }
 
+/* Scroll-triggered reveal animations */
+.scroll-hidden {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity var(--motion-state) var(--motion-ease),
+              transform var(--motion-state) var(--motion-ease);
+}
+
+.scroll-revealed {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity var(--motion-state) var(--motion-ease),
+              transform var(--motion-state) var(--motion-ease);
+}
+
+/* Parallax container */
+.parallax-bg {
+  will-change: transform;
+  transition: transform 0.1s linear;
+}
+
 /* Confetti Burst (CSS Only) */
 @keyframes confetti-burst {
   0% { transform: translateY(0) scale(1); opacity: 1; }
