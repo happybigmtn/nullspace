@@ -803,8 +803,8 @@
 				"Test rate limit reset after window expires"
 			],
 			"priority": 62,
-			"passes": false,
-			"notes": "HIGH GAP: Rate limiting exists but metrics/observability for monitoring not tested."
+			"passes": true,
+			"notes": "FIXED: Added trackRateLimitHit() and trackRateLimitReset() to metrics module. ConnectionLimiter, SessionManager, and security RateLimiter now track all rate limit hits. 21 unit tests verify: (1) counter increments on ip_limit, session_cap, session_rate_limit, metrics_rate_limit hits, (2) metrics exposed via /metrics JSON endpoint, (3) per-IP tracking via sanitized IP keys, (4) reset tracking when windows expire. High-volume tests verify 1000+ rate limit events tracked accurately."
 		},
 		{
 			"id": "US-072",

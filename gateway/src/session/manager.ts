@@ -18,6 +18,7 @@ import {
 	wrapSubmission,
 	generateSessionId,
 } from "../codec/index.js";
+import { getValidPlayerName } from "../utils/player-name-validation.js";
 import type { Session, SessionCreateOptions } from "../types/session.js";
 import type { GameType } from "@nullspace/types";
 import { CASINO_INITIAL_CHIPS } from "@nullspace/constants/limits";
@@ -122,8 +123,10 @@ export class SessionManager {
 			throw new Error("Failed to generate unique session key");
 		}
 
-		const playerName =
-			options.playerName ?? `Player_${publicKeyHex.slice(0, 8)}`;
+		const { name: playerName } = getValidPlayerName(
+			options.playerName,
+			publicKeyHex,
+		);
 
 		const now = Date.now();
 		const session: Session = {
