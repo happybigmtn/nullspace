@@ -1289,6 +1289,95 @@ mod tests {
         assert!(matches!(result, Err(GameError::InvalidPayload)));
     }
 
+    /// US-148: Comprehensive edge boundary tests for all split/corner/line bet types.
+    /// Verifies that boundary values are correctly accepted or rejected.
+    #[test]
+    fn test_edge_bet_boundary_validation() {
+        // SplitH: Valid numbers are 1-35, excluding multiples of 3 (right-edge).
+        // Left column (1,4,7,...,34): valid
+        // Middle column (2,5,8,...,35): valid
+        // Right column (3,6,9,...,36): INVALID
+
+        // Valid SplitH boundary cases
+        assert!(is_valid_bet_number(BetType::SplitH, 1, ZeroRule::Standard)); // First valid
+        assert!(is_valid_bet_number(BetType::SplitH, 2, ZeroRule::Standard)); // Middle column
+        assert!(is_valid_bet_number(BetType::SplitH, 34, ZeroRule::Standard)); // Last row, col 1
+        assert!(is_valid_bet_number(BetType::SplitH, 35, ZeroRule::Standard)); // Last row, col 2
+
+        // Invalid SplitH: right-edge numbers (column 3)
+        assert!(!is_valid_bet_number(BetType::SplitH, 3, ZeroRule::Standard));
+        assert!(!is_valid_bet_number(BetType::SplitH, 6, ZeroRule::Standard));
+        assert!(!is_valid_bet_number(BetType::SplitH, 33, ZeroRule::Standard));
+        assert!(!is_valid_bet_number(BetType::SplitH, 36, ZeroRule::Standard));
+
+        // Invalid SplitH: out of range
+        assert!(!is_valid_bet_number(BetType::SplitH, 0, ZeroRule::Standard));
+        assert!(!is_valid_bet_number(BetType::SplitH, 37, ZeroRule::Standard));
+
+        // SplitV: Valid numbers are 1-33 (vertical split needs row below)
+        assert!(is_valid_bet_number(BetType::SplitV, 1, ZeroRule::Standard));
+        assert!(is_valid_bet_number(BetType::SplitV, 33, ZeroRule::Standard)); // Last valid
+        assert!(!is_valid_bet_number(BetType::SplitV, 34, ZeroRule::Standard)); // No row below
+        assert!(!is_valid_bet_number(BetType::SplitV, 35, ZeroRule::Standard));
+        assert!(!is_valid_bet_number(BetType::SplitV, 36, ZeroRule::Standard));
+        assert!(!is_valid_bet_number(BetType::SplitV, 0, ZeroRule::Standard));
+
+        // Street: Must start on 1, 4, 7, ..., 34 (row starts)
+        assert!(is_valid_bet_number(BetType::Street, 1, ZeroRule::Standard));
+        assert!(is_valid_bet_number(BetType::Street, 4, ZeroRule::Standard));
+        assert!(is_valid_bet_number(BetType::Street, 34, ZeroRule::Standard)); // Last row
+        assert!(!is_valid_bet_number(BetType::Street, 2, ZeroRule::Standard)); // Not row start
+        assert!(!is_valid_bet_number(BetType::Street, 3, ZeroRule::Standard));
+        assert!(!is_valid_bet_number(BetType::Street, 35, ZeroRule::Standard)); // Out of range
+        assert!(!is_valid_bet_number(BetType::Street, 0, ZeroRule::Standard));
+
+        // Corner: Must be 1-32, excluding right-edge (multiples of 3)
+        assert!(is_valid_bet_number(BetType::Corner, 1, ZeroRule::Standard)); // Top-left
+        assert!(is_valid_bet_number(BetType::Corner, 2, ZeroRule::Standard)); // Top-middle
+        assert!(is_valid_bet_number(BetType::Corner, 31, ZeroRule::Standard)); // Bottom-left
+        assert!(is_valid_bet_number(BetType::Corner, 32, ZeroRule::Standard)); // Bottom-middle
+        assert!(!is_valid_bet_number(BetType::Corner, 3, ZeroRule::Standard)); // Right edge
+        assert!(!is_valid_bet_number(BetType::Corner, 33, ZeroRule::Standard)); // Right edge
+        assert!(!is_valid_bet_number(BetType::Corner, 34, ZeroRule::Standard)); // No row below
+        assert!(!is_valid_bet_number(BetType::Corner, 0, ZeroRule::Standard));
+
+        // SixLine: Must start on 1, 4, 7, ..., 31 (two consecutive rows)
+        assert!(is_valid_bet_number(BetType::SixLine, 1, ZeroRule::Standard));
+        assert!(is_valid_bet_number(BetType::SixLine, 4, ZeroRule::Standard));
+        assert!(is_valid_bet_number(BetType::SixLine, 31, ZeroRule::Standard)); // Last valid
+        assert!(!is_valid_bet_number(BetType::SixLine, 34, ZeroRule::Standard)); // No second row
+        assert!(!is_valid_bet_number(BetType::SixLine, 2, ZeroRule::Standard)); // Not row start
+        assert!(!is_valid_bet_number(BetType::SixLine, 0, ZeroRule::Standard));
+
+        // Dozen: Valid numbers are 0, 1, 2
+        assert!(is_valid_bet_number(BetType::Dozen, 0, ZeroRule::Standard));
+        assert!(is_valid_bet_number(BetType::Dozen, 1, ZeroRule::Standard));
+        assert!(is_valid_bet_number(BetType::Dozen, 2, ZeroRule::Standard));
+        assert!(!is_valid_bet_number(BetType::Dozen, 3, ZeroRule::Standard));
+        assert!(!is_valid_bet_number(BetType::Dozen, 255, ZeroRule::Standard));
+
+        // Column: Valid numbers are 0, 1, 2
+        assert!(is_valid_bet_number(BetType::Column, 0, ZeroRule::Standard));
+        assert!(is_valid_bet_number(BetType::Column, 1, ZeroRule::Standard));
+        assert!(is_valid_bet_number(BetType::Column, 2, ZeroRule::Standard));
+        assert!(!is_valid_bet_number(BetType::Column, 3, ZeroRule::Standard));
+    }
+
+    /// US-148: Verify SplitH edge case - 35-36 is a valid horizontal split.
+    /// Number 35 is in column 2 (35 % 3 = 2), 36 is in column 3 (36 % 3 = 0).
+    /// They are adjacent in row 12, so this is a valid split bet.
+    #[test]
+    fn test_splith_35_36_is_valid() {
+        // 35 passes validation (35 % 3 = 2, not 0)
+        assert!(is_valid_bet_number(BetType::SplitH, 35, ZeroRule::Standard));
+
+        // The bet correctly wins on both 35 and 36
+        assert!(bet_wins(BetType::SplitH, 35, 35));
+        assert!(bet_wins(BetType::SplitH, 35, 36));
+        assert!(!bet_wins(BetType::SplitH, 35, 34)); // Not adjacent
+        assert!(!bet_wins(BetType::SplitH, 35, 0)); // Zero loses
+    }
+
     #[test]
     fn test_spin_without_bets() {
         let seed = create_test_seed();
