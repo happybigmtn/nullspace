@@ -2689,3 +2689,42 @@ Target: Testnet Production
   - Shared value type in component props: Use `{ value: number }` not `Animated.SharedValue<number>`
 
 ---
+
+## 2026-01-07 - US-118: Bet confirmation modal with countdown
+
+- What was implemented:
+  - BetConfirmationModal component with countdown progress indicator
+  - Animated countdown bar using `withTiming()` with linear easing
+  - Pulse animation for countdown container via `withSequence()`
+  - Game type badge with display name mapping for all 10 game types
+  - Payout info section showing min win and max payout odds
+  - Visual danger zone warning when bet > 80% of balance
+  - Danger zone pulse animation using `interpolateColor()` for flashing red background
+  - Cancel/Confirm buttons - Cancel as outlined Pressable, Confirm as PrimaryButton
+  - Auto-confirm option with countdown hint text
+  - Side bets breakdown display (optional)
+  - Custom payout description support
+  - `useBetConfirmation` hook for easy integration into game screens
+  - Hook returns `showConfirmation`, `confirmationProps`, `requestConfirmation`
+  - Integrated into BlackjackScreen: Deal button now shows confirmation modal first
+  - 25 unit tests covering all acceptance criteria
+- Files changed:
+  - `mobile/src/components/ui/BetConfirmationModal.tsx` (NEW) - 521 lines
+  - `mobile/src/hooks/useBetConfirmation.ts` (NEW) - 85 lines
+  - `mobile/src/components/ui/index.ts` - Export BetConfirmationModal, BetDetails, GameType
+  - `mobile/src/hooks/index.ts` - Export useBetConfirmation
+  - `mobile/src/screens/games/BlackjackScreen.tsx` - Integrate modal with Deal flow
+  - `mobile/src/components/ui/__tests__/BetConfirmationModal.test.tsx` (NEW) - 25 tests
+- **Learnings:**
+  - StyleSheet.create with TYPOGRAPHY spreads causes ViewStyle|TextStyle|ImageStyle union problems
+  - Solution: Split into separate `viewStyles` and `textStyles` objects
+  - For textStyles, use explicit type annotation `Record<string, TextStyle>` to avoid union issues
+  - `fontVariant: readonly ["tabular-nums"]` from `as const` not assignable - manually define style without spread
+  - react-test-renderer `findAllText` helper needs to handle array children for template literals
+  - Text like `${formatAmount(amount)}` renders as array children `['$', '25']` - join them for assertions
+  - AnimatedPressable (via `Animated.createAnimatedComponent`) doesn't render as plain Pressable in tests
+  - Walk up parent tree from Text to find pressable with `onPress` prop
+  - `runOnJS()` callback must be defined BEFORE the animation callback that calls it
+  - GlassModal `closeOnBackdrop={false}` prevents accidental dismissal during bet confirmation
+
+---

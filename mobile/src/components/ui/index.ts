@@ -9,6 +9,8 @@ export { GlassView, GlassOverlay } from './GlassView';
 export type { GlassIntensity, GlassTint } from './GlassView';
 export { GlassModal, GlassSheet } from './GlassModal';
 export type { ModalPosition } from './GlassModal';
+export { BetConfirmationModal } from './BetConfirmationModal';
+export type { BetDetails, GameType } from './BetConfirmationModal';
 // Micro-interaction components (US-113)
 export {
   AnimatedSelectionRing,

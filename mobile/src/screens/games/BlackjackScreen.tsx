@@ -8,9 +8,9 @@ import Animated, { SlideInRight } from 'react-native-reanimated';
 import { Card } from '../../components/casino';
 import { ChipSelector } from '../../components/casino';
 import { GameLayout } from '../../components/game';
-import { TutorialOverlay, PrimaryButton, BlackjackSkeleton } from '../../components/ui';
+import { TutorialOverlay, PrimaryButton, BlackjackSkeleton, BetConfirmationModal } from '../../components/ui';
 import { haptics } from '../../services/haptics';
-import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useChipBetting, useBetSubmission } from '../../hooks';
+import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useChipBetting, useBetSubmission, useBetConfirmation } from '../../hooks';
 import {
   COLORS,
   SPACING,
@@ -214,7 +214,8 @@ export function BlackjackScreen() {
     }
   }, [lastMessage, clearSubmission]);
 
-  const handleDeal = useCallback(() => {
+  // US-118: Execute the actual bet submission
+  const executeDeal = useCallback(() => {
     if (bet === 0 || isSubmitting) return;
     haptics.betConfirm().catch(() => {});
 
@@ -237,6 +238,29 @@ export function BlackjackScreen() {
       }));
     }
   }, [bet, submitBet, sideBet21Plus3, isSubmitting]);
+
+  // US-118: Bet confirmation modal integration
+  const { showConfirmation, confirmationProps, requestConfirmation } = useBetConfirmation({
+    gameType: 'blackjack',
+    onConfirm: executeDeal,
+    countdownSeconds: 5,
+    autoConfirm: false,
+  });
+
+  // US-118: Handle deal with confirmation modal
+  const handleDeal = useCallback(() => {
+    if (bet === 0 || isSubmitting) return;
+
+    const totalBet = bet + sideBet21Plus3;
+    const sideBets = sideBet21Plus3 > 0
+      ? [{ name: '21+3 Side Bet', amount: sideBet21Plus3 }]
+      : undefined;
+
+    requestConfirmation({
+      amount: totalBet,
+      sideBets,
+    });
+  }, [bet, sideBet21Plus3, isSubmitting, requestConfirmation]);
 
   const handleHit = useCallback(() => {
     haptics.buttonPress().catch(() => {});
@@ -493,6 +517,12 @@ export function BlackjackScreen() {
         steps={TUTORIAL_STEPS}
         onComplete={() => setShowTutorial(false)}
         forceShow={showTutorial}
+      />
+
+      {/* US-118: Bet Confirmation Modal */}
+      <BetConfirmationModal
+        {...confirmationProps}
+        testID="bet-confirmation-modal"
       />
     </>
   );

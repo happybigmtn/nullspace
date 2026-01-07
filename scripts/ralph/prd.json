@@ -492,8 +492,8 @@
 				"Allow cancel within countdown window"
 			],
 			"priority": 41,
-			"passes": false,
-			"notes": "UX-MEDIUM: Bets submit immediately without review. No confirmation step or payout preview before commitment."
+			"passes": true,
+			"notes": "COMPLETE: BetConfirmationModal.tsx with countdown animation, game badges, payout info, danger zone warning. useBetConfirmation hook for integration. 25 tests."
 		},
 		{
 			"id": "US-119",
