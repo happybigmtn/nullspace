@@ -19,7 +19,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { COLORS } from './src/constants/theme';
 import { useAppState, useGatewaySession, useWebSocketReconnectOnForeground, useThemedColors } from './src/hooks';
-import { AuthProvider, WebSocketProvider, ThemeProvider, useTheme } from './src/context';
+import { AuthProvider, WebSocketProvider, ThemeProvider, useTheme, ToastProvider } from './src/context';
 
 // Typography imports - synced with @nullspace/design-tokens
 import {
@@ -72,13 +72,15 @@ function ThemedContent() {
         barStyle={isDark ? 'light-content' : 'dark-content'}
         backgroundColor={colors.background}
       />
-      <AuthProvider>
-        <WebSocketProvider>
-          <GatewaySessionBridge>
-            <RootNavigator />
-          </GatewaySessionBridge>
-        </WebSocketProvider>
-      </AuthProvider>
+      <ToastProvider>
+        <AuthProvider>
+          <WebSocketProvider>
+            <GatewaySessionBridge>
+              <RootNavigator />
+            </GatewaySessionBridge>
+          </WebSocketProvider>
+        </AuthProvider>
+      </ToastProvider>
     </GestureHandlerRootView>
   );
 }
