@@ -24,8 +24,8 @@ const GAME_EVENT_TIMEOUT = (() => {
   if (Number.isFinite(parsed) && parsed >= 0) {
     return parsed;
   }
-  // Keep production generous; shorten dev/test to keep integration flows responsive.
-  return process.env.NODE_ENV === 'production' ? 30000 : 5000;
+  // Match mobile test timeout (60s) to prevent premature timeouts during slow backend processing
+  return process.env.NODE_ENV === 'production' ? 30000 : 60000;
 })();
 
 /**
@@ -483,9 +483,9 @@ export abstract class GameHandler {
       response.state = Array.from(event.initialState);
     }
 
-    if (session.balance > 0n) {
-      response.balance = session.balance.toString();
-    }
+    // Always include balance field so mobile can update its display
+    // (even when balance is 0 - player needs to know they're broke)
+    response.balance = session.balance.toString();
 
     return response;
   }
