@@ -207,6 +207,299 @@ describe('game-state parsers', () => {
 });
 
 /**
+ * US-078: State Blob Truncation Handling Tests
+ *
+ * These tests verify that parsers handle truncated state blobs gracefully:
+ * 1. Blob 1 byte short of required minimum
+ * 2. Blob truncated mid-field (e.g., 5 bytes of an 8-byte u64)
+ * 3. Valid header but truncated body
+ * 4. Extra bytes after valid data (should still parse)
+ * 5. Large state blobs (8-deck Blackjack) within limits
+ */
+describe('state blob truncation handling (US-078)', () => {
+  /**
+   * Helper to create a minimal valid blob then truncate by N bytes
+   */
+  const createTruncatedBlob = (fullBlob: Uint8Array, truncateBy: number): Uint8Array => {
+    return fullBlob.slice(0, fullBlob.length - truncateBy);
+  };
+
+  /**
+   * Helper to create a valid minimal Blackjack v4 state blob
+   * Minimum structure: version(1) + stage(1) + sideBets(40) + initCards(2) + activeIdx(1) + handCount(1) = 46 bytes header
+   * Plus at least 1 hand: betMult(1) + status(1) + wasSplit(1) + cardCount(1) + card(1) = 5 bytes
+   * Plus dealer: cardCount(1) + card(1) = 2 bytes
+   * Minimum valid v4 = 46 + 5 + 2 = 53 bytes (with 1 hand, 1 card each)
+   */
+  const createMinimalBlackjackV4 = (): Uint8Array => {
+    const blob = new Uint8Array(53);
+    blob[0] = 4; // version 4
+    blob[1] = 1; // stage = 1 (AwaitingAction)
+    // bytes 2-41: side bets (5 * 8 = 40 bytes, all zeros)
+    blob[42] = 10; // init player card 1
+    blob[43] = 11; // init player card 2
+    blob[44] = 0; // active hand index
+    blob[45] = 1; // hand count = 1
+    // Hand 0:
+    blob[46] = 1; // bet multiplier = 1
+    blob[47] = 0; // status = 0
+    blob[48] = 0; // was split = 0
+    blob[49] = 1; // card count = 1
+    blob[50] = 15; // one card (value 15)
+    // Dealer:
+    blob[51] = 1; // dealer card count = 1
+    blob[52] = 20; // one dealer card (value 20)
+    return blob;
+  };
+
+  describe('Blackjack truncation', () => {
+    it('returns null for blob 1 byte short of minimum header', () => {
+      // Blackjack v4 requires at least 14 bytes for initial check, then more for full parse
+      // Create blob that's 13 bytes (1 short of minimum 14)
+      const truncated = new Uint8Array(13);
+      truncated[0] = 4; // version 4
+      expect(parseBlackjackState(truncated)).toBeNull();
+    });
+
+    it('returns null for blob truncated mid-side-bet field', () => {
+      // Side bet is a u64 (8 bytes). Truncate at 5 bytes into the first side bet.
+      const truncated = new Uint8Array(7); // version(1) + stage(1) + 5 bytes of u64
+      truncated[0] = 4; // version
+      truncated[1] = 1; // stage
+      // Only 5 bytes for the 8-byte side bet - should fail
+      expect(parseBlackjackState(truncated)).toBeNull();
+    });
+
+    it('returns null for valid header but truncated hand data', () => {
+      const fullBlob = createMinimalBlackjackV4();
+      // Truncate by 3 bytes - should cut into hand data
+      const truncated = createTruncatedBlob(fullBlob, 3);
+      expect(parseBlackjackState(truncated)).toBeNull();
+    });
+
+    it('returns null for valid header but missing dealer cards', () => {
+      const fullBlob = createMinimalBlackjackV4();
+      // Truncate to remove dealer card data (last 2 bytes)
+      const truncated = createTruncatedBlob(fullBlob, 2);
+      expect(parseBlackjackState(truncated)).toBeNull();
+    });
+
+    it('successfully parses valid minimal blob', () => {
+      const fullBlob = createMinimalBlackjackV4();
+      const parsed = parseBlackjackState(fullBlob);
+      expect(parsed).not.toBeNull();
+      expect(parsed?.version).toBe(4);
+      expect(parsed?.hands.length).toBe(1);
+    });
+
+    it('successfully parses blob with extra bytes after valid data', () => {
+      // Extra bytes should be ignored (not cause parse failure)
+      const fullBlob = createMinimalBlackjackV4();
+      const withExtra = new Uint8Array(fullBlob.length + 10);
+      withExtra.set(fullBlob);
+      withExtra.fill(0xFF, fullBlob.length); // Fill extra with 0xFF
+      const parsed = parseBlackjackState(withExtra);
+      expect(parsed).not.toBeNull();
+      expect(parsed?.version).toBe(4);
+    });
+  });
+
+  describe('8-deck Blackjack state blob limits', () => {
+    it('handles maximum 8-deck state size (theoretical maximum)', () => {
+      // 8 decks = 416 cards total
+      // Max hands: 4 splits = 5 hands per player, but cards distributed
+      // Theoretical max cards per hand: 8 (soft hand hitting multiple times)
+      // This tests that we don't overflow any internal limits
+
+      // Create a "large" but still valid blob
+      // For testing purposes, we'll create 4 hands with 8 cards each
+      const handCount = 4;
+      const cardsPerHand = 8;
+      const dealerCards = 6;
+
+      // Calculate size:
+      // Header: 46 bytes (v4)
+      // Per hand: 4 + cardsPerHand = 12 bytes each
+      // Dealer: 1 + dealerCards = 7 bytes
+      const blobSize = 46 + handCount * (4 + cardsPerHand) + (1 + dealerCards);
+      const blob = new Uint8Array(blobSize);
+
+      blob[0] = 4; // version 4
+      blob[1] = 1; // stage
+      blob[42] = 10; // init card 1
+      blob[43] = 11; // init card 2
+      blob[44] = 0; // active hand
+      blob[45] = handCount;
+
+      let offset = 46;
+      for (let h = 0; h < handCount; h++) {
+        blob[offset++] = 1; // bet mult
+        blob[offset++] = 0; // status
+        blob[offset++] = h > 0 ? 1 : 0; // wasSplit
+        blob[offset++] = cardsPerHand;
+        for (let c = 0; c < cardsPerHand; c++) {
+          blob[offset++] = 10 + c; // cards
+        }
+      }
+
+      // Dealer cards
+      blob[offset++] = dealerCards;
+      for (let c = 0; c < dealerCards; c++) {
+        blob[offset++] = 30 + c;
+      }
+
+      const parsed = parseBlackjackState(blob);
+      expect(parsed).not.toBeNull();
+      expect(parsed?.hands.length).toBe(handCount);
+      expect(parsed?.hands[0].cards.length).toBe(cardsPerHand);
+      expect(parsed?.dealerCards.length).toBe(dealerCards);
+    });
+
+    it('rejects blob with impossibly high hand count', () => {
+      // The parser should reject hand count > 10 as invalid
+      const blob = new Uint8Array(50);
+      blob[0] = 4; // version
+      blob[1] = 1; // stage
+      blob[45] = 255; // impossible hand count
+      expect(parseBlackjackState(blob)).toBeNull();
+    });
+  });
+
+  describe('Other game truncation handling', () => {
+    it('Baccarat: returns null for truncated blob', () => {
+      // Baccarat needs version + phase + player cards + banker cards
+      const truncated = new Uint8Array(5); // Too short
+      truncated[0] = 1; // version
+      expect(parseBaccaratState(truncated)).toBeNull();
+    });
+
+    it('Roulette: returns partial state with result=null for truncated blob', () => {
+      // Roulette gracefully degrades: returns betCount but result=null if data missing
+      const truncated = new Uint8Array(3); // Has betCount but missing result
+      truncated[0] = 2; // betCount = 2
+      const result = parseRouletteState(truncated);
+      expect(result).not.toBeNull();
+      expect(result?.betCount).toBe(2);
+      expect(result?.result).toBeNull(); // Result data is truncated
+    });
+
+    it('Roulette: returns null for completely empty blob', () => {
+      expect(parseRouletteState(new Uint8Array(0))).toBeNull();
+    });
+
+    it('SicBo: returns partial state with dice=null for truncated blob', () => {
+      // SicBo gracefully degrades: if dice data missing, returns betCount but dice=null
+      const truncated = new Uint8Array(3); // Has betCount but no dice
+      truncated[0] = 1; // betCount = 1 (1 bet * 10 bytes = offset 11, but we only have 3 bytes)
+      const result = parseSicBoState(truncated);
+      expect(result).not.toBeNull();
+      expect(result?.betCount).toBe(1);
+      expect(result?.dice).toBeNull(); // Dice data is truncated
+    });
+
+    it('SicBo: returns null for completely empty blob', () => {
+      expect(parseSicBoState(new Uint8Array(0))).toBeNull();
+    });
+
+    it('Craps: returns null for truncated blob', () => {
+      const truncated = new Uint8Array(3); // Too short
+      truncated[0] = 2; // version 2
+      expect(parseCrapsState(truncated)).toBeNull();
+    });
+
+    it('HiLo: returns null for truncated blob', () => {
+      const truncated = new Uint8Array(5); // Too short
+      truncated[0] = 1; // version
+      expect(parseHiLoState(truncated)).toBeNull();
+    });
+
+    it('VideoPoker: returns null for truncated blob', () => {
+      const truncated = new Uint8Array(3); // Too short
+      truncated[0] = 2; // version
+      expect(parseVideoPokerState(truncated)).toBeNull();
+    });
+
+    it('CasinoWar: returns null for blob < 3 bytes (minimum)', () => {
+      // CasinoWar has backward compat: 3+ bytes = v0, 12+ bytes = v1
+      const truncated = new Uint8Array(2); // Too short for any version
+      expect(parseCasinoWarState(truncated)).toBeNull();
+    });
+
+    it('CasinoWar v1: falls back to v0 for truncated tieBet field', () => {
+      // V1 requires 12+ bytes: version(1) + stage(1) + cards(2) + tieBet(8)
+      // Create 8 bytes (truncated tieBet)
+      const truncated = new Uint8Array(8);
+      truncated[0] = 1; // version 1 marker
+      // looksLikeV1 check fails if length < 12, so falls back to v0
+      // For 8 bytes with byte[0]=1, it parses as v0 with different field mapping
+      // This documents the graceful degradation behavior
+      const result = parseCasinoWarState(truncated);
+      // Length >= 3 means v0 fallback succeeds
+      expect(result).not.toBeNull();
+      expect(result?.version).toBe(0); // Falls back to v0 interpretation
+    });
+
+    it('ThreeCard: returns null for truncated blob', () => {
+      const truncated = new Uint8Array(3); // Too short (needs 16)
+      truncated[0] = 3; // version 3
+      expect(parseThreeCardState(truncated)).toBeNull();
+    });
+
+    it('UltimateHoldem: returns null for truncated blob', () => {
+      const truncated = new Uint8Array(3); // Too short
+      truncated[0] = 3; // version 3
+      expect(parseUltimateHoldemState(truncated)).toBeNull();
+    });
+  });
+
+  describe('SafeReader error messages', () => {
+    it('SafeReader provides descriptive error on truncation', () => {
+      // This tests that SafeReader's internal error messages are helpful
+      // The error should include field name and offset
+      // Import directly from source
+      const { SafeReader } = require('../dist/index.js');
+      const reader = new SafeReader(new Uint8Array(2));
+
+      expect(() => reader.readU64BE('test_field')).toThrow('insufficient data for test_field');
+    });
+
+    it('SafeReader.remaining() accurately reports bytes left', () => {
+      const { SafeReader } = require('../dist/index.js');
+      const reader = new SafeReader(new Uint8Array(10));
+
+      expect(reader.remaining()).toBe(10);
+      reader.readU8('byte1');
+      expect(reader.remaining()).toBe(9);
+      reader.readBytes(4, 'bytes2-5');
+      expect(reader.remaining()).toBe(5);
+    });
+  });
+
+  describe('Mobile error message handling', () => {
+    it('returns null (not undefined) for truncated data', () => {
+      // Mobile code should get null, not undefined, so it can show error message
+      const truncated = new Uint8Array(5);
+      const result = parseBlackjackState(truncated);
+      expect(result).toBeNull();
+      expect(result).not.toBeUndefined();
+    });
+
+    it('returns null type that can be used in error conditionals', () => {
+      const truncated = new Uint8Array(5);
+      const result = parseBlackjackState(truncated);
+
+      // Mobile would use this pattern:
+      if (result === null) {
+        // Show error: "Failed to load game state. Please try again."
+        expect(true).toBe(true);
+      } else {
+        fail('Should have been null');
+      }
+    });
+  });
+});
+
+/**
  * Golden vector tests (server→client state parsing)
  *
  * These tests validate that TypeScript parsers correctly decode state blobs
