@@ -1463,3 +1463,30 @@ Target: Testnet Production
   - Pattern: `process.env.NODE_ENV === 'test'` guards skip animations in Card.tsx for cleaner test behavior
 
 ---
+
+## 2026-01-06 - US-070: Add nonce timestamp clock skew tolerance test
+
+- What was implemented:
+  - Added 7 tests in 'clock skew tolerance (US-070)' describe block in websocket.test.tsx
+  - Documented architectural finding: nonces are sequential bigints, not timestamped
+  - Tests cover:
+    1. documents: nonces are sequential, not timestamped
+    2. documents: message queue timeout is mobile-local
+    3. handles system clock jump forward during reconnection
+    4. handles system clock jump backward during reconnection
+    5. tolerates up to 30 seconds of clock skew without message loss
+    6. expires messages at exactly 30 seconds
+    7. maintains queue timestamps during rapid reconnection cycles
+- Files changed:
+  - `mobile/src/services/__tests__/websocket.test.tsx` - Added 7 tests (~150 lines)
+- **Learnings:**
+  - NonceManager uses sequential bigint nonces, NOT timestamped nonces
+  - Server validates nonce > previous_nonce, making clock skew irrelevant for nonce validation
+  - MESSAGE_TIMEOUT_MS (30s) in websocket.ts uses Date.now() on both queue AND filter, so it's immune to mobile↔server clock skew
+  - System clock changes on the mobile device CAN affect message expiration:
+    - Clock jump forward: Messages may expire unexpectedly (safe: dropped)
+    - Clock jump backward: Messages always valid (safe: server validates nonce)
+  - Pattern: Document architectural assumptions in tests with documentation tests (expect(true).toBe(true))
+  - Pre-existing TS strictness issues in websocket.test.tsx (socket?.readyState etc.) - followed existing patterns
+
+---
