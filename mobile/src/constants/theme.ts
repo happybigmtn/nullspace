@@ -15,19 +15,53 @@ import {
   DURATION,
   SPRING,
   GAME,
+  FONTS,
 } from '@nullspace/design-tokens';
 
-const FONT_FAMILY = Platform.select({
-  ios: 'System',
-  android: 'sans-serif-medium',
-  default: 'System',
-});
+/**
+ * Font family constants - synced with @nullspace/design-tokens
+ *
+ * These map to the fonts loaded in App.tsx via @expo-google-fonts packages.
+ * The naming convention follows expo-google-fonts: FontName_WeightVariant
+ *
+ * Display font (Outfit): Headlines, large text, numbers in displays
+ * Body font (Plus Jakarta Sans): Readable paragraphs, UI text, labels
+ */
 
+/** Display font family - Outfit (from design-tokens FONTS.display) */
+export const FONT_DISPLAY = {
+  regular: 'Outfit_400Regular',
+  medium: 'Outfit_500Medium',
+  semibold: 'Outfit_600SemiBold',
+  bold: 'Outfit_700Bold',
+  extrabold: 'Outfit_800ExtraBold',
+} as const;
+
+/** Body font family - Plus Jakarta Sans (from design-tokens FONTS.body) */
+export const FONT_BODY = {
+  regular: 'PlusJakartaSans_400Regular',
+  medium: 'PlusJakartaSans_500Medium',
+  semibold: 'PlusJakartaSans_600SemiBold',
+  bold: 'PlusJakartaSans_700Bold',
+  extrabold: 'PlusJakartaSans_800ExtraBold',
+} as const;
+
+/**
+ * Mono font family for code and tabular numbers
+ * Uses platform default since JetBrains Mono isn't bundled (would add ~200KB)
+ */
 const MONO_FONT = Platform.select({
   ios: 'Courier',
   android: 'monospace',
   default: 'monospace',
 });
+
+/**
+ * Legacy FONT_FAMILY export for backwards compatibility
+ * New code should use FONT_DISPLAY or FONT_BODY directly
+ * @deprecated Use FONT_BODY.regular for body text or FONT_DISPLAY.bold for headlines
+ */
+const FONT_FAMILY = FONT_BODY.regular;
 
 /**
  * Light color palette derived from design-tokens
@@ -147,72 +181,98 @@ export const RADIUS = {
 } as const;
 
 /**
- * Typography definitions
- * Platform-specific (fonts differ between iOS/Android)
+ * Typography definitions - synced with @nullspace/design-tokens
+ *
+ * Display variants use Outfit (display font) for visual impact
+ * Body variants use Plus Jakarta Sans (body font) for readability
+ *
+ * Note: fontWeight is kept for React Native compatibility, but the actual
+ * weight is determined by the loaded font variant (e.g., Outfit_700Bold)
  */
 export const TYPOGRAPHY = {
+  // Display variants - Outfit font for headlines and large text
   displayLarge: {
     fontSize: 48,
     fontWeight: '800' as const,
     letterSpacing: -1,
-    fontFamily: FONT_FAMILY,
+    fontFamily: FONT_DISPLAY.extrabold,
   },
   displayMedium: {
     fontSize: 36,
     fontWeight: '700' as const,
     letterSpacing: -0.5,
-    fontFamily: FONT_FAMILY,
+    fontFamily: FONT_DISPLAY.bold,
   },
   h1: {
     fontSize: 28,
     fontWeight: '700' as const,
-    fontFamily: FONT_FAMILY,
+    fontFamily: FONT_DISPLAY.bold,
   },
   h2: {
     fontSize: 24,
     fontWeight: '600' as const,
-    fontFamily: FONT_FAMILY,
+    fontFamily: FONT_DISPLAY.semibold,
   },
   h3: {
     fontSize: 20,
     fontWeight: '600' as const,
-    fontFamily: FONT_FAMILY,
+    fontFamily: FONT_DISPLAY.semibold,
   },
+  // Body variants - Plus Jakarta Sans for readable text
   bodyLarge: {
     fontSize: 18,
     fontWeight: '500' as const,
     lineHeight: 28,
-    fontFamily: FONT_FAMILY,
+    fontFamily: FONT_BODY.medium,
   },
   body: {
     fontSize: 16,
     fontWeight: '400' as const,
     lineHeight: 24,
-    fontFamily: FONT_FAMILY,
+    fontFamily: FONT_BODY.regular,
   },
   label: {
     fontSize: 10,
     fontWeight: '700' as const,
     letterSpacing: 1.5,
-    fontFamily: FONT_FAMILY,
+    fontFamily: FONT_BODY.bold,
     textTransform: 'uppercase' as const,
   },
+  // Mono for code and technical content
   mono: {
     fontFamily: MONO_FONT,
     fontSize: 12,
   },
-  // Additional variants used by game screens
+  // Additional body variants
   bodySmall: {
     fontSize: 14,
     fontWeight: '400' as const,
     lineHeight: 20,
-    fontFamily: FONT_FAMILY,
+    fontFamily: FONT_BODY.regular,
   },
   caption: {
     fontSize: 12,
     fontWeight: '400' as const,
     lineHeight: 16,
-    fontFamily: FONT_FAMILY,
+    fontFamily: FONT_BODY.regular,
+  },
+  /**
+   * Tabular figures style for numeric displays (balance, bets, payouts)
+   * Uses display font for visual impact + fontVariant for aligned digits
+   * This ensures numbers don't shift when values change (e.g., $999 → $1000)
+   */
+  numeric: {
+    fontSize: 24,
+    fontWeight: '600' as const,
+    fontFamily: FONT_DISPLAY.semibold,
+    fontVariant: ['tabular-nums'] as const,
+  },
+  /** Large numeric display for balance */
+  numericLarge: {
+    fontSize: 32,
+    fontWeight: '700' as const,
+    fontFamily: FONT_DISPLAY.bold,
+    fontVariant: ['tabular-nums'] as const,
   },
 } as const;
 

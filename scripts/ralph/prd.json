@@ -297,8 +297,8 @@
 				"Consider ceiling division or minimum 1-chip payout guarantee"
 			],
 			"priority": 27,
-			"passes": false,
-			"notes": "EDGE-CASE (code-verified): baccarat.rs:391-399 uses floor division for Banker Six (1*1/2=0). Bet of 1 chip becomes push instead of win. May confuse users betting minimum."
+			"passes": true,
+			"notes": "COMPLETE: Added minimum 1-chip payout guarantee via half_payout.max(1). A 1-chip bet on Banker with Banker-6 win now returns 1 chip instead of 0 (push). Updated tests in test_banker_six_rounding_odd_amounts()."
 		},
 		{
 			"id": "US-105",
@@ -310,8 +310,8 @@
 				"Verify no orphaned sessions after failed registration attempts"
 			],
 			"priority": 28,
-			"passes": false,
-			"notes": "MEMORY-LEAK (code-verified): manager.ts:150-158 adds session to maps before registration, but doesn't remove on failure. Orphaned sessions accumulate until gateway restart."
+			"passes": true,
+			"notes": "COMPLETE: Added cleanupFailedSession() method. createSession() now throws on registration failure after cleaning up Maps. 3 new tests verify no orphaned sessions."
 		},
 		{
 			"id": "US-106",
@@ -323,8 +323,8 @@
 				"Remove chatbot aesthetic, achieve premium app feel"
 			],
 			"priority": 29,
-			"passes": false,
-			"notes": "UX-CRITICAL: LobbyScreen.tsx:36-107 uses emojis (🎲🃏🎡👑⚔️🎰🀄🎴🤠) which create cheap chatbot feel. Premium casino apps use refined monochrome icons."
+			"passes": true,
+			"notes": "COMPLETE: Created GameIcon.tsx with pure React Native Views (no SVG dep). 10 game icons + ProfileIcon with consistent 2px stroke, color prop for theming. Updated LobbyScreen.tsx GAMES array and profile button."
 		},
 		{
 			"id": "US-107",
@@ -337,8 +337,8 @@
 				"Persist user preference in storage"
 			],
 			"priority": 30,
-			"passes": false,
-			"notes": "UX-HIGH: No dark mode implementation found (grep colorScheme/darkMode returns nothing). Modern users expect dark mode, especially for casino/gaming apps used at night."
+			"passes": true,
+			"notes": "COMPLETE: Created ThemeContext with useColorScheme integration. DARK_COLORS uses pure black (#000000) for OLED. DARK_MODE_GLOW provides ambient effects. Storage persists user preference. 30 tests cover theme system."
 		},
 		{
 			"id": "US-108",
@@ -352,8 +352,8 @@
 				"Match website typography defined in website/src/index.css"
 			],
 			"priority": 31,
-			"passes": false,
-			"notes": "UX-HIGH (verified): design-tokens/typography.ts defines Outfit/Plus Jakarta Sans/JetBrains Mono. Website uses them via Google Fonts. Mobile theme.ts:20-30 uses Platform.select for system fonts only - parity gap."
+			"passes": true,
+			"notes": "COMPLETE: Added @expo-google-fonts/outfit and plus-jakarta-sans. App.tsx loads fonts with useFonts() and holds splash screen. theme.ts exports FONT_DISPLAY (Outfit) and FONT_BODY (Plus Jakarta Sans). Added numeric/numericLarge styles with fontVariant: ['tabular-nums']."
 		},
 		{
 			"id": "US-109",

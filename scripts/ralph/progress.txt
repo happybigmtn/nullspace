@@ -27,8 +27,13 @@ Target: Testnet Production
 - Type guards: `isGameResultMessage()`, `isErrorMessage()`, etc. in `@nullspace/protocol/mobile`
 - Safe parsing: `parseServerMessage()` returns discriminated union with error details
 - Shared styles: `theme.ts` exports GAME_LAYOUT_STYLES, MESSAGE_STYLES, BET_STYLES, ACTION_STYLES, DRAWER_STYLES, HAND_STYLES, INTERACTIVE_STYLES, CHIP_AREA_STYLES
+- Dark mode: `ThemeContext` provides `useTheme()`, `useThemedColors()`, `useGlow()` hooks (US-107)
+- OLED palette: `DARK_COLORS.background = '#000000'` for AMOLED battery savings
+- Typography: `FONT_DISPLAY` (Outfit) for headlines, `FONT_BODY` (Plus Jakarta Sans) for body text (US-108)
+- Tabular figures: Use `fontVariant: ['tabular-nums']` for balance/bet displays to prevent number jumping
+- Font loading: `useFonts()` in App.tsx holds splash screen until fonts ready
 - 12 race conditions identified (see US-005 through US-009, US-021-022)
-- Tests: 222/222 unit tests, run with `npm test`
+- Tests: 252/252 unit tests, run with `npm test`
 
 ### Configuration
 - Production configs: `configs/production/*.env.example`
@@ -2274,5 +2279,126 @@ Target: Testnet Production
   - When tests use mock messages, they must match the actual schema to avoid validation failures
   - Analytics tracking of invalid messages enables server-side debugging without client crashes
   - `ParseResult<T>` discriminated union pattern enables exhaustive error handling
+
+---
+
+---
+
+## 2026-01-07 - US-104: Fix Baccarat Banker Six minimum bet edge case
+
+- What was implemented:
+  - Added minimum 1-chip payout guarantee for Banker Six wins in baccarat.rs
+  - Changed `if winnings > 0 { win } else { push }` to `half_payout.max(1)` unconditionally wins
+  - Updated test_banker_six_rounding_odd_amounts() to verify new behavior:
+    - amount=1: floor(1/2)=0 → guaranteed 1 chip (was: push)
+    - amount=3,5,7,9: floor division still applies for larger amounts
+  - All 452 execution tests pass
+- Files changed:
+  - `execution/src/casino/baccarat.rs` - Payout logic + tests
+- **Learnings:**
+  - Baccarat Banker Six rule: payout is 0.5:1 (half the bet) instead of 1:1
+  - Floor division for fractional chip payouts is standard casino practice
+  - `half_payout.max(1)` is cleaner than conditional branches for minimum guarantees
+  - US-047 had already documented the floor division behavior - US-104 changed it to UX-friendly
+  - `.saturating_mul()` and `.saturating_div()` prevent overflow panics in Rust
+
+
+## 2026-01-07 - US-105: Clean up session on registration failure
+
+- What was implemented:
+  - Added `cleanupFailedSession()` private method that removes session from both Maps and disconnects updatesClient
+  - Modified `createSession()` to throw when registration fails (after cleanup)
+  - Updated existing test suite from documenting the bug to verifying the fix
+  - Added 3 new test cases: basic cleanup, byPublicKey map cleanup, multiple failed registrations
+- Files changed:
+  - `gateway/src/session/manager.ts` - Added cleanup method, modified createSession error handling
+  - `gateway/tests/unit/session-manager.test.ts` - Updated tests to verify cleanup behavior
+- **Learnings:**
+  - Session creation followed add-then-initialize pattern without rollback on failure
+  - Fix: Cleanup in catch block + check registered flag after initialization
+  - Pattern: For two-phase operations (add→verify), always have rollback logic for failure cases
+  - Test pattern: Use `rejects.toThrow()` for async error assertions in vitest
+
+---
+
+## 2026-01-07 - US-106: Replace emojis with monochrome icon set in lobby
+
+- What was implemented:
+  - Created `GameIcon.tsx` component using pure React Native Views (no SVG dependency)
+  - 10 game-specific icons with consistent 2px stroke weight scaled to size
+  - Added `ProfileIcon` component for the profile button
+  - Removed emoji strings from GAMES array in LobbyScreen.tsx
+  - Updated LobbyScreen test to find profile button by style (not emoji text)
+- Files changed:
+  - `mobile/src/components/ui/GameIcon.tsx` - New component with 11 icon variants
+  - `mobile/src/components/ui/index.ts` - Export new components
+  - `mobile/src/screens/LobbyScreen.tsx` - Replace emoji with GameIcon, ProfileIcon
+  - `mobile/src/screens/__tests__/LobbyScreen.test.tsx` - Updated test to find button by style
+- **Learnings:**
+  - Pure React Native Views can create icons without SVG dependency (use borderWidth, borderRadius, transforms)
+  - Icon scaling: Pass `scale` factor derived from `size / baseSize`, scale all dimensions
+  - Stroke consistency: Calculate `stroke = 2 * scale` for uniform appearance at any size
+  - Test fix: When replacing text/emoji with components, tests must find elements by other properties (style dimensions)
+  - Pattern: `{ width: X * scale, height: Y * scale, borderWidth: stroke }` for scalable shapes
+
+---
+
+## 2026-01-07 - US-107: Implement dark mode with OLED-optimized palette
+
+- What was implemented:
+  - Created `ThemeContext.tsx` with React Context for color scheme management
+  - Integrated `useColorScheme` from React Native for system preference detection
+  - Added `DARK_COLORS` palette with pure black (#000000) background for AMOLED battery savings
+  - Created `DARK_MODE_GLOW` constants with ambient shadow effects for dark mode buttons
+  - Added `getGlowStyle()` helper function for conditional glow application
+  - Created `useThemedColors()` and `useGlow()` hooks in `useThemedColors.ts`
+  - Updated `App.tsx` with `ThemeProvider` wrapper and dynamic StatusBar barStyle
+  - Added `COLOR_SCHEME_PREFERENCE` storage key for persistence
+  - Wrote 30 tests covering theme context, color palettes, and glow effects
+- Files changed:
+  - `mobile/src/context/ThemeContext.tsx` - New context with ThemeProvider, useTheme, useIsDark
+  - `mobile/src/context/index.ts` - Export new theme context
+  - `mobile/src/constants/theme.ts` - Added LIGHT_COLORS, DARK_COLORS, DARK_MODE_GLOW, getColors(), getGlowStyle()
+  - `mobile/src/constants/theme.test.ts` - Added 22 tests for color palettes and glow system
+  - `mobile/src/hooks/useThemedColors.ts` - New hooks for themed color access
+  - `mobile/src/hooks/index.ts` - Export new hooks
+  - `mobile/src/services/storage.ts` - Added COLOR_SCHEME_PREFERENCE key
+  - `mobile/App.tsx` - ThemeProvider wrapper, dynamic StatusBar
+  - `mobile/src/context/__tests__/ThemeContext.test.tsx` - 8 tests for context behavior
+- **Learnings:**
+  - React Native `useColorScheme()` returns 'light' | 'dark' | null based on system settings
+  - OLED optimization: Pure black (#000000) saves battery on AMOLED screens vs dark gray
+  - Type inference: When `getColors()` returns different literal types, use union type `typeof LIGHT_COLORS | typeof DARK_COLORS`
+  - React 19 testing: Error boundaries don't throw synchronously, they log to console instead
+  - Glow pattern: `shadowOffset: {width: 0, height: 0}` with high `shadowRadius` creates ambient glow
+  - Storage pattern: Use string key enum for type-safe preference keys
+
+---
+
+## 2026-01-07 - US-108: Sync mobile typography with design-tokens
+
+- What was implemented:
+  - Installed `@expo-google-fonts/outfit` and `@expo-google-fonts/plus-jakarta-sans`
+  - Added `expo-font` and `expo-splash-screen` dependencies
+  - Updated `App.tsx` with `useFonts()` hook to load 10 font variants (5 Outfit + 5 Plus Jakarta Sans)
+  - Added `SplashScreen.preventAutoHideAsync()` to hold splash until fonts ready
+  - Created `FONT_DISPLAY` and `FONT_BODY` exports in `theme.ts` mapping to expo-google-fonts naming
+  - Updated all `TYPOGRAPHY` variants to use appropriate font families:
+    - Display variants (displayLarge, displayMedium, h1-h3) → Outfit
+    - Body variants (body, bodyLarge, bodySmall, caption, label) → Plus Jakarta Sans
+  - Added `numeric` and `numericLarge` styles with `fontVariant: ['tabular-nums']` for stable number displays
+  - Imported `FONTS` constant from `@nullspace/design-tokens` for documentation consistency
+- Files changed:
+  - `mobile/App.tsx` - Font loading with useFonts(), splash screen hold, onLayoutRootView callback
+  - `mobile/src/constants/theme.ts` - FONT_DISPLAY, FONT_BODY exports, updated TYPOGRAPHY definitions
+  - `mobile/package.json` - Added expo-google-fonts packages, expo-font, expo-splash-screen
+  - `pnpm-lock.yaml` - Dependency lock updates
+- **Learnings:**
+  - expo-google-fonts naming convention: `FontName_WeightVariant` (e.g., `Outfit_700Bold`)
+  - useFonts() returns `[fontsLoaded, fontError]` tuple - check either for loading complete
+  - SplashScreen pattern: `preventAutoHideAsync()` early, then `hideAsync()` in `onLayout` callback
+  - `fontVariant: ['tabular-nums']` forces equal-width digits, preventing "jumping" when numbers change (e.g., $999 → $1000)
+  - Font weights in React Native are redundant with specific font variants but kept for compatibility
+  - JetBrains Mono skipped (would add ~200KB) - platform monospace fonts used instead
 
 ---

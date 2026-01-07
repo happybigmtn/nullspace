@@ -12,12 +12,34 @@ import './src/utils/cryptoPolyfill';
 import * as Sentry from '@sentry/react-native';
 import { initializeErrorReporter } from './src/services/errorReporter';
 import { registerRootComponent } from 'expo';
+import * as SplashScreen from 'expo-splash-screen';
+import { useCallback, useEffect, useState } from 'react';
 import { StatusBar, StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { COLORS } from './src/constants/theme';
 import { useAppState, useGatewaySession, useWebSocketReconnectOnForeground, useThemedColors } from './src/hooks';
 import { AuthProvider, WebSocketProvider, ThemeProvider, useTheme } from './src/context';
+
+// Typography imports - synced with @nullspace/design-tokens
+import {
+  useFonts,
+  Outfit_400Regular,
+  Outfit_500Medium,
+  Outfit_600SemiBold,
+  Outfit_700Bold,
+  Outfit_800ExtraBold,
+} from '@expo-google-fonts/outfit';
+import {
+  PlusJakartaSans_400Regular,
+  PlusJakartaSans_500Medium,
+  PlusJakartaSans_600SemiBold,
+  PlusJakartaSans_700Bold,
+  PlusJakartaSans_800ExtraBold,
+} from '@expo-google-fonts/plus-jakarta-sans';
+
+// Hold splash screen until fonts are loaded
+SplashScreen.preventAutoHideAsync();
 
 // Initialize Sentry for production error tracking
 const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN;
@@ -90,17 +112,60 @@ function ErrorFallback({ resetError }: { resetError: () => void }) {
 }
 
 function App() {
+  const [appIsReady, setAppIsReady] = useState(false);
+
+  // Load custom fonts from @expo-google-fonts packages
+  // These match the typography defined in @nullspace/design-tokens
+  const [fontsLoaded, fontError] = useFonts({
+    // Display font (Outfit) - used for headlines and large text
+    Outfit_400Regular,
+    Outfit_500Medium,
+    Outfit_600SemiBold,
+    Outfit_700Bold,
+    Outfit_800ExtraBold,
+    // Body font (Plus Jakarta Sans) - used for readable paragraphs and UI
+    PlusJakartaSans_400Regular,
+    PlusJakartaSans_500Medium,
+    PlusJakartaSans_600SemiBold,
+    PlusJakartaSans_700Bold,
+    PlusJakartaSans_800ExtraBold,
+  });
+
+  useEffect(() => {
+    if (fontsLoaded || fontError) {
+      setAppIsReady(true);
+    }
+  }, [fontsLoaded, fontError]);
+
+  const onLayoutRootView = useCallback(async () => {
+    if (appIsReady) {
+      // Hide splash screen once fonts are loaded and layout is ready
+      await SplashScreen.hideAsync();
+    }
+  }, [appIsReady]);
+
+  // Don't render until fonts are ready (splash screen stays visible)
+  if (!appIsReady) {
+    return null;
+  }
+
   // In production, wrap with Sentry error boundary
   // In development, let errors bubble up naturally
   if (SENTRY_DSN && !__DEV__) {
     return (
-      <Sentry.ErrorBoundary fallback={ErrorFallback} showDialog>
-        <AppContent />
-      </Sentry.ErrorBoundary>
+      <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
+        <Sentry.ErrorBoundary fallback={ErrorFallback} showDialog>
+          <AppContent />
+        </Sentry.ErrorBoundary>
+      </View>
     );
   }
 
-  return <AppContent />;
+  return (
+    <View style={{ flex: 1 }} onLayout={onLayoutRootView}>
+      <AppContent />
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
