@@ -493,6 +493,13 @@ impl CrapsState {
             return None;
         }
 
+        // US-147: Validate Fire Bet made_points_mask only has valid point bits (0-5).
+        // Bits 6-7 don't correspond to valid points and could allow corrupted payouts.
+        // Valid masks: 0x00-0x3F (points 4=bit0, 5=bit1, 6=bit2, 8=bit3, 9=bit4, 10=bit5)
+        if made_points_mask > 0b0011_1111 {
+            return None;
+        }
+
         // Validate bet count against maximum to prevent DoS via large allocations
         if bet_count > limits::CRAPS_MAX_BETS {
             return None;
@@ -2161,6 +2168,71 @@ mod tests {
             rng.fill(&mut blob[..]);
             let _ = parse_state(&blob);
         }
+    }
+
+    /// US-147: Validate that corrupted made_points_mask values are rejected.
+    /// Fire Bet has 999:1 payout for 6 points. Invalid masks could drain bankroll.
+    #[test]
+    fn test_invalid_made_points_mask_rejected() {
+        // Build a valid state blob, then corrupt the made_points_mask byte
+        let valid_state = CrapsState {
+            phase: Phase::ComeOut,
+            main_point: 0,
+            d1: 0,
+            d2: 0,
+            made_points_mask: 0b0011_1111, // All 6 valid points made
+            epoch_point_established: false,
+            field_paytable: FieldPaytable::default(),
+            bets: Vec::new(),
+        };
+
+        let mut blob = serialize_state(&valid_state);
+        assert!(parse_state(&blob).is_some(), "Valid state should parse");
+
+        // Byte 5 is made_points_mask. Valid values are 0x00-0x3F (bits 0-5).
+        // Test that any value with bits 6 or 7 set is rejected.
+
+        // Test bit 6 set (0x40)
+        blob[5] = 0b0100_0000;
+        assert!(
+            parse_state(&blob).is_none(),
+            "Mask 0x40 (bit 6) should be rejected"
+        );
+
+        // Test bit 7 set (0x80)
+        blob[5] = 0b1000_0000;
+        assert!(
+            parse_state(&blob).is_none(),
+            "Mask 0x80 (bit 7) should be rejected"
+        );
+
+        // Test both bits 6 and 7 set (0xC0)
+        blob[5] = 0b1100_0000;
+        assert!(
+            parse_state(&blob).is_none(),
+            "Mask 0xC0 (bits 6-7) should be rejected"
+        );
+
+        // Test maximum invalid value (0xFF - all bits set)
+        blob[5] = 0xFF;
+        assert!(
+            parse_state(&blob).is_none(),
+            "Mask 0xFF should be rejected"
+        );
+
+        // Test boundary: 0x3F should be valid (max valid value)
+        blob[5] = 0b0011_1111;
+        assert!(
+            parse_state(&blob).is_some(),
+            "Mask 0x3F (all 6 points) should be valid"
+        );
+
+        // Test boundary: 0x40 should be invalid (min invalid value)
+        blob[5] = 0b0100_0000;
+        assert!(
+            parse_state(&blob).is_none(),
+            "Mask 0x40 should be rejected"
+        );
     }
 
     #[test]
