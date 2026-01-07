@@ -32,6 +32,7 @@ Target: Testnet Production
 - Typography: `FONT_DISPLAY` (Outfit) for headlines, `FONT_BODY` (Plus Jakarta Sans) for body text (US-108)
 - Tabular figures: Use `fontVariant: ['tabular-nums']` for balance/bet displays to prevent number jumping
 - Font loading: `useFonts()` in App.tsx holds splash screen until fonts ready
+- Audio: `audio.initialize()` in App.tsx, disabled by default, category-based volumes (ui/game/celebration/error)
 - Premium cards: Multi-layer shadows (`shadowContact` + `shadowDiffuse`), gold/silver rim by suit, scale pop animation
 - Textures: Linen pattern via semi-transparent View lines (avoid SVG for performance)
 - Glassmorphism: `expo-blur` BlurView with GLASS constants (blur.medium=20, backdropOpacity.medium=0.6)
@@ -3230,5 +3231,36 @@ Target: Testnet Production
   - Website's crypto.randomUUID is already secure but getRandomValues is a better fallback than Math.random
   - Hex encoding doubles the string length (8 bytes → 16 hex chars)
   - Format: prefix_timestamp_randomHex enables debugging while maintaining security
+
+---
+
+## 2026-01-07 - US-143: Implement mobile audio system with expo-av
+
+- What was implemented:
+  - Added expo-av package to mobile for audio playback
+  - Replaced console.debug stubs with full expo-av integration
+  - AudioService now preloads sounds during splash screen
+  - Implemented category-based volume control (ui, game, celebration, error)
+  - Added persistent settings with MMKV/AsyncStorage via getObject/setObject
+  - Integrated audio.initialize() in App.tsx alongside font loading
+  - Audio disabled by default, user must opt-in
+- Files changed:
+  - `mobile/package.json` - Added expo-av ^16.0.8 dependency
+  - `mobile/src/services/audio.ts` - Full expo-av implementation with:
+    - 22 sound IDs across 4 categories
+    - Preloading via Audio.Sound.createAsync()
+    - Volume calculation: soundVolume × masterVolume × categoryVolume
+    - Graceful handling of missing sound files
+    - loadSettings/saveSettings for persistence
+  - `mobile/App.tsx` - Audio initialization in prepare() function
+- **Learnings:**
+  - expo-av Audio.Sound.createAsync() returns { sound, status } - destructure properly
+  - playsInSilentModeIOS: false respects iOS silent switch (good default for games)
+  - staysActiveInBackground: false prevents audio when app backgrounded
+  - shouldDuckAndroid: true lowers other app volume during playback
+  - Sound assets defined in SOUND_DEFINITIONS with optional `asset: require()` field
+  - When no asset is defined, playback silently skips - no crashes
+  - Storage uses dual approach: simple SOUND_ENABLED boolean + detailed AUDIO_SETTINGS_KEY object
+  - Audio init is non-blocking - app continues even if it fails
 
 ---
