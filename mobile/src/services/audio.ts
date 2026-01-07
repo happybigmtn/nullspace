@@ -1,7 +1,8 @@
 /**
- * Audio service skeleton for game sound effects
+ * Audio service for game sound effects
  *
  * US-136: Sound design service skeleton
+ * US-143: Implement mobile audio system with expo-av
  *
  * Mirrors the haptics.ts structure to provide consistent audio feedback
  * across all game interactions. Audio is disabled by default and requires
@@ -12,10 +13,10 @@
  * - Game: In-game actions (card deals, chip placement, dice rolls)
  * - Celebration: Win effects (win, big win, jackpot)
  * - Error: Negative feedback (loss, error, invalid action)
- *
- * Future implementation will use expo-av for audio playback.
- * This skeleton defines the API contract for consistent integration.
  */
+import { Audio } from 'expo-av';
+import { Platform } from 'react-native';
+import { getBoolean, setBoolean, getObject, setObject, STORAGE_KEYS } from './storage';
 
 /**
  * Sound category for organizing audio assets
@@ -24,7 +25,7 @@ export type SoundCategory = 'ui' | 'game' | 'celebration' | 'error';
 
 /**
  * Sound IDs for game audio
- * Maps to asset files when implemented
+ * Maps to asset files in mobile/assets/sounds/
  */
 export type SoundId =
   // UI sounds
@@ -61,10 +62,13 @@ interface SoundConfig {
   volume: number; // 0.0 - 1.0
   /** Optional: multiple variants for variety (randomly selected) */
   variants?: number;
+  /** Asset require path - undefined if sound not available yet */
+  asset?: ReturnType<typeof require>;
 }
 
 /**
  * Sound definitions with category and default volume
+ * Assets will be added as sound files become available
  */
 const SOUND_DEFINITIONS: Record<SoundId, SoundConfig> = {
   // UI sounds - subtle, non-intrusive
@@ -123,20 +127,155 @@ export const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
   },
 };
 
+/** Storage key for detailed audio settings */
+const AUDIO_SETTINGS_KEY = 'settings.audio_settings';
+
+/**
+ * Loaded sound instance with metadata
+ */
+interface LoadedSound {
+  sound: Audio.Sound;
+  loaded: boolean;
+}
+
 /**
  * AudioService - Centralized audio playback service
  *
  * Provides consistent audio feedback across game interactions.
  * Audio is disabled by default and controlled via settings.
+ *
+ * Features:
+ * - Preloads sounds at app startup for instant playback
+ * - Gracefully handles missing sound files
+ * - Persists user audio preferences
+ * - Category-based volume control
  */
 export class AudioService {
   private settings: AudioSettings = DEFAULT_AUDIO_SETTINGS;
+  private loadedSounds: Map<SoundId, LoadedSound> = new Map();
+  private isInitialized = false;
+  private initPromise: Promise<void> | null = null;
+
+  /**
+   * Initialize audio system and preload sounds
+   * Call this during app startup (from splash screen)
+   */
+  async initialize(): Promise<void> {
+    // Prevent multiple concurrent initializations
+    if (this.initPromise) {
+      return this.initPromise;
+    }
+
+    if (this.isInitialized) {
+      return;
+    }
+
+    this.initPromise = this._doInitialize();
+    return this.initPromise;
+  }
+
+  private async _doInitialize(): Promise<void> {
+    try {
+      // Configure audio mode for game sounds
+      await Audio.setAudioModeAsync({
+        playsInSilentModeIOS: false, // Respect iOS silent switch
+        staysActiveInBackground: false, // Don't play when backgrounded
+        shouldDuckAndroid: true, // Lower other app volume
+      });
+
+      // Load settings from storage
+      await this.loadSettings();
+
+      // Preload all sounds that have assets defined
+      await this.preloadSounds();
+
+      this.isInitialized = true;
+      if (__DEV__) {
+        console.log('[Audio] Initialized successfully');
+      }
+    } catch (error) {
+      console.warn('[Audio] Initialization failed:', error);
+      this.isInitialized = true; // Mark as initialized to prevent retries
+    } finally {
+      this.initPromise = null;
+    }
+  }
+
+  /**
+   * Load settings from persistent storage
+   */
+  private async loadSettings(): Promise<void> {
+    try {
+      // First check the simple enabled toggle
+      const enabled = getBoolean(STORAGE_KEYS.SOUND_ENABLED, false);
+
+      // Then load detailed settings if available
+      const savedSettings = getObject<Partial<AudioSettings>>(AUDIO_SETTINGS_KEY, {});
+
+      this.settings = {
+        ...DEFAULT_AUDIO_SETTINGS,
+        ...savedSettings,
+        enabled, // Simple toggle takes precedence
+      };
+    } catch (error) {
+      console.warn('[Audio] Failed to load settings:', error);
+      this.settings = DEFAULT_AUDIO_SETTINGS;
+    }
+  }
+
+  /**
+   * Save settings to persistent storage
+   */
+  private saveSettings(): void {
+    try {
+      // Save simple toggle for quick access
+      setBoolean(STORAGE_KEYS.SOUND_ENABLED, this.settings.enabled);
+
+      // Save full settings object
+      setObject(AUDIO_SETTINGS_KEY, this.settings);
+    } catch (error) {
+      console.warn('[Audio] Failed to save settings:', error);
+    }
+  }
+
+  /**
+   * Preload all sounds that have assets defined
+   */
+  private async preloadSounds(): Promise<void> {
+    const loadPromises: Promise<void>[] = [];
+
+    for (const [soundId, config] of Object.entries(SOUND_DEFINITIONS) as [SoundId, SoundConfig][]) {
+      if (config.asset) {
+        loadPromises.push(this.loadSound(soundId, config.asset));
+      }
+    }
+
+    // Load sounds in parallel, failures are logged but don't block
+    await Promise.allSettled(loadPromises);
+  }
+
+  /**
+   * Load a single sound asset
+   */
+  private async loadSound(soundId: SoundId, asset: ReturnType<typeof require>): Promise<void> {
+    try {
+      const { sound } = await Audio.Sound.createAsync(asset, { shouldPlay: false });
+      this.loadedSounds.set(soundId, { sound, loaded: true });
+      if (__DEV__) {
+        console.log(`[Audio] Loaded: ${soundId}`);
+      }
+    } catch (error) {
+      console.warn(`[Audio] Failed to load ${soundId}:`, error);
+      // Store as not loaded so we don't retry
+      this.loadedSounds.set(soundId, { sound: null as unknown as Audio.Sound, loaded: false });
+    }
+  }
 
   /**
    * Check if audio can be played
    */
   private canPlay(): boolean {
-    return this.settings.enabled;
+    return this.settings.enabled && Platform.OS !== 'web';
   }
 
   /**
@@ -161,20 +300,70 @@ export class AudioService {
   async play(soundId: SoundId): Promise<void> {
     if (!this.canPlay()) return;
 
-    const _volume = this.getVolume(soundId);
-    const config = SOUND_DEFINITIONS[soundId];
+    const loadedSound = this.loadedSounds.get(soundId);
 
-    // TODO: Implement actual audio playback with expo-av
-    // For now, this is a no-op skeleton
-    console.debug(`[Audio] Would play: ${soundId} (volume: ${_volume.toFixed(2)}, category: ${config?.category})`);
+    // If sound isn't loaded or failed to load, log and return
+    if (!loadedSound?.loaded) {
+      if (__DEV__) {
+        console.debug(`[Audio] Sound not available: ${soundId}`);
+      }
+      return;
+    }
+
+    try {
+      const volume = this.getVolume(soundId);
+
+      // Set volume and reset to start
+      await loadedSound.sound.setStatusAsync({
+        volume,
+        positionMillis: 0,
+        shouldPlay: true,
+      });
+    } catch (error) {
+      // Sound playback failures are non-critical
+      if (__DEV__) {
+        console.warn(`[Audio] Playback failed for ${soundId}:`, error);
+      }
+    }
   }
 
   /**
    * Stop all currently playing sounds
    */
   async stopAll(): Promise<void> {
-    // TODO: Implement with expo-av
-    console.debug('[Audio] Would stop all sounds');
+    const stopPromises: Promise<void>[] = [];
+
+    for (const [, loadedSound] of this.loadedSounds) {
+      if (loadedSound.loaded) {
+        stopPromises.push(
+          loadedSound.sound.stopAsync().then(() => {
+            // Success, nothing to return
+          }).catch(() => {
+            // Ignore stop errors
+          })
+        );
+      }
+    }
+
+    await Promise.allSettled(stopPromises);
+  }
+
+  /**
+   * Cleanup and unload all sounds
+   * Call when app is terminating or audio is no longer needed
+   */
+  async cleanup(): Promise<void> {
+    for (const [, loadedSound] of this.loadedSounds) {
+      if (loadedSound.loaded) {
+        try {
+          await loadedSound.sound.unloadAsync();
+        } catch {
+          // Ignore unload errors
+        }
+      }
+    }
+    this.loadedSounds.clear();
+    this.isInitialized = false;
   }
 
   /**
@@ -182,6 +371,7 @@ export class AudioService {
    */
   setSettings(settings: Partial<AudioSettings>): void {
     this.settings = { ...this.settings, ...settings };
+    this.saveSettings();
   }
 
   /**
@@ -196,6 +386,7 @@ export class AudioService {
    */
   setEnabled(enabled: boolean): void {
     this.settings.enabled = enabled;
+    this.saveSettings();
   }
 
   /**
@@ -203,6 +394,42 @@ export class AudioService {
    */
   isEnabled(): boolean {
     return this.settings.enabled;
+  }
+
+  /**
+   * Toggle audio enabled state
+   * @returns The new enabled state
+   */
+  toggle(): boolean {
+    const newState = !this.settings.enabled;
+    this.setEnabled(newState);
+    return newState;
+  }
+
+  /**
+   * Set master volume
+   * @param volume 0.0 to 1.0
+   */
+  setMasterVolume(volume: number): void {
+    this.settings.masterVolume = Math.max(0, Math.min(1, volume));
+    this.saveSettings();
+  }
+
+  /**
+   * Set category volume
+   * @param category The sound category
+   * @param volume 0.0 to 1.0
+   */
+  setCategoryVolume(category: SoundCategory, volume: number): void {
+    this.settings.categoryVolumes[category] = Math.max(0, Math.min(1, volume));
+    this.saveSettings();
+  }
+
+  /**
+   * Check if audio system is initialized
+   */
+  isReady(): boolean {
+    return this.isInitialized;
   }
 
   // ─────────────────────────────────────────────────────────────────────────────

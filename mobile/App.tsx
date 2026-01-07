@@ -11,6 +11,7 @@
 import './src/utils/cryptoPolyfill';
 import * as Sentry from '@sentry/react-native';
 import { initializeErrorReporter } from './src/services/errorReporter';
+import { audio } from './src/services/audio';
 import { registerRootComponent } from 'expo';
 import * as SplashScreen from 'expo-splash-screen';
 import { useCallback, useEffect, useState } from 'react';
@@ -139,9 +140,19 @@ function App() {
   });
 
   useEffect(() => {
-    if (fontsLoaded || fontError) {
-      setAppIsReady(true);
+    async function prepare() {
+      // Initialize audio service in parallel with font loading
+      // Audio init is non-blocking - app continues even if it fails
+      await audio.initialize().catch(() => {
+        // Audio failures are non-critical, app continues
+      });
+
+      if (fontsLoaded || fontError) {
+        setAppIsReady(true);
+      }
     }
+
+    prepare();
   }, [fontsLoaded, fontError]);
 
   const onLayoutRootView = useCallback(async () => {
