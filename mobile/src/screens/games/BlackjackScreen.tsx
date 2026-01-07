@@ -2,10 +2,9 @@
  * Blackjack Game Screen - Jony Ive Redesigned
  * Hit/Stand always visible, Split/Double contextual
  */
-import { View, Text, StyleSheet, InteractionManager, Pressable } from 'react-native';
+import { View, Text, StyleSheet, InteractionManager, Pressable, Dimensions } from 'react-native';
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import Animated, { SlideInRight } from 'react-native-reanimated';
-import { Card } from '../../components/casino';
+import { DealtCard, DealtHiddenCard } from '../../components/casino';
 import { ChipSelector } from '../../components/casino';
 import { GameLayout } from '../../components/game';
 import { TutorialOverlay, PrimaryButton, BlackjackSkeleton, BetConfirmationModal } from '../../components/ui';
@@ -15,7 +14,6 @@ import {
   COLORS,
   SPACING,
   TYPOGRAPHY,
-  SPRING,
   RADIUS,
   GAME_LAYOUT_STYLES,
   MESSAGE_STYLES,
@@ -337,10 +335,13 @@ export function BlackjackScreen() {
   }), [state.phase, bet, state.canDouble, state.canSplit, isDisconnected, handleHit, handleStand, handleDouble, handleSplit, handleDeal, handleNewGame, clearBet, handleChipPlace]);
 
   useGameKeyboard(keyboardHandlers);
-  const cardEnter = SlideInRight.springify()
-    .damping(SPRING.cardDeal.damping)
-    .stiffness(SPRING.cardDeal.stiffness)
-    .mass(SPRING.cardDeal.mass);
+
+  // Get screen dimensions for dealer position (top-center)
+  const { width: screenWidth } = Dimensions.get('window');
+  const dealerPosition = useMemo(() => ({
+    x: screenWidth / 2,
+    y: -80, // Above visible game area
+  }), [screenWidth]);
 
   return (
     <>
@@ -363,19 +364,33 @@ export function BlackjackScreen() {
               Dealer {state.phase === 'result' && `(${state.dealerTotal})`}
             </Text>
             <View style={GAME_LAYOUT_STYLES.cards}>
-              {state.dealerCards.map((card, i) => (
-                <Animated.View
-                  key={i}
-                  entering={cardEnter.delay(i * 100)}
-                  style={[GAME_LAYOUT_STYLES.cardWrapper, { marginLeft: i > 0 ? -40 : 0 }]}
-                >
-                  <Card
-                    suit={card.suit}
-                    rank={card.rank}
-                    faceUp={!(i === 1 && state.dealerHidden)}
-                  />
-                </Animated.View>
-              ))}
+              {state.dealerCards.map((card, i) => {
+                const isFaceDown = i === 1 && state.dealerHidden;
+                return isFaceDown ? (
+                  <View
+                    key={i}
+                    style={[GAME_LAYOUT_STYLES.cardWrapper, { marginLeft: i > 0 ? -40 : 0 }]}
+                  >
+                    <DealtHiddenCard
+                      dealIndex={i}
+                      dealerPosition={dealerPosition}
+                    />
+                  </View>
+                ) : (
+                  <View
+                    key={i}
+                    style={[GAME_LAYOUT_STYLES.cardWrapper, { marginLeft: i > 0 ? -40 : 0 }]}
+                  >
+                    <DealtCard
+                      suit={card.suit}
+                      rank={card.rank}
+                      faceUp={true}
+                      dealIndex={i}
+                      dealerPosition={dealerPosition}
+                    />
+                  </View>
+                );
+              })}
             </View>
           </View>
 
@@ -400,13 +415,18 @@ export function BlackjackScreen() {
             </Text>
             <View style={GAME_LAYOUT_STYLES.cards}>
               {state.playerCards.map((card, i) => (
-                <Animated.View
+                <View
                   key={i}
-                  entering={cardEnter.delay(i * 100)}
                   style={[GAME_LAYOUT_STYLES.cardWrapper, { marginLeft: i > 0 ? -40 : 0 }]}
                 >
-                  <Card suit={card.suit} rank={card.rank} faceUp={true} />
-                </Animated.View>
+                  <DealtCard
+                    suit={card.suit}
+                    rank={card.rank}
+                    faceUp={true}
+                    dealIndex={i}
+                    dealerPosition={dealerPosition}
+                  />
+                </View>
               ))}
             </View>
           </View>
