@@ -35,7 +35,47 @@ If metrics auth is enabled, add the auth header in `docker/observability/prometh
 (local stack defaults assume no auth).
 2) Open Grafana: `http://localhost:3001` (admin/admin).
 3) Use the preloaded dashboard: "Nullspace / Nullspace SLO Overview" (includes casino activity, node memory/CPU, and limit reject panels).
-4) Optional: Alertmanager UI is available at `http://localhost:9093` (no-op receiver by default).
+4) Optional: Alertmanager UI is available at `http://localhost:9093`.
+
+## Alertmanager Configuration (Production)
+
+For production, configure real notification receivers by setting environment variables
+before starting the observability stack:
+
+```bash
+# Copy and edit the example file
+cp docker/observability/alertmanager.env.example docker/observability/alertmanager.env
+# Edit alertmanager.env with real webhook URLs
+
+# Start with secrets
+source docker/observability/alertmanager.env && docker compose up -d
+```
+
+**Required secrets:**
+- `SLACK_WEBHOOK_URL` - Slack incoming webhook for `#nullspace-alerts` channel
+- `PAGERDUTY_SERVICE_KEY` - PagerDuty Events API v2 integration key
+
+**Alert routing:**
+| Severity | Destination | Response Time |
+|----------|-------------|---------------|
+| `critical` | Slack (`#nullspace-critical`) + PagerDuty | 15 min ack |
+| `warning` | Slack (`#nullspace-alerts`) only | Next business hour |
+
+**On-call escalation policy:**
+1. Primary on-call responds within 15 minutes
+2. Secondary escalation if no ack within 30 minutes
+3. Engineering lead escalation if downtime > 30 minutes
+
+See `docs/RUNBOOK.md` Section 8.1 for full incident response procedures.
+
+**Testing alerts:**
+```bash
+# Send a test alert to verify routing
+curl -H "Content-Type: application/json" -d '[{
+  "labels": {"alertname": "TestAlert", "severity": "warning"},
+  "annotations": {"summary": "Test alert", "description": "Verifying alert routing"}
+}]' http://localhost:9093/api/v1/alerts
+```
 
 Notes:
 - `prometheus.yml` targets `host.docker.internal` for local dev. On Linux, the

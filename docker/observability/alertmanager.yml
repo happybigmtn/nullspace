@@ -1,4 +1,132 @@
+# Alertmanager configuration for Nullspace production
+#
+# Required environment variables:
+#   SLACK_WEBHOOK_URL - Slack incoming webhook for #alerts channel
+#   PAGERDUTY_SERVICE_KEY - PagerDuty integration key for critical alerts
+#
+# Alert routing:
+#   - critical severity → Slack + PagerDuty (pages on-call)
+#   - warning severity → Slack only (for visibility)
+#   - default → Slack only
+#
+# On-call escalation policy:
+#   1. Primary on-call responds within 15 minutes
+#   2. Secondary escalation if no ack within 30 minutes
+#   3. Engineering lead escalation if downtime > 30 minutes
+#   See docs/RUNBOOK.md Section 8.1 for details
+
+global:
+  # Slack configuration
+  slack_api_url: "${SLACK_WEBHOOK_URL}"
+
+  # PagerDuty routing key (for Events API v2)
+  pagerduty_url: "https://events.pagerduty.com/v2/enqueue"
+
+  # Resolve timeout - how long to wait before declaring an alert resolved
+  resolve_timeout: 5m
+
+# Notification templates
+templates:
+  - "/etc/alertmanager/templates/*.tmpl"
+
+# Inhibition rules - prevent duplicate notifications
+inhibit_rules:
+  # If a critical alert fires, suppress the corresponding warning
+  - source_matchers:
+      - severity="critical"
+    target_matchers:
+      - severity="warning"
+    equal:
+      - alertname
+
+# Alert routing tree
 route:
-  receiver: "null"
+  # Default receiver for unmatched alerts
+  receiver: slack-warnings
+
+  # Group alerts by alertname to reduce notification noise
+  group_by: ["alertname", "severity"]
+
+  # Wait before sending initial notification (allows grouping)
+  group_wait: 30s
+
+  # Wait before sending updates to existing groups
+  group_interval: 5m
+
+  # Wait before resending a notification
+  repeat_interval: 4h
+
+  # Child routes (evaluated in order, first match wins)
+  routes:
+    # Critical alerts → Slack + PagerDuty (pages on-call)
+    - matchers:
+        - severity="critical"
+      receiver: critical-pagerduty
+      group_wait: 10s
+      repeat_interval: 1h
+      continue: false
+
+    # Warning alerts → Slack only
+    - matchers:
+        - severity="warning"
+      receiver: slack-warnings
+      continue: false
+
+# Notification receivers
 receivers:
+  # Slack channel for warning alerts
+  - name: slack-warnings
+    slack_configs:
+      - channel: "#nullspace-alerts"
+        send_resolved: true
+        title: '{{ if eq .Status "firing" }}🔥{{ else }}✅{{ end }} {{ .CommonLabels.alertname }}'
+        text: |
+          *Status:* {{ .Status | toUpper }}
+          *Severity:* {{ .CommonLabels.severity }}
+          *Summary:* {{ .CommonAnnotations.summary }}
+          *Description:* {{ .CommonAnnotations.description }}
+          {{ if gt (len .Alerts.Firing) 0 }}
+          *Firing:* {{ len .Alerts.Firing }}
+          {{ end }}
+          {{ if gt (len .Alerts.Resolved) 0 }}
+          *Resolved:* {{ len .Alerts.Resolved }}
+          {{ end }}
+          <{{ .ExternalURL }}/#/alerts?filter={{ .CommonLabels.alertname }}|View in Alertmanager>
+        actions:
+          - type: button
+            text: "Runbook"
+            url: "https://github.com/nullspace-network/nullspace/blob/main/docs/RUNBOOK.md#8-incident-response"
+          - type: button
+            text: "Grafana"
+            url: "http://localhost:3001/d/nullspace-slo"
+
+  # Critical alerts → Slack + PagerDuty
+  - name: critical-pagerduty
+    slack_configs:
+      - channel: "#nullspace-critical"
+        send_resolved: true
+        title: '{{ if eq .Status "firing" }}🚨 CRITICAL{{ else }}✅ RESOLVED{{ end }} {{ .CommonLabels.alertname }}'
+        text: |
+          *Status:* {{ .Status | toUpper }}
+          *Severity:* CRITICAL - Paging on-call
+          *Summary:* {{ .CommonAnnotations.summary }}
+          *Description:* {{ .CommonAnnotations.description }}
+          {{ if gt (len .Alerts.Firing) 0 }}
+          *Firing:* {{ len .Alerts.Firing }}
+          {{ end }}
+          {{ if gt (len .Alerts.Resolved) 0 }}
+          *Resolved:* {{ len .Alerts.Resolved }}
+          {{ end }}
+          <{{ .ExternalURL }}/#/alerts?filter={{ .CommonLabels.alertname }}|View in Alertmanager>
+    pagerduty_configs:
+      - routing_key: "${PAGERDUTY_SERVICE_KEY}"
+        severity: critical
+        description: "{{ .CommonLabels.alertname }}: {{ .CommonAnnotations.summary }}"
+        details:
+          firing: "{{ .Alerts.Firing | len }}"
+          resolved: "{{ .Alerts.Resolved | len }}"
+          description: "{{ .CommonAnnotations.description }}"
+          runbook: "https://github.com/nullspace-network/nullspace/blob/main/docs/RUNBOOK.md#8-incident-response"
+
+  # Fallback null receiver (for silencing during maintenance)
   - name: "null"
