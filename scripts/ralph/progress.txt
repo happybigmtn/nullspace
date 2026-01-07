@@ -1794,3 +1794,29 @@ Target: Testnet Production
   - Pattern: Defensive nonce management - trust local state over potentially reset backend
 
 ---
+
+## 2026-01-06 - US-085: Add balance field presence validation test
+
+- What was implemented:
+  - Fixed bug in `gateway/src/handlers/base.ts` line 486
+  - Changed `if (session.balance > 0n)` to always include balance field
+  - Added 17 tests in `gateway/tests/unit/balance-field-validation.test.ts`
+  - Tests cover:
+    1. game_started always includes balance field (even when 0)
+    2. game_move without balance handled gracefully
+    3. mobile balance update patterns documented
+    4. balance field in different response types
+    5. edge cases (negative, zero, large values)
+- Files changed:
+  - `gateway/src/handlers/base.ts` - Removed conditional that skipped balance=0
+  - `gateway/tests/unit/balance-field-validation.test.ts` - New file with 17 tests
+- **Learnings:**
+  - Original bug: `if (session.balance > 0n)` meant balance=0 was never sent to mobile
+  - Mobile would keep showing stale balance, potentially allowing invalid bets
+  - Fix: Always include balance field - it's always useful for display
+  - game_move uses event.balanceSnapshot (optional) - mobile must handle missing field
+  - game_result uses finalChips (always present via `?? '0'` fallback)
+  - Safe extraction pattern: `typeof msg.balance === 'string' ? BigInt(msg.balance) : null`
+  - Pattern: Fields that indicate state (like balance) should always be present, not conditional
+
+---

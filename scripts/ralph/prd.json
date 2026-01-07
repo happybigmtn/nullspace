@@ -985,8 +985,8 @@
 				"Fix base.ts:486 conditional check that skips balance=0"
 			],
 			"priority": 76,
-			"passes": false,
-			"notes": "CRITICAL GAP: base.ts:486 'if (session.balance > 0n)' may skip balance field. Mobile can't update balance if field missing."
+			"passes": true,
+			"notes": "FIXED: (1) Changed base.ts:486 from `if (session.balance > 0n)` to always include balance field. (2) Added 17 tests in balance-field-validation.test.ts covering: game_started always includes balance (even 0), game_move without balance handled gracefully, mobile balance update patterns, balance in different response types, edge cases (negative, zero, large). Mobile can now properly show 0 balance when player is broke."
 		},
 		{
 			"id": "US-086",
