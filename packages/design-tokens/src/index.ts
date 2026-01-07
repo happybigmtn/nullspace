@@ -71,3 +71,13 @@ export {
   type GlowColor,
   type GlowConfig,
 } from './shadows.js';
+
+// Opacity
+export {
+  OPACITY,
+  OPACITY_SEMANTIC,
+  type OpacityKey,
+  type OpacityValue,
+  type OpacitySemanticKey,
+  type OpacitySemanticValue,
+} from './opacity.js';

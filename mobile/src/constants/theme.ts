@@ -16,6 +16,8 @@ import {
   SPRING,
   GAME,
   FONTS,
+  OPACITY,
+  OPACITY_SEMANTIC,
 } from '@nullspace/design-tokens';
 
 /**
@@ -130,8 +132,8 @@ export const DARK_COLORS = {
   suitBlack: TITANIUM[200], // Light for visibility on dark
 
   // Glass - darker, higher contrast glass effect
-  glassLight: 'rgba(255, 255, 255, 0.08)',
-  glassDark: 'rgba(0, 0, 0, 0.85)',
+  glassLight: `rgba(255, 255, 255, ${OPACITY.xs})`,
+  glassDark: `rgba(0, 0, 0, ${OPACITY_SEMANTIC.tutorial})`,
 } as const;
 
 /** Color scheme type for theming */
@@ -459,7 +461,7 @@ export const DRAWER_STYLES = StyleSheet.create({
   drawerOverlay: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: `rgba(0, 0, 0, ${OPACITY_SEMANTIC.backdrop})`,
   },
   /** Drawer container */
   drawer: {

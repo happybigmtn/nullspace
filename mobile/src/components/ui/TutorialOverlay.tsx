@@ -13,6 +13,7 @@ import Animated, { FadeIn, FadeOut, SlideInDown } from 'react-native-reanimated'
 import { haptics } from '../../services/haptics';
 import { isTutorialCompleted, markTutorialCompleted } from '../../services/storage';
 import { SPACING, RADIUS, TYPOGRAPHY, DARK_MODE_GLOW } from '../../constants/theme';
+import { OPACITY_SEMANTIC, OPACITY } from '@nullspace/design-tokens';
 import { useTheme } from '../../context/ThemeContext';
 import { useThemedColors } from '../../hooks/useThemedColors';
 import type { TutorialStep } from '../../types';
@@ -114,8 +115,8 @@ export function TutorialOverlay({
             StyleSheet.absoluteFill,
             {
               backgroundColor: isDark
-                ? 'rgba(0, 0, 0, 0.6)'
-                : 'rgba(0, 0, 0, 0.4)',
+                ? `rgba(0, 0, 0, ${OPACITY.xl})`
+                : `rgba(0, 0, 0, ${OPACITY.lg})`,
             },
           ]}
         />
