@@ -266,8 +266,8 @@
         "Add bundle size limit check in CI"
       ],
       "priority": 68,
-      "passes": false,
-      "notes": "PERF-CRITICAL: Main bundle 841KB, EconomyDashboard 392KB. Both exceed 500KB warning threshold."
+      "passes": true,
+      "notes": "COMPLETE: Main bundle reduced to 13KB (was 841KB). All routes lazy-loaded via React.lazy() in App.jsx. Vendor chunks split by category (react, charts, animation). Bundle analyzer via ANALYZE=true. CI check enforces: main<50KB, route<600KB, vendor<350KB."
     },
     {
       "id": "US-146",

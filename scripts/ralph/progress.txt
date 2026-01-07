@@ -3289,3 +3289,28 @@ Target: Testnet Production
   - Test alerts: `curl -H "Content-Type: application/json" -d '[{"labels":{"alertname":"Test","severity":"warning"}}]' http://localhost:9093/api/v1/alerts`
 
 ---
+
+---
+
+## 2026-01-07 - US-145: Code-split and lazy-load website bundles
+
+- What was implemented:
+  - Added bundle size check script to CI pipeline (.github/workflows/tests.yml)
+  - Script website/scripts/check-bundle-sizes.mjs enforces limits per bundle type
+  - Verified existing code-splitting already met all acceptance criteria
+- Files changed:
+  - `.github/workflows/tests.yml` - Added "Check bundle sizes (US-145)" step after build
+  - `website/scripts/check-bundle-sizes.mjs` - Bundle size enforcement script (already existed, now in CI)
+- Current bundle sizes:
+  - Main entry: 13KB (limit: 50KB)
+  - CasinoApp: 478KB (limit: 600KB) 
+  - vendor-charts: 293KB (limit: 350KB)
+  - vendor-react: 228KB (limit: 350KB)
+  - EconomyDashboard: 11KB (lazy-loaded as separate chunk)
+- **Learnings:**
+  - React.lazy() with dynamic import() creates automatic code-split points
+  - Vite manualChunks in rollupOptions provides fine-grained vendor splitting
+  - rollup-plugin-visualizer (not webpack-bundle-analyzer) works with Vite
+  - Bundle check runs AFTER build step to validate dist/assets/*.js sizes
+  - Main bundle tiny because ALL routes use lazy() - only React, router, and bootstrap code in entry
+
