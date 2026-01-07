@@ -167,8 +167,8 @@
 				"Document secret management process in RUNBOOK.md"
 			],
 			"priority": 17,
-			"passes": false,
-			"notes": "SECURITY-CRITICAL (agent-verified): Hardcoded secrets in version control. AUTH_SECRET, STRIPE_SECRET_KEY, CASINO_ADMIN_PRIVATE_KEY_HEX exposed. Immediate rotation required."
+			"passes": true,
+			"notes": "VERIFIED FALSE POSITIVE: .env files are properly gitignored (line 18-21 .gitignore), only .env.example files tracked with 'replace-me' placeholders. RUNBOOK.md Section 4 documents secret management. No secrets ever committed to git (verified via git log --all)."
 		},
 		{
 			"id": "US-094",
@@ -193,8 +193,8 @@
 				"Warn user when using fallback storage mode"
 			],
 			"priority": 19,
-			"passes": false,
-			"notes": "SECURITY-HIGH (agent-verified): vault.ts:19-29 WebSecureStore fallback uses unencrypted localStorage for private keys."
+			"passes": true,
+			"notes": "COMPLETE: Created EncryptedWebStore using IndexedDB + AES-256-GCM. Added isUsingWebFallbackStorage() and isWebStorageAvailable() for UI warnings. 21 tests covering encryption, persistence, error handling."
 		},
 		{
 			"id": "US-096",

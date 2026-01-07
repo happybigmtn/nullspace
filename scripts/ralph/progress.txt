@@ -2098,3 +2098,48 @@ Target: Testnet Production
   - When updating password length requirements, search for existing security tests (timing attacks, constant-time tests)
   - React Test Renderer serializes children separately: `["56", " bits"]` not `"56 bits"` - use JSON.stringify matching
   - Exported `VAULT_PASSWORD_MIN_LENGTH` allows tests to use the actual value via mock, keeping tests in sync
+
+---
+
+## 2026-01-07 - US-093: Rotate and externalize hardcoded secrets from .env files
+
+- What was implemented:
+  - VERIFIED FALSE POSITIVE: After investigation, no secrets were ever committed to git
+  - `.gitignore` lines 18-21 properly exclude `.env` and `.env.*` (except `.example`)
+  - All `.env.example` files use safe placeholders (`replace-me`, `sk_live_or_test`, etc.)
+  - `git log --all -- '*.env'` confirms no `.env` files in git history
+  - RUNBOOK.md Section 4 already documents credential management and rotation
+- Files changed:
+  - None - existing configuration was already correct
+- **Learnings:**
+  - Always verify security findings with `git ls-files` and `git log --all` before acting
+  - `git check-ignore -v <file>` shows which `.gitignore` rule matches a file
+  - False positives happen when scans detect `.env` files on disk that aren't committed
+  - Security scans should distinguish tracked vs. untracked files
+
+---
+
+## 2026-01-07 - US-095: Add encrypted fallback for web vault storage
+
+- What was implemented:
+  - Created `EncryptedWebStore` module (`encryptedWebStore.ts`) replacing insecure localStorage
+  - Uses IndexedDB for persistent storage + SubtleCrypto AES-256-GCM for encryption
+  - Per-browser encryption key generated and stored in IndexedDB (never exported)
+  - Added `isUsingWebFallbackStorage()` and `isWebStorageAvailable()` for UI warnings
+  - Updated `vault.ts` to use EncryptedWebStore instead of plain localStorage on web
+  - Added 21 tests covering encryption, persistence, error handling, and key reuse
+- Files changed:
+  - `mobile/src/services/encryptedWebStore.ts` - New encrypted storage module (270 lines)
+  - `mobile/src/services/vault.ts` - Switched to EncryptedWebStore, added detection APIs
+  - `mobile/src/services/__tests__/encryptedWebStore.test.ts` - Comprehensive tests
+- **Learnings:**
+  - IndexedDB + SubtleCrypto is the modern browser pattern for secure client storage
+  - AES-GCM requires 96-bit (12 byte) IV for optimal security
+  - Store encryption key in IndexedDB as JWK format for portability
+  - Import key as non-extractable after initial storage to prevent key theft
+  - Mock IDB in tests using custom classes (IDBRequest, IDBObjectStore, IDBDatabase)
+  - Jest `jest.isolateModules` has issues with shared mocks; use `require()` for simple export tests
+  - `crypto.subtle.generateKey` with `extractable: true` allows one-time export for storage
+  - Re-import with `extractable: false` ensures key can't be exported by malicious scripts
+
+---

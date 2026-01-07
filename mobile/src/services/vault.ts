@@ -5,6 +5,10 @@ import { pbkdf2 } from '@noble/hashes/pbkdf2';
 import { sha256 } from '@noble/hashes/sha256';
 import { xchacha20poly1305 } from '@noble/ciphers/chacha';
 import { bytesToHex, hexToBytes } from '../utils/hex';
+import {
+  EncryptedWebStore,
+  isEncryptedStorageAvailable,
+} from './encryptedWebStore';
 
 const VAULT_RECORD_KEY = 'nullspace_vault_record_v1';
 const LEGACY_PRIVATE_KEY_KEY = 'nullspace_private_key';
@@ -27,20 +31,35 @@ const PRIVATE_KEY_BYTES = 32;
 
 const isWeb = Platform.OS === 'web';
 
-const WebSecureStore = {
-  async getItemAsync(key: string): Promise<string | null> {
-    return localStorage.getItem(key);
-  },
-  async setItemAsync(key: string, value: string): Promise<void> {
-    localStorage.setItem(key, value);
-  },
-  async deleteItemAsync(key: string): Promise<void> {
-    localStorage.removeItem(key);
-  },
-};
+/**
+ * Storage implementation for web platform.
+ * Uses IndexedDB + AES-GCM encryption for secure storage.
+ *
+ * SECURITY: This replaces the previous insecure localStorage fallback.
+ * The vault data is now encrypted at rest with a per-browser key.
+ */
+const VaultStore = isWeb ? EncryptedWebStore : SecureStore;
+const LegacyStore = isWeb ? EncryptedWebStore : SecureStore;
 
-const VaultStore = isWeb ? WebSecureStore : SecureStore;
-const LegacyStore = isWeb ? WebSecureStore : SecureStore;
+/**
+ * Returns true if the vault is using encrypted web storage (IndexedDB + AES-GCM).
+ * This can be used by UI to display a warning that storage may be less secure
+ * than native SecureStore (e.g., no hardware-backed keychain).
+ */
+export function isUsingWebFallbackStorage(): boolean {
+  return isWeb;
+}
+
+/**
+ * Returns true if encrypted web storage is available and functional.
+ * If false on web platform, vault operations will fail.
+ */
+export function isWebStorageAvailable(): boolean {
+  if (!isWeb) {
+    return true; // Native platforms use SecureStore
+  }
+  return isEncryptedStorageAvailable();
+}
 
 type VaultRecord = {
   version: 1;
