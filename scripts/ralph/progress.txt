@@ -3314,3 +3314,26 @@ Target: Testnet Production
   - Bundle check runs AFTER build step to validate dist/assets/*.js sizes
   - Main bundle tiny because ALL routes use lazy() - only React, router, and bootstrap code in entry
 
+
+---
+
+## 2026-01-07 - US-146: Add SEO essentials to website
+
+- What was implemented:
+  - Created robots.txt in public/ allowing all crawlers, referencing sitemap
+  - Created sitemap.xml with 9 public routes (casino, economy, swap, stake, liquidity, bridge, security, explorer, tokens)
+  - Copied favicon.ico to public/ so it's included in dist/
+  - Added JSON-LD structured data with @graph containing Organization, WebApplication, WebSite schemas
+  - Verified Open Graph + Twitter Card meta tags already existed
+- Files changed:
+  - `website/public/robots.txt` - Created with Allow: / and sitemap reference
+  - `website/public/sitemap.xml` - Created with 9 URLs, priorities, changefreq
+  - `website/public/favicon.ico` - Copied from website root
+  - `website/index.html` - Added JSON-LD script block
+- **Learnings:**
+  - Vite automatically copies public/ contents to dist/ during build
+  - favicon.ico existed at website root but wasn't in public/ (so 404 in prod)
+  - JSON-LD @graph allows multiple schemas in one script block
+  - Use @id references (e.g., "#organization") to link schemas without duplication
+  - Open Graph and Twitter Card meta tags provide social sharing previews
+
