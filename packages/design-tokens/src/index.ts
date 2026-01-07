@@ -65,11 +65,17 @@ export {
   SHADOW,
   ELEVATION,
   GLOW,
+  SHADOW_COLORED,
+  SHADOW_INSET,
   type ShadowLevel,
   type ShadowConfig,
   type ElevationLevel,
   type GlowColor,
   type GlowConfig,
+  type ShadowColoredKey,
+  type ShadowColoredConfig,
+  type ShadowInsetLevel,
+  type ShadowInsetConfig,
 } from './shadows.js';
 
 // Opacity

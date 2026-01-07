@@ -25,6 +25,7 @@ import Animated, {
 import { haptics } from '../../services/haptics';
 import { COLORS, SPACING, TYPOGRAPHY, SPRING } from '../../constants/theme';
 import { CHIP_VALUES } from '../../constants/theme';
+import { GLOW, SHADOW_COLORED } from '@nullspace/design-tokens';
 import type { ChipValue } from '../../types';
 
 /**
@@ -314,7 +315,7 @@ const Chip = React.memo(function Chip({
             backgroundColor: colors.base,
             borderColor: colors.border,
           },
-          selected && [styles.chipSelected, { shadowColor: COLORS.primary }],
+          selected && styles.chipSelected,
           animatedStyle,
         ]}
       >
@@ -413,9 +414,10 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   chipSelected: {
-    borderColor: COLORS.primary,
-    shadowOpacity: 0.6,
-    shadowRadius: 8,
+    borderColor: GLOW.indigo.color,
+    shadowColor: GLOW.indigo.color,
+    shadowOpacity: GLOW.indigo.opacity + 0.2, // Slightly stronger for visibility
+    shadowRadius: GLOW.indigo.blur / 2, // Scale for RN (CSS blur is spread)
   },
   chipText: {
     ...TYPOGRAPHY.caption,
