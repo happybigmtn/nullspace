@@ -933,8 +933,8 @@
 				"Test ephemeral key loss on reconnect is handled gracefully"
 			],
 			"priority": 72,
-			"passes": false,
-			"notes": "ARCHITECTURE: Gateway uses custodial signing (ephemeral keys per session). Mobile vault keys used for auth service only. WebSocket identity is the auth boundary for game messages."
+			"passes": true,
+			"notes": "FIXED: Created custodial-signing-architecture.test.ts with 30 tests. Documents two-tier signing: (1) Custodial - gateway ephemeral Ed25519 keys per session, namespace-prefixed signing, entropy validation. (2) Entitlements - mobile vault XChaCha20-Poly1305 + PBKDF2 250K iterations. (3) Session isolation via Map<WebSocket,Session> and Map<publicKeyHex,Session>. (4) Reconnection creates new keypair, balance maintained via backend queries. Security boundaries documented: private keys in memory only, transaction namespace prevents cross-chain replay, nonce prevents in-chain replay."
 		},
 		{
 			"id": "US-082",
@@ -946,8 +946,8 @@
 				"Test auto-reconnect doesn't loop infinitely on expired session"
 			],
 			"priority": 73,
-			"passes": false,
-			"notes": "CRITICAL GAP: cleanupIdleSessions() destroys session without notifying client. Mobile continues playing against dead session."
+			"passes": true,
+			"notes": "FIXED: Added onSessionExpired callback to cleanupIdleSessions(). Callback invoked BEFORE ws.close() so client receives SESSION_EXPIRED message. Added periodic cleanup timer in index.ts (5 min interval, 30 min idle threshold). 16 tests verify: SESSION_EXPIRED sent before close, game state available in callback, close code 1000 prevents reconnect loops. Sessions with active games also expire (callback receives game state for logging)."
 		},
 		{
 			"id": "US-083",
@@ -959,8 +959,8 @@
 				"Test user can unlock vault and continue game"
 			],
 			"priority": 74,
-			"passes": false,
-			"notes": "HIGH GAP: If vault auto-locks during game, signMessage() throws but mobile may not handle gracefully."
+			"passes": true,
+			"notes": "FIXED: Added 10 comprehensive tests in vault.test.ts 'vault lock during active game (US-083)' describe block. Tests verify: (1) getUnlockedVaultPrivateKey() returns null when locked, (2) getVaultStatus() reflects lock state, (3) exportVaultPrivateKey() throws vault_locked without password, (4) vault re-unlock after locking during game, (5) game state preservation (external to vault), (6) immediate memory clearing on lockVault(), (7) documents signMessage vault_locked error pattern, (8) multiple lock/unlock cycles, (9) wrong password leaves vault locked, (10) rapid lock/unlock handles without race conditions."
 		},
 		{
 			"id": "US-084",

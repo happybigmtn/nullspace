@@ -1682,3 +1682,85 @@ Target: Testnet Production
   - Pattern: Source of truth for game rules should be execution layer, not UI
 
 ---
+
+## 2026-01-06 - US-081: Add custodial signing architecture integration test
+
+- What was implemented:
+  - Created `gateway/tests/unit/custodial-signing-architecture.test.ts` with 30 tests
+  - Documents and tests the two-tier signing architecture:
+    1. **Custodial Model (Gateway → On-Chain)**: Ephemeral Ed25519 keys per session, namespace-prefixed signing (`_NULLSPACE_TX`), entropy validation (no all-zeros/same-byte keys)
+    2. **Entitlements Model (Mobile → Auth)**: Vault XChaCha20-Poly1305 encryption, PBKDF2-SHA256 with 250K iterations, vault_locked error handling
+    3. **Session Isolation**: 1:1 WebSocket→Session mapping, double indexing (ws→session, publicKeyHex→session), handlers receive session context
+    4. **Reconnection**: Session destroyed on disconnect, new keypair generated, balance maintained via backend queries
+  - Security boundaries documented: private keys in memory only, transaction namespace prevents cross-chain replay, nonce prevents in-chain replay
+  - Rate limiting tests: 10 sessions per IP per hour, independent per-IP buckets
+  - Transaction signature verification tests: valid passes, tampered fails, wrong key fails
+- Files changed:
+  - `gateway/tests/unit/custodial-signing-architecture.test.ts` - New file with 30 tests
+- **Learnings:**
+  - Gateway uses `ed25519.utils.randomPrivateKey()` with entropy validation (retries 3 times if weak)
+  - Signing format is `union_unique`: [varint(namespace.len)][namespace][nonce + instruction]
+  - Session destruction clears both Maps: `sessions.delete(ws)` and `byPublicKey.delete(publicKeyHex)`
+  - `buildTransaction()` creates: nonce(8) + instruction + pubkey(32) + signature(64)
+  - `verifyTransaction()` uses same namespace for verification
+  - Mobile vault uses XChaCha20 (24-byte nonce) for forward secrecy
+  - Game session IDs stored on-chain (immutable) - allows game state recovery after reconnect
+  - Rate limiting via SessionManager prevents session exhaustion attacks
+  - Pattern: Document architecture via tests - tests serve as living documentation
+
+---
+
+## 2026-01-06 - US-082: Add session expiration notification test
+
+- What was implemented:
+  - Modified `SessionManager.cleanupIdleSessions()` to accept optional `onSessionExpired` callback
+  - Callback invoked BEFORE `ws.close()` so client receives notification
+  - Added periodic cleanup timer to `gateway/src/index.ts`:
+    - Runs every 5 minutes (`SESSION_CLEANUP_INTERVAL_MS`)
+    - Expires sessions idle > 30 minutes (`SESSION_MAX_IDLE_MS`)
+  - Sends `SESSION_EXPIRED` error message via callback before closing
+  - Created 16 tests covering all acceptance criteria
+- Files changed:
+  - `gateway/src/session/manager.ts` - Added onSessionExpired callback parameter
+  - `gateway/src/index.ts` - Added cleanup interval and callback implementation
+  - `gateway/tests/unit/session-expiration-notification.test.ts` - 16 new tests
+- **Learnings:**
+  - Callback pattern maintains separation of concerns (SessionManager doesn't import messaging)
+  - Callback errors are caught and ignored to ensure cleanup continues
+  - WebSocket close code 1000 = "normal closure" - clients shouldn't auto-retry
+  - Sessions with active games are also expired (game state available in callback for logging)
+  - Periodic timer uses setInterval (5 min) not session-level timers (simpler, less memory)
+  - Boundary condition: `>` not `>=` for idle time check
+  - Pattern: Notify BEFORE destroy so client can handle gracefully
+
+---
+
+## 2026-01-06 - US-083: Add vault lock during active game test
+
+- What was implemented:
+  - Added 10 comprehensive tests in `mobile/src/services/__tests__/vault.test.ts`
+  - Tests document and verify vault lock behavior during active game scenarios:
+    1. `getUnlockedVaultPrivateKey()` returns null when vault locked
+    2. `getVaultStatus()` correctly reflects lock state changes (enabled but unlocked=false)
+    3. `exportVaultPrivateKey()` throws 'vault_locked' when locked without password
+    4. Vault can be re-unlocked after locking during game (recovery path)
+    5. Game state is preserved across lock/unlock cycle (external to vault)
+    6. `lockVault()` immediately clears private key from memory
+    7. Documents `signMessage()` vault_locked error pattern from crypto.ts
+    8. Multiple lock/unlock cycles work correctly
+    9. Wrong password does not unlock vault (leaves locked)
+    10. Rapid lock/unlock handles without race conditions
+- Files changed:
+  - `mobile/src/services/__tests__/vault.test.ts` - Added 10 new tests (now 63 total)
+- **Learnings:**
+  - Vault uses module-level variables (`unlockedPrivateKey`, `unlockedPublicKeyHex`) for in-memory cache
+  - `lockVault()` simply nulls both variables - immediate memory clearing
+  - `signMessage()` in crypto.ts checks: (1) isVaultEnabled(), (2) getUnlockedVaultPrivateKey()
+  - If vault enabled but key null → throws 'vault_locked'
+  - Mobile must catch 'vault_locked' error, show unlock prompt overlay, retry operation after unlock
+  - Game state (bet amount, hand cards) lives in React state/WebSocket context, not vault
+  - Vault lock only affects signing capability, not game state preservation
+  - Pattern: Vault is orthogonal to game state - lock/unlock is a separate concern
+  - Double-lock is safe (idempotent null assignment)
+
+---
