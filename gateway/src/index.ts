@@ -348,6 +348,24 @@ const server = createServer(async (req, res) => {
 const wss = new WebSocketServer({ server });
 server.listen(PORT);
 
+// SESSION CLEANUP: Periodic cleanup of idle sessions (runs every 5 minutes)
+// Sessions idle for more than 30 minutes are cleaned up with SESSION_EXPIRED notification
+const SESSION_CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+const SESSION_MAX_IDLE_MS = 30 * 60 * 1000; // 30 minutes
+
+setInterval(() => {
+  const cleaned = sessionManager.cleanupIdleSessions(SESSION_MAX_IDLE_MS, (ws, session) => {
+    // Send SESSION_EXPIRED message BEFORE closing the connection
+    // This allows the client to handle the expiration gracefully
+    sendError(ws, ErrorCodes.SESSION_EXPIRED, 'Session expired due to inactivity');
+    logInfo(`[Gateway] Session expired: ${session.id} (idle > ${SESSION_MAX_IDLE_MS / 60000} minutes)`);
+  });
+
+  if (cleaned > 0) {
+    logInfo(`[Gateway] Cleaned up ${cleaned} idle session(s)`);
+  }
+}, SESSION_CLEANUP_INTERVAL_MS);
+
 wss.on('connection', async (ws: WebSocket, req) => {
   const clientIp = req.socket.remoteAddress ?? 'unknown';
   const originHeader = req.headers.origin;

@@ -486,14 +486,29 @@ export class SessionManager {
 	}
 
 	/**
-	 * Clean up idle sessions
+	 * Clean up idle sessions.
+	 * @param maxIdleMs Maximum idle time before session is cleaned up (default: 30 minutes)
+	 * @param onSessionExpired Optional callback to notify client before closing. Receives (ws, session).
+	 * @returns Number of sessions cleaned up
 	 */
-	cleanupIdleSessions(maxIdleMs: number = 30 * 60 * 1000): number {
+	cleanupIdleSessions(
+		maxIdleMs: number = 30 * 60 * 1000,
+		onSessionExpired?: (ws: WebSocket, session: Session) => void
+	): number {
 		const now = Date.now();
 		let cleaned = 0;
 
 		for (const [ws, session] of this.sessions.entries()) {
 			if (now - session.lastActivityAt > maxIdleMs) {
+				// Notify client BEFORE destroying session so they can handle gracefully
+				if (onSessionExpired) {
+					try {
+						onSessionExpired(ws, session);
+					} catch {
+						// Ignore callback errors - continue with cleanup
+					}
+				}
+
 				this.destroySession(ws);
 				try {
 					ws.close(1000, "Session timeout");
