@@ -3023,3 +3023,27 @@ Target: Testnet Production
   - Stagger pattern: `setTimeout(..., index * staggerDelay)` creates cascade effect
 
 ---
+
+## 2026-01-07 - US-128: Website premium hover states on interactive elements
+
+- What was implemented:
+  - VERIFIED: Full CSS utility classes in index.css
+  - `.hover-elevate` - multi-step shadow (soft → float → 2xl) + scale(0.98) on active
+  - `.hover-rotate` / `.hover-rotate-reverse` - ±1° rotation with scale(1.02)
+  - `.hover-glow` / `.hover-glow-success` - border glow with box-shadow spread
+  - `.pressed-inset:active` - inset shadow + scale(0.98) + translateY(1px)
+  - `.hover-gradient-overlay` - ::after pseudo-element with soft-light blend
+  - `.card-premium` - composite class combining translateY(-4px), rotate(0.5deg), layered shadows
+  - Used in ModeSelectView.tsx: Cash Game and Tournament cards
+  - prefers-reduced-motion disables transform-based effects
+- Files changed:
+  - `website/src/index.css` - Lines 1127-1225 (existing)
+  - `website/src/components/casino/ModeSelectView.tsx` - Uses classes (existing)
+- **Learnings:**
+  - Multi-step shadows: combine offset shadow + blur shadow + spread shadow
+  - Inset shadow creates "pressed into surface" feel
+  - `mix-blend-mode: soft-light` for subtle gradient overlay
+  - `::after` pseudo-element allows gradient overlay without extra DOM
+  - Card premium pattern: translateY + slight rotation creates floating effect
+
+---

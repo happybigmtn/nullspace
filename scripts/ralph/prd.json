@@ -632,8 +632,8 @@
         "Add gradient overlay on mode selection cards"
       ],
       "priority": 51,
-      "passes": false,
-      "notes": "WEB-UX: GameControlBar.tsx:36-74 has basic scale-110 hover. No layered depth or tactile feedback."
+      "passes": true,
+      "notes": "COMPLETE: index.css has hover-elevate (multi-step shadow), hover-rotate (1° + scale), hover-glow/hover-glow-success (border glow), pressed-inset (inset shadow), hover-gradient-overlay (::after gradient). card-premium composite class. Used in ModeSelectView mode cards."
     },
     {
       "id": "US-129",
