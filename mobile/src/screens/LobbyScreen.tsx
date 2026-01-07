@@ -11,6 +11,7 @@ import { initializeNotifications } from '../services';
 import { useGameStore } from '../stores/gameStore';
 import { useEntitlements, useGatewaySession } from '../hooks';
 import { stripTrailingSlash } from '../utils/url';
+import { GameIcon, ProfileIcon } from '../components/ui';
 import type { LobbyScreenProps } from '../navigation/types';
 import type { GameId } from '../types';
 
@@ -18,7 +19,6 @@ interface GameInfo {
   id: GameId;
   name: string;
   description: string;
-  emoji: string;
   color: string;
 }
 
@@ -34,76 +34,16 @@ type ReferralSummary = {
 };
 
 const GAMES: GameInfo[] = [
-  {
-    id: 'hi_lo',
-    name: 'Hi-Lo',
-    description: 'Higher or Lower',
-    emoji: '🎲',
-    color: GAME_COLORS.hi_lo,
-  },
-  {
-    id: 'blackjack',
-    name: 'Blackjack',
-    description: 'Beat the dealer',
-    emoji: '🃏',
-    color: GAME_COLORS.blackjack,
-  },
-  {
-    id: 'roulette',
-    name: 'Roulette',
-    description: 'Spin the wheel',
-    emoji: '🎡',
-    color: GAME_COLORS.roulette,
-  },
-  {
-    id: 'craps',
-    name: 'Craps',
-    description: 'Roll the dice',
-    emoji: '🎯',
-    color: GAME_COLORS.craps,
-  },
-  {
-    id: 'baccarat',
-    name: 'Baccarat',
-    description: 'Player or Banker',
-    emoji: '👑',
-    color: GAME_COLORS.baccarat,
-  },
-  {
-    id: 'casino_war',
-    name: 'Casino War',
-    description: 'High card wins',
-    emoji: '⚔️',
-    color: GAME_COLORS.casino_war,
-  },
-  {
-    id: 'video_poker',
-    name: 'Video Poker',
-    description: 'Jacks or Better',
-    emoji: '🎰',
-    color: GAME_COLORS.video_poker,
-  },
-  {
-    id: 'sic_bo',
-    name: 'Sic Bo',
-    description: 'Dice totals',
-    emoji: '🀄',
-    color: GAME_COLORS.sic_bo,
-  },
-  {
-    id: 'three_card_poker',
-    name: '3 Card Poker',
-    description: 'Ante & Pair Plus',
-    emoji: '🎴',
-    color: GAME_COLORS.three_card_poker,
-  },
-  {
-    id: 'ultimate_texas_holdem',
-    name: 'Ultimate Holdem',
-    description: 'Bet the streets',
-    emoji: '🤠',
-    color: GAME_COLORS.ultimate_texas_holdem,
-  },
+  { id: 'hi_lo', name: 'Hi-Lo', description: 'Higher or Lower', color: GAME_COLORS.hi_lo },
+  { id: 'blackjack', name: 'Blackjack', description: 'Beat the dealer', color: GAME_COLORS.blackjack },
+  { id: 'roulette', name: 'Roulette', description: 'Spin the wheel', color: GAME_COLORS.roulette },
+  { id: 'craps', name: 'Craps', description: 'Roll the dice', color: GAME_COLORS.craps },
+  { id: 'baccarat', name: 'Baccarat', description: 'Player or Banker', color: GAME_COLORS.baccarat },
+  { id: 'casino_war', name: 'Casino War', description: 'High card wins', color: GAME_COLORS.casino_war },
+  { id: 'video_poker', name: 'Video Poker', description: 'Jacks or Better', color: GAME_COLORS.video_poker },
+  { id: 'sic_bo', name: 'Sic Bo', description: 'Dice totals', color: GAME_COLORS.sic_bo },
+  { id: 'three_card_poker', name: '3 Card Poker', description: 'Ante & Pair Plus', color: GAME_COLORS.three_card_poker },
+  { id: 'ultimate_texas_holdem', name: 'Ultimate Holdem', description: 'Bet the streets', color: GAME_COLORS.ultimate_texas_holdem },
 ];
 
 export function LobbyScreen({ navigation }: LobbyScreenProps) {
@@ -264,7 +204,7 @@ export function LobbyScreen({ navigation }: LobbyScreenProps) {
         ]}
       >
         <View style={[styles.gameIconContainer, { backgroundColor: game.color + '20' }]}>
-          <Text style={styles.gameEmoji}>{game.emoji}</Text>
+          <GameIcon gameId={game.id} color={game.color} size={24} />
         </View>
         <Text style={styles.gameName}>{game.name}</Text>
         <Text style={styles.gameDescription}>{game.description}</Text>
@@ -296,7 +236,7 @@ export function LobbyScreen({ navigation }: LobbyScreenProps) {
           </View>
         </View>
         <Pressable style={styles.profileButton} onPress={() => navigation.navigate('Vault')}>
-          <Text style={styles.profileIcon}>👤</Text>
+          <ProfileIcon color={COLORS.textPrimary} size={20} />
         </Pressable>
       </Animated.View>
 
@@ -458,9 +398,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surface,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  profileIcon: {
-    fontSize: 20,
   },
   rewardsCard: {
     marginHorizontal: SPACING.lg,
@@ -652,9 +589,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: SPACING.sm,
-  },
-  gameEmoji: {
-    fontSize: 24,
   },
   gameName: {
     color: COLORS.textPrimary,

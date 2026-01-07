@@ -4,3 +4,4 @@ export { PrimaryButton } from './PrimaryButton';
 export { ConnectionStatusBanner } from './ConnectionStatusBanner';
 export { WalletBadge } from './WalletBadge';
 export { PasswordStrengthIndicator } from './PasswordStrengthIndicator';
+export { GameIcon, ProfileIcon } from './GameIcon';

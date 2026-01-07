@@ -94,11 +94,12 @@ describe('LobbyScreen', () => {
 
   it('renders lobby screen', async () => {
     const navigation = { navigate: jest.fn(), replace: jest.fn() } as any;
+    const route = { key: 'lobby-1', name: 'Lobby' as const };
     const flushPromises = () => new Promise<void>((resolve) => setImmediate(resolve));
 
     let tree: ReturnType<typeof create> | null = null;
     await act(async () => {
-      tree = create(<LobbyScreen navigation={navigation} />);
+      tree = create(<LobbyScreen navigation={navigation} route={route} />);
       await flushPromises();
     });
 
@@ -107,32 +108,44 @@ describe('LobbyScreen', () => {
 
   it('allows game navigation', async () => {
     const navigation = { navigate: jest.fn(), replace: jest.fn() } as any;
+    const route = { key: 'lobby-1', name: 'Lobby' as const };
     const flushPromises = () => new Promise<void>((resolve) => setImmediate(resolve));
 
     let tree: ReturnType<typeof create> | null = null;
     await act(async () => {
-      tree = create(<LobbyScreen navigation={navigation} />);
+      tree = create(<LobbyScreen navigation={navigation} route={route} />);
       await flushPromises();
     });
 
-    const profileButton = tree!.root.findAll((node) =>
+    // Find the profile button by its position in header (right side, navigates to Vault)
+    // Profile button contains ProfileIcon (not text), so we find by onPress behavior
+    const pressables = tree!.root.findAll((node) =>
       typeof node.props.onPress === 'function'
-      && node.findAllByType(Text).some((child) => readText(child).includes('👤'))
     );
-    expect(profileButton?.[0]?.props.onPress).toBeDefined();
+    // Profile button is a small circular pressable in the header
+    const profileButton = pressables.find((node) => {
+      const style = node.props.style;
+      // Profile button has specific dimensions (44x44)
+      if (Array.isArray(style)) {
+        return style.some((s: any) => s?.width === 44 && s?.height === 44);
+      }
+      return style?.width === 44 && style?.height === 44;
+    });
+    expect(profileButton?.props.onPress).toBeDefined();
     act(() => {
-      profileButton![0].props.onPress();
+      profileButton!.props.onPress();
     });
     expect(navigation.navigate).toHaveBeenCalledWith('Vault');
   });
 
   it('requests faucet when claim pressed', async () => {
     const navigation = { navigate: jest.fn(), replace: jest.fn() } as any;
+    const route = { key: 'lobby-1', name: 'Lobby' as const };
     const flushPromises = () => new Promise<void>((resolve) => setImmediate(resolve));
 
     let tree: ReturnType<typeof create> | null = null;
     await act(async () => {
-      tree = create(<LobbyScreen navigation={navigation} />);
+      tree = create(<LobbyScreen navigation={navigation} route={route} />);
       await flushPromises();
     });
 
@@ -156,11 +169,12 @@ describe('LobbyScreen', () => {
     });
 
     const navigation = { navigate: jest.fn(), replace: jest.fn() } as any;
+    const route = { key: 'lobby-1', name: 'Lobby' as const };
     const flushPromises = () => new Promise<void>((resolve) => setImmediate(resolve));
 
     let tree: ReturnType<typeof create> | null = null;
     await act(async () => {
-      tree = create(<LobbyScreen navigation={navigation} />);
+      tree = create(<LobbyScreen navigation={navigation} route={route} />);
       await flushPromises();
     });
 
@@ -179,11 +193,12 @@ describe('LobbyScreen', () => {
     });
 
     const navigation = { navigate: jest.fn(), replace: jest.fn() } as any;
+    const route = { key: 'lobby-1', name: 'Lobby' as const };
     const flushPromises = () => new Promise<void>((resolve) => setImmediate(resolve));
 
     let tree: ReturnType<typeof create> | null = null;
     await act(async () => {
-      tree = create(<LobbyScreen navigation={navigation} />);
+      tree = create(<LobbyScreen navigation={navigation} route={route} />);
       await flushPromises();
     });
 
@@ -223,11 +238,12 @@ describe('LobbyScreen', () => {
     }) as unknown as typeof fetch;
 
     const navigation = { navigate: jest.fn(), replace: jest.fn() } as any;
+    const route = { key: 'lobby-1', name: 'Lobby' as const };
     const flushPromises = () => new Promise<void>((resolve) => setImmediate(resolve));
 
     let tree: ReturnType<typeof create> | null = null;
     await act(async () => {
-      tree = create(<LobbyScreen navigation={navigation} />);
+      tree = create(<LobbyScreen navigation={navigation} route={route} />);
       await flushPromises();
     });
     await act(async () => {
