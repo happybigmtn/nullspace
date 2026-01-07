@@ -81,3 +81,13 @@ export {
   type OpacitySemanticKey,
   type OpacitySemanticValue,
 } from './opacity.js';
+
+// Z-Index
+export {
+  Z_INDEX,
+  Z_INDEX_GAME,
+  type ZIndexKey,
+  type ZIndexValue,
+  type ZIndexGameKey,
+  type ZIndexGameValue,
+} from './zindex.js';
