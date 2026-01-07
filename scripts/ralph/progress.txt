@@ -2898,3 +2898,29 @@ Target: Testnet Production
   - Pattern: `const socket = getSocket()` is cleaner than `const socket = MockWebSocket.instances[0]!` throughout
 
 ---
+
+## 2026-01-07 - US-123: Expanded haptic sequence patterns
+
+- What was implemented:
+  - VERIFIED: All 6 haptic patterns already implemented in haptics.ts
+  - `sequentialBets(count=3)` - rapid light taps at 60ms intervals for chip placement
+  - `spinStart()` - ascending intensity (Light→Light→Medium→Medium) for wheel spin start
+  - `spinEnd()` - descending intensity with Heavy landing (Medium→Medium→Light→Heavy)
+  - `dealerAction()` - double medium tap at 80ms interval for dealer moves
+  - `roundStart()` - ascending pattern (Light→Light→Medium→Success notification)
+  - `allInBet()` - single Heavy tap for high-stakes warning
+  - All patterns support abort via AbortController for cleanup
+  - 12 comprehensive tests in haptics.test.ts verify timing and intensity sequences
+- Files changed:
+  - `mobile/src/services/haptics.ts` - Lines 196-336 (previously implemented)
+  - `mobile/src/services/__tests__/haptics.test.ts` - Lines 100-265 (existing tests verified)
+- **Learnings:**
+  - Pattern already complete - prior work sessions implemented haptic sequences
+  - Timing intervals: 60ms for rapid sequential, 80-100ms for pattern steps
+  - Ascending patterns: Light→Medium builds anticipation (spinStart, roundStart)
+  - Descending patterns: Medium→Light→Heavy creates "landing" feel (spinEnd)
+  - `AbortController` prevents phantom haptics when component unmounts mid-sequence
+  - `scheduleHaptic()` helper abstracts timeout + abort cleanup pattern
+  - All patterns cancel in-flight sequences when starting new pattern
+
+---

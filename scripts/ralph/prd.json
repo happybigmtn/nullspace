@@ -562,8 +562,8 @@
         "Add allInBet() - strong warning-style single tap"
       ],
       "priority": 46,
-      "passes": false,
-      "notes": "UX-MEDIUM: haptics.ts has 11 basic methods. No multi-tap sequences or context-specific patterns."
+      "passes": true,
+      "notes": "COMPLETE: Added 6 new haptic patterns - sequentialBets (configurable count, 60ms intervals), spinStart (Light→Medium ascending), spinEnd (Medium→Light→Heavy landing), dealerAction (double medium tap at 80ms), roundStart (Light→Medium→Success), allInBet (single Heavy). 12 tests in haptics.test.ts."
     },
     {
       "id": "US-124",
