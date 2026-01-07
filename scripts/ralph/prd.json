@@ -972,8 +972,8 @@
 				"Document nonce recovery behavior in edge cases"
 			],
 			"priority": 75,
-			"passes": false,
-			"notes": "HIGH GAP: nonce.ts:172-175 has guard for reset. If backend legitimately resets, unclear whether to use 0 or keep local value."
+			"passes": true,
+			"notes": "FIXED: Added 10 tests in nonce.test.ts 'Nonce Sync After Backend Restart (US-084)' describe block. Tests verify: (1) GUARD activates when backend=0 and local>0, (2) fresh account accepts 0, (3) normal sync accepts higher backend nonce, (4) pending cleared on sync, (5) subsequent transactions work with preserved nonce, (6) undefined local nonce edge case, (7) BigInt precision for high nonces, (8) documents guard preventing duplicate tx, (9) nonce recovery behavior table, (10) multiple syncs maintain sequence. Guard design: keep local nonce when backend reset to 0 - prevents duplicate transactions."
 		},
 		{
 			"id": "US-085",

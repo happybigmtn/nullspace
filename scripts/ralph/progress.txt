@@ -1764,3 +1764,33 @@ Target: Testnet Production
   - Double-lock is safe (idempotent null assignment)
 
 ---
+
+## 2026-01-06 - US-084: Add nonce sync after backend restart test
+
+- What was implemented:
+  - Added 10 comprehensive tests in `gateway/tests/unit/nonce.test.ts`
+  - Tests document and verify the critical guard logic at nonce.ts lines 171-179:
+    1. GUARD: keeps local nonce when backend returns 0 but local > 0
+    2. FRESH: accepts 0 for new account (both local and backend are 0)
+    3. NORMAL: accepts backend nonce when higher than local (transactions confirmed)
+    4. SYNC: clears pending on successful sync regardless of nonce change
+    5. SUBSEQUENT: transactions work after backend restart (local nonce preserved)
+    6. EDGE: handles undefined local nonce (never set)
+    7. EDGE: handles very high nonce values (BigInt precision)
+    8. DOCS: guard logic prevents duplicate transactions after backend restart
+    9. DOCS: nonce recovery behavior in edge cases table
+    10. INTEGRATION: multiple syncs maintain correct nonce sequence
+- Files changed:
+  - `gateway/tests/unit/nonce.test.ts` - Added 10 new tests (now 26 total)
+- **Learnings:**
+  - Guard condition: `current !== undefined && current > 0n && onChainNonce === 0n`
+  - Purpose: Backend indexer may restart and lose nonce state, returning 0
+  - If we blindly trust 0, next tx uses nonce 0 which may already be used → replay/rejection
+  - Guard keeps local nonce, ensuring next tx uses correct sequence number
+  - Fresh accounts (local=0) correctly accept backend's 0 (guard doesn't activate)
+  - Backend ahead of local → accept (transactions confirmed elsewhere)
+  - syncFromBackend always clears pending set after successful fetch
+  - withLock ensures concurrent transactions use sequential nonces
+  - Pattern: Defensive nonce management - trust local state over potentially reset backend
+
+---
