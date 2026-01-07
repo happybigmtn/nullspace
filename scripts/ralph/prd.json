@@ -907,8 +907,8 @@
 				"Test unknown phase values handled gracefully (not undefined)"
 			],
 			"priority": 70,
-			"passes": false,
-			"notes": "CRITICAL GAP: Mobile uses 'dealer_turn', Rust uses 'AwaitingReveal'. Craps has 5 live-table phases vs 2 single-player phases."
+			"passes": true,
+			"notes": "FIXED: Created phase-naming-consistency.test.ts with 14 tests. Blackjack: Stage::Betting(0)→'betting', Stage::PlayerTurn(1)→'player_turn', Stage::AwaitingReveal(2)→'dealer_turn', Stage::Complete(3)→'result'. Craps: Phase::ComeOut(0)→'comeout', Phase::Point(1)→'point'. Unknown phases fall through gracefully (Blackjack→'result', Craps→'comeout'). 'AwaitingReveal'→'dealer_turn' is intentional for UI clarity."
 		},
 		{
 			"id": "US-080",

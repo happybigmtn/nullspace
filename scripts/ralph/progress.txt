@@ -1640,3 +1640,24 @@ Target: Testnet Production
   - Priority: SESSION_EXPIRED handling bypasses faucet error handling (returns early before checking faucetStatus)
 
 ---
+
+## 2026-01-06 - US-079: Add phase naming consistency tests across layers
+
+- What was implemented:
+  - Created `phase-naming-consistency.test.ts` with 14 tests documenting phase mapping
+  - Tests verify Blackjack Stage enum (0,1,2,3) maps correctly to mobile phases
+  - Tests verify Craps Phase enum (0,1) maps correctly to mobile phases
+  - Tests verify unknown phase values are handled gracefully (not undefined)
+  - Living documentation for canonical phase mapping table
+- Files changed:
+  - `mobile/src/utils/state/__tests__/phase-naming-consistency.test.ts` - New file with 14 tests
+- **Learnings:**
+  - Rust Stage::AwaitingReveal (2) → Mobile 'dealer_turn' is INTENTIONAL, not a bug
+  - Gateway auto-reveals during AwaitingReveal phase, so mobile sees it as "dealer's turn"
+  - Blackjack unknown stages (>3) fall through to 'result' (terminal state is safest)
+  - Craps unknown phases (!=1) fall through to 'comeout' (initial state allows new bets)
+  - Craps v2 blob requires minimum 8 bytes with version byte first
+  - Blackjack v4 header is 46 bytes before hands data
+  - Pattern: Use graceful fallback to safest/most permissive state for unknown values
+
+---
