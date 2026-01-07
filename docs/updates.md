@@ -3871,3 +3871,106 @@ git commit -m "Remove tracked secret files from git"
 ```
 
 **Note**: The secrets in git history remain accessible. For production secrets, consider using `git filter-branch` or BFG Repo-Cleaner to fully purge history.
+
+---
+
+## 2026-01-07: US-142 - Secrets Management with SOPS + Age
+
+### Overview
+
+Implemented centralized secrets management using SOPS (Secrets OPerationS) with Age encryption. This replaces storing secrets in plain text `.env.example` files with encrypted secrets files that can be safely committed to git.
+
+### Why SOPS + Age?
+
+| Solution | Pros | Cons |
+|----------|------|------|
+| HashiCorp Vault | Enterprise-grade, dynamic secrets | Requires infrastructure to run |
+| AWS Secrets Manager | Native AWS integration | AWS lock-in, external dependency |
+| Doppler | Easy SaaS integration | External dependency, cost |
+| **SOPS + Age** | Git-native, no external deps, free | Manual key management |
+
+SOPS with Age was chosen because:
+1. **Git-native**: Encrypted files are committed to repo, versioned with code
+2. **No external dependencies**: Works offline, no cloud service required
+3. **Environment isolation**: Separate keys for production/staging/development
+4. **CI/CD friendly**: Easy integration with GitHub Actions
+
+### Files Added
+
+```
+.sops.yaml                          # SOPS configuration with encryption rules
+secrets/
+├── .gitignore                      # Ignores unencrypted files
+├── secrets.template.yaml           # Template for all required secrets
+├── production/README.md            # Production secrets guide
+├── staging/README.md               # Staging secrets guide
+└── development/README.md           # Development secrets guide
+scripts/
+├── setup-secrets.sh                # Generate keys, encrypt secrets
+└── decrypt-secrets.sh              # Decrypt secrets at deployment
+.github/workflows/
+└── deploy-staging.yml              # Deployment workflow with secrets
+```
+
+### Secrets Categories
+
+The template organizes secrets by service:
+
+- **auth**: AUTH_SECRET, CASINO_ADMIN_PRIVATE_KEY_HEX, GEMINI_API_KEY
+- **convex**: CONVEX_SERVICE_TOKEN
+- **stripe**: STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET
+- **gateway**: METRICS_AUTH_TOKEN, GATEWAY_LIVE_TABLE_PRESENCE_TOKEN
+- **simulator**: METRICS_AUTH_TOKEN, GLOBAL_TABLE_PRESENCE_TOKEN
+- **ops**: OPS_ADMIN_TOKEN
+- **evm**: EVM_PRIVATE_KEY, BIDDER_PRIVATE_KEYS
+- **alerting**: SLACK_WEBHOOK_URL, PAGERDUTY_SERVICE_KEY
+
+### Quick Start
+
+```bash
+# 1. Install dependencies
+brew install sops age  # macOS
+apt install sops age   # Ubuntu
+
+# 2. Generate encryption keys
+./scripts/setup-secrets.sh generate
+
+# 3. Update .sops.yaml with generated public keys
+
+# 4. Create secrets from template
+cp secrets/secrets.template.yaml secrets/staging/secrets.yaml
+# Edit with actual values
+
+# 5. Encrypt
+./scripts/setup-secrets.sh encrypt staging
+
+# 6. Clean up plaintext
+rm secrets/staging/secrets.yaml
+```
+
+### Deployment Usage
+
+```bash
+# Local deployment
+export SOPS_AGE_KEY_FILE=~/.config/sops/age/staging.key
+./scripts/decrypt-secrets.sh staging /etc/nullspace
+
+# CI/CD (GitHub Actions)
+env:
+  SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY_STAGING }}
+run: ./scripts/decrypt-secrets.sh staging /tmp/secrets
+```
+
+### Security Notes
+
+1. **Production keys**: Store in password manager or HSM, never on developer machines
+2. **Key rotation**: Decrypt all secrets, generate new key, re-encrypt, update CI
+3. **Access control**: Each environment has separate key - limit production key access
+4. **Audit trail**: Git history shows who changed secrets and when
+
+### Migration Path
+
+Existing `.env.example` files remain as documentation. The actual secrets should be:
+1. Copied to `secrets/<env>/secrets.yaml`
+2. Encrypted with SOPS
+3. Rotated (generate new values since old ones may have been exposed)

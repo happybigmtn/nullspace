@@ -1,0 +1,56 @@
+name: Deploy to Staging
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: staging
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install SOPS
+        run: |
+          curl -LO https://github.com/getsops/sops/releases/download/v3.8.1/sops-v3.8.1.linux.amd64
+          sudo mv sops-v3.8.1.linux.amd64 /usr/local/bin/sops
+          sudo chmod +x /usr/local/bin/sops
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.40.5/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Decrypt secrets
+        env:
+          SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY_STAGING }}
+        run: |
+          mkdir -p /tmp/secrets
+          chmod 700 /tmp/secrets
+          ./scripts/decrypt-secrets.sh staging /tmp/secrets
+
+      - name: Deploy services
+        env:
+          DEPLOY_HOST: ${{ vars.STAGING_HOST }}
+          DEPLOY_USER: ${{ vars.STAGING_USER }}
+        run: |
+          # This is a placeholder for actual deployment logic
+          # Options:
+          #   1. SSH to host and docker-compose up
+          #   2. kubectl apply with secrets
+          #   3. Terraform with injected variables
+          echo "Deploying to staging..."
+          echo "Secrets available in /tmp/secrets/"
+          ls -la /tmp/secrets/
+
+      - name: Clean up secrets
+        if: always()
+        run: |
+          rm -rf /tmp/secrets
