@@ -418,4 +418,147 @@ describe('BlackjackScreen', () => {
       expect(hasErrorMessage).toBe(true);
     });
   });
+
+  describe('SESSION_EXPIRED during active game (US-068)', () => {
+    beforeEach(() => {
+      // Set up a non-zero bet for game interaction
+      mockUseChipBetting.mockReturnValue({
+        bet: 100,
+        selectedChip: 25,
+        balance: 1000,
+        setSelectedChip: jest.fn(),
+        placeChip: jest.fn(() => true),
+        clearBet: jest.fn(),
+        setBet: jest.fn(),
+      });
+    });
+
+    afterEach(() => {
+      // Reset to default
+      mockUseChipBetting.mockReturnValue({
+        bet: 0,
+        selectedChip: 25,
+        balance: 1000,
+        setSelectedChip: jest.fn(),
+        placeChip: jest.fn(() => true),
+        clearBet: jest.fn(),
+        setBet: jest.fn(),
+      });
+    });
+
+    it('displays SESSION_EXPIRED message during active game', async () => {
+      let tree!: ReturnType<typeof create>;
+
+      // Start game
+      await act(async () => {
+        tree = create(<BlackjackScreen />);
+      });
+
+      // Get into playing phase
+      const dealButton = findPrimaryButton(tree, 'DEAL');
+      await act(async () => {
+        await dealButton?.props.onPress?.();
+      });
+
+      // Simulate SESSION_EXPIRED error during game
+      setGameConnectionMessage({
+        type: 'error',
+        code: 'SESSION_EXPIRED',
+        message: 'Your session has expired. Please log in again.',
+      });
+
+      await act(async () => {
+        tree.update(<BlackjackScreen />);
+      });
+
+      // Should show the session expired message to user
+      const hasSessionExpiredMessage = tree.root
+        .findAllByType(Text)
+        .some(
+          (node) =>
+            textMatches(node.props.children, 'Your session has expired. Please log in again.') ||
+            textMatches(node.props.children, 'Session expired')
+        );
+      expect(hasSessionExpiredMessage).toBe(true);
+    });
+
+    it('reverts to betting phase when SESSION_EXPIRED received mid-game', async () => {
+      let tree!: ReturnType<typeof create>;
+
+      await act(async () => {
+        tree = create(<BlackjackScreen />);
+      });
+
+      // Get into player turn phase
+      const stateBytes = createBlackjackPlayerTurnState();
+      setGameConnectionMessage({
+        type: 'game_started',
+        state: stateBytes,
+      });
+
+      await act(async () => {
+        tree.update(<BlackjackScreen />);
+      });
+
+      // Verify we're in player turn
+      const hitButton = findPrimaryButton(tree, 'HIT');
+      expect(hitButton).toBeDefined();
+
+      // Now session expires
+      setGameConnectionMessage({
+        type: 'error',
+        code: 'SESSION_EXPIRED',
+        message: 'Session has timed out',
+      });
+
+      await act(async () => {
+        tree.update(<BlackjackScreen />);
+      });
+
+      // Should revert to betting phase (can start a new game after re-auth)
+      const dealButton = findPrimaryButton(tree, 'DEAL');
+      expect(dealButton).toBeDefined();
+    });
+
+    it('shows appropriate message for session expiration vs regular errors', async () => {
+      let tree!: ReturnType<typeof create>;
+
+      await act(async () => {
+        tree = create(<BlackjackScreen />);
+      });
+
+      // Send a regular error first
+      setGameConnectionMessage({
+        type: 'error',
+        code: 'INSUFFICIENT_BALANCE',
+        message: 'Not enough chips',
+      });
+
+      await act(async () => {
+        tree.update(<BlackjackScreen />);
+      });
+
+      const hasBalanceError = tree.root
+        .findAllByType(Text)
+        .some((node) => textMatches(node.props.children, 'Not enough chips'));
+      expect(hasBalanceError).toBe(true);
+
+      // Now send SESSION_EXPIRED
+      setGameConnectionMessage({
+        type: 'error',
+        code: 'SESSION_EXPIRED',
+        message: 'Your session has expired',
+      });
+
+      await act(async () => {
+        tree.update(<BlackjackScreen />);
+      });
+
+      // Should show session expired (supersedes balance error)
+      const hasSessionExpired = tree.root
+        .findAllByType(Text)
+        .some((node) => textMatches(node.props.children, 'Your session has expired'));
+      expect(hasSessionExpired).toBe(true);
+    });
+  });
 });
