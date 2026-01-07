@@ -252,8 +252,8 @@
         "Add to navigation stack and verify lobby link works"
       ],
       "priority": 67,
-      "passes": false,
-      "notes": "UX-CRITICAL: Casino War listed in lobby but screen doesn't exist. App crashes if user taps it."
+      "passes": true,
+      "notes": "COMPLETE: CasinoWarScreen.tsx exists with full implementation - ante betting, War/Surrender choices, celebration effects, tutorial overlay."
     },
     {
       "id": "US-145",
