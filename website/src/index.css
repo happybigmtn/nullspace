@@ -787,6 +787,64 @@ body.fonts-loaded {
   animation: slideIn var(--motion-state) var(--motion-ease);
 }
 
+/* Page Transition Animations */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp var(--motion-state) var(--motion-ease) both;
+}
+
+.animate-fade-in-down {
+  animation: fadeInDown var(--motion-state) var(--motion-ease) both;
+}
+
+.animate-slide-in-left {
+  animation: slideInLeft var(--motion-state) var(--motion-ease) both;
+}
+
+/* Staggered animation delays for nested components */
+.stagger-1 { animation-delay: 50ms; }
+.stagger-2 { animation-delay: 100ms; }
+.stagger-3 { animation-delay: 150ms; }
+.stagger-4 { animation-delay: 200ms; }
+.stagger-5 { animation-delay: 250ms; }
+
+/* Page transition wrapper */
+.page-transition-enter {
+  animation: fadeInUp var(--motion-state) var(--motion-ease) both;
+}
+
 /* Confetti Burst (CSS Only) */
 @keyframes confetti-burst {
   0% { transform: translateY(0) scale(1); opacity: 1; }

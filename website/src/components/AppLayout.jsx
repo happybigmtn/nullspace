@@ -1,5 +1,6 @@
 import { Outlet } from 'react-router-dom';
 import { BottomNav } from './BottomNav';
+import { PageTransition } from './ui/PageTransition';
 
 export default function AppLayout() {
   return (
@@ -11,7 +12,9 @@ export default function AppLayout() {
         Skip to content
       </a>
       <main id="app-main" tabIndex={-1}>
-        <Outlet />
+        <PageTransition>
+          <Outlet />
+        </PageTransition>
       </main>
       <BottomNav />
     </div>
