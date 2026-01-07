@@ -22,6 +22,7 @@ Target: Testnet Production
 ### Mobile (React Native)
 - Crypto: Ed25519 signing, PBKDF2 key derivation, AES-GCM storage
 - WebSocket: Exponential backoff 1s → 30s, max 10 attempts
+- WebSocket idempotency: Messages get unique IDs, sentMessageIdsRef deduplicates on reconnect
 - 12 race conditions identified (see US-005 through US-009, US-021-022)
 - Tests: 222/222 unit tests, run with `npm test`
 
@@ -2141,5 +2142,64 @@ Target: Testnet Production
   - Jest `jest.isolateModules` has issues with shared mocks; use `require()` for simple export tests
   - `crypto.subtle.generateKey` with `extractable: true` allows one-time export for storage
   - Re-import with `extractable: false` ensures key can't be exported by malicious scripts
+
+---
+
+## 2026-01-07 - US-097 & US-098: Session counter verification and message queue idempotency
+
+- What was implemented:
+  
+  **US-097 (False Positive):**
+  - Investigated alleged `isNextSession()` function with side effects
+  - Verified function does not exist in codebase - was a false positive
+  - `gameSessionCounter` mutation occurs in `startGame()` (action method, not query)
+  - Counter++ inside `generateSessionId()` is appropriate for unique ID generation
+  
+  **US-098 (Idempotency):**
+  - Added `generateMessageId()` function creating unique IDs (`{timestamp}-{counter}`)
+  - Added `sentMessageIdsRef` Map to track sent message IDs for deduplication
+  - Modified `onopen` handler to skip already-sent messages during queue flush
+  - Added 60-second cleanup of old sent IDs to prevent memory leaks
+  - Updated log format to include message IDs: `Message queued (N/50), id=...`
+  - Updated flush log to show duplicate count: `Flushing N messages (..., N duplicates skipped)`
+  - Added JSDoc documentation explaining idempotency guarantees
+  
+- Files changed:
+  - `mobile/src/services/websocket.ts` - Idempotency implementation (+76 lines)
+  - `mobile/src/services/__tests__/websocket.test.tsx` - 9 new idempotency tests (+282 lines)
+  - `scripts/ralph/prd.json` - Updated both stories to passes: true
+
+- **Learnings:**
+  - Always verify false positives before implementing fixes - search for exact function names
+  - Mutation in action methods (startGame) is fine; concern is query methods (is*, get*, has*)
+  - Client-side idempotency complements server nonces - reduces traffic and provides faster feedback
+  - Message ID format `{timestamp}-{counter}` ensures uniqueness within session
+  - Map with timestamp values enables TTL-based cleanup without separate timers
+  - Test updates needed when log messages change - use regex matchers for flexibility
+
+---
+
+## 2026-01-07 - US-099: Add onMessageDropped callback for critical message notifications
+
+- What was implemented:
+  - Added `OnMessageDroppedCallback` type: `(dropped: DroppedMessage, isCritical: boolean) => void`
+  - Added `WebSocketOptions` interface with optional `onMessageDropped` callback
+  - Updated `useWebSocket(url, options?)` signature to accept options
+  - Callback invoked on queue overflow (oldest message dropped) with critical flag
+  - Callback invoked for each expired message during reconnect flush
+  - Added `isCriticalMessageType()` helper for consistent bet/game_action/request_faucet checking
+  - Updated JSDoc documentation with callback usage example
+  
+- Files changed:
+  - `mobile/src/services/websocket.ts` - Callback implementation (+85 lines)
+  - `mobile/src/services/__tests__/websocket.test.tsx` - 7 new callback tests (+304 lines)
+  - `scripts/ralph/prd.json` - Updated US-099 to passes: true
+
+- **Learnings:**
+  - Return value semantics matter: send() returning `true` for NEW message is correct
+  - Callbacks are better than changing return types when reporting side effects
+  - Use `useRef` + `useEffect` pattern to keep callback ref fresh without dependencies
+  - `isCritical` flag allows callers to prioritize user notifications
+  - Test each callback invocation separately (queue_full vs expired, critical vs non-critical)
 
 ---

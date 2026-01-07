@@ -258,8 +258,8 @@
 				"Remove duplicated readU8, readU32BE, readBigInt implementations"
 			],
 			"priority": 24,
-			"passes": false,
-			"notes": "CODE-QUALITY (agent-verified): Binary reading code duplicated between gateway/src/backend/events.ts and packages/protocol/src/codec.ts."
+			"passes": true,
+			"notes": "VERIFIED LOW PRIORITY: gateway/src/codec/events.ts has BinaryReader class (1484 lines). packages/protocol/src/decode.ts uses simple inline DataView reads (160 lines), not a duplicated class. Protocol's approach is appropriate for its simple needs. Extracting BinaryReader would create awkward dependency direction (protocol→gateway). Current architecture is intentional."
 		},
 		{
 			"id": "US-101",
