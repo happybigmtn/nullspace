@@ -38,8 +38,12 @@ COPY execution/ ./execution/
 COPY simulator/ ./simulator/
 COPY types/ ./types/
 COPY website/wasm/ ./website/wasm/
+COPY packages/types/ ./packages/types/
 
 RUN wasm-pack build --target web --out-dir pkg website/wasm
+
+# Generate TypeScript types from Rust types (requires cargo)
+RUN cargo run --release --bin export_ts --features ts
 
 FROM node:20-slim AS web-builder
 
@@ -52,11 +56,14 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/ ./packages/
 COPY website/package.json ./website/
 
+# Copy generated types from wasm-builder (cargo-generated TypeScript)
+COPY --from=wasm-builder /app/packages/types/src/generated /app/packages/types/src/generated
+
 # Install dependencies (ignore-scripts to skip packages/types prepare hook)
 RUN pnpm install --frozen-lockfile --ignore-scripts
 
-# Build workspace packages first
-RUN pnpm -C packages/types build || true
+# Build workspace packages first (types already has generated files)
+RUN pnpm -C packages/types build
 RUN pnpm -C packages/constants build || true
 RUN pnpm -C packages/protocol build || true
 RUN pnpm -C packages/design-tokens build || true
