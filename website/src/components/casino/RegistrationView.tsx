@@ -1,10 +1,22 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { PlayerStats, LeaderboardEntry } from '../../types';
 import { formatTime } from '../../utils/gameUtils';
 import { BotConfig } from '../../services/BotService';
 import { usePasskeyAuth } from '../../hooks/usePasskeyAuth';
 import { PlaySwapStakeTabs } from '../PlaySwapStakeTabs';
+import { ChevronDown, Settings } from 'lucide-react';
+
+/**
+ * LUX-014: Redesigned RegistrationView with luxury aesthetic
+ *
+ * Design principles:
+ * - Light titanium background, not terminal-black
+ * - Countdown as hero visual element
+ * - Clean typography hierarchy (no excessive monospace)
+ * - Stats as clean cards, not bordered grids
+ * - Bot config hidden in settings drawer
+ */
 
 interface RegistrationViewProps {
   stats: PlayerStats;
@@ -47,6 +59,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
   botConfig,
   onBotConfigChange
 }) => {
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const {
     enabled: passkeyEnabled,
     session: passkeySession,
@@ -54,18 +67,6 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
     loading: passkeyLoading,
     error: passkeyError
   } = usePasskeyAuth();
-  const pnlData = stats.pnlHistory;
-  const maxVal = Math.max(...pnlData, 100);
-  const minVal = Math.min(...pnlData, -100);
-  const range = maxVal - minVal;
-  const height = 100;
-  const width = 300;
-
-  const points = pnlData.map((val, i) => {
-       const x = (i / Math.max(pnlData.length - 1, 1)) * width;
-       const y = height - ((val - minVal) / (range || 1)) * height;
-       return `${x},${y}`;
-  }).join(' ');
 
   const maxEntries = Number.isFinite(dailyLimit) ? Math.max(1, dailyLimit) : 1;
   const entriesRemaining = Math.max(0, maxEntries - tournamentsPlayedToday);
@@ -75,253 +76,310 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
     playerActiveTournamentId === activeTournamentId;
   const showStatus = !!statusMessage && statusMessage !== 'PRESS / FOR COMMANDS';
   const normalizedStatus = (statusMessage ?? '').toLowerCase();
-  const statusTone =
+  const isErrorStatus =
     normalizedStatus.includes('offline') ||
     normalizedStatus.includes('error') ||
-    normalizedStatus.includes('failed')
-      ? 'text-action-destructive'
-      : 'text-gray-300';
+    normalizedStatus.includes('failed');
+
+  // Determine button state and text
+  const getButtonConfig = () => {
+    if (isSubmitting) {
+      return { text: 'Joining...', disabled: true, variant: 'loading' as const };
+    }
+    if (!isRegistered) {
+      return { text: 'Register to Play', disabled: false, variant: 'primary' as const };
+    }
+    if (isJoinedNext) {
+      return { text: 'Registered', disabled: true, variant: 'success' as const };
+    }
+    if (entriesRemaining <= 0) {
+      return { text: 'Daily Limit Reached', disabled: true, variant: 'disabled' as const };
+    }
+    return { text: 'Join Next Tournament', disabled: false, variant: 'primary' as const };
+  };
+
+  const buttonConfig = getButtonConfig();
 
   return (
-      <div className="flex flex-col min-h-screen w-screen bg-titanium-900 text-white font-mono items-center justify-center p-4 sm:p-6 md:p-8 overflow-auto casino-contrast" data-contrast="dark">
-          <div className="max-w-4xl w-full mb-3 flex justify-center">
-              <PlaySwapStakeTabs />
-          </div>
-          <div className="max-w-4xl w-full border border-action-success rounded-lg p-4 sm:p-6 md:p-8 shadow-2xl relative bg-black/80 backdrop-blur">
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-center mb-2 tracking-[0.2em] sm:tracking-[0.3em] md:tracking-[0.5em] text-white">
-                  FREEROLL LOBBY
-              </h1>
-
-              {/* STATUS MESSAGE */}
-              <div className="text-center mb-4 sm:mb-6 md:mb-8">
-                  <div className="flex flex-col items-center gap-4">
-                      {activeTimeLeft > 0 && (
-                          <div>
-                              <div className="text-[10px] sm:text-xs text-gray-500 tracking-widest mb-1">TOURNAMENT IN PROGRESS · ENDS IN</div>
-                              <div className="text-2xl sm:text-3xl md:text-4xl font-bold text-action-destructive animate-pulse font-mono">
-                                  {formatTime(activeTimeLeft)}
-                              </div>
-                          </div>
-                      )}
-
-                      <div>
-                          <div className="text-[10px] sm:text-xs text-gray-500 tracking-widest mb-1">
-                              NEXT TOURNAMENT STARTS IN{nextTournamentId !== null ? ` · ID ${nextTournamentId}` : ''}
-                          </div>
-                          <div className="text-xl sm:text-2xl md:text-3xl font-bold text-action-success font-mono">
-                              {formatTime(nextStartIn)}
-                          </div>
-                          <div className="mt-2 text-[10px] text-gray-600 tracking-widest">
-                              ENTRIES LEFT TODAY: <span className={entriesRemaining > 0 ? 'text-action-success' : 'text-action-destructive'}>{entriesRemaining}/{maxEntries}</span>
-                          </div>
-                      </div>
-                  </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-12">
-                  {/* STATS */}
-                  <div className="space-y-4 sm:space-y-6">
-                      <h2 className="text-base sm:text-lg md:text-xl font-bold text-gray-500 border-b border-gray-800 pb-2">YOUR PERFORMANCE</h2>
-                      <div className="grid grid-cols-2 gap-2 sm:gap-4 text-sm">
-                           <div className="bg-gray-900 p-2 sm:p-4 rounded border border-gray-800">
-                               <div className="text-gray-500 text-[10px] sm:text-xs mb-1">FINAL CHIPS</div>
-                               <div className="text-lg sm:text-xl md:text-2xl text-white font-bold">${stats.chips.toLocaleString()}</div>
-                           </div>
-                           <div className="bg-gray-900 p-2 sm:p-4 rounded border border-gray-800">
-                               <div className="text-gray-500 text-[10px] sm:text-xs mb-1">FINAL RANK</div>
-                               <div className="text-lg sm:text-xl md:text-2xl text-action-success font-bold">#{stats.rank}</div>
-                           </div>
-                      </div>
-                      
-                      <div className="space-y-2">
-                          <div className="text-xs text-gray-500 uppercase tracking-widest">PNL BY GAME</div>
-                          {Object.entries(stats.pnlByGame).map(([game, pnl]) => {
-                              const val = pnl as number;
-                              return (
-                              <div key={game} className="flex justify-between text-xs border-b border-gray-800 pb-1">
-                                  <span>{game}</span>
-                                  <span className={val >= 0 ? 'text-action-success' : 'text-action-destructive'}>
-                                      {val >= 0 ? '+' : ''}{val}
-                                  </span>
-                              </div>
-                              );
-                          })}
-                      </div>
-                  </div>
-
-                  {/* CHART & REGISTRATION */}
-                  <div className="space-y-8 flex flex-col">
-                       <div>
-                           <h2 className="text-xl font-bold text-gray-500 border-b border-gray-800 pb-2 mb-4">PNL EVOLUTION</h2>
-                           <div className="w-full h-32 bg-gray-900 border border-gray-800 rounded relative overflow-hidden">
-                               <svg width="100%" height="100%" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
-                                    <polyline 
-                                        points={points} 
-                                        fill="none" 
-                                        stroke="#00ff41" 
-                                        strokeWidth="2" 
-                                    />
-                               </svg>
-                           </div>
-                       </div>
-
-	                       <div className="flex-1 flex flex-col items-center justify-center gap-4">
-	                           <button
-	                              className={`px-8 py-4 font-bold text-lg rounded transition-colors shadow-[0_0_20px_rgba(0,255,65,0.35)] ${
-	                                  !isRegistered || (!isJoinedNext && entriesRemaining > 0)
-	                                      ? 'bg-action-success text-black hover:bg-green-400'
-	                                      : 'bg-gray-800 text-gray-500 cursor-not-allowed'
-	                              }`}
-	                              onClick={onRegister}
-	                              disabled={isSubmitting || (isRegistered && (isJoinedNext || entriesRemaining <= 0))}
-	                           >
-	                               {isSubmitting
-	                                   ? 'SUBMITTING...'
-	                                   : !isRegistered
-	                                       ? 'PRESS [R] TO REGISTER'
-	                                       : isJoinedNext
-	                                           ? 'REGISTERED FOR NEXT TOURNAMENT'
-	                                           : entriesRemaining <= 0
-	                                               ? 'DAILY LIMIT REACHED'
-	                                               : 'JOIN NEXT TOURNAMENT'}
-	                           </button>
-                           {canEnterTournament && (
-                               <button
-                                   className="px-8 py-3 font-bold text-sm rounded transition-colors border border-action-destructive/60 text-action-destructive bg-action-destructive/10 hover:bg-action-destructive/20"
-                                   onClick={onEnterTournament}
-                               >
-                                   ENTER TOURNAMENT
-                               </button>
-                           )}
-	                           <div className="text-xs text-gray-400 flex flex-col items-center gap-1">
-	                               {showStatus && (
-	                                   <div
-                                         className={`text-[11px] tracking-widest text-center ${statusTone}`}
-                                         role="status"
-                                         aria-live="polite"
-                                       >
-	                                       {statusMessage}
-	                                       {lastTxSig ? (
-	                                           <span className="text-gray-600"> · TX {lastTxSig}</span>
-	                                       ) : null}
-	                                   </div>
-	                               )}
-                               {passkeyEnabled && (
-                                   <>
-                                       <button
-                                           onClick={registerPasskey}
-                                           disabled={passkeyLoading}
-                                           className="text-action-success hover:underline disabled:opacity-50"
-                                       >
-                                           {passkeyLoading ? 'Pairing passkey...' : 'Use passkey (beta)'}
-                                       </button>
-                                       {passkeySession && (
-                                           <span className="text-[10px] text-action-success">
-                                               Passkey ready · {passkeySession.credentialId.slice(0, 8)}...
-                                           </span>
-                                       )}
-                                       {passkeyError && (
-                                           <span className="text-[10px] text-action-destructive">{passkeyError}</span>
-                                       )}
-                                   </>
-                               )}
-                           </div>
-                           
-                           <div className="text-center">
-                                <div className="text-[10px] text-gray-500 mb-1">REGISTERED PLAYERS</div>
-                                <div className="text-xs text-gray-400 flex flex-wrap justify-center gap-2 max-w-xs">
-                                    {leaderboard.slice(0, 8).map((p, i) => (
-                                        <span key={i}>{p.name}</span>
-                                    ))}
-                                    <span>...</span>
-                                </div>
-                           </div>
-                       </div>
-                  </div>
-              </div>
-
-              {/* BOT CONFIGURATION */}
-              <div className="mt-8 border-t border-gray-800 pt-6">
-                  <div className="flex items-center justify-between mb-4">
-                      <h2 className="text-sm font-bold text-gray-500 tracking-widest">BOT OPPONENTS</h2>
-                      <button
-                          className={`px-4 py-2 rounded text-xs font-bold transition-colors ${
-                              botConfig.enabled
-                                  ? 'bg-action-destructive text-black'
-                                  : 'bg-gray-800 text-gray-500 hover:bg-gray-700'
-                          }`}
-                          onClick={() => onBotConfigChange({ ...botConfig, enabled: !botConfig.enabled })}
-                      >
-                          {botConfig.enabled ? 'BOTS ENABLED' : 'ENABLE BOTS'}
-                      </button>
-                  </div>
-
-                  {botConfig.enabled && (
-                      <div className="grid grid-cols-3 gap-4 bg-gray-900/50 p-4 rounded border border-gray-800">
-                          {/* Number of Bots */}
-                          <div>
-                              <label className="text-[10px] text-gray-500 uppercase tracking-widest block mb-2">
-                                  NUMBER OF BOTS
-                              </label>
-                              <div className="flex items-center gap-2">
-                                  <input
-                                      type="range"
-                                      min="10"
-                                      max="300"
-                                      step="10"
-                                      value={botConfig.numBots}
-                                      onChange={(e) => onBotConfigChange({ ...botConfig, numBots: parseInt(e.target.value) })}
-                                      className="flex-1 accent-action-success bg-gray-800"
-                                  />
-                                  <span className="text-action-success font-mono w-12 text-right">{botConfig.numBots}</span>
-                              </div>
-                          </div>
-
-                          {/* Bet Interval */}
-                          <div>
-                              <label className="text-[10px] text-gray-500 uppercase tracking-widest block mb-2">
-                                  BET INTERVAL (SEC)
-                              </label>
-                              <div className="flex items-center gap-2">
-                                  <input
-                                      type="range"
-                                      min="1000"
-                                      max="10000"
-                                      step="1000"
-                                      value={botConfig.betIntervalMs}
-                                      onChange={(e) => onBotConfigChange({ ...botConfig, betIntervalMs: parseInt(e.target.value) })}
-                                      className="flex-1 accent-action-success bg-gray-800"
-                                  />
-                                  <span className="text-action-success font-mono w-12 text-right">{botConfig.betIntervalMs / 1000}s</span>
-                              </div>
-                          </div>
-
-                          {/* Randomize */}
-                          <div>
-                              <label className="text-[10px] text-gray-500 uppercase tracking-widest block mb-2">
-                                  RANDOMIZE TIMING
-                              </label>
-                              <button
-                                  className={`w-full py-2 rounded text-xs font-bold transition-colors ${
-                                      botConfig.randomizeInterval
-                                          ? 'bg-action-success/20 text-action-success border border-action-success'
-                                          : 'bg-gray-800 text-gray-500 border border-gray-700'
-                                  }`}
-                                  onClick={() => onBotConfigChange({ ...botConfig, randomizeInterval: !botConfig.randomizeInterval })}
-                              >
-                                  {botConfig.randomizeInterval ? 'RANDOM' : 'FIXED'}
-                              </button>
-                          </div>
-                      </div>
-                  )}
-
-                  {botConfig.enabled && (
-                      <div className="mt-2 text-[10px] text-gray-600 text-center">
-                          {botConfig.numBots} bots will make random bets every ~{botConfig.betIntervalMs / 1000}s during the tournament
-                      </div>
-                  )}
-              </div>
-          </div>
+    <div className="min-h-screen w-screen bg-titanium-50 flex flex-col items-center justify-start p-4 sm:p-6 md:p-8 overflow-auto">
+      {/* Mode Tabs */}
+      <div className="max-w-2xl w-full mb-6 flex justify-center">
+        <PlaySwapStakeTabs />
       </div>
+
+      {/* Main Content Card */}
+      <div className="max-w-2xl w-full bg-white rounded-3xl shadow-float p-6 sm:p-8 md:p-10 space-y-8">
+        {/* Header */}
+        <div className="text-center">
+          <h1 className="text-headline font-semibold text-titanium-900 tracking-tight">
+            Freeroll Tournament
+          </h1>
+          <p className="text-caption text-titanium-600 mt-1">
+            Play free, win real rewards
+          </p>
+        </div>
+
+        {/* Hero Countdown Section */}
+        <div className="text-center py-6">
+          {activeTimeLeft > 0 ? (
+            <div className="space-y-2">
+              <div className="text-caption text-titanium-500 uppercase tracking-widest">
+                Tournament Ends In
+              </div>
+              <div className="text-hero text-action-destructive font-semibold tracking-tight font-display">
+                {formatTime(activeTimeLeft)}
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="text-caption text-titanium-500 uppercase tracking-widest">
+                Next Tournament In
+              </div>
+              <div className="text-hero text-titanium-900 font-semibold tracking-tight font-display">
+                {formatTime(nextStartIn)}
+              </div>
+              {nextTournamentId !== null && (
+                <div className="text-micro text-titanium-400">
+                  Tournament #{nextTournamentId}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Entries Badge */}
+          <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 bg-titanium-100 rounded-full">
+            <span className="text-micro text-titanium-500 uppercase tracking-wider">
+              Entries Today
+            </span>
+            <span className={`text-micro font-semibold ${entriesRemaining > 0 ? 'text-titanium-900' : 'text-action-destructive'}`}>
+              {tournamentsPlayedToday}/{maxEntries}
+            </span>
+          </div>
+        </div>
+
+        {/* Register Button */}
+        <div className="flex flex-col items-center gap-3">
+          <button
+            onClick={onRegister}
+            disabled={buttonConfig.disabled}
+            className={`w-full max-w-xs px-8 py-4 rounded-2xl font-semibold text-body transition-all motion-interaction ${
+              buttonConfig.variant === 'primary'
+                ? 'bg-titanium-900 text-white hover:bg-titanium-800 active:scale-[0.98]'
+                : buttonConfig.variant === 'success'
+                  ? 'bg-action-success/10 text-action-success border border-action-success/30'
+                  : buttonConfig.variant === 'loading'
+                    ? 'bg-titanium-200 text-titanium-500'
+                    : 'bg-titanium-100 text-titanium-400'
+            }`}
+          >
+            {buttonConfig.text}
+            {!isRegistered && (
+              <span className="ml-2 text-titanium-500 text-caption">[R]</span>
+            )}
+          </button>
+
+          {canEnterTournament && (
+            <button
+              onClick={onEnterTournament}
+              className="px-6 py-2 rounded-xl text-caption font-medium text-action-primary hover:bg-action-primary/5 transition-colors"
+            >
+              Enter Active Tournament →
+            </button>
+          )}
+
+          {/* Status Message */}
+          {showStatus && (
+            <p className={`text-caption text-center ${isErrorStatus ? 'text-action-destructive' : 'text-titanium-500'}`}>
+              {statusMessage}
+              {lastTxSig && (
+                <span className="text-titanium-400"> · {lastTxSig.slice(0, 8)}...</span>
+              )}
+            </p>
+          )}
+
+          {/* Passkey Section - Simplified */}
+          {passkeyEnabled && (
+            <div className="text-center">
+              {passkeySession ? (
+                <div className="flex items-center gap-2 text-micro text-action-success">
+                  <span className="w-1.5 h-1.5 rounded-full bg-action-success" />
+                  Signed in securely
+                </div>
+              ) : (
+                <button
+                  onClick={registerPasskey}
+                  disabled={passkeyLoading}
+                  className="text-caption text-action-primary hover:underline disabled:opacity-50"
+                >
+                  {passkeyLoading ? 'Connecting...' : 'Sign in securely'}
+                </button>
+              )}
+              {passkeyError && (
+                <p className="text-micro text-action-destructive mt-1">{passkeyError}</p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Stats Section - Clean Typography */}
+        <div className="pt-6 border-t border-titanium-100">
+          <div className="grid grid-cols-2 gap-6">
+            <div className="text-center">
+              <div className="text-micro text-titanium-500 uppercase tracking-wider mb-1">
+                Your Balance
+              </div>
+              <div className="text-headline text-titanium-900 font-semibold font-display">
+                ${stats.chips.toLocaleString()}
+              </div>
+            </div>
+            <div className="text-center">
+              <div className="text-micro text-titanium-500 uppercase tracking-wider mb-1">
+                Current Rank
+              </div>
+              <div className="text-headline text-titanium-900 font-semibold font-display">
+                #{stats.rank}
+              </div>
+            </div>
+          </div>
+
+          {/* PNL by Game - Subtle List */}
+          {Object.keys(stats.pnlByGame).length > 0 && (
+            <div className="mt-6 space-y-2">
+              <div className="text-micro text-titanium-500 uppercase tracking-wider">
+                Performance by Game
+              </div>
+              <div className="space-y-1">
+                {Object.entries(stats.pnlByGame).map(([game, pnl]) => {
+                  const val = pnl as number;
+                  return (
+                    <div key={game} className="flex justify-between text-caption">
+                      <span className="text-titanium-600">{game}</span>
+                      <span className={val >= 0 ? 'text-action-success' : 'text-action-destructive'}>
+                        {val >= 0 ? '+' : ''}{val}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Registered Players */}
+        {leaderboard.length > 0 && (
+          <div className="pt-4 border-t border-titanium-100">
+            <div className="text-micro text-titanium-500 uppercase tracking-wider mb-2">
+              Players ({leaderboard.length})
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {leaderboard.slice(0, 8).map((p, i) => (
+                <span
+                  key={i}
+                  className="px-2 py-1 bg-titanium-100 rounded-lg text-micro text-titanium-700"
+                >
+                  {p.name}
+                </span>
+              ))}
+              {leaderboard.length > 8 && (
+                <span className="px-2 py-1 text-micro text-titanium-400">
+                  +{leaderboard.length - 8} more
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Advanced Settings Toggle */}
+        <div className="pt-4 border-t border-titanium-100">
+          <button
+            onClick={() => setShowAdvanced(!showAdvanced)}
+            className="w-full flex items-center justify-between py-2 text-caption text-titanium-500 hover:text-titanium-700 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <Settings className="w-4 h-4" />
+              <span>Advanced Settings</span>
+            </div>
+            <ChevronDown className={`w-4 h-4 transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
+          </button>
+
+          {showAdvanced && (
+            <div className="mt-4 p-4 bg-titanium-50 rounded-2xl space-y-4">
+              {/* Bot Toggle */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-caption text-titanium-700 font-medium">Bot Opponents</div>
+                  <div className="text-micro text-titanium-500">Add AI players to the tournament</div>
+                </div>
+                <button
+                  onClick={() => onBotConfigChange({ ...botConfig, enabled: !botConfig.enabled })}
+                  className={`w-12 h-7 rounded-full transition-colors relative ${
+                    botConfig.enabled ? 'bg-action-primary' : 'bg-titanium-200'
+                  }`}
+                >
+                  <span
+                    className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${
+                      botConfig.enabled ? 'left-6' : 'left-1'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {botConfig.enabled && (
+                <div className="space-y-3 pt-3 border-t border-titanium-200">
+                  {/* Number of Bots */}
+                  <div>
+                    <div className="flex justify-between text-micro text-titanium-600 mb-1">
+                      <span>Number of Bots</span>
+                      <span className="font-medium">{botConfig.numBots}</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="10"
+                      max="300"
+                      step="10"
+                      value={botConfig.numBots}
+                      onChange={(e) => onBotConfigChange({ ...botConfig, numBots: parseInt(e.target.value) })}
+                      className="w-full accent-action-primary"
+                    />
+                  </div>
+
+                  {/* Bet Interval */}
+                  <div>
+                    <div className="flex justify-between text-micro text-titanium-600 mb-1">
+                      <span>Bet Interval</span>
+                      <span className="font-medium">{botConfig.betIntervalMs / 1000}s</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="1000"
+                      max="10000"
+                      step="1000"
+                      value={botConfig.betIntervalMs}
+                      onChange={(e) => onBotConfigChange({ ...botConfig, betIntervalMs: parseInt(e.target.value) })}
+                      className="w-full accent-action-primary"
+                    />
+                  </div>
+
+                  {/* Randomize Toggle */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-micro text-titanium-600">Randomize Timing</span>
+                    <button
+                      onClick={() => onBotConfigChange({ ...botConfig, randomizeInterval: !botConfig.randomizeInterval })}
+                      className={`px-3 py-1 rounded-lg text-micro font-medium transition-colors ${
+                        botConfig.randomizeInterval
+                          ? 'bg-action-primary/10 text-action-primary'
+                          : 'bg-titanium-200 text-titanium-500'
+                      }`}
+                    >
+                      {botConfig.randomizeInterval ? 'Random' : 'Fixed'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 };

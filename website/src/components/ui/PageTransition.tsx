@@ -7,7 +7,7 @@ import {
   createContext,
   useContext,
 } from 'react';
-import { animated, useTransition, useSpring } from '@react-spring/web';
+import { animated, useTransition, useSpring, to } from '@react-spring/web';
 import { SPRING_LIQUID_CONFIGS, SPRING_CONFIGS } from '../../utils/motion';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
@@ -91,8 +91,9 @@ export function PageTransition({ children }: PageTransitionProps) {
                 ? { opacity: style.opacity }
                 : {
                     opacity: style.opacity,
-                    transform: style.scale.to(
-                      (s) => `scale(${s}) translateX(${style.x.get()}px)`
+                    transform: to(
+                      [style.scale, style.x],
+                      (s, x) => `scale(${s}) translateX(${x}px)`
                     ),
                   }
             }
@@ -177,8 +178,9 @@ export function StaggerChildren({
               ? { opacity: style.opacity }
               : {
                   opacity: style.opacity,
-                  transform: style.y.to(
-                    (y) => `translateY(${y}px) scale(${style.scale.get()})`
+                  transform: to(
+                    [style.y, style.scale],
+                    (y, scale) => `translateY(${y}px) scale(${scale})`
                   ),
                 }
           }

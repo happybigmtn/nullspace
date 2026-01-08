@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, type ReactNode, type CSSProperties } from 'react';
-import { useSpring, animated, type SpringConfig } from '@react-spring/web';
+import { useSpring, animated, to, type SpringConfig } from '@react-spring/web';
 import { SPRING_LIQUID_CONFIGS, type SpringLiquidPreset } from '../../utils/motion';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
@@ -162,9 +162,9 @@ export function RevealOnScroll({
       style={{
         ...style,
         opacity: springStyles.opacity,
-        transform: springStyles.x.to(
-          (x) =>
-            `translate3d(${x}px, ${springStyles.y.get()}px, 0) scale(${springStyles.scale.get()})`
+        transform: to(
+          [springStyles.x, springStyles.y, springStyles.scale],
+          (x, y, scale) => `translate3d(${x}px, ${y}px, 0) scale(${scale})`
         ),
         willChange: isRevealed ? 'auto' : 'opacity, transform',
       }}

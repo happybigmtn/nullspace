@@ -5,54 +5,11 @@ import { DiceThrow2D } from '../GameComponents';
 import { MobileDrawer } from '../MobileDrawer';
 import { BetsDrawer } from '../BetsDrawer';
 import { PanelDrawer } from '../PanelDrawer';
+import { InlineBetSelector } from '../InlineBetSelector';
 import { Label } from '../ui/Label';
 import { calculateCrapsExposure, canPlaceCrapsBonusBets } from '../../../utils/gameUtils';
 import { CrapsBonusDashboard } from './CrapsBonusDashboard';
 import { CrapsBetMenu } from './CrapsBetMenu';
-
-const CHIP_VALUES = [1, 5, 25, 100, 500, 1000, 5000, 10000];
-
-// Casino chip colors by denomination
-const CHIP_COLORS: Record<number, { bg: string; border: string; text: string }> = {
-    1: { bg: 'bg-gray-100', border: 'border-gray-300', text: 'text-gray-800' },
-    5: { bg: 'bg-red-600', border: 'border-red-400', text: 'text-white' },
-    25: { bg: 'bg-green-600', border: 'border-green-400', text: 'text-white' },
-    100: { bg: 'bg-gray-900', border: 'border-gray-600', text: 'text-white' },
-    500: { bg: 'bg-purple-600', border: 'border-purple-400', text: 'text-white' },
-    1000: { bg: 'bg-yellow-500', border: 'border-yellow-300', text: 'text-black' },
-    5000: { bg: 'bg-pink-500', border: 'border-pink-300', text: 'text-white' },
-    10000: { bg: 'bg-blue-600', border: 'border-blue-400', text: 'text-white' },
-};
-
-// Chip component for bet size display
-const ChipButton: React.FC<{
-    value: number;
-    selected?: boolean;
-    onClick?: () => void;
-    size?: 'sm' | 'md' | 'lg';
-}> = ({ value, selected, onClick, size = 'lg' }) => {
-    const colors = CHIP_COLORS[value] || CHIP_COLORS[25];
-    const label = value >= 1000 ? `${value / 1000}K` : value.toString();
-    const sizes = { sm: 'w-10 h-10 text-xs', md: 'w-12 h-12 text-sm', lg: 'w-14 h-14 text-base' };
-
-    return (
-        <button
-            type="button"
-            onClick={onClick}
-            className={`
-                ${sizes[size]} relative rounded-full font-bold font-mono
-                ${colors.bg} ${colors.text} border-4 ${colors.border}
-                flex items-center justify-center transition-all duration-150
-                ${onClick ? 'cursor-pointer hover:scale-110 active:scale-95' : ''}
-                ${selected ? 'ring-2 ring-white ring-offset-2 ring-offset-black shadow-lg' : ''}
-            `}
-            style={{ boxShadow: `inset 0 2px 4px rgba(255,255,255,0.3), inset 0 -2px 4px rgba(0,0,0,0.3)` }}
-        >
-            <div className="absolute inset-0.5 rounded-full border-2 border-dashed border-white/30" />
-            <span className="relative z-10 drop-shadow-md">{label}</span>
-        </button>
-    );
-};
 
 export const CrapsView = React.memo<{
     gameState: GameState;
@@ -61,8 +18,9 @@ export const CrapsView = React.memo<{
     playMode?: 'CASH' | 'FREEROLL' | null;
     currentBet?: number;
     onBetChange?: (bet: number) => void;
-}>(({ gameState, actions, lastWin, playMode, currentBet, onBetChange }) => {
-    const [showChipSelector, setShowChipSelector] = useState(false);
+    /** LUX-010: Balance for inline bet selector calculations */
+    balance?: number;
+}>(({ gameState, actions, lastWin, playMode, currentBet, onBetChange, balance = 1000 }) => {
     const [leftSidebarView, setLeftSidebarView] = useState<'EXPOSURE' | 'SIDE_BETS'>('EXPOSURE');
     const [diceSettled, setDiceSettled] = useState(true);
     const [showOutcome, setShowOutcome] = useState(true);
@@ -584,48 +542,16 @@ export const CrapsView = React.memo<{
                         </PanelDrawer>
                     </div>
 
-                    {/* Desktop: Chip + ROLL Button */}
+                    {/* Desktop: Bet Selector + ROLL Button - LUX-010 */}
                     <div className="hidden md:flex items-center gap-3">
-                        {/* Chip Selector */}
-                        <div className="relative">
-                            <ChipButton
-                                value={currentBet || 25}
-                                selected={showChipSelector}
-                                onClick={() => setShowChipSelector(!showChipSelector)}
+                        {/* Inline Bet Selector */}
+                        {onBetChange && (
+                            <InlineBetSelector
+                                currentBet={currentBet || 25}
+                                balance={balance}
+                                onBetChange={onBetChange}
                             />
-                            {showChipSelector && (
-                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 p-3 bg-black/95 border border-gray-700 rounded-xl backdrop-blur-sm z-50">
-                                    <div className="flex gap-2 pb-2">
-                                        {CHIP_VALUES.slice(0, 4).map((value) => (
-                                            <ChipButton
-                                                key={value}
-                                                value={value}
-                                                size="md"
-                                                selected={currentBet === value}
-                                                onClick={() => {
-                                                    onBetChange?.(value);
-                                                    setShowChipSelector(false);
-                                                }}
-                                            />
-                                        ))}
-                                    </div>
-                                    <div className="flex gap-2 pt-2 border-t border-gray-800">
-                                        {CHIP_VALUES.slice(4).map((value) => (
-                                            <ChipButton
-                                                key={value}
-                                                value={value}
-                                                size="md"
-                                                selected={currentBet === value}
-                                                onClick={() => {
-                                                    onBetChange?.(value);
-                                                    setShowChipSelector(false);
-                                                }}
-                                            />
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
+                        )}
 
                         {/* ROLL Button */}
                         <button

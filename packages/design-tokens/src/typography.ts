@@ -6,30 +6,58 @@
  */
 
 /**
- * Font family definitions
- * Display: Headlines and large text
- * Body: Readable paragraphs and UI text
- * Mono: Code, numbers, and technical content
+ * Font family definitions - Luxury Redesign v4.0
+ *
+ * Sans: Inter for all UI text (Superhuman/Linear standard)
+ * Display: SF Pro Display for headlines (Apple standard, falls back to system-ui)
+ * Mono: JetBrains Mono for numbers, balances, and technical content
+ *
+ * Font weights limited to: 400 (normal), 500 (medium), 600 (semibold)
+ * Only hero headlines may use 700 (bold)
  */
 export const FONTS = {
-  display: 'Outfit',
-  body: 'Plus Jakarta Sans',
+  sans: 'Inter',
+  display: 'SF Pro Display',
   mono: 'JetBrains Mono',
+  // Legacy aliases for backwards compatibility
+  body: 'Inter',
 } as const;
 
 /**
- * Type scale with size, line height, weight, and letter spacing
- * All numeric values are in pixels (consumers convert as needed)
+ * Type scale - Luxury Redesign v4.0
+ *
+ * Strict 4-level hierarchy + 1 micro size:
+ * - Hero (48px): Page titles, splash screens
+ * - Headline (24px): Section titles, card headers
+ * - Body (16px): All readable content
+ * - Caption (12px): Labels, hints, timestamps
+ * - Micro (10px): Badges, tiny labels
+ *
+ * Letter-spacing in pixels (converted from em at base 16px):
+ * -0.02em = -0.32px, -0.015em = -0.24px, 0.01em = 0.16px
  */
 export const TYPE_SCALE = {
-  micro: { size: 10, lineHeight: 12, weight: 500, letterSpacing: 0.5 },
-  label: { size: 12, lineHeight: 16, weight: 500, letterSpacing: 0.25 },
-  body: { size: 14, lineHeight: 20, weight: 400, letterSpacing: 0 },
+  // Micro: Badges, tiny labels (10px)
+  micro: { size: 10, lineHeight: 12, weight: 500, letterSpacing: 0.16 },
+
+  // Caption: Labels, hints, timestamps (12px)
+  caption: { size: 12, lineHeight: 16, weight: 400, letterSpacing: 0.16 },
+
+  // Body: All readable content (16px) - THE default
+  body: { size: 16, lineHeight: 24, weight: 400, letterSpacing: 0 },
+
+  // Headline: Section titles, card headers (24px)
+  headline: { size: 24, lineHeight: 32, weight: 500, letterSpacing: -0.24 },
+
+  // Hero: Page titles, splash screens (48px)
+  hero: { size: 48, lineHeight: 56, weight: 600, letterSpacing: -0.32 },
+
+  // Legacy aliases for backwards compatibility (map to new hierarchy)
+  label: { size: 12, lineHeight: 16, weight: 400, letterSpacing: 0.16 },
   bodyLarge: { size: 16, lineHeight: 24, weight: 400, letterSpacing: 0 },
-  heading: { size: 20, lineHeight: 28, weight: 600, letterSpacing: -0.25 },
-  headingLarge: { size: 24, lineHeight: 32, weight: 600, letterSpacing: -0.5 },
-  display: { size: 32, lineHeight: 40, weight: 700, letterSpacing: -0.5 },
-  hero: { size: 48, lineHeight: 56, weight: 800, letterSpacing: -1 },
+  heading: { size: 24, lineHeight: 32, weight: 500, letterSpacing: -0.24 },
+  headingLarge: { size: 24, lineHeight: 32, weight: 500, letterSpacing: -0.24 },
+  display: { size: 48, lineHeight: 56, weight: 600, letterSpacing: -0.32 },
 } as const;
 
 /**

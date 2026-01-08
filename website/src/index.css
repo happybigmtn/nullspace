@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap');
 @import "tailwindcss";
 
 @layer theme {
@@ -46,9 +46,31 @@
     --a11y-btn-success-text: #000000; /* Black on success green, 9.46:1 */
     --a11y-btn-warning-text: #000000; /* Black on warning orange, 9.55:1 */
     --a11y-btn-error-text: #ffffff;   /* White on error red, 3.55:1 (large text only) */
+
+    /* ─────────────────────────────────────────────────────────────────────────────
+     * Semantic Color Tokens - Luxury Redesign v4.0
+     *
+     * 5 essential colors for the entire UI:
+     * - background: Page/app background
+     * - surface: Cards, panels, modals
+     * - border: Dividers, outlines
+     * - text-muted: Secondary text, hints
+     * - text: Primary text
+     * ───────────────────────────────────────────────────────────────────────────── */
+    --ns-background: #FAFAFA;   /* titanium-50 */
+    --ns-surface: #F5F5F5;      /* titanium-100 */
+    --ns-border: #E5E5E5;       /* titanium-200 */
+    --ns-text-muted: #525252;   /* titanium-600 */
+    --ns-text: #171717;         /* titanium-900 */
   }
 
   .dark {
+    /* Dark mode semantic colors */
+    --ns-background: #0A0A0A;   /* titanium-950 */
+    --ns-surface: #171717;      /* titanium-900 */
+    --ns-border: #404040;       /* titanium-700 */
+    --ns-text-muted: #A3A3A3;   /* titanium-400 */
+    --ns-text: #FAFAFA;         /* titanium-50 */
     /* Dark mode accessible text colors */
     --a11y-text-primary: #FAFAFA;     /* titanium-50, 18.97:1 on titanium-950 */
     --a11y-text-secondary: #D4D4D4;   /* titanium-300, 13.36:1 on titanium-950 */
@@ -65,9 +87,10 @@
 body {
   background-color: #f9f9f9; /* titanium-50 */
   color: #2c2c2e; /* titanium-800 */
-  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.01em;
 }
 
 .dark body {
@@ -1015,6 +1038,102 @@ a[href="#app-main"]:focus-visible {
   letter-spacing: 0.24em !important;
 }
 
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Display Mono - For Balance/Bet Amounts (LUX-001)
+ *
+ * Use this class for any numeric display that should feel "financial":
+ * - Wallet balances
+ * - Bet amounts
+ * - Win/loss amounts
+ * - Countdown timers
+ * - Any numeric value where precision matters visually
+ * ───────────────────────────────────────────────────────────────────────────── */
+.text-display-mono {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  font-feature-settings: 'tnum' 1, 'zero' 1;  /* Tabular numbers, slashed zero */
+  letter-spacing: -0.02em;
+}
+
+/* Variant sizes for display-mono */
+.text-display-mono-sm {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  font-feature-settings: 'tnum' 1, 'zero' 1;
+  font-size: 0.875rem;
+  letter-spacing: -0.01em;
+}
+
+.text-display-mono-lg {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  font-feature-settings: 'tnum' 1, 'zero' 1;
+  font-size: 1.5rem;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+}
+
+.text-display-mono-xl {
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  font-feature-settings: 'tnum' 1, 'zero' 1;
+  font-size: 2rem;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Semantic Typography Classes (LUX-001/LUX-002)
+ *
+ * 4-level hierarchy: hero, headline, body, caption
+ * Use these instead of arbitrary text-* sizes
+ * ───────────────────────────────────────────────────────────────────────────── */
+.text-hero {
+  font-size: 3rem;        /* 48px */
+  line-height: 3.5rem;    /* 56px */
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-family: 'SF Pro Display', 'Inter', -apple-system, system-ui, sans-serif;
+}
+
+.text-headline {
+  font-size: 1.5rem;      /* 24px */
+  line-height: 2rem;      /* 32px */
+  font-weight: 500;
+  letter-spacing: -0.015em;
+}
+
+.text-body {
+  font-size: 1rem;        /* 16px */
+  line-height: 1.5rem;    /* 24px */
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.text-caption {
+  font-size: 0.75rem;     /* 12px */
+  line-height: 1rem;      /* 16px */
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  color: var(--ns-text-muted);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Semantic Color Utilities - Luxury Redesign v4.0
+ *
+ * Use these instead of titanium-* numbered classes.
+ * Automatically switches between light/dark mode.
+ * ───────────────────────────────────────────────────────────────────────────── */
+
+/* Background colors */
+.bg-ns-background { background-color: var(--ns-background); }
+.bg-ns-surface { background-color: var(--ns-surface); }
+
+/* Border colors */
+.border-ns { border-color: var(--ns-border); }
+.border-ns-default { border-color: var(--ns-border); }
+
+/* Text colors */
+.text-ns { color: var(--ns-text); }
+.text-ns-primary { color: var(--ns-text); }
+.text-ns-muted { color: var(--ns-text-muted); }
+
 /* Titanium & Glass Utilities */
 .bg-glass-light {
   background-color: rgba(255, 255, 255, 0.92);
@@ -1052,6 +1171,21 @@ a[href="#app-main"]:focus-visible {
 
 .motion-interaction {
   transition: all var(--motion-micro) var(--motion-ease);
+}
+
+/* LUX-022: Button press micro-animation */
+.motion-press {
+  transition: transform 100ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.motion-press:active {
+  transform: scale(0.97);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-press:active {
+    transform: none;
+  }
 }
 
 .motion-state {

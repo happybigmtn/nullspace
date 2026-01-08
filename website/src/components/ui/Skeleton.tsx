@@ -307,4 +307,60 @@ export function SkeletonWrapper({
   );
 }
 
+/**
+ * LUX-023: Loading text with subtle pulse animation
+ * Use instead of spinners for inline loading states
+ */
+interface LoadingTextProps {
+  /** Text to display. Default '...' */
+  text?: string;
+  className?: string;
+}
+
+export function LoadingText({ text = '...', className = '' }: LoadingTextProps) {
+  return (
+    <span
+      className={cn(
+        'inline-block animate-pulse text-titanium-400 dark:text-titanium-500',
+        className
+      )}
+      aria-live="polite"
+      aria-busy="true"
+    >
+      {text}
+    </span>
+  );
+}
+
+/**
+ * LUX-023: Loading dots animation
+ * Animated ellipsis for "Loading..." states
+ */
+interface LoadingDotsProps {
+  className?: string;
+}
+
+export function LoadingDots({ className = '' }: LoadingDotsProps) {
+  return (
+    <span
+      className={cn('inline-flex gap-1', className)}
+      aria-live="polite"
+      aria-busy="true"
+    >
+      <span
+        className="w-1.5 h-1.5 rounded-full bg-current animate-bounce"
+        style={{ animationDelay: '0ms' }}
+      />
+      <span
+        className="w-1.5 h-1.5 rounded-full bg-current animate-bounce"
+        style={{ animationDelay: '150ms' }}
+      />
+      <span
+        className="w-1.5 h-1.5 rounded-full bg-current animate-bounce"
+        style={{ animationDelay: '300ms' }}
+      />
+    </span>
+  );
+}
+
 export default Skeleton;

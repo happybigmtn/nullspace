@@ -19,10 +19,11 @@ import { NodeSDK } from '@opentelemetry/sdk-node';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
 import { Resource } from '@opentelemetry/resources';
-// Define semantic convention attributes as strings to avoid version compatibility issues
-const ATTR_SERVICE_NAME = 'service.name';
-const ATTR_SERVICE_VERSION = 'service.version';
-const ATTR_DEPLOYMENT_ENVIRONMENT_NAME = 'deployment.environment.name';
+import {
+  ATTR_SERVICE_NAME,
+  ATTR_SERVICE_VERSION,
+  ATTR_DEPLOYMENT_ENVIRONMENT_NAME,
+} from '@opentelemetry/semantic-conventions';
 import {
   trace,
   context,
@@ -248,5 +249,4 @@ export function createSpanFromTraceparent(
 }
 
 // Export types for consumers
-export type { Span } from '@opentelemetry/api';
-export { SpanStatusCode } from '@opentelemetry/api';
+export { Span, SpanStatusCode } from '@opentelemetry/api';

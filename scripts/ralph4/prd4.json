@@ -1,0 +1,831 @@
+{
+  "project": "Nullspace Luxury Redesign - Superhuman Casino",
+  "version": "4.0",
+  "agent": "ralph4",
+  "description": "Complete visual overhaul inspired by Jony Ive's minimalism and Superhuman's speed-first UX. Strip away clutter, elevate typography, unify auth flows, and create a casino that feels like Apple designed it.",
+  "designPhilosophy": {
+    "core": "Less, but better. Every pixel earns its place.",
+    "influences": ["Jony Ive (Apple)", "Superhuman", "Linear", "Stripe"],
+    "principles": {
+      "radicalSimplicity": "If it doesn't help you place a bet or see results, remove it",
+      "typographyFirst": "Type is the primary design element. No decorative borders or boxes.",
+      "whiteSpace": "Generous breathing room creates elegance. Cramped is never luxurious.",
+      "oneAction": "ONE primary action per screen state. Everything else fades back.",
+      "instantFeedback": "Every interaction responds in <100ms with spring physics",
+      "keyboardFirst": "Power users should never need the mouse"
+    }
+  },
+  "phases": [
+    {
+      "id": "phase-1",
+      "name": "Typography & Visual Foundation",
+      "priority": "critical",
+      "description": "Replace generic fonts with premium typography. Establish clear visual hierarchy through type alone.",
+      "stories": []
+    },
+    {
+      "id": "phase-2",
+      "name": "Declutter Game Views",
+      "priority": "critical",
+      "description": "Strip redundant elements from BlackjackView, BaccaratView, and all game screens. One place for each piece of information.",
+      "stories": []
+    },
+    {
+      "id": "phase-3",
+      "name": "Bet Controls Revolution",
+      "priority": "high",
+      "description": "Redesign bet buttons and chip selectors. Make placing bets feel instant and satisfying.",
+      "stories": []
+    },
+    {
+      "id": "phase-4",
+      "name": "Auth & Passkey Simplification",
+      "priority": "high",
+      "description": "Remove authentication complexity from user consciousness. It should just work.",
+      "stories": []
+    },
+    {
+      "id": "phase-5",
+      "name": "Navigation & Menu Refinement",
+      "priority": "medium",
+      "description": "Simplify navigation. Remove drawer overload. One way to do each thing.",
+      "stories": []
+    },
+    {
+      "id": "phase-6",
+      "name": "Premium Polish",
+      "priority": "medium",
+      "description": "Final touches that elevate from good to luxurious.",
+      "stories": []
+    }
+  ],
+  "stories": [
+    {
+      "id": "LUX-001",
+      "phase": "phase-1",
+      "title": "Implement premium font stack with SF Pro and Inter",
+      "priority": 1,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/src/index.css",
+        "/website/tailwind.config.js",
+        "/packages/design-tokens/src/typography.ts"
+      ],
+      "description": "Replace system fonts with Inter for UI and SF Pro Display/JetBrains Mono for numbers. Typography should feel expensive.",
+      "acceptance": [
+        "Inter loaded via Google Fonts or local files",
+        "SF Pro Display used for headlines (fallback to system-ui)",
+        "JetBrains Mono used ONLY for balance displays and numeric values",
+        "Font weights limited to 400 (normal), 500 (medium), 600 (semibold)",
+        "No font-bold (700) anywhere except hero headlines",
+        "Letter-spacing tightened for headlines (-0.02em)",
+        "Build passes, fonts render correctly"
+      ],
+      "implementation": [
+        "Add Inter font import to index.css or tailwind config",
+        "Update design-tokens TYPE_SCALE with new font families",
+        "Create text-display-mono class for balance/bet amounts",
+        "Audit all font-bold usages, replace with font-semibold",
+        "Set default letter-spacing: -0.01em on body",
+        "Test on Windows/Linux where SF Pro unavailable"
+      ],
+      "notes": "Superhuman uses Inter. Apple uses SF Pro. Linear uses Inter. These are the gold standards."
+    },
+    {
+      "id": "LUX-002",
+      "phase": "phase-1",
+      "title": "Establish 4-level typography hierarchy",
+      "priority": 2,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/src/index.css",
+        "/packages/design-tokens/src/typography.ts",
+        "/website/tailwind.config.js"
+      ],
+      "description": "Create strict typography hierarchy: Hero (48px), Headline (24px), Body (16px), Caption (12px). No in-between sizes.",
+      "acceptance": [
+        "TYPE_SCALE reduced to 4 core sizes + 1 micro (10px)",
+        "Hero: 48px/56px, -0.02em, font-semibold",
+        "Headline: 24px/32px, -0.015em, font-medium",
+        "Body: 16px/24px, normal, font-normal",
+        "Caption: 12px/16px, 0.01em, font-normal, text-titanium-500",
+        "Remove text-bodyLarge, text-headingLarge confusion",
+        "All game views use only these 4 sizes"
+      ],
+      "implementation": [
+        "Simplify TYPE_SCALE in design-tokens",
+        "Create semantic classes: text-hero, text-headline, text-body, text-caption",
+        "Audit all components for non-standard sizes",
+        "Replace text-sm, text-xs, text-lg with semantic classes",
+        "Document hierarchy in design-principles.md"
+      ],
+      "notes": "Constraint breeds creativity. Limiting to 4 sizes forces intentional decisions."
+    },
+    {
+      "id": "LUX-003",
+      "phase": "phase-1",
+      "title": "Reduce color palette to essential shades",
+      "priority": 3,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/packages/design-tokens/src/colors.ts",
+        "/website/tailwind.config.js",
+        "/website/src/index.css"
+      ],
+      "description": "Limit titanium scale to 5 shades. Remove unused ACTION colors. Simplify to: background, surface, border, text-primary, text-muted.",
+      "acceptance": [
+        "TITANIUM reduced to: 50 (background), 100 (surface), 200 (border), 600 (text-muted), 900 (text-primary)",
+        "Remove titanium-300, 400, 500, 700, 800 intermediate shades",
+        "ACTION colors: keep only indigo, success (green), destructive (red)",
+        "Remove action-warning, action-info duplicates",
+        "All components use semantic color names, not numbered shades",
+        "Create semantic aliases: bg-primary, bg-surface, border-default, text-muted"
+      ],
+      "implementation": [
+        "Audit current color usage across all components",
+        "Update design-tokens/colors.ts with reduced palette",
+        "Create semantic color mapping in Tailwind extend",
+        "Search-replace titanium-300/400/500/700/800 usages",
+        "Update dark mode mappings for 5-shade system"
+      ],
+      "notes": "Apple's interfaces use surprisingly few colors. The contrast creates hierarchy, not color variety."
+    },
+    {
+      "id": "LUX-004",
+      "phase": "phase-1",
+      "title": "Remove decorative borders and boxes",
+      "priority": 4,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/src/components/casino/games/BlackjackView.tsx",
+        "/website/src/components/casino/games/BaccaratView.tsx",
+        "/website/src/components/"
+      ],
+      "description": "Eliminate visual noise from borders, rounded boxes, and decorative containers. Let typography and spacing create structure.",
+      "acceptance": [
+        "Remove border classes from inline info displays",
+        "Remove bg-titanium-50/100 wrapper divs that add visual weight",
+        "Bet pills become pure text with subtle color, no border",
+        "Card totals become clean numbers without badge containers",
+        "Reduce rounded-* usage to only interactive elements (buttons, cards)",
+        "No nested bordered containers (border within border)"
+      ],
+      "implementation": [
+        "Audit BlackjackView.tsx for border/bg wrapper divs",
+        "Audit BaccaratView.tsx for same",
+        "Replace badge-style displays with clean typography",
+        "Use spacing (gap/padding) instead of borders for separation",
+        "Keep borders only on: buttons, modals, drawers, cards"
+      ],
+      "notes": "Jony Ive: 'We try to develop products that seem somehow inevitable.' Borders make things feel constructed, not inevitable."
+    },
+    {
+      "id": "LUX-005",
+      "phase": "phase-2",
+      "title": "Eliminate redundant bet displays in BlackjackView",
+      "priority": 5,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/src/components/casino/games/BlackjackView.tsx"
+      ],
+      "description": "Current bet is shown in: 1) Mobile header, 2) Center pills, 3) Control bar, 4) Chip selector label. Pick ONE location.",
+      "acceptance": [
+        "Remove mobile bet summary header (lines ~477-484)",
+        "Remove center bet pills display from game area",
+        "Bet amount shown ONLY in GameControlBar balance section",
+        "Side bet indicators hidden until drawer opened",
+        "Current bet readable in one glance, one location"
+      ],
+      "implementation": [
+        "Delete MobileBetHeader component/section",
+        "Delete center BetPills from game area",
+        "Update GameControlBar to show: Balance + Current Bet in left section",
+        "Move side bet status to drawer header badge",
+        "Test mobile and desktop layouts"
+      ],
+      "notes": "Redundancy creates cognitive overhead. Users shouldn't see the same number 3 times."
+    },
+    {
+      "id": "LUX-006",
+      "phase": "phase-2",
+      "title": "Hide keyboard shortcuts by default",
+      "priority": 6,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/src/components/casino/games/BlackjackView.tsx",
+        "/website/src/components/casino/games/BaccaratView.tsx"
+      ],
+      "description": "Keyboard shortcuts bar takes permanent vertical space. Show only on keypress or in help modal.",
+      "acceptance": [
+        "Remove permanent keyboard shortcut bar from game views",
+        "Shortcuts appear as tooltip on button hover (desktop only)",
+        "Press '?' to show full keyboard shortcut overlay",
+        "Shortcuts still functional without visual hint",
+        "Save 40-60px vertical space on all game screens"
+      ],
+      "implementation": [
+        "Delete KeyboardShortcutsBar component from game views",
+        "Add title/aria-label with shortcut to each button",
+        "Create KeyboardShortcutsModal opened by '?' key",
+        "Add subtle keyboard icon to help button indicating shortcuts exist",
+        "Test all shortcuts still work after visual removal"
+      ],
+      "notes": "Superhuman shows shortcuts on hover. Power users learn them, everyone else ignores them."
+    },
+    {
+      "id": "LUX-007",
+      "phase": "phase-2",
+      "title": "Collapse analysis panel into modal",
+      "priority": 7,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/src/components/casino/games/BlackjackView.tsx",
+        "/website/src/components/casino/"
+      ],
+      "description": "Hand analysis panel (EV calculations, iterations) pushes game content up. Move to on-demand modal.",
+      "acceptance": [
+        "Analysis panel removed from inline game view",
+        "Analysis available via 'A' key or info button",
+        "Analysis modal shows same EV/recommendation data",
+        "Modal slides up from bottom (like iOS action sheet)",
+        "Game area reclaims 80-100px vertical space"
+      ],
+      "implementation": [
+        "Extract AnalysisPanel to standalone AnalysisModal",
+        "Add 'A' keyboard shortcut to toggle",
+        "Add analysis icon button near help button",
+        "Style modal with glassmorphism backdrop",
+        "Preserve analysis calculations/logic"
+      ],
+      "notes": "Analysis is valuable but not during every hand. Expert users can summon it when needed."
+    },
+    {
+      "id": "LUX-008",
+      "phase": "phase-2",
+      "title": "Consolidate BaccaratView bet positions",
+      "priority": 8,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/src/components/casino/games/BaccaratView.tsx"
+      ],
+      "description": "PLAYER/BANKER/TIE bets shown in: center pills, control bar buttons, drawer. Consolidate to single bet area.",
+      "acceptance": [
+        "Bet selection happens in ONE location (game area or control bar)",
+        "Remove duplicate bet displays from center area",
+        "PLAYER|BANKER as two large tap targets in game area",
+        "TIE and pair bets only shown when drawer opens",
+        "Current bet amount shown only in control bar"
+      ],
+      "implementation": [
+        "Design simple PLAYER | BANKER toggle in game area",
+        "Remove bet pills from center info section",
+        "Move side bets entirely to drawer",
+        "Update control bar to show total bet, not individual positions",
+        "Test bet placement flow end-to-end"
+      ],
+      "notes": "Baccarat has only 3 main bets. The UI should reflect this simplicity."
+    },
+    {
+      "id": "LUX-009",
+      "phase": "phase-2",
+      "title": "Remove Super Mode visual excess",
+      "priority": 9,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/src/components/casino/games/BlackjackView.tsx",
+        "/website/src/components/casino/games/BaccaratView.tsx"
+      ],
+      "description": "Super Mode panel has shimmer animations, multiple borders, multiplier list - too much visual weight.",
+      "acceptance": [
+        "Super Mode indicated by single gold accent color change",
+        "Remove shimmer/glow border animations",
+        "Multiplier display simplified to: 'SUPER 2.5x' badge",
+        "Super Mode toggleable but not visually overwhelming",
+        "Active state clear from accent color alone"
+      ],
+      "implementation": [
+        "Replace Super Mode panel with subtle accent treatment",
+        "Remove AnimatedBorder/shimmer effects",
+        "Consolidate multiplier info to single badge",
+        "Use gold/amber accent color for super mode indication",
+        "Keep Super button in control bar, remove inline panel"
+      ],
+      "notes": "Premium features don't need to scream. Understated signals exclusivity."
+    },
+    {
+      "id": "LUX-010",
+      "phase": "phase-3",
+      "title": "Redesign chip selector as inline stepper",
+      "priority": 10,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/src/components/casino/MobileChipSelector.tsx",
+        "/website/src/components/casino/games/"
+      ],
+      "description": "Current chip selector requires popup overlay with 2 clicks. Replace with inline +/- stepper or preset amounts.",
+      "acceptance": [
+        "Bet amount adjustable with single tap/click",
+        "+/- buttons for increment/decrement",
+        "Preset amounts: Min, 1/4, 1/2, Max (relative to balance)",
+        "Current amount always visible without opening popup",
+        "Keyboard: arrow keys adjust bet amount",
+        "No popup overlay required for bet changes"
+      ],
+      "implementation": [
+        "Create InlineBetSelector component",
+        "Design: [- ] $25 [ +] with tap targets",
+        "Add preset buttons below: MIN | 1/4 | 1/2 | MAX",
+        "Keyboard: Up/Down arrows, Shift+Up for 10x increment",
+        "Remove popup ChipSelector overlay",
+        "Integrate into GameControlBar or game area"
+      ],
+      "notes": "Every click is friction. Betting should feel as fast as thinking."
+    },
+    {
+      "id": "LUX-011",
+      "phase": "phase-3",
+      "title": "Make DEAL button unmissably prominent",
+      "priority": 11,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/src/components/casino/GameControlBar.tsx"
+      ],
+      "description": "DEAL/SPIN/ROLL is THE action. It should dominate visually. Currently same size as modifiers.",
+      "acceptance": [
+        "Primary action button 2x visual weight of secondary actions",
+        "Elevated FAB style maintained but larger (96px diameter)",
+        "Pulsing glow when ready to act (not disabled)",
+        "Secondary actions (STAND, HIT) clearly subordinate",
+        "Keyboard: SPACE/ENTER always triggers primary action",
+        "Disabled state clearly dimmed, not just grayed"
+      ],
+      "implementation": [
+        "Increase FAB size from 80px to 96px",
+        "Add subtle glow ring animation when enabled",
+        "Ensure color contrast meets WCAG AAA",
+        "Scale down secondary buttons relatively",
+        "Add press animation with spring physics"
+      ],
+      "notes": "One button should draw the eye instantly. That's DEAL."
+    },
+    {
+      "id": "LUX-012",
+      "phase": "phase-3",
+      "title": "Consolidate modifiers into expandable section",
+      "priority": 12,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/src/components/casino/games/BlackjackView.tsx",
+        "/website/src/components/casino/games/BaccaratView.tsx",
+        "/website/src/components/casino/GameControlBar.tsx"
+      ],
+      "description": "SHIELD, DOUBLE, SUPER shown even when disabled. Group modifiers and show only in expanded state.",
+      "acceptance": [
+        "Modifiers hidden by default behind single toggle",
+        "Toggle labeled 'Modifiers' with count badge if active",
+        "Expanded state shows: SHIELD, DOUBLE, SUPER toggles",
+        "Disabled modifiers not shown at all (not grayed)",
+        "Active modifier count shown in collapsed state: 'Modifiers (2)'"
+      ],
+      "implementation": [
+        "Create ModifiersAccordion component",
+        "Only render modifiers that are currently available",
+        "Collapsed: icon + 'Modifiers' + count badge",
+        "Expanded: vertical toggle list with descriptions",
+        "Animate expand/collapse with spring physics"
+      ],
+      "notes": "Most users don't use modifiers. Don't waste their attention."
+    },
+    {
+      "id": "LUX-013",
+      "phase": "phase-3",
+      "title": "Implement REBET as single-tap action",
+      "priority": 13,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/src/components/casino/games/BlackjackView.tsx",
+        "/website/src/components/casino/games/BaccaratView.tsx"
+      ],
+      "description": "After a hand, REBET should be instant with last bet. No confirmation needed.",
+      "acceptance": [
+        "REBET button appears after hand completes",
+        "Single tap rebets and deals immediately",
+        "Show previous bet amount on REBET button: 'REBET $25'",
+        "Keyboard: 'R' triggers rebet",
+        "If balance insufficient, show disabled with reason"
+      ],
+      "implementation": [
+        "Add REBET to post-hand state in game views",
+        "Store previous bet in game state/context",
+        "REBET triggers placeBet + deal in sequence",
+        "Style as secondary action near DEAL button",
+        "Add keyboard shortcut handler"
+      ],
+      "notes": "Repeat players want to go again fast. Remove friction for the core loop."
+    },
+    {
+      "id": "LUX-014",
+      "phase": "phase-4",
+      "title": "Redesign RegistrationView with luxury aesthetic",
+      "priority": 14,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/src/components/casino/RegistrationView.tsx"
+      ],
+      "description": "RegistrationView has old terminal-green-on-black aesthetic. Modernize to match new design language.",
+      "acceptance": [
+        "Remove terminal/hacker aesthetic (green text, monospace everywhere)",
+        "Use titanium color palette for backgrounds",
+        "Tournament info displayed with clean typography hierarchy",
+        "Countdown timer as large centered hero number",
+        "Stats presented as clean cards, not grid with borders",
+        "Passkey section integrated naturally, not as afterthought"
+      ],
+      "implementation": [
+        "Replace bg-titanium-900 with bg-titanium-50 (light mode default)",
+        "Remove action-success green except for positive indicators",
+        "Redesign stats section as clean typographic display",
+        "Make countdown the visual hero of the page",
+        "Integrate passkey into main registration flow",
+        "Remove bot configuration UI (move to settings)"
+      ],
+      "notes": "This is often the first screen users see. It sets the tone for the entire experience."
+    },
+    {
+      "id": "LUX-015",
+      "phase": "phase-4",
+      "title": "Hide passkey complexity behind 'secure login' concept",
+      "priority": 15,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/src/components/casino/RegistrationView.tsx",
+        "/website/src/components/AuthStatusPill.tsx",
+        "/website/src/hooks/usePasskeyAuth.ts"
+      ],
+      "description": "Users shouldn't think about 'passkeys'. They should think 'login'. Abstract the implementation.",
+      "acceptance": [
+        "Replace 'Use passkey (beta)' with 'Sign in securely'",
+        "Remove credential ID display from UI",
+        "Success state: 'Signed in' with checkmark, no technical details",
+        "Error states: human-readable messages, no technical jargon",
+        "Passkey enrollment happens automatically on first play"
+      ],
+      "implementation": [
+        "Rename passkey UI elements to user-friendly terms",
+        "Remove credential ID display entirely",
+        "Auto-enroll passkey when user first plays (with consent modal)",
+        "Simplify AuthStatusPill to show: Anonymous | Signed In",
+        "Store passkey state but don't expose implementation"
+      ],
+      "notes": "The best authentication is invisible. Users shouldn't know how it works."
+    },
+    {
+      "id": "LUX-016",
+      "phase": "phase-4",
+      "title": "Simplify wallet connection flow",
+      "priority": 16,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/src/components/WalletPill.tsx",
+        "/website/src/components/AuthStatusPill.tsx"
+      ],
+      "description": "Wallet connection shows technical details. Users care about balance, not addresses.",
+      "acceptance": [
+        "WalletPill shows only balance when connected",
+        "Wallet address hidden (available in drawer/settings)",
+        "Disconnected state: single 'Connect' button",
+        "Connection modal: wallet icons only, no technical text",
+        "Transaction signing: simple approval prompt"
+      ],
+      "implementation": [
+        "Remove address display from main WalletPill",
+        "Add address to settings/account drawer only",
+        "Simplify connection modal to essential choices",
+        "Use wallet icons (Phantom, etc.) without text labels",
+        "Design approval modal as simple confirm dialog"
+      ],
+      "notes": "Users want to play, not understand blockchain. Hide the machinery."
+    },
+    {
+      "id": "LUX-017",
+      "phase": "phase-5",
+      "title": "Consolidate drawer types to maximum 2",
+      "priority": 17,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/src/components/casino/MobileDrawer.tsx",
+        "/website/src/components/casino/PanelDrawer.tsx",
+        "/website/src/components/casino/BetsDrawer.tsx",
+        "/website/src/components/casino/SideBetsDrawer.tsx",
+        "/website/src/components/casino/RewardsDrawer.tsx"
+      ],
+      "description": "5+ drawer types create confusion. Consolidate to: Game Options drawer and Account drawer.",
+      "acceptance": [
+        "Maximum 2 drawer types across entire app",
+        "Game Options drawer: side bets, modifiers, settings for current game",
+        "Account drawer: balance, transactions, rewards, settings",
+        "Remove: PanelDrawer 'Table' tab, separate BetsDrawer",
+        "Each drawer has clear, distinct purpose"
+      ],
+      "implementation": [
+        "Create unified GameOptionsDrawer component",
+        "Merge SideBetsDrawer content into GameOptionsDrawer",
+        "Merge exposure/payout info into INFO/help modal",
+        "Create unified AccountDrawer for wallet/rewards",
+        "Update all game views to use new drawer structure"
+      ],
+      "notes": "Too many doors confuses users. Two entrances maximum."
+    },
+    {
+      "id": "LUX-018",
+      "phase": "phase-5",
+      "title": "Redesign HamburgerMenu as minimal action list",
+      "priority": 18,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/src/components/casino/HamburgerMenu.tsx"
+      ],
+      "description": "HamburgerMenu has too many options. Reduce to essential actions only.",
+      "acceptance": [
+        "Maximum 6 menu items",
+        "Essential items: Games, Account, Settings, Help, Sign Out",
+        "Remove redundant navigation (already in BottomNav)",
+        "Clean typography-only list, no icons",
+        "Menu opens from right side, slides in"
+      ],
+      "implementation": [
+        "Audit current menu items, remove duplicates",
+        "Design minimal list with clear type hierarchy",
+        "Remove icons - text labels sufficient",
+        "Add subtle dividers between groups",
+        "Ensure keyboard navigation works"
+      ],
+      "notes": "A menu with everything is a menu with nothing. Be ruthless."
+    },
+    {
+      "id": "LUX-019",
+      "phase": "phase-5",
+      "title": "Simplify BottomNav to 4 items maximum",
+      "priority": 19,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/src/components/BottomNav.tsx"
+      ],
+      "description": "BottomNav should have core destinations only: Games, Rewards, Account.",
+      "acceptance": [
+        "Maximum 4 nav items including active indicator",
+        "Items: Games (lobby), Rewards, Account",
+        "Remove any game-specific or contextual items",
+        "Clean icons without labels (tooltip on hover)",
+        "Active state clearly indicated with animation"
+      ],
+      "implementation": [
+        "Reduce nav items to 3-4 core destinations",
+        "Remove redundant items covered by other UI",
+        "Simplify icons to essential shapes",
+        "Add hover tooltips for accessibility",
+        "Polish active state spring animation"
+      ],
+      "notes": "iPhone has 4-5 dock icons. That's the mental model."
+    },
+    {
+      "id": "LUX-020",
+      "phase": "phase-5",
+      "title": "Unify PlaySwapStakeTabs into single mode selector",
+      "priority": 20,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/src/components/PlaySwapStakeTabs.tsx"
+      ],
+      "description": "Tabs component works but could be more elegant. Single-selection should feel instant.",
+      "acceptance": [
+        "Tabs feel like physical toggle switch",
+        "Selected state has spring-animated background pill",
+        "Unselected items are subtle but readable",
+        "No border around entire tab group",
+        "Keyboard: Tab to group, arrows to select"
+      ],
+      "implementation": [
+        "Review existing sliding indicator animation",
+        "Remove outer border/background from tab group",
+        "Ensure pills have sufficient contrast",
+        "Add keyboard navigation if missing",
+        "Polish spring animation timing"
+      ],
+      "notes": "iOS segment control is the gold standard. Match that feel."
+    },
+    {
+      "id": "LUX-021",
+      "phase": "phase-6",
+      "title": "Implement consistent spacing scale",
+      "priority": 21,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/src/components/"
+      ],
+      "description": "Spacing is inconsistent: gap-1, gap-1.5, gap-2, gap-3, gap-4, gap-6, gap-8, gap-12. Standardize to 4px grid.",
+      "acceptance": [
+        "All spacing uses 4px base: 4, 8, 12, 16, 24, 32, 48, 64",
+        "Remove odd values: gap-1.5 (6px), gap-3 (12px)",
+        "Component internal spacing: 8-16px",
+        "Section spacing: 24-32px",
+        "Screen padding: 16px mobile, 24px tablet, 32px desktop"
+      ],
+      "implementation": [
+        "Audit all gap-*, p-*, m-* usages in components",
+        "Create spacing-audit script to find violations",
+        "Replace non-standard values with nearest grid value",
+        "Document spacing scale in design-principles.md",
+        "Add Tailwind custom spacing if needed"
+      ],
+      "notes": "Consistent spacing creates visual rhythm. Irregular spacing feels amateur."
+    },
+    {
+      "id": "LUX-022",
+      "phase": "phase-6",
+      "title": "Add micro-animations for all interactions",
+      "priority": 22,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/src/components/ui/AnimatedButton.tsx",
+        "/website/src/utils/motion.ts"
+      ],
+      "description": "Every tap should have instant feedback. Button press, toggle switch, menu open - all animated.",
+      "acceptance": [
+        "Button press: scale to 0.97 with spring return",
+        "Toggle switch: thumb slides with slight overshoot",
+        "Menu open: fade + slide with stagger for items",
+        "Card tap: subtle lift shadow",
+        "All animations complete in <200ms"
+      ],
+      "implementation": [
+        "Audit components missing interaction feedback",
+        "Add useSpring hooks to buttons without animation",
+        "Create AnimatedToggle component",
+        "Add stagger utility for list animations",
+        "Test animations with reduced motion preference"
+      ],
+      "notes": "Instant feedback is the difference between 'fast' and 'instant'. Springs feel natural."
+    },
+    {
+      "id": "LUX-023",
+      "phase": "phase-6",
+      "title": "Create consistent loading states",
+      "priority": 23,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/src/components/ui/Skeleton.tsx",
+        "/website/src/components/casino/"
+      ],
+      "description": "Loading states should feel intentional, not broken. Consistent skeleton animations everywhere.",
+      "acceptance": [
+        "Skeleton shimmer direction: left to right consistently",
+        "Shimmer speed: 1.5s per cycle",
+        "Skeleton shapes match content they replace",
+        "No layout shift when content loads",
+        "Loading text: '...' with subtle pulse, no spinners"
+      ],
+      "implementation": [
+        "Audit all loading states in game views",
+        "Replace spinners with skeleton loaders where appropriate",
+        "Ensure skeleton dimensions match content",
+        "Add AnimatePresence for smooth load transitions",
+        "Remove any layout-shifting loaders"
+      ],
+      "notes": "Skeletons feel like the content is 'developing'. Spinners feel like waiting."
+    },
+    {
+      "id": "LUX-024",
+      "phase": "phase-6",
+      "title": "Polish error states with helpful messaging",
+      "priority": 24,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/src/components/ConnectionStatus.tsx",
+        "/website/src/components/casino/"
+      ],
+      "description": "Errors should guide users to resolution, not just state the problem.",
+      "acceptance": [
+        "Every error message includes: what happened + what to do",
+        "Connection lost: 'Connection lost. Reconnecting...' with auto-retry",
+        "Bet failed: 'Bet failed. Tap to retry or adjust amount.'",
+        "No alarming colors except for destructive actions",
+        "Error states dismissible after acknowledgment"
+      ],
+      "implementation": [
+        "Audit all error states and messages",
+        "Rewrite error copy with action-oriented language",
+        "Add retry mechanisms where appropriate",
+        "Use amber/warning color instead of red for recoverable errors",
+        "Reserve red for truly destructive or final states"
+      ],
+      "notes": "Good error messages turn frustration into confidence."
+    },
+    {
+      "id": "LUX-025",
+      "phase": "phase-6",
+      "title": "Final visual audit and consistency pass",
+      "priority": 25,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/src/"
+      ],
+      "description": "Complete visual audit of all screens for consistency with new design language.",
+      "acceptance": [
+        "All screens use 4-level typography hierarchy",
+        "All screens use 5-shade color palette",
+        "No decorative borders remaining",
+        "Consistent spacing on 4px grid",
+        "All interactions have micro-animation feedback",
+        "All loading/error states polished",
+        "Screenshots captured for visual regression baseline"
+      ],
+      "implementation": [
+        "Walk through every screen in the app",
+        "Document any remaining inconsistencies",
+        "Fix identified issues",
+        "Capture new visual regression baselines",
+        "Update design documentation"
+      ],
+      "notes": "Details matter. The last 10% takes 50% of the effort but makes 100% of the impression."
+    }
+  ],
+  "bugTracker": [],
+  "dependencies": {
+    "web": [
+      "Inter font (Google Fonts or local)"
+    ],
+    "mobile": [],
+    "shared": []
+  },
+  "testingStrategy": {
+    "visual": "Screenshot comparison before/after each story",
+    "accessibility": "WCAG AAA contrast for all text",
+    "performance": "Lighthouse scores maintained or improved",
+    "manual": "Side-by-side comparison with Superhuman/Linear for feel"
+  },
+  "successMetrics": {
+    "timeToFirstBet": "< 5 seconds from game load to bet placed",
+    "visualComplexity": "< 15 distinct elements visible at any time",
+    "typographyLevels": "Exactly 4 text sizes in use",
+    "colorShades": "Maximum 5 gray shades + 3 accent colors",
+    "interactionLatency": "All feedback < 100ms",
+    "userSentiment": "'Clean', 'fast', 'premium' in feedback"
+  },
+  "designReferences": {
+    "superhuman": "Email client with keyboard-first UX, minimal UI",
+    "linear": "Project management with beautiful motion and typography",
+    "stripe": "Complex features made to feel simple and trustworthy",
+    "apple": "Hardware-grade attention to detail in software"
+  }
+}

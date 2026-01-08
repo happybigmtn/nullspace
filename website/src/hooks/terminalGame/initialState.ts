@@ -19,6 +19,7 @@ export const createInitialGameState = (): GameState => ({
   type: GameType.NONE,
   message: "TYPE '/' FOR FUN",
   bet: 50,
+  lastBet: 50, // LUX-013: Store previous bet for REBET functionality
   stage: 'BETTING',
   playerCards: [],
   dealerCards: [],

@@ -1,7 +1,28 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { useSpring, animated } from '@react-spring/web';
+import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useSpring, animated, type SpringValue } from '@react-spring/web';
 import { SPRING_CONFIGS, SPRING_LIQUID_CONFIGS } from '../../utils/motion';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+
+/**
+ * DS-057: Safe spring value extraction
+ *
+ * Subscribes to a SpringValue and extracts its current value on each frame.
+ * This prevents React 19 reconciliation issues where raw SpringValue objects
+ * leak into the component tree during rapid mount/unmount cycles.
+ */
+function useSpringValue<T>(springValue: SpringValue<T>): T {
+  // Subscribe to the spring animation and get current value
+  return useSyncExternalStore(
+    (callback) => {
+      // Subscribe to spring updates
+      const unsubscribe = springValue.animation?.onChange?.(callback) || (() => {});
+      return unsubscribe;
+    },
+    () => springValue.get(),
+    () => springValue.get()
+  );
+}
+
 
 // Instant config for reduced motion
 const INSTANT_CONFIG = { duration: 0 };
@@ -98,24 +119,34 @@ export function AnimatedNumber({
     prevValueRef.current = value;
   }, [value]);
 
-  // Format the number
-  const formatter = new Intl.NumberFormat(locale, {
-    minimumFractionDigits: decimalPlaces,
-    maximumFractionDigits: decimalPlaces,
-    ...formatOptions,
-  });
+  // DS-057: Memoize formatter to prevent recreation on every render
+  const formatter = React.useMemo(
+    () =>
+      new Intl.NumberFormat(locale, {
+        minimumFractionDigits: decimalPlaces,
+        maximumFractionDigits: decimalPlaces,
+        ...formatOptions,
+      }),
+    [locale, decimalPlaces, formatOptions]
+  );
+
+  // DS-057: Extract current spring value to avoid React 19 reconciliation issues
+  // Instead of passing SpringValue.to() interpolation to animated.span children,
+  // we extract the raw number and format it directly
+  const currentValue = useSpringValue(spring.value);
+  const displayText = formatter.format(currentValue);
 
   return (
-    <animated.span
+    <span
       className={['tabular-nums transition-colors duration-200', className].filter(Boolean).join(' ')}
       style={{
         color: flashColor ?? undefined,
       }}
     >
       {prefix}
-      {spring.value.to((v) => formatter.format(v))}
+      {displayText}
       {suffix}
-    </animated.span>
+    </span>
   );
 }
 
@@ -245,14 +276,22 @@ export function CountUp({
       : SPRING_LIQUID_CONFIGS.liquidSettle,
   });
 
-  const formatter = new Intl.NumberFormat(locale, formatOptions);
+  // DS-057: Memoize formatter to prevent recreation on every render
+  const formatter = React.useMemo(
+    () => new Intl.NumberFormat(locale, formatOptions),
+    [locale, formatOptions]
+  );
+
+  // DS-057: Extract current spring value for safe rendering
+  const currentValue = useSpringValue(spring.value);
+  const displayText = formatter.format(currentValue);
 
   return (
-    <animated.span className={['tabular-nums', className].filter(Boolean).join(' ')}>
+    <span className={['tabular-nums', className].filter(Boolean).join(' ')}>
       {prefix}
-      {spring.value.to((v) => formatter.format(v))}
+      {displayText}
       {suffix}
-    </animated.span>
+    </span>
   );
 }
 

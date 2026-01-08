@@ -1,7 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Grid, X, ChevronUp, Layers } from 'lucide-react';
-import { animated, useSpring, to } from '@react-spring/web';
+import { animated, useSpring } from '@react-spring/web';
 import { Label } from './ui/Label';
+import { InlineBetSelector } from './InlineBetSelector';
+import { ModifiersAccordion } from './ModifiersAccordion';
 import { useMagneticCursor } from '../../hooks/useMagneticCursor';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { SPRING_LIQUID_CONFIGS } from '../../utils/motion';
@@ -30,6 +32,13 @@ interface Action {
     className?: string;
 }
 
+/** LUX-012: Modifier configuration for accordion */
+interface ModifierConfig {
+    active: boolean;
+    available: boolean;
+    onToggle: () => void;
+}
+
 interface GameControlBarProps {
     children?: React.ReactNode;
     primaryAction?: Action;
@@ -39,6 +48,21 @@ interface GameControlBarProps {
     ariaLabel?: string;
     mobileMenuLabel?: string;
     balance?: string;
+    /** LUX-010: Inline bet selector props */
+    currentBet?: number;
+    onBetChange?: (amount: number) => void;
+    /** Numeric balance for bet calculations (separate from display string) */
+    balanceAmount?: number;
+    /** Show inline bet selector instead of static balance */
+    showBetSelector?: boolean;
+    /** Whether betting is disabled (e.g., during play) */
+    bettingDisabled?: boolean;
+    /** LUX-012: Modifiers accordion - replaces inline modifier buttons */
+    modifiers?: {
+        shield?: ModifierConfig;
+        double?: ModifierConfig;
+        super?: ModifierConfig;
+    };
 }
 
 export const GameControlBar: React.FC<GameControlBarProps> = ({
@@ -49,6 +73,12 @@ export const GameControlBar: React.FC<GameControlBarProps> = ({
     ariaLabel = 'Game controls',
     mobileMenuLabel = 'BETTING',
     balance = '$1,000.00',
+    currentBet,
+    onBetChange,
+    balanceAmount = 1000,
+    showBetSelector = false,
+    bettingDisabled = false,
+    modifiers,
 }) => {
     const [menuOpen, setMenuOpen] = useState(false);
     const prefersReducedMotion = useReducedMotion();
@@ -142,15 +172,27 @@ export const GameControlBar: React.FC<GameControlBarProps> = ({
         <>
             {/* Main Floating Island */}
             <div role="group" aria-label={ariaLabel} className={`${baseContainer} ${className}`}>
-                {/* Left: Balance Info */}
-                <div className="flex flex-col pl-6 pr-4 border-r border-titanium-100">
-                    <Label className="mb-0.5">Balance</Label>
-                    <span className="text-titanium-900 font-bold text-sm tabular-nums tracking-tight">{balance}</span>
+                {/* Left: Balance/Bet Info - LUX-010: Inline bet selector */}
+                <div className="flex flex-col pl-4 pr-3 border-r border-titanium-100">
+                    {showBetSelector && currentBet !== undefined && onBetChange ? (
+                        <InlineBetSelector
+                            currentBet={currentBet}
+                            balance={balanceAmount}
+                            onBetChange={onBetChange}
+                            disabled={bettingDisabled}
+                            compact
+                        />
+                    ) : (
+                        <>
+                            <Label className="mb-0.5">Balance</Label>
+                            <span className="text-titanium-900 font-bold text-sm tabular-nums tracking-tight">{balance}</span>
+                        </>
+                    )}
                 </div>
 
-                {/* Center: Primary Action (Elevated FAB) */}
+                {/* Center: Primary Action (Elevated FAB) - LUX-011: Unmissably prominent */}
                 {primaryAction && (
-                    <div className="absolute -top-10 left-1/2 -translate-x-1/2">
+                    <div className="absolute -top-12 left-1/2 -translate-x-1/2">
                         <animated.button
                             ref={fabRef}
                             type="button"
@@ -176,20 +218,16 @@ export const GameControlBar: React.FC<GameControlBarProps> = ({
                                 resetIdleTimer();
                             }}
                             style={{
-                                ...fabMagneticStyle,
-                                // DS-056: Apply breathing scale when idle
-                                transform: prefersReducedMotion
-                                    ? fabMagneticStyle?.transform
-                                    : breatheSpring.breathe.to((b) => {
-                                        // Combine magnetic cursor transform with breathing scale
-                                        const magneticTransform = fabMagneticStyle?.transform?.toString() || '';
-                                        return `${magneticTransform} scale(${b})`.trim();
-                                    }),
+                                // DS-056: Use magnetic transform when available, otherwise apply breathing
+                                // Note: magnetic transform already includes translate3d from useMagneticCursor
+                                transform: fabMagneticStyle?.transform
+                                    ? fabMagneticStyle.transform
+                                    : breatheSpring.breathe.to((b) => `scale(${b})`),
                             }}
-                            className={`w-20 h-20 rounded-full shadow-float flex items-center justify-center text-white font-bold tracking-[0.1em] text-xs transition-all motion-interaction
+                            className={`w-24 h-24 rounded-full flex items-center justify-center text-white font-semibold tracking-[0.15em] text-sm transition-all motion-interaction
                             ${primaryAction.disabled
-                                ? 'bg-titanium-200 text-titanium-400 cursor-not-allowed grayscale'
-                                : 'bg-titanium-900 hover:scale-110 active:scale-90 hover:shadow-2xl'
+                                ? 'bg-titanium-300 text-titanium-500 cursor-not-allowed opacity-50'
+                                : 'bg-titanium-900 hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl ring-4 ring-titanium-900/20'
                             } ${primaryAction.className || ''}`}
                         >
                             {primaryAction.label}
@@ -244,32 +282,42 @@ export const GameControlBar: React.FC<GameControlBarProps> = ({
                     </div>
 
                     {/* Actions Grid */}
-                    <div className="grid grid-cols-2 gap-4 max-h-[60vh] overflow-y-auto scrollbar-hide">
-                         {children && <div className="col-span-2 mb-2 p-4 bg-titanium-50 rounded-3xl border border-titanium-100">{children}</div>}
+                    <div className="flex flex-col gap-4 max-h-[60vh] overflow-y-auto scrollbar-hide">
+                         {children && <div className="p-4 bg-titanium-50 rounded-3xl border border-titanium-100">{children}</div>}
 
-                        {secondaryActions.map((action, i) => 
-                            action.type === 'divider' ? (
-                                <div key={i} className="col-span-2 mt-4">
-                                    <Label>{action.label}</Label>
-                                    <div className="h-px bg-titanium-100 w-full mt-2" />
-                                </div>
-                            ) : (
-                                <button
-                                    key={i}
-                                    type="button"
-                                    onClick={() => {
-                                        action.onClick?.();
-                                    }}
-                                    disabled={action.disabled}
-                                    className={`h-16 rounded-[24px] flex flex-col items-center justify-center gap-1 transition-all motion-interaction shadow-soft border ${
-                                        action.active
-                                            ? 'bg-titanium-900 text-white border-titanium-900 shadow-lg'
-                                            : 'bg-white text-titanium-800 border-titanium-200 hover:border-titanium-400'
-                                    } ${action.disabled ? 'opacity-40 cursor-not-allowed' : 'active:scale-95'}`}
-                                >
-                                    <span className="font-bold text-sm tracking-tight">{action.label}</span>
-                                </button>
-                            )
+                        {/* LUX-012: Modifiers Accordion - collapsed by default */}
+                        {modifiers && (
+                            <ModifiersAccordion modifiers={modifiers} />
+                        )}
+
+                        {/* Secondary Actions Grid */}
+                        {secondaryActions.length > 0 && (
+                            <div className="grid grid-cols-2 gap-4">
+                                {secondaryActions.map((action, i) =>
+                                    action.type === 'divider' ? (
+                                        <div key={i} className="col-span-2 mt-2">
+                                            <Label>{action.label}</Label>
+                                            <div className="h-px bg-titanium-100 w-full mt-2" />
+                                        </div>
+                                    ) : (
+                                        <button
+                                            key={i}
+                                            type="button"
+                                            onClick={() => {
+                                                action.onClick?.();
+                                            }}
+                                            disabled={action.disabled}
+                                            className={`h-16 rounded-[24px] flex flex-col items-center justify-center gap-1 transition-all motion-interaction shadow-soft border ${
+                                                action.active
+                                                    ? 'bg-titanium-900 text-white border-titanium-900 shadow-lg'
+                                                    : 'bg-white text-titanium-800 border-titanium-200 hover:border-titanium-400'
+                                            } ${action.disabled ? 'opacity-40 cursor-not-allowed' : 'active:scale-95'}`}
+                                        >
+                                            <span className="font-bold text-sm tracking-tight">{action.label}</span>
+                                        </button>
+                                    )
+                                )}
+                            </div>
                         )}
                     </div>
                 </div>

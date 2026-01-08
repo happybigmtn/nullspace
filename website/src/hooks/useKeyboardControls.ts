@@ -35,6 +35,8 @@ interface KeyboardControlsProps {
     bjSplit: () => void;
     bjInsurance: (take: boolean) => void;
     bjToggle21Plus3: () => void;
+    /** LUX-013: Set bet to lastBet value for REBET */
+    setToLastBet: () => boolean;
     drawVideoPoker: () => void;
     toggleHold: (index: number) => void;
     hiloPlay: (choice: 'HIGHER' | 'LOWER' | 'SAME') => void;
@@ -235,6 +237,13 @@ export const useKeyboardControls = ({
                     if (e.key === '3') { gameActions.bjTogglePerfectPairs(); return; }
                     if (e.key === '4') { gameActions.bjToggleBustIt(); return; }
                     if (e.key === '5') { gameActions.bjToggleRoyalMatch(); return; }
+                }
+                // LUX-013: REBET shortcut - set bet to lastBet and deal immediately
+                if (gameState.stage === 'RESULT' && k === 'r') {
+                    if (gameActions.setToLastBet()) {
+                        gameActions.deal();
+                    }
+                    return;
                 }
                 if (k === 'j') gameActions.bjToggle21Plus3();
                 // Only allow blackjack actions during player turn (not during betting/reveal stages).

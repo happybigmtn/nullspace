@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { animated, useSpring, useTransition } from '@react-spring/web';
+import { animated, useSpring, useTransition, to } from '@react-spring/web';
 import { SPRING_CONFIGS, SPRING_LIQUID_CONFIGS } from '../../utils/motion';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
@@ -90,8 +90,9 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
             opacity: style.opacity,
             transform: prefersReducedMotion
               ? undefined
-              : style.scale.to(
-                  (s) => `scale(${s}) translateY(${style.y.get()}px)`
+              : to(
+                  [style.scale, style.y],
+                  (s, y) => `scale(${s}) translateY(${y}px)`
                 ),
             border: `1px solid ${GLASS_MEDIUM.border}`,
             backgroundColor: 'rgb(23, 23, 23)', // titanium-950

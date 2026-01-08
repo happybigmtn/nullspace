@@ -185,12 +185,11 @@ export const BaccaratView = React.memo<{
                 <div className="absolute top-2 left-2 z-40">
                     <MobileDrawer label="INFO" title="BACCARAT">
                         <div className="space-y-4 p-2">
-                            <p className="text-body-sm text-titanium-800 font-semibold leading-relaxed">
+                            <p className="text-body text-ns-text leading-relaxed">
                                 Closest to 9 wins. Aces are 1, Face cards and 10s are 0.
                             </p>
-                            <div className="bg-titanium-50 p-4 rounded-2xl border border-titanium-100">
-                                <Label size="micro" className="mb-2 block">Controls</Label>
-                                <p className="text-[11px] text-titanium-500 font-bold uppercase tracking-wider">
+                            <div className="pt-4">
+                                <p className="text-caption uppercase tracking-wider">
                                     PLAYER (P) • BANKER (B) • TIE (E)
                                 </p>
                             </div>
@@ -199,87 +198,39 @@ export const BaccaratView = React.memo<{
                 </div>
                 <div className="min-h-[180px] w-full max-w-2xl flex flex-col items-center justify-center gap-12 px-6">
                     <div className="flex flex-col items-center gap-4 opacity-80 group transition-transform hover:scale-105">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-3">
                             <Label variant="destructive">Banker</Label>
-                            <span className="px-2 py-0.5 rounded-md bg-titanium-100 text-titanium-900 font-black text-[10px] tabular-nums group-hover:bg-action-destructive group-hover:text-white transition-colors">{bankerValue}</span>
+                            <span className="text-display-mono text-headline text-ns-text">{bankerValue}</span>
                         </div>
                         <Hand cards={gameState.dealerCards} forcedColor={bankerColor} />
                     </div>
 
-                    <div className="h-px w-32 bg-titanium-200" />
+                    <div className="h-px w-32 bg-ns-border" />
 
                     <div className="flex flex-col items-center gap-4 group transition-transform hover:scale-105">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-3">
                             <Label variant="gold">Player</Label>
-                            <span className="px-2 py-0.5 rounded-md bg-titanium-100 text-titanium-900 font-black text-[10px] tabular-nums group-hover:bg-action-primary group-hover:text-white transition-colors">{playerValue}</span>
+                            <span className="text-display-mono text-headline text-ns-text">{playerValue}</span>
                         </div>
                         <Hand cards={gameState.playerCards} forcedColor={playerColor} />
                     </div>
                 </div>
-                {/* Center Info */}
-                <div className="text-center space-y-2 relative z-20 py-2 sm:py-4 px-6">
-                    <h2 className="text-xl sm:text-2xl font-semibold text-titanium-800 tracking-tight font-display animate-scale-in zen-hide">
+                {/* Center Info - simplified to just the message */}
+                <div className="text-center relative z-20 py-2 sm:py-4 px-6">
+                    <h2 className="text-headline text-ns-text tracking-tight animate-scale-in zen-hide">
                         {gameState.message || 'Place Your Bets'}
                     </h2>
-                    <div className="flex flex-wrap items-center justify-center gap-2">
-                        <span className={`px-3 py-1 rounded-full border text-[10px] font-bold uppercase tracking-widest transition-all ${getWinnerClass(gameState.baccaratSelection)}`}>
-                            <span className={gameState.stage === 'RESULT' && getWinnerClass(gameState.baccaratSelection).includes('text-action-success') ? 'text-action-success' : 'text-titanium-900'}>
-                                {gameState.baccaratSelection}
-                            </span> ${gameState.bet.toLocaleString()}
-                        </span>
-                        {sideBetAmounts.TIE > 0 && (
-                            <span className={`px-3 py-1 rounded-full border text-[10px] font-bold uppercase tracking-widest transition-all ${getWinnerClass('TIE')}`}>
-                                TIE ${sideBetAmounts.TIE.toLocaleString()}
-                            </span>
-                        )}
-                        {sideBetAmounts.P_PAIR > 0 && (
-                            <span className={`px-3 py-1 rounded-full border text-[10px] font-bold uppercase tracking-widest transition-all ${getWinnerClass('P_PAIR')}`}>
-                                P.PAIR ${sideBetAmounts.P_PAIR.toLocaleString()}
-                            </span>
-                        )}
-                        {sideBetAmounts.B_PAIR > 0 && (
-                            <span className={`px-3 py-1 rounded-full border text-[10px] font-bold uppercase tracking-widest transition-all ${getWinnerClass('B_PAIR')}`}>
-                                B.PAIR ${sideBetAmounts.B_PAIR.toLocaleString()}
-                            </span>
-                        )}
-                    </div>
                 </div>
 
-                {/* Super Mode Info - Animated */}
+                {/* Super Mode - minimal gold accent indicator */}
                 {gameState.superMode?.isActive && (
-                    <div className="w-full max-w-md mx-auto px-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                        <div className="relative bg-titanium-900/95 border-2 border-action-primary rounded text-center overflow-hidden
-                                        shadow-[0_0_20px_rgba(255,215,0,0.3),inset_0_0_30px_rgba(255,215,0,0.05)]
-                                        animate-pulse-glow">
-                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-action-primary/10 to-transparent
-                                            animate-shimmer pointer-events-none" />
-                            <div className="relative p-3">
-                                <div className="text-xs font-bold text-action-primary tracking-[0.3em] mb-2 font-mono flex items-center justify-center gap-2">
-                                    <span className="animate-pulse">⚡</span>
-                                    <span className="bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-300 bg-clip-text text-transparent">
-                                        SUPER MODE ACTIVE
-                                    </span>
-                                    <span className="animate-pulse">⚡</span>
-                                </div>
-                                {Array.isArray(gameState.superMode.multipliers) && gameState.superMode.multipliers.length > 0 ? (
-                                    <div className="flex flex-wrap gap-1.5 justify-center">
-                                        {gameState.superMode.multipliers.slice(0, 10).map((m, idx) => (
-                                            <span
-                                                key={idx}
-                                                className="px-2.5 py-1 rounded-lg bg-gradient-to-br from-amber-900/50 to-amber-950/50
-                                                           border border-action-primary/60 text-action-primary text-xs font-mono font-bold
-                                                           shadow-[0_0_8px_rgba(255,215,0,0.2)] hover:shadow-[0_0_12px_rgba(255,215,0,0.4)]
-                                                           transition-all duration-200 hover:scale-105"
-                                            >
-                                                {cardIdToString(m.id)} <span className="text-amber-300">×{m.multiplier}</span>
-                                            </span>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <div className="text-[10px] text-gray-400 font-mono animate-pulse">Loading multipliers...</div>
-                                )}
-                            </div>
-                        </div>
+                    <div className="text-center text-caption text-action-gold animate-in fade-in">
+                        <span className="uppercase tracking-widest">Super Mode</span>
+                        {Array.isArray(gameState.superMode.multipliers) && gameState.superMode.multipliers.length > 0 && (
+                            <span className="text-display-mono ml-2">
+                                ×{Math.max(...gameState.superMode.multipliers.map(m => m.multiplier))}
+                            </span>
+                        )}
                     </div>
                 )}
             </div>
@@ -287,7 +238,7 @@ export const BaccaratView = React.memo<{
             {/* Table Drawer */}
 
             {/* CONTROLS - Grouped by Normal/Bonus */}
-            <div className="ns-controlbar zen-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-titanium-900/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
+            <div className="ns-controlbar zen-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-titanium-900/95 backdrop-blur z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
                 <div className="h-auto md:h-20 flex flex-col md:flex-row items-stretch md:items-center justify-between md:justify-center gap-2 p-2 md:px-4">
                     {/* Desktop: Bet Groups */}
                     <div className="hidden md:flex items-center gap-3 flex-1">
@@ -297,7 +248,7 @@ export const BaccaratView = React.memo<{
                             <button
                                 type="button"
                                 onClick={() => actions?.baccaratActions?.toggleSelection?.('PLAYER')}
-                                className={`px-3 py-1.5 rounded border text-xs font-bold tracking-wider transition-all ${
+                                className={`px-3 py-2 rounded border text-xs font-bold tracking-wider transition-all ${
                                     isPlayerSelected
                                         ? 'border-action-success bg-action-success/20 text-action-success'
                                         : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'
@@ -308,7 +259,7 @@ export const BaccaratView = React.memo<{
                             <button
                                 type="button"
                                 onClick={() => actions?.baccaratActions?.toggleSelection?.('BANKER')}
-                                className={`px-3 py-1.5 rounded border text-xs font-bold tracking-wider transition-all ${
+                                className={`px-3 py-2 rounded border text-xs font-bold tracking-wider transition-all ${
                                     isBankerSelected
                                         ? 'border-action-success bg-action-success/20 text-action-success'
                                         : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'
@@ -492,14 +443,14 @@ export const BaccaratView = React.memo<{
                             <button
                                 type="button"
                                 onClick={actions?.baccaratActions?.rebet}
-                                className="px-3 py-1.5 rounded border border-gray-700 bg-black/50 text-gray-300 text-xs font-bold tracking-wider hover:bg-gray-800 transition-all"
+                                className="px-3 py-2 rounded border border-gray-700 bg-black/50 text-gray-300 text-xs font-bold tracking-wider hover:bg-gray-800 transition-all"
                             >
                                 REBET
                             </button>
                             <button
                                 type="button"
                                 onClick={actions?.baccaratActions?.undo}
-                                className="px-3 py-1.5 rounded border border-gray-700 bg-black/50 text-gray-300 text-xs font-bold tracking-wider hover:bg-gray-800 transition-all"
+                                className="px-3 py-2 rounded border border-gray-700 bg-black/50 text-gray-300 text-xs font-bold tracking-wider hover:bg-gray-800 transition-all"
                             >
                                 UNDO
                             </button>
@@ -508,7 +459,7 @@ export const BaccaratView = React.memo<{
                                     <button
                                         type="button"
                                         onClick={actions?.toggleShield}
-                                        className={`px-3 py-1.5 rounded border text-xs font-bold tracking-wider transition-all ${
+                                        className={`px-3 py-2 rounded border text-xs font-bold tracking-wider transition-all ${
                                             gameState.activeModifiers.shield
                                                 ? 'border-action-primary bg-action-primary/20 text-action-primary'
                                                 : 'border-gray-700 bg-black/50 text-gray-400 hover:bg-gray-800'
@@ -519,7 +470,7 @@ export const BaccaratView = React.memo<{
                                     <button
                                         type="button"
                                         onClick={actions?.toggleDouble}
-                                        className={`px-3 py-1.5 rounded border text-xs font-bold tracking-wider transition-all ${
+                                        className={`px-3 py-2 rounded border text-xs font-bold tracking-wider transition-all ${
                                             gameState.activeModifiers.double
                                                 ? 'border-action-primary bg-action-primary/20 text-action-primary'
                                                 : 'border-gray-700 bg-black/50 text-gray-400 hover:bg-gray-800'
@@ -532,7 +483,7 @@ export const BaccaratView = React.memo<{
                             <button
                                 type="button"
                                 onClick={actions?.toggleSuper}
-                                className={`px-3 py-1.5 rounded border text-xs font-bold tracking-wider transition-all ${
+                                className={`px-3 py-2 rounded border text-xs font-bold tracking-wider transition-all ${
                                     gameState.activeModifiers.super
                                         ? 'border-action-primary bg-action-primary/20 text-action-primary'
                                         : 'border-gray-700 bg-black/50 text-gray-400 hover:bg-gray-800'
@@ -543,84 +494,59 @@ export const BaccaratView = React.memo<{
                         </div>
                     </div>
 
-                    {/* DEAL Button */}
+                    {/* Mobile: Inline bet controls (no drawers) */}
+                    <div className="flex md:hidden items-center justify-between gap-2 w-full">
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => actions?.baccaratActions?.toggleSelection?.('PLAYER')}
+                                className={`px-3 py-2 rounded border text-[10px] font-bold ${
+                                    isPlayerSelected
+                                        ? 'border-action-success bg-action-success/20 text-action-success'
+                                        : 'border-gray-700 bg-black/50 text-gray-400'
+                                }`}
+                            >
+                                P
+                            </button>
+                            <button
+                                onClick={() => actions?.baccaratActions?.toggleSelection?.('BANKER')}
+                                className={`px-3 py-2 rounded border text-[10px] font-bold ${
+                                    isBankerSelected
+                                        ? 'border-action-success bg-action-success/20 text-action-success'
+                                        : 'border-gray-700 bg-black/50 text-gray-400'
+                                }`}
+                            >
+                                B
+                            </button>
+                            <button
+                                onClick={actions?.toggleSuper}
+                                className={`px-2 py-2 rounded border text-[10px] font-bold ${
+                                    gameState.activeModifiers.super
+                                        ? 'border-action-primary bg-action-primary/20 text-action-primary'
+                                        : 'border-gray-700 bg-black/50 text-gray-400'
+                                }`}
+                            >
+                                ⚡
+                            </button>
+                        </div>
+
+                        {/* DEAL Button - Mobile */}
+                        <button
+                            type="button"
+                            onClick={actions?.deal}
+                            className="ns-control-primary h-10 px-6 rounded border-2 font-bold text-sm tracking-widest uppercase transition-all border-action-success bg-action-success text-black"
+                        >
+                            DEAL
+                        </button>
+                    </div>
+
+                    {/* DEAL Button - Desktop */}
                     <button
                         type="button"
                         onClick={actions?.deal}
-                        className="ns-control-primary h-14 px-8 rounded border-2 font-bold text-base tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] border-action-success bg-action-success text-black hover:bg-white hover:border-white hover:scale-105 active:scale-95"
+                        className="hidden md:block ns-control-primary h-14 px-8 rounded border-2 font-bold text-base tracking-widest uppercase transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] border-action-success bg-action-success text-black hover:bg-white hover:border-white hover:scale-105 active:scale-95"
                     >
                         DEAL
                     </button>
-
-                    {/* Mobile: Simplified controls */}
-                    <div className="flex md:hidden gap-2">
-                        <BetsDrawer title="NORMAL BETS">
-                            <div className="space-y-4">
-                                <div className="rounded border border-gray-800 bg-black/40 p-2 space-y-2">
-                                    <div className="text-[10px] text-green-500 font-bold tracking-widest border-b border-gray-800 pb-1">NORMAL BETS</div>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <button
-                                            onClick={() => actions?.baccaratActions?.toggleSelection?.('PLAYER')}
-                                            className={`py-3 rounded border text-xs font-bold ${
-                                                isPlayerSelected
-                                                    ? 'border-green-400 bg-green-500/20 text-green-300'
-                                                    : 'border-gray-700 bg-gray-900 text-gray-400'
-                                            }`}
-                                        >
-                                            PLAYER
-                                        </button>
-                                        <button
-                                            onClick={() => actions?.baccaratActions?.toggleSelection?.('BANKER')}
-                                            className={`py-3 rounded border text-xs font-bold ${
-                                                isBankerSelected
-                                                    ? 'border-green-400 bg-green-500/20 text-green-300'
-                                                    : 'border-gray-700 bg-gray-900 text-gray-400'
-                                            }`}
-                                        >
-                                            BANKER
-                                        </button>
-                                    </div>
-                                </div>
-                                <div className="rounded border border-gray-800 bg-black/40 p-2">
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                        <button onClick={actions?.baccaratActions?.rebet} className="flex-1 py-3 rounded border border-gray-700 bg-gray-900 text-gray-400 text-xs font-bold">
-                                            REBET
-                                        </button>
-                                        <button onClick={actions?.baccaratActions?.undo} className="flex-1 py-3 rounded border border-gray-700 bg-gray-900 text-gray-400 text-xs font-bold">
-                                            UNDO
-                                        </button>
-                                        <button onClick={actions?.toggleSuper} className={`flex-1 py-3 rounded border text-xs font-bold ${gameState.activeModifiers.super ? 'border-yellow-400 bg-yellow-500/20 text-yellow-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>
-                                            SUPER
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </BetsDrawer>
-                        <SideBetsDrawer
-                            title="BACCARAT SIDE BETS"
-                            label="Side Bets"
-                            count={Object.values(sideBetAmounts).filter((amount) => amount > 0).length}
-                            shortcutHint="Shift+2"
-                            open={activeGroup === 'BONUS'}
-                            onOpenChange={(open) => setActiveGroup(open ? 'BONUS' : 'NONE')}
-                        >
-                            <div className="grid grid-cols-2 gap-2">
-                                {BONUS_BETS.map((bet) => (
-                                    <button
-                                        key={bet.action}
-                                        onClick={() => executeBetAction(bet.action)}
-                                        className={`py-3 rounded border text-xs font-bold ${
-                                            isBonusActive(bet.action)
-                                                ? 'border-amber-400 bg-amber-500/20 text-amber-300'
-                                                : 'border-gray-700 bg-gray-900 text-gray-400'
-                                        }`}
-                                    >
-                                        {bet.label}
-                                    </button>
-                                ))}
-                            </div>
-                        </SideBetsDrawer>
-                    </div>
                 </div>
             </div>
         </>

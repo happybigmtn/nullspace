@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuthSession } from '../hooks/useAuthSession';
 import { getVaultStatusSync } from '../security/keyVault';
 import { subscribeVault } from '../security/vaultRuntime';
@@ -233,9 +234,9 @@ export const AuthStatusPill: React.FC<AuthStatusPillProps> = ({ publicKeyHex, cl
               {signInBusy ? 'Signing…' : 'Sign in'}
             </button>
           ) : vaultStatus.supported ? (
-            <a href="/security" className="text-action-primary hover:opacity-70 transition-opacity">
+            <Link to="/security" className="text-action-primary hover:opacity-70 transition-opacity">
               Unlock
-            </a>
+            </Link>
           ) : (
             <span className="text-titanium-300 italic">Vault Unavailable</span>
           )}

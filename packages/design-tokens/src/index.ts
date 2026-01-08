@@ -11,6 +11,7 @@
 // Colors
 export {
   TITANIUM,
+  SEMANTIC,
   ACTION,
   GAME,
   type TitaniumShade,

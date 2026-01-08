@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback, type RefObject } from 'react';
-import { useSpring, type SpringConfig } from '@react-spring/web';
+import { useSpring, to, type SpringConfig } from '@react-spring/web';
 import { SPRING_LIQUID_CONFIGS, type SpringLiquidPreset } from '../utils/motion';
 import { useReducedMotion } from './useReducedMotion';
 
@@ -348,9 +348,9 @@ export function useSpringScrollReveal<T extends HTMLElement = HTMLDivElement>(
     ref,
     style: {
       opacity: springStyles.opacity,
-      transform: springStyles.x.to(
-        (x) =>
-          `translate3d(${x}px, ${springStyles.y.get()}px, 0) scale(${springStyles.scale.get()})`
+      transform: to(
+        [springStyles.x, springStyles.y, springStyles.scale],
+        (x, y, scale) => `translate3d(${x}px, ${y}px, 0) scale(${scale})`
       ),
       willChange: isRevealed ? 'auto' : 'opacity, transform',
     },

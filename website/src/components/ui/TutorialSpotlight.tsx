@@ -10,7 +10,7 @@
  */
 import React, { useEffect, useRef, useState, useCallback, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { animated, useSpring, useTransition, config } from '@react-spring/web';
+import { animated, useSpring, useTransition, config, to } from '@react-spring/web';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 export interface TutorialStep {
@@ -230,9 +230,10 @@ export function TutorialSpotlight({
       <animated.div
         className="absolute inset-0"
         style={{
-          background: spotlightSpring.x.to(
-            (x) =>
-              `radial-gradient(circle ${spotlightSpring.size.get()}px at ${x}px ${spotlightSpring.y.get()}px, transparent 0%, rgba(0,0,0,0.85) 100%)`
+          background: to(
+            [spotlightSpring.x, spotlightSpring.y, spotlightSpring.size],
+            (x, y, size) =>
+              `radial-gradient(circle ${size}px at ${x}px ${y}px, transparent 0%, rgba(0,0,0,0.85) 100%)`
           ),
           backdropFilter: 'blur(2px)',
         }}
