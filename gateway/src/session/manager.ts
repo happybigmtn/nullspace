@@ -387,25 +387,43 @@ export class SessionManager {
 	}
 
 	/**
-	 * Get session by WebSocket
+	 * Get session by WebSocket.
+	 * Returns undefined for sessions marked for cleanup (US-150: race condition fix).
 	 */
 	getSession(ws: WebSocket): Session | undefined {
-		return this.sessions.get(ws);
+		const session = this.sessions.get(ws);
+		// US-150: Don't return sessions being cleaned up
+		if (session?.markedForCleanup) {
+			return undefined;
+		}
+		return session;
 	}
 
 	/**
-	 * Get session by public key
+	 * Get session by public key.
+	 * Returns undefined for sessions marked for cleanup (US-150: race condition fix).
 	 */
 	getSessionByPublicKey(publicKey: Uint8Array): Session | undefined {
 		const hex = Buffer.from(publicKey).toString("hex");
-		return this.byPublicKey.get(hex);
+		const session = this.byPublicKey.get(hex);
+		// US-150: Don't return sessions being cleaned up
+		if (session?.markedForCleanup) {
+			return undefined;
+		}
+		return session;
 	}
 
 	/**
-	 * Get session by public key hex
+	 * Get session by public key hex.
+	 * Returns undefined for sessions marked for cleanup (US-150: race condition fix).
 	 */
 	getSessionByPublicKeyHex(publicKeyHex: string): Session | undefined {
-		return this.byPublicKey.get(publicKeyHex);
+		const session = this.byPublicKey.get(publicKeyHex);
+		// US-150: Don't return sessions being cleaned up
+		if (session?.markedForCleanup) {
+			return undefined;
+		}
+		return session;
 	}
 
 	/**
@@ -530,7 +548,13 @@ export class SessionManager {
 	}
 
 	/**
-	 * Clean up idle sessions.
+	 * Clean up idle sessions using mark-and-sweep pattern (US-150).
+	 *
+	 * This avoids race conditions where message handlers could access
+	 * a session being destroyed. The two-phase approach:
+	 * 1. Mark phase: Flag sessions for cleanup (getSession returns undefined for marked sessions)
+	 * 2. Sweep phase: Destroy marked sessions and close connections
+	 *
 	 * @param maxIdleMs Maximum idle time before session is cleaned up (default: 30 minutes)
 	 * @param onSessionExpired Optional callback to notify client before closing. Receives (ws, session).
 	 * @returns Number of sessions cleaned up
@@ -540,29 +564,44 @@ export class SessionManager {
 		onSessionExpired?: (ws: WebSocket, session: Session) => void
 	): number {
 		const now = Date.now();
-		let cleaned = 0;
+
+		// Phase 1: MARK - Identify and mark idle sessions
+		// This prevents message handlers from using these sessions (getSession checks markedForCleanup)
+		const sessionsToCleanup: Array<{ ws: WebSocket; session: Session }> = [];
 
 		for (const [ws, session] of this.sessions.entries()) {
-			if (now - session.lastActivityAt > maxIdleMs) {
-				// Notify client BEFORE destroying session so they can handle gracefully
-				if (onSessionExpired) {
-					try {
-						onSessionExpired(ws, session);
-					} catch {
-						// Ignore callback errors - continue with cleanup
-					}
-				}
+			// Skip already-marked sessions (defensive - shouldn't happen normally)
+			if (session.markedForCleanup) {
+				continue;
+			}
 
-				this.destroySession(ws);
-				try {
-					ws.close(1000, "Session timeout");
-				} catch {
-					// Ignore close errors
-				}
-				cleaned++;
+			if (now - session.lastActivityAt > maxIdleMs) {
+				// Mark for cleanup - getSession() will now return undefined for this session
+				session.markedForCleanup = true;
+				sessionsToCleanup.push({ ws, session });
 			}
 		}
 
-		return cleaned;
+		// Phase 2: SWEEP - Destroy marked sessions
+		// Iterate over collected array, not the Map (avoids iterator invalidation)
+		for (const { ws, session } of sessionsToCleanup) {
+			// Notify client BEFORE destroying session so they can handle gracefully
+			if (onSessionExpired) {
+				try {
+					onSessionExpired(ws, session);
+				} catch {
+					// Ignore callback errors - continue with cleanup
+				}
+			}
+
+			this.destroySession(ws);
+			try {
+				ws.close(1000, "Session timeout");
+			} catch {
+				// Ignore close errors
+			}
+		}
+
+		return sessionsToCleanup.length;
 	}
 }
