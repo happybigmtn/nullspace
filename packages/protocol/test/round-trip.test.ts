@@ -7,12 +7,19 @@
  * 3. TypeScript decodes the state blob
  *
  * This catches protocol drift between frontend encoding and backend processing.
+ *
+ * NOTE: US-149 added a protocol version header to all encoded payloads.
+ * The Rust backend doesn't yet understand the version header, so we strip it
+ * before sending payloads to the Rust binary (via toHexStripped helper).
+ * Once the Rust side is updated (execution/src/casino/payload.rs), these tests
+ * can send versioned payloads directly.
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import { execSync, spawnSync } from 'child_process';
 import { existsSync } from 'fs';
 import { join } from 'path';
+import { stripVersionHeader } from '../src/version.js';
 
 // Import encoders from protocol package
 import {
@@ -44,6 +51,14 @@ function toHex(bytes: Uint8Array): string {
   return Array.from(bytes)
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
+}
+
+// Helper to strip version header and convert to hex for Rust binary
+// The Rust binary doesn't yet understand version headers (US-149),
+// so we strip them before sending.
+function toHexStripped(bytes: Uint8Array): string {
+  const { payload } = stripVersionHeader(bytes);
+  return toHex(payload);
 }
 
 // Helper to convert hex string to Uint8Array
@@ -123,12 +138,12 @@ describe('Protocol Round-Trip Tests', () => {
     it('encodes deal, Rust processes, TypeScript decodes state', () => {
       if (!binaryAvailable) return;
 
-      // TypeScript encodes
+      // TypeScript encodes (now includes version header)
       const dealPayload = encodeBlackjackMove('deal');
-      expect(dealPayload).toEqual(new Uint8Array([0x04]));
+      expect(dealPayload).toEqual(new Uint8Array([0x01, 0x04])); // [version, deal opcode]
 
-      // Rust processes
-      const result = runRustGame('blackjack', 100, [toHex(dealPayload)]);
+      // Rust processes (strip version header since Rust doesn't know about it yet)
+      const result = runRustGame('blackjack', 100, [toHexStripped(dealPayload)]);
       expect(result.moves_processed).toBe(1);
       expect(result.state_blob_hex.length).toBeGreaterThan(0);
 
@@ -149,9 +164,10 @@ describe('Protocol Round-Trip Tests', () => {
       const dealPayload = encodeBlackjackMove('deal');
       const hitPayload = encodeBlackjackMove('hit');
 
+      // Strip version headers for Rust binary
       const result = runRustGame('blackjack', 100, [
-        toHex(dealPayload),
-        toHex(hitPayload),
+        toHexStripped(dealPayload),
+        toHexStripped(hitPayload),
       ]);
 
       expect(result.moves_processed).toBe(2);
@@ -177,8 +193,8 @@ describe('Protocol Round-Trip Tests', () => {
         { betType: 1, number: 0, amount: 100n }, // Red bet
       ]);
 
-      // Rust processes (bet triggers auto-spin)
-      const result = runRustGame('roulette', 100, [toHex(betPayload)]);
+      // Rust processes (bet triggers auto-spin) - strip version header
+      const result = runRustGame('roulette', 100, [toHexStripped(betPayload)]);
 
       expect(result.moves_processed).toBe(1);
       expect(result.is_complete).toBe(true); // Game completes after spin
@@ -207,8 +223,8 @@ describe('Protocol Round-Trip Tests', () => {
         { betType: 0, target: 0, amount: 100n }, // Pass bet
       ]);
 
-      // Rust processes (bet triggers auto-roll)
-      const result = runRustGame('craps', 100, [toHex(betPayload)]);
+      // Rust processes (bet triggers auto-roll) - strip version header
+      const result = runRustGame('craps', 100, [toHexStripped(betPayload)]);
 
       expect(result.moves_processed).toBe(1);
       expect(result.is_complete).toBe(true); // Game completes after roll
@@ -239,8 +255,8 @@ describe('Protocol Round-Trip Tests', () => {
       // Deal is opcode 0 (the bet triggers deal in baccarat)
       // Actually baccarat auto-deals when you place bet
 
-      // Rust processes
-      const result = runRustGame('baccarat', 100, [toHex(betPayload)]);
+      // Rust processes - strip version header
+      const result = runRustGame('baccarat', 100, [toHexStripped(betPayload)]);
 
       expect(result.moves_processed).toBe(1);
 
@@ -265,8 +281,8 @@ describe('Protocol Round-Trip Tests', () => {
         { betType: 0, target: 0, amount: 100n }, // Small bet
       ]);
 
-      // Rust processes (bet triggers auto-roll)
-      const result = runRustGame('sicbo', 100, [toHex(betPayload)]);
+      // Rust processes (bet triggers auto-roll) - strip version header
+      const result = runRustGame('sicbo', 100, [toHexStripped(betPayload)]);
 
       expect(result.moves_processed).toBe(1);
       expect(result.is_complete).toBe(true);
@@ -291,10 +307,10 @@ describe('Protocol Round-Trip Tests', () => {
     it('processes deal, TypeScript decodes card and multipliers', () => {
       if (!binaryAvailable) return;
 
-      // HiLo Deal is opcode 0
+      // HiLo Deal is opcode 0 (raw payload without version for Rust)
       const dealPayload = new Uint8Array([0x00]);
 
-      // Rust processes
+      // Rust processes (passing raw opcode without version)
       const result = runRustGame('hilo', 100, [toHex(dealPayload)]);
 
       expect(result.moves_processed).toBe(1);
@@ -322,10 +338,10 @@ describe('Protocol Round-Trip Tests', () => {
     it('processes deal, TypeScript decodes cards', () => {
       if (!binaryAvailable) return;
 
-      // VideoPoker Deal is opcode 0
+      // VideoPoker Deal is opcode 0 (raw payload without version for Rust)
       const dealPayload = new Uint8Array([0x00]);
 
-      // Rust processes
+      // Rust processes (passing raw opcode without version)
       const result = runRustGame('videopoker', 100, [toHex(dealPayload)]);
 
       expect(result.moves_processed).toBe(1);
@@ -350,10 +366,10 @@ describe('Protocol Round-Trip Tests', () => {
     it('processes deal, TypeScript decodes cards', () => {
       if (!binaryAvailable) return;
 
-      // Deal is opcode 0
+      // Deal is opcode 0 (raw payload without version for Rust)
       const dealPayload = new Uint8Array([0x00]);
 
-      // Rust processes
+      // Rust processes (passing raw opcode without version)
       const result = runRustGame('casinowar', 100, [toHex(dealPayload)]);
 
       expect(result.moves_processed).toBe(1);
@@ -380,10 +396,10 @@ describe('Protocol Round-Trip Tests', () => {
     it('processes deal, TypeScript decodes cards', () => {
       if (!binaryAvailable) return;
 
-      // ThreeCard Deal is opcode 2 (not 0)
+      // ThreeCard Deal is opcode 2 (raw payload without version for Rust)
       const dealPayload = new Uint8Array([0x02]);
 
-      // Rust processes
+      // Rust processes (passing raw opcode without version)
       const result = runRustGame('threecard', 100, [toHex(dealPayload)]);
 
       expect(result.moves_processed).toBe(1);
@@ -403,10 +419,10 @@ describe('Protocol Round-Trip Tests', () => {
     it('processes deal, TypeScript decodes cards', () => {
       if (!binaryAvailable) return;
 
-      // UltimateHoldem Deal is opcode 5 (not 0)
+      // UltimateHoldem Deal is opcode 5 (raw payload without version for Rust)
       const dealPayload = new Uint8Array([0x05]);
 
-      // Rust processes
+      // Rust processes (passing raw opcode without version)
       const result = runRustGame('ultimateholdem', 100, [toHex(dealPayload)]);
 
       expect(result.moves_processed).toBe(1);

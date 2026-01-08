@@ -1,24 +1,25 @@
 {
+  "protocolVersion": 1,
   "blackjackMoves": [
-    { "move": "hit", "hex": "00" },
-    { "move": "stand", "hex": "01" },
-    { "move": "double", "hex": "02" },
-    { "move": "split", "hex": "03" },
-    { "move": "deal", "hex": "04" },
-    { "move": "surrender", "hex": "07" }
+    { "move": "hit", "hex": "0100" },
+    { "move": "stand", "hex": "0101" },
+    { "move": "double", "hex": "0102" },
+    { "move": "split", "hex": "0103" },
+    { "move": "deal", "hex": "0104" },
+    { "move": "surrender", "hex": "0107" }
   ],
   "rouletteMoves": [
-    { "move": "spin", "hex": "01" },
-    { "move": "clear_bets", "hex": "02" }
+    { "move": "spin", "hex": "0101" },
+    { "move": "clear_bets", "hex": "0102" }
   ],
   "rouletteBets": [
-    { "betType": 1, "number": 0, "amount": "100", "hex": "0001000000000000000064" }
+    { "betType": 1, "number": 0, "amount": "100", "hex": "010001000000000000000064" }
   ],
   "rouletteAtomicBatch": [
     {
       "description": "Single bet: Red, amount 100",
       "bets": [{ "betType": 1, "number": 0, "amount": "100" }],
-      "hex": "040101000000000000000064"
+      "hex": "01040101000000000000000064"
     },
     {
       "description": "Two bets: Red 100, Black 50",
@@ -26,24 +27,24 @@
         { "betType": 1, "number": 0, "amount": "100" },
         { "betType": 2, "number": 0, "amount": "50" }
       ],
-      "hex": "04020100000000000000006402000000000000000032"
+      "hex": "0104020100000000000000006402000000000000000032"
     }
   ],
   "crapsMoves": [
-    { "move": "roll", "hex": "02" },
-    { "move": "clear_bets", "hex": "03" }
+    { "move": "roll", "hex": "0102" },
+    { "move": "clear_bets", "hex": "0103" }
   ],
   "crapsPlaceBets": [
-    { "betType": 0, "target": 0, "amount": "100", "hex": "0000000000000000000064" }
+    { "betType": 0, "target": 0, "amount": "100", "hex": "010000000000000000000064" }
   ],
   "crapsAddOdds": [
-    { "amount": "25", "hex": "010000000000000019" }
+    { "amount": "25", "hex": "01010000000000000019" }
   ],
   "crapsAtomicBatch": [
     {
       "description": "Single bet: Pass, amount 100",
       "bets": [{ "betType": 0, "target": 0, "amount": "100" }],
-      "hex": "040100000000000000000064"
+      "hex": "01040100000000000000000064"
     },
     {
       "description": "Two bets: Pass 100, Field 50",
@@ -51,7 +52,7 @@
         { "betType": 0, "target": 0, "amount": "100" },
         { "betType": 4, "target": 0, "amount": "50" }
       ],
-      "hex": "04020000000000000000006404000000000000000032"
+      "hex": "0104020000000000000000006404000000000000000032"
     },
     {
       "description": "Three bets: Pass 100, Field 50, Yes(6) 25",
@@ -60,14 +61,14 @@
         { "betType": 4, "target": 0, "amount": "50" },
         { "betType": 5, "target": 6, "amount": "25" }
       ],
-      "hex": "0403000000000000000000640400000000000000003205060000000000000019"
+      "hex": "010403000000000000000000640400000000000000003205060000000000000019"
     }
   ],
   "baccaratAtomicBatch": [
     {
       "description": "Single bet: Player, amount 100",
       "bets": [{ "betType": 0, "amount": "100" }],
-      "hex": "0301000000000000000064"
+      "hex": "010301000000000000000064"
     },
     {
       "description": "Two bets: Player 100, Banker 50",
@@ -75,14 +76,14 @@
         { "betType": 0, "amount": "100" },
         { "betType": 1, "amount": "50" }
       ],
-      "hex": "0302000000000000000064010000000000000032"
+      "hex": "010302000000000000000064010000000000000032"
     }
   ],
   "sicBoAtomicBatch": [
     {
       "description": "Single bet: Small, amount 100",
       "bets": [{ "betType": 0, "target": 0, "amount": "100" }],
-      "hex": "030100000000000000000064"
+      "hex": "01030100000000000000000064"
     },
     {
       "description": "Two bets: Small 100, Big 50",
@@ -90,7 +91,7 @@
         { "betType": 0, "target": 0, "amount": "100" },
         { "betType": 1, "target": 0, "amount": "50" }
       ],
-      "hex": "03020000000000000000006401000000000000000032"
+      "hex": "0103020000000000000000006401000000000000000032"
     }
   ],
   "chainEvents": [

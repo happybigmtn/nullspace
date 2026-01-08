@@ -4,6 +4,7 @@ import {
   ThreeCardMove,
   UltimateHoldemMove,
 } from '@nullspace/constants';
+import { CURRENT_PROTOCOL_VERSION, withVersionHeader } from '../version.js';
 
 export type HiLoAction = 'higher' | 'lower' | 'same' | 'cashout';
 
@@ -15,7 +16,7 @@ const HILO_OPCODES: Record<HiLoAction, number> = {
 };
 
 export function encodeHiLoAction(action: HiLoAction): Uint8Array {
-  return new Uint8Array([HILO_OPCODES[action]]);
+  return withVersionHeader(new Uint8Array([HILO_OPCODES[action]]));
 }
 
 export function encodeVideoPokerHold(holds: boolean[]): Uint8Array {
@@ -23,7 +24,7 @@ export function encodeVideoPokerHold(holds: boolean[]): Uint8Array {
   for (let i = 0; i < 5 && i < holds.length; i += 1) {
     if (holds[i]) holdBits |= (1 << i);
   }
-  return new Uint8Array([holdBits]);
+  return withVersionHeader(new Uint8Array([holdBits]));
 }
 
 export type CasinoWarAction = 'play' | 'war' | 'surrender';
@@ -35,13 +36,14 @@ const CASINO_WAR_OPCODES: Record<CasinoWarAction, number> = {
 };
 
 export function encodeCasinoWarAction(action: CasinoWarAction): Uint8Array {
-  return new Uint8Array([CASINO_WAR_OPCODES[action]]);
+  return withVersionHeader(new Uint8Array([CASINO_WAR_OPCODES[action]]));
 }
 
 export function encodeCasinoWarTieBet(amount: bigint): Uint8Array {
-  const payload = new Uint8Array(9);
-  payload[0] = CasinoWarMove.SetTieBet;
-  new DataView(payload.buffer).setBigUint64(1, amount, false);
+  const payload = new Uint8Array(10);
+  payload[0] = CURRENT_PROTOCOL_VERSION;
+  payload[1] = CasinoWarMove.SetTieBet;
+  new DataView(payload.buffer).setBigUint64(2, amount, false);
   return payload;
 }
 
@@ -54,7 +56,7 @@ const THREE_CARD_OPCODES: Record<ThreeCardAction, number> = {
 };
 
 export function encodeThreeCardAction(action: ThreeCardAction): Uint8Array {
-  return new Uint8Array([THREE_CARD_OPCODES[action]]);
+  return withVersionHeader(new Uint8Array([THREE_CARD_OPCODES[action]]));
 }
 
 export type ThreeCardDealOptions = {
@@ -70,15 +72,16 @@ export function encodeThreeCardDeal(options: ThreeCardDealOptions = {}): Uint8Ar
   const hasSideBets = pairPlus > 0 || sixCard > 0 || progressive > 0;
 
   if (!hasSideBets) {
-    return new Uint8Array([ThreeCardMove.Deal]);
+    return withVersionHeader(new Uint8Array([ThreeCardMove.Deal]));
   }
 
-  const payload = new Uint8Array(25);
-  payload[0] = ThreeCardMove.AtomicDeal;
+  const payload = new Uint8Array(26);
+  payload[0] = CURRENT_PROTOCOL_VERSION;
+  payload[1] = ThreeCardMove.AtomicDeal;
   const view = new DataView(payload.buffer);
-  view.setBigUint64(1, BigInt(pairPlus), false);
-  view.setBigUint64(9, BigInt(sixCard), false);
-  view.setBigUint64(17, BigInt(progressive), false);
+  view.setBigUint64(2, BigInt(pairPlus), false);
+  view.setBigUint64(10, BigInt(sixCard), false);
+  view.setBigUint64(18, BigInt(progressive), false);
   return payload;
 }
 
@@ -91,7 +94,7 @@ const ULTIMATE_HOLDEM_OPCODES: Record<UltimateHoldemAction, number> = {
 };
 
 export function encodeUltimateHoldemAction(action: UltimateHoldemAction): Uint8Array {
-  return new Uint8Array([ULTIMATE_HOLDEM_OPCODES[action]]);
+  return withVersionHeader(new Uint8Array([ULTIMATE_HOLDEM_OPCODES[action]]));
 }
 
 export type UltimateHoldemBetMultiplier = 1 | 2 | 3 | 4;
@@ -104,7 +107,7 @@ const ULTIMATE_HOLDEM_BET_OPCODES: Record<UltimateHoldemBetMultiplier, number> =
 };
 
 export function encodeUltimateHoldemBet(multiplier: UltimateHoldemBetMultiplier): Uint8Array {
-  return new Uint8Array([ULTIMATE_HOLDEM_BET_OPCODES[multiplier]]);
+  return withVersionHeader(new Uint8Array([ULTIMATE_HOLDEM_BET_OPCODES[multiplier]]));
 }
 
 export type UltimateHoldemDealOptions = {
@@ -120,15 +123,16 @@ export function encodeUltimateHoldemDeal(options: UltimateHoldemDealOptions = {}
   const hasSideBets = trips > 0 || sixCard > 0 || progressive > 0;
 
   if (!hasSideBets) {
-    return new Uint8Array([UltimateHoldemMove.Deal]);
+    return withVersionHeader(new Uint8Array([UltimateHoldemMove.Deal]));
   }
 
-  const payload = new Uint8Array(25);
-  payload[0] = UltimateHoldemMove.AtomicDeal;
+  const payload = new Uint8Array(26);
+  payload[0] = CURRENT_PROTOCOL_VERSION;
+  payload[1] = UltimateHoldemMove.AtomicDeal;
   const view = new DataView(payload.buffer);
-  view.setBigUint64(1, BigInt(trips), false);
-  view.setBigUint64(9, BigInt(sixCard), false);
-  view.setBigUint64(17, BigInt(progressive), false);
+  view.setBigUint64(2, BigInt(trips), false);
+  view.setBigUint64(10, BigInt(sixCard), false);
+  view.setBigUint64(18, BigInt(progressive), false);
   return payload;
 }
 
