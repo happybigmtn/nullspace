@@ -3491,3 +3491,92 @@ Target: Testnet Production
   - Double-shutdown prevention via isDraining flag guards async race conditions
   - Force exit timeout (5s) handles hung server.close() calls
 
+
+---
+
+## US-155: Apply bet confirmation modal to all game screens
+**Date:** 2025-01-07
+**Priority:** 78 (UX-HIGH)
+**Commit:** feat: US-155 - Apply bet confirmation modal to all game screens
+
+### Implementation Summary
+Applied consistent bet confirmation modal pattern across all 6 remaining game screens:
+
+1. **RouletteScreen.tsx**
+   - Added `useBetConfirmation` hook with `gameType: 'roulette'`
+   - Created `executeSpin` function with original spin logic
+   - Modified `handleSpin` to call `requestConfirmation` with total bet
+   - Added `<BetConfirmationModal {...confirmationProps} />`
+
+2. **BaccaratScreen.tsx**
+   - Added `useBetConfirmation` hook with `gameType: 'baccarat'`
+   - Created `executeDeal` function with original deal logic
+   - Modified `handleDeal` to show confirmation with side bets breakdown
+   - Shows Player/Banker/Tie/Pair bets in sideBets array
+
+3. **CrapsScreen.tsx**
+   - Added `useBetConfirmation` hook with `gameType: 'craps'`
+   - Created `executePlaceBets` function with original bet placement logic
+   - Modified `handlePlaceBets` to call `requestConfirmation` with total bets
+
+4. **SicBoScreen.tsx**
+   - Added `useBetConfirmation` hook with `gameType: 'sic_bo'`
+   - Created `executeRoll` function with original roll logic
+   - Modified `handleRoll` to call `requestConfirmation` with total bet
+
+5. **VideoPokerScreen.tsx**
+   - Added `useBetConfirmation` hook with `gameType: 'video_poker'`
+   - Created `executeDeal` function with original deal logic
+   - Modified `handleDeal` to call `requestConfirmation` with bet amount
+
+6. **ThreeCardPokerScreen.tsx**
+   - Added `useBetConfirmation` hook with `gameType: 'three_card'`
+   - Created `executeDeal` function with original deal logic
+   - Modified `handleDeal` to show confirmation with side bets (Pair Plus, 6-Card, Progressive)
+
+### Pattern Applied
+```typescript
+// 1. Add imports
+import { BetConfirmationModal } from '../../components/ui';
+import { useBetConfirmation } from '../../hooks';
+
+// 2. Create execute function with original logic
+const executeDeal = useCallback(() => {
+  // Original deal/spin/roll logic here
+}, [dependencies]);
+
+// 3. Initialize confirmation hook
+const { confirmationProps, requestConfirmation } = useBetConfirmation({
+  gameType: 'game_type',
+  onConfirm: executeDeal,
+  countdownSeconds: 5,
+});
+
+// 4. Update handler to request confirmation
+const handleDeal = useCallback(() => {
+  requestConfirmation({ amount: totalBet, sideBets: [...] });
+}, [requestConfirmation, ...]);
+
+// 5. Add modal to JSX
+<BetConfirmationModal {...confirmationProps} testID="bet-confirmation-modal" />
+```
+
+### Type Fixes
+- Changed `gameType: 'sicBo'` to `'sic_bo'` (valid GameType)
+- Changed `gameType: 'three_card_poker'` to `'three_card'` (valid GameType)
+
+### Files Changed
+- `mobile/src/screens/games/RouletteScreen.tsx`
+- `mobile/src/screens/games/BaccaratScreen.tsx`
+- `mobile/src/screens/games/CrapsScreen.tsx`
+- `mobile/src/screens/games/SicBoScreen.tsx`
+- `mobile/src/screens/games/VideoPokerScreen.tsx`
+- `mobile/src/screens/games/ThreeCardPokerScreen.tsx`
+
+### Learnings
+- `useBetConfirmation` hook provides consistent UX with 5-second countdown
+- `GameType` in BetConfirmationModal uses snake_case ('sic_bo', 'three_card')
+- Side bets array supports { name, amount } objects for detailed breakdown
+- Each game's execute function preserves original betting logic unchanged
+- Modal shows payout info based on gameType for user awareness
+
