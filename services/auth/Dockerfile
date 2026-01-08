@@ -4,6 +4,7 @@ RUN apt-get update && apt-get install -y \
     curl \
     libssl-dev \
     pkg-config \
+    clang \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl -sSf https://rustwasm.github.io/wasm-pack/installer/init.sh | sh
