@@ -52,13 +52,14 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@nullspace/types": "workspace:*",
     "@nullspace/constants": "workspace:*",
+    "@nullspace/types": "workspace:*",
     "zod": "^3.23.0"
   },
   "devDependencies": {
     "@nullspace/tsconfig": "workspace:*",
     "@vitest/coverage-v8": "^2.1.9",
+    "fast-check": "^4.5.3",
     "typescript": "^5.7.0",
     "vitest": "^2.0.0"
   }
