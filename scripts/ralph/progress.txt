@@ -67,6 +67,10 @@ Target: Testnet Production
 - PWA: `usePWA()` hook for install prompts, `InstallBanner` component handles Chrome + iOS Safari
 - Service worker: `website/public/sw.js` with network-first navigation, stale-while-revalidate for assets
 - Offline: `offline.html` fallback page, skip API/auth routes in SW
+- Touch targets: 44px minimum per WCAG 2.2 SC 2.5.8, use `min-h-11` class (Tailwind)
+- BottomNav: 5 items max (4 primary + More overflow), `sm:hidden` for mobile-only
+- Mobile utilities: `.touch-target`, `.touch-target-sm`, `.game-control-btn`, `.chip-btn` in index.css
+- Responsive breakpoints: sm=640px, md=768px (Tailwind defaults), use `md:` for desktop layouts
 
 ### Configuration
 - Production configs: `configs/production/*.env.example`
@@ -3879,5 +3883,33 @@ Updated `docs/testnet-readiness-runbook.md` Section 6:
   - MMKV provides synchronous storage reads, enabling instant tutorial state checks
   - `forceShow` pattern is elegant for allowing manual replay after completion
   - Analytics tracking is separate concern - doesn't block core UX functionality
+
+---
+
+## 2026-01-07 - US-158: Optimize mobile web layout and navigation
+
+- What was implemented:
+  - Consolidated BottomNav from 6-7 items to 5 (4 primary + More overflow menu)
+  - Bridge, Explorer, Analytics moved to "More" overflow with slide-up sheet
+  - Enforced 44px minimum touch targets per WCAG 2.2 SC 2.5.8
+  - AnimatedButton sizes: sm=40px, md=44px, lg=48px, xl=56px
+  - AnimatedIconButton sizes: sm=40px, md=44px, lg=48px
+  - GameControlBar menu toggle: w-11 h-11 (44px)
+  - MobileDrawer trigger: min-h-11 (44px)
+  - Added touch target CSS utilities to index.css
+  - Added mobile game control utilities (.game-control-btn, .chip-btn)
+  - Added animate-slide-up keyframe for mobile menus
+- Files changed:
+  - `website/src/components/BottomNav.tsx` - Restructured with More overflow
+  - `website/src/components/ui/AnimatedButton.tsx` - Added min-h constraints
+  - `website/src/components/casino/GameControlBar.tsx` - Fixed button sizes
+  - `website/src/components/casino/MobileDrawer.tsx` - Improved touch targets
+  - `website/src/index.css` - Added touch-target and mobile game utilities
+- **Learnings:**
+  - 44px minimum touch target from Apple HIG / WCAG 2.2 SC 2.5.8
+  - BottomNav pattern: 4-5 primary items max, use overflow for secondary
+  - Tailwind: min-h-11 = 44px, min-h-10 = 40px for borderline cases
+  - Use `sm:hidden` for mobile-only components (640px breakpoint)
+  - Pre-existing type errors in website are unrelated (react-spring types)
 
 ---

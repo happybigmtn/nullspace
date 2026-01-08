@@ -1,6 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Grid, X, ChevronUp, Layers } from 'lucide-react';
+import { animated, useSpring, to } from '@react-spring/web';
 import { Label } from './ui/Label';
+import { useMagneticCursor } from '../../hooks/useMagneticCursor';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { SPRING_LIQUID_CONFIGS } from '../../utils/motion';
+
+/**
+ * Breathing animation constants for idle CTA
+ * DS-056: Idle state breathing animations
+ */
+const BREATHING = {
+  /** Min scale (1.0 = no change) */
+  min: 1.0,
+  /** Max scale (subtle 2% increase) */
+  max: 1.02,
+  /** Full cycle duration in ms (8 seconds) */
+  duration: 8000,
+  /** Idle timeout before breathing starts (ms) */
+  idleTimeout: 5000,
+};
 
 interface Action {
     type?: 'button' | 'divider';
@@ -32,6 +51,82 @@ export const GameControlBar: React.FC<GameControlBarProps> = ({
     balance = '$1,000.00',
 }) => {
     const [menuOpen, setMenuOpen] = useState(false);
+    const prefersReducedMotion = useReducedMotion();
+
+    // Breathing animation state (DS-056)
+    const [isIdle, setIsIdle] = useState(false);
+    const [isHovered, setIsHovered] = useState(false);
+    const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Breathing spring animation
+    const [breatheSpring, breatheApi] = useSpring(() => ({
+        breathe: 1,
+        config: { duration: BREATHING.duration / 2 },
+    }));
+
+    // Magnetic cursor effect for the FAB button
+    const { ref: fabRef, style: fabMagneticStyle } = useMagneticCursor<HTMLButtonElement>({
+        threshold: 120,
+        maxTranslation: 6,
+        spring: 'liquidFloat',
+        disabled: primaryAction?.disabled,
+    });
+
+    // Reset idle timer on interaction
+    const resetIdleTimer = () => {
+        setIsIdle(false);
+        if (idleTimerRef.current) {
+            clearTimeout(idleTimerRef.current);
+        }
+        if (!prefersReducedMotion && !primaryAction?.disabled) {
+            idleTimerRef.current = setTimeout(() => {
+                setIsIdle(true);
+            }, BREATHING.idleTimeout);
+        }
+    };
+
+    // Start breathing animation when idle (DS-056)
+    useEffect(() => {
+        if (prefersReducedMotion || primaryAction?.disabled || isHovered) {
+            breatheApi.start({ breathe: 1 });
+            return;
+        }
+
+        if (isIdle) {
+            // Smooth oscillation between 1.0 and 1.02
+            const breatheCycle = () => {
+                breatheApi.start({
+                    breathe: BREATHING.max,
+                    config: { duration: BREATHING.duration / 2 },
+                    onRest: () => {
+                        breatheApi.start({
+                            breathe: BREATHING.min,
+                            config: { duration: BREATHING.duration / 2 },
+                            onRest: breatheCycle,
+                        });
+                    },
+                });
+            };
+            breatheCycle();
+        }
+
+        return () => {
+            breatheApi.stop();
+        };
+    }, [isIdle, prefersReducedMotion, primaryAction?.disabled, isHovered, breatheApi]);
+
+    // Initialize idle timer on mount
+    useEffect(() => {
+        if (!prefersReducedMotion && !primaryAction?.disabled) {
+            resetIdleTimer();
+        }
+        return () => {
+            if (idleTimerRef.current) {
+                clearTimeout(idleTimerRef.current);
+            }
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [prefersReducedMotion, primaryAction?.disabled]);
 
     const baseContainer = "fixed bottom-8 left-1/2 -translate-x-1/2 h-16 bg-white/80 backdrop-blur-2xl rounded-full border border-titanium-200 shadow-float flex items-center justify-between px-2 z-50 min-w-[320px] max-w-[95vw] transition-all motion-state animate-scale-in";
 
@@ -56,18 +151,49 @@ export const GameControlBar: React.FC<GameControlBarProps> = ({
                 {/* Center: Primary Action (Elevated FAB) */}
                 {primaryAction && (
                     <div className="absolute -top-10 left-1/2 -translate-x-1/2">
-                        <button
+                        <animated.button
+                            ref={fabRef}
                             type="button"
-                            onClick={primaryAction.onClick}
+                            onClick={() => {
+                                resetIdleTimer();
+                                primaryAction.onClick?.();
+                            }}
                             disabled={primaryAction.disabled}
-                            className={`w-20 h-20 rounded-full shadow-float flex items-center justify-center text-white font-bold tracking-[0.1em] text-xs transition-all motion-interaction transform
-                            ${primaryAction.disabled 
-                                ? 'bg-titanium-200 text-titanium-400 cursor-not-allowed grayscale' 
+                            onMouseEnter={() => {
+                                setIsHovered(true);
+                                resetIdleTimer();
+                            }}
+                            onMouseLeave={() => {
+                                setIsHovered(false);
+                                resetIdleTimer();
+                            }}
+                            onFocus={() => {
+                                setIsHovered(true);
+                                resetIdleTimer();
+                            }}
+                            onBlur={() => {
+                                setIsHovered(false);
+                                resetIdleTimer();
+                            }}
+                            style={{
+                                ...fabMagneticStyle,
+                                // DS-056: Apply breathing scale when idle
+                                transform: prefersReducedMotion
+                                    ? fabMagneticStyle?.transform
+                                    : breatheSpring.breathe.to((b) => {
+                                        // Combine magnetic cursor transform with breathing scale
+                                        const magneticTransform = fabMagneticStyle?.transform?.toString() || '';
+                                        return `${magneticTransform} scale(${b})`.trim();
+                                    }),
+                            }}
+                            className={`w-20 h-20 rounded-full shadow-float flex items-center justify-center text-white font-bold tracking-[0.1em] text-xs transition-all motion-interaction
+                            ${primaryAction.disabled
+                                ? 'bg-titanium-200 text-titanium-400 cursor-not-allowed grayscale'
                                 : 'bg-titanium-900 hover:scale-110 active:scale-90 hover:shadow-2xl'
                             } ${primaryAction.className || ''}`}
                         >
                             {primaryAction.label}
-                        </button>
+                        </animated.button>
                         {/* Shadow accent for FAB */}
                         {!primaryAction.disabled && <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-12 h-4 bg-black/10 blur-xl rounded-full -z-10" />}
                     </div>
@@ -76,9 +202,10 @@ export const GameControlBar: React.FC<GameControlBarProps> = ({
                 {/* Right: Menu Toggle */}
                 <div className="flex items-center gap-1 pr-2">
                     {children && <div className="hidden sm:flex">{children}</div>}
-                    <button 
+                    <button
                         onClick={() => setMenuOpen(true)}
-                        className="p-3 rounded-full hover:bg-titanium-100 active:scale-95 transition-all motion-interaction group"
+                        className="w-11 h-11 flex items-center justify-center rounded-full hover:bg-titanium-100 active:scale-95 transition-all motion-interaction group"
+                        aria-label="Open menu"
                     >
                         <Grid className="text-titanium-400 group-hover:text-titanium-900 w-5 h-5" strokeWidth={2.5} />
                     </button>
@@ -107,7 +234,11 @@ export const GameControlBar: React.FC<GameControlBarProps> = ({
                             <Label>{mobileMenuLabel}</Label>
                             <h3 className="text-2xl font-bold text-titanium-900 tracking-tight mt-1">Actions</h3>
                         </div>
-                        <button onClick={() => setMenuOpen(false)} className="w-10 h-10 bg-titanium-100 rounded-full flex items-center justify-center text-titanium-400 hover:text-titanium-900 transition-colors">
+                        <button
+                            onClick={() => setMenuOpen(false)}
+                            className="w-11 h-11 bg-titanium-100 rounded-full flex items-center justify-center text-titanium-400 hover:text-titanium-900 transition-colors"
+                            aria-label="Close menu"
+                        >
                             <X className="w-5 h-5" />
                         </button>
                     </div>
