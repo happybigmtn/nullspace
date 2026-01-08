@@ -4175,3 +4175,20 @@ Updated `docs/testnet-readiness-runbook.md` Section 6:
   - Vitest `pool: 'forks'` with `singleFork: true` ensures sequential execution
 
 ---
+
+## 2026-01-08 - US-215: Run Rust execution engine full test suite
+
+- What was implemented:
+  - Ran `cargo test --workspace` - all 406 tests pass
+  - Fixed `golden_vectors_match_payload_parsing` test that was failing due to protocol version prefix
+  - Test now accounts for version byte prefix added by US-149 (protocol version headers)
+- Files changed:
+  - `execution/src/casino/payload.rs` - Updated test to parse version byte before opcode comparisons
+- **Learnings:**
+  - Protocol version prefix (1 byte) was added in US-149 to all binary messages
+  - Golden vectors JSON includes `protocolVersion: 1` field
+  - Bet payload format: `[version, opcode, bet_type, number, amount...]`
+  - Pre-existing clippy errors exist in faucet constants (FAUCET_MIN_*=0) - absurd_extreme_comparisons
+  - Rust coverage not tracked in CI (--skip-rust in coverage-all.mjs)
+
+---

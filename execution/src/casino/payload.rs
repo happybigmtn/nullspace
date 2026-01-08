@@ -59,6 +59,12 @@ mod tests {
     fn golden_vectors_match_payload_parsing() {
         let vectors = load_vectors();
 
+        // Protocol version from golden vectors (first byte is version prefix)
+        let expected_version: u8 = vectors
+            .get("protocolVersion")
+            .and_then(|v| v.as_u64())
+            .expect("protocolVersion missing") as u8;
+
         let blackjack_moves = vectors
             .get("blackjackMoves")
             .and_then(|v| v.as_array())
@@ -73,7 +79,7 @@ mod tests {
                 .and_then(|v| v.as_str())
                 .expect("blackjack hex missing");
             let payload = hex_to_bytes(hex);
-            let expected = match move_name {
+            let expected_opcode = match move_name {
                 "hit" => 0,
                 "stand" => 1,
                 "double" => 2,
@@ -82,7 +88,7 @@ mod tests {
                 "surrender" => 7,
                 _ => panic!("unexpected blackjack move: {move_name}"),
             };
-            assert_eq!(payload, vec![expected], "blackjack {move_name} opcode mismatch");
+            assert_eq!(payload, vec![expected_version, expected_opcode], "blackjack {move_name} opcode mismatch");
         }
 
         let roulette_moves = vectors
@@ -99,12 +105,12 @@ mod tests {
                 .and_then(|v| v.as_str())
                 .expect("roulette hex missing");
             let payload = hex_to_bytes(hex);
-            let expected = match move_name {
+            let expected_opcode = match move_name {
                 "spin" => 1,
                 "clear_bets" => 2,
                 _ => panic!("unexpected roulette move: {move_name}"),
             };
-            assert_eq!(payload, vec![expected], "roulette {move_name} opcode mismatch");
+            assert_eq!(payload, vec![expected_version, expected_opcode], "roulette {move_name} opcode mismatch");
         }
 
         let roulette_bets = vectors
@@ -117,8 +123,10 @@ mod tests {
                 .and_then(|v| v.as_str())
                 .expect("roulette bet hex missing");
             let payload = hex_to_bytes(hex);
+            // Skip version byte prefix when parsing bet payload
+            assert_eq!(payload[0], expected_version, "roulette bet version mismatch");
             let (bet_type, number, amount) =
-                parse_place_bet_payload(&payload).expect("roulette bet payload");
+                parse_place_bet_payload(&payload[1..]).expect("roulette bet payload");
             let expected_type = entry.get("betType").and_then(|v| v.as_u64()).unwrap_or(0) as u8;
             let expected_number = entry.get("number").and_then(|v| v.as_u64()).unwrap_or(0) as u8;
             let expected_amount = entry
@@ -146,12 +154,12 @@ mod tests {
                 .and_then(|v| v.as_str())
                 .expect("craps hex missing");
             let payload = hex_to_bytes(hex);
-            let expected = match move_name {
+            let expected_opcode = match move_name {
                 "roll" => 2,
                 "clear_bets" => 3,
                 _ => panic!("unexpected craps move: {move_name}"),
             };
-            assert_eq!(payload, vec![expected], "craps {move_name} opcode mismatch");
+            assert_eq!(payload, vec![expected_version, expected_opcode], "craps {move_name} opcode mismatch");
         }
 
         let craps_place = vectors
@@ -164,8 +172,10 @@ mod tests {
                 .and_then(|v| v.as_str())
                 .expect("craps bet hex missing");
             let payload = hex_to_bytes(hex);
+            // Skip version byte prefix when parsing bet payload
+            assert_eq!(payload[0], expected_version, "craps bet version mismatch");
             let (bet_type, target, amount) =
-                parse_place_bet_payload(&payload).expect("craps bet payload");
+                parse_place_bet_payload(&payload[1..]).expect("craps bet payload");
             let expected_type = entry.get("betType").and_then(|v| v.as_u64()).unwrap_or(0) as u8;
             let expected_target = entry.get("target").and_then(|v| v.as_u64()).unwrap_or(0) as u8;
             let expected_amount = entry
@@ -189,9 +199,11 @@ mod tests {
                 .and_then(|v| v.as_str())
                 .expect("craps add odds hex missing");
             let payload = hex_to_bytes(hex);
-            assert_eq!(payload.len(), 9, "craps add odds length mismatch");
-            assert_eq!(payload[0], 1, "craps add odds opcode mismatch");
-            let amount = parse_u64_be(&payload, 1).expect("craps add odds amount parse");
+            // Version (1) + opcode (1) + amount (8) = 10 bytes
+            assert_eq!(payload.len(), 10, "craps add odds length mismatch");
+            assert_eq!(payload[0], expected_version, "craps add odds version mismatch");
+            assert_eq!(payload[1], 1, "craps add odds opcode mismatch");
+            let amount = parse_u64_be(&payload, 2).expect("craps add odds amount parse");
             let expected_amount = entry
                 .get("amount")
                 .and_then(|v| v.as_str())
