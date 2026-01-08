@@ -19,8 +19,9 @@ COPY packages/ ./packages/
 COPY gateway/ ./gateway/
 COPY types/ ./types/
 
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --ignore-scripts
 
+# Generate types (requires cargo)
 RUN pnpm -C packages/types run generate
 RUN pnpm -C packages/types build
 RUN pnpm -C packages/constants build

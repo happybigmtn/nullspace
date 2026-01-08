@@ -32,25 +32,40 @@ RUN wasm-pack build --target web --out-dir pkg website/wasm
 
 FROM node:20-slim AS build
 
+RUN corepack enable
+
 WORKDIR /app
+
+# Copy workspace config
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY services/auth/package.json /app/services/auth/
-COPY services/auth/package-lock.json /app/services/auth/
+COPY website/package.json /app/website/
+
+# Install dependencies
+RUN pnpm install --frozen-lockfile --filter @nullspace/auth...
+
 COPY services/auth/tsconfig.json /app/services/auth/
 COPY services/auth/src /app/services/auth/src
 COPY website/convex/_generated /app/website/convex/_generated
 COPY --from=wasm-builder /app/website/wasm/pkg /app/website/wasm/pkg
 
 WORKDIR /app/services/auth
-RUN npm ci
-RUN npm run build
+RUN pnpm run build
 
 FROM node:20-slim
 
-WORKDIR /app/services/auth
+RUN corepack enable
+
+WORKDIR /app
 ENV NODE_ENV=production
+
+# Copy workspace config
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY services/auth/package.json /app/services/auth/
-COPY services/auth/package-lock.json /app/services/auth/
-RUN npm ci --omit=dev
+COPY website/package.json /app/website/
+
+RUN pnpm install --prod --frozen-lockfile --filter @nullspace/auth... --ignore-scripts
+
 COPY --from=build /app/services/auth/dist /app/services/auth/dist
 COPY --from=build /app/website/convex/_generated /app/website/convex/_generated
 COPY --from=build /app/website/wasm/pkg /app/website/wasm/pkg
@@ -61,4 +76,4 @@ USER node
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
     CMD node -e "fetch('http://127.0.0.1:' + (process.env.PORT || 4000) + '/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
-CMD ["node", "dist/server.js"]
+CMD ["node", "/app/services/auth/dist/server.js"]

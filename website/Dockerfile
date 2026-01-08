@@ -32,10 +32,24 @@ RUN wasm-pack build --target web --out-dir pkg website/wasm
 
 FROM node:20-slim AS web-builder
 
+RUN corepack enable
+
 WORKDIR /app
 
-COPY website/package.json website/package-lock.json /app/website/
-RUN cd /app/website && npm ci
+# Copy workspace config and all package dependencies
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages/ ./packages/
+COPY website/package.json ./website/
+
+# Install dependencies
+RUN pnpm install --frozen-lockfile
+
+# Build workspace packages first
+RUN pnpm -C packages/types build || true
+RUN pnpm -C packages/constants build || true
+RUN pnpm -C packages/protocol build || true
+RUN pnpm -C packages/design-tokens build || true
+RUN pnpm -C packages/game-state build || true
 
 COPY website/ /app/website/
 COPY economy_log.json /app/economy_log.json
@@ -59,7 +73,7 @@ ENV VITE_IDENTITY=$VITE_IDENTITY \
 
 WORKDIR /app/website
 
-RUN npm run build
+RUN pnpm run build
 
 FROM nginx:1.27-alpine
 
