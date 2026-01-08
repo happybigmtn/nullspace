@@ -2,7 +2,7 @@
  * Sic Bo Game Screen - Jony Ive Redesigned
  * 3 dice with Big/Small quick bets, drawer for advanced bets
  */
-import { View, Text, StyleSheet, Pressable, Modal, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Modal, ScrollView, InteractionManager } from 'react-native';
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import Animated, {
   SlideInUp,
@@ -10,7 +10,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { ChipSelector, Dice3D } from '../../components/casino';
 import { GameLayout } from '../../components/game';
-import { TutorialOverlay, PrimaryButton, BetConfirmationModal } from '../../components/ui';
+import { TutorialOverlay, PrimaryButton, BetConfirmationModal, SicBoSkeleton } from '../../components/ui';
 import { haptics } from '../../services/haptics';
 import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useModalBackHandler, useBetSubmission, useBetConfirmation } from '../../hooks';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS, SPRING } from '../../constants/theme';
@@ -72,12 +72,25 @@ export function SicBoScreen() {
   const [comboMode, setComboMode] = useState<'NONE' | 'DOMINO' | 'HOP3_EASY' | 'HOP3_HARD' | 'HOP4_EASY'>('NONE');
   const [comboPicks, setComboPicks] = useState<number[]>([]);
 
+  // US-156: Track initial loading state for skeleton
+  const [isParsingState, setIsParsingState] = useState(true);
+
   // Track mounted state to prevent setState after unmount
   const isMounted = useRef(true);
   useEffect(() => {
     return () => {
       isMounted.current = false;
     };
+  }, []);
+
+  // US-156: Clear skeleton after initial render
+  useEffect(() => {
+    const task = InteractionManager.runAfterInteractions(() => {
+      if (isMounted.current) {
+        setIsParsingState(false);
+      }
+    });
+    return () => task.cancel();
   }, []);
 
   useModalBackHandler(showAdvanced, () => setShowAdvanced(false));
@@ -356,6 +369,11 @@ export function SicBoScreen() {
         }
         gameId="sicBo"
       >
+        {/* US-156: Show skeleton during initial render */}
+        {isParsingState ? (
+          <SicBoSkeleton />
+        ) : (
+        <>
         {/* DS-047: 3D Dice Display */}
       <View style={styles.diceContainer}>
         {state.dice ? (
@@ -478,6 +496,8 @@ export function SicBoScreen() {
           onChipPlace={handleChipPlace}
         />
       )}
+        </>
+        )}
       </GameLayout>
 
       {/* Advanced Bets Drawer */}

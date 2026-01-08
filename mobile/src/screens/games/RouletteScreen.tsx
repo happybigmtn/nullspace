@@ -2,7 +2,7 @@
  * Roulette Game Screen - Jony Ive Redesigned
  * 6 quick bets visible, drawer for advanced bets
  */
-import { View, Text, StyleSheet, Pressable, Modal } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Modal, InteractionManager } from 'react-native';
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import Animated, {
   SlideInUp,
@@ -10,7 +10,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { ChipSelector, RouletteWheel } from '../../components/casino';
 import { GameLayout } from '../../components/game';
-import { TutorialOverlay, PrimaryButton, BetConfirmationModal } from '../../components/ui';
+import { TutorialOverlay, PrimaryButton, BetConfirmationModal, RouletteSkeleton } from '../../components/ui';
 import { haptics } from '../../services/haptics';
 import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useModalBackHandler, useBetSubmission, useBetConfirmation } from '../../hooks';
 import {
@@ -86,6 +86,8 @@ export function RouletteScreen() {
   const [showTutorial, setShowTutorial] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [insideMode, setInsideMode] = useState<InsideBetType>('SPLIT_H');
+  // US-156: Track initial loading state for skeleton
+  const [isParsingState, setIsParsingState] = useState(true);
 
   // Track mounted state to prevent setState after unmount
   const isMounted = useRef(true);
@@ -93,6 +95,16 @@ export function RouletteScreen() {
     return () => {
       isMounted.current = false;
     };
+  }, []);
+
+  // US-156: Clear skeleton after initial render
+  useEffect(() => {
+    const task = InteractionManager.runAfterInteractions(() => {
+      if (isMounted.current) {
+        setIsParsingState(false);
+      }
+    });
+    return () => task.cancel();
   }, []);
 
   useModalBackHandler(showAdvanced, () => setShowAdvanced(false));
@@ -303,6 +315,11 @@ export function RouletteScreen() {
         }
         gameId="roulette"
       >
+        {/* US-156: Show skeleton during initial render */}
+        {isParsingState ? (
+          <RouletteSkeleton />
+        ) : (
+        <>
         {/* DS-046: Physics-based Roulette Wheel */}
       <View style={styles.wheelContainer}>
         <RouletteWheel
@@ -378,6 +395,8 @@ export function RouletteScreen() {
           onChipPlace={handleChipPlace}
         />
       )}
+        </>
+        )}
       </GameLayout>
 
       {/* Advanced Bets Drawer */}

@@ -3774,3 +3774,26 @@ Updated `docs/testnet-readiness-runbook.md` Section 6:
   - Secrets: `SOPS_AGE_KEY_STAGING`, `SOPS_AGE_KEY_PRODUCTION`, `STAGING_SSH_KEY`, `PRODUCTION_SSH_KEY`, `*_SSH_KNOWN_HOSTS`, `*_METRICS_TOKEN`
   - Variables: `*_HOST`, `*_USER`, `*_INDEXER_URL`, `*_GATEWAY_URL`, `*_AUTH_URL`, `SLACK_WEBHOOK_URL`
 
+---
+
+## 2026-01-07 - US-156
+
+- What was implemented:
+  - Added loading skeletons to RouletteScreen, BaccaratScreen, CrapsScreen, SicBoScreen
+  - Each screen now has `isParsingState` state starting as `true`
+  - Uses `InteractionManager.runAfterInteractions` to clear skeleton after initial render
+  - Conditionally renders game-specific skeleton component when `isParsingState` is true
+
+- Files changed:
+  - mobile/src/screens/games/RouletteScreen.tsx (+23 lines)
+  - mobile/src/screens/games/BaccaratScreen.tsx (+23 lines)
+  - mobile/src/screens/games/CrapsScreen.tsx (+23 lines)
+  - mobile/src/screens/games/SicBoScreen.tsx (+24 lines)
+
+- **Learnings:**
+  - All 10 game screens now have loading skeletons: Blackjack, HiLo, VideoPoker, CasinoWar, ThreeCardPoker, UltimateTXHoldem already had them
+  - Pattern: `const [isParsingState, setIsParsingState] = useState(true)` + InteractionManager effect to clear
+  - GameSkeletons.tsx exports typed skeleton components: `RouletteSkeleton`, `BaccaratSkeleton`, `CrapsSkeleton`, `SicBoSkeleton`
+  - InteractionManager.runAfterInteractions defers state update until animations complete, preventing CLS
+  - Pre-existing test failures in mobile due to Skia module mocking issues (unrelated to skeleton changes)
+

@@ -416,8 +416,8 @@
         "Ensure skeleton matches actual layout to prevent CLS"
       ],
       "priority": 79,
-      "passes": false,
-      "notes": "UX-HIGH: Only Blackjack has loading skeleton. Other games show janky first render."
+      "passes": true,
+      "notes": "COMPLETE: Added isParsingState skeleton to RouletteScreen, BaccaratScreen, CrapsScreen, SicBoScreen. Each uses InteractionManager.runAfterInteractions to show skeleton during initial render, preventing CLS. Existing screens (Blackjack, HiLo, VideoPoker, CasinoWar, ThreeCardPoker, UltimateTXHoldem) already had skeletons."
     },
     {
       "id": "US-157",
