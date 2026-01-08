@@ -5,23 +5,18 @@
 import { View, Text, StyleSheet, Pressable, Modal, ScrollView } from 'react-native';
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSequence,
-  withTiming,
-  withSpring,
   SlideInUp,
   SlideOutDown,
 } from 'react-native-reanimated';
-import { ChipSelector } from '../../components/casino';
+import { ChipSelector, Dice3D } from '../../components/casino';
 import { GameLayout } from '../../components/game';
-import { TutorialOverlay, PrimaryButton } from '../../components/ui';
+import { TutorialOverlay, PrimaryButton, BetConfirmationModal } from '../../components/ui';
 import { haptics } from '../../services/haptics';
-import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useModalBackHandler, useBetSubmission } from '../../hooks';
+import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useModalBackHandler, useBetSubmission, useBetConfirmation } from '../../hooks';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS, GAME_DETAIL_COLORS, SPRING } from '../../constants/theme';
+// Note: SPRING still used for modal animations
 import { decodeStateBytes, parseCrapsState, parseNumeric } from '../../utils';
 import { useGameStore } from '../../stores/gameStore';
-import { getDieFace } from '../../utils/dice';
 import type { ChipValue, TutorialStep, CrapsBetType } from '../../types';
 import type { GameMessage } from '@nullspace/protocol/mobile';
 
@@ -122,12 +117,8 @@ export function CrapsScreen() {
     };
   }, [isDisconnected, send]);
 
-  const die1Rotation = useSharedValue(0);
-  const die2Rotation = useSharedValue(0);
-  const die1OffsetX = useSharedValue(0);
-  const die1OffsetY = useSharedValue(0);
-  const die2OffsetX = useSharedValue(0);
-  const die2OffsetY = useSharedValue(0);
+  // DS-047: Track dice rolling state for 3D animation
+  const [diceRolling, setDiceRolling] = useState(false);
 
   useEffect(() => {
     if (!lastMessage) return;
@@ -141,40 +132,10 @@ export function CrapsScreen() {
       ? payload.point
       : parsedState?.point ?? null;
 
+    // DS-047: Trigger 3D dice roll animation
     const shouldAnimateDice = dice !== null;
-
     if (shouldAnimateDice) {
-      // Animate dice - Reset then spin with physics settle
-      die1Rotation.value = 0;
-      die1Rotation.value = withSequence(
-        withTiming(720, { duration: 300 }),
-        withSpring(1080, SPRING.diceTumble)
-      );
-
-      die2Rotation.value = 0;
-      die2Rotation.value = withSequence(
-        withTiming(-720, { duration: 300 }),
-        withSpring(-1080, SPRING.diceTumble)
-      );
-
-      const scatter = () => (Math.random() * 2 - 1) * 18;
-      const lift = () => -18 - Math.random() * 10;
-      die1OffsetX.value = withSequence(
-        withTiming(scatter(), { duration: 120 }),
-        withSpring(0, SPRING.diceTumble)
-      );
-      die1OffsetY.value = withSequence(
-        withTiming(lift(), { duration: 120 }),
-        withSpring(0, SPRING.diceTumble)
-      );
-      die2OffsetX.value = withSequence(
-        withTiming(scatter(), { duration: 120 }),
-        withSpring(0, SPRING.diceTumble)
-      );
-      die2OffsetY.value = withSequence(
-        withTiming(lift(), { duration: 120 }),
-        withSpring(0, SPRING.diceTumble)
-      );
+      setDiceRolling(true);
       haptics.diceRoll().catch(() => {});
     }
 
@@ -371,32 +332,12 @@ export function CrapsScreen() {
         };
       });
     }
-  }, [
-    lastMessage,
-    clearSubmission,
-    die1Rotation,
-    die2Rotation,
-    die1OffsetX,
-    die1OffsetY,
-    die2OffsetX,
-    die2OffsetY,
-  ]);
+  }, [lastMessage, clearSubmission]);
 
-  const die1Style = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: die1OffsetX.value },
-      { translateY: die1OffsetY.value },
-      { rotate: `${die1Rotation.value}deg` },
-    ],
-  }));
-
-  const die2Style = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: die2OffsetX.value },
-      { translateY: die2OffsetY.value },
-      { rotate: `${die2Rotation.value}deg` },
-    ],
-  }));
+  // DS-047: Handler when dice roll animation completes
+  const handleDiceRollComplete = useCallback(() => {
+    setDiceRolling(false);
+  }, []);
 
   const addBet = useCallback((type: CrapsBetType, target?: number) => {
     if (liveTable.phase !== 'betting') {
@@ -437,7 +378,10 @@ export function CrapsScreen() {
     });
   }, [state.phase, selectedChip, state.bets, balance, liveTable.phase]);
 
-  const handleRoll = useCallback(async () => {
+  /**
+   * Execute the bet placement after confirmation (US-155)
+   */
+  const executePlaceBets = useCallback(() => {
     if (state.bets.length === 0 || isSubmitting) return;
     if (liveTable.phase !== 'betting') {
       setState((prev) => ({ ...prev, message: 'BETTING CLOSED' }));
@@ -449,19 +393,43 @@ export function CrapsScreen() {
       label: 'On-chain pending',
     });
     // US-090: Calculate total bet for atomic validation
-    const totalBet = state.bets.reduce((sum, b) => sum + b.amount, 0);
+    const totalBetAmount = state.bets.reduce((sum, b) => sum + b.amount, 0);
     submitBet(
       {
         type: 'craps_live_bet',
         bets: state.bets,
       },
-      { amount: totalBet }
+      { amount: totalBetAmount }
     );
     setState((prev) => ({
       ...prev,
       message: 'BETS PLACED',
     }));
   }, [state.bets, submitBet, liveTable.phase, isSubmitting]);
+
+  // US-155: Bet confirmation modal integration
+  const { showConfirmation, confirmationProps, requestConfirmation } = useBetConfirmation({
+    gameType: 'craps',
+    onConfirm: executePlaceBets,
+    countdownSeconds: 5,
+  });
+
+  /**
+   * Handle place bets button - triggers confirmation modal (US-155)
+   */
+  const handleRoll = useCallback(async () => {
+    if (state.bets.length === 0 || isSubmitting) return;
+    if (liveTable.phase !== 'betting') {
+      setState((prev) => ({ ...prev, message: 'BETTING CLOSED' }));
+      return;
+    }
+
+    // US-155: Show confirmation modal
+    const totalBetAmount = state.bets.reduce((sum, b) => sum + b.amount, 0);
+    requestConfirmation({
+      amount: totalBetAmount,
+    });
+  }, [state.bets, isSubmitting, liveTable.phase, requestConfirmation]);
 
   const handleChipPlace = useCallback((value: ChipValue) => {
     addBet('PASS');
@@ -540,25 +508,28 @@ export function CrapsScreen() {
         </View>
       )}
 
-      {/* Dice Display */}
+      {/* DS-047: 3D Dice Display */}
       <View style={styles.diceContainer}>
         {state.dice ? (
           <>
-            <Animated.View style={[styles.die, die1Style]}>
-              <Text style={styles.dieFace}>{getDieFace(state.dice[0])}</Text>
-            </Animated.View>
-            <Animated.View style={[styles.die, die2Style]}>
-              <Text style={styles.dieFace}>{getDieFace(state.dice[1])}</Text>
-            </Animated.View>
+            <Dice3D
+              value={state.dice[0]}
+              isRolling={diceRolling}
+              index={0}
+              size={70}
+              onRollComplete={handleDiceRollComplete}
+            />
+            <Dice3D
+              value={state.dice[1]}
+              isRolling={diceRolling}
+              index={1}
+              size={70}
+            />
           </>
         ) : (
           <>
-            <View style={styles.diePlaceholder}>
-              <Text style={styles.diePlaceholderText}>🎲</Text>
-            </View>
-            <View style={styles.diePlaceholder}>
-              <Text style={styles.diePlaceholderText}>🎲</Text>
-            </View>
+            <Dice3D value={1} isRolling={false} index={0} size={70} skipAnimation />
+            <Dice3D value={1} isRolling={false} index={1} size={70} skipAnimation />
           </>
         )}
       </View>
@@ -853,6 +824,12 @@ export function CrapsScreen() {
         onComplete={() => setShowTutorial(false)}
         forceShow={showTutorial}
       />
+
+      {/* US-155: Bet Confirmation Modal */}
+      <BetConfirmationModal
+        {...confirmationProps}
+        testID="bet-confirmation-modal"
+      />
     </>
   );
 }
@@ -883,39 +860,9 @@ const styles = StyleSheet.create({
   diceContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
+    alignItems: 'center',
     gap: SPACING.lg,
     marginVertical: SPACING.lg,
-  },
-  die: {
-    width: 80,
-    height: 80,
-    backgroundColor: COLORS.textPrimary,
-    borderRadius: RADIUS.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  dieFace: {
-    fontSize: 56,
-  },
-  diePlaceholder: {
-    width: 80,
-    height: 80,
-    backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: COLORS.border,
-    borderStyle: 'dashed',
-  },
-  diePlaceholderText: {
-    fontSize: 40,
-    opacity: 0.3,
   },
   total: {
     color: COLORS.textPrimary,

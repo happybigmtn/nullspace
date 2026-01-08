@@ -8,9 +8,9 @@ import Animated, { FadeIn, SlideInUp } from 'react-native-reanimated';
 import { Card } from '../../components/casino';
 import { ChipSelector } from '../../components/casino';
 import { GameLayout } from '../../components/game';
-import { TutorialOverlay, PrimaryButton } from '../../components/ui';
+import { TutorialOverlay, PrimaryButton, BetConfirmationModal } from '../../components/ui';
 import { haptics } from '../../services/haptics';
-import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useBetSubmission } from '../../hooks';
+import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useBetSubmission, useBetConfirmation } from '../../hooks';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS, SPRING } from '../../constants/theme';
 import { decodeCardList, decodeStateBytes, parseThreeCardState, parseNumeric } from '../../utils';
 import { useGameStore } from '../../stores/gameStore';
@@ -228,12 +228,15 @@ export function ThreeCardPokerScreen() {
     }));
   }, [state.phase, activeBetType, state.anteBet, state.pairPlusBet, state.sixCardBet, state.progressiveBet, balance]);
 
-  const handleDeal = useCallback(() => {
+  /**
+   * Execute the deal after confirmation (US-155)
+   */
+  const executeDeal = useCallback(() => {
     if (state.anteBet === 0 || isSubmitting) return;
     haptics.betConfirm().catch(() => {});
 
     // US-090: Calculate total bet for atomic validation
-    const totalBet = state.anteBet + state.pairPlusBet + state.sixCardBet + state.progressiveBet;
+    const totalBetAmount = state.anteBet + state.pairPlusBet + state.sixCardBet + state.progressiveBet;
     const success = submitBet(
       {
         type: 'three_card_poker_deal',
@@ -242,7 +245,7 @@ export function ThreeCardPokerScreen() {
         sixCard: state.sixCardBet,
         progressive: state.progressiveBet,
       },
-      { amount: totalBet }
+      { amount: totalBetAmount }
     );
 
     if (success) {
@@ -252,6 +255,32 @@ export function ThreeCardPokerScreen() {
       }));
     }
   }, [state.anteBet, state.pairPlusBet, state.sixCardBet, state.progressiveBet, submitBet, isSubmitting]);
+
+  // US-155: Bet confirmation modal integration
+  const { showConfirmation, confirmationProps, requestConfirmation } = useBetConfirmation({
+    gameType: 'three_card',
+    onConfirm: executeDeal,
+    countdownSeconds: 5,
+  });
+
+  /**
+   * Handle deal button - triggers confirmation modal (US-155)
+   */
+  const handleDeal = useCallback(() => {
+    if (state.anteBet === 0 || isSubmitting) return;
+
+    // US-155: Calculate total bet and show confirmation
+    const totalBetAmount = state.anteBet + state.pairPlusBet + state.sixCardBet + state.progressiveBet;
+    const sideBets: { name: string; amount: number }[] = [];
+    if (state.pairPlusBet > 0) sideBets.push({ name: 'Pair Plus', amount: state.pairPlusBet });
+    if (state.sixCardBet > 0) sideBets.push({ name: '6 Card Bonus', amount: state.sixCardBet });
+    if (state.progressiveBet > 0) sideBets.push({ name: 'Progressive', amount: state.progressiveBet });
+
+    requestConfirmation({
+      amount: totalBetAmount,
+      sideBets: sideBets.length > 0 ? sideBets : undefined,
+    });
+  }, [state.anteBet, state.pairPlusBet, state.sixCardBet, state.progressiveBet, isSubmitting, requestConfirmation]);
 
   const handlePlay = useCallback(() => {
     if (isSubmitting) return;
@@ -550,6 +579,12 @@ export function ThreeCardPokerScreen() {
         steps={TUTORIAL_STEPS}
         onComplete={() => setShowTutorial(false)}
         forceShow={showTutorial}
+      />
+
+      {/* US-155: Bet Confirmation Modal */}
+      <BetConfirmationModal
+        {...confirmationProps}
+        testID="bet-confirmation-modal"
       />
     </>
   );
