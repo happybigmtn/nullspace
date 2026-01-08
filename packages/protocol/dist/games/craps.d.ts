@@ -16,8 +16,8 @@ export declare const crapsPlaceBetSchema: z.ZodObject<{
     sessionId: string;
     game: "craps";
     move: "place_bet";
-    target?: number | undefined;
     requestId?: string | undefined;
+    target?: number | undefined;
 }, {
     betType: number;
     amount: string;
@@ -25,8 +25,8 @@ export declare const crapsPlaceBetSchema: z.ZodObject<{
     sessionId: string;
     game: "craps";
     move: "place_bet";
-    target?: number | undefined;
     requestId?: string | undefined;
+    target?: number | undefined;
 }>;
 export declare const crapsAddOddsSchema: z.ZodObject<{
     type: z.ZodLiteral<"game_move">;
@@ -104,8 +104,8 @@ export declare const crapsMoveSchema: z.ZodUnion<[z.ZodObject<{
     sessionId: string;
     game: "craps";
     move: "place_bet";
-    target?: number | undefined;
     requestId?: string | undefined;
+    target?: number | undefined;
 }, {
     betType: number;
     amount: string;
@@ -113,8 +113,8 @@ export declare const crapsMoveSchema: z.ZodUnion<[z.ZodObject<{
     sessionId: string;
     game: "craps";
     move: "place_bet";
-    target?: number | undefined;
     requestId?: string | undefined;
+    target?: number | undefined;
 }>, z.ZodObject<{
     type: z.ZodLiteral<"game_move">;
     sessionId: z.ZodString;

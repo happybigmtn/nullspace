@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState, useCallback, type RefObject } from 'react';
+import { useSpring, type SpringConfig } from '@react-spring/web';
+import { SPRING_LIQUID_CONFIGS, type SpringLiquidPreset } from '../utils/motion';
+import { useReducedMotion } from './useReducedMotion';
 
 interface ScrollRevealOptions {
   /** Threshold for intersection (0-1). Default 0.1 (10% visible) */
@@ -207,4 +210,150 @@ export function useParallax<T extends HTMLElement = HTMLDivElement>(
   }, [speed]);
 
   return [ref, offsetY];
+}
+
+type RevealDirection = 'up' | 'down' | 'left' | 'right' | 'none';
+
+interface SpringScrollRevealOptions {
+  /** Direction content enters from. Default 'up' */
+  direction?: RevealDirection;
+  /** Spring preset for animation. Default 'liquidFloat' */
+  spring?: SpringLiquidPreset;
+  /** Custom spring config (overrides spring preset) */
+  springConfig?: SpringConfig;
+  /** Threshold for intersection (0-1). Default 0.1 */
+  threshold?: number;
+  /** Root margin for early/late triggering. Default '0px 0px -50px 0px' */
+  rootMargin?: string;
+  /** Stagger index for sequential reveals (0-based). Adds delay based on index */
+  staggerIndex?: number;
+  /** Stagger delay in ms between items. Default 50 */
+  staggerDelay?: number;
+}
+
+/**
+ * Get the initial transform offset based on direction
+ */
+function getDirectionOffset(direction: RevealDirection) {
+  switch (direction) {
+    case 'up':
+      return { x: 0, y: 30 };
+    case 'down':
+      return { x: 0, y: -30 };
+    case 'left':
+      return { x: 30, y: 0 };
+    case 'right':
+      return { x: -30, y: 0 };
+    case 'none':
+      return { x: 0, y: 0 };
+  }
+}
+
+/**
+ * Hook for scroll-triggered reveal with spring physics animation.
+ * Returns a ref and animated style object for use with animated.div.
+ *
+ * @example
+ * import { animated } from '@react-spring/web';
+ *
+ * function MyComponent() {
+ *   const { ref, style } = useSpringScrollReveal({ direction: 'up' });
+ *   return <animated.div ref={ref} style={style}>Content</animated.div>;
+ * }
+ *
+ * @example
+ * // With stagger for list items
+ * function ListItem({ index }) {
+ *   const { ref, style } = useSpringScrollReveal({ staggerIndex: index });
+ *   return <animated.div ref={ref} style={style}>...</animated.div>;
+ * }
+ */
+export function useSpringScrollReveal<T extends HTMLElement = HTMLDivElement>(
+  options: SpringScrollRevealOptions = {}
+): {
+  ref: RefObject<T | null>;
+  style: Record<string, unknown>;
+  isRevealed: boolean;
+} {
+  const {
+    direction = 'up',
+    spring = 'liquidFloat',
+    springConfig: customSpringConfig,
+    threshold = 0.1,
+    rootMargin = '0px 0px -50px 0px',
+    staggerIndex = 0,
+    staggerDelay = 50,
+  } = options;
+
+  const ref = useRef<T>(null);
+  const [isRevealed, setIsRevealed] = useState(false);
+  const hasRevealedRef = useRef(false);
+  const prefersReducedMotion = useReducedMotion();
+
+  // Calculate stagger delay
+  const delay = staggerIndex * staggerDelay;
+
+  // Get direction offsets
+  const { x: initialX, y: initialY } = getDirectionOffset(direction);
+
+  // Determine spring config
+  const config = customSpringConfig ?? SPRING_LIQUID_CONFIGS[spring];
+
+  // Spring animation
+  const springStyles = useSpring({
+    opacity: isRevealed ? 1 : 0,
+    x: isRevealed ? 0 : initialX,
+    y: isRevealed ? 0 : initialY,
+    scale: isRevealed ? 1 : 0.95,
+    config: prefersReducedMotion ? { duration: 0 } : config,
+    delay: prefersReducedMotion ? 0 : delay,
+  });
+
+  // Intersection Observer setup
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+
+    // Skip if already revealed
+    if (hasRevealedRef.current) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !hasRevealedRef.current) {
+          hasRevealedRef.current = true;
+          setIsRevealed(true);
+          observer.unobserve(element);
+        }
+      },
+      { threshold, rootMargin }
+    );
+
+    observer.observe(element);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [threshold, rootMargin]);
+
+  // For reduced motion, return simple opacity style
+  if (prefersReducedMotion) {
+    return {
+      ref,
+      style: { opacity: isRevealed ? 1 : 0 },
+      isRevealed,
+    };
+  }
+
+  return {
+    ref,
+    style: {
+      opacity: springStyles.opacity,
+      transform: springStyles.x.to(
+        (x) =>
+          `translate3d(${x}px, ${springStyles.y.get()}px, 0) scale(${springStyles.scale.get()})`
+      ),
+      willChange: isRevealed ? 'auto' : 'opacity, transform',
+    },
+    isRevealed,
+  };
 }

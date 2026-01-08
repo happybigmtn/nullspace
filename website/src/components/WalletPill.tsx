@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getVaultStatusSync } from '../security/keyVault';
 import { subscribeVault } from '../security/vaultRuntime';
+import { AnimatedInteger } from './ui/AnimatedNumber';
 
 type WalletPillProps = {
   rng?: number | bigint | string | null;
@@ -24,6 +25,14 @@ function formatInteger(value: number | bigint | string | null | undefined): stri
   if (!raw) return '—';
   if (/^\d+$/.test(raw)) return raw.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   return raw;
+}
+
+function toNumber(value: number | bigint | string | null | undefined): number | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value === 'bigint') return Number(value);
+  const parsed = parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function shortHex(hex: string, start = 10, end = 6): string {
@@ -99,14 +108,41 @@ export const WalletPill: React.FC<WalletPillProps> = ({
 
       <div className="flex items-center gap-4 text-[10px] tracking-widest uppercase font-bold text-titanium-400 whitespace-nowrap">
         <span>
-          RNG <span className="text-titanium-900 dark:text-titanium-100">{formatInteger(rng)}</span>
+          RNG{' '}
+          {toNumber(rng) !== null ? (
+            <AnimatedInteger
+              value={toNumber(rng)!}
+              className="text-titanium-900 dark:text-titanium-100"
+              flashOnChange
+            />
+          ) : (
+            <span className="text-titanium-900 dark:text-titanium-100">—</span>
+          )}
         </span>
         <span>
-          vUSDT <span className="text-titanium-900 dark:text-titanium-100">{formatInteger(vusdt)}</span>
+          vUSDT{' '}
+          {toNumber(vusdt) !== null ? (
+            <AnimatedInteger
+              value={toNumber(vusdt)!}
+              className="text-titanium-900 dark:text-titanium-100"
+              flashOnChange
+            />
+          ) : (
+            <span className="text-titanium-900 dark:text-titanium-100">—</span>
+          )}
         </span>
         {credits !== undefined || creditsLocked !== undefined ? (
           <span>
-            Credits <span className="text-titanium-900 dark:text-titanium-100">{formatInteger(credits)}</span>
+            Credits{' '}
+            {toNumber(credits) !== null ? (
+              <AnimatedInteger
+                value={toNumber(credits)!}
+                className="text-titanium-900 dark:text-titanium-100"
+                flashOnChange
+              />
+            ) : (
+              <span className="text-titanium-900 dark:text-titanium-100">—</span>
+            )}
           </span>
         ) : null}
       </div>

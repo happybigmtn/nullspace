@@ -3,8 +3,14 @@
  *
  * This is DECODING ONLY - the chain has already computed game state.
  * We simply parse the binary event data into renderable types.
+ *
+ * This module also provides utilities for validating protocol version headers
+ * on encoded messages.
  */
 import { ProtocolError } from './errors.js';
+import { validateVersion, stripVersionHeader, peekVersion, UnsupportedProtocolVersionError, CURRENT_PROTOCOL_VERSION, MIN_PROTOCOL_VERSION, MAX_PROTOCOL_VERSION, } from './version.js';
+// Re-export version utilities for decode consumers
+export { validateVersion, stripVersionHeader, peekVersion, UnsupportedProtocolVersionError, CURRENT_PROTOCOL_VERSION, MIN_PROTOCOL_VERSION, MAX_PROTOCOL_VERSION, };
 const SUITS = ['spades', 'hearts', 'diamonds', 'clubs'];
 const RANKS = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
 const STAGES = ['betting', 'playing', 'dealer_turn', 'complete'];
@@ -110,6 +116,42 @@ export function decodeBlackjackState(data) {
         canStand: (actionFlags & 0x02) !== 0,
         canDouble: (actionFlags & 0x04) !== 0,
         canSplit: (actionFlags & 0x08) !== 0,
+    };
+}
+/**
+ * Decode a versioned game move payload
+ *
+ * Validates the version header and extracts the opcode and payload.
+ * Use this when receiving encoded messages to validate protocol compatibility.
+ *
+ * @throws UnsupportedProtocolVersionError if version is not supported
+ * @throws ProtocolError if message is too short
+ */
+export function decodeVersionedPayload(data) {
+    if (data.length < 2) {
+        throw new ProtocolError('Versioned payload too short: expected at least 2 bytes (version + opcode)');
+    }
+    const { version, payload } = stripVersionHeader(data);
+    const opcode = payload[0];
+    return {
+        version,
+        opcode,
+        payload,
+    };
+}
+/**
+ * Check if a payload has a valid version header without throwing
+ *
+ * Returns the version if valid, or null if invalid/missing
+ */
+export function tryDecodeVersion(data) {
+    const version = peekVersion(data);
+    if (version === null) {
+        return null;
+    }
+    return {
+        version,
+        isSupported: version >= MIN_PROTOCOL_VERSION && version <= MAX_PROTOCOL_VERSION,
     };
 }
 //# sourceMappingURL=decode.js.map

@@ -43,6 +43,8 @@ export interface TutorialStep {
   title: string;
   description: string;
   highlight?: string;
+  /** Gesture hint to show (DS-052) */
+  gesture?: 'tap' | 'swipe-left' | 'swipe-right' | 'swipe-up' | 'swipe-down';
 }
 
 export type { ChipValue };

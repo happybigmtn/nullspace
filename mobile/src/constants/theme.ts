@@ -14,6 +14,7 @@ import {
   RADIUS as TOKEN_RADIUS,
   DURATION,
   SPRING,
+  STAGGER,
   GAME,
   FONTS,
   OPACITY,
@@ -498,7 +499,7 @@ export const ANIMATION = {
 } as const;
 
 // Re-export spring configs for components that need physics-based animations
-export { SPRING, CHIP_VALUES };
+export { SPRING, STAGGER, CHIP_VALUES };
 
 export const GAME_COLORS = {
   hi_lo: GAME.hiLo.accent,

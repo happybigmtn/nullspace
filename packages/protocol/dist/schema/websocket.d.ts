@@ -55,15 +55,15 @@ export declare const GameResultMessageSchema: z.ZodObject<{
 }, "strip", z.ZodTypeAny, {
     type: "game_result";
     message: string;
-    payout: string;
-    won: boolean;
     sessionId: string;
+    won: boolean;
+    payout: string;
 }, {
     type: "game_result";
     message: string;
-    payout: string;
-    won: boolean;
     sessionId: string;
+    won: boolean;
+    payout: string;
 }>;
 export declare const ErrorMessageSchema: z.ZodObject<{
     type: z.ZodLiteral<"error">;
@@ -114,15 +114,15 @@ export declare const ServerMessageSchema: z.ZodDiscriminatedUnion<"type", [z.Zod
 }, "strip", z.ZodTypeAny, {
     type: "game_result";
     message: string;
-    payout: string;
-    won: boolean;
     sessionId: string;
+    won: boolean;
+    payout: string;
 }, {
     type: "game_result";
     message: string;
-    payout: string;
-    won: boolean;
     sessionId: string;
+    won: boolean;
+    payout: string;
 }>, z.ZodObject<{
     type: z.ZodLiteral<"error">;
     code: z.ZodString;

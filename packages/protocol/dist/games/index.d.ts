@@ -102,8 +102,8 @@ export declare const GAME_CODECS: readonly [GameCodec<import("zod").ZodObject<{
     sessionId: string;
     game: "craps";
     move: "place_bet";
-    target?: number | undefined;
     requestId?: string | undefined;
+    target?: number | undefined;
 }, {
     betType: number;
     amount: string;
@@ -111,8 +111,8 @@ export declare const GAME_CODECS: readonly [GameCodec<import("zod").ZodObject<{
     sessionId: string;
     game: "craps";
     move: "place_bet";
-    target?: number | undefined;
     requestId?: string | undefined;
+    target?: number | undefined;
 }>, import("zod").ZodObject<{
     type: import("zod").ZodLiteral<"game_move">;
     sessionId: import("zod").ZodString;
@@ -177,8 +177,8 @@ export declare const GAME_CODECS: readonly [GameCodec<import("zod").ZodObject<{
     sessionId: string;
     game: "craps";
     move: "place_bet";
-    target?: number | undefined;
     requestId?: string | undefined;
+    target?: number | undefined;
 } | {
     amount: string;
     type: "game_move";
@@ -305,8 +305,8 @@ export declare const GAME_CODECS_BY_NAME: {
         sessionId: string;
         game: "craps";
         move: "place_bet";
-        target?: number | undefined;
         requestId?: string | undefined;
+        target?: number | undefined;
     }, {
         betType: number;
         amount: string;
@@ -314,8 +314,8 @@ export declare const GAME_CODECS_BY_NAME: {
         sessionId: string;
         game: "craps";
         move: "place_bet";
-        target?: number | undefined;
         requestId?: string | undefined;
+        target?: number | undefined;
     }>, import("zod").ZodObject<{
         type: import("zod").ZodLiteral<"game_move">;
         sessionId: import("zod").ZodString;
@@ -380,8 +380,8 @@ export declare const GAME_CODECS_BY_NAME: {
         sessionId: string;
         game: "craps";
         move: "place_bet";
-        target?: number | undefined;
         requestId?: string | undefined;
+        target?: number | undefined;
     } | {
         amount: string;
         type: "game_move";

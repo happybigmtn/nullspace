@@ -262,7 +262,7 @@ export const BlackjackView = React.memo<{
                         <div className="flex flex-col items-center gap-4">
                             <div className="flex items-center gap-2">
                                 <Label variant="destructive">Dealer</Label>
-                                <span className="px-2 py-0.5 rounded-md bg-titanium-100 text-titanium-900 font-black text-[10px] tabular-nums">{dealerValue}</span>
+                                <span className="px-2.5 py-1 rounded-lg bg-titanium-100 text-titanium-900 font-black text-sm tabular-nums">{dealerValue}</span>
                             </div>
                             <Hand
                                 cards={gameState.dealerCards}
@@ -277,9 +277,17 @@ export const BlackjackView = React.memo<{
                     )}
                 </div>
 
+                {/* Connection Warning */}
+                {gameState.message?.includes('OFFLINE') && (
+                    <div className="text-center bg-action-destructive/20 border border-action-destructive/50 rounded-lg px-4 py-2 mx-4">
+                        <p className="text-action-destructive font-bold text-sm">⚠️ Chain Offline - Check Vault Status</p>
+                        <p className="text-action-destructive/80 text-xs">Navigate to Security → Unlock Vault to connect</p>
+                    </div>
+                )}
+
                 {/* Center Info */}
                 <div className="text-center relative z-20 px-6">
-                    <h2 className="text-xl sm:text-2xl font-semibold text-titanium-800 tracking-tight font-display animate-scale-in zen-hide">
+                    <h2 className="text-2xl sm:text-3xl font-bold text-titanium-900 tracking-tight font-display animate-scale-in">
                         {gameState.message || 'Place Your Bet'}
                     </h2>
                 </div>
@@ -302,9 +310,9 @@ export const BlackjackView = React.memo<{
                     <div className="flex flex-col items-center gap-4 scale-110">
                         <div className="flex items-center gap-2">
                             <Label variant="gold">You</Label>
-                            <span className="px-2 py-0.5 rounded-md bg-titanium-100 text-titanium-900 font-black text-[10px] tabular-nums">{playerValue}</span>
+                            <span className="px-2.5 py-1 rounded-lg bg-titanium-100 text-titanium-900 font-black text-sm tabular-nums">{playerValue}</span>
                             {(gameState.completedHands.length > 0 || gameState.blackjackStack.length > 0) ? (
-                                <span className="text-titanium-400 text-[10px] font-bold uppercase tracking-widest ml-1">Hand {activeHandNumber}</span>
+                                <span className="text-titanium-400 text-xs font-bold uppercase tracking-widest ml-1">Hand {activeHandNumber}</span>
                             ) : null}
                         </div>
                         {gameState.playerCards.length > 0 ? (
@@ -330,12 +338,12 @@ export const BlackjackView = React.memo<{
                 </div>
 
                 {displaySideBets.length > 0 && (
-                    <div className="flex flex-wrap items-center justify-center gap-2 text-[10px] uppercase tracking-[0.2em] text-titanium-500">
-                        <span className="text-titanium-400">Side Bets</span>
+                    <div className="flex flex-wrap items-center justify-center gap-2 text-xs uppercase tracking-[0.15em] text-titanium-500">
+                        <span className="text-titanium-400 font-semibold">Side Bets:</span>
                         {displaySideBets.map((bet) => (
                             <span
                                 key={bet.id}
-                                className="rounded-full border border-titanium-200 px-2.5 py-1 text-titanium-700 dark:border-titanium-800 dark:text-titanium-200"
+                                className="rounded-full border border-titanium-200 px-3 py-1.5 text-titanium-700 dark:border-titanium-800 dark:text-titanium-200 font-medium"
                             >
                                 {bet.id} ${bet.amount.toLocaleString()}
                             </span>
@@ -441,6 +449,31 @@ export const BlackjackView = React.memo<{
 
             {/* CONTROLS */}
             <div className="ns-controlbar zen-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-titanium-900/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
+                {/* Keyboard Shortcuts Hint Bar - All Screens */}
+                <div className="flex items-center justify-center gap-3 sm:gap-6 py-2 border-b border-gray-800 text-[10px] sm:text-xs font-mono text-gray-400 bg-black/30 flex-wrap px-2">
+                    {isBettingStage ? (
+                        <>
+                            <span><kbd className="px-1 sm:px-1.5 py-0.5 rounded bg-gray-800 text-gray-300 font-bold">SPACE</kbd> Deal</span>
+                            <span><kbd className="px-1 sm:px-1.5 py-0.5 rounded bg-gray-800 text-gray-300 font-bold">↑↓</kbd> Bet</span>
+                            <span className="hidden sm:inline"><kbd className="px-1.5 py-0.5 rounded bg-gray-800 text-gray-300 font-bold">1-5</kbd> Side Bets</span>
+                            <span className="hidden sm:inline"><kbd className="px-1.5 py-0.5 rounded bg-gray-800 text-gray-300 font-bold">G</kbd> Super</span>
+                        </>
+                    ) : showInsurancePrompt ? (
+                        <>
+                            <span><kbd className="px-1 sm:px-1.5 py-0.5 rounded bg-gray-800 text-gray-300 font-bold">I</kbd> Insure</span>
+                            <span><kbd className="px-1 sm:px-1.5 py-0.5 rounded bg-gray-800 text-gray-300 font-bold">N</kbd> No</span>
+                        </>
+                    ) : (
+                        <>
+                            <span><kbd className="px-1 sm:px-1.5 py-0.5 rounded bg-gray-800 text-gray-300 font-bold">H</kbd> Hit</span>
+                            <span><kbd className="px-1 sm:px-1.5 py-0.5 rounded bg-gray-800 text-gray-300 font-bold">S</kbd> Stand</span>
+                            <span><kbd className="px-1 sm:px-1.5 py-0.5 rounded bg-gray-800 text-gray-300 font-bold">D</kbd> Double</span>
+                            <span><kbd className="px-1 sm:px-1.5 py-0.5 rounded bg-gray-800 text-gray-300 font-bold">P</kbd> Split</span>
+                        </>
+                    )}
+                    <span className="text-gray-600 hidden sm:inline">|</span>
+                    <span className="hidden sm:inline"><kbd className="px-1.5 py-0.5 rounded bg-gray-800 text-gray-300 font-bold">?</kbd> Help</span>
+                </div>
                 <div className="h-16 md:h-20 flex items-center justify-between md:justify-center gap-2 p-2 md:px-4">
                     <div className="flex items-center gap-2">
                         <SideBetsDrawer
@@ -539,46 +572,46 @@ export const BlackjackView = React.memo<{
                                 </BetsDrawer>
                             </div>
 
-                            <div className="hidden md:flex items-center gap-2">
+                            <div className="hidden md:flex items-center gap-3">
                                 {/* Modifiers Group */}
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-3">
                                     {playMode !== 'CASH' && (
                                         <>
                                             <button
                                                 type="button"
                                                 onClick={actions?.toggleShield}
-                                                className={`h-12 px-4 rounded border-2 font-bold text-sm tracking-widest uppercase font-mono transition-all ${
+                                                className={`h-14 px-6 rounded-lg border-2 font-bold text-base tracking-widest uppercase font-mono transition-all ${
                                                     gameState.activeModifiers.shield
                                                         ? 'border-action-success bg-action-success/20 text-action-success'
-                                                        : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'
+                                                        : 'border-gray-600 bg-black/60 text-gray-200 hover:bg-gray-700 hover:border-gray-500'
                                                 }`}
                                             >
-                                                SHIELD
+                                                SHIELD <span className="text-gray-500 ml-1 text-xs">[Z]</span>
                                             </button>
                                             <button
                                                 type="button"
                                                 onClick={actions?.toggleDouble}
-                                                className={`h-12 px-4 rounded border-2 font-bold text-sm tracking-widest uppercase font-mono transition-all ${
+                                                className={`h-14 px-6 rounded-lg border-2 font-bold text-base tracking-widest uppercase font-mono transition-all ${
                                                     gameState.activeModifiers.double
                                                         ? 'border-action-success bg-action-success/20 text-action-success'
-                                                        : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'
+                                                        : 'border-gray-600 bg-black/60 text-gray-200 hover:bg-gray-700 hover:border-gray-500'
                                                 }`}
                                             >
-                                                DOUBLE
+                                                DOUBLE <span className="text-gray-500 ml-1 text-xs">[X]</span>
                                             </button>
                                         </>
                                     )}
                                     <button
                                         type="button"
                                         onClick={actions?.toggleSuper}
-                                        className={`h-12 px-4 rounded border-2 font-bold text-sm tracking-widest uppercase font-mono transition-all ${
+                                        className={`h-14 px-6 rounded-lg border-2 font-bold text-base tracking-widest uppercase font-mono transition-all ${
                                             gameState.activeModifiers.super
                                                 ? 'border-action-primary bg-action-primary/20 text-action-primary'
-                                                : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'
+                                                : 'border-gray-600 bg-black/60 text-gray-200 hover:bg-gray-700 hover:border-gray-500'
                                         }`}
-                                            >
-                                                SUPER
-                                            </button>
+                                    >
+                                        SUPER <span className="text-gray-500 ml-1 text-xs">[G]</span>
+                                    </button>
                                 </div>
                             </div>
                         </>
@@ -620,20 +653,20 @@ export const BlackjackView = React.memo<{
                                     </button>
                                 )}
                             </div>
-                            <div className="hidden md:flex items-center gap-2">
+                            <div className="hidden md:flex items-center gap-3">
                                 <button
                                     type="button"
                                     onClick={() => actions?.bjInsurance?.(false)}
-                                    className="h-12 px-6 rounded border-2 font-bold text-sm tracking-widest uppercase font-mono transition-all border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800"
+                                    className="h-14 px-8 rounded-lg border-2 font-bold text-base tracking-widest uppercase font-mono transition-all border-gray-600 bg-black/60 text-gray-200 hover:bg-gray-700 hover:border-gray-500"
                                 >
-                                    NO
+                                    NO <span className="text-gray-500 ml-1 text-xs">[N]</span>
                                 </button>
                                 {canAnalyze && (
                                     <button
                                         type="button"
                                         onClick={runAnalysis}
                                         disabled={analysisPending}
-                                        className={`h-12 px-4 rounded border-2 font-bold text-sm tracking-widest uppercase font-mono transition-all ${
+                                        className={`h-14 px-6 rounded-lg border-2 font-bold text-base tracking-widest uppercase font-mono transition-all ${
                                             analysisPending
                                                 ? 'opacity-60 cursor-not-allowed border-gray-800 bg-gray-900/50 text-gray-500'
                                                 : 'border-action-primary bg-action-primary/15 text-action-primary hover:bg-action-primary/25'
@@ -704,49 +737,49 @@ export const BlackjackView = React.memo<{
                                     </button>
                                 )}
                             </div>
-                            <div className="hidden md:flex items-center gap-2">
+                            <div className="hidden md:flex items-center gap-3">
                                 <button
                                     type="button"
                                     onClick={actions?.bjStand}
                                     disabled={!canStand}
-                                    className={`h-12 px-6 rounded border-2 font-bold text-sm tracking-widest uppercase font-mono transition-all ${
+                                    className={`h-14 px-8 rounded-lg border-2 font-bold text-base tracking-widest uppercase font-mono transition-all ${
                                         canStand
-                                            ? 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'
+                                            ? 'border-gray-600 bg-black/60 text-gray-200 hover:bg-gray-700 hover:border-gray-500'
                                             : 'opacity-50 cursor-not-allowed border-gray-800 bg-gray-900/50 text-gray-700'
                                     }`}
                                 >
-                                    STAND
+                                    STAND <span className="text-gray-500 ml-1 text-xs">[S]</span>
                                 </button>
                                 <button
                                     type="button"
                                     onClick={actions?.bjDouble}
                                     disabled={!canDouble}
-                                    className={`h-12 px-6 rounded border-2 font-bold text-sm tracking-widest uppercase font-mono transition-all ${
+                                    className={`h-14 px-8 rounded-lg border-2 font-bold text-base tracking-widest uppercase font-mono transition-all ${
                                         canDouble
-                                            ? 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'
+                                            ? 'border-gray-600 bg-black/60 text-gray-200 hover:bg-gray-700 hover:border-gray-500'
                                             : 'opacity-50 cursor-not-allowed border-gray-800 bg-gray-900/50 text-gray-700'
                                     }`}
                                 >
-                                    DOUBLE
+                                    DOUBLE <span className="text-gray-500 ml-1 text-xs">[D]</span>
                                 </button>
                                 <button
                                     type="button"
                                     onClick={actions?.bjSplit}
                                     disabled={!canSplit}
-                                    className={`h-12 px-6 rounded border-2 font-bold text-sm tracking-widest uppercase font-mono transition-all ${
+                                    className={`h-14 px-8 rounded-lg border-2 font-bold text-base tracking-widest uppercase font-mono transition-all ${
                                         canSplit
-                                            ? 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'
+                                            ? 'border-gray-600 bg-black/60 text-gray-200 hover:bg-gray-700 hover:border-gray-500'
                                             : 'opacity-50 cursor-not-allowed border-gray-800 bg-gray-900/50 text-gray-700'
                                     }`}
                                 >
-                                    SPLIT
+                                    SPLIT <span className="text-gray-500 ml-1 text-xs">[P]</span>
                                 </button>
                                 {canAnalyze && (
                                     <button
                                         type="button"
                                         onClick={runAnalysis}
                                         disabled={analysisPending}
-                                        className={`h-12 px-4 rounded border-2 font-bold text-sm tracking-widest uppercase font-mono transition-all ${
+                                        className={`h-14 px-6 rounded-lg border-2 font-bold text-base tracking-widest uppercase font-mono transition-all ${
                                             analysisPending
                                                 ? 'opacity-60 cursor-not-allowed border-gray-800 bg-gray-900/50 text-gray-500'
                                                 : 'border-action-primary bg-action-primary/15 text-action-primary hover:bg-action-primary/25'
@@ -763,7 +796,8 @@ export const BlackjackView = React.memo<{
                     <div className="flex items-center gap-3">
                         {/* Chip Selector - Only show during BETTING or RESULT stage */}
                         {(gameState.stage === 'BETTING' || gameState.stage === 'RESULT') && (
-                            <div className="relative">
+                            <div className="relative flex flex-col items-center">
+                                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">Bet</span>
                                 <ChipButton
                                     value={currentBet || 25}
                                     selected={showChipSelector}
@@ -815,7 +849,7 @@ export const BlackjackView = React.memo<{
                                         : actions?.bjHit
                             }
                             disabled={gameState.stage === 'PLAYING' && !showInsurancePrompt && !canHit}
-                            className={`ns-control-primary h-12 md:h-14 px-6 md:px-8 rounded border-2 font-bold text-sm md:text-base tracking-widest uppercase font-mono transition-all shadow-[0_0_15px_rgba(0,0,0,0.5)] ${
+                            className={`ns-control-primary h-14 md:h-16 px-8 md:px-10 rounded-lg border-2 font-bold text-base md:text-lg tracking-widest uppercase font-mono transition-all shadow-[0_0_20px_rgba(0,0,0,0.5)] ${
                                 showInsurancePrompt
                                     ? 'border-action-primary bg-action-primary text-black hover:bg-white hover:border-white'
                                     : (gameState.stage === 'PLAYING' && !canHit)

@@ -1,7 +1,8 @@
-import { SPRING, DURATION, EASING } from '@nullspace/design-tokens';
+import { SPRING, SPRING_LIQUID, DURATION, EASING } from '@nullspace/design-tokens';
 
 // Re-export token types for convenience
 export type SpringPreset = keyof typeof SPRING;
+export type SpringLiquidPreset = keyof typeof SPRING_LIQUID;
 export type DurationPreset = keyof typeof DURATION;
 export type EasingPreset = keyof typeof EASING;
 
@@ -26,6 +27,29 @@ export const springConfig = (preset: SpringPreset) => {
 export const SPRING_CONFIGS = Object.fromEntries(
   Object.keys(SPRING).map((key) => [key, springConfig(key as SpringPreset)])
 ) as Record<SpringPreset, { mass: number; tension: number; friction: number }>;
+
+/**
+ * Convert liquid spring config to react-spring format
+ */
+export const liquidSpringConfig = (preset: SpringLiquidPreset) => {
+  const { mass, stiffness, damping } = SPRING_LIQUID[preset];
+  return {
+    mass,
+    tension: stiffness,
+    friction: damping,
+  };
+};
+
+/**
+ * Liquid spring presets for organic, water-like motion
+ * Use: config={SPRING_LIQUID_CONFIGS.liquidMorph}
+ */
+export const SPRING_LIQUID_CONFIGS = Object.fromEntries(
+  Object.keys(SPRING_LIQUID).map((key) => [
+    key,
+    liquidSpringConfig(key as SpringLiquidPreset),
+  ])
+) as Record<SpringLiquidPreset, { mass: number; tension: number; friction: number }>;
 
 /**
  * Duration values in ms for non-spring animations

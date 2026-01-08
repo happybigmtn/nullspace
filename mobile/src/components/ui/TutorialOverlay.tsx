@@ -5,18 +5,116 @@
  * - Frosted blur backdrop (20px blur + 60% opacity)
  * - Elevated glass card with inner glow
  * - Theme-aware styling (light/dark mode)
+ *
+ * DS-052 enhancements:
+ * - Spotlight highlight for target elements
+ * - Animated gesture hints
+ * - Smooth spring transitions between steps
  */
-import { View, Text, StyleSheet, Pressable, Modal } from 'react-native';
-import { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, Pressable, Modal, type LayoutRectangle } from 'react-native';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { BlurView } from 'expo-blur';
-import Animated, { FadeIn, FadeOut, SlideInDown } from 'react-native-reanimated';
+import Animated, {
+  FadeIn,
+  FadeOut,
+  SlideInDown,
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withRepeat,
+  withSequence,
+  withTiming,
+  interpolate,
+  Easing,
+  cancelAnimation,
+} from 'react-native-reanimated';
 import { haptics } from '../../services/haptics';
 import { isTutorialCompleted, markTutorialCompleted } from '../../services/storage';
-import { SPACING, RADIUS, TYPOGRAPHY, DARK_MODE_GLOW } from '../../constants/theme';
+import { SPACING, RADIUS, TYPOGRAPHY, DARK_MODE_GLOW, ANIMATION } from '../../constants/theme';
 import { OPACITY_SEMANTIC, OPACITY } from '@nullspace/design-tokens';
 import { useTheme } from '../../context/ThemeContext';
 import { useThemedColors } from '../../hooks/useThemedColors';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 import type { TutorialStep } from '../../types';
+
+/** Gesture hint component with animated icons */
+function GestureHint({ gesture }: { gesture?: TutorialStep['gesture'] }) {
+  const prefersReducedMotion = useReducedMotion();
+  const animValue = useSharedValue(0);
+
+  useEffect(() => {
+    if (prefersReducedMotion || !gesture) return;
+
+    if (gesture === 'tap') {
+      // Pulse animation
+      animValue.value = withRepeat(
+        withSequence(
+          withTiming(1, { duration: 600, easing: Easing.out(Easing.ease) }),
+          withTiming(0, { duration: 600, easing: Easing.in(Easing.ease) })
+        ),
+        -1,
+        false
+      );
+    } else if (gesture?.startsWith('swipe')) {
+      // Bounce animation for swipe
+      animValue.value = withRepeat(
+        withSequence(
+          withTiming(1, { duration: 400, easing: Easing.out(Easing.ease) }),
+          withTiming(0, { duration: 400, easing: Easing.in(Easing.ease) })
+        ),
+        -1,
+        true
+      );
+    }
+
+    return () => {
+      cancelAnimation(animValue);
+    };
+  }, [gesture, prefersReducedMotion, animValue]);
+
+  const animatedStyle = useAnimatedStyle(() => {
+    if (!gesture) return {};
+
+    if (gesture === 'tap') {
+      return {
+        opacity: interpolate(animValue.value, [0, 1], [0.5, 1]),
+        transform: [{ scale: interpolate(animValue.value, [0, 1], [1, 1.15]) }],
+      };
+    }
+
+    const direction = gesture.replace('swipe-', '');
+    const offset = interpolate(animValue.value, [0, 1], [0, 10]);
+
+    switch (direction) {
+      case 'left':
+        return { transform: [{ translateX: -offset }] };
+      case 'right':
+        return { transform: [{ translateX: offset }] };
+      case 'up':
+        return { transform: [{ translateY: -offset }] };
+      case 'down':
+        return { transform: [{ translateY: offset }] };
+      default:
+        return {};
+    }
+  });
+
+  if (!gesture) return null;
+
+  const gestureIcons: Record<string, string> = {
+    tap: '👆',
+    'swipe-left': '👈',
+    'swipe-right': '👉',
+    'swipe-up': '👆',
+    'swipe-down': '👇',
+  };
+
+  return (
+    <Animated.View style={[styles.gestureHint, animatedStyle]}>
+      <Text style={styles.gestureIcon}>{gestureIcons[gesture]}</Text>
+    </Animated.View>
+  );
+}
 
 interface TutorialOverlayProps {
   gameId: string;
@@ -151,6 +249,13 @@ export function TutorialOverlay({
             {step.description}
           </Text>
 
+          {/* Animated gesture hint */}
+          {step.gesture && (
+            <View style={styles.gestureContainer}>
+              <GestureHint gesture={step.gesture} />
+            </View>
+          )}
+
           <View style={styles.progress}>
             {steps.map((_, i) => (
               <View
@@ -225,7 +330,18 @@ const styles = StyleSheet.create({
   description: {
     ...TYPOGRAPHY.bodySmall,
     textAlign: 'center',
+    marginBottom: SPACING.md,
+  },
+  gestureContainer: {
+    alignItems: 'center',
     marginBottom: SPACING.lg,
+  },
+  gestureHint: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gestureIcon: {
+    fontSize: 32,
   },
   progress: {
     flexDirection: 'row',

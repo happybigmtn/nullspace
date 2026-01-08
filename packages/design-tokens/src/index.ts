@@ -48,15 +48,30 @@ export {
 // Animations
 export {
   SPRING,
+  SPRING_LIQUID,
   DURATION,
   EASING,
+  EASING_LUXURY,
+  SCALE,
+  SCALE_DOWN,
+  SCALE_SEMANTIC,
   STAGGER,
   type SpringPreset,
   type SpringConfig,
+  type SpringLiquidPreset,
+  type SpringLiquidConfig,
   type DurationKey,
   type DurationValue,
   type EasingKey,
   type EasingCurve,
+  type EasingLuxuryKey,
+  type EasingLuxuryCurve,
+  type ScaleKey,
+  type ScaleValue,
+  type ScaleDownKey,
+  type ScaleDownValue,
+  type ScaleSemanticKey,
+  type ScaleSemanticValue,
   type StaggerKey,
 } from './animations.js';
 
@@ -113,3 +128,47 @@ export {
   type FocusOffsetKey,
   type FocusOffsetValue,
 } from './focus.js';
+
+// Blur (Glassmorphism)
+export {
+  BLUR,
+  BLUR_SEMANTIC,
+  BLUR_GLOW,
+  type BlurLevel,
+  type BlurValue,
+  type BlurSemanticKey,
+  type BlurSemanticValue,
+  type BlurGlowKey,
+  type BlurGlowValue,
+} from './blur.js';
+
+// Glass Effects (Glassmorphism)
+export {
+  GLASS,
+  GLASS_DARK,
+  BACKDROP_FILTER,
+  GLASS_SEMANTIC,
+  type GlassPreset,
+  type GlassConfig,
+  type GlassDarkPreset,
+  type GlassDarkConfig,
+  type BackdropFilterPreset,
+  type BackdropFilterConfig,
+  type GlassSemanticKey,
+  type GlassSemanticValue,
+} from './glass.js';
+
+// Gradients
+export {
+  GRADIENT_LINEAR,
+  GRADIENT_RADIAL,
+  GRADIENT_LUXURY,
+  GRADIENT_SEMANTIC,
+  type GradientStop,
+  type LinearGradientConfig,
+  type RadialGradientConfig,
+  type GradientLinearPreset,
+  type GradientRadialPreset,
+  type GradientLuxuryPreset,
+  type GradientSemanticKey,
+} from './gradients.js';

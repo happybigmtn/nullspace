@@ -1,11 +1,12 @@
 /**
- * DealtCard - Card with dealing trajectory animation
+ * DealtCard - Card with dealing trajectory animation (DS-045)
  *
  * Implements casino-style card dealing with:
  * - Arc trajectory from dealer position (top-center)
- * - Slight rotation mid-flight for realism
+ * - Rotation during flight (45° → 0°) for authentic dealer motion
  * - Scale bounce landing with spring overshoot
- * - Staggered timing via delay prop
+ * - Staggered timing via dealIndex for choreographed dealing
+ * - **Sequential flip: card flips AFTER reaching destination**
  * - Haptic feedback synced to landing moment
  *
  * @example
@@ -21,9 +22,10 @@
  *   />
  * ))}
  */
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { View, StyleSheet, LayoutChangeEvent, Dimensions } from 'react-native';
-import Animated, {
+import Animated from 'react-native-reanimated';
+import {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
@@ -35,9 +37,11 @@ import Animated, {
   Easing,
   runOnJS,
 } from 'react-native-reanimated';
+import { GestureDetector } from 'react-native-gesture-handler';
 import { Card, HiddenCard } from './Card';
 import { haptics } from '../../services/haptics';
-import { SPRING } from '../../constants/theme';
+import { SPRING, STAGGER } from '../../constants/theme';
+import { useParallaxTilt } from '../../hooks/useParallaxTilt';
 import type { Suit, Rank } from '../../types';
 
 /** Position coordinates for dealer origin */
@@ -69,10 +73,19 @@ export interface DealtCardProps {
   onDealComplete?: () => void;
   /** Callback when flip animation completes */
   onFlipComplete?: () => void;
+  /**
+   * DS-055: Enable 3D parallax tilt after card lands
+   * Card becomes interactive with touch-based 3D rotation
+   */
+  enableParallax?: boolean;
+  /** DS-055: Maximum rotation amplitude in degrees (default: 12) */
+  parallaxAmplitude?: number;
+  /** DS-055: Scale when touching card (default: 1.05) */
+  parallaxScale?: number;
 }
 
-/** Default stagger delay between cards (ms) */
-const DEFAULT_STAGGER_MS = 120;
+/** Default stagger delay between cards (ms) - uses STAGGER.normal (50ms) for premium feel */
+const DEFAULT_STAGGER_MS = STAGGER.normal;
 
 /** Duration of the deal trajectory (ms) */
 const DEAL_DURATION_MS = 350;
@@ -80,11 +93,19 @@ const DEAL_DURATION_MS = 350;
 /** Arc height as percentage of travel distance */
 const ARC_HEIGHT_RATIO = 0.25;
 
-/** Max rotation during flight (degrees) */
-const FLIGHT_ROTATION_DEG = 8;
+/**
+ * DS-045: Flight rotation range (degrees)
+ * Card starts at 45° (like being pulled from a deck at angle)
+ * and rotates to 0° (flat) as it reaches destination
+ */
+const FLIGHT_ROTATION_START_DEG = 45;
+const FLIGHT_ROTATION_END_DEG = 0;
 
 /** Landing bounce scale overshoot */
 const LANDING_SCALE_PEAK = 1.08;
+
+/** Delay before flip starts after landing (ms) */
+const FLIP_DELAY_AFTER_LANDING_MS = 80;
 
 /**
  * Spring config for landing bounce - slightly more dramatic than cardDeal
@@ -107,6 +128,9 @@ export function DealtCard({
   skipAnimation = false,
   onDealComplete,
   onFlipComplete,
+  enableParallax = false,
+  parallaxAmplitude = 12,
+  parallaxScale = 1.05,
 }: DealtCardProps) {
   // Animation progress: 0 = at dealer, 1 = at destination
   const dealProgress = useSharedValue(skipAnimation ? 1 : 0);
@@ -122,12 +146,45 @@ export function DealtCard({
   const onDealCompleteRef = useRef(onDealComplete);
   onDealCompleteRef.current = onDealComplete;
 
+  /**
+   * DS-045: Sequential flip state
+   * Card starts face down during flight, flips AFTER reaching destination
+   */
+  const [shouldFlip, setShouldFlip] = useState(skipAnimation ? faceUp : false);
+
+  /**
+   * DS-055: Track if deal animation has completed for parallax activation
+   */
+  const [dealCompleted, setDealCompleted] = useState(skipAnimation);
+
+  /**
+   * DS-055: Parallax tilt hook - only active after card lands
+   */
+  const {
+    animatedStyle: parallaxStyle,
+    gesture: parallaxGesture,
+    onLayout: parallaxLayout,
+  } = useParallaxTilt({
+    rotateAmplitude: parallaxAmplitude,
+    scaleOnTouch: parallaxScale,
+    enabled: enableParallax && dealCompleted,
+  });
+
   // Get screen dimensions for default dealer position
   const { width: screenWidth } = Dimensions.get('window');
   const defaultDealerPos: DealerPosition = dealerPosition ?? {
     x: screenWidth / 2,
     y: -100, // Above visible area
   };
+
+  /**
+   * DS-045: Trigger flip after landing - card flips to face up after reaching position
+   */
+  const triggerFlipAfterLanding = useCallback(() => {
+    if (faceUp && !shouldFlip) {
+      setShouldFlip(true);
+    }
+  }, [faceUp, shouldFlip]);
 
   /**
    * Trigger haptic on landing - run via runOnJS from worklet
@@ -137,16 +194,23 @@ export function DealtCard({
       dealCompleteRef.current = true;
       haptics.cardDeal().catch(() => {});
       onDealCompleteRef.current?.();
+      // DS-055: Mark deal as completed for parallax activation
+      setDealCompleted(true);
+      // DS-045: Trigger flip after a brief delay for smooth sequencing
+      setTimeout(triggerFlipAfterLanding, FLIP_DELAY_AFTER_LANDING_MS);
     }
-  }, []);
+  }, [triggerFlipAfterLanding]);
 
   /**
    * Capture card's final position on layout
+   * DS-055: Also captures dimensions for parallax tilt
    */
   const handleLayout = useCallback((event: LayoutChangeEvent) => {
     const { x, y } = event.nativeEvent.layout;
     cardPosition.current = { x, y };
-  }, []);
+    // DS-055: Also call parallax layout for dimension tracking
+    parallaxLayout(event);
+  }, [parallaxLayout]);
 
   /**
    * Start deal animation with staggered delay
@@ -222,11 +286,16 @@ export function DealtCard({
     const arcOffset = -arcHeight * 4 * dealProgress.value * (1 - dealProgress.value);
     const translateY = baseY + arcOffset;
 
-    // Rotation during flight - tilts forward then back
+    /**
+     * DS-045: Rotation during flight (45° → 0°)
+     * Card starts tilted (like being pulled from angled deck)
+     * and rotates to flat as it reaches destination
+     * Smooth easeOut curve for professional dealer motion
+     */
     const rotation = interpolate(
       dealProgress.value,
-      [0, 0.3, 0.7, 1],
-      [FLIGHT_ROTATION_DEG, FLIGHT_ROTATION_DEG * 1.5, -FLIGHT_ROTATION_DEG * 0.5, 0],
+      [0, 0.4, 0.8, 1],
+      [FLIGHT_ROTATION_START_DEG, FLIGHT_ROTATION_START_DEG * 0.5, FLIGHT_ROTATION_END_DEG + 2, FLIGHT_ROTATION_END_DEG],
       Extrapolate.CLAMP
     );
 
@@ -247,18 +316,43 @@ export function DealtCard({
     };
   });
 
+  /**
+   * DS-055: Render with parallax if enabled
+   * Wraps in GestureDetector and applies parallax transforms after deal completes
+   */
+  const cardContent = (
+    <Card
+      suit={suit}
+      rank={rank}
+      faceUp={shouldFlip}
+      size={size}
+      onFlipComplete={onFlipComplete}
+    />
+  );
+
+  // DS-055: When parallax is enabled and deal is complete, wrap with gesture detector
+  if (enableParallax && dealCompleted) {
+    return (
+      <Animated.View
+        style={[styles.container, trajectoryStyle]}
+        onLayout={handleLayout}
+      >
+        <GestureDetector gesture={parallaxGesture}>
+          <Animated.View style={[styles.parallaxContainer, parallaxStyle]}>
+            {cardContent}
+          </Animated.View>
+        </GestureDetector>
+      </Animated.View>
+    );
+  }
+
+  // Standard render without parallax
   return (
     <Animated.View
       style={[styles.container, trajectoryStyle]}
       onLayout={handleLayout}
     >
-      <Card
-        suit={suit}
-        rank={rank}
-        faceUp={faceUp}
-        size={size}
-        onFlipComplete={onFlipComplete}
-      />
+      {cardContent}
     </Animated.View>
   );
 }
@@ -354,10 +448,14 @@ export function DealtHiddenCard({
     const arcOffset = -arcHeight * 4 * dealProgress.value * (1 - dealProgress.value);
     const translateY = baseY + arcOffset;
 
+    /**
+     * DS-045: Rotation during flight (45° → 0°)
+     * Same rotation as DealtCard for consistency
+     */
     const rotation = interpolate(
       dealProgress.value,
-      [0, 0.3, 0.7, 1],
-      [FLIGHT_ROTATION_DEG, FLIGHT_ROTATION_DEG * 1.5, -FLIGHT_ROTATION_DEG * 0.5, 0],
+      [0, 0.4, 0.8, 1],
+      [FLIGHT_ROTATION_START_DEG, FLIGHT_ROTATION_START_DEG * 0.5, FLIGHT_ROTATION_END_DEG + 2, FLIGHT_ROTATION_END_DEG],
       Extrapolate.CLAMP
     );
 
@@ -391,4 +489,7 @@ const styles = StyleSheet.create({
   container: {
     // Position relative for trajectory animation
   },
+  // DS-055: Parallax container for 3D transforms
+  // Note: React Native handles perspective via transform array
+  parallaxContainer: {},
 });

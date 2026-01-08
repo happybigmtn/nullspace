@@ -3,6 +3,9 @@
  *
  * This is ENCODING ONLY - no game logic here.
  * The on-chain Rust program validates and processes these moves.
+ *
+ * All encoded messages include a 1-byte protocol version header as the first byte.
+ * See version.ts for version constants and validation utilities.
  */
 import { CrapsBetType } from '@nullspace/constants';
 import { type BaccaratBetName, type CrapsBetName, type RouletteBetName, type SicBoBetName } from '@nullspace/constants';
@@ -35,13 +38,13 @@ declare const CRAPS_OPCODES: {
     readonly roll: 2;
     readonly clear_bets: 3;
 };
-/** Encode a blackjack move action into binary payload */
+/** Encode a blackjack move action into binary payload (with version header) */
 export declare function encodeBlackjackMove(move: BlackjackMoveAction): Uint8Array;
-/** Encode a roulette bet placement */
+/** Encode a roulette bet placement (with version header) */
 export declare function encodeRouletteBet(betType: number, number: number, amount: bigint): Uint8Array;
-/** Encode a roulette spin command */
+/** Encode a roulette spin command (with version header) */
 export declare function encodeRouletteSpin(): Uint8Array;
-/** Encode roulette clear bets command */
+/** Encode roulette clear bets command (with version header) */
 export declare function encodeRouletteClearBets(): Uint8Array;
 /** Roulette place_bet options */
 export interface RoulettePlaceBetOptions {
@@ -60,18 +63,18 @@ export interface CrapsPlaceBetOptions {
     amount: bigint;
 }
 /**
- * Encode a craps bet placement
- * Format: [0, bet_type, target, amount (8 bytes BE)]
+ * Encode a craps bet placement (with version header)
+ * Format: [version, opcode, bet_type, target, amount (8 bytes BE)]
  */
 export declare function encodeCrapsPlaceBet(options: CrapsPlaceBetOptions): Uint8Array;
 /**
- * Encode a craps add odds command
- * Format: [1, amount (8 bytes BE)]
+ * Encode a craps add odds command (with version header)
+ * Format: [version, opcode, amount (8 bytes BE)]
  */
 export declare function encodeCrapsAddOdds(amount: bigint): Uint8Array;
-/** Encode a craps roll command */
+/** Encode a craps roll command (with version header) */
 export declare function encodeCrapsRoll(): Uint8Array;
-/** Encode a craps clear bets command */
+/** Encode a craps clear bets command (with version header) */
 export declare function encodeCrapsClearBets(): Uint8Array;
 /** Encode a craps move (dispatcher) */
 export declare function encodeCrapsMove(move: 'roll'): Uint8Array;

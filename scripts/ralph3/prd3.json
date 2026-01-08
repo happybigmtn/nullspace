@@ -1,8 +1,8 @@
 {
   "project": "Nullspace Design System Implementation",
-  "version": "3.0",
+  "version": "3.1",
   "agent": "ralph3",
-  "description": "Comprehensive design system alignment across web and mobile platforms",
+  "description": "Comprehensive design system alignment across web and mobile platforms with luxury minimalist liquid animations",
   "phases": [
     {
       "id": "phase-1",
@@ -32,6 +32,34 @@
       "id": "phase-5",
       "name": "Accessibility & Polish",
       "priority": "medium",
+      "stories": []
+    },
+    {
+      "id": "phase-6",
+      "name": "Luxury Motion Foundation",
+      "priority": "high",
+      "description": "Design tokens and primitives for liquid display animations and Jony Ive-inspired minimalist motion",
+      "stories": []
+    },
+    {
+      "id": "phase-7",
+      "name": "Web Liquid Animations",
+      "priority": "high",
+      "description": "Sophisticated fluid animations and micro-interactions for web platform",
+      "stories": []
+    },
+    {
+      "id": "phase-8",
+      "name": "Mobile Liquid Animations",
+      "priority": "high",
+      "description": "Premium gesture-driven animations and physics-based interactions for mobile",
+      "stories": []
+    },
+    {
+      "id": "phase-9",
+      "name": "Premium Polish & Delight",
+      "priority": "medium",
+      "description": "Cross-platform luxury refinements, ambient animations, and anticipatory motion",
       "stories": []
     }
   ],
@@ -628,6 +656,983 @@
         "Document performance baselines"
       ],
       "notes": "Code audit complete. All animations use native drivers (mobile) and will-change optimizations (web). Reduced motion support in place. Manual device testing checklist provided in PERFORMANCE_AUDIT.md."
+    },
+    {
+      "id": "DS-023",
+      "phase": "phase-6",
+      "title": "Add blur scale tokens to design-tokens package",
+      "priority": 23,
+      "status": "completed",
+      "passes": true,
+      "platform": "shared",
+      "files": [
+        "/packages/design-tokens/src/blur.ts",
+        "/packages/design-tokens/src/index.ts"
+      ],
+      "description": "Create dedicated blur token scale for glassmorphism and frosted glass effects",
+      "acceptance": [
+        "BLUR scale exported: none (0), xs (4px), sm (8px), md (16px), lg (24px), xl (32px), 2xl (48px)",
+        "Semantic blur values: subtle, glass, heavy, frosted",
+        "TypeScript types exported",
+        "Tokens documented with use cases"
+      ],
+      "implementation": [
+        "Create /packages/design-tokens/src/blur.ts",
+        "Define BLUR numeric scale",
+        "Define BLUR_SEMANTIC mapping",
+        "Export from index.ts",
+        "Add tests to tokens.test.ts"
+      ],
+      "notes": "Foundation for Apple Liquid Glass-inspired effects. Blur is GPU-accelerated via backdrop-filter."
+    },
+    {
+      "id": "DS-024",
+      "phase": "phase-6",
+      "title": "Add glassmorphism effect tokens",
+      "priority": 24,
+      "status": "completed",
+      "passes": true,
+      "platform": "shared",
+      "files": [
+        "/packages/design-tokens/src/glass.ts",
+        "/packages/design-tokens/src/index.ts"
+      ],
+      "description": "Create combined glassmorphism configuration tokens for luxury frosted glass UI",
+      "acceptance": [
+        "GLASS presets: subtle, medium, heavy, frosted",
+        "Each preset includes: blur, opacity, tint (rgba), border (rgba)",
+        "BACKDROP_FILTER presets for CSS backdrop-filter combos",
+        "Works with both light and dark titanium backgrounds"
+      ],
+      "implementation": [
+        "Create /packages/design-tokens/src/glass.ts",
+        "Define GLASS object with blur + opacity + tint + border",
+        "Define BACKDROP_FILTER combining blur + brightness + saturate",
+        "Export all from index.ts",
+        "Test visual appearance"
+      ],
+      "notes": "Jony Ive: 'Material honesty' - let glass be glass. Use subtle tinting, not heavy overlays."
+    },
+    {
+      "id": "DS-025",
+      "phase": "phase-6",
+      "title": "Add luxury easing curves to animation tokens",
+      "priority": 25,
+      "status": "completed",
+      "passes": true,
+      "platform": "shared",
+      "files": [
+        "/packages/design-tokens/src/animations.ts"
+      ],
+      "description": "Extend EASING with sophisticated curves for liquid motion and premium feel",
+      "acceptance": [
+        "EASING_LUXURY curves: liquidSmooth, liquidElastic, elegantEntry, elegantExit",
+        "Apple-inspired curves: expressiveOut, expressiveInOut",
+        "Premium curves: jewelMotion, silkSlide",
+        "All curves as cubic-bezier arrays",
+        "Documentation with visual examples"
+      ],
+      "implementation": [
+        "Add EASING_LUXURY object to animations.ts",
+        "liquidSmooth: [0.23, 1, 0.32, 1] - fluid motion",
+        "liquidElastic: [0.68, -0.55, 0.27, 1.55] - bounce",
+        "elegantEntry: [0.22, 0.61, 0.36, 1] - Apple-like",
+        "elegantExit: [0.64, 0, 0.78, 0] - refined exit",
+        "jewelMotion: [0.33, 0, 0.2, 1] - precious feel"
+      ],
+      "notes": "iOS 17 made spring animation default. These curves complement springs for CSS transitions."
+    },
+    {
+      "id": "DS-026",
+      "phase": "phase-6",
+      "title": "Add liquid spring presets to animation tokens",
+      "priority": 26,
+      "status": "completed",
+      "passes": true,
+      "platform": "shared",
+      "files": [
+        "/packages/design-tokens/src/animations.ts"
+      ],
+      "description": "Create spring configurations for organic liquid motion and fluid interactions",
+      "acceptance": [
+        "SPRING_LIQUID presets: liquidFloat, liquidRipple, liquidMorph, liquidSettle, liquidWave",
+        "Each preset has mass, stiffness, damping values",
+        "Presets feel organic and water-like",
+        "Works with react-spring (web) and Reanimated (mobile)"
+      ],
+      "implementation": [
+        "Add SPRING_LIQUID to animations.ts",
+        "liquidFloat: { mass: 0.3, stiffness: 120, damping: 12 }",
+        "liquidRipple: { mass: 0.5, stiffness: 180, damping: 14 }",
+        "liquidMorph: { mass: 0.8, stiffness: 100, damping: 18 }",
+        "liquidSettle: { mass: 1.2, stiffness: 140, damping: 22 }",
+        "liquidWave: { mass: 0.6, stiffness: 160, damping: 10 }"
+      ],
+      "notes": "Springs feel natural because they 'slowly and gradually come to rest' - no abrupt stopping."
+    },
+    {
+      "id": "DS-027",
+      "phase": "phase-6",
+      "title": "Add scale transform tokens",
+      "priority": 27,
+      "status": "completed",
+      "passes": true,
+      "platform": "shared",
+      "files": [
+        "/packages/design-tokens/src/animations.ts"
+      ],
+      "description": "Create scale values for consistent transform animations across platforms",
+      "acceptance": [
+        "SCALE values: subtle (1.02), small (1.05), medium (1.1), large (1.15), dramatic (1.25)",
+        "SCALE_DOWN values for press states: subtle (0.98), small (0.95), medium (0.9)",
+        "Semantic scales: hover, press, focus, active",
+        "TypeScript types exported"
+      ],
+      "implementation": [
+        "Add SCALE and SCALE_DOWN to animations.ts",
+        "Add SCALE_SEMANTIC mapping (hover -> subtle, press -> small, etc.)",
+        "Ensure values work for both CSS and RN transforms",
+        "Document with visual examples"
+      ],
+      "notes": "Consistent scale values prevent 'busy' feel. Jony Ive: subtlety over spectacle."
+    },
+    {
+      "id": "DS-028",
+      "phase": "phase-6",
+      "title": "Add gradient configuration tokens",
+      "priority": 28,
+      "status": "completed",
+      "passes": true,
+      "platform": "shared",
+      "files": [
+        "/packages/design-tokens/src/gradients.ts",
+        "/packages/design-tokens/src/index.ts"
+      ],
+      "description": "Create gradient presets for luxury backgrounds and liquid visual effects",
+      "acceptance": [
+        "GRADIENT_LINEAR presets with angle and color stops",
+        "GRADIENT_RADIAL spotlight effects",
+        "GRADIENT_LUXURY presets: titaniumSheen, goldReflection, indigoGlow",
+        "Platform-agnostic format (converts to CSS/RN)"
+      ],
+      "implementation": [
+        "Create /packages/design-tokens/src/gradients.ts",
+        "Define gradient structure: { type, angle/shape, stops: [{color, position}] }",
+        "Create titaniumSheen for subtle metallic effect",
+        "Create goldReflection for win celebrations",
+        "Export and document"
+      ],
+      "notes": "Gradients should be subtle - enhance depth without competing for attention."
+    },
+    {
+      "id": "DS-029",
+      "phase": "phase-7",
+      "title": "Implement liquid ripple effect component - Web",
+      "priority": 29,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/src/components/ui/LiquidRipple.tsx",
+        "/website/src/hooks/useRipple.ts"
+      ],
+      "description": "Create water-like ripple animation that expands from touch/click point",
+      "acceptance": [
+        "Ripple originates from exact click coordinates",
+        "Expands with spring physics (not linear)",
+        "Fades out smoothly during expansion",
+        "Respects reduced motion preference",
+        "Works on buttons, cards, list items"
+      ],
+      "implementation": [
+        "Create useRipple hook capturing click position",
+        "Use react-spring for physics-based expansion",
+        "Calculate ripple size from container bounds",
+        "Add LiquidRipple wrapper component",
+        "Export from ui/index.ts"
+      ],
+      "notes": "Material Design popularized ripples. Ours should be softer, more water-like - slower fade, gentler edge."
+    },
+    {
+      "id": "DS-030",
+      "phase": "phase-7",
+      "title": "Add spring-based button press animations - Web",
+      "priority": 30,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/src/components/ui/AnimatedButton.tsx",
+        "/website/src/hooks/useSpringAnimation.ts"
+      ],
+      "description": "Replace CSS active:scale with spring physics for all interactive buttons",
+      "acceptance": [
+        "Button press uses SPRING.button config",
+        "Scale down with spring overshoot on release",
+        "Shadow reduces on press, expands on release",
+        "Works with existing button variants",
+        "Feels 'squishy' not mechanical"
+      ],
+      "implementation": [
+        "Create AnimatedButton wrapping existing button logic",
+        "Use react-spring useSpring for scale + shadow",
+        "Apply to GameControlBar FAB",
+        "Apply to primary action buttons",
+        "Test with keyboard and touch"
+      ],
+      "notes": "The bounce-back on release is what makes springs feel premium. Avoid abrupt stops."
+    },
+    {
+      "id": "DS-031",
+      "phase": "phase-7",
+      "title": "Implement sliding tab indicator - Web",
+      "priority": 31,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/src/components/PlaySwapStakeTabs.tsx"
+      ],
+      "description": "Add liquid morphing background pill that slides between tabs with spring physics",
+      "acceptance": [
+        "Background pill slides to active tab position",
+        "Uses SPRING_LIQUID.liquidMorph for movement",
+        "Pill width morphs to match tab width",
+        "Smooth color transition on active state",
+        "Works with keyboard navigation"
+      ],
+      "implementation": [
+        "Add animated indicator element behind tabs",
+        "Calculate target position from active tab ref",
+        "Use react-spring useSpring for x + width",
+        "Add subtle scale bounce on settle",
+        "Ensure focus-visible states still work"
+      ],
+      "notes": "Like iOS segment control. The indicator should feel like it's being pulled to the new position."
+    },
+    {
+      "id": "DS-032",
+      "phase": "phase-7",
+      "title": "Add toast enter/exit animations - Web",
+      "priority": 32,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/src/components/ui/ToastHost.tsx"
+      ],
+      "description": "Implement spring-based slide-in and slide-out for toast notifications",
+      "acceptance": [
+        "Toast slides in from right with spring overshoot",
+        "Stacks with stagger delay (50ms between toasts)",
+        "Slide out with spring + fade on dismiss",
+        "Progress bar for auto-dismiss animates smoothly",
+        "Swipe-to-dismiss gesture on touch devices"
+      ],
+      "implementation": [
+        "Wrap toast items with react-spring animated.div",
+        "Enter: translateX(100%) -> 0 with liquidSettle spring",
+        "Exit: translateX(0) -> translateX(100%) + opacity 0",
+        "Add AnimatePresence for exit animations",
+        "Implement touch gesture handler for swipe"
+      ],
+      "notes": "Toasts should enter assertively but exit gracefully - faster exit than enter."
+    },
+    {
+      "id": "DS-033",
+      "phase": "phase-7",
+      "title": "Implement glassmorphism modal backdrop - Web",
+      "priority": 33,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/src/components/ui/ConfirmModal.tsx",
+        "/website/src/components/casino/MobileDrawer.tsx"
+      ],
+      "description": "Enhance modal backdrops with animated glassmorphism blur effect",
+      "acceptance": [
+        "Backdrop blur animates from 0 to BLUR.md on open",
+        "Uses GLASS.medium configuration",
+        "Modal content has subtle glass border",
+        "Blur intensity tracks modal open progress",
+        "Works with reduced motion (falls back to opacity)"
+      ],
+      "implementation": [
+        "Add CSS custom property for blur value",
+        "Animate --backdrop-blur with react-spring",
+        "Apply backdrop-filter: blur(var(--backdrop-blur))",
+        "Add glass border from GLASS.medium.border",
+        "Test on Safari (webkit-backdrop-filter)"
+      ],
+      "notes": "Animated blur feels premium. Static blur feels static. The animation sells the effect."
+    },
+    {
+      "id": "DS-034",
+      "phase": "phase-7",
+      "title": "Add page transition with shared element morph - Web",
+      "priority": 34,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/src/components/ui/PageTransition.tsx"
+      ],
+      "description": "Implement FLIP-style page transitions with shared element morphing",
+      "acceptance": [
+        "Outgoing page fades/scales down",
+        "Incoming page fades/scales up from 0.95",
+        "Direction-aware (slide left vs right based on nav)",
+        "Shared elements (balance, header) morph position",
+        "Stagger child elements with delay"
+      ],
+      "implementation": [
+        "Replace CSS keyframe with react-spring transitions",
+        "Add exit animation support via AnimatePresence",
+        "Implement direction detection from route history",
+        "Use SPRING_LIQUID.liquidMorph for transitions",
+        "Add stagger wrapper for child reveal"
+      ],
+      "notes": "FLIP = First, Last, Invert, Play. Calculate element positions before/after, animate the diff."
+    },
+    {
+      "id": "DS-035",
+      "phase": "phase-7",
+      "title": "Implement animated number counter - Web",
+      "priority": 35,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/src/components/ui/AnimatedNumber.tsx",
+        "/website/src/components/WalletPill.tsx"
+      ],
+      "description": "Create count-up/down animation for balance and numeric displays",
+      "acceptance": [
+        "Numbers animate from old to new value",
+        "Uses spring physics for smooth settle",
+        "Supports currency formatting during animation",
+        "Color flash on increase (gold) / decrease (red)",
+        "Configurable duration and easing"
+      ],
+      "implementation": [
+        "Create AnimatedNumber component using react-spring",
+        "Interpolate between old and new numeric values",
+        "Format number during animation (locale, decimals)",
+        "Add optional delta badge that fades out",
+        "Apply to WalletPill balance display"
+      ],
+      "notes": "Slot machine digit effect. Numbers should 'roll' not 'jump'. Very satisfying when done right."
+    },
+    {
+      "id": "DS-036",
+      "phase": "phase-7",
+      "title": "Add scroll-triggered reveal animations - Web",
+      "priority": 36,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/src/hooks/useScrollReveal.ts",
+        "/website/src/components/ui/RevealOnScroll.tsx"
+      ],
+      "description": "Implement intersection observer-based reveal animations for content",
+      "acceptance": [
+        "Content fades + translates in when entering viewport",
+        "Stagger option for list items",
+        "Configurable threshold and rootMargin",
+        "Uses SPRING_LIQUID springs for animation",
+        "Once triggered, stays visible (no re-hide)"
+      ],
+      "implementation": [
+        "Create useScrollReveal hook with IntersectionObserver",
+        "Track visibility state with useSpring",
+        "Create RevealOnScroll wrapper component",
+        "Add stagger prop accepting index for delay calc",
+        "Apply to lobby game cards, transaction lists"
+      ],
+      "notes": "Reveals create sense of journey and discovery. Should feel natural, not performative."
+    },
+    {
+      "id": "DS-037",
+      "phase": "phase-7",
+      "title": "Add magnetic cursor effect for CTAs - Web",
+      "priority": 37,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/src/hooks/useMagneticCursor.ts",
+        "/website/src/components/casino/GameControlBar.tsx"
+      ],
+      "description": "Implement subtle magnetic pull effect where buttons move slightly toward cursor",
+      "acceptance": [
+        "Button translates toward cursor when within threshold",
+        "Maximum translation of 4-6px",
+        "Spring return to center on mouse leave",
+        "Only on desktop (no effect on touch)",
+        "Applied to FAB and primary CTAs"
+      ],
+      "implementation": [
+        "Create useMagneticCursor hook tracking mouse position",
+        "Calculate distance and angle from button center",
+        "Apply translateX/Y with spring physics",
+        "Add threshold distance for activation (e.g., 100px)",
+        "Apply to GameControlBar FAB button"
+      ],
+      "notes": "Subtle magnetism creates sense of object having 'weight'. Don't overdo it - barely perceptible is best."
+    },
+    {
+      "id": "DS-038",
+      "phase": "phase-7",
+      "title": "Implement bottom nav indicator animation - Web",
+      "priority": 38,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/src/components/BottomNav.tsx"
+      ],
+      "description": "Add animated indicator line that slides between nav items with spring physics",
+      "acceptance": [
+        "Indicator line slides to active nav item",
+        "Uses SPRING_LIQUID.liquidSlide for movement",
+        "Icon scales up slightly on active (1.1x)",
+        "Color transition uses liquidSmooth easing",
+        "Works with route changes"
+      ],
+      "implementation": [
+        "Add animated indicator element",
+        "Calculate position from active nav item ref",
+        "Use react-spring for x position animation",
+        "Add subtle icon scale animation on active",
+        "Ensure touch targets remain accessible"
+      ],
+      "notes": "Navigation should feel responsive and alive. The indicator 'follows' your selection."
+    },
+    {
+      "id": "DS-039",
+      "phase": "phase-7",
+      "title": "Add skeleton shimmer loading states - Web",
+      "priority": 39,
+      "status": "completed",
+      "passes": true,
+      "platform": "web",
+      "files": [
+        "/website/src/components/ui/Skeleton.tsx",
+        "/website/src/components/ui/GameSkeleton.tsx"
+      ],
+      "description": "Create animated skeleton components with traveling shimmer highlight",
+      "acceptance": [
+        "Base skeleton with pulse animation",
+        "Shimmer highlight travels across skeleton",
+        "Game-specific composite skeletons (table, cards, chips)",
+        "Respects reduced motion (static instead of shimmer)",
+        "Smooth transition to real content on load"
+      ],
+      "implementation": [
+        "Create base Skeleton with CSS gradient animation",
+        "Shimmer: linear-gradient moving via background-position",
+        "Create GameSkeleton composites matching game layouts",
+        "Add fade-out transition when content loads",
+        "Apply to game loading states"
+      ],
+      "notes": "Skeletons signal 'content is coming'. The shimmer suggests active loading, not broken state."
+    },
+    {
+      "id": "DS-040",
+      "phase": "phase-8",
+      "title": "Implement swipe-to-dismiss modal gesture - Mobile",
+      "priority": 40,
+      "status": "completed",
+      "passes": true,
+      "platform": "mobile",
+      "files": [
+        "/mobile/src/components/ui/GlassModal.tsx"
+      ],
+      "description": "Add vertical pan gesture for dismissing bottom sheets and modals",
+      "acceptance": [
+        "Swipe down to dismiss with velocity tracking",
+        "Rubber-band effect when pulling beyond threshold",
+        "Background blur intensity follows drag progress",
+        "Snap back if not past dismiss threshold",
+        "Haptic feedback on dismiss"
+      ],
+      "implementation": [
+        "Add Gesture.Pan() to modal content",
+        "Track translateY with useSharedValue",
+        "Calculate dismiss threshold (e.g., 150px or velocity > 500)",
+        "Interpolate backdrop blur with drag progress",
+        "Add Haptics.impactAsync on dismiss trigger"
+      ],
+      "notes": "iOS standard pattern. The rubber-band physics at boundaries is what makes it feel native."
+    },
+    {
+      "id": "DS-041",
+      "phase": "phase-8",
+      "title": "Add parallax scroll to lobby game cards - Mobile",
+      "priority": 41,
+      "status": "completed",
+      "passes": true,
+      "platform": "mobile",
+      "files": [
+        "/mobile/src/screens/LobbyScreen.tsx"
+      ],
+      "description": "Implement parallax depth effect where cards translate at different speeds during scroll",
+      "acceptance": [
+        "Cards translate vertically at 0.5x scroll speed",
+        "Creates depth illusion during scroll",
+        "Header compresses smoothly on scroll up",
+        "Balance display shrinks elegantly",
+        "Performance: 60fps on mid-range Android"
+      ],
+      "implementation": [
+        "Add onScroll handler with useAnimatedScrollHandler",
+        "Calculate parallax offset per card based on index",
+        "Use interpolate for smooth depth mapping",
+        "Add header scale/translate animation",
+        "Use useAnimatedStyle for card transforms"
+      ],
+      "notes": "Parallax creates sense of depth without 3D transforms. Subtle is key - too much causes nausea."
+    },
+    {
+      "id": "DS-042",
+      "phase": "phase-8",
+      "title": "Implement magnetic snap scrolling - Mobile",
+      "priority": 42,
+      "status": "completed",
+      "passes": true,
+      "platform": "mobile",
+      "files": [
+        "/mobile/src/components/ui/SnapList.tsx",
+        "/mobile/src/screens/LobbyScreen.tsx"
+      ],
+      "description": "Add spring-based snapping to game cards with momentum preservation",
+      "acceptance": [
+        "Cards snap to center with spring physics",
+        "Momentum from flick preserved (fast flick = skip cards)",
+        "Haptic feedback on snap",
+        "Works with FlatList/FlashList",
+        "Smooth deceleration curve"
+      ],
+      "implementation": [
+        "Create SnapList wrapper component",
+        "Use snapToInterval with custom deceleration",
+        "Add onMomentumScrollEnd haptic trigger",
+        "Calculate snap point from scroll offset",
+        "Apply SPRING_LIQUID.liquidSettle for snap animation"
+      ],
+      "notes": "iOS scroll physics are the gold standard. Match their friction coefficients for natural feel."
+    },
+    {
+      "id": "DS-043",
+      "phase": "phase-8",
+      "title": "Add staggered card entrance animation - Mobile",
+      "priority": 43,
+      "status": "completed",
+      "passes": true,
+      "platform": "mobile",
+      "files": [
+        "/mobile/src/screens/LobbyScreen.tsx",
+        "/mobile/src/components/ui/StaggerContainer.tsx"
+      ],
+      "description": "Implement choreographed entrance with cards fading in sequentially",
+      "acceptance": [
+        "Cards enter with fade + translateY + scale",
+        "Stagger delay of 50ms between cards",
+        "First card starts after header settles",
+        "Uses SPRING_LIQUID.liquidFloat for bounce",
+        "Reduced motion: instant appear"
+      ],
+      "implementation": [
+        "Create StaggerContainer wrapper",
+        "Pass index to calculate entering delay",
+        "Use Entering modifier with withDelay",
+        "Apply FadeInUp.delay(index * 50).springify()",
+        "Check reducedMotion via useReducedMotion hook"
+      ],
+      "notes": "Choreographed reveals feel intentional and premium. Random simultaneous entrance feels chaotic."
+    },
+    {
+      "id": "DS-044",
+      "phase": "phase-8",
+      "title": "Implement chip toss physics - Mobile",
+      "priority": 44,
+      "status": "completed",
+      "passes": true,
+      "platform": "mobile",
+      "files": [
+        "/mobile/src/components/casino/ChipSelector.tsx",
+        "/mobile/src/components/casino/ChipPile.tsx"
+      ],
+      "description": "Add parabolic arc animation when placing chips with physics-based landing",
+      "acceptance": [
+        "Chip follows arc trajectory to bet area",
+        "Rotation during flight (3D tumble effect)",
+        "Slight scatter on landing near existing chips",
+        "Bounce and settle with spring physics",
+        "Haptic on land"
+      ],
+      "implementation": [
+        "Calculate parabolic path from start to end position",
+        "Use withSequence for arc phases",
+        "Add rotateX/rotateY during flight",
+        "Calculate landing offset based on existing chips",
+        "Trigger SPRING.chipSettle on land"
+      ],
+      "notes": "Chips should feel like they have weight. The arc and tumble sell the 'toss' gesture."
+    },
+    {
+      "id": "DS-045",
+      "phase": "phase-8",
+      "title": "Add card deal animation from deck - Mobile",
+      "priority": 45,
+      "status": "completed",
+      "passes": true,
+      "platform": "mobile",
+      "files": [
+        "/mobile/src/components/casino/DealtCard.tsx",
+        "/mobile/src/constants/theme.ts"
+      ],
+      "description": "Implement cards flying from deck position with rotation during deal",
+      "acceptance": [
+        "Card originates from top-right deck position",
+        "Flies in arc to final position",
+        "Rotates during flight (45deg to 0deg)",
+        "Stagger delay between multiple cards",
+        "Flip animation after reaching position"
+      ],
+      "implementation": [
+        "Add deal origin position constant",
+        "Calculate trajectory from origin to target",
+        "Use withSequence: translate + rotate, then flip",
+        "Apply stagger via STAGGER.normal (50ms)",
+        "Integrate with existing Card flip logic"
+      ],
+      "notes": "DealtCard component enhanced: rotation 45°→0°, sequential flip after landing, STAGGER exported from theme."
+    },
+    {
+      "id": "DS-046",
+      "phase": "phase-8",
+      "title": "Implement roulette wheel physics - Mobile",
+      "priority": 46,
+      "status": "completed",
+      "passes": true,
+      "platform": "mobile",
+      "files": [
+        "/mobile/src/screens/games/RouletteScreen.tsx",
+        "/mobile/src/components/casino/RouletteWheel.tsx",
+        "/mobile/src/components/casino/index.ts"
+      ],
+      "description": "Create physics-based wheel spin with realistic deceleration and ball bounce",
+      "acceptance": [
+        "Wheel spins with initial velocity",
+        "Deceleration follows friction curve",
+        "Ball bounces with decreasing amplitude",
+        "Ball settles into winning slot",
+        "Haptic pulses as ball crosses slots"
+      ],
+      "implementation": [
+        "Calculate initial rotation from spin strength",
+        "Apply friction coefficient for deceleration",
+        "Ball: damped harmonic motion for bounces",
+        "Interpolate ball position to wheel rotation",
+        "Trigger haptics based on rotation angle"
+      ],
+      "notes": "New RouletteWheel component with European wheel layout, ball physics, slot segments, and haptic feedback."
+    },
+    {
+      "id": "DS-047",
+      "phase": "phase-8",
+      "title": "Add dice throw physics - Mobile",
+      "priority": 47,
+      "status": "completed",
+      "passes": true,
+      "platform": "mobile",
+      "files": [
+        "/mobile/src/screens/games/CrapsScreen.tsx",
+        "/mobile/src/screens/games/SicBoScreen.tsx",
+        "/mobile/src/components/casino/Dice3D.tsx"
+      ],
+      "description": "Implement 3D dice tumble with realistic bounce and settle physics",
+      "acceptance": [
+        "Dice rotate on all 3 axes during throw",
+        "Bounce on table with decreasing height",
+        "Each die settles independently",
+        "Final face matches server result",
+        "Shake-to-roll gesture option"
+      ],
+      "implementation": [
+        "Create Dice3D component with 6-face cube",
+        "Calculate rotation to land on target face",
+        "Add throw arc with gravity",
+        "Bounce: damped spring with floor collision",
+        "Settle using SPRING_LIQUID.liquidSettle"
+      ],
+      "notes": "Created Dice3D component with pip-based face layout. React Native doesn't support true 3D CSS transforms (translateZ, preserve-3d), so implemented convincing 2.5D effect using rotation, scale, dynamic shadows, and bounce physics. Integrated into CrapsScreen (2 dice) and SicBoScreen (3 dice). Uses SPRING_LIQUID.liquidSettle for organic settling animation. Shake-to-roll deferred to separate story."
+    },
+    {
+      "id": "DS-048",
+      "phase": "phase-8",
+      "title": "Enhance celebration particle system - Mobile",
+      "priority": 48,
+      "status": "completed",
+      "passes": true,
+      "platform": "mobile",
+      "files": [
+        "/mobile/src/components/celebration/GoldParticles.tsx",
+        "/mobile/src/components/celebration/CelebrationOverlay.tsx",
+        "/mobile/src/components/celebration/MultiplierBadge.tsx",
+        "/mobile/src/hooks/useScreenShake.ts"
+      ],
+      "description": "Add confetti variants and screen shake for jackpot wins",
+      "acceptance": [
+        "Multiple particle shapes: squares, triangles, circles",
+        "Color variants: gold, multicolor, game-themed",
+        "Firework burst patterns for big wins",
+        "Subtle screen shake for jackpots",
+        "Win streak multiplier badge animation"
+      ],
+      "implementation": [
+        "Add shape variants to particle generator",
+        "Create firework burst timing sequence",
+        "Add screen shake via transform on root view",
+        "Create animated multiplier badge with scale pop",
+        "Add celebration intensity tiers (small/medium/big)"
+      ],
+      "notes": "Enhanced GoldParticles with circle/square/triangle/star shapes. Added ColorVariant (gold/multicolor/game). Firework burst creates 3 sequential waves. Created useScreenShake hook with amplitude decay. MultiplierBadge shows pop-in + glow pulse. CelebrationOverlay orchestrates all effects."
+    },
+    {
+      "id": "DS-049",
+      "phase": "phase-9",
+      "title": "Add ambient floating particles - Both",
+      "priority": 49,
+      "status": "completed",
+      "passes": true,
+      "platform": "both",
+      "files": [
+        "/website/src/components/ui/AmbientParticles.tsx",
+        "/mobile/src/components/ui/AmbientParticles.tsx"
+      ],
+      "description": "Create subtle floating dust motes for depth and premium atmosphere",
+      "acceptance": [
+        "Particles drift slowly (8-15s cycle)",
+        "Random size, opacity, speed variation",
+        "Very subtle (barely visible) - ambient not distracting",
+        "Pauses when app backgrounded",
+        "Respects reduced motion"
+      ],
+      "implementation": [
+        "Create particle array with random properties",
+        "Animate translateY with sinusoidal path",
+        "Add slight X drift for organic movement",
+        "Use CSS animation (web) or Reanimated (mobile)",
+        "Limit to 10-15 particles for performance"
+      ],
+      "notes": "Created AmbientParticles for both platforms. Web uses CSS @keyframes ambientFloat with sinusoidal path. Mobile uses Reanimated withRepeat/withSequence. Both pause when backgrounded and respect reduced motion. 12 particles default, 0.1-0.25 opacity (barely visible), 8-15s cycle."
+    },
+    {
+      "id": "DS-050",
+      "phase": "phase-9",
+      "title": "Implement anticipatory button animations - Both",
+      "priority": 50,
+      "status": "completed",
+      "passes": true,
+      "platform": "both",
+      "files": [
+        "/website/src/components/ui/AnimatedButton.tsx",
+        "/mobile/src/components/ui/PrimaryButton.tsx"
+      ],
+      "description": "Add hover/focus animations that anticipate press action",
+      "acceptance": [
+        "Button lifts slightly on hover/focus",
+        "Shadow expands to show 'pressable' state",
+        "Subtle glow pulse when idle and enabled",
+        "Hint of scale-up (1.01) on approach",
+        "Prepares user for what press will do"
+      ],
+      "implementation": [
+        "Web: Add hover state with translateY(-2px)",
+        "Add shadow expansion on hover",
+        "Create subtle breathe animation (scale 1.0 to 1.01)",
+        "Mobile: Focus state for accessibility",
+        "Document anticipation patterns"
+      ],
+      "notes": "Web: AnimatedButton enhanced with handleMouseEnter for hover lift (-2px), scale (1.01), and expanded shadow. Optional enableBreathing prop adds 8s idle pulse (1.0→1.02). Uses react-spring `to()` for multi-value interpolation. Mobile: PrimaryButton enhanced with optional enableBreathing prop. Idle animation uses withRepeat/withSequence with sinusoidal easing. Pauses when app backgrounded. All animations respect prefers-reduced-motion."
+    },
+    {
+      "id": "DS-051",
+      "phase": "phase-9",
+      "title": "Add connection state liquid transitions - Both",
+      "priority": 51,
+      "status": "completed",
+      "passes": true,
+      "platform": "both",
+      "files": [
+        "/website/src/components/ConnectionStatus.tsx",
+        "/mobile/src/components/ui/ConnectionStatusBanner.tsx"
+      ],
+      "description": "Create smooth morphing transitions between connection states",
+      "acceptance": [
+        "Status badge morphs color smoothly",
+        "Icon transitions with crossfade",
+        "Pulse animation during connecting",
+        "Success celebration on reconnect",
+        "Error state has attention-grabbing but not alarming animation"
+      ],
+      "implementation": [
+        "Use interpolateColor for state transitions",
+        "Add icon crossfade with opacity springs",
+        "Create pulse ring for connecting state",
+        "Add brief success flash on reconnect",
+        "Error: subtle shake + color change"
+      ],
+      "notes": "Web: Added animated status dot with color spring, icon crossfade transition, pulse ring during connecting, success flash overlay on reconnect, subtle shake on error. Mobile: Enhanced with interpolateColor for smooth color morphing, success flash animation, error shake sequence. Both respect reduced motion."
+    },
+    {
+      "id": "DS-052",
+      "phase": "phase-9",
+      "title": "Implement tutorial spotlight reveal - Both",
+      "priority": 52,
+      "status": "completed",
+      "passes": true,
+      "platform": "both",
+      "files": [
+        "/website/src/components/ui/TutorialSpotlight.tsx",
+        "/mobile/src/components/ui/TutorialOverlay.tsx"
+      ],
+      "description": "Create animated spotlight that reveals UI elements during onboarding",
+      "acceptance": [
+        "Circular reveal expands from target element",
+        "Background dims with animated blur",
+        "Spotlight follows element if it moves",
+        "Smooth transition between tutorial steps",
+        "Animated gesture hints (hand showing tap/swipe)"
+      ],
+      "implementation": [
+        "Create spotlight mask with animated clip-path/borderRadius",
+        "Calculate element position via measure/refs",
+        "Animate spotlight position between steps",
+        "Create hand gesture Lottie/SVG animations",
+        "Add step indicator with spring transitions"
+      ],
+      "notes": "Web: Created TutorialSpotlight with radial gradient mask, animated spotlight position via react-spring, gesture hint icons, step indicator dots, tooltip card with spring transitions. Mobile: Added GestureHint component with pulse/bounce animations, updated TutorialStep type. Both respect reduced motion."
+    },
+    {
+      "id": "DS-053",
+      "phase": "phase-9",
+      "title": "Add form input floating label animations - Both",
+      "priority": 53,
+      "status": "completed",
+      "passes": true,
+      "platform": "both",
+      "files": [
+        "/website/src/components/ui/FloatingInput.tsx",
+        "/mobile/src/components/ui/PremiumInput.tsx"
+      ],
+      "description": "Implement animated floating labels that rise on focus",
+      "acceptance": [
+        "Label animates from placeholder to floating position",
+        "Scale reduces as label rises",
+        "Color transitions to accent on focus",
+        "Spring physics for natural movement",
+        "Works with validation states"
+      ],
+      "implementation": [
+        "Track focus state and value presence",
+        "Animate translateY, scale, and color together",
+        "Use SPRING_LIQUID.liquidFloat for movement",
+        "Add focus ring animation below input",
+        "Integrate with form validation"
+      ],
+      "notes": "Web: Created FloatingInput component using react-spring with floating label animation (translateY + scale), color transitions via progress interpolation, animated focus ring, validation checkmark animation, shake-on-error imperative method. Mobile: PremiumInput already had full implementation (floating label, scale reduction, color transition, underline animation, validation checkmark, shake). Both respect reduced motion."
+    },
+    {
+      "id": "DS-054",
+      "phase": "phase-9",
+      "title": "Create layout animation system - Both",
+      "priority": 54,
+      "status": "completed",
+      "passes": true,
+      "platform": "both",
+      "files": [
+        "/website/src/hooks/useLayoutAnimation.ts",
+        "/mobile/src/hooks/useLayoutAnimation.ts"
+      ],
+      "description": "Implement FLIP-based layout animations for list reordering and content changes",
+      "acceptance": [
+        "Elements animate position when layout changes",
+        "Works with add/remove list items",
+        "Stagger delays for multiple moving elements",
+        "Spring physics for natural settling",
+        "Performance: no layout thrashing"
+      ],
+      "implementation": [
+        "Create useLayoutAnimation hook",
+        "Capture element positions before update",
+        "Calculate position deltas after update",
+        "Apply inverse transform then animate to 0",
+        "Use requestAnimationFrame for batching"
+      ],
+      "notes": "Web: Created useLayoutAnimation (single element), useListLayoutAnimation (multiple elements), useEnterExitAnimation (mount/unmount) using react-spring. Uses translate3d for GPU acceleration. Mobile: Created useLayoutAnimation, useListItemAnimation, useEnterAnimation, useExitAnimation, useSharedElementTransition using Reanimated. Uses onLayout for position tracking and withSpring/withDelay for staggered animations. Both respect reduced motion."
+    },
+    {
+      "id": "DS-055",
+      "phase": "phase-9",
+      "title": "Add game result morph animations - Both",
+      "priority": 55,
+      "status": "completed",
+      "passes": true,
+      "platform": "both",
+      "files": [
+        "/website/src/components/casino/ResultDisplay.tsx",
+        "/mobile/src/components/celebration/ResultReveal.tsx"
+      ],
+      "description": "Create morphing transition between game states (betting -> result)",
+      "acceptance": [
+        "Betting UI morphs into result display",
+        "Numbers roll to final values",
+        "Color shifts based on win/loss",
+        "Elements reposition with spring physics",
+        "Payout amount animates up from 0"
+      ],
+      "implementation": [
+        "Identify shared elements between states",
+        "Apply FLIP for position morphing",
+        "Use AnimatedNumber for value changes",
+        "Add color interpolation for state change",
+        "Sequence: morph -> settle -> celebrate"
+      ],
+      "notes": "Web: Created ResultDisplay using react-spring with staged reveals (outcome→payout→breakdown→session), CountUp for payout animation, glassmorphism backdrop blur, glow pulse for wins, keyboard dismiss support. Mobile: ResultReveal already comprehensive with staged RevealElement animations, AnimatedPayout counter, GlowPulse for wins, color-coded outcomes. Both use spring physics and respect reduced motion."
+    },
+    {
+      "id": "DS-056",
+      "phase": "phase-9",
+      "title": "Implement idle state breathing animations - Both",
+      "priority": 56,
+      "status": "completed",
+      "passes": true,
+      "platform": "both",
+      "files": [
+        "/website/src/components/casino/GameControlBar.tsx",
+        "/mobile/src/components/ui/PrimaryButton.tsx"
+      ],
+      "description": "Add subtle breathing animation to key CTAs when idle",
+      "acceptance": [
+        "CTA buttons have subtle scale pulse (1.0 to 1.02)",
+        "8-10 second cycle (very slow)",
+        "Only when user hasn't interacted recently",
+        "Stops immediately on hover/focus",
+        "Reduced motion: disabled entirely"
+      ],
+      "implementation": [
+        "Track last interaction timestamp",
+        "After 5s idle, start breathing animation",
+        "Use CSS animation (web) or withRepeat (mobile)",
+        "Scale: 1.0 -> 1.02 -> 1.0 with ease-in-out",
+        "Add subtle shadow pulse synchronized"
+      ],
+      "notes": "Web: Added breathing animation to GameControlBar FAB button with react-spring. Tracks idle state via timer (5s timeout), stops on hover/focus, uses 8s cycle (4s up + 4s down), scale 1.0→1.02. Mobile: PrimaryButton already had full breathing implementation via enableBreathing prop from DS-050 (withRepeat/withSequence, 8s cycle, stops on press, pauses when backgrounded). Both respect prefers-reduced-motion."
     }
   ],
   "bugTracker": [],
@@ -648,6 +1653,34 @@
     "tokenCoverage": "100% of colors, spacing, typography from tokens",
     "visualParity": "Web and mobile screens visually identical",
     "accessibility": "Zero WCAG AA violations",
-    "performance": "60fps animations on all target devices"
+    "performance": "60fps animations on all target devices",
+    "liquidMotion": "All primary interactions use spring physics",
+    "glassmorphism": "Modal and overlay surfaces use glass effects",
+    "microInteractions": "All buttons, nav, and forms have micro-animations",
+    "anticipation": "CTAs signal interactivity before user action",
+    "luxuryFeel": "User feedback: 'premium', 'smooth', 'polished'"
+  },
+  "designPrinciples": {
+    "jonyIve": {
+      "minimalism": "Less, but better - reduce to essential elements",
+      "materialHonesty": "Digital materials are themselves, not imitations",
+      "whiteSpace": "Generous breathing room creates elegance",
+      "typography": "Type as primary visual element",
+      "care": "Every detail matters, from unwrap to interaction"
+    },
+    "liquidMotion": {
+      "springs": "Use spring physics over linear/eased timing",
+      "momentum": "Preserve gesture velocity in animations",
+      "rubberBand": "Add resistance at boundaries",
+      "settle": "Animations gradually come to rest, never stop abruptly",
+      "anticipation": "Prepare user for actions subconsciously"
+    },
+    "luxuryPatterns": {
+      "glassmorphism": "Frosted glass with animated blur",
+      "depth": "Layered shadows and parallax create dimension",
+      "flow": "Seamless state transitions, morphing elements",
+      "ambient": "Subtle atmospheric effects (particles, breathing)",
+      "celebration": "Win magnitude matched to celebration intensity"
+    }
   }
 }

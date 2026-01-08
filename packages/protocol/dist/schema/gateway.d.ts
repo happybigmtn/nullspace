@@ -22,36 +22,36 @@ export declare const startGameSchema: z.ZodEffects<z.ZodObject<{
     }>, "many">>;
     requestId: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
+    bet: string;
     type: "start_game";
     gameType: GameType;
-    bet: string;
     requestId?: string | undefined;
     sideBets?: {
         amount: string;
         type: number;
     }[] | undefined;
 }, {
+    bet: string;
     type: "start_game";
     gameType: number;
-    bet: string;
     requestId?: string | undefined;
     sideBets?: {
         amount: string;
         type: number;
     }[] | undefined;
 }>, {
+    bet: string;
     type: "start_game";
     gameType: GameType;
-    bet: string;
     requestId?: string | undefined;
     sideBets?: {
         amount: string;
         type: number;
     }[] | undefined;
 }, {
+    bet: string;
     type: "start_game";
     gameType: number;
-    bet: string;
     requestId?: string | undefined;
     sideBets?: {
         amount: string;
@@ -79,36 +79,36 @@ export declare const clientMessageSchema: z.ZodUnion<[z.ZodEffects<z.ZodObject<{
     }>, "many">>;
     requestId: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
+    bet: string;
     type: "start_game";
     gameType: GameType;
-    bet: string;
     requestId?: string | undefined;
     sideBets?: {
         amount: string;
         type: number;
     }[] | undefined;
 }, {
+    bet: string;
     type: "start_game";
     gameType: number;
-    bet: string;
     requestId?: string | undefined;
     sideBets?: {
         amount: string;
         type: number;
     }[] | undefined;
 }>, {
+    bet: string;
     type: "start_game";
     gameType: GameType;
-    bet: string;
     requestId?: string | undefined;
     sideBets?: {
         amount: string;
         type: number;
     }[] | undefined;
 }, {
+    bet: string;
     type: "start_game";
     gameType: number;
-    bet: string;
     requestId?: string | undefined;
     sideBets?: {
         amount: string;
