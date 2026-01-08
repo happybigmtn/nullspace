@@ -4119,3 +4119,30 @@ Updated `docs/testnet-readiness-runbook.md` Section 6:
 - Session stats are calculated on-the-fly for date-filtered views
 
 ---
+
+## 2026-01-07 - US-167: Add protocol fuzzing and adversarial input testing
+
+- What was implemented:
+  - Created `packages/protocol/test/fuzz.test.ts` with 39 property-based tests using fast-check
+  - Version header roundtrip testing (`withVersionHeader → stripVersionHeader`)
+  - All game encoders tested: blackjack, roulette, craps, baccarat, sicbo atomic batches
+  - All decoders tested: card, cards, gameResult, blackjackState, versionedPayload
+  - Random binary input crash testing (decoders only throw ProtocolError, never crash)
+  - Mutation testing (bit flips in valid data)
+  - Boundary condition tests (max u64, max message length, edge card counts)
+  - CI integration: `CI=true` runs 1000 iterations; local default is 10000
+  - Extended fuzzing: `FUZZ_ITERATIONS=1000000` runs 1M+ iterations
+- Files changed:
+  - `packages/protocol/test/fuzz.test.ts` - Created 39 fuzz tests
+  - `packages/protocol/package.json` - Added fast-check devDependency
+  - `.github/workflows/tests.yml` - Added ProtocolFuzz job
+- **Learnings:**
+  - fast-check property-based testing generates random inputs to find edge cases
+  - `fc.property()` defines invariants that must hold for all generated inputs
+  - `fc.assert()` runs the property many times with different random seeds
+  - Use `fc.uint8Array()`, `fc.bigInt()`, `fc.integer()` for binary protocol testing
+  - `CI=true` environment variable enables reduced iteration mode
+  - All decoders should only throw ProtocolError or subclasses, never crash
+  - 1M iterations took ~7.5 minutes locally with 0 crashes
+
+---

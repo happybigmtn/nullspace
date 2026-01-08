@@ -570,8 +570,8 @@
         "Integrate fuzzing into CI (with reduced iterations)"
       ],
       "priority": 90,
-      "passes": false,
-      "notes": "TEST-MEDIUM: Limited fuzzing exists. Malformed messages could crash gateway/clients."
+      "passes": true,
+      "notes": "COMPLETE: Created packages/protocol/test/fuzz.test.ts with 39 property-based tests using fast-check. Covers: version header roundtrip, blackjack/roulette/craps/baccarat/sicbo encoding, card/game-result/blackjack-state decoding, random binary crash testing, mutation (bit flip) testing, boundary conditions. 1M+ iterations pass without crashes. Added ProtocolFuzz job to tests.yml (CI=true runs 1000 iterations)."
     },
     {
       "id": "US-168",
