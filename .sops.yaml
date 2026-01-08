@@ -24,7 +24,7 @@ creation_rules:
   # Staging secrets - requires staging key
   - path_regex: secrets/staging/.*\.enc\.(yaml|json|env)$
     age: >-
-      age1staging_key_placeholder_replace_with_actual_public_key
+      age1xaw2rdg74qg5qtxltsj9sjzul9uptelmuptge36xdz4d9x4r7q7qt6vn49
 
   # Development secrets - can use local development key
   - path_regex: secrets/development/.*\.enc\.(yaml|json|env)$
