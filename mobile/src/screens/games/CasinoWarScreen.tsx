@@ -8,7 +8,7 @@ import Animated, { SlideInLeft, SlideInRight } from 'react-native-reanimated';
 import { Card } from '../../components/casino';
 import { ChipSelector } from '../../components/casino';
 import { GameLayout } from '../../components/game';
-import { TutorialOverlay, PrimaryButton } from '../../components/ui';
+import { TutorialOverlay, PrimaryButton, BlackjackSkeleton } from '../../components/ui';
 import { haptics } from '../../services/haptics';
 import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useChipBetting, useBetSubmission, useWinCelebration } from '../../hooks';
 import { COLORS, SPACING, TYPOGRAPHY, SPRING } from '../../constants/theme';
@@ -58,6 +58,8 @@ export function CasinoWarScreen() {
     tieBet: 0,
   });
   const [showTutorial, setShowTutorial] = useState(false);
+  // US-156: Track loading state during InteractionManager parsing
+  const [isParsingState, setIsParsingState] = useState(false);
 
   // Track mounted state to prevent setState after unmount
   const isMounted = useRef(true);
@@ -83,8 +85,11 @@ export function CasinoWarScreen() {
     if (lastMessage.type === 'game_started' || lastMessage.type === 'game_move') {
       clearSubmission(); // Clear bet submission state on server response
       if (parsedState) {
+        // US-156: Show skeleton during state parsing
+        setIsParsingState(true);
         InteractionManager.runAfterInteractions(() => {
           if (!isMounted.current) return;
+          setIsParsingState(false);
           setState((prev) => {
             const nextPhase =
               parsedState.stage === 'war'
@@ -266,6 +271,11 @@ export function CasinoWarScreen() {
         celebrationState={celebrationState}
         gameId="casinoWar"
       >
+        {/* US-156: Show skeleton during state parsing */}
+        {isParsingState ? (
+          <BlackjackSkeleton />
+        ) : (
+        <>
         {/* Game Area */}
         <View style={styles.gameArea}>
         {/* Cards Display */}
@@ -405,7 +415,8 @@ export function CasinoWarScreen() {
           />
         </View>
       )}
-
+        </>
+        )}
       </GameLayout>
 
       {/* Tutorial */}

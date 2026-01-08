@@ -8,7 +8,7 @@ import Animated, { FadeIn, SlideInUp, SlideInDown } from 'react-native-reanimate
 import { Card } from '../../components/casino';
 import { ChipSelector } from '../../components/casino';
 import { GameLayout } from '../../components/game';
-import { TutorialOverlay, PrimaryButton } from '../../components/ui';
+import { TutorialOverlay, PrimaryButton, BlackjackSkeleton } from '../../components/ui';
 import { haptics } from '../../services/haptics';
 import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useBetSubmission } from '../../hooks';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS, SPRING } from '../../constants/theme';
@@ -105,6 +105,8 @@ export function UltimateTXHoldemScreen() {
   const [selectedChip, setSelectedChip] = useState<ChipValue>(25);
   const [activeBetType, setActiveBetType] = useState<'main' | 'trips' | 'sixcard' | 'progressive'>('main');
   const [showTutorial, setShowTutorial] = useState(false);
+  // US-156: Track loading state during InteractionManager parsing
+  const [isParsingState, setIsParsingState] = useState(false);
 
   // Track mounted state to prevent setState after unmount
   const isMounted = useRef(true);
@@ -132,10 +134,13 @@ export function UltimateTXHoldemScreen() {
         }));
         return;
       }
+      // US-156: Show skeleton during state parsing
+      setIsParsingState(true);
       InteractionManager.runAfterInteractions(() => {
         if (!isMounted.current) return;
         const parsed = parseUltimateHoldemState(stateBytes);
         if (!parsed) {
+          setIsParsingState(false);
           if (__DEV__) {
             console.error('[UltimateTXHoldem] Failed to parse state blob');
           }
@@ -147,6 +152,7 @@ export function UltimateTXHoldemScreen() {
           }));
           return;
         }
+        setIsParsingState(false);
         setState((prev) => ({
           ...prev,
           playerCards: parsed.playerCards.length > 0 ? parsed.playerCards : prev.playerCards,
@@ -498,6 +504,11 @@ export function UltimateTXHoldemScreen() {
         connectionStatus={connectionStatusProps}
         gameId="ultimateHoldem"
       >
+        {/* US-156: Show skeleton during state parsing */}
+        {isParsingState ? (
+          <BlackjackSkeleton />
+        ) : (
+        <>
         {/* Game Area */}
       <ScrollView style={styles.gameArea} contentContainerStyle={styles.gameContent}>
         {/* Dealer Hand */}
@@ -770,6 +781,8 @@ export function UltimateTXHoldemScreen() {
           />
         </View>
       )}
+        </>
+        )}
       </GameLayout>
 
       {/* Tutorial */}

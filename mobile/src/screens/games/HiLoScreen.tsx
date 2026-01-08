@@ -8,7 +8,7 @@ import Animated, { FadeIn, SlideInUp } from 'react-native-reanimated';
 import { Card } from '../../components/casino';
 import { ChipSelector } from '../../components/casino';
 import { GameLayout } from '../../components/game';
-import { TutorialOverlay, PrimaryButton } from '../../components/ui';
+import { TutorialOverlay, PrimaryButton, HiLoSkeleton } from '../../components/ui';
 import { haptics } from '../../services/haptics';
 import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useChipBetting, useBetSubmission } from '../../hooks';
 import {
@@ -62,6 +62,8 @@ export function HiLoScreen() {
     parseError: null,
   });
   const [showTutorial, setShowTutorial] = useState(false);
+  // US-156: Track loading state during InteractionManager parsing
+  const [isParsingState, setIsParsingState] = useState(false);
 
   // Track mounted state to prevent setState after unmount
   const isMounted = useRef(true);
@@ -97,6 +99,8 @@ export function HiLoScreen() {
         return;
       }
 
+      // US-156: Show skeleton during state parsing
+      setIsParsingState(true);
       InteractionManager.runAfterInteractions(() => {
         if (!isMounted.current) return;
         const parsed = parseHiLoState(stateBytes);
@@ -104,6 +108,7 @@ export function HiLoScreen() {
           if (__DEV__) {
             console.error('[HiLo] Failed to parse state blob');
           }
+          setIsParsingState(false);
           setState((prev) => ({
             ...prev,
             phase: 'error',
@@ -112,6 +117,7 @@ export function HiLoScreen() {
           }));
           return;
         }
+        setIsParsingState(false);
         setState((prev) => ({
           ...prev,
           currentCard: parsed.currentCard,
@@ -220,6 +226,11 @@ export function HiLoScreen() {
         connectionStatus={connectionStatusProps}
         gameId="hiLo"
       >
+        {/* US-156: Show skeleton during state parsing */}
+        {isParsingState ? (
+          <HiLoSkeleton />
+        ) : (
+        <>
         {/* Game Area */}
         <View style={GAME_LAYOUT_STYLES.gameAreaCentered}>
           {/* Cards Display */}
@@ -323,6 +334,8 @@ export function HiLoScreen() {
               onChipPlace={handleChipPlace}
             />
           </View>
+        )}
+        </>
         )}
       </GameLayout>
 
