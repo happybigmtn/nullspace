@@ -3655,3 +3655,79 @@ Fixed Detox API compatibility issues:
 - `reactivecircus/android-emulator-runner@v2` handles AVD lifecycle and caching
 - `actions/github-script` allows complex PR comment logic with artifact reading
 - Concurrency groups prevent duplicate runs on rapid commits
+
+---
+
+## US-152: Add gateway WebSocket stress testing
+**Date:** 2025-01-07
+**Priority:** 75 (TEST-CRITICAL)
+**Commit:** feat: US-152 - Add gateway WebSocket stress testing
+
+### Implementation Summary
+Created comprehensive WebSocket stress testing infrastructure to validate gateway capacity claims.
+
+### Test Files Created
+
+**gateway/tests/stress/websocket-stress.test.ts:**
+- Vitest-based stress test suite
+- Configurable via environment variables:
+  - `STRESS_CONNECTIONS` - Number of concurrent connections (default: 100)
+  - `P99_LATENCY_TARGET_MS` - Target P99 latency (default: 100ms)
+  - `CONNECTION_BATCH_SIZE` - Batch size for connection ramp-up (default: 50)
+  - `MESSAGE_ROUNDS` - Ping rounds per connection (default: 5)
+- Three test cases:
+  1. `should handle N concurrent connections` - Success rate >95%
+  2. `should maintain P99 latency under target` - P99 <100ms
+  3. `should gracefully reject connections at capacity` - Beyond-limit handling
+- Skipped unless `RUN_STRESS=true` (prevents accidental load in unit test runs)
+
+**scripts/ws-stress-test.mjs:**
+- Standalone script for manual stress testing
+- Rich console output with progress bars and ASCII tables
+- JSON output for CI parsing
+- Exit code based on success rate threshold
+- Environment variables:
+  - `GATEWAY_URL` - WebSocket endpoint (default: ws://localhost:9010)
+  - `CONNECTIONS` - Number to attempt (default: 1000)
+  - `BATCH_SIZE` - Connections per batch (default: 50)
+  - `MESSAGE_ROUNDS` - Ping rounds (default: 5)
+
+### Package Scripts Added
+```json
+"test:stress": "RUN_STRESS=true vitest run tests/stress/websocket-stress.test.ts",
+"test:stress:1k": "STRESS_CONNECTIONS=1000 RUN_STRESS=true vitest run tests/stress/websocket-stress.test.ts",
+"test:stress:ci": "STRESS_CONNECTIONS=100 RUN_STRESS=true vitest run tests/stress/websocket-stress.test.ts"
+```
+
+### CI Integration
+Added `GatewayStress` job to `.github/workflows/tests.yml`:
+- Runs on ubuntu-latest
+- Uses mock backend (no full simulator needed)
+- 100 connections in CI (conservative for shared runners)
+- 20-minute timeout
+
+### Documentation
+Updated `docs/testnet-readiness-runbook.md` Section 6:
+- Added capacity limits tables (defaults vs production)
+- Added WebSocket stress test commands
+- Documented expected results at 1k connections
+
+### Metrics Measured
+- Connection success rate (target: >95%)
+- P50/P95/P99/Avg/Min/Max latency
+- Total test duration
+- Error aggregation (first 10)
+
+### Files Changed
+- `gateway/tests/stress/websocket-stress.test.ts` (new - 200 lines)
+- `scripts/ws-stress-test.mjs` (new - 230 lines)
+- `gateway/package.json` (added stress test scripts)
+- `.github/workflows/tests.yml` (added GatewayStress job)
+- `docs/testnet-readiness-runbook.md` (capacity documentation)
+
+### Learnings
+- Batch connection ramp-up prevents overwhelming the system during test setup
+- P99 latency more meaningful than average for user experience
+- Mock backend sufficient for connection stress testing (no game logic needed)
+- 100 connections appropriate for CI runners (limited resources)
+- Percentile calculation: `Math.ceil((p/100) * length) - 1` for 0-indexed arrays
