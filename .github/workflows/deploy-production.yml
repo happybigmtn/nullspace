@@ -1,22 +1,31 @@
-name: Deploy to Staging
+name: Deploy to Production
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
+    inputs:
+      skip_smoke_tests:
+        description: 'Skip post-deployment smoke tests'
+        required: false
+        type: boolean
+        default: false
+      services:
+        description: 'Services to deploy (comma-separated, or "all")'
+        required: false
+        type: string
+        default: 'all'
 
-# Ensure only one staging deployment runs at a time
+# Ensure only one production deployment runs at a time
 concurrency:
-  group: staging-deploy
+  group: production-deploy
   cancel-in-progress: false
 
 jobs:
-  # Wait for images to be built
-  wait-for-images:
+  # Pre-deployment validation
+  validate:
     runs-on: ubuntu-latest
-    if: github.event_name == 'push'
     outputs:
       image_tag: ${{ steps.tag.outputs.tag }}
+      services: ${{ steps.services.outputs.list }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -24,64 +33,56 @@ jobs:
       - name: Determine image tag
         id: tag
         run: |
+          # Use the latest main branch SHA for production deploys
           TAG="sha-$(git rev-parse --short HEAD)"
           echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "Using image tag: $TAG"
 
-      - name: Wait for build-images workflow
+      - name: Parse services
+        id: services
+        run: |
+          INPUT="${{ inputs.services }}"
+          if [[ "$INPUT" == "all" || -z "$INPUT" ]]; then
+            echo 'list=["simulator","gateway","auth","website","ops"]' >> $GITHUB_OUTPUT
+          else
+            # Convert comma-separated to JSON array
+            JSON=$(echo "$INPUT" | tr ',' '\n' | jq -R . | jq -s .)
+            echo "list=$JSON" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Verify images exist
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "Waiting for build-images workflow to complete..."
+          TAG="${{ steps.tag.outputs.tag }}"
+          SERVICES=("simulator" "gateway" "auth" "website" "ops")
 
-          # Wait up to 20 minutes for build workflow
-          for i in {1..40}; do
-            # Check if build workflow for this commit succeeded
-            RUNS=$(gh run list --workflow=build-images.yml --branch=main --limit=5 --json headSha,status,conclusion)
-            CURRENT_SHA=$(git rev-parse HEAD)
+          for service in "${SERVICES[@]}"; do
+            IMAGE="ghcr.io/${{ github.repository_owner }}/nullspace-${service}:${TAG}"
+            echo "Checking: $IMAGE"
 
-            STATUS=$(echo "$RUNS" | jq -r ".[] | select(.headSha == \"$CURRENT_SHA\") | .status")
-            CONCLUSION=$(echo "$RUNS" | jq -r ".[] | select(.headSha == \"$CURRENT_SHA\") | .conclusion")
-
-            if [[ "$STATUS" == "completed" ]]; then
-              if [[ "$CONCLUSION" == "success" ]]; then
-                echo "Build workflow completed successfully!"
-                exit 0
-              else
-                echo "Build workflow failed with conclusion: $CONCLUSION"
+            # Verify image exists in GHCR
+            if ! docker manifest inspect "$IMAGE" > /dev/null 2>&1; then
+              echo "::warning::Image not found with tag $TAG, checking for 'latest'"
+              IMAGE="ghcr.io/${{ github.repository_owner }}/nullspace-${service}:latest"
+              if ! docker manifest inspect "$IMAGE" > /dev/null 2>&1; then
+                echo "::error::Required image not found: nullspace-${service}"
                 exit 1
               fi
             fi
-
-            echo "Build status: $STATUS (attempt $i/40)"
-            sleep 30
           done
-
-          echo "Timeout waiting for build workflow"
-          exit 1
+          echo "All required images verified"
 
   # Notify deployment start
   notify-start:
     runs-on: ubuntu-latest
-    needs: wait-for-images
-    if: always() && (needs.wait-for-images.result == 'success' || github.event_name == 'workflow_dispatch')
+    needs: validate
     steps:
-      - name: Checkout (for manual trigger)
-        if: github.event_name == 'workflow_dispatch'
-        uses: actions/checkout@v4
-
-      - name: Determine image tag (manual trigger)
-        id: tag
-        if: github.event_name == 'workflow_dispatch'
-        run: |
-          TAG="sha-$(git rev-parse --short HEAD)"
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
-
       - name: Notify Slack - Deployment Starting
         if: vars.SLACK_WEBHOOK_URL != ''
         env:
           SLACK_WEBHOOK_URL: ${{ vars.SLACK_WEBHOOK_URL }}
         run: |
-          TAG="${{ needs.wait-for-images.outputs.image_tag || steps.tag.outputs.tag || 'latest' }}"
           curl -X POST -H 'Content-type: application/json' \
             --data "{
               \"blocks\": [
@@ -89,16 +90,16 @@ jobs:
                   \"type\": \"header\",
                   \"text\": {
                     \"type\": \"plain_text\",
-                    \"text\": \"🔄 Staging Deployment Starting\",
+                    \"text\": \"🚀 Production Deployment Starting\",
                     \"emoji\": true
                   }
                 },
                 {
                   \"type\": \"section\",
                   \"fields\": [
-                    {\"type\": \"mrkdwn\", \"text\": \"*Environment:*\nStaging\"},
-                    {\"type\": \"mrkdwn\", \"text\": \"*Triggered by:*\n${{ github.event_name == 'push' && 'Merge to main' || github.actor }}\"},
-                    {\"type\": \"mrkdwn\", \"text\": \"*Image Tag:*\n$TAG\"},
+                    {\"type\": \"mrkdwn\", \"text\": \"*Environment:*\nProduction\"},
+                    {\"type\": \"mrkdwn\", \"text\": \"*Triggered by:*\n${{ github.actor }}\"},
+                    {\"type\": \"mrkdwn\", \"text\": \"*Image Tag:*\n${{ needs.validate.outputs.image_tag }}\"},
                     {\"type\": \"mrkdwn\", \"text\": \"*Run:*\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Workflow>\"}
                   ]
                 }
@@ -106,26 +107,18 @@ jobs:
             }" \
             "$SLACK_WEBHOOK_URL" || echo "Slack notification failed (non-fatal)"
 
+  # Production deployment with manual approval
   deploy:
     runs-on: ubuntu-latest
-    needs: [wait-for-images, notify-start]
-    if: always() && (needs.wait-for-images.result == 'success' || github.event_name == 'workflow_dispatch')
-    environment: staging
+    needs: [validate, notify-start]
+    environment: production  # Requires manual approval
     permissions:
       contents: read
       packages: read
-    outputs:
-      image_tag: ${{ steps.tag.outputs.tag }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Determine image tag
-        id: tag
-        run: |
-          TAG="sha-$(git rev-parse --short HEAD)"
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
 
       - name: Install SOPS
         run: |
@@ -140,16 +133,16 @@ jobs:
 
       - name: Decrypt secrets
         env:
-          SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY_STAGING }}
+          SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY_PRODUCTION }}
         run: |
           mkdir -p /tmp/secrets
           chmod 700 /tmp/secrets
-          ./scripts/decrypt-secrets.sh staging /tmp/secrets
+          ./scripts/decrypt-secrets.sh production /tmp/secrets
 
       - name: Setup SSH
         env:
-          SSH_PRIVATE_KEY: ${{ secrets.STAGING_SSH_KEY }}
-          SSH_KNOWN_HOSTS: ${{ secrets.STAGING_SSH_KNOWN_HOSTS }}
+          SSH_PRIVATE_KEY: ${{ secrets.PRODUCTION_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.PRODUCTION_SSH_KNOWN_HOSTS }}
         run: |
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
@@ -159,14 +152,14 @@ jobs:
 
       - name: Deploy services
         env:
-          DEPLOY_HOST: ${{ vars.STAGING_HOST }}
-          DEPLOY_USER: ${{ vars.STAGING_USER }}
-          IMAGE_TAG: ${{ steps.tag.outputs.tag }}
+          DEPLOY_HOST: ${{ vars.PRODUCTION_HOST }}
+          DEPLOY_USER: ${{ vars.PRODUCTION_USER }}
+          IMAGE_TAG: ${{ needs.validate.outputs.image_tag }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
 
-          echo "=== Deploying to Staging ==="
+          echo "=== Deploying to Production ==="
           echo "Host: $DEPLOY_HOST"
           echo "Image tag: $IMAGE_TAG"
 
@@ -237,6 +230,7 @@ jobs:
   smoke-tests:
     runs-on: ubuntu-latest
     needs: deploy
+    if: inputs.skip_smoke_tests != true
 
     steps:
       - name: Checkout
@@ -244,10 +238,10 @@ jobs:
 
       - name: Run smoke tests
         env:
-          INDEXER_URL: ${{ vars.STAGING_INDEXER_URL }}
-          GATEWAY_URL: ${{ vars.STAGING_GATEWAY_URL }}
-          AUTH_URL: ${{ vars.STAGING_AUTH_URL }}
-          METRICS_TOKEN: ${{ secrets.STAGING_METRICS_TOKEN }}
+          INDEXER_URL: ${{ vars.PRODUCTION_INDEXER_URL }}
+          GATEWAY_URL: ${{ vars.PRODUCTION_GATEWAY_URL }}
+          AUTH_URL: ${{ vars.PRODUCTION_AUTH_URL }}
+          METRICS_TOKEN: ${{ secrets.PRODUCTION_METRICS_TOKEN }}
         run: |
           set -euo pipefail
 
@@ -315,7 +309,7 @@ jobs:
   # Notify deployment result
   notify-result:
     runs-on: ubuntu-latest
-    needs: [deploy, smoke-tests]
+    needs: [validate, deploy, smoke-tests]
     if: always()
 
     steps:
@@ -324,14 +318,16 @@ jobs:
         env:
           SLACK_WEBHOOK_URL: ${{ vars.SLACK_WEBHOOK_URL }}
         run: |
-          if [[ "${{ needs.smoke-tests.result }}" == "success" ]]; then
-            STATUS="✅ Success"
-            COLOR="good"
-          elif [[ "${{ needs.deploy.result }}" == "success" && "${{ needs.smoke-tests.result }}" == "failure" ]]; then
-            STATUS="⚠️ Deployed but smoke tests failed"
-            COLOR="warning"
+          if [[ "${{ needs.smoke-tests.result }}" == "success" || "${{ needs.smoke-tests.result }}" == "skipped" ]]; then
+            if [[ "${{ needs.deploy.result }}" == "success" ]]; then
+              STATUS="✅ Success"
+              COLOR="good"
+            else
+              STATUS="❌ Failed"
+              COLOR="danger"
+            fi
           else
-            STATUS="❌ Failed"
+            STATUS="❌ Smoke Tests Failed"
             COLOR="danger"
           fi
 
@@ -344,16 +340,17 @@ jobs:
                     \"type\": \"header\",
                     \"text\": {
                       \"type\": \"plain_text\",
-                      \"text\": \"Staging Deployment: $STATUS\",
+                      \"text\": \"Production Deployment: $STATUS\",
                       \"emoji\": true
                     }
                   },
                   {
                     \"type\": \"section\",
                     \"fields\": [
-                      {\"type\": \"mrkdwn\", \"text\": \"*Environment:*\nStaging\"},
-                      {\"type\": \"mrkdwn\", \"text\": \"*Triggered by:*\n${{ github.event_name == 'push' && 'Merge to main' || github.actor }}\"},
-                      {\"type\": \"mrkdwn\", \"text\": \"*Image Tag:*\n${{ needs.deploy.outputs.image_tag || 'latest' }}\"}
+                      {\"type\": \"mrkdwn\", \"text\": \"*Environment:*\nProduction\"},
+                      {\"type\": \"mrkdwn\", \"text\": \"*Triggered by:*\n${{ github.actor }}\"},
+                      {\"type\": \"mrkdwn\", \"text\": \"*Image Tag:*\n${{ needs.validate.outputs.image_tag }}\"},
+                      {\"type\": \"mrkdwn\", \"text\": \"*Duration:*\n$(date -u -d @$(($(date +%s) - ${{ github.run_started_at }})) +'%H:%M:%S' 2>/dev/null || echo 'N/A')\"}
                     ]
                   },
                   {
