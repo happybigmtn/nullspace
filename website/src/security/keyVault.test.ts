@@ -45,10 +45,15 @@ vi.mock('../api/wasm.js', () => {
 import {
   createPasswordVault,
   deleteVault,
+  deleteLegacyPrivateKey,
+  dismissMigration,
   getCasinoKeyIdForStorage,
+  getLegacyPrivateKeyHex,
   getVaultRecord,
   getVaultStatusSync,
+  isMigrationDismissed,
   lockPasskeyVault,
+  needsLegacyKeyMigration,
   unlockPasswordVault,
 } from './keyVault';
 
@@ -126,4 +131,70 @@ describe('password vault', () => {
   it('returns null when no key is available', () => {
     expect(getCasinoKeyIdForStorage()).toBeNull();
   }, TEST_TIMEOUT_MS);
+
+  it('does not return legacy localStorage key (US-159)', () => {
+    // Legacy keys should no longer be returned by getCasinoKeyIdForStorage
+    localStorage.setItem('casino_private_key', PRIVATE_KEY_HEX);
+    expect(getCasinoKeyIdForStorage()).toBeNull();
+  }, TEST_TIMEOUT_MS);
+});
+
+describe('legacy key migration (US-159)', () => {
+  beforeEach(async () => {
+    await resetStorage();
+  }, TEST_TIMEOUT_MS);
+
+  it('detects valid legacy private key', () => {
+    localStorage.setItem('casino_private_key', PRIVATE_KEY_HEX);
+    expect(getLegacyPrivateKeyHex()).toBe(PRIVATE_KEY_HEX);
+  });
+
+  it('returns null for invalid legacy key format', () => {
+    localStorage.setItem('casino_private_key', 'invalid-not-hex');
+    expect(getLegacyPrivateKeyHex()).toBeNull();
+  });
+
+  it('returns null for wrong length legacy key', () => {
+    localStorage.setItem('casino_private_key', 'aabbcc');
+    expect(getLegacyPrivateKeyHex()).toBeNull();
+  });
+
+  it('tracks migration dismissed state', () => {
+    expect(isMigrationDismissed()).toBe(false);
+    dismissMigration();
+    expect(isMigrationDismissed()).toBe(true);
+  });
+
+  it('detects when migration is needed', () => {
+    // No legacy key = no migration needed
+    expect(needsLegacyKeyMigration()).toBe(false);
+
+    // Add legacy key = migration needed
+    localStorage.setItem('casino_private_key', PRIVATE_KEY_HEX);
+    expect(needsLegacyKeyMigration()).toBe(true);
+
+    // Dismiss migration = no longer needed
+    dismissMigration();
+    expect(needsLegacyKeyMigration()).toBe(false);
+  });
+
+  it('does not need migration when vault is enabled', async () => {
+    localStorage.setItem('casino_private_key', PRIVATE_KEY_HEX);
+    expect(needsLegacyKeyMigration()).toBe(true);
+
+    // Create a vault (which migrates the key)
+    await createPasswordVault('correct horse battery staple');
+
+    // Migration no longer needed
+    expect(needsLegacyKeyMigration()).toBe(false);
+    // Legacy key should be removed
+    expect(getLegacyPrivateKeyHex()).toBeNull();
+  }, TEST_TIMEOUT_MS);
+
+  it('deletes legacy private key', () => {
+    localStorage.setItem('casino_private_key', PRIVATE_KEY_HEX);
+    expect(getLegacyPrivateKeyHex()).toBe(PRIVATE_KEY_HEX);
+    deleteLegacyPrivateKey();
+    expect(getLegacyPrivateKeyHex()).toBeNull();
+  });
 });
