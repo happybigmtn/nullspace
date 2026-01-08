@@ -543,7 +543,7 @@
       ],
       "priority": 88,
       "passes": true,
-      "notes": "UX-MEDIUM: Users can't review past bets or track gameplay performance."
+      "notes": "COMPLETE: HistoryScreen.tsx with FlatList rendering bet entries (game icon, timestamp, outcome, wager, net P/L). Session stats card shows total bets, win rate, net P/L, wins/losses/pushes, biggest win/loss. Date filtering (Today, 7 Days, 30 Days, All) with filtered stats recalculation. Navigation via HistoryIcon button in LobbyScreen header. Storage functions: getBetHistory, getSessionStats, getBetHistoryByDateRange, addBetToHistory. Pull-to-refresh support. 17 storage tests pass."
     },
     {
       "id": "US-166",

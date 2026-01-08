@@ -4247,3 +4247,33 @@ Updated `docs/testnet-readiness-runbook.md` Section 6:
   - P2P "serve send failed" warnings are benign (peer buffer full, auto-retries)
 
 ---
+
+## 2026-01-08 - US-165: Add bet history and session stats screen
+
+- What was implemented:
+  - ALREADY COMPLETE: HistoryScreen.tsx exists with full implementation
+  - Verified all acceptance criteria met:
+    1. HistoryScreen.tsx at mobile/src/screens/ with FlatList for bet entries
+    2. Bet entries show game icon, game name, timestamp, outcome, wager, net P/L
+    3. Stats card shows total bets, win rate, net P/L, wins/losses/pushes, biggest win/loss
+    4. Date filtering (Today, 7 Days, 30 Days, All) with filtered stats recalculation
+    5. HistoryIcon button in LobbyScreen header navigates to History route
+  - Storage layer in storage.ts: getBetHistory, getSessionStats, getBetHistoryByDateRange, addBetToHistory
+  - Navigation types registered (HistoryScreenProps in types.ts)
+  - RootNavigator includes History screen with parallax transitions
+- Files verified:
+  - `mobile/src/screens/HistoryScreen.tsx` - Full implementation (547 lines)
+  - `mobile/src/screens/LobbyScreen.tsx:527-529` - HistoryIcon navigation button
+  - `mobile/src/services/storage.ts:460-569` - Bet history storage functions
+  - `mobile/src/navigation/types.ts:15,27` - Navigation types
+  - `mobile/src/navigation/RootNavigator.tsx:114` - History screen registration
+- Tests: 17/17 storage tests pass (including 3 bet history tests)
+- **Learnings:**
+  - Story was already implemented in a prior session
+  - HistoryIcon exported from GameIcon.tsx alongside ProfileIcon
+  - getBetHistoryByDateRange filters by timestamp for date filtering
+  - SessionStats tracks wins/losses/pushes/biggestWin/biggestLoss
+  - MAX_BET_HISTORY_ENTRIES = 500 (auto-prunes old entries)
+  - Pull-to-refresh uses refreshKey state to force useMemo recalculation
+
+---
