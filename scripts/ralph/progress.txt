@@ -3580,3 +3580,78 @@ const handleDeal = useCallback(() => {
 - Each game's execute function preserves original betting logic unchanged
 - Modal shows payout info based on gameType for user awareness
 
+
+---
+
+## US-151: Integrate Detox E2E tests into mobile CI pipeline
+**Date:** 2025-01-07
+**Priority:** 74 (TEST-CRITICAL)
+**Commit:** feat: US-151 - Integrate Detox E2E tests into mobile CI pipeline
+
+### Implementation Summary
+Created comprehensive GitHub Actions workflow for running Detox E2E tests on both iOS and Android platforms.
+
+### Workflow Structure (.github/workflows/mobile-e2e.yml)
+
+**Triggers:**
+- PR changes to: `mobile/**`, `packages/**`, `gateway/**`
+- Manual dispatch with platform selection (ios/android/both)
+
+**iOS Job (macos-14):**
+1. pnpm install + CocoaPods caching
+2. `expo prebuild --platform ios` + pod install
+3. `detox build --configuration ios.sim.debug`
+4. Boot iPhone 15 simulator
+5. Start mock WebSocket backend on :9010
+6. Run Detox tests with `--headless --record-logs all --record-videos failing`
+7. Upload artifacts (logs, videos)
+
+**Android Job (ubuntu-latest):**
+1. Java 17 + Android SDK setup
+2. KVM enablement for hardware acceleration
+3. Create/cache AVD (Pixel_7_API_34)
+4. `expo prebuild --platform android`
+5. `detox build --configuration android.emu.debug`
+6. Start mock backend + `adb reverse tcp:9010 tcp:9010`
+7. Run via `android-emulator-runner@v2` action
+8. Upload artifacts
+
+**Report Job:**
+- Downloads artifacts from both platforms
+- Posts/updates PR comment with results table
+- Includes last 50 lines of test output in collapsible sections
+
+### Mock Backend
+Created minimal WebSocket server for E2E tests that handles:
+- Health check at /healthz
+- `authenticate` → `authenticated` response
+- `join_game` → `game_joined` response
+- `place_bet` → mock `game_result` with random win/loss
+
+This allows E2E tests to run without full backend infrastructure.
+
+### E2E Test Fixes
+Fixed Detox API compatibility issues:
+- `longPressAndDrag()` - Added missing 8th argument (`holdDuration: 0`)
+- `setStatusBar()` - Changed invalid `networkConnectionMode` to valid `dataNetwork`
+
+### Caching Strategy
+- pnpm store: hash of `pnpm-lock.yaml`
+- CocoaPods: hash of `Podfile.lock`
+- Gradle: hash of `*.gradle*` and `gradle-wrapper.properties`
+- AVD: `avd-api34-{os}`
+- Detox iOS build: hash of source files
+
+### Files Changed
+- `.github/workflows/mobile-e2e.yml` (new - 340 lines)
+- `mobile/e2e/games.test.ts` (fix longPressAndDrag)
+- `mobile/e2e/native-features.test.ts` (fix setStatusBar)
+
+### Learnings
+- `macos-14` is ARM64 (M1), good for iOS simulator performance
+- Android emulator on Ubuntu requires KVM enabled via udev rules
+- `adb reverse` maps host ports to emulator localhost for mock servers
+- Detox `--headless` works on both platforms for CI
+- `reactivecircus/android-emulator-runner@v2` handles AVD lifecycle and caching
+- `actions/github-script` allows complex PR comment logic with artifact reading
+- Concurrency groups prevent duplicate runs on rapid commits
