@@ -4,6 +4,7 @@ const path = require('path');
 require('@nomicfoundation/hardhat-chai-matchers');
 require('@nomicfoundation/hardhat-ethers');
 require('@nomicfoundation/hardhat-verify');
+require('solidity-coverage');
 
 dotenv.config({ path: path.join(__dirname, '.env') });
 
