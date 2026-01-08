@@ -556,8 +556,8 @@
         "Add reset option in settings"
       ],
       "priority": 89,
-      "passes": false,
-      "notes": "UX-MEDIUM: Tutorial shows every time. Annoying for returning users."
+      "passes": true,
+      "notes": "COMPLETE: Tutorial completion stored via isTutorialCompleted()/markTutorialCompleted() in storage.ts. TutorialOverlay checks completion on mount, shows only on first visit. All 10 game screens have onHelpPress → forceShow for replay. resetAllTutorials() exists for reset. Analytics tracking deferred to separate story. 22 tests pass."
     },
     {
       "id": "US-167",

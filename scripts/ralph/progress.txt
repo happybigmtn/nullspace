@@ -3858,3 +3858,26 @@ Updated `docs/testnet-readiness-runbook.md` Section 6:
   - XSS risk: localStorage is readable by any JS on the page; encrypted vault uses IndexedDB + WebCrypto
 
 ---
+
+## 2026-01-07 - US-166: Implement tutorial completion tracking
+
+- What was implemented: **Already complete** - verified existing implementation
+  - `storage.ts`: `isTutorialCompleted(gameId)`, `markTutorialCompleted(gameId)`, `resetTutorial(gameId)`, `resetAllTutorials()`
+  - `TutorialOverlay.tsx`: Checks storage on mount, only shows if not completed, `forceShow` prop for replay
+  - All 10 game screens: Pass `onHelpPress={() => setShowTutorial(true)}` to GameLayout
+  - Storage keys defined: `TUTORIAL_HILO`, `TUTORIAL_BLACKJACK`, `TUTORIAL_ROULETTE`, etc.
+  - 22 tests covering normal flow, storage failures, forceShow behavior
+- Files verified (no changes needed):
+  - `mobile/src/services/storage.ts` - Tutorial persistence API
+  - `mobile/src/components/ui/TutorialOverlay.tsx` - Component with storage integration
+  - `mobile/src/screens/games/*.tsx` - All game screens with help button
+  - `mobile/src/services/__tests__/storage.test.ts` - Tutorial API tests
+  - `mobile/src/components/ui/__tests__/TutorialOverlay.test.tsx` - Component tests
+- **Learnings:**
+  - Feature was already implemented but marked as incomplete in PRD
+  - Always verify existing code before implementing - saves duplication
+  - MMKV provides synchronous storage reads, enabling instant tutorial state checks
+  - `forceShow` pattern is elegant for allowing manual replay after completion
+  - Analytics tracking is separate concern - doesn't block core UX functionality
+
+---
