@@ -83,6 +83,11 @@ const NONCE_PERSIST_INTERVAL_MS = parsePositiveInt(
   15_000,
   { allowZero: true },
 );
+const GATEWAY_DRAIN_TIMEOUT_MS = parsePositiveInt(
+  'GATEWAY_DRAIN_TIMEOUT_MS',
+  30_000, // 30 seconds default - wait for active games to complete
+  { allowZero: true },
+);
 const GATEWAY_ALLOW_NO_ORIGIN = ['1', 'true', 'yes'].includes(
   String(process.env.GATEWAY_ALLOW_NO_ORIGIN ?? '').toLowerCase(),
 );
@@ -132,6 +137,10 @@ const connectionLimiter = new ConnectionLimiter({
 const handlers = createHandlerRegistry();
 
 crapsLiveTable.configure({ submitClient, nonceManager, backendUrl: BACKEND_URL, origin: GATEWAY_ORIGIN });
+
+// Graceful shutdown state (US-154)
+let isDraining = false;
+let drainStartTime: number | null = null;
 
 /**
  * Send JSON message to client
@@ -322,8 +331,25 @@ const server = createServer(async (req, res) => {
     return;
   }
 
-  // Readiness probe: Can we serve traffic? Checks backend connectivity.
+  // Readiness probe: Can we serve traffic? Checks backend connectivity and drain state.
   if (req.method === 'GET' && (path === '/healthz' || path === '/readyz')) {
+    // US-154: Report draining state - return 503 when draining so load balancer removes us
+    if (isDraining) {
+      const elapsedMs = drainStartTime ? Date.now() - drainStartTime : 0;
+      const activeSessions = sessionManager.getSessionCount();
+      const activeGames = sessionManager.getAllSessions().filter(s => s.activeGameId !== null).length;
+      res.statusCode = 503;
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({
+        ok: false,
+        status: 'draining',
+        drainElapsedMs: elapsedMs,
+        activeSessions,
+        activeGames,
+      }));
+      return;
+    }
+
     const backendHealthy = await submitClient.healthCheck();
     if (backendHealthy) {
       res.statusCode = 200;
@@ -376,6 +402,14 @@ wss.on('connection', async (ws: WebSocket, req) => {
   const originHeader = req.headers.origin;
   const originValue = typeof originHeader === 'string' ? originHeader : null;
   const origin = originValue === 'null' ? null : originValue;
+
+  // US-154: Reject new connections during drain
+  if (isDraining) {
+    logInfo(`[Gateway] Connection rejected during drain: ${clientIp}`);
+    sendError(ws, ErrorCodes.BACKEND_UNAVAILABLE, 'Server is shutting down');
+    ws.close(1013, 'Server shutting down'); // 1013 = Try Again Later
+    return;
+  }
 
   if (GATEWAY_ALLOWED_ORIGINS.length > 0) {
     if (!origin) {
@@ -482,23 +516,93 @@ const noncePersistTimer =
     : null;
 noncePersistTimer?.unref?.();
 
-// Graceful shutdown
-const shutdown = (label: string): void => {
-  logInfo(`[Gateway] ${label}...`);
+/**
+ * Graceful shutdown with connection draining (US-154).
+ *
+ * 1. Enter draining state (new connections rejected, healthz returns 503)
+ * 2. Wait for active games to complete (up to DRAIN_TIMEOUT_MS)
+ * 3. Close all remaining connections gracefully
+ * 4. Shut down server
+ */
+const drainAndShutdown = async (label: string): Promise<void> => {
+  // Prevent double-shutdown
+  if (isDraining) {
+    logWarn('[Gateway] Shutdown already in progress');
+    return;
+  }
+
+  isDraining = true;
+  drainStartTime = Date.now();
+  logInfo(`[Gateway] ${label} - entering drain mode...`);
+
+  // Persist nonces immediately
   nonceManager.persist();
   if (noncePersistTimer) {
     clearInterval(noncePersistTimer);
   }
+
+  // Count initial state
+  const initialSessions = sessionManager.getSessionCount();
+  const initialActiveGames = sessionManager.getAllSessions().filter(s => s.activeGameId !== null).length;
+  logInfo(`[Gateway] Drain started: ${initialSessions} sessions, ${initialActiveGames} active games`);
+
+  // Wait for active games to complete (with timeout)
+  const drainStart = Date.now();
+  const DRAIN_CHECK_INTERVAL_MS = 500;
+
+  while (Date.now() - drainStart < GATEWAY_DRAIN_TIMEOUT_MS) {
+    const activeGames = sessionManager.getAllSessions().filter(s => s.activeGameId !== null);
+    if (activeGames.length === 0) {
+      logInfo('[Gateway] All active games completed');
+      break;
+    }
+
+    const elapsed = Date.now() - drainStart;
+    const remaining = GATEWAY_DRAIN_TIMEOUT_MS - elapsed;
+    logInfo(`[Gateway] Draining: ${activeGames.length} active game(s), ${Math.ceil(remaining / 1000)}s remaining`);
+
+    await new Promise(resolve => setTimeout(resolve, DRAIN_CHECK_INTERVAL_MS));
+  }
+
+  // Notify and close all remaining sessions
+  const remainingSessions = sessionManager.getAllSessions();
+  logInfo(`[Gateway] Closing ${remainingSessions.length} remaining session(s)`);
+
+  for (const session of remainingSessions) {
+    try {
+      sendError(session.ws, ErrorCodes.SESSION_EXPIRED, 'Server is shutting down');
+      session.ws.close(1001, 'Server shutting down'); // 1001 = Going Away
+    } catch {
+      // Ignore errors during close
+    }
+    sessionManager.destroySession(session.ws);
+  }
+
+  // Final persist before shutdown
+  nonceManager.persist();
+
+  // Log final state
+  const drainDuration = Date.now() - drainStart;
+  logInfo(`[Gateway] Drain complete in ${drainDuration}ms`);
+
+  // Close WebSocket server (stop accepting connections)
   wss.close(() => {
+    // Close HTTP server
     server.close(() => {
       logInfo('[Gateway] Server closed');
       process.exit(0);
     });
   });
+
+  // Force exit after additional grace period if server.close hangs
+  setTimeout(() => {
+    logWarn('[Gateway] Force exit after server close timeout');
+    process.exit(1);
+  }, 5000).unref();
 };
 
-process.on('SIGINT', () => shutdown('Shutting down'));
-process.on('SIGTERM', () => shutdown('Terminating'));
+process.on('SIGINT', () => { drainAndShutdown('Shutting down (SIGINT)'); });
+process.on('SIGTERM', () => { drainAndShutdown('Terminating (SIGTERM)'); });
 
 // Restore nonces on startup
 nonceManager.restore();
