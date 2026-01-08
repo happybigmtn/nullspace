@@ -1,0 +1,29 @@
+# Staging environment configuration
+# Copy to terraform.tfvars and fill in values
+
+# Hetzner Cloud API token (or set TF_VAR_hcloud_token env var)
+# hcloud_token = "your-hcloud-api-token"
+
+# SSH key name in Hetzner Cloud console
+ssh_key_name = "nullspace-deploy"
+
+# Admin IPs allowed SSH access (office/home IPs)
+admin_ssh_ips = [
+  "203.0.113.10/32",  # Office IP
+  "198.51.100.20/32", # VPN IP
+]
+
+# Prometheus server IPs for metrics scraping
+# Leave empty if using observability server within the network
+prometheus_ips = []
+
+# Scaling
+gateway_count   = 2 # Horizontal scaling for WebSocket connections
+validator_count = 3 # Minimum 3 for BFT consensus (f=1)
+
+# Storage
+database_volume_gb      = 50  # Postgres data
+observability_volume_gb = 100 # Prometheus/Loki data retention
+
+# Optional components
+enable_observability = true
