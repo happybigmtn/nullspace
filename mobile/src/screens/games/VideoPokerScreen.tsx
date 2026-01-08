@@ -8,7 +8,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { Card } from '../../components/casino';
 import { ChipSelector } from '../../components/casino';
 import { GameLayout } from '../../components/game';
-import { TutorialOverlay, PrimaryButton, BetConfirmationModal } from '../../components/ui';
+import { TutorialOverlay, PrimaryButton, BetConfirmationModal, VideoPokerSkeleton } from '../../components/ui';
 import { haptics } from '../../services/haptics';
 import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useChipBetting, useModalBackHandler, useBetSubmission, useBetConfirmation } from '../../hooks';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS, SPRING } from '../../constants/theme';
@@ -84,6 +84,8 @@ export function VideoPokerScreen() {
   });
   const [showTutorial, setShowTutorial] = useState(false);
   const [showPayTable, setShowPayTable] = useState(false);
+  // US-156: Track loading state during InteractionManager parsing
+  const [isParsingState, setIsParsingState] = useState(false);
 
   useModalBackHandler(showPayTable, () => setShowPayTable(false));
 
@@ -119,10 +121,13 @@ export function VideoPokerScreen() {
         }));
         return;
       }
+      // US-156: Show skeleton during state parsing
+      setIsParsingState(true);
       InteractionManager.runAfterInteractions(() => {
         if (!isMounted.current) return;
         const parsed = parseVideoPokerState(stateBytes);
         if (!parsed) {
+          setIsParsingState(false);
           if (__DEV__) {
             console.error('[VideoPoker] Failed to parse state blob');
           }
@@ -134,6 +139,7 @@ export function VideoPokerScreen() {
           }));
           return;
         }
+        setIsParsingState(false);
         setState((prev) => ({
           ...prev,
           cards: parsed.cards,
@@ -306,6 +312,11 @@ export function VideoPokerScreen() {
         }
         gameId="videoPoker"
       >
+        {/* US-156: Show skeleton during state parsing */}
+        {isParsingState ? (
+          <VideoPokerSkeleton />
+        ) : (
+        <>
         {/* Game Area */}
       <View style={styles.gameArea}>
         {/* Cards Display */}
@@ -414,6 +425,8 @@ export function VideoPokerScreen() {
           onChipPlace={handleChipPlace}
         />
       )}
+        </>
+        )}
       </GameLayout>
 
       {/* Pay Table Modal */}

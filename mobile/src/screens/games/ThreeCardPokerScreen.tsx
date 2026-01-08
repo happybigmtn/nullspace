@@ -8,7 +8,7 @@ import Animated, { FadeIn, SlideInUp } from 'react-native-reanimated';
 import { Card } from '../../components/casino';
 import { ChipSelector } from '../../components/casino';
 import { GameLayout } from '../../components/game';
-import { TutorialOverlay, PrimaryButton, BetConfirmationModal } from '../../components/ui';
+import { TutorialOverlay, PrimaryButton, BetConfirmationModal, BlackjackSkeleton } from '../../components/ui';
 import { haptics } from '../../services/haptics';
 import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useBetSubmission, useBetConfirmation } from '../../hooks';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS, SPRING } from '../../constants/theme';
@@ -87,6 +87,8 @@ export function ThreeCardPokerScreen() {
   const [selectedChip, setSelectedChip] = useState<ChipValue>(25);
   const [showTutorial, setShowTutorial] = useState(false);
   const [activeBetType, setActiveBetType] = useState<'ante' | 'pairplus' | 'sixcard' | 'progressive'>('ante');
+  // US-156: Track loading state during InteractionManager parsing
+  const [isParsingState, setIsParsingState] = useState(false);
 
   // Track mounted state to prevent setState after unmount
   const isMounted = useRef(true);
@@ -114,10 +116,13 @@ export function ThreeCardPokerScreen() {
         }));
         return;
       }
+      // US-156: Show skeleton during state parsing
+      setIsParsingState(true);
       InteractionManager.runAfterInteractions(() => {
         if (!isMounted.current) return;
         const parsed = parseThreeCardState(stateBytes);
         if (!parsed) {
+          setIsParsingState(false);
           if (__DEV__) {
             console.error('[ThreeCardPoker] Failed to parse state blob');
           }
@@ -129,6 +134,7 @@ export function ThreeCardPokerScreen() {
           }));
           return;
         }
+        setIsParsingState(false);
         setState((prev) => ({
           ...prev,
           playerCards: parsed.playerCards.length > 0 ? parsed.playerCards : prev.playerCards,
@@ -381,6 +387,11 @@ export function ThreeCardPokerScreen() {
         connectionStatus={connectionStatusProps}
         gameId="threeCard"
       >
+        {/* US-156: Show skeleton during state parsing */}
+        {isParsingState ? (
+          <BlackjackSkeleton />
+        ) : (
+        <>
         {/* Game Area */}
       <View style={styles.gameArea}>
         {/* Dealer Hand */}
@@ -571,6 +582,8 @@ export function ThreeCardPokerScreen() {
           onChipPlace={handleChipPlace}
         />
       )}
+        </>
+        )}
       </GameLayout>
 
       {/* Tutorial */}
