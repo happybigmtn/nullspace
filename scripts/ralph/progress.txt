@@ -4064,3 +4064,36 @@ Updated `docs/testnet-readiness-runbook.md` Section 6:
   - `volume_size_gb = 0` conditionally skips volume creation
 
 ---
+
+## 2026-01-07 - US-164: Add visual regression testing to CI
+
+- What was implemented:
+  - Enhanced `website/scripts/visual-regression.mjs` with pixelmatch for accurate pixel-by-pixel comparison
+  - Added `pixelmatch` and `pngjs` dependencies for PNG parsing and comparison
+  - Created `.github/workflows/visual-regression.yml` with two jobs:
+    - `VisualRegression`: Runs on PRs touching website/design-tokens, compares against baselines
+    - `UpdateBaselines`: Triggered by 'update-baselines' label to auto-commit new baselines
+  - Created baseline directory structure in `website/tests/visual-snapshots/`
+  - Added `.gitignore` to exclude current captures and diff images while tracking baselines
+  - 8 screens configured for capture (6 light mode, 2 dark mode):
+    - mode-select, mode-select-mobile, lobby-desktop, lobby-mobile
+    - game-blackjack, game-roulette
+    - mode-select-dark, lobby-desktop-dark
+- Files changed:
+  - `website/package.json` - Added pixelmatch and pngjs dependencies
+  - `website/scripts/visual-regression.mjs` - Rewrote with proper pixelmatch comparison
+  - `.github/workflows/visual-regression.yml` (NEW) - CI workflow
+  - `website/tests/visual-snapshots/.gitignore` (NEW) - Track baselines only
+  - `website/tests/visual-snapshots/baseline/.gitkeep` (NEW) - Placeholder for baselines
+- **Learnings:**
+  - pixelmatch uses `threshold: 0.1` (10% color difference) to handle anti-aliasing
+  - `includeAA: false` in pixelmatch ignores anti-aliasing differences (reduces false positives)
+  - PNG.sync.read/write from pngjs provides synchronous PNG parsing for comparison
+  - playwright-core's `animations: 'disabled'` option freezes CSS animations during screenshot
+  - Separate color scheme contexts in Playwright (not just colorScheme in viewport)
+  - CI workflow uses `continue-on-error: true` then explicit fail step for clean artifacts
+  - GitHub Actions `github-script` action allows inline JS for PR comments
+  - `upload-artifact@v4` requires explicit retention-days (14 for test artifacts)
+  - Baseline update via label trigger avoids manual baseline commits
+
+---

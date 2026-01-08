@@ -1,0 +1,6 @@
+# Baseline images for visual regression testing
+# These are automatically captured and committed via:
+#   npm run visual:capture
+#   npm run visual:update
+#
+# Or via CI with the 'update-baselines' label on a PR

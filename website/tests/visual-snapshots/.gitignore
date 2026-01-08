@@ -1,0 +1,12 @@
+# Visual regression test artifacts
+# Baseline images are tracked in git
+# Current captures and diffs are generated during test runs
+
+# Current captures (generated during test runs)
+current/
+
+# Diff images (generated when comparison fails)
+diff/
+
+# Test summary (generated in CI)
+summary.json
