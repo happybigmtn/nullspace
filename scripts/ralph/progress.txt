@@ -4022,3 +4022,45 @@ Updated `docs/testnet-readiness-runbook.md` Section 6:
   - Dashboard schema version 38 is compatible with Grafana 10.x
 
 ---
+
+## 2026-01-07 - US-163: Implement infrastructure as code with Terraform
+
+- What was implemented:
+  - Created `terraform/` directory with comprehensive IaC for Hetzner Cloud
+  - **4 reusable modules**:
+    - `network/` - Private network 10.0.0.0/16, subnets, network zones
+    - `firewall/` - 6 firewall types (bastion, web, internal, validator, database, observability)
+    - `server/` - Compute instances with cloud-init, volumes, network attachment
+    - `load-balancer/` - L4/L7 load balancers with health checks
+  - **2 environment configurations**:
+    - `staging/` - 5k concurrent players (2x gw, 1x sim, 3x validators, 1x auth, 1x db, 1x obs)
+    - `production/` - 20k+ concurrent players (4x gw, 1x sim CPX51, 4x validators, 1x convex, larger volumes)
+  - S3-compatible state backend with encryption
+  - Cloud-init template for automated server provisioning
+  - Comprehensive README with quick start, architecture, and troubleshooting
+- Files changed:
+  - `terraform/versions.tf` - Provider requirements (hcloud ~> 1.45)
+  - `terraform/modules/network/{main,variables,outputs}.tf` (NEW)
+  - `terraform/modules/firewall/{main,variables,outputs}.tf` (NEW)
+  - `terraform/modules/server/{main,variables,outputs}.tf` (NEW)
+  - `terraform/modules/server/templates/cloud-init.yaml.tpl` (NEW)
+  - `terraform/modules/load-balancer/{main,variables,outputs}.tf` (NEW)
+  - `terraform/environments/staging/{backend,main,variables,outputs}.tf` (NEW)
+  - `terraform/environments/staging/terraform.tfvars.example` (NEW)
+  - `terraform/environments/production/{backend,main,variables,outputs}.tf` (NEW)
+  - `terraform/environments/production/terraform.tfvars.example` (NEW)
+  - `terraform/README.md` (NEW) - Full documentation
+  - `terraform/.gitignore` (NEW) - Excludes state, plans, and tfvars
+- **Learnings:**
+  - Hetzner Cloud provider is `hetznercloud/hcloud` (not `hetzner/hcloud`)
+  - Hetzner network zones: us-east (Ashburn), eu-central (Nuremberg/Falkenstein/Helsinki)
+  - Hetzner server types: CPX11→CPX51 (shared vCPU), CX→CX51 (dedicated)
+  - Firewall rules support CIDR ranges but not named security groups
+  - Load balancer health checks can be TCP or HTTP (use /healthz per runbook)
+  - `hcloud_server_network` resource attaches servers to private networks
+  - Cloud-init handles initial user/directory setup per runbook Section 4
+  - State backend supports AWS S3, Hetzner Object Storage, and Cloudflare R2
+  - Production requires 4 validators minimum for BFT safety margin (f=1)
+  - `volume_size_gb = 0` conditionally skips volume creation
+
+---

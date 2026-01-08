@@ -514,8 +514,8 @@
         "Document infrastructure provisioning process"
       ],
       "priority": 86,
-      "passes": false,
-      "notes": "INFRA-CRITICAL: No IaC. Infrastructure is manually created and not reproducible."
+      "passes": true,
+      "notes": "COMPLETE: Created terraform/ directory with 4 modules (network, firewall, server, load-balancer). Staging and production environments configured with S3 backend. Cloud-init templates for server provisioning. Full documentation in terraform/README.md. Matches runbook topology: 10.0.0.0/16 network, firewall rules per service role, server specs per docs/hetzner-deployment-runbook.md."
     },
     {
       "id": "US-164",
