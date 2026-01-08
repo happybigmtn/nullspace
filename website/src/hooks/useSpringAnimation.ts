@@ -1,4 +1,4 @@
-import { useSpring, useTransition } from '@react-spring/web';
+import { useSpring, useTransition, to } from '@react-spring/web';
 import { SPRING_CONFIGS, type SpringPreset } from '../utils/motion';
 import { useReducedMotion } from './useReducedMotion';
 
@@ -68,8 +68,9 @@ export function useModalSpring(isOpen: boolean) {
   return {
     style: {
       opacity: spring.opacity,
-      transform: spring.scale.to(
-        (s) => `scale(${s}) translateY(${spring.y.get()}px)`
+      transform: to(
+        [spring.scale, spring.y],
+        (s, y) => `scale(${s}) translateY(${y}px)`
       ),
     },
     backdropStyle: {
@@ -104,8 +105,9 @@ export function useCardHover(preset: SpringPreset = 'tooltip') {
 
   return {
     style: {
-      transform: spring.scale.to(
-        (s) => `scale(${s}) translateY(${spring.y.get()}px)`
+      transform: to(
+        [spring.scale, spring.y],
+        (s, y) => `scale(${s}) translateY(${y}px)`
       ),
     },
     onMouseEnter: () => api.start({ scale: 1.02, y: -4 }),

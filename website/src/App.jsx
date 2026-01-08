@@ -4,6 +4,9 @@ import { isFeatureEnabled } from './services/featureFlags';
 import { ToastHost } from './components/ui/ToastHost';
 import { InstallBanner } from './components/ui/InstallBanner';
 import { captureReferralFromSearch, claimReferralIfReady } from './services/referrals';
+// Import vaultRuntime in main bundle to ensure it's not duplicated across lazy chunks
+// This ensures the in-memory vault state is shared between CasinoApp and SecurityApp
+import './security/vaultRuntime';
 
 // Route-based code splitting (US-145)
 // CasinoApp is the largest route - lazy-load to reduce initial bundle

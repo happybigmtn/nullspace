@@ -42,7 +42,11 @@ export type SicBoBet = GeneratedSicBoBet;
 export type CrapsEventLog = GeneratedCrapsEventLog;
 export type LeaderboardEntry = GeneratedLeaderboardEntry;
 
-export type GameState = Omit<UIGameState, 'type'> & { type: GameType };
+export type GameState = Omit<UIGameState, 'type'> & {
+  type: GameType;
+  /** LUX-013: Store previous bet for REBET functionality */
+  lastBet?: number;
+};
 
 export type AutoPlayDraft =
   | {

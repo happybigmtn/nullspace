@@ -65,6 +65,29 @@ export const easingToCss = (preset: EasingPreset): string => {
 };
 
 /**
+ * LUX-022: Toggle switch spring config
+ * Slight overshoot for tactile feel
+ */
+export const TOGGLE_SPRING = {
+  tension: 400,
+  friction: 20,
+  mass: 1,
+};
+
+/**
+ * LUX-022: Menu stagger animation helpers
+ * For staggered list item reveals
+ */
+export const STAGGER_CONFIG = {
+  /** Delay between each item in ms */
+  itemDelay: 30,
+  /** Base animation duration */
+  duration: 150,
+  /** Spring config for menu items */
+  spring: { tension: 300, friction: 24 },
+};
+
+/**
  * Common animation variants for react-spring useSpring
  */
 export const springVariants = {

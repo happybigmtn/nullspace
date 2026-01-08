@@ -1,177 +1,250 @@
-import React, { useState } from 'react';
-import { NavLink } from 'react-router-dom';
-import { AuthStatusPill } from '../AuthStatusPill';
-import { ThemeToggle } from '../ui/ThemeToggle';
+import React, { useState, useEffect, useCallback } from 'react';
+import { NavLink, useLocation } from 'react-router-dom';
+import { animated, useTransition } from '@react-spring/web';
+import { SPRING_CONFIGS } from '../../utils/motion';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
+
+/**
+ * LUX-018: Minimal HamburgerMenu
+ *
+ * Design principles:
+ * - Maximum 6 menu items
+ * - Essential items only: Games, Account, Settings, Help
+ * - Clean typography-only list (no icons)
+ * - Subtle dividers between groups
+ * - Keyboard accessible
+ */
 
 interface HamburgerMenuProps {
-    playMode: 'CASH' | 'FREEROLL' | null;
-    onSetPlayMode: (mode: 'CASH' | 'FREEROLL' | null) => void;
-    onOpenSafety: () => void;
-    onOpenRewards: () => void;
-    onToggleHelp: () => void;
-    soundEnabled: boolean;
-    onToggleSound: () => void;
-    touchMode: boolean;
-    onToggleTouchMode: () => void;
-    reducedMotion: boolean;
-    onToggleReducedMotion: () => void;
-    publicKeyHex?: string | null;
-    focusMode?: boolean;
-    onToggleFocus?: () => void;
-    walletSlot?: React.ReactNode;
+  playMode: 'CASH' | 'FREEROLL' | null;
+  onSetPlayMode: (mode: 'CASH' | 'FREEROLL' | null) => void;
+  onOpenSafety: () => void;
+  onOpenRewards: () => void;
+  onToggleHelp: () => void;
+  soundEnabled: boolean;
+  onToggleSound: () => void;
+  touchMode: boolean;
+  onToggleTouchMode: () => void;
+  reducedMotion: boolean;
+  onToggleReducedMotion: () => void;
+  publicKeyHex?: string | null;
+  focusMode?: boolean;
+  onToggleFocus?: () => void;
+  walletSlot?: React.ReactNode;
 }
 
+const INSTANT_CONFIG = { duration: 0 };
+
 export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
-    playMode, onSetPlayMode, onOpenSafety, onOpenRewards, onToggleHelp,
-    soundEnabled, onToggleSound, touchMode, onToggleTouchMode, reducedMotion, onToggleReducedMotion,
-    publicKeyHex,
-    focusMode,
-    onToggleFocus,
-    walletSlot
+  playMode,
+  onSetPlayMode,
+  onOpenSafety,
+  onOpenRewards,
+  onToggleHelp,
+  soundEnabled,
+  onToggleSound,
+  reducedMotion,
+  onToggleReducedMotion,
+  focusMode,
+  onToggleFocus,
 }) => {
-    const [isOpen, setIsOpen] = useState(false);
-    const hasOps = !!(import.meta as any)?.env?.VITE_OPS_URL || !!(import.meta as any)?.env?.VITE_ANALYTICS_URL;
+  const [isOpen, setIsOpen] = useState(false);
+  const location = useLocation();
+  const prefersReducedMotion = useReducedMotion();
 
-    const toggle = () => setIsOpen(!isOpen);
-    const close = () => setIsOpen(false);
+  const toggle = useCallback(() => setIsOpen(prev => !prev), []);
+  const close = useCallback(() => setIsOpen(false), []);
 
-    const NavItem = ({ to, label, onClick }: { to: string, label: string, onClick: () => void }) => (
-        <NavLink 
-            to={to} 
-            onClick={onClick} 
-            className={({ isActive }) => `px-4 py-3 rounded-2xl text-sm font-bold tracking-tight transition-all ${
-                isActive 
-                    ? 'bg-titanium-900 text-white shadow-lg dark:bg-action-primary/20 dark:text-action-primary' 
-                    : 'text-titanium-800 hover:bg-titanium-100 dark:text-titanium-100 dark:hover:bg-titanium-800/60'
-            }`}
+  // Close on route change
+  useEffect(() => {
+    close();
+  }, [location.pathname, close]);
+
+  // Escape key handler
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, close]);
+
+  // Menu transition animation
+  const transitions = useTransition(isOpen, {
+    from: prefersReducedMotion
+      ? { opacity: 0 }
+      : { opacity: 0, x: 8 },
+    enter: prefersReducedMotion
+      ? { opacity: 1 }
+      : { opacity: 1, x: 0 },
+    leave: prefersReducedMotion
+      ? { opacity: 0 }
+      : { opacity: 0, x: 8 },
+    config: prefersReducedMotion ? INSTANT_CONFIG : SPRING_CONFIGS.snappy,
+  });
+
+  // Simple menu item
+  const MenuItem = ({ to, label, onClick }: { to?: string; label: string; onClick?: () => void }) => {
+    const baseClasses = 'block w-full text-left py-3 px-4 text-body font-medium text-titanium-700 hover:text-titanium-900 dark:text-titanium-300 dark:hover:text-titanium-100 transition-colors';
+
+    if (to) {
+      return (
+        <NavLink
+          to={to}
+          onClick={close}
+          className={({ isActive }) =>
+            `${baseClasses} ${isActive ? 'text-titanium-900 dark:text-white' : ''}`
+          }
         >
-            {label}
+          {label}
         </NavLink>
-    );
-
-    const walletContent = walletSlot ?? (publicKeyHex ? <AuthStatusPill publicKeyHex={publicKeyHex} /> : null);
+      );
+    }
 
     return (
-        <div className="relative">
-            <button 
-                onClick={toggle} 
-                aria-label="Menu"
-                className="w-10 h-10 flex items-center justify-center rounded-full bg-white border border-titanium-200 shadow-soft hover:shadow-md transition-shadow active:scale-95 dark:bg-titanium-900/70 dark:border-titanium-800 dark:shadow-none"
-            >
-                <div className="flex flex-col gap-1">
-                    <span className={`w-4 h-0.5 bg-titanium-900 dark:bg-titanium-100 rounded-full transition-transform ${isOpen ? 'rotate-45 translate-y-1.5' : ''}`} />
-                    <span className={`w-4 h-0.5 bg-titanium-900 dark:bg-titanium-100 rounded-full transition-opacity ${isOpen ? 'opacity-0' : ''}`} />
-                    <span className={`w-4 h-0.5 bg-titanium-900 dark:bg-titanium-100 rounded-full transition-transform ${isOpen ? '-rotate-45 -translate-y-1.5' : ''}`} />
-                </div>
-            </button>
-
-            {isOpen && (
-                <>
-                    <div className="fixed inset-0 z-[90] bg-titanium-900/20 backdrop-blur-md dark:bg-black/60" onClick={close} />
-                    <div className="absolute top-12 right-0 w-72 bg-white border border-titanium-200 rounded-[32px] shadow-float z-[100] p-3 flex flex-col gap-1 animate-scale-in origin-top-right dark:bg-titanium-900 dark:border-titanium-800 dark:text-titanium-100">
-                        <div className="px-4 pt-4 pb-2">
-                            <div className="text-[10px] font-bold text-titanium-400 uppercase tracking-[0.2em] mb-4">Navigation</div>
-                            <div className="flex flex-col gap-1">
-                                <NavItem to="/" label="Play" onClick={close} />
-                                <NavItem to="/swap" label="Swap" onClick={close} />
-                                <NavItem to="/stake" label="Stake" onClick={close} />
-                                <NavItem to="/bridge" label="Bridge" onClick={close} />
-                                <NavItem to="/security" label="Vault" onClick={close} />
-                                {hasOps ? <NavItem to="/analytics" label="Analytics" onClick={close} /> : null}
-                            </div>
-                        </div>
-
-                        <div className="h-px bg-titanium-100 my-2 mx-4 dark:bg-titanium-800" />
-
-                        <div className="px-4 py-2">
-                            <div className="text-[10px] font-bold text-titanium-400 uppercase tracking-[0.2em] mb-4">Settings</div>
-                            <div className="flex flex-col gap-4">
-                                {onToggleFocus && (
-                                    <button onClick={onToggleFocus} className="flex justify-between items-center group">
-                                        <span className="text-sm font-semibold text-titanium-800 dark:text-titanium-100">Zen</span>
-                                        <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${focusMode ? 'bg-action-success/10 text-action-success' : 'bg-titanium-100 text-titanium-400 dark:bg-titanium-800 dark:text-titanium-300'}`}>
-                                            {focusMode ? 'On' : 'Off'}
-                                        </span>
-                                    </button>
-                                )}
-                                <button onClick={onToggleSound} className="flex justify-between items-center group">
-                                    <span className="text-sm font-semibold text-titanium-800 dark:text-titanium-100">Sound</span>
-                                    <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${soundEnabled ? 'bg-action-success/10 text-action-success' : 'bg-titanium-100 text-titanium-400 dark:bg-titanium-800 dark:text-titanium-300'}`}>
-                                        {soundEnabled ? 'On' : 'Off'}
-                                    </span>
-                                </button>
-                                <button onClick={onToggleReducedMotion} className="flex justify-between items-center group">
-                                    <span className="text-sm font-semibold text-titanium-800 dark:text-titanium-100">Motion</span>
-                                    <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${reducedMotion ? 'bg-titanium-100 text-titanium-400 dark:bg-titanium-800 dark:text-titanium-300' : 'bg-action-success/10 text-action-success'}`}>
-                                        {reducedMotion ? 'Low' : 'Full'}
-                                    </span>
-                                </button>
-                                <ThemeToggle variant="menu" className="w-full" />
-                            </div>
-                        </div>
-
-                        <div className="h-px bg-titanium-100 my-2 mx-4 dark:bg-titanium-800" />
-
-                        {walletContent && (
-                            <>
-                                <div className="px-4 py-2">
-                                    <div className="text-[10px] font-bold text-titanium-400 uppercase tracking-[0.2em] mb-4">Wallet</div>
-                                    {walletContent}
-                                </div>
-                                <div className="h-px bg-titanium-100 my-2 mx-4 dark:bg-titanium-800" />
-                            </>
-                        )}
-
-                        <div className="px-4 py-2">
-                            <button
-                                onClick={() => { onOpenRewards(); close(); }}
-                                className="w-full py-3 rounded-2xl bg-titanium-900 text-white text-xs font-bold uppercase tracking-widest hover:opacity-90 transition-colors dark:bg-action-primary/20 dark:text-action-primary"
-                            >
-                                Rewards
-                            </button>
-                        </div>
-
-                        <div className="h-px bg-titanium-100 my-2 mx-4 dark:bg-titanium-800" />
-
-                        <div className="px-4 py-2">
-                            <div className="grid grid-cols-2 gap-2">
-                                <button 
-                                    onClick={() => { onOpenSafety(); close(); }}
-                                    className="py-3 rounded-2xl bg-titanium-50 text-titanium-800 text-xs font-bold uppercase tracking-widest hover:bg-titanium-100 transition-colors dark:bg-titanium-800 dark:text-titanium-100 dark:hover:bg-titanium-900"
-                                >
-                                    Safety
-                                </button>
-                                <button 
-                                    onClick={() => { onToggleHelp(); close(); }}
-                                    className="py-3 rounded-2xl bg-titanium-50 text-titanium-800 text-xs font-bold uppercase tracking-widest hover:bg-titanium-100 transition-colors dark:bg-titanium-800 dark:text-titanium-100 dark:hover:bg-titanium-900"
-                                >
-                                    Help
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="px-4 pb-4 pt-2">
-                            <div className="p-4 bg-titanium-50 rounded-2xl border border-titanium-100 flex flex-col items-center gap-3 dark:bg-titanium-800 dark:border-titanium-800">
-                                <span className="text-[9px] font-bold text-titanium-400 uppercase tracking-widest">Active Mode</span>
-                                <div className="flex w-full gap-2">
-                                    <button 
-                                        onClick={() => { onSetPlayMode('CASH'); close(); }}
-                                        className={`flex-1 py-2 text-[10px] font-bold rounded-full transition-all ${playMode === 'CASH' ? 'bg-titanium-900 text-white dark:bg-action-primary/20 dark:text-action-primary' : 'bg-white text-titanium-800 border border-titanium-200 dark:bg-titanium-900/60 dark:text-titanium-100 dark:border-titanium-800'}`}
-                                    >
-                                        Cash
-                                    </button>
-                                    <button 
-                                        onClick={() => { onSetPlayMode('FREEROLL'); close(); }}
-                                        className={`flex-1 py-2 text-[10px] font-bold rounded-full transition-all ${playMode === 'FREEROLL' ? 'bg-action-primary text-white dark:bg-action-primary/20 dark:text-action-primary' : 'bg-white text-titanium-800 border border-titanium-200 dark:bg-titanium-900/60 dark:text-titanium-100 dark:border-titanium-800'}`}
-                                    >
-                                        Tourney
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </>
-            )}
-        </div>
+      <button
+        type="button"
+        onClick={() => {
+          onClick?.();
+          close();
+        }}
+        className={baseClasses}
+      >
+        {label}
+      </button>
     );
+  };
+
+  // Toggle setting item
+  const ToggleItem = ({ label, value, onToggle }: { label: string; value: boolean; onToggle: () => void }) => (
+    <button
+      type="button"
+      onClick={onToggle}
+      className="w-full flex items-center justify-between py-3 px-4 text-body text-titanium-700 dark:text-titanium-300 hover:bg-titanium-50 dark:hover:bg-titanium-800/50 transition-colors"
+    >
+      <span className="font-medium">{label}</span>
+      <span className={`text-caption font-semibold ${value ? 'text-action-success' : 'text-titanium-400'}`}>
+        {value ? 'On' : 'Off'}
+      </span>
+    </button>
+  );
+
+  return (
+    <div className="relative">
+      {/* Hamburger Button */}
+      <button
+        onClick={toggle}
+        aria-label="Menu"
+        aria-expanded={isOpen}
+        className="w-10 h-10 flex items-center justify-center rounded-full bg-white border border-titanium-200 shadow-soft hover:shadow-md transition-all active:scale-95 dark:bg-titanium-900/70 dark:border-titanium-800"
+      >
+        <div className="flex flex-col gap-1">
+          <span
+            className={`w-4 h-0.5 bg-titanium-900 dark:bg-titanium-100 rounded-full transition-transform ${
+              isOpen ? 'rotate-45 translate-y-1.5' : ''
+            }`}
+          />
+          <span
+            className={`w-4 h-0.5 bg-titanium-900 dark:bg-titanium-100 rounded-full transition-opacity ${
+              isOpen ? 'opacity-0' : ''
+            }`}
+          />
+          <span
+            className={`w-4 h-0.5 bg-titanium-900 dark:bg-titanium-100 rounded-full transition-transform ${
+              isOpen ? '-rotate-45 -translate-y-1.5' : ''
+            }`}
+          />
+        </div>
+      </button>
+
+      {/* Menu Overlay */}
+      {transitions((style, show) =>
+        show ? (
+          <>
+            {/* Backdrop */}
+            <div
+              className="fixed inset-0 z-[90] bg-titanium-900/10 backdrop-blur-sm dark:bg-black/40"
+              onClick={close}
+            />
+
+            {/* Menu Panel */}
+            <animated.div
+              style={{
+                opacity: style.opacity,
+                transform: prefersReducedMotion
+                  ? undefined
+                  : style.x.to(x => `translateX(${x}px)`),
+              }}
+              className="absolute top-12 right-0 w-64 bg-white border border-titanium-200 rounded-2xl shadow-float z-[100] overflow-hidden dark:bg-titanium-900 dark:border-titanium-800"
+              role="menu"
+            >
+              {/* Primary Navigation - Essential items only */}
+              <div className="py-2">
+                <MenuItem to="/" label="Games" />
+                <MenuItem label="Rewards" onClick={onOpenRewards} />
+                <MenuItem to="/security" label="Account" />
+              </div>
+
+              {/* Divider */}
+              <div className="h-px bg-titanium-100 dark:bg-titanium-800 mx-4" />
+
+              {/* Settings */}
+              <div className="py-2">
+                <ToggleItem label="Sound" value={soundEnabled} onToggle={onToggleSound} />
+                <ToggleItem label="Motion" value={!reducedMotion} onToggle={onToggleReducedMotion} />
+                {onToggleFocus && (
+                  <ToggleItem label="Focus" value={Boolean(focusMode)} onToggle={onToggleFocus} />
+                )}
+              </div>
+
+              {/* Divider */}
+              <div className="h-px bg-titanium-100 dark:bg-titanium-800 mx-4" />
+
+              {/* Help & Safety */}
+              <div className="py-2">
+                <MenuItem label="Help" onClick={onToggleHelp} />
+                <MenuItem label="Safety" onClick={onOpenSafety} />
+              </div>
+
+              {/* Mode Selector */}
+              <div className="p-4 bg-titanium-50 dark:bg-titanium-800/50">
+                <div className="text-micro text-titanium-500 uppercase tracking-wider mb-2">
+                  Play Mode
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      onSetPlayMode('CASH');
+                      close();
+                    }}
+                    className={`flex-1 py-2 text-caption font-semibold rounded-xl transition-all ${
+                      playMode === 'CASH'
+                        ? 'bg-titanium-900 text-white dark:bg-action-primary dark:text-white'
+                        : 'bg-white text-titanium-600 border border-titanium-200 dark:bg-titanium-900 dark:text-titanium-400 dark:border-titanium-700'
+                    }`}
+                  >
+                    Cash
+                  </button>
+                  <button
+                    onClick={() => {
+                      onSetPlayMode('FREEROLL');
+                      close();
+                    }}
+                    className={`flex-1 py-2 text-caption font-semibold rounded-xl transition-all ${
+                      playMode === 'FREEROLL'
+                        ? 'bg-titanium-900 text-white dark:bg-action-primary dark:text-white'
+                        : 'bg-white text-titanium-600 border border-titanium-200 dark:bg-titanium-900 dark:text-titanium-400 dark:border-titanium-700'
+                    }`}
+                  >
+                    Tournament
+                  </button>
+                </div>
+              </div>
+            </animated.div>
+          </>
+        ) : null
+      )}
+    </div>
+  );
 };

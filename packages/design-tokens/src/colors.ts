@@ -8,6 +8,15 @@
 /**
  * Titanium color palette - Jony Ive inspired neutral scale
  * Used for backgrounds, text, and UI chrome
+ *
+ * Luxury Redesign v4.0 - 5 Essential Shades:
+ * - 50:  background (page background)
+ * - 100: surface (cards, panels)
+ * - 200: border (dividers, outlines)
+ * - 600: text-muted (secondary text)
+ * - 900: text-primary (main text)
+ *
+ * Other shades kept for backwards compatibility but should migrate to semantic aliases.
  */
 export const TITANIUM = {
   50: '#FAFAFA',
@@ -21,6 +30,31 @@ export const TITANIUM = {
   800: '#262626',
   900: '#171717',
   950: '#0A0A0A',
+} as const;
+
+/**
+ * Semantic color aliases - Luxury Redesign v4.0
+ *
+ * Use these instead of numbered titanium shades.
+ * Maps to the 5 essential shades for light mode.
+ */
+export const SEMANTIC = {
+  // Light mode defaults
+  light: {
+    background: TITANIUM[50],   // Page background
+    surface: TITANIUM[100],     // Cards, panels, modals
+    border: TITANIUM[200],      // Dividers, outlines
+    textMuted: TITANIUM[600],   // Secondary text, hints
+    textPrimary: TITANIUM[900], // Primary text
+  },
+  // Dark mode
+  dark: {
+    background: TITANIUM[950],  // Page background
+    surface: TITANIUM[900],     // Cards, panels, modals
+    border: TITANIUM[700],      // Dividers, outlines
+    textMuted: TITANIUM[400],   // Secondary text, hints
+    textPrimary: TITANIUM[50],  // Primary text
+  },
 } as const;
 
 /**

@@ -162,5 +162,25 @@ export const useBetControls = ({
     setGameState,
   ]);
 
-  return { setBetAmount, toggleShield, toggleDouble, toggleSuper };
+  /**
+   * LUX-013: Set bet to lastBet value (for REBET functionality)
+   * Returns true if successful, false if insufficient funds or no lastBet
+   */
+  const setToLastBet = useCallback((): boolean => {
+    const lastBet = gameState.lastBet;
+    if (!lastBet || lastBet <= 0) {
+      setGameState(prev => ({ ...prev, message: 'NO PREVIOUS BET' }));
+      return false;
+    }
+
+    if (stats.chips < lastBet) {
+      setGameState(prev => ({ ...prev, message: 'INSUFFICIENT FUNDS' }));
+      return false;
+    }
+
+    setGameState(prev => ({ ...prev, bet: lastBet }));
+    return true;
+  }, [gameState.lastBet, stats.chips, setGameState]);
+
+  return { setBetAmount, toggleShield, toggleDouble, toggleSuper, setToLastBet };
 };

@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { useTransition, animated, useSpring } from '@react-spring/web';
+import { useTransition, animated, useSpring, to } from '@react-spring/web';
 import { SPRING_CONFIGS, SPRING_LIQUID_CONFIGS } from '../../utils/motion';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
@@ -92,8 +92,9 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
             opacity: style.opacity,
             transform: prefersReducedMotion
               ? undefined
-              : style.scale.to(
-                  (s) => `scale(${s}) translateY(${style.y.get()}px)`
+              : to(
+                  [style.scale, style.y],
+                  (s, y) => `scale(${s}) translateY(${y}px)`
                 ),
             // Glass border effect
             border: `1px solid ${GLASS_MEDIUM.border}`,

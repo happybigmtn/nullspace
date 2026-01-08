@@ -1,13 +1,22 @@
 /**
  * Spacing tokens for Nullspace design system
- * Based on an 8pt grid with half-step for tight spacing
+ *
+ * LUX-021: Consistent 4px grid spacing
+ *
+ * Allowed values: 4, 8, 12, 16, 24, 32, 48, 64, 96
+ * Avoid: 6px (gap-1.5), 20px (gap-5), 28px (gap-7), etc.
+ *
+ * Usage guidelines:
+ * - Component internal: 8-16px (gap-2 to gap-4)
+ * - Section spacing: 24-32px (gap-6 to gap-8)
+ * - Screen padding: 16px mobile, 24px tablet, 32px desktop
  *
  * NO platform-specific code - raw values only (in pixels)
  */
 
 /**
  * Spacing scale values in pixels
- * Uses 4px base unit for flexibility
+ * Pure 4px base unit grid
  */
 export const SPACING = {
   0: 0,
@@ -15,13 +24,10 @@ export const SPACING = {
   2: 8,
   3: 12,
   4: 16,
-  5: 20,
   6: 24,
   8: 32,
-  10: 40,
   12: 48,
   16: 64,
-  20: 80,
   24: 96,
 } as const;
 

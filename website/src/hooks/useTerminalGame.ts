@@ -196,15 +196,16 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
     setLastTxSig: setters.setLastTxSig,
   });
 
-  const { setBetAmount, toggleShield, toggleDouble, toggleSuper } = useBetControls({
+  const { setBetAmount, toggleShield, toggleDouble, toggleSuper, setToLastBet } = useBetControls({
     gameState: state.gameState,
     setGameState: setters.setGameState,
     stats: state.stats,
-    setStats: setters.setStats,
     chainService: state.chainService,
     isOnChain: state.isOnChain,
     currentSessionIdRef: refs.currentSessionIdRef,
-    isPendingRef: refs.isPendingRef,
+    tournamentTime: state.tournamentTime,
+    phase: state.phase,
+    playMode,
     setLastTxSig: setters.setLastTxSig,
   });
 
@@ -351,6 +352,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
     actions: {
       startGame,
       setBetAmount,
+      setToLastBet, // LUX-013: For REBET functionality
       toggleShield,
       toggleDouble,
       toggleSuper,

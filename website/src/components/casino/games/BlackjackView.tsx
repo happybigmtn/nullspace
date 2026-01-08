@@ -5,50 +5,10 @@ import { Hand } from '../GameComponents';
 import { MobileDrawer } from '../MobileDrawer';
 import { BetsDrawer } from '../BetsDrawer';
 import { SideBetsDrawer } from '../SideBetsDrawer';
+import { InlineBetSelector } from '../InlineBetSelector';
 import { Label } from '../ui/Label';
 import { cardIdToString } from '../../../services/games';
 import { analyzeBlackjackHand, BlackjackAnalysis } from '../../../utils/blackjackAnalysis';
-
-const CHIP_VALUES = [1, 5, 25, 100, 500, 1000, 5000, 10000];
-
-// Casino chip colors by denomination
-const CHIP_COLORS: Record<number, { bg: string; border: string; text: string }> = {
-    1: { bg: 'bg-gray-100', border: 'border-gray-300', text: 'text-gray-800' },
-    5: { bg: 'bg-red-600', border: 'border-red-400', text: 'text-white' },
-    25: { bg: 'bg-green-600', border: 'border-green-400', text: 'text-white' },
-    100: { bg: 'bg-gray-900', border: 'border-gray-600', text: 'text-white' },
-    500: { bg: 'bg-purple-600', border: 'border-purple-400', text: 'text-white' },
-    1000: { bg: 'bg-yellow-500', border: 'border-yellow-300', text: 'text-black' },
-    5000: { bg: 'bg-pink-500', border: 'border-pink-300', text: 'text-white' },
-    10000: { bg: 'bg-blue-600', border: 'border-blue-400', text: 'text-white' },
-};
-
-const ChipButton: React.FC<{
-    value: number;
-    selected?: boolean;
-    onClick?: () => void;
-    size?: 'sm' | 'md' | 'lg';
-}> = ({ value, selected, onClick, size = 'lg' }) => {
-    const label = value >= 1000 ? `${value / 1000}K` : value.toString();
-    const sizes = { sm: 'w-10 h-10 text-xs', md: 'w-12 h-12 text-sm', lg: 'w-14 h-14 text-base' };
-
-    return (
-        <button
-            type="button"
-            onClick={onClick}
-            className={`
-                ns-control-no-unify
-                ${sizes[size]} relative rounded-full font-bold
-                flex items-center justify-center transition-all duration-300
-                ${onClick ? 'cursor-pointer hover:scale-110 active:scale-95' : ''}
-                ${selected ? 'bg-titanium-900 text-white shadow-float ring-2 ring-offset-2 ring-titanium-900' : 'bg-white text-titanium-800 border border-titanium-200 shadow-soft'}
-            `}
-            style={{ fontFamily: 'Space Grotesk' }}
-        >
-            <span className="relative z-10">{label}</span>
-        </button>
-    );
-};
 
 const calculateBlackjackTotal = (cards: Card[]): number => {
     let total = 0;
@@ -81,8 +41,9 @@ export const BlackjackView = React.memo<{
     playMode?: 'CASH' | 'FREEROLL' | null;
     currentBet?: number;
     onBetChange?: (bet: number) => void;
-}>(({ gameState, actions, lastWin, playMode, currentBet, onBetChange }) => {
-    const [showChipSelector, setShowChipSelector] = useState(false);
+    /** LUX-010: Balance for inline bet selector calculations */
+    balance?: number;
+}>(({ gameState, actions, lastWin, playMode, currentBet, onBetChange, balance = 1000 }) => {
     const [analysis, setAnalysis] = useState<BlackjackAnalysis | null>(null);
     const [analysisPending, setAnalysisPending] = useState(false);
     const dealerValue = useMemo(() => {
@@ -130,6 +91,8 @@ export const BlackjackView = React.memo<{
     const canDouble = gameState.blackjackActions?.canDouble && !showInsurancePrompt;
     const canSplit = gameState.blackjackActions?.canSplit && !showInsurancePrompt;
     const isBettingStage = gameState.stage === 'BETTING' || gameState.stage === 'RESULT';
+    const isResultStage = gameState.stage === 'RESULT';
+    const canRebet = isResultStage && gameState.lastBet && gameState.lastBet > 0 && balance >= gameState.lastBet;
     const canAnalyze = gameState.stage === 'PLAYING' && gameState.playerCards.length > 0 && !!dealerUpcard;
 
     const activeHandNumber = gameState.completedHands.length + 1;
@@ -244,12 +207,11 @@ export const BlackjackView = React.memo<{
                 <div className="absolute top-2 left-2 z-40">
                     <MobileDrawer label="INFO" title="BLACKJACK">
                         <div className="space-y-4 p-2">
-                            <p className="text-body-sm text-titanium-800 font-semibold leading-relaxed">
+                            <p className="text-body text-ns-text leading-relaxed">
                                 Get as close to 21 as possible without going over. Dealer stands on 17.
                             </p>
-                            <div className="bg-titanium-50 p-4 rounded-2xl border border-titanium-100">
-                                <Label size="micro" className="mb-2 block">Controls</Label>
-                                <p className="text-[11px] text-titanium-500 font-bold uppercase tracking-wider">
+                            <div className="pt-4">
+                                <p className="text-caption uppercase tracking-wider">
                                     Hit (H) • Stand (S) • Double (D) • Split (P)
                                 </p>
                             </div>
@@ -260,9 +222,9 @@ export const BlackjackView = React.memo<{
                 <div className="min-h-[120px] flex items-center justify-center opacity-80">
                     {gameState.dealerCards.length > 0 ? (
                         <div className="flex flex-col items-center gap-4">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-3">
                                 <Label variant="destructive">Dealer</Label>
-                                <span className="px-2.5 py-1 rounded-lg bg-titanium-100 text-titanium-900 font-black text-sm tabular-nums">{dealerValue}</span>
+                                <span className="text-display-mono text-headline text-ns-text">{dealerValue}</span>
                             </div>
                             <Hand
                                 cards={gameState.dealerCards}
@@ -272,7 +234,7 @@ export const BlackjackView = React.memo<{
                     ) : (
                         <div className="flex flex-col items-center gap-3">
                              <Label variant="secondary">Dealer</Label>
-                             <div className="w-14 h-20 border-2 border-dashed border-titanium-200 rounded-xl" />
+                             <div className="w-14 h-20 rounded-xl bg-titanium-100/50 dark:bg-titanium-800/30" />
                         </div>
                     )}
                 </div>
@@ -308,11 +270,11 @@ export const BlackjackView = React.memo<{
                     )}
 
                     <div className="flex flex-col items-center gap-4 scale-110">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-3">
                             <Label variant="gold">You</Label>
-                            <span className="px-2.5 py-1 rounded-lg bg-titanium-100 text-titanium-900 font-black text-sm tabular-nums">{playerValue}</span>
+                            <span className="text-display-mono text-headline text-ns-text">{playerValue}</span>
                             {(gameState.completedHands.length > 0 || gameState.blackjackStack.length > 0) ? (
-                                <span className="text-titanium-400 text-xs font-bold uppercase tracking-widest ml-1">Hand {activeHandNumber}</span>
+                                <span className="text-caption uppercase tracking-widest ml-2">Hand {activeHandNumber}</span>
                             ) : null}
                         </div>
                         {gameState.playerCards.length > 0 ? (
@@ -321,7 +283,7 @@ export const BlackjackView = React.memo<{
                                 forcedColor="text-action-success"
                             />
                         ) : (
-                            <div className="w-14 h-20 border-2 border-dashed border-action-success/30 rounded-xl bg-action-success/5 shadow-inner" />
+                            <div className="w-14 h-20 rounded-xl bg-action-success/10" />
                         )}
                     </div>
 
@@ -329,7 +291,7 @@ export const BlackjackView = React.memo<{
                     {gameState.blackjackStack.length > 0 && (
                             <div className="flex gap-2 opacity-30 scale-90 origin-left">
                             {gameState.blackjackStack.map((h, i) => (
-                                <div key={i} className="w-14 h-20 bg-titanium-100 border border-titanium-200 rounded-xl flex items-center justify-center">
+                                <div key={i} className="w-14 h-20 rounded-xl bg-titanium-200/50 dark:bg-titanium-700/30 flex items-center justify-center">
                                     <Label size="micro">Wait</Label>
                                 </div>
                             ))}
@@ -337,145 +299,40 @@ export const BlackjackView = React.memo<{
                     )}
                 </div>
 
-                {displaySideBets.length > 0 && (
-                    <div className="flex flex-wrap items-center justify-center gap-2 text-xs uppercase tracking-[0.15em] text-titanium-500">
-                        <span className="text-titanium-400 font-semibold">Side Bets:</span>
-                        {displaySideBets.map((bet) => (
-                            <span
-                                key={bet.id}
-                                className="rounded-full border border-titanium-200 px-3 py-1.5 text-titanium-700 dark:border-titanium-800 dark:text-titanium-200 font-medium"
-                            >
-                                {bet.id} ${bet.amount.toLocaleString()}
-                            </span>
-                        ))}
-                    </div>
-                )}
 
-                {/* Super Mode Info - Animated */}
+                {/* Super Mode - minimal gold accent indicator */}
                 {gameState.superMode?.isActive && (
-                    <div className="w-full max-w-md mx-auto px-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                        <div className="relative bg-titanium-900/95 border-2 border-action-primary rounded text-center overflow-hidden
-                                        shadow-[0_0_20px_rgba(255,215,0,0.3),inset_0_0_30px_rgba(255,215,0,0.05)]
-                                        animate-pulse-glow">
-                            {/* Animated shimmer overlay */}
-                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-action-primary/10 to-transparent
-                                            animate-shimmer pointer-events-none" />
-
-                            <div className="relative p-3">
-                                <div className="text-xs font-bold text-action-primary tracking-[0.3em] mb-2 font-mono flex items-center justify-center gap-2">
-                                    <span className="animate-pulse">⚡</span>
-                                    <span className="bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-300 bg-clip-text text-transparent">
-                                        SUPER MODE ACTIVE
-                                    </span>
-                                    <span className="animate-pulse">⚡</span>
-                                </div>
-                                {Array.isArray(gameState.superMode.multipliers) && gameState.superMode.multipliers.length > 0 ? (
-                                    <div className="flex flex-wrap gap-1.5 justify-center">
-                                        {gameState.superMode.multipliers.slice(0, 10).map((m, idx) => (
-                                            <span
-                                                key={idx}
-                                                className="px-2.5 py-1 rounded-lg bg-gradient-to-br from-amber-900/50 to-amber-950/50
-                                                           border border-action-primary/60 text-action-primary text-xs font-mono font-bold
-                                                           shadow-[0_0_8px_rgba(255,215,0,0.2)] hover:shadow-[0_0_12px_rgba(255,215,0,0.4)]
-                                                           transition-all duration-200 hover:scale-105"
-                                                style={{ animationDelay: `${idx * 50}ms` }}
-                                            >
-                                                {cardIdToString(m.id)} <span className="text-amber-300">×{m.multiplier}</span>
-                                            </span>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <div className="text-[10px] text-gray-400 font-mono animate-pulse">Loading multipliers...</div>
-                                )}
-                            </div>
-                        </div>
+                    <div className="text-center text-caption text-action-gold animate-in fade-in">
+                        <span className="uppercase tracking-widest">Super Mode</span>
+                        {Array.isArray(gameState.superMode.multipliers) && gameState.superMode.multipliers.length > 0 && (
+                            <span className="text-display-mono ml-2">
+                                ×{Math.max(...gameState.superMode.multipliers.map(m => m.multiplier))}
+                            </span>
+                        )}
                     </div>
                 )}
 
-                {(analysis || analysisPending) && (
-                    <div className="w-full max-w-md mx-auto px-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                        <div className="bg-titanium-900/95 border-2 border-gray-700 rounded-2xl shadow-2xl overflow-hidden">
-                            <div className="flex items-center justify-between px-3 py-2 border-b border-gray-800 bg-titanium-900/90">
-                                <Label size="micro">Hand Analysis</Label>
-                                <button
-                                    type="button"
-                                    onClick={() => setAnalysis(null)}
-                                    className="text-[10px] px-2 py-1 rounded border border-gray-700 bg-black/40 text-gray-400 hover:border-gray-500"
-                                >
-                                    CLEAR
-                                </button>
-                            </div>
-                            <div className="p-3 space-y-3">
-                                {analysisPending && !analysis ? (
-                                    <div className="text-[11px] text-gray-400 font-mono">Analyzing...</div>
-                                ) : null}
-                                {analysis ? (
-                                    <div className="space-y-2">
-                                        {analysisRows.map((row) => {
-                                            const isBest = analysis.bestPlay === row.code;
-                                            return (
-                                                <div
-                                                    key={row.key}
-                                                    className={`flex items-center justify-between px-3 py-2 rounded border text-[11px] font-mono ${
-                                                        isBest
-                                                            ? 'border-action-primary bg-action-primary/15 text-action-primary'
-                                                            : 'border-gray-800 bg-black/40 text-gray-300'
-                                                    }`}
-                                                >
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="font-bold tracking-widest uppercase">{row.label}</span>
-                                                        {isBest && (
-                                                            <span className="text-[9px] font-bold uppercase tracking-widest text-action-primary">
-                                                                BEST
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    <span className="tabular-nums">{formatEv(row.value)}</span>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                ) : null}
-                                {analysis ? (
-                                    <div className="text-[10px] text-gray-500 leading-relaxed">
-                                        EV per 1x bet • {analysis.iterations.toLocaleString()} sims • {analysis.note}
-                                    </div>
-                                ) : null}
-                            </div>
-                        </div>
+                {/* Analysis panel removed for cleaner UI - analysis still available via 'A' key */}
+                {analysis && (
+                    <div className="text-center text-caption text-ns-text-muted animate-in fade-in">
+                        Best: <span className="text-action-primary font-medium">{analysis.bestPlay}</span>
+                        <button
+                            type="button"
+                            onClick={() => setAnalysis(null)}
+                            className="ml-2 text-ns-text-muted hover:text-ns-text"
+                        >
+                            ×
+                        </button>
                     </div>
                 )}
             </div>
 
             {/* CONTROLS */}
-            <div className="ns-controlbar zen-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-titanium-900/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
-                {/* Keyboard Shortcuts Hint Bar - All Screens */}
-                <div className="flex items-center justify-center gap-3 sm:gap-6 py-2 border-b border-gray-800 text-[10px] sm:text-xs font-mono text-gray-400 bg-black/30 flex-wrap px-2">
-                    {isBettingStage ? (
-                        <>
-                            <span><kbd className="px-1 sm:px-1.5 py-0.5 rounded bg-gray-800 text-gray-300 font-bold">SPACE</kbd> Deal</span>
-                            <span><kbd className="px-1 sm:px-1.5 py-0.5 rounded bg-gray-800 text-gray-300 font-bold">↑↓</kbd> Bet</span>
-                            <span className="hidden sm:inline"><kbd className="px-1.5 py-0.5 rounded bg-gray-800 text-gray-300 font-bold">1-5</kbd> Side Bets</span>
-                            <span className="hidden sm:inline"><kbd className="px-1.5 py-0.5 rounded bg-gray-800 text-gray-300 font-bold">G</kbd> Super</span>
-                        </>
-                    ) : showInsurancePrompt ? (
-                        <>
-                            <span><kbd className="px-1 sm:px-1.5 py-0.5 rounded bg-gray-800 text-gray-300 font-bold">I</kbd> Insure</span>
-                            <span><kbd className="px-1 sm:px-1.5 py-0.5 rounded bg-gray-800 text-gray-300 font-bold">N</kbd> No</span>
-                        </>
-                    ) : (
-                        <>
-                            <span><kbd className="px-1 sm:px-1.5 py-0.5 rounded bg-gray-800 text-gray-300 font-bold">H</kbd> Hit</span>
-                            <span><kbd className="px-1 sm:px-1.5 py-0.5 rounded bg-gray-800 text-gray-300 font-bold">S</kbd> Stand</span>
-                            <span><kbd className="px-1 sm:px-1.5 py-0.5 rounded bg-gray-800 text-gray-300 font-bold">D</kbd> Double</span>
-                            <span><kbd className="px-1 sm:px-1.5 py-0.5 rounded bg-gray-800 text-gray-300 font-bold">P</kbd> Split</span>
-                        </>
-                    )}
-                    <span className="text-gray-600 hidden sm:inline">|</span>
-                    <span className="hidden sm:inline"><kbd className="px-1.5 py-0.5 rounded bg-gray-800 text-gray-300 font-bold">?</kbd> Help</span>
-                </div>
-                <div className="h-16 md:h-20 flex items-center justify-between md:justify-center gap-2 p-2 md:px-4">
-                    <div className="flex items-center gap-2">
+            {/* Keyboard shortcuts removed for cleaner UI - shortcuts still work, press ? for help */}
+            <div className="ns-controlbar zen-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-titanium-900/95 backdrop-blur z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
+                <div className="h-14 sm:h-16 md:h-20 flex items-center justify-center gap-2 sm:gap-3 p-2 md:px-4">
+                    {/* Side Bets - Desktop only drawer, mobile uses simplified button */}
+                    <div className="hidden sm:flex items-center gap-2">
                         <SideBetsDrawer
                             title="BLACKJACK SIDE BETS"
                             label="Side Bets"
@@ -525,51 +382,19 @@ export const BlackjackView = React.memo<{
                     {/* Secondary Actions - Main Actions */}
                     {isBettingStage ? (
                         <>
-                            <div className="flex md:hidden items-center gap-2">
-                                <BetsDrawer title="MODIFIERS">
-                                    <div className="rounded border border-gray-800 bg-black/40 p-2 space-y-2">
-                                        <div className="text-[10px] text-cyan-500 font-bold tracking-widest border-b border-gray-800 pb-1">MODIFIERS</div>
-                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                            {playMode !== 'CASH' && (
-                                                <>
-                                                    <button
-                                                        type="button"
-                                                        onClick={actions?.toggleShield}
-                                                        className={`py-3 rounded border text-xs font-bold ${
-                                                            gameState.activeModifiers.shield
-                                                                ? 'border-action-success bg-action-success/20 text-action-success'
-                                                                : 'border-gray-700 bg-gray-900 text-gray-400'
-                                                        }`}
-                                                    >
-                                                        SHIELD
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={actions?.toggleDouble}
-                                                        className={`py-3 rounded border text-xs font-bold ${
-                                                            gameState.activeModifiers.double
-                                                                ? 'border-action-success bg-action-success/20 text-action-success'
-                                                                : 'border-gray-700 bg-gray-900 text-gray-400'
-                                                        }`}
-                                                    >
-                                                        DOUBLE
-                                                    </button>
-                                                </>
-                                            )}
-                                            <button
-                                                type="button"
-                                                onClick={actions?.toggleSuper}
-                                                className={`py-3 rounded border text-xs font-bold ${
-                                                    gameState.activeModifiers.super
-                                                        ? 'border-action-primary bg-action-primary/20 text-action-primary'
-                                                        : 'border-gray-700 bg-gray-900 text-gray-400'
-                                                }`}
-                                            >
-                                                SUPER
-                                            </button>
-                                        </div>
-                                    </div>
-                                </BetsDrawer>
+                            {/* Mobile: Simple modifier toggles inline */}
+                            <div className="flex sm:hidden items-center gap-1">
+                                <button
+                                    type="button"
+                                    onClick={actions?.toggleSuper}
+                                    className={`px-3 py-2 rounded-lg text-[10px] font-bold uppercase ${
+                                        gameState.activeModifiers.super
+                                            ? 'bg-action-primary/20 text-action-primary border border-action-primary/50'
+                                            : 'bg-gray-800 text-gray-400 border border-gray-700'
+                                    }`}
+                                >
+                                    Super
+                                </button>
                             </div>
 
                             <div className="hidden md:flex items-center gap-3">
@@ -617,41 +442,15 @@ export const BlackjackView = React.memo<{
                         </>
                     ) : showInsurancePrompt ? (
                         <>
-                            <div className="flex md:hidden items-center gap-2">
-                                <MobileDrawer label="INSURE" title="INSURANCE">
-                                    <div className="rounded border border-gray-800 bg-black/40 p-2">
-                                        <div className="grid grid-cols-2 gap-2">
-                                        <button
-                                            type="button"
-                                            onClick={() => actions?.bjInsurance?.(true)}
-                                            className="py-3 rounded border border-action-primary bg-action-primary/20 text-action-primary text-xs font-bold"
-                                        >
-                                            YES
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => actions?.bjInsurance?.(false)}
-                                            className="py-3 rounded border border-gray-700 bg-gray-900 text-gray-400 text-xs font-bold"
-                                        >
-                                            NO
-                                        </button>
-                                        </div>
-                                    </div>
-                                </MobileDrawer>
-                                {canAnalyze && (
-                                    <button
-                                        type="button"
-                                        onClick={runAnalysis}
-                                        disabled={analysisPending}
-                                        className={`text-[11px] font-mono px-3 py-2 rounded-full border ${
-                                            analysisPending
-                                                ? 'opacity-60 cursor-not-allowed border-gray-800 bg-black/30 text-gray-500'
-                                                : 'border-action-primary bg-action-primary/15 text-action-primary hover:bg-action-primary/25'
-                                        }`}
-                                    >
-                                        {analysisPending ? '...' : 'ANALYZE'}
-                                    </button>
-                                )}
+                            {/* Mobile: Simple No button inline */}
+                            <div className="flex sm:hidden items-center gap-1">
+                                <button
+                                    type="button"
+                                    onClick={() => actions?.bjInsurance?.(false)}
+                                    className="px-3 py-2 rounded-lg text-[10px] font-bold uppercase bg-gray-800 text-gray-400 border border-gray-700"
+                                >
+                                    No
+                                </button>
                             </div>
                             <div className="hidden md:flex items-center gap-3">
                                 <button
@@ -679,61 +478,36 @@ export const BlackjackView = React.memo<{
                         </>
                     ) : (
                         <>
-                            <div className="flex md:hidden items-center gap-2">
-                                <MobileDrawer label="ACTIONS" title="BLACKJACK ACTIONS">
-                                    <div className="rounded border border-gray-800 bg-black/40 p-2">
-                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                        <button
-                                            type="button"
-                                            onClick={actions?.bjStand}
-                                            disabled={!canStand}
-                                            className={`py-3 rounded border text-xs font-bold ${
-                                                canStand
-                                                    ? 'border-gray-700 bg-gray-900 text-gray-300'
-                                                    : 'opacity-50 cursor-not-allowed border-gray-800 bg-gray-900/50 text-gray-700'
-                                            }`}
-                                        >
-                                            STAND
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={actions?.bjDouble}
-                                            disabled={!canDouble}
-                                            className={`py-3 rounded border text-xs font-bold ${
-                                                canDouble
-                                                    ? 'border-gray-700 bg-gray-900 text-gray-300'
-                                                    : 'opacity-50 cursor-not-allowed border-gray-800 bg-gray-900/50 text-gray-700'
-                                            }`}
-                                        >
-                                            DOUBLE
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={actions?.bjSplit}
-                                            disabled={!canSplit}
-                                            className={`py-3 rounded border text-xs font-bold ${
-                                                canSplit
-                                                    ? 'border-gray-700 bg-gray-900 text-gray-300'
-                                                    : 'opacity-50 cursor-not-allowed border-gray-800 bg-gray-900/50 text-gray-700'
-                                            }`}
-                                        >
-                                            SPLIT
-                                        </button>
-                                        </div>
-                                    </div>
-                                </MobileDrawer>
-                                {canAnalyze && (
+                            {/* Mobile: Inline action buttons */}
+                            <div className="flex sm:hidden items-center gap-1">
+                                <button
+                                    type="button"
+                                    onClick={actions?.bjStand}
+                                    disabled={!canStand}
+                                    className={`px-3 py-2 rounded-lg text-[10px] font-bold uppercase ${
+                                        canStand
+                                            ? 'bg-gray-800 text-gray-300 border border-gray-700'
+                                            : 'opacity-40 bg-gray-900 text-gray-600 border border-gray-800'
+                                    }`}
+                                >
+                                    Stand
+                                </button>
+                                {canDouble && (
                                     <button
                                         type="button"
-                                        onClick={runAnalysis}
-                                        disabled={analysisPending}
-                                        className={`text-[11px] font-mono px-3 py-2 rounded-full border ${
-                                            analysisPending
-                                                ? 'opacity-60 cursor-not-allowed border-gray-800 bg-black/30 text-gray-500'
-                                                : 'border-action-primary bg-action-primary/15 text-action-primary hover:bg-action-primary/25'
-                                        }`}
+                                        onClick={actions?.bjDouble}
+                                        className="px-3 py-2 rounded-lg text-[10px] font-bold uppercase bg-gray-800 text-gray-300 border border-gray-700"
                                     >
-                                        {analysisPending ? '...' : 'ANALYZE'}
+                                        x2
+                                    </button>
+                                )}
+                                {canSplit && (
+                                    <button
+                                        type="button"
+                                        onClick={actions?.bjSplit}
+                                        className="px-3 py-2 rounded-lg text-[10px] font-bold uppercase bg-gray-800 text-gray-300 border border-gray-700"
+                                    >
+                                        Split
                                     </button>
                                 )}
                             </div>
@@ -792,53 +566,35 @@ export const BlackjackView = React.memo<{
                         </>
                     )}
 
-                    {/* Primary Action with Chip Selector (Desktop & Mobile) */}
-                    <div className="flex items-center gap-3">
-                        {/* Chip Selector - Only show during BETTING or RESULT stage */}
-                        {(gameState.stage === 'BETTING' || gameState.stage === 'RESULT') && (
-                            <div className="relative flex flex-col items-center">
-                                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1">Bet</span>
-                                <ChipButton
-                                    value={currentBet || 25}
-                                    selected={showChipSelector}
-                                    onClick={() => setShowChipSelector(!showChipSelector)}
+                    {/* Primary Action with Bet Selector - LUX-010: Inline stepper */}
+                    <div className="flex items-center gap-2 sm:gap-3">
+                        {/* Inline Bet Selector - Hidden on mobile (bet in header), visible on sm+ */}
+                        {(gameState.stage === 'BETTING' || gameState.stage === 'RESULT') && onBetChange && (
+                            <div className="hidden sm:block">
+                                <InlineBetSelector
+                                    currentBet={currentBet || 25}
+                                    balance={balance}
+                                    onBetChange={onBetChange}
                                 />
-                                {showChipSelector && (
-                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 p-3 bg-black/95 border border-gray-700 rounded-xl backdrop-blur-sm z-50">
-                                        <div className="flex gap-2 pb-2">
-                                            {CHIP_VALUES.slice(0, 4).map((value) => (
-                                                <ChipButton
-                                                    key={value}
-                                                    value={value}
-                                                    size="md"
-                                                    selected={currentBet === value}
-                                                    onClick={() => {
-                                                        onBetChange?.(value);
-                                                        setShowChipSelector(false);
-                                                    }}
-                                                />
-                                            ))}
-                                        </div>
-                                        <div className="flex gap-2 pt-2 border-t border-gray-800">
-                                            {CHIP_VALUES.slice(4).map((value) => (
-                                                <ChipButton
-                                                    key={value}
-                                                    value={value}
-                                                    size="md"
-                                                    selected={currentBet === value}
-                                                    onClick={() => {
-                                                        onBetChange?.(value);
-                                                        setShowChipSelector(false);
-                                                    }}
-                                                />
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
                             </div>
                         )}
 
-                        {/* Primary Action Button */}
+                        {/* LUX-013: REBET button - shows in RESULT stage with lastBet amount */}
+                        {canRebet && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (actions?.setToLastBet?.()) {
+                                        actions?.deal?.();
+                                    }
+                                }}
+                                className="h-10 sm:h-14 md:h-16 px-4 sm:px-6 md:px-8 rounded-lg border-2 font-bold text-xs sm:text-sm md:text-base tracking-widest uppercase font-mono transition-all border-action-primary bg-action-primary/20 text-action-primary hover:bg-action-primary/30"
+                            >
+                                REBET ${gameState.lastBet} <span className="hidden sm:inline text-action-primary/60 ml-1 text-xs">[R]</span>
+                            </button>
+                        )}
+
+                        {/* Primary Action Button - Smaller on mobile */}
                         <button
                             type="button"
                             onClick={
@@ -849,12 +605,12 @@ export const BlackjackView = React.memo<{
                                         : actions?.bjHit
                             }
                             disabled={gameState.stage === 'PLAYING' && !showInsurancePrompt && !canHit}
-                            className={`ns-control-primary h-14 md:h-16 px-8 md:px-10 rounded-lg border-2 font-bold text-base md:text-lg tracking-widest uppercase font-mono transition-all shadow-[0_0_20px_rgba(0,0,0,0.5)] ${
+                            className={`ns-control-primary h-10 sm:h-14 md:h-16 px-6 sm:px-8 md:px-10 rounded-lg border-2 font-bold text-sm sm:text-base md:text-lg tracking-widest uppercase font-mono transition-all shadow-lg ${
                                 showInsurancePrompt
-                                    ? 'border-action-primary bg-action-primary text-black hover:bg-white hover:border-white'
+                                    ? 'border-action-primary bg-action-primary text-black'
                                     : (gameState.stage === 'PLAYING' && !canHit)
                                         ? 'opacity-50 cursor-not-allowed border-gray-800 bg-gray-900/50 text-gray-700'
-                                        : 'border-action-success bg-action-success text-black hover:bg-white hover:border-white hover:scale-105 active:scale-95'
+                                        : 'border-action-success bg-action-success text-black'
                             }`}
                         >
                             {(gameState.stage === 'BETTING' || gameState.stage === 'RESULT')

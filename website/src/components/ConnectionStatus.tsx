@@ -16,6 +16,10 @@ type ConnectionStatusType =
   | 'missing_identity'
   | 'error';
 
+/**
+ * LUX-024: Action-oriented status messages
+ * Every message tells users what happened + what to do
+ */
 const statusLabel = (status: string) => {
   switch (status) {
     case 'connected':
@@ -23,24 +27,29 @@ const statusLabel = (status: string) => {
     case 'connecting':
       return 'Connecting...';
     case 'offline':
-      return 'Offline';
+      return 'Reconnecting...';
     case 'vault_locked':
-      return 'Vault locked';
+      return 'Tap to unlock';
     case 'missing_identity':
-      return 'Setup required';
+      return 'Complete setup';
     case 'error':
-      return 'Connection error';
+      return 'Connection lost. Tap retry';
     default:
       return 'Connecting...';
   }
 };
 
-/** Status colors as hex values for animation interpolation */
+/**
+ * LUX-024: Status colors
+ * - Amber for recoverable states (offline, reconnecting)
+ * - Red only for true errors
+ * - Green for success
+ */
 const STATUS_COLORS: Record<string, string> = {
   connected: '#34C759', // success green
   connecting: '#9CA3AF', // gray-400
-  offline: '#FF3B30', // destructive red
-  error: '#FF3B30',
+  offline: '#F59E0B', // amber-500 (recoverable, auto-reconnecting)
+  error: '#FF3B30', // destructive red (user action needed)
   vault_locked: '#5E5CE6', // action-primary (indigo)
   missing_identity: '#5E5CE6',
   default: '#9CA3AF',
@@ -206,7 +215,8 @@ export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({ className })
   return (
     <animated.div
       className={[
-        'flex items-center gap-2 rounded border border-gray-800 bg-gray-900/40 px-2 py-1 relative overflow-hidden',
+        // LUX-024: Updated to luxury aesthetic
+        'flex items-center gap-2 rounded-full border border-titanium-200 bg-white/80 backdrop-blur-sm px-3 py-1.5 relative overflow-hidden shadow-soft dark:border-titanium-800 dark:bg-titanium-900/80',
         className ?? '',
       ]
         .join(' ')
@@ -258,7 +268,7 @@ export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({ className })
 
       {/* Status text with color animation */}
       <animated.span
-        className="text-[10px] tracking-widest uppercase max-w-[220px] truncate"
+        className="text-micro font-medium tracking-wider max-w-[220px] truncate"
         style={{ color: colorSpring.color }}
         title={title}
       >
@@ -277,7 +287,7 @@ export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({ className })
         <button
           type="button"
           onClick={() => void refreshOnce()}
-          className="text-[10px] border border-gray-700 rounded px-2 py-0.5 text-gray-300 hover:border-gray-500 hover:text-white transition-colors"
+          className="text-micro font-semibold border border-titanium-300 rounded-full px-3 py-1 text-titanium-600 hover:border-titanium-400 hover:text-titanium-800 transition-colors dark:border-titanium-700 dark:text-titanium-400 dark:hover:border-titanium-600 dark:hover:text-titanium-200"
         >
           Retry
         </button>

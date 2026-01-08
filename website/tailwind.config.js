@@ -1,4 +1,4 @@
-import { TITANIUM, ACTION, GAME, TYPE_SCALE, FONTS, SHADOW, ELEVATION, GLOW, SPACING_SEMANTIC, RADIUS, CONTAINER } from '@nullspace/design-tokens';
+import { TITANIUM, SEMANTIC, ACTION, GAME, TYPE_SCALE, FONTS, SHADOW, ELEVATION, GLOW, SPACING_SEMANTIC, RADIUS, CONTAINER } from '@nullspace/design-tokens';
 
 // Helper to convert TYPE_SCALE to Tailwind fontSize format
 const toTailwindFontSize = (style) => [
@@ -32,24 +32,41 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        mono: ['"Space Mono"', 'monospace'],
-        sans: ['"Plus Jakarta Sans"', 'Inter', 'system-ui', 'sans-serif'],
-        display: ['"Outfit"', 'sans-serif'],
+        // Primary UI font: Inter (Superhuman/Linear standard)
+        sans: ['"Inter"', '"SF Pro Display"', '-apple-system', 'BlinkMacSystemFont', 'system-ui', 'sans-serif'],
+        // Headlines: SF Pro Display with Inter fallback
+        display: ['"SF Pro Display"', '"Inter"', '-apple-system', 'system-ui', 'sans-serif'],
+        // Numeric/code: JetBrains Mono for balance displays and technical content
+        mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'monospace'],
       },
       fontSize: {
-        // TYPE_SCALE from design tokens
-        'micro': toTailwindFontSize(TYPE_SCALE.micro),
+        // Luxury Redesign v4.0 - Strict 4-level hierarchy + micro
+        // Primary semantic names (use these)
+        'micro': toTailwindFontSize(TYPE_SCALE.micro),      // 10px - badges, tiny labels
+        'caption': toTailwindFontSize(TYPE_SCALE.caption),  // 12px - labels, hints
+        'body': toTailwindFontSize(TYPE_SCALE.body),        // 16px - all readable content
+        'headline': toTailwindFontSize(TYPE_SCALE.headline),// 24px - section titles
+        'hero': toTailwindFontSize(TYPE_SCALE.hero),        // 48px - page titles
+
+        // Legacy aliases (for backwards compatibility, map to new hierarchy)
         'label': toTailwindFontSize(TYPE_SCALE.label),
-        'body': toTailwindFontSize(TYPE_SCALE.body),
         'body-lg': toTailwindFontSize(TYPE_SCALE.bodyLarge),
         'heading': toTailwindFontSize(TYPE_SCALE.heading),
         'heading-lg': toTailwindFontSize(TYPE_SCALE.headingLarge),
         'display': toTailwindFontSize(TYPE_SCALE.display),
-        'hero': toTailwindFontSize(TYPE_SCALE.hero),
       },
       colors: {
         // Titanium neutrals from design tokens
         titanium: TITANIUM,
+
+        // Semantic color aliases - Luxury Redesign v4.0
+        // Use these instead of numbered titanium shades
+        'ns-bg': SEMANTIC.light.background,
+        'ns-surface': SEMANTIC.light.surface,
+        'ns-border': SEMANTIC.light.border,
+        'ns-text-muted': SEMANTIC.light.textMuted,
+        'ns-text': SEMANTIC.light.textPrimary,
+
         // Glass effects (rgba values not in tokens - kept local)
         glass: {
           light: 'rgba(255, 255, 255, 0.75)',

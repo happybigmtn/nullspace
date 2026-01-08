@@ -167,25 +167,26 @@ export const GenericGameView = React.memo<{ gameState: GameState; actions: any; 
                                  onClick: actions?.casinoWarToggleTieBet,
                                  active: casinoWarTieBet > 0,
                              }] : []),
-                             ...(playMode !== 'CASH' ? [
-                             {
-                                 label: 'SHIELD',
-                                 onClick: actions?.toggleShield,
-                                 active: gameState.activeModifiers.shield,
-                             },
-                             {
-                                 label: 'DOUBLE',
-                                 onClick: actions?.toggleDouble,
-                                 active: gameState.activeModifiers.double,
-                             },
-                             ] : []),
-                             {
-                                 label: 'SUPER',
-                                 onClick: actions?.toggleSuper,
-                                 active: gameState.activeModifiers.super,
-                             },
                          ]
                  }
+                 /* LUX-012: Modifiers in collapsible accordion */
+                 modifiers={!isWarState ? {
+                     shield: playMode !== 'CASH' ? {
+                         active: gameState.activeModifiers.shield,
+                         available: true,
+                         onToggle: actions?.toggleShield,
+                     } : undefined,
+                     double: playMode !== 'CASH' ? {
+                         active: gameState.activeModifiers.double,
+                         available: true,
+                         onToggle: actions?.toggleDouble,
+                     } : undefined,
+                     super: {
+                         active: gameState.activeModifiers.super,
+                         available: true,
+                         onToggle: actions?.toggleSuper,
+                     },
+                 } : undefined}
              />
         </>
     );

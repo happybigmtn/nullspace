@@ -133,18 +133,19 @@ export const HiLoView = React.memo<HiLoViewProps & { lastWin?: number; playMode?
                         onClick: actions?.deal,
                         className: 'w-full md:w-auto',
                     }}
-                    secondaryActions={playMode !== 'CASH' ? [
-                        {
-                            label: 'SHIELD',
-                            onClick: actions?.toggleShield,
+                    /* LUX-012: Modifiers in collapsible accordion */
+                    modifiers={playMode !== 'CASH' ? {
+                        shield: {
                             active: gameState.activeModifiers.shield,
+                            available: true,
+                            onToggle: actions?.toggleShield,
                         },
-                        {
-                            label: 'DOUBLE',
-                            onClick: actions?.toggleDouble,
+                        double: {
                             active: gameState.activeModifiers.double,
+                            available: true,
+                            onToggle: actions?.toggleDouble,
                         },
-                    ] : []}
+                    } : undefined}
                 />
             ) : (
                 <GameControlBar variant="stack">

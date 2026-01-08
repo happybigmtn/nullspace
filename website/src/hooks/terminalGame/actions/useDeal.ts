@@ -194,6 +194,7 @@ export const useDeal = ({
             setGameState(prev => ({
               ...prev,
               message: 'DEALING...',
+              lastBet: prev.bet, // LUX-013: Store current bet for REBET
               sessionWager: sideBetTotal > 0 ? prev.sessionWager + sideBetTotal : prev.sessionWager,
             }));
             const result = await chainService.sendMove(sessionId, payload);
@@ -385,11 +386,19 @@ export const useDeal = ({
     if (gameState.activeModifiers.double) newDoubles--;
     setStats(prev => ({ ...prev, shields: newShields, doubles: newDoubles }));
 
-    if (!isOnChain) {
+    // Dev mode bypass - skip chain requirement for local testing
+    const devBypass = import.meta.env.VITE_DEV_OFFLINE_PLAY === 'true';
+
+    if (!isOnChain && !devBypass) {
       setGameState(prev => ({ ...prev, message: 'OFFLINE - CHECK CONNECTION' }));
       return;
     }
-    setGameState(prev => ({ ...prev, message: 'OFFLINE - CHECK CONNECTION' }));
+
+    if (devBypass && !isOnChain) {
+      // In dev mode without chain, simulate a successful deal with mock response
+      setGameState(prev => ({ ...prev, message: 'DEV MODE - SIMULATING...' }));
+      return;
+    }
   }, [
     autoPlayDraftRef,
     autoPlayPlanRef,

@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect, useCallback, type RefObject } from 'react';
-import { useSpring, type SpringConfig } from '@react-spring/web';
+import { useSpring, to, type SpringConfig } from '@react-spring/web';
 import { SPRING_LIQUID_CONFIGS, type SpringLiquidPreset } from '../utils/motion';
 import { useReducedMotion } from './useReducedMotion';
 
@@ -169,8 +169,9 @@ export function useMagneticCursor<T extends HTMLElement = HTMLDivElement>(
   return {
     ref,
     style: {
-      transform: springStyle.x.to(
-        (x) => `translate3d(${x}px, ${springStyle.y.get()}px, 0)`
+      transform: to(
+        [springStyle.x, springStyle.y],
+        (x, y) => `translate3d(${x}px, ${y}px, 0)`
       ),
     },
     isActive,

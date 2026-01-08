@@ -14,7 +14,7 @@
  * Uses spring physics for natural settling motion.
  */
 import React, { useEffect, useCallback } from 'react';
-import { animated, useSpring, useTransition, config } from '@react-spring/web';
+import { animated, useSpring, useTransition, config, to } from '@react-spring/web';
 import { createPortal } from 'react-dom';
 import { AnimatedNumber, CountUp } from '../ui/AnimatedNumber';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -143,8 +143,9 @@ function RevealElement({
       className={className}
       style={{
         opacity: spring.opacity,
-        transform: spring.y.to(
-          (y) => `translateY(${y}px) scale(${spring.scale.get()})`
+        transform: to(
+          [spring.y, spring.scale],
+          (y, scale) => `translateY(${y}px) scale(${scale})`
         ),
       }}
     >
@@ -183,8 +184,9 @@ function GlowPulse({
     <animated.div
       className="absolute inset-0 rounded-2xl pointer-events-none"
       style={{
-        boxShadow: spring.glowOpacity.to(
-          (o) => `0 0 ${spring.glowSize.get()}px ${color}${Math.round(o * 255).toString(16).padStart(2, '0')}`
+        boxShadow: to(
+          [spring.glowOpacity, spring.glowSize],
+          (o, size) => `0 0 ${size}px ${color}${Math.round(o * 255).toString(16).padStart(2, '0')}`
         ),
       }}
     />
@@ -301,8 +303,9 @@ export function ResultDisplay({
         <animated.div
           className="relative bg-titanium-900/95 rounded-2xl p-8 min-w-[300px] max-w-md border border-titanium-700/50 shadow-2xl"
           style={{
-            transform: cardSpring.scale.to(
-              (s) => `scale(${s}) translateY(${cardSpring.y.get()}px)`
+            transform: to(
+              [cardSpring.scale, cardSpring.y],
+              (s, y) => `scale(${s}) translateY(${y}px)`
             ),
           }}
           onClick={(e) => e.stopPropagation()}

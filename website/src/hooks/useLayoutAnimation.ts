@@ -24,7 +24,7 @@ import {
   type RefObject,
   type MutableRefObject,
 } from 'react';
-import { useSpring, useSprings, config } from '@react-spring/web';
+import { useSpring, useSprings, config, to } from '@react-spring/web';
 import { useReducedMotion } from './useReducedMotion';
 import { SPRING_LIQUID_CONFIGS } from '../utils/motion';
 
@@ -121,8 +121,9 @@ export function useLayoutAnimation<T = unknown>(
     style: prefersReducedMotion
       ? {}
       : {
-          transform: spring.x.to(
-            (x) => `translate3d(${x}px, ${spring.y.get()}px, 0)`
+          transform: to(
+            [spring.x, spring.y],
+            (x, y) => `translate3d(${x}px, ${y}px, 0)`
           ),
         },
   };
@@ -251,8 +252,9 @@ export function useListLayoutAnimation(
         style: prefersReducedMotion || !spring
           ? {}
           : {
-              transform: spring.x.to(
-                (x) => `translate3d(${x}px, ${spring.y.get()}px, 0)`
+              transform: to(
+                [spring.x, spring.y],
+                (x, y) => `translate3d(${x}px, ${y}px, 0)`
               ),
             },
       };
@@ -330,8 +332,9 @@ export function useEnterExitAnimation<T>(
           ? {}
           : {
               opacity: spring.opacity,
-              transform: spring.y.to(
-                (y) => `translate3d(0, ${y}px, 0) scale(${spring.scale.get()})`
+              transform: to(
+                [spring.y, spring.scale],
+                (y, scale) => `translate3d(0, ${y}px, 0) scale(${scale})`
               ),
             },
       };
