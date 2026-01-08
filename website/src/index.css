@@ -262,6 +262,49 @@ input:invalid:focus-visible,
   box-shadow: 0 0 4px rgba(163, 163, 163, 0.3);
 }
 
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Skeleton Shimmer Animation
+ * Creates a traveling highlight effect for loading states
+ * ───────────────────────────────────────────────────────────────────────────── */
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--skeleton-base, #e5e5e5) 0%,
+    var(--skeleton-base, #e5e5e5) 40%,
+    var(--skeleton-highlight, #f5f5f5) 50%,
+    var(--skeleton-base, #e5e5e5) 60%,
+    var(--skeleton-base, #e5e5e5) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+}
+
+.dark .skeleton-shimmer {
+  --skeleton-base: #404040;
+  --skeleton-highlight: #525252;
+}
+
+/* Reduced motion: static skeleton with no shimmer */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-shimmer {
+    animation: none;
+    background: var(--skeleton-base, #e5e5e5);
+  }
+
+  .dark .skeleton-shimmer {
+    background: var(--skeleton-base, #404040);
+  }
+}
+
 /* Skip link focus (already exists, enhanced) */
 a[href="#app-main"]:focus-visible {
   outline: 2px solid var(--focus-color-primary);
@@ -822,6 +865,101 @@ a[href="#app-main"]:focus-visible {
   }
 }
 
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Touch Target Utilities (WCAG 2.2 SC 2.5.8 / Apple HIG)
+ *
+ * Minimum 44x44px touch targets for mobile accessibility.
+ * Use .touch-target on interactive elements, or .touch-target-sm for
+ * constrained spaces where 44px is impractical (falls back to 40px).
+ * ───────────────────────────────────────────────────────────────────────────── */
+
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+.touch-target-sm {
+  min-height: 40px;
+  min-width: 40px;
+}
+
+/* Touch target hit area expansion (invisible padding for small visual elements) */
+.touch-target-expand {
+  position: relative;
+}
+
+.touch-target-expand::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: max(100%, 44px);
+  height: max(100%, 44px);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Mobile Game Control Utilities
+ *
+ * Consistent layouts for game control bars on mobile web.
+ * Uses touch-target sizing and proper spacing for thumbs.
+ * ───────────────────────────────────────────────────────────────────────────── */
+
+/* Game control bar with proper mobile sizing */
+.game-control-btn {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0.75rem 1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-radius: 0.75rem;
+  transition: all 150ms ease-out;
+}
+
+/* Chip button sizing (circular touch targets) */
+.chip-btn {
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Action button grid - 2 columns on mobile, 3+ on larger */
+.game-action-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+}
+
+@media (min-width: 640px) {
+  .game-action-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Mobile-first control bar layout */
+.mobile-control-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
+}
+
+@media (min-width: 768px) {
+  .mobile-control-bar {
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    padding-bottom: 0;
+    gap: 1rem;
+  }
+}
+
 :root[data-touch-mode="true"] .ns-keycap {
   display: none;
 }
@@ -1042,6 +1180,25 @@ a[href="#app-main"]:focus-visible {
   100% {
     transform: translateY(-100px) translateX(var(--drift-x, 20px));
     opacity: 0;
+  }
+}
+
+/* DS-049: Ambient floating particles - dust motes effect */
+@keyframes ambientFloat {
+  0% {
+    transform: translateY(0) translateX(0);
+  }
+  25% {
+    transform: translateY(-15px) translateX(calc(var(--x-drift, 0px) * 0.5));
+  }
+  50% {
+    transform: translateY(-25px) translateX(var(--x-drift, 0px));
+  }
+  75% {
+    transform: translateY(-15px) translateX(calc(var(--x-drift, 0px) * 0.5));
+  }
+  100% {
+    transform: translateY(0) translateX(0);
   }
 }
 
@@ -1439,6 +1596,25 @@ a[href="#app-main"]:focus-visible {
   background-color: rgba(255, 149, 0, 0.15);
   color: var(--a11y-warning-text);
   border-color: rgba(255, 149, 0, 0.3);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Mobile Menu Animations
+ * ───────────────────────────────────────────────────────────────────────────── */
+
+@keyframes slide-up {
+  from {
+    transform: translateY(100%);
+    opacity: 0.8;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-up {
+  animation: slide-up 250ms var(--motion-ease) forwards;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
