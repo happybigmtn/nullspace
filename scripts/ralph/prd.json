@@ -319,7 +319,7 @@
         "Document version negotiation in protocol README"
       ],
       "priority": 72,
-      "passes": false,
+      "passes": true,
       "notes": "PROTOCOL-HIGH: No version field in encoded messages. Future protocol changes could break silently."
     },
     {

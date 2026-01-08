@@ -3402,3 +3402,41 @@ Target: Testnet Production
   - Production keys must be stored in secure storage (password manager, HSM)
   - `.env.example` files remain as documentation; actual secrets go in encrypted files
 
+
+---
+
+## 2026-01-07 - US-149: Add protocol version header to binary messages
+
+- What was implemented:
+  - Created `packages/protocol/src/version.ts` with version constants and utilities
+    - CURRENT_PROTOCOL_VERSION = 1, MIN/MAX bounds for backward compat
+    - withVersionHeader() to prepend version byte to payloads
+    - stripVersionHeader() to extract version and validate
+    - UnsupportedProtocolVersionError for graceful rejection
+  - Updated `packages/protocol/src/encode.ts` to prepend version byte to all encoders
+  - Updated `packages/protocol/src/games/actions.ts` for game-specific action encoders
+  - Added `decodeVersionedPayload()` and `tryDecodeVersion()` to decode.ts
+  - Created `packages/protocol/README.md` documenting the protocol format
+  - Updated golden vectors and all test expectations for new [version, opcode, ...] format
+  - Updated `gateway/tests/unit/codec.test.ts` for version-aware expectations
+  - Updated round-trip tests to strip version header before sending to Rust binary
+- Files changed:
+  - packages/protocol/src/version.ts (NEW)
+  - packages/protocol/README.md (NEW)
+  - packages/protocol/src/encode.ts
+  - packages/protocol/src/decode.ts
+  - packages/protocol/src/games/actions.ts
+  - packages/protocol/src/index.ts
+  - packages/protocol/test/fixtures/golden-vectors.json
+  - packages/protocol/test/encoding.test.ts
+  - packages/protocol/test/batch-validation.test.ts
+  - packages/protocol/test/round-trip.test.ts
+  - gateway/tests/unit/codec.test.ts
+  - AGENTS.md (learnings section)
+- **Learnings:**
+  - Protocol versioning requires updates across multiple packages (protocol, gateway, tests)
+  - Golden vector tests catch byte-level format changes immediately
+  - Round-trip tests with Rust need adapter (toHexStripped) until Rust parses version
+  - Craps HARDWAY encoding maps target to betType via CRAPS_HARDWAY_MAP, target becomes 0
+  - Big-endian encoding for amounts (u64) ensures consistent byte order across platforms
+  - UnsupportedProtocolVersionError enables graceful client upgrade prompts
