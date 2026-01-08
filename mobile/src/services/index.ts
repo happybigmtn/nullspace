@@ -30,5 +30,14 @@ export {
   setString,
   getNumber,
   setNumber,
+  // Bet history (US-165)
+  getBetHistory,
+  addBetToHistory,
+  getSessionStats,
+  clearBetHistory,
+  getBetHistoryByDateRange,
+  getBetHistoryByGame,
+  type BetHistoryEntry,
+  type SessionStats,
 } from './storage';
 export { initializeNotifications } from './notifications';

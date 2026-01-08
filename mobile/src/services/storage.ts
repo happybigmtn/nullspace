@@ -272,6 +272,10 @@ export const STORAGE_KEYS = {
   // Onboarding
   ONBOARDING_COMPLETED: 'onboarding.completed',
   FIRST_GAME_PLAYED: 'onboarding.first_game_played',
+
+  // Bet history (US-165)
+  BET_HISTORY: 'history.bets',
+  SESSION_STATS: 'history.session_stats',
 } as const;
 
 /**
@@ -413,4 +417,153 @@ export function hasPlayedFirstGame(): boolean {
  */
 export function markFirstGamePlayed(): void {
   setBoolean(STORAGE_KEYS.FIRST_GAME_PLAYED, true);
+}
+
+// ============================================================================
+// Bet History (US-165)
+// ============================================================================
+
+/**
+ * Bet history entry stored locally
+ */
+export interface BetHistoryEntry {
+  id: string;
+  gameId: string;
+  gameName: string;
+  bet: number;
+  payout: number;
+  won: boolean;
+  timestamp: number; // Unix ms
+  outcome?: string; // e.g., "Blackjack!", "Player Wins", "7 Out"
+}
+
+/**
+ * Session statistics aggregated from bet history
+ */
+export interface SessionStats {
+  totalBets: number;
+  totalWagered: number;
+  totalPayout: number;
+  wins: number;
+  losses: number;
+  pushes: number;
+  biggestWin: number;
+  biggestLoss: number;
+  lastUpdated: number;
+}
+
+const MAX_BET_HISTORY_ENTRIES = 500;
+
+/**
+ * Get bet history from storage
+ */
+export function getBetHistory(): BetHistoryEntry[] {
+  return getObject<BetHistoryEntry[]>(STORAGE_KEYS.BET_HISTORY, []);
+}
+
+/**
+ * Add a bet to history
+ */
+export function addBetToHistory(entry: Omit<BetHistoryEntry, 'id'>): void {
+  const history = getBetHistory();
+  const newEntry: BetHistoryEntry = {
+    ...entry,
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+  };
+
+  // Prepend new entry, keep most recent MAX_BET_HISTORY_ENTRIES
+  const updated = [newEntry, ...history].slice(0, MAX_BET_HISTORY_ENTRIES);
+  setObject(STORAGE_KEYS.BET_HISTORY, updated);
+
+  // Update session stats
+  updateSessionStats(newEntry);
+}
+
+/**
+ * Get session statistics
+ */
+export function getSessionStats(): SessionStats {
+  return getObject<SessionStats>(STORAGE_KEYS.SESSION_STATS, {
+    totalBets: 0,
+    totalWagered: 0,
+    totalPayout: 0,
+    wins: 0,
+    losses: 0,
+    pushes: 0,
+    biggestWin: 0,
+    biggestLoss: 0,
+    lastUpdated: Date.now(),
+  });
+}
+
+/**
+ * Update session stats with a new bet entry
+ */
+function updateSessionStats(entry: BetHistoryEntry): void {
+  const stats = getSessionStats();
+  const netResult = entry.payout - entry.bet;
+
+  stats.totalBets += 1;
+  stats.totalWagered += entry.bet;
+  stats.totalPayout += entry.payout;
+  stats.lastUpdated = Date.now();
+
+  if (entry.payout > entry.bet) {
+    stats.wins += 1;
+    if (netResult > stats.biggestWin) {
+      stats.biggestWin = netResult;
+    }
+  } else if (entry.payout < entry.bet) {
+    stats.losses += 1;
+    const loss = entry.bet - entry.payout;
+    if (loss > stats.biggestLoss) {
+      stats.biggestLoss = loss;
+    }
+  } else {
+    stats.pushes += 1;
+  }
+
+  setObject(STORAGE_KEYS.SESSION_STATS, stats);
+}
+
+/**
+ * Clear all bet history and reset session stats
+ */
+export function clearBetHistory(): void {
+  setObject(STORAGE_KEYS.BET_HISTORY, []);
+  setObject(STORAGE_KEYS.SESSION_STATS, {
+    totalBets: 0,
+    totalWagered: 0,
+    totalPayout: 0,
+    wins: 0,
+    losses: 0,
+    pushes: 0,
+    biggestWin: 0,
+    biggestLoss: 0,
+    lastUpdated: Date.now(),
+  });
+}
+
+/**
+ * Get bet history filtered by date range
+ */
+export function getBetHistoryByDateRange(
+  startDate: Date,
+  endDate: Date
+): BetHistoryEntry[] {
+  const history = getBetHistory();
+  const startMs = startDate.getTime();
+  const endMs = endDate.getTime();
+
+  return history.filter(
+    (entry) => entry.timestamp >= startMs && entry.timestamp <= endMs
+  );
+}
+
+/**
+ * Get bet history filtered by game
+ */
+export function getBetHistoryByGame(gameId: string): BetHistoryEntry[] {
+  const history = getBetHistory();
+  return history.filter((entry) => entry.gameId === gameId);
 }

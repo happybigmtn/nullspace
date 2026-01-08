@@ -3,6 +3,8 @@ import { useWebSocketContext } from '../context/WebSocketContext';
 import { useGameStore } from '../stores/gameStore';
 import { parseNumeric } from '../utils';
 import { initAnalytics, setAnalyticsContext, track } from '../services/analytics';
+import { addBetToHistory } from '../services/storage';
+import { getGameName } from '../types';
 import type { GameMessage } from '@nullspace/protocol/mobile';
 
 // Time in ms before faucet status resets from 'success' to 'idle'
@@ -59,6 +61,8 @@ export function useGatewaySession() {
 
   const lastSessionIdRef = useRef<string | null>(null);
   const faucetResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // US-165: Track current game's bet for history recording
+  const currentGameBetRef = useRef<{ gameType: string; bet: number } | null>(null);
 
   useEffect(() => {
     void initAnalytics();
@@ -160,10 +164,16 @@ export function useGatewaySession() {
         balanceSeq?: string;
       };
 
+      // US-165: Store bet for history recording on game_result
+      const betAmount = parseNumeric(msg.bet);
+      if (betAmount !== null && betAmount > 0) {
+        currentGameBetRef.current = { gameType: msg.gameType, bet: betAmount };
+      }
+
       void track('casino.game.started', {
         source: 'mobile',
         gameType: msg.gameType,
-        bet: parseNumeric(msg.bet),
+        bet: betAmount,
         sessionId: msg.sessionId,
       });
       updateBalanceFromMessage(msg.balance, msg.balanceSeq);
@@ -196,13 +206,32 @@ export function useGatewaySession() {
           sessionId: string;
           balance?: string;
           balanceSeq?: string;
+          message?: string;
         };
+
+        const payoutAmount = parseNumeric(msg.payout) ?? 0;
+
+        // US-165: Record bet to history
+        if (currentGameBetRef.current && currentGameBetRef.current.gameType === msg.gameType) {
+          const { gameType, bet } = currentGameBetRef.current;
+          addBetToHistory({
+            gameId: gameType,
+            gameName: getGameName(gameType as never),
+            bet,
+            payout: payoutAmount,
+            won: msg.won,
+            timestamp: Date.now(),
+            outcome: typeof msg.message === 'string' ? msg.message : undefined,
+          });
+          // Clear after recording
+          currentGameBetRef.current = null;
+        }
 
         void track('casino.game.completed', {
           source: 'mobile',
           gameType: msg.gameType,
           won: msg.won,
-          payout: parseNumeric(msg.payout),
+          payout: payoutAmount,
           finalChips: parseNumeric(msg.finalChips),
           sessionId: msg.sessionId,
         });

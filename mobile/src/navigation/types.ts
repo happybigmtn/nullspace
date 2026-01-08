@@ -12,6 +12,7 @@ export type RootStackParamList = {
   Onboarding: undefined;
   Lobby: undefined;
   Vault: undefined;
+  History: undefined;
   Game: {
     gameId: GameId;
   };
@@ -23,6 +24,7 @@ export type AuthScreenProps = NativeStackScreenProps<RootStackParamList, 'Auth'>
 export type OnboardingScreenProps = NativeStackScreenProps<RootStackParamList, 'Onboarding'>;
 export type LobbyScreenProps = NativeStackScreenProps<RootStackParamList, 'Lobby'>;
 export type VaultScreenProps = NativeStackScreenProps<RootStackParamList, 'Vault'>;
+export type HistoryScreenProps = NativeStackScreenProps<RootStackParamList, 'History'>;
 export type GameScreenProps = NativeStackScreenProps<RootStackParamList, 'Game'>;
 
 // Game screen names - re-export from constants

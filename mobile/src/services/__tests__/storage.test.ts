@@ -342,6 +342,126 @@ describe('storage service (web)', () => {
     expect(() => storageModule!.getStorage()).toThrow('Storage not initialized');
   });
 
+  // US-165: Bet history tests
+  describe('bet history (US-165)', () => {
+    it('stores and retrieves bet history', async () => {
+      const storageModule = getWebStorageModule();
+      await storageModule.initializeStorage();
+
+      // Clear any existing history
+      storageModule.clearBetHistory();
+      expect(storageModule.getBetHistory()).toEqual([]);
+      expect(storageModule.getSessionStats().totalBets).toBe(0);
+
+      // Add a winning bet
+      storageModule.addBetToHistory({
+        gameId: 'blackjack',
+        gameName: 'Blackjack',
+        bet: 100,
+        payout: 200,
+        won: true,
+        timestamp: Date.now(),
+        outcome: 'Blackjack!',
+      });
+
+      const history = storageModule.getBetHistory();
+      expect(history.length).toBe(1);
+      expect(history[0].gameId).toBe('blackjack');
+      expect(history[0].bet).toBe(100);
+      expect(history[0].payout).toBe(200);
+      expect(history[0].won).toBe(true);
+
+      // Check session stats
+      const stats = storageModule.getSessionStats();
+      expect(stats.totalBets).toBe(1);
+      expect(stats.wins).toBe(1);
+      expect(stats.totalWagered).toBe(100);
+      expect(stats.totalPayout).toBe(200);
+      expect(stats.biggestWin).toBe(100); // net profit
+
+      // Add a losing bet
+      storageModule.addBetToHistory({
+        gameId: 'roulette',
+        gameName: 'Roulette',
+        bet: 50,
+        payout: 0,
+        won: false,
+        timestamp: Date.now(),
+      });
+
+      const updatedStats = storageModule.getSessionStats();
+      expect(updatedStats.totalBets).toBe(2);
+      expect(updatedStats.wins).toBe(1);
+      expect(updatedStats.losses).toBe(1);
+      expect(updatedStats.biggestLoss).toBe(50);
+    });
+
+    it('filters history by date range', async () => {
+      const storageModule = getWebStorageModule();
+      await storageModule.initializeStorage();
+      storageModule.clearBetHistory();
+
+      const now = Date.now();
+      const yesterday = now - 24 * 60 * 60 * 1000;
+      const lastWeek = now - 7 * 24 * 60 * 60 * 1000;
+
+      // Add bets with different timestamps
+      storageModule.addBetToHistory({
+        gameId: 'hi_lo',
+        gameName: 'Hi-Lo',
+        bet: 10,
+        payout: 20,
+        won: true,
+        timestamp: now,
+      });
+
+      storageModule.addBetToHistory({
+        gameId: 'hi_lo',
+        gameName: 'Hi-Lo',
+        bet: 20,
+        payout: 0,
+        won: false,
+        timestamp: lastWeek - 1000, // Just before last week
+      });
+
+      // Filter should only return recent bet
+      const todayBets = storageModule.getBetHistoryByDateRange(
+        new Date(yesterday),
+        new Date(now + 1000)
+      );
+      expect(todayBets.length).toBe(1);
+      expect(todayBets[0].bet).toBe(10);
+    });
+
+    it('filters history by game', async () => {
+      const storageModule = getWebStorageModule();
+      await storageModule.initializeStorage();
+      storageModule.clearBetHistory();
+
+      storageModule.addBetToHistory({
+        gameId: 'blackjack',
+        gameName: 'Blackjack',
+        bet: 100,
+        payout: 200,
+        won: true,
+        timestamp: Date.now(),
+      });
+
+      storageModule.addBetToHistory({
+        gameId: 'roulette',
+        gameName: 'Roulette',
+        bet: 50,
+        payout: 0,
+        won: false,
+        timestamp: Date.now(),
+      });
+
+      const blackjackBets = storageModule.getBetHistoryByGame('blackjack');
+      expect(blackjackBets.length).toBe(1);
+      expect(blackjackBets[0].gameId).toBe('blackjack');
+    });
+  });
+
   // NOTE: This test is skipped because jest.doMock inside isolateModules
   // doesn't reliably apply mocks when the module has already been loaded elsewhere.
   // The native storage initialization is covered by the integration tests above.

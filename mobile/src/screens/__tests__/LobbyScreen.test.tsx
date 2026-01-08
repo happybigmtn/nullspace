@@ -117,20 +117,34 @@ describe('LobbyScreen', () => {
       await flushPromises();
     });
 
-    // Find the profile button by its position in header (right side, navigates to Vault)
-    // Profile button contains ProfileIcon (not text), so we find by onPress behavior
+    // Find the header buttons (History and Profile) - 44x44 circular pressables
     const pressables = tree!.root.findAll((node) =>
       typeof node.props.onPress === 'function'
     );
-    // Profile button is a small circular pressable in the header
-    const profileButton = pressables.find((node) => {
+    // Both header buttons have 44x44 dimensions - find them all
+    const headerButtons = pressables.filter((node) => {
       const style = node.props.style;
-      // Profile button has specific dimensions (44x44)
       if (Array.isArray(style)) {
         return style.some((s: any) => s?.width === 44 && s?.height === 44);
       }
       return style?.width === 44 && style?.height === 44;
     });
+
+    // US-165: We now have 2 header buttons - History (first) and Profile (second)
+    expect(headerButtons.length).toBeGreaterThanOrEqual(2);
+
+    // Test History button navigates to History
+    const historyButton = headerButtons[0];
+    expect(historyButton?.props.onPress).toBeDefined();
+    act(() => {
+      historyButton!.props.onPress();
+    });
+    expect(navigation.navigate).toHaveBeenCalledWith('History');
+
+    navigation.navigate.mockClear();
+
+    // Test Profile button navigates to Vault
+    const profileButton = headerButtons[1];
     expect(profileButton?.props.onPress).toBeDefined();
     act(() => {
       profileButton!.props.onPress();
