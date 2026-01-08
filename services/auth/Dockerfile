@@ -53,7 +53,7 @@ COPY services/auth/package.json /app/services/auth/
 COPY website/package.json /app/website/
 
 # Install dependencies
-RUN pnpm install --frozen-lockfile --filter @nullspace/auth...
+RUN pnpm install --frozen-lockfile --filter nullspace-auth...
 
 COPY services/auth/tsconfig.json /app/services/auth/
 COPY services/auth/src /app/services/auth/src
@@ -75,7 +75,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY services/auth/package.json /app/services/auth/
 COPY website/package.json /app/website/
 
-RUN pnpm install --prod --frozen-lockfile --filter @nullspace/auth... --ignore-scripts
+RUN pnpm install --prod --frozen-lockfile --filter nullspace-auth... --ignore-scripts
 
 COPY --from=build /app/services/auth/dist /app/services/auth/dist
 COPY --from=build /app/website/convex/_generated /app/website/convex/_generated
