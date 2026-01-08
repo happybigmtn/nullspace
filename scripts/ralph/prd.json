@@ -12,13 +12,13 @@
       ],
       "priority": 1,
       "passes": false,
-      "notes": "STAGING READY: Multi-host deployment completed. Run soak test against staging.nullspace.app"
+      "notes": "STAGING READY: Multi-host deployment completed. Run soak test against testnet.regenesis.dev"
     },
     {
       "id": "US-011",
       "title": "Execute bot load test",
       "acceptanceCriteria": [
-        "./scripts/run-bots.sh configs/testnet https://staging.nullspace.app:8080",
+        "./scripts/run-bots.sh configs/testnet https://indexer.testnet.regenesis.dev",
         "NUM_BOTS=300 DURATION_SECONDS=300",
         "No sustained errors",
         "Response times acceptable"
@@ -32,7 +32,7 @@
       "title": "Execute global table fanout test",
       "acceptanceCriteria": [
         "node scripts/load-test-global-table.mjs",
-        "URL=wss://staging.nullspace.app:9010 TOTAL=5000 DURATION=300",
+        "URL=wss://api.testnet.regenesis.dev TOTAL=5000 DURATION=300",
         "Events broadcast to all clients",
         "No message loss"
       ],
@@ -44,9 +44,9 @@
       "id": "US-013",
       "title": "Verify health endpoints",
       "acceptanceCriteria": [
-        "GET https://staging.nullspace.app:8080/healthz returns 200",
-        "GET https://staging.nullspace.app:9010/healthz returns 200",
-        "GET https://auth.staging.nullspace.app/healthz returns 200",
+        "GET https://indexer.testnet.regenesis.dev/healthz returns 200",
+        "GET https://api.testnet.regenesis.dev/healthz returns 200",
+        "GET https://auth.testnet.regenesis.dev/healthz returns 200",
         "All services respond within 5s"
       ],
       "priority": 4,
@@ -64,7 +64,7 @@
       ],
       "priority": 5,
       "passes": false,
-      "notes": "STAGING READY: Core testnet user journey on staging.nullspace.app"
+      "notes": "STAGING READY: Core testnet user journey on testnet.regenesis.dev"
     },
     {
       "id": "US-015",
@@ -322,7 +322,7 @@
       "id": "US-212",
       "title": "Run cross-service integration tests against staging",
       "acceptanceCriteria": [
-        "Run tests/integration suite with STAGING_URL=https://staging.nullspace.app",
+        "Run tests/integration suite with STAGING_URL=https://testnet.regenesis.dev",
         "Signup → auth → gateway → backend flow works",
         "Deposit → bet → withdraw flow works",
         "Error scenarios handled correctly",
@@ -817,6 +817,439 @@
       "priority": 91,
       "passes": true,
       "notes": "COMPLETE: Created tests/integration/ with CrossServiceClient, Docker Compose stack, Vitest config. Tests cover: service health, full user journey (signup→auth→gateway→backend), game flows (blackjack, hi-lo), concurrent connections, error scenarios (invalid messages, insufficient balance). CI workflow at .github/workflows/cross-service-integration.yml runs on gateway/auth/simulator changes."
+    },
+    {
+      "id": "US-216",
+      "title": "Verify DNS configuration for production domains",
+      "acceptanceCriteria": [
+        "Verify A/AAAA records for testnet.regenesis.dev point to production load balancer",
+        "Verify subdomain records: api.testnet.regenesis.dev, indexer.testnet.regenesis.dev, auth.testnet.regenesis.dev",
+        "Test DNS propagation from multiple geographic locations",
+        "Verify TTL values are appropriate (300s recommended)",
+        "Document DNS configuration in runbook"
+      ],
+      "priority": 92,
+      "passes": false,
+      "notes": "PRODUCTION-CRITICAL: DNS must be configured and verified before launch"
+    },
+    {
+      "id": "US-217",
+      "title": "Verify SSL/TLS certificate configuration",
+      "acceptanceCriteria": [
+        "Verify SSL certificates issued for all production domains",
+        "Test HTTPS endpoints return valid certificates (no browser warnings)",
+        "Verify certificate auto-renewal is configured (Let's Encrypt/certbot)",
+        "Test WebSocket connections work over WSS with valid certificates",
+        "Verify HSTS headers are configured"
+      ],
+      "priority": 93,
+      "passes": false,
+      "notes": "PRODUCTION-CRITICAL: Valid SSL required for production launch"
+    },
+    {
+      "id": "US-218",
+      "title": "Configure and verify CDN",
+      "acceptanceCriteria": [
+        "Configure CDN (CloudFlare/Fastly) for static assets and website",
+        "Verify cache headers are set correctly for static assets",
+        "Test asset loading from multiple geographic regions",
+        "Configure cache invalidation workflow for deployments",
+        "Verify WebSocket connections bypass CDN caching"
+      ],
+      "priority": 94,
+      "passes": false,
+      "notes": "PRODUCTION-IMPORTANT: CDN improves global performance and reduces origin load"
+    },
+    {
+      "id": "US-219",
+      "title": "Verify rate limiting configuration",
+      "acceptanceCriteria": [
+        "Verify gateway rate limiting is enabled per runbook Section 6",
+        "Test rate limits with load testing tools (exceed limits, verify 429 responses)",
+        "Verify auth service rate limiting protects login/signup endpoints",
+        "Test IP-based rate limiting works correctly",
+        "Document rate limit thresholds in runbook"
+      ],
+      "priority": 95,
+      "passes": false,
+      "notes": "PRODUCTION-CRITICAL: Rate limiting prevents abuse and ensures service stability"
+    },
+    {
+      "id": "US-220",
+      "title": "Configure DDoS protection",
+      "acceptanceCriteria": [
+        "Enable CloudFlare DDoS protection or equivalent",
+        "Configure firewall rules to block malicious traffic patterns",
+        "Test SYN flood protection at network level",
+        "Configure application-layer DDoS protection",
+        "Document DDoS mitigation procedures in runbook"
+      ],
+      "priority": 96,
+      "passes": false,
+      "notes": "PRODUCTION-CRITICAL: DDoS protection essential for production availability"
+    },
+    {
+      "id": "US-221",
+      "title": "Verify backup and restore procedures",
+      "acceptanceCriteria": [
+        "Execute full database backup procedure",
+        "Test restore from backup to clean environment",
+        "Verify automated backup schedule is configured",
+        "Test point-in-time recovery capability",
+        "Document backup retention policy and procedures"
+      ],
+      "priority": 97,
+      "passes": false,
+      "notes": "PRODUCTION-CRITICAL: Backup/restore must be tested before production launch"
+    },
+    {
+      "id": "US-222",
+      "title": "Document and test rollback procedures",
+      "acceptanceCriteria": [
+        "Document rollback procedure for each service component",
+        "Test rollback from staging deployment (simulate failed deploy)",
+        "Verify database migration rollback works correctly",
+        "Test traffic switching between blue/green deployments",
+        "Document rollback decision criteria and timeline"
+      ],
+      "priority": 98,
+      "passes": false,
+      "notes": "PRODUCTION-CRITICAL: Rollback procedures must be tested before production launch"
+    },
+    {
+      "id": "US-223",
+      "title": "Fix React component memory leaks and re-renders",
+      "acceptanceCriteria": [
+        "Fix event listener cleanup in SuperModeDisplay (ActiveGame.tsx:157-160)",
+        "Refactor useKeyboardControls hook to prevent recreation on every state change",
+        "Add useMemo for getRouletteMaxWin, getSicBoMaxWin, getCrapsMaxWin calculations",
+        "Wrap RouletteView actions prop in useMemo in parent component",
+        "Fix WebSocket cleanup in useCasinoConnection hook"
+      ],
+      "priority": 99,
+      "passes": false,
+      "notes": "PERFORMANCE: HIGH priority - event listener leaks and unnecessary re-renders causing performance issues"
+    },
+    {
+      "id": "US-224",
+      "title": "Implement code splitting for game components",
+      "acceptanceCriteria": [
+        "Lazy load game views (RouletteView, BlackjackView, etc.) using React.lazy",
+        "Reduce main CasinoApp bundle from 473KB to under 200KB",
+        "Implement Suspense fallback for game component loading",
+        "Verify total bundle size reduced from 5.7MB"
+      ],
+      "priority": 100,
+      "passes": false,
+      "notes": "PERFORMANCE: HIGH priority - bundle size affecting initial load times"
+    },
+    {
+      "id": "US-225",
+      "title": "Add Merkle proof caching in simulator",
+      "acceptanceCriteria": [
+        "Cache proof stores by height + filter pattern in state.rs",
+        "Deduplicate identical filter requests in build_filtered_update",
+        "Use Arc to share proof data structures across subscriptions",
+        "Benchmark: reduce proof generation CPU usage by 50%"
+      ],
+      "priority": 101,
+      "passes": false,
+      "notes": "PERFORMANCE: HIGH priority - proof regeneration causing CPU spikes under load"
+    },
+    {
+      "id": "US-226",
+      "title": "Add missing database indexes for explorer",
+      "acceptanceCriteria": [
+        "Add composite index: CREATE INDEX idx_explorer_ops_height_index ON explorer_ops(height, op_index)",
+        "Add index: CREATE INDEX idx_explorer_blocks_indexed_at ON explorer_blocks(indexed_at_ms)",
+        "Benchmark query performance improvement",
+        "Add migration script for index creation"
+      ],
+      "priority": 102,
+      "passes": false,
+      "notes": "PERFORMANCE: MEDIUM priority - missing indexes slowing explorer queries"
+    },
+    {
+      "id": "US-227",
+      "title": "Standardize API error response format across services",
+      "acceptanceCriteria": [
+        "Adopt RFC 7807 Problem Details format for all HTTP errors",
+        "Update gateway error types to include type, title, status, detail, instance",
+        "Update auth service to use consistent error format",
+        "Update simulator to return structured error bodies (not just status codes)",
+        "Include traceId in all error responses"
+      ],
+      "priority": 103,
+      "passes": false,
+      "notes": "API-CONTRACT: Inconsistent error formats across services causing client integration issues"
+    },
+    {
+      "id": "US-228",
+      "title": "Fix incorrect HTTP status codes in auth service",
+      "acceptanceCriteria": [
+        "Change 502 to 503 for service unavailable errors (ai_unavailable, etc.)",
+        "Change 502 to 500 for internal errors (checkout failed, etc.)",
+        "Add 422 Unprocessable Entity for validation failures",
+        "Document status code usage in API docs"
+      ],
+      "priority": 104,
+      "passes": false,
+      "notes": "API-CONTRACT: Auth service incorrectly using 502 Bad Gateway for non-proxy errors"
+    },
+    {
+      "id": "US-229",
+      "title": "Generate production SOPS Age keys",
+      "acceptanceCriteria": [
+        "Generate Age keypair for production environment",
+        "Update .sops.yaml with production public key (replace placeholder)",
+        "Store private key in GitHub Secrets as SOPS_AGE_KEY_PRODUCTION",
+        "Test encryption/decryption of secrets.enc.yaml",
+        "Generate and configure CI and development keys if missing"
+      ],
+      "priority": 105,
+      "passes": false,
+      "notes": "PRODUCTION-CRITICAL: Cannot encrypt/decrypt production secrets without keys"
+    },
+    {
+      "id": "US-230",
+      "title": "Add Docker resource limits to production compose",
+      "acceptanceCriteria": [
+        "Create infrastructure/production/docker-compose.yml",
+        "Add CPU limits (gateway: 2 CPU, simulator: 4 CPU)",
+        "Add memory limits (gateway: 4GB, simulator: 8GB)",
+        "Configure restart policies with backoff",
+        "Test resource limits under load"
+      ],
+      "priority": 106,
+      "passes": false,
+      "notes": "PRODUCTION-CRITICAL: No resource limits = risk of cascading failures"
+    },
+    {
+      "id": "US-231",
+      "title": "Add OpenTelemetry configuration to auth service",
+      "acceptanceCriteria": [
+        "Add OTEL_EXPORTER_OTLP_ENDPOINT to auth .env.production.example",
+        "Add OTEL_SERVICE_NAME=auth to production config",
+        "Verify traces appear in Tempo",
+        "Document tracing configuration in runbook"
+      ],
+      "priority": 107,
+      "passes": false,
+      "notes": "OBSERVABILITY: Auth service missing distributed tracing in production"
+    },
+    {
+      "id": "US-232",
+      "title": "Configure Terraform remote state backend",
+      "acceptanceCriteria": [
+        "Create S3 bucket for terraform state storage",
+        "Add backend.tf with S3 configuration",
+        "Configure state locking with DynamoDB",
+        "Migrate existing state to remote backend",
+        "Document state management procedures"
+      ],
+      "priority": 108,
+      "passes": false,
+      "notes": "PRODUCTION-CRITICAL: Local terraform state prevents team collaboration and risks state loss"
+    },
+    {
+      "id": "US-233",
+      "title": "Document secret rotation procedures",
+      "acceptanceCriteria": [
+        "Add section 4.9 to RUNBOOK.md for secret rotation",
+        "Document SOPS Age key rotation procedure",
+        "Document metrics token rotation",
+        "Document database credential rotation",
+        "Define rotation schedule (quarterly for production)"
+      ],
+      "priority": 109,
+      "passes": false,
+      "notes": "SECURITY: No documented procedure for rotating secrets"
+    },
+    {
+      "id": "US-234",
+      "title": "Add CSRF protection for cookie-authenticated endpoints",
+      "acceptanceCriteria": [
+        "Add SameSite=Strict to all session cookies",
+        "Implement CSRF token validation for form submissions",
+        "Document CSRF protection in security docs",
+        "Test CSRF protection with cross-origin requests"
+      ],
+      "priority": 110,
+      "passes": false,
+      "notes": "SECURITY: MEDIUM priority - partial CSRF implementation"
+    },
+    {
+      "id": "US-235",
+      "title": "Create OpenAPI/Swagger specifications",
+      "acceptanceCriteria": [
+        "Generate OpenAPI 3.0 spec for auth service endpoints",
+        "Generate OpenAPI 3.0 spec for simulator HTTP endpoints",
+        "Generate OpenAPI 3.0 spec for gateway metrics endpoints",
+        "Add example requests/responses for all endpoints",
+        "Publish API docs at /docs endpoint"
+      ],
+      "priority": 111,
+      "passes": false,
+      "notes": "API-CONTRACT: No API documentation for external integrations"
+    },
+    {
+      "id": "US-236",
+      "title": "ARCH-001: Design horizontal scaling for game engine",
+      "acceptanceCriteria": [
+        "Document Global Table partitioning strategy for engine instances",
+        "Design game ID based routing to distributed engine instances",
+        "Create architectural diagram for multi-engine deployment",
+        "Add scaling section to RUNBOOK.md"
+      ],
+      "priority": 112,
+      "passes": false,
+      "notes": "ARCHITECTURE: HIGH - Single-threaded engine is bottleneck for high-concurrency tables"
+    },
+    {
+      "id": "US-237",
+      "title": "ARCH-002: Tune on-chain batching for latency optimization",
+      "acceptanceCriteria": [
+        "Run diagnose-chain-latency.ts benchmarks at various batch sizes",
+        "Document optimal GATEWAY_LIVE_TABLE_SETTLE_BATCH value for 5k+ concurrent users",
+        "Test batch sizes: 10, 25, 50, 100 under load",
+        "Update configs with optimized batch size and document rationale"
+      ],
+      "priority": 113,
+      "passes": false,
+      "notes": "ARCHITECTURE: MEDIUM - Current batch size 25 may cause latency under high load"
+    },
+    {
+      "id": "US-238",
+      "title": "ARCH-003: Document Convex self-hosting runbook",
+      "acceptanceCriteria": [
+        "Create self-hosting runbook for Convex deployment",
+        "Document service token rotation procedure",
+        "Validate persistence layer can be migrated if needed",
+        "Add vendor lock-in mitigation section to architecture docs"
+      ],
+      "priority": 114,
+      "passes": false,
+      "notes": "ARCHITECTURE: MEDIUM - Heavy Convex dependency creates vendor risk"
+    },
+    {
+      "id": "US-239",
+      "title": "Fix non-standard version numbers in package.json",
+      "acceptanceCriteria": [
+        "Fix Zod version inconsistency: gateway ^3.23.0 vs mobile ^4.2.1 (4.x is non-standard)",
+        "Fix Vitest version inconsistency: gateway ^1.6.0 vs website ^4.0.16 (4.x is non-standard)",
+        "Verify all versions exist in npm registry",
+        "Unify versions in pnpm-workspace.yaml or root package.json"
+      ],
+      "priority": 115,
+      "passes": false,
+      "notes": "CODE-QUALITY: LOW - Version inconsistencies may cause build issues"
+    },
+    {
+      "id": "US-240",
+      "title": "Benchmark Rust overflow-checks performance impact",
+      "acceptanceCriteria": [
+        "Run benchmarks with overflow-checks = true (current)",
+        "Run benchmarks with overflow-checks = false",
+        "Document performance difference in critical execution paths",
+        "Make informed decision and document rationale in Cargo.toml"
+      ],
+      "priority": 116,
+      "passes": false,
+      "notes": "CODE-QUALITY: LOW - overflow-checks=true is safer but has performance penalty"
+    },
+    {
+      "id": "US-241",
+      "title": "Execute and document soak test results",
+      "acceptanceCriteria": [
+        "Execute soak test for 600 seconds under sustained load",
+        "Document results in scripts/ralph/soak_results.json",
+        "Capture: memory usage, CPU usage, latency percentiles, error rates",
+        "Baseline: p99 < 100ms at 1000 connections, success rate > 95%"
+      ],
+      "priority": 117,
+      "passes": false,
+      "notes": "TESTING: CRITICAL - Soak test baseline needed for launch"
+    },
+    {
+      "id": "US-242",
+      "title": "Verify mobile vault recovery flow E2E",
+      "acceptanceCriteria": [
+        "Test recovery key export on iOS",
+        "Test recovery key export on Android",
+        "Test recovery key import on iOS",
+        "Test recovery key import on Android",
+        "Document any platform-specific differences"
+      ],
+      "priority": 118,
+      "passes": false,
+      "notes": "TESTING: HIGH - Mobile vault E2E parity for recovery flow"
+    },
+    {
+      "id": "US-243",
+      "title": "Execute and document recovery drills",
+      "acceptanceCriteria": [
+        "Execute validator rejoin recovery drill and document results",
+        "Execute gateway session recovery drill and document results",
+        "Verify rejoin behavior matches RUNBOOK.md specifications",
+        "Update RUNBOOK.md with actual recovery times observed"
+      ],
+      "priority": 119,
+      "passes": false,
+      "notes": "TESTING: HIGH - Recovery drill execution status unknown"
+    },
+    {
+      "id": "US-244",
+      "title": "Audit mobile noble cryptography performance",
+      "acceptanceCriteria": [
+        "Benchmark Ed25519 signing/verification on iOS",
+        "Benchmark Ed25519 signing/verification on Android",
+        "Compare with desktop performance baselines",
+        "Document any performance concerns for older devices"
+      ],
+      "priority": 120,
+      "passes": false,
+      "notes": "PERFORMANCE: MEDIUM - Noble crypto library needs mobile audit"
+    },
+    {
+      "id": "US-245",
+      "title": "Document NAT user rate limiting false positive mitigation",
+      "acceptanceCriteria": [
+        "Analyze rate limiting for NAT users (multiple users per IP)",
+        "Document expected false positive rate for NAT environments",
+        "Consider fingerprinting alternatives or session-based limits",
+        "Update rate limiting configuration if needed"
+      ],
+      "priority": 121,
+      "passes": false,
+      "notes": "SECURITY: MEDIUM - Rate limiting may cause false positives for NAT users"
+    },
+    {
+      "id": "US-246",
+      "title": "Validate KPIs for testnet launch",
+      "acceptanceCriteria": [
+        "Verify simulator_submit_p95_ms <= 250ms",
+        "Verify simulator_submit_p99_ms <= 500ms",
+        "Verify auth_request_avg_ms <= 200ms",
+        "Verify ws_send_errors_rate === 0",
+        "Verify casino_errors_rate === 0",
+        "Document baseline KPIs in scripts/ralph/kpi_baseline.json"
+      ],
+      "priority": 122,
+      "passes": false,
+      "notes": "OBSERVABILITY: CRITICAL - KPI validation required before launch"
+    },
+    {
+      "id": "US-247",
+      "title": "Verify commonware dependency version",
+      "acceptanceCriteria": [
+        "Check current commonware version (0.0.64)",
+        "Verify against latest stable release",
+        "Document any breaking changes in newer versions",
+        "Update if security patches available"
+      ],
+      "priority": 123,
+      "passes": false,
+      "notes": "DEPENDENCIES: LOW - Verify commonware is at latest stable"
     }
   ]
 }
