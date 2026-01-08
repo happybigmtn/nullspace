@@ -6,7 +6,7 @@ export type { PremiumInputHandle } from './PremiumInput';
 export { ConnectionStatusBanner } from './ConnectionStatusBanner';
 export { WalletBadge } from './WalletBadge';
 export { PasswordStrengthIndicator } from './PasswordStrengthIndicator';
-export { GameIcon, ProfileIcon } from './GameIcon';
+export { GameIcon, ProfileIcon, HistoryIcon } from './GameIcon';
 export { GlassView, GlassOverlay } from './GlassView';
 export type { GlassIntensity, GlassTint } from './GlassView';
 export { GlassModal, GlassSheet } from './GlassModal';
@@ -40,3 +40,11 @@ export {
   GenericGameSkeleton,
   GameSkeletonLoader,
 } from './GameSkeletons';
+// DS-042: Magnetic snap scrolling
+export { SnapList, SnapListItem } from './SnapList';
+export type { SnapListProps, SnapListItemProps } from './SnapList';
+// DS-043: Staggered entrance animations
+export { StaggerContainer, StaggerList, useStaggerEntering } from './StaggerContainer';
+export type { StaggerContainerProps, StaggerListProps, StaggerDirection } from './StaggerContainer';
+// DS-049: Ambient floating particles
+export { AmbientParticles } from './AmbientParticles';

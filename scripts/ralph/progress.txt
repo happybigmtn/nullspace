@@ -4097,3 +4097,25 @@ Updated `docs/testnet-readiness-runbook.md` Section 6:
   - Baseline update via label trigger avoids manual baseline commits
 
 ---
+
+## 2026-01-07 - US-165
+
+- **Implemented:** Bet history and session stats screen
+- **Files created:**
+  - `mobile/src/screens/HistoryScreen.tsx` - New History screen with FlatList, stats card, date filters
+  - `mobile/src/hooks/useBetHistory.ts` - Custom hook for recording bets (optional per-game use)
+- **Files modified:**
+  - `mobile/src/services/storage.ts` - Added bet history types and CRUD functions
+  - `mobile/src/hooks/useGatewaySession.ts` - Integrated bet recording on game_result
+  - `mobile/src/navigation/RootNavigator.tsx` - Added History route
+  - `mobile/src/navigation/types.ts` - Added History to RootStackParamList
+  - `mobile/src/screens/LobbyScreen.tsx` - Added History button in header
+  - `mobile/src/components/ui/GameIcon.tsx` - Added HistoryIcon component
+
+**Learnings:**
+- Bet recording is best done centrally in `useGatewaySession` rather than per-game screen
+- game_started provides the bet amount, game_result provides the payout - store bet ref between
+- MMKV storage caps at 500 entries to prevent unbounded growth
+- Session stats are calculated on-the-fly for date-filtered views
+
+---

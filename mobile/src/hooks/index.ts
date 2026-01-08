@@ -20,3 +20,16 @@ export type { CelebrationState, CelebrationIntensity, CelebrationConfig } from '
 export { useWinCelebration } from './useWinCelebration';
 export { useBetConfirmation } from './useBetConfirmation';
 export { useReducedMotion, getAccessibleAnimationConfig, getAccessibleSpringConfig } from './useReducedMotion';
+export { useScreenShake } from './useScreenShake';
+export type { ShakeIntensity } from './useScreenShake';
+export {
+  useLayoutAnimation,
+  useListItemAnimation,
+  useEnterAnimation,
+  useExitAnimation,
+  useSharedElementTransition,
+} from './useLayoutAnimation';
+export { useParallaxTilt } from './useParallaxTilt';
+export type { ParallaxTiltOptions, ParallaxTiltResult } from './useParallaxTilt';
+// Bet history (US-165)
+export { useBetHistory } from './useBetHistory';

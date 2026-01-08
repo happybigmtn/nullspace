@@ -588,6 +588,64 @@ export function ProfileIcon({ color = COLORS.textPrimary, size = 20 }: { color?:
   );
 }
 
+/** History icon - clock with hands (US-165) */
+export function HistoryIcon({ color = COLORS.textPrimary, size = 20 }: { color?: string; size?: number }) {
+  const scale = size / 20;
+  const stroke = 2 * scale;
+  const outerSize = 18 * scale;
+
+  return (
+    <View style={[styles.iconContainer, { width: 20 * scale, height: 20 * scale }]}>
+      {/* Clock face */}
+      <View
+        style={{
+          width: outerSize,
+          height: outerSize,
+          borderRadius: outerSize / 2,
+          borderWidth: stroke,
+          borderColor: color,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        {/* Hour hand */}
+        <View
+          style={{
+            position: 'absolute',
+            width: stroke,
+            height: 5 * scale,
+            backgroundColor: color,
+            bottom: outerSize / 2 - stroke / 2,
+            borderRadius: stroke / 2,
+            transform: [{ rotate: '-45deg' }, { translateY: -2.5 * scale }],
+          }}
+        />
+        {/* Minute hand */}
+        <View
+          style={{
+            position: 'absolute',
+            width: stroke,
+            height: 7 * scale,
+            backgroundColor: color,
+            bottom: outerSize / 2 - stroke / 2,
+            borderRadius: stroke / 2,
+            transform: [{ rotate: '60deg' }, { translateY: -3.5 * scale }],
+          }}
+        />
+        {/* Center dot */}
+        <View
+          style={{
+            width: 3 * scale,
+            height: 3 * scale,
+            borderRadius: 1.5 * scale,
+            backgroundColor: color,
+          }}
+        />
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   iconContainer: {
     alignItems: 'center',

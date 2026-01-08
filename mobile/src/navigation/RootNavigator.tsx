@@ -23,6 +23,7 @@ import { AuthScreen } from '../screens/AuthScreen';
 import { OnboardingScreen } from '../screens/OnboardingScreen';
 import { LobbyScreen } from '../screens/LobbyScreen';
 import { VaultScreen } from '../screens/VaultScreen';
+import { HistoryScreen } from '../screens/HistoryScreen';
 import { GameScreen } from '../screens/GameScreen';
 import { RootStackParamList } from './types';
 import { COLORS } from '../constants/theme';
@@ -33,6 +34,7 @@ const linkingConfig = {
   screens: {
     Lobby: 'lobby',
     Vault: 'vault',
+    History: 'history',
     Game: 'game/:gameId',
   },
 };
@@ -108,6 +110,8 @@ export function RootNavigator() {
         <Stack.Screen name="Lobby" component={LobbyScreen} />
         {/* Settings/utility screens use horizontal parallax */}
         <Stack.Screen name="Vault" component={VaultScreen} />
+        {/* History screen for bet history and session stats (US-165) */}
+        <Stack.Screen name="History" component={HistoryScreen} />
         {/* Game screen uses parallax but disables gesture during gameplay */}
         <Stack.Screen
           name="Game"

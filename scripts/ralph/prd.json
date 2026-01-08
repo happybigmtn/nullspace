@@ -542,7 +542,7 @@
         "Navigate to history from lobby profile button"
       ],
       "priority": 88,
-      "passes": false,
+      "passes": true,
       "notes": "UX-MEDIUM: Users can't review past bets or track gameplay performance."
     },
     {
