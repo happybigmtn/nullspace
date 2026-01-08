@@ -360,8 +360,8 @@
         "Document capacity limits in RUNBOOK.md"
       ],
       "priority": 75,
-      "passes": false,
-      "notes": "TEST-CRITICAL: Gateway claims 'tens of thousands concurrent players' but no stress testing validates this."
+      "passes": true,
+      "notes": "COMPLETE: Created gateway/tests/stress/websocket-stress.test.ts with vitest tests for 1k/10k connections. Standalone scripts/ws-stress-test.mjs for manual runs. Added GatewayStress job to tests.yml (100 connections in CI). Documented capacity limits in RUNBOOK.md Section 6."
     },
     {
       "id": "US-153",

@@ -12,6 +12,9 @@
     "test:watch": "vitest",
     "test:integration": "RUN_INTEGRATION=true vitest run tests/integration/integration.test.ts",
     "test:integration:all": "RUN_INTEGRATION=true vitest run tests/integration/all-bet-types.test.ts",
+    "test:stress": "RUN_STRESS=true vitest run tests/stress/websocket-stress.test.ts",
+    "test:stress:1k": "STRESS_CONNECTIONS=1000 RUN_STRESS=true vitest run tests/stress/websocket-stress.test.ts",
+    "test:stress:ci": "STRESS_CONNECTIONS=100 RUN_STRESS=true vitest run tests/stress/websocket-stress.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

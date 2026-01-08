@@ -122,22 +122,62 @@ Reference: `docs/testnet-runbook.md`.
   ```
 
 ## 6) Load tests + soak
-- Soak test (10 min):
-  ```bash
-  ALLOW_HTTP_NO_ORIGIN=1 ALLOW_WS_NO_ORIGIN=1 DURATION_SECONDS=600 \
-    ./scripts/soak-test.sh configs/testnet 4
-  ```
-- Bot load (5-10 min):
-  ```bash
-  NUM_BOTS=300 DURATION_SECONDS=300 RATE_PER_SEC=3.0 \
-    ./scripts/run-bots.sh configs/testnet http://<INDEXER_HOST>:8080
-  ```
-- Global table fanout (5-10 min):
-  ```bash
-  URL=ws://<GATEWAY_HOST>:9010 ORIGIN=https://gateway.example.com \
-    TOTAL=5000 RAMP_PER_SEC=500 DURATION=300 \
-    node scripts/load-test-global-table.mjs
-  ```
+
+### Capacity Limits (validated via stress testing)
+
+**Gateway WebSocket Limits:**
+| Metric | Default | Production | Notes |
+|--------|---------|------------|-------|
+| `MAX_CONNECTIONS_PER_IP` | 5 | 200 | Per-IP connection limit |
+| `MAX_TOTAL_SESSIONS` | 1000 | 20000 | Total concurrent sessions |
+| Connection P99 Latency | - | <100ms | Target at 1k connections |
+| Connection Success Rate | - | >95% | At configured capacity |
+
+**Simulator Limits:**
+| Metric | Default | Production | Notes |
+|--------|---------|------------|-------|
+| `RATE_LIMIT_WS_CONNECTIONS` | 30000 | 30000 | Total WS connection cap |
+| `RATE_LIMIT_WS_CONNECTIONS_PER_IP` | 500 | 500 | Per-IP limit on simulator |
+
+### WebSocket Stress Test
+Run stress tests to validate capacity before production:
+
+```bash
+# 1k concurrent connections (local)
+pnpm -C gateway test:stress:1k
+
+# 10k connections (staging)
+STRESS_CONNECTIONS=10000 STRESS_GATEWAY_URL=ws://staging-gateway:9010 \
+  pnpm -C gateway test:stress
+
+# Standalone script with detailed output
+CONNECTIONS=1000 GATEWAY_URL=ws://localhost:9010 \
+  node scripts/ws-stress-test.mjs
+```
+
+**Expected results at 1k connections:**
+- Success rate: >95%
+- P99 latency: <100ms
+- No gateway crashes or memory leaks
+
+### Soak test (10 min)
+```bash
+ALLOW_HTTP_NO_ORIGIN=1 ALLOW_WS_NO_ORIGIN=1 DURATION_SECONDS=600 \
+  ./scripts/soak-test.sh configs/testnet 4
+```
+
+### Bot load (5-10 min)
+```bash
+NUM_BOTS=300 DURATION_SECONDS=300 RATE_PER_SEC=3.0 \
+  ./scripts/run-bots.sh configs/testnet http://<INDEXER_HOST>:8080
+```
+
+### Global table fanout (5-10 min)
+```bash
+URL=ws://<GATEWAY_HOST>:9010 ORIGIN=https://gateway.example.com \
+  TOTAL=5000 RAMP_PER_SEC=500 DURATION=300 \
+  node scripts/load-test-global-table.mjs
+```
 
 ## 7) Recovery drills
 - Restart a validator and confirm it rejoins.

@@ -119,6 +119,59 @@ jobs:
           kill $(cat /tmp/localnet.pid) 2>/dev/null || true
         fi
 
+  GatewayStress:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'pnpm'
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        version: ${{ env.PNPM_VERSION }}
+        run_install: false
+    - name: Install dependencies
+      run: pnpm install --frozen-lockfile
+    - name: Start gateway (mock mode)
+      run: |
+        # Create minimal mock backend for stress test
+        cat > /tmp/mock-backend.mjs << 'EOF'
+        import { createServer } from 'http';
+        const http = createServer((req, res) => {
+          if (req.url === '/healthz') { res.writeHead(200); res.end('OK'); }
+          else { res.writeHead(404); res.end(); }
+        });
+        http.listen(8080, () => console.log('Mock backend on :8080'));
+        EOF
+        node /tmp/mock-backend.mjs &
+        echo $! > /tmp/mock.pid
+        sleep 2
+    - name: Start gateway
+      run: |
+        pnpm -C gateway start > /tmp/gateway.log 2>&1 &
+        echo $! > /tmp/gateway.pid
+        for i in {1..30}; do
+          if curl -sf http://localhost:9010/healthz > /dev/null; then
+            exit 0
+          fi
+          sleep 1
+        done
+        echo "Gateway failed to start" >&2
+        cat /tmp/gateway.log || true
+        exit 1
+    - name: Run stress tests (CI mode - 100 connections)
+      run: pnpm -C gateway test:stress:ci
+    - name: Stop services
+      if: always()
+      run: |
+        if [ -f /tmp/gateway.pid ]; then kill $(cat /tmp/gateway.pid) 2>/dev/null || true; fi
+        if [ -f /tmp/mock.pid ]; then kill $(cat /tmp/mock.pid) 2>/dev/null || true; fi
+
   Dependencies:
     runs-on: ubuntu-latest
     timeout-minutes: 20
