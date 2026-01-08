@@ -1,0 +1,139 @@
+name: Cross-Service Integration Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - 'gateway/**'
+      - 'services/auth/**'
+      - 'simulator/**'
+      - 'execution/**'
+      - 'tests/integration/**'
+      - '.github/workflows/cross-service-integration.yml'
+
+env:
+  NODE_VERSION: 20
+  PNPM_VERSION: 9.15.0
+  CARGO_TERM_COLOR: always
+
+jobs:
+  CrossServiceIntegration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run setup (Rust)
+        uses: ./.github/actions/setup
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build simulator binary
+        run: cargo build --release -p nullspace-simulator
+
+      - name: Start simulator
+        run: |
+          ./scripts/start-local-network.sh configs/local 1 --no-build > /tmp/simulator.log 2>&1 &
+          echo $! > /tmp/simulator.pid
+          for i in {1..90}; do
+            if curl -sf http://localhost:8080/healthz > /dev/null; then
+              echo "✓ Simulator ready"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Simulator failed to start" >&2
+          cat /tmp/simulator.log || true
+          exit 1
+
+      - name: Start gateway
+        run: |
+          pnpm -C gateway start > /tmp/gateway.log 2>&1 &
+          echo $! > /tmp/gateway.pid
+          for i in {1..30}; do
+            if curl -sf http://localhost:9010/healthz > /dev/null; then
+              echo "✓ Gateway ready"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Gateway failed to start" >&2
+          cat /tmp/gateway.log || true
+          exit 1
+
+      - name: Start auth service
+        run: |
+          # Start auth with minimal config for integration testing
+          cd services/auth
+          npm ci
+          AUTH_SECRET="test-auth-secret-for-ci-integration-testing" \
+          CONVEX_URL="http://localhost:3210" \
+          CONVEX_SERVICE_TOKEN="test-token" \
+          AUTH_ALLOWED_ORIGINS="*" \
+          npm start > /tmp/auth.log 2>&1 &
+          echo $! > /tmp/auth.pid
+
+          # Auth service is optional for these tests - don't fail if it can't start
+          for i in {1..15}; do
+            if curl -sf http://localhost:4000/healthz > /dev/null 2>&1; then
+              echo "✓ Auth service ready"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "⚠ Auth service not available (tests will skip auth-dependent scenarios)"
+
+      - name: Install integration test dependencies
+        run: |
+          cd tests/integration
+          pnpm install
+
+      - name: Run cross-service integration tests
+        run: |
+          cd tests/integration
+          RUN_CROSS_SERVICE=true pnpm test:ci
+        env:
+          BACKEND_URL: http://localhost:8080
+          GATEWAY_HTTP_URL: http://localhost:9010
+          GATEWAY_WS_URL: ws://localhost:9010
+          AUTH_URL: http://localhost:4000
+
+      - name: Upload test logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-logs
+          path: |
+            /tmp/simulator.log
+            /tmp/gateway.log
+            /tmp/auth.log
+          retention-days: 7
+
+      - name: Stop services
+        if: always()
+        run: |
+          if [ -f /tmp/auth.pid ]; then
+            kill $(cat /tmp/auth.pid) 2>/dev/null || true
+          fi
+          if [ -f /tmp/gateway.pid ]; then
+            kill $(cat /tmp/gateway.pid) 2>/dev/null || true
+          fi
+          if [ -f /tmp/simulator.pid ]; then
+            kill $(cat /tmp/simulator.pid) 2>/dev/null || true
+          fi
