@@ -3997,3 +3997,28 @@ Updated `docs/testnet-readiness-runbook.md` Section 6:
   - WebSocket messages need custom trace IDs since WS doesn't have standard headers
 
 ---
+
+## 2026-01-07 - US-162: Create Grafana dashboards for all services
+
+- What was implemented:
+  - Created 4 comprehensive Grafana dashboards with RED metrics pattern
+  - **nullspace-gateway.json**: Connections, sessions, message rates, latency (p50/p95/p99), rate limits, drain status
+  - **nullspace-simulator.json**: TPS, submit/query latency, HTTP rejections, WebSocket errors, CPU/memory, update index
+  - **nullspace-auth.json**: Login/failure rates, success %, verification latency, EVM auth, freeroll sync, Convex mutations
+  - **nullspace-games.json**: Game lifecycle (started/moved/completed), active sessions, error rates, tournaments, leaderboards
+- Files changed:
+  - `docker/observability/grafana/dashboards/nullspace-gateway.json` (NEW)
+  - `docker/observability/grafana/dashboards/nullspace-simulator.json` (NEW)
+  - `docker/observability/grafana/dashboards/nullspace-auth.json` (NEW)
+  - `docker/observability/grafana/dashboards/nullspace-games.json` (NEW)
+- **Learnings:**
+  - Grafana dashboard provisioning auto-loads any JSON in the dashboards directory
+  - Gateway metrics are JSON format (custom MetricsStore), not Prometheus text format
+  - Auth service exposes both `/metrics` (JSON) and `/metrics/prometheus` (text) endpoints
+  - Simulator exposes Prometheus metrics at `/metrics/prometheus` with 30+ metric types
+  - RED metrics pattern: Rate (requests/sec), Errors (failures/sec), Duration (latency percentiles)
+  - Use `stat` panels for overview KPIs, `timeseries` for detailed trends
+  - Thresholds align with existing alerts.yml (250ms SLO, 1% error rate)
+  - Dashboard schema version 38 is compatible with Grafana 10.x
+
+---
