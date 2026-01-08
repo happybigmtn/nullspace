@@ -11,6 +11,7 @@ RUN curl -sSf https://rustwasm.github.io/wasm-pack/installer/init.sh | sh
 WORKDIR /app
 
 COPY Cargo.toml Cargo.lock ./
+COPY .cargo/ ./.cargo/
 COPY node/Cargo.toml ./node/
 COPY client/Cargo.toml ./client/
 COPY execution/Cargo.toml ./execution/
