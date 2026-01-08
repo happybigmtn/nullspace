@@ -30,7 +30,9 @@
     "qa:bet-suite": "node scripts/qa-bet-suite.mjs",
     "visual:capture": "node scripts/visual-regression.mjs capture",
     "visual:compare": "node scripts/visual-regression.mjs compare",
-    "visual:update": "VISUAL_UPDATE=1 node scripts/visual-regression.mjs capture"
+    "visual:update": "VISUAL_UPDATE=1 node scripts/visual-regression.mjs capture",
+    "build:analyze": "ANALYZE=true npm run build",
+    "bundle:check": "node scripts/check-bundle-sizes.mjs"
   },
   "keywords": [],
   "author": "",
@@ -48,6 +50,7 @@
     "@types/node": "^20.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@use-gesture/react": "^10.3.1",
     "@vitejs/plugin-react": "^4.7.0",
     "autoprefixer": "^10.4.21",
     "convex": "^1.31.2",
@@ -69,7 +72,10 @@
     "fake-indexeddb": "^6.2.5",
     "jsdom": "^26.1.0",
     "node-fetch": "^3.3.2",
+    "pixelmatch": "^6.0.0",
     "playwright-core": "^1.49.0",
+    "pngjs": "^7.0.0",
+    "rollup-plugin-visualizer": "^6.0.5",
     "vitest": "^4.0.16",
     "ws": "^8.18.3"
   }

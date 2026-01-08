@@ -528,8 +528,8 @@
         "Test on light and dark mode"
       ],
       "priority": 87,
-      "passes": false,
-      "notes": "TEST-MEDIUM: Script exists but not in CI. Design system changes not validated automatically."
+      "passes": true,
+      "notes": "COMPLETE: Enhanced visual-regression.mjs with pixelmatch for pixel-by-pixel comparison. Added visual-regression.yml workflow triggered on website/design-token changes. 8 screens captured (6 light, 2 dark). Baselines stored in website/tests/visual-snapshots/baseline/. PR fails if diff exceeds 10% threshold. UpdateBaselines job runs via 'update-baselines' label. Artifacts uploaded with diff images."
     },
     {
       "id": "US-165",

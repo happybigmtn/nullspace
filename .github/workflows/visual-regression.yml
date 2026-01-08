@@ -1,0 +1,176 @@
+name: Visual Regression
+
+on:
+  pull_request:
+    paths:
+      - 'website/src/**'
+      - 'website/public/**'
+      - 'website/index.html'
+      - 'packages/design-tokens/**'
+      - '.github/workflows/visual-regression.yml'
+
+env:
+  NODE_VERSION: 20
+  PNPM_VERSION: 9.15.0
+
+jobs:
+  VisualRegression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run setup
+        uses: ./.github/actions/setup
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y chromium-browser
+          echo "PW_CHROMIUM_PATH=/usr/bin/chromium-browser" >> $GITHUB_ENV
+
+      - name: Build WASM
+        run: cd website && npm run build:wasm
+
+      - name: Run visual regression comparison
+        id: visual
+        run: cd website && npm run visual:compare
+        continue-on-error: true
+
+      - name: Upload visual snapshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-snapshots
+          path: |
+            website/tests/visual-snapshots/current/
+            website/tests/visual-snapshots/diff/
+            website/tests/visual-snapshots/summary.json
+          retention-days: 14
+
+      - name: Comment on PR with visual diff results
+        if: github.event_name == 'pull_request' && steps.visual.outcome == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const summaryPath = 'website/tests/visual-snapshots/summary.json';
+
+            let summary;
+            try {
+              summary = JSON.parse(fs.readFileSync(summaryPath, 'utf8'));
+            } catch (e) {
+              summary = { failed: 0, passed: 0, errors: 0, results: [] };
+            }
+
+            const failedScreens = summary.results
+              .filter(r => r.status === 'fail')
+              .map(r => `- **${r.screen}** (${r.colorScheme}): ${r.diffPercent}% diff`)
+              .join('\n');
+
+            const body = `## Visual Regression Test Failed
+
+            **Summary:** ${summary.passed} passed, ${summary.failed} failed, ${summary.errors} errors
+            **Threshold:** ${summary.threshold}%
+
+            ### Failed Screens
+            ${failedScreens || 'None'}
+
+            ### What to do
+            1. Download the \`visual-snapshots\` artifact from this workflow run
+            2. Review the diff images in the \`diff/\` folder
+            3. If changes are intentional:
+               - Run \`npm run visual:capture\` locally
+               - Run \`npm run visual:update\` to update baselines
+               - Commit the new baseline images
+            4. If changes are unintentional, fix the visual regression
+
+            ---
+            *Visual regression tests compare screenshots against baseline images to catch unintended UI changes.*`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
+
+      - name: Fail if visual regression detected
+        if: steps.visual.outcome == 'failure'
+        run: |
+          echo "Visual regression detected. See PR comment for details."
+          exit 1
+
+  UpdateBaselines:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'update-baselines'))
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run setup
+        uses: ./.github/actions/setup
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+          run_install: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y chromium-browser
+          echo "PW_CHROMIUM_PATH=/usr/bin/chromium-browser" >> $GITHUB_ENV
+
+      - name: Build WASM
+        run: cd website && npm run build:wasm
+
+      - name: Capture and update baselines
+        run: |
+          cd website
+          npm run visual:capture
+          npm run visual:update
+
+      - name: Commit updated baselines
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add website/tests/visual-snapshots/baseline/
+          if git diff --staged --quiet; then
+            echo "No baseline changes to commit"
+          else
+            git commit -m "chore: update visual regression baselines
+
+            🤖 Generated with [Claude Code](https://claude.com/claude-code)"
+            git push
+          fi
