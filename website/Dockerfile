@@ -62,8 +62,9 @@ COPY --from=wasm-builder /app/packages/types/src/generated /app/packages/types/s
 # Install dependencies (ignore-scripts to skip packages/types prepare hook)
 RUN pnpm install --frozen-lockfile --ignore-scripts
 
-# Build workspace packages first (types already has generated files)
-RUN pnpm -C packages/types build
+# Build workspace packages first (types already has generated files from wasm-builder)
+# Use --ignore-scripts to skip prebuild hook that needs cargo
+RUN cd /app/packages/types && pnpm run build --ignore-scripts
 RUN pnpm -C packages/constants build || true
 RUN pnpm -C packages/protocol build || true
 RUN pnpm -C packages/design-tokens build || true

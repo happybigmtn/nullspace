@@ -387,6 +387,9 @@ importers:
       '@opentelemetry/sdk-node':
         specifier: ^0.52.0
         version: 0.52.1(@opentelemetry/api@1.9.0)
+      '@opentelemetry/semantic-conventions':
+        specifier: ^1.27.0
+        version: 1.38.0
       convex:
         specifier: ^1.31.2
         version: 1.31.2(react@19.2.3)
