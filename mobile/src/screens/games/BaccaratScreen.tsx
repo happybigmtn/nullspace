@@ -2,13 +2,13 @@
  * Baccarat Game Screen - Jony Ive Redesigned
  * Epitome of simplicity - only 3 betting options
  */
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet, Pressable, InteractionManager } from 'react-native';
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import Animated, { FadeIn, SlideInUp, SlideInDown } from 'react-native-reanimated';
 import { Card } from '../../components/casino';
 import { ChipSelector } from '../../components/casino';
 import { GameLayout } from '../../components/game';
-import { TutorialOverlay, PrimaryButton, BetConfirmationModal } from '../../components/ui';
+import { TutorialOverlay, PrimaryButton, BetConfirmationModal, BaccaratSkeleton } from '../../components/ui';
 import { haptics } from '../../services/haptics';
 import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useBetSubmission, useBetConfirmation } from '../../hooks';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS, SPRING } from '../../constants/theme';
@@ -94,6 +94,8 @@ export function BaccaratScreen() {
   });
   const [selectedChip, setSelectedChip] = useState<ChipValue>(25);
   const [showTutorial, setShowTutorial] = useState(false);
+  // US-156: Track initial loading state for skeleton
+  const [isParsingState, setIsParsingState] = useState(true);
 
   // Track mounted state to prevent setState after unmount
   const isMounted = useRef(true);
@@ -101,6 +103,16 @@ export function BaccaratScreen() {
     return () => {
       isMounted.current = false;
     };
+  }, []);
+
+  // US-156: Clear skeleton after initial render
+  useEffect(() => {
+    const task = InteractionManager.runAfterInteractions(() => {
+      if (isMounted.current) {
+        setIsParsingState(false);
+      }
+    });
+    return () => task.cancel();
   }, []);
 
   useEffect(() => {
@@ -317,6 +329,11 @@ export function BaccaratScreen() {
         connectionStatus={connectionStatusProps}
         gameId="baccarat"
       >
+        {/* US-156: Show skeleton during initial render */}
+        {isParsingState ? (
+          <BaccaratSkeleton />
+        ) : (
+        <>
         {/* Game Area */}
         <View style={styles.gameArea}>
           {/* Banker Hand */}
@@ -465,6 +482,8 @@ export function BaccaratScreen() {
             onSelect={setSelectedChip}
             onChipPlace={handleChipPlace}
           />
+        )}
+        </>
         )}
       </GameLayout>
 
