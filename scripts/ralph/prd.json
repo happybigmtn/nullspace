@@ -388,8 +388,8 @@
         "Add health endpoint that reports draining state"
       ],
       "priority": 77,
-      "passes": false,
-      "notes": "GATEWAY-HIGH: Current shutdown immediately closes all connections. Players lose game state on deploys."
+      "passes": true,
+      "notes": "COMPLETE: drainAndShutdown() with GATEWAY_DRAIN_TIMEOUT_MS (30s default). Rejects new connections during drain (1013), waits for active games, notifies clients (SESSION_EXPIRED), closes gracefully (1001). /healthz returns 503 with draining status. 5 documentation tests."
     },
     {
       "id": "US-155",

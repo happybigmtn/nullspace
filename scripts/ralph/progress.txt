@@ -3463,3 +3463,31 @@ Target: Testnet Production
   - Pre-marked session check (`if (session.markedForCleanup) continue`) prevents duplicate processing
   - Node.js runs synchronously within each tick - no true concurrent access, but interleaved async operations can cause races
 
+
+---
+
+## 2026-01-07 - US-154: Implement graceful shutdown draining for gateway
+
+- What was implemented:
+  - Added `GATEWAY_DRAIN_TIMEOUT_MS` config (default 30s)
+  - Added `isDraining` and `drainStartTime` state variables
+  - Implemented `drainAndShutdown()` async function:
+    1. Sets isDraining flag (prevents double-shutdown)
+    2. Persists nonces immediately
+    3. Waits for active games (sessions with activeGameId) up to timeout
+    4. Sends SESSION_EXPIRED to all remaining sessions
+    5. Closes connections with 1001 (Going Away)
+    6. Closes WebSocket and HTTP servers
+  - Updated `/healthz` endpoint to return 503 with draining status
+  - Added connection rejection during drain (close code 1013)
+  - Added 5 documentation tests for draining behavior
+- Files changed:
+  - `gateway/src/index.ts` - Config, state, drainAndShutdown(), healthz update, connection rejection
+  - `gateway/tests/unit/health-check.test.ts` - 5 new documentation tests
+- **Learnings:**
+  - WebSocket close codes: 1001=Going Away (existing), 1013=Try Again Later (new connections)
+  - Kubernetes readiness probes: 503 response removes pod from service endpoints
+  - Active games identified by `session.activeGameId !== null`
+  - Double-shutdown prevention via isDraining flag guards async race conditions
+  - Force exit timeout (5s) handles hung server.close() calls
+
