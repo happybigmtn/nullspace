@@ -92,7 +92,8 @@ ENV VITE_IDENTITY=$VITE_IDENTITY \
 
 WORKDIR /app/website
 
-RUN pnpm run build
+# Run build steps directly, skipping build:wasm since wasm/pkg is already copied
+RUN pnpm run copy:data && pnpm exec vite build
 
 FROM nginx:1.27-alpine
 
