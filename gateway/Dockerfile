@@ -4,6 +4,7 @@ RUN apt-get update && apt-get install -y \
     curl \
     pkg-config \
     libssl-dev \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
