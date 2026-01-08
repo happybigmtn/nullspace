@@ -584,8 +584,8 @@
         "Document test environment setup"
       ],
       "priority": 91,
-      "passes": false,
-      "notes": "TEST-MEDIUM: No cross-service tests. E2E user flows not validated."
+      "passes": true,
+      "notes": "COMPLETE: Created tests/integration/ with CrossServiceClient, Docker Compose stack, Vitest config. Tests cover: service health, full user journey (signup→auth→gateway→backend), game flows (blackjack, hi-lo), concurrent connections, error scenarios (invalid messages, insufficient balance). CI workflow at .github/workflows/cross-service-integration.yml runs on gateway/auth/simulator changes."
     }
   ]
 }

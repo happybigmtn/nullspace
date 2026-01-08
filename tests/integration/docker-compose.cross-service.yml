@@ -1,0 +1,100 @@
+# Cross-Service Integration Test Stack
+# Usage: docker compose -f tests/integration/docker-compose.cross-service.yml up -d
+#
+# Services orchestrated:
+# - convex (backend database)
+# - auth (authentication service)
+# - simulator (blockchain simulator)
+# - gateway (WebSocket API gateway)
+
+services:
+  # Convex backend for data persistence
+  convex:
+    image: ghcr.io/get-convex/convex-backend:latest
+    stop_grace_period: 10s
+    stop_signal: SIGINT
+    ports:
+      - "3210:3210"
+      - "3211:3211"
+    environment:
+      - CONVEX_CLOUD_ORIGIN=http://127.0.0.1:3210
+      - CONVEX_SITE_ORIGIN=http://127.0.0.1:3211
+      - RUST_LOG=info
+      - DO_NOT_REQUIRE_SSL=true
+      - DISABLE_BEACON=true
+    healthcheck:
+      test: curl -f http://localhost:3210/version
+      interval: 5s
+      timeout: 3s
+      start_period: 10s
+      retries: 5
+
+  # Auth service for user authentication
+  auth:
+    build:
+      context: ../../services/auth
+      dockerfile: Dockerfile
+    ports:
+      - "4000:4000"
+    environment:
+      - NODE_ENV=test
+      - CONVEX_URL=http://convex:3210
+      - CONVEX_SERVICE_TOKEN=${CONVEX_SERVICE_TOKEN:-test-service-token}
+      - AUTH_SECRET=${AUTH_SECRET:-test-auth-secret-min-32-chars-long}
+      - AUTH_CHALLENGE_TTL_MS=60000
+      - AUTH_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
+    depends_on:
+      convex:
+        condition: service_healthy
+    healthcheck:
+      test: curl -f http://localhost:4000/healthz
+      interval: 5s
+      timeout: 3s
+      start_period: 15s
+      retries: 5
+
+  # Blockchain simulator
+  simulator:
+    build:
+      context: ../..
+      dockerfile: simulator/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - RUST_LOG=info
+      - SIMULATOR_PORT=8080
+      - SIMULATOR_IDENTITY=${SIMULATOR_IDENTITY:-test-simulator}
+    healthcheck:
+      test: curl -f http://localhost:8080/healthz
+      interval: 5s
+      timeout: 3s
+      start_period: 20s
+      retries: 10
+
+  # WebSocket gateway
+  gateway:
+    build:
+      context: ../../gateway
+      dockerfile: Dockerfile
+    ports:
+      - "9010:9010"
+    environment:
+      - NODE_ENV=test
+      - GATEWAY_PORT=9010
+      - BACKEND_URL=http://simulator:8080
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:5173
+      - SUBMIT_TIMEOUT_MS=30000
+      - GATEWAY_LOG_LEVEL=info
+    depends_on:
+      simulator:
+        condition: service_healthy
+    healthcheck:
+      test: curl -f http://localhost:9010/healthz
+      interval: 5s
+      timeout: 3s
+      start_period: 15s
+      retries: 5
+
+networks:
+  default:
+    name: nullspace-integration

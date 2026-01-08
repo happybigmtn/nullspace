@@ -4146,3 +4146,32 @@ Updated `docs/testnet-readiness-runbook.md` Section 6:
   - 1M iterations took ~7.5 minutes locally with 0 crashes
 
 ---
+
+## 2026-01-07 - US-168: Create cross-service integration test suite
+
+- What was implemented:
+  - Created `tests/integration/` directory for cross-service E2E tests
+  - Docker Compose stack orchestrating: Convex, Auth, Simulator, Gateway
+  - `CrossServiceClient` helper class for unified testing across all services
+  - Test coverage spans: service health, full user journey, game flows, concurrent connections, error scenarios
+  - CI workflow runs automatically on gateway/auth/simulator/execution changes
+- Files changed:
+  - `tests/integration/docker-compose.cross-service.yml` - Docker Compose stack for all 4 services
+  - `tests/integration/helpers/services.ts` - Service orchestration utilities
+  - `tests/integration/helpers/client.ts` - CrossServiceClient with Ed25519 auth, WebSocket, game flows
+  - `tests/integration/cross-service.test.ts` - 20+ test cases across 5 test suites
+  - `tests/integration/package.json` - Vitest + ws dependencies
+  - `tests/integration/vitest.config.ts` - 2-minute timeouts, fork pool
+  - `tests/integration/tsconfig.json` - ESNext module config
+  - `tests/integration/README.md` - Setup documentation
+  - `.github/workflows/cross-service-integration.yml` - CI pipeline with real backend
+- **Learnings:**
+  - Cross-service tests need longer timeouts (2-3 minutes) due to service startup
+  - Ed25519 key generation uses SPKI/PKCS8 DER format with specific prefixes
+  - waitForReady() pattern: wait for session_ready, then poll get_balance until registered
+  - Auth service is optional for gateway+simulator tests - skip gracefully
+  - Docker Compose `--wait` flag blocks until healthchecks pass
+  - Use `describe.skipIf(!ENABLED)` pattern for conditional test suites
+  - Vitest `pool: 'forks'` with `singleFork: true` ensures sequential execution
+
+---
