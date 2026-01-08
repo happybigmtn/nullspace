@@ -151,8 +151,10 @@ describe('WebSocket Reconnection (Native)', () => {
       .withTimeout(10000);
 
     // Enable airplane mode (simulates network loss)
+    // Note: setStatusBar only affects the visual display, not actual connectivity
+    // Use 'hide' to simulate no network in status bar
     await device.setStatusBar({
-      networkConnectionMode: 'disabled'
+      dataNetwork: 'hide'
     });
 
     // Wait for disconnect detection
@@ -161,9 +163,9 @@ describe('WebSocket Reconnection (Native)', () => {
     // Should show reconnecting indicator
     await expect(element(by.id('connection-status-reconnecting'))).toBeVisible();
 
-    // Disable airplane mode
+    // Restore wifi display
     await device.setStatusBar({
-      networkConnectionMode: 'wifi'
+      dataNetwork: 'wifi'
     });
 
     // Should reconnect

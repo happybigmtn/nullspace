@@ -179,7 +179,8 @@ describe('Chip Selector Gestures', () => {
       element(by.id('bet-area-red')),
       0.5,
       0.5,
-      'fast'
+      'fast',
+      0 // holdDuration at target
     );
 
     // Verify bet was placed

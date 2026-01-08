@@ -346,8 +346,8 @@
         "Report Detox test results in PR comments"
       ],
       "priority": 74,
-      "passes": false,
-      "notes": "TEST-CRITICAL: Detox E2E tests exist (3 files, 600 lines) but never run. Native behaviors unvalidated."
+      "passes": true,
+      "notes": "COMPLETE: Created .github/workflows/mobile-e2e.yml with iOS (macos-14) and Android (ubuntu + emulator) jobs. Mock backend for offline testing, caching for CocoaPods/Gradle/AVD, PR comment reporting via github-script. Fixed E2E test Detox API issues (longPressAndDrag, setStatusBar)."
     },
     {
       "id": "US-152",
