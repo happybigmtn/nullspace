@@ -374,8 +374,8 @@
         "Add deployment notifications to Slack"
       ],
       "priority": 76,
-      "passes": false,
-      "notes": "INFRA-CRITICAL: No automated deployment. Build-images.yml builds containers but doesn't deploy them."
+      "passes": true,
+      "notes": "COMPLETE: Created deploy-production.yml with manual approval via GitHub environments. Staging deploys automatically on merge to main with wait-for-images. Both environments have smoke tests (health checks, metrics, WebSocket) and Slack notifications. Service deployment follows runbook order: simulator → validators → gateway → auth → website → ops."
     },
     {
       "id": "US-154",

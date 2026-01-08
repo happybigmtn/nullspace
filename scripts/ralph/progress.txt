@@ -69,6 +69,15 @@ Target: Testnet Production
 - Preflight validation: `scripts/preflight-management.mjs`
 - Bootstrap: `./scripts/bootstrap-testnet.sh` generates node YAML
 
+### CI/CD (GitHub Actions)
+- Deployment concurrency: `cancel-in-progress: false` for deployments (avoid partial deploys)
+- Environment approval: `environment: production` enables manual approval gates
+- Wait for builds: Use `gh run list --workflow=build-images.yml --json headSha,status,conclusion` + jq
+- Secrets: SOPS Age keys via `SOPS_AGE_KEY_*` secrets, decrypted with `scripts/decrypt-secrets.sh`
+- Service startup order: simulator → validators → gateway → auth → website → ops (per runbook Section 3)
+- Smoke tests: health endpoints `/healthz`, metrics with `x-metrics-token` header
+- Slack notifications: Block Kit format with `attachments[].color` for status colors
+
 ### Testing Scripts
 - Bet coverage: `RUN_INTEGRATION=true pnpm -C gateway exec vitest run tests/all-bet-types.test.ts`
 - Soak test: `./scripts/soak-test.sh configs/testnet 4`
@@ -3731,3 +3740,37 @@ Updated `docs/testnet-readiness-runbook.md` Section 6:
 - Mock backend sufficient for connection stress testing (no game logic needed)
 - 100 connections appropriate for CI runners (limited resources)
 - Percentile calculation: `Math.ceil((p/100) * length) - 1` for 0-indexed arrays
+
+---
+
+## 2026-01-07 - US-153: Create production deployment pipeline
+
+- What was implemented:
+  - Created `.github/workflows/deploy-production.yml` with full deployment pipeline
+  - Updated `.github/workflows/deploy-staging.yml` from placeholder to working deployment
+  - **Staging Pipeline**: Auto-deploys on merge to main after waiting for build-images workflow
+  - **Production Pipeline**: Manual trigger with GitHub environment approval gate
+  - Both pipelines deploy services in runbook order: simulator → validators → gateway → auth → website → ops
+  - Post-deployment smoke tests: indexer health, gateway health, auth health, metrics endpoint, WebSocket connectivity
+  - Slack notifications on deployment start and result (success/warning/failure)
+  - SSH-based deployment to Hetzner hosts with SOPS secret decryption
+
+- Files changed:
+  - `.github/workflows/deploy-production.yml` - New production deployment workflow
+  - `.github/workflows/deploy-staging.yml` - Complete rewrite with actual deployment logic
+
+- **Learnings:**
+  - Use `concurrency.cancel-in-progress: false` for deployments to avoid partial deploys
+  - GitHub environment approval gates work via `environment: production` job setting
+  - Wait for build-images workflow using `gh run list` + jq to check status by commit SHA
+  - SOPS Age key passed via `secrets.SOPS_AGE_KEY_STAGING` / `secrets.SOPS_AGE_KEY_PRODUCTION`
+  - Use heredoc for multi-line deploy scripts to avoid shell escaping issues
+  - Slack notifications use Block Kit for rich formatting with attachments for status colors
+  - WebSocket connectivity test via curl is imperfect (101 upgrade may look like failure)
+  - Service startup order matters per runbook Section 3 - validators need simulator first
+
+- **Required GitHub Configuration:**
+  - Environments: `staging`, `production` (production requires approvers)
+  - Secrets: `SOPS_AGE_KEY_STAGING`, `SOPS_AGE_KEY_PRODUCTION`, `STAGING_SSH_KEY`, `PRODUCTION_SSH_KEY`, `*_SSH_KNOWN_HOSTS`, `*_METRICS_TOKEN`
+  - Variables: `*_HOST`, `*_USER`, `*_INDEXER_URL`, `*_GATEWAY_URL`, `*_AUTH_URL`, `SLACK_WEBHOOK_URL`
+
