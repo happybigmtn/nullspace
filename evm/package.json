@@ -5,6 +5,10 @@
   "scripts": {
     "build": "hardhat compile",
     "test": "hardhat test",
+    "test:fuzz": "forge test --match-path 'test/foundry/*.sol'",
+    "test:fuzz:ci": "forge test --match-path 'test/foundry/*.sol' --profile ci",
+    "test:fuzz:intensive": "forge test --match-path 'test/foundry/*.sol' --profile intensive",
+    "coverage": "hardhat coverage",
     "deploy:sepolia": "hardhat run scripts/deployPhase2.js --network sepolia",
     "deploy:anvil": "hardhat run scripts/deployPhase2.js --network anvil",
     "simulate:cca:sepolia": "hardhat run scripts/simulateCcaBids.js --network sepolia",
@@ -20,8 +24,8 @@
     "@openzeppelin/contracts": "^5.0.2",
     "dotenv": "^16.4.5",
     "ethers": "^6.13.4",
-    "merkletreejs": "^0.4.0",
-    "keccak256": "^1.0.6"
+    "keccak256": "^1.0.6",
+    "merkletreejs": "^0.4.0"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-chai-matchers": "^2.0.8",
@@ -29,6 +33,7 @@
     "@nomicfoundation/hardhat-verify": "^2.0.11",
     "@types/chai": "^4.3.11",
     "chai": "^4.4.1",
-    "hardhat": "^2.22.10"
+    "hardhat": "^2.22.10",
+    "solidity-coverage": "^0.8.17"
   }
 }

@@ -3913,3 +3913,37 @@ Updated `docs/testnet-readiness-runbook.md` Section 6:
   - Pre-existing type errors in website are unrelated (react-spring types)
 
 ---
+
+## 2026-01-07 - US-160: Expand EVM contract test coverage to 80%
+
+- What was implemented:
+  - Added `solidity-coverage` plugin to hardhat.config.js for coverage reporting
+  - Created `test/security.test.js` with 43 security-focused tests:
+    - RecoveryPool: overflow protection, access control, events
+    - BogoDistributor: CEI reentrancy pattern, proof validation, deadline enforcement
+    - FeeDistributor: epoch management, pause mechanism, sweep protection
+    - BridgeLockbox: deposit/withdraw validation, access control
+    - RNGToken: cap enforcement, ownership transfer
+  - Created Foundry fuzz test infrastructure:
+    - `foundry.toml` with fuzz configs (1k default, 256 CI, 10k intensive)
+    - `test/foundry/RecoveryPool.fuzz.t.sol` - 7 fuzz tests for overflow and invariants
+    - `test/foundry/BogoDistributor.fuzz.t.sol` - 8 fuzz tests for claim logic
+  - Added npm scripts: `coverage`, `test:fuzz`, `test:fuzz:ci`, `test:fuzz:intensive`
+  - **Coverage achieved: 98.72% line coverage** (exceeds 80% requirement)
+- Files changed:
+  - `evm/package.json` - Added solidity-coverage, fuzz scripts
+  - `evm/hardhat.config.js` - Added solidity-coverage require
+  - `evm/test/security.test.js` (NEW) - 43 security tests
+  - `evm/foundry.toml` (NEW) - Foundry config
+  - `evm/test/foundry/RecoveryPool.fuzz.t.sol` (NEW) - Fuzz tests
+  - `evm/test/foundry/BogoDistributor.fuzz.t.sol` (NEW) - Fuzz tests
+- **Learnings:**
+  - Solidity 0.8+ has built-in overflow protection - test verifies correct behavior
+  - CEI (Checks-Effects-Interactions) pattern prevents reentrancy - update state before external calls
+  - OpenZeppelin v5 Ownable uses `OwnableUnauthorizedAccount` custom error, not string revert
+  - SafeERC20 wraps transfers to handle non-standard ERC20s (USDT, etc.)
+  - Hardhat tests use `ethers.MaxUint256` for max uint256, `ethers.ZeroAddress` for address(0)
+  - Foundry fuzz tests require `vm.assume()` to bound inputs to valid ranges
+  - Coverage tool instruments bytecode - some uncovered lines are unreachable branches
+
+---

@@ -4,3 +4,11 @@ cache/
 deployments/
 data/
 .env
+
+# Coverage reports
+coverage/
+coverage.json
+
+# Foundry
+foundry-out/
+foundry-cache/
