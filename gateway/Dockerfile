@@ -15,9 +15,22 @@ WORKDIR /app
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY Cargo.toml Cargo.lock ./
+# Copy all Cargo workspace members (required for types generate)
+COPY node/Cargo.toml ./node/
+COPY client/Cargo.toml ./client/
+COPY execution/Cargo.toml ./execution/
+COPY simulator/Cargo.toml ./simulator/
+COPY types/ ./types/
+COPY website/wasm/Cargo.toml ./website/wasm/
+# Create dummy source files for cargo
+RUN mkdir -p node/src client/src execution/src simulator/src website/wasm/src && \
+    echo "fn main() {}" > node/src/main.rs && \
+    echo "fn main() {}" > client/src/main.rs && \
+    echo "pub fn placeholder() {}" > execution/src/lib.rs && \
+    echo "fn main() {}" > simulator/src/main.rs && \
+    echo "pub fn placeholder() {}" > website/wasm/src/lib.rs
 COPY packages/ ./packages/
 COPY gateway/ ./gateway/
-COPY types/ ./types/
 
 RUN pnpm install --frozen-lockfile --ignore-scripts
 

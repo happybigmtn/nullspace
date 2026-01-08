@@ -11,20 +11,29 @@ RUN curl -sSf https://rustwasm.github.io/wasm-pack/installer/init.sh | sh
 WORKDIR /app
 
 COPY Cargo.toml Cargo.lock ./
+COPY node/Cargo.toml ./node/
+COPY client/Cargo.toml ./client/
 COPY execution/Cargo.toml ./execution/
+COPY simulator/Cargo.toml ./simulator/
 COPY types/Cargo.toml ./types/
 COPY website/wasm/Cargo.toml ./website/wasm/
 
-RUN mkdir -p execution/src types/src website/wasm/src && \
+RUN mkdir -p node/src client/src execution/src simulator/src types/src website/wasm/src && \
+    echo "fn main() {}" > node/src/main.rs && \
+    echo "fn main() {}" > client/src/main.rs && \
     echo "pub fn placeholder() {}" > execution/src/lib.rs && \
+    echo "fn main() {}" > simulator/src/main.rs && \
     echo "pub fn placeholder() {}" > types/src/lib.rs && \
     echo "pub fn placeholder() {}" > website/wasm/src/lib.rs
 
 RUN wasm-pack build --target web --out-dir pkg website/wasm 2>/dev/null || true
 
-RUN rm -rf execution/src types/src website/wasm/src
+RUN rm -rf node/src client/src execution/src simulator/src types/src website/wasm/src
 
+COPY node/ ./node/
+COPY client/ ./client/
 COPY execution/ ./execution/
+COPY simulator/ ./simulator/
 COPY types/ ./types/
 COPY website/wasm/ ./website/wasm/
 
@@ -41,8 +50,8 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/ ./packages/
 COPY website/package.json ./website/
 
-# Install dependencies
-RUN pnpm install --frozen-lockfile
+# Install dependencies (ignore-scripts to skip packages/types prepare hook)
+RUN pnpm install --frozen-lockfile --ignore-scripts
 
 # Build workspace packages first
 RUN pnpm -C packages/types build || true
