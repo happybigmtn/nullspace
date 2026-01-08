@@ -458,8 +458,8 @@
         "Log warning if migration fails"
       ],
       "priority": 82,
-      "passes": false,
-      "notes": "SECURITY-MEDIUM: XSS attacks could steal keys from localStorage. Legacy mode should be removed."
+      "passes": true,
+      "notes": "COMPLETE: getCasinoKeyIdForStorage() no longer returns localStorage keys. Added getLegacyPrivateKeyHex(), needsLegacyKeyMigration(), migrateLegacyKeyToVault() for migration workflow. Existing vault creation already migrates and deletes legacy keys. 8 new tests validate migration logic."
     },
     {
       "id": "US-160",

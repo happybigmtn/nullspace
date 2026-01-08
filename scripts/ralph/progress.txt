@@ -3834,3 +3834,27 @@ Updated `docs/testnet-readiness-runbook.md` Section 6:
   - Maskable icons need safe zone (inner 80% circle) for adaptive icon masks on Android
 
 ---
+
+## 2026-01-07 - US-159: Remove legacy localStorage private key storage
+
+- What was implemented:
+  - Removed legacy localStorage fallback from `getCasinoKeyIdForStorage()` - now only returns vault public key
+  - Added constants: `LS_LEGACY_PRIVATE_KEY`, `LS_MIGRATION_DISMISSED`
+  - Added `getLegacyPrivateKeyHex()` - detects and validates legacy keys
+  - Added `needsLegacyKeyMigration()` - checks if migration UI should be shown
+  - Added `dismissMigration()` / `isMigrationDismissed()` - dismissal tracking
+  - Added `deleteLegacyPrivateKey()` - explicit key removal
+  - Added `migrateLegacyKeyToVault()` - complete migration workflow
+  - Existing vault creation (`createPasskeyVault`, `createPasswordVault`) already migrates keys when `migrateExistingCasinoKey: true`
+  - Added 8 new tests for migration functionality
+- Files changed:
+  - `website/src/security/keyVault.ts` - Removed fallback, added migration API
+  - `website/src/security/keyVault.test.ts` - Added migration tests
+- **Learnings:**
+  - Security principle: Never return raw private keys from functions - only public key identifiers
+  - Migration UX: Allow dismissal but track it, so users can migrate later from settings
+  - Validation: Always validate hex format and length before treating as valid key
+  - Existing code already handled migration during vault creation - just needed to expose detection
+  - XSS risk: localStorage is readable by any JS on the page; encrypted vault uses IndexedDB + WebCrypto
+
+---

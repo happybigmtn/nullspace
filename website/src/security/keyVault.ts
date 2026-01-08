@@ -72,6 +72,8 @@ const LS_VAULT_KIND = 'nullspace_vault_kind';
 const LS_VAULT_ID = 'nullspace_vault_id';
 const LS_VAULT_CREDENTIAL_ID = 'nullspace_vault_credential_id';
 const LS_CASINO_PUBLIC_KEY_HEX = 'casino_public_key_hex';
+const LS_LEGACY_PRIVATE_KEY = 'casino_private_key';
+const LS_MIGRATION_DISMISSED = 'nullspace_migration_dismissed';
 const VAULT_KIND_PASSKEY: VaultKind = 'passkey';
 const VAULT_KIND_PASSWORD: VaultKind = 'password';
 const PASSWORD_MIN_LENGTH = 10;
@@ -201,14 +203,9 @@ export function getVaultPublicKeyHex(): string | null {
 
 export function getCasinoKeyIdForStorage(): string | null {
   if (!isBrowser()) return null;
-  const publicKeyHex = getVaultPublicKeyHex();
-  if (publicKeyHex) return publicKeyHex;
-  const allowLegacyKeys =
-    typeof import.meta !== 'undefined' &&
-    import.meta.env?.PROD !== true &&
-    (import.meta.env?.DEV || import.meta.env?.VITE_ALLOW_LEGACY_KEYS === 'true');
-  if (!allowLegacyKeys) return null;
-  return localStorage.getItem('casino_private_key');
+  // US-159: Only return vault public key. Legacy localStorage keys are no longer supported.
+  // Users with legacy keys must migrate to the encrypted vault.
+  return getVaultPublicKeyHex();
 }
 
 function setVaultMeta(meta: {
@@ -749,4 +746,115 @@ export function getVaultStatusSync(): {
     passkeySupported,
     passwordSupported,
   };
+}
+
+// ============================================================================
+// US-159: Legacy key migration
+// ============================================================================
+
+/**
+ * Checks if a legacy localStorage private key exists that needs migration.
+ * Returns the hex key if found and valid, null otherwise.
+ */
+export function getLegacyPrivateKeyHex(): string | null {
+  if (!isBrowser()) return null;
+  const hex = localStorage.getItem(LS_LEGACY_PRIVATE_KEY);
+  if (!hex || hex.length !== 64) return null;
+  // Validate it's a valid hex string
+  if (!/^[0-9a-fA-F]{64}$/.test(hex)) return null;
+  return hex;
+}
+
+/**
+ * Checks if user has dismissed the migration prompt.
+ */
+export function isMigrationDismissed(): boolean {
+  if (!isBrowser()) return false;
+  return localStorage.getItem(LS_MIGRATION_DISMISSED) === 'true';
+}
+
+/**
+ * Mark the migration as dismissed (user chose not to migrate now).
+ * They can still migrate later from settings.
+ */
+export function dismissMigration(): void {
+  if (!isBrowser()) return;
+  localStorage.setItem(LS_MIGRATION_DISMISSED, 'true');
+}
+
+/**
+ * Clear the migration dismissed flag (e.g., when user wants to try again).
+ */
+export function clearMigrationDismissed(): void {
+  if (!isBrowser()) return;
+  localStorage.removeItem(LS_MIGRATION_DISMISSED);
+}
+
+/**
+ * Checks if migration is needed and available.
+ * Returns true if:
+ * - Legacy key exists in localStorage
+ * - No vault is currently enabled
+ * - Vault storage is supported
+ * - User hasn't dismissed the migration prompt
+ */
+export function needsLegacyKeyMigration(): boolean {
+  if (!isBrowser()) return false;
+  if (!isVaultStorageSupported()) return false;
+  if (isVaultEnabled()) return false;
+  if (isMigrationDismissed()) return false;
+  return getLegacyPrivateKeyHex() !== null;
+}
+
+/**
+ * Deletes the legacy private key from localStorage.
+ * Should be called after successful migration or when user explicitly requests deletion.
+ */
+export function deleteLegacyPrivateKey(): void {
+  if (!isBrowser()) return;
+  try {
+    localStorage.removeItem(LS_LEGACY_PRIVATE_KEY);
+    console.log('[KeyVault] Legacy private key removed from localStorage');
+  } catch (error) {
+    console.warn('[KeyVault] Failed to remove legacy private key:', error);
+  }
+}
+
+/**
+ * Attempts to migrate a legacy localStorage key to the encrypted vault.
+ * This is called automatically when creating a new vault if migration is enabled.
+ *
+ * @param vaultType - Whether to create a passkey or password vault
+ * @param password - Required if vaultType is 'password'
+ * @returns The created vault record, or throws on failure
+ */
+export async function migrateLegacyKeyToVault(
+  vaultType: 'passkey' | 'password',
+  password?: string,
+): Promise<VaultRecord> {
+  const legacyKey = getLegacyPrivateKeyHex();
+  if (!legacyKey) {
+    throw new Error('no-legacy-key');
+  }
+
+  console.log('[KeyVault] Starting legacy key migration to encrypted vault...');
+
+  try {
+    let record: VaultRecord;
+    if (vaultType === 'passkey') {
+      record = await createPasskeyVault({ migrateExistingCasinoKey: true });
+    } else {
+      if (!password) throw new Error('password-required');
+      record = await createPasswordVault(password, { migrateExistingCasinoKey: true });
+    }
+
+    // Clear the dismissed flag since migration succeeded
+    clearMigrationDismissed();
+
+    console.log('[KeyVault] Legacy key migration successful. Key moved to encrypted vault.');
+    return record;
+  } catch (error) {
+    console.warn('[KeyVault] Legacy key migration failed:', error);
+    throw error;
+  }
 }
