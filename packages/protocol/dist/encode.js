@@ -3,8 +3,12 @@
  *
  * This is ENCODING ONLY - no game logic here.
  * The on-chain Rust program validates and processes these moves.
+ *
+ * All encoded messages include a 1-byte protocol version header as the first byte.
+ * See version.ts for version constants and validation utilities.
  */
 import { BaccaratMove, BlackjackMove, CrapsMove, CrapsBetType, RouletteMove, SicBoMove, } from '@nullspace/constants';
+import { CURRENT_PROTOCOL_VERSION, withVersionHeader } from './version.js';
 import { BACCARAT_BET_TYPES, CRAPS_BET_TYPES, ROULETTE_BET_NAMES, SICBO_BET_TYPES, encodeBaccaratBet as encodeBaccaratBetType, encodeCrapsBet as encodeCrapsBetType, encodeRouletteBet as encodeRouletteBetType, encodeSicBoBet as encodeSicBoBetType, } from '@nullspace/constants';
 /**
  * Opcode map with type safety via `satisfies`
@@ -29,28 +33,29 @@ const CRAPS_OPCODES = {
     roll: CrapsMove.Roll,
     clear_bets: CrapsMove.ClearBets,
 };
-/** Encode a blackjack move action into binary payload */
+/** Encode a blackjack move action into binary payload (with version header) */
 export function encodeBlackjackMove(move) {
-    return new Uint8Array([BLACKJACK_OPCODES[move]]);
+    return withVersionHeader(new Uint8Array([BLACKJACK_OPCODES[move]]));
 }
-/** Encode a roulette bet placement */
+/** Encode a roulette bet placement (with version header) */
 export function encodeRouletteBet(betType, number, amount) {
-    // Binary format: [opcode, betType, number, amount (8 bytes BE)]
-    const buffer = new ArrayBuffer(11);
+    // Binary format: [version, opcode, betType, number, amount (8 bytes BE)]
+    const buffer = new ArrayBuffer(12);
     const view = new DataView(buffer);
-    view.setUint8(0, RouletteMove.PlaceBet);
-    view.setUint8(1, betType);
-    view.setUint8(2, number);
-    view.setBigUint64(3, amount, false); // big-endian per Rust spec
+    view.setUint8(0, CURRENT_PROTOCOL_VERSION);
+    view.setUint8(1, RouletteMove.PlaceBet);
+    view.setUint8(2, betType);
+    view.setUint8(3, number);
+    view.setBigUint64(4, amount, false); // big-endian per Rust spec
     return new Uint8Array(buffer);
 }
-/** Encode a roulette spin command */
+/** Encode a roulette spin command (with version header) */
 export function encodeRouletteSpin() {
-    return new Uint8Array([RouletteMove.Spin]);
+    return withVersionHeader(new Uint8Array([RouletteMove.Spin]));
 }
-/** Encode roulette clear bets command */
+/** Encode roulette clear bets command (with version header) */
 export function encodeRouletteClearBets() {
-    return new Uint8Array([RouletteMove.ClearBets]);
+    return withVersionHeader(new Uint8Array([RouletteMove.ClearBets]));
 }
 export function encodeRouletteMove(move, options) {
     switch (move) {
@@ -67,36 +72,38 @@ export function encodeRouletteMove(move, options) {
     }
 }
 /**
- * Encode a craps bet placement
- * Format: [0, bet_type, target, amount (8 bytes BE)]
+ * Encode a craps bet placement (with version header)
+ * Format: [version, opcode, bet_type, target, amount (8 bytes BE)]
  */
 export function encodeCrapsPlaceBet(options) {
-    const buffer = new ArrayBuffer(11); // 1 + 1 + 1 + 8
+    const buffer = new ArrayBuffer(12); // 1 version + 1 opcode + 1 bet_type + 1 target + 8 amount
     const view = new DataView(buffer);
-    view.setUint8(0, CrapsMove.PlaceBet);
-    view.setUint8(1, options.betType);
-    view.setUint8(2, options.target);
-    view.setBigUint64(3, options.amount, false); // big-endian per Rust spec
+    view.setUint8(0, CURRENT_PROTOCOL_VERSION);
+    view.setUint8(1, CrapsMove.PlaceBet);
+    view.setUint8(2, options.betType);
+    view.setUint8(3, options.target);
+    view.setBigUint64(4, options.amount, false); // big-endian per Rust spec
     return new Uint8Array(buffer);
 }
 /**
- * Encode a craps add odds command
- * Format: [1, amount (8 bytes BE)]
+ * Encode a craps add odds command (with version header)
+ * Format: [version, opcode, amount (8 bytes BE)]
  */
 export function encodeCrapsAddOdds(amount) {
-    const buffer = new ArrayBuffer(9);
+    const buffer = new ArrayBuffer(10); // 1 version + 1 opcode + 8 amount
     const view = new DataView(buffer);
-    view.setUint8(0, CrapsMove.AddOdds);
-    view.setBigUint64(1, amount, false); // big-endian per Rust spec
+    view.setUint8(0, CURRENT_PROTOCOL_VERSION);
+    view.setUint8(1, CrapsMove.AddOdds);
+    view.setBigUint64(2, amount, false); // big-endian per Rust spec
     return new Uint8Array(buffer);
 }
-/** Encode a craps roll command */
+/** Encode a craps roll command (with version header) */
 export function encodeCrapsRoll() {
-    return new Uint8Array([CrapsMove.Roll]);
+    return withVersionHeader(new Uint8Array([CrapsMove.Roll]));
 }
-/** Encode a craps clear bets command */
+/** Encode a craps clear bets command (with version header) */
 export function encodeCrapsClearBets() {
-    return new Uint8Array([CrapsMove.ClearBets]);
+    return withVersionHeader(new Uint8Array([CrapsMove.ClearBets]));
 }
 export function encodeCrapsMove(move, optionsOrAmount) {
     switch (move) {
@@ -120,11 +127,13 @@ export function encodeBaccaratAtomicBatch(bets) {
     if (!bets.length) {
         throw new Error('No bets provided');
     }
-    const payload = new Uint8Array(2 + bets.length * 9);
+    // Format: [version, opcode, count, ...bets]
+    const payload = new Uint8Array(3 + bets.length * 9);
     const view = new DataView(payload.buffer);
-    payload[0] = BaccaratMove.AtomicBatch;
-    payload[1] = bets.length;
-    let offset = 2;
+    payload[0] = CURRENT_PROTOCOL_VERSION;
+    payload[1] = BaccaratMove.AtomicBatch;
+    payload[2] = bets.length;
+    let offset = 3;
     for (const bet of bets) {
         if (bet.amount <= 0n) {
             throw new Error('Bet amount must be positive');
@@ -148,11 +157,13 @@ export function encodeRouletteAtomicBatch(bets) {
     if (!bets.length) {
         throw new Error('No bets provided');
     }
-    const payload = new Uint8Array(2 + bets.length * 10);
+    // Format: [version, opcode, count, ...bets]
+    const payload = new Uint8Array(3 + bets.length * 10);
     const view = new DataView(payload.buffer);
-    payload[0] = RouletteMove.AtomicBatch;
-    payload[1] = bets.length;
-    let offset = 2;
+    payload[0] = CURRENT_PROTOCOL_VERSION;
+    payload[1] = RouletteMove.AtomicBatch;
+    payload[2] = bets.length;
+    let offset = 3;
     for (const bet of bets) {
         if (bet.amount <= 0n) {
             throw new Error('Bet amount must be positive');
@@ -178,11 +189,13 @@ export function encodeCrapsAtomicBatch(bets) {
     if (!bets.length) {
         throw new Error('No bets provided');
     }
-    const payload = new Uint8Array(2 + bets.length * 10);
+    // Format: [version, opcode, count, ...bets]
+    const payload = new Uint8Array(3 + bets.length * 10);
     const view = new DataView(payload.buffer);
-    payload[0] = CrapsMove.AtomicBatch;
-    payload[1] = bets.length;
-    let offset = 2;
+    payload[0] = CURRENT_PROTOCOL_VERSION;
+    payload[1] = CrapsMove.AtomicBatch;
+    payload[2] = bets.length;
+    let offset = 3;
     for (const bet of bets) {
         if (bet.amount <= 0n) {
             throw new Error('Bet amount must be positive');
@@ -207,11 +220,13 @@ export function encodeSicBoAtomicBatch(bets) {
     if (!bets.length) {
         throw new Error('No bets provided');
     }
-    const payload = new Uint8Array(2 + bets.length * 10);
+    // Format: [version, opcode, count, ...bets]
+    const payload = new Uint8Array(3 + bets.length * 10);
     const view = new DataView(payload.buffer);
-    payload[0] = SicBoMove.AtomicBatch;
-    payload[1] = bets.length;
-    let offset = 2;
+    payload[0] = CURRENT_PROTOCOL_VERSION;
+    payload[1] = SicBoMove.AtomicBatch;
+    payload[2] = bets.length;
+    let offset = 3;
     for (const bet of bets) {
         if (bet.amount <= 0n) {
             throw new Error('Bet amount must be positive');

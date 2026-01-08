@@ -1,8 +1,13 @@
 /**
- * GoldParticles - Animated gold particle burst effect for win celebrations
+ * GoldParticles - Animated particle burst effect for win celebrations (DS-048)
+ *
+ * Features:
+ * - Multiple particle shapes: circles, squares, triangles
+ * - Color variants: gold, multicolor, game-themed
+ * - Firework burst patterns for big wins
+ * - Physics-based gravity and rotation
  *
  * Uses react-native-reanimated for performant particle animations.
- * Particles burst outward from center with gravity and fade.
  */
 import React, { useEffect, useMemo } from 'react';
 import { View, StyleSheet, Dimensions } from 'react-native';
@@ -17,10 +22,17 @@ import Animated, {
 } from 'react-native-reanimated';
 import type { CelebrationIntensity } from '../../hooks/useCelebration';
 import { PARTICLE_COUNTS, CELEBRATION_DURATIONS } from '../../hooks/useCelebration';
+import { GAME } from '@nullspace/design-tokens';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const CENTER_X = SCREEN_WIDTH / 2;
 const CENTER_Y = SCREEN_HEIGHT * 0.3; // Burst from upper third (near balance)
+
+/** Particle shape types */
+export type ParticleShape = 'circle' | 'square' | 'triangle' | 'star';
+
+/** Color theme variants */
+export type ColorVariant = 'gold' | 'multicolor' | 'game';
 
 /** Gold color shades for variety */
 const GOLD_COLORS = [
@@ -31,6 +43,35 @@ const GOLD_COLORS = [
   '#FFCA28', // Light gold
 ];
 
+/** Multicolor rainbow palette */
+const MULTICOLOR_PALETTE = [
+  '#FF3B30', // Red
+  '#FF9500', // Orange
+  '#FFCC00', // Yellow
+  '#34C759', // Green
+  '#5AC8FA', // Light blue
+  '#007AFF', // Blue
+  '#AF52DE', // Purple
+  '#FF2D55', // Pink
+];
+
+/** Get game-themed colors based on gameId */
+function getGameColors(gameId?: string): string[] {
+  if (!gameId) return GOLD_COLORS;
+
+  const gameColors = GAME[gameId as keyof typeof GAME];
+  if (!gameColors) return GOLD_COLORS;
+
+  // Create palette from game's primary and accent
+  return [
+    gameColors.primary,
+    gameColors.accent,
+    '#FFD700', // Add gold for sparkle
+    gameColors.primary,
+    gameColors.accent,
+  ];
+}
+
 interface ParticleConfig {
   id: number;
   angle: number;
@@ -39,6 +80,9 @@ interface ParticleConfig {
   delay: number;
   color: string;
   rotationSpeed: number;
+  shape: ParticleShape;
+  /** For firework patterns: which burst wave */
+  wave: number;
 }
 
 interface GoldParticlesProps {
@@ -46,6 +90,12 @@ interface GoldParticlesProps {
   isActive: boolean;
   /** Celebration intensity determines particle count */
   intensity: CelebrationIntensity;
+  /** Color variant (default: gold) */
+  colorVariant?: ColorVariant;
+  /** Game ID for game-themed colors */
+  gameId?: string;
+  /** Enable firework burst pattern for big wins */
+  fireworkBurst?: boolean;
   /** Callback when animation completes */
   onComplete?: () => void;
 }
@@ -53,27 +103,118 @@ interface GoldParticlesProps {
 /**
  * Generate particle configurations with seeded randomness
  */
-function generateParticles(count: number, intensity: CelebrationIntensity): ParticleConfig[] {
+function generateParticles(
+  count: number,
+  intensity: CelebrationIntensity,
+  colorVariant: ColorVariant,
+  gameId?: string,
+  fireworkBurst?: boolean
+): ParticleConfig[] {
   const particles: ParticleConfig[] = [];
   const baseDistance = intensity === 'jackpot' ? 200 : intensity === 'big' ? 160 : 120;
 
-  for (let i = 0; i < count; i++) {
-    // Distribute particles evenly with some randomness
-    const baseAngle = (i / count) * Math.PI * 2;
-    const angleVariation = (Math.random() - 0.5) * 0.5;
+  // Get color palette based on variant
+  let colors: string[];
+  switch (colorVariant) {
+    case 'multicolor':
+      colors = MULTICOLOR_PALETTE;
+      break;
+    case 'game':
+      colors = getGameColors(gameId);
+      break;
+    case 'gold':
+    default:
+      colors = GOLD_COLORS;
+  }
 
-    particles.push({
-      id: i,
-      angle: baseAngle + angleVariation,
-      distance: baseDistance * (0.6 + Math.random() * 0.8),
-      size: 4 + Math.random() * 8,
-      delay: Math.random() * 100,
-      color: GOLD_COLORS[i % GOLD_COLORS.length] ?? '#FFD700',
-      rotationSpeed: (Math.random() - 0.5) * 720, // -360 to 360 degrees
-    });
+  // Shape distribution based on intensity
+  const shapes: ParticleShape[] =
+    intensity === 'jackpot'
+      ? ['circle', 'square', 'triangle', 'star', 'circle', 'square']
+      : intensity === 'big'
+        ? ['circle', 'square', 'triangle', 'circle']
+        : ['circle', 'circle', 'square'];
+
+  // Number of firework waves
+  const waveCount = fireworkBurst && (intensity === 'jackpot' || intensity === 'big') ? 3 : 1;
+
+  for (let wave = 0; wave < waveCount; wave++) {
+    const waveParticleCount = Math.floor(count / waveCount);
+    const waveDelay = wave * 200; // 200ms between waves
+
+    for (let i = 0; i < waveParticleCount; i++) {
+      // Distribute particles evenly with some randomness
+      const baseAngle = (i / waveParticleCount) * Math.PI * 2;
+      const angleVariation = (Math.random() - 0.5) * 0.5;
+
+      // Vary distance per wave for firework effect
+      const waveDistanceMultiplier = 1 - wave * 0.2;
+
+      particles.push({
+        id: wave * 1000 + i,
+        angle: baseAngle + angleVariation,
+        distance: baseDistance * (0.6 + Math.random() * 0.8) * waveDistanceMultiplier,
+        size: 4 + Math.random() * 8,
+        delay: waveDelay + Math.random() * 100,
+        color: colors[i % colors.length] ?? '#FFD700',
+        rotationSpeed: (Math.random() - 0.5) * 720, // -360 to 360 degrees
+        shape: shapes[i % shapes.length] ?? 'circle',
+        wave,
+      });
+    }
   }
 
   return particles;
+}
+
+/**
+ * Triangle shape component
+ */
+function TriangleShape({ size, color }: { size: number; color: string }) {
+  return (
+    <View
+      style={{
+        width: 0,
+        height: 0,
+        borderLeftWidth: size / 2,
+        borderRightWidth: size / 2,
+        borderBottomWidth: size,
+        borderLeftColor: 'transparent',
+        borderRightColor: 'transparent',
+        borderBottomColor: color,
+      }}
+    />
+  );
+}
+
+/**
+ * Star shape component (simplified 4-point star)
+ */
+function StarShape({ size, color }: { size: number; color: string }) {
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      {/* Horizontal bar */}
+      <View
+        style={{
+          position: 'absolute',
+          width: size,
+          height: size / 3,
+          backgroundColor: color,
+          borderRadius: size / 6,
+        }}
+      />
+      {/* Vertical bar */}
+      <View
+        style={{
+          position: 'absolute',
+          width: size / 3,
+          height: size,
+          backgroundColor: color,
+          borderRadius: size / 6,
+        }}
+      />
+    </View>
+  );
 }
 
 /**
@@ -139,33 +280,72 @@ function Particle({
     };
   });
 
+  // Render shape based on config
+  const renderShape = () => {
+    switch (config.shape) {
+      case 'triangle':
+        return <TriangleShape size={config.size} color={config.color} />;
+      case 'star':
+        return <StarShape size={config.size} color={config.color} />;
+      case 'square':
+        return (
+          <View
+            style={{
+              width: config.size,
+              height: config.size,
+              backgroundColor: config.color,
+              borderRadius: config.size / 6, // Slightly rounded
+            }}
+          />
+        );
+      case 'circle':
+      default:
+        return (
+          <View
+            style={{
+              width: config.size,
+              height: config.size,
+              borderRadius: config.size / 2,
+              backgroundColor: config.color,
+            }}
+          />
+        );
+    }
+  };
+
   return (
     <Animated.View
       style={[
         styles.particle,
-        {
-          width: config.size,
-          height: config.size,
-          borderRadius: config.size / 2,
-          backgroundColor: config.color,
-        },
         animatedStyle,
       ]}
-    />
+    >
+      {renderShape()}
+    </Animated.View>
   );
 }
 
 /**
  * Gold particle burst effect container
  */
-export function GoldParticles({ isActive, intensity, onComplete }: GoldParticlesProps) {
+export function GoldParticles({
+  isActive,
+  intensity,
+  colorVariant = 'gold',
+  gameId,
+  fireworkBurst = false,
+  onComplete,
+}: GoldParticlesProps) {
   const particleCount = PARTICLE_COUNTS[intensity];
   const duration = CELEBRATION_DURATIONS[intensity];
 
+  // Auto-enable firework burst for jackpot wins
+  const shouldFirework = fireworkBurst || intensity === 'jackpot';
+
   // Generate particle configs (memoized on intensity change)
   const particles = useMemo(
-    () => (isActive ? generateParticles(particleCount, intensity) : []),
-    [isActive, particleCount, intensity]
+    () => (isActive ? generateParticles(particleCount, intensity, colorVariant, gameId, shouldFirework) : []),
+    [isActive, particleCount, intensity, colorVariant, gameId, shouldFirework]
   );
 
   // Handle completion callback

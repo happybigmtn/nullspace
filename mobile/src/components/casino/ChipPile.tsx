@@ -7,6 +7,12 @@
  * - Stack height grows with pile, bottom chips compress
  * - Live cumulative bet counter with animated updates
  * - Color-coded chip trails during flight animation
+ *
+ * DS-044: Enhanced chip toss physics
+ * - Parabolic arc trajectory (gravity simulation)
+ * - 3D tumble effect (rotateX + rotateY during flight)
+ * - Scatter landing near existing chips
+ * - SPRING.chipSettle for natural bounce on land
  */
 import React, { useEffect, useMemo, useCallback } from 'react';
 import { View, StyleSheet, Text } from 'react-native';
@@ -88,6 +94,12 @@ interface PlacedChip {
   rotation: number;
   /** Time of placement for animation sequencing */
   placedAt: number;
+  /**
+   * DS-044: Scatter offset for landing position
+   * Chips land slightly offset from center for natural pile look
+   */
+  scatterX?: number;
+  scatterY?: number;
 }
 
 interface StackedChipProps {
@@ -95,27 +107,48 @@ interface StackedChipProps {
   index: number;
   totalChips: number;
   isNew: boolean;
+  /** DS-054: Callback for liquid ripple trigger on landing */
+  onLand?: (chipValue: ChipValue) => void;
 }
 
 /**
+ * DS-044: Parabolic arc constants for chip toss physics
+ * Simulates gravity pulling chip down during flight
+ */
+const ARC_HEIGHT = 40; // Peak height of parabolic arc (px)
+const FLIGHT_DURATION = 280; // Total flight time (ms)
+const TUMBLE_ROTATIONS = 1.5; // Number of 360° rotations during flight
+
+/**
  * Single chip in the pile with flight and stacking animation
+ *
+ * DS-044: Enhanced with parabolic arc trajectory and 3D tumble
  */
 const StackedChip = React.memo(function StackedChip({
   chip,
   index,
   totalChips,
   isNew,
+  onLand,
 }: StackedChipProps) {
   const colors = CHIP_COLORS[chip.value];
 
+  // DS-044: Scatter offset for natural pile landing
+  const scatterX = chip.scatterX ?? 0;
+  const scatterY = chip.scatterY ?? 0;
+
   // Animation values
-  const translateY = useSharedValue(isNew ? -100 : 0);
-  const translateX = useSharedValue(isNew ? 30 : 0);
+  const translateY = useSharedValue(isNew ? -100 : scatterY);
+  const translateX = useSharedValue(isNew ? 30 : scatterX);
   const scale = useSharedValue(isNew ? 0.5 : 1);
-  const rotateX = useSharedValue(isNew ? 45 : 0); // 3D tilt during flight
-  const rotateZ = useSharedValue(chip.rotation);
+  // DS-044: Enhanced 3D tumble - both X and Y rotation during flight
+  const rotateX = useSharedValue(isNew ? 45 : 0); // Forward/back tilt
+  const rotateY = useSharedValue(isNew ? 0 : 0);  // Side-to-side tumble
+  const rotateZ = useSharedValue(chip.rotation);  // Flat spin
   const opacity = useSharedValue(isNew ? 0 : 1);
   const trailOpacity = useSharedValue(isNew ? 1 : 0);
+  // DS-044: Arc height for parabolic trajectory
+  const arcOffset = useSharedValue(isNew ? 0 : 0);
 
   // Calculate compression based on position in stack
   // Bottom chips compress more, top chips stay full size
@@ -141,29 +174,71 @@ const StackedChip = React.memo(function StackedChip({
 
   const triggerLandingHaptic = useCallback(() => {
     haptics.chipPlace();
-  }, []);
+    // DS-054: Trigger liquid ripple effect on chip landing
+    if (onLand) {
+      onLand(chip.value);
+    }
+  }, [onLand, chip.value]);
 
-  // Animate new chips flying in with 3D rotation
+  /**
+   * DS-044: Enhanced chip toss animation
+   * - Parabolic arc trajectory (rise then fall)
+   * - 3D tumble effect (rotateX + rotateY)
+   * - Scatter landing near existing chips
+   * - Spring physics settle on land
+   */
   useEffect(() => {
     if (!isNew) return;
 
-    // Flight animation with 3D tilt
-    translateY.value = withSequence(
-      withTiming(-60, { duration: 100, easing: Easing.out(Easing.ease) }),
-      withSpring(0, SPRING.chipToss)
+    // DS-044: Parabolic arc - chip rises to peak then falls
+    // Uses sin curve to simulate arc: 0 -> ARC_HEIGHT -> 0
+    arcOffset.value = withSequence(
+      withTiming(-ARC_HEIGHT, {
+        duration: FLIGHT_DURATION * 0.4, // Rise phase
+        easing: Easing.out(Easing.ease),
+      }),
+      withTiming(0, {
+        duration: FLIGHT_DURATION * 0.6, // Fall phase (gravity acceleration)
+        easing: Easing.in(Easing.quad),
+      })
     );
-    translateX.value = withSpring(0, SPRING.chipToss);
+
+    // Horizontal translation with scatter offset landing
+    translateX.value = withSequence(
+      withTiming(15, { duration: FLIGHT_DURATION * 0.5 }),
+      withSpring(scatterX, SPRING.chipSettle)
+    );
+
+    // Vertical translation (main trajectory)
+    translateY.value = withSequence(
+      withTiming(-60, { duration: FLIGHT_DURATION * 0.4, easing: Easing.out(Easing.ease) }),
+      withSpring(scatterY, SPRING.chipToss)
+    );
+
+    // Scale: grow during flight, bounce on land
     scale.value = withSequence(
-      withTiming(1.1, { duration: 150 }),
+      withTiming(1.1, { duration: FLIGHT_DURATION * 0.5 }),
       withSpring(1, SPRING.chipSettle)
     );
+
+    // DS-044: 3D tumble - forward/back rotation (rotateX)
     rotateX.value = withSequence(
-      withTiming(30, { duration: 100 }),
+      withTiming(TUMBLE_ROTATIONS * 180, { duration: FLIGHT_DURATION, easing: Easing.out(Easing.ease) }),
       withSpring(0, { ...SPRING.chipSettle, damping: 15 })
     );
+
+    // DS-044: 3D tumble - side-to-side rotation (rotateY)
+    // Random direction based on chip rotation sign
+    const tumbleDirection = chip.rotation >= 0 ? 1 : -1;
+    rotateY.value = withSequence(
+      withTiming(tumbleDirection * TUMBLE_ROTATIONS * 120, { duration: FLIGHT_DURATION, easing: Easing.out(Easing.ease) }),
+      withSpring(0, { ...SPRING.chipSettle, damping: 18 })
+    );
+
+    // Fade in quickly
     opacity.value = withTiming(1, { duration: 100 });
 
-    // Fade out trail
+    // Fade out trail during flight
     trailOpacity.value = withSequence(
       withDelay(50, withTiming(0.8, { duration: 100 })),
       withTiming(0, { duration: 200 })
@@ -172,18 +247,25 @@ const StackedChip = React.memo(function StackedChip({
     // Trigger haptic on landing
     const timeoutId = setTimeout(() => {
       runOnJS(triggerLandingHaptic)();
-    }, 200);
+    }, FLIGHT_DURATION);
 
     return () => clearTimeout(timeoutId);
-  }, [isNew, translateY, translateX, scale, rotateX, opacity, trailOpacity, triggerLandingHaptic]);
+  }, [isNew, translateY, translateX, scale, rotateX, rotateY, arcOffset, opacity, trailOpacity, triggerLandingHaptic, scatterX, scatterY, chip.rotation]);
 
+  /**
+   * DS-044: Animated style with parabolic arc and 3D tumble
+   * - arcOffset adds vertical displacement for parabolic trajectory
+   * - rotateX + rotateY create 3D tumble effect
+   */
   const animatedChipStyle = useAnimatedStyle(() => ({
     transform: [
       { translateX: translateX.value },
-      { translateY: translateY.value - stackOffset },
+      // DS-044: Arc offset adds parabolic "bump" to trajectory
+      { translateY: translateY.value - stackOffset + arcOffset.value },
       { scale: scale.value * compressionRatio },
       { perspective: 500 },
       { rotateX: `${rotateX.value}deg` },
+      { rotateY: `${rotateY.value}deg` }, // DS-044: Side tumble
       { rotateZ: `${rotateZ.value}deg` },
     ],
     opacity: opacity.value,
@@ -285,6 +367,12 @@ export interface ChipPileProps {
   showCounter?: boolean;
   /** Test ID for testing */
   testID?: string;
+  /**
+   * DS-054: Callback fired when a chip lands
+   * Used to trigger liquid ripple effects
+   * @param chipValue - The value of the chip that landed
+   */
+  onChipLand?: (chipValue: ChipValue) => void;
 }
 
 /**
@@ -295,6 +383,7 @@ export const ChipPile = React.memo(function ChipPile({
   totalBet,
   showCounter = true,
   testID,
+  onChipLand,
 }: ChipPileProps) {
   // Only show most recent chips to prevent visual clutter
   const visibleChips = useMemo(() => {
@@ -332,6 +421,7 @@ export const ChipPile = React.memo(function ChipPile({
             index={index}
             totalChips={visibleChips.length}
             isNew={newChipIds.has(chip.id)}
+            onLand={onChipLand}
           />
         ))}
       </View>
@@ -342,14 +432,30 @@ export const ChipPile = React.memo(function ChipPile({
 });
 
 /**
- * Helper to create a placed chip with random rotation
+ * DS-044: Scatter range for natural pile landing
+ * Chips land slightly offset from center, creating organic pile appearance
  */
-export function createPlacedChip(value: ChipValue): PlacedChip {
+const SCATTER_RANGE = 6; // Max pixels from center
+
+/**
+ * Helper to create a placed chip with random rotation and scatter offset
+ *
+ * DS-044: Now includes scatterX and scatterY for natural pile landing
+ */
+export function createPlacedChip(value: ChipValue, existingChipCount = 0): PlacedChip {
+  // DS-044: Calculate scatter based on pile size
+  // More chips = wider scatter to simulate natural stacking
+  const scatterMultiplier = Math.min(existingChipCount / 5, 1); // Cap at 1x
+  const baseScatter = SCATTER_RANGE * scatterMultiplier;
+
   return {
     id: `chip-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     value,
     rotation: Math.random() * 30 - 15, // -15 to 15 degrees
     placedAt: Date.now(),
+    // DS-044: Scatter offset - chips land near but not exactly on center
+    scatterX: (Math.random() * 2 - 1) * baseScatter,
+    scatterY: (Math.random() * 2 - 1) * (baseScatter * 0.5), // Less vertical scatter
   };
 }
 

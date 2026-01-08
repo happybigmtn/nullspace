@@ -1,7 +1,11 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { visualizer } from 'rollup-plugin-visualizer'
 import { copyFileSync } from 'fs'
 import { resolve } from 'path'
+
+// Enable bundle visualization with ANALYZE=true
+const shouldAnalyze = process.env.ANALYZE === 'true';
 
 const backendUrl = process.env.VITE_URL || 'http://localhost:8080';
 const authProxyUrl = process.env.VITE_AUTH_PROXY_URL || 'http://localhost:4000';
@@ -48,8 +52,16 @@ export default defineConfig({
           console.warn('Warning: Could not copy preview.png:', err.message);
         }
       }
-    }
-  ],
+    },
+    // US-145: Bundle analyzer - run with ANALYZE=true pnpm build
+    shouldAnalyze && visualizer({
+      filename: 'dist/bundle-stats.html',
+      open: true,
+      gzipSize: true,
+      brotliSize: true,
+      template: 'treemap'
+    })
+  ].filter(Boolean),
   // Note: VITE_IDENTITY and VITE_URL are automatically loaded from .env files
   // Don't use define here as it runs before .env is loaded
   server: {
@@ -86,6 +98,36 @@ export default defineConfig({
   build: {
     modulePreload: {
       polyfill: true
-    }
+    },
+    rollupOptions: {
+      output: {
+        // US-145: Manual chunks to split large dependencies
+        manualChunks: (id) => {
+          // Split recharts (used by EconomyDashboard) into separate chunk
+          if (id.includes('node_modules/recharts') ||
+              id.includes('node_modules/d3-') ||
+              id.includes('node_modules/victory-vendor')) {
+            return 'vendor-charts';
+          }
+          // Split react ecosystem into vendor chunk
+          if (id.includes('node_modules/react') ||
+              id.includes('node_modules/react-dom') ||
+              id.includes('node_modules/react-router') ||
+              id.includes('node_modules/scheduler')) {
+            return 'vendor-react';
+          }
+          // Split animation libraries
+          if (id.includes('node_modules/@react-spring')) {
+            return 'vendor-animation';
+          }
+          // Keep other node_modules in default vendor chunk
+          if (id.includes('node_modules/')) {
+            return 'vendor';
+          }
+        }
+      }
+    },
+    // Increase warning threshold since we're actively splitting
+    chunkSizeWarningLimit: 600
   }
 })
