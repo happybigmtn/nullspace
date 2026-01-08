@@ -2,11 +2,16 @@ name: Build Images
 
 on:
   push:
-    branches: ["main", "master"]
+    branches: ["main", "master", "ralph/testnet-production"]
     tags: ["v*"]
   pull_request:
     branches: ["main", "master"]
   workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch or tag to build'
+        required: false
+        default: ''
 
 jobs:
   build:
@@ -38,14 +43,7 @@ jobs:
             dockerfile: ./website/Dockerfile
             context: .
             image: nullspace-website
-            build_args: |
-              VITE_URL=${{ vars.VITE_URL || secrets.VITE_URL }}
-              VITE_AUTH_URL=${{ vars.VITE_AUTH_URL || secrets.VITE_AUTH_URL }}
-              VITE_AUTH_PROXY_URL=${{ vars.VITE_AUTH_PROXY_URL || secrets.VITE_AUTH_PROXY_URL }}
-              VITE_IDENTITY=${{ vars.VITE_IDENTITY || secrets.VITE_IDENTITY }}
-              VITE_STRIPE_TIERS=${{ vars.VITE_STRIPE_TIERS || secrets.VITE_STRIPE_TIERS }}
-              VITE_STRIPE_PRICE_ID=${{ vars.VITE_STRIPE_PRICE_ID || secrets.VITE_STRIPE_PRICE_ID }}
-              VITE_STRIPE_TIER=${{ vars.VITE_STRIPE_TIER || secrets.VITE_STRIPE_TIER }}
+            needs_build_args: true
           - id: ops
             dockerfile: ./services/ops/Dockerfile
             context: .
@@ -85,6 +83,13 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: ${{ matrix.build_args || '' }}
+          build-args: |
+            ${{ matrix.needs_build_args && format('VITE_URL={0}', vars.VITE_URL) || '' }}
+            ${{ matrix.needs_build_args && format('VITE_AUTH_URL={0}', vars.VITE_AUTH_URL) || '' }}
+            ${{ matrix.needs_build_args && format('VITE_AUTH_PROXY_URL={0}', vars.VITE_AUTH_PROXY_URL) || '' }}
+            ${{ matrix.needs_build_args && format('VITE_IDENTITY={0}', vars.VITE_IDENTITY) || '' }}
+            ${{ matrix.needs_build_args && format('VITE_STRIPE_TIERS={0}', vars.VITE_STRIPE_TIERS) || '' }}
+            ${{ matrix.needs_build_args && format('VITE_STRIPE_PRICE_ID={0}', vars.VITE_STRIPE_PRICE_ID) || '' }}
+            ${{ matrix.needs_build_args && format('VITE_STRIPE_TIER={0}', vars.VITE_STRIPE_TIER) || '' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
