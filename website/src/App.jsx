@@ -1,10 +1,13 @@
 import React, { Suspense, lazy, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
-import CasinoApp from './CasinoApp';
 import { isFeatureEnabled } from './services/featureFlags';
 import { ToastHost } from './components/ui/ToastHost';
+import { InstallBanner } from './components/ui/InstallBanner';
 import { captureReferralFromSearch, claimReferralIfReady } from './services/referrals';
 
+// Route-based code splitting (US-145)
+// CasinoApp is the largest route - lazy-load to reduce initial bundle
+const CasinoApp = lazy(() => import('./CasinoApp'));
 const AppLayout = lazy(() => import('./components/AppLayout'));
 const ChainConnectionLayout = lazy(() => import('./components/ChainConnectionLayout'));
 const EconomyDashboard = lazy(() => import('./components/EconomyDashboard'));
@@ -44,6 +47,7 @@ function App() {
   return (
     <BrowserRouter>
       <ToastHost />
+      <InstallBanner />
       <ReferralListener />
       <Suspense
         fallback={

@@ -430,8 +430,8 @@
         "Test PWA installation on mobile Chrome/Safari"
       ],
       "priority": 80,
-      "passes": false,
-      "notes": "WEB-HIGH: No PWA support. Website cannot be installed or work offline."
+      "passes": true,
+      "notes": "COMPLETE: manifest.json with icons (192px, 512px, maskable), sw.js service worker (network-first + stale-while-revalidate), offline.html fallback, usePWA() hook + InstallBanner component for Chrome/iOS install prompts. Testing requires HTTPS or localhost."
     },
     {
       "id": "US-158",

@@ -63,6 +63,11 @@ Target: Testnet Production
 - 12 race conditions identified (see US-005 through US-009, US-021-022)
 - Tests: Run with `npm test` (432+ unit tests after US-122)
 
+### Website (React)
+- PWA: `usePWA()` hook for install prompts, `InstallBanner` component handles Chrome + iOS Safari
+- Service worker: `website/public/sw.js` with network-first navigation, stale-while-revalidate for assets
+- Offline: `offline.html` fallback page, skip API/auth routes in SW
+
 ### Configuration
 - Production configs: `configs/production/*.env.example`
 - Staging configs: `configs/staging/*.env.example`
@@ -3797,3 +3802,35 @@ Updated `docs/testnet-readiness-runbook.md` Section 6:
   - InteractionManager.runAfterInteractions defers state update until animations complete, preventing CLS
   - Pre-existing test failures in mobile due to Skia module mocking issues (unrelated to skeleton changes)
 
+
+## 2026-01-07 - US-157: Implement PWA support for website
+
+- What was implemented:
+  - Created `website/public/manifest.json` with app icons, theme colors, and app metadata
+  - Created `website/public/sw.js` service worker with offline-first caching strategy
+  - Created `website/public/offline.html` fallback page for offline state
+  - Created `website/src/hooks/usePWA.ts` hook for install prompt management
+  - Created `website/src/components/ui/InstallBanner.tsx` for install prompts (Chrome + iOS Safari)
+  - Generated PWA icons (192px, 512px, maskable variants) from favicon.ico
+  - Updated `website/index.html` with manifest link, Apple meta tags, and service worker registration
+  - Added `InstallBanner` component to `App.jsx`
+- Files changed:
+  - `website/public/manifest.json` - NEW: PWA manifest
+  - `website/public/sw.js` - NEW: Service worker
+  - `website/public/offline.html` - NEW: Offline fallback page
+  - `website/public/icons/icon-*.png` - NEW: PWA icons (4 files)
+  - `website/src/hooks/usePWA.ts` - NEW: Install prompt hook
+  - `website/src/components/ui/InstallBanner.tsx` - NEW: Install banner component
+  - `website/index.html` - Added manifest link, Apple PWA meta tags, SW registration
+  - `website/src/App.jsx` - Added InstallBanner import and component
+  - `website/src/hooks/useRipple.ts` → `useRipple.tsx` - Fixed pre-existing JSX in .ts file
+- **Learnings:**
+  - PWA installability requires: manifest.json with icons ≥192px, service worker with fetch handler, HTTPS
+  - Chrome uses `beforeinstallprompt` event; Safari iOS needs manual instructions (Share → Add to Home Screen)
+  - Service worker caching strategies: network-first for navigation, stale-while-revalidate for assets
+  - Apple PWA meta tags: `apple-mobile-web-app-capable`, `apple-mobile-web-app-status-bar-style`, `apple-touch-icon`
+  - Use `display: standalone` for fullscreen app feel; `theme_color` affects browser chrome
+  - Service worker `self.skipWaiting()` + `clients.claim()` enables immediate activation
+  - Maskable icons need safe zone (inner 80% circle) for adaptive icon masks on Android
+
+---
