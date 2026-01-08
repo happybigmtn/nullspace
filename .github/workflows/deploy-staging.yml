@@ -344,7 +344,7 @@ jobs:
             docker rm nullspace-website 2>/dev/null || true
             docker run -d --name nullspace-website \
               --restart unless-stopped \
-              -p 80:80 -p 443:443 \
+              -p 127.0.0.1:8080:80 \
               $GHCR_REGISTRY/$IMAGE_PREFIX-website:$IMAGE_TAG
             docker ps | grep nullspace-website
           DEPLOY
