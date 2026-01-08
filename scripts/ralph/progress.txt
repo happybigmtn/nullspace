@@ -3947,3 +3947,53 @@ Updated `docs/testnet-readiness-runbook.md` Section 6:
   - Coverage tool instruments bytecode - some uncovered lines are unreachable branches
 
 ---
+## 2026-01-07 - US-161: Add distributed tracing with OpenTelemetry
+
+- What was implemented:
+  - Enhanced `gateway/src/telemetry.ts` with comprehensive tracing helpers:
+    - `withSpan()` and `withSpanSync()` for wrapping operations in trace spans
+    - `addSpanAttributes()` for adding metadata to spans
+    - `getTraceContext()` and `generateTraceId()` for trace ID propagation
+    - W3C Trace Context propagation via `W3CTraceContextPropagator`
+    - Resource attributes (service.name, service.version, deployment.environment)
+  - Enhanced `services/auth/src/telemetry.ts` with same pattern
+  - Added Tempo 2.4.1 to Docker observability stack:
+    - OTLP receivers: gRPC (4317), HTTP (4318)
+    - Local storage with 14-day retention
+    - Metrics generator for service-graphs and span-metrics
+  - Modified `gateway/src/index.ts` to wrap handleMessage in trace spans:
+    - Generates/extracts traceId for each message
+    - Includes traceId in WebSocket responses for client correlation
+    - Adds span attributes: message.type, game.type, session.public_key, handler.success
+  - Updated Grafana datasource configuration:
+    - Tempo datasource with trace-to-logs correlation (Loki)
+    - Prometheus exemplar support linking to traces
+    - Loki derived field extracting traceId from JSON logs
+  - Created `nullspace-traces.json` Grafana dashboard:
+    - Service overview: request rate, P99 latency by service
+    - Gateway operations: message type breakdown, error rates
+    - Game operations: requests and latency by game type
+    - Trace search panel with filtering
+    - Service topology node graph
+- Files changed:
+  - `gateway/src/telemetry.ts` - Enhanced with span helpers and propagation
+  - `gateway/src/index.ts` - Added trace spans to handleMessage
+  - `services/auth/src/telemetry.ts` - Enhanced with span helpers
+  - `docker/observability/tempo.yml` (NEW) - Tempo configuration
+  - `docker/observability/docker-compose.yml` - Added Tempo service
+  - `docker/observability/grafana/provisioning/datasources/datasource.yml` - Added Tempo datasource
+  - `docker/observability/grafana/dashboards/nullspace-traces.json` (NEW) - Traces dashboard
+  - `configs/production/gateway.env.example` - Added OTEL env vars
+  - `services/auth/.env.production.example` - Added OTEL env vars
+- **Learnings:**
+  - OpenTelemetry SDK must be imported FIRST in the module to instrument before other imports
+  - W3C Trace Context format: `00-{traceId}-{spanId}-{flags}` (32-char traceId, 16-char spanId)
+  - Tempo is lighter than Jaeger for single-node deployments - no indexing required
+  - Trace-to-logs correlation requires matching traceId in both systems
+  - Grafana feature toggles `traceToLogs,traceToMetrics` enable correlation UI
+  - Prometheus remote write receiver (`--web.enable-remote-write-receiver`) needed for Tempo metrics
+  - `@opentelemetry/auto-instrumentations-node` handles HTTP/Express/fetch automatically
+  - Disable noisy instrumentations (fs, dns) to reduce trace volume
+  - WebSocket messages need custom trace IDs since WS doesn't have standard headers
+
+---

@@ -486,8 +486,8 @@
         "Create Grafana dashboard for trace visualization"
       ],
       "priority": 84,
-      "passes": false,
-      "notes": "INFRA-HIGH: No distributed tracing. Hard to debug cross-service latency issues."
+      "passes": true,
+      "notes": "COMPLETE: Enhanced telemetry.ts in both gateway and auth service with withSpan helpers, W3C Trace Context propagation, and resource attributes. Deployed Tempo 2.4.1 in Docker observability stack with OTLP receivers (HTTP 4318, gRPC 4317). Gateway handleMessage wraps game operations in spans with traceId included in responses. Grafana datasource configured for Tempo with trace-to-logs/metrics correlation. Created nullspace-traces.json dashboard with service overview, game operations, and trace search."
     },
     {
       "id": "US-162",

@@ -26,6 +26,15 @@ import {
   handleCorsPreflight,
 } from './middleware/security.js';
 import { generateSecureId } from './utils/crypto.js';
+import {
+  tracer,
+  withSpan,
+  addSpanAttributes,
+  getTraceContext,
+  generateTraceId,
+  createSpanFromTraceparent,
+  type Span,
+} from './telemetry.js';
 
 const NODE_ENV = process.env.NODE_ENV ?? 'development';
 const IS_PROD = NODE_ENV === 'production';
@@ -143,23 +152,26 @@ let isDraining = false;
 let drainStartTime: number | null = null;
 
 /**
- * Send JSON message to client
+ * Send JSON message to client with optional trace context
  */
-function send(ws: WebSocket, msg: Record<string, unknown>): void {
+function send(ws: WebSocket, msg: Record<string, unknown>, traceId?: string): void {
   if (ws.readyState === ws.OPEN) {
-    ws.send(JSON.stringify(msg));
+    // Include traceId in response for client-side correlation
+    const payload = traceId ? { ...msg, traceId } : msg;
+    ws.send(JSON.stringify(payload));
   }
 }
 
 /**
- * Send error to client
+ * Send error to client with optional trace context
  */
-function sendError(ws: WebSocket, code: string, message: string): void {
-  send(ws, { type: 'error', code, message });
+function sendError(ws: WebSocket, code: string, message: string, traceId?: string): void {
+  send(ws, { type: 'error', code, message }, traceId);
 }
 
 /**
  * Handle incoming message from mobile client
+ * Wraps processing in an OpenTelemetry span for distributed tracing
  */
 async function handleMessage(ws: WebSocket, rawData: Buffer): Promise<void> {
   // Size check before parsing to prevent DoS
@@ -179,22 +191,73 @@ async function handleMessage(ws: WebSocket, rawData: Buffer): Promise<void> {
   }
 
   const msgType = msg.type as string | undefined;
-  logDebug(`[Gateway] Received message: ${msgType}`, JSON.stringify(msg).slice(0, 200));
+  // Extract client-provided traceId or generate new one for tracing
+  const clientTraceParent = typeof msg.traceparent === 'string' ? msg.traceparent : undefined;
+  const { traceId } = clientTraceParent
+    ? { traceId: clientTraceParent.split('-')[1] || generateTraceId().traceId }
+    : generateTraceId();
+
+  logDebug(`[Gateway] Received message: ${msgType} (traceId: ${traceId})`, JSON.stringify(msg).slice(0, 200));
 
   if (!msgType) {
-    sendError(ws, ErrorCodes.INVALID_MESSAGE, 'Missing message type');
+    sendError(ws, ErrorCodes.INVALID_MESSAGE, 'Missing message type', traceId);
     return;
   }
 
-  // Handle system messages
+  // Handle system messages (no tracing overhead for high-frequency messages)
   if (msgType === 'ping') {
     send(ws, { type: 'pong', timestamp: Date.now() });
     return;
   }
 
-  if (msgType === 'get_balance') {
-    const session = sessionManager.getSession(ws);
-    if (session) {
+  // Wrap game operations in a trace span
+  await withSpan(`gateway.${msgType}`, async (span) => {
+    addSpanAttributes(span, {
+      'message.type': msgType,
+      'message.size_bytes': rawData.length,
+      'trace.id': traceId,
+    });
+
+    if (msgType === 'get_balance') {
+      const session = sessionManager.getSession(ws);
+      if (session) {
+        addSpanAttributes(span, { 'session.public_key': session.publicKeyHex });
+        await sessionManager.refreshBalance(session);
+        const { balance, balanceSeq } = sessionManager.getBalanceWithSeq(session);
+        send(ws, {
+          type: 'balance',
+          registered: session.registered,
+          hasBalance: session.hasBalance,
+          publicKey: session.publicKeyHex,
+          balance,
+          balanceSeq,
+        }, traceId);
+      } else {
+        sendError(ws, ErrorCodes.SESSION_EXPIRED, 'No active session', traceId);
+      }
+      return;
+    }
+
+    if (msgType === 'faucet_claim') {
+      const session = sessionManager.getSession(ws);
+      if (!session) {
+        sendError(ws, ErrorCodes.SESSION_EXPIRED, 'No active session', traceId);
+        return;
+      }
+
+      addSpanAttributes(span, { 'session.public_key': session.publicKeyHex });
+
+      const amountRaw = typeof msg.amount === 'number' ? msg.amount : null;
+      const amount = amountRaw && amountRaw > 0 ? BigInt(Math.floor(amountRaw)) : DEFAULT_FAUCET_AMOUNT;
+      addSpanAttributes(span, { 'faucet.amount': Number(amount) });
+
+      const result = await sessionManager.requestFaucet(session, amount, FAUCET_COOLDOWN_MS);
+      if (!result.success) {
+        addSpanAttributes(span, { 'faucet.error': result.error ?? 'unknown' });
+        sendError(ws, ErrorCodes.INVALID_MESSAGE, result.error ?? 'Faucet claim failed', traceId);
+        return;
+      }
+
       await sessionManager.refreshBalance(session);
       const { balance, balanceSeq } = sessionManager.getBalanceWithSeq(session);
       send(ws, {
@@ -204,101 +267,83 @@ async function handleMessage(ws: WebSocket, rawData: Buffer): Promise<void> {
         publicKey: session.publicKeyHex,
         balance,
         balanceSeq,
-      });
-    } else {
-      sendError(ws, ErrorCodes.SESSION_EXPIRED, 'No active session');
+        message: 'FAUCET_CLAIMED',
+      }, traceId);
+      trackGatewayFaucet(session, amount);
+      return;
     }
-    return;
-  }
 
-  if (msgType === 'faucet_claim') {
+    const validation = OutboundMessageSchema.safeParse(msg);
+    if (!validation.success) {
+      sendError(ws, ErrorCodes.INVALID_MESSAGE, 'Invalid message payload', traceId);
+      return;
+    }
+
+    const validatedMsg = validation.data as OutboundMessage;
+    const validatedType = validatedMsg.type;
+
+    // Get session
     const session = sessionManager.getSession(ws);
     if (!session) {
-      sendError(ws, ErrorCodes.SESSION_EXPIRED, 'No active session');
+      sendError(ws, ErrorCodes.SESSION_EXPIRED, 'Session not found', traceId);
       return;
     }
 
-    const amountRaw = typeof msg.amount === 'number' ? msg.amount : null;
-    const amount = amountRaw && amountRaw > 0 ? BigInt(Math.floor(amountRaw)) : DEFAULT_FAUCET_AMOUNT;
+    addSpanAttributes(span, { 'session.public_key': session.publicKeyHex });
 
-    const result = await sessionManager.requestFaucet(session, amount, FAUCET_COOLDOWN_MS);
-    if (!result.success) {
-      sendError(ws, ErrorCodes.INVALID_MESSAGE, result.error ?? 'Faucet claim failed');
+    // Map message type to game type
+    const gameType = getOutboundMessageGameType(validatedType);
+    if (gameType === null || gameType === undefined) {
+      sendError(ws, ErrorCodes.INVALID_MESSAGE, `Unknown message type: ${validatedType}`, traceId);
       return;
     }
 
-    await sessionManager.refreshBalance(session);
-    const { balance, balanceSeq } = sessionManager.getBalanceWithSeq(session);
-    send(ws, {
-      type: 'balance',
-      registered: session.registered,
-      hasBalance: session.hasBalance,
-      publicKey: session.publicKeyHex,
-      balance,
-      balanceSeq,
-      message: 'FAUCET_CLAIMED',
+    addSpanAttributes(span, { 'game.type': gameType });
+
+    // Get handler for game type
+    const handler = handlers.get(gameType);
+    if (!handler) {
+      sendError(ws, ErrorCodes.INVALID_GAME_TYPE, `No handler for game type: ${gameType}`, traceId);
+      return;
+    }
+
+    // Build handler context
+    const ctx: HandlerContext = {
+      session,
+      submitClient,
+      nonceManager,
+      backendUrl: BACKEND_URL,
+      origin: GATEWAY_ORIGIN,
+    };
+
+    // Execute handler
+    logDebug(`[Gateway] Executing handler for ${validatedType} (traceId: ${traceId})...`);
+    const result = await handler.handleMessage(ctx, validatedMsg);
+    logDebug(
+      `[Gateway] Handler result (traceId: ${traceId}):`,
+      result.success ? 'success' : 'failed',
+      result.error?.message ?? '',
+    );
+
+    addSpanAttributes(span, {
+      'handler.success': result.success,
+      'handler.has_response': !!result.response,
     });
-    trackGatewayFaucet(session, amount);
-    return;
-  }
 
-  const validation = OutboundMessageSchema.safeParse(msg);
-  if (!validation.success) {
-    sendError(ws, ErrorCodes.INVALID_MESSAGE, 'Invalid message payload');
-    return;
-  }
-
-  const validatedMsg = validation.data as OutboundMessage;
-  const validatedType = validatedMsg.type;
-
-  // Get session
-  const session = sessionManager.getSession(ws);
-  if (!session) {
-    sendError(ws, ErrorCodes.SESSION_EXPIRED, 'Session not found');
-    return;
-  }
-
-  // Map message type to game type
-  const gameType = getOutboundMessageGameType(validatedType);
-  if (gameType === null || gameType === undefined) {
-    sendError(ws, ErrorCodes.INVALID_MESSAGE, `Unknown message type: ${validatedType}`);
-    return;
-  }
-
-  // Get handler for game type
-  const handler = handlers.get(gameType);
-  if (!handler) {
-    sendError(ws, ErrorCodes.INVALID_GAME_TYPE, `No handler for game type: ${gameType}`);
-    return;
-  }
-
-  // Build handler context
-  const ctx: HandlerContext = {
-    session,
-    submitClient,
-    nonceManager,
-    backendUrl: BACKEND_URL,
-    origin: GATEWAY_ORIGIN,
-  };
-
-  // Execute handler
-  logDebug(`[Gateway] Executing handler for ${validatedType}...`);
-  const result = await handler.handleMessage(ctx, validatedMsg);
-  logDebug(
-    `[Gateway] Handler result:`,
-    result.success ? 'success' : 'failed',
-    result.error?.message ?? '',
-  );
-
-  if (result.success) {
-    if (result.response) {
-      logDebug(`[Gateway] Sending response:`, JSON.stringify(result.response).slice(0, 200));
-      send(ws, result.response);
-      trackGatewayResponse(session, result.response as Record<string, unknown>);
+    if (result.success) {
+      if (result.response) {
+        logDebug(`[Gateway] Sending response:`, JSON.stringify(result.response).slice(0, 200));
+        send(ws, result.response, traceId);
+        trackGatewayResponse(session, result.response as Record<string, unknown>);
+      }
+    } else if (result.error) {
+      addSpanAttributes(span, {
+        'error.code': result.error.code,
+        'error.message': result.error.message,
+      });
+      sendError(ws, result.error.code, result.error.message, traceId);
     }
-  } else if (result.error) {
-    sendError(ws, result.error.code, result.error.message);
-  }
+  });
 }
 
 // Create HTTP server with healthz and metrics endpoints, then attach WebSocket server
