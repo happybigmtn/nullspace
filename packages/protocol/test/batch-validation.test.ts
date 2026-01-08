@@ -3,6 +3,9 @@
  *
  * Tests for bet encoding and validation across all games
  * that support atomic batch betting (Baccarat, Roulette, Craps, Sic Bo).
+ *
+ * Note: All payloads include a version header as the first byte.
+ * Format: [version:u8] [opcode:u8] [count:u8] [bets...]
  */
 import { describe, it, expect } from 'vitest';
 import {
@@ -17,6 +20,7 @@ import {
 } from '../src/encode.js';
 import { encodeAtomicBatchPayload } from '../src/games/atomic.js';
 import { BaccaratMove, RouletteMove, CrapsMove, SicBoMove } from '@nullspace/constants';
+import { CURRENT_PROTOCOL_VERSION } from '../src/version.js';
 
 describe('Baccarat Atomic Batch Validation', () => {
   describe('Valid Bets', () => {
@@ -27,9 +31,10 @@ describe('Baccarat Atomic Batch Validation', () => {
 
       const result = encodeBaccaratAtomicBatch(bets);
 
-      expect(result[0]).toBe(BaccaratMove.AtomicBatch);
-      expect(result[1]).toBe(1); // bet count
-      expect(result.length).toBe(2 + 1 * 9); // header + 1 bet (type + 8 bytes amount)
+      expect(result[0]).toBe(CURRENT_PROTOCOL_VERSION); // version header
+      expect(result[1]).toBe(BaccaratMove.AtomicBatch);
+      expect(result[2]).toBe(1); // bet count
+      expect(result.length).toBe(3 + 1 * 9); // version + header + 1 bet (type + 8 bytes amount)
     });
 
     it('should encode multiple bets', () => {
@@ -41,9 +46,10 @@ describe('Baccarat Atomic Batch Validation', () => {
 
       const result = encodeBaccaratAtomicBatch(bets);
 
-      expect(result[0]).toBe(BaccaratMove.AtomicBatch);
-      expect(result[1]).toBe(3); // bet count
-      expect(result.length).toBe(2 + 3 * 9); // header + 3 bets
+      expect(result[0]).toBe(CURRENT_PROTOCOL_VERSION); // version header
+      expect(result[1]).toBe(BaccaratMove.AtomicBatch);
+      expect(result[2]).toBe(3); // bet count
+      expect(result.length).toBe(3 + 3 * 9); // version + header + 3 bets
     });
 
     it('should accept all valid baccarat bet types', () => {
@@ -131,9 +137,10 @@ describe('Roulette Atomic Batch Validation', () => {
 
       const result = encodeRouletteAtomicBatch(bets);
 
-      expect(result[0]).toBe(RouletteMove.AtomicBatch);
-      expect(result[1]).toBe(1);
-      expect(result.length).toBe(2 + 1 * 10); // header + 1 bet (type + value + 8 bytes)
+      expect(result[0]).toBe(CURRENT_PROTOCOL_VERSION); // version header
+      expect(result[1]).toBe(RouletteMove.AtomicBatch);
+      expect(result[2]).toBe(1);
+      expect(result.length).toBe(3 + 1 * 10); // version + header + 1 bet (type + value + 8 bytes)
     });
 
     it('should encode outside bets', () => {
@@ -147,7 +154,7 @@ describe('Roulette Atomic Batch Validation', () => {
       ];
 
       const result = encodeRouletteAtomicBatch(outsideBets);
-      expect(result[1]).toBe(6); // 6 bets
+      expect(result[2]).toBe(6); // 6 bets (at offset 2 after version + opcode)
     });
 
     it('should encode dozen and column bets', () => {
@@ -158,7 +165,7 @@ describe('Roulette Atomic Batch Validation', () => {
       ];
 
       const result = encodeRouletteAtomicBatch(bets);
-      expect(result[1]).toBe(3);
+      expect(result[2]).toBe(3); // count at offset 2
     });
 
     it('should accept target, number, or value for bet value', () => {
@@ -204,9 +211,10 @@ describe('Craps Atomic Batch Validation', () => {
 
       const result = encodeCrapsAtomicBatch(bets);
 
-      expect(result[0]).toBe(CrapsMove.AtomicBatch);
-      expect(result[1]).toBe(1);
-      expect(result.length).toBe(2 + 1 * 10); // header + bet (type + target + 8 bytes)
+      expect(result[0]).toBe(CURRENT_PROTOCOL_VERSION); // version header
+      expect(result[1]).toBe(CrapsMove.AtomicBatch);
+      expect(result[2]).toBe(1);
+      expect(result.length).toBe(3 + 1 * 10); // version + header + bet (type + target + 8 bytes)
     });
 
     it('should encode place bets with targets', () => {
@@ -217,7 +225,7 @@ describe('Craps Atomic Batch Validation', () => {
       ];
 
       const result = encodeCrapsAtomicBatch(bets);
-      expect(result[1]).toBe(3);
+      expect(result[2]).toBe(3); // count at offset 2
     });
 
     it('should accept all craps bet types', () => {
@@ -289,8 +297,9 @@ describe('Sic Bo Atomic Batch Validation', () => {
 
       const result = encodeSicBoAtomicBatch(bets);
 
-      expect(result[0]).toBe(SicBoMove.AtomicBatch);
-      expect(result[1]).toBe(2);
+      expect(result[0]).toBe(CURRENT_PROTOCOL_VERSION); // version header
+      expect(result[1]).toBe(SicBoMove.AtomicBatch);
+      expect(result[2]).toBe(2); // count at offset 2
     });
 
     it('should encode sum bet with number', () => {
@@ -299,7 +308,7 @@ describe('Sic Bo Atomic Batch Validation', () => {
       ];
 
       const result = encodeSicBoAtomicBatch(bets);
-      expect(result.length).toBe(2 + 1 * 10);
+      expect(result.length).toBe(3 + 1 * 10); // version + opcode + count + bet
     });
 
     it('should accept all sic bo bet types', () => {
@@ -361,28 +370,32 @@ describe('encodeAtomicBatchPayload Dispatcher', () => {
     const bets = [{ type: 'PLAYER' as const, amount: 100n }];
     const result = encodeAtomicBatchPayload('baccarat', bets);
 
-    expect(result[0]).toBe(BaccaratMove.AtomicBatch);
+    expect(result[0]).toBe(CURRENT_PROTOCOL_VERSION); // version header
+    expect(result[1]).toBe(BaccaratMove.AtomicBatch);
   });
 
   it('should dispatch to roulette encoder', () => {
     const bets = [{ type: 'RED' as const, amount: 100n }];
     const result = encodeAtomicBatchPayload('roulette', bets);
 
-    expect(result[0]).toBe(RouletteMove.AtomicBatch);
+    expect(result[0]).toBe(CURRENT_PROTOCOL_VERSION); // version header
+    expect(result[1]).toBe(RouletteMove.AtomicBatch);
   });
 
   it('should dispatch to craps encoder', () => {
     const bets = [{ type: 'PASS' as const, amount: 100n }];
     const result = encodeAtomicBatchPayload('craps', bets);
 
-    expect(result[0]).toBe(CrapsMove.AtomicBatch);
+    expect(result[0]).toBe(CURRENT_PROTOCOL_VERSION); // version header
+    expect(result[1]).toBe(CrapsMove.AtomicBatch);
   });
 
   it('should dispatch to sic bo encoder', () => {
     const bets = [{ type: 'SMALL' as const, amount: 100n }];
     const result = encodeAtomicBatchPayload('sicbo', bets);
 
-    expect(result[0]).toBe(SicBoMove.AtomicBatch);
+    expect(result[0]).toBe(CURRENT_PROTOCOL_VERSION); // version header
+    expect(result[1]).toBe(SicBoMove.AtomicBatch);
   });
 });
 
@@ -403,8 +416,8 @@ describe('Batch Size Limits', () => {
     ];
 
     const result = encodeBaccaratAtomicBatch(bets);
-    expect(result[1]).toBe(10);
-    expect(result.length).toBe(2 + 10 * 9);
+    expect(result[2]).toBe(10); // count at offset 2 (after version + opcode)
+    expect(result.length).toBe(3 + 10 * 9); // version + opcode + count + bets
   });
 
   it('should handle maximum realistic bet count for roulette', () => {
@@ -415,7 +428,7 @@ describe('Batch Size Limits', () => {
     }
 
     const result = encodeRouletteAtomicBatch(bets);
-    expect(result[1]).toBe(37);
+    expect(result[2]).toBe(37); // count at offset 2
   });
 });
 
@@ -427,10 +440,10 @@ describe('Binary Encoding Correctness', () => {
 
     const result = encodeBaccaratAtomicBatch(bets);
 
-    // Amount starts at offset 3 (opcode + count + bet type)
+    // Amount starts at offset 4 (version + opcode + count + bet type)
     // Big-endian means most significant byte first
     const view = new DataView(result.buffer, result.byteOffset, result.length);
-    const encodedAmount = view.getBigUint64(3, false);
+    const encodedAmount = view.getBigUint64(4, false);
 
     expect(encodedAmount).toBe(0x0102030405060708n);
   });
@@ -441,15 +454,15 @@ describe('Binary Encoding Correctness', () => {
       { type: 'PLAYER', amount: 100n },
     ];
     const playerResult = encodeBaccaratAtomicBatch(playerBets);
-    // Type is at offset 2 (opcode + count)
-    expect(playerResult[2]).toBe(0);
+    // Type is at offset 3 (version + opcode + count)
+    expect(playerResult[3]).toBe(0);
 
     // Baccarat BANKER should be type 1
     const bankerBets: BaccaratAtomicBetInput[] = [
       { type: 'BANKER', amount: 100n },
     ];
     const bankerResult = encodeBaccaratAtomicBatch(bankerBets);
-    expect(bankerResult[2]).toBe(1);
+    expect(bankerResult[3]).toBe(1);
   });
 });
 
@@ -462,7 +475,7 @@ describe('Duplicate Bet Handling', () => {
 
     // This should encode without error - validation is done on-chain
     const result = encodeBaccaratAtomicBatch(bets);
-    expect(result[1]).toBe(2);
+    expect(result[2]).toBe(2); // count at offset 2
   });
 
   it('should allow same roulette number to be bet multiple times', () => {
@@ -472,6 +485,6 @@ describe('Duplicate Bet Handling', () => {
     ];
 
     const result = encodeRouletteAtomicBatch(bets);
-    expect(result[1]).toBe(2);
+    expect(result[2]).toBe(2); // count at offset 2
   });
 });

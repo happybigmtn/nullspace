@@ -70,7 +70,8 @@ describe('protocol encode golden vectors', () => {
       { type: 'PLAYER', amount: 5n },
       { type: 'BANKER', amount: 10n },
     ]);
-    expect(toHex(payload)).toBe('030200000000000000000501000000000000000a');
+    // Format: [version=01] [opcode=03] [count=02] [bet1: type=00, amount BE] [bet2: type=01, amount BE]
+    expect(toHex(payload)).toBe('01030200000000000000000501000000000000000a');
   });
 
   it('encodes roulette atomic batch payloads', () => {
@@ -78,7 +79,8 @@ describe('protocol encode golden vectors', () => {
       { type: 'STRAIGHT', amount: 100n, number: 7 },
       { type: 'RED', amount: 50n },
     ]);
-    expect(toHex(payload)).toBe('04020007000000000000006401000000000000000032');
+    // Format: [version=01] [opcode=04] [count=02] [bet1: type=00, number=07, amount BE] [bet2: type=01, number=00, amount BE]
+    expect(toHex(payload)).toBe('0104020007000000000000006401000000000000000032');
   });
 
   it('encodes craps atomic batch payloads', () => {
@@ -86,7 +88,9 @@ describe('protocol encode golden vectors', () => {
       { type: 'PASS', amount: 10n },
       { type: 'HARDWAY', amount: 25n, target: 4 },
     ]);
-    expect(toHex(payload)).toBe('04020000000000000000000a08000000000000000019');
+    // Format: [version=01] [opcode=04] [count=02] [bet1: type=00, target=00, amount BE] [bet2: type=08, target=00, amount BE]
+    // Note: HARDWAY with target 4 maps to betType 8 with target 0 (hardway targets are encoded in the betType)
+    expect(toHex(payload)).toBe('0104020000000000000000000a08000000000000000019');
   });
 
   it('encodes sic bo atomic batch payloads', () => {
@@ -94,7 +98,8 @@ describe('protocol encode golden vectors', () => {
       { type: 'BIG', amount: 100n },
       { type: 'SUM', amount: 50n, target: 10 },
     ]);
-    expect(toHex(payload)).toBe('030201000000000000000064070a0000000000000032');
+    // Format: [version=01] [opcode=03] [count=02] [bet1: type=01, target=00, amount BE] [bet2: type=07, target=0a, amount BE]
+    expect(toHex(payload)).toBe('01030201000000000000000064070a0000000000000032');
   });
 
   it('rejects invalid atomic bet types', () => {

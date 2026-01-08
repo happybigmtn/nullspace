@@ -137,19 +137,21 @@ describe('Instruction Encoders', () => {
 describe('Protocol Payload Builders', () => {
   describe('encodeGameMovePayload (blackjack)', () => {
     it('encodes all moves', () => {
-      expect(encodeGameMovePayload({ game: 'blackjack', move: 'hit' })).toEqual(new Uint8Array([0]));
-      expect(encodeGameMovePayload({ game: 'blackjack', move: 'stand' })).toEqual(new Uint8Array([1]));
-      expect(encodeGameMovePayload({ game: 'blackjack', move: 'double' })).toEqual(new Uint8Array([2]));
-      expect(encodeGameMovePayload({ game: 'blackjack', move: 'split' })).toEqual(new Uint8Array([3]));
+      // All payloads now include version header (01) as first byte (US-149)
+      expect(encodeGameMovePayload({ game: 'blackjack', move: 'hit' })).toEqual(new Uint8Array([1, 0]));
+      expect(encodeGameMovePayload({ game: 'blackjack', move: 'stand' })).toEqual(new Uint8Array([1, 1]));
+      expect(encodeGameMovePayload({ game: 'blackjack', move: 'double' })).toEqual(new Uint8Array([1, 2]));
+      expect(encodeGameMovePayload({ game: 'blackjack', move: 'split' })).toEqual(new Uint8Array([1, 3]));
     });
   });
 
   describe('encodeGameActionPayload (hilo)', () => {
     it('encodes all guesses', () => {
-      expect(encodeGameActionPayload({ game: 'hilo', action: 'higher' })).toEqual(new Uint8Array([0]));
-      expect(encodeGameActionPayload({ game: 'hilo', action: 'lower' })).toEqual(new Uint8Array([1]));
+      // All payloads now include version header (01) as first byte (US-149)
+      expect(encodeGameActionPayload({ game: 'hilo', action: 'higher' })).toEqual(new Uint8Array([1, 0]));
+      expect(encodeGameActionPayload({ game: 'hilo', action: 'lower' })).toEqual(new Uint8Array([1, 1]));
       // Same = 3 in Rust (2 is unused/reserved)
-      expect(encodeGameActionPayload({ game: 'hilo', action: 'same' })).toEqual(new Uint8Array([3]));
+      expect(encodeGameActionPayload({ game: 'hilo', action: 'same' })).toEqual(new Uint8Array([1, 3]));
     });
   });
 });
