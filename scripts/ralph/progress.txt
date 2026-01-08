@@ -3440,3 +3440,26 @@ Target: Testnet Production
   - Craps HARDWAY encoding maps target to betType via CRAPS_HARDWAY_MAP, target becomes 0
   - Big-endian encoding for amounts (u64) ensures consistent byte order across platforms
   - UnsupportedProtocolVersionError enables graceful client upgrade prompts
+
+---
+
+## 2026-01-07 - US-150: Fix session cleanup race condition in gateway
+
+- What was implemented:
+  - Added `markedForCleanup` flag to Session interface in `gateway/src/types/session.ts`
+  - Implemented mark-and-sweep pattern in `cleanupIdleSessions()`:
+    1. Mark phase: Iterate sessions, flag idle ones as `markedForCleanup`
+    2. Sweep phase: Iterate collected array (not Map), destroy and close
+  - Updated `getSession()`, `getSessionByPublicKey()`, `getSessionByPublicKeyHex()` to return undefined for marked sessions
+  - Added 7 new tests validating race condition prevention
+- Files changed:
+  - `gateway/src/types/session.ts` - Added markedForCleanup flag
+  - `gateway/src/session/manager.ts` - Mark-and-sweep in cleanupIdleSessions, guards in getSession methods
+  - `gateway/tests/unit/session-manager.test.ts` - 7 new tests for race prevention
+- **Learnings:**
+  - Mark-and-sweep is safer than locks in Node.js single-threaded event loop
+  - Marking sessions before iteration prevents Map iterator invalidation
+  - getSession() guards ensure message handlers see sessions as "expired" during cleanup
+  - Pre-marked session check (`if (session.markedForCleanup) continue`) prevents duplicate processing
+  - Node.js runs synchronously within each tick - no true concurrent access, but interleaved async operations can cause races
+

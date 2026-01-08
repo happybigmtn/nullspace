@@ -332,8 +332,8 @@
         "Add test for concurrent cleanup + message handling"
       ],
       "priority": 73,
-      "passes": false,
-      "notes": "GATEWAY-HIGH: Race between cleanup and message handling could crash gateway or double-close connections."
+      "passes": true,
+      "notes": "COMPLETE: Mark-and-sweep pattern implemented. Sessions get markedForCleanup flag set, getSession() returns undefined for marked sessions, then sweep phase destroys. 7 new tests validate race prevention."
     },
     {
       "id": "US-151",

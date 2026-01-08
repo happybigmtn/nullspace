@@ -459,4 +459,157 @@ describe('SessionManager', () => {
       expect(manager.getAllSessions()).toHaveLength(0);
     });
   });
+
+  describe('Race Condition Prevention (US-150)', () => {
+    it('should return undefined for sessions marked for cleanup via getSession', async () => {
+      const ws = new MockWebSocket() as unknown as import('ws').WebSocket;
+      const session = await manager.createSession(ws, {}, '127.0.0.1');
+
+      // Verify session is accessible before marking
+      expect(manager.getSession(ws)).toBe(session);
+
+      // Simulate mark phase by setting markedForCleanup flag
+      session.markedForCleanup = true;
+
+      // Session should now be invisible to getSession (as if it's expired)
+      expect(manager.getSession(ws)).toBeUndefined();
+    });
+
+    it('should return undefined for sessions marked for cleanup via getSessionByPublicKeyHex', async () => {
+      const ws = new MockWebSocket() as unknown as import('ws').WebSocket;
+      const session = await manager.createSession(ws, {}, '127.0.0.1');
+      const publicKeyHex = session.publicKeyHex;
+
+      // Verify accessible before marking
+      expect(manager.getSessionByPublicKeyHex(publicKeyHex)).toBe(session);
+
+      // Mark for cleanup
+      session.markedForCleanup = true;
+
+      // Should now be invisible
+      expect(manager.getSessionByPublicKeyHex(publicKeyHex)).toBeUndefined();
+    });
+
+    it('should return undefined for sessions marked for cleanup via getSessionByPublicKey', async () => {
+      const ws = new MockWebSocket() as unknown as import('ws').WebSocket;
+      const session = await manager.createSession(ws, {}, '127.0.0.1');
+      const publicKey = session.publicKey;
+
+      // Verify accessible before marking
+      expect(manager.getSessionByPublicKey(publicKey)).toBe(session);
+
+      // Mark for cleanup
+      session.markedForCleanup = true;
+
+      // Should now be invisible
+      expect(manager.getSessionByPublicKey(publicKey)).toBeUndefined();
+    });
+
+    it('should use mark-and-sweep pattern in cleanupIdleSessions', async () => {
+      const ws = new MockWebSocket() as unknown as import('ws').WebSocket;
+      const session = await manager.createSession(ws, {}, '127.0.0.1');
+
+      // Make session idle
+      session.lastActivityAt = Date.now() - (35 * 60 * 1000);
+
+      // Record callback invocations to verify order
+      const callbackOrder: string[] = [];
+
+      // Clean up with callback that checks session state
+      manager.cleanupIdleSessions(30 * 60 * 1000, (callbackWs, callbackSession) => {
+        // During callback, session should be marked
+        expect(callbackSession.markedForCleanup).toBe(true);
+        // But still accessible via direct reference (not via getSession)
+        expect(manager.getSession(callbackWs)).toBeUndefined();
+        callbackOrder.push('callback');
+      });
+
+      callbackOrder.push('after_cleanup');
+
+      // Verify callback was called before cleanup completed
+      expect(callbackOrder).toEqual(['callback', 'after_cleanup']);
+
+      // Session should be fully removed after sweep
+      expect(manager.getSessionCount()).toBe(0);
+    });
+
+    it('should skip already-marked sessions in cleanupIdleSessions', async () => {
+      const ws1 = new MockWebSocket() as unknown as import('ws').WebSocket;
+      const ws2 = new MockWebSocket() as unknown as import('ws').WebSocket;
+
+      const session1 = await manager.createSession(ws1, {}, '127.0.0.1');
+      const session2 = await manager.createSession(ws2, {}, '127.0.0.2');
+
+      // Make both idle
+      session1.lastActivityAt = Date.now() - (35 * 60 * 1000);
+      session2.lastActivityAt = Date.now() - (35 * 60 * 1000);
+
+      // Pre-mark session1 (simulating a prior cleanup run or external marking)
+      session1.markedForCleanup = true;
+
+      let callbackCount = 0;
+      manager.cleanupIdleSessions(30 * 60 * 1000, () => {
+        callbackCount++;
+      });
+
+      // Only session2 should trigger callback (session1 was already marked)
+      expect(callbackCount).toBe(1);
+    });
+
+    it('should prevent race between cleanup and message handling', async () => {
+      const ws = new MockWebSocket() as unknown as import('ws').WebSocket;
+      const session = await manager.createSession(ws, {}, '127.0.0.1');
+
+      // Make session idle
+      session.lastActivityAt = Date.now() - (35 * 60 * 1000);
+
+      // Simulate concurrent access: cleanup marks session, then message handler checks
+      // This simulates what happens when cleanup runs while a message is being processed
+
+      // Step 1: During mark phase, flag is set
+      session.markedForCleanup = true;
+
+      // Step 2: Message handler calls getSession() - should get undefined
+      const sessionForHandler = manager.getSession(ws);
+      expect(sessionForHandler).toBeUndefined();
+
+      // Step 3: Handler responds with SESSION_EXPIRED (simulated)
+      // This is what the gateway does when getSession returns undefined
+
+      // Step 4: Sweep phase cleans up
+      manager.destroySession(ws);
+
+      // Final state: session fully removed
+      expect(manager.getSessionCount()).toBe(0);
+    });
+
+    it('should handle multiple concurrent cleanups safely', async () => {
+      const sockets: MockWebSocket[] = [];
+      const sessions: import('../../src/types/session.js').Session[] = [];
+
+      // Create 10 sessions
+      for (let i = 0; i < 10; i++) {
+        const ws = new MockWebSocket() as unknown as import('ws').WebSocket;
+        const session = await manager.createSession(ws, {}, `192.168.1.${i}`);
+        session.lastActivityAt = Date.now() - (35 * 60 * 1000); // All idle
+        sockets.push(ws as unknown as MockWebSocket);
+        sessions.push(session);
+      }
+
+      expect(manager.getSessionCount()).toBe(10);
+
+      // Run cleanup multiple times (simulating overlapping timer fires)
+      const cleaned1 = manager.cleanupIdleSessions(30 * 60 * 1000);
+      const cleaned2 = manager.cleanupIdleSessions(30 * 60 * 1000);
+      const cleaned3 = manager.cleanupIdleSessions(30 * 60 * 1000);
+
+      // First run should clean all 10
+      expect(cleaned1).toBe(10);
+      // Subsequent runs should find nothing (sessions already removed)
+      expect(cleaned2).toBe(0);
+      expect(cleaned3).toBe(0);
+
+      expect(manager.getSessionCount()).toBe(0);
+    });
+  });
 });

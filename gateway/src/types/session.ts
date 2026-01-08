@@ -81,6 +81,13 @@ export interface Session {
 
   /** Periodic balance refresh interval (optional) */
   balanceRefreshIntervalId?: ReturnType<typeof setInterval>;
+
+  /**
+   * Session marked for cleanup (US-150: race condition fix).
+   * When true, session is being cleaned up - message handlers should
+   * treat it as expired. Prevents use-after-destroy race conditions.
+   */
+  markedForCleanup?: boolean;
 }
 
 /**
