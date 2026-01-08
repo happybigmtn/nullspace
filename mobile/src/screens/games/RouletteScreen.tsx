@@ -5,20 +5,14 @@
 import { View, Text, StyleSheet, Pressable, Modal } from 'react-native';
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  withRepeat,
-  Easing,
-  cancelAnimation,
   SlideInUp,
   SlideOutDown,
 } from 'react-native-reanimated';
-import { ChipSelector } from '../../components/casino';
+import { ChipSelector, RouletteWheel } from '../../components/casino';
 import { GameLayout } from '../../components/game';
-import { TutorialOverlay, PrimaryButton } from '../../components/ui';
+import { TutorialOverlay, PrimaryButton, BetConfirmationModal } from '../../components/ui';
 import { haptics } from '../../services/haptics';
-import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useModalBackHandler, useBetSubmission } from '../../hooks';
+import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useModalBackHandler, useBetSubmission, useBetConfirmation } from '../../hooks';
 import {
   COLORS,
   SPACING,
@@ -43,16 +37,6 @@ const SPLIT_V_TARGETS = Array.from({ length: 33 }, (_, i) => i + 1);
 const STREET_TARGETS = Array.from({ length: 12 }, (_, i) => 1 + i * 3);
 const CORNER_TARGETS = Array.from({ length: 32 }, (_, i) => i + 1).filter((num) => num % 3 !== 0);
 const SIX_LINE_TARGETS = Array.from({ length: 11 }, (_, i) => 1 + i * 3);
-const ROULETTE_NUMBERS = [
-  0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10,
-  5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26,
-];
-
-const getNumberAngle = (num: number) => {
-  const index = ROULETTE_NUMBERS.indexOf(num);
-  if (index < 0) return 0;
-  return (index * 360) / ROULETTE_NUMBERS.length;
-};
 
 interface RouletteBet {
   type: RouletteBetType;
@@ -102,7 +86,6 @@ export function RouletteScreen() {
   const [showTutorial, setShowTutorial] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [insideMode, setInsideMode] = useState<InsideBetType>('SPLIT_H');
-  const spinSeedRef = useRef({ extraSpins: 4 });
 
   // Track mounted state to prevent setState after unmount
   const isMounted = useRef(true);
@@ -129,24 +112,17 @@ export function RouletteScreen() {
     }
   }, [insideMode]);
 
-  const wheelRotation = useSharedValue(0);
-
+  /**
+   * DS-046: Process game result messages
+   * RouletteWheel component now handles spin animation internally
+   */
   useEffect(() => {
     if (!lastMessage) return;
 
     if (lastMessage.type === 'game_result') {
       clearSubmission();
-      cancelAnimation(wheelRotation);
       const payload = lastMessage as Record<string, unknown>;
       const result = typeof payload.result === 'number' ? payload.result : 0;
-      const current = wheelRotation.value % 360;
-      const targetAngle = getNumberAngle(result);
-      const delta = (targetAngle - current + 360) % 360;
-      const targetRotation = wheelRotation.value + spinSeedRef.current.extraSpins * 360 + delta;
-      wheelRotation.value = withTiming(targetRotation, {
-        duration: 2200,
-        easing: Easing.out(Easing.cubic),
-      });
 
       const won = (payload.won as boolean | undefined) ?? false;
       const totalReturn = parseNumeric(payload.totalReturn ?? payload.payout) ?? 0;
@@ -166,15 +142,7 @@ export function RouletteScreen() {
         message: typeof payload.message === 'string' ? payload.message : won ? 'You win!' : 'No luck',
       }));
     }
-  }, [lastMessage, wheelRotation, clearSubmission]);
-
-  useEffect(() => () => {
-    cancelAnimation(wheelRotation);
-  }, [wheelRotation]);
-
-  const wheelStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${wheelRotation.value}deg` }],
-  }));
+  }, [lastMessage, clearSubmission]);
 
   const addBet = useCallback((type: RouletteBetType, target?: number) => {
     if (state.phase !== 'betting') return;
@@ -213,35 +181,52 @@ export function RouletteScreen() {
     });
   }, [state.phase, selectedChip, state.bets, balance]);
 
-  const handleSpin = useCallback(() => {
+  /**
+   * DS-046: Execute the spin after confirmation
+   */
+  const executeSpin = useCallback(() => {
     if (state.bets.length === 0 || isSubmitting) return;
     haptics.wheelSpin().catch(() => {});
 
     // US-090: Calculate total bet for atomic validation
-    const totalBet = state.bets.reduce((sum, b) => sum + b.amount, 0);
+    const totalBetAmount = state.bets.reduce((sum, b) => sum + b.amount, 0);
     const success = submitBet(
       {
         type: 'roulette_spin',
         bets: state.bets,
       },
-      { amount: totalBet }
+      { amount: totalBetAmount }
     );
 
     if (success) {
-      spinSeedRef.current = { extraSpins: 4 + Math.floor(Math.random() * 3) };
-      wheelRotation.value = withRepeat(
-        withTiming(360, { duration: 500, easing: Easing.linear }),
-        -1,
-        false
-      );
-
+      // DS-046: Phase change to 'spinning' triggers RouletteWheel animation
       setState((prev) => ({
         ...prev,
         phase: 'spinning',
         message: 'No more bets!',
       }));
     }
-  }, [state.bets, submitBet, isSubmitting, wheelRotation]);
+  }, [state.bets, submitBet, isSubmitting]);
+
+  // US-155: Bet confirmation modal integration
+  const { showConfirmation, confirmationProps, requestConfirmation } = useBetConfirmation({
+    gameType: 'roulette',
+    onConfirm: executeSpin,
+    countdownSeconds: 5,
+  });
+
+  /**
+   * DS-046: Handle spin - triggers confirmation modal
+   */
+  const handleSpin = useCallback(() => {
+    if (state.bets.length === 0 || isSubmitting) return;
+
+    // US-155: Show confirmation modal before spinning
+    const totalBetAmount = state.bets.reduce((sum, b) => sum + b.amount, 0);
+    requestConfirmation({
+      amount: totalBetAmount,
+    });
+  }, [state.bets, isSubmitting, requestConfirmation]);
 
   const handleNewGame = useCallback(() => {
     setState((prev) => ({
@@ -318,19 +303,13 @@ export function RouletteScreen() {
         }
         gameId="roulette"
       >
-        {/* Wheel Display */}
+        {/* DS-046: Physics-based Roulette Wheel */}
       <View style={styles.wheelContainer}>
-        <Animated.View style={[styles.wheel, wheelStyle]}>
-          <View style={styles.wheelInner}>
-            {state.result !== null ? (
-              <Text style={[styles.resultNumber, { color: getResultColor(state.result) }]}>
-                {state.result}
-              </Text>
-            ) : (
-              <Text style={styles.wheelPlaceholder}>🎰</Text>
-            )}
-          </View>
-        </Animated.View>
+        <RouletteWheel
+          phase={state.phase}
+          result={state.result}
+          size={180}
+        />
       </View>
 
       {/* Message */}
@@ -513,42 +492,23 @@ export function RouletteScreen() {
         onComplete={() => setShowTutorial(false)}
         forceShow={showTutorial}
       />
+
+      {/* US-155: Bet Confirmation Modal */}
+      <BetConfirmationModal
+        {...confirmationProps}
+        testID="bet-confirmation-modal"
+      />
     </>
   );
 }
 
 // Shared styles: MESSAGE_STYLES, BET_STYLES, ACTION_STYLES, DRAWER_STYLES, INTERACTIVE_STYLES
 const styles = StyleSheet.create({
-  // Game-specific styles only
+  // DS-046: Container for RouletteWheel component
   wheelContainer: {
     alignItems: 'center',
     justifyContent: 'center',
     marginVertical: SPACING.lg,
-  },
-  wheel: {
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    backgroundColor: COLORS.surface,
-    borderWidth: 4,
-    borderColor: COLORS.gold,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  wheelInner: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: COLORS.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  resultNumber: {
-    ...TYPOGRAPHY.displayLarge,
-    color: COLORS.textPrimary,
-  },
-  wheelPlaceholder: {
-    fontSize: 48,
   },
   quickBets: {
     flexDirection: 'row',

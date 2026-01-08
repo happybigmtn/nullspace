@@ -5,22 +5,19 @@
 import { View, Text, StyleSheet, Pressable, Modal, ScrollView } from 'react-native';
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSequence,
-  withTiming,
-  withSpring,
   SlideInUp,
   SlideOutDown,
 } from 'react-native-reanimated';
-import { ChipSelector } from '../../components/casino';
+import { ChipSelector, Dice3D } from '../../components/casino';
 import { GameLayout } from '../../components/game';
-import { TutorialOverlay, PrimaryButton } from '../../components/ui';
+import { TutorialOverlay, PrimaryButton, BetConfirmationModal } from '../../components/ui';
 import { haptics } from '../../services/haptics';
-import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useModalBackHandler, useBetSubmission } from '../../hooks';
+import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useModalBackHandler, useBetSubmission, useBetConfirmation } from '../../hooks';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS, SPRING } from '../../constants/theme';
+// Note: SPRING still used for modal animations
 import { useGameStore } from '../../stores/gameStore';
 import { getDieFace } from '../../utils/dice';
+// Note: getDieFace still needed for drawer bet display
 import { decodeStateBytes, parseNumeric, parseSicBoState } from '../../utils';
 import type { ChipValue, TutorialStep, SicBoBetType } from '../../types';
 import type { GameMessage } from '@nullspace/protocol/mobile';
@@ -85,15 +82,8 @@ export function SicBoScreen() {
 
   useModalBackHandler(showAdvanced, () => setShowAdvanced(false));
 
-  const dice1Bounce = useSharedValue(0);
-  const dice2Bounce = useSharedValue(0);
-  const dice3Bounce = useSharedValue(0);
-  const dice1OffsetX = useSharedValue(0);
-  const dice2OffsetX = useSharedValue(0);
-  const dice3OffsetX = useSharedValue(0);
-  const dice1Spin = useSharedValue(0);
-  const dice2Spin = useSharedValue(0);
-  const dice3Spin = useSharedValue(0);
+  // DS-047: Track dice rolling state for 3D animation
+  const [diceRolling, setDiceRolling] = useState(false);
 
   useEffect(() => {
     if (!lastMessage) return;
@@ -105,46 +95,9 @@ export function SicBoScreen() {
       ? payload.dice as [number, number, number]
       : parsedState?.dice ?? null;
 
+    // DS-047: Trigger 3D dice roll animation
     if (dice) {
-      // Animate dice bouncing - Toss up then land with physics
-      dice1Bounce.value = withSequence(
-        withTiming(-40, { duration: 150 }),
-        withSpring(0, SPRING.diceTumble)
-      );
-      dice2Bounce.value = withSequence(
-        withTiming(-50, { duration: 150 }),
-        withSpring(0, SPRING.diceTumble)
-      );
-      dice3Bounce.value = withSequence(
-        withTiming(-45, { duration: 150 }),
-        withSpring(0, SPRING.diceTumble)
-      );
-
-      const scatter = () => (Math.random() * 2 - 1) * 14;
-      dice1OffsetX.value = withSequence(
-        withTiming(scatter(), { duration: 120 }),
-        withSpring(0, SPRING.diceTumble)
-      );
-      dice2OffsetX.value = withSequence(
-        withTiming(scatter(), { duration: 120 }),
-        withSpring(0, SPRING.diceTumble)
-      );
-      dice3OffsetX.value = withSequence(
-        withTiming(scatter(), { duration: 120 }),
-        withSpring(0, SPRING.diceTumble)
-      );
-      dice1Spin.value = withSequence(
-        withTiming(240, { duration: 180 }),
-        withSpring(0, SPRING.diceTumble)
-      );
-      dice2Spin.value = withSequence(
-        withTiming(-240, { duration: 180 }),
-        withSpring(0, SPRING.diceTumble)
-      );
-      dice3Spin.value = withSequence(
-        withTiming(180, { duration: 180 }),
-        withSpring(0, SPRING.diceTumble)
-      );
+      setDiceRolling(true);
       haptics.diceRoll().catch(() => {});
     }
 
@@ -194,45 +147,16 @@ export function SicBoScreen() {
         message: typeof payload.message === 'string' ? payload.message : won ? 'You win!' : 'No luck',
       }));
     }
-  }, [
-    lastMessage,
-    clearSubmission,
-    dice1Bounce,
-    dice1OffsetX,
-    dice1Spin,
-    dice2Bounce,
-    dice2OffsetX,
-    dice2Spin,
-    dice3Bounce,
-    dice3OffsetX,
-    dice3Spin,
-  ]);
+  }, [lastMessage, clearSubmission]);
+
+  // DS-047: Handler when dice roll animation completes
+  const handleDiceRollComplete = useCallback(() => {
+    setDiceRolling(false);
+  }, []);
 
   useEffect(() => {
     setComboPicks([]);
   }, [comboMode]);
-
-  const dice1Style = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: dice1OffsetX.value },
-      { translateY: dice1Bounce.value },
-      { rotate: `${dice1Spin.value}deg` },
-    ],
-  }));
-  const dice2Style = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: dice2OffsetX.value },
-      { translateY: dice2Bounce.value },
-      { rotate: `${dice2Spin.value}deg` },
-    ],
-  }));
-  const dice3Style = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: dice3OffsetX.value },
-      { translateY: dice3Bounce.value },
-      { rotate: `${dice3Spin.value}deg` },
-    ],
-  }));
 
   const addBet = useCallback((type: SicBoBetType, target?: number) => {
     if (state.phase !== 'betting') return;
@@ -330,18 +254,19 @@ export function SicBoScreen() {
     }
   }, [comboMode, comboPicks, addBet]);
 
-  const handleRoll = useCallback(() => {
+  // US-155: Execute roll after bet confirmation
+  const executeRoll = useCallback(() => {
     if (state.bets.length === 0 || isSubmitting) return;
     haptics.diceRoll().catch(() => {});
 
     // US-090: Calculate total bet for atomic validation
-    const totalBet = state.bets.reduce((sum, b) => sum + b.amount, 0);
+    const totalBetAmount = state.bets.reduce((sum, b) => sum + b.amount, 0);
     const success = submitBet(
       {
         type: 'sic_bo_roll',
         bets: state.bets,
       },
-      { amount: totalBet }
+      { amount: totalBetAmount }
     );
 
     if (success) {
@@ -352,6 +277,19 @@ export function SicBoScreen() {
       }));
     }
   }, [state.bets, submitBet, isSubmitting]);
+
+  // US-155: Bet confirmation modal integration
+  const { showConfirmation, confirmationProps, requestConfirmation } = useBetConfirmation({
+    gameType: 'sic_bo',
+    onConfirm: executeRoll,
+    countdownSeconds: 5,
+  });
+
+  const handleRoll = useCallback(() => {
+    if (state.bets.length === 0 || isSubmitting) return;
+    const totalBetAmount = state.bets.reduce((sum, b) => sum + b.amount, 0);
+    requestConfirmation({ amount: totalBetAmount });
+  }, [state.bets, isSubmitting, requestConfirmation]);
 
   const handleNewGame = useCallback(() => {
     setState({
@@ -418,31 +356,35 @@ export function SicBoScreen() {
         }
         gameId="sicBo"
       >
-        {/* Dice Display */}
+        {/* DS-047: 3D Dice Display */}
       <View style={styles.diceContainer}>
         {state.dice ? (
           <>
-            <Animated.View style={[styles.die, dice1Style]}>
-              <Text style={styles.dieFace}>{getDieFace(state.dice[0])}</Text>
-            </Animated.View>
-            <Animated.View style={[styles.die, dice2Style]}>
-              <Text style={styles.dieFace}>{getDieFace(state.dice[1])}</Text>
-            </Animated.View>
-            <Animated.View style={[styles.die, dice3Style]}>
-              <Text style={styles.dieFace}>{getDieFace(state.dice[2])}</Text>
-            </Animated.View>
+            <Dice3D
+              value={state.dice[0]}
+              isRolling={diceRolling}
+              index={0}
+              size={56}
+              onRollComplete={handleDiceRollComplete}
+            />
+            <Dice3D
+              value={state.dice[1]}
+              isRolling={diceRolling}
+              index={1}
+              size={56}
+            />
+            <Dice3D
+              value={state.dice[2]}
+              isRolling={diceRolling}
+              index={2}
+              size={56}
+            />
           </>
         ) : (
           <>
-            <View style={styles.diePlaceholder}>
-              <Text style={styles.diePlaceholderText}>🎲</Text>
-            </View>
-            <View style={styles.diePlaceholder}>
-              <Text style={styles.diePlaceholderText}>🎲</Text>
-            </View>
-            <View style={styles.diePlaceholder}>
-              <Text style={styles.diePlaceholderText}>🎲</Text>
-            </View>
+            <Dice3D value={1} isRolling={false} index={0} size={56} skipAnimation />
+            <Dice3D value={1} isRolling={false} index={1} size={56} skipAnimation />
+            <Dice3D value={1} isRolling={false} index={2} size={56} skipAnimation />
           </>
         )}
       </View>
@@ -678,6 +620,9 @@ export function SicBoScreen() {
         onComplete={() => setShowTutorial(false)}
         forceShow={showTutorial}
       />
+
+      {/* US-155: Bet Confirmation Modal */}
+      <BetConfirmationModal {...confirmationProps} testID="bet-confirmation-modal" />
     </>
   );
 }
@@ -696,39 +641,9 @@ const styles = StyleSheet.create({
   diceContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
+    alignItems: 'center',
     gap: SPACING.md,
     marginVertical: SPACING.lg,
-  },
-  die: {
-    width: 64,
-    height: 64,
-    backgroundColor: COLORS.textPrimary,
-    borderRadius: RADIUS.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  dieFace: {
-    fontSize: 40,
-  },
-  diePlaceholder: {
-    width: 64,
-    height: 64,
-    backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: COLORS.border,
-    borderStyle: 'dashed',
-  },
-  diePlaceholderText: {
-    fontSize: 32,
-    opacity: 0.3,
   },
   total: {
     color: COLORS.textPrimary,

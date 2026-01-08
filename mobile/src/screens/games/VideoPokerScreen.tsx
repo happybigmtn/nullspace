@@ -8,9 +8,9 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { Card } from '../../components/casino';
 import { ChipSelector } from '../../components/casino';
 import { GameLayout } from '../../components/game';
-import { TutorialOverlay, PrimaryButton } from '../../components/ui';
+import { TutorialOverlay, PrimaryButton, BetConfirmationModal } from '../../components/ui';
 import { haptics } from '../../services/haptics';
-import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useChipBetting, useModalBackHandler, useBetSubmission } from '../../hooks';
+import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useChipBetting, useModalBackHandler, useBetSubmission, useBetConfirmation } from '../../hooks';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS, SPRING } from '../../constants/theme';
 import { decodeStateBytes, parseNumeric, parseVideoPokerState } from '../../utils';
 import type { ChipValue, TutorialStep, PokerHand, Card as CardType } from '../../types';
@@ -174,7 +174,10 @@ export function VideoPokerScreen() {
     }
   }, [lastMessage, clearSubmission]);
 
-  const handleDeal = useCallback(() => {
+  /**
+   * Execute the deal after confirmation (US-155)
+   */
+  const executeDeal = useCallback(() => {
     if (bet === 0 || isSubmitting) return;
     haptics.betConfirm().catch(() => {});
 
@@ -187,6 +190,25 @@ export function VideoPokerScreen() {
       { amount: bet }
     );
   }, [bet, submitBet, isSubmitting]);
+
+  // US-155: Bet confirmation modal integration
+  const { showConfirmation, confirmationProps, requestConfirmation } = useBetConfirmation({
+    gameType: 'video_poker',
+    onConfirm: executeDeal,
+    countdownSeconds: 5,
+  });
+
+  /**
+   * Handle deal button - triggers confirmation modal (US-155)
+   */
+  const handleDeal = useCallback(() => {
+    if (bet === 0 || isSubmitting) return;
+
+    // US-155: Show confirmation modal
+    requestConfirmation({
+      amount: bet,
+    });
+  }, [bet, isSubmitting, requestConfirmation]);
 
   const handleToggleHold = useCallback((index: number) => {
     if (state.phase !== 'initial') return;
@@ -423,6 +445,12 @@ export function VideoPokerScreen() {
         steps={TUTORIAL_STEPS}
         onComplete={() => setShowTutorial(false)}
         forceShow={showTutorial}
+      />
+
+      {/* US-155: Bet Confirmation Modal */}
+      <BetConfirmationModal
+        {...confirmationProps}
+        testID="bet-confirmation-modal"
       />
     </>
   );

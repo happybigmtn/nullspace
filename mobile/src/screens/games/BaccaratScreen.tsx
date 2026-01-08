@@ -8,9 +8,9 @@ import Animated, { FadeIn, SlideInUp, SlideInDown } from 'react-native-reanimate
 import { Card } from '../../components/casino';
 import { ChipSelector } from '../../components/casino';
 import { GameLayout } from '../../components/game';
-import { TutorialOverlay, PrimaryButton } from '../../components/ui';
+import { TutorialOverlay, PrimaryButton, BetConfirmationModal } from '../../components/ui';
 import { haptics } from '../../services/haptics';
-import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useBetSubmission } from '../../hooks';
+import { useGameKeyboard, KEY_ACTIONS, useGameConnection, useBetSubmission, useBetConfirmation } from '../../hooks';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS, SPRING } from '../../constants/theme';
 import { decodeCardList } from '../../utils';
 import { useGameStore } from '../../stores/gameStore';
@@ -186,7 +186,10 @@ export function BaccaratScreen() {
     });
   }, [state.phase, state.mainBet, state.sideBets, selectedChip, balance]);
 
-  const handleDeal = useCallback(() => {
+  /**
+   * Execute the deal after confirmation (US-155)
+   */
+  const executeDeal = useCallback(() => {
     if (isSubmitting) return;
     const betList: BaccaratBet[] = [];
     if (state.mainBet > 0) {
@@ -198,13 +201,13 @@ export function BaccaratScreen() {
     haptics.betConfirm().catch(() => {});
 
     // US-090: Calculate total bet for atomic validation
-    const totalBet = betList.reduce((sum, b) => sum + b.amount, 0);
+    const totalBetAmount = betList.reduce((sum, b) => sum + b.amount, 0);
     const success = submitBet(
       {
         type: 'baccarat_deal',
         bets: betList,
       },
-      { amount: totalBet }
+      { amount: totalBetAmount }
     );
 
     if (success) {
@@ -215,6 +218,41 @@ export function BaccaratScreen() {
       }));
     }
   }, [state.selection, state.mainBet, state.sideBets, isSubmitting, submitBet]);
+
+  // US-155: Bet confirmation modal integration
+  const { showConfirmation, confirmationProps, requestConfirmation } = useBetConfirmation({
+    gameType: 'baccarat',
+    onConfirm: executeDeal,
+    countdownSeconds: 5,
+  });
+
+  /**
+   * Handle deal button - triggers confirmation modal (US-155)
+   */
+  const handleDeal = useCallback(() => {
+    if (isSubmitting) return;
+    const betList: BaccaratBet[] = [];
+    if (state.mainBet > 0) {
+      betList.push({ type: state.selection, amount: state.mainBet });
+    }
+    betList.push(...state.sideBets.filter((bet) => bet.amount > 0));
+
+    if (betList.length === 0) return;
+
+    // US-155: Show confirmation modal
+    const totalBetAmount = betList.reduce((sum, b) => sum + b.amount, 0);
+    const sideBetsForModal = state.sideBets
+      .filter((bet) => bet.amount > 0)
+      .map((bet) => ({
+        name: SIDE_BET_LABELS[bet.type as BaccaratSideBetType],
+        amount: bet.amount,
+      }));
+
+    requestConfirmation({
+      amount: totalBetAmount,
+      sideBets: sideBetsForModal.length > 0 ? sideBetsForModal : undefined,
+    });
+  }, [state.selection, state.mainBet, state.sideBets, isSubmitting, requestConfirmation]);
 
   const handleNewGame = useCallback(() => {
     setState({
@@ -436,6 +474,12 @@ export function BaccaratScreen() {
         steps={TUTORIAL_STEPS}
         onComplete={() => setShowTutorial(false)}
         forceShow={showTutorial}
+      />
+
+      {/* US-155: Bet Confirmation Modal */}
+      <BetConfirmationModal
+        {...confirmationProps}
+        testID="bet-confirmation-modal"
       />
     </>
   );
