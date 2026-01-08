@@ -108,6 +108,9 @@ if command -v yq &> /dev/null; then
     # Extract simulator secrets
     sops -d "$SECRETS_FILE" | yq -r '.simulator // {} | to_entries | .[] | "\(.key)=\(.value)"' > "$OUTPUT_DIR/simulator.env"
 
+    # Extract node/validator secrets (same as simulator for now)
+    sops -d "$SECRETS_FILE" | yq -r '.simulator // {} | to_entries | .[] | "\(.key)=\(.value)"' > "$OUTPUT_DIR/node.env"
+
     # Extract ops secrets
     sops -d "$SECRETS_FILE" | yq -r '.ops // {} | to_entries | .[] | "\(.key)=\(.value)"' > "$OUTPUT_DIR/ops.env"
 
