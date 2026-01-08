@@ -63,8 +63,8 @@ COPY --from=wasm-builder /app/packages/types/src/generated /app/packages/types/s
 RUN pnpm install --frozen-lockfile --ignore-scripts
 
 # Build workspace packages first (types already has generated files from wasm-builder)
-# Use --ignore-scripts to skip prebuild hook that needs cargo
-RUN cd /app/packages/types && pnpm run build --ignore-scripts
+# Run tsc directly to skip prebuild hook that needs cargo
+RUN cd /app/packages/types && pnpm exec tsc -p tsconfig.build.json
 RUN pnpm -C packages/constants build || true
 RUN pnpm -C packages/protocol build || true
 RUN pnpm -C packages/design-tokens build || true
