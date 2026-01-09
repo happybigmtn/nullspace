@@ -1860,4 +1860,120 @@ a[href="#app-main"]:focus-visible {
     animation: none !important;
     opacity: 1 !important;
   }
+
+  /* Disable additional LC motion (US-269) */
+  .animate-lc-edge-glow,
+  .animate-lc-shimmer,
+  .animate-lc-float,
+  .animate-lc-breathe,
+  .animate-lc-ripple {
+    animation: none !important;
+  }
+
+  /* Reset LC motion CSS vars to reduced values */
+  :root {
+    --lc-motion-micro: 10ms;
+    --lc-motion-state: 10ms;
+    --lc-motion-reveal: 10ms;
+    --lc-motion-dramatic: 100ms;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Liquid Crystal Motion Language (US-269)
+ *
+ * Motion should feel like liquid glass reacting to user interaction.
+ * Specular highlights sweep across surfaces, refraction pulses on touch,
+ * and edges glow subtly to create material depth.
+ *
+ * Principles:
+ * 1. Motion is subordinate to game state (wins/losses take priority)
+ * 2. Feels like light moving across glass, not the glass itself moving
+ * 3. Reduced motion is fully supported
+ * 4. Performance budgets respected (max 1 animating glass surface)
+ * ───────────────────────────────────────────────────────────────────────────── */
+
+/* Motion CSS Custom Properties */
+:root {
+  --lc-motion-micro: 180ms;
+  --lc-motion-state: 300ms;
+  --lc-motion-reveal: 600ms;
+  --lc-motion-dramatic: 1000ms;
+  --lc-motion-ease: cubic-bezier(0.23, 1, 0.32, 1);
+  --lc-motion-ease-spring: cubic-bezier(0.68, -0.55, 0.27, 1.55);
+  --lc-motion-ease-settle: cubic-bezier(0.33, 0, 0.2, 1);
+}
+
+/* Additional LC Keyframes (US-269) */
+@keyframes lc-edge-glow {
+  0%, 100% { box-shadow: inset 0 1px 0 rgba(255,255,255,0.15), inset 0 -1px 0 rgba(0,0,0,0.08); }
+  50% { box-shadow: inset 0 1px 0 rgba(255,255,255,0.25), inset 0 -1px 0 rgba(0,0,0,0.12); }
+}
+
+@keyframes lc-shimmer {
+  0% { background-position: -100% 0; opacity: 0.5; }
+  50% { opacity: 0.8; }
+  100% { background-position: 100% 0; opacity: 0.5; }
+}
+
+@keyframes lc-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+@keyframes lc-breathe {
+  0%, 100% { opacity: 0.9; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.02); }
+}
+
+@keyframes lc-ripple {
+  0% { transform: scale(0.8); opacity: 1; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+
+/* LC Animation Classes (US-269) */
+.animate-lc-edge-glow {
+  animation: lc-edge-glow 2s var(--lc-motion-ease) infinite;
+}
+
+.animate-lc-shimmer {
+  animation: lc-shimmer 2s var(--lc-motion-ease) infinite;
+}
+
+.animate-lc-float {
+  animation: lc-float 3s var(--lc-motion-ease) infinite;
+}
+
+.animate-lc-breathe {
+  animation: lc-breathe 4s var(--lc-motion-ease) infinite;
+}
+
+.animate-lc-ripple {
+  animation: lc-ripple 0.6s var(--lc-motion-ease-spring) forwards;
+}
+
+/* Interactive motion utilities */
+.lc-motion-hover:hover {
+  animation: lc-refract 0.2s var(--lc-motion-ease-spring);
+}
+
+.lc-motion-press:active {
+  animation: lc-ripple 0.3s var(--lc-motion-ease-spring);
+}
+
+/* Game state suppression - add to container when game state is active */
+.lc-suppress-decorative .animate-lc-sweep,
+.lc-suppress-decorative .animate-lc-shimmer,
+.lc-suppress-decorative .animate-lc-float,
+.lc-suppress-decorative .animate-lc-breathe,
+.lc-suppress-decorative .animate-lc-edge-glow {
+  animation: none !important;
+}
+
+/* Elevated motion tier - for big win states */
+.lc-motion-elevated {
+  --lc-motion-micro: 200ms;
+  --lc-motion-state: 400ms;
+  --lc-motion-reveal: 800ms;
+  --lc-motion-dramatic: 2000ms;
 }

@@ -455,3 +455,258 @@ import { LC_TYPOGRAPHY, TRACKING } from '@/constants/theme';
 // Numeric roles include fontVariant: ['tabular-nums']
 <Text style={LC_TYPOGRAPHY.numeric}>Bet: 100</Text>
 ```
+
+## Liquid Crystal Motion Language (US-269)
+
+Motion in the Liquid Crystal system should feel like liquid glass reacting to user interaction. Specular highlights sweep across surfaces, refraction pulses on touch, and edges glow subtly to create material depth.
+
+### Core Principles
+
+1. **Subordinate to Game State** - Decorative motion never competes with game results (wins/losses)
+2. **Reactive** - Motion responds to user touch/hover like liquid surfaces
+3. **Light, Not Glass** - Feels like light moving across glass, not the glass itself moving
+4. **Accessible** - Full reduced-motion support with graceful degradation
+
+### Motion Tiers
+
+| Tier | Use Case | Micro | State | Reveal | Dramatic |
+|------|----------|-------|-------|--------|----------|
+| `none` | Animations disabled | 0ms | 0ms | 0ms | 0ms |
+| `reduced` | prefers-reduced-motion | 10ms | 10ms | 10ms | 100ms |
+| `standard` | Default UI | 180ms | 300ms | 600ms | 1000ms |
+| `elevated` | Big wins, celebrations | 200ms | 400ms | 800ms | 2000ms |
+
+### Motion Priority (Hierarchy)
+
+| Priority | Value | Examples |
+|----------|-------|----------|
+| `gameResult` | 100 | Win/loss animations, jackpots |
+| `gameAction` | 80 | Card flips, dice rolls, wheel spins |
+| `userFeedback` | 60 | Button presses, bet placement |
+| `uiState` | 40 | Modal opens, sheet slides |
+| `decorative` | 20 | Glass shimmer, specular sweeps |
+
+Higher priority motion can suppress lower priority. During game reveals, decorative motion is automatically suppressed.
+
+### Animation Types
+
+#### Specular Sweep (`animate-lc-sweep`)
+
+Light highlight sweeping across the glass surface. Use for:
+- Interactive element hover states
+- Attention-drawing surfaces
+- Idle animation for prominent elements
+
+```html
+<!-- Standard sweep on hover -->
+<div class="bg-lc-smoke hover:animate-lc-sweep">
+  Interactive surface
+</div>
+```
+
+#### Refraction Pulse (`animate-lc-refract`)
+
+Glass surface responding to touch with blur/brightness shift. Use for:
+- Press feedback on glass buttons
+- Focus state activation
+- State transitions
+
+```html
+<!-- Pulse on interaction -->
+<button class="bg-lc-veil active:animate-lc-refract">
+  Glass Button
+</button>
+```
+
+#### Edge Glow (`animate-lc-edge-glow`)
+
+Subtle pulsing of edge highlights. Use for:
+- Selected states
+- Active panels
+- Attention indicators
+
+```html
+<!-- Glowing edge on selection -->
+<div class="bg-lc-smoke shadow-lc-edge-standard data-[selected]:animate-lc-edge-glow">
+  Selectable card
+</div>
+```
+
+#### Liquid Float (`animate-lc-float`)
+
+Gentle floating motion. Use for:
+- Floating action buttons
+- Tooltips
+- Attention-drawing badges
+
+#### Breathing (`animate-lc-breathe`)
+
+Subtle scale/opacity pulse. Use for:
+- Loading states
+- Idle indicators
+- Waiting states
+
+#### Ripple (`animate-lc-ripple`)
+
+Outward ripple from interaction point. Use for:
+- Touch feedback
+- Click effects
+- Confirmation feedback
+
+### Game State Suppression
+
+When game results are revealing, decorative motion should be suppressed:
+
+```html
+<!-- Add lc-suppress-decorative during game reveals -->
+<div class="lc-suppress-decorative">
+  <!-- All decorative animations paused during reveal -->
+  <div class="animate-lc-shimmer">This won't animate</div>
+  <div class="animate-lc-float">This won't animate</div>
+</div>
+```
+
+For elevated celebration states (big wins):
+
+```html
+<!-- Add lc-motion-elevated for big win states -->
+<div class="lc-motion-elevated">
+  <!-- Longer, more theatrical durations -->
+</div>
+```
+
+### CSS Custom Properties
+
+The motion system uses CSS custom properties for timing:
+
+```css
+:root {
+  --lc-motion-micro: 180ms;    /* Quick interactions */
+  --lc-motion-state: 300ms;    /* State changes */
+  --lc-motion-reveal: 600ms;   /* Content reveal */
+  --lc-motion-dramatic: 1000ms; /* Big moments */
+  --lc-motion-ease: cubic-bezier(0.23, 1, 0.32, 1);
+  --lc-motion-ease-spring: cubic-bezier(0.68, -0.55, 0.27, 1.55);
+}
+```
+
+### Usage in Tailwind
+
+```html
+<!-- Sweep on hover -->
+<div class="hover:animate-lc-sweep">Surface</div>
+
+<!-- Edge glow for selected state -->
+<div class="data-[selected]:animate-lc-edge-glow">Card</div>
+
+<!-- Float for attention -->
+<button class="animate-lc-float">FAB</button>
+
+<!-- Ripple on click (apply via JS) -->
+<div class="animate-lc-ripple">Clicked element</div>
+
+<!-- Suppress decorative motion during game -->
+<div class="lc-suppress-decorative">
+  <child class="animate-lc-shimmer" /> <!-- Won't animate -->
+</div>
+```
+
+### Usage in React Native
+
+```tsx
+import { LC_MOTION, SPRING_LIQUID } from '@/constants/theme';
+import Animated, {
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+  Easing,
+} from 'react-native-reanimated';
+
+// Use LC spring configs
+const animatedStyle = useAnimatedStyle(() => ({
+  transform: [{
+    scale: withSpring(pressed ? 0.95 : 1, LC_MOTION.spring.splash)
+  }]
+}));
+
+// Use LC timing for state changes
+const fadeStyle = useAnimatedStyle(() => ({
+  opacity: withTiming(visible ? 1 : 0, {
+    duration: LC_MOTION.timing.standard.state,
+    easing: Easing.bezier(...LC_MOTION.easing.liquidSmooth),
+  })
+}));
+
+// Check game state before decorative motion
+if (LC_MOTION.gameRules.revealingResult.suppress.includes(MOTION_PRIORITY.decorative)) {
+  // Skip decorative animation
+}
+```
+
+### Spring Configurations
+
+For physics-based animations (Framer Motion, Reanimated):
+
+| Preset | Mass | Stiffness | Damping | Use Case |
+|--------|------|-----------|---------|----------|
+| `float` | 0.3 | 120 | 12 | Tooltips, badges |
+| `ripple` | 0.5 | 180 | 14 | Touch feedback |
+| `morph` | 0.8 | 100 | 18 | Shape transitions |
+| `settle` | 1.2 | 140 | 22 | Landing elements |
+| `wave` | 0.6 | 160 | 10 | Sheets, curtains |
+| `heavy` | 1.5 | 80 | 28 | Modals, thick movement |
+| `splash` | 0.4 | 220 | 12 | Quick responses |
+| `slide` | 0.7 | 150 | 16 | Drawers, sidebars |
+
+### Entrance/Exit Animations
+
+Pre-configured entrance/exit animations for common UI elements:
+
+```typescript
+import { LC_ENTRANCE } from '@nullspace/design-tokens';
+
+// Tooltip entrance
+const tooltipConfig = LC_ENTRANCE.tooltip;
+// {
+//   enter: { duration: 200, opacity: [0,1], blur: [0,4], scale: [0.95,1] },
+//   exit: { duration: 150, opacity: [1,0], blur: [4,0], scale: [1,0.95] },
+// }
+
+// Modal entrance
+const modalConfig = LC_ENTRANCE.modal;
+// {
+//   enter: { duration: 500, opacity: [0,1], blur: [0,16], scale: [0.9,1] },
+//   exit: { duration: 300, opacity: [1,0], blur: [16,8], scale: [1,0.95] },
+// }
+```
+
+### Reduced Motion
+
+All LC motion respects `prefers-reduced-motion`:
+
+```css
+@media (prefers-reduced-motion: reduce) {
+  /* All LC animations disabled or reduced to 10ms */
+  .animate-lc-sweep,
+  .animate-lc-shimmer,
+  .animate-lc-float,
+  .animate-lc-breathe,
+  .animate-lc-edge-glow {
+    animation: none !important;
+  }
+
+  :root {
+    --lc-motion-micro: 10ms;
+    --lc-motion-state: 10ms;
+    --lc-motion-reveal: 10ms;
+    --lc-motion-dramatic: 100ms;
+  }
+}
+```
+
+### Performance Guidelines
+
+- Maximum 1 animating glass surface per view (backdrop-filter is expensive)
+- Use `lc-suppress-decorative` during game sequences
+- Prefer springs over keyframes for interactive elements
+- Use CSS custom properties for coordinated timing changes

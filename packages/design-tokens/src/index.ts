@@ -258,3 +258,39 @@ export {
   type ViewDensity,
   type DeviceTier,
 } from './liquid-crystal-a11y.js';
+
+// Liquid Crystal Motion Language (US-269)
+export {
+  // Motion tiers
+  MOTION_TIER,
+  MOTION_TIMING,
+  MOTION_PRIORITY,
+  // Liquid Crystal animations
+  LC_SWEEP,
+  LC_REFRACT,
+  LC_EDGE,
+  LC_ENTRANCE,
+  LC_SPRING,
+  // CSS definitions
+  LC_KEYFRAMES,
+  LC_ANIMATION,
+  // Game state motion rules
+  GAME_STATE_MOTION_RULES,
+  // Utility functions
+  toEasingCSS,
+  shouldAllowMotion,
+  getMotionTiming,
+  generateMotionCSSVars,
+  generateLCMotionCSS,
+  // Type exports
+  type MotionTier,
+  type MotionPriorityKey,
+  type LCSweepPreset,
+  type LCRefractPreset,
+  type LCEdgePreset,
+  type LCEntrancePreset,
+  type LCSpringPreset,
+  type LCKeyframeName,
+  type LCAnimationName,
+  type GameStateKey,
+} from './liquid-crystal-motion.js';

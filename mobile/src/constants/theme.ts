@@ -19,7 +19,9 @@ import {
   // Animation
   DURATION,
   SPRING,
+  SPRING_LIQUID,
   STAGGER,
+  EASING_LUXURY,
   // Opacity
   OPACITY_SEMANTIC,
   // Shadows
@@ -32,6 +34,16 @@ import {
   LC_TYPE_ROLE,
   LC_TYPE_SEMANTIC,
   LC_GLASS_ADJUSTMENTS,
+  // Liquid Crystal Motion Language (US-269)
+  MOTION_TIER,
+  MOTION_TIMING,
+  MOTION_PRIORITY,
+  LC_SWEEP,
+  LC_REFRACT,
+  LC_EDGE,
+  LC_ENTRANCE,
+  LC_SPRING,
+  GAME_STATE_MOTION_RULES,
 } from '@nullspace/design-tokens';
 
 /**
@@ -676,6 +688,48 @@ export const ANIMATION = {
 
 // Re-export spring configs for components that need physics-based animations
 export { SPRING, STAGGER, CHIP_VALUES };
+
+/**
+ * Liquid Crystal Motion Language (US-269)
+ *
+ * Motion should feel like liquid glass reacting to user interaction.
+ * Specular highlights sweep across surfaces, refraction pulses on touch,
+ * and edges glow subtly to create material depth.
+ *
+ * Key principle: Motion is subordinate to game state. Decorative motion
+ * should never compete with win/loss animations.
+ */
+export const LC_MOTION = {
+  // Motion tiers
+  tier: MOTION_TIER,
+  timing: MOTION_TIMING,
+  priority: MOTION_PRIORITY,
+
+  // Animation configurations
+  sweep: LC_SWEEP,
+  refract: LC_REFRACT,
+  edge: LC_EDGE,
+  entrance: LC_ENTRANCE,
+
+  // Spring configs for Reanimated
+  spring: LC_SPRING,
+
+  // Game state rules
+  gameRules: GAME_STATE_MOTION_RULES,
+
+  // Easing curves (format: [x1, y1, x2, y2] for Reanimated)
+  easing: {
+    liquidSmooth: EASING_LUXURY.liquidSmooth,
+    liquidElastic: EASING_LUXURY.liquidElastic,
+    liquidSettle: EASING_LUXURY.liquidSettle,
+    breathe: EASING_LUXURY.breathe,
+    snapSettle: EASING_LUXURY.snapSettle,
+  },
+} as const;
+
+// Re-export motion primitives for direct access
+export { MOTION_TIER, MOTION_TIMING, MOTION_PRIORITY, SPRING_LIQUID, EASING_LUXURY };
+export { LC_SWEEP, LC_REFRACT, LC_EDGE, LC_ENTRANCE, LC_SPRING, GAME_STATE_MOTION_RULES };
 
 /**
  * Game accent colors - Monochrome redesign (US-262)

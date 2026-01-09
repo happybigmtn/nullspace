@@ -323,6 +323,12 @@ export default {
         // Liquid Crystal animations (US-265)
         'lc-sweep': 'lc-sweep 1.5s ease-in-out',
         'lc-refract': 'lc-refract 0.3s ease-out',
+        // Liquid Crystal motion language (US-269)
+        'lc-edge-glow': 'lc-edge-glow 2s var(--lc-motion-ease, ease) infinite',
+        'lc-shimmer': 'lc-shimmer 2s var(--lc-motion-ease, ease) infinite',
+        'lc-float': 'lc-float 3s var(--lc-motion-ease, ease) infinite',
+        'lc-breathe': 'lc-breathe 4s var(--lc-motion-ease, ease) infinite',
+        'lc-ripple': 'lc-ripple 0.6s cubic-bezier(0.68, -0.55, 0.27, 1.55) forwards',
       },
       keyframes: {
         shimmer: {
@@ -352,6 +358,28 @@ export default {
           '0%': { backdropFilter: 'blur(8px) brightness(105%)' },
           '50%': { backdropFilter: 'blur(12px) brightness(115%)' },
           '100%': { backdropFilter: 'blur(8px) brightness(105%)' },
+        },
+        // Liquid Crystal motion language (US-269)
+        'lc-edge-glow': {
+          '0%, 100%': { boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.15), inset 0 -1px 0 rgba(0,0,0,0.08)' },
+          '50%': { boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.25), inset 0 -1px 0 rgba(0,0,0,0.12)' },
+        },
+        'lc-shimmer': {
+          '0%': { backgroundPosition: '-100% 0', opacity: '0.5' },
+          '50%': { opacity: '0.8' },
+          '100%': { backgroundPosition: '100% 0', opacity: '0.5' },
+        },
+        'lc-float': {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-4px)' },
+        },
+        'lc-breathe': {
+          '0%, 100%': { opacity: '0.9', transform: 'scale(1)' },
+          '50%': { opacity: '1', transform: 'scale(1.02)' },
+        },
+        'lc-ripple': {
+          '0%': { transform: 'scale(0.8)', opacity: '1' },
+          '100%': { transform: 'scale(1.5)', opacity: '0' },
         },
       },
     },
