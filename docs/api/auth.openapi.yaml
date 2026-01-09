@@ -1,0 +1,1091 @@
+openapi: 3.1.0
+info:
+  title: Nullspace Auth API
+  description: |
+    Authentication and profile management API for Nullspace.
+
+    ## Authentication Flow
+
+    1. Client requests a challenge via `POST /auth/challenge`
+    2. Client signs the challenge with their passkey
+    3. Client submits credentials to `POST /auth/callback/credentials`
+    4. Server sets session cookie (`authjs.session-token`)
+    5. Subsequent requests include the session cookie
+
+    ## CSRF Protection
+
+    State-changing endpoints require CSRF token:
+    1. Fetch CSRF token from `GET /auth/csrf`
+    2. Include token in request body as `csrfToken` field
+    3. Cookie `authjs.csrf-token` is automatically sent
+
+    ## Error Responses
+
+    All errors use RFC 7807 Problem Details format (`application/problem+json`).
+  version: 1.0.0
+  contact:
+    name: Nullspace Team
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+
+servers:
+  - url: https://auth.nullspace.gg
+    description: Production
+  - url: https://auth.staging.nullspace.gg
+    description: Staging
+  - url: http://localhost:4000
+    description: Local development
+
+tags:
+  - name: Health
+    description: Health and metrics endpoints
+  - name: Authentication
+    description: Challenge and credential verification
+  - name: Profile
+    description: User profile and key management
+  - name: Billing
+    description: Stripe subscription management
+  - name: AI
+    description: AI-powered game strategy
+
+paths:
+  /healthz:
+    get:
+      operationId: getHealth
+      summary: Health check
+      tags:
+        - Health
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+
+  /metrics:
+    get:
+      operationId: getMetrics
+      summary: Get metrics (JSON)
+      tags:
+        - Health
+      security:
+        - bearerAuth: []
+        - metricsTokenAuth: []
+      responses:
+        '200':
+          description: Metrics in JSON format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetricsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /metrics/prometheus:
+    get:
+      operationId: getMetricsPrometheus
+      summary: Get metrics (Prometheus)
+      tags:
+        - Health
+      security:
+        - bearerAuth: []
+        - metricsTokenAuth: []
+      responses:
+        '200':
+          description: Metrics in Prometheus text format
+          content:
+            text/plain:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/csrf:
+    get:
+      operationId: getCsrfToken
+      summary: Get CSRF token
+      description: |
+        Returns a CSRF token for use in state-changing requests.
+
+        Also sets the `authjs.csrf-token` cookie which must be sent with subsequent requests.
+      tags:
+        - Authentication
+      security: []
+      responses:
+        '200':
+          description: CSRF token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  csrfToken:
+                    type: string
+                    description: Token to include in request body
+
+  /auth/challenge:
+    post:
+      operationId: createChallenge
+      summary: Create authentication challenge
+      description: |
+        Generates a cryptographic challenge for passkey authentication.
+
+        The challenge must be signed by the passkey and submitted to `/auth/callback/credentials`.
+
+        Rate limited: 30 requests/minute per IP (configurable).
+      tags:
+        - Authentication
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - publicKey
+              properties:
+                publicKey:
+                  type: string
+                  pattern: ^[0-9a-fA-F]{64}$
+                  description: Ed25519 public key (32 bytes hex-encoded)
+                  example: 1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
+      responses:
+        '200':
+          description: Challenge created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChallengeResponse'
+        '400':
+          description: Invalid public key
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          $ref: '#/components/responses/OriginNotAllowed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /auth/callback/credentials:
+    post:
+      operationId: authenticateCredentials
+      summary: Authenticate with signed challenge
+      description: |
+        Verifies the signed challenge and creates a session.
+
+        On success, sets the `authjs.session-token` cookie.
+
+        Request must include CSRF token from `/auth/csrf`.
+      tags:
+        - Authentication
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - publicKey
+                - signature
+                - challengeId
+                - csrfToken
+              properties:
+                publicKey:
+                  type: string
+                  pattern: ^[0-9a-fA-F]{64}$
+                  description: Ed25519 public key (32 bytes hex)
+                signature:
+                  type: string
+                  pattern: ^[0-9a-fA-F]{128}$
+                  description: Ed25519 signature (64 bytes hex)
+                challengeId:
+                  type: string
+                  format: uuid
+                  description: Challenge ID from `/auth/challenge`
+                csrfToken:
+                  type: string
+                  description: CSRF token from `/auth/csrf`
+      responses:
+        '302':
+          description: Authentication successful, redirecting
+          headers:
+            Location:
+              schema:
+                type: string
+            Set-Cookie:
+              schema:
+                type: string
+              description: Session cookie
+        '400':
+          description: Invalid credentials
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          $ref: '#/components/responses/CsrfInvalid'
+
+  /mobile/challenge:
+    post:
+      operationId: createMobileChallenge
+      summary: Create mobile authentication challenge
+      description: |
+        Mobile-specific challenge endpoint. Does not require Origin header.
+
+        Requires `AUTH_MOBILE_ENABLED=true` on server.
+      tags:
+        - Authentication
+      security: []
+      requestBody:
+        $ref: '#/paths/~1auth~1challenge/post/requestBody'
+      responses:
+        '200':
+          description: Challenge created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChallengeResponse'
+        '400':
+          description: Invalid public key
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Mobile endpoints disabled
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /mobile/entitlements:
+    post:
+      operationId: getMobileEntitlements
+      summary: Get entitlements for mobile
+      description: |
+        Returns user entitlements after verifying signature.
+
+        Does not create a session - use for mobile apps that maintain
+        their own session state.
+
+        Requires `AUTH_MOBILE_ENABLED=true` on server.
+      tags:
+        - Authentication
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - publicKey
+                - signature
+                - challengeId
+              properties:
+                publicKey:
+                  type: string
+                  pattern: ^[0-9a-fA-F]{64}$
+                signature:
+                  type: string
+                  pattern: ^[0-9a-fA-F]{128}$
+                challengeId:
+                  type: string
+                  format: uuid
+      responses:
+        '200':
+          description: Entitlements returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entitlements:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Entitlement'
+        '400':
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Mobile endpoints disabled
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /profile:
+    get:
+      operationId: getProfile
+      summary: Get user profile
+      description: |
+        Returns the authenticated user's profile including entitlements
+        and linked EVM address.
+
+        Rate limited: 60 requests/minute per IP.
+      tags:
+        - Profile
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Profile returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/OriginNotAllowed'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /profile/link-public-key:
+    post:
+      operationId: linkPublicKey
+      summary: Link additional public key
+      description: |
+        Links an additional Ed25519 public key to the user's account.
+
+        Requires CSRF token and valid signature proving key ownership.
+      tags:
+        - Profile
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - publicKey
+                - signature
+                - challengeId
+                - csrfToken
+              properties:
+                publicKey:
+                  type: string
+                  pattern: ^[0-9a-fA-F]{64}$
+                signature:
+                  type: string
+                  pattern: ^[0-9a-fA-F]{128}$
+                challengeId:
+                  type: string
+                  format: uuid
+                csrfToken:
+                  type: string
+      responses:
+        '200':
+          description: Public key linked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+        '400':
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/CsrfInvalid'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /profile/evm-challenge:
+    post:
+      operationId: createEvmChallenge
+      summary: Create EVM linking challenge
+      description: |
+        Generates a message for the user to sign with their EVM wallet
+        to link an Ethereum address.
+
+        User must have a linked public key first.
+      tags:
+        - Profile
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - address
+                - chainId
+                - csrfToken
+              properties:
+                address:
+                  type: string
+                  pattern: ^0x[0-9a-fA-F]{40}$
+                  description: Ethereum address
+                  example: '0x1234567890123456789012345678901234567890'
+                chainId:
+                  type: integer
+                  description: EVM chain ID (must be in allowed list)
+                  example: 1
+                csrfToken:
+                  type: string
+      responses:
+        '200':
+          description: EVM challenge created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvmChallengeResponse'
+        '400':
+          description: Invalid request or no linked public key
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: CSRF invalid or chain not allowed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /profile/link-evm:
+    post:
+      operationId: linkEvm
+      summary: Link EVM address
+      description: |
+        Verifies the EVM signature and links the address to the user's account.
+      tags:
+        - Profile
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - address
+                - signature
+                - challengeId
+                - chainId
+                - csrfToken
+              properties:
+                address:
+                  type: string
+                  pattern: ^0x[0-9a-fA-F]{40}$
+                signature:
+                  type: string
+                  description: EVM signature (0x-prefixed)
+                challengeId:
+                  type: string
+                  format: uuid
+                chainId:
+                  type: integer
+                csrfToken:
+                  type: string
+      responses:
+        '200':
+          description: EVM address linked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+                  link:
+                    $ref: '#/components/schemas/EvmLink'
+        '400':
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/CsrfInvalid'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /profile/unlink-evm:
+    post:
+      operationId: unlinkEvm
+      summary: Unlink EVM address
+      description: Removes the linked EVM address from the user's account.
+      tags:
+        - Profile
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - csrfToken
+              properties:
+                csrfToken:
+                  type: string
+      responses:
+        '200':
+          description: EVM address unlinked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/CsrfInvalid'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /profile/sync-freeroll:
+    post:
+      operationId: syncFreeroll
+      summary: Sync freeroll limits
+      description: |
+        Synchronizes the user's freeroll limits to the casino chain.
+
+        User must have a linked public key.
+      tags:
+        - Profile
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - csrfToken
+              properties:
+                csrfToken:
+                  type: string
+      responses:
+        '200':
+          description: Freeroll synced
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    const: true
+                  status:
+                    type: string
+                    description: Sync status message
+                  limit:
+                    oneOf:
+                      - type: integer
+                      - type: 'null'
+                    description: Current freeroll limit (null if not applicable)
+        '400':
+          description: No public key in session
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/CsrfInvalid'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          description: Sync failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /ai/strategy:
+    post:
+      operationId: getAiStrategy
+      summary: Get AI game strategy
+      description: |
+        Returns AI-powered strategy advice for casino games using Google Gemini.
+
+        Rate limited: 10 requests/minute per IP.
+
+        Disabled if `AI_STRATEGY_DISABLED=true` or no `GEMINI_API_KEY`.
+      tags:
+        - AI
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - gameType
+              properties:
+                gameType:
+                  type: string
+                  maxLength: 64
+                  description: Game type (e.g., "blackjack", "poker")
+                  example: blackjack
+                playerCards:
+                  type: array
+                  maxItems: 10
+                  items: {}
+                  description: Player's current cards
+                dealerUpCard:
+                  description: Dealer's visible card (if applicable)
+                history:
+                  type: array
+                  maxItems: 20
+                  items: {}
+                  description: Recent game history
+      responses:
+        '200':
+          description: Strategy advice
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  advice:
+                    type: string
+                    maxLength: 500
+                    description: AI-generated strategy advice
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          description: AI service unavailable
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /billing/checkout:
+    post:
+      operationId: createCheckout
+      summary: Create Stripe checkout session
+      description: |
+        Creates a Stripe checkout session for subscription purchase.
+
+        Disabled if `AUTH_BILLING_ENABLED=false`.
+
+        Rate limited: 20 requests/minute per IP.
+      tags:
+        - Billing
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - priceId
+                - successUrl
+                - cancelUrl
+                - csrfToken
+              properties:
+                priceId:
+                  type: string
+                  description: Stripe price ID
+                successUrl:
+                  type: string
+                  format: uri
+                  description: Redirect URL on success (must be allowed origin)
+                cancelUrl:
+                  type: string
+                  format: uri
+                  description: Redirect URL on cancel (must be allowed origin)
+                tier:
+                  type: string
+                  description: Subscription tier (optional)
+                allowPromotionCodes:
+                  type: boolean
+                  default: false
+                  description: Allow promotion codes at checkout
+                csrfToken:
+                  type: string
+      responses:
+        '200':
+          description: Checkout session created
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Stripe CheckoutSession object
+        '400':
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/CsrfInvalid'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/BillingDisabled'
+
+  /billing/portal:
+    post:
+      operationId: createPortal
+      summary: Create Stripe customer portal session
+      description: |
+        Creates a Stripe customer portal session for managing subscriptions.
+
+        Disabled if `AUTH_BILLING_ENABLED=false`.
+      tags:
+        - Billing
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - returnUrl
+                - csrfToken
+              properties:
+                returnUrl:
+                  type: string
+                  format: uri
+                  description: Return URL (must be allowed origin)
+                csrfToken:
+                  type: string
+      responses:
+        '200':
+          description: Portal session created
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Stripe BillingPortalSession object
+        '400':
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/CsrfInvalid'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/BillingDisabled'
+
+  /billing/reconcile:
+    post:
+      operationId: reconcileSubscriptions
+      summary: Reconcile subscriptions with Stripe
+      description: |
+        Fetches and reconciles subscription status with Stripe.
+
+        Disabled if `AUTH_BILLING_ENABLED=false`.
+      tags:
+        - Billing
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - csrfToken
+              properties:
+                limit:
+                  type: integer
+                  description: Maximum subscriptions to fetch
+                csrfToken:
+                  type: string
+      responses:
+        '200':
+          description: Reconciliation complete
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Stripe subscription data
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/CsrfInvalid'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/BillingDisabled'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Bearer token for metrics endpoints
+    metricsTokenAuth:
+      type: apiKey
+      in: header
+      name: x-metrics-token
+      description: Alternative metrics auth header
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: authjs.session-token
+      description: Session cookie set after authentication
+
+  responses:
+    Unauthorized:
+      description: Not authenticated
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          example:
+            type: urn:nullspace:problem:unauthorized
+            title: Unauthorized
+            status: 401
+            detail: Authentication required
+
+    OriginNotAllowed:
+      description: Origin header not in allowed list
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          example:
+            type: urn:nullspace:problem:origin-not-allowed
+            title: Forbidden
+            status: 403
+            detail: Origin not allowed
+            code: origin_not_allowed
+
+    CsrfInvalid:
+      description: CSRF token missing or invalid
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          example:
+            type: urn:nullspace:problem:csrf-invalid
+            title: Forbidden
+            status: 403
+            detail: CSRF token missing or invalid
+            code: csrf_invalid
+
+    RateLimited:
+      description: Rate limit exceeded
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/RateLimitedProblem'
+          example:
+            type: urn:nullspace:problem:rate-limited
+            title: Too Many Requests
+            status: 429
+            detail: Rate limit exceeded. Retry after 60 seconds.
+            retryAfter: 60
+
+    BillingDisabled:
+      description: Billing functionality is disabled
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          example:
+            type: urn:nullspace:problem:billing-disabled
+            title: Service Unavailable
+            status: 503
+            detail: Billing is not enabled on this server
+            code: billing_disabled
+
+  schemas:
+    ProblemDetails:
+      type: object
+      description: RFC 7807 Problem Details
+      required:
+        - type
+        - title
+        - status
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri
+        code:
+          type: string
+          description: Machine-readable error code
+
+    RateLimitedProblem:
+      allOf:
+        - $ref: '#/components/schemas/ProblemDetails'
+        - type: object
+          properties:
+            retryAfter:
+              type: integer
+
+    ChallengeResponse:
+      type: object
+      required:
+        - challengeId
+        - challenge
+        - expiresAtMs
+      properties:
+        challengeId:
+          type: string
+          format: uuid
+          description: Unique challenge identifier
+        challenge:
+          type: string
+          description: Challenge bytes (hex-encoded)
+        expiresAtMs:
+          type: integer
+          format: int64
+          description: Challenge expiry (Unix timestamp ms)
+
+    EvmChallengeResponse:
+      type: object
+      required:
+        - challengeId
+        - message
+        - expiresAtMs
+        - address
+        - chainId
+      properties:
+        challengeId:
+          type: string
+          format: uuid
+        message:
+          type: string
+          description: Message to sign with EVM wallet
+        expiresAtMs:
+          type: integer
+          format: int64
+        address:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{40}$
+        chainId:
+          type: integer
+
+    Entitlement:
+      type: object
+      properties:
+        type:
+          type: string
+          description: Entitlement type
+        tier:
+          type: string
+          description: Subscription tier (if applicable)
+        expiresAt:
+          type: string
+          format: date-time
+          description: Expiry timestamp (if applicable)
+
+    EvmLink:
+      type: object
+      properties:
+        address:
+          type: string
+          pattern: ^0x[0-9a-fA-F]{40}$
+        chainId:
+          type: integer
+        linkedAt:
+          type: string
+          format: date-time
+
+    ProfileResponse:
+      type: object
+      properties:
+        session:
+          type: object
+          properties:
+            user:
+              type: object
+              properties:
+                id:
+                  type: string
+                authProvider:
+                  type: string
+                authSubject:
+                  type: string
+        entitlements:
+          type: array
+          items:
+            $ref: '#/components/schemas/Entitlement'
+        evmLink:
+          oneOf:
+            - $ref: '#/components/schemas/EvmLink'
+            - type: 'null'
+
+    MetricsResponse:
+      type: object
+      properties:
+        counters:
+          type: object
+          additionalProperties:
+            type: number
+        timings:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              count:
+                type: integer
+              totalMs:
+                type: number
+              maxMs:
+                type: number
+              avgMs:
+                type: number

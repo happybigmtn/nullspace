@@ -1,0 +1,17 @@
+# Redocly OpenAPI linting configuration
+
+apis:
+  gateway:
+    root: gateway.openapi.yaml
+  auth:
+    root: auth.openapi.yaml
+
+rules:
+  # Health/readiness endpoints don't need 4xx responses
+  operation-4xx-response: off
+
+  # Auth callback returns 302, which is valid for redirects
+  operation-2xx-response: off
+
+  # Not all operations need examples
+  no-invalid-schema-examples: warn
