@@ -134,3 +134,16 @@ Categories by count:
   - Used 80% of spec memory to leave headroom for OS/overhead
 - Blockers: None. File validates with docker compose config.
 
+### 2026-01-08 - US-253: Log warning on super-mode payout saturation
+- Files: execution/src/casino/super_mode.rs, docs/RUNBOOK.md
+- Decisions:
+  - Added `tracing::warn!` to three payout functions when saturation occurs:
+    - apply_super_multiplier_cards: Card-based games (Blackjack, Baccarat, Poker)
+    - apply_super_multiplier_number: Number-based games (Roulette)
+    - apply_super_multiplier_total: Total-based games (Sic Bo, Craps)
+  - Warning includes base_payout, total_multiplier, and relevant context
+  - Detection tracks intermediate saturation during multiplier stacking
+  - Updated test_super_stacking_logs_warning_on_saturation to document new behavior
+  - Added RUNBOOK.md §4.13 with alert configuration guidance
+- Blockers: None. All 406 execution tests pass.
+

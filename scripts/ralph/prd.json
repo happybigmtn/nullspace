@@ -696,8 +696,8 @@
         "Add a test to verify saturation logging/metric",
         "Update observability or runbook guidance for monitoring"
       ],
-      "passes": false,
-      "notes": "Silent saturation can mask payout calculation issues in super-mode scenarios."
+      "passes": true,
+      "notes": "Added tracing::warn! to apply_super_multiplier_{cards,number,total}. RUNBOOK.md §4.13 documents alert configuration."
     },
     {
       "id": "US-254",
