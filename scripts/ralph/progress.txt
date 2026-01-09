@@ -689,3 +689,16 @@ Categories by count:
 - Tests: All 406 execution tests pass, zero warnings
 - Blockers: None. Code hygiene improvement, no PRD story affected.
 
+### 2026-01-09 - QA-N02: Test vault password enforcement
+- Files: mobile/src/services/__tests__/vault.test.ts (verified), mobile/src/screens/__tests__/VaultScreen.test.tsx (verified), mobile/src/components/ui/__tests__/PasswordStrengthIndicator.test.tsx (verified)
+- Decisions:
+  - Verified existing comprehensive test coverage across 3 test files:
+    - vault.test.ts: "password validation" describe block with 3 tests (reject short, accept min length, reject empty unlock)
+    - VaultScreen.test.tsx: UI tests for "more characters needed" warning (< 12 chars) and vault creation (>= 12 chars)
+    - PasswordStrengthIndicator.test.tsx: Component tests for min length warnings and entropy calculation
+  - VAULT_PASSWORD_MIN_LENGTH = 12 characters enforced in both UI and crypto layers
+  - Password validation errors throw 'password_too_short' error code
+  - Real-time UI feedback shows characters remaining until 12-char minimum
+- Evidence: All tests pass when run individually and in suite
+- Blockers: None. Marking as passes: true based on existing test coverage.
+

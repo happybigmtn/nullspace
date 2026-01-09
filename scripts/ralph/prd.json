@@ -491,8 +491,9 @@
         "Try valid password",
         "Verify acceptance"
       ],
-      "passes": false,
-      "platform": "native"
+      "passes": true,
+      "platform": "native",
+      "notes": "Unit tests in vault.test.ts cover password validation (rejects < 12 chars, accepts >= 12 chars). UI tests in VaultScreen.test.tsx verify password strength indicator shows warning for short passwords. PasswordStrengthIndicator.test.tsx has additional coverage. All tests pass."
     },
     {
       "id": "QA-N03",
