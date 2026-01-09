@@ -887,8 +887,8 @@
         "Add blur fallbacks for unsupported browsers",
         "Create performance budgets for blur/backdrop-filter usage"
       ],
-      "passes": false,
-      "notes": "Glass effects can harm readability and performance if unchecked."
+      "passes": true,
+      "notes": "Implemented liquid-crystal-a11y.ts with WCAG contrast utilities (parseColor, getContrastRatio, validateGlassContrast), GLASS_TEXT_COLORS for pre-calculated safe text colors, REDUCED_MOTION config with CSS media query handling for LC animations (sweep/refract/heavy blur), PERFORMANCE_BUDGET constants (maxBlurRadius: 24px, maxGlassSurfaces: 5, view density guidelines). Added 30 unit tests. Updated docs/design.md with comprehensive a11y and performance guidelines. Blur fallbacks already existed in LIQUID_CRYSTAL_FALLBACK."
     },
     {
       "id": "US-269",
