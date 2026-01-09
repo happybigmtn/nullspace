@@ -466,8 +466,8 @@
         "Capture baseline for all game screens",
         "Add to CI pipeline"
       ],
-      "passes": false,
-      "notes": "No screenshots/snapshot tests."
+      "passes": true,
+      "notes": "Extended visual-regression.mjs to cover all 10 game screens (blackjack, roulette, baccarat, craps, hilo, sic-bo, video-poker, casino-war, three-card-poker, ultimate-holdem). 19 total baseline screenshots now captured. CI workflow already configured to run comparisons on PR and auto-update baselines with label."
     },
     {
       "id": "QA-N01",

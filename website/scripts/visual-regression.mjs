@@ -50,8 +50,53 @@ fs.mkdirSync(CURRENT_DIR, { recursive: true });
 fs.mkdirSync(DIFF_DIR, { recursive: true });
 
 /**
+ * Helper to generate game screen config
+ * Opens command palette and navigates to game via search
+ */
+function createGameScreen(gameId, gameName, description, colorScheme = 'light') {
+  return {
+    name: colorScheme === 'light' ? `game-${gameId}` : `game-${gameId}-dark`,
+    path: '/',
+    waitFor: 'heading:Select Your Mode',
+    setup: async (page) => {
+      await page.getByRole('button', { name: /cash game/i }).click();
+      await page.waitForTimeout(500);
+      await page.keyboard.press('/');
+      await page.waitForTimeout(300);
+      const search = page.getByPlaceholder(/search nullspace|type command/i);
+      if (await search.isVisible().catch(() => false)) {
+        await search.fill(gameName);
+        await page.getByText(new RegExp(`^${gameName}$`, 'i')).first().waitFor({ timeout: 5000 });
+        await page.getByText(new RegExp(`^${gameName}$`, 'i')).first().click();
+        await page.waitForTimeout(1500);
+      }
+    },
+    viewport: { width: 1280, height: 720 },
+    description: `${description} game table${colorScheme === 'dark' ? ' (dark mode)' : ''}`,
+    colorScheme,
+  };
+}
+
+/**
+ * All 10 casino games for visual regression coverage (QA-026)
+ * Note: 'name' must match the GameType enum value exactly for command palette search
+ */
+const GAME_CONFIGS = [
+  { id: 'blackjack', name: 'BLACKJACK', description: 'Blackjack' },
+  { id: 'roulette', name: 'ROULETTE', description: 'Roulette' },
+  { id: 'baccarat', name: 'BACCARAT', description: 'Baccarat' },
+  { id: 'craps', name: 'CRAPS', description: 'Craps' },
+  { id: 'hilo', name: 'HILO', description: 'Hi-Lo' },
+  { id: 'sic-bo', name: 'SIC_BO', description: 'Sic Bo' },
+  { id: 'video-poker', name: 'VIDEO_POKER', description: 'Video Poker' },
+  { id: 'casino-war', name: 'CASINO_WAR', description: 'Casino War' },
+  { id: 'three-card-poker', name: 'THREE_CARD', description: 'Three Card Poker' },
+  { id: 'ultimate-holdem', name: 'ULTIMATE_HOLDEM', description: 'Ultimate Texas Holdem' },
+];
+
+/**
  * Screen configurations for visual regression testing
- * Covers: Landing, Lobby, Games, Dark Mode (as per PRD US-164)
+ * Covers: Landing, Lobby, All 10 Games, Dark Mode (as per PRD US-164, QA-026)
  */
 const SCREENS = [
   // Light mode screens
@@ -95,48 +140,8 @@ const SCREENS = [
     description: 'Casino lobby on mobile',
     colorScheme: 'light',
   },
-  {
-    name: 'game-blackjack',
-    path: '/',
-    waitFor: 'heading:Select Your Mode',
-    setup: async (page) => {
-      await page.getByRole('button', { name: /cash game/i }).click();
-      await page.waitForTimeout(500);
-      await page.keyboard.press('/');
-      await page.waitForTimeout(300);
-      const search = page.getByPlaceholder(/search nullspace|type command/i);
-      if (await search.isVisible().catch(() => false)) {
-        await search.fill('blackjack');
-        await page.getByText(/^blackjack$/i).first().waitFor({ timeout: 5000 });
-        await page.getByText(/^blackjack$/i).first().click();
-        await page.waitForTimeout(1500);
-      }
-    },
-    viewport: { width: 1280, height: 720 },
-    description: 'Blackjack game table',
-    colorScheme: 'light',
-  },
-  {
-    name: 'game-roulette',
-    path: '/',
-    waitFor: 'heading:Select Your Mode',
-    setup: async (page) => {
-      await page.getByRole('button', { name: /cash game/i }).click();
-      await page.waitForTimeout(500);
-      await page.keyboard.press('/');
-      await page.waitForTimeout(300);
-      const search = page.getByPlaceholder(/search nullspace|type command/i);
-      if (await search.isVisible().catch(() => false)) {
-        await search.fill('roulette');
-        await page.getByText(/^roulette$/i).first().waitFor({ timeout: 5000 });
-        await page.getByText(/^roulette$/i).first().click();
-        await page.waitForTimeout(1500);
-      }
-    },
-    viewport: { width: 1280, height: 720 },
-    description: 'Roulette game table',
-    colorScheme: 'light',
-  },
+  // All 10 game screens (light mode)
+  ...GAME_CONFIGS.map((game) => createGameScreen(game.id, game.name, game.description, 'light')),
   // Dark mode screens
   {
     name: 'mode-select-dark',
@@ -158,6 +163,10 @@ const SCREENS = [
     description: 'Casino lobby in dark mode',
     colorScheme: 'dark',
   },
+  // Representative game screens in dark mode (blackjack, roulette, baccarat)
+  ...GAME_CONFIGS.filter((game) => ['blackjack', 'roulette', 'baccarat'].includes(game.id)).map((game) =>
+    createGameScreen(game.id, game.name, game.description, 'dark')
+  ),
 ];
 
 async function waitForHttpOk(url, timeoutMs = 30_000) {
