@@ -309,6 +309,7 @@ export function RouletteScreen() {
           <Pressable
             onPress={() => setShowAdvanced(true)}
             style={INTERACTIVE_STYLES.moreBetsButton}
+            testID="roulette-open-advanced"
           >
             <Text style={INTERACTIVE_STYLES.moreBetsText}>Bets ▾</Text>
           </Pressable>
@@ -330,18 +331,24 @@ export function RouletteScreen() {
       </View>
 
       {/* Message */}
-      <Text style={MESSAGE_STYLES.message}>{state.message}</Text>
+      <Text style={MESSAGE_STYLES.message} testID="roulette-message">{state.message}</Text>
 
       {/* Win Amount */}
       {state.winAmount > 0 && (
-        <Text style={BET_STYLES.winAmount}>+${state.winAmount}</Text>
+        <Text style={BET_STYLES.winAmount} testID="roulette-win-amount">+${state.winAmount}</Text>
+      )}
+
+      {/* Result Indicator (for E2E testing) */}
+      {state.phase === 'result' && state.result !== null && (
+        <Text testID={`roulette-result-${state.result}`} style={{ position: 'absolute', opacity: 0 }} />
       )}
 
       {/* Quick Bets */}
-      <View style={styles.quickBets}>
+      <View style={styles.quickBets} testID="roulette-quick-bets">
         {QUICK_BETS.map((bet) => (
           <Pressable
             key={bet}
+            testID={`bet-area-${bet.toLowerCase()}`}
             onPress={() => addBet(bet)}
             disabled={state.phase !== 'betting' || isDisconnected}
             style={({ pressed }) => [
@@ -359,14 +366,14 @@ export function RouletteScreen() {
 
       {/* Bet Summary */}
       {totalBet > 0 && (
-        <View style={BET_STYLES.betContainer}>
+        <View style={BET_STYLES.betContainer} testID="roulette-bet-summary">
           <Text style={BET_STYLES.betLabel}>Total Bet</Text>
-          <Text style={BET_STYLES.betAmount}>${totalBet}</Text>
+          <Text style={BET_STYLES.betAmount} testID="total-bet-amount">${totalBet}</Text>
         </View>
       )}
 
       {/* Actions */}
-      <View style={ACTION_STYLES.actionsCentered}>
+      <View style={ACTION_STYLES.actionsCentered} testID="roulette-actions">
         {state.phase === 'betting' && (
           <PrimaryButton
             label="SPIN"
@@ -374,6 +381,7 @@ export function RouletteScreen() {
             disabled={state.bets.length === 0 || isDisconnected || isSubmitting}
             variant="primary"
             size="large"
+            testID="spin-button"
           />
         )}
 
@@ -383,6 +391,7 @@ export function RouletteScreen() {
             onPress={handleNewGame}
             variant="primary"
             size="large"
+            testID="roulette-new-game-button"
           />
         )}
       </View>
@@ -400,7 +409,7 @@ export function RouletteScreen() {
       </GameLayout>
 
       {/* Advanced Bets Drawer */}
-      <Modal visible={showAdvanced} transparent animationType="slide">
+      <Modal visible={showAdvanced} transparent animationType="slide" testID="roulette-advanced-drawer">
         <View style={DRAWER_STYLES.drawerOverlay}>
           <Animated.View
             entering={drawerEnter}
@@ -408,29 +417,32 @@ export function RouletteScreen() {
             style={DRAWER_STYLES.drawer}
           >
             <View style={DRAWER_STYLES.drawerHeader}>
-              <Pressable onPress={() => setShowAdvanced(false)} style={DRAWER_STYLES.drawerHandle}>
+              <Pressable onPress={() => setShowAdvanced(false)} style={DRAWER_STYLES.drawerHandle} testID="roulette-close-drawer">
                 <Text style={DRAWER_STYLES.drawerHandleText}>Bets ▾</Text>
               </Pressable>
             </View>
 
             {/* Dozens */}
             <Text style={DRAWER_STYLES.sectionTitle}>Dozens (2:1)</Text>
-            <View style={DRAWER_STYLES.betRow}>
+            <View style={DRAWER_STYLES.betRow} testID="roulette-dozens-row">
               <Pressable
                 style={DRAWER_STYLES.advancedBet}
                 onPress={() => addBet('DOZEN_1')}
+                testID="bet-dozen-1"
               >
                 <Text style={DRAWER_STYLES.advancedBetText}>1-12</Text>
               </Pressable>
               <Pressable
                 style={DRAWER_STYLES.advancedBet}
                 onPress={() => addBet('DOZEN_2')}
+                testID="bet-dozen-2"
               >
                 <Text style={DRAWER_STYLES.advancedBetText}>13-24</Text>
               </Pressable>
               <Pressable
                 style={DRAWER_STYLES.advancedBet}
                 onPress={() => addBet('DOZEN_3')}
+                testID="bet-dozen-3"
               >
                 <Text style={DRAWER_STYLES.advancedBetText}>25-36</Text>
               </Pressable>
@@ -438,22 +450,25 @@ export function RouletteScreen() {
 
             {/* Columns */}
             <Text style={DRAWER_STYLES.sectionTitle}>Columns (2:1)</Text>
-            <View style={DRAWER_STYLES.betRow}>
+            <View style={DRAWER_STYLES.betRow} testID="roulette-columns-row">
               <Pressable
                 style={DRAWER_STYLES.advancedBet}
                 onPress={() => addBet('COL_1')}
+                testID="bet-column-1"
               >
                 <Text style={DRAWER_STYLES.advancedBetText}>Col 1</Text>
               </Pressable>
               <Pressable
                 style={DRAWER_STYLES.advancedBet}
                 onPress={() => addBet('COL_2')}
+                testID="bet-column-2"
               >
                 <Text style={DRAWER_STYLES.advancedBetText}>Col 2</Text>
               </Pressable>
               <Pressable
                 style={DRAWER_STYLES.advancedBet}
                 onPress={() => addBet('COL_3')}
+                testID="bet-column-3"
               >
                 <Text style={DRAWER_STYLES.advancedBetText}>Col 3</Text>
               </Pressable>
@@ -461,23 +476,25 @@ export function RouletteScreen() {
 
             {/* Inside Bets */}
             <Text style={DRAWER_STYLES.sectionTitle}>Inside Bets</Text>
-            <View style={styles.insideTabs}>
+            <View style={styles.insideTabs} testID="roulette-inside-tabs">
               {(['SPLIT_H', 'SPLIT_V', 'STREET', 'CORNER', 'SIX_LINE'] as InsideBetType[]).map((type) => (
                 <Pressable
                   key={type}
                   onPress={() => setInsideMode(type)}
                   style={[styles.insideTab, insideMode === type && styles.insideTabActive]}
+                  testID={`bet-tab-${type.toLowerCase()}`}
                 >
                   <Text style={styles.insideTabText}>{type.replace('_', ' ')}</Text>
                 </Pressable>
               ))}
             </View>
-            <View style={styles.numberGrid}>
+            <View style={styles.numberGrid} testID="roulette-inside-grid">
               {insideTargets.map((num) => (
                 <Pressable
                   key={`${insideMode}-${num}`}
                   style={styles.numberBet}
                   onPress={() => addBet(insideMode, num)}
+                  testID={`bet-${insideMode.toLowerCase()}-${num}`}
                 >
                   <Text style={styles.numberText}>{num}</Text>
                 </Pressable>
@@ -486,7 +503,7 @@ export function RouletteScreen() {
 
             {/* Straight Numbers */}
             <Text style={DRAWER_STYLES.sectionTitle}>Straight Up (35:1)</Text>
-            <View style={styles.numberGrid}>
+            <View style={styles.numberGrid} testID="roulette-straight-grid">
               {[0, ...Array.from({ length: 36 }, (_, i) => i + 1)].map((num) => (
                 <Pressable
                   key={num}
@@ -495,6 +512,7 @@ export function RouletteScreen() {
                     { backgroundColor: getResultColor(num) },
                   ]}
                   onPress={() => addBet('STRAIGHT', num)}
+                  testID={`bet-straight-${num}`}
                 >
                   <Text style={styles.numberText}>{num}</Text>
                 </Pressable>

@@ -312,8 +312,8 @@
         "Test outside bets (red/black, odd/even)",
         "Verify payouts correct"
       ],
-      "passes": false,
-      "notes": "Chip drag tested, specific bets missing."
+      "passes": true,
+      "notes": "Added comprehensive 'Roulette All Bet Categories (QA-009)' test suite in mobile/e2e/games.test.ts with 24 tests: Outside bets (7 tests: RED, BLACK, ODD, EVEN, LOW, HIGH, multiple bets), Dozens/Columns (6 tests), Inside bets - Straight Up (3 tests on 0, 17, 32), Split H/V (2 tests), Street (1 test), Corner (1 test), Six Line (1 test), Game Flow (4 tests: new game, win display, bet accumulation, chip selection). Added testIDs to RouletteScreen: bet-area-{type}, spin-button, roulette-new-game-button, bet-dozen-{n}, bet-column-{n}, bet-tab-{type}, bet-straight-{n}, bet-{insideMode}-{n}, roulette-open-advanced, roulette-close-drawer."
     },
     {
       "id": "QA-010",

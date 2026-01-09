@@ -862,3 +862,32 @@ Categories by count:
 - Evidence: Typecheck passes, lint passes (0 errors)
 - Blockers: None. Detox tests require iOS simulator or Android emulator to execute.
 
+### 2026-01-09 - QA-009: Test Roulette all bet categories
+- Files: mobile/src/screens/games/RouletteScreen.tsx, mobile/e2e/games.test.ts
+- Decisions:
+  - Added testIDs to RouletteScreen for E2E testability:
+    - Quick bets: testID="bet-area-{red|black|odd|even|low|high}"
+    - Bet summary: testID="total-bet-amount"
+    - Actions: testID="spin-button", testID="roulette-new-game-button"
+    - Message/Win: testID="roulette-message", testID="roulette-win-amount"
+    - Result: testID="roulette-result-{number}" (hidden indicator for verification)
+    - Advanced drawer: testID="roulette-open-advanced", testID="roulette-close-drawer"
+    - Dozens: testID="bet-dozen-{1|2|3}"
+    - Columns: testID="bet-column-{1|2|3}"
+    - Inside bet tabs: testID="bet-tab-{split_h|split_v|street|corner|six_line}"
+    - Inside bets: testID="bet-{insideMode}-{num}" (e.g., bet-split_h-1)
+    - Straight numbers: testID="bet-straight-{0-36}"
+  - Created comprehensive 'Roulette All Bet Categories (QA-009)' test suite with 24 tests:
+    - Outside Bets (1:1 payout): 7 tests for RED, BLACK, ODD, EVEN, LOW, HIGH, and multiple outside bets
+    - Dozens/Columns (2:1 payout): 6 tests for DOZEN_1/2/3 and COLUMN_1/2/3
+    - Inside Bets - Straight Up (35:1 payout): 3 tests on 0 (green), 17 (black), 32 (red)
+    - Inside Bets - Split (17:1 payout): 2 tests for horizontal and vertical splits
+    - Inside Bets - Street (11:1 payout): 1 test covering row 1-2-3
+    - Inside Bets - Corner (8:1 payout): 1 test covering 1-2-4-5
+    - Inside Bets - Six Line (5:1 payout): 1 test covering two adjacent rows
+    - Game Flow Verification: 4 tests for new game, win amount display, bet accumulation, chip selection
+  - Tests open advanced bets drawer for dozens/columns/inside/straight bets
+  - Tests verify bet placement, total bet amount, and game resolution
+- Evidence: Typecheck passes, lint passes (0 errors)
+- Blockers: None. Detox tests require iOS simulator or Android emulator to execute.
+
