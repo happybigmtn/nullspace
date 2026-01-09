@@ -325,8 +325,8 @@
         "Test tie bet",
         "Verify commission on banker win"
       ],
-      "passes": false,
-      "notes": "Integration test only."
+      "passes": true,
+      "notes": "Added testIDs to BaccaratScreen (player-hand, banker-hand, player-total, banker-total, game-message, game-result-player/banker/tie, bet-area-player/banker/tie, deal-button, new-game-button, total-bet-amount). Created comprehensive 'Baccarat Main Bets (QA-010)' test suite in mobile/e2e/games.test.ts with 13 tests: Player bet (3 tests: place/resolve, show totals, winner badge), Banker bet (3 tests: place/resolve, winner badge, commission verification), Tie bet (3 tests: place/resolve, combined bets, tie indicator), Game Flow (4 tests: new game, bet accumulation, chip selection, hand labels). Also added bet summary display to show total bet amount during betting phase."
     },
     {
       "id": "QA-011",

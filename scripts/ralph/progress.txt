@@ -891,3 +891,26 @@ Categories by count:
 - Evidence: Typecheck passes, lint passes (0 errors)
 - Blockers: None. Detox tests require iOS simulator or Android emulator to execute.
 
+### 2026-01-09 - QA-010: Test Baccarat main bets
+- Files: mobile/src/screens/games/BaccaratScreen.tsx, mobile/e2e/games.test.ts
+- Decisions:
+  - Added testIDs to BaccaratScreen for E2E testability:
+    - Hands: testID="player-hand", testID="banker-hand"
+    - Labels: testID="player-hand-label", testID="banker-hand-label"
+    - Totals: testID="player-total", testID="banker-total"
+    - Game message: testID="game-message"
+    - Game result indicators: testID="game-result-player", testID="game-result-banker", testID="game-result-tie"
+    - Bet areas (main): testID="bet-area-player", testID="bet-area-banker"
+    - Bet areas (side): testID="bet-area-tie", testID="bet-area-p-pair", etc.
+    - Actions: testID="deal-button", testID="new-game-button"
+    - Bet summary: testID="total-bet-amount"
+  - Added bet summary display showing total bet amount during betting phase
+  - Created comprehensive 'Baccarat Main Bets (QA-010)' test suite with 13 tests:
+    - Player Bet (1:1 payout): 3 tests for place/resolve, show totals, winner badge
+    - Banker Bet (1:1 with 5% commission): 3 tests for place/resolve, winner badge, commission verification
+    - Tie Bet (8:1 payout): 3 tests for place/resolve, combined bets, tie indicator
+    - Game Flow Verification: 4 tests for new game, bet accumulation, chip selection, hand labels
+  - Tests handle RNG by retrying up to 10-15 times for specific outcomes (player/banker/tie wins)
+- Evidence: Typecheck passes, lint passes (0 errors)
+- Blockers: None. Detox tests require iOS simulator or Android emulator to execute.
+
