@@ -446,3 +446,15 @@ Categories by count:
   - Card suits: suitRed=MONO[500] (gray), suitBlack=MONO[0] (pure black)
 - Blockers: None. Aligns with US-261 (web monochrome) and US-260 (design-tokens).
 
+### 2026-01-09 - US-263: Monochrome game differentiation via geometric patterns
+- Files: mobile/src/components/game/GamePattern.tsx (new), mobile/src/components/game/FeltBackground.tsx, mobile/src/components/game/GameLayout.tsx, mobile/src/components/game/index.ts
+- Decisions:
+  - Created GamePattern.tsx with 10 unique Skia-rendered geometric patterns for game differentiation
+  - Patterns: diagonal-stripes, radial-segments, dot-grid, horizontal-lines, vertical-bars, chevron, honeycomb, triangle-mesh, crosshatch, diagonal-grid
+  - Each pattern uses white opacity overlays on MONO[0] black background
+  - Pattern density (sparse/medium/dense) from GAME_PATTERN tokens controls opacity/stroke width
+  - Updated FeltBackground to use GamePattern instead of color-based differentiation
+  - Updated GameLayout to use GamePatternId type from design-tokens
+  - Game identity now via texture/geometry instead of hue
+- Blockers: None. Pre-existing useAnimatedStyle lint error in LobbyScreen (architectural issue outside scope).
+

@@ -15,7 +15,7 @@ import { FeltBackground } from './FeltBackground';
 import { COLORS } from '../../constants/theme';
 import type { ConnectionState } from '../../services/websocket';
 import type { CelebrationState } from '../../hooks/useCelebration';
-import type { GameId } from '@nullspace/design-tokens';
+import type { GamePatternId } from '@nullspace/design-tokens';
 
 interface ConnectionStatus {
   connectionState: ConnectionState;
@@ -53,8 +53,8 @@ interface GameLayoutProps {
   onCelebrationComplete?: () => void;
   /** Game error state for error recovery overlay (US-120) */
   gameError?: GameErrorState;
-  /** Game ID for themed felt background (US-135) */
-  gameId?: GameId;
+  /** Game ID for monochrome pattern background (US-135, US-263) */
+  gameId?: GamePatternId;
 }
 
 export function GameLayout({
