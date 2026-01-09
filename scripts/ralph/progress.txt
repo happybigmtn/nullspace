@@ -64,3 +64,15 @@ Categories by count:
   - /profile/unlink-evm, /profile/sync-freeroll
   - /billing/checkout, /billing/portal, /billing/reconcile
 - Blockers: None. Gateway doesn't need CSRF as it uses WebSocket auth, not cookies.
+
+### 2026-01-08 - US-248: Honor X-Forwarded-For for gateway IP-based limits and metrics
+- Files: gateway/src/utils/client-ip.ts, gateway/src/index.ts, gateway/src/middleware/security.ts, gateway/tests/unit/client-ip.test.ts, configs/staging/gateway.env.example, docs/RUNBOOK.md
+- Decisions:
+  - Created getClientIp() utility with CIDR-based trusted proxy configuration
+  - TRUSTED_PROXY_CIDRS env var supports individual IPs, CIDR notation, and shorthands (docker, private, loopback)
+  - X-Forwarded-For (standard) checked first, then X-Real-IP (nginx convention)
+  - Only IPs matching TRUSTED_PROXY_CIDRS have forwarded headers trusted (prevents spoofing)
+  - Falls back to socket.remoteAddress when not behind trusted proxy
+- Impact: Connection limiter, session rate limits, and metrics now use real client IP
+- Tests: 28 unit tests covering CIDR matching, header extraction, normalization
+- Blockers: None. Caddy already sends X-Forwarded-For headers by default.

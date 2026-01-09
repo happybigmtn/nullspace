@@ -634,8 +634,8 @@
         "Add tests covering forwarded headers and fallback to socket remoteAddress",
         "Document proxy header expectations in runbooks/Caddy config"
       ],
-      "passes": false,
-      "notes": "Gateway runs behind Caddy in staging; current IP handling collapses all clients to proxy IP, breaking per-IP limits and metrics."
+      "passes": true,
+      "notes": "Implemented getClientIp() with CIDR-based TRUSTED_PROXY_CIDRS config. 28 unit tests. Docs in RUNBOOK.md §1.4.1."
     },
     {
       "id": "US-249",
