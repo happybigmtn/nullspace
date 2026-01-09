@@ -4,6 +4,7 @@ import { formatTime, HELP_CONTENT, buildHistoryEntry, formatSummaryLine, prepend
 import { PanelDrawer } from './PanelDrawer';
 import { Label } from './ui/Label';
 import { ThemeToggle } from '../ui/ThemeToggle';
+import { GlassSurface, GlassModal } from '../ui';
 
 interface HeaderProps {
     phase: string;
@@ -60,7 +61,11 @@ export const Header: React.FC<HeaderProps> = ({
                 : 'text-titanium-600 dark:text-titanium-200';
 
     return (
-        <header className="h-14 border-b border-titanium-200 flex items-center justify-between px-6 z-10 bg-glass-light backdrop-blur-xl sticky top-0 dark:border-titanium-800 dark:bg-glass-dark dark:text-titanium-100">
+        <GlassSurface
+            as="header"
+            depth="flat"
+            className="h-14 flex items-center justify-between px-6 z-10 sticky top-0 dark:text-titanium-100"
+        >
             <div className="flex items-center gap-4">
                 <span className="font-display font-semibold tracking-tight text-titanium-900 dark:text-titanium-100 text-base">nullspace</span>
                 {onOpenCommandPalette && (
@@ -103,7 +108,7 @@ export const Header: React.FC<HeaderProps> = ({
                 <ThemeToggle className="hidden md:inline-flex" />
                 {children}
             </div>
-        </header>
+        </GlassSurface>
     );
 };
 
@@ -342,7 +347,11 @@ export const Footer: React.FC<{ currentBet?: number; className?: string }> = ({ 
     const isCustom = currentBet && !bets.includes(currentBet);
 
     return (
-        <footer className={`hidden lg:flex fixed bottom-0 left-0 right-0 border-t border-titanium-200 bg-glass-light backdrop-blur-xl h-10 items-center justify-center gap-8 px-6 z-20 dark:border-titanium-800 dark:bg-glass-dark dark:text-titanium-100 ${className ?? ''}`}>
+        <GlassSurface
+            as="footer"
+            depth="flat"
+            className={`hidden lg:flex fixed bottom-0 left-0 right-0 h-10 items-center justify-center gap-8 px-6 z-20 dark:text-titanium-100 ${className ?? ''}`}
+        >
             <Label size="micro">Quick Bet Keys</Label>
             <div className="flex gap-6">
                 {bets.map((bet, i) => {
@@ -361,7 +370,7 @@ export const Footer: React.FC<{ currentBet?: number; className?: string }> = ({ 
                     <span className={`text-xs font-black transition-all group-hover:scale-110 ${isCustom ? 'text-mono-0 dark:text-mono-1000 underline underline-offset-2' : 'text-titanium-800'}`}>Custom</span>
                 </div>
             </div>
-        </footer>
+        </GlassSurface>
     );
 };
 
@@ -381,12 +390,13 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, searchQu
 
     return (
         <div
-            className="fixed inset-0 bg-titanium-900/45 backdrop-blur-md z-[100] flex items-start justify-center pt-24 px-4"
+            className="fixed inset-0 bg-mono-0/20 dark:bg-mono-0/40 backdrop-blur-sm z-[100] flex items-start justify-center pt-24 px-4"
             onClick={onClose}
         >
-            <div
-                className="w-full max-w-[640px] bg-white rounded-[32px] shadow-float overflow-hidden flex flex-col border border-titanium-300 max-h-[60vh] animate-scale-in dark:bg-titanium-900/85 dark:border-titanium-700"
-                onClick={(e) => e.stopPropagation()}
+            <GlassSurface
+                depth="overlay"
+                className="w-full max-w-[640px] rounded-[32px] overflow-hidden flex flex-col max-h-[60vh] animate-scale-in"
+                onClick={(e: React.MouseEvent) => e.stopPropagation()}
             >
                 <div className="px-8 py-6 border-b border-titanium-200 flex items-center gap-4 bg-titanium-100/60 dark:border-titanium-700 dark:bg-titanium-900/70">
                     <span className="text-mono-0 dark:text-mono-1000 font-black text-xl font-mono">&gt;</span>
@@ -423,7 +433,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, searchQu
                         <div className="px-8 py-12 text-titanium-600 text-center italic font-semibold dark:text-titanium-300">No results found.</div>
                     )}
                 </div>
-            </div>
+            </GlassSurface>
         </div>
     );
 };
@@ -432,8 +442,8 @@ export const CustomBetOverlay: React.FC<{ isOpen: boolean; betString: string; in
     if (!isOpen) return null;
 
     return (
-         <div className="fixed inset-0 bg-titanium-900/60 backdrop-blur-lg z-[100] flex items-center justify-center px-4">
-             <div className="bg-white rounded-[48px] p-12 shadow-float flex flex-col items-center gap-8 w-full max-w-md border border-titanium-200 animate-scale-in">
+         <div className="fixed inset-0 bg-mono-0/20 dark:bg-mono-0/40 backdrop-blur-sm z-[100] flex items-center justify-center px-4">
+             <GlassSurface depth="overlay" className="rounded-[48px] p-12 flex flex-col items-center gap-8 w-full max-w-md animate-scale-in">
                  <Label size="micro" variant="primary">Set Custom Wager</Label>
                  <div className="flex items-center text-8xl text-titanium-900 font-extrabold tracking-tighter font-display">
                      <span className="text-titanium-200">$</span>
@@ -453,7 +463,7 @@ export const CustomBetOverlay: React.FC<{ isOpen: boolean; betString: string; in
                         Use number keys to enter amount
                     </div>
                  </div>
-             </div>
+             </GlassSurface>
          </div>
     );
 };

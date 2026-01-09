@@ -7,6 +7,7 @@ import { ModifiersAccordion } from './ModifiersAccordion';
 import { useMagneticCursor } from '../../hooks/useMagneticCursor';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { SPRING_LIQUID_CONFIGS } from '../../utils/motion';
+import { GlassSurface } from '../ui';
 
 /**
  * Breathing animation constants for idle CTA
@@ -158,20 +159,21 @@ export const GameControlBar: React.FC<GameControlBarProps> = ({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [prefersReducedMotion, primaryAction?.disabled]);
 
-    const baseContainer = "fixed bottom-8 left-1/2 -translate-x-1/2 h-16 bg-white/80 backdrop-blur-2xl rounded-full border border-titanium-200 shadow-float flex items-center justify-between px-2 z-50 min-w-[320px] max-w-[95vw] transition-all motion-state animate-scale-in";
+    // US-266: Base container now uses GlassSurface with float depth
+    const baseContainerClasses = "fixed bottom-8 left-1/2 -translate-x-1/2 h-16 rounded-full flex items-center justify-between px-2 z-50 min-w-[320px] max-w-[95vw] transition-all motion-state animate-scale-in";
 
     if (!primaryAction && secondaryActions.length === 0 && children) {
         return (
-             <div className={baseContainer}>
+             <GlassSurface depth="float" className={baseContainerClasses}>
                 {children}
-            </div>
+            </GlassSurface>
         );
     }
 
     return (
         <>
-            {/* Main Floating Island */}
-            <div role="group" aria-label={ariaLabel} className={`${baseContainer} ${className}`}>
+            {/* Main Floating Island - US-266: Using GlassSurface for consistent glass effect */}
+            <GlassSurface depth="float" as="div" className={`${baseContainerClasses} ${className}`}>
                 {/* Left: Balance/Bet Info - LUX-010: Inline bet selector */}
                 <div className="flex flex-col pl-4 pr-3 border-r border-titanium-100">
                     {showBetSelector && currentBet !== undefined && onBetChange ? (
@@ -248,20 +250,21 @@ export const GameControlBar: React.FC<GameControlBarProps> = ({
                         <Grid className="text-titanium-400 group-hover:text-titanium-900 w-5 h-5" strokeWidth={2.5} />
                     </button>
                 </div>
-            </div>
+            </GlassSurface>
 
-            {/* Bottom Sheet / Menu Overlay */}
-            <div 
-                className={`fixed inset-0 z-[60] bg-titanium-900/20 backdrop-blur-sm transition-opacity motion-state ${
+            {/* Bottom Sheet / Menu Overlay - US-266: Using consistent backdrop */}
+            <div
+                className={`fixed inset-0 z-[60] bg-mono-0/20 dark:bg-mono-0/40 backdrop-blur-sm transition-opacity motion-state ${
                     menuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
                 }`}
                 onClick={() => setMenuOpen(false)}
             >
-                <div 
-                    className={`absolute bottom-0 left-0 right-0 bg-white rounded-t-[40px] p-8 pb-12 shadow-float border-t border-titanium-200 transition-transform motion-state ${
+                <GlassSurface
+                    depth="overlay"
+                    className={`absolute bottom-0 left-0 right-0 rounded-t-[40px] p-8 pb-12 transition-transform motion-state ${
                         menuOpen ? 'translate-y-0' : 'translate-y-full'
                     }`}
-                    onClick={(e) => e.stopPropagation()}
+                    onClick={(e: React.MouseEvent) => e.stopPropagation()}
                 >
                     {/* Sheet Handle */}
                     <div className="w-12 h-1 bg-titanium-200 rounded-full mx-auto mb-8" />
@@ -320,7 +323,7 @@ export const GameControlBar: React.FC<GameControlBarProps> = ({
                             </div>
                         )}
                     </div>
-                </div>
+                </GlassSurface>
             </div>
         </>
     );
