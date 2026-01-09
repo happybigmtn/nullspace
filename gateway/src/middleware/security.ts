@@ -6,6 +6,12 @@
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import {
+  PROBLEM_JSON_CONTENT_TYPE,
+  ProblemTypes,
+  createProblemDetails,
+  rateLimited,
+} from '@nullspace/types';
 import { trackRateLimitHit, trackRateLimitReset } from '../metrics/index.js';
 import { getClientIp } from '../utils/client-ip.js';
 
@@ -97,12 +103,12 @@ export function validateCors(
   if (!origin) {
     if (!config.allowNoOrigin) {
       res.statusCode = 403;
-      res.setHeader('Content-Type', 'application/json');
-      res.end(JSON.stringify({
-        error: 'Forbidden',
-        message: 'Origin header required',
+      res.setHeader('Content-Type', PROBLEM_JSON_CONTENT_TYPE);
+      res.end(JSON.stringify(createProblemDetails(403, 'Forbidden', {
+        type: ProblemTypes.ORIGIN_NOT_ALLOWED,
+        detail: 'Origin header required',
         code: 'CORS_ORIGIN_REQUIRED',
-      }));
+      })));
       return false;
     }
     // No origin but allowed
@@ -112,12 +118,12 @@ export function validateCors(
   // Check origin against allowlist
   if (!config.allowedOrigins.includes(origin)) {
     res.statusCode = 403;
-    res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify({
-      error: 'Forbidden',
-      message: 'Origin not allowed',
+    res.setHeader('Content-Type', PROBLEM_JSON_CONTENT_TYPE);
+    res.end(JSON.stringify(createProblemDetails(403, 'Forbidden', {
+      type: ProblemTypes.ORIGIN_NOT_ALLOWED,
+      detail: 'Origin not allowed',
       code: 'CORS_ORIGIN_NOT_ALLOWED',
-    }));
+    })));
     return false;
   }
 
@@ -292,14 +298,11 @@ export function applyRateLimit(
 
   if (!result.allowed) {
     res.statusCode = 429;
-    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Type', PROBLEM_JSON_CONTENT_TYPE);
     if (result.retryAfter) {
       res.setHeader('Retry-After', result.retryAfter.toString());
     }
-    res.end(JSON.stringify({
-      error: 'Too many requests',
-      retryAfter: result.retryAfter,
-    }));
+    res.end(JSON.stringify(rateLimited(result.retryAfter)));
     return false;
   }
 

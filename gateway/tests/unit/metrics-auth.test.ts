@@ -7,8 +7,11 @@
  * - Rejection of invalid tokens
  * - Development mode bypass
  * - Production mode enforcement
+ *
+ * US-227: Error responses use RFC 7807 Problem Details format
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { ProblemTypes } from '@nullspace/types';
 import { requireMetricsAuth, handleMetrics, metrics } from '../../src/metrics/index.js';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
@@ -93,8 +96,12 @@ describe('Metrics Authentication (US-252)', () => {
 
       expect(result).toBe(false);
       expect(getStatusCode()).toBe(401);
+      // US-227: RFC 7807 Problem Details format
       expect(JSON.parse(getResponseBody())).toEqual({
-        error: 'Missing or invalid authorization. Use Bearer token or x-metrics-token header.',
+        type: ProblemTypes.UNAUTHORIZED,
+        title: 'Unauthorized',
+        status: 401,
+        detail: 'Missing or invalid authorization. Use Bearer token or x-metrics-token header.',
       });
     });
 
@@ -134,7 +141,8 @@ describe('Metrics Authentication (US-252)', () => {
 
       expect(result).toBe(false);
       expect(getStatusCode()).toBe(401);
-      expect(JSON.parse(getResponseBody()).error).toContain('x-metrics-token');
+      // US-227: RFC 7807 Problem Details format
+      expect(JSON.parse(getResponseBody()).detail).toContain('x-metrics-token');
     });
 
     it('should ignore array x-metrics-token (use string only)', () => {
@@ -238,8 +246,12 @@ describe('Metrics Authentication (US-252)', () => {
 
       expect(result).toBe(false);
       expect(getStatusCode()).toBe(503);
+      // US-227: RFC 7807 Problem Details format
       expect(JSON.parse(getResponseBody())).toEqual({
-        error: 'Metrics endpoint not configured',
+        type: ProblemTypes.SERVICE_UNAVAILABLE,
+        title: 'Service Unavailable',
+        status: 503,
+        detail: 'Metrics endpoint not configured',
       });
     });
 
@@ -254,8 +266,12 @@ describe('Metrics Authentication (US-252)', () => {
 
       expect(result).toBe(false);
       expect(getStatusCode()).toBe(503);
+      // US-227: RFC 7807 Problem Details format
       expect(JSON.parse(getResponseBody())).toEqual({
-        error: 'Metrics endpoint not properly configured',
+        type: ProblemTypes.SERVICE_UNAVAILABLE,
+        title: 'Service Unavailable',
+        status: 503,
+        detail: 'Metrics endpoint not properly configured',
       });
     });
 

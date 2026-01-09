@@ -95,8 +95,8 @@
         "Update auth service error responses",
         "Add error response tests"
       ],
-      "passes": false,
-      "notes": "Gateway has structured errors but not RFC 7807. Auth uses simple JSON."
+      "passes": true,
+      "notes": "Implemented RFC 7807/9457 Problem Details format with shared types in @nullspace/types. Updated gateway CORS/rate-limit/metrics errors and auth middleware (origin, CSRF, metrics, rate-limit, billing). 21 tests added."
     },
     {
       "id": "US-228",

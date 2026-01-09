@@ -7,6 +7,11 @@
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import {
+  PROBLEM_JSON_CONTENT_TYPE,
+  ProblemTypes,
+  createProblemDetails,
+} from '@nullspace/types';
 import { timingSafeStringEqual } from '../utils/crypto.js';
 
 /**
@@ -65,8 +70,11 @@ export function requireMetricsAuth(req: IncomingMessage, res: ServerResponse): b
   if (!expectedToken || expectedToken.trim() === '') {
     if (process.env.NODE_ENV === 'production') {
       res.statusCode = 503;
-      res.setHeader('Content-Type', 'application/json');
-      res.end(JSON.stringify({ error: 'Metrics endpoint not configured' }));
+      res.setHeader('Content-Type', PROBLEM_JSON_CONTENT_TYPE);
+      res.end(JSON.stringify(createProblemDetails(503, 'Service Unavailable', {
+        type: ProblemTypes.SERVICE_UNAVAILABLE,
+        detail: 'Metrics endpoint not configured',
+      })));
       return false;
     }
     // Allow in development without auth
@@ -76,8 +84,11 @@ export function requireMetricsAuth(req: IncomingMessage, res: ServerResponse): b
   // Check for placeholder values
   if (expectedToken.toLowerCase().includes('your_') || expectedToken.toLowerCase().includes('placeholder')) {
     res.statusCode = 503;
-    res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify({ error: 'Metrics endpoint not properly configured' }));
+    res.setHeader('Content-Type', PROBLEM_JSON_CONTENT_TYPE);
+    res.end(JSON.stringify(createProblemDetails(503, 'Service Unavailable', {
+      type: ProblemTypes.SERVICE_UNAVAILABLE,
+      detail: 'Metrics endpoint not properly configured',
+    })));
     return false;
   }
 
@@ -94,9 +105,12 @@ export function requireMetricsAuth(req: IncomingMessage, res: ServerResponse): b
 
   // No valid authentication provided
   res.statusCode = 401;
-  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Content-Type', PROBLEM_JSON_CONTENT_TYPE);
   res.setHeader('WWW-Authenticate', 'Bearer realm="metrics"');
-  res.end(JSON.stringify({ error: 'Missing or invalid authorization. Use Bearer token or x-metrics-token header.' }));
+  res.end(JSON.stringify(createProblemDetails(401, 'Unauthorized', {
+    type: ProblemTypes.UNAUTHORIZED,
+    detail: 'Missing or invalid authorization. Use Bearer token or x-metrics-token header.',
+  })));
   return false;
 }
 

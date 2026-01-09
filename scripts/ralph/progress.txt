@@ -217,3 +217,27 @@ Categories by count:
   - Documented in RUNBOOK.md §5.4.1 with env vars table
 - Blockers: None. Tests gracefully skip when RUN_CROSS_SERVICE is not set.
 
+### 2026-01-08 - US-227: Standardize API error response format (RFC 7807)
+- Files: packages/types/src/problem-details.ts (new), packages/types/test/problem-details.test.ts (new), gateway/src/middleware/security.ts, gateway/src/metrics/index.ts, gateway/tests/unit/metrics-auth.test.ts, services/auth/src/server.ts, services/auth/package.json
+- Decisions:
+  - Created RFC 7807/9457 Problem Details types in @nullspace/types package:
+    - ProblemDetails interface with standard fields (type, title, status, detail, instance)
+    - ProblemTypes constants for standard problem type URNs (urn:nullspace:problem:*)
+    - createProblemDetails() factory function with extension support
+    - Helper functions: badRequest, unauthorized, forbidden, notFound, rateLimited, internalError, serviceUnavailable
+    - PROBLEM_JSON_CONTENT_TYPE = 'application/problem+json'
+  - Updated gateway HTTP errors to use RFC 7807 format:
+    - CORS validation (403 with ORIGIN_NOT_ALLOWED type)
+    - Rate limiting (429 with RATE_LIMITED type and retryAfter extension)
+    - Metrics auth (401, 503 with appropriate types)
+  - Updated auth service middleware to use RFC 7807 format:
+    - requireAllowedOrigin (403)
+    - requireCsrfToken (403)
+    - requireMetricsAuth (401)
+    - rateLimit (429 with retryAfter extension)
+    - requireBillingEnabled (503 with BILLING_DISABLED type)
+  - Added sendProblem() helper to auth service for consistent responses with instance correlation
+  - Backward compatibility preserved via `code` extension field for legacy clients
+- Tests: 21 unit tests for problem-details types + updated gateway metrics-auth tests
+- Blockers: None. Pre-existing mobile lint issues unrelated.
+

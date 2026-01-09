@@ -8,6 +8,12 @@ import Credentials from "@auth/express/providers/credentials";
 import { ethers } from "ethers";
 import { ConvexHttpClient } from "convex/browser";
 import { createRequire } from "module";
+import {
+  type ProblemDetails,
+  PROBLEM_JSON_CONTENT_TYPE,
+  ProblemTypes,
+  createProblemDetails,
+} from "@nullspace/types";
 import { syncFreerollLimit } from "./casinoAdmin.js";
 import {
   buildAiPrompt,
@@ -18,6 +24,22 @@ import {
   parseChainId,
   timingSafeStringEqual,
 } from "./utils.js";
+
+/**
+ * Send RFC 7807 Problem Details error response
+ *
+ * @param res - Express response object
+ * @param problem - Problem details object or status code with title
+ * @param instance - Optional request ID for correlation
+ */
+const sendProblem = (
+  res: express.Response,
+  problem: ProblemDetails,
+  instance?: string,
+): void => {
+  const response = instance ? { ...problem, instance: `/request/${instance}` } : problem;
+  res.status(problem.status).contentType(PROBLEM_JSON_CONTENT_TYPE).json(response);
+};
 
 // Avoid pulling Convex source files into the auth build output.
 const require = createRequire(import.meta.url);
@@ -136,7 +158,11 @@ const isAllowedChainId = (chainId: number): boolean => {
 const requireAllowedOrigin: express.RequestHandler = (req, res, next) => {
   const origin = getRequestOrigin(req);
   if (!origin || !allowedOrigins.includes(origin)) {
-    res.status(403).json({ error: "origin_not_allowed" });
+    sendProblem(res, createProblemDetails(403, "Forbidden", {
+      type: ProblemTypes.ORIGIN_NOT_ALLOWED,
+      detail: "Origin not allowed",
+      code: "origin_not_allowed",
+    }), res.locals.requestId);
     return;
   }
   next();
@@ -209,7 +235,11 @@ const requireCsrfToken: express.RequestHandler = async (req, res, next) => {
   const isValid = await verifyCsrfToken(cookieValue, submittedToken);
   if (!isValid) {
     inc("csrf.invalid");
-    res.status(403).json({ error: "csrf_invalid" });
+    sendProblem(res, createProblemDetails(403, "Forbidden", {
+      type: ProblemTypes.CSRF_INVALID,
+      detail: "CSRF token invalid or missing",
+      code: "csrf_invalid",
+    }), res.locals.requestId);
     return;
   }
 
@@ -244,7 +274,11 @@ const requireMetricsAuth: express.RequestHandler = (req, res, next) => {
     next();
     return;
   }
-  res.status(401).json({ error: "unauthorized" });
+  sendProblem(res, createProblemDetails(401, "Unauthorized", {
+    type: ProblemTypes.UNAUTHORIZED,
+    detail: "Missing or invalid authorization",
+    code: "unauthorized",
+  }), res.locals.requestId);
 };
 
 const parseStripeTierMap = (raw: string): Map<string, string> => {
@@ -357,7 +391,12 @@ const rateLimit = (keyPrefix: string, windowMs: number, max: number): express.Re
     if (bucket.count >= max) {
       const retryAfterSec = Math.ceil((bucket.resetAt - now) / 1000);
       res.setHeader("Retry-After", retryAfterSec.toString());
-      res.status(429).json({ error: "rate_limited" });
+      sendProblem(res, createProblemDetails(429, "Too Many Requests", {
+        type: ProblemTypes.RATE_LIMITED,
+        detail: `Rate limit exceeded. Retry after ${retryAfterSec} seconds.`,
+        code: "rate_limited",
+        retryAfter: retryAfterSec,
+      }), res.locals.requestId);
       return;
     }
     bucket.count += 1;
@@ -385,7 +424,11 @@ const billingRateLimit = rateLimit(
 const requireBillingEnabled: express.RequestHandler = (_req, res, next) => {
   if (!billingEnabled) {
     inc("billing.disabled");
-    res.status(503).json({ error: "billing_disabled" });
+    sendProblem(res, createProblemDetails(503, "Service Unavailable", {
+      type: ProblemTypes.BILLING_DISABLED,
+      detail: "Billing is not enabled on this server",
+      code: "billing_disabled",
+    }), res.locals.requestId);
     return;
   }
   next();
