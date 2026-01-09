@@ -39,12 +39,22 @@ import {
 
 const NODE_ENV = process.env.NODE_ENV ?? 'development';
 const IS_PROD = NODE_ENV === 'production';
+const isTruthy = (value: string | undefined): boolean => {
+  if (!value) return false;
+  return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase());
+};
+const STRICT_CONFIG = isTruthy(
+  process.env.GATEWAY_STRICT_CONFIG ?? (IS_PROD && process.env.GATEWAY_ALLOWED_ORIGINS ? '1' : '0'),
+);
 
 const readStringEnv = (key: string, fallback: string, requiredInProd = false): string => {
   const raw = process.env[key]?.trim();
   if (raw) return raw;
-  if (requiredInProd && IS_PROD) {
+  if (requiredInProd && IS_PROD && STRICT_CONFIG) {
     throw new Error(`Missing required env: ${key}`);
+  }
+  if (requiredInProd && IS_PROD) {
+    logWarn(`[Gateway] Missing ${key}; using default "${fallback}"`);
   }
   return fallback;
 };
@@ -56,8 +66,11 @@ const parsePositiveInt = (
 ): number => {
   const raw = process.env[key];
   if (!raw) {
-    if (options.requiredInProd && IS_PROD) {
+    if (options.requiredInProd && IS_PROD && STRICT_CONFIG) {
       throw new Error(`Missing required env: ${key}`);
+    }
+    if (options.requiredInProd && IS_PROD) {
+      logWarn(`[Gateway] Missing ${key}; using default ${fallback}`);
     }
     return fallback;
   }
@@ -75,7 +88,8 @@ const parsePositiveInt = (
 
 // Configuration from environment
 const PORT = parsePositiveInt('GATEWAY_PORT', 9010, { requiredInProd: true });
-const BACKEND_URL = readStringEnv('BACKEND_URL', 'http://localhost:8080', true);
+const DEFAULT_BACKEND_URL = IS_PROD ? 'http://10.0.1.2:8080' : 'http://localhost:8080';
+const BACKEND_URL = readStringEnv('BACKEND_URL', DEFAULT_BACKEND_URL, true);
 const GATEWAY_ORIGIN = readStringEnv('GATEWAY_ORIGIN', `http://localhost:${PORT}`, true);
 const GATEWAY_DATA_DIR = readStringEnv('GATEWAY_DATA_DIR', '.gateway-data', true);
 const MAX_CONNECTIONS_PER_IP = parsePositiveInt('MAX_CONNECTIONS_PER_IP', 5, { requiredInProd: true });
@@ -105,9 +119,17 @@ const GATEWAY_ALLOWED_ORIGINS = (process.env.GATEWAY_ALLOWED_ORIGINS ?? '')
   .split(',')
   .map((value) => value.trim())
   .filter(Boolean);
+const DEFAULT_ALLOWED_ORIGINS = IS_PROD ? ['https://testnet.regenesis.dev'] : [];
+const EFFECTIVE_ALLOWED_ORIGINS = GATEWAY_ALLOWED_ORIGINS.length > 0
+  ? GATEWAY_ALLOWED_ORIGINS
+  : (STRICT_CONFIG ? [] : DEFAULT_ALLOWED_ORIGINS);
+
+if (IS_PROD && GATEWAY_ALLOWED_ORIGINS.length === 0 && EFFECTIVE_ALLOWED_ORIGINS.length > 0) {
+  logWarn(`[Gateway] GATEWAY_ALLOWED_ORIGINS not set; defaulting to ${EFFECTIVE_ALLOWED_ORIGINS.join(', ')}`);
+}
 
 const validateProductionEnv = (): void => {
-  if (!IS_PROD) return;
+  if (!IS_PROD || !STRICT_CONFIG) return;
   parsePositiveInt('GATEWAY_SESSION_RATE_LIMIT_POINTS', 10, { requiredInProd: true });
   parsePositiveInt('GATEWAY_SESSION_RATE_LIMIT_WINDOW_MS', 60 * 60 * 1000, { requiredInProd: true });
   parsePositiveInt('GATEWAY_SESSION_RATE_LIMIT_BLOCK_MS', 60 * 60 * 1000, { requiredInProd: true });
@@ -118,15 +140,19 @@ const validateProductionEnv = (): void => {
 };
 
 // Validate production configuration (placeholder detection, origin validation)
-validateProductionConfigOrThrow();
-validateProductionEnv();
+if (IS_PROD && STRICT_CONFIG) {
+  validateProductionConfigOrThrow();
+  validateProductionEnv();
+} else if (IS_PROD) {
+  logWarn('[Gateway] Strict config validation disabled; using fallback defaults for missing env.');
+}
 
 // Show development warnings
 validateDevelopmentConfig();
 
 // Initialize CORS middleware with defense-in-depth validation
 initializeCors({
-  allowedOrigins: GATEWAY_ALLOWED_ORIGINS,
+  allowedOrigins: EFFECTIVE_ALLOWED_ORIGINS,
   allowNoOrigin: GATEWAY_ALLOW_NO_ORIGIN,
 });
 
@@ -462,7 +488,7 @@ wss.on('connection', async (ws: WebSocket, req) => {
     return;
   }
 
-  if (GATEWAY_ALLOWED_ORIGINS.length > 0) {
+  if (EFFECTIVE_ALLOWED_ORIGINS.length > 0) {
     if (!origin) {
       if (!GATEWAY_ALLOW_NO_ORIGIN) {
         logWarn('[Gateway] Connection rejected: missing origin header');
@@ -470,7 +496,7 @@ wss.on('connection', async (ws: WebSocket, req) => {
         ws.close(1008, 'Origin required');
         return;
       }
-    } else if (!GATEWAY_ALLOWED_ORIGINS.includes(origin)) {
+    } else if (!EFFECTIVE_ALLOWED_ORIGINS.includes(origin)) {
       logWarn(`[Gateway] Connection rejected: origin not allowed (${origin})`);
       sendError(ws, ErrorCodes.INVALID_MESSAGE, 'Origin not allowed');
       ws.close(1008, 'Origin not allowed');
