@@ -835,8 +835,8 @@
         "Refresh visual regression baselines after monochrome rollout",
         "Add quick audit script that flags non-monochrome CSS values"
       ],
-      "passes": false,
-      "notes": "Prevents color drift and keeps UI strictly monochrome."
+      "passes": true,
+      "notes": "Created scripts/audit-monochrome.mjs that scans website/src and mobile/src for non-token hex colors. Supports --fix for suggestions and --strict for CI enforcement. Added pnpm audit:monochrome command. Documented in RUNBOOK.md §7.2.1. Visual regression baselines skipped (no existing snapshot tests per QA-026)."
     },
     {
       "id": "US-265",

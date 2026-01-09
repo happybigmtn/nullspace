@@ -907,6 +907,27 @@ npm audit --omit=dev --audit-level=high
 
 Optional: Container scan with Trivy, code scan with Semgrep.
 
+### 7.2.1 Design System Compliance
+
+The monochrome design system audit detects non-token hex colors to prevent color drift:
+
+```bash
+# Run audit (informational)
+pnpm audit:monochrome
+
+# Run with replacement suggestions
+pnpm audit:monochrome --fix
+
+# Run in strict mode (exit 1 on violations, for CI)
+pnpm audit:monochrome --strict
+```
+
+Valid monochrome palette (from `packages/design-tokens/src/colors.ts`):
+- MONO scale: `#000000` through `#ffffff` (14 values)
+- Valid rgba: `rgba(0,0,0,...)` and `rgba(255,255,255,...)`
+
+The audit skips test files and the design token source file itself.
+
 ### 7.3 CI Image Builds
 
 - `build-images.yml` builds/publishes container images on main/master and PRs

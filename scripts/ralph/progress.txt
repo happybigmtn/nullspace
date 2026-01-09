@@ -309,3 +309,16 @@ Categories by count:
   - Added monochrome-compatible glow effects (glow-white, glow-black) and pulse animations
 - Blockers: None. US-261/262/263 can now build on this foundation for UI refactoring.
 
+### 2026-01-09 - US-264: Monochrome QA guardrails
+- Files: scripts/audit-monochrome.mjs, package.json, docs/RUNBOOK.md
+- Decisions:
+  - Created audit script that scans website/src and mobile/src for non-token hex colors
+  - Valid palette: 14 MONO values (#000000-#ffffff) plus black/white rgba patterns
+  - Script supports --fix (shows closest mono replacement) and --strict (exits 1, for CI)
+  - Skips test files and design-tokens source (the source of truth)
+  - Added pnpm audit:monochrome command to root package.json
+  - Documented in RUNBOOK.md §7.2.1 Design System Compliance
+  - Visual regression baselines not refreshed (no existing snapshot tests per QA-026)
+- Current status: 296 violations found (mostly charts, casino UI components)
+- Blockers: None. Audit is informational; strict mode can be added to CI when ready to enforce.
+
