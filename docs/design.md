@@ -188,12 +188,157 @@ Without colored states, we use contrast and icons:
 - **Warning**: Medium contrast (`text-mono-300`) + warning icon
 - **Info**: Inverted contrast (`bg-mono-900 text-mono-0`) + info icon
 
-## Typography
+## Liquid Crystal Typography (US-267)
 
-Font stack optimized for the monochrome aesthetic:
+The typography system is optimized for glass surfaces and edge contrast. It defines role-based styles that ensure readability on translucent backgrounds while maintaining the sharp, edgy aesthetic.
 
-- **Display**: Syne - bold, geometric headlines
-- **Body**: Space Grotesk - clean, modern UI text
-- **Mono**: JetBrains Mono - tabular numbers, code
+### Font Stack
 
-Use `font-display`, `font-sans`, `font-mono` Tailwind classes.
+| Role | Font | Use Case |
+|------|------|----------|
+| Display | Syne | Bold, geometric headlines with tight tracking |
+| Body | Space Grotesk | Clean, modern UI text |
+| Mono | JetBrains Mono | Tabular numbers, code, financial data |
+
+### Tracking (Letter-Spacing)
+
+Tracking is carefully calibrated for edge visibility and visual density:
+
+| Preset | Value | Use Case |
+|--------|-------|----------|
+| `tighter` | -0.4px | Large display text (48px+) |
+| `tight` | -0.32px | Headlines, section titles |
+| `normal` | 0px | Body text, descriptions |
+| `wide` | 0.16px | Labels, captions |
+| `wider` | 0.8px | All-caps text |
+| `widest` | 1.6px | Badges, micro text |
+
+Use Tailwind classes: `tracking-tighter`, `tracking-tight`, `tracking-normal`, `tracking-wide`, `tracking-wider`, `tracking-widest`
+
+### Type Roles
+
+Role-based typography ensures consistent usage across the casino UI:
+
+```html
+<!-- Display roles (use font-display) -->
+<h1 class="text-lc-display-hero font-display">Splash Title</h1>
+<h2 class="text-lc-display-large font-display">Page Title</h2>
+<h3 class="text-lc-display-medium font-display">Card Title</h3>
+
+<!-- Body roles (use font-sans) -->
+<p class="text-lc-body">Paragraph text</p>
+<span class="text-lc-label">Button Label</span>
+<span class="text-lc-label-upper uppercase">STATUS BADGE</span>
+<span class="text-lc-caption">Timestamp</span>
+
+<!-- Numeric roles (use font-mono + tabular-nums) -->
+<span class="text-lc-numeric font-mono tabular-nums">1,234.56</span>
+<span class="text-lc-numeric-large font-mono tabular-nums">$10,000</span>
+<span class="text-lc-numeric-hero font-mono tabular-nums">JACKPOT!</span>
+<span class="text-lc-numeric-small font-mono tabular-nums">2.5x</span>
+```
+
+### Tabular Numbers
+
+**Critical for financial data**: Always use `tabular-nums` for balances, odds, and payouts to ensure proper alignment.
+
+```html
+<!-- Balance display -->
+<div class="font-mono tabular-nums text-lc-numeric-large">
+  $1,234.56
+</div>
+
+<!-- Odds display -->
+<div class="font-mono tabular-nums text-lc-numeric-small">
+  3.5x
+</div>
+```
+
+In React Native:
+```tsx
+import { LC_TYPOGRAPHY } from '@/constants/theme';
+
+<Text style={LC_TYPOGRAPHY.numericLarge}>$1,234.56</Text>
+```
+
+### Semantic Mappings
+
+For consistent usage across casino UI elements:
+
+| Element | Type Role | Classes |
+|---------|-----------|---------|
+| Balance | `numericLarge` | `text-lc-numeric-large font-mono tabular-nums` |
+| Session P&L | `numeric` | `text-lc-numeric font-mono tabular-nums` |
+| Bet Amount | `numeric` | `text-lc-numeric font-mono tabular-nums` |
+| Odds | `numericSmall` | `text-lc-numeric-small font-mono tabular-nums` |
+| Payout | `numericLarge` | `text-lc-numeric-large font-mono tabular-nums` |
+| Big Win | `numericHero` | `text-lc-numeric-hero font-mono tabular-nums` |
+| Game Title | `displayMedium` | `text-lc-display-medium font-display` |
+| Section Title | `headline` | `text-lc-headline` |
+| Button | `label` | `text-lc-label` |
+| Badge | `labelUppercase` | `text-lc-label-upper uppercase` |
+
+### Glass Surface Adjustments
+
+On translucent glass surfaces, text needs specific treatment for readability:
+
+| Glass Level | Weight Boost | Size Boost | Text Shadow |
+|-------------|--------------|------------|-------------|
+| `mist` | 0 | 0 | none |
+| `veil` | 0 | 0 | none |
+| `smoke` | +100 | 0 | none |
+| `fog` | +100 | 0 | `0 1px 2px rgba(0,0,0,0.1)` |
+| `frost` | +100 | +1px | `0 1px 3px rgba(0,0,0,0.15)` |
+
+Example applying glass adjustments:
+```tsx
+import { LC_GLASS_ADJUSTMENTS } from '@nullspace/design-tokens';
+
+// For text on fog-level glass
+const fogAdjustment = LC_GLASS_ADJUSTMENTS.fog;
+// Apply: fontWeight + 100, textShadow: '0 1px 2px rgba(0,0,0,0.1)'
+```
+
+### Direct Token Usage (TypeScript)
+
+```typescript
+import {
+  LC_TYPE_ROLE,
+  LC_TYPE_SEMANTIC,
+  TRACKING,
+  FONT_FEATURES,
+} from '@nullspace/design-tokens';
+
+// Get complete role config
+const balanceStyle = LC_TYPE_ROLE[LC_TYPE_SEMANTIC.balance];
+// {
+//   fontFamily: 'mono',
+//   size: 32,
+//   lineHeight: 40,
+//   weight: 500,
+//   letterSpacing: -0.32,
+//   textTransform: 'none',
+//   fontFeatures: 'tnum',  // tabular-nums
+// }
+
+// Use tracking presets
+const headlineTracking = TRACKING.tight; // -0.32px
+
+// Check font features for role
+if (balanceStyle.fontFeatures === FONT_FEATURES.tabularNums) {
+  // Apply tabular-nums
+}
+```
+
+### Mobile (React Native)
+
+```tsx
+import { LC_TYPOGRAPHY, TRACKING } from '@/constants/theme';
+
+// Use role-based styles directly
+<Text style={LC_TYPOGRAPHY.displayHero}>Hero Title</Text>
+<Text style={LC_TYPOGRAPHY.numericLarge}>$1,234.56</Text>
+
+// Numeric roles include fontVariant: ['tabular-nums']
+<Text style={LC_TYPOGRAPHY.numeric}>Bet: 100</Text>
+```

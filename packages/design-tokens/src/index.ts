@@ -40,10 +40,26 @@ export {
   FONTS,
   TYPE_SCALE,
   FONT_WEIGHTS,
+  // Liquid Crystal Typography (US-267)
+  TRACKING,
+  FONT_FEATURES,
+  LC_TYPE_ROLE,
+  LC_TYPE_SEMANTIC,
+  LC_GLASS_ADJUSTMENTS,
+  // Type exports
   type FontFamily,
   type TypeVariant,
   type TypeStyle,
   type FontWeight,
+  type TrackingPreset,
+  type TrackingValue,
+  type FontFeature,
+  type FontFeatureValue,
+  type LCTypeRole,
+  type LCTypeRoleConfig,
+  type LCTypeSemantic,
+  type LCGlassLevel,
+  type LCGlassAdjustment,
 } from './typography.js';
 
 // Spacing

@@ -26,6 +26,12 @@ import {
   SHADOW,
   // Typography
   TYPE_SCALE,
+  // Liquid Crystal Typography (US-267)
+  TRACKING,
+  FONT_FEATURES,
+  LC_TYPE_ROLE,
+  LC_TYPE_SEMANTIC,
+  LC_GLASS_ADJUSTMENTS,
 } from '@nullspace/design-tokens';
 
 /**
@@ -494,6 +500,168 @@ export const TYPOGRAPHY = {
     fontVariant: ['tabular-nums'] as const,
   },
 } as const;
+
+/**
+ * Liquid Crystal Typography System (US-267)
+ *
+ * Role-based typography optimized for glass surfaces and edge contrast.
+ * Use these for new components following the Liquid Crystal design language.
+ *
+ * Font feature: tabular-nums for numeric roles ensures alignment
+ */
+
+/** Helper to get mono font - for tabular numbers */
+const getMonoFont = () => MONO_FONT;
+
+export const LC_TYPOGRAPHY = {
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Display roles - Syne/Outfit for headlines
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /** Hero display - 48px, splash screens */
+  displayHero: {
+    fontSize: LC_TYPE_ROLE.displayHero.size,
+    lineHeight: LC_TYPE_ROLE.displayHero.lineHeight,
+    fontWeight: weightToString(LC_TYPE_ROLE.displayHero.weight),
+    letterSpacing: LC_TYPE_ROLE.displayHero.letterSpacing,
+    fontFamily: getDisplayFont(LC_TYPE_ROLE.displayHero.weight),
+  },
+
+  /** Large display - 36px, page titles */
+  displayLarge: {
+    fontSize: LC_TYPE_ROLE.displayLarge.size,
+    lineHeight: LC_TYPE_ROLE.displayLarge.lineHeight,
+    fontWeight: weightToString(LC_TYPE_ROLE.displayLarge.weight),
+    letterSpacing: LC_TYPE_ROLE.displayLarge.letterSpacing,
+    fontFamily: getDisplayFont(LC_TYPE_ROLE.displayLarge.weight),
+  },
+
+  /** Medium display - 24px, card/modal headers */
+  displayMedium: {
+    fontSize: LC_TYPE_ROLE.displayMedium.size,
+    lineHeight: LC_TYPE_ROLE.displayMedium.lineHeight,
+    fontWeight: weightToString(LC_TYPE_ROLE.displayMedium.weight),
+    letterSpacing: LC_TYPE_ROLE.displayMedium.letterSpacing,
+    fontFamily: getDisplayFont(LC_TYPE_ROLE.displayMedium.weight),
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Body roles - Space Grotesk/Plus Jakarta Sans for UI text
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /** Headline - 18px, section labels */
+  headline: {
+    fontSize: LC_TYPE_ROLE.headline.size,
+    lineHeight: LC_TYPE_ROLE.headline.lineHeight,
+    fontWeight: weightToString(LC_TYPE_ROLE.headline.weight),
+    letterSpacing: LC_TYPE_ROLE.headline.letterSpacing,
+    fontFamily: getBodyFont(LC_TYPE_ROLE.headline.weight),
+  },
+
+  /** Label - 14px, form labels, buttons */
+  label: {
+    fontSize: LC_TYPE_ROLE.label.size,
+    lineHeight: LC_TYPE_ROLE.label.lineHeight,
+    fontWeight: weightToString(LC_TYPE_ROLE.label.weight),
+    letterSpacing: LC_TYPE_ROLE.label.letterSpacing,
+    fontFamily: getBodyFont(LC_TYPE_ROLE.label.weight),
+  },
+
+  /** Uppercase label - 12px, badges, tags */
+  labelUppercase: {
+    fontSize: LC_TYPE_ROLE.labelUppercase.size,
+    lineHeight: LC_TYPE_ROLE.labelUppercase.lineHeight,
+    fontWeight: weightToString(LC_TYPE_ROLE.labelUppercase.weight),
+    letterSpacing: LC_TYPE_ROLE.labelUppercase.letterSpacing,
+    fontFamily: getBodyFont(LC_TYPE_ROLE.labelUppercase.weight),
+    textTransform: 'uppercase' as const,
+  },
+
+  /** Body - 16px, paragraph text */
+  body: {
+    fontSize: LC_TYPE_ROLE.body.size,
+    lineHeight: LC_TYPE_ROLE.body.lineHeight,
+    fontWeight: weightToString(LC_TYPE_ROLE.body.weight),
+    letterSpacing: LC_TYPE_ROLE.body.letterSpacing,
+    fontFamily: getBodyFont(LC_TYPE_ROLE.body.weight),
+  },
+
+  /** Small body - 14px, helper text */
+  bodySmall: {
+    fontSize: LC_TYPE_ROLE.bodySmall.size,
+    lineHeight: LC_TYPE_ROLE.bodySmall.lineHeight,
+    fontWeight: weightToString(LC_TYPE_ROLE.bodySmall.weight),
+    letterSpacing: LC_TYPE_ROLE.bodySmall.letterSpacing,
+    fontFamily: getBodyFont(LC_TYPE_ROLE.bodySmall.weight),
+  },
+
+  /** Caption - 12px, timestamps, hints */
+  caption: {
+    fontSize: LC_TYPE_ROLE.caption.size,
+    lineHeight: LC_TYPE_ROLE.caption.lineHeight,
+    fontWeight: weightToString(LC_TYPE_ROLE.caption.weight),
+    letterSpacing: LC_TYPE_ROLE.caption.letterSpacing,
+    fontFamily: getBodyFont(LC_TYPE_ROLE.caption.weight),
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Numeric roles - JetBrains Mono/monospace for tabular data
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /** Numeric - 16px, balances, odds */
+  numeric: {
+    fontSize: LC_TYPE_ROLE.numeric.size,
+    lineHeight: LC_TYPE_ROLE.numeric.lineHeight,
+    fontWeight: weightToString(LC_TYPE_ROLE.numeric.weight),
+    letterSpacing: LC_TYPE_ROLE.numeric.letterSpacing,
+    fontFamily: getMonoFont(),
+    fontVariant: ['tabular-nums'] as const,
+  },
+
+  /** Large numeric - 32px, hero balances */
+  numericLarge: {
+    fontSize: LC_TYPE_ROLE.numericLarge.size,
+    lineHeight: LC_TYPE_ROLE.numericLarge.lineHeight,
+    fontWeight: weightToString(LC_TYPE_ROLE.numericLarge.weight),
+    letterSpacing: LC_TYPE_ROLE.numericLarge.letterSpacing,
+    fontFamily: getMonoFont(),
+    fontVariant: ['tabular-nums'] as const,
+  },
+
+  /** Hero numeric - 48px, big wins, jackpots */
+  numericHero: {
+    fontSize: LC_TYPE_ROLE.numericHero.size,
+    lineHeight: LC_TYPE_ROLE.numericHero.lineHeight,
+    fontWeight: weightToString(LC_TYPE_ROLE.numericHero.weight),
+    letterSpacing: LC_TYPE_ROLE.numericHero.letterSpacing,
+    fontFamily: getMonoFont(),
+    fontVariant: ['tabular-nums'] as const,
+  },
+
+  /** Small numeric - 14px, odds, multipliers */
+  numericSmall: {
+    fontSize: LC_TYPE_ROLE.numericSmall.size,
+    lineHeight: LC_TYPE_ROLE.numericSmall.lineHeight,
+    fontWeight: weightToString(LC_TYPE_ROLE.numericSmall.weight),
+    letterSpacing: LC_TYPE_ROLE.numericSmall.letterSpacing,
+    fontFamily: getMonoFont(),
+    fontVariant: ['tabular-nums'] as const,
+  },
+
+  /** Code - 14px, technical identifiers */
+  code: {
+    fontSize: LC_TYPE_ROLE.code.size,
+    lineHeight: LC_TYPE_ROLE.code.lineHeight,
+    fontWeight: weightToString(LC_TYPE_ROLE.code.weight),
+    letterSpacing: LC_TYPE_ROLE.code.letterSpacing,
+    fontFamily: getMonoFont(),
+  },
+} as const;
+
+/**
+ * Re-export LC typography tokens for direct access
+ */
+export { TRACKING, FONT_FEATURES, LC_TYPE_ROLE, LC_TYPE_SEMANTIC, LC_GLASS_ADJUSTMENTS };
 
 /**
  * Animation durations from design-tokens

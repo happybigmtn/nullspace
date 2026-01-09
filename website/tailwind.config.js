@@ -4,6 +4,8 @@ import {
   SPACING_SEMANTIC, RADIUS, CONTAINER,
   LIQUID_CRYSTAL, LIQUID_CRYSTAL_SEMANTIC, LIQUID_CRYSTAL_FALLBACK,
   REFRACTION, toBackdropFilter, toEdgeHighlight,
+  // Liquid Crystal Typography (US-267)
+  TRACKING, LC_TYPE_ROLE,
 } from '@nullspace/design-tokens';
 
 // Helper to convert TYPE_SCALE to Tailwind fontSize format
@@ -54,6 +56,22 @@ export default {
         'body': toTailwindFontSize(TYPE_SCALE.body),        // 16px - all readable content
         'headline': toTailwindFontSize(TYPE_SCALE.headline),// 24px - section titles
         'hero': toTailwindFontSize(TYPE_SCALE.hero),        // 48px - page titles
+
+        // Liquid Crystal Typography (US-267) - Role-based sizes
+        'lc-display-hero': toTailwindFontSize(LC_TYPE_ROLE.displayHero),     // 48px
+        'lc-display-large': toTailwindFontSize(LC_TYPE_ROLE.displayLarge),   // 36px
+        'lc-display-medium': toTailwindFontSize(LC_TYPE_ROLE.displayMedium), // 24px
+        'lc-headline': toTailwindFontSize(LC_TYPE_ROLE.headline),            // 18px
+        'lc-label': toTailwindFontSize(LC_TYPE_ROLE.label),                  // 14px
+        'lc-label-upper': toTailwindFontSize(LC_TYPE_ROLE.labelUppercase),   // 12px uppercase
+        'lc-body': toTailwindFontSize(LC_TYPE_ROLE.body),                    // 16px
+        'lc-body-small': toTailwindFontSize(LC_TYPE_ROLE.bodySmall),         // 14px
+        'lc-caption': toTailwindFontSize(LC_TYPE_ROLE.caption),              // 12px
+        'lc-numeric': toTailwindFontSize(LC_TYPE_ROLE.numeric),              // 16px tabular
+        'lc-numeric-large': toTailwindFontSize(LC_TYPE_ROLE.numericLarge),   // 32px tabular
+        'lc-numeric-hero': toTailwindFontSize(LC_TYPE_ROLE.numericHero),     // 48px tabular
+        'lc-numeric-small': toTailwindFontSize(LC_TYPE_ROLE.numericSmall),   // 14px tabular
+        'lc-code': toTailwindFontSize(LC_TYPE_ROLE.code),                    // 14px mono
 
         // Legacy aliases (for backwards compatibility, map to new hierarchy)
         'label': toTailwindFontSize(TYPE_SCALE.label),
@@ -268,6 +286,16 @@ export default {
         'xl': `${RADIUS.xl}px`,
         '2xl': `${RADIUS['2xl']}px`,
         'full': `${RADIUS.full}px`,
+      },
+      // Liquid Crystal Typography (US-267)
+      letterSpacing: {
+        // Tracking presets from design tokens
+        'tighter': `${TRACKING.tighter}px`,  // -0.4px for large display
+        'tight': `${TRACKING.tight}px`,      // -0.32px for headlines
+        'normal': `${TRACKING.normal}px`,    // 0px for body
+        'wide': `${TRACKING.wide}px`,        // 0.16px for labels/captions
+        'wider': `${TRACKING.wider}px`,      // 0.8px for all-caps
+        'widest': `${TRACKING.widest}px`,    // 1.6px for badges
       },
       spacing: {
         // Semantic spacing from design tokens (extends Tailwind defaults)
