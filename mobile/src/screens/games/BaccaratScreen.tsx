@@ -337,11 +337,11 @@ export function BaccaratScreen() {
         {/* Game Area */}
         <View style={styles.gameArea}>
           {/* Banker Hand */}
-          <View style={styles.handContainer}>
+          <View style={styles.handContainer} testID="banker-hand">
             <View style={styles.handHeader}>
-              <Text style={styles.handLabel}>BANKER</Text>
+              <Text style={styles.handLabel} testID="banker-hand-label">BANKER</Text>
               {state.bankerCards.length > 0 && (
-                <Text style={styles.handTotal}>{state.bankerTotal}</Text>
+                <Text style={styles.handTotal} testID="banker-total">{state.bankerTotal}</Text>
               )}
             </View>
             <View style={styles.cards}>
@@ -356,7 +356,7 @@ export function BaccaratScreen() {
               ))}
             </View>
             {state.winner === 'BANKER' && (
-              <Animated.View entering={FadeIn} style={styles.winnerBadge}>
+              <Animated.View entering={FadeIn} style={styles.winnerBadge} testID="game-result-banker">
                 <Text style={styles.winnerText}>WINNER</Text>
               </Animated.View>
             )}
@@ -364,6 +364,7 @@ export function BaccaratScreen() {
 
           {/* Message */}
           <Text
+            testID="game-message"
             style={[
               styles.message,
               state.winner === 'TIE' && styles.messageTie,
@@ -371,13 +372,15 @@ export function BaccaratScreen() {
           >
             {state.message}
           </Text>
+          {/* Hidden result indicator for E2E tests */}
+          {state.winner === 'TIE' && <View testID="game-result-tie" style={{ display: 'none' }} />}
 
           {/* Player Hand */}
-          <View style={styles.handContainer}>
+          <View style={styles.handContainer} testID="player-hand">
             <View style={styles.handHeader}>
-              <Text style={styles.handLabel}>PLAYER</Text>
+              <Text style={styles.handLabel} testID="player-hand-label">PLAYER</Text>
               {state.playerCards.length > 0 && (
-                <Text style={styles.handTotal}>{state.playerTotal}</Text>
+                <Text style={styles.handTotal} testID="player-total">{state.playerTotal}</Text>
               )}
             </View>
             <View style={styles.cards}>
@@ -392,7 +395,7 @@ export function BaccaratScreen() {
               ))}
             </View>
             {state.winner === 'PLAYER' && (
-              <Animated.View entering={FadeIn} style={styles.winnerBadge}>
+              <Animated.View entering={FadeIn} style={styles.winnerBadge} testID="game-result-player">
                 <Text style={styles.winnerText}>WINNER</Text>
               </Animated.View>
             )}
@@ -406,6 +409,7 @@ export function BaccaratScreen() {
             {(['PLAYER', 'BANKER'] as const).map((type) => (
               <Pressable
                 key={type}
+                testID={`bet-area-${type.toLowerCase()}`}
                 onPress={() => handleMainSelect(type)}
                 disabled={state.phase !== 'betting' || isDisconnected || isSubmitting}
                 style={({ pressed }) => [
@@ -435,6 +439,7 @@ export function BaccaratScreen() {
               return (
                 <Pressable
                   key={type}
+                  testID={`bet-area-${type.toLowerCase().replace('_', '-')}`}
                   onPress={() => addSideBet(type)}
                   disabled={state.phase !== 'betting' || isDisconnected || isSubmitting}
                   style={({ pressed }) => [
@@ -453,10 +458,19 @@ export function BaccaratScreen() {
           </View>
         </View>
 
+        {/* Bet Summary */}
+        {totalBet > 0 && state.phase === 'betting' && (
+          <View style={styles.betSummary}>
+            <Text style={styles.betSummaryLabel}>Total Bet:</Text>
+            <Text style={styles.betSummaryAmount} testID="total-bet-amount">${totalBet}</Text>
+          </View>
+        )}
+
         {/* Actions */}
         <View style={styles.actions}>
           {state.phase === 'betting' && (
             <PrimaryButton
+              testID="deal-button"
               label="DEAL"
               onPress={handleDeal}
               disabled={totalBet === 0 || isDisconnected || isSubmitting}
@@ -467,6 +481,7 @@ export function BaccaratScreen() {
 
           {state.phase === 'result' && (
             <PrimaryButton
+              testID="new-game-button"
               label="NEW GAME"
               onPress={handleNewGame}
               variant="primary"
@@ -632,5 +647,21 @@ const styles = StyleSheet.create({
   actions: {
     alignItems: 'center',
     marginBottom: SPACING.md,
+  },
+  betSummary: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    marginBottom: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+  },
+  betSummaryLabel: {
+    color: COLORS.textSecondary,
+    ...TYPOGRAPHY.label,
+  },
+  betSummaryAmount: {
+    color: COLORS.gold,
+    ...TYPOGRAPHY.h3,
   },
 });
