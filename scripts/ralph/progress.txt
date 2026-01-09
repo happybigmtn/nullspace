@@ -476,3 +476,24 @@ Categories by count:
   - Fixed Skia mock in mobile/jest/setup.js to include Line, Path, and Skia.Path.MakeFromSVGString for US-263 patterns
 - SLO Targets: submit p95 ≤250ms, submit p99 ≤500ms, auth avg ≤200ms, WS errors = 0, casino errors = 0
 - Blockers: None. Pre-existing mobile test issues (useEffect loops, runOnJS mocks) are unrelated to this work.
+
+### 2026-01-09 - US-265: Liquid Crystal material system (monochrome glass)
+- Files: packages/design-tokens/src/liquid-crystal.ts (new), packages/design-tokens/src/index.ts, website/tailwind.config.js, docs/design.md (new)
+- Decisions:
+  - Created Apple-inspired glass material system constrained to monochrome
+  - 8 translucency levels: ghost (2%), whisper (5%), mist (8%), veil (12%), smoke (18%), fog (25%), frost (35%), solid (85%)
+  - 4 specular highlight presets: topLeft, topEdge, rim, sweep (for animations)
+  - 4 edge highlight presets: hairline, standard, pronounced, thick
+  - 6 refraction configs: none, subtle, standard, heavy, frosted, cinema
+  - LIQUID_CRYSTAL combines all effects into complete material configs per level
+  - LIQUID_CRYSTAL_SEMANTIC maps to UI elements: navbar=mist, card=veil, dropdown=smoke, modal=fog, betSlip=smoke, overlay=frost, tooltip=whisper, toast=veil
+  - LIQUID_CRYSTAL_FALLBACK provides solid colors for browsers without backdrop-filter
+  - Helper functions: toBackdropFilter(), toEdgeHighlight(), toSpecularGradient()
+- Tailwind integration:
+  - bg-lc-{level} / bg-lc-dark-{level} colors
+  - border-lc-border-{level} / border-lc-border-dark-{level} colors
+  - shadow-lc-edge-{preset} box shadows
+  - backdrop-blur-lc-{preset}, backdrop-brightness-lc-{preset}, etc
+  - animate-lc-sweep, animate-lc-refract animations
+- Docs: Created docs/design.md with complete usage guide, examples, accessibility guidelines
+- Blockers: None. All typechecks and tests pass.

@@ -848,8 +848,8 @@
         "Limit glass usage to primary surfaces (bet slip, header strip, modal) to protect readability",
         "Add examples and usage rules in docs/design.md"
       ],
-      "passes": false,
-      "notes": "Inspired by Apple’s Liquid Glass material (translucent, refractive, adaptive) but constrained to monochrome."
+      "passes": true,
+      "notes": "Implemented TRANSLUCENCY (8 levels), SPECULAR (4 presets), EDGE_HIGHLIGHT (4 presets), REFRACTION (6 presets) in liquid-crystal.ts. LIQUID_CRYSTAL and LIQUID_CRYSTAL_SEMANTIC provide complete material configs. Tailwind utilities (bg-lc-*, backdrop-blur-lc-*, shadow-lc-edge-*) and animations (lc-sweep, lc-refract) added. LIQUID_CRYSTAL_FALLBACK provides graceful degradation. Documented in docs/design.md with usage examples."
     },
     {
       "id": "US-266",
