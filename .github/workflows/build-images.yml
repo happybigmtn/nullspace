@@ -53,6 +53,33 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Validate required VITE_* variables (website only)
+        if: matrix.needs_build_args == true && github.event_name != 'pull_request'
+        run: |
+          missing_vars=()
+
+          if [ -z "${{ vars.VITE_URL }}" ]; then
+            missing_vars+=("VITE_URL")
+          fi
+          if [ -z "${{ vars.VITE_AUTH_URL }}" ]; then
+            missing_vars+=("VITE_AUTH_URL")
+          fi
+          if [ -z "${{ vars.VITE_AUTH_PROXY_URL }}" ]; then
+            missing_vars+=("VITE_AUTH_PROXY_URL")
+          fi
+          if [ -z "${{ vars.VITE_IDENTITY }}" ]; then
+            missing_vars+=("VITE_IDENTITY")
+          fi
+
+          if [ ${#missing_vars[@]} -gt 0 ]; then
+            echo "::error::Required GitHub repository variables are missing or empty: ${missing_vars[*]}"
+            echo "Website builds require these variables to be configured in Settings > Secrets and variables > Actions > Variables"
+            echo "See docs/RUNBOOK.md §7.3.1 for required variables."
+            exit 1
+          fi
+
+          echo "✓ All required VITE_* variables are configured"
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 

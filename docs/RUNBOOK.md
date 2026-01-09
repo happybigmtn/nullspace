@@ -867,6 +867,24 @@ Optional: Container scan with Trivy, code scan with Semgrep.
 - `build-images.yml` builds/publishes container images on main/master and PRs
 - Website builds depend on `VITE_*` vars/secrets in CI
 
+#### 7.3.1 Required GitHub Repository Variables
+
+The website image build **requires** these GitHub repository variables (Settings > Secrets and variables > Actions > Variables). Builds will fail fast if any are missing or empty:
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `VITE_URL` | WebSocket gateway URL | `wss://gateway.nullspace.io` |
+| `VITE_AUTH_URL` | Auth service URL | `https://auth.nullspace.io` |
+| `VITE_AUTH_PROXY_URL` | Auth proxy/callback URL | `https://auth.nullspace.io/api/auth` |
+| `VITE_IDENTITY` | Network identity (hex) | `abc123...` |
+
+**Optional variables** (used if set, no build failure if missing):
+- `VITE_STRIPE_TIERS` - Stripe tier configuration JSON
+- `VITE_STRIPE_PRICE_ID` - Stripe price ID
+- `VITE_STRIPE_TIER` - Default tier name
+
+**Why validation matters:** Without these variables, Vite falls back to localhost defaults during build, shipping a broken UI to production that cannot connect to the real services.
+
 ### 7.4 Rollback Plan
 
 1. Keep last two container images tagged and ready
