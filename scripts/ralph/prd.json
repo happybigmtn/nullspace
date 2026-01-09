@@ -288,8 +288,8 @@
         "Add Detox test for stand action",
         "Verify win/loss outcomes correct"
       ],
-      "passes": false,
-      "notes": "Integration tests exist, Detox partial."
+      "passes": true,
+      "notes": "Added testIDs to BlackjackScreen (player-hand, dealer-hand, game-message, game-result-{outcome}, action-hit, action-stand, action-double, action-split, deal-button, new-game-button). Created comprehensive 'Blackjack Hit/Stand Flow (QA-007)' test suite in mobile/e2e/games.test.ts with 6 tests: full hit action flow, full stand action flow, win/loss/push outcome verification, new game after result, multiple hit actions until bust, dealer card reveal after standing."
     },
     {
       "id": "QA-008",

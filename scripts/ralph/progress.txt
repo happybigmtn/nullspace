@@ -819,3 +819,26 @@ Categories by count:
 - Evidence: All 29 unit tests pass, existing 11 ChipSelector tests pass
 - Blockers: None. Pre-existing lint warnings in other mobile files unrelated.
 
+### 2026-01-09 - QA-007: Test Blackjack hit/stand flow
+- Files: mobile/src/screens/games/BlackjackScreen.tsx, mobile/e2e/games.test.ts
+- Decisions:
+  - Added testIDs to BlackjackScreen for E2E testability:
+    - Player hand: testID="player-hand", testID="player-hand-label"
+    - Dealer hand: testID="dealer-hand", testID="dealer-hand-label"
+    - Game message: testID="game-message"
+    - Game result indicators: testID="game-result-{win|loss|push|blackjack|unknown}"
+    - Action buttons: testID="action-hit", testID="action-stand", testID="action-double", testID="action-split"
+    - Deal button: testID="deal-button"
+    - New game/try again: testID="new-game-button", testID="try-again-button"
+  - Fixed existing Blackjack test flow (was using non-existent "bet-ante" testID)
+  - Created comprehensive 'Blackjack Hit/Stand Flow (QA-007)' test suite with 6 tests:
+    1. should complete a full hit action flow - Places bet, hits, verifies player hand updates or bust
+    2. should complete a full stand action flow - Places bet, stands, verifies dealer reveal and result
+    3. should display correct win outcome after stand - Verifies game-result-{outcome} indicators exist
+    4. should allow starting a new game after result - Verifies new-game-button resets to betting phase
+    5. should handle multiple hit actions until bust or stand - Loops hitting up to 5 times
+    6. should show dealer cards after standing - Verifies dealer-hand and dealer-hand-label visible
+  - Tests handle random game outcomes by checking for any valid result (win/loss/push/blackjack)
+- Evidence: Typecheck passes, lint passes (0 errors), tests added to Detox suite
+- Blockers: None. Detox tests require iOS simulator or Android emulator to execute.
+

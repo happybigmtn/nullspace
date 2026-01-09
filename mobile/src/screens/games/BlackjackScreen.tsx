@@ -359,8 +359,8 @@ export function BlackjackScreen() {
         {/* Game Area */}
         <View style={GAME_LAYOUT_STYLES.gameArea}>
           {/* Dealer's Hand */}
-          <View style={GAME_LAYOUT_STYLES.handContainer}>
-            <Text style={HAND_STYLES.handLabel}>
+          <View style={GAME_LAYOUT_STYLES.handContainer} testID="dealer-hand">
+            <Text style={HAND_STYLES.handLabel} testID="dealer-hand-label">
               Dealer {state.phase === 'result' && `(${state.dealerTotal})`}
             </Text>
             <View style={GAME_LAYOUT_STYLES.cards}>
@@ -396,6 +396,7 @@ export function BlackjackScreen() {
 
           {/* Message */}
           <Text
+            testID="game-message"
             style={[
               MESSAGE_STYLES.message,
               state.lastResult === 'win' && MESSAGE_STYLES.messageWin,
@@ -408,9 +409,16 @@ export function BlackjackScreen() {
             {state.message}
           </Text>
 
+          {/* Game Result indicator for E2E testing */}
+          {state.phase === 'result' && (
+            <Text testID={`game-result-${state.lastResult || 'unknown'}`} style={{ display: 'none' }}>
+              {state.lastResult}
+            </Text>
+          )}
+
           {/* Player's Hand */}
-          <View style={GAME_LAYOUT_STYLES.handContainer}>
-            <Text style={HAND_STYLES.handLabel}>
+          <View style={GAME_LAYOUT_STYLES.handContainer} testID="player-hand">
+            <Text style={HAND_STYLES.handLabel} testID="player-hand-label">
               You ({state.playerTotal})
             </Text>
             <View style={GAME_LAYOUT_STYLES.cards}>
@@ -472,6 +480,7 @@ export function BlackjackScreen() {
               disabled={bet === 0 || isDisconnected || isSubmitting}
               variant="primary"
               size="large"
+              testID="deal-button"
             />
           )}
 
@@ -482,12 +491,14 @@ export function BlackjackScreen() {
                 onPress={handleHit}
                 disabled={isDisconnected}
                 variant="primary"
+                testID="action-hit"
               />
               <PrimaryButton
                 label="STAND"
                 onPress={handleStand}
                 disabled={isDisconnected}
                 variant="secondary"
+                testID="action-stand"
               />
               {state.canDouble && (
                 <PrimaryButton
@@ -495,6 +506,7 @@ export function BlackjackScreen() {
                   onPress={handleDouble}
                   disabled={isDisconnected}
                   variant="secondary"
+                  testID="action-double"
                 />
               )}
               {state.canSplit && (
@@ -503,6 +515,7 @@ export function BlackjackScreen() {
                   onPress={handleSplit}
                   disabled={isDisconnected}
                   variant="secondary"
+                  testID="action-split"
                 />
               )}
             </>
@@ -514,6 +527,7 @@ export function BlackjackScreen() {
               onPress={handleNewGame}
               variant="primary"
               size="large"
+              testID="new-game-button"
             />
           )}
 
@@ -523,6 +537,7 @@ export function BlackjackScreen() {
               onPress={handleNewGame}
               variant="primary"
               size="large"
+              testID="try-again-button"
             />
           )}
         </View>
