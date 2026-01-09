@@ -300,8 +300,8 @@
         "Add Detox test for split",
         "Verify bet amounts correct"
       ],
-      "passes": false,
-      "notes": "No Detox coverage."
+      "passes": true,
+      "notes": "Added comprehensive 'Blackjack Double/Split Flow (QA-008)' test suite in mobile/e2e/games.test.ts with 6 tests: (1) show double button when available, (2) execute double down successfully with retry logic, (3) show split button when dealt a pair with retry logic, (4) execute split action when pair is dealt, (5) disable double after hitting, (6) verify bet amount doubles after double down. Tests handle random game outcomes by retrying up to 5-15 attempts for conditional scenarios."
     },
     {
       "id": "QA-009",

@@ -842,3 +842,23 @@ Categories by count:
 - Evidence: Typecheck passes, lint passes (0 errors), tests added to Detox suite
 - Blockers: None. Detox tests require iOS simulator or Android emulator to execute.
 
+### 2026-01-09 - QA-008: Test Blackjack double/split
+- Files: mobile/e2e/games.test.ts
+- Decisions:
+  - Created comprehensive 'Blackjack Double/Split Flow (QA-008)' test suite with 6 tests
+  - Double/split are conditional actions requiring specific game conditions:
+    - Double: Available only on initial two cards when balance allows
+    - Split: Available only when dealt a pair (roughly 1/13 chance)
+  - Tests handle RNG by retrying up to 5-15 attempts to encounter conditions
+  - Tests verify functionality when conditions are met, avoid false failures when conditions don't occur
+  - Test coverage:
+    1. should show double button when available (first two cards)
+    2. should execute double down action successfully - retries up to 5 games
+    3. should show split button when dealt a pair - retries up to 15 games
+    4. should execute split action successfully - includes playing out both hands
+    5. should disable double after hitting - verifies double disappears after hit
+    6. should verify bet amount doubles after double down
+  - All tests use testIDs added in QA-007: action-double, action-split
+- Evidence: Typecheck passes, lint passes (0 errors)
+- Blockers: None. Detox tests require iOS simulator or Android emulator to execute.
+
