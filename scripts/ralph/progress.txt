@@ -147,3 +147,15 @@ Categories by count:
   - Added RUNBOOK.md §4.13 with alert configuration guidance
 - Blockers: None. All 406 execution tests pass.
 
+### 2026-01-08 - US-250: Fail website builds when required VITE_* args missing
+- Files: .github/workflows/build-images.yml, docs/RUNBOOK.md
+- Decisions:
+  - Added validation step in build-images.yml for website builds only
+  - Checks VITE_URL, VITE_AUTH_URL, VITE_AUTH_PROXY_URL, VITE_IDENTITY
+  - Validation runs on push/tag (not PRs where vars may not be available)
+  - Uses `::error::` annotation for clear GitHub Actions error display
+  - Documented required variables in RUNBOOK.md §7.3.1 with table format
+  - Stripe vars (VITE_STRIPE_*) remain optional
+- Rationale: Prevents shipping UIs with localhost defaults that can't connect to real services
+- Blockers: None.
+

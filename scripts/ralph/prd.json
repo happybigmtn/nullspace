@@ -658,8 +658,8 @@
         "Make the build fail fast if any required var is empty",
         "Document required GitHub vars in docs/release.md or runbooks"
       ],
-      "passes": false,
-      "notes": "If build args are unset, the website falls back to localhost endpoints and ships a broken testnet UI."
+      "passes": true,
+      "notes": "Added validation step in build-images.yml for website builds. Runs on push/tag (not PRs). Documented in RUNBOOK.md §7.3.1."
     },
     {
       "id": "US-251",
