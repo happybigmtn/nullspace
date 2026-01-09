@@ -389,7 +389,7 @@ mod tests {
         let mut rng = GameRng::new(&seed, session.id, 0);
 
         // Initialize blackjack game
-        init_game(&mut session, &mut rng);
+        let _ = init_game(&mut session, &mut rng);
         assert!(!session.is_complete, "Game should not be complete after init");
 
         // Process TypeScript-encoded deal move

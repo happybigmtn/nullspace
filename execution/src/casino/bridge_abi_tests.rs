@@ -14,6 +14,7 @@ mod tests {
     use commonware_cryptography::ed25519::PublicKey;
 
     /// Convert a hex string to bytes for golden vector validation
+    #[allow(dead_code)] // Intended for future golden vector tests
     fn hex_to_bytes(hex: &str) -> Vec<u8> {
         let clean = hex.trim().replace("0x", "").replace(" ", "");
         (0..clean.len())

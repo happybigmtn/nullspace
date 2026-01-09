@@ -59,7 +59,7 @@ mod tests {
         // Expected format: [04, 02, bet0(10 bytes), bet1(10 bytes)] = 22 bytes
         let mut session = create_test_session(GameType::Craps, 100, 1);
         let mut rng = create_test_rng(1, 0);
-        init_game(&mut session, &mut rng);
+        let _ = init_game(&mut session, &mut rng);
 
         // Truncated: 2 bets declared but only 16 bytes (missing 6 bytes of 2nd bet)
         // 04 02 = opcode + count
@@ -83,7 +83,7 @@ mod tests {
         // This: [04, 01, bet(9 bytes)] = 11 bytes
         let mut session = create_test_session(GameType::Craps, 100, 2);
         let mut rng = create_test_rng(2, 0);
-        init_game(&mut session, &mut rng);
+        let _ = init_game(&mut session, &mut rng);
 
         // Missing last byte of amount (should be 0x64 = 100)
         let payload = hex_to_bytes("04010000000000000000");
@@ -103,7 +103,7 @@ mod tests {
         // Expected: [03, 02, bet0(9 bytes), bet1(9 bytes)] = 20 bytes
         let mut session = create_test_session(GameType::Baccarat, 100, 3);
         let mut rng = create_test_rng(3, 0);
-        init_game(&mut session, &mut rng);
+        let _ = init_game(&mut session, &mut rng);
 
         // Truncated: 2 bets declared but only 16 bytes instead of 20
         // 03 02 = opcode + count
@@ -126,7 +126,7 @@ mod tests {
         // Expected: [04, 02, bet0(10 bytes), bet1(10 bytes)] = 22 bytes
         let mut session = create_test_session(GameType::Roulette, 100, 4);
         let mut rng = create_test_rng(4, 0);
-        init_game(&mut session, &mut rng);
+        let _ = init_game(&mut session, &mut rng);
 
         // Truncated: 2 bets declared but only 18 bytes (missing 4 bytes)
         let truncated_payload = hex_to_bytes("040201000000000000006402000000000000");
@@ -146,7 +146,7 @@ mod tests {
         // Expected: [03, 01, bet0(10 bytes)] = 12 bytes
         let mut session = create_test_session(GameType::SicBo, 100, 5);
         let mut rng = create_test_rng(5, 0);
-        init_game(&mut session, &mut rng);
+        let _ = init_game(&mut session, &mut rng);
 
         // Truncated: 1 bet declared but only 6 bytes of bet data
         let truncated_payload = hex_to_bytes("03010000000000");
@@ -170,7 +170,7 @@ mod tests {
         // Send Baccarat-sized payload (9 bytes/bet) to Craps game
         let mut session = create_test_session(GameType::Craps, 100, 10);
         let mut rng = create_test_rng(10, 0);
-        init_game(&mut session, &mut rng);
+        let _ = init_game(&mut session, &mut rng);
 
         // Baccarat atomic batch format: [03, 01, betType:u8, amount:u64] = 11 bytes
         // But we're sending to Craps which expects [04, 01, betType:u8, target:u8, amount:u64] = 12 bytes
@@ -193,7 +193,7 @@ mod tests {
         // Send Craps-sized payload (10 bytes/bet) to Baccarat game
         let mut session = create_test_session(GameType::Baccarat, 100, 11);
         let mut rng = create_test_rng(11, 0);
-        init_game(&mut session, &mut rng);
+        let _ = init_game(&mut session, &mut rng);
 
         // Craps format for 1 bet: [04, 01, betType:u8, target:u8, amount:u64] = 12 bytes
         // Baccarat expects: [03, 01, betType:u8, amount:u64] = 11 bytes
@@ -257,7 +257,7 @@ mod tests {
         // Verify they are processed correctly
         let mut session = create_test_session(GameType::Craps, 200, 20);
         let mut rng = create_test_rng(20, 0);
-        init_game(&mut session, &mut rng);
+        let _ = init_game(&mut session, &mut rng);
 
         // Valid Craps atomic batch: Pass bet (type=0) for 100 chips
         // [04, 01, 00, 00, 0000000000000064]
@@ -281,7 +281,7 @@ mod tests {
         // Empty payload should return InvalidPayload
         let mut session = create_test_session(GameType::Craps, 100, 30);
         let mut rng = create_test_rng(30, 0);
-        init_game(&mut session, &mut rng);
+        let _ = init_game(&mut session, &mut rng);
 
         let empty_payload: Vec<u8> = vec![];
 
@@ -299,7 +299,7 @@ mod tests {
         // Payload with just opcode, no bet count
         let mut session = create_test_session(GameType::Craps, 100, 31);
         let mut rng = create_test_rng(31, 0);
-        init_game(&mut session, &mut rng);
+        let _ = init_game(&mut session, &mut rng);
 
         let minimal_payload = vec![0x04]; // Just AtomicBatch opcode, no count
 
@@ -317,7 +317,7 @@ mod tests {
         // Atomic batch declaring zero bets
         let mut session = create_test_session(GameType::Craps, 100, 32);
         let mut rng = create_test_rng(32, 0);
-        init_game(&mut session, &mut rng);
+        let _ = init_game(&mut session, &mut rng);
 
         let zero_bets = vec![0x04, 0x00]; // AtomicBatch with 0 bets
 
@@ -335,7 +335,7 @@ mod tests {
         // Bet count exceeds limits (e.g., 255 bets)
         let mut session = create_test_session(GameType::Craps, 100, 33);
         let mut rng = create_test_rng(33, 0);
-        init_game(&mut session, &mut rng);
+        let _ = init_game(&mut session, &mut rng);
 
         // 255 bets declared but no actual bet data
         let excessive_count = vec![0x04, 0xFF];
@@ -354,7 +354,7 @@ mod tests {
         // Valid structure but invalid bet type (0xFF is not a valid Craps bet type)
         let mut session = create_test_session(GameType::Craps, 100, 34);
         let mut rng = create_test_rng(34, 0);
-        init_game(&mut session, &mut rng);
+        let _ = init_game(&mut session, &mut rng);
 
         // [04, 01, FF, 00, amount] - bet type 0xFF is invalid
         let invalid_bet_type = hex_to_bytes("0401FF000000000000000064");
@@ -373,7 +373,7 @@ mod tests {
         // Valid structure but zero amount
         let mut session = create_test_session(GameType::Craps, 100, 35);
         let mut rng = create_test_rng(35, 0);
-        init_game(&mut session, &mut rng);
+        let _ = init_game(&mut session, &mut rng);
 
         // [04, 01, 00, 00, 0000000000000000] - amount = 0
         let zero_amount = hex_to_bytes("040100000000000000000000");
@@ -410,7 +410,7 @@ mod tests {
         for (idx, payload) in malformed_payloads.iter().enumerate() {
             let mut session = create_test_session(GameType::Craps, 100, 100 + idx as u64);
             let mut rng = create_test_rng(100 + idx as u64, 0);
-            init_game(&mut session, &mut rng);
+            let _ = init_game(&mut session, &mut rng);
 
             let mut rng = create_test_rng(100 + idx as u64, 1);
             // This should not panic - it should return an error
@@ -445,7 +445,7 @@ mod tests {
         for (idx, (game_type, truncated_payload)) in game_configs.iter().enumerate() {
             let mut session = create_test_session(*game_type, 100, 200 + idx as u64);
             let mut rng = create_test_rng(200 + idx as u64, 0);
-            init_game(&mut session, &mut rng);
+            let _ = init_game(&mut session, &mut rng);
 
             let mut rng = create_test_rng(200 + idx as u64, 1);
             let result = process_game_move(&mut session, truncated_payload, &mut rng);
