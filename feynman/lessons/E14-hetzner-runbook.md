@@ -25,6 +25,8 @@ The runbook targets Hetzner Cloud because it provides cost-effective servers for
 
 The key point is not Hetzner itself; it is the deployment pattern. The runbook encodes a secure and repeatable way to bring up a distributed stack. The same ideas apply to other cloud providers.
 
+**Note on Infrastructure as Code (IaC):** While this lesson covers manual provisioning procedures, the project has migrated to Terraform-based infrastructure management. See **E26 - Terraform infrastructure** and the `terraform/` directory for the IaC approach. The manual procedures below remain useful for understanding the underlying architecture and for debugging, but new deployments should prefer the Terraform workflow.
+
 ---
 
 ## 2) Project and network setup
@@ -35,6 +37,8 @@ The runbook starts with project creation and network planning:
 - Create a private network `10.0.0.0/16` with a `10.0.1.0/24` subnet.
 - Attach all servers to the private network.
 - Only load balancers and the bastion get public IPs.
+
+**Terraform alternative:** These network and project resources are now defined as code in `terraform/` (see E26). The Terraform modules provision the private network, firewall rules, and server instances declaratively, replacing manual Hetzner console operations.
 
 ### 2.1 Why a private network is non-negotiable
 
@@ -80,6 +84,8 @@ This policy is the simplest form of zero trust: only the edge is public, everyth
 
 The runbook provides explicit firewall rules. This is the most important hardening step.
 
+**Terraform codification:** Firewall rules are now defined in Terraform modules (`terraform/`), ensuring consistent enforcement across environments and enabling version-controlled security policy.
+
 ### 3.1 Public ingress
 
 Only the following should be public:
@@ -123,6 +129,8 @@ The runbook recommends a baseline host layout:
 - `ns-db-1` (Postgres): CPX41 + volume.
 - `ns-obs-1` (Observability): CPX31 (optional).
 - `ns-ops-1` (Ops/analytics): CPX21 (optional).
+
+**Terraform server definitions:** Server instances, their types, and volumes are declared in `terraform/` modules. This allows you to adjust instance sizes and counts via Terraform variables, applying changes through `terraform plan` and `terraform apply` rather than manual console operations.
 
 ### 4.1 Why these roles are separated
 
@@ -405,6 +413,13 @@ One more habit to build: treat the runbook as a living document. When a deployme
 The Hetzner runbook is a security checklist disguised as a deployment guide. It says: build a private network, expose only the front door, run each role on the right size machine, and validate everything before you open the doors. If you follow that, you get a safe and repeatable testnet. The details matter because every skipped step becomes a future outage. Treat it like an operations playbook, not a suggestion.
 
 Repeatability is the real product.
+
+**Migration to Infrastructure as Code:** The project has evolved from manual provisioning to Terraform-based IaC. While the principles and architecture described here remain foundational, new deployments use `terraform/` modules to provision infrastructure declaratively. See **E26 - Terraform infrastructure** for the IaC workflow. The manual procedures documented here are still valuable for:
+
+- Understanding the underlying architecture and security boundaries
+- Debugging infrastructure issues when Terraform state diverges
+- One-off testing and development scenarios
+- Learning the "why" behind infrastructure decisions before automating them
 
 ---
 

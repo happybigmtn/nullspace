@@ -20,15 +20,13 @@
 
 ## Progress Format
 
-APPEND to progress.txt:
+After completing each task, append to progress.txt:
 
-## [Date] - [Story ID]
-
-- What was implemented
+- Task completed and PRD item reference
+- Key decisions made and reasoning
 - Files changed
-- **Learnings:**
-  - Patterns discovered
-  - Gotchas encountered
+- Any blockers or notes for next iteration
+  Keep entries concise. Sacrifice grammar for the sake of concision. This file helps future iterations skip exploration.
 
 ---
 

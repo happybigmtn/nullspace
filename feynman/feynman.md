@@ -58,6 +58,7 @@ Optional extensions (woven into the flow where they fit best)
 ### Foundations (recommended before Day 1)
 - E01 Architecture overview: `feynman/lessons/E01-architecture-overview.md`
 - E02 Component roles + deployment topology: `feynman/lessons/E02-component-roles-topology.md`
+- E38 Shared packages overview: `feynman/lessons/E38-shared-packages.md`
 
 ### Commonware primitives (recommended after E03-E06)
 - E17 Commonware runtime + scheduling: `feynman/lessons/E17-commonware-runtime.md`
@@ -76,6 +77,7 @@ Optional extensions (woven into the flow where they fit best)
 - L03 Instruction encoding (binary formats): `feynman/lessons/L03-instructions-encoding.md`
 - L04 Transaction building + signing: `feynman/lessons/L04-transactions-signing.md`
 - E08 Protocol packages + schemas (cross-cutting): `feynman/lessons/E08-protocol-packages.md`
+- L52 Protocol version headers: `feynman/lessons/L52-protocol-versioning.md`
 - L05 Submit client and HTTP submission: `feynman/lessons/L05-submit-client.md`
 - L47 Simulator HTTP API + rate limits: `feynman/lessons/L47-simulator-http-api.md`
 - L06 Simulator /submit endpoint (decode + dispatch): `feynman/lessons/L06-simulator-submit-http.md`
@@ -92,7 +94,10 @@ Optional extensions (woven into the flow where they fit best)
 ### Clients (optional, to accompany L01-L04)
 - E09 Mobile app architecture: `feynman/lessons/E09-mobile-app.md`
 - E10 Web app architecture: `feynman/lessons/E10-web-app.md`
+- E32 Client-side hooks, toasts, utilities: `feynman/lessons/E32-client-utilities.md`
 - L50 Web vault + passkeys: `feynman/lessons/L50-web-vault-passkeys.md`
+- L51 Bet history + session stats (mobile): `feynman/lessons/L51-bet-history-stats.md`
+- L54 Economy UI components: `feynman/lessons/L54-economy-ui-components.md`
 
 ### Registration + Faucet (CasinoRegister / CasinoDeposit)
 - L13 Gateway entrypoint (register/faucet paths): `feynman/lessons/L13-gateway-register-faucet.md`
@@ -133,8 +138,15 @@ Optional extensions (woven into the flow where they fit best)
 - L44 OnchainCrapsTable (global table orchestration): `feynman/lessons/L44-onchain-craps-table.md`
 - L45 Global table handlers (on-chain): `feynman/lessons/L45-global-table-handlers.md`
 - L46 Compare global table vs normal craps: `feynman/lessons/L46-live-vs-normal-craps.md`
+- L53 Casino games implementation deep dive: `feynman/lessons/L53-casino-games-deepdive.md`
 - E06 Execution engine internals (game logic): `feynman/lessons/E06-execution-engine.md`
 - E07 RNG + fairness model: `feynman/lessons/E07-rng-fairness.md`
+
+### Economics & Advanced Features (optional extensions)
+- E28 AMM, liquidity vaults, savings, oracle: `feynman/lessons/E28-liquidity-amm.md`
+- E29 Staking and rewards system: `feynman/lessons/E29-staking-rewards.md`
+- E30 Bridge and cross-chain transfers: `feynman/lessons/E30-bridge-crosschain.md`
+- E31 EVM/Solidity contracts integration: `feynman/lessons/E31-evm-contracts.md`
 
 ### Supplemental Concept Labs
 - S01 Networking primer (HTTP/WS, CORS, origins): `feynman/lessons/S01-networking-primer.md`
@@ -151,5 +163,12 @@ Optional extensions (woven into the flow where they fit best)
 - E12 CI images + Docker build chain: `feynman/lessons/E12-ci-docker.md`
 - E13 Systemd + service orchestration: `feynman/lessons/E13-systemd-services.md`
 - E14 Hetzner infra + hardening checklist: `feynman/lessons/E14-hetzner-runbook.md`
+- E26 Terraform infrastructure + IaC: `feynman/lessons/E26-terraform-infrastructure.md`
+- E27 Observability stack + distributed tracing: `feynman/lessons/E27-observability-stack.md`
+- E33 SOPS, Age encryption, secrets workflow: `feynman/lessons/E33-secrets-management.md`
+- E34 Ops service analytics endpoints: `feynman/lessons/E34-ops-service.md`
 - E15 Testing strategy + harnesses: `feynman/lessons/E15-testing-strategy.md`
+- E35 Cross-service integration tests: `feynman/lessons/E35-integration-tests.md`
+- E36 Mobile E2E testing with Detox: `feynman/lessons/E36-mobile-e2e-detox.md`
+- E37 Stress and soak testing: `feynman/lessons/E37-stress-soak-testing.md`
 - E16 Limits inventory + tuning checklist: `feynman/lessons/E16-limits-inventory.md`

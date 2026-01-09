@@ -13,10 +13,13 @@ Goal: explain how telemetry is enabled, how the ops service collects analytics a
 After this lesson you should be able to:
 
 1) Explain when gateway telemetry is enabled and what it exports.
-2) Describe how the ops service stores events and aggregates KPIs.
-3) Understand the security controls for ops endpoints (CORS, admin tokens).
-4) Trace an analytics event from ingestion to storage and leaderboard updates.
-5) Describe the referral and push notification workflows.
+2) Describe how OpenTelemetry traces flow from services through the collector to Grafana Tempo.
+3) Understand W3C Trace Context propagation across service boundaries.
+4) Navigate Grafana dashboards to debug service issues using metrics, logs, and traces.
+5) Describe how the ops service stores events and aggregates KPIs.
+6) Understand the security controls for ops endpoints (CORS, admin tokens).
+7) Trace an analytics event from ingestion to storage and leaderboard updates.
+8) Describe the referral and push notification workflows.
 
 ---
 
@@ -52,6 +55,17 @@ OpenTelemetry (OTel) provides:
 - **Collector** (optional): centralized service that receives spans and forwards them.
 
 This pipeline is why you see `OTLP` endpoints in configs: OTLP is the standard wire format for sending telemetry.
+
+### 1.3.1 W3C Trace Context propagation
+
+OpenTelemetry implements the W3C Trace Context standard, which defines how trace context is propagated across service boundaries via HTTP headers:
+
+- `traceparent`: contains trace ID, parent span ID, and sampling decision
+- `tracestate`: vendor-specific trace state information
+
+When a request flows from the gateway to the simulator, the trace context is automatically propagated. This allows you to follow a single user request across multiple services in your distributed tracing backend. Without this standard, each service would create independent, disconnected traces.
+
+The gateway's auto-instrumentation handles this propagation automatically for outbound HTTP requests.
 
 ### 1.4 Product ops analytics is not telemetry
 
@@ -130,6 +144,51 @@ If `OTEL_SERVICE_NAME` is not provided, the gateway uses `nullspace-gateway`. Th
 ### 3.4 Graceful shutdown
 
 The file registers handlers for `SIGTERM` and `SIGINT` to shut down the SDK. This prevents spans from being lost during restarts.
+
+### 3.5 Where traces go: Grafana Tempo
+
+In production, the gateway exports traces to Grafana Tempo via the OpenTelemetry Collector. The flow is:
+
+1. Gateway SDK exports spans to `OTEL_EXPORTER_OTLP_ENDPOINT` (typically the collector).
+2. OpenTelemetry Collector receives spans and forwards them to Tempo.
+3. Tempo stores traces in object storage (S3-compatible).
+4. Grafana queries Tempo to visualize traces.
+
+This architecture separates concerns:
+
+- **Gateway**: lightweight OTLP export, no storage logic.
+- **Collector**: buffering, batching, and routing.
+- **Tempo**: durable trace storage.
+- **Grafana**: query and visualization.
+
+Tempo is designed for high-volume traces. It uses object storage instead of a database, which makes it cost-effective and scalable. Traces are indexed by trace ID, service name, and span attributes, allowing you to search for specific requests or errors.
+
+For a deep dive on the full observability stack (Grafana, Tempo, Loki, Prometheus), see **E27 - Observability stack deep dive**.
+
+### 3.6 Grafana dashboards: service-level visibility
+
+Nullspace runs Grafana dashboards for each major service:
+
+- **Gateway dashboard**: HTTP request rates, latency percentiles (p50, p95, p99), error rates, active connections
+- **Simulator dashboard**: game execution time, RNG call counts, state transitions, error rates
+- **Auth service dashboard**: authentication success/failure rates, token issuance rates, session counts
+- **Game services dashboard**: per-game metrics (blackjack, roulette, slots), bet distributions, payout ratios
+
+These dashboards query:
+
+- **Prometheus** for metrics (request counts, latency histograms, error rates)
+- **Loki** for structured logs (error messages, audit events)
+- **Tempo** for distributed traces (end-to-end request timelines)
+
+A typical debugging workflow:
+
+1. See elevated error rate in the gateway dashboard.
+2. Query Loki for error logs in that time window.
+3. Find a trace ID in the logs.
+4. Open that trace in Tempo to see which downstream service failed.
+5. Drill into that service's span to see the root cause (timeout, validation error, etc.).
+
+This three-pillar approach (metrics, logs, traces) is why Grafana is the unified query layer. You can correlate data across sources without switching tools.
 
 ---
 
@@ -569,17 +628,27 @@ This is the main tradeoff of a file-based analytics system. It is easy to operat
 
 ## 18) Feynman recap
 
-Telemetry is the engine dashboard: it shows how the gateway behaves. Ops analytics is the scoreboard: it shows what users are doing. Telemetry is optional and export-based; ops analytics is local and file-based. Both are needed if you want to run a real system and understand it.
+Telemetry is the engine dashboard: it shows how the gateway behaves. Ops analytics is the scoreboard: it shows what users are doing.
+
+Telemetry is optional and export-based. OpenTelemetry captures traces with W3C Trace Context propagation, exports them via OTLP to the collector, which forwards them to Grafana Tempo for storage. Grafana provides unified dashboards that query Prometheus (metrics), Loki (logs), and Tempo (traces), enabling a complete debugging workflow from high-level error rates down to individual request timelines.
+
+Ops analytics is local and file-based, storing events in daily NDJSON buckets. This keeps it simple and dependency-free while still supporting KPIs, leaderboards, referrals, and push campaigns.
+
+Both layers are needed if you want to run a real system and understand it. For the full observability architecture, see E27.
 
 ---
 
 ## 19) Exercises
 
 1) What triggers telemetry to start in the gateway?
-2) Why does the ops service store daily NDJSON instead of a single JSON file?
-3) How does `OPS_LEAGUE_POINTS_MODE` change the leaderboard?
-4) What does `OPS_ALLOW_NO_ORIGIN` do, and why could it be risky?
-5) How does the ops service decide whether an actor is the same across events?
+2) How does W3C Trace Context enable distributed tracing across services?
+3) What are the three data sources that Grafana dashboards query, and what does each provide?
+4) Describe the flow of a trace from the gateway to Grafana Tempo.
+5) Why does the ops service store daily NDJSON instead of a single JSON file?
+6) How does `OPS_LEAGUE_POINTS_MODE` change the leaderboard?
+7) What does `OPS_ALLOW_NO_ORIGIN` do, and why could it be risky?
+8) How does the ops service decide whether an actor is the same across events?
+9) You see a spike in gateway errors. Walk through how you would use Grafana, Loki, and Tempo to find the root cause.
 
 ---
 

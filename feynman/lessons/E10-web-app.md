@@ -21,8 +21,9 @@ After this lesson you should be able to:
 1) Describe the route hierarchy and how lazy loading works in the web app.
 2) Explain how feature flags gate large sections of the UI.
 3) Trace the data flow in `CasinoApp` from chain state to UI components.
-4) Explain how responsible play controls and safety checks are enforced on the client.
-5) Identify the primary failure modes and what the architecture does to mitigate them.
+4) Explain how the PWA architecture provides offline-first caching and installability.
+5) Explain how responsible play controls and safety checks are enforced on the client.
+6) Identify the primary failure modes and what the architecture does to mitigate them.
 
 ---
 
@@ -272,7 +273,216 @@ This is an example of accessible design built into the architecture, not bolted 
 
 ---
 
-## 10) Responsible play settings
+## 10) Progressive Web App (PWA) support
+
+The web app is built as a **Progressive Web App (PWA)**, which means users can install it to their home screen and use it offline. This provides an app-like experience without requiring a native app download from an app store.
+
+### 10.1 What a PWA provides
+
+PWAs combine the reach of the web with the experience of native apps:
+
+- **Installable**: Users can add the app to their home screen on mobile or desktop.
+- **Offline-first**: Critical assets are cached so the app works even without network connectivity.
+- **Fast loading**: Cached resources load instantly on repeat visits.
+- **Native app feel**: Runs in standalone mode without browser chrome (address bar, tabs).
+
+For a casino app, this is especially valuable: users get a dedicated gaming experience without installing a separate app.
+
+### 10.2 Service worker architecture
+
+The service worker lives at `/website/public/sw.js` and implements an **offline-first caching strategy** with network fallback:
+
+```javascript
+// Precache critical assets on install
+const PRECACHE_ASSETS = [
+  '/',
+  '/index.html',
+  '/manifest.json',
+  '/favicon.ico',
+  '/offline.html'
+];
+```
+
+The service worker implements three caching strategies depending on the resource type:
+
+1. **Navigation requests (HTML pages)**: Network-first with offline fallback. The app tries to fetch fresh HTML, but if the network fails, it serves cached content or an offline page.
+
+2. **Static assets (JS, CSS, fonts, images)**: Stale-while-revalidate. The app serves cached assets immediately for speed, then updates the cache in the background.
+
+3. **API requests**: Always network-only. Transaction submission and chain queries should never be cached.
+
+This hybrid approach ensures the UI shell loads instantly while keeping chain state fresh.
+
+### 10.3 Service worker lifecycle
+
+The service worker follows a three-phase lifecycle:
+
+**Install phase**: When a new service worker is discovered, it precaches critical assets:
+
+```javascript
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then((cache) => cache.addAll(PRECACHE_ASSETS))
+      .then(() => self.skipWaiting())  // Activate immediately
+  );
+});
+```
+
+**Activate phase**: The new service worker cleans up old caches and takes control:
+
+```javascript
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys()
+      .then((cacheNames) => {
+        // Delete old caches
+        return Promise.all(
+          cacheNames
+            .filter((name) => name.startsWith('nullspace-') && name !== CACHE_NAME)
+            .map((name) => caches.delete(name))
+        );
+      })
+      .then(() => self.clients.claim())  // Take control immediately
+  );
+});
+```
+
+**Fetch phase**: The service worker intercepts network requests and applies caching logic based on the resource type.
+
+The key architectural decision is `skipWaiting()` and `clients.claim()`. These ensure the new service worker activates immediately without waiting for tabs to close. This keeps updates fast but requires careful testing to avoid breaking in-progress sessions.
+
+### 10.4 Install prompt handling (Chrome/Edge vs iOS)
+
+The install experience differs dramatically across platforms:
+
+**Chrome/Edge (Android and desktop)**:
+- Browsers fire a `beforeinstallprompt` event when install criteria are met.
+- The app captures this event and shows a custom install banner.
+- When the user clicks "Install", the app calls `prompt()` to trigger the native install UI.
+
+**iOS Safari**:
+- Safari does not support the `beforeinstallprompt` API.
+- Users must manually tap Share → "Add to Home Screen".
+- The app detects iOS Safari and shows visual instructions instead.
+
+The `usePWA` hook (`/website/src/hooks/usePWA.ts`) abstracts these platform differences:
+
+```typescript
+const { canInstall, promptInstall, isIOSSafari, dismissBanner, isDismissed } = usePWA();
+```
+
+- `canInstall` is true when the install prompt is available (Chrome/Edge).
+- `isIOSSafari` is true when manual instructions are needed (iOS).
+- `promptInstall` triggers the native install dialog on supported browsers.
+- `dismissBanner` hides the banner for 7 days to avoid nagging users.
+
+The `InstallBanner` component (`/website/src/components/ui/InstallBanner.tsx`) renders platform-specific UI:
+
+```tsx
+if (isIOSSafari) {
+  return <IOSInstallInstructions />;  // Shows "Tap Share → Add to Home Screen"
+}
+
+if (canInstall) {
+  return <InstallButton onClick={promptInstall} />;  // Shows native prompt
+}
+```
+
+This is mounted at the router level in `App.jsx` so it appears consistently across all routes.
+
+### 10.5 Manifest and app metadata
+
+The web app manifest (`/website/public/manifest.json`) defines how the app appears when installed:
+
+```json
+{
+  "name": "null/space Casino",
+  "short_name": "null/space",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#111111",
+  "theme_color": "#111111",
+  "icons": [...]
+}
+```
+
+Key properties:
+
+- `display: "standalone"` hides the browser UI (address bar, back button) for an app-like experience.
+- `theme_color` sets the status bar color on mobile devices.
+- `start_url` defines where the app opens (the casino root route).
+- `icons` provides app icons for home screen, splash screen, and task switcher.
+
+The manifest is linked in `index.html` along with iOS-specific meta tags:
+
+```html
+<link rel="manifest" href="/manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="null/space">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
+```
+
+These tags ensure the app works correctly on both Android (via manifest) and iOS (via meta tags).
+
+### 10.6 App icons and maskable variants
+
+The app provides four icon variants:
+
+1. **icon-192.png** and **icon-512.png**: Standard icons with transparent backgrounds. Used on most platforms.
+
+2. **icon-maskable-192.png** and **icon-maskable-512.png**: Icons with extra padding that can be safely cropped into different shapes (circle, squircle, rounded square). Used on Android 13+ where the OS applies adaptive icon shapes.
+
+The manifest declares both purposes:
+
+```json
+{
+  "src": "/icons/icon-192.png",
+  "purpose": "any"  // Standard icon
+},
+{
+  "src": "/icons/icon-maskable-192.png",
+  "purpose": "maskable"  // Safe-area icon for adaptive shapes
+}
+```
+
+This ensures the icon looks correct whether the OS displays it as a circle (Pixel), squircle (Samsung), or rounded square (iOS).
+
+### 10.7 Service worker registration
+
+The service worker is registered in `index.html` after the app loads:
+
+```javascript
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then((registration) => console.log('[PWA] Service worker registered'))
+      .catch((error) => console.error('[PWA] Registration failed:', error));
+  });
+}
+```
+
+Registration is deferred until after page load to avoid blocking the initial render. This is a best practice: the service worker will not help the first visit, so there is no reason to slow it down.
+
+The service worker is served from `/public/sw.js` (not bundled with the app). This keeps the scope at the root path and avoids versioning conflicts with the main bundle.
+
+### 10.8 Why offline-first matters for a casino app
+
+Most casino logic requires chain connectivity, so why support offline mode?
+
+1. **Instant UI load**: The app shell (HTML, CSS, JS) loads from cache immediately. Users see the UI in under 100ms even on slow networks.
+
+2. **Resilience to flaky connections**: Mobile networks drop in and out. Caching ensures the UI does not flicker or reload when connectivity is intermittent.
+
+3. **Perception of speed**: A cached shell makes the app feel fast. Once the UI is loaded, the app can show connection status and wait for chain services gracefully.
+
+4. **App-like continuity**: Users expect installed apps to open instantly. Offline-first caching provides that experience.
+
+The key insight is that the UI and the chain state are separate concerns. The service worker caches the UI layer, while the app handles chain connectivity at the application level.
+
+---
+
+## 11) Responsible play settings
 
 The `ResponsiblePlaySettings` structure is stored in localStorage under `nullspace_responsible_play_v1`. It includes:
 
@@ -293,7 +503,7 @@ These controls are client-side, but they are still valuable: they shape user beh
 
 ---
 
-## 10.1) How `safeDeal` enforces limits in practice
+## 11.1) How `safeDeal` enforces limits in practice
 
 `safeDeal` is the gatekeeper for starting a new round. It only performs checks when the game is at a round boundary (`BETTING` or `RESULT` stage), which prevents mid-round interruptions. The checks include:
 
@@ -310,7 +520,7 @@ This pattern is critical: **UI safety logic wraps, but does not replace, the cor
 
 ---
 
-## 10.2) Session baselines and PnL tracking
+## 11.2) Session baselines and PnL tracking
 
 `CasinoApp` calculates `currentPnl`, `sessionMinutes`, and `netPnl` from `stats` and `rp`. When a session starts, it stores a baseline PnL and a start timestamp. Subsequent PnL checks compute net gain or loss relative to that baseline, not absolute wallet balance. This is important because a user's wallet may change for reasons unrelated to the current session (for example, tournament payouts or airdrops).
 
@@ -318,7 +528,7 @@ By baselining at session start, the UI can enforce loss limits based on actual s
 
 ---
 
-## 11) Command palette, help, and overlays
+## 12) Command palette, help, and overlays
 
 `CasinoApp` manages multiple overlays:
 
@@ -334,7 +544,7 @@ The command palette also integrates with keyboard shortcuts (see `useKeyboardCon
 
 ---
 
-## 11.1) Input refs and focus management
+## 12.1) Input refs and focus management
 
 `CasinoApp` keeps `inputRef` and `customBetRef` so it can programmatically focus inputs when overlays open. This is a small UX detail, but it matters: when a user opens the command palette, they can start typing immediately. When they open custom bet mode, the numeric input is focused without extra clicks.
 
@@ -342,7 +552,7 @@ This is a classic example of how React refs are used for imperative UX improveme
 
 ---
 
-## 12) Keyboard controls: power-user UX
+## 13) Keyboard controls: power-user UX
 
 The `useKeyboardControls` hook (not shown in full here) provides a large set of shortcuts:
 
@@ -358,7 +568,7 @@ The hook also implements game-specific shortcuts (blackjack hit/stand, roulette 
 
 ---
 
-## 12.1) Local UI state belongs in the component
+## 13.1) Local UI state belongs in the component
 
 `CasinoApp` maintains a large number of UI-only state variables: `commandOpen`, `customBetOpen`, `helpOpen`, `helpDetail`, `customBetString`, `searchQuery`, `leaderboardView`, `feedOpen`, `numberInputString`, `focusMode`, and `rewardsOpen`. These states are not part of the core chain or game logic. They are purely presentation concerns.
 
@@ -371,7 +581,7 @@ This division is an architectural choice: global state for things that must be c
 
 ---
 
-## 12.2) Play mode flow (cash vs freeroll)
+## 13.2) Play mode flow (cash vs freeroll)
 
 The casino can operate in different modes. `playMode` is stored in component state and drives which screens are shown:
 
@@ -384,7 +594,7 @@ Separating mode selection from game state is important: you can add new modes or
 
 ---
 
-## 13) QA harness and feature gating
+## 14) QA harness and feature gating
 
 The `qaEnabled` flag is derived from `VITE_QA_BETS`. When enabled, the UI renders a `QABetHarness` component. This is a testing tool that should never appear in production.
 
@@ -392,7 +602,7 @@ This is another example of environment-driven feature gating. It allows QA and d
 
 ---
 
-## 13.1) Wallet and auth indicators
+## 14.1) Wallet and auth indicators
 
 `CasinoApp` imports `WalletPill` and `AuthStatusPill` components. These are small UI elements, but they provide essential situational awareness:
 
@@ -405,7 +615,7 @@ These indicators also serve as anchor points for support and debugging. When a u
 
 ---
 
-## 14) Sound effects and telemetry
+## 15) Sound effects and telemetry
 
 `CasinoApp` calls `setSfxEnabled(soundEnabled)` when the sound preference changes. This lets the sound engine run independently of the UI. Sound effects are a key part of casino feedback, but they must respect user preferences.
 
@@ -413,13 +623,13 @@ The app also tracks events via `track` (telemetry). This mirrors the mobile app 
 
 ---
 
-## 15) Error boundaries
+## 16) Error boundaries
 
 `CasinoApp` wraps large sections in an `ErrorBoundary` component. This prevents a single render error from crashing the entire app. In a complex UI with many game components, this is essential for resilience.
 
 ---
 
-## 16) A simplified data flow
+## 17) A simplified data flow
 
 A casino action flows like this:
 
@@ -432,7 +642,7 @@ The UI does not embed chain logic. It delegates to the hook, which maintains con
 
 ---
 
-## 17) Failure modes and mitigations
+## 18) Failure modes and mitigations
 
 - **Chain offline**: `isOnChain` toggles to `offline`, and the UI can block actions.
 - **Feature flag misconfig**: fallback to legacy UI ensures functionality.
@@ -443,7 +653,7 @@ These are not theoretical. They reflect real conditions: ad blockers, privacy se
 
 ---
 
-## 17.1) Chain responsiveness timeouts
+## 18.1) Chain responsiveness timeouts
 
 Although not shown directly in `CasinoApp.tsx`, the `useTerminalGame` hook wires in `useChainTimeouts`. This subsystem arms timeouts when a transaction is sent and clears them when a response arrives. If a timeout fires, the UI can reset pending state or warn the user that the chain is unresponsive.
 
@@ -453,19 +663,22 @@ Even though this logic lives inside a hook, it has user-visible consequences. It
 
 ---
 
-## 18) Feynman recap: explain it like I am five
+## 19) Feynman recap: explain it like I am five
 
 Think of the web app as a big arcade hall. The front door is the router. Inside, there are different rooms (economy, explorer, casino). The casino room has a big control panel (`useTerminalGame`) that knows how to talk to the chain. All the buttons, sounds, and overlays are just decorations around that panel. If the control panel says the chain is offline, the room closes its doors.
 
 ---
 
-## 19) Exercises
+## 20) Exercises
 
 1) Why does the app use lazy loading for large sections like the explorer?
 2) What is the benefit of routing `economy` and `stake` through feature-flagged components?
 3) Explain how `safeDeal` enforces responsible play settings.
 4) If the chain is offline, which state signals should the UI use to disable actions?
 5) Where would you add a new top-level route if you wanted a new product section?
+6) Why does the service worker use network-first caching for HTML but stale-while-revalidate for static assets?
+7) What is the difference between installing a PWA on Chrome/Edge vs iOS Safari?
+8) Why are maskable icons important for Android 13+ devices?
 
 ---
 

@@ -1,5 +1,59 @@
 # Nullspace Updates
 
+## 2026-01-08: Feynman Documentation - Comprehensive Expansion
+
+Massive expansion of Feynman technical documentation covering economy features, testing strategy, secrets management, operations, and cross-service integration.
+
+**New Lessons Created:**
+- E26-terraform-infrastructure.md - Terraform IaC deployment patterns for Hetzner infrastructure
+- E27-observability-stack.md - OpenTelemetry integration, Grafana Tempo distributed tracing
+- E28-liquidity-amm.md - AMM liquidity pools, vault mechanics, savings accounts, oracle integration
+- E29-staking-rewards.md - Staking mechanics, 18-decimal precision rewards distribution
+- E30-bridge-crosschain.md - Bridge architecture, lockbox pattern, relayer system
+- E31-evm-contracts.md - EVM/Solidity contracts on Base L2, bridging patterns
+- E32-client-utilities.md - Client hooks, toast notification system, animation utilities
+- E33-secrets-management.md - SOPS + Age encryption for deployment secrets
+- E34-ops-service.md - File-based analytics, leaderboards, push notifications
+- E35-integration-tests.md - Cross-service integration testing patterns
+- E36-mobile-e2e-detox.md - Mobile E2E testing with Detox framework
+- E37-stress-soak-testing.md - WebSocket stress tests and soak testing
+- E38-shared-packages.md - Monorepo shared package architecture
+- L51-bet-history-stats.md - Mobile bet history and session stats implementation (US-165)
+- L52-protocol-versioning.md - Protocol version headers and compatibility
+- L53-casino-games-deepdive.md - Casino game implementations and mechanics
+- L54-economy-ui-components.md - Economy UI components and state management
+
+**Existing Lessons Updated:**
+- E10-web-app.md - Added PWA support section covering service workers and offline capabilities (US-157)
+- E11-telemetry-ops.md - Updated with OpenTelemetry instrumentation and Grafana dashboard configs
+- E14-hetzner-runbook.md - Added Terraform infrastructure references and updated deployment procedures
+- E15-testing-strategy.md - Added fuzzing, visual regression testing, and integration test patterns
+
+**Index Updated:**
+- feynman.md - Added new lessons to table of contents with proper categorization
+
+---
+
+## 2026-01-08: Feynman Documentation Refresh
+
+Initial documentation refresh covering infrastructure, observability, and mobile features.
+
+**New Lessons Created:**
+- E26-terraform-infrastructure.md - Terraform IaC deployment patterns for Hetzner infrastructure
+- E27-observability-stack.md - OpenTelemetry integration, Grafana Tempo distributed tracing
+- L51-bet-history-stats.md - Mobile bet history and session stats implementation (US-165)
+
+**Existing Lessons Updated:**
+- E10-web-app.md - Added PWA support section covering service workers and offline capabilities (US-157)
+- E11-telemetry-ops.md - Updated with OpenTelemetry instrumentation and Grafana dashboard configs
+- E14-hetzner-runbook.md - Added Terraform infrastructure references and updated deployment procedures
+- E15-testing-strategy.md - Added fuzzing, visual regression testing, and integration test patterns
+
+**Index Updated:**
+- feynman.md - Added new lessons to table of contents with proper categorization
+
+---
+
 ## 2026-01-06: US-022 - Remove Global Game-State Mock
 
 ### Problem

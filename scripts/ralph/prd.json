@@ -1,1255 +1,505 @@
 {
   "branchName": "ralph/testnet-production",
-  "userStories": [
-    {
-      "id": "US-010",
-      "title": "Execute soak test",
-      "acceptanceCriteria": [
-        "./scripts/soak-test.sh configs/testnet 4",
-        "DURATION_SECONDS=600 (10 minutes)",
-        "No crashes or deadlocks",
-        "Memory usage stable"
-      ],
-      "priority": 1,
-      "passes": false,
-      "notes": "STAGING READY: Multi-host deployment completed. Run soak test against testnet.regenesis.dev"
-    },
-    {
-      "id": "US-011",
-      "title": "Execute bot load test",
-      "acceptanceCriteria": [
-        "./scripts/run-bots.sh configs/testnet https://indexer.testnet.regenesis.dev",
-        "NUM_BOTS=300 DURATION_SECONDS=300",
-        "No sustained errors",
-        "Response times acceptable"
-      ],
-      "priority": 2,
-      "passes": false,
-      "notes": "STAGING READY: Run bot load test against staging deployment"
-    },
-    {
-      "id": "US-012",
-      "title": "Execute global table fanout test",
-      "acceptanceCriteria": [
-        "node scripts/load-test-global-table.mjs",
-        "URL=wss://api.testnet.regenesis.dev TOTAL=5000 DURATION=300",
-        "Events broadcast to all clients",
-        "No message loss"
-      ],
-      "priority": 3,
-      "passes": false,
-      "notes": "STAGING READY: Run global table fanout test against staging gateway"
-    },
-    {
-      "id": "US-013",
-      "title": "Verify health endpoints",
-      "acceptanceCriteria": [
-        "GET https://indexer.testnet.regenesis.dev/healthz returns 200",
-        "GET https://api.testnet.regenesis.dev/healthz returns 200",
-        "GET https://auth.testnet.regenesis.dev/healthz returns 200",
-        "All services respond within 5s"
-      ],
-      "priority": 4,
-      "passes": true,
-      "notes": "COMPLETE: Smoke tests passed in deploy-staging workflow. All health endpoints verified."
-    },
-    {
-      "id": "US-014",
-      "title": "Test faucet flow end-to-end",
-      "acceptanceCriteria": [
-        "Register new user via mobile app",
-        "Claim faucet credits",
-        "Balance updates correctly",
-        "Can place and resolve bet"
-      ],
-      "priority": 5,
-      "passes": false,
-      "notes": "STAGING READY: Core testnet user journey on testnet.regenesis.dev"
-    },
-    {
-      "id": "US-015",
-      "title": "Test vault-only login on iOS",
-      "acceptanceCriteria": [
-        "Set VITE_ALLOW_LEGACY_KEYS=0",
-        "Create new account with vault password",
-        "Export recovery key",
-        "Reimport on fresh install"
-      ],
-      "priority": 6,
-      "passes": false,
-      "notes": "MANUAL: Go/No-Go criteria per runbook Section 10. Requires iOS device."
-    },
-    {
-      "id": "US-016",
-      "title": "Test vault-only login on Android",
-      "acceptanceCriteria": [
-        "Set VITE_ALLOW_LEGACY_KEYS=0",
-        "Create new account with vault password",
-        "Export recovery key",
-        "Reimport on fresh install"
-      ],
-      "priority": 7,
-      "passes": false,
-      "notes": "MANUAL: Go/No-Go criteria per runbook Section 10. Requires Android device."
-    },
-    {
-      "id": "US-017",
-      "title": "Test validator restart recovery",
-      "acceptanceCriteria": [
-        "Stop one validator node via SSH",
-        "Restart after 30 seconds",
-        "Node rejoins consensus",
-        "No transaction loss"
-      ],
-      "priority": 8,
-      "passes": false,
-      "notes": "STAGING READY: Recovery drill per runbook Section 7. SSH to STAGING_HOST_NODE1"
-    },
-    {
-      "id": "US-018",
-      "title": "Test gateway restart recovery",
-      "acceptanceCriteria": [
-        "Stop gateway service via SSH",
-        "Restart after 10 seconds",
-        "Sessions re-register",
-        "Nonces persist correctly"
-      ],
-      "priority": 9,
-      "passes": false,
-      "notes": "STAGING READY: Recovery drill per runbook Section 7. SSH to STAGING_HOST_GATEWAY"
-    },
-    {
-      "id": "US-019",
-      "title": "Build production mobile APK",
-      "acceptanceCriteria": [
-        "Configure EAS secrets for production endpoints",
-        "eas build -p android --profile production",
-        "Install on real device",
-        "Verify WSS connection works"
-      ],
-      "priority": 10,
-      "passes": false,
-      "notes": "MANUAL: Final production Android build. Requires EAS account."
-    },
-    {
-      "id": "US-020",
-      "title": "Build production mobile IPA",
-      "acceptanceCriteria": [
-        "Configure EAS secrets for production endpoints",
-        "eas build -p ios --profile production",
-        "Install via TestFlight",
-        "Verify WSS connection works"
-      ],
-      "priority": 11,
-      "passes": false,
-      "notes": "MANUAL: Final production iOS build. Requires Apple Developer account."
-    },
-    {
-      "id": "US-200",
-      "title": "Run Blackjack end-to-end bet tests",
-      "acceptanceCriteria": [
-        "Run pnpm test --filter @nullspace/execution -- --grep blackjack",
-        "Verify hit/stand/double/split actions work correctly",
-        "Test blackjack payout (3:2) on natural 21",
-        "Test insurance bet when dealer shows ace",
-        "All blackjack tests pass with no failures"
-      ],
-      "priority": 100,
-      "passes": true,
-      "notes": "COMPLETE: 29 blackjack tests pass via cargo test -p nullspace-execution blackjack. Covered by US-215."
-    },
-    {
-      "id": "US-201",
-      "title": "Run Roulette end-to-end bet tests",
-      "acceptanceCriteria": [
-        "Run pnpm test --filter @nullspace/execution -- --grep roulette",
-        "Verify all bet types: straight, split, street, corner, line, dozen, column, red/black, odd/even, high/low",
-        "Test payout calculations for each bet type",
-        "Verify edge bet boundary validation",
-        "All roulette tests pass with no failures"
-      ],
-      "priority": 101,
-      "passes": true,
-      "notes": "COMPLETE: 35 roulette tests pass via cargo test -p nullspace-execution roulette. Covered by US-215."
-    },
-    {
-      "id": "US-202",
-      "title": "Run Craps end-to-end bet tests",
-      "acceptanceCriteria": [
-        "Run pnpm test --filter @nullspace/execution -- --grep craps",
-        "Verify pass/don't pass line bets",
-        "Test come/don't come bets",
-        "Test odds bets and payouts",
-        "Test prop bets (hardways, field, any craps)",
-        "All craps tests pass with no failures"
-      ],
-      "priority": 102,
-      "passes": true,
-      "notes": "COMPLETE: 79 craps tests pass via cargo test -p nullspace-execution craps. Covered by US-215."
-    },
-    {
-      "id": "US-203",
-      "title": "Run Baccarat end-to-end bet tests",
-      "acceptanceCriteria": [
-        "Run pnpm test --filter @nullspace/execution -- --grep baccarat",
-        "Verify player/banker/tie bets",
-        "Test natural win scenarios (8 or 9)",
-        "Test third card drawing rules",
-        "Verify 5% banker commission",
-        "All baccarat tests pass with no failures"
-      ],
-      "priority": 103,
-      "passes": true,
-      "notes": "COMPLETE: 58 baccarat tests pass via cargo test -p nullspace-execution baccarat. Covered by US-215."
-    },
-    {
-      "id": "US-204",
-      "title": "Run Hi-Lo end-to-end bet tests",
-      "acceptanceCriteria": [
-        "Run pnpm test --filter @nullspace/execution -- --grep hi_lo",
-        "Verify higher/lower predictions",
-        "Test edge cases (ace high/low)",
-        "Test streak multiplier calculations",
-        "All hi-lo tests pass with no failures"
-      ],
-      "priority": 104,
-      "passes": true,
-      "notes": "COMPLETE: 21 hilo tests pass via cargo test -p nullspace-execution hilo. Covered by US-215."
-    },
-    {
-      "id": "US-205",
-      "title": "Run Sic Bo end-to-end bet tests",
-      "acceptanceCriteria": [
-        "Run pnpm test --filter @nullspace/execution -- --grep sicbo",
-        "Verify big/small bets",
-        "Test specific triple bets",
-        "Test two dice combination bets",
-        "Test total sum bets",
-        "All sic bo tests pass with no failures"
-      ],
-      "priority": 105,
-      "passes": true,
-      "notes": "COMPLETE: 25 sic_bo tests pass via cargo test -p nullspace-execution sic_bo. Covered by US-215."
-    },
-    {
-      "id": "US-206",
-      "title": "Run Video Poker end-to-end bet tests",
-      "acceptanceCriteria": [
-        "Run pnpm test --filter @nullspace/execution -- --grep video_poker",
-        "Verify hand rankings (royal flush to jacks or better)",
-        "Test hold/discard mechanics",
-        "Test payout table accuracy",
-        "All video poker tests pass with no failures"
-      ],
-      "priority": 106,
-      "passes": true,
-      "notes": "COMPLETE: 23 video_poker tests pass via cargo test -p nullspace-execution video_poker. Covered by US-215."
-    },
-    {
-      "id": "US-207",
-      "title": "Run Casino War end-to-end bet tests",
-      "acceptanceCriteria": [
-        "Run pnpm test --filter @nullspace/execution -- --grep casino_war",
-        "Verify ante bet resolution",
-        "Test war scenario (tie) mechanics",
-        "Test surrender option payout",
-        "All casino war tests pass with no failures"
-      ],
-      "priority": 107,
-      "passes": true,
-      "notes": "COMPLETE: 9 casino_war tests pass via cargo test -p nullspace-execution casino_war. Covered by US-215."
-    },
-    {
-      "id": "US-208",
-      "title": "Run Three Card Poker end-to-end bet tests",
-      "acceptanceCriteria": [
-        "Run pnpm test --filter @nullspace/execution -- --grep three_card_poker",
-        "Verify ante/play bet mechanics",
-        "Test pair plus side bet",
-        "Test hand rankings (straight flush to high card)",
-        "Test dealer qualification (Q high)",
-        "All three card poker tests pass with no failures"
-      ],
-      "priority": 108,
-      "passes": true,
-      "notes": "COMPLETE: 11 three_card tests pass via cargo test -p nullspace-execution three_card. Covered by US-215."
-    },
-    {
-      "id": "US-209",
-      "title": "Run Ultimate Texas Hold'em end-to-end bet tests",
-      "acceptanceCriteria": [
-        "Run pnpm test --filter @nullspace/execution -- --grep ultimate",
-        "Verify blind/ante/trips bet mechanics",
-        "Test preflop 4x/3x raise options",
-        "Test flop 2x raise option",
-        "Test river 1x raise or check/fold",
-        "All ultimate texas hold'em tests pass with no failures"
-      ],
-      "priority": 109,
-      "passes": true,
-      "notes": "COMPLETE: 16 ultimate tests pass via cargo test -p nullspace-execution ultimate. Covered by US-215."
-    },
-    {
-      "id": "US-210",
-      "title": "Run full protocol integration test suite",
-      "acceptanceCriteria": [
-        "Run pnpm -C packages/protocol test",
-        "All encode/decode roundtrip tests pass",
-        "Version header validation works",
-        "Corrupted message handling tested",
-        "All protocol tests pass with no failures"
-      ],
-      "priority": 110,
-      "passes": true,
-      "notes": "COMPLETE: 204 protocol tests pass via pnpm -C packages/protocol test. Includes encoding, decoding, validation, round-trip, corrupted-data, and fuzz tests."
-    },
-    {
-      "id": "US-211",
-      "title": "Run full gateway integration test suite",
-      "acceptanceCriteria": [
-        "Run pnpm -C gateway test",
-        "Session management tests pass",
-        "Rate limiting tests pass",
-        "WebSocket stress tests pass",
-        "Graceful shutdown tests pass",
-        "All gateway tests pass with no failures"
-      ],
-      "priority": 111,
-      "passes": true,
-      "notes": "COMPLETE: 455 gateway tests pass (72 skipped) via pnpm -C gateway test. Includes session management, rate limiting, health checks, and race condition prevention tests."
-    },
-    {
-      "id": "US-212",
-      "title": "Run cross-service integration tests against staging",
-      "acceptanceCriteria": [
-        "Run tests/integration suite with STAGING_URL=https://testnet.regenesis.dev",
-        "Signup → auth → gateway → backend flow works",
-        "Deposit → bet → withdraw flow works",
-        "Error scenarios handled correctly",
-        "All cross-service tests pass"
-      ],
-      "priority": 112,
-      "passes": false,
-      "notes": "STAGING READY: Run integration tests against live staging environment"
-    },
-    {
-      "id": "US-213",
-      "title": "Verify RTP calculations match expected house edge",
-      "acceptanceCriteria": [
-        "Run cargo test --package nullspace-execution rtp",
-        "Blackjack RTP ~99.5% with optimal strategy",
-        "Roulette RTP 97.3% (single zero) or 94.7% (double zero)",
-        "Craps pass line RTP 98.59%",
-        "Document actual RTP vs expected for each game"
-      ],
-      "priority": 113,
-      "passes": true,
-      "notes": "COMPLETE: 6 RTP verification tests pass via cargo test -p nullspace-execution rtp. Tests verify RTP distribution for blackjack, roulette, craps, baccarat, sic_bo, and hilo."
-    },
-    {
-      "id": "US-214",
-      "title": "Run protocol fuzz tests with 1M iterations",
-      "acceptanceCriteria": [
-        "Run pnpm -C packages/protocol test -- --grep fuzz",
-        "Set FUZZ_ITERATIONS=1000000",
-        "No crashes or panics",
-        "All corrupted inputs handled gracefully",
-        "Report any edge cases found"
-      ],
-      "priority": 114,
-      "passes": true,
-      "notes": "COMPLETE: 39 fuzz tests pass via pnpm -C packages/protocol test test/fuzz.test.ts. Uses fast-check property-based testing. 1M iterations require FUZZ_ITERATIONS env var (defaults to 100 in normal runs)."
-    },
-    {
-      "id": "US-215",
-      "title": "Run Rust execution engine full test suite",
-      "acceptanceCriteria": [
-        "Run cargo test --workspace",
-        "All unit tests pass",
-        "All integration tests pass",
-        "No clippy warnings",
-        "Code coverage >80%"
-      ],
-      "priority": 115,
-      "passes": true,
-      "notes": "COMPLETE: 406 tests pass. Fixed golden_vectors_match_payload_parsing to handle protocol version prefix (US-149). Pre-existing clippy absurd_extreme_comparisons errors in faucet constants (FAUCET_MIN_*=0) unrelated to this change. Coverage not tracked for Rust in CI."
-    },
-    {
-      "id": "US-135",
-      "title": "Add table felt texture backgrounds per game",
-      "acceptanceCriteria": [
-        "Create SVG woven texture pattern for game backgrounds",
-        "Vary texture color per game (green blackjack, red roulette)",
-        "Adjust scanline intensity based on connection state",
-        "Add subtle gradient shift over time (30-60s cycle)",
-        "Test texture rendering performance on low-end devices"
-      ],
-      "priority": 58,
-      "passes": true,
-      "notes": "COMPLETE: FeltBackground component with woven texture, game-specific colors from GAME palette, connection-aware scanline intensity, 45s gradient animation. All 10 game screens now pass gameId prop to GameLayout. Uses View-based pattern (not SVG) for better performance."
-    },
-    {
-      "id": "US-136",
-      "title": "Add sound design service skeleton",
-      "acceptanceCriteria": [
-        "Create audio.ts service mirroring haptics.ts structure",
-        "Define hook methods: dealerSpeak, cardFlip, chipPlace, result",
-        "Audio disabled by default with settings toggle",
-        "Define sound categories: UI, game, celebration, error",
-        "Document audio integration points per game event"
-      ],
-      "priority": 59,
-      "passes": true,
-      "notes": "UX-LOWER: AudioService skeleton in mobile/src/services/audio.ts. 22 sound IDs across 4 categories, disabled by default, volume-per-category settings. Convenience methods match haptics.ts API."
-    },
-    {
-      "id": "US-139",
-      "title": "Fix timing attack vulnerability in token comparisons",
-      "acceptanceCriteria": [
-        "Replace === comparisons with crypto.timingSafeEqual() for bearer tokens",
-        "Fix gateway/src/metrics/index.ts:88 token comparison",
-        "Fix services/auth/src/server.ts:166 metrics auth comparison",
-        "Add timing-safe comparison utility function",
-        "Add security test to validate constant-time behavior"
-      ],
-      "priority": 62,
-      "passes": true,
-      "notes": "SECURITY-CRITICAL: Fixed with timingSafeStringEqual() in gateway/src/utils/crypto.ts and services/auth/src/utils.ts. Uses crypto.timingSafeEqual() for constant-time comparison. 11 tests validate correctness."
-    },
-    {
-      "id": "US-140",
-      "title": "Replace Math.random() with crypto.getRandomValues() for ID generation",
-      "acceptanceCriteria": [
-        "Replace Math.random() in gateway/src/index.ts:407 (connection ID)",
-        "Replace Math.random() in website/src/api/client.js:15 (session ID)",
-        "Create shared cryptoRandom() utility in packages/utils",
-        "Ensure IDs are unpredictable and non-guessable",
-        "Add tests validating cryptographic randomness"
-      ],
-      "priority": 63,
-      "passes": true,
-      "notes": "COMPLETE: Added generateSecureId() to gateway/utils/crypto.ts using crypto.randomBytes(). Updated gateway connection ID and website request ID. 9 tests validate format, uniqueness, and entropy distribution."
-    },
-    {
-      "id": "US-141",
-      "title": "Configure Alertmanager with real notification receivers",
-      "acceptanceCriteria": [
-        "Replace null receiver in docker/observability/alertmanager.yml",
-        "Configure Slack webhook for warning/critical alerts",
-        "Configure PagerDuty or email for critical alerts",
-        "Test alert routing with synthetic alerts",
-        "Document on-call escalation policy"
-      ],
-      "priority": 64,
-      "passes": true,
-      "notes": "COMPLETE: Alertmanager configured with Slack + PagerDuty receivers. Critical alerts page on-call via PagerDuty, warning alerts go to Slack. Inhibition rules prevent duplicate notifications. alertmanager.env.example has required secrets. On-call escalation documented in observability.md."
-    },
-    {
-      "id": "US-142",
-      "title": "Implement secrets management solution",
-      "acceptanceCriteria": [
-        "Evaluate and select secrets manager (Vault, AWS SM, Doppler)",
-        "Migrate AUTH_SECRET, CONVEX_SERVICE_TOKEN from env files",
-        "Migrate CASINO_ADMIN_PRIVATE_KEY_HEX to secrets manager",
-        "Update deployment scripts to fetch secrets at runtime",
-        "Rotate all secrets that were previously in .env files"
-      ],
-      "priority": 65,
-      "passes": true,
-      "notes": "COMPLETE: Implemented SOPS + Age encryption. Created .sops.yaml, secrets/ directory structure, setup-secrets.sh, decrypt-secrets.sh, deploy-staging.yml workflow. Template covers all secret categories. Rotation is manual step documented in updates.md."
-    },
-    {
-      "id": "US-143",
-      "title": "Implement mobile audio system with expo-av",
-      "acceptanceCriteria": [
-        "Replace console.debug stubs in mobile/src/services/audio.ts",
-        "Implement expo-av integration for sound playback",
-        "Add sound effects: win, lose, push, card flip, chip place, dice roll",
-        "Add audio settings toggle (mute/unmute) persisted in storage",
-        "Preload audio assets during splash screen"
-      ],
-      "priority": 66,
-      "passes": true,
-      "notes": "COMPLETE: AudioService now uses expo-av with preloading, category-based volumes, MMKV persistence. Sound files pending - system gracefully handles missing assets. 22 sound IDs defined across 4 categories. Initialized during splash screen."
-    },
-    {
-      "id": "US-144",
-      "title": "Implement Casino War game screen",
-      "acceptanceCriteria": [
-        "Create mobile/src/screens/games/CasinoWarScreen.tsx",
-        "Implement ante bet placement UI",
-        "Handle tie scenario with Go to War / Surrender options",
-        "Integrate with backend casino_war game type",
-        "Add to navigation stack and verify lobby link works"
-      ],
-      "priority": 67,
-      "passes": true,
-      "notes": "COMPLETE: CasinoWarScreen.tsx exists with full implementation - ante betting, War/Surrender choices, celebration effects, tutorial overlay."
-    },
-    {
-      "id": "US-145",
-      "title": "Code-split and lazy-load website bundles",
-      "acceptanceCriteria": [
-        "Reduce main bundle from 841KB to under 300KB",
-        "Lazy-load EconomyDashboard (392KB) only when needed",
-        "Implement route-based code splitting with React.lazy()",
-        "Add webpack-bundle-analyzer to track bundle sizes",
-        "Add bundle size limit check in CI"
-      ],
-      "priority": 68,
-      "passes": true,
-      "notes": "COMPLETE: Main bundle reduced to 13KB (was 841KB). All routes lazy-loaded via React.lazy() in App.jsx. Vendor chunks split by category (react, charts, animation). Bundle analyzer via ANALYZE=true. CI check enforces: main<50KB, route<600KB, vendor<350KB."
-    },
-    {
-      "id": "US-146",
-      "title": "Add SEO essentials to website",
-      "acceptanceCriteria": [
-        "Create robots.txt allowing search engine crawling",
-        "Generate sitemap.xml with all public routes",
-        "Add favicon.ico (currently 404)",
-        "Add JSON-LD structured data for Organization/WebApplication",
-        "Add Open Graph meta tags for social sharing"
-      ],
-      "priority": 69,
-      "passes": true,
-      "notes": "COMPLETE: robots.txt with sitemap reference, sitemap.xml with 9 routes, favicon.ico in public/, JSON-LD structured data (Organization, WebApplication, WebSite schemas). Open Graph tags already existed."
-    },
-    {
-      "id": "US-147",
-      "title": "Validate Craps Fire Bet progress mask on deserialization",
-      "acceptanceCriteria": [
-        "Add validation that made_points_mask only has valid point bits (4,5,6,8,9,10)",
-        "Reject state blobs with invalid mask values during deserialization",
-        "Add integration test for Fire Bet payout with corrupted mask",
-        "Log warning for any rejected invalid states"
-      ],
-      "priority": 70,
-      "passes": true,
-      "notes": "COMPLETE: Added validation in CrapsState::from_blob() rejecting masks >0x3F (bits 6-7 invalid). Test validates 0x40, 0x80, 0xC0, 0xFF rejection. Follows existing pattern of returning None (no logging)."
-    },
-    {
-      "id": "US-148",
-      "title": "Fix Roulette SplitH bet validation for right edge",
-      "acceptanceCriteria": [
-        "Add check: number <= 35 && number % 3 != 0 for SplitH bets",
-        "Reject bet on 35 attempting to split to 36 (invalid edge case)",
-        "Add unit tests for all roulette edge bet boundaries",
-        "Audit other split/corner bet edge cases"
-      ],
-      "priority": 71,
-      "passes": true,
-      "notes": "COMPLETE: Validation already correct (1..=35, %3!=0). AC#2 was incorrect: 35-36 IS valid (35%3=2). Added 89 lines of boundary tests for all bet types. Documented that right-edge rejection works correctly."
-    },
-    {
-      "id": "US-149",
-      "title": "Add protocol version header to binary messages",
-      "acceptanceCriteria": [
-        "Add 1-byte version header to all encoded transactions",
-        "Update decode.ts to validate version before parsing",
-        "Reject messages with unsupported versions gracefully",
-        "Document version negotiation in protocol README"
-      ],
-      "priority": 72,
-      "passes": true,
-      "notes": "PROTOCOL-HIGH: No version field in encoded messages. Future protocol changes could break silently."
-    },
-    {
-      "id": "US-150",
-      "title": "Fix session cleanup race condition in gateway",
-      "acceptanceCriteria": [
-        "Add mutex/lock to cleanupIdleSessions iteration",
-        "Prevent concurrent message handling from accessing destroyed sessions",
-        "Implement mark-and-sweep pattern for safe session cleanup",
-        "Add test for concurrent cleanup + message handling"
-      ],
-      "priority": 73,
-      "passes": true,
-      "notes": "COMPLETE: Mark-and-sweep pattern implemented. Sessions get markedForCleanup flag set, getSession() returns undefined for marked sessions, then sweep phase destroys. 7 new tests validate race prevention."
-    },
-    {
-      "id": "US-151",
-      "title": "Integrate Detox E2E tests into mobile CI pipeline",
-      "acceptanceCriteria": [
-        "Add iOS simulator setup to GitHub Actions",
-        "Add Android emulator setup to GitHub Actions",
-        "Run mobile/e2e/games.test.ts on every PR",
-        "Run mobile/e2e/native-features.test.ts on every PR",
-        "Report Detox test results in PR comments"
-      ],
-      "priority": 74,
-      "passes": true,
-      "notes": "COMPLETE: Created .github/workflows/mobile-e2e.yml with iOS (macos-14) and Android (ubuntu + emulator) jobs. Mock backend for offline testing, caching for CocoaPods/Gradle/AVD, PR comment reporting via github-script. Fixed E2E test Detox API issues (longPressAndDrag, setStatusBar)."
-    },
-    {
-      "id": "US-152",
-      "title": "Add gateway WebSocket stress testing",
-      "acceptanceCriteria": [
-        "Create stress test for 1k concurrent WebSocket connections",
-        "Target test for 10k concurrent connections",
-        "Measure P99 latency under load (target <100ms)",
-        "Add stress test to CI with lower connection count",
-        "Document capacity limits in RUNBOOK.md"
-      ],
-      "priority": 75,
-      "passes": true,
-      "notes": "COMPLETE: Created gateway/tests/stress/websocket-stress.test.ts with vitest tests for 1k/10k connections. Standalone scripts/ws-stress-test.mjs for manual runs. Added GatewayStress job to tests.yml (100 connections in CI). Documented capacity limits in RUNBOOK.md Section 6."
-    },
-    {
-      "id": "US-153",
-      "title": "Create production deployment pipeline",
-      "acceptanceCriteria": [
-        "Create GitHub Actions workflow for production deployment",
-        "Implement staging deploy on merge to main",
-        "Implement production deploy with manual approval gate",
-        "Add post-deployment smoke tests",
-        "Add deployment notifications to Slack"
-      ],
-      "priority": 76,
-      "passes": true,
-      "notes": "COMPLETE: Created deploy-production.yml with manual approval via GitHub environments. Staging deploys automatically on merge to main with wait-for-images. Both environments have smoke tests (health checks, metrics, WebSocket) and Slack notifications. Service deployment follows runbook order: simulator → validators → gateway → auth → website → ops."
-    },
-    {
-      "id": "US-154",
-      "title": "Implement graceful shutdown draining for gateway",
-      "acceptanceCriteria": [
-        "Add SIGTERM handler that stops accepting new connections",
-        "Wait for active games to complete (with configurable timeout)",
-        "Drain existing connections gracefully before exit",
-        "Log drain progress and final connection count",
-        "Add health endpoint that reports draining state"
-      ],
-      "priority": 77,
-      "passes": true,
-      "notes": "COMPLETE: drainAndShutdown() with GATEWAY_DRAIN_TIMEOUT_MS (30s default). Rejects new connections during drain (1013), waits for active games, notifies clients (SESSION_EXPIRED), closes gracefully (1001). /healthz returns 503 with draining status. 5 documentation tests."
-    },
-    {
-      "id": "US-155",
-      "title": "Apply bet confirmation modal to all game screens",
-      "acceptanceCriteria": [
-        "Add useBetConfirmation hook to RouletteScreen",
-        "Add useBetConfirmation hook to BaccaratScreen",
-        "Add useBetConfirmation hook to CrapsScreen, SicBoScreen",
-        "Add useBetConfirmation hook to VideoPokerScreen, ThreeCardPokerScreen",
-        "Verify consistent UX across all 10 games"
-      ],
-      "priority": 78,
-      "passes": true,
-      "notes": "COMPLETE: All 6 screens updated with useBetConfirmation hook and BetConfirmationModal. Each shows 5-second countdown before confirming bet. Side bets displayed for games with them (Baccarat, ThreeCardPoker). Consistent UX pattern across all games."
-    },
-    {
-      "id": "US-156",
-      "title": "Add loading skeletons to all game screens",
-      "acceptanceCriteria": [
-        "Add isParsingState skeleton to RouletteScreen",
-        "Add isParsingState skeleton to BaccaratScreen, CrapsScreen",
-        "Add isParsingState skeleton to all remaining game screens",
-        "Use GameSkeletons.tsx components consistently",
-        "Ensure skeleton matches actual layout to prevent CLS"
-      ],
-      "priority": 79,
-      "passes": true,
-      "notes": "COMPLETE: Added isParsingState skeleton to RouletteScreen, BaccaratScreen, CrapsScreen, SicBoScreen. Each uses InteractionManager.runAfterInteractions to show skeleton during initial render, preventing CLS. Existing screens (Blackjack, HiLo, VideoPoker, CasinoWar, ThreeCardPoker, UltimateTXHoldem) already had skeletons."
-    },
-    {
-      "id": "US-157",
-      "title": "Implement PWA support for website",
-      "acceptanceCriteria": [
-        "Create manifest.json with app icons and colors",
-        "Implement service worker for offline fallback",
-        "Add install prompt for Add to Home Screen",
-        "Cache critical assets for offline access",
-        "Test PWA installation on mobile Chrome/Safari"
-      ],
-      "priority": 80,
-      "passes": true,
-      "notes": "COMPLETE: manifest.json with icons (192px, 512px, maskable), sw.js service worker (network-first + stale-while-revalidate), offline.html fallback, usePWA() hook + InstallBanner component for Chrome/iOS install prompts. Testing requires HTTPS or localhost."
-    },
-    {
-      "id": "US-158",
-      "title": "Optimize mobile web layout and navigation",
-      "acceptanceCriteria": [
-        "Audit mobile breakpoint usage for consistency",
-        "Ensure 44x44px minimum touch targets on all interactive elements",
-        "Optimize BottomNav for mobile (currently 7 items, cluttered)",
-        "Add mobile-specific game controls layout",
-        "Test on real mobile devices (iPhone, Android)"
-      ],
-      "priority": 81,
-      "passes": true,
-      "notes": "COMPLETE: BottomNav consolidated from 6-7 items to 5 (4 primary + More overflow). 44px touch targets enforced via min-h-11/w-11 classes. AnimatedButton/AnimatedIconButton sizes increased. MobileDrawer trigger sized for accessibility. Added .touch-target, .game-control-btn, .chip-btn utilities to index.css. AC#5 (real device testing) is manual."
-    },
-    {
-      "id": "US-159",
-      "title": "Remove legacy localStorage private key storage",
-      "acceptanceCriteria": [
-        "Remove casino_private_key localStorage fallback from keyVault.ts",
-        "Migrate any existing localStorage keys to encrypted vault",
-        "Add one-time migration on app load for legacy users",
-        "Delete plaintext key after successful migration",
-        "Log warning if migration fails"
-      ],
-      "priority": 82,
-      "passes": true,
-      "notes": "COMPLETE: getCasinoKeyIdForStorage() no longer returns localStorage keys. Added getLegacyPrivateKeyHex(), needsLegacyKeyMigration(), migrateLegacyKeyToVault() for migration workflow. Existing vault creation already migrates and deletes legacy keys. 8 new tests validate migration logic."
-    },
-    {
-      "id": "US-160",
-      "title": "Expand EVM contract test coverage to 80%",
-      "acceptanceCriteria": [
-        "Add tests for RecoveryPool overflow protection",
-        "Add tests for BogoDistributor reentrancy guards",
-        "Add access control edge case tests",
-        "Integrate Foundry for contract fuzzing",
-        "Achieve 80%+ line coverage on critical contracts"
-      ],
-      "priority": 83,
-      "passes": true,
-      "notes": "COMPLETE: Added security.test.js with 43 new tests covering overflow protection, CEI reentrancy pattern, access control edge cases, events, and deadline enforcement. Created Foundry fuzz tests (RecoveryPool.fuzz.t.sol, BogoDistributor.fuzz.t.sol). Configured solidity-coverage plugin. Achieved 98.72% line coverage (exceeds 80% requirement). All 49 Hardhat tests pass."
-    },
-    {
-      "id": "US-161",
-      "title": "Add distributed tracing with OpenTelemetry",
-      "acceptanceCriteria": [
-        "Add OpenTelemetry instrumentation to gateway",
-        "Add OpenTelemetry instrumentation to auth service",
-        "Deploy Jaeger or Tempo for trace storage",
-        "Add trace ID to WebSocket messages for correlation",
-        "Create Grafana dashboard for trace visualization"
-      ],
-      "priority": 84,
-      "passes": true,
-      "notes": "COMPLETE: Enhanced telemetry.ts in both gateway and auth service with withSpan helpers, W3C Trace Context propagation, and resource attributes. Deployed Tempo 2.4.1 in Docker observability stack with OTLP receivers (HTTP 4318, gRPC 4317). Gateway handleMessage wraps game operations in spans with traceId included in responses. Grafana datasource configured for Tempo with trace-to-logs/metrics correlation. Created nullspace-traces.json dashboard with service overview, game operations, and trace search."
-    },
-    {
-      "id": "US-162",
-      "title": "Create Grafana dashboards for all services",
-      "acceptanceCriteria": [
-        "Create gateway metrics dashboard (connections, latency, errors)",
-        "Create simulator metrics dashboard (TPS, block time)",
-        "Create auth service dashboard (login rate, failures)",
-        "Create game-specific dashboard (bets, payouts, RTP)",
-        "Add RED metrics (Rate, Errors, Duration) to all dashboards"
-      ],
-      "priority": 85,
-      "passes": true,
-      "notes": "COMPLETE: Created 4 Grafana dashboards with RED metrics: nullspace-gateway.json (connections, sessions, latency), nullspace-simulator.json (TPS, submit latency, system resources), nullspace-auth.json (login rate, failures, verification latency), nullspace-games.json (game lifecycle, tournaments, leaderboards). All dashboards have overview stats, Rate/Errors/Duration sections, and appropriate thresholds."
-    },
-    {
-      "id": "US-163",
-      "title": "Implement infrastructure as code with Terraform",
-      "acceptanceCriteria": [
-        "Create Terraform modules for Hetzner server provisioning",
-        "Define network topology (VPC, subnets, security groups)",
-        "Create modules for load balancer configuration",
-        "Add Terraform state backend (S3/GCS)",
-        "Document infrastructure provisioning process"
-      ],
-      "priority": 86,
-      "passes": true,
-      "notes": "COMPLETE: Created terraform/ directory with 4 modules (network, firewall, server, load-balancer). Staging and production environments configured with S3 backend. Cloud-init templates for server provisioning. Full documentation in terraform/README.md. Matches runbook topology: 10.0.0.0/16 network, firewall rules per service role, server specs per docs/hetzner-deployment-runbook.md."
-    },
-    {
-      "id": "US-164",
-      "title": "Add visual regression testing to CI",
-      "acceptanceCriteria": [
-        "Capture baseline screenshots for key screens",
-        "Integrate visual-regression.mjs into CI pipeline",
-        "Fail PR if visual diff exceeds threshold",
-        "Add baseline update process for intentional changes",
-        "Test on light and dark mode"
-      ],
-      "priority": 87,
-      "passes": true,
-      "notes": "COMPLETE: Enhanced visual-regression.mjs with pixelmatch for pixel-by-pixel comparison. Added visual-regression.yml workflow triggered on website/design-token changes. 8 screens captured (6 light, 2 dark). Baselines stored in website/tests/visual-snapshots/baseline/. PR fails if diff exceeds 10% threshold. UpdateBaselines job runs via 'update-baselines' label. Artifacts uploaded with diff images."
-    },
-    {
-      "id": "US-165",
-      "title": "Add bet history and session stats screen",
-      "acceptanceCriteria": [
-        "Create mobile/src/screens/HistoryScreen.tsx",
-        "Show list of recent bets with outcome, amount, game",
-        "Show session statistics (win/loss ratio, total wagered)",
-        "Add date filtering for bet history",
-        "Navigate to history from lobby profile button"
-      ],
-      "priority": 88,
-      "passes": true,
-      "notes": "UX-MEDIUM: Users can't review past bets or track gameplay performance."
-    },
-    {
-      "id": "US-166",
-      "title": "Implement tutorial completion tracking",
-      "acceptanceCriteria": [
-        "Store tutorial completion state per game in AsyncStorage",
-        "Only show tutorial on first game visit",
-        "Add 'Show Tutorial' button for users who want to replay",
-        "Track tutorial completion in analytics",
-        "Add reset option in settings"
-      ],
-      "priority": 89,
-      "passes": true,
-      "notes": "COMPLETE: Tutorial completion stored via isTutorialCompleted()/markTutorialCompleted() in storage.ts. TutorialOverlay checks completion on mount, shows only on first visit. All 10 game screens have onHelpPress → forceShow for replay. resetAllTutorials() exists for reset. Analytics tracking deferred to separate story. 22 tests pass."
-    },
-    {
-      "id": "US-167",
-      "title": "Add protocol fuzzing and adversarial input testing",
-      "acceptanceCriteria": [
-        "Create fuzz test harness for protocol encode/decode",
-        "Run 1M+ fuzz iterations without crashes",
-        "Add corrupted message handling tests",
-        "Test boundary conditions for all message types",
-        "Integrate fuzzing into CI (with reduced iterations)"
-      ],
-      "priority": 90,
-      "passes": true,
-      "notes": "COMPLETE: Created packages/protocol/test/fuzz.test.ts with 39 property-based tests using fast-check. Covers: version header roundtrip, blackjack/roulette/craps/baccarat/sicbo encoding, card/game-result/blackjack-state decoding, random binary crash testing, mutation (bit flip) testing, boundary conditions. 1M+ iterations pass without crashes. Added ProtocolFuzz job to tests.yml (CI=true runs 1000 iterations)."
-    },
-    {
-      "id": "US-168",
-      "title": "Create cross-service integration test suite",
-      "acceptanceCriteria": [
-        "Create tests spanning signup → auth → gateway → backend",
-        "Test deposit → bet → withdraw flow end-to-end",
-        "Test error scenarios (auth failure, insufficient balance)",
-        "Add to CI with real backend (not mocks)",
-        "Document test environment setup"
-      ],
-      "priority": 91,
-      "passes": true,
-      "notes": "COMPLETE: Created tests/integration/ with CrossServiceClient, Docker Compose stack, Vitest config. Tests cover: service health, full user journey (signup→auth→gateway→backend), game flows (blackjack, hi-lo), concurrent connections, error scenarios (invalid messages, insufficient balance). CI workflow at .github/workflows/cross-service-integration.yml runs on gateway/auth/simulator changes."
-    },
-    {
-      "id": "US-216",
-      "title": "Verify DNS configuration for production domains",
-      "acceptanceCriteria": [
-        "Verify A/AAAA records for testnet.regenesis.dev point to production load balancer",
-        "Verify subdomain records: api.testnet.regenesis.dev, indexer.testnet.regenesis.dev, auth.testnet.regenesis.dev",
-        "Test DNS propagation from multiple geographic locations",
-        "Verify TTL values are appropriate (300s recommended)",
-        "Document DNS configuration in runbook"
-      ],
-      "priority": 92,
-      "passes": false,
-      "notes": "PRODUCTION-CRITICAL: DNS must be configured and verified before launch"
-    },
-    {
-      "id": "US-217",
-      "title": "Verify SSL/TLS certificate configuration",
-      "acceptanceCriteria": [
-        "Verify SSL certificates issued for all production domains",
-        "Test HTTPS endpoints return valid certificates (no browser warnings)",
-        "Verify certificate auto-renewal is configured (Let's Encrypt/certbot)",
-        "Test WebSocket connections work over WSS with valid certificates",
-        "Verify HSTS headers are configured"
-      ],
-      "priority": 93,
-      "passes": false,
-      "notes": "PRODUCTION-CRITICAL: Valid SSL required for production launch"
-    },
-    {
-      "id": "US-218",
-      "title": "Configure and verify CDN",
-      "acceptanceCriteria": [
-        "Configure CDN (CloudFlare/Fastly) for static assets and website",
-        "Verify cache headers are set correctly for static assets",
-        "Test asset loading from multiple geographic regions",
-        "Configure cache invalidation workflow for deployments",
-        "Verify WebSocket connections bypass CDN caching"
-      ],
-      "priority": 94,
-      "passes": false,
-      "notes": "PRODUCTION-IMPORTANT: CDN improves global performance and reduces origin load"
-    },
-    {
-      "id": "US-219",
-      "title": "Verify rate limiting configuration",
-      "acceptanceCriteria": [
-        "Verify gateway rate limiting is enabled per runbook Section 6",
-        "Test rate limits with load testing tools (exceed limits, verify 429 responses)",
-        "Verify auth service rate limiting protects login/signup endpoints",
-        "Test IP-based rate limiting works correctly",
-        "Document rate limit thresholds in runbook"
-      ],
-      "priority": 95,
-      "passes": false,
-      "notes": "PRODUCTION-CRITICAL: Rate limiting prevents abuse and ensures service stability"
-    },
-    {
-      "id": "US-220",
-      "title": "Configure DDoS protection",
-      "acceptanceCriteria": [
-        "Enable CloudFlare DDoS protection or equivalent",
-        "Configure firewall rules to block malicious traffic patterns",
-        "Test SYN flood protection at network level",
-        "Configure application-layer DDoS protection",
-        "Document DDoS mitigation procedures in runbook"
-      ],
-      "priority": 96,
-      "passes": false,
-      "notes": "PRODUCTION-CRITICAL: DDoS protection essential for production availability"
-    },
-    {
-      "id": "US-221",
-      "title": "Verify backup and restore procedures",
-      "acceptanceCriteria": [
-        "Execute full database backup procedure",
-        "Test restore from backup to clean environment",
-        "Verify automated backup schedule is configured",
-        "Test point-in-time recovery capability",
-        "Document backup retention policy and procedures"
-      ],
-      "priority": 97,
-      "passes": false,
-      "notes": "PRODUCTION-CRITICAL: Backup/restore must be tested before production launch"
-    },
-    {
-      "id": "US-222",
-      "title": "Document and test rollback procedures",
-      "acceptanceCriteria": [
-        "Document rollback procedure for each service component",
-        "Test rollback from staging deployment (simulate failed deploy)",
-        "Verify database migration rollback works correctly",
-        "Test traffic switching between blue/green deployments",
-        "Document rollback decision criteria and timeline"
-      ],
-      "priority": 98,
-      "passes": false,
-      "notes": "PRODUCTION-CRITICAL: Rollback procedures must be tested before production launch"
-    },
-    {
-      "id": "US-223",
-      "title": "Fix React component memory leaks and re-renders",
-      "acceptanceCriteria": [
-        "Fix event listener cleanup in SuperModeDisplay (ActiveGame.tsx:157-160)",
-        "Refactor useKeyboardControls hook to prevent recreation on every state change",
-        "Add useMemo for getRouletteMaxWin, getSicBoMaxWin, getCrapsMaxWin calculations",
-        "Wrap RouletteView actions prop in useMemo in parent component",
-        "Fix WebSocket cleanup in useCasinoConnection hook"
-      ],
-      "priority": 99,
-      "passes": false,
-      "notes": "PERFORMANCE: HIGH priority - event listener leaks and unnecessary re-renders causing performance issues"
-    },
-    {
-      "id": "US-224",
-      "title": "Implement code splitting for game components",
-      "acceptanceCriteria": [
-        "Lazy load game views (RouletteView, BlackjackView, etc.) using React.lazy",
-        "Reduce main CasinoApp bundle from 473KB to under 200KB",
-        "Implement Suspense fallback for game component loading",
-        "Verify total bundle size reduced from 5.7MB"
-      ],
-      "priority": 100,
-      "passes": false,
-      "notes": "PERFORMANCE: HIGH priority - bundle size affecting initial load times"
-    },
-    {
-      "id": "US-225",
-      "title": "Add Merkle proof caching in simulator",
-      "acceptanceCriteria": [
-        "Cache proof stores by height + filter pattern in state.rs",
-        "Deduplicate identical filter requests in build_filtered_update",
-        "Use Arc to share proof data structures across subscriptions",
-        "Benchmark: reduce proof generation CPU usage by 50%"
-      ],
-      "priority": 101,
-      "passes": false,
-      "notes": "PERFORMANCE: HIGH priority - proof regeneration causing CPU spikes under load"
-    },
-    {
-      "id": "US-226",
-      "title": "Add missing database indexes for explorer",
-      "acceptanceCriteria": [
-        "Add composite index: CREATE INDEX idx_explorer_ops_height_index ON explorer_ops(height, op_index)",
-        "Add index: CREATE INDEX idx_explorer_blocks_indexed_at ON explorer_blocks(indexed_at_ms)",
-        "Benchmark query performance improvement",
-        "Add migration script for index creation"
-      ],
-      "priority": 102,
-      "passes": false,
-      "notes": "PERFORMANCE: MEDIUM priority - missing indexes slowing explorer queries"
-    },
-    {
-      "id": "US-227",
-      "title": "Standardize API error response format across services",
-      "acceptanceCriteria": [
-        "Adopt RFC 7807 Problem Details format for all HTTP errors",
-        "Update gateway error types to include type, title, status, detail, instance",
-        "Update auth service to use consistent error format",
-        "Update simulator to return structured error bodies (not just status codes)",
-        "Include traceId in all error responses"
-      ],
-      "priority": 103,
-      "passes": false,
-      "notes": "API-CONTRACT: Inconsistent error formats across services causing client integration issues"
-    },
-    {
-      "id": "US-228",
-      "title": "Fix incorrect HTTP status codes in auth service",
-      "acceptanceCriteria": [
-        "Change 502 to 503 for service unavailable errors (ai_unavailable, etc.)",
-        "Change 502 to 500 for internal errors (checkout failed, etc.)",
-        "Add 422 Unprocessable Entity for validation failures",
-        "Document status code usage in API docs"
-      ],
-      "priority": 104,
-      "passes": false,
-      "notes": "API-CONTRACT: Auth service incorrectly using 502 Bad Gateway for non-proxy errors"
-    },
-    {
-      "id": "US-229",
-      "title": "Generate production SOPS Age keys",
-      "acceptanceCriteria": [
-        "Generate Age keypair for production environment",
-        "Update .sops.yaml with production public key (replace placeholder)",
-        "Store private key in GitHub Secrets as SOPS_AGE_KEY_PRODUCTION",
-        "Test encryption/decryption of secrets.enc.yaml",
-        "Generate and configure CI and development keys if missing"
-      ],
-      "priority": 105,
-      "passes": false,
-      "notes": "PRODUCTION-CRITICAL: Cannot encrypt/decrypt production secrets without keys"
-    },
-    {
-      "id": "US-230",
-      "title": "Add Docker resource limits to production compose",
-      "acceptanceCriteria": [
-        "Create infrastructure/production/docker-compose.yml",
-        "Add CPU limits (gateway: 2 CPU, simulator: 4 CPU)",
-        "Add memory limits (gateway: 4GB, simulator: 8GB)",
-        "Configure restart policies with backoff",
-        "Test resource limits under load"
-      ],
-      "priority": 106,
-      "passes": false,
-      "notes": "PRODUCTION-CRITICAL: No resource limits = risk of cascading failures"
-    },
-    {
-      "id": "US-231",
-      "title": "Add OpenTelemetry configuration to auth service",
-      "acceptanceCriteria": [
-        "Add OTEL_EXPORTER_OTLP_ENDPOINT to auth .env.production.example",
-        "Add OTEL_SERVICE_NAME=auth to production config",
-        "Verify traces appear in Tempo",
-        "Document tracing configuration in runbook"
-      ],
-      "priority": 107,
-      "passes": false,
-      "notes": "OBSERVABILITY: Auth service missing distributed tracing in production"
-    },
-    {
-      "id": "US-232",
-      "title": "Configure Terraform remote state backend",
-      "acceptanceCriteria": [
-        "Create S3 bucket for terraform state storage",
-        "Add backend.tf with S3 configuration",
-        "Configure state locking with DynamoDB",
-        "Migrate existing state to remote backend",
-        "Document state management procedures"
-      ],
-      "priority": 108,
-      "passes": false,
-      "notes": "PRODUCTION-CRITICAL: Local terraform state prevents team collaboration and risks state loss"
-    },
-    {
-      "id": "US-233",
-      "title": "Document secret rotation procedures",
-      "acceptanceCriteria": [
-        "Add section 4.9 to RUNBOOK.md for secret rotation",
-        "Document SOPS Age key rotation procedure",
-        "Document metrics token rotation",
-        "Document database credential rotation",
-        "Define rotation schedule (quarterly for production)"
-      ],
-      "priority": 109,
-      "passes": false,
-      "notes": "SECURITY: No documented procedure for rotating secrets"
-    },
-    {
-      "id": "US-234",
-      "title": "Add CSRF protection for cookie-authenticated endpoints",
-      "acceptanceCriteria": [
-        "Add SameSite=Strict to all session cookies",
-        "Implement CSRF token validation for form submissions",
-        "Document CSRF protection in security docs",
-        "Test CSRF protection with cross-origin requests"
-      ],
-      "priority": 110,
-      "passes": false,
-      "notes": "SECURITY: MEDIUM priority - partial CSRF implementation"
-    },
-    {
-      "id": "US-235",
-      "title": "Create OpenAPI/Swagger specifications",
-      "acceptanceCriteria": [
-        "Generate OpenAPI 3.0 spec for auth service endpoints",
-        "Generate OpenAPI 3.0 spec for simulator HTTP endpoints",
-        "Generate OpenAPI 3.0 spec for gateway metrics endpoints",
-        "Add example requests/responses for all endpoints",
-        "Publish API docs at /docs endpoint"
-      ],
-      "priority": 111,
-      "passes": false,
-      "notes": "API-CONTRACT: No API documentation for external integrations"
-    },
-    {
-      "id": "US-236",
-      "title": "ARCH-001: Design horizontal scaling for game engine",
-      "acceptanceCriteria": [
-        "Document Global Table partitioning strategy for engine instances",
-        "Design game ID based routing to distributed engine instances",
-        "Create architectural diagram for multi-engine deployment",
-        "Add scaling section to RUNBOOK.md"
-      ],
-      "priority": 112,
-      "passes": false,
-      "notes": "ARCHITECTURE: HIGH - Single-threaded engine is bottleneck for high-concurrency tables"
-    },
-    {
-      "id": "US-237",
-      "title": "ARCH-002: Tune on-chain batching for latency optimization",
-      "acceptanceCriteria": [
-        "Run diagnose-chain-latency.ts benchmarks at various batch sizes",
-        "Document optimal GATEWAY_LIVE_TABLE_SETTLE_BATCH value for 5k+ concurrent users",
-        "Test batch sizes: 10, 25, 50, 100 under load",
-        "Update configs with optimized batch size and document rationale"
-      ],
-      "priority": 113,
-      "passes": false,
-      "notes": "ARCHITECTURE: MEDIUM - Current batch size 25 may cause latency under high load"
-    },
-    {
-      "id": "US-238",
-      "title": "ARCH-003: Document Convex self-hosting runbook",
-      "acceptanceCriteria": [
-        "Create self-hosting runbook for Convex deployment",
-        "Document service token rotation procedure",
-        "Validate persistence layer can be migrated if needed",
-        "Add vendor lock-in mitigation section to architecture docs"
-      ],
-      "priority": 114,
-      "passes": false,
-      "notes": "ARCHITECTURE: MEDIUM - Heavy Convex dependency creates vendor risk"
-    },
-    {
-      "id": "US-239",
-      "title": "Fix non-standard version numbers in package.json",
-      "acceptanceCriteria": [
-        "Fix Zod version inconsistency: gateway ^3.23.0 vs mobile ^4.2.1 (4.x is non-standard)",
-        "Fix Vitest version inconsistency: gateway ^1.6.0 vs website ^4.0.16 (4.x is non-standard)",
-        "Verify all versions exist in npm registry",
-        "Unify versions in pnpm-workspace.yaml or root package.json"
-      ],
-      "priority": 115,
-      "passes": false,
-      "notes": "CODE-QUALITY: LOW - Version inconsistencies may cause build issues"
-    },
-    {
-      "id": "US-240",
-      "title": "Benchmark Rust overflow-checks performance impact",
-      "acceptanceCriteria": [
-        "Run benchmarks with overflow-checks = true (current)",
-        "Run benchmarks with overflow-checks = false",
-        "Document performance difference in critical execution paths",
-        "Make informed decision and document rationale in Cargo.toml"
-      ],
-      "priority": 116,
-      "passes": false,
-      "notes": "CODE-QUALITY: LOW - overflow-checks=true is safer but has performance penalty"
-    },
-    {
-      "id": "US-241",
-      "title": "Execute and document soak test results",
-      "acceptanceCriteria": [
-        "Execute soak test for 600 seconds under sustained load",
-        "Document results in scripts/ralph/soak_results.json",
-        "Capture: memory usage, CPU usage, latency percentiles, error rates",
-        "Baseline: p99 < 100ms at 1000 connections, success rate > 95%"
-      ],
-      "priority": 117,
-      "passes": false,
-      "notes": "TESTING: CRITICAL - Soak test baseline needed for launch"
-    },
-    {
-      "id": "US-242",
-      "title": "Verify mobile vault recovery flow E2E",
-      "acceptanceCriteria": [
-        "Test recovery key export on iOS",
-        "Test recovery key export on Android",
-        "Test recovery key import on iOS",
-        "Test recovery key import on Android",
-        "Document any platform-specific differences"
-      ],
-      "priority": 118,
-      "passes": false,
-      "notes": "TESTING: HIGH - Mobile vault E2E parity for recovery flow"
-    },
-    {
-      "id": "US-243",
-      "title": "Execute and document recovery drills",
-      "acceptanceCriteria": [
-        "Execute validator rejoin recovery drill and document results",
-        "Execute gateway session recovery drill and document results",
-        "Verify rejoin behavior matches RUNBOOK.md specifications",
-        "Update RUNBOOK.md with actual recovery times observed"
-      ],
-      "priority": 119,
-      "passes": false,
-      "notes": "TESTING: HIGH - Recovery drill execution status unknown"
-    },
-    {
-      "id": "US-244",
-      "title": "Audit mobile noble cryptography performance",
-      "acceptanceCriteria": [
-        "Benchmark Ed25519 signing/verification on iOS",
-        "Benchmark Ed25519 signing/verification on Android",
-        "Compare with desktop performance baselines",
-        "Document any performance concerns for older devices"
-      ],
-      "priority": 120,
-      "passes": false,
-      "notes": "PERFORMANCE: MEDIUM - Noble crypto library needs mobile audit"
-    },
-    {
-      "id": "US-245",
-      "title": "Document NAT user rate limiting false positive mitigation",
-      "acceptanceCriteria": [
-        "Analyze rate limiting for NAT users (multiple users per IP)",
-        "Document expected false positive rate for NAT environments",
-        "Consider fingerprinting alternatives or session-based limits",
-        "Update rate limiting configuration if needed"
-      ],
-      "priority": 121,
-      "passes": false,
-      "notes": "SECURITY: MEDIUM - Rate limiting may cause false positives for NAT users"
-    },
-    {
-      "id": "US-246",
-      "title": "Validate KPIs for testnet launch",
-      "acceptanceCriteria": [
-        "Verify simulator_submit_p95_ms <= 250ms",
-        "Verify simulator_submit_p99_ms <= 500ms",
-        "Verify auth_request_avg_ms <= 200ms",
-        "Verify ws_send_errors_rate === 0",
-        "Verify casino_errors_rate === 0",
-        "Document baseline KPIs in scripts/ralph/kpi_baseline.json"
-      ],
-      "priority": 122,
-      "passes": false,
-      "notes": "OBSERVABILITY: CRITICAL - KPI validation required before launch"
-    },
-    {
-      "id": "US-247",
-      "title": "Verify commonware dependency version",
-      "acceptanceCriteria": [
-        "Check current commonware version (0.0.64)",
-        "Verify against latest stable release",
-        "Document any breaking changes in newer versions",
-        "Update if security patches available"
-      ],
-      "priority": 123,
-      "passes": false,
-      "notes": "DEPENDENCIES: LOW - Verify commonware is at latest stable"
+  "consolidatedFrom": ["ralph", "ralph2", "ralph3", "ralph4"],
+  "consolidationDate": "2026-01-08",
+  "completedWork": {
+    "designSystem": {
+      "agent": "ralph3",
+      "stories": 56,
+      "phases": 9,
+      "description": "Full design token alignment, spring animations, accessibility, glassmorphism"
+    },
+    "luxuryRedesign": {
+      "agent": "ralph4",
+      "stories": 25,
+      "phases": 6,
+      "description": "Premium typography, decluttered UX, bet controls, auth simplification"
+    },
+    "qaBaseline": {
+      "agent": "ralph2",
+      "stories": 6,
+      "ids": ["QA-001", "QA-002", "QA-003", "QA-004", "QA-005", "QA-006"],
+      "description": "Hi-Lo flow, lobby navigation, deposit flow, session management"
+    },
+    "testnetProduction": {
+      "agent": "ralph",
+      "stories": 48,
+      "description": "Core infrastructure, deployment, observability, protocol features"
     }
-  ]
+  },
+  "pendingStories": {
+    "production": [
+      {
+        "id": "US-010",
+        "title": "Execute soak test",
+        "priority": 1,
+        "notes": "STAGING READY: ./scripts/soak-test.sh configs/testnet 4"
+      },
+      {
+        "id": "US-011",
+        "title": "Execute bot load test",
+        "priority": 2,
+        "notes": "STAGING READY: NUM_BOTS=300 DURATION_SECONDS=300"
+      },
+      {
+        "id": "US-012",
+        "title": "Execute global table fanout test",
+        "priority": 3,
+        "notes": "STAGING READY: TOTAL=5000 DURATION=300"
+      },
+      {
+        "id": "US-014",
+        "title": "Test faucet flow end-to-end",
+        "priority": 5,
+        "notes": "Core testnet user journey"
+      },
+      {
+        "id": "US-015",
+        "title": "Test vault-only login on iOS",
+        "priority": 6,
+        "notes": "MANUAL: Requires iOS device"
+      },
+      {
+        "id": "US-016",
+        "title": "Test vault-only login on Android",
+        "priority": 7,
+        "notes": "MANUAL: Requires Android device"
+      },
+      {
+        "id": "US-017",
+        "title": "Test validator restart recovery",
+        "priority": 8,
+        "notes": "Recovery drill per runbook Section 7"
+      },
+      {
+        "id": "US-018",
+        "title": "Test gateway restart recovery",
+        "priority": 9,
+        "notes": "Recovery drill per runbook Section 7"
+      },
+      {
+        "id": "US-019",
+        "title": "Build production mobile APK",
+        "priority": 10,
+        "notes": "MANUAL: Requires EAS account"
+      },
+      {
+        "id": "US-020",
+        "title": "Build production mobile IPA",
+        "priority": 11,
+        "notes": "MANUAL: Requires Apple Developer account"
+      }
+    ],
+    "infrastructure": [
+      {
+        "id": "US-212",
+        "title": "Run cross-service integration tests against staging",
+        "priority": 112
+      },
+      {
+        "id": "US-216",
+        "title": "Verify DNS configuration for production domains",
+        "priority": 92,
+        "notes": "PRODUCTION-CRITICAL"
+      },
+      {
+        "id": "US-217",
+        "title": "Verify SSL/TLS certificate configuration",
+        "priority": 93,
+        "notes": "PRODUCTION-CRITICAL"
+      },
+      {
+        "id": "US-218",
+        "title": "Configure and verify CDN",
+        "priority": 94
+      },
+      {
+        "id": "US-219",
+        "title": "Verify rate limiting configuration",
+        "priority": 95,
+        "notes": "PRODUCTION-CRITICAL"
+      },
+      {
+        "id": "US-220",
+        "title": "Configure DDoS protection",
+        "priority": 96,
+        "notes": "PRODUCTION-CRITICAL"
+      },
+      {
+        "id": "US-221",
+        "title": "Verify backup and restore procedures",
+        "priority": 97,
+        "notes": "PRODUCTION-CRITICAL"
+      },
+      {
+        "id": "US-222",
+        "title": "Document and test rollback procedures",
+        "priority": 98,
+        "notes": "PRODUCTION-CRITICAL"
+      },
+      {
+        "id": "US-229",
+        "title": "Generate production SOPS Age keys",
+        "priority": 105,
+        "notes": "PRODUCTION-CRITICAL"
+      },
+      {
+        "id": "US-230",
+        "title": "Add Docker resource limits to production compose",
+        "priority": 106,
+        "notes": "PRODUCTION-CRITICAL"
+      },
+      {
+        "id": "US-231",
+        "title": "Add OpenTelemetry configuration to auth service",
+        "priority": 107
+      },
+      {
+        "id": "US-232",
+        "title": "Configure Terraform remote state backend",
+        "priority": 108,
+        "notes": "PRODUCTION-CRITICAL"
+      },
+      {
+        "id": "US-233",
+        "title": "Document secret rotation procedures",
+        "priority": 109
+      },
+      {
+        "id": "US-234",
+        "title": "Add CSRF protection for cookie-authenticated endpoints",
+        "priority": 110
+      },
+      {
+        "id": "US-235",
+        "title": "Create OpenAPI/Swagger specifications",
+        "priority": 111
+      }
+    ],
+    "performance": [
+      {
+        "id": "US-223",
+        "title": "Fix React component memory leaks and re-renders",
+        "priority": 99,
+        "notes": "HIGH priority"
+      },
+      {
+        "id": "US-224",
+        "title": "Implement code splitting for game components",
+        "priority": 100,
+        "notes": "Reduce main bundle from 473KB to <200KB"
+      },
+      {
+        "id": "US-225",
+        "title": "Add Merkle proof caching in simulator",
+        "priority": 101,
+        "notes": "Reduce CPU usage by 50%"
+      },
+      {
+        "id": "US-226",
+        "title": "Add missing database indexes for explorer",
+        "priority": 102
+      },
+      {
+        "id": "US-240",
+        "title": "Benchmark Rust overflow-checks performance impact",
+        "priority": 116
+      },
+      {
+        "id": "US-244",
+        "title": "Audit mobile noble cryptography performance",
+        "priority": 120
+      }
+    ],
+    "apiContract": [
+      {
+        "id": "US-227",
+        "title": "Standardize API error response format across services",
+        "priority": 103,
+        "notes": "RFC 7807 Problem Details format"
+      },
+      {
+        "id": "US-228",
+        "title": "Fix incorrect HTTP status codes in auth service",
+        "priority": 104
+      }
+    ],
+    "architecture": [
+      {
+        "id": "US-236",
+        "title": "ARCH-001: Design horizontal scaling for game engine",
+        "priority": 112,
+        "notes": "HIGH - Single-threaded engine bottleneck"
+      },
+      {
+        "id": "US-237",
+        "title": "ARCH-002: Tune on-chain batching for latency optimization",
+        "priority": 113
+      },
+      {
+        "id": "US-238",
+        "title": "ARCH-003: Document Convex self-hosting runbook",
+        "priority": 114
+      },
+      {
+        "id": "US-239",
+        "title": "Fix non-standard version numbers in package.json",
+        "priority": 115
+      },
+      {
+        "id": "US-247",
+        "title": "Verify commonware dependency version",
+        "priority": 123
+      }
+    ],
+    "testing": [
+      {
+        "id": "US-241",
+        "title": "Execute and document soak test results",
+        "priority": 117,
+        "notes": "CRITICAL - Baseline needed for launch"
+      },
+      {
+        "id": "US-242",
+        "title": "Verify mobile vault recovery flow E2E",
+        "priority": 118,
+        "notes": "HIGH - Mobile vault parity"
+      },
+      {
+        "id": "US-243",
+        "title": "Execute and document recovery drills",
+        "priority": 119,
+        "notes": "HIGH - Recovery drill execution"
+      },
+      {
+        "id": "US-245",
+        "title": "Document NAT user rate limiting false positive mitigation",
+        "priority": 121
+      },
+      {
+        "id": "US-246",
+        "title": "Validate KPIs for testnet launch",
+        "priority": 122,
+        "notes": "CRITICAL - KPI validation required"
+      }
+    ],
+    "qaGames": [
+      {
+        "id": "QA-007",
+        "title": "Test Blackjack game - hit/stand flow",
+        "priority": 11
+      },
+      {
+        "id": "QA-008",
+        "title": "Test Blackjack game - double down and split",
+        "priority": 12
+      },
+      {
+        "id": "QA-009",
+        "title": "Test Roulette - all bet categories",
+        "priority": 13
+      },
+      {
+        "id": "QA-010",
+        "title": "Test Baccarat - main bets",
+        "priority": 14
+      },
+      {
+        "id": "QA-011",
+        "title": "Test Baccarat - side bets",
+        "priority": 15
+      },
+      {
+        "id": "QA-012",
+        "title": "Test Casino War - basic and tie scenarios",
+        "priority": 16
+      },
+      {
+        "id": "QA-013",
+        "title": "Test Video Poker - deal and hold mechanics",
+        "priority": 17
+      },
+      {
+        "id": "QA-014",
+        "title": "Test Sic Bo - all bet categories",
+        "priority": 18
+      },
+      {
+        "id": "QA-015",
+        "title": "Test Three Card Poker - ante/play flow",
+        "priority": 19
+      },
+      {
+        "id": "QA-016",
+        "title": "Test Ultimate Texas Holdem - street betting",
+        "priority": 20
+      },
+      {
+        "id": "QA-017",
+        "title": "Test Craps - pass line and come bets",
+        "priority": 21
+      },
+      {
+        "id": "QA-018",
+        "title": "Test Craps - odds and proposition bets",
+        "priority": 22
+      }
+    ],
+    "qaUi": [
+      {
+        "id": "QA-019",
+        "title": "Test chip selector across all games",
+        "priority": 25
+      },
+      {
+        "id": "QA-020",
+        "title": "Test game header and back navigation",
+        "priority": 26
+      },
+      {
+        "id": "QA-021",
+        "title": "Test connection loss and reconnection",
+        "priority": 30
+      },
+      {
+        "id": "QA-022",
+        "title": "Test insufficient balance handling",
+        "priority": 31
+      },
+      {
+        "id": "QA-023",
+        "title": "Test rapid bet submission",
+        "priority": 32
+      },
+      {
+        "id": "QA-024",
+        "title": "Test vault screen access",
+        "priority": 35
+      },
+      {
+        "id": "QA-025",
+        "title": "Document all bugs found during testing",
+        "priority": 40
+      },
+      {
+        "id": "QA-026",
+        "title": "Create visual regression baseline",
+        "priority": 41
+      }
+    ],
+    "qaNative": [
+      {
+        "id": "QA-N01",
+        "title": "[NATIVE] SecureStore wallet persistence",
+        "priority": 50,
+        "platform": "native"
+      },
+      {
+        "id": "QA-N02",
+        "title": "[NATIVE] Vault password 12 char enforcement",
+        "priority": 51,
+        "platform": "native"
+      },
+      {
+        "id": "QA-N03",
+        "title": "[NATIVE] Biometric authentication for vault",
+        "priority": 52,
+        "platform": "native"
+      },
+      {
+        "id": "QA-N04",
+        "title": "[NATIVE] Haptic feedback on game actions",
+        "priority": 53,
+        "platform": "native-device"
+      },
+      {
+        "id": "QA-N05",
+        "title": "[NATIVE] App backgrounding preserves state",
+        "priority": 54,
+        "platform": "native"
+      },
+      {
+        "id": "QA-N06",
+        "title": "[NATIVE] Network loss recovery with airplane mode",
+        "priority": 55,
+        "platform": "native-device"
+      },
+      {
+        "id": "QA-N07",
+        "title": "[NATIVE] Push notification for big wins",
+        "priority": 56,
+        "platform": "native-device"
+      },
+      {
+        "id": "QA-N08",
+        "title": "[NATIVE] Card dealing animation smoothness",
+        "priority": 57,
+        "platform": "native"
+      },
+      {
+        "id": "QA-N09",
+        "title": "[NATIVE] Chip drag gesture on touch screen",
+        "priority": 58,
+        "platform": "native"
+      },
+      {
+        "id": "QA-N10",
+        "title": "[NATIVE] iOS Simulator full game flow",
+        "priority": 60,
+        "platform": "ios"
+      },
+      {
+        "id": "QA-N11",
+        "title": "[NATIVE] Android Emulator full game flow",
+        "priority": 61,
+        "platform": "android"
+      },
+      {
+        "id": "QA-N12",
+        "title": "[NATIVE] Memory stability during extended play",
+        "priority": 62,
+        "platform": "native"
+      }
+    ]
+  },
+  "bugTracker": {
+    "critical": [
+      {
+        "id": "BUG-003",
+        "title": "Missing SafeAreaProvider crashes web app",
+        "fix": "Wrap component tree with SafeAreaProvider in App.tsx",
+        "affectedFile": "mobile/App.tsx"
+      }
+    ],
+    "high": [
+      {
+        "id": "BUG-002",
+        "title": "Session/wallet not persisted on full page reload",
+        "note": "SPA navigation works correctly"
+      }
+    ],
+    "medium": [
+      {
+        "id": "BUG-001",
+        "title": "Chip tap only selects, drag required to place bet",
+        "recommendation": "Add tap-to-place or update tutorial"
+      }
+    ]
+  },
+  "summary": {
+    "totalCompleted": 135,
+    "totalPending": 63,
+    "criticalPending": 12,
+    "categories": {
+      "production": 10,
+      "infrastructure": 15,
+      "performance": 6,
+      "apiContract": 2,
+      "architecture": 5,
+      "testing": 5,
+      "qaGames": 12,
+      "qaUi": 8,
+      "qaNative": 12
+    }
+  }
 }

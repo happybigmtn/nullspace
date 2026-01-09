@@ -1,8 +1,13 @@
 # E15 - Testing strategy + harnesses (from scratch)
 
-Focus files: `gateway/tests/integration/all-bet-types.test.ts`, `node/src/tests.rs`
+Focus files:
+- `gateway/tests/integration/all-bet-types.test.ts` (gateway integration)
+- `node/src/tests.rs` (node simulation)
+- `packages/protocol/test/fuzz.test.ts` (protocol fuzzing)
+- `.github/workflows/visual-regression.yml` (visual regression)
+- `tests/integration/cross-service.test.ts` (cross-service integration)
 
-Goal: explain how integration and simulation tests validate the gateway and node logic. For every excerpt, you will see why it matters and a plain description of what the code does. This lesson reads like a textbook chapter: it introduces the testing philosophy, then walks through the two focus files line by line, with Feynman-style explanations.
+Goal: explain how our multi-layered testing strategy validates the entire stack from protocol encoding to UI rendering to distributed consensus. For every excerpt, you will see why it matters and a plain description of what the code does. This lesson reads like a textbook chapter: it introduces the testing philosophy, then walks through the test files with Feynman-style explanations.
 
 ---
 
@@ -19,13 +24,16 @@ If either answer is wrong, the game becomes unfair or unreliable. That is why th
 
 ## 1) Testing philosophy: layers and responsibilities
 
-Our stack needs three kinds of tests:
+Our stack needs six kinds of tests:
 
 1) **Integration tests** for the gateway and client protocol. These use real WebSocket messages, real game flows, and a running gateway.
 2) **Deterministic simulation tests** for the validator stack. These use simulated networks and deterministic time to test consensus and execution without flakiness.
 3) **Security regression tests** for config redaction and secrets. These ensure debug logs do not leak private material.
+4) **Property-based fuzzing tests** for protocol encoding/decoding. These use randomized inputs to discover edge cases that manual tests miss.
+5) **Visual regression tests** for the frontend. These capture screenshots and compare pixel-by-pixel to detect unintended UI changes.
+6) **Cross-service integration tests** that verify the full stack (auth, gateway, simulator) working together end-to-end.
 
-The two focus files cover all three. The gateway test file provides end-to-end integration coverage for every bet type. The node test file provides deterministic simulations, failure scenarios (late validators, bad links, restarts), and a security check.
+The two focus files cover the first three categories. This lesson also introduces the newer testing approaches: protocol fuzzing, visual regression, and cross-service integration testing.
 
 ---
 
@@ -584,8 +592,497 @@ When running these tests, keep the following in mind:
 
 ---
 
-## 23) Feynman recap
+## 23) Protocol fuzzing: property-based testing with fast-check
 
-The gateway test file is an exhaustive protocol check: every bet type, every game, via real WebSocket messages. The node test file is a deterministic simulator: it spins up validators, simulates networks, and proves that consensus and execution converge to the same state even under bad links or restarts. Together they give us confidence that both the user-facing protocol and the validator core are stable.
+File: `packages/protocol/test/fuzz.test.ts`
 
-If you can explain these tests to someone new, you understand how the system is supposed to behave under both normal and adversarial conditions.
+Fuzzing is a powerful technique for discovering edge cases that manual tests miss. Instead of writing specific test cases, you define properties that should always hold true and let the fuzzer generate thousands of randomized inputs.
+
+Our protocol fuzzing tests use fast-check, a property-based testing library that generates random test data intelligently. The tests cover four key areas:
+
+1. **Roundtrip encoding**: If you encode data and then decode it, you should get the original value back.
+2. **Mutation testing**: Flip random bits in valid messages and ensure the decoder handles corruption gracefully.
+3. **Random binary input**: Feed completely random bytes to decoders and ensure they never crash.
+4. **Boundary conditions**: Test edge values for all numeric fields (zero, max values, etc).
+
+### 23.1 Why fuzzing matters for protocols
+
+Protocol bugs are often hiding in edge cases you didn't think to test:
+
+- What happens when a card suit byte is 255 instead of 0-3?
+- What if the message length field says 100 bytes but only 50 remain?
+- Can bet amounts overflow when they reach MAX_SAFE_INTEGER?
+- Does bit-flipping in an encoded bet create an exploitable state?
+
+Manual testing can't cover the combinatorial explosion of possibilities. Fuzzing finds these cases automatically by generating thousands of test inputs.
+
+### 23.2 Roundtrip property tests
+
+The most fundamental property is roundtrip encoding. For example, version headers:
+
+```typescript
+fc.property(
+  fc.uint8Array({ minLength: 1, maxLength: 1000 }),
+  (payload) => {
+    const versioned = withVersionHeader(payload);
+    const { version, payload: stripped } = stripVersionHeader(versioned);
+
+    expect(version).toBe(CURRENT_PROTOCOL_VERSION);
+    expect(stripped).toEqual(payload);
+  }
+)
+```
+
+This test generates 10,000 random byte arrays, wraps each with a version header, strips it back off, and verifies the payload is unchanged. If any input breaks this invariant, the test fails and fast-check provides a minimal failing example.
+
+### 23.3 Encoding stability tests
+
+Encoding functions should never crash regardless of input. The fuzzer tests all atomic batch encoders:
+
+- Roulette bets: random bet types, numbers (0-36), and amounts up to u64::MAX
+- Craps bets: random bet types, targets, and amounts
+- Baccarat, Sic Bo: similar coverage for their bet structures
+
+Example for roulette:
+
+```typescript
+fc.property(
+  fc.integer({ min: 0, max: 255 }),  // betType
+  fc.integer({ min: 0, max: 36 }),    // number
+  fc.bigInt({ min: 1n, max: BigInt(Number.MAX_SAFE_INTEGER) }),
+  (betType, number, amount) => {
+    const encoded = encodeRouletteBet(betType, number, amount);
+    expect(encoded.length).toBe(12);
+    expect(encoded[0]).toBe(CURRENT_PROTOCOL_VERSION);
+  }
+)
+```
+
+The test verifies that encoding always produces the expected byte length and includes the version header, even with extreme values.
+
+### 23.4 Decoder robustness: crash testing
+
+The most critical tests verify that decoders never crash on invalid input. Every decoder must either return valid data or throw a known error type (ProtocolError or UnsupportedProtocolVersionError). It must never throw an unhandled exception or cause a panic.
+
+```typescript
+fc.property(
+  fc.uint8Array({ minLength: 0, maxLength: 500 }),
+  (data) => {
+    try {
+      decodeGameResult(data);
+    } catch (e) {
+      expect(e).toBeInstanceOf(ProtocolError);
+    }
+  }
+)
+```
+
+This feeds completely random bytes to `decodeGameResult`. The test passes if the decoder either succeeds or throws only ProtocolError. Any other exception type indicates a bug.
+
+### 23.5 Mutation testing: bit flips
+
+Mutation tests verify graceful handling of corrupted messages. The fuzzer generates valid data, flips a random bit, and checks the result:
+
+```typescript
+fc.property(
+  fc.integer({ min: 0, max: 3 }),   // valid suit
+  fc.integer({ min: 0, max: 12 }),  // valid rank
+  fc.integer({ min: 0, max: 23 }),  // bit position
+  (suit, rank, bitPos) => {
+    const data = new Uint8Array([suit, rank, 1]);
+    const byteIdx = Math.floor(bitPos / 8);
+    const bitIdx = bitPos % 8;
+    data[byteIdx] ^= (1 << bitIdx);  // flip bit
+
+    try {
+      const card = decodeCard(data, 0);
+      // If it decodes, verify structure is valid
+      expect(card).toHaveProperty('suit');
+    } catch (e) {
+      // Should only throw ProtocolError
+      expect(e).toBeInstanceOf(ProtocolError);
+    }
+  }
+)
+```
+
+This simulates network corruption or malicious tampering. The decoder must handle every possible bit flip without crashing.
+
+### 23.6 Boundary value testing
+
+The fuzzer explicitly tests boundary conditions for numeric fields:
+
+- SessionID: 0, 1, MAX_SAFE_INTEGER, i64::MAX, u64::MAX
+- Payout amounts: same boundaries
+- Card counts: 0, 1, 10, 21 (blackjack edge case)
+- Message lengths: 0, 1, 127, 255 (max for u8 length prefix)
+
+These are the values most likely to trigger integer overflow, underflow, or off-by-one errors.
+
+### 23.7 CI integration and iteration control
+
+The fuzz tests run with 10,000 iterations locally and 1,000 in CI (to keep build times reasonable). You can override with `FUZZ_ITERATIONS=1000000` for extended fuzzing:
+
+```bash
+FUZZ_ITERATIONS=1000000 pnpm test fuzz.test.ts
+```
+
+For extended runs (>100,000 iterations), the fuzzer includes a stress test that runs all decoders on the same random input and verifies zero crashes.
+
+### 23.8 Why this approach is strong
+
+Property-based fuzzing complements manual tests:
+
+- Manual tests cover known scenarios and expected behavior
+- Fuzzing finds unknown edge cases and unexpected failures
+- Together they provide much higher confidence than either alone
+
+If a fuzzer finds a bug, you add a regression test for that specific case. Over time, the combination of fuzzing and regression tests covers a much larger input space than manual testing alone.
+
+---
+
+## 24) Visual regression testing with Pixelmatch
+
+File: `.github/workflows/visual-regression.yml`
+
+Visual regression tests catch unintended UI changes by comparing screenshots pixel-by-pixel. This is crucial for a casino UI where visual consistency and player trust are paramount. A subtle layout shift or color change could indicate a bug or create confusion for players.
+
+### 24.1 How visual regression works
+
+The workflow:
+
+1. **Capture baseline screenshots** of key screens (game views, betting interfaces, results screens) in a known-good state.
+2. **On every PR**, capture new screenshots of the same screens with the same viewport size and browser.
+3. **Compare images pixel-by-pixel** using Pixelmatch, which generates a diff image highlighting changed pixels.
+4. **Calculate a difference percentage** and fail the test if it exceeds a threshold (typically 0.1-1%).
+5. **Upload diff artifacts** so developers can review the visual changes.
+
+### 24.2 Workflow structure
+
+The visual regression workflow runs on every PR that touches frontend code:
+
+```yaml
+on:
+  pull_request:
+    paths:
+      - 'website/src/**'
+      - 'website/public/**'
+      - 'website/index.html'
+      - 'packages/design-tokens/**'
+```
+
+It only runs when visual code changes, avoiding unnecessary CI time for backend-only changes.
+
+### 24.3 Capture and compare process
+
+The workflow:
+
+1. **Installs Chromium** in a reproducible environment (Ubuntu + specific Chromium version).
+2. **Builds the WASM runtime** to ensure the frontend has the latest protocol code.
+3. **Runs `npm run visual:compare`**, which:
+   - Starts the dev server
+   - Launches Chromium in headless mode
+   - Navigates to each test screen
+   - Captures screenshots at 1920x1080
+   - Compares against baseline images using Pixelmatch
+   - Generates diff images for any mismatches
+   - Writes a summary JSON with pass/fail/error counts
+
+### 24.4 Diff threshold and false positives
+
+Visual regression tests are sensitive. Even anti-aliasing differences or minor font rendering variations can trigger failures. The workflow uses a configurable threshold:
+
+- **<0.1% difference**: Pass (likely just rendering noise)
+- **0.1-1% difference**: Warning zone (review carefully)
+- **>1% difference**: Fail (clear visual change)
+
+The threshold is tuned to avoid false positives while catching real regressions.
+
+### 24.5 PR feedback and artifacts
+
+When visual regression fails, the workflow:
+
+1. **Posts a comment on the PR** with:
+   - Summary of passed/failed/errored screens
+   - List of failed screens with diff percentages
+   - Instructions for reviewing and updating baselines
+2. **Uploads artifacts** containing:
+   - Current screenshots
+   - Diff images (with changed pixels highlighted in red)
+   - summary.json with detailed results
+
+Developers download the artifact, review the diffs, and either fix the regression or update the baseline if the change is intentional.
+
+### 24.6 Updating baselines
+
+If visual changes are intentional (new feature, design update), you update the baselines:
+
+```bash
+npm run visual:capture   # Capture new screenshots
+npm run visual:update    # Copy current → baseline
+git add website/tests/visual-snapshots/baseline/
+git commit -m "chore: update visual regression baselines"
+```
+
+The workflow also includes an `UpdateBaselines` job that can be triggered by:
+- Adding an `update-baselines` label to the PR
+- Manual `workflow_dispatch`
+
+This job automatically captures and commits updated baselines, streamlining the process.
+
+### 24.7 Test coverage and screens
+
+Visual regression tests cover:
+
+- Game screens for each casino game (blackjack, roulette, craps, etc)
+- Betting interfaces with various bet configurations
+- Result screens showing wins, losses, and pushes
+- Balance and history views
+- Both light and dark color schemes
+
+Each screen is tested in both color schemes because CSS changes might only affect one theme.
+
+### 24.8 Why visual regression matters
+
+Visual bugs are hard to catch in code review:
+
+- A CSS change might have unintended effects on unrelated components
+- Responsive layout breakpoints might break in unexpected ways
+- Design token updates could cause widespread visual drift
+- Browser rendering differences might appear only in production
+
+Visual regression tests catch these issues before they reach players. They're especially important for a casino where players scrutinize every detail and visual inconsistencies can erode trust.
+
+---
+
+## 25) Cross-service integration tests
+
+Files: `tests/integration/cross-service.test.ts`, `tests/integration/helpers/services.ts`
+
+Cross-service tests verify the full stack working together: authentication service, gateway, and blockchain simulator. Unlike the per-service integration tests, these tests exercise the complete user journey across service boundaries.
+
+### 25.1 What cross-service tests validate
+
+These tests answer questions like:
+
+- Can a new user authenticate, connect to the gateway, and place a bet end-to-end?
+- Do balance updates from the simulator propagate correctly through the gateway?
+- Does session state remain isolated between concurrent clients?
+- How does the system handle invalid messages or malformed requests across services?
+- Can multiple clients play games simultaneously without interfering with each other?
+
+These are system-level properties that can't be validated by testing services in isolation.
+
+### 25.2 Service orchestration and health checks
+
+Before running tests, the framework verifies all services are healthy:
+
+```typescript
+const DEFAULT_SERVICES = [
+  { name: 'convex', healthUrl: 'http://localhost:3210', timeout: 30000 },
+  { name: 'auth', healthUrl: 'http://localhost:4000', timeout: 30000 },
+  { name: 'simulator', healthUrl: 'http://localhost:8080', timeout: 60000 },
+  { name: 'gateway', healthUrl: 'http://localhost:9010', timeout: 30000 },
+];
+
+await waitForAllServices();
+```
+
+The framework polls each service's health endpoint until it responds or times out. This prevents flaky failures from services not being ready.
+
+### 25.3 Full user journey test
+
+The most important test validates the complete flow:
+
+1. **Connect to gateway** over WebSocket
+2. **Wait for `session_ready` message** (gateway confirms session established)
+3. **Register user** (simulator creates account and allocates initial balance)
+4. **Query balance** (verify registration and balance propagated)
+5. **Place bet** (send blackjack_deal message)
+6. **Receive result** (verify game engine processed bet and returned outcome)
+7. **Check balance updated** (verify settlement reflected in balance)
+
+This exercises:
+- WebSocket connection handling
+- Session management
+- User registration flow
+- Balance tracking across services
+- Game engine execution
+- State synchronization
+
+### 25.4 Concurrent client isolation
+
+A critical property for a multi-tenant system is that clients don't interfere with each other:
+
+```typescript
+it('should isolate game state between clients', async () => {
+  const client1 = new CrossServiceClient();
+  const client2 = new CrossServiceClient();
+
+  // Start game on client1
+  await client1.sendAndReceive({ type: 'blackjack_deal', amount: 100 });
+
+  // Client2 should not have an active game
+  const response = await client2.sendAndReceive({ type: 'blackjack_stand' });
+  expect(response.code).toBe('NO_ACTIVE_GAME');
+});
+```
+
+This verifies that session state is properly isolated. If the gateway mixed up sessions, client2 might see or interfere with client1's game.
+
+### 25.5 Error handling across service boundaries
+
+Cross-service tests verify error propagation:
+
+- Invalid message types return `INVALID_MESSAGE` errors
+- Bets exceeding balance return `INSUFFICIENT_BALANCE` from the simulator
+- Moves without an active game return `NO_ACTIVE_GAME` from the game engine
+- Malformed JSON is handled gracefully without crashing connections
+
+These tests ensure error handling is consistent across the full stack, not just in individual services.
+
+### 25.6 Load testing with concurrent connections
+
+The tests verify the system handles multiple simultaneous clients:
+
+```typescript
+it('should handle multiple simultaneous clients', async () => {
+  const clients = Array.from({ length: 5 }, () => new CrossServiceClient());
+
+  await Promise.all(clients.map(c => c.connect()));
+  const sessions = await Promise.all(clients.map(c => c.waitForMessage('session_ready')));
+
+  // Verify all sessions are unique
+  const sessionIds = sessions.map(s => s.sessionId);
+  expect(new Set(sessionIds).size).toBe(clients.length);
+});
+```
+
+This is a lightweight load test: if the system can handle 5 clients in parallel, it likely handles connection concurrency correctly. More extensive load tests would use tools like k6 or Locust, but this smoke test catches basic concurrency bugs.
+
+### 25.7 Docker Compose orchestration
+
+The test helpers include utilities for starting the full stack with Docker Compose:
+
+```typescript
+await startDockerStack('tests/integration/docker-compose.cross-service.yml');
+// ... run tests ...
+await stopDockerStack();
+```
+
+This allows tests to run in CI without requiring a manually-started stack. The Docker Compose file defines all service dependencies, networking, and initialization order.
+
+### 25.8 Opt-in execution
+
+Like the gateway integration tests, cross-service tests are opt-in:
+
+```bash
+RUN_CROSS_SERVICE=true pnpm test:cross-service
+```
+
+This prevents them from running in quick local test loops (they're slow and require infrastructure) but ensures they run in CI on every PR.
+
+### 25.9 Why cross-service tests matter
+
+Individual service tests can't catch:
+
+- Race conditions in cross-service communication
+- State synchronization bugs between gateway and simulator
+- Session handling edge cases that span service boundaries
+- Network-level issues in production-like deployments
+
+Cross-service tests validate the system as players experience it. They're the last line of defense before production.
+
+---
+
+## 26) CI workflow integration
+
+The testing strategy is only effective if all tests run automatically on every change. The CI workflows ensure:
+
+1. **Unit tests** run on every commit (fast feedback)
+2. **Integration tests** run on PRs affecting each service
+3. **Visual regression** runs on PRs affecting frontend code
+4. **Cross-service tests** run on PRs affecting multiple services or the integration boundary
+5. **Fuzzing tests** run with reduced iterations in CI (1000) and extended locally (10000+)
+
+### 26.1 Test selection and triggers
+
+Different test suites have different trigger conditions:
+
+- **Unit tests**: Always run (fast, no infrastructure needed)
+- **Gateway integration**: Run when `gateway/**` or `packages/protocol/**` changes
+- **Visual regression**: Run when `website/**` or `packages/design-tokens/**` changes
+- **Cross-service**: Run when multiple services change or on `main` branch
+
+This optimizes CI time by only running expensive tests when relevant code changes.
+
+### 26.2 Timeout configuration
+
+Each test suite has appropriate timeouts:
+
+- Unit tests: 2 minutes (should be fast)
+- Integration tests: 20 minutes (allow for slow startup and message processing)
+- Visual regression: 20 minutes (Chromium startup and screenshot capture can be slow)
+- Cross-service: 30 minutes (full stack startup takes time)
+
+These are deliberately generous to avoid false failures in CI environments with variable performance.
+
+### 26.3 Artifact retention
+
+Failed tests upload artifacts for debugging:
+
+- Visual regression: screenshots, diff images, summary.json (14 days)
+- Integration tests: logs from failed test runs (7 days)
+- Fuzzing: minimal failing examples when found (30 days)
+
+Artifact retention balances debuggability with storage costs.
+
+### 26.4 Test reporting and PR comments
+
+Workflows post comments on PRs with:
+
+- Test summaries (passed/failed/skipped counts)
+- Links to detailed logs and artifacts
+- Instructions for reproducing failures locally
+- Guidance on updating baselines or fixtures if needed
+
+This keeps the feedback loop tight: developers see results in the PR without leaving GitHub.
+
+### 26.5 Continuous monitoring
+
+Beyond PR checks, some tests run on a schedule:
+
+- Extended fuzzing (1M iterations) runs nightly on `main`
+- Cross-service soak tests run weekly to catch gradual degradation
+- Dependency update PRs trigger all test suites
+
+This catches issues that only appear over time or in rare combinations.
+
+---
+
+## 27) Feynman recap
+
+The testing strategy has six complementary layers:
+
+1. **Gateway integration tests** provide exhaustive protocol coverage: every bet type, every game, via real WebSocket messages.
+
+2. **Node simulation tests** use deterministic runtime and simulated networks to prove consensus and execution converge correctly even under bad links, late nodes, or unclean restarts.
+
+3. **Protocol fuzzing** with fast-check generates thousands of randomized inputs to find edge cases in encoding/decoding that manual tests miss. It verifies decoders never crash, encoders handle extreme values, and bit-flipped messages are handled gracefully.
+
+4. **Visual regression testing** captures screenshots of every UI screen and compares pixel-by-pixel to catch unintended visual changes. This is critical for a casino where UI consistency builds player trust.
+
+5. **Cross-service integration tests** exercise the complete user journey across authentication, gateway, and simulator boundaries. They verify session isolation, error propagation, and concurrent client handling at the system level.
+
+6. **CI workflow integration** ensures all tests run automatically on relevant changes with appropriate timeouts, artifact retention, and PR feedback.
+
+Together these layers provide defense in depth:
+
+- Unit tests catch logic bugs
+- Integration tests catch protocol and API issues
+- Fuzzing catches edge cases and crashes
+- Visual regression catches UI regressions
+- Cross-service tests catch system-level bugs
+- Simulation tests catch consensus and distributed systems issues
+
+If you can explain these tests to someone new, you understand how the system is supposed to behave under both normal and adversarial conditions. More importantly, you understand why each testing layer matters and what classes of bugs it prevents.
