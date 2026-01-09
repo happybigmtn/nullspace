@@ -47,6 +47,8 @@ interface PremiumInputProps extends Omit<TextInputProps, 'style'> {
   containerStyle?: StyleProp<ViewStyle>;
   /** Whether to show validation checkmark */
   showValidation?: boolean;
+  /** Test ID for E2E testing */
+  testID?: string;
 }
 
 /**
@@ -63,6 +65,7 @@ export const PremiumInput = forwardRef<PremiumInputHandle, PremiumInputProps>(
       isValid = false,
       containerStyle,
       showValidation = false,
+      testID,
       onFocus,
       onBlur,
       onChangeText,
@@ -200,6 +203,7 @@ export const PremiumInput = forwardRef<PremiumInputHandle, PremiumInputProps>(
           {/* Text input */}
           <AnimatedTextInput
             ref={inputRef}
+            testID={testID}
             value={value}
             onFocus={handleFocus}
             onBlur={handleBlur}

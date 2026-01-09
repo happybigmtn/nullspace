@@ -160,40 +160,42 @@ export function VaultScreen({ navigation }: VaultScreenProps) {
   }, [refreshStatus]);
 
   return (
-    <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+    <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled" testID="vault-screen">
       <View style={styles.header}>
-        <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
+        <Pressable onPress={() => navigation.goBack()} style={styles.backButton} testID="vault-back-button">
           <Text style={styles.backLabel}>Back</Text>
         </Pressable>
         <Text style={styles.title}>Vault</Text>
         <Text style={styles.subtitle}>Password vault + recovery key</Text>
       </View>
 
-      <View style={styles.card}>
+      <View style={styles.card} testID="vault-status-card">
         <Text style={styles.cardTitle}>Status</Text>
-        <Text style={styles.cardBody}>Vault: {vaultEnabled ? 'Enabled' : 'Not set'}</Text>
-        <Text style={styles.cardBody}>Unlocked: {vaultUnlocked ? 'Yes' : 'No'}</Text>
-        <Text style={styles.cardBody}>Public key: {maskKey(publicKeyHex)}</Text>
+        <Text style={styles.cardBody} testID="vault-status-enabled">Vault: {vaultEnabled ? 'Enabled' : 'Not set'}</Text>
+        <Text style={styles.cardBody} testID="vault-status-unlocked">Unlocked: {vaultUnlocked ? 'Yes' : 'No'}</Text>
+        <Text style={styles.cardBody} testID="vault-public-key">Public key: {maskKey(publicKeyHex)}</Text>
+        {publicKeyHex && <Text style={styles.hidden} testID="vault-public-key-full">{publicKeyHex}</Text>}
       </View>
 
       {message && (
-        <View style={styles.noticeSuccess}>
+        <View style={styles.noticeSuccess} testID="vault-success-message">
           <Text style={styles.noticeText}>{message}</Text>
         </View>
       )}
 
       {error && (
-        <View style={styles.noticeError}>
+        <View style={styles.noticeError} testID="vault-error-message">
           <Text style={styles.noticeText}>{error}</Text>
         </View>
       )}
 
       {!vaultEnabled && (
-        <View style={styles.card}>
+        <View style={styles.card} testID="vault-create-card">
           <Text style={styles.cardTitle}>Create vault</Text>
           <Text style={styles.cardBody}>Encrypt your key with a password.</Text>
           <PremiumInput
             ref={createPasswordRef}
+            testID="vault-create-password"
             label="Create password"
             secureTextEntry
             value={createPassword}
@@ -204,6 +206,7 @@ export function VaultScreen({ navigation }: VaultScreenProps) {
           <PasswordStrengthIndicator password={createPassword} />
           <PremiumInput
             ref={createConfirmRef}
+            testID="vault-create-confirm"
             label="Confirm password"
             secureTextEntry
             value={createConfirm}
@@ -211,44 +214,46 @@ export function VaultScreen({ navigation }: VaultScreenProps) {
             showValidation
             isValid={createConfirm.length > 0 && createConfirm === createPassword}
           />
-          <PrimaryButton label="Create vault" onPress={handleCreateVault} size="large" />
+          <PrimaryButton testID="vault-create-button" label="Create vault" onPress={handleCreateVault} size="large" />
           <Text style={styles.helperText}>Minimum {VAULT_PASSWORD_MIN_LENGTH} characters.</Text>
         </View>
       )}
 
       {vaultEnabled && !vaultUnlocked && (
-        <View style={styles.card}>
+        <View style={styles.card} testID="vault-unlock-card">
           <Text style={styles.cardTitle}>Unlock vault</Text>
           <PremiumInput
             ref={unlockPasswordRef}
+            testID="vault-unlock-password"
             label="Vault password"
             secureTextEntry
             value={unlockPassword}
             onChangeText={setUnlockPassword}
           />
-          <PrimaryButton label="Unlock" onPress={handleUnlock} size="large" />
+          <PrimaryButton testID="vault-unlock-button" label="Unlock" onPress={handleUnlock} size="large" />
         </View>
       )}
 
       {vaultEnabled && vaultUnlocked && (
-        <View style={styles.card}>
+        <View style={styles.card} testID="vault-recovery-card">
           <Text style={styles.cardTitle}>Recovery key</Text>
           <Text style={styles.cardBody}>Store offline. Anyone with this key can control the account.</Text>
-          <PrimaryButton label="Show recovery key" onPress={handleExport} />
+          <PrimaryButton testID="vault-export-button" label="Show recovery key" onPress={handleExport} />
           {recoveryKey ? (
-            <View style={styles.recoveryBox}>
-              <Text style={styles.recoveryText}>{recoveryKey}</Text>
+            <View style={styles.recoveryBox} testID="vault-recovery-box">
+              <Text style={styles.recoveryText} testID="vault-recovery-key">{recoveryKey}</Text>
             </View>
           ) : null}
-          <PrimaryButton label="Lock vault" onPress={handleLock} variant="secondary" />
+          <PrimaryButton testID="vault-lock-button" label="Lock vault" onPress={handleLock} variant="secondary" />
         </View>
       )}
 
-      <View style={styles.card}>
+      <View style={styles.card} testID="vault-import-card">
         <Text style={styles.cardTitle}>Import recovery key</Text>
         <Text style={styles.cardBody}>Replaces any vault on this device.</Text>
         <PremiumInput
           ref={importKeyRef}
+          testID="vault-import-key"
           label="Recovery key (64 hex)"
           value={importKey}
           onChangeText={setImportKey}
@@ -259,6 +264,7 @@ export function VaultScreen({ navigation }: VaultScreenProps) {
         />
         <PremiumInput
           ref={importPasswordRef}
+          testID="vault-import-password"
           label="New vault password"
           secureTextEntry
           value={importPassword}
@@ -267,14 +273,14 @@ export function VaultScreen({ navigation }: VaultScreenProps) {
           isValid={importPassword.length >= VAULT_PASSWORD_MIN_LENGTH}
         />
         <PasswordStrengthIndicator password={importPassword} />
-        <PrimaryButton label="Import & replace" onPress={handleImport} variant="danger" />
+        <PrimaryButton testID="vault-import-button" label="Import & replace" onPress={handleImport} variant="danger" />
       </View>
 
       {vaultEnabled && (
-        <View style={styles.card}>
+        <View style={styles.card} testID="vault-delete-card">
           <Text style={styles.cardTitle}>Delete vault</Text>
           <Text style={styles.cardBody}>Removes the vault from this device only.</Text>
-          <PrimaryButton label="Delete vault" onPress={handleDeleteVault} variant="danger" />
+          <PrimaryButton testID="vault-delete-button" label="Delete vault" onPress={handleDeleteVault} variant="danger" />
         </View>
       )}
     </ScrollView>
@@ -358,5 +364,11 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     fontSize: 12,
     letterSpacing: 0.5,
+  },
+  hidden: {
+    width: 0,
+    height: 0,
+    opacity: 0,
+    position: 'absolute',
   },
 });

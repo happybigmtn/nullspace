@@ -237,8 +237,8 @@
         "Verify vault recovery works",
         "Add E2E test for flow"
       ],
-      "passes": false,
-      "notes": "Vault implementation exists, no recovery E2E test."
+      "passes": true,
+      "notes": "Added comprehensive E2E tests in native-features.test.ts covering the manual recovery workflow (create → export → delete → import). Added testIDs to VaultScreen, PremiumInput, and PrimaryButton for E2E testing. Tests verify: vault creation, recovery key export, vault deletion (simulating uninstall), import validation (invalid key, short password). Unit tests for data integrity already exist in vault.test.ts."
     },
     {
       "id": "US-244",

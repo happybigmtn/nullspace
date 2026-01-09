@@ -35,6 +35,8 @@ interface PrimaryButtonProps {
   style?: ViewStyle;
   /** Enable breathing animation when idle (subtle pulse) */
   enableBreathing?: boolean;
+  /** Test ID for E2E testing */
+  testID?: string;
 }
 
 /** Anticipation constants */
@@ -72,6 +74,7 @@ export function PrimaryButton({
   size = 'normal',
   style,
   enableBreathing = false,
+  testID,
 }: PrimaryButtonProps) {
   const prefersReducedMotion = useReducedMotion();
 
@@ -229,6 +232,7 @@ export function PrimaryButton({
 
   return (
     <AnimatedPressable
+      testID={testID}
       onPress={handlePress}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
