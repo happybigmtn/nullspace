@@ -646,8 +646,8 @@
         "Ensure auth responses include Access-Control-Allow-Credentials and a specific origin",
         "Validate browser auth flow and preflight behavior on staging"
       ],
-      "passes": false,
-      "notes": "Caddy currently forces Access-Control-Allow-Origin=* on auth/gateway/indexer, which can override upstream CORS and break credentialed cookies."
+      "passes": true,
+      "notes": "Removed Access-Control-Allow-Origin=* from Caddy for auth/gateway/indexer. Upstream services handle CORS with specific origins. Docs updated in RUNBOOK.md §4.2."
     },
     {
       "id": "US-250",

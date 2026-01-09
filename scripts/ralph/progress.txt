@@ -107,3 +107,17 @@ Categories by count:
 - Tests: 18 unit tests covering Bearer auth, x-metrics-token auth, parity scenarios, dev/production modes
 - Docs: Updated RUNBOOK.md §5.2 (added gateway metrics + header comment) and §7.6 (added x-metrics-token example)
 - Blockers: None. Pre-existing mobile lint/test issues unrelated.
+
+### 2026-01-08 - US-249: Fix Caddy CORS headers for auth cookie flows
+- Files: infrastructure/staging/Caddyfile, docs/RUNBOOK.md
+- Decisions:
+  - Removed Access-Control-Allow-Origin: "*" from Caddy for auth, gateway, and indexer services
+  - Each upstream service handles its own CORS with specific origin allowlists:
+    - Auth: AUTH_ALLOWED_ORIGINS with credentials: true
+    - Gateway: GATEWAY_ALLOWED_ORIGINS
+    - Simulator: ALLOWED_HTTP_ORIGINS
+  - Wildcard origin was breaking credentialed cookie requests (browsers reject credentials with "*")
+  - Added detailed comments in Caddyfile explaining why CORS headers must not be overridden
+- Docs: Updated RUNBOOK.md §4.2 with reverse proxy CORS guidance
+- Blockers: None. Browser auth flow should now work correctly on staging.
+
