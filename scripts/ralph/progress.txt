@@ -197,3 +197,23 @@ Categories by count:
 - Tests: 8 new integration tests covering auth flow + CSRF behavior
 - Blockers: None. Tests gracefully skip if Convex not available.
 
+### 2026-01-08 - US-256: Verify chain updates for gateway-initiated bets
+- Files: tests/integration/helpers/updates-client.ts (new), tests/integration/cross-service.test.ts, tests/integration/docker-compose.cross-service.yml, docs/RUNBOOK.md
+- Decisions:
+  - Created UpdatesClient helper for subscribing to simulator's /updates/:filter WebSocket
+  - Implemented UpdatesFilterType enum and encodeUpdatesFilter() for hex-encoding filters (All, Account, Session)
+  - Added getAccountState() helper for querying /account/:pubkey endpoint
+  - New test suite 'Chain Updates Verification (US-256)' with 7 tests:
+    - Update subscription connectivity (All and Account filters)
+    - Chain update reception when placing bets
+    - Multiple updates for game start/completion
+    - Balance verification via /account endpoint
+    - All-filter subscription validation
+    - Multiple consecutive games chain tracking
+  - Updated docker-compose.cross-service.yml with simulator CORS config:
+    - ALLOWED_HTTP_ORIGINS for HTTP endpoints
+    - ALLOWED_WS_ORIGINS for WebSocket endpoints
+    - ALLOW_WS_NO_ORIGIN=1 for gateway-to-simulator connections
+  - Documented in RUNBOOK.md §5.4.1 with env vars table
+- Blockers: None. Tests gracefully skip when RUN_CROSS_SERVICE is not set.
+

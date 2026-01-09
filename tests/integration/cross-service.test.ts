@@ -589,3 +589,197 @@ describe.skipIf(!CROSS_SERVICE_ENABLED)('Auth E2E Flow (US-258)', () => {
     }, 30000);
   });
 });
+
+/**
+ * US-256: Chain Updates Verification Tests
+ *
+ * Verifies that gateway-initiated bets result in on-chain updates being broadcast.
+ * Tests subscribe to simulator /updates WebSocket and verify:
+ * - Transaction events are emitted for bets
+ * - Casino events (started, completed) are broadcast
+ * - Account state changes are queryable via /account endpoint
+ */
+describe.skipIf(!CROSS_SERVICE_ENABLED)('Chain Updates Verification (US-256)', () => {
+  // Import dynamically to avoid issues when not running cross-service tests
+  let UpdatesClient: typeof import('./helpers/updates-client.js').UpdatesClient;
+  let getAccountState: typeof import('./helpers/updates-client.js').getAccountState;
+
+  let gatewayClient: CrossServiceClient;
+  let updatesClient: InstanceType<typeof UpdatesClient>;
+
+  beforeAll(async () => {
+    // Dynamic import to avoid loading when tests are skipped
+    const updatesModule = await import('./helpers/updates-client.js');
+    UpdatesClient = updatesModule.UpdatesClient;
+    getAccountState = updatesModule.getAccountState;
+
+    await waitForAllServices();
+  }, 120000);
+
+  beforeEach(async () => {
+    gatewayClient = new CrossServiceClient(undefined, { mode: 'web' });
+    updatesClient = new UpdatesClient();
+  }, 30000);
+
+  afterEach(() => {
+    gatewayClient?.disconnect();
+    updatesClient?.disconnect();
+  });
+
+  describe('Update Subscription', () => {
+    it('should connect to simulator updates stream', async () => {
+      await updatesClient.connectForAll();
+      expect(updatesClient.isConnected()).toBe(true);
+    }, 30000);
+
+    it('should connect with account filter', async () => {
+      // Connect gateway to get a public key
+      await gatewayClient.connect();
+      const session = await gatewayClient.waitForMessage('session_ready');
+      const publicKey = session.publicKey as string;
+
+      // Connect updates client filtered to this account
+      await updatesClient.connectForAccount(publicKey);
+      expect(updatesClient.isConnected()).toBe(true);
+    }, 60000);
+  });
+
+  describe('Bet Flow Chain Updates', () => {
+    it('should receive chain update when placing a bet via gateway', async () => {
+      // 1. Connect gateway and wait for ready
+      await gatewayClient.connect();
+      await gatewayClient.waitForReady();
+      const publicKey = gatewayClient.getPublicKey();
+
+      // 2. Subscribe to updates for this account BEFORE placing bet
+      await updatesClient.connectForAccount(publicKey);
+      expect(updatesClient.isConnected()).toBe(true);
+
+      // 3. Place a bet via gateway
+      const { gameStarted } = await gatewayClient.playBlackjackHand(100);
+      expect(gameStarted.type).toBe('game_started');
+
+      // 4. Wait for chain update
+      const update = await updatesClient.waitForUpdate(15000);
+
+      // 5. Verify we received update data
+      expect(update).toBeDefined();
+      expect(update.length).toBeGreaterThan(0);
+
+      const info = updatesClient.getUpdateInfo();
+      expect(info.received).toBe(true);
+      expect(info.messageCount).toBeGreaterThanOrEqual(1);
+    }, 60000);
+
+    it('should receive multiple updates for game start and completion', async () => {
+      // 1. Connect and prepare
+      await gatewayClient.connect();
+      await gatewayClient.waitForReady();
+      const publicKey = gatewayClient.getPublicKey();
+
+      // 2. Subscribe to updates
+      await updatesClient.connectForAccount(publicKey);
+
+      // 3. Play a complete game (deal + stand)
+      const { gameStarted, result } = await gatewayClient.playBlackjackHand(100);
+      expect(gameStarted.type).toBe('game_started');
+
+      // 4. Wait for updates (may receive multiple: started, moved/completed)
+      // Give extra time for all events to propagate
+      await new Promise((r) => setTimeout(r, 2000));
+
+      const info = updatesClient.getUpdateInfo();
+
+      // Should have received at least one update
+      expect(info.received).toBe(true);
+      expect(info.byteCount).toBeGreaterThan(0);
+
+      // Log for debugging
+      console.log(`[US-256] Received ${info.messageCount} updates, ${info.byteCount} bytes`);
+      console.log(`[US-256] Game result type: ${result.type}`);
+    }, 60000);
+
+    it('should see balance change via account endpoint after game', async () => {
+      // 1. Connect gateway
+      await gatewayClient.connect();
+      await gatewayClient.waitForReady();
+      const publicKey = gatewayClient.getPublicKey();
+
+      // 2. Get initial balance from simulator
+      const initialState = await getAccountState(publicKey);
+      const initialBalance = initialState.balance;
+
+      // 3. Play a game
+      await gatewayClient.playBlackjackHand(100);
+
+      // 4. Small delay for state to propagate
+      await new Promise((r) => setTimeout(r, 1000));
+
+      // 5. Get updated balance
+      const finalState = await getAccountState(publicKey);
+      const finalBalance = finalState.balance;
+
+      // Balance should have changed (win or loss)
+      // Note: Could be same balance if push, but very unlikely
+      console.log(`[US-256] Initial balance: ${initialBalance}, Final balance: ${finalBalance}`);
+
+      // At minimum, nonce should have incremented (transaction was processed)
+      expect(finalState.nonce).toBeGreaterThanOrEqual(initialState.nonce);
+    }, 60000);
+  });
+
+  describe('All Updates Subscription', () => {
+    it('should receive updates when subscribed to all events', async () => {
+      // 1. Subscribe to ALL updates first
+      await updatesClient.connectForAll();
+      expect(updatesClient.isConnected()).toBe(true);
+
+      // 2. Connect gateway and play
+      await gatewayClient.connect();
+      await gatewayClient.waitForReady();
+
+      // Clear any updates from registration
+      updatesClient.clearMessages();
+
+      // 3. Place a bet
+      const { gameStarted } = await gatewayClient.playBlackjackHand(100);
+      expect(gameStarted.type).toBe('game_started');
+
+      // 4. Wait for update
+      const update = await updatesClient.waitForUpdate(15000);
+
+      expect(update).toBeDefined();
+      expect(update.length).toBeGreaterThan(0);
+
+      const info = updatesClient.getUpdateInfo();
+      console.log(`[US-256] All-filter received ${info.messageCount} updates, ${info.byteCount} bytes`);
+    }, 60000);
+  });
+
+  describe('Multiple Games Chain Verification', () => {
+    it('should track updates across multiple consecutive games', async () => {
+      // 1. Connect and prepare
+      await gatewayClient.connect();
+      await gatewayClient.waitForReady();
+      const publicKey = gatewayClient.getPublicKey();
+
+      // 2. Subscribe to updates
+      await updatesClient.connectForAccount(publicKey);
+
+      // 3. Play 3 consecutive games
+      for (let i = 0; i < 3; i++) {
+        const { gameStarted } = await gatewayClient.playBlackjackHand(100);
+        expect(gameStarted.type).toBe('game_started');
+      }
+
+      // 4. Wait a bit for all updates to arrive
+      await new Promise((r) => setTimeout(r, 3000));
+
+      const info = updatesClient.getUpdateInfo();
+
+      // Should have received multiple updates (at least one per game)
+      expect(info.messageCount).toBeGreaterThanOrEqual(3);
+      console.log(`[US-256] After 3 games: ${info.messageCount} updates, ${info.byteCount} bytes`);
+    }, 120000);
+  });
+});

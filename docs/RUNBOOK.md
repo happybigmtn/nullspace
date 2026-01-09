@@ -731,12 +731,23 @@ RUN_CROSS_SERVICE=true pnpm -C tests/integration exec vitest run
 | `GATEWAY_ALLOWED_ORIGINS`  | gateway  | Comma-separated allowed origins for CORS     |
 | `GATEWAY_ALLOW_NO_ORIGIN`  | gateway  | Set to `1` for mobile clients without Origin |
 | `AUTH_ALLOWED_ORIGINS`     | auth     | Comma-separated allowed origins for CORS     |
+| `ALLOWED_HTTP_ORIGINS`     | simulator| Comma-separated allowed origins for HTTP     |
+| `ALLOWED_WS_ORIGINS`       | simulator| Comma-separated allowed origins for WebSocket|
+| `ALLOW_WS_NO_ORIGIN`       | simulator| Set to `1` for gateway/test WS connections   |
 | `METRICS_AUTH_TOKEN`       | all      | Shared token for metrics endpoint auth       |
 | `AUTH_BILLING_ENABLED`     | auth     | Set to `0` to disable Stripe billing         |
 
 **Test modes:**
 - `mode: 'web'` - Sends Origin header (browser behavior)
 - `mode: 'mobile'` - No Origin header (native app behavior)
+
+**Chain updates verification (US-256):**
+
+The `UpdatesClient` helper subscribes to simulator's `/updates/:filter` WebSocket to verify
+that gateway-initiated bets result in on-chain state changes being broadcast. Tests validate:
+- Transaction events are emitted when placing bets
+- Casino events (started, moved, completed) are broadcast
+- Account state changes are queryable via `/account/:pubkey` endpoint
 
 **Cleanup:**
 ```bash

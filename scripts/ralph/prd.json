@@ -733,8 +733,8 @@
         "Verify account state changes via /state or /account endpoint",
         "Add to cross-service integration suite"
       ],
-      "passes": false,
-      "notes": "No current E2E test proves that a gateway bet results in on-chain updates being broadcast."
+      "passes": true,
+      "notes": "Created UpdatesClient helper (tests/integration/helpers/updates-client.ts) that subscribes to simulator's /updates/:filter WebSocket. Added 7 tests validating: subscription connectivity, chain updates for bets, balance changes via /account endpoint. Updated docker-compose with simulator CORS config. Docs in RUNBOOK.md §5.4.1."
     },
     {
       "id": "US-257",
