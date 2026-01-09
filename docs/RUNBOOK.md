@@ -904,9 +904,88 @@ URL=ws://<GATEWAY_HOST>:9010 ORIGIN=https://gateway.example.com \
 
 ### 5.6 Recovery Drills
 
-- Restart validator and confirm it rejoins
-- Restart gateway and confirm sessions can re-register
-- (Optional) Restart simulator and verify indexer recovery
+#### 5.6.1 Validator Restart Recovery (US-017)
+
+**Automated Verification:**
+```bash
+# Run the validator recovery drill script
+./scripts/validator-recovery-drill.sh
+```
+
+This runs the `test_unclean_shutdown` unit test which validates:
+- Consensus continues when a node stops (f+1 quorum maintained)
+- Stopped nodes rejoin automatically after restart
+- State is preserved across unclean shutdowns (journal replay)
+
+**Recovery Characteristics:**
+| Metric | Value |
+|--------|-------|
+| Fault tolerance | n=4 network tolerates f=1 failure |
+| Consensus pause on node stop | None (quorum maintained) |
+| Node rejoin time | 1-3 seconds (journal replay) |
+| Manual intervention required | None |
+| Data loss risk | None (persistent journal) |
+
+**Manual Recovery Procedure:**
+1. Stop the validator process:
+   ```bash
+   docker compose stop node1  # or: kill -TERM <PID>
+   ```
+2. Verify other validators continue (check logs for "certified block"):
+   ```bash
+   docker compose logs --tail=20 node2 node3
+   ```
+3. Restart the stopped validator:
+   ```bash
+   docker compose start node1  # or: systemctl restart nullspace-node@1
+   ```
+4. Verify it rejoins consensus (look for "certified block" in logs):
+   ```bash
+   docker compose logs --tail=50 node1 | grep "certified block"
+   ```
+5. Document recovery time for ops records.
+
+**Failure Scenarios:**
+- If 2+ nodes fail in a 4-node network: consensus halts until quorum restored
+- If data directory corrupted: node must sync from scratch (backfill from peers)
+- If all nodes fail: restart all; first to start becomes leader
+
+#### 5.6.2 Gateway Restart Recovery (US-018)
+
+**Recovery Characteristics:**
+| Metric | Value |
+|--------|-------|
+| Client notification | SESSION_EXPIRED WebSocket close |
+| Session state | Lost (clients must re-register) |
+| Reconnection time | < 1 second (stateless) |
+| Manual intervention | None |
+
+**Manual Recovery Procedure:**
+1. Stop gateway:
+   ```bash
+   docker compose stop gateway
+   ```
+2. Active clients receive SESSION_EXPIRED and disconnect
+3. Restart gateway:
+   ```bash
+   docker compose start gateway
+   ```
+4. Clients reconnect and re-register sessions automatically
+5. Verify connections via metrics:
+   ```bash
+   curl -H "Authorization: Bearer $METRICS_AUTH_TOKEN" http://localhost:9010/metrics | grep websocket_connections
+   ```
+
+#### 5.6.3 Simulator/Indexer Recovery
+
+**Procedure:**
+1. Stop simulator (validators continue consensus independently)
+2. Validators queue blocks awaiting indexer
+3. Restart simulator
+4. Indexer catches up via backfill from validators
+5. Verify with `/healthz` endpoint
+
+**Note:** Extended outages may require manual intervention if validator block queues overflow
 
 ### 5.7 Tournament Scheduler
 
