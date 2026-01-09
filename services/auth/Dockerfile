@@ -54,8 +54,8 @@ COPY website/package.json /app/website/
 COPY packages/types/package.json /app/packages/types/
 COPY packages/tsconfig/package.json /app/packages/tsconfig/
 
-# Install dependencies
-RUN pnpm install --frozen-lockfile --filter nullspace-auth... --filter @nullspace/types...
+# Install dependencies (skip workspace prepare scripts that require Rust)
+RUN pnpm install --frozen-lockfile --filter nullspace-auth... --filter @nullspace/types... --ignore-scripts
 
 COPY services/auth/tsconfig.json /app/services/auth/
 COPY services/auth/src /app/services/auth/src
