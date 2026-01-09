@@ -900,8 +900,8 @@
         "Ensure all motion is subordinate to the bet slip and game state",
         "Add motion samples to docs/design.md"
       ],
-      "passes": false,
-      "notes": "Motion should feel like liquid glass reacting to movement, not decorative noise."
+      "passes": true,
+      "notes": "Created liquid-crystal-motion.ts with motion tiers (none/reduced/standard/elevated), priority hierarchy (gameResult > gameAction > userFeedback > uiState > decorative), specular sweep, refraction pulse, edge glow, shimmer, float, breathe, and ripple animations. Added CSS keyframes/classes to Tailwind config and index.css. Documented in docs/design.md with usage examples for web (Tailwind) and mobile (Reanimated)."
     }
   ],
   "verifiedComplete": [

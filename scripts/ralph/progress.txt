@@ -568,3 +568,28 @@ Categories by count:
   - Updated docs/design.md with comprehensive accessibility and performance guidelines
   - Fixed LobbyScreen.tsx useAnimatedStyle hook violation (extracted ParallaxGameCard component)
 - Blockers: None. All feedback loops pass.
+
+### 2026-01-09 - US-269: Liquid Crystal motion language
+- Files: packages/design-tokens/src/liquid-crystal-motion.ts (new), packages/design-tokens/src/index.ts, website/tailwind.config.js, website/src/index.css, mobile/src/constants/theme.ts, docs/design.md
+- Decisions:
+  - Created liquid-crystal-motion.ts with motion system:
+    - MOTION_TIER: none/reduced/standard/elevated tiers
+    - MOTION_TIMING: timing values per tier (micro/state/reveal/dramatic)
+    - MOTION_PRIORITY: hierarchy ensuring game state trumps decorative motion
+      - gameResult (100) > gameAction (80) > userFeedback (60) > uiState (40) > decorative (20)
+  - Defined LC_SWEEP, LC_REFRACT, LC_EDGE animations with duration, easing, and priority
+  - Defined LC_ENTRANCE for tooltip/dropdown/modal/sheet enter/exit animations
+  - Mapped LC_SPRING configs from SPRING_LIQUID for Reanimated compatibility
+  - Added LC_KEYFRAMES and LC_ANIMATION CSS definitions
+  - Created GAME_STATE_MOTION_RULES to suppress decorative motion during game reveals
+  - Added utility functions: toEasingCSS(), shouldAllowMotion(), getMotionTiming(), generateLCMotionCSS()
+  - Tailwind integration:
+    - New animations: lc-edge-glow, lc-shimmer, lc-float, lc-breathe, lc-ripple
+    - CSS custom properties: --lc-motion-micro, --lc-motion-state, --lc-motion-reveal, --lc-motion-dramatic
+    - Utility classes: .lc-suppress-decorative, .lc-motion-elevated
+  - Mobile integration:
+    - Added LC_MOTION convenience object with tier, timing, priority, animations, springs, easing
+    - Re-exported all motion primitives for direct access
+  - Reduced motion: All LC animations disabled or reduced to 10ms via prefers-reduced-motion
+  - Docs: Added comprehensive motion language section to docs/design.md with usage examples
+- Blockers: None. All feedback loops pass.
