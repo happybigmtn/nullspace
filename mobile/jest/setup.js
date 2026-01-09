@@ -15,11 +15,19 @@ jest.mock('@shopify/react-native-skia', () => {
     Canvas: SkiaMock,
     Group: SkiaMock,
     Circle: SkiaMock,
+    Line: SkiaMock,
+    Path: SkiaMock,
     RadialGradient: SkiaMock,
     Blur: SkiaMock,
     Paint: SkiaMock,
     BlendMode: {},
     vec: (x, y) => ({ x, y }),
+    // Skia factory mock for Path.MakeFromSVGString
+    Skia: {
+      Path: {
+        MakeFromSVGString: (svg) => ({ svg }),
+      },
+    },
   };
 });
 

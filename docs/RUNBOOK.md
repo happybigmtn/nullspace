@@ -1111,6 +1111,51 @@ docker compose up -d
 
 Update `docker/observability/prometheus.yml` targets to match host IPs.
 
+### 5.11.1 KPI Validation (US-246)
+
+**SLO Targets:**
+
+| Metric | Target | Query |
+|--------|--------|-------|
+| Simulator submit p95 | ≤ 250ms | `histogram_quantile(0.95, sum(rate(nullspace_simulator_http_submit_latency_ms_bucket[5m])) by (le))` |
+| Simulator submit p99 | ≤ 500ms | `histogram_quantile(0.99, sum(rate(nullspace_simulator_http_submit_latency_ms_bucket[5m])) by (le))` |
+| Auth request avg | ≤ 200ms | `avg_over_time(nullspace_auth_timing_avg_ms{key="http.request_ms"}[5m])` |
+| WS send errors | 0/sec | `rate(nullspace_simulator_ws_updates_send_errors_total[5m])` |
+| Casino errors | 0/sec | `rate(nullspace_simulator_casino_errors_total[5m])` |
+
+**Run SLO Check:**
+```bash
+# Against local Prometheus
+node scripts/check-slo.mjs --prom-url http://localhost:9090 --window 5m
+
+# With missing data allowed (for cold-start)
+node scripts/check-slo.mjs --allow-missing
+
+# Against staging Prometheus
+PROM_URL=https://prometheus.staging.example.com node scripts/check-slo.mjs
+```
+
+**Grafana Dashboard:**
+
+The `nullspace-slo` dashboard (`docker/observability/grafana/dashboards/nullspace-slo.json`) provides:
+- Status summary panel showing passing/failing SLOs
+- Threshold annotations on all latency graphs (green → yellow → red)
+- Configurable time window via `$window` variable (1m, 5m, 15m, 1h)
+
+**Pre-Launch Validation Checklist:**
+- [ ] `check-slo.mjs` passes against staging Prometheus
+- [ ] All dashboard panels show green (no threshold violations)
+- [ ] Soak test (10 min) completes with all SLOs passing
+- [ ] Bot load test (5 min, 300 bots) completes with all SLOs passing
+
+**Establishing Baseline:**
+
+After launch, record baseline metrics for ongoing comparison:
+1. Run `check-slo.mjs` with `--window 1h` to capture steady-state
+2. Document baseline in ops log: p95, p99, auth avg latency
+3. Set up Grafana alerts at 80% of SLO threshold (early warning)
+4. Review weekly for trend analysis
+
 ### 5.12 Go/No-Go Criteria
 
 Approve testnet launch only if:
@@ -1119,6 +1164,7 @@ Approve testnet launch only if:
 - Soak + bot load complete without sustained errors
 - Observability is live and alerting verified
 - Vault-only login works on iOS and Android with recovery key export/import
+- `check-slo.mjs` passes against staging (all 5 SLO checks green)
 
 ---
 

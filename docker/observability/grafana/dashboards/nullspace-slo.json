@@ -3,80 +3,251 @@
   "title": "Nullspace SLO Overview",
   "timezone": "browser",
   "schemaVersion": 38,
-  "version": 1,
+  "version": 2,
   "refresh": "30s",
   "time": {
     "from": "now-6h",
     "to": "now"
   },
+  "annotations": {
+    "list": [
+      {
+        "name": "SLO Thresholds",
+        "enable": true,
+        "hide": false
+      }
+    ]
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "window",
+        "type": "custom",
+        "current": {
+          "value": "5m",
+          "text": "5m"
+        },
+        "options": [
+          { "text": "1m", "value": "1m" },
+          { "text": "5m", "value": "5m" },
+          { "text": "15m", "value": "15m" },
+          { "text": "1h", "value": "1h" }
+        ]
+      }
+    ]
+  },
   "panels": [
     {
+      "type": "stat",
+      "title": "SLO Status Summary",
+      "description": "Overall SLO health based on check-slo.mjs targets",
+      "datasource": "Prometheus",
+      "gridPos": { "h": 4, "w": 24, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(((histogram_quantile(0.95, sum(rate(nullspace_simulator_http_submit_latency_ms_bucket[$window])) by (le)) <= 250) or vector(0)) + ((histogram_quantile(0.99, sum(rate(nullspace_simulator_http_submit_latency_ms_bucket[$window])) by (le)) <= 500) or vector(0)) + ((avg_over_time(nullspace_auth_timing_avg_ms{key=\"http.request_ms\"}[$window]) <= 200) or vector(0)) + ((rate(nullspace_simulator_ws_updates_send_errors_total[$window]) <= 0.001) or vector(0)) + ((rate(nullspace_simulator_casino_errors_total[$window]) <= 0.001) or vector(0)))",
+          "legendFormat": "passing"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        },
+        "colorMode": "background",
+        "textMode": "value_and_name"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "range", "options": { "from": 5, "to": 5, "result": { "color": "green", "text": "All SLOs Passing (5/5)" } } },
+            { "type": "range", "options": { "from": 4, "to": 4.9, "result": { "color": "yellow", "text": "4/5 SLOs Passing" } } },
+            { "type": "range", "options": { "from": 0, "to": 3.9, "result": { "color": "red", "text": "SLO Violation" } } }
+          ]
+        }
+      }
+    },
+    {
+      "type": "row",
+      "title": "Latency SLOs",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 4 }
+    },
+    {
       "type": "timeseries",
-      "title": "Simulator submit p95 latency (ms)",
+      "title": "Simulator submit p95 latency (SLO: ≤250ms)",
+      "description": "Transaction submit latency p95. SLO target: ≤250ms",
       "datasource": "Prometheus",
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum(rate(nullspace_simulator_http_submit_latency_ms_bucket[5m])) by (le))",
+          "expr": "histogram_quantile(0.95, sum(rate(nullspace_simulator_http_submit_latency_ms_bucket[$window])) by (le))",
           "legendFormat": "p95"
         }
       ],
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 200 },
+              { "color": "red", "value": 250 }
+            ]
+          },
+          "unit": "ms",
+          "custom": {
+            "thresholdsStyle": {
+              "mode": "line+area"
+            }
+          }
+        },
         "overrides": []
       },
       "options": {},
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 }
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 5 }
     },
     {
       "type": "timeseries",
-      "title": "Auth request avg (ms)",
+      "title": "Simulator submit p99 latency (SLO: ≤500ms)",
+      "description": "Transaction submit latency p99. SLO target: ≤500ms",
       "datasource": "Prometheus",
       "targets": [
         {
-          "expr": "avg_over_time(nullspace_auth_timing_avg_ms{key=\"http.request_ms\"}[5m])",
+          "expr": "histogram_quantile(0.99, sum(rate(nullspace_simulator_http_submit_latency_ms_bucket[$window])) by (le))",
+          "legendFormat": "p99"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 400 },
+              { "color": "red", "value": 500 }
+            ]
+          },
+          "unit": "ms",
+          "custom": {
+            "thresholdsStyle": {
+              "mode": "line+area"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {},
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 5 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Auth request avg (SLO: ≤200ms)",
+      "description": "Auth service HTTP request average latency. SLO target: ≤200ms",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "avg_over_time(nullspace_auth_timing_avg_ms{key=\"http.request_ms\"}[$window])",
           "legendFormat": "avg"
         }
       ],
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 150 },
+              { "color": "red", "value": 200 }
+            ]
+          },
+          "unit": "ms",
+          "custom": {
+            "thresholdsStyle": {
+              "mode": "line+area"
+            }
+          }
+        },
         "overrides": []
       },
       "options": {},
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 }
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 5 }
+    },
+    {
+      "type": "row",
+      "title": "Error Rate SLOs",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 13 }
     },
     {
       "type": "timeseries",
-      "title": "Update index failures (rate)",
+      "title": "WS update send errors (SLO: 0 errors/sec)",
+      "description": "WebSocket update send failures. SLO target: 0 errors",
       "datasource": "Prometheus",
       "targets": [
         {
-          "expr": "rate(nullspace_simulator_update_index_failures_total[5m])",
-          "legendFormat": "failures/sec"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {},
-        "overrides": []
-      },
-      "options": {},
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 }
-    },
-    {
-      "type": "timeseries",
-      "title": "WS update send errors (rate)",
-      "datasource": "Prometheus",
-      "targets": [
-        {
-          "expr": "rate(nullspace_simulator_ws_updates_send_errors_total[5m])",
+          "expr": "rate(nullspace_simulator_ws_updates_send_errors_total[$window])",
           "legendFormat": "errors/sec"
         }
       ],
       "fieldConfig": {
-        "defaults": {},
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 0.001 }
+            ]
+          },
+          "unit": "short",
+          "custom": {
+            "thresholdsStyle": {
+              "mode": "line+area"
+            }
+          }
+        },
         "overrides": []
       },
       "options": {},
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 }
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Casino errors rate (SLO: 0 errors/sec)",
+      "description": "Casino game errors. SLO target: 0 errors",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "rate(nullspace_simulator_casino_errors_total[$window])",
+          "legendFormat": "errors/sec"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 0.001 }
+            ]
+          },
+          "unit": "short",
+          "custom": {
+            "thresholdsStyle": {
+              "mode": "line+area"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {},
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 }
+    },
+    {
+      "type": "row",
+      "title": "Operational Metrics",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 22 }
     },
     {
       "type": "timeseries",
@@ -93,7 +264,7 @@
         "overrides": []
       },
       "options": {},
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 }
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 23 }
     },
     {
       "type": "timeseries",
@@ -101,11 +272,11 @@
       "datasource": "Prometheus",
       "targets": [
         {
-          "expr": "rate(nullspace_simulator_casino_games_started_total[5m])",
+          "expr": "rate(nullspace_simulator_casino_games_started_total[$window])",
           "legendFormat": "started/sec"
         },
         {
-          "expr": "rate(nullspace_simulator_casino_games_completed_total[5m])",
+          "expr": "rate(nullspace_simulator_casino_games_completed_total[$window])",
           "legendFormat": "completed/sec"
         }
       ],
@@ -114,16 +285,16 @@
         "overrides": []
       },
       "options": {},
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 }
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 23 }
     },
     {
       "type": "timeseries",
-      "title": "Casino errors rate",
+      "title": "Update index failures (rate)",
       "datasource": "Prometheus",
       "targets": [
         {
-          "expr": "rate(nullspace_simulator_casino_errors_total[5m])",
-          "legendFormat": "errors/sec"
+          "expr": "rate(nullspace_simulator_update_index_failures_total[$window])",
+          "legendFormat": "failures/sec"
         }
       ],
       "fieldConfig": {
@@ -131,7 +302,46 @@
         "overrides": []
       },
       "options": {},
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 }
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 31 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Limit rejects rate",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "rate(nullspace_simulator_http_reject_origin_total[$window])",
+          "legendFormat": "http_origin/sec"
+        },
+        {
+          "expr": "rate(nullspace_simulator_http_reject_rate_limit_total[$window])",
+          "legendFormat": "http_rate_limit/sec"
+        },
+        {
+          "expr": "rate(nullspace_simulator_http_reject_body_limit_total[$window])",
+          "legendFormat": "http_body_limit/sec"
+        },
+        {
+          "expr": "rate(nullspace_simulator_ws_connection_reject_global_total[$window])",
+          "legendFormat": "ws_global/sec"
+        },
+        {
+          "expr": "rate(nullspace_simulator_ws_connection_reject_per_ip_total[$window])",
+          "legendFormat": "ws_per_ip/sec"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {},
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 31 }
+    },
+    {
+      "type": "row",
+      "title": "System Resources",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 39 }
     },
     {
       "type": "timeseries",
@@ -152,7 +362,7 @@
         "overrides": []
       },
       "options": {},
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 }
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 40 }
     },
     {
       "type": "timeseries",
@@ -173,7 +383,7 @@
         "overrides": []
       },
       "options": {},
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 }
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 40 }
     },
     {
       "type": "timeseries",
@@ -181,7 +391,7 @@
       "datasource": "Prometheus",
       "targets": [
         {
-          "expr": "rate(engine_marshal_verified_blocks_journal_tracked{job=\"node\"}[5m])",
+          "expr": "rate(engine_marshal_verified_blocks_journal_tracked{job=\"node\"}[$window])",
           "legendFormat": "blocks/sec"
         }
       ],
@@ -190,7 +400,7 @@
         "overrides": []
       },
       "options": {},
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 }
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 48 }
     },
     {
       "type": "timeseries",
@@ -207,40 +417,7 @@
         "overrides": []
       },
       "options": {},
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 40 }
-    },
-    {
-      "type": "timeseries",
-      "title": "Limit rejects rate",
-      "datasource": "Prometheus",
-      "targets": [
-        {
-          "expr": "rate(nullspace_simulator_http_reject_origin_total[5m])",
-          "legendFormat": "http_origin/sec"
-        },
-        {
-          "expr": "rate(nullspace_simulator_http_reject_rate_limit_total[5m])",
-          "legendFormat": "http_rate_limit/sec"
-        },
-        {
-          "expr": "rate(nullspace_simulator_http_reject_body_limit_total[5m])",
-          "legendFormat": "http_body_limit/sec"
-        },
-        {
-          "expr": "rate(nullspace_simulator_ws_connection_reject_global_total[5m])",
-          "legendFormat": "ws_global/sec"
-        },
-        {
-          "expr": "rate(nullspace_simulator_ws_connection_reject_per_ip_total[5m])",
-          "legendFormat": "ws_per_ip/sec"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {},
-        "overrides": []
-      },
-      "options": {},
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 40 }
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 48 }
     }
   ]
 }

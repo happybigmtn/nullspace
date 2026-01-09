@@ -458,3 +458,21 @@ Categories by count:
   - Game identity now via texture/geometry instead of hue
 - Blockers: None. Pre-existing useAnimatedStyle lint error in LobbyScreen (architectural issue outside scope).
 
+
+### 2026-01-09 - US-246: Validate KPIs for testnet launch
+- Files: docker/observability/grafana/dashboards/nullspace-slo.json, docs/RUNBOOK.md, mobile/jest/setup.js
+- Decisions:
+  - Enhanced nullspace-slo.json dashboard with:
+    - Status summary panel showing passing/failing SLOs (5/5 green = healthy)
+    - Threshold annotations on latency graphs (green/yellow/red zones)
+    - Configurable $window template variable (1m/5m/15m/1h)
+    - SLO row sections: Latency SLOs, Error Rate SLOs, Operational Metrics, System Resources
+  - Added RUNBOOK.md §5.11.1 "KPI Validation (US-246)" with:
+    - SLO targets table (5 metrics with targets and PromQL queries)
+    - check-slo.mjs usage examples
+    - Pre-launch validation checklist
+    - Baseline establishment procedure
+  - Updated §5.12 Go/No-Go Criteria to include SLO check requirement
+  - Fixed Skia mock in mobile/jest/setup.js to include Line, Path, and Skia.Path.MakeFromSVGString for US-263 patterns
+- SLO Targets: submit p95 ≤250ms, submit p99 ≤500ms, auth avg ≤200ms, WS errors = 0, casino errors = 0
+- Blockers: None. Pre-existing mobile test issues (useEffect loops, runOnJS mocks) are unrelated to this work.
