@@ -7,6 +7,7 @@
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { trackRateLimitHit, trackRateLimitReset } from '../metrics/index.js';
+import { getClientIp } from '../utils/client-ip.js';
 
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
@@ -285,7 +286,8 @@ export function applyRateLimit(
   res: ServerResponse,
   limiter: RateLimiter = metricsRateLimiter,
 ): boolean {
-  const clientIp = req.socket.remoteAddress || 'unknown';
+  // US-248: Use real client IP when behind reverse proxy
+  const clientIp = getClientIp(req);
   const result = limiter.isAllowed(clientIp);
 
   if (!result.allowed) {

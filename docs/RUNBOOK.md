@@ -64,6 +64,7 @@ GATEWAY_ORIGIN=https://gateway.example.com
 GATEWAY_DATA_DIR=/var/lib/nullspace/gateway
 GATEWAY_ALLOWED_ORIGINS=https://app.example.com,https://auth.example.com
 GATEWAY_ALLOW_NO_ORIGIN=1  # for native mobile clients
+TRUSTED_PROXY_CIDRS=172.18.0.0/16  # for X-Forwarded-For extraction behind Caddy
 
 # Metrics
 METRICS_AUTH_TOKEN=<secure-token>
@@ -111,6 +112,35 @@ GATEWAY_EVENT_TIMEOUT_MS=30000
 ```
 
 **Note:** For NAT-heavy mobile traffic, keep per-IP caps at or above these defaults to avoid false throttling.
+
+### 1.4.1 Reverse Proxy Configuration (US-248)
+
+When running Gateway behind a reverse proxy (Caddy, nginx), configure `TRUSTED_PROXY_CIDRS` to enable proper client IP extraction from `X-Forwarded-For` headers.
+
+**Why this matters:**
+- Without this, all clients appear to come from the proxy's IP
+- Per-IP rate limits become global rate limits (one user hitting limit blocks everyone)
+- Metrics show proxy IP instead of actual client IPs
+
+**Configuration:**
+```bash
+# Docker bridge network (typical staging setup)
+TRUSTED_PROXY_CIDRS=172.18.0.0/16
+
+# Multiple ranges (comma-separated)
+TRUSTED_PROXY_CIDRS=172.18.0.0/16,192.168.0.0/16
+
+# Shorthands available:
+# - "loopback" = 127.0.0.0/8 and ::1
+# - "private" = RFC 1918 ranges (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)
+# - "docker" = 172.16.0.0/12
+TRUSTED_PROXY_CIDRS=docker
+```
+
+**Security:** Only IPs matching `TRUSTED_PROXY_CIDRS` will have their `X-Forwarded-For` headers trusted. Requests from other IPs use `socket.remoteAddress` to prevent header spoofing.
+
+**Caddy Configuration:**
+Caddy automatically adds `X-Forwarded-For`, `X-Forwarded-Host`, and `X-Forwarded-Proto` headers when using `reverse_proxy`. No additional configuration needed.
 
 ### 1.5 Preflight Config Check
 

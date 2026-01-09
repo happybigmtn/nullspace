@@ -26,6 +26,7 @@ import {
   handleCorsPreflight,
 } from './middleware/security.js';
 import { generateSecureId } from './utils/crypto.js';
+import { getClientIp, initializeTrustedProxies } from './utils/client-ip.js';
 import {
   tracer,
   withSpan,
@@ -128,6 +129,10 @@ initializeCors({
   allowedOrigins: GATEWAY_ALLOWED_ORIGINS,
   allowNoOrigin: GATEWAY_ALLOW_NO_ORIGIN,
 });
+
+// Initialize trusted proxy configuration for IP extraction (US-248)
+// When behind Caddy/nginx, this allows using X-Forwarded-For for real client IP
+initializeTrustedProxies();
 
 // Core services
 const nonceManager = new NonceManager({ origin: GATEWAY_ORIGIN, dataDir: GATEWAY_DATA_DIR });
@@ -443,7 +448,8 @@ setInterval(() => {
 }, SESSION_CLEANUP_INTERVAL_MS);
 
 wss.on('connection', async (ws: WebSocket, req) => {
-  const clientIp = req.socket.remoteAddress ?? 'unknown';
+  // US-248: Extract real client IP when behind reverse proxy
+  const clientIp = getClientIp(req);
   const originHeader = req.headers.origin;
   const originValue = typeof originHeader === 'string' ? originHeader : null;
   const origin = originValue === 'null' ? null : originValue;
