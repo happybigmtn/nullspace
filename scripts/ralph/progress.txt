@@ -283,3 +283,16 @@ Categories by count:
 - Key insight: Most horizontal scaling achieved at gateway layer while keeping consensus vertically scaled
 - Blockers: None. Documentation-only change.
 
+### 2026-01-09 - US-238: Document Convex self-hosting runbook
+- Files: docs/convex-migration.md (new)
+- Decisions:
+  - Created comprehensive 7-section runbook covering self-hosting, export, import, migration, and rollback
+  - Self-hosted setup: Docker Compose with backend + dashboard, env configuration, initial deployment
+  - Data export: CLI export, HTTP API queries, volume snapshots for production (with pause/resume)
+  - Data import: CLI import, incremental merge, volume restore
+  - Migration: Cloud-to-self, self-to-self, version upgrades with verification steps
+  - Rollback: Function rollback, data rollback, full rollback to Convex Cloud, emergency procedures
+  - Monitoring: Health checks, common issues, log analysis, metrics endpoints
+- Schema tables documented: users, entitlements, stripe_events, stripe_reconcile_state, auth_challenges, admin_nonces, evm_links, evm_challenges
+- Blockers: None. Documentation-only change.
+

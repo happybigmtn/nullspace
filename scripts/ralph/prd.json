@@ -161,8 +161,8 @@
         "Document self-hosting setup",
         "Add rollback procedures"
       ],
-      "passes": false,
-      "notes": "References exist in golive.md, need dedicated runbook."
+      "passes": true,
+      "notes": "Created docs/convex-migration.md with self-hosted setup (Docker Compose), data export (CLI + volume snapshots), import procedures, migration workflows (cloud-to-self, self-to-self, version upgrade), and rollback procedures."
     },
     {
       "id": "US-014",
