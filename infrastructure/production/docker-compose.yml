@@ -1,0 +1,223 @@
+# Nullspace Production Infrastructure
+# Domain: [production domain TBD]
+#
+# Usage:
+#   docker-compose up -d
+#
+# Prerequisites:
+#   - Docker and Docker Compose installed
+#   - DNS records configured
+#   - Environment files in /etc/nullspace/
+#
+# Resource limits based on Hetzner CPX specs (see docs/RUNBOOK.md §2.1):
+#   - Gateway: CPX31 (4 vCPU, 8 GB)
+#   - Simulator: CPX41/51 (8-16 vCPU, 16-32 GB)
+#   - Validators: CPX31 (4 vCPU, 8 GB)
+#   - Auth: CPX21 (2 vCPU, 4 GB)
+
+services:
+  # Caddy reverse proxy with automatic HTTPS
+  caddy:
+    image: caddy:2-alpine
+    container_name: nullspace-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+      - /var/log/caddy:/var/log/caddy
+    networks:
+      - nullspace
+    depends_on:
+      - website
+      - gateway
+      - auth
+      - simulator
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
+
+  # Simulator/Indexer - largest service, handles chain state
+  # Sized for CPX41 (8 vCPU, 16 GB) or CPX51 (16 vCPU, 32 GB)
+  simulator:
+    image: ghcr.io/happybigmtn/nullspace-simulator:latest
+    container_name: nullspace-simulator
+    restart: unless-stopped
+    env_file:
+      - /etc/nullspace/simulator.env
+    volumes:
+      - simulator_data:/data
+    networks:
+      - nullspace
+    expose:
+      - "8080"
+    deploy:
+      resources:
+        limits:
+          cpus: "8"
+          memory: 14G
+        reservations:
+          cpus: "2"
+          memory: 4G
+
+  # Validator nodes - consensus participants
+  # Each sized for CPX31 (4 vCPU, 8 GB)
+  node1:
+    image: ghcr.io/happybigmtn/nullspace-node:latest
+    container_name: nullspace-node-1
+    restart: unless-stopped
+    env_file:
+      - /etc/nullspace/node.env
+    environment:
+      - NODE_ID=1
+    volumes:
+      - node1_data:/data
+    networks:
+      - nullspace
+    expose:
+      - "9001"
+      - "9100"
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 7G
+        reservations:
+          cpus: "1"
+          memory: 2G
+
+  node2:
+    image: ghcr.io/happybigmtn/nullspace-node:latest
+    container_name: nullspace-node-2
+    restart: unless-stopped
+    env_file:
+      - /etc/nullspace/node.env
+    environment:
+      - NODE_ID=2
+    volumes:
+      - node2_data:/data
+    networks:
+      - nullspace
+    expose:
+      - "9001"
+      - "9100"
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 7G
+        reservations:
+          cpus: "1"
+          memory: 2G
+
+  node3:
+    image: ghcr.io/happybigmtn/nullspace-node:latest
+    container_name: nullspace-node-3
+    restart: unless-stopped
+    env_file:
+      - /etc/nullspace/node.env
+    environment:
+      - NODE_ID=3
+    volumes:
+      - node3_data:/data
+    networks:
+      - nullspace
+    expose:
+      - "9001"
+      - "9100"
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 7G
+        reservations:
+          cpus: "1"
+          memory: 2G
+
+  # Gateway - WebSocket + API server
+  # Sized for CPX31 (4 vCPU, 8 GB)
+  gateway:
+    image: ghcr.io/happybigmtn/nullspace-gateway:latest
+    container_name: nullspace-gateway
+    restart: unless-stopped
+    env_file:
+      - /etc/nullspace/gateway.env
+    volumes:
+      - gateway_data:/data
+    networks:
+      - nullspace
+    expose:
+      - "9010"
+    depends_on:
+      - simulator
+      - node1
+      - node2
+      - node3
+    deploy:
+      resources:
+        limits:
+          cpus: "4"
+          memory: 7G
+        reservations:
+          cpus: "1"
+          memory: 2G
+
+  # Auth service - OAuth and session management
+  # Sized for CPX21 (2 vCPU, 4 GB)
+  auth:
+    image: ghcr.io/happybigmtn/nullspace-auth:latest
+    container_name: nullspace-auth
+    restart: unless-stopped
+    env_file:
+      - /etc/nullspace/auth.env
+    networks:
+      - nullspace
+    expose:
+      - "4000"
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 3G
+        reservations:
+          cpus: "0.5"
+          memory: 512M
+
+  # Website - static frontend
+  website:
+    image: ghcr.io/happybigmtn/nullspace-website:latest
+    container_name: nullspace-website
+    restart: unless-stopped
+    networks:
+      - nullspace
+    expose:
+      - "80"
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
+
+networks:
+  nullspace:
+    driver: bridge
+
+volumes:
+  caddy_data:
+  caddy_config:
+  simulator_data:
+  node1_data:
+  node2_data:
+  node3_data:
+  gateway_data:
