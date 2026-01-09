@@ -17,24 +17,25 @@
 
 creation_rules:
   # Production secrets - requires production key
-  - path_regex: secrets/production/.*\.enc\.(yaml|json|env)$
+  # Matches both source files (for encryption) and encrypted files (for decryption/editing)
+  - path_regex: secrets/production/.*\.(yaml|json|env)$
     age: >-
-      age1production_key_placeholder_replace_with_actual_public_key
+      age1dx5k9k3jt8n7xvalqpn47gxfal4g2y56p864wwaetlhcx3z3v59sj9pvcl
 
   # Staging secrets - requires staging key
-  - path_regex: secrets/staging/.*\.enc\.(yaml|json|env)$
+  - path_regex: secrets/staging/.*\.(yaml|json|env)$
     age: >-
       age1xaw2rdg74qg5qtxltsj9sjzul9uptelmuptge36xdz4d9x4r7q7qt6vn49
 
   # Development secrets - can use local development key
-  - path_regex: secrets/development/.*\.enc\.(yaml|json|env)$
+  - path_regex: secrets/development/.*\.(yaml|json|env)$
     age: >-
-      age1development_key_placeholder_replace_with_actual_public_key
+      age16xyaj827xfg0r8s76eg9r7uke6eknzcf4hnxgcmpdnq2qg7w0vlq3r3lqr
 
   # CI secrets - for GitHub Actions automated deployments
-  - path_regex: secrets/ci/.*\.enc\.(yaml|json|env)$
+  - path_regex: secrets/ci/.*\.(yaml|json|env)$
     age: >-
-      age1ci_key_placeholder_replace_with_actual_public_key
+      age1w7848h53gelq9arxpkjayaedvvjhwn6zvlesnsucstls5ej8k4gquj3f46
 
 # Encrypted key suffixes
 # Only these file patterns can be decrypted/encrypted with sops

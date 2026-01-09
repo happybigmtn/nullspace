@@ -332,3 +332,18 @@ Categories by count:
   - Backend has additional daily/block-based rate limiting (separate from gateway cooldown)
 - Blockers: None. Tests pass when run with integration environment.
 
+### 2026-01-09 - US-229: Generate production SOPS Age keys
+- Files: .sops.yaml
+- Decisions:
+  - Generated Age keys for all environments (production, development, ci) using setup-secrets.sh
+  - Updated .sops.yaml with real public keys replacing placeholders:
+    - Production: age1dx5k9k3jt8n7xvalqpn47gxfal4g2y56p864wwaetlhcx3z3v59sj9pvcl
+    - Development: age16xyaj827xfg0r8s76eg9r7uke6eknzcf4hnxgcmpdnq2qg7w0vlq3r3lqr
+    - CI: age1w7848h53gelq9arxpkjayaedvvjhwn6zvlesnsucstls5ej8k4gquj3f46
+  - Fixed path_regex patterns: removed `.enc.` requirement so SOPS matches source files during encryption
+  - Verified encryption/decryption roundtrip works for production
+  - Verified existing staging secrets still decrypt correctly
+- Key storage: Private keys in ~/.config/sops/age/{environment}.key
+- Next steps: Store production/CI private keys in password manager, add CI key to GitHub Secrets as SOPS_AGE_KEY
+- Blockers: None. PRODUCTION-CRITICAL task complete.
+

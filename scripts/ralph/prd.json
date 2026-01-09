@@ -29,8 +29,8 @@
         "Verify .sops.yaml has real production key (not placeholder)",
         "Test encryption/decryption roundtrip"
       ],
-      "passes": false,
-      "notes": "Staging key exists, production is placeholder. PRODUCTION-CRITICAL."
+      "passes": true,
+      "notes": "Generated Age keys for production/development/ci. Updated .sops.yaml with real public keys. Fixed path_regex to match source files during encryption. Verified roundtrip works."
     },
     {
       "id": "US-230",
