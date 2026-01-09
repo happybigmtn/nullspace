@@ -296,3 +296,16 @@ Categories by count:
 - Schema tables documented: users, entitlements, stripe_events, stripe_reconcile_state, auth_challenges, admin_nonces, evm_links, evm_challenges
 - Blockers: None. Documentation-only change.
 
+### 2026-01-09 - US-260: Replace design tokens with edgy monochrome palette + typography
+- Files: packages/design-tokens/src/colors.ts, packages/design-tokens/src/index.ts, packages/design-tokens/src/typography.ts, website/tailwind.config.js
+- Decisions:
+  - Created MONO palette (0-1000 grayscale scale) with pure black (#000000) and pure white (#FFFFFF) for maximum contrast
+  - Added STATE tokens for monochrome state differentiation - success/error/warning via contrast and icons, not color
+  - Added EDGE tokens for depth highlights (highlight, shadow, glow) without introducing hue
+  - Added GAME_PATTERN for texture-based game identity (diagonal-stripes, radial-segments, dot-grid, etc.)
+  - Deprecated ACTION/GAME/TITANIUM while maintaining backwards compatibility - existing code still works but maps to grayscale
+  - Updated typography fonts: Syne (display), Space Grotesk (body), JetBrains Mono (mono)
+  - Tailwind config updated with mono-*, state-*, edge-* utilities and new font stacks
+  - Added monochrome-compatible glow effects (glow-white, glow-black) and pulse animations
+- Blockers: None. US-261/262/263 can now build on this foundation for UI refactoring.
+

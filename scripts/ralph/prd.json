@@ -635,7 +635,7 @@
         "Document proxy header expectations in runbooks/Caddy config"
       ],
       "passes": true,
-      "notes": "Implemented getClientIp() with CIDR-based TRUSTED_PROXY_CIDRS config. 28 unit tests. Docs in RUNBOOK.md \u00a71.4.1."
+      "notes": "Implemented getClientIp() with CIDR-based TRUSTED_PROXY_CIDRS config. 28 unit tests. Docs in RUNBOOK.md §1.4.1."
     },
     {
       "id": "US-249",
@@ -709,7 +709,7 @@
         "Verify instructions run cleanly in repo"
       ],
       "passes": true,
-      "notes": "Fixed commands: pnpm typecheck \u2192 pnpm type-check, pnpm test --run \u2192 pnpm test. Verified commands run correctly."
+      "notes": "Fixed commands: pnpm typecheck → pnpm type-check, pnpm test --run → pnpm test. Verified commands run correctly."
     },
     {
       "id": "US-255",
@@ -741,7 +741,7 @@
       "category": "testing",
       "description": "Expand full bet-flow coverage across all games in E2E",
       "steps": [
-        "Add at least one complete bet flow per game (start \u2192 move(s) \u2192 result)",
+        "Add at least one complete bet flow per game (start → move(s) → result)",
         "Validate payouts and balance deltas (tolerance for push states)",
         "Run these flows in gateway integration or cross-service suite",
         "Record failures per game for triage"
@@ -784,7 +784,7 @@
         "Update typography tokens to use Syne (display), Space Grotesk (body), Fragment/JetBrains Mono (mono)",
         "Update Tailwind + RN theme mappings to new tokens"
       ],
-      "passes": false,
+      "passes": true,
       "notes": "Goal: entirely monochrome, high-contrast, edgy visual system."
     },
     {
@@ -849,7 +849,7 @@
         "Add examples and usage rules in docs/design.md"
       ],
       "passes": false,
-      "notes": "Inspired by Apple\u2019s Liquid Glass material (translucent, refractive, adaptive) but constrained to monochrome."
+      "notes": "Inspired by Apple’s Liquid Glass material (translucent, refractive, adaptive) but constrained to monochrome."
     },
     {
       "id": "US-266",
