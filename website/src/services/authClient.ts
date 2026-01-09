@@ -70,6 +70,41 @@ const authFetch = (path: string, init?: RequestInit) => {
   });
 };
 
+// US-234: CSRF-protected fetch for state-changing operations
+// Automatically fetches CSRF token and includes it in request body
+// Note: getCsrfToken is defined later but this works because it's called at runtime
+const authFetchWithCsrf = async (
+  path: string,
+  body?: Record<string, unknown>,
+): Promise<Response> => {
+  const csrfToken = await getCsrfTokenInternal();
+
+  // Merge CSRF token with request body
+  const bodyWithCsrf = JSON.stringify({ ...body, csrfToken });
+
+  return fetch(authPath(path), {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: bodyWithCsrf,
+  });
+};
+
+// Internal CSRF fetch (defined here to avoid hoisting issues)
+const getCsrfTokenInternal = async (): Promise<string> => {
+  const res = await authFetch("/auth/csrf", { method: "GET" });
+  if (!res.ok) {
+    throw new Error(`CSRF token fetch failed (${res.status})`);
+  }
+  const data = (await res.json()) as { csrfToken?: string };
+  if (!data?.csrfToken) {
+    throw new Error("Missing csrf token");
+  }
+  return data.csrfToken;
+};
+
 const readError = async (res: Response) => {
   try {
     const data = await res.json();
@@ -120,44 +155,38 @@ export async function getProfile(): Promise<AuthProfile> {
   return (await res.json()) as AuthProfile;
 }
 
+// US-234: CSRF-protected endpoint
 export async function linkPublicKey(input: {
   publicKey: string;
   signature: string;
   challengeId: string;
 }): Promise<void> {
-  const res = await authFetch("/profile/link-public-key", {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
+  const res = await authFetchWithCsrf("/profile/link-public-key", input);
   if (!res.ok) {
     throw new Error(await readError(res));
   }
 }
 
+// US-234: CSRF-protected endpoint
 export async function requestEvmChallenge(input: {
   address: string;
   chainId: number;
 }): Promise<EvmChallenge> {
-  const res = await authFetch("/profile/evm-challenge", {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
+  const res = await authFetchWithCsrf("/profile/evm-challenge", input);
   if (!res.ok) {
     throw new Error(await readError(res));
   }
   return (await res.json()) as EvmChallenge;
 }
 
+// US-234: CSRF-protected endpoint
 export async function linkEvmAddress(input: {
   address: string;
   chainId: number;
   signature: string;
   challengeId: string;
 }): Promise<EvmLink> {
-  const res = await authFetch("/profile/link-evm", {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
+  const res = await authFetchWithCsrf("/profile/link-evm", input);
   if (!res.ok) {
     throw new Error(await readError(res));
   }
@@ -165,13 +194,15 @@ export async function linkEvmAddress(input: {
   return data.link;
 }
 
+// US-234: CSRF-protected endpoint
 export async function unlinkEvmAddress(): Promise<void> {
-  const res = await authFetch("/profile/unlink-evm", { method: "POST" });
+  const res = await authFetchWithCsrf("/profile/unlink-evm");
   if (!res.ok) {
     throw new Error(await readError(res));
   }
 }
 
+// US-234: CSRF-protected endpoint
 export async function createCheckoutSession(input: {
   priceId: string;
   successUrl: string;
@@ -179,31 +210,27 @@ export async function createCheckoutSession(input: {
   tier?: string;
   allowPromotionCodes?: boolean;
 }): Promise<{ url: string }> {
-  const res = await authFetch("/billing/checkout", {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
+  const res = await authFetchWithCsrf("/billing/checkout", input);
   if (!res.ok) {
     throw new Error(await readError(res));
   }
   return (await res.json()) as { url: string };
 }
 
+// US-234: CSRF-protected endpoint
 export async function createBillingPortalSession(input: {
   returnUrl: string;
 }): Promise<{ url: string }> {
-  const res = await authFetch("/billing/portal", {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
+  const res = await authFetchWithCsrf("/billing/portal", input);
   if (!res.ok) {
     throw new Error(await readError(res));
   }
   return (await res.json()) as { url: string };
 }
 
+// US-234: CSRF-protected endpoint
 export async function syncFreerollLimit(): Promise<{ status?: string; limit?: number }> {
-  const res = await authFetch("/profile/sync-freeroll", { method: "POST" });
+  const res = await authFetchWithCsrf("/profile/sync-freeroll");
   if (!res.ok) {
     throw new Error(await readError(res));
   }
@@ -211,15 +238,7 @@ export async function syncFreerollLimit(): Promise<{ status?: string; limit?: nu
 }
 
 export async function getCsrfToken(): Promise<string> {
-  const res = await authFetch("/auth/csrf", { method: "GET" });
-  if (!res.ok) {
-    throw new Error(await readError(res));
-  }
-  const data = (await res.json()) as { csrfToken?: string };
-  if (!data?.csrfToken) {
-    throw new Error("Missing csrf token");
-  }
-  return data.csrfToken;
+  return getCsrfTokenInternal();
 }
 
 export async function requestAuthChallenge(publicKey: string): Promise<AuthChallenge> {

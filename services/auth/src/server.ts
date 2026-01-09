@@ -142,6 +142,81 @@ const requireAllowedOrigin: express.RequestHandler = (req, res, next) => {
   next();
 };
 
+// US-234: CSRF Protection Middleware
+// Uses the same token format as @auth/express for compatibility
+const AUTH_SECRET = required("AUTH_SECRET");
+
+const parseCookies = (cookieHeader: string | undefined): Map<string, string> => {
+  const cookies = new Map<string, string>();
+  if (!cookieHeader) return cookies;
+  for (const part of cookieHeader.split(";")) {
+    const [name, ...rest] = part.trim().split("=");
+    if (name && rest.length > 0) {
+      try {
+        cookies.set(name.trim(), decodeURIComponent(rest.join("=").trim()));
+      } catch {
+        cookies.set(name.trim(), rest.join("=").trim());
+      }
+    }
+  }
+  return cookies;
+};
+
+const createCsrfHash = async (token: string, secret: string): Promise<string> => {
+  const data = new TextEncoder().encode(`${token}${secret}`);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  return Buffer.from(hashBuffer).toString("hex");
+};
+
+const getCsrfCookieName = (): string => {
+  // Match @auth/express cookie naming convention
+  // Production uses __Host- prefix, dev doesn't
+  const useSecureCookies = process.env.NODE_ENV === "production";
+  return useSecureCookies ? "__Host-authjs.csrf-token" : "authjs.csrf-token";
+};
+
+const verifyCsrfToken = async (
+  cookieValue: string | undefined,
+  bodyValue: string | undefined,
+): Promise<boolean> => {
+  if (!cookieValue || !bodyValue) return false;
+
+  // Cookie format is "token|hash"
+  const [cookieToken, cookieHash] = cookieValue.split("|");
+  if (!cookieToken || !cookieHash) return false;
+
+  // Verify the hash matches
+  const expectedHash = await createCsrfHash(cookieToken, AUTH_SECRET);
+  if (!timingSafeStringEqual(cookieHash, expectedHash)) {
+    return false;
+  }
+
+  // Verify the submitted token matches the cookie token
+  return timingSafeStringEqual(cookieToken, bodyValue);
+};
+
+const requireCsrfToken: express.RequestHandler = async (req, res, next) => {
+  const cookies = parseCookies(req.headers.cookie);
+  const cookieName = getCsrfCookieName();
+  const cookieValue = cookies.get(cookieName);
+
+  // Token can come from body (csrfToken) or header (x-csrf-token)
+  const bodyToken = typeof req.body?.csrfToken === "string" ? req.body.csrfToken : undefined;
+  const headerToken =
+    typeof req.headers["x-csrf-token"] === "string" ? req.headers["x-csrf-token"] : undefined;
+  const submittedToken = bodyToken || headerToken;
+
+  const isValid = await verifyCsrfToken(cookieValue, submittedToken);
+  if (!isValid) {
+    inc("csrf.invalid");
+    res.status(403).json({ error: "csrf_invalid" });
+    return;
+  }
+
+  inc("csrf.valid");
+  next();
+};
+
 const metricsAuthToken = process.env.METRICS_AUTH_TOKEN ?? "";
 const requireMetricsAuthToken =
   String(process.env.AUTH_REQUIRE_METRICS_AUTH ?? "").toLowerCase() === "true" ||
@@ -684,7 +759,8 @@ app.get("/profile", requireAllowedOrigin, profileRateLimit, async (req, res) => 
   res.json({ session, entitlements, evmLink });
 });
 
-app.post("/profile/link-public-key", requireAllowedOrigin, profileRateLimit, async (req, res) => {
+// US-234: CSRF protection on state-changing profile endpoints
+app.post("/profile/link-public-key", requireAllowedOrigin, requireCsrfToken, profileRateLimit, async (req, res) => {
   const session = await requireSession(req, res);
   if (!session) return;
   const publicKey = normalizeHex(String(req.body?.publicKey ?? ""));
@@ -729,7 +805,7 @@ app.post("/profile/link-public-key", requireAllowedOrigin, profileRateLimit, asy
   res.json({ ok: true });
 });
 
-app.post("/profile/evm-challenge", requireAllowedOrigin, profileRateLimit, async (req, res) => {
+app.post("/profile/evm-challenge", requireAllowedOrigin, requireCsrfToken, profileRateLimit, async (req, res) => {
   const session = await requireSession(req, res);
   if (!session) return;
   const address = normalizeEvmAddress(String(req.body?.address ?? ""));
@@ -782,7 +858,7 @@ app.post("/profile/evm-challenge", requireAllowedOrigin, profileRateLimit, async
   res.json({ challengeId, message, expiresAtMs, address, chainId });
 });
 
-app.post("/profile/link-evm", requireAllowedOrigin, profileRateLimit, async (req, res) => {
+app.post("/profile/link-evm", requireAllowedOrigin, requireCsrfToken, profileRateLimit, async (req, res) => {
   const session = await requireSession(req, res);
   if (!session) return;
 
@@ -855,7 +931,7 @@ app.post("/profile/link-evm", requireAllowedOrigin, profileRateLimit, async (req
   res.json({ ok: true, link });
 });
 
-app.post("/profile/unlink-evm", requireAllowedOrigin, profileRateLimit, async (req, res) => {
+app.post("/profile/unlink-evm", requireAllowedOrigin, requireCsrfToken, profileRateLimit, async (req, res) => {
   const session = await requireSession(req, res);
   if (!session) return;
   await convex.mutation(api.evm.unlinkEvmAddress, {
@@ -866,7 +942,7 @@ app.post("/profile/unlink-evm", requireAllowedOrigin, profileRateLimit, async (r
   res.json({ ok: true });
 });
 
-app.post("/profile/sync-freeroll", requireAllowedOrigin, profileRateLimit, async (req, res) => {
+app.post("/profile/sync-freeroll", requireAllowedOrigin, requireCsrfToken, profileRateLimit, async (req, res) => {
   const session = await requireSession(req, res);
   if (!session) return;
   const entitlements = await convex.query(api.entitlements.getEntitlementsByUser, {
@@ -978,7 +1054,8 @@ app.post("/ai/strategy", requireAllowedOrigin, aiRateLimit, async (req, res) => 
   }
 });
 
-app.post("/billing/checkout", requireAllowedOrigin, billingRateLimit, async (req, res) => {
+// US-234: CSRF protection on state-changing billing endpoints
+app.post("/billing/checkout", requireAllowedOrigin, requireCsrfToken, billingRateLimit, async (req, res) => {
   const session = await requireSession(req, res);
   if (!session) return;
   const { priceId, successUrl, cancelUrl, tier, allowPromotionCodes } =
@@ -1037,7 +1114,7 @@ app.post("/billing/checkout", requireAllowedOrigin, billingRateLimit, async (req
   }
 });
 
-app.post("/billing/portal", requireAllowedOrigin, billingRateLimit, async (req, res) => {
+app.post("/billing/portal", requireAllowedOrigin, requireCsrfToken, billingRateLimit, async (req, res) => {
   const session = await requireSession(req, res);
   if (!session) return;
   const { returnUrl } = req.body ?? {};
@@ -1084,7 +1161,7 @@ app.post("/billing/portal", requireAllowedOrigin, billingRateLimit, async (req, 
   }
 });
 
-app.post("/billing/reconcile", requireAllowedOrigin, billingRateLimit, async (req, res) => {
+app.post("/billing/reconcile", requireAllowedOrigin, requireCsrfToken, billingRateLimit, async (req, res) => {
   const session = await requireSession(req, res);
   if (!session) return;
   const limitRaw = req.body?.limit;
