@@ -347,3 +347,22 @@ Categories by count:
 - Next steps: Store production/CI private keys in password manager, add CI key to GitHub Secrets as SOPS_AGE_KEY
 - Blockers: None. PRODUCTION-CRITICAL task complete.
 
+### 2026-01-09 - US-218: Configure and verify CDN
+- Files: docs/RUNBOOK.md, infrastructure/staging/DNS_RECORDS.md, scripts/verify-cdn.sh (new)
+- Decisions:
+  - Added RUNBOOK.md §2.6 CDN Configuration (Cloudflare) covering:
+    - DNS setup with proxy status (orange cloud for website/auth, gray for WebSocket)
+    - 4 cache rules: static assets (1yr), JS/CSS/WASM (1yr), images/fonts (1d), bypass for HTML/API
+    - WebSocket configuration (DNS only on Free plan, proxied on Pro)
+    - WAF settings: Cloudflare Managed + OWASP rulesets, Stripe webhook exception
+    - Performance: Brotli, HTTP/2+3, Early Hints, Tiered Cache
+    - Verification commands for cf-cache-status and cf-ray headers
+    - Cache purge API commands (though Vite fingerprinting makes this rarely needed)
+  - Updated DNS_RECORDS.md with proxy status table by service type
+  - Created scripts/verify-cdn.sh for automated verification:
+    - Checks Cloudflare proxy status (cf-ray header)
+    - Validates cache headers and security headers
+    - Tests TLS, HTTP/2, compression
+    - Checks auth/gateway health endpoints
+- Blockers: None. Documentation covers full CDN setup for production.
+

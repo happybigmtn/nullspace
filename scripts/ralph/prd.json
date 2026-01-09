@@ -263,8 +263,8 @@
         "Verify cache headers correct",
         "Document CDN configuration"
       ],
-      "passes": false,
-      "notes": "Cache headers in nginx, no dedicated CDN setup."
+      "passes": true,
+      "notes": "Added RUNBOOK.md §2.6 (CDN Configuration) with DNS setup, cache rules (4 rules for assets/bundles/images/bypass), WebSocket guidance, WAF settings, performance optimization, verification commands, and cache purge procedures. Updated DNS_RECORDS.md with proxy status guide per service. Created scripts/verify-cdn.sh."
     },
     {
       "id": "US-246",
