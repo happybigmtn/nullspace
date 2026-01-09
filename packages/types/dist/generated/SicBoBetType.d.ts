@@ -1,2 +1,0 @@
-export type SicBoBetType = "BIG" | "SMALL" | "ODD" | "EVEN" | "TRIPLE_ANY" | "TRIPLE_SPECIFIC" | "DOUBLE_SPECIFIC" | "SUM" | "SINGLE_DIE" | "DOMINO" | "HOP3_EASY" | "HOP3_HARD" | "HOP4_EASY";
-//# sourceMappingURL=SicBoBetType.d.ts.map

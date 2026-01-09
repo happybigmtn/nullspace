@@ -1,2 +1,0 @@
-export type GameType = "NONE" | "BACCARAT" | "BLACKJACK" | "CASINO_WAR" | "CRAPS" | "ROULETTE" | "SIC_BO" | "THREE_CARD" | "ULTIMATE_HOLDEM" | "VIDEO_POKER" | "HILO";
-//# sourceMappingURL=GameType.d.ts.map

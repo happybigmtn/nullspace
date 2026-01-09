@@ -854,7 +854,6 @@ Review non-code artifacts for provenance and relevance.
 - [ ] AGENTS.md
 - [ ] Untitled
 - [ ] convex.txt
-- [ ] economy_log.json.bak
 - [ ] restart.log
 - [ ] website.log
 - [ ] website_direct.log

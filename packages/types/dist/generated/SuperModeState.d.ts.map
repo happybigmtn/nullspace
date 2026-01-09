@@ -1,1 +1,0 @@
-{"version":3,"file":"SuperModeState.d.ts","sourceRoot":"","sources":["../../src/generated/SuperModeState.ts"],"names":[],"mappings":"AACA,OAAO,KAAK,EAAE,eAAe,EAAE,MAAM,sBAAsB,CAAC;AAE5D,MAAM,MAAM,cAAc,GAAG;IAAE,QAAQ,EAAE,OAAO,CAAC;IAAC,WAAW,EAAE,MAAM,CAAC;IAAC,WAAW,EAAE,KAAK,CAAC,eAAe,CAAC,CAAC;CAAE,CAAC"}

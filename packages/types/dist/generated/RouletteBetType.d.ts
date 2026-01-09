@@ -1,2 +1,0 @@
-export type RouletteBetType = "STRAIGHT" | "RED" | "BLACK" | "ODD" | "EVEN" | "LOW" | "HIGH" | "DOZEN_1" | "DOZEN_2" | "DOZEN_3" | "COL_1" | "COL_2" | "COL_3" | "ZERO" | "SPLIT_H" | "SPLIT_V" | "STREET" | "CORNER" | "SIX_LINE";
-//# sourceMappingURL=RouletteBetType.d.ts.map

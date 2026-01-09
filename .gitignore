@@ -2,6 +2,7 @@
 node_modules
 .pnp
 .pnp.js
+/package-lock.json
 
 # Testing
 coverage
@@ -13,6 +14,7 @@ target
 
 # Misc
 .DS_Store
+*.bak
 
 # Environment files
 .env
@@ -44,6 +46,7 @@ nohup.out
 data/
 .turbo/
 logs/
+tmp/
 website/dist/
 website/qa-artifacts/
 qa-artifacts/
