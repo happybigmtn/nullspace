@@ -641,3 +641,40 @@ Categories by count:
   - Consider progress indicators during vault unlock
   - No Ed25519 optimization needed (already >100 sigs/sec)
 - Blockers: None. All tests pass.
+
+### 2026-01-09 - QA-022: Test insufficient balance handling
+- Files: mobile/src/screens/games/__tests__/BetRejectionHandling.test.tsx (verified), website/src/hooks/terminalGame/actions/useBetControls.ts (verified)
+- Decisions:
+  - Mobile already has comprehensive test coverage in BetRejectionHandling.test.tsx:
+    - INSUFFICIENT_BALANCE error display and message verification
+    - Button re-enable after rejection via clearSubmission
+    - UI recovery after bet rejection (DEAL button state management)
+    - Sequential error message display
+    - Generic error handling with fallback messages
+  - Web has client-side prevention in useBetControls.ts:
+    - Lines 44-46: Checks stats.chips < amount before submission
+    - Lines 176-178: Same check in setToLastBet for REBET
+  - PRD note "Backend tested, UI feedback not tested" was outdated
+- Evidence: 20+ tests in BetRejectionHandling.test.tsx covering all rejection scenarios
+- Blockers: None. Marking as passes: true.
+
+### 2026-01-09 - QA-023: Test rapid bet submission
+- Files: mobile/src/hooks/__tests__/useBetSubmission.test.tsx (verified), mobile/src/hooks/useBetSubmission.ts (verified)
+- Decisions:
+  - Mobile has comprehensive double-tap prevention in useBetSubmission.ts:
+    - isSubmitting flag blocks duplicate submissions
+    - 5-second timeout auto-recovery
+    - clearSubmission callback for server response handling
+    - Atomic bet validation lock (US-090) prevents race conditions
+  - Test coverage in useBetSubmission.test.tsx:
+    - double-tap rejection (isSubmitting flag): 4 tests
+    - timeout auto-recovery: 3 tests
+    - clearSubmission on response: 3 tests
+    - send failure handling: 3 tests
+    - rapid-fire taps test: Verifies 5 rapid taps only submit once
+    - concurrent bet validation lock: 9 tests (US-090)
+  - Web uses isPendingRef for similar double-submit prevention
+  - PRD note "No double-tap prevention test" was outdated
+- Evidence: 25+ tests in useBetSubmission.test.tsx covering all debounce scenarios
+- Blockers: None. Marking as passes: true.
+

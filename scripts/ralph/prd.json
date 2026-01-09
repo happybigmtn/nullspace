@@ -442,8 +442,8 @@
         "Verify bet is rejected",
         "Test recovery flow"
       ],
-      "passes": false,
-      "notes": "Backend tested, UI feedback not tested."
+      "passes": true,
+      "notes": "Mobile tests in BetRejectionHandling.test.tsx cover: INSUFFICIENT_BALANCE error display, button re-enable, UI recovery after rejection (20+ tests). Web has client-side prevention in useBetControls.ts."
     },
     {
       "id": "QA-023",
@@ -454,8 +454,8 @@
         "Verify no double-betting",
         "Verify UI debouncing works"
       ],
-      "passes": false,
-      "notes": "No double-tap prevention test."
+      "passes": true,
+      "notes": "Mobile tests in useBetSubmission.test.tsx cover: double-tap rejection (isSubmitting flag), rapid-fire taps test (5 taps, only first succeeds), timeout auto-recovery, clearSubmission on response. Web uses isPendingRef for same purpose."
     },
     {
       "id": "QA-026",
