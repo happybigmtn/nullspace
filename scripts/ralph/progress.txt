@@ -593,3 +593,21 @@ Categories by count:
   - Reduced motion: All LC animations disabled or reduced to 10ms via prefers-reduced-motion
   - Docs: Added comprehensive motion language section to docs/design.md with usage examples
 - Blockers: None. All feedback loops pass.
+
+### 2026-01-09 - US-259: Automate mobile integration tests against real gateway
+- Files: .github/workflows/mobile-integration.yml (new), docs/RUNBOOK.md
+- Decisions:
+  - Created new GitHub Actions workflow separate from mobile-e2e.yml (which runs Detox with mocks)
+  - Schedule: Nightly at 3 AM UTC against staging gateway
+  - Manual dispatch: Choice of staging/production/custom gateway URL
+  - Two jobs: integration-tests (all 10 games) + reconnection-tests (runs after main tests pass)
+  - Results: JSON artifacts uploaded with 30-day retention
+  - Failure handling: Auto-creates GitHub issue labeled `integration-failure` on nightly failures
+  - Existing framework already supported GATEWAY_URL env var, no test code changes needed
+- Documentation: Added RUNBOOK.md §6.7 "Automated Integration Tests" covering:
+  - What gets tested (game flows, reconnection, on-chain validation)
+  - Local run commands
+  - CI schedule and triggers table
+  - Test results locations
+  - Failure investigation procedure
+- Blockers: None. YAML syntax validated. All feedback loops pass.

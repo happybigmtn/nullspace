@@ -1211,6 +1211,65 @@ Approve testnet launch only if:
 - Signing fails gracefully when vault locked
 - Recovery flow restores correct public key
 
+### 6.7 Automated Integration Tests (US-259)
+
+Mobile integration tests run nightly against the staging gateway via GitHub Actions workflow `mobile-integration.yml`.
+
+#### 6.7.1 What Gets Tested
+
+- **Game Flow Tests**: All 10 games (Blackjack, Hi-Lo, Roulette, Craps, Baccarat, Sic Bo, Video Poker, Casino War, Three Card Poker, Ultimate Hold'em)
+- **Reconnection Tests**: WebSocket disconnect/reconnect scenarios
+- **On-Chain Validation**: Real bet placement with balance verification
+
+#### 6.7.2 Running Locally
+
+```bash
+cd mobile
+
+# Against staging
+GATEWAY_URL=wss://staging-api.nullspace.casino/ws npx tsx tests/integration/runTests.ts
+
+# Against production
+GATEWAY_URL=wss://api.nullspace.casino/ws npx tsx tests/integration/runTests.ts
+
+# Against local gateway
+GATEWAY_URL=ws://localhost:9010 npx tsx tests/integration/runTests.ts
+
+# Run reconnection tests
+GATEWAY_URL=wss://staging-api.nullspace.casino/ws npx tsx tests/integration/runReconnectionTests.ts
+```
+
+#### 6.7.3 CI Schedule and Triggers
+
+| Trigger | Gateway | Frequency |
+|---------|---------|-----------|
+| Schedule | Staging | Nightly at 3 AM UTC |
+| Manual dispatch | Configurable | On-demand |
+
+Manual dispatch options:
+- `staging` (default)
+- `production`
+- `custom` + custom URL input
+
+#### 6.7.4 Test Results
+
+Results are uploaded as artifacts to the workflow run:
+- `integration-test-results-{env}/` - JSON results and logs
+- `reconnection-test-results-{env}/` - Reconnection test artifacts
+
+Local results are saved to `mobile/tests/integration/results/test-results-{timestamp}.json`.
+
+#### 6.7.5 Failure Handling
+
+On nightly failure, the workflow automatically:
+1. Creates a GitHub issue labeled `integration-failure`
+2. Or adds a comment to an existing open issue
+
+To investigate failures:
+1. Check the workflow run summary and artifacts
+2. Run locally with the same gateway URL
+3. Check gateway/simulator health
+
 ---
 
 ## 7. Release Process

@@ -771,8 +771,8 @@
         "Provide env-configurable GATEWAY_URL and test credentials",
         "Publish test artifacts (results JSON/logs) for triage"
       ],
-      "passes": false,
-      "notes": "Mobile integration framework exercises full game flows but is not automated; Detox CI uses mock servers and does not validate on-chain behavior."
+      "passes": true,
+      "notes": "Created .github/workflows/mobile-integration.yml with nightly schedule (3 AM UTC) and manual dispatch. Runs all 10 game integration tests + reconnection tests against configurable gateway (staging/production/custom). Results uploaded as artifacts. Automatic GitHub issue creation on nightly failure. Documented in RUNBOOK.md §6.7."
     },
     {
       "id": "US-260",
