@@ -553,6 +553,81 @@ cargo audit
 
 **Schedule:** Security patches within 48 hours, minor versions monthly, major versions quarterly.
 
+### 4.9 Authentication Security
+
+**Challenge-Response Flow:**
+1. Client requests challenge via `POST /auth/challenge`
+2. Server generates 32-byte random challenge
+3. Client signs with ED25519 private key
+4. Server verifies signature (timing-safe comparison)
+5. Challenge consumed after use (one-time)
+
+**Challenge Parameters:**
+| Parameter | Value |
+|-----------|-------|
+| TTL | 5 minutes (AUTH_CHALLENGE_TTL_MS) |
+| Max TTL | 15 minutes (AUTH_CHALLENGE_TTL_MAX_MS) |
+| Format | 32 bytes random |
+| Signature | 128 hex chars (64 bytes) |
+
+**CSRF Protection:**
+- Cookie: `token|hash` format
+- Hash: SHA256(token + AUTH_SECRET)
+- Timing-safe comparison
+- Protected routes: `/profile/*`, `/billing/*`, `/ai/*`
+
+### 4.10 Admin Key Management
+
+**Key Loading Priority:**
+1. `CASINO_ADMIN_PRIVATE_KEY_URL` (with optional vault token)
+2. `CASINO_ADMIN_PRIVATE_KEY_FILE`
+3. `CASINO_ADMIN_PRIVATE_KEY_HEX` (dev only, blocked in NODE_ENV=production)
+
+**Admin Operations:**
+- Set freeroll limits per player
+- Sync tournament limits from entitlements
+- Bridge pause/unpause (emergency)
+
+**Key Rotation Procedure:**
+1. Generate new ED25519 keypair
+2. Update secret storage (vault/file)
+3. Restart auth service with new key
+4. Verify admin operations functioning
+5. Revoke old key after confirmation
+
+### 4.11 Rate Limiting Summary
+
+| Layer | Limit | Window |
+|-------|-------|--------|
+| Gateway connections/IP | 5 | Concurrent |
+| Gateway sessions/IP | 10 | 1 hour |
+| Auth challenges | 30 | 1 minute |
+| Auth profile ops | 60 | 1 minute |
+| Auth billing ops | 20 | 1 minute |
+| Simulator HTTP | 1,000 | 1 second |
+| Simulator submit | 100 | 1 minute |
+
+### 4.12 Stripe Billing Configuration
+
+**Billing is optional for testnet deployments.** To disable billing:
+
+```bash
+AUTH_BILLING_ENABLED=0
+# STRIPE_PRICE_TIERS can be omitted when billing is disabled
+```
+
+When billing is disabled:
+- Auth service starts without requiring `STRIPE_PRICE_TIERS`
+- `/billing/checkout`, `/billing/portal`, `/billing/reconcile` return 503 with `billing_disabled` error
+- Entitlement checks still work (free tier)
+
+**To enable billing:**
+
+```bash
+AUTH_BILLING_ENABLED=1  # default when not set
+STRIPE_PRICE_TIERS=member:price_xxx,premium:price_yyy
+```
+
 ---
 
 ## 5. Testnet Operations

@@ -262,9 +262,15 @@ const parseStripeTierMap = (raw: string): Map<string, string> => {
   return map;
 };
 
+// US-251: Make Stripe billing optional
+// AUTH_BILLING_ENABLED defaults to true for backward compatibility
+const billingEnabled = !["0", "false", "no"].includes(
+  String(process.env.AUTH_BILLING_ENABLED ?? "").toLowerCase(),
+);
+
 const stripeTierMap = parseStripeTierMap(process.env.STRIPE_PRICE_TIERS ?? "");
-if (stripeTierMap.size === 0) {
-  throw new Error("STRIPE_PRICE_TIERS must be set");
+if (billingEnabled && stripeTierMap.size === 0) {
+  throw new Error("STRIPE_PRICE_TIERS must be set when billing is enabled");
 }
 
 const resolveStripeTier = (priceId: string, tier?: string): string => {
@@ -374,6 +380,17 @@ const billingRateLimit = rateLimit(
   parsePositiveInt(process.env.AUTH_BILLING_RATE_LIMIT_WINDOW_MS, 60_000),
   parsePositiveInt(process.env.AUTH_BILLING_RATE_LIMIT_MAX, 20),
 );
+
+// US-251: Guard billing endpoints when billing is disabled
+const requireBillingEnabled: express.RequestHandler = (_req, res, next) => {
+  if (!billingEnabled) {
+    inc("billing.disabled");
+    res.status(503).json({ error: "billing_disabled" });
+    return;
+  }
+  next();
+};
+
 const aiRateLimit = rateLimit(
   "ai",
   parsePositiveInt(process.env.AUTH_AI_RATE_LIMIT_WINDOW_MS, 60_000),
@@ -1055,7 +1072,8 @@ app.post("/ai/strategy", requireAllowedOrigin, aiRateLimit, async (req, res) => 
 });
 
 // US-234: CSRF protection on state-changing billing endpoints
-app.post("/billing/checkout", requireAllowedOrigin, requireCsrfToken, billingRateLimit, async (req, res) => {
+// US-251: Guard billing endpoints when billing is disabled
+app.post("/billing/checkout", requireAllowedOrigin, requireBillingEnabled, requireCsrfToken, billingRateLimit, async (req, res) => {
   const session = await requireSession(req, res);
   if (!session) return;
   const { priceId, successUrl, cancelUrl, tier, allowPromotionCodes } =
@@ -1114,7 +1132,7 @@ app.post("/billing/checkout", requireAllowedOrigin, requireCsrfToken, billingRat
   }
 });
 
-app.post("/billing/portal", requireAllowedOrigin, requireCsrfToken, billingRateLimit, async (req, res) => {
+app.post("/billing/portal", requireAllowedOrigin, requireBillingEnabled, requireCsrfToken, billingRateLimit, async (req, res) => {
   const session = await requireSession(req, res);
   if (!session) return;
   const { returnUrl } = req.body ?? {};
@@ -1161,7 +1179,7 @@ app.post("/billing/portal", requireAllowedOrigin, requireCsrfToken, billingRateL
   }
 });
 
-app.post("/billing/reconcile", requireAllowedOrigin, requireCsrfToken, billingRateLimit, async (req, res) => {
+app.post("/billing/reconcile", requireAllowedOrigin, requireBillingEnabled, requireCsrfToken, billingRateLimit, async (req, res) => {
   const session = await requireSession(req, res);
   if (!session) return;
   const limitRaw = req.body?.limit;

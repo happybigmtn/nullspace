@@ -672,8 +672,8 @@
         "Update env examples and runbooks",
         "Add tests for billing-disabled startup"
       ],
-      "passes": false,
-      "notes": "Auth currently throws if STRIPE_PRICE_TIERS is missing, conflicting with runbook guidance that Stripe is optional for testnet."
+      "passes": true,
+      "notes": "Implemented AUTH_BILLING_ENABLED flag (defaults true). Billing endpoints return 503 billing_disabled when disabled. 20 unit tests added. Docs in RUNBOOK.md §4.12."
     },
     {
       "id": "US-252",

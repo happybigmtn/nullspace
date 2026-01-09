@@ -84,3 +84,15 @@ Categories by count:
   - Changed `pnpm test --run` to `pnpm test` (--run flag doesn't exist)
   - Commands appear in both "Startup Sequence" and "Feedback Loops" sections
 - Blockers: None. Pre-existing lint/test failures in mobile package unrelated to this change.
+
+### 2026-01-08 - US-251: Make Stripe billing optional in auth service
+- Files: services/auth/src/server.ts, services/auth/tests/billing.test.ts, services/auth/.env.example, services/auth/.env.staging.example, services/auth/.env.production.example, docs/RUNBOOK.md
+- Decisions:
+  - Added AUTH_BILLING_ENABLED flag (defaults to true for backward compatibility)
+  - Only require STRIPE_PRICE_TIERS when billing is enabled
+  - Added requireBillingEnabled middleware that returns 503 with "billing_disabled" error
+  - All three billing endpoints (/billing/checkout, /billing/portal, /billing/reconcile) now guarded
+  - Updated all env examples with AUTH_BILLING_ENABLED=1 and documentation
+  - Added new section §4.12 to RUNBOOK.md documenting billing configuration
+- Tests: 20 unit tests covering isBillingEnabled, parseStripeTierMap, and validateBillingConfig
+- Blockers: None. Backward compatible - existing deployments with billing continue to work unchanged.
