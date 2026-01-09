@@ -641,6 +641,31 @@ AUTH_BILLING_ENABLED=1  # default when not set
 STRIPE_PRICE_TIERS=member:price_xxx,premium:price_yyy
 ```
 
+### 4.13 Game Engine Monitoring
+
+**Super Mode Payout Saturation:**
+
+The casino game engine uses `saturating_mul` for payout calculations to prevent overflow panics. When payouts saturate to `u64::MAX` (18,446,744,073,709,551,615), a warning is logged:
+
+```
+WARN Super mode payout saturated to u64::MAX base_payout=<value> total_multiplier=<value>
+```
+
+**Alert Configuration:**
+- Search logs for: `"Super mode payout saturated"`
+- Alert threshold: Any occurrence (this should never happen with normal bet sizes)
+- Action: Investigate bet amount and multiplier configuration
+
+**Affected Functions:**
+- `apply_super_multiplier_cards` - Card-based games (Blackjack, Baccarat, Poker variants)
+- `apply_super_multiplier_number` - Number-based games (Roulette)
+- `apply_super_multiplier_total` - Total-based games (Sic Bo, Craps)
+
+**Why This Matters:**
+- Silent saturation could mask payout calculation bugs
+- Extreme multiplier stacking (e.g., 4+ matching super cards) can reach astronomical values
+- Realistic scenarios (8x × 8x × 8x × 8x = 4096x) are safe; edge cases (65535x^4) saturate
+
 ---
 
 ## 5. Testnet Operations

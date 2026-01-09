@@ -7,6 +7,7 @@
 use super::cards;
 use super::GameRng;
 use nullspace_types::casino::{SuperModeState, SuperMultiplier, SuperType};
+use tracing::warn;
 
 const PERCENT_SCALE: u32 = 10_000;
 
@@ -663,12 +664,15 @@ pub fn apply_hilo_streak_multiplier(base_payout: u64, streak: u8, was_ace: bool)
 ///
 /// Returns the boosted payout if any winning cards match the super multipliers.
 /// Multipliers stack multiplicatively.
+///
+/// Logs a warning if payout saturates to u64::MAX.
 pub fn apply_super_multiplier_cards(
     winning_cards: &[u8],
     multipliers: &[SuperMultiplier],
     base_payout: u64,
 ) -> u64 {
     let mut total_mult: u64 = 1;
+    let mut mult_saturated = false;
 
     for card in winning_cards {
         for m in multipliers {
@@ -679,25 +683,51 @@ pub fn apply_super_multiplier_cards(
                 _ => false,
             };
             if matches {
+                let prev = total_mult;
                 total_mult = total_mult.saturating_mul(m.multiplier as u64);
+                if total_mult == u64::MAX && prev != u64::MAX {
+                    mult_saturated = true;
+                }
             }
         }
     }
 
-    base_payout.saturating_mul(total_mult)
+    let result = base_payout.saturating_mul(total_mult);
+
+    if result == u64::MAX && (mult_saturated || (base_payout > 0 && total_mult > 1)) {
+        warn!(
+            base_payout = base_payout,
+            total_multiplier = total_mult,
+            matching_cards = winning_cards.len(),
+            "Super mode payout saturated to u64::MAX"
+        );
+    }
+
+    result
 }
 
 /// Apply super multiplier for number-based games (Roulette)
 ///
 /// Returns the boosted payout if the result matches a super multiplier.
+///
+/// Logs a warning if payout saturates to u64::MAX.
 pub fn apply_super_multiplier_number(
-    result: u8,
+    result_num: u8,
     multipliers: &[SuperMultiplier],
     base_payout: u64,
 ) -> u64 {
     for m in multipliers {
-        if m.super_type == SuperType::Number && m.id == result {
-            return base_payout.saturating_mul(m.multiplier as u64);
+        if m.super_type == SuperType::Number && m.id == result_num {
+            let payout = base_payout.saturating_mul(m.multiplier as u64);
+            if payout == u64::MAX && base_payout > 0 {
+                warn!(
+                    base_payout = base_payout,
+                    multiplier = m.multiplier,
+                    result_number = result_num,
+                    "Super mode payout saturated to u64::MAX"
+                );
+            }
+            return payout;
         }
     }
     base_payout
@@ -706,6 +736,8 @@ pub fn apply_super_multiplier_number(
 /// Apply super multiplier for total-based games (Sic Bo)
 ///
 /// Returns the boosted payout if the total matches a super multiplier.
+///
+/// Logs a warning if payout saturates to u64::MAX.
 pub fn apply_super_multiplier_total(
     total: u8,
     multipliers: &[SuperMultiplier],
@@ -713,7 +745,16 @@ pub fn apply_super_multiplier_total(
 ) -> u64 {
     for m in multipliers {
         if m.super_type == SuperType::Total && m.id == total {
-            return base_payout.saturating_mul(m.multiplier as u64);
+            let payout = base_payout.saturating_mul(m.multiplier as u64);
+            if payout == u64::MAX && base_payout > 0 {
+                warn!(
+                    base_payout = base_payout,
+                    multiplier = m.multiplier,
+                    total = total,
+                    "Super mode payout saturated to u64::MAX"
+                );
+            }
+            return payout;
         }
     }
     base_payout
@@ -1451,9 +1492,8 @@ mod tests {
 
     #[test]
     fn test_super_stacking_logs_warning_on_saturation() {
-        // Document: currently no logging when saturation occurs
-        // This is a gap - large payouts silently clamp to u64::MAX
-        // In production, this could cause incorrect payouts
+        // Saturation now emits tracing::warn! for observability
+        // This allows operators to detect extreme payout scenarios
 
         // Create saturation scenario
         let max_multipliers = vec![
@@ -1463,17 +1503,15 @@ mod tests {
             SuperMultiplier { id: 3, multiplier: u16::MAX, super_type: SuperType::Card },
         ];
 
-        // This SHOULD log a warning but currently doesn't
-        // The function uses saturating_mul which silently clamps
+        // This will log a warning via tracing::warn!
+        // The function still uses saturating_mul to prevent overflow panics
         let result = apply_super_multiplier_cards(&[0, 1, 2, 3], &max_multipliers, 1_000_000);
 
-        // Document: result is clamped, no warning logged
+        // Verify saturation still occurs (safety) but now with logging (observability)
         assert_eq!(result, u64::MAX, "Saturation should occur with extreme multipliers");
 
-        // TODO: Add eprintln! or log::warn! when saturation detected:
-        // if total_mult == u64::MAX || result == u64::MAX {
-        //     eprintln!("WARNING: Super mode payout saturated to u64::MAX");
-        // }
+        // Note: To verify the warning is emitted in integration tests, use tracing-test
+        // or check logs contain "Super mode payout saturated to u64::MAX"
     }
 
     #[test]
