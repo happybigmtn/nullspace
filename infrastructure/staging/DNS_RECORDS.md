@@ -51,20 +51,58 @@ curl -I https://api.testnet.regenesis.dev/healthz
 curl -I https://indexer.testnet.regenesis.dev/healthz
 ```
 
-## Cloudflare-Specific Notes
+## Cloudflare CDN Configuration
 
-If using Cloudflare:
+Cloudflare provides CDN caching, TLS termination, and WAF protection. See RUNBOOK.md §2.6 for complete configuration details.
 
-1. Set proxy status to "DNS only" (gray cloud) initially for certificate issuance
-2. After SSL works, you can enable "Proxied" (orange cloud) if desired
-3. Or keep "DNS only" to use Caddy's built-in SSL
+### Initial Setup (DNS Only)
+
+For initial deployment with Caddy handling TLS:
+
+1. Set proxy status to **DNS only** (gray cloud) for all records
+2. Caddy will obtain Let's Encrypt certificates automatically
+3. This is the simplest approach for development/staging
+
+### Production Setup (Proxied + CDN)
+
+For production with Cloudflare CDN:
+
+1. Set proxy status to **Proxied** (orange cloud) for website and auth
+2. Configure SSL/TLS mode to **Full (strict)**
+3. Create Cache Rules for static assets (see RUNBOOK.md §2.6.2)
+4. For WebSocket (api.testnet): Keep **DNS only** on Free plan, or enable WebSockets on Pro plan
+
+### Proxy Status by Service
+
+| Subdomain | Proxy Status | Notes |
+|-----------|--------------|-------|
+| `testnet` (website) | Proxied | Static assets cached at edge |
+| `auth.testnet` | Proxied | CORS handled by upstream |
+| `api.testnet` (gateway) | DNS only* | WebSocket requires Pro plan for proxying |
+| `indexer.testnet` | DNS only | Real-time data, no caching benefit |
+
+*Can be Proxied on Cloudflare Pro plan with WebSockets enabled
+
+### Cache Verification
+
+After enabling Cloudflare proxy:
+
+```bash
+# Check cache hit status
+curl -sI https://testnet.regenesis.dev/assets/index-*.js | grep -i "cf-cache-status"
+# Expected: cf-cache-status: HIT (after first request)
+
+# Verify Cloudflare is serving traffic
+curl -sI https://testnet.regenesis.dev | grep -i "cf-ray"
+# Expected: cf-ray: <id>-<IATA-CODE>
+```
 
 ## Common DNS Providers
 
 ### Cloudflare
 1. Go to DNS settings for regenesis.dev
 2. Add A records as shown above
-3. Set proxy status to "DNS only"
+3. Set proxy status per the table above (DNS only initially)
 
 ### Namecheap
 1. Go to Advanced DNS

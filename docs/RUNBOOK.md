@@ -294,6 +294,133 @@ On each host:
 - Use Cloudflare for TLS + WAF
 - Align proxy/body size limits with simulator `http_body_limit_bytes`
 
+### 2.6 CDN Configuration (Cloudflare)
+
+Configure Cloudflare for static asset caching, TLS termination, and WAF protection.
+
+#### 2.6.1 DNS Setup
+
+1. Add domain to Cloudflare (regenesis.dev)
+2. Create DNS records with **Proxied** status (orange cloud):
+   - `testnet` → origin server IP
+   - `auth.testnet` → origin server IP
+   - `api.testnet` → origin server IP (see WebSocket note below)
+   - `indexer.testnet` → origin server IP
+
+3. Set SSL/TLS mode to **Full (strict)** in Cloudflare dashboard
+
+#### 2.6.2 Cache Rules
+
+Create these Cache Rules in Cloudflare dashboard (Settings → Rules → Cache Rules):
+
+**Rule 1: Static Assets (Website)**
+- If: `(http.host eq "testnet.regenesis.dev" and http.request.uri.path matches "^/assets/")`
+- Cache eligibility: Eligible for cache
+- Edge TTL: Override, 1 year (31536000 seconds)
+- Browser TTL: Override, 1 year
+- Cache key: Include query string
+
+**Rule 2: JS/CSS/WASM Bundles**
+- If: `(http.host eq "testnet.regenesis.dev" and http.request.uri.path matches "\\.(js|css|wasm)$")`
+- Cache eligibility: Eligible for cache
+- Edge TTL: Override, 1 year
+- Browser TTL: Override, 1 year
+- Cache key: Include query string
+
+**Rule 3: Images/Fonts**
+- If: `(http.host eq "testnet.regenesis.dev" and http.request.uri.path matches "\\.(ico|png|jpg|jpeg|gif|svg|webp|woff|woff2)$")`
+- Cache eligibility: Eligible for cache
+- Edge TTL: Override, 1 day (86400 seconds)
+- Browser TTL: Override, 1 day
+
+**Rule 4: Bypass Cache for HTML/API**
+- If: `(http.host eq "testnet.regenesis.dev" and not http.request.uri.path matches "^/assets/" and not http.request.uri.path matches "\\.(js|css|wasm|ico|png|jpg|jpeg|gif|svg|webp|woff|woff2)$")`
+- Cache eligibility: Bypass cache
+- Origin error page pass-thru: On
+
+#### 2.6.3 WebSocket Configuration
+
+For the Gateway (`api.testnet.regenesis.dev`):
+1. Go to Network → WebSockets → Enable
+2. Cloudflare supports WebSocket proxying on Pro plan and above
+3. For Free plan: Set `api.testnet` to **DNS only** (gray cloud) and let Caddy handle TLS
+
+#### 2.6.4 Security Settings
+
+1. **WAF Rules** (Security → WAF):
+   - Enable Cloudflare Managed Ruleset
+   - Enable OWASP Core Ruleset (sensitivity: medium)
+   - Create exception for `/billing/webhook` (Stripe webhooks)
+
+2. **Rate Limiting** (Security → WAF → Rate limiting rules):
+   - Auth endpoints: 100 requests/minute per IP
+   - API endpoints: 1000 requests/minute per IP
+
+3. **Bot Protection** (Security → Bots):
+   - Enable Bot Fight Mode
+   - Configure Super Bot Fight Mode if on Pro plan
+
+4. **Page Shield** (Security → Page Shield):
+   - Monitor for malicious scripts
+   - Alert on new script sources
+
+#### 2.6.5 Performance Settings
+
+1. **Speed → Optimization**:
+   - Auto Minify: Enable for JS, CSS (not HTML - SPA routing)
+   - Brotli compression: Enable
+   - Early Hints: Enable
+   - Rocket Loader: Disable (may break SPA)
+
+2. **Caching → Tiered Cache**:
+   - Enable Smart Tiered Cache for better cache hit rates
+
+3. **Network**:
+   - HTTP/2: Enable
+   - HTTP/3 (QUIC): Enable
+   - 0-RTT Connection Resumption: Enable
+
+#### 2.6.6 Verification
+
+After configuration, verify CDN is working:
+
+```bash
+# Check cache status (should show HIT after first request)
+curl -sI https://testnet.regenesis.dev/assets/index-*.js | grep -i "cf-cache-status"
+# Expected: cf-cache-status: HIT
+
+# Check edge location
+curl -sI https://testnet.regenesis.dev | grep -i "cf-ray"
+# Expected: cf-ray: <id>-<IATA-CODE> (e.g., -IAD for Ashburn)
+
+# Verify cache headers
+curl -sI https://testnet.regenesis.dev/assets/index-*.js | grep -i "cache-control"
+# Expected: cache-control: public, max-age=31536000, immutable
+
+# Test WebSocket (if proxied)
+wscat -c wss://api.testnet.regenesis.dev
+```
+
+#### 2.6.7 Cache Purge
+
+When deploying new versions with updated assets:
+
+```bash
+# Purge everything (use sparingly)
+curl -X POST "https://api.cloudflare.com/client/v4/zones/{zone_id}/purge_cache" \
+  -H "Authorization: Bearer {api_token}" \
+  -H "Content-Type: application/json" \
+  --data '{"purge_everything":true}'
+
+# Purge specific files
+curl -X POST "https://api.cloudflare.com/client/v4/zones/{zone_id}/purge_cache" \
+  -H "Authorization: Bearer {api_token}" \
+  -H "Content-Type: application/json" \
+  --data '{"files":["https://testnet.regenesis.dev/assets/index.js"]}'
+```
+
+**Note:** Vite generates fingerprinted filenames (e.g., `index-DTUCVp2P.css`), so cache purging is usually unnecessary - new deployments automatically use new URLs.
+
 ---
 
 ## 3. Database Operations (Postgres)
