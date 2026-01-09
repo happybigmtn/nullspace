@@ -176,3 +176,24 @@ Categories by count:
   - Documented in RUNBOOK.md §5.4.1 with required env vars table
 - Blockers: None. Pre-existing mobile lint issues unrelated to this change.
 
+### 2026-01-08 - US-258: Fix and validate auth E2E flow (endpoints + CSRF/cookie behavior)
+- Files: tests/integration/helpers/client.ts, tests/integration/cross-service.test.ts
+- Decisions:
+  - Added CookieJar class to CrossServiceClient for managing cookies across requests
+  - Added CSRF token fetching via /auth/csrf endpoint (Auth.js standard)
+  - Updated authenticate() to:
+    - First fetch CSRF token (which also sets CSRF cookie)
+    - Use application/x-www-form-urlencoded for Auth.js callback (per convention)
+    - Handle redirect responses (302) as success
+    - Verify session creation after authentication
+  - Added authFetchWithCsrf() helper for CSRF-protected POST requests
+  - Added authFetchWithoutCsrf() for testing CSRF rejection
+  - Added getSession() to verify session state
+  - Created new 'Auth E2E Flow (US-258)' test suite with:
+    - CSRF token retrieval tests
+    - Full auth flow with CSRF token tests
+    - CSRF protection validation (reject without token, accept with token, reject invalid)
+    - Session management tests (persistence, clear)
+- Tests: 8 new integration tests covering auth flow + CSRF behavior
+- Blockers: None. Tests gracefully skip if Convex not available.
+

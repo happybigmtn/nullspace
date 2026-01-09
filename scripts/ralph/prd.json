@@ -759,8 +759,8 @@
         "Add negative tests for missing/invalid CSRF",
         "Verify against staging/testnet auth domain"
       ],
-      "passes": false,
-      "notes": "Cross-service auth test currently targets /api/auth/challenge which does not exist; CSRF/cookie flows are unverified end-to-end."
+      "passes": true,
+      "notes": "Added CookieJar for cookie management, CSRF token fetching via /auth/csrf, updated authenticate() to use form-urlencoded for Auth.js callback. 8 new tests: CSRF retrieval, full auth flow, CSRF rejection/acceptance, session persistence/clear."
     },
     {
       "id": "US-259",

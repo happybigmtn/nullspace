@@ -3,11 +3,62 @@
  *
  * Provides a unified client for testing the full flow:
  * Auth Service → Gateway → Simulator/Backend
+ *
+ * US-258: Includes CSRF token handling and cookie management
+ * for testing authenticated endpoints.
  */
 
 import WebSocket from 'ws';
 import crypto from 'crypto';
 import { SERVICE_URLS } from './services.js';
+
+/**
+ * Simple cookie jar for tracking cookies across requests
+ */
+class CookieJar {
+  private cookies: Map<string, string> = new Map();
+
+  /**
+   * Parse Set-Cookie headers and store cookies
+   */
+  storeCookies(setCookieHeaders: string | string[] | undefined): void {
+    if (!setCookieHeaders) return;
+    const headers = Array.isArray(setCookieHeaders) ? setCookieHeaders : [setCookieHeaders];
+    for (const header of headers) {
+      // Parse cookie name=value from header (before first semicolon)
+      const cookiePart = header.split(';')[0];
+      if (!cookiePart) continue;
+      const eqIndex = cookiePart.indexOf('=');
+      if (eqIndex === -1) continue;
+      const name = cookiePart.slice(0, eqIndex).trim();
+      const value = cookiePart.slice(eqIndex + 1).trim();
+      this.cookies.set(name, value);
+    }
+  }
+
+  /**
+   * Get Cookie header value for requests
+   */
+  getCookieHeader(): string {
+    return Array.from(this.cookies.entries())
+      .map(([name, value]) => `${name}=${value}`)
+      .join('; ');
+  }
+
+  /**
+   * Get a specific cookie value
+   */
+  getCookie(name: string): string | undefined {
+    return this.cookies.get(name);
+  }
+
+  /**
+   * Clear all cookies
+   */
+  clear(): void {
+    this.cookies.clear();
+  }
+}
 
 export interface TestUser {
   publicKey: string;
@@ -72,6 +123,8 @@ export type ClientMode = 'web' | 'mobile';
  * Supports testing both web and mobile connection scenarios:
  * - Web mode: Sends Origin header, validates CORS allowlist
  * - Mobile mode: No Origin header, relies on GATEWAY_ALLOW_NO_ORIGIN=1
+ *
+ * US-258: Includes cookie jar for session management and CSRF token handling
  */
 export class CrossServiceClient {
   private ws: WebSocket | null = null;
@@ -82,6 +135,8 @@ export class CrossServiceClient {
   private authUrl: string;
   private mode: ClientMode;
   private origin: string | null;
+  private cookieJar: CookieJar;
+  private csrfToken: string | null = null;
 
   constructor(
     user?: TestUser,
@@ -108,6 +163,7 @@ export class CrossServiceClient {
     this.authUrl = options?.authUrl || SERVICE_URLS.auth;
     this.mode = options?.mode ?? 'web';
     this.origin = options?.origin ?? 'http://localhost:5173';
+    this.cookieJar = new CookieJar();
   }
 
   /**
@@ -296,68 +352,193 @@ export class CrossServiceClient {
 
   /**
    * Build headers for auth service requests.
-   * Includes Origin header in web mode for CORS validation.
+   * Includes Origin header in web mode, cookies for session management.
    */
-  private buildAuthHeaders(): Record<string, string> {
+  private buildAuthHeaders(contentType = 'application/json'): Record<string, string> {
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
+      'Content-Type': contentType,
     };
     if (this.mode === 'web' && this.origin) {
       headers['Origin'] = this.origin;
+    }
+    const cookieHeader = this.cookieJar.getCookieHeader();
+    if (cookieHeader) {
+      headers['Cookie'] = cookieHeader;
     }
     return headers;
   }
 
   /**
+   * Store cookies from a response
+   */
+  private storeCookiesFromResponse(response: Response): void {
+    // Node fetch returns headers.getSetCookie() for multiple Set-Cookie headers
+    const setCookie = response.headers.getSetCookie?.() ?? response.headers.get('set-cookie');
+    this.cookieJar.storeCookies(setCookie);
+  }
+
+  /**
+   * Fetch CSRF token from auth service.
+   * Auth.js provides this at /auth/csrf endpoint.
+   * US-258: This token is required for state-changing auth endpoints.
+   */
+  async getCsrfToken(): Promise<string> {
+    const response = await fetch(`${this.authUrl}/auth/csrf`, {
+      method: 'GET',
+      headers: this.buildAuthHeaders(),
+    });
+
+    this.storeCookiesFromResponse(response);
+
+    if (!response.ok) {
+      throw new Error(`CSRF token fetch failed: ${response.status}`);
+    }
+
+    const data = (await response.json()) as { csrfToken?: string };
+    if (!data?.csrfToken) {
+      throw new Error('Missing CSRF token in response');
+    }
+
+    this.csrfToken = data.csrfToken;
+    return data.csrfToken;
+  }
+
+  /**
+   * Get the current session from auth service.
+   * Requires valid session cookie from prior authentication.
+   */
+  async getSession(): Promise<{ user?: { id: string; authProvider?: string } } | null> {
+    const response = await fetch(`${this.authUrl}/auth/session`, {
+      method: 'GET',
+      headers: this.buildAuthHeaders(),
+    });
+
+    this.storeCookiesFromResponse(response);
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return response.json();
+  }
+
+  /**
    * Request authentication challenge from auth service.
    *
-   * Note: Uses /auth/challenge endpoint (not /api/auth/challenge)
-   * per actual auth service routes.
+   * Note: Uses /auth/challenge endpoint (custom, not Auth.js)
+   * Returns challengeId and challenge for signing.
    */
-  async getAuthChallenge(): Promise<string> {
+  async getAuthChallenge(): Promise<{ challengeId: string; challenge: string }> {
     const response = await fetch(`${this.authUrl}/auth/challenge`, {
       method: 'POST',
       headers: this.buildAuthHeaders(),
       body: JSON.stringify({ publicKey: this.user.publicKey }),
     });
 
+    this.storeCookiesFromResponse(response);
+
     if (!response.ok) {
       throw new Error(`Auth challenge failed: ${response.status}`);
     }
 
-    const data = await response.json();
-    return data.challenge;
+    const data = (await response.json()) as { challengeId: string; challenge: string };
+    return { challengeId: data.challengeId, challenge: data.challenge };
   }
 
   /**
    * Authenticate with signed challenge.
    *
-   * Note: Uses /auth/callback/credentials endpoint (not /api/auth/verify)
-   * per actual auth service routes.
+   * US-258: Uses Auth.js /auth/callback/credentials endpoint with proper CSRF token.
+   * The callback uses application/x-www-form-urlencoded format per Auth.js conventions.
    */
-  async authenticate(): Promise<{ token: string; userId: string }> {
-    const challenge = await this.getAuthChallenge();
+  async authenticate(): Promise<{ success: boolean; session?: { user?: { id: string } } }> {
+    // First fetch CSRF token (this also sets the CSRF cookie)
+    const csrfToken = await this.getCsrfToken();
+
+    // Get auth challenge
+    const { challengeId, challenge } = await this.getAuthChallenge();
 
     // Build auth message matching server format
     const message = `Sign this message to authenticate:\n${challenge}`;
     const signature = signMessage(message, this.user.privateKey);
 
-    const response = await fetch(`${this.authUrl}/auth/callback/credentials`, {
-      method: 'POST',
-      headers: this.buildAuthHeaders(),
-      body: JSON.stringify({
-        publicKey: this.user.publicKey,
-        challenge,
-        signature,
-      }),
+    // Auth.js callback expects application/x-www-form-urlencoded
+    const body = new URLSearchParams({
+      csrfToken,
+      publicKey: this.user.publicKey,
+      signature,
+      challengeId,
     });
 
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Auth verify failed: ${response.status} - ${error}`);
+    const response = await fetch(`${this.authUrl}/auth/callback/credentials`, {
+      method: 'POST',
+      headers: this.buildAuthHeaders('application/x-www-form-urlencoded'),
+      body: body.toString(),
+      redirect: 'manual', // Don't follow redirects automatically
+    });
+
+    this.storeCookiesFromResponse(response);
+
+    // Auth.js typically returns a 302 redirect on success
+    if (response.status === 302 || response.status === 200) {
+      // Verify session was created
+      const session = await this.getSession();
+      return { success: true, session: session ?? undefined };
     }
 
-    return response.json();
+    const error = await response.text().catch(() => 'Unknown error');
+    throw new Error(`Auth verify failed: ${response.status} - ${error}`);
+  }
+
+  /**
+   * Make a CSRF-protected request to auth service.
+   * US-258: Automatically includes CSRF token in request body.
+   */
+  async authFetchWithCsrf(
+    path: string,
+    body?: Record<string, unknown>
+  ): Promise<Response> {
+    // Ensure we have a CSRF token
+    if (!this.csrfToken) {
+      await this.getCsrfToken();
+    }
+
+    const bodyWithCsrf = JSON.stringify({ ...body, csrfToken: this.csrfToken });
+
+    const response = await fetch(`${this.authUrl}${path}`, {
+      method: 'POST',
+      headers: this.buildAuthHeaders(),
+      body: bodyWithCsrf,
+    });
+
+    this.storeCookiesFromResponse(response);
+    return response;
+  }
+
+  /**
+   * Make an unauthenticated request (for testing CSRF rejection).
+   * Does NOT include CSRF token.
+   */
+  async authFetchWithoutCsrf(
+    path: string,
+    body?: Record<string, unknown>
+  ): Promise<Response> {
+    const response = await fetch(`${this.authUrl}${path}`, {
+      method: 'POST',
+      headers: this.buildAuthHeaders(),
+      body: JSON.stringify(body ?? {}),
+    });
+
+    this.storeCookiesFromResponse(response);
+    return response;
+  }
+
+  /**
+   * Clear all stored cookies and CSRF token
+   */
+  clearCookies(): void {
+    this.cookieJar.clear();
+    this.csrfToken = null;
   }
 
   /**
