@@ -192,6 +192,7 @@ interface ChipProps {
   selected: boolean;
   disabled?: boolean;
   randomRotation: number;
+  testID?: string;
   onSelect: (value: ChipValue) => void;
   onDrop: (value: ChipValue, position: { x: number; y: number }) => void;
 }
@@ -201,6 +202,7 @@ const Chip = React.memo(function Chip({
   selected,
   disabled = false,
   randomRotation,
+  testID,
   onSelect,
   onDrop,
 }: ChipProps) {
@@ -309,6 +311,7 @@ const Chip = React.memo(function Chip({
   return (
     <GestureDetector gesture={composedGesture}>
       <Animated.View
+        testID={testID}
         style={[
           styles.chip,
           {
@@ -373,7 +376,7 @@ export const ChipSelector = React.memo(function ChipSelector({
   );
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="chip-selector">
       {CHIP_VALUES.map((value, index) => (
         <Chip
           key={value}
@@ -381,6 +384,7 @@ export const ChipSelector = React.memo(function ChipSelector({
           selected={selectedValue === value}
           disabled={disabled}
           randomRotation={chipRotations[index] ?? 0}
+          testID={`chip-${value}`}
           onSelect={onSelect}
           onDrop={handleDrop}
         />

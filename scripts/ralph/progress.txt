@@ -796,3 +796,26 @@ Categories by count:
 - Tests: All 23 tests pass
 - Blockers: None.
 
+### 2026-01-09 - QA-N09: Test chip drag gesture
+- Files: mobile/src/components/casino/ChipSelector.tsx, mobile/src/components/casino/__tests__/ChipDragGesture.test.tsx (new)
+- Decisions:
+  - Added testID props to ChipSelector component for E2E testability:
+    - Container: testID="chip-selector"
+    - Each chip: testID="chip-{value}" (e.g., chip-1, chip-25, chip-1000)
+  - Created comprehensive ChipDragGesture.test.tsx with 29 unit tests covering:
+    - testID accessibility: Verifies all testIDs render for Detox discovery
+    - Gesture configuration: Drop threshold (y < -100), Gesture.Exclusive composition, scale (1.2), rotation reset, z-index elevation (100)
+    - Spring animation parameters: chipStack, chipSettle, chipToss springs with damping ratio validation
+    - Callback behavior: onSelect, onChipPlace memoization, onDrop position data
+    - Multi-touch handling: Gesture.Exclusive prevents simultaneous tap+drag, independent handlers per chip
+    - Drop zone validation: y offset threshold logic verification
+    - Haptic feedback timing: chipPlace on drag begin/tap, betConfirm on drop
+    - Animation timing budgets: Pickup <200ms, bounce <300ms, return <500ms
+    - Visual feedback states: Selected glow, disabled opacity, rotation behavior
+  - Existing Detox test in games.test.ts ('should support chip drag gesture') validates E2E flow:
+    - Select chip via tap
+    - longPressAndDrag to bet-area-red
+    - Verify bet-placed-indicator visible
+- Evidence: All 29 unit tests pass, existing 11 ChipSelector tests pass
+- Blockers: None. Pre-existing lint warnings in other mobile files unrelated.
+
