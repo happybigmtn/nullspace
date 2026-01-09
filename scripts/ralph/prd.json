@@ -135,8 +135,8 @@
         "Create openapi.yaml for auth service",
         "Add API documentation generation to build"
       ],
-      "passes": false,
-      "notes": "No openapi.yaml or swagger files found."
+      "passes": true,
+      "notes": "Created docs/api/gateway.openapi.yaml and docs/api/auth.openapi.yaml. Added validation script (pnpm api:validate) with redocly.yaml config."
     },
     {
       "id": "US-236",

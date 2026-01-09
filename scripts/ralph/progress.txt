@@ -241,3 +241,15 @@ Categories by count:
 - Tests: 21 unit tests for problem-details types + updated gateway metrics-auth tests
 - Blockers: None. Pre-existing mobile lint issues unrelated.
 
+### 2026-01-09 - US-235: Create OpenAPI/Swagger specifications
+- Files: docs/api/gateway.openapi.yaml, docs/api/auth.openapi.yaml, docs/api/redocly.yaml, scripts/validate-openapi.mjs, package.json
+- Decisions:
+  - Used OpenAPI 3.1.0 for modern JSON Schema compatibility
+  - Gateway spec: Health probes (/livez, /healthz, /readyz) and metrics endpoint
+  - Auth spec: Authentication flow (challenge/callback), profile management, EVM linking, billing (Stripe), AI strategy
+  - All error responses use RFC 7807 Problem Details format (aligns with US-227)
+  - Security documented: Bearer token for metrics, session cookies for authenticated endpoints, CSRF tokens for state-changing requests
+  - Added redocly.yaml config to disable warnings for health endpoints (no 4xx needed)
+  - Added pnpm api:validate command using @redocly/cli for linting
+- Blockers: None.
+
