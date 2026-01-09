@@ -6,6 +6,12 @@
 # - auth (authentication service)
 # - simulator (blockchain simulator)
 # - gateway (WebSocket API gateway)
+#
+# Environment variables align with production configs:
+# - GATEWAY_ALLOWED_ORIGINS for gateway CORS (replaces deprecated CORS_ORIGINS)
+# - GATEWAY_ALLOW_NO_ORIGIN=1 for mobile/native clients without Origin header
+# - AUTH_ALLOWED_ORIGINS for auth service CORS
+# - METRICS_AUTH_TOKEN for metrics endpoint authentication
 
 services:
   # Convex backend for data persistence
@@ -38,11 +44,25 @@ services:
       - "4000:4000"
     environment:
       - NODE_ENV=test
+      - PORT=4000
       - CONVEX_URL=http://convex:3210
       - CONVEX_SERVICE_TOKEN=${CONVEX_SERVICE_TOKEN:-test-service-token}
       - AUTH_SECRET=${AUTH_SECRET:-test-auth-secret-min-32-chars-long}
+      - AUTH_URL=http://localhost:4000
       - AUTH_CHALLENGE_TTL_MS=60000
-      - AUTH_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
+      - AUTH_CHALLENGE_TTL_MAX_MS=300000
+      # CORS: Allow web origin + test client origin
+      - AUTH_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173,http://localhost:9010
+      # Metrics authentication
+      - AUTH_REQUIRE_METRICS_AUTH=0
+      - METRICS_AUTH_TOKEN=${METRICS_AUTH_TOKEN:-test-metrics-token}
+      # Disable billing for integration tests
+      - AUTH_BILLING_ENABLED=0
+      # Rate limits (relaxed for testing)
+      - AUTH_CHALLENGE_RATE_LIMIT_WINDOW_MS=60000
+      - AUTH_CHALLENGE_RATE_LIMIT_MAX=100
+      - AUTH_PROFILE_RATE_LIMIT_WINDOW_MS=60000
+      - AUTH_PROFILE_RATE_LIMIT_MAX=100
     depends_on:
       convex:
         condition: service_healthy
@@ -64,6 +84,8 @@ services:
       - RUST_LOG=info
       - SIMULATOR_PORT=8080
       - SIMULATOR_IDENTITY=${SIMULATOR_IDENTITY:-test-simulator}
+      # Metrics authentication (parity with auth/gateway)
+      - METRICS_AUTH_TOKEN=${METRICS_AUTH_TOKEN:-test-metrics-token}
     healthcheck:
       test: curl -f http://localhost:8080/healthz
       interval: 5s
@@ -82,8 +104,26 @@ services:
       - NODE_ENV=test
       - GATEWAY_PORT=9010
       - BACKEND_URL=http://simulator:8080
-      - CORS_ORIGINS=http://localhost:3000,http://localhost:5173
-      - SUBMIT_TIMEOUT_MS=30000
+      - GATEWAY_ORIGIN=http://localhost:9010
+      - GATEWAY_DATA_DIR=/tmp/gateway-data
+      # CORS: Use current env vars (not deprecated CORS_ORIGINS)
+      - GATEWAY_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
+      # Allow connections without Origin header (mobile/native clients)
+      - GATEWAY_ALLOW_NO_ORIGIN=1
+      # Timeouts
+      - GATEWAY_SUBMIT_TIMEOUT_MS=30000
+      - GATEWAY_HEALTHCHECK_TIMEOUT_MS=5000
+      - GATEWAY_ACCOUNT_TIMEOUT_MS=5000
+      - GATEWAY_EVENT_TIMEOUT_MS=30000
+      # Connection limits (relaxed for testing)
+      - MAX_CONNECTIONS_PER_IP=50
+      - MAX_TOTAL_SESSIONS=1000
+      # Rate limits (relaxed for testing)
+      - GATEWAY_SESSION_RATE_LIMIT_POINTS=1000
+      - GATEWAY_SESSION_RATE_LIMIT_WINDOW_MS=3600000
+      - GATEWAY_SESSION_RATE_LIMIT_BLOCK_MS=60000
+      # Metrics authentication
+      - METRICS_AUTH_TOKEN=${METRICS_AUTH_TOKEN:-test-metrics-token}
       - GATEWAY_LOG_LEVEL=info
     depends_on:
       simulator:

@@ -5,6 +5,14 @@
  * - Check service health
  * - Wait for all services to be ready
  * - Get service URLs from environment
+ *
+ * Required environment variables for production-like testing:
+ * - GATEWAY_ALLOWED_ORIGINS: Comma-separated list of allowed origins for gateway CORS
+ * - GATEWAY_ALLOW_NO_ORIGIN: Set to '1' to allow mobile clients without Origin header
+ * - AUTH_ALLOWED_ORIGINS: Comma-separated list of allowed origins for auth service CORS
+ * - METRICS_AUTH_TOKEN: Shared token for metrics endpoint authentication
+ *
+ * See docker-compose.cross-service.yml for default values used in testing.
  */
 
 import { exec } from 'child_process';

@@ -159,3 +159,20 @@ Categories by count:
 - Rationale: Prevents shipping UIs with localhost defaults that can't connect to real services
 - Blockers: None.
 
+### 2026-01-08 - US-255: Align cross-service integration stack with current deployment envs and origin rules
+- Files: tests/integration/docker-compose.cross-service.yml, tests/integration/helpers/client.ts, tests/integration/helpers/services.ts, tests/integration/cross-service.test.ts, docs/RUNBOOK.md
+- Decisions:
+  - Updated docker-compose to use current env vars:
+    - GATEWAY_ALLOWED_ORIGINS (replaces deprecated CORS_ORIGINS)
+    - GATEWAY_ALLOW_NO_ORIGIN=1 for mobile/native clients
+    - AUTH_ALLOWED_ORIGINS for auth service CORS
+    - METRICS_AUTH_TOKEN for metrics endpoint auth (parity across services)
+    - AUTH_BILLING_ENABLED=0 to disable Stripe in tests
+  - Added ClientMode type to CrossServiceClient:
+    - 'web' mode: Sends Origin header (browser behavior)
+    - 'mobile' mode: No Origin header (native app behavior)
+  - Fixed auth endpoint paths: /auth/challenge and /auth/callback/credentials (was incorrect /api/auth/*)
+  - Added Origin header tests covering both web and mobile client scenarios
+  - Documented in RUNBOOK.md §5.4.1 with required env vars table
+- Blockers: None. Pre-existing mobile lint issues unrelated to this change.
+

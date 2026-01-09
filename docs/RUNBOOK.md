@@ -709,6 +709,40 @@ pnpm -C packages/game-state test
 pnpm -C website exec vitest run src/services/games/__tests__/game-state.test.ts
 ```
 
+### 5.4.1 Cross-Service Integration Tests (US-255)
+
+Full-stack integration tests that exercise auth → gateway → simulator flows with
+production-like environment variables.
+
+**Start the stack:**
+```bash
+docker compose -f tests/integration/docker-compose.cross-service.yml up -d --wait
+```
+
+**Run tests:**
+```bash
+RUN_CROSS_SERVICE=true pnpm -C tests/integration exec vitest run
+```
+
+**Required environment variables (set in docker-compose):**
+
+| Variable                   | Service  | Purpose                                      |
+|----------------------------|----------|----------------------------------------------|
+| `GATEWAY_ALLOWED_ORIGINS`  | gateway  | Comma-separated allowed origins for CORS     |
+| `GATEWAY_ALLOW_NO_ORIGIN`  | gateway  | Set to `1` for mobile clients without Origin |
+| `AUTH_ALLOWED_ORIGINS`     | auth     | Comma-separated allowed origins for CORS     |
+| `METRICS_AUTH_TOKEN`       | all      | Shared token for metrics endpoint auth       |
+| `AUTH_BILLING_ENABLED`     | auth     | Set to `0` to disable Stripe billing         |
+
+**Test modes:**
+- `mode: 'web'` - Sends Origin header (browser behavior)
+- `mode: 'mobile'` - No Origin header (native app behavior)
+
+**Cleanup:**
+```bash
+docker compose -f tests/integration/docker-compose.cross-service.yml down -v
+```
+
 ### 5.5 Load Tests
 
 **Soak Test (10 min):**

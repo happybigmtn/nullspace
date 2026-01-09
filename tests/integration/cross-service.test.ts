@@ -18,6 +18,7 @@ import {
 import {
   CrossServiceClient,
   generateTestKeypair,
+  type ClientMode,
 } from './helpers/client.js';
 
 const CROSS_SERVICE_ENABLED = process.env.RUN_CROSS_SERVICE === 'true';
@@ -309,4 +310,94 @@ describe.skipIf(!CROSS_SERVICE_ENABLED)('Balance and Betting Flow', () => {
     expect(response.type).toBe('error');
     expect(response.code).toBe('INSUFFICIENT_BALANCE');
   }, 30000);
+});
+
+describe.skipIf(!CROSS_SERVICE_ENABLED)('Origin Header and CORS Validation', () => {
+  beforeAll(async () => {
+    await waitForAllServices();
+  }, 120000);
+
+  describe('Web Client Mode (with Origin header)', () => {
+    it('should connect successfully with allowed origin', async () => {
+      // Default mode is 'web' with origin http://localhost:5173
+      const client = new CrossServiceClient(undefined, { mode: 'web' });
+
+      await client.connect();
+      const sessionReady = await client.waitForMessage('session_ready');
+
+      expect(sessionReady.type).toBe('session_ready');
+      expect(sessionReady.sessionId).toBeDefined();
+
+      client.disconnect();
+    }, 30000);
+
+    it('should connect with custom allowed origin', async () => {
+      const client = new CrossServiceClient(undefined, {
+        mode: 'web',
+        origin: 'http://localhost:3000',
+      });
+
+      await client.connect();
+      const sessionReady = await client.waitForMessage('session_ready');
+
+      expect(sessionReady.type).toBe('session_ready');
+      client.disconnect();
+    }, 30000);
+  });
+
+  describe('Mobile Client Mode (without Origin header)', () => {
+    it('should connect successfully without Origin header', async () => {
+      // Mobile mode: no Origin header
+      // Requires GATEWAY_ALLOW_NO_ORIGIN=1 in gateway config
+      const client = new CrossServiceClient(undefined, { mode: 'mobile' });
+
+      await client.connect();
+      const sessionReady = await client.waitForMessage('session_ready');
+
+      expect(sessionReady.type).toBe('session_ready');
+      expect(sessionReady.sessionId).toBeDefined();
+      expect(client.getMode()).toBe('mobile');
+
+      client.disconnect();
+    }, 30000);
+
+    it('should play a game without Origin header', async () => {
+      const client = new CrossServiceClient(undefined, { mode: 'mobile' });
+
+      await client.connect();
+      await client.waitForReady();
+
+      // Play a game to verify full flow works without Origin
+      const { gameStarted } = await client.playBlackjackHand(100);
+      expect(gameStarted.type).toBe('game_started');
+
+      client.disconnect();
+    }, 60000);
+  });
+
+  describe('Mixed Client Modes', () => {
+    it('should isolate sessions between web and mobile clients', async () => {
+      const webClient = new CrossServiceClient(undefined, { mode: 'web' });
+      const mobileClient = new CrossServiceClient(undefined, { mode: 'mobile' });
+
+      try {
+        // Connect both clients
+        await Promise.all([webClient.connect(), mobileClient.connect()]);
+
+        // Wait for both to be ready
+        const [webSession, mobileSession] = await Promise.all([
+          webClient.waitForMessage('session_ready'),
+          mobileClient.waitForMessage('session_ready'),
+        ]);
+
+        // Sessions should be unique
+        expect(webSession.sessionId).not.toBe(mobileSession.sessionId);
+        expect(webClient.getMode()).toBe('web');
+        expect(mobileClient.getMode()).toBe('mobile');
+      } finally {
+        webClient.disconnect();
+        mobileClient.disconnect();
+      }
+    }, 60000);
+  });
 });

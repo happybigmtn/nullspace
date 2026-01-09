@@ -60,7 +60,18 @@ export function signMessage(message: string, privateKeyHex: string): string {
 }
 
 /**
+ * Client connection mode for Origin header handling.
+ * - 'web': Sends Origin header (browser-like behavior)
+ * - 'mobile': No Origin header (native app behavior)
+ */
+export type ClientMode = 'web' | 'mobile';
+
+/**
  * CrossServiceClient - Handles the full authentication and game flow
+ *
+ * Supports testing both web and mobile connection scenarios:
+ * - Web mode: Sends Origin header, validates CORS allowlist
+ * - Mobile mode: No Origin header, relies on GATEWAY_ALLOW_NO_ORIGIN=1
  */
 export class CrossServiceClient {
   private ws: WebSocket | null = null;
@@ -69,16 +80,41 @@ export class CrossServiceClient {
   private messageHandlers: Map<string, (msg: GameMessage) => void> = new Map();
   private gatewayUrl: string;
   private authUrl: string;
+  private mode: ClientMode;
+  private origin: string | null;
 
   constructor(
     user?: TestUser,
-    options?: { gatewayUrl?: string; authUrl?: string }
+    options?: {
+      gatewayUrl?: string;
+      authUrl?: string;
+      /**
+       * Connection mode:
+       * - 'web': Include Origin header (default, for browser clients)
+       * - 'mobile': No Origin header (for native/mobile clients)
+       */
+      mode?: ClientMode;
+      /**
+       * Custom origin to send (only used in 'web' mode).
+       * Defaults to http://localhost:5173
+       */
+      origin?: string;
+    }
   ) {
     this.user = user || {
       ...generateTestKeypair(),
     };
     this.gatewayUrl = options?.gatewayUrl || SERVICE_URLS.gatewayWs;
     this.authUrl = options?.authUrl || SERVICE_URLS.auth;
+    this.mode = options?.mode ?? 'web';
+    this.origin = options?.origin ?? 'http://localhost:5173';
+  }
+
+  /**
+   * Get the client's connection mode
+   */
+  getMode(): ClientMode {
+    return this.mode;
   }
 
   /**
@@ -90,6 +126,9 @@ export class CrossServiceClient {
 
   /**
    * Connect to the gateway WebSocket
+   *
+   * In 'web' mode, sends Origin header to validate CORS allowlist.
+   * In 'mobile' mode, no Origin header (native app behavior).
    */
   async connect(timeoutMs = 30000): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -97,7 +136,15 @@ export class CrossServiceClient {
         reject(new Error('WebSocket connection timeout'));
       }, timeoutMs);
 
-      this.ws = new WebSocket(this.gatewayUrl);
+      // Build WebSocket options based on connection mode
+      const wsOptions: WebSocket.ClientOptions = {};
+      if (this.mode === 'web' && this.origin) {
+        // Web clients send Origin header
+        wsOptions.headers = { Origin: this.origin };
+      }
+      // Mobile mode: no Origin header (relies on GATEWAY_ALLOW_NO_ORIGIN)
+
+      this.ws = new WebSocket(this.gatewayUrl, wsOptions);
 
       this.ws.on('open', () => {
         clearTimeout(timer);
@@ -248,12 +295,29 @@ export class CrossServiceClient {
   }
 
   /**
-   * Request authentication challenge from auth service
+   * Build headers for auth service requests.
+   * Includes Origin header in web mode for CORS validation.
+   */
+  private buildAuthHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (this.mode === 'web' && this.origin) {
+      headers['Origin'] = this.origin;
+    }
+    return headers;
+  }
+
+  /**
+   * Request authentication challenge from auth service.
+   *
+   * Note: Uses /auth/challenge endpoint (not /api/auth/challenge)
+   * per actual auth service routes.
    */
   async getAuthChallenge(): Promise<string> {
-    const response = await fetch(`${this.authUrl}/api/auth/challenge`, {
+    const response = await fetch(`${this.authUrl}/auth/challenge`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.buildAuthHeaders(),
       body: JSON.stringify({ publicKey: this.user.publicKey }),
     });
 
@@ -266,7 +330,10 @@ export class CrossServiceClient {
   }
 
   /**
-   * Authenticate with signed challenge
+   * Authenticate with signed challenge.
+   *
+   * Note: Uses /auth/callback/credentials endpoint (not /api/auth/verify)
+   * per actual auth service routes.
    */
   async authenticate(): Promise<{ token: string; userId: string }> {
     const challenge = await this.getAuthChallenge();
@@ -275,9 +342,9 @@ export class CrossServiceClient {
     const message = `Sign this message to authenticate:\n${challenge}`;
     const signature = signMessage(message, this.user.privateKey);
 
-    const response = await fetch(`${this.authUrl}/api/auth/verify`, {
+    const response = await fetch(`${this.authUrl}/auth/callback/credentials`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.buildAuthHeaders(),
       body: JSON.stringify({
         publicKey: this.user.publicKey,
         challenge,

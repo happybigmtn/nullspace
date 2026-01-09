@@ -720,8 +720,8 @@
         "Add Origin header coverage in cross-service client (web origin + no-origin mobile)",
         "Run cross-service tests under production-like settings and document required envs"
       ],
-      "passes": false,
-      "notes": "Current integration compose uses outdated CORS_ORIGINS and does not exercise origin allowlists from the deployment config."
+      "passes": true,
+      "notes": "Updated docker-compose with GATEWAY_ALLOWED_ORIGINS, GATEWAY_ALLOW_NO_ORIGIN, AUTH_ALLOWED_ORIGINS, METRICS_AUTH_TOKEN. Added ClientMode (web/mobile) with Origin header support. Tests cover both modes. Docs in RUNBOOK.md §5.4.1."
     },
     {
       "id": "US-256",
