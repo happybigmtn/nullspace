@@ -9,10 +9,13 @@ jest.mock('../../../services/haptics', () => ({
 }));
 
 // Mock COLORS for testing color assertions
+// Note: Monochrome redesign (US-262) uses grayscale for suits
+// suitRed -> MONO[500] (mid-gray), suitBlack -> MONO[0] (black)
+// Tests use distinguishable values to verify differentiation
 jest.mock('../../../constants/theme', () => ({
   COLORS: {
-    suitRed: '#FF0000', // ACTION.error
-    suitBlack: '#1A1A1A', // TITANIUM[900]
+    suitRed: '#737373',    // MONO[500] - mid-gray in monochrome
+    suitBlack: '#000000',  // MONO[0] - pure black
   },
   RADIUS: { md: 8, sm: 4 },
   SPRING: { cardFlip: { damping: 15, stiffness: 100 } },
@@ -119,7 +122,8 @@ describe('Card', () => {
         expect(suitText).toBeDefined();
 
         // Verify color (red suits should use suitRed, black suits should use suitBlack)
-        const expectedColor = colorName === 'suitRed' ? '#FF0000' : '#1A1A1A';
+        // Monochrome: suitRed = mid-gray, suitBlack = pure black
+        const expectedColor = colorName === 'suitRed' ? '#737373' : '#000000';
         expect(suitText?.props.style).toEqual(
           expect.arrayContaining([expect.objectContaining({ color: expectedColor })])
         );
@@ -146,7 +150,7 @@ describe('Card', () => {
       const diamondsColor = diamondsTexts[0].props.style[1]?.color;
 
       expect(heartsColor).toBe(diamondsColor);
-      expect(heartsColor).toBe('#FF0000'); // suitRed
+      expect(heartsColor).toBe('#737373'); // suitRed (mid-gray in monochrome)
 
       act(() => {
         heartsTree.unmount();
@@ -170,7 +174,7 @@ describe('Card', () => {
       const spadesColor = spadesTexts[0].props.style[1]?.color;
 
       expect(clubsColor).toBe(spadesColor);
-      expect(clubsColor).toBe('#1A1A1A'); // suitBlack
+      expect(clubsColor).toBe('#000000'); // suitBlack (pure black in monochrome)
 
       act(() => {
         clubsTree.unmount();

@@ -431,3 +431,18 @@ Categories by count:
 - Recovery time SLOs: validator < 10s, gateway < 5s
 - Blockers: None. Documentation-only change building on existing drill scripts.
 
+### 2026-01-09 - US-262: Mobile UI monochrome refactor + alignment cleanup
+- Files: mobile/src/constants/theme.ts, mobile/src/components/celebration/ResultReveal.tsx, mobile/src/components/casino/__tests__/Card.test.tsx
+- Decisions:
+  - Replaced ACTION/TITANIUM imports with MONO/SEMANTIC/STATE/EDGE from design-tokens
+  - LIGHT_COLORS and DARK_COLORS now use SEMANTIC.light/dark for backgrounds and text
+  - STATE.interactive used for primary/hover states
+  - MONO palette used for all color values (0=black, 1000=white, 500=mid-gray)
+  - GAME_COLORS unified to MONO[300] - game identity via patterns not color
+  - GAME_DETAIL_COLORS (roulette/craps) use grayscale differentiation
+  - MESSAGE_STYLES use contrast + font-weight instead of colored states
+  - GLOW_STYLES and DARK_MODE_GLOW use white (#FFFFFF) glows with varying opacity
+  - ResultReveal OUTCOME_COLORS: wins=white high-contrast, losses=muted gray
+  - Card suits: suitRed=MONO[500] (gray), suitBlack=MONO[0] (pure black)
+- Blockers: None. Aligns with US-261 (web monochrome) and US-260 (design-tokens).
+

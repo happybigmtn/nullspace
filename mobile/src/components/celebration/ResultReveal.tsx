@@ -26,7 +26,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
 import { COLORS, TYPOGRAPHY, SPACING, RADIUS, DARK_MODE_GLOW, GLASS } from '../../constants/theme';
-import { ACTION, TITANIUM } from '@nullspace/design-tokens';
+import { MONO } from '@nullspace/design-tokens';
 import { haptics } from '../../services/haptics';
 import type { CelebrationIntensity } from '../../hooks/useCelebration';
 
@@ -78,32 +78,37 @@ const TIMING = {
   dismissDelay: 200,
 } as const;
 
-/** Outcome-specific colors */
+/**
+ * Outcome-specific colors - Monochrome redesign (US-262)
+ *
+ * All outcomes use white glow with varying intensity/opacity.
+ * State differentiation via contrast and typography weight.
+ */
 const OUTCOME_COLORS: Record<ResultOutcome, { primary: string; glow: string; bg: string }> = {
   win: {
-    primary: ACTION.success,
-    glow: ACTION.success,
-    bg: 'rgba(52, 199, 89, 0.15)',
+    primary: MONO[1000],                    // White text - high contrast
+    glow: MONO[1000],                       // White glow
+    bg: 'rgba(255, 255, 255, 0.08)',        // Subtle white overlay
   },
   blackjack: {
-    primary: '#FFD700',
-    glow: '#FFD700',
-    bg: 'rgba(255, 215, 0, 0.15)',
+    primary: MONO[1000],                    // White text - maximum emphasis
+    glow: MONO[1000],                       // Intense white glow
+    bg: 'rgba(255, 255, 255, 0.12)',        // Stronger overlay for special wins
   },
   loss: {
-    primary: ACTION.error,
-    glow: ACTION.error,
-    bg: 'rgba(255, 59, 48, 0.08)',
+    primary: MONO[500],                     // Muted gray - de-emphasized
+    glow: MONO[500],                        // Subtle glow
+    bg: 'rgba(0, 0, 0, 0.15)',              // Darker overlay
   },
   push: {
-    primary: ACTION.warning,
-    glow: ACTION.warning,
-    bg: 'rgba(255, 159, 10, 0.12)',
+    primary: MONO[700],                     // Light gray - neutral
+    glow: MONO[700],                        // Subtle glow
+    bg: 'rgba(255, 255, 255, 0.05)',        // Minimal overlay
   },
   war: {
-    primary: ACTION.warning,
-    glow: ACTION.warning,
-    bg: 'rgba(255, 159, 10, 0.12)',
+    primary: MONO[700],                     // Light gray
+    glow: MONO[700],
+    bg: 'rgba(255, 255, 255, 0.05)',
   },
 };
 
@@ -320,7 +325,7 @@ export function ResultReveal({
                   style={styles.breakdownRow}
                 >
                   <Text style={styles.breakdownLabel}>{item.label}</Text>
-                  <Text style={[styles.breakdownAmount, { color: item.amount >= 0 ? ACTION.success : ACTION.error }]}>
+                  <Text style={[styles.breakdownAmount, { color: item.amount >= 0 ? MONO[1000] : MONO[500] }]}>
                     {item.amount >= 0 ? '+' : ''}${Math.abs(item.amount).toLocaleString()}
                   </Text>
                 </RevealElement>
@@ -407,7 +412,7 @@ const styles = StyleSheet.create({
   },
   payoutLabel: {
     ...TYPOGRAPHY.label,
-    color: TITANIUM[400],
+    color: MONO[500],
     marginBottom: SPACING.xs,
   },
   payoutAmount: {
@@ -425,7 +430,7 @@ const styles = StyleSheet.create({
   },
   payoutMultiplier: {
     ...TYPOGRAPHY.bodySmall,
-    color: TITANIUM[400],
+    color: MONO[500],
     marginTop: SPACING.xs,
   },
   breakdownContainer: {
@@ -442,7 +447,7 @@ const styles = StyleSheet.create({
   },
   breakdownLabel: {
     ...TYPOGRAPHY.body,
-    color: TITANIUM[300],
+    color: MONO[600],
   },
   breakdownAmount: {
     ...TYPOGRAPHY.body,
@@ -459,23 +464,25 @@ const styles = StyleSheet.create({
   },
   sessionLabel: {
     ...TYPOGRAPHY.caption,
-    color: TITANIUM[500],
+    color: MONO[500],
     marginBottom: SPACING.xs,
   },
   sessionDelta: {
     ...TYPOGRAPHY.h3,
-    color: TITANIUM[300],
+    color: MONO[600],
     fontVariant: ['tabular-nums'],
   },
   sessionPositive: {
-    color: ACTION.success,
+    color: MONO[1000],                      // White - positive emphasis
+    fontWeight: '700',
   },
   sessionNegative: {
-    color: ACTION.error,
+    color: MONO[400],                       // Muted - de-emphasized
+    fontWeight: '400',
   },
   dismissHint: {
     ...TYPOGRAPHY.caption,
-    color: TITANIUM[500],
+    color: MONO[500],
     marginTop: SPACING.lg,
   },
 });

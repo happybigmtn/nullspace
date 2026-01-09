@@ -810,8 +810,8 @@
         "Standardize control bar and bet slip placement across games",
         "Remove remaining color accents in game screens"
       ],
-      "passes": false,
-      "notes": "Mobile should mirror the edgy monochrome system and layout discipline."
+      "passes": true,
+      "notes": "Updated mobile theme.ts to use MONO/SEMANTIC/STATE/EDGE tokens. Replaced ACTION and TITANIUM throughout LIGHT_COLORS, DARK_COLORS, GAME_COLORS, GAME_DETAIL_COLORS, MESSAGE_STYLES, BET_STYLES, DRAWER_STYLES, HAND_STYLES, INTERACTIVE_STYLES, GLOW_STYLES, DARK_MODE_GLOW. Updated ResultReveal.tsx OUTCOME_COLORS to use monochrome. Updated Card.test.tsx for new suit color values."
     },
     {
       "id": "US-263",

@@ -8,20 +8,23 @@
 import { Platform, StyleSheet } from 'react-native';
 import { CHIP_VALUES } from '@nullspace/constants/chips';
 import {
-  TITANIUM,
-  ACTION,
+  // Primary monochrome palette (US-260/US-262)
+  MONO,
+  SEMANTIC,
+  STATE,
+  EDGE,
+  // Spacing and layout
   SPACING_SEMANTIC,
   RADIUS as TOKEN_RADIUS,
+  // Animation
   DURATION,
   SPRING,
   STAGGER,
-  GAME,
-  FONTS,
-  OPACITY,
+  // Opacity
   OPACITY_SEMANTIC,
+  // Shadows
   SHADOW,
-  ELEVATION,
-  GLOW,
+  // Typography
   TYPE_SCALE,
 } from '@nullspace/design-tokens';
 
@@ -71,74 +74,77 @@ const MONO_FONT = Platform.select({
 const FONT_FAMILY = FONT_BODY.regular;
 
 /**
- * Light color palette derived from design-tokens
- * Maps semantic names to platform-appropriate values
+ * Light color palette - Monochrome redesign (US-262)
+ *
+ * High-contrast pure white theme. All colors from MONO/SEMANTIC tokens.
+ * States differentiated by contrast and icons, not hue.
  */
 export const LIGHT_COLORS = {
-  // Titanium Palette (from design-tokens)
-  background: TITANIUM[100],
-  surface: '#FFFFFF',
-  surfaceElevated: '#FFFFFF',
-  border: TITANIUM[200],
+  // Monochrome backgrounds (from SEMANTIC.light)
+  background: SEMANTIC.light.background,     // Pure white
+  surface: SEMANTIC.light.surface,           // Near-white cards
+  surfaceElevated: SEMANTIC.light.surfaceElevated,
+  border: SEMANTIC.light.border,
 
-  // Action Colors (from design-tokens)
-  primary: ACTION.indigo,
-  primaryDark: ACTION.indigoHover,
-  success: ACTION.success,
-  warning: ACTION.warning,
-  error: ACTION.error,
-  destructive: ACTION.error,
-  gold: '#FFCC00', // Not in design-tokens yet
+  // Monochrome interactive states (from STATE)
+  primary: STATE.interactive.default,        // Black
+  primaryDark: STATE.interactive.hover,      // Dark gray
+  success: MONO[0],                          // Black (use icons for semantics)
+  warning: MONO[300],                        // Dark gray
+  error: MONO[0],                            // Black (use icons for semantics)
+  destructive: MONO[0],                      // Black
+  gold: MONO[0],                             // Black (no gold accent)
 
-  // Text hierarchy (derived from titanium scale)
-  textPrimary: TITANIUM[900],
-  textSecondary: TITANIUM[500],
-  textMuted: TITANIUM[400], // WCAG AA compliant on white
-  textDisabled: TITANIUM[300],
+  // Text hierarchy (from SEMANTIC.light)
+  textPrimary: SEMANTIC.light.textPrimary,   // Pure black
+  textSecondary: SEMANTIC.light.textSecondary,
+  textMuted: SEMANTIC.light.textMuted,
+  textDisabled: SEMANTIC.light.textDisabled,
 
-  // Card suits
-  suitRed: ACTION.error,
-  suitBlack: TITANIUM[900],
+  // Card suits - monochrome contrast
+  suitRed: MONO[500],                        // Mid-gray (distinguishable but muted)
+  suitBlack: MONO[0],                        // Pure black
 
-  // Glass (platform-specific - not in tokens)
-  glassLight: 'rgba(255, 255, 255, 0.75)',
-  glassDark: 'rgba(28, 28, 30, 0.8)',
+  // Glass (monochrome)
+  glassLight: EDGE.light.highlight,
+  glassDark: EDGE.light.shadow,
 } as const;
 
 /**
- * OLED-optimized dark color palette
- * Uses pure black (#000000) for maximum AMOLED battery savings
- * Inverts the titanium scale for text/surface contrast
+ * Dark color palette - Monochrome redesign (US-262)
+ *
+ * OLED-optimized pure black theme. Maximum battery savings on AMOLED.
+ * States differentiated by contrast and icons, not hue.
  */
 export const DARK_COLORS = {
-  // OLED-optimized backgrounds - pure black saves battery
-  background: '#000000',
-  surface: TITANIUM[900], // Elevated surfaces use dark gray
-  surfaceElevated: TITANIUM[800], // Higher elevation = lighter
-  border: TITANIUM[700],
+  // Monochrome backgrounds (from SEMANTIC.dark)
+  background: SEMANTIC.dark.background,      // Pure black - OLED savings
+  surface: SEMANTIC.dark.surface,            // Near-black cards
+  surfaceElevated: SEMANTIC.dark.surfaceElevated,
+  border: SEMANTIC.dark.border,
 
-  // Action Colors - same as light (brand colors)
-  primary: ACTION.indigo,
-  primaryDark: ACTION.indigoHover,
-  success: ACTION.success,
-  warning: ACTION.warning,
-  error: ACTION.error,
-  destructive: ACTION.error,
-  gold: '#FFCC00',
+  // Monochrome interactive states (inverted for dark mode)
+  primary: MONO[1000],                       // White on dark
+  primaryDark: MONO[800],                    // Light gray
+  success: MONO[1000],                       // White (use icons for semantics)
+  warning: MONO[700],                        // Light gray
+  error: MONO[1000],                         // White (use icons for semantics)
+  destructive: MONO[1000],                   // White
+  gold: MONO[1000],                          // White (no gold accent)
 
-  // Text hierarchy - inverted from light mode
-  textPrimary: TITANIUM[50], // Near-white for maximum contrast
-  textSecondary: TITANIUM[400],
-  textMuted: TITANIUM[500], // WCAG AA compliant on dark
-  textDisabled: TITANIUM[600],
+  // Text hierarchy (from SEMANTIC.dark)
+  textPrimary: SEMANTIC.dark.textPrimary,    // Pure white
+  textSecondary: SEMANTIC.dark.textSecondary,
+  textMuted: SEMANTIC.dark.textMuted,
+  textDisabled: SEMANTIC.dark.textDisabled,
 
-  // Card suits - adjusted for dark backgrounds
-  suitRed: '#FF6B6B', // Slightly brighter red for dark mode
-  suitBlack: TITANIUM[200], // Light for visibility on dark
+  // Card suits - monochrome contrast on dark
+  suitRed: MONO[500],                        // Mid-gray (distinguishable but muted)
+  suitBlack: MONO[1000],                     // Pure white on dark
 
-  // Glass - darker, higher contrast glass effect
-  glassLight: `rgba(255, 255, 255, ${OPACITY.xs})`,
-  glassDark: `rgba(0, 0, 0, ${OPACITY_SEMANTIC.tutorial})`,
+  // Glass (monochrome)
+  glassLight: EDGE.dark.highlight,
+  glassDark: EDGE.dark.shadow,
 } as const;
 
 /** Color scheme type for theming */
@@ -255,40 +261,42 @@ export const ELEVATION_STYLES = {
 } as const;
 
 /**
- * Glow effects for focus/highlight states from design tokens
- * Used for focus rings, win animations, and interactive highlights
+ * Glow effects - Monochrome redesign (US-262)
+ *
+ * All glows use white for dark mode, differentiated by intensity/radius.
+ * Used for focus rings, win animations, and interactive highlights.
  */
 export const GLOW_STYLES = {
-  /** Brand indigo glow - focused states */
+  /** Primary glow - focused states */
   indigo: {
-    shadowColor: GLOW.indigo.color,
+    shadowColor: MONO[1000],               // White glow
     shadowOffset: { width: 0, height: 0 },
-    shadowRadius: GLOW.indigo.blur,
-    shadowOpacity: GLOW.indigo.opacity,
+    shadowRadius: 20,
+    shadowOpacity: 0.4,
     elevation: 6,
   },
-  /** Success/win glow */
+  /** Success/win glow - medium intensity */
   success: {
-    shadowColor: GLOW.success.color,
+    shadowColor: MONO[1000],
     shadowOffset: { width: 0, height: 0 },
-    shadowRadius: GLOW.success.blur,
-    shadowOpacity: GLOW.success.opacity,
+    shadowRadius: 20,
+    shadowOpacity: 0.35,
     elevation: 6,
   },
-  /** Error/loss glow */
+  /** Error/loss glow - subtle */
   error: {
-    shadowColor: GLOW.error.color,
+    shadowColor: MONO[1000],
     shadowOffset: { width: 0, height: 0 },
-    shadowRadius: GLOW.error.blur,
-    shadowOpacity: GLOW.error.opacity,
-    elevation: 6,
+    shadowRadius: 16,
+    shadowOpacity: 0.25,
+    elevation: 4,
   },
-  /** Gold/jackpot glow */
+  /** Win/jackpot glow - high intensity */
   gold: {
-    shadowColor: GLOW.gold.color,
+    shadowColor: MONO[1000],
     shadowOffset: { width: 0, height: 0 },
-    shadowRadius: GLOW.gold.blur,
-    shadowOpacity: GLOW.gold.opacity,
+    shadowRadius: 30,
+    shadowOpacity: 0.5,
     elevation: 8,
   },
 } as const;
@@ -501,29 +509,40 @@ export const ANIMATION = {
 // Re-export spring configs for components that need physics-based animations
 export { SPRING, STAGGER, CHIP_VALUES };
 
+/**
+ * Game accent colors - Monochrome redesign (US-262)
+ *
+ * All games use the same monochrome accent. Game identity
+ * is established via patterns/textures (GAME_PATTERN), not color.
+ */
 export const GAME_COLORS = {
-  hi_lo: GAME.hiLo.accent,
-  blackjack: GAME.blackjack.accent,
-  roulette: GAME.roulette.accent,
-  craps: GAME.craps.accent,
-  baccarat: GAME.baccarat.accent,
-  casino_war: GAME.casinoWar.accent,
-  video_poker: GAME.videoPoker.accent,
-  sic_bo: GAME.sicBo.accent,
-  three_card_poker: GAME.threeCard.accent,
-  ultimate_texas_holdem: GAME.ultimateHoldem.accent,
+  hi_lo: MONO[300],
+  blackjack: MONO[300],
+  roulette: MONO[300],
+  craps: MONO[300],
+  baccarat: MONO[300],
+  casino_war: MONO[300],
+  video_poker: MONO[300],
+  sic_bo: MONO[300],
+  three_card_poker: MONO[300],
+  ultimate_texas_holdem: MONO[300],
 } as const;
 
+/**
+ * Game-specific detail colors - Monochrome redesign (US-262)
+ *
+ * Uses contrast levels instead of hue to differentiate game elements.
+ */
 export const GAME_DETAIL_COLORS = {
   roulette: {
-    red: ACTION.error,
-    black: TITANIUM[900],
-    green: ACTION.success,
+    red: MONO[400],              // Distinguishable mid-gray
+    black: MONO[0],              // Pure black
+    green: MONO[600],            // Lighter gray
   },
   craps: {
-    pass: ACTION.success,
-    dontPass: ACTION.error,
-    field: '#FFCC00',
+    pass: MONO[0],               // Black
+    dontPass: MONO[400],         // Mid-gray
+    field: MONO[300],            // Dark gray
   },
 } as const;
 
@@ -575,44 +594,50 @@ export const GAME_LAYOUT_STYLES = StyleSheet.create({
 });
 
 /**
- * Message styles - status text shown during gameplay
+ * Message styles - Monochrome redesign (US-262)
+ *
+ * Status text uses contrast and weight instead of color.
+ * Win = high contrast (black/white), Loss = muted gray.
  */
 export const MESSAGE_STYLES = StyleSheet.create({
   /** Base message style */
   message: {
-    color: TITANIUM[500],
+    color: MONO[500],
     fontSize: 20,
     fontWeight: '600' as const,
     textAlign: 'center',
   },
-  /** Win state */
+  /** Win state - high contrast, bold */
   messageWin: {
-    color: ACTION.success,
+    color: MONO[0],            // Black in light mode (inverted by theme)
+    fontWeight: '700' as const,
   },
-  /** Loss state */
+  /** Loss state - muted */
   messageLoss: {
-    color: ACTION.error,
+    color: MONO[400],
+    fontWeight: '400' as const,
   },
-  /** Push/tie state */
+  /** Push/tie state - neutral */
   messagePush: {
-    color: ACTION.warning,
+    color: MONO[500],
   },
-  /** Error state */
+  /** Error state - high contrast */
   messageError: {
-    color: ACTION.error,
+    color: MONO[0],
   },
-  /** Blackjack/special win */
+  /** Blackjack/special win - bold emphasis */
   messageBlackjack: {
-    color: '#FFCC00',
+    color: MONO[0],
+    fontWeight: '800' as const,
   },
   /** Tie (Baccarat style) */
   messageTie: {
-    color: '#FFCC00',
+    color: MONO[500],
   },
 });
 
 /**
- * Bet display styles
+ * Bet display styles - Monochrome redesign (US-262)
  */
 export const BET_STYLES = StyleSheet.create({
   /** Container for bet amount display */
@@ -621,22 +646,22 @@ export const BET_STYLES = StyleSheet.create({
   },
   /** "Bet" or "Total Bet" label */
   betLabel: {
-    color: TITANIUM[400],
+    color: MONO[500],
     fontSize: 12,
     fontWeight: '400' as const,
     lineHeight: 16,
   },
-  /** Bet amount in gold */
+  /** Bet amount - high contrast */
   betAmount: {
-    color: '#FFCC00',
+    color: MONO[0],              // Black (or white in dark mode via theme)
     fontSize: 24,
     fontWeight: '600' as const,
   },
-  /** Win amount display */
+  /** Win amount display - bold emphasis */
   winAmount: {
-    color: ACTION.success,
+    color: MONO[0],
     fontSize: 24,
-    fontWeight: '600' as const,
+    fontWeight: '700' as const,
     textAlign: 'center',
     marginBottom: SPACING_SEMANTIC.md,
   },
@@ -663,7 +688,7 @@ export const ACTION_STYLES = StyleSheet.create({
 });
 
 /**
- * Drawer/modal styles - for advanced bet panels
+ * Drawer/modal styles - Monochrome redesign (US-262)
  */
 export const DRAWER_STYLES = StyleSheet.create({
   /** Modal overlay with semi-transparent background */
@@ -674,7 +699,7 @@ export const DRAWER_STYLES = StyleSheet.create({
   },
   /** Drawer container */
   drawer: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: MONO[1000],             // Pure white
     borderTopLeftRadius: TOKEN_RADIUS['2xl'],
     borderTopRightRadius: TOKEN_RADIUS['2xl'],
     padding: SPACING_SEMANTIC.md,
@@ -694,19 +719,19 @@ export const DRAWER_STYLES = StyleSheet.create({
     paddingHorizontal: SPACING_SEMANTIC.md,
     borderRadius: TOKEN_RADIUS.full,
     borderWidth: 1,
-    borderColor: TITANIUM[200],
-    backgroundColor: '#FFFFFF',
+    borderColor: MONO[700],                  // Light border
+    backgroundColor: MONO[1000],
   },
   /** Drawer handle text */
   drawerHandleText: {
-    color: TITANIUM[500],
+    color: MONO[500],
     fontSize: 14,
     fontWeight: '400' as const,
     lineHeight: 20,
   },
   /** Section title in drawer */
   sectionTitle: {
-    color: TITANIUM[500],
+    color: MONO[500],
     fontSize: 10,
     fontWeight: '700' as const,
     letterSpacing: 1.5,
@@ -723,13 +748,13 @@ export const DRAWER_STYLES = StyleSheet.create({
   advancedBet: {
     flex: 1,
     paddingVertical: SPACING_SEMANTIC.sm,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: MONO[1000],
     borderRadius: TOKEN_RADIUS.lg,
     alignItems: 'center',
   },
   /** Advanced bet text */
   advancedBetText: {
-    color: TITANIUM[900],
+    color: MONO[0],                          // Black text
     fontSize: 10,
     fontWeight: '700' as const,
     letterSpacing: 1.5,
@@ -738,12 +763,12 @@ export const DRAWER_STYLES = StyleSheet.create({
 });
 
 /**
- * Hand label styles - for card games (Blackjack, Baccarat)
+ * Hand label styles - Monochrome redesign (US-262)
  */
 export const HAND_STYLES = StyleSheet.create({
   /** Hand label (e.g., "Dealer", "Player") */
   handLabel: {
-    color: TITANIUM[500],
+    color: MONO[500],
     fontSize: 10,
     fontWeight: '700' as const,
     letterSpacing: 1.5,
@@ -752,7 +777,7 @@ export const HAND_STYLES = StyleSheet.create({
   },
   /** Hand total display */
   handTotal: {
-    color: TITANIUM[900],
+    color: MONO[0],                          // Black (or white via theme)
     fontSize: 24,
     fontWeight: '600' as const,
   },
@@ -766,7 +791,7 @@ export const HAND_STYLES = StyleSheet.create({
 });
 
 /**
- * Common interactive element styles
+ * Common interactive element styles - Monochrome redesign (US-262)
  */
 export const INTERACTIVE_STYLES = StyleSheet.create({
   /** Pressed state opacity */
@@ -781,12 +806,12 @@ export const INTERACTIVE_STYLES = StyleSheet.create({
   moreBetsButton: {
     paddingVertical: SPACING_SEMANTIC.xs,
     paddingHorizontal: SPACING_SEMANTIC.sm,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: MONO[1000],
     borderRadius: TOKEN_RADIUS.lg,
   },
   /** More bets button text */
   moreBetsText: {
-    color: TITANIUM[500],
+    color: MONO[500],
     fontSize: 14,
     fontWeight: '400' as const,
     lineHeight: 20,
@@ -805,46 +830,47 @@ export const CHIP_AREA_STYLES = StyleSheet.create({
 });
 
 /**
- * Dark mode ambient glow effects
- * Applied to primary action buttons in dark mode for visual emphasis
- * Uses box-shadow to create a soft halo around interactive elements
+ * Dark mode ambient glow effects - Monochrome redesign (US-262)
+ *
+ * All glows use white (#FFFFFF) for monochrome consistency.
+ * Differentiation is via opacity and radius, not color.
  */
 export const DARK_MODE_GLOW = {
-  /** Primary action button glow (indigo) */
+  /** Primary action button glow - strong white */
   primary: {
-    shadowColor: ACTION.indigo,
+    shadowColor: MONO[1000],
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
+    shadowOpacity: 0.4,
     shadowRadius: 12,
     elevation: 8,
   },
-  /** Success action glow (green) */
+  /** Success action glow - medium white */
   success: {
-    shadowColor: ACTION.success,
+    shadowColor: MONO[1000],
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
+    shadowOpacity: 0.35,
     shadowRadius: 10,
     elevation: 6,
   },
-  /** Gold/highlight glow (for wins, special states) */
+  /** Win/highlight glow - intense white */
   gold: {
-    shadowColor: '#FFCC00',
+    shadowColor: MONO[1000],
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.5,
     shadowRadius: 14,
     elevation: 8,
   },
-  /** Error/destructive action glow */
+  /** Error/destructive action glow - subtle white */
   error: {
-    shadowColor: ACTION.error,
+    shadowColor: MONO[1000],
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.4,
+    shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 4,
   },
   /** Subtle glow for less important interactive elements */
   subtle: {
-    shadowColor: '#FFFFFF',
+    shadowColor: MONO[1000],
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.1,
     shadowRadius: 6,
