@@ -611,3 +611,33 @@ Categories by count:
   - Test results locations
   - Failure investigation procedure
 - Blockers: None. YAML syntax validated. All feedback loops pass.
+
+### 2026-01-09 - US-244: Audit mobile noble cryptography performance
+- Files: mobile/src/services/__tests__/crypto-perf.test.ts (new), docs/RUNBOOK.md
+- Decisions:
+  - Created comprehensive benchmark test file with 14 tests covering:
+    - PBKDF2 key derivation (single, multi-iteration comparison)
+    - XChaCha20-Poly1305 encryption/decryption by payload size
+    - Ed25519 key generation, public key derivation, signing, verification
+    - Full vault creation/unlock flow breakdown
+    - Signature hot path throughput
+  - Actual PBKDF2 iterations: 250k (not 500k as noted in PRD, nor 310k in old RUNBOOK)
+  - Node.js benchmark results:
+    - PBKDF2 (250k): 500-600ms per derivation
+    - XChaCha20-Poly1305: <1ms (instant)
+    - Ed25519 signing: 0.28ms avg, 3500+ sigs/sec throughput
+    - Ed25519 verification: 1.1ms avg
+  - Vault creation/unlock dominated by PBKDF2 (~99.8% of time)
+  - Fixed RUNBOOK.md password min length: 10→12 to match code
+  - Fixed RUNBOOK.md PBKDF2 iterations: 310k→250k to match code
+  - Added RUNBOOK.md §6.6.1 "Cryptography Performance" with:
+    - Configuration table
+    - Node.js benchmark results
+    - Expected mobile performance by device class
+    - UX impact analysis
+    - Recommendations
+- Recommendations:
+  - 250k iterations sufficient for security vs UX trade-off
+  - Consider progress indicators during vault unlock
+  - No Ed25519 optimization needed (already >100 sigs/sec)
+- Blockers: None. All tests pass.

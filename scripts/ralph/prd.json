@@ -250,8 +250,8 @@
         "Document performance characteristics",
         "Recommend optimizations if needed"
       ],
-      "passes": false,
-      "notes": "500k PBKDF2 iterations, no benchmarks documented."
+      "passes": true,
+      "notes": "Created crypto-perf.test.ts with comprehensive benchmarks. PBKDF2 (250k iterations): 500-600ms in Node.js, 200-800ms estimated on mobile. Ed25519 signing: 0.3ms avg, 3500+ sigs/sec throughput. XChaCha20-Poly1305: <1ms. Documented in RUNBOOK.md §6.6.1 with device-class performance tables and recommendations."
     },
     {
       "id": "US-218",

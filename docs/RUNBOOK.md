@@ -1192,7 +1192,7 @@ Approve testnet launch only if:
 ### 6.4 Password Vault Fallback (All Devices)
 
 - [ ] Create password vault with recovery key
-- [ ] Enforce password min length 10 (PBKDF2-SHA256, 310k iterations)
+- [ ] Enforce password min length 12 (PBKDF2-SHA256, 250k iterations)
 - [ ] Export recovery key; store out-of-band
 - [ ] Lock app, relaunch, unlock with password
 - [ ] Import recovery key on second device; confirm public key matches
@@ -1210,6 +1210,61 @@ Approve testnet launch only if:
 - No crashes during vault create/unlock/import
 - Signing fails gracefully when vault locked
 - Recovery flow restores correct public key
+
+### 6.6.1 Cryptography Performance (US-244)
+
+Mobile vault operations use `@noble/curves` and `@noble/hashes` for pure JavaScript cryptographic operations.
+
+#### Configuration
+
+| Parameter | Value | Purpose |
+|-----------|-------|---------|
+| PBKDF2 iterations | 250,000 | Password key derivation |
+| PBKDF2 hash | SHA-256 | Hash function |
+| Salt size | 32 bytes | KDF salt |
+| Cipher | XChaCha20-Poly1305 | Private key encryption |
+| Signing | Ed25519 | Transaction authentication |
+
+#### Performance Benchmarks (Node.js)
+
+| Operation | Time | Notes |
+|-----------|------|-------|
+| PBKDF2 (250k) | 500-600ms | Dominates vault operations |
+| XChaCha20 encrypt | <1ms | Instant |
+| XChaCha20 decrypt | <1ms | Instant |
+| Ed25519 key gen | <1ms | Instant |
+| Ed25519 sign | 0.3ms | Hot path during gameplay |
+| Ed25519 verify | 1.1ms | Not used in mobile |
+
+#### Expected Mobile Performance
+
+| Device Class | PBKDF2 (250k) | Ed25519 Sign |
+|--------------|---------------|--------------|
+| iPhone 14/15 | 150-300ms | 0.3-1.5ms |
+| iPhone 11/12 | 200-400ms | 0.5-2.0ms |
+| Mid-range Android (2022+) | 200-500ms | 0.5-3.0ms |
+| Budget Android (2020+) | 400-800ms | 1.0-5.0ms |
+
+#### Performance Impact on UX
+
+- **Vault creation**: 200-800ms one-time cost (acceptable with loading indicator)
+- **Vault unlock**: 200-800ms one-time cost (acceptable with loading indicator)
+- **Signing per bet**: <5ms even on budget devices (imperceptible)
+- **Signature throughput**: >100 sigs/sec on all devices (supports rapid betting)
+
+#### Recommendations
+
+1. **PBKDF2 iterations (250k)**: Keep as-is for security. Consider reducing to 100k only if budget device UX is unacceptable.
+2. **Progress indicators**: Show loading UI during vault create/unlock (PBKDF2-bound).
+3. **Background execution**: Consider moving PBKDF2 to background thread if UI blocking is an issue.
+4. **No Ed25519 optimization needed**: Sub-millisecond signing supports all game flows.
+
+#### Running Benchmarks
+
+```bash
+cd mobile
+pnpm test -- --testPathPattern=crypto-perf --verbose
+```
 
 ### 6.7 Automated Integration Tests (US-259)
 
