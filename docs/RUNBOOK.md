@@ -952,6 +952,18 @@ This runs the `test_unclean_shutdown` unit test which validates:
 
 #### 5.6.2 Gateway Restart Recovery (US-018)
 
+**Automated Verification:**
+```bash
+# Run the gateway recovery drill script
+./scripts/gateway-recovery-drill.sh
+```
+
+This runs the session expiration and health check tests which validate:
+- SESSION_EXPIRED notification sent before WebSocket close
+- Session cleanup removes sessions from tracking maps
+- New connections work after sessions are destroyed
+- Health endpoints return correct status during drain
+
 **Recovery Characteristics:**
 | Metric | Value |
 |--------|-------|
@@ -959,6 +971,12 @@ This runs the `test_unclean_shutdown` unit test which validates:
 | Session state | Lost (clients must re-register) |
 | Reconnection time | < 1 second (stateless) |
 | Manual intervention | None |
+| Drain timeout | 30 seconds (waits for active games) |
+
+**Graceful Shutdown Behavior:**
+- Drain mode: Rejects new connections (HTTP 503, WS 1013)
+- Active games: Waits up to `GATEWAY_DRAIN_TIMEOUT_MS` (30s default)
+- Final close: SESSION_EXPIRED sent, then WS close code 1001
 
 **Manual Recovery Procedure:**
 1. Stop gateway:

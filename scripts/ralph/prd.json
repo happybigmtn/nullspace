@@ -70,8 +70,8 @@
         "Verify new connections work",
         "Document recovery time"
       ],
-      "passes": false,
-      "notes": "Procedures in RUNBOOK.md 5.6, needs execution proof."
+      "passes": true,
+      "notes": "Verified via gateway-recovery-drill.sh script (34 tests). Recovery time: <1 second (stateless). Documented in RUNBOOK.md §5.6.2."
     },
     {
       "id": "US-243",

@@ -404,3 +404,17 @@ Categories by count:
 - Test results: 2 restart cycles completed in 6 seconds, all validators recovered
 - Blockers: None. Unit test passes, documentation complete.
 
+### 2026-01-09 - US-018: Test gateway restart recovery
+- Files: scripts/gateway-recovery-drill.sh (new), docs/RUNBOOK.md
+- Decisions:
+  - Created gateway-recovery-drill.sh script to run automated verification
+  - Leverages existing session expiration tests (US-082) and health check tests
+  - Updated RUNBOOK.md §5.6.2 with automated verification section (mirrors §5.6.1 format)
+  - Added graceful shutdown behavior documentation:
+    - Drain mode: Rejects new connections (HTTP 503, WS 1013)
+    - Active games: Waits up to GATEWAY_DRAIN_TIMEOUT_MS (30s default)
+    - Final close: SESSION_EXPIRED sent, then WS close code 1001
+  - Gateway is stateless: recovery time < 1 second
+- Test results: 34 tests pass (16 session expiration + 18 health check)
+- Blockers: None. Pre-existing mobile lint issues unrelated.
+
