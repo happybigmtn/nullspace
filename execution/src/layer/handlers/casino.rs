@@ -2,9 +2,19 @@ use super::casino_error_vec;
 use super::super::*;
 use commonware_cryptography::{sha256::Sha256, Hasher};
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt::Write;
 
 const SECS_PER_VIEW: u64 = 3;
 const MS_PER_VIEW: u64 = SECS_PER_VIEW * 1_000;
+
+fn payload_prefix_hex(payload: &[u8], max_bytes: usize) -> String {
+    let len = payload.len().min(max_bytes);
+    let mut out = String::with_capacity(len.saturating_mul(2));
+    for byte in &payload[..len] {
+        let _ = write!(out, "{:02x}", byte);
+    }
+    out
+}
 
 fn settle_freeroll_credits(
     player: &mut nullspace_types::casino::Player,
@@ -769,12 +779,14 @@ impl<'a, S: State> Layer<'a, S> {
                         "Deck exhausted, no more cards available",
                     ),
                 };
+                let payload_prefix = payload_prefix_hex(payload, 12);
                 tracing::warn!(
                     player = ?public,
                     session_id = session_id,
                     game_type = ?session.game_type,
                     payload_len = payload_len,
                     payload_action = payload_action,
+                    payload_prefix = %payload_prefix,
                     ?err,
                     error_code = error_code,
                     "casino move rejected"

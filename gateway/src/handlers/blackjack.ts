@@ -15,7 +15,7 @@ import { GameType } from '../codec/index.js';
 import { generateSessionId } from '../codec/transactions.js';
 import { ErrorCodes, createError } from '../types/errors.js';
 import { BlackjackMove as SharedBlackjackMove } from '@nullspace/constants';
-import { encodeGameMovePayload } from '@nullspace/protocol';
+import { encodeGameMovePayload, withVersionHeader } from '@nullspace/protocol';
 import type { BlackjackDealRequest, OutboundMessage } from '@nullspace/protocol/mobile';
 
 /**
@@ -82,11 +82,12 @@ export class BlackjackHandler extends GameHandler {
     }
 
     // Step 2: Send Deal move to actually deal cards (atomic deal when side bet is set)
-    let dealPayload = new Uint8Array([BlackjackMove.Deal]);
+    let dealPayload = encodeGameMovePayload({ game: 'blackjack', move: 'deal' });
     if (sideBet21Plus3 > 0) {
-      dealPayload = new Uint8Array(9);
-      dealPayload[0] = 7; // atomic deal opcode (shares value with Surrender)
-      new DataView(dealPayload.buffer).setBigUint64(1, BigInt(sideBet21Plus3), false);
+      const atomicDeal = new Uint8Array(9);
+      atomicDeal[0] = 7; // atomic deal opcode (shares value with Surrender)
+      new DataView(atomicDeal.buffer).setBigUint64(1, BigInt(sideBet21Plus3), false);
+      dealPayload = withVersionHeader(atomicDeal);
     }
     const dealResult = await this.makeMove(ctx, dealPayload);
 
@@ -125,7 +126,7 @@ export class BlackjackHandler extends GameHandler {
     // Check if we got a 'game_move' response (not 'game_result')
     if (standResult.response?.type === 'game_move') {
       // Send Reveal to resolve the hand
-      const revealPayload = new Uint8Array([BlackjackMove.Reveal]);
+      const revealPayload = withVersionHeader(new Uint8Array([BlackjackMove.Reveal]));
       return this.makeMove(ctx, revealPayload);
     }
 
@@ -142,7 +143,7 @@ export class BlackjackHandler extends GameHandler {
 
     // Double usually ends the hand - may need reveal
     if (doubleResult.response?.type === 'game_move') {
-      const revealPayload = new Uint8Array([BlackjackMove.Reveal]);
+      const revealPayload = withVersionHeader(new Uint8Array([BlackjackMove.Reveal]));
       return this.makeMove(ctx, revealPayload);
     }
 

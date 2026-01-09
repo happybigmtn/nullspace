@@ -15,7 +15,8 @@ import { UpdatesClient } from '../backend/updates.js';
 import type { SubmitClient } from '../backend/http.js';
 import type { NonceManager } from '../session/nonce.js';
 import { ErrorCodes, createError, type ErrorResponse } from '../types/errors.js';
-import { logDebug, logWarn } from '../logger.js';
+import { logDebug, logInfo, logWarn } from '../logger.js';
+import { stripVersionHeader } from '@nullspace/protocol';
 
 /** Timeout for waiting for game events (ms) */
 const GAME_EVENT_TIMEOUT = (() => {
@@ -27,6 +28,15 @@ const GAME_EVENT_TIMEOUT = (() => {
   // Match mobile test timeout (60s) to prevent premature timeouts during slow backend processing
   return process.env.NODE_ENV === 'production' ? 30000 : 60000;
 })();
+
+const LOG_MOVE_PAYLOADS = ['1', 'true', 'yes', 'on'].includes(
+  String(process.env.GATEWAY_LOG_MOVE_PAYLOADS ?? '').toLowerCase()
+);
+
+const payloadPreviewHex = (payload: Uint8Array, maxBytes = 12): string => {
+  if (payload.length === 0) return '';
+  return Buffer.from(payload.slice(0, Math.min(maxBytes, payload.length))).toString('hex');
+};
 
 /**
  * Result of handling a message
@@ -136,6 +146,11 @@ export abstract class GameHandler {
           };
         }
 
+        logWarn('[GameHandler] No game started event received; using local session id', {
+          sessionId: gameSessionId.toString(),
+          gameType: this.gameType,
+        });
+
         // Fallback if no event received (backend may be slow)
         await this.ensureSessionUpdatesClient(session, backendUrl, session.activeGameId!, ctx.origin);
         session.lastGameBet = bet;
@@ -190,6 +205,11 @@ export abstract class GameHandler {
               };
             }
 
+            logWarn('[GameHandler] No game started event received after retry; using local session id', {
+              sessionId: gameSessionId.toString(),
+              gameType: this.gameType,
+            });
+
             await this.ensureSessionUpdatesClient(session, backendUrl, session.activeGameId!, ctx.origin);
             session.lastGameBet = bet;
             session.lastGameStartChips = session.balance;
@@ -240,8 +260,53 @@ export abstract class GameHandler {
     const gameSessionId = session.activeGameId;
     logDebug(`[GameHandler] Making move with sessionId=${gameSessionId} (hex=${gameSessionId.toString(16)})`);
 
+    // Rust backend doesn't yet support protocol version headers (US-149), so strip before submit.
+    let strippedPayload: Uint8Array;
+    let protocolVersion: number;
+    try {
+      const stripped = stripVersionHeader(payload);
+      strippedPayload = stripped.payload;
+      protocolVersion = stripped.version;
+    } catch (err) {
+      logWarn('[GameHandler] Invalid protocol payload (missing/unsupported version header)', {
+        sessionId: gameSessionId.toString(),
+        gameType: this.gameType,
+        payloadLen: payload.length,
+        payloadPreview: payloadPreviewHex(payload),
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return {
+        success: false,
+        error: createError(ErrorCodes.INVALID_MESSAGE, 'Unsupported protocol version'),
+      };
+    }
+
+    if (strippedPayload.length === 0) {
+      logWarn('[GameHandler] Empty move payload after stripping version header', {
+        sessionId: gameSessionId.toString(),
+        gameType: this.gameType,
+        payloadLen: payload.length,
+        protocolVersion,
+      });
+      return {
+        success: false,
+        error: createError(ErrorCodes.INVALID_MESSAGE, 'Move payload missing opcode'),
+      };
+    }
+
+    if (LOG_MOVE_PAYLOADS) {
+      logInfo('[GameHandler] Move payload', {
+        sessionId: gameSessionId.toString(),
+        gameType: this.gameType,
+        protocolVersion,
+        opcode: strippedPayload[0],
+        payloadLen: strippedPayload.length,
+        payloadPreview: payloadPreviewHex(strippedPayload),
+      });
+    }
+
     return nonceManager.withLock(session.publicKeyHex, async (nonce) => {
-      const instruction = encodeCasinoGameMove(gameSessionId, payload);
+      const instruction = encodeCasinoGameMove(gameSessionId, strippedPayload);
       const tx = buildTransaction(nonce, instruction, session.privateKey);
       const submission = wrapSubmission(tx);
 
@@ -272,6 +337,14 @@ export abstract class GameHandler {
             } else if (gameEvent.balanceSnapshot) {
               session.balance = gameEvent.balanceSnapshot.chips;
             }
+            if (LOG_MOVE_PAYLOADS) {
+              logInfo('[GameHandler] Game completed event received', {
+                sessionId: gameEvent.sessionId.toString(),
+                gameType: gameEvent.gameType ?? this.gameType,
+                payout: gameEvent.payout?.toString(),
+                finalChips: gameEvent.finalChips?.toString(),
+              });
+            }
             return {
               success: true,
               response: this.buildGameCompletedResponse(gameEvent, session),
@@ -279,6 +352,13 @@ export abstract class GameHandler {
           } else if (gameEvent.type === 'moved') {
             if (gameEvent.balanceSnapshot) {
               session.balance = gameEvent.balanceSnapshot.chips;
+            }
+            if (LOG_MOVE_PAYLOADS) {
+              logInfo('[GameHandler] Game move event received', {
+                sessionId: gameEvent.sessionId.toString(),
+                gameType: session.gameType ?? this.gameType,
+                moveNumber: gameEvent.moveNumber,
+              });
             }
             return {
               success: true,
@@ -325,6 +405,14 @@ export abstract class GameHandler {
                 } else if (gameEvent.balanceSnapshot) {
                   session.balance = gameEvent.balanceSnapshot.chips;
                 }
+                if (LOG_MOVE_PAYLOADS) {
+                  logInfo('[GameHandler] Game completed event received', {
+                    sessionId: gameEvent.sessionId.toString(),
+                    gameType: gameEvent.gameType ?? this.gameType,
+                    payout: gameEvent.payout?.toString(),
+                    finalChips: gameEvent.finalChips?.toString(),
+                  });
+                }
                 return {
                   success: true,
                   response: this.buildGameCompletedResponse(gameEvent, session),
@@ -332,6 +420,13 @@ export abstract class GameHandler {
               } else if (gameEvent.type === 'moved') {
                 if (gameEvent.balanceSnapshot) {
                   session.balance = gameEvent.balanceSnapshot.chips;
+                }
+                if (LOG_MOVE_PAYLOADS) {
+                  logInfo('[GameHandler] Game move event received', {
+                    sessionId: gameEvent.sessionId.toString(),
+                    gameType: session.gameType ?? this.gameType,
+                    moveNumber: gameEvent.moveNumber,
+                  });
                 }
                 return {
                   success: true,
