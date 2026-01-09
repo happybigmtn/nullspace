@@ -648,6 +648,8 @@ curl http://<AUTH_IP>:4000/healthz
 curl http://<OPS_IP>:9020/healthz  # if running ops
 
 # Metrics (with auth)
+# All services accept both "Authorization: Bearer <TOKEN>" and "x-metrics-token: <TOKEN>"
+curl -H "x-metrics-token: <TOKEN>" http://<GATEWAY_IP>:9010/metrics
 curl -H "x-metrics-token: <TOKEN>" http://<INDEXER_IP>:8080/metrics/prometheus
 curl -H "x-metrics-token: <TOKEN>" http://<NODE_IP>:9100/metrics
 curl -H "x-metrics-token: <TOKEN>" http://<AUTH_IP>:4000/metrics/prometheus
@@ -854,8 +856,10 @@ curl https://gateway.nullspace.io/healthz
 # Metrics auth (should reject without token)
 curl https://gateway.nullspace.io/metrics  # Expected: 401
 
-# Metrics auth (should succeed with token)
+# Metrics auth (should succeed with token - either header works)
 curl -H "Authorization: Bearer $METRICS_AUTH_TOKEN" \
+  https://gateway.nullspace.io/metrics  # Expected: 200
+curl -H "x-metrics-token: $METRICS_AUTH_TOKEN" \
   https://gateway.nullspace.io/metrics  # Expected: 200
 
 # HTTP redirect

@@ -50,11 +50,15 @@ export const metrics = new MetricsStore();
 /**
  * Metrics authentication middleware
  *
- * Validates Bearer token from Authorization header against METRICS_AUTH_TOKEN env var.
- * Returns 401 if auth header is missing/invalid, 403 if token doesn't match.
+ * Validates token from Authorization header (Bearer) or x-metrics-token header
+ * against METRICS_AUTH_TOKEN env var. This provides parity with simulator/auth services.
+ * Returns 401 if no valid auth provided, 403 if token doesn't match.
+ *
+ * US-252: Accept x-metrics-token header for parity with simulator/auth
  */
 export function requireMetricsAuth(req: IncomingMessage, res: ServerResponse): boolean {
   const authHeader = req.headers.authorization;
+  const xMetricsToken = req.headers['x-metrics-token'];
   const expectedToken = process.env.METRICS_AUTH_TOKEN;
 
   // If no token is configured, reject all requests in production
@@ -77,25 +81,23 @@ export function requireMetricsAuth(req: IncomingMessage, res: ServerResponse): b
     return false;
   }
 
-  // Validate Authorization header format
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    res.statusCode = 401;
-    res.setHeader('Content-Type', 'application/json');
-    res.setHeader('WWW-Authenticate', 'Bearer realm="metrics"');
-    res.end(JSON.stringify({ error: 'Missing or invalid authorization header. Use Bearer token.' }));
-    return false;
+  // Extract Bearer token if present
+  const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
+
+  // Extract x-metrics-token if present (string only, not array)
+  const headerToken = typeof xMetricsToken === 'string' ? xMetricsToken : null;
+
+  // Check if either token matches using timing-safe comparison (US-139)
+  if (timingSafeStringEqual(bearerToken, expectedToken) || timingSafeStringEqual(headerToken, expectedToken)) {
+    return true;
   }
 
-  // Extract and validate token using timing-safe comparison (US-139)
-  const token = authHeader.slice(7); // Remove 'Bearer ' prefix
-  if (!timingSafeStringEqual(token, expectedToken)) {
-    res.statusCode = 403;
-    res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify({ error: 'Invalid metrics token' }));
-    return false;
-  }
-
-  return true;
+  // No valid authentication provided
+  res.statusCode = 401;
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('WWW-Authenticate', 'Bearer realm="metrics"');
+  res.end(JSON.stringify({ error: 'Missing or invalid authorization. Use Bearer token or x-metrics-token header.' }));
+  return false;
 }
 
 /**

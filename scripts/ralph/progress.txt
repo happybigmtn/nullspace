@@ -96,3 +96,14 @@ Categories by count:
   - Added new section §4.12 to RUNBOOK.md documenting billing configuration
 - Tests: 20 unit tests covering isBillingEnabled, parseStripeTierMap, and validateBillingConfig
 - Blockers: None. Backward compatible - existing deployments with billing continue to work unchanged.
+
+### 2026-01-08 - US-252: Accept x-metrics-token for gateway metrics (parity with simulator/auth)
+- Files: gateway/src/metrics/index.ts, gateway/tests/unit/metrics-auth.test.ts, docs/RUNBOOK.md
+- Decisions:
+  - Modified requireMetricsAuth() to check both Authorization: Bearer and x-metrics-token headers
+  - Simplified auth logic: check both tokens first, then reject only if neither matches
+  - Uses timing-safe comparison for both headers (consistent with US-139)
+  - Error message updated to mention both auth methods
+- Tests: 18 unit tests covering Bearer auth, x-metrics-token auth, parity scenarios, dev/production modes
+- Docs: Updated RUNBOOK.md §5.2 (added gateway metrics + header comment) and §7.6 (added x-metrics-token example)
+- Blockers: None. Pre-existing mobile lint/test issues unrelated.

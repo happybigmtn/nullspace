@@ -684,8 +684,8 @@
         "Update observability docs to note accepted headers",
         "Add a unit test for the alternate header"
       ],
-      "passes": false,
-      "notes": "Simulator/auth accept Bearer or x-metrics-token; gateway currently only accepts Bearer."
+      "passes": true,
+      "notes": "Gateway now accepts both Authorization: Bearer and x-metrics-token headers for metrics auth. 18 unit tests added. Docs updated in RUNBOOK.md §5.2 and §7.6."
     },
     {
       "id": "US-253",
