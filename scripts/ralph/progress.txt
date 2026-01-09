@@ -523,3 +523,20 @@ Categories by count:
   - Created lib/utils.ts with cn() classname helper (was missing, causing build failure)
   - Fixed ui/index.ts export: GameSkeleton → GameCardSkeleton (correct export name)
 - Blockers: None. Build passes, pre-existing typecheck errors unrelated to this work.
+
+### 2026-01-09 - US-267: Liquid Crystal typography system
+- Files: packages/design-tokens/src/typography.ts, packages/design-tokens/src/index.ts, website/tailwind.config.js, mobile/src/constants/theme.ts, docs/design.md
+- Decisions:
+  - Created TRACKING presets for letter-spacing: tighter (-0.4px), tight (-0.32px), normal (0), wide (0.16px), wider (0.8px), widest (1.6px)
+  - Created LC_TYPE_ROLE definitions for 14 typographic roles:
+    - Display: displayHero (48px), displayLarge (36px), displayMedium (24px) - Syne/Outfit
+    - Body: headline (18px), label (14px), labelUppercase (12px), body (16px), bodySmall (14px), caption (12px) - Space Grotesk/Plus Jakarta Sans
+    - Numeric: numeric (16px), numericLarge (32px), numericHero (48px), numericSmall (14px) - JetBrains Mono/monospace with tabular-nums
+    - Code: code (14px) - JetBrains Mono/monospace
+  - Created LC_TYPE_SEMANTIC mappings for casino UI elements: balance, sessionPnl, betAmount, odds, payout, bigWin, gameTitle, sectionTitle, button, badge, inputLabel, hint, description, descriptionSmall
+  - Created FONT_FEATURES for tabular-nums, lining-nums, oldstyle-nums, etc.
+  - Created LC_GLASS_ADJUSTMENTS for text on translucent surfaces: weightBoost, sizeBoost, textShadow per glass level
+  - Tailwind integration: text-lc-{role} font sizes, tracking-{preset} letter-spacing
+  - Mobile integration: LC_TYPOGRAPHY object with React Native styles, re-exported design-tokens for direct access
+  - Updated docs/design.md with comprehensive usage guide, role tables, semantic mappings, and code examples
+- Blockers: None. Typecheck, tests, and lint all pass.

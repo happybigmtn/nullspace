@@ -874,8 +874,8 @@
         "Apply tabular-nums to balances/odds",
         "Update web/mobile typography mapping to new tokens"
       ],
-      "passes": false,
-      "notes": "Type must feel sharp and sophisticated without sacrificing legibility."
+      "passes": true,
+      "notes": "Implemented TRACKING presets (tight/tighter/normal/wide/wider/widest), LC_TYPE_ROLE definitions (14 roles: displayHero/displayLarge/displayMedium/headline/label/labelUppercase/body/bodySmall/caption/numeric/numericLarge/numericHero/numericSmall/code), LC_TYPE_SEMANTIC mappings for casino UI, FONT_FEATURES for tabular-nums, LC_GLASS_ADJUSTMENTS for text on glass surfaces. Web (Tailwind text-lc-*, tracking-*) and Mobile (LC_TYPOGRAPHY, TRACKING exports) mappings complete. Documented in docs/design.md."
     },
     {
       "id": "US-268",
