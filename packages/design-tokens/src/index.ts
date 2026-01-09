@@ -186,3 +186,33 @@ export {
   type GradientLuxuryPreset,
   type GradientSemanticKey,
 } from './gradients.js';
+
+// Liquid Crystal Material System
+export {
+  // Core material tokens
+  TRANSLUCENCY,
+  SPECULAR,
+  EDGE_HIGHLIGHT,
+  REFRACTION,
+  // Complete material configurations
+  LIQUID_CRYSTAL,
+  LIQUID_CRYSTAL_SEMANTIC,
+  LIQUID_CRYSTAL_FALLBACK,
+  // Helper functions
+  toBackdropFilter,
+  toEdgeHighlight,
+  toSpecularGradient,
+  // Type exports
+  type TranslucencyLevel,
+  type TranslucencyValue,
+  type SpecularPreset,
+  type SpecularConfig,
+  type EdgeHighlightPreset,
+  type EdgeHighlightConfig,
+  type RefractionPreset,
+  type RefractionConfig,
+  type LiquidCrystalPreset,
+  type LiquidCrystalConfig,
+  type LiquidCrystalSemanticKey,
+  type LiquidCrystalSemanticValue,
+} from './liquid-crystal.js';

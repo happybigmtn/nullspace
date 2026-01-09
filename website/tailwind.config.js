@@ -1,4 +1,10 @@
-import { MONO, TITANIUM, SEMANTIC, STATE, EDGE, ACTION, GAME, TYPE_SCALE, FONTS, SHADOW, ELEVATION, GLOW, SPACING_SEMANTIC, RADIUS, CONTAINER } from '@nullspace/design-tokens';
+import {
+  MONO, TITANIUM, SEMANTIC, STATE, EDGE, ACTION, GAME,
+  TYPE_SCALE, FONTS, SHADOW, ELEVATION, GLOW,
+  SPACING_SEMANTIC, RADIUS, CONTAINER,
+  LIQUID_CRYSTAL, LIQUID_CRYSTAL_SEMANTIC, LIQUID_CRYSTAL_FALLBACK,
+  REFRACTION, toBackdropFilter, toEdgeHighlight,
+} from '@nullspace/design-tokens';
 
 // Helper to convert TYPE_SCALE to Tailwind fontSize format
 const toTailwindFontSize = (style) => [
@@ -91,6 +97,68 @@ export default {
           border: 'rgba(0, 0, 0, 0.05)',
         },
 
+        // Liquid Crystal material system (US-265)
+        // Background colors for glass surfaces
+        'lc': {
+          // Light mode backgrounds
+          'ghost': LIQUID_CRYSTAL.ghost.background.light,
+          'whisper': LIQUID_CRYSTAL.whisper.background.light,
+          'mist': LIQUID_CRYSTAL.mist.background.light,
+          'veil': LIQUID_CRYSTAL.veil.background.light,
+          'smoke': LIQUID_CRYSTAL.smoke.background.light,
+          'fog': LIQUID_CRYSTAL.fog.background.light,
+          'frost': LIQUID_CRYSTAL.frost.background.light,
+          'solid': LIQUID_CRYSTAL.solid.background.light,
+          // Dark mode backgrounds (use dark: prefix)
+          'dark-ghost': LIQUID_CRYSTAL.ghost.background.dark,
+          'dark-whisper': LIQUID_CRYSTAL.whisper.background.dark,
+          'dark-mist': LIQUID_CRYSTAL.mist.background.dark,
+          'dark-veil': LIQUID_CRYSTAL.veil.background.dark,
+          'dark-smoke': LIQUID_CRYSTAL.smoke.background.dark,
+          'dark-fog': LIQUID_CRYSTAL.fog.background.dark,
+          'dark-frost': LIQUID_CRYSTAL.frost.background.dark,
+          'dark-solid': LIQUID_CRYSTAL.solid.background.dark,
+        },
+        // Border colors for liquid crystal
+        'lc-border': {
+          'ghost': LIQUID_CRYSTAL.ghost.border.light,
+          'whisper': LIQUID_CRYSTAL.whisper.border.light,
+          'mist': LIQUID_CRYSTAL.mist.border.light,
+          'veil': LIQUID_CRYSTAL.veil.border.light,
+          'smoke': LIQUID_CRYSTAL.smoke.border.light,
+          'fog': LIQUID_CRYSTAL.fog.border.light,
+          'frost': LIQUID_CRYSTAL.frost.border.light,
+          'solid': LIQUID_CRYSTAL.solid.border.light,
+          // Dark mode borders
+          'dark-ghost': LIQUID_CRYSTAL.ghost.border.dark,
+          'dark-whisper': LIQUID_CRYSTAL.whisper.border.dark,
+          'dark-mist': LIQUID_CRYSTAL.mist.border.dark,
+          'dark-veil': LIQUID_CRYSTAL.veil.border.dark,
+          'dark-smoke': LIQUID_CRYSTAL.smoke.border.dark,
+          'dark-fog': LIQUID_CRYSTAL.fog.border.dark,
+          'dark-frost': LIQUID_CRYSTAL.frost.border.dark,
+          'dark-solid': LIQUID_CRYSTAL.solid.border.dark,
+        },
+        // Fallback colors (for @supports not (backdrop-filter))
+        'lc-fallback': {
+          'ghost': LIQUID_CRYSTAL_FALLBACK.ghost.light,
+          'whisper': LIQUID_CRYSTAL_FALLBACK.whisper.light,
+          'mist': LIQUID_CRYSTAL_FALLBACK.mist.light,
+          'veil': LIQUID_CRYSTAL_FALLBACK.veil.light,
+          'smoke': LIQUID_CRYSTAL_FALLBACK.smoke.light,
+          'fog': LIQUID_CRYSTAL_FALLBACK.fog.light,
+          'frost': LIQUID_CRYSTAL_FALLBACK.frost.light,
+          'solid': LIQUID_CRYSTAL_FALLBACK.solid.light,
+          'dark-ghost': LIQUID_CRYSTAL_FALLBACK.ghost.dark,
+          'dark-whisper': LIQUID_CRYSTAL_FALLBACK.whisper.dark,
+          'dark-mist': LIQUID_CRYSTAL_FALLBACK.mist.dark,
+          'dark-veil': LIQUID_CRYSTAL_FALLBACK.veil.dark,
+          'dark-smoke': LIQUID_CRYSTAL_FALLBACK.smoke.dark,
+          'dark-fog': LIQUID_CRYSTAL_FALLBACK.fog.dark,
+          'dark-frost': LIQUID_CRYSTAL_FALLBACK.frost.dark,
+          'dark-solid': LIQUID_CRYSTAL_FALLBACK.solid.dark,
+        },
+
         // Legacy action colors (deprecated - maps to monochrome)
         action: {
           indigo: ACTION.indigo,
@@ -152,6 +220,44 @@ export default {
         'card-elevated': '0 8px 32px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.8)',
         // Edge highlights for monochrome depth
         'edge-highlight': 'inset 0 1px 0 rgba(255,255,255,0.1), inset 0 -1px 0 rgba(0,0,0,0.1)',
+        // Liquid Crystal edge highlights (US-265)
+        'lc-edge-hairline': toEdgeHighlight(LIQUID_CRYSTAL.whisper.edge),
+        'lc-edge-standard': toEdgeHighlight(LIQUID_CRYSTAL.veil.edge),
+        'lc-edge-pronounced': toEdgeHighlight(LIQUID_CRYSTAL.fog.edge),
+        'lc-edge-thick': toEdgeHighlight(LIQUID_CRYSTAL.solid.edge),
+      },
+      // Liquid Crystal backdrop filters (US-265)
+      backdropBlur: {
+        'lc-none': `${REFRACTION.none.blur}px`,
+        'lc-subtle': `${REFRACTION.subtle.blur}px`,
+        'lc-standard': `${REFRACTION.standard.blur}px`,
+        'lc-heavy': `${REFRACTION.heavy.blur}px`,
+        'lc-frosted': `${REFRACTION.frosted.blur}px`,
+        'lc-cinema': `${REFRACTION.cinema.blur}px`,
+      },
+      backdropBrightness: {
+        'lc-none': `${REFRACTION.none.brightness}%`,
+        'lc-subtle': `${REFRACTION.subtle.brightness}%`,
+        'lc-standard': `${REFRACTION.standard.brightness}%`,
+        'lc-heavy': `${REFRACTION.heavy.brightness}%`,
+        'lc-frosted': `${REFRACTION.frosted.brightness}%`,
+        'lc-cinema': `${REFRACTION.cinema.brightness}%`,
+      },
+      backdropSaturate: {
+        'lc-none': `${REFRACTION.none.saturate}%`,
+        'lc-subtle': `${REFRACTION.subtle.saturate}%`,
+        'lc-standard': `${REFRACTION.standard.saturate}%`,
+        'lc-heavy': `${REFRACTION.heavy.saturate}%`,
+        'lc-frosted': `${REFRACTION.frosted.saturate}%`,
+        'lc-cinema': `${REFRACTION.cinema.saturate}%`,
+      },
+      backdropContrast: {
+        'lc-none': `${REFRACTION.none.contrast}%`,
+        'lc-subtle': `${REFRACTION.subtle.contrast}%`,
+        'lc-standard': `${REFRACTION.standard.contrast}%`,
+        'lc-heavy': `${REFRACTION.heavy.contrast}%`,
+        'lc-frosted': `${REFRACTION.frosted.contrast}%`,
+        'lc-cinema': `${REFRACTION.cinema.contrast}%`,
       },
       borderRadius: {
         // Border radius from design tokens
@@ -186,6 +292,9 @@ export default {
         'pulse-glow': 'pulse-glow 2s ease-in-out infinite',
         'float': 'float 3s ease-in-out infinite',
         'scale-in': 'scale-in 0.2s ease-out',
+        // Liquid Crystal animations (US-265)
+        'lc-sweep': 'lc-sweep 1.5s ease-in-out',
+        'lc-refract': 'lc-refract 0.3s ease-out',
       },
       keyframes: {
         shimmer: {
@@ -204,6 +313,17 @@ export default {
         'scale-in': {
           '0%': { transform: 'scale(0.9)', opacity: '0' },
           '100%': { transform: 'scale(1)', opacity: '1' },
+        },
+        // Liquid Crystal specular sweep animation (US-265)
+        'lc-sweep': {
+          '0%': { backgroundPosition: '-200% 0' },
+          '100%': { backgroundPosition: '200% 0' },
+        },
+        // Liquid Crystal refraction pulse on interaction
+        'lc-refract': {
+          '0%': { backdropFilter: 'blur(8px) brightness(105%)' },
+          '50%': { backdropFilter: 'blur(12px) brightness(115%)' },
+          '100%': { backdropFilter: 'blur(8px) brightness(105%)' },
         },
       },
     },
