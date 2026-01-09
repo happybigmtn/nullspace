@@ -678,3 +678,14 @@ Categories by count:
 - Evidence: 25+ tests in useBetSubmission.test.tsx covering all debounce scenarios
 - Blockers: None. Marking as passes: true.
 
+### 2026-01-09 - Code Hygiene: Eliminate Rust test warnings
+- Files: execution/src/casino/batch_boundary_tests.rs, execution/src/casino/bridge_abi_tests.rs, execution/src/casino/protocol_round_trip_tests.rs
+- Decisions:
+  - Fixed #[must_use] warnings on GameResult by adding `let _ =` to ignore return values in test setup code
+  - bridge_abi_tests.rs: Added #[allow(dead_code)] to hex_to_bytes function (intended for future golden vector tests)
+  - protocol_round_trip_tests.rs: 1 fix at line 392
+  - batch_boundary_tests.rs: 16 fixes for init_game() calls in test setup
+  - Pattern: `let _ = init_game(...)` explicitly documents that result is intentionally ignored
+- Tests: All 406 execution tests pass, zero warnings
+- Blockers: None. Code hygiene improvement, no PRD story affected.
+
