@@ -124,7 +124,7 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
       className="w-full flex items-center justify-between py-3 px-4 text-body text-titanium-700 dark:text-titanium-300 hover:bg-titanium-50 dark:hover:bg-titanium-800/50 transition-colors"
     >
       <span className="font-medium">{label}</span>
-      <span className={`text-caption font-semibold ${value ? 'text-action-success' : 'text-titanium-400'}`}>
+      <span className={`text-caption font-semibold ${value ? 'text-mono-0 dark:text-mono-1000 font-bold' : 'text-titanium-400'}`}>
         {value ? 'On' : 'Off'}
       </span>
     </button>
@@ -220,7 +220,7 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
                     }}
                     className={`flex-1 py-2 text-caption font-semibold rounded-xl transition-all ${
                       playMode === 'CASH'
-                        ? 'bg-titanium-900 text-white dark:bg-action-primary dark:text-white'
+                        ? 'bg-titanium-900 text-white dark:bg-mono-0 dark:text-white'
                         : 'bg-white text-titanium-600 border border-titanium-200 dark:bg-titanium-900 dark:text-titanium-400 dark:border-titanium-700'
                     }`}
                   >
@@ -233,7 +233,7 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
                     }}
                     className={`flex-1 py-2 text-caption font-semibold rounded-xl transition-all ${
                       playMode === 'FREEROLL'
-                        ? 'bg-titanium-900 text-white dark:bg-action-primary dark:text-white'
+                        ? 'bg-titanium-900 text-white dark:bg-mono-0 dark:text-white'
                         : 'bg-white text-titanium-600 border border-titanium-200 dark:bg-titanium-900 dark:text-titanium-400 dark:border-titanium-700'
                     }`}
                   >

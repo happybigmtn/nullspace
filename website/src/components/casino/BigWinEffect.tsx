@@ -56,7 +56,7 @@ export const BigWinEffect: React.FC<BigWinEffectProps> = ({ amount, show, durati
 
             <div className={`relative flex flex-col items-center gap-2 ${reducedMotion ? '' : 'animate-scale-in'}`}>
                 <div className="flex flex-col items-center">
-                    <span className="text-sm font-black text-action-primary tracking-[0.5em] uppercase mb-4">Grand Win</span>
+                    <span className="text-sm font-black text-mono-0 dark:text-mono-1000 tracking-[0.5em] uppercase mb-4">Grand Win</span>
                     <h2 
                         className="text-9xl font-extrabold text-titanium-900 tracking-tighter leading-none mb-4"
                         style={{ fontFamily: 'Outfit' }}

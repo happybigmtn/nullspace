@@ -137,7 +137,7 @@ function LeaderboardEntry({
       ref={ref}
       className={`flex items-center justify-between rounded-xl border px-3 py-2 ${
         isRevealed ? 'scroll-revealed' : 'scroll-hidden'
-      } ${isYou ? 'border-action-primary/40 bg-action-primary/10 text-action-primary' : 'border-titanium-200 dark:border-titanium-800'}`}
+      } ${isYou ? 'border-mono-0/40 bg-mono-0/10 text-mono-0 dark:text-mono-1000' : 'border-titanium-200 dark:border-titanium-800'}`}
     >
       <div className="flex items-center gap-2">
         <span className="text-[10px] text-titanium-400">#{index + 1}</span>
@@ -458,7 +458,7 @@ export const RewardsDrawer: React.FC<RewardsDrawerProps> = ({
                 </div>
                 <div className="flex flex-col items-end gap-1">
                   <div className="text-[10px] font-bold text-titanium-400 uppercase tracking-widest">Streak</div>
-                  <div className="text-lg font-black text-action-success">{streak}x</div>
+                  <div className="text-lg font-black text-mono-0 dark:text-mono-1000 font-bold">{streak}x</div>
                 </div>
               </div>
               <button
@@ -471,7 +471,7 @@ export const RewardsDrawer: React.FC<RewardsDrawerProps> = ({
                 disabled={!canClaim}
                 className={`w-full rounded-full px-4 py-2 text-[11px] font-bold uppercase tracking-widest transition-all motion-interaction ${
                   canClaim
-                    ? 'bg-action-success text-white shadow-soft hover:scale-[1.02]'
+                    ? 'bg-mono-0 text-white shadow-soft hover:scale-[1.02]'
                     : 'bg-titanium-100 text-titanium-400 dark:bg-titanium-800 dark:text-titanium-400'
                 }`}
               >
@@ -505,7 +505,7 @@ export const RewardsDrawer: React.FC<RewardsDrawerProps> = ({
                       </div>
                       <div className="h-2 rounded-full bg-titanium-100 dark:bg-titanium-800 overflow-hidden">
                         <div
-                          className="h-full bg-action-primary transition-all motion-state"
+                          className="h-full bg-mono-0 transition-all motion-state"
                           style={{ width: `${pct}%` }}
                         />
                       </div>
@@ -531,7 +531,7 @@ export const RewardsDrawer: React.FC<RewardsDrawerProps> = ({
                       writeStorage(STORAGE_KEYS.clubBaseline, stats.history.length);
                       writeStorage(STORAGE_KEYS.clubWeek, weekKey);
                     }}
-                    className="rounded-full px-4 py-2 text-[11px] font-bold uppercase tracking-widest bg-titanium-900 text-white shadow-soft hover:scale-[1.02] transition-all dark:bg-action-primary/20 dark:text-action-primary"
+                    className="rounded-full px-4 py-2 text-[11px] font-bold uppercase tracking-widest bg-titanium-900 text-white shadow-soft hover:scale-[1.02] transition-all dark:bg-mono-0/20 dark:text-mono-0 dark:text-mono-1000"
                   >
                     Join Club
                   </button>
@@ -543,11 +543,11 @@ export const RewardsDrawer: React.FC<RewardsDrawerProps> = ({
                       <div className="text-sm font-semibold text-titanium-800 dark:text-titanium-100">Orion Table</div>
                       <div className="text-[11px] text-titanium-500 dark:text-titanium-300">Weekly goal: 25 hands</div>
                     </div>
-                    <div className="text-xs font-bold text-action-success">{clubProgress}/{clubGoal}</div>
+                    <div className="text-xs font-bold text-mono-0 dark:text-mono-1000 font-bold">{clubProgress}/{clubGoal}</div>
                   </div>
                   <div className="h-2 rounded-full bg-titanium-100 dark:bg-titanium-800 overflow-hidden">
                     <div
-                      className="h-full bg-action-success transition-all motion-state"
+                      className="h-full bg-mono-0 transition-all motion-state"
                       style={{ width: `${Math.round((clubProgress / clubGoal) * 100)}%` }}
                     />
                   </div>

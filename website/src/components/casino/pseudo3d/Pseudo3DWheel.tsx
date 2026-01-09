@@ -214,7 +214,7 @@ export const Pseudo3DWheel: React.FC<Pseudo3DWheelProps> = ({
                 
                 {/* Substantial Pointer (Triangular style) */}
                 <div 
-                    className="absolute top-0 left-1/2 -translate-x-1/2 w-4 h-8 bg-action-primary z-20 shadow-lg" 
+                    className="absolute top-0 left-1/2 -translate-x-1/2 w-4 h-8 bg-mono-0 z-20 shadow-lg" 
                     style={{ clipPath: 'polygon(0% 0%, 100% 0%, 50% 100%)' }} 
                 />
                 

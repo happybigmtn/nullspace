@@ -797,8 +797,8 @@
         "Replace colored accents with monochrome contrast, textures, and edge highlights",
         "Remove redundant navigation surfaces"
       ],
-      "passes": false,
-      "notes": "Reduce clutter and enforce alignment across casino screens."
+      "passes": true,
+      "notes": "Replaced all action-* color accents across 27 casino components with monochrome tokens (mono-0/mono-1000 for wins/primary, mono-400/mono-500 for losses). Updated Layout.tsx, ResultDisplay.tsx, ActiveGame.tsx, Label.tsx, all game views, and UI primitives. Header/control bar already consolidated from previous work."
     },
     {
       "id": "US-262",

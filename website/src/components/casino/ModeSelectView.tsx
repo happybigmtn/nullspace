@@ -15,7 +15,8 @@ function FloatingParticles({ isDark }: { isDark: boolean }) {
       duration: `${5 + (i % 4) * 1.5}s`,
       delay: `${(i * 0.5) % 3}s`,
       driftX: `${(i % 2 === 0 ? 1 : -1) * (10 + (i % 5) * 8)}px`,
-      color: i % 3 === 0 ? 'var(--action-primary)' : i % 3 === 1 ? 'var(--action-success)' : (isDark ? '#a2a2a7' : '#636366'),
+      // US-261: Monochrome particles
+      color: isDark ? (i % 2 === 0 ? '#FFFFFF' : '#737373') : (i % 2 === 0 ? '#000000' : '#737373'),
     }));
   }, [isDark]);
 
@@ -83,9 +84,9 @@ export const ModeSelectView: React.FC<ModeSelectViewProps> = ({ onSelect }) => {
         style={{ backgroundColor: palette.panel, borderColor: palette.border }}
       >
         {/* Animated Background Gradients */}
-        <div className="absolute top-0 right-0 w-80 h-80 bg-action-primary rounded-full -mr-40 -mt-40 hero-glow-pulse hero-gradient-drift" />
-        <div className="absolute bottom-0 left-0 w-80 h-80 bg-action-success rounded-full -ml-40 -mb-40 hero-glow-pulse-alt hero-gradient-drift-alt" />
-        <div className="absolute top-1/2 left-1/2 w-96 h-96 -translate-x-1/2 -translate-y-1/2 bg-gradient-radial from-action-primary/5 to-transparent rounded-full hero-gradient-drift" />
+        <div className="absolute top-0 right-0 w-80 h-80 bg-mono-0 rounded-full -mr-40 -mt-40 hero-glow-pulse hero-gradient-drift" />
+        <div className="absolute bottom-0 left-0 w-80 h-80 bg-mono-0 rounded-full -ml-40 -mb-40 hero-glow-pulse-alt hero-gradient-drift-alt" />
+        <div className="absolute top-1/2 left-1/2 w-96 h-96 -translate-x-1/2 -translate-y-1/2 bg-gradient-radial from-mono-0/5 to-transparent rounded-full hero-gradient-drift" />
 
         {/* Floating Particles */}
         <FloatingParticles isDark={isDark} />
@@ -105,7 +106,7 @@ export const ModeSelectView: React.FC<ModeSelectViewProps> = ({ onSelect }) => {
             style={{ backgroundColor: palette.panel, borderColor: palette.border }}
             onClick={() => onSelect('CASH')}
           >
-            <div className="w-12 h-12 rounded-2xl bg-action-success flex items-center justify-center text-white mb-6 shadow-lg shadow-green-500/20 group-hover:rotate-6 group-hover:scale-110 transition-transform">
+            <div className="w-12 h-12 rounded-2xl bg-mono-0 flex items-center justify-center text-white mb-6 shadow-lg shadow-green-500/20 group-hover:rotate-6 group-hover:scale-110 transition-transform">
                 <span className="text-xl font-bold">$</span>
             </div>
             <div className="text-lg font-bold mb-2">Cash Game</div>
@@ -125,7 +126,7 @@ export const ModeSelectView: React.FC<ModeSelectViewProps> = ({ onSelect }) => {
             style={{ backgroundColor: palette.panel, borderColor: palette.border }}
             onClick={() => onSelect('FREEROLL')}
           >
-            <div className="w-12 h-12 rounded-2xl bg-action-primary flex items-center justify-center text-white mb-6 shadow-lg shadow-blue-500/20 group-hover:-rotate-6 group-hover:scale-110 transition-transform">
+            <div className="w-12 h-12 rounded-2xl bg-mono-0 flex items-center justify-center text-white mb-6 shadow-lg shadow-blue-500/20 group-hover:-rotate-6 group-hover:scale-110 transition-transform">
                 <span className="text-xl font-bold">★</span>
             </div>
             <div className="text-lg font-bold mb-2">Tournament</div>
@@ -142,10 +143,10 @@ export const ModeSelectView: React.FC<ModeSelectViewProps> = ({ onSelect }) => {
         </div>
 
         <div className="mt-16 flex flex-wrap justify-center gap-x-8 gap-y-4 relative z-10">
-          <Link to="/swap" className="text-[11px] font-bold mode-subtle hover:text-action-primary transition-colors tracking-widest uppercase" style={{ color: palette.subtle }}>Swap</Link>
-          <Link to="/stake" className="text-[11px] font-bold mode-subtle hover:text-action-primary transition-colors tracking-widest uppercase" style={{ color: palette.subtle }}>Stake</Link>
-          <Link to="/security" className="text-[11px] font-bold mode-subtle hover:text-action-primary transition-colors tracking-widest uppercase" style={{ color: palette.subtle }}>Vault</Link>
-          <Link to="/explorer" className="text-[11px] font-bold mode-subtle hover:text-action-primary transition-colors tracking-widest uppercase" style={{ color: palette.subtle }}>Blocks</Link>
+          <Link to="/swap" className="text-[11px] font-bold mode-subtle hover:text-mono-0 dark:text-mono-1000 transition-colors tracking-widest uppercase" style={{ color: palette.subtle }}>Swap</Link>
+          <Link to="/stake" className="text-[11px] font-bold mode-subtle hover:text-mono-0 dark:text-mono-1000 transition-colors tracking-widest uppercase" style={{ color: palette.subtle }}>Stake</Link>
+          <Link to="/security" className="text-[11px] font-bold mode-subtle hover:text-mono-0 dark:text-mono-1000 transition-colors tracking-widest uppercase" style={{ color: palette.subtle }}>Vault</Link>
+          <Link to="/explorer" className="text-[11px] font-bold mode-subtle hover:text-mono-0 dark:text-mono-1000 transition-colors tracking-widest uppercase" style={{ color: palette.subtle }}>Blocks</Link>
         </div>
       </div>
     </div>

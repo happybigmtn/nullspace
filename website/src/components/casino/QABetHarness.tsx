@@ -857,7 +857,7 @@ export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, 
     <div className={`fixed bottom-4 left-4 z-[120] w-[320px] rounded-2xl border border-titanium-200 bg-white/90 p-4 shadow-float backdrop-blur ${className ?? ''}`}>
       <div className="flex items-center justify-between">
         <div className="text-[11px] font-bold tracking-[0.2em] text-titanium-500 uppercase">QA Bets</div>
-        <div className={`text-[10px] font-bold ${running ? 'text-action-primary' : summary.failures ? 'text-action-destructive' : 'text-action-success'}`}>
+        <div className={`text-[10px] font-bold ${running ? 'text-mono-0 dark:text-mono-1000' : summary.failures ? 'text-mono-400 dark:text-mono-500' : 'text-mono-0 dark:text-mono-1000 font-bold'}`}>
           {running ? 'RUNNING' : summary.failures ? `${summary.failures} FAIL` : 'READY'}
         </div>
       </div>
@@ -894,7 +894,7 @@ export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, 
           logs.slice(-12).map((entry) => (
             <div
               key={entry.id}
-              className={`px-3 py-1 text-[10px] ${entry.level === 'error' ? 'text-action-destructive' : entry.level === 'success' ? 'text-action-success' : 'text-titanium-600'}`}
+              className={`px-3 py-1 text-[10px] ${entry.level === 'error' ? 'text-mono-400 dark:text-mono-500' : entry.level === 'success' ? 'text-mono-0 dark:text-mono-1000 font-bold' : 'text-titanium-600'}`}
             >
               {new Date(entry.ts).toLocaleTimeString()} {entry.message}
             </div>

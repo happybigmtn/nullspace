@@ -219,14 +219,14 @@ export const GameOptionsDrawer: React.FC<GameOptionsDrawerProps> = ({
         disabled
           ? 'text-titanium-400 cursor-not-allowed'
           : hasActive
-            ? 'text-action-primary bg-action-primary/10'
+            ? 'text-mono-0 dark:text-mono-1000 bg-mono-0/10'
             : 'text-titanium-600 hover:text-titanium-900 dark:text-titanium-400 dark:hover:text-titanium-100'
       }`
     : `h-10 px-4 rounded-full border text-caption font-semibold uppercase tracking-widest transition-all ${
         disabled
           ? 'border-titanium-200 text-titanium-400 cursor-not-allowed dark:border-titanium-800 dark:text-titanium-500'
           : hasActive
-            ? 'border-action-primary/50 text-action-primary bg-action-primary/10'
+            ? 'border-mono-0/50 text-mono-0 dark:text-mono-1000 bg-mono-0/10'
             : 'border-titanium-300 text-titanium-600 hover:text-titanium-900 hover:border-titanium-500 dark:border-titanium-700 dark:text-titanium-300 dark:hover:text-titanium-100'
       }`;
 
@@ -240,7 +240,7 @@ export const GameOptionsDrawer: React.FC<GameOptionsDrawerProps> = ({
       >
         {label}
         {count > 0 && (
-          <span className="ml-2 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-action-primary/20 text-micro font-bold text-action-primary">
+          <span className="ml-2 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-mono-0/20 text-micro font-bold text-mono-0 dark:text-mono-1000">
             {count}
           </span>
         )}

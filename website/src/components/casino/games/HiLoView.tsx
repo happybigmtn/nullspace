@@ -58,14 +58,14 @@ export const HiLoView = React.memo<HiLoViewProps & { lastWin?: number; playMode?
                 
                 {/* TOP: POT with accumulator graph */}
                 <div className="min-h-[60px] sm:min-h-[80px] flex flex-col items-center justify-center w-full max-w-md">
-                     <div className="text-2xl sm:text-3xl text-action-primary font-mono font-bold mb-1 sm:mb-2 tracking-widest">
+                     <div className="text-2xl sm:text-3xl text-mono-0 dark:text-mono-1000 font-mono font-bold mb-1 sm:mb-2 tracking-widest">
                          POT: ${gameState.hiloAccumulator.toLocaleString()}
                      </div>
                 </div>
 
                 {/* Center Info */}
                 <div className="text-center space-y-3 relative z-20 zen-hide">
-                        <div className="text-lg sm:text-2xl font-bold text-action-primary tracking-widest leading-tight animate-pulse">
+                        <div className="text-lg sm:text-2xl font-bold text-mono-0 dark:text-mono-1000 tracking-widest leading-tight animate-pulse">
                             {gameState.message}
                         </div>
                 </div>
@@ -81,7 +81,7 @@ export const HiLoView = React.memo<HiLoViewProps & { lastWin?: number; playMode?
                                     <div className="text-[10px] text-gray-500 uppercase tracking-wider font-mono">
                                         {showLower ? 'LOWER' : showSame && !showHigher ? 'SAME' : '—'}
                                     </div>
-                                    <div className="text-action-success font-mono font-bold text-sm">
+                                    <div className="text-mono-0 dark:text-mono-1000 font-bold font-mono font-bold text-sm">
                                         {showLower ? formatMultiplier(lowerMultiplier) : showSame && !showHigher ? formatMultiplier(sameMultiplier) : '—'}
                                     </div>
                                 </div>
@@ -93,7 +93,7 @@ export const HiLoView = React.memo<HiLoViewProps & { lastWin?: number; playMode?
                                     <div className="text-[10px] text-gray-500 uppercase tracking-wider font-mono">
                                         {showHigher ? 'HIGHER' : showSame && !showLower ? 'SAME' : '—'}
                                     </div>
-                                    <div className="text-action-success font-mono font-bold text-sm">
+                                    <div className="text-mono-0 dark:text-mono-1000 font-bold font-mono font-bold text-sm">
                                         {showHigher ? formatMultiplier(higherMultiplier) : showSame && !showLower ? formatMultiplier(sameMultiplier) : '—'}
                                     </div>
                                 </div>
@@ -101,7 +101,7 @@ export const HiLoView = React.memo<HiLoViewProps & { lastWin?: number; playMode?
                             {showSame && showLower && showHigher && (
                                 <div className="text-center opacity-80">
                                     <div className="text-[10px] text-gray-500 uppercase tracking-wider font-mono">SAME</div>
-                                    <div className="text-action-primary font-mono font-bold text-sm">
+                                    <div className="text-mono-0 dark:text-mono-1000 font-mono font-bold text-sm">
                                         {formatMultiplier(sameMultiplier)}
                                     </div>
                                 </div>
@@ -152,22 +152,22 @@ export const HiLoView = React.memo<HiLoViewProps & { lastWin?: number; playMode?
                     <button
                         type="button"
                         onClick={actions?.hiloCashout}
-                        className="w-full h-12 rounded border-2 border-action-primary bg-action-primary/10 text-action-primary font-mono font-bold tracking-widest uppercase hover:bg-action-primary/20 transition-all"
+                        className="w-full h-12 rounded border-2 border-mono-0 bg-mono-0/10 text-mono-0 dark:text-mono-1000 font-mono font-bold tracking-widest uppercase hover:bg-mono-0/20 transition-all"
                     >
                         <span className="ns-keycap">C</span> CASHOUT · LOCK POT
                     </button>
                     <div className={`mt-2 grid ${options.length === 3 ? 'grid-cols-3' : 'grid-cols-2'} gap-2`}>
                         {options.map((option) => {
                             const toneClass = option.tone === 'destructive'
-                                ? 'border-action-destructive text-action-destructive hover:bg-action-destructive/10'
+                                ? 'border-mono-400 text-mono-400 dark:text-mono-500 hover:bg-mono-400/10'
                                 : option.tone === 'success'
-                                    ? 'border-action-success text-action-success hover:bg-action-success/10'
-                                    : 'border-action-primary text-action-primary hover:bg-action-primary/10';
+                                    ? 'border-mono-0 text-mono-0 dark:text-mono-1000 font-bold hover:bg-mono-0/10'
+                                    : 'border-mono-0 text-mono-0 dark:text-mono-1000 hover:bg-mono-0/10';
                             const keycapClass = option.tone === 'destructive'
-                                ? 'text-action-destructive'
+                                ? 'text-mono-400 dark:text-mono-500'
                                 : option.tone === 'success'
-                                    ? 'text-action-success'
-                                    : 'text-action-primary';
+                                    ? 'text-mono-0 dark:text-mono-1000 font-bold'
+                                    : 'text-mono-0 dark:text-mono-1000';
 
                             return (
                                 <button

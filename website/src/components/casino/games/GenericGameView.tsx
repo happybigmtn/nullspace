@@ -84,23 +84,23 @@ export const GenericGameView = React.memo<{ gameState: GameState; actions: any; 
                 <div className="min-h-[96px] sm:min-h-[120px] flex items-center justify-center opacity-75">
                     {gameState.dealerCards.length > 0 ? (
                         <div className="flex flex-col items-center gap-2">
-                            <span className="text-lg font-mono font-bold tracking-widest text-action-destructive">DEALER</span>
+                            <span className="text-lg font-mono font-bold tracking-widest text-mono-400 dark:text-mono-500">DEALER</span>
                             <Hand
                                 cards={gameState.dealerCards}
-                                forcedColor="text-action-destructive"
+                                forcedColor="text-mono-400 dark:text-mono-500"
                             />
                         </div>
                     ) : (
                         <div className="flex flex-col items-center gap-2">
-                            <span className="text-lg font-mono font-bold tracking-widest text-action-destructive">DEALER</span>
-                            <div className="w-12 h-[4.5rem] sm:w-14 sm:h-20 md:w-16 md:h-24 border-2 border-dashed border-action-destructive/50 rounded" />
+                            <span className="text-lg font-mono font-bold tracking-widest text-mono-400 dark:text-mono-500">DEALER</span>
+                            <div className="w-12 h-[4.5rem] sm:w-14 sm:h-20 md:w-16 md:h-24 border-2 border-dashed border-mono-400/50 rounded" />
                         </div>
                     )}
                 </div>
 
                 {/* Center Info */}
                 <div className="text-center space-y-3 relative z-20 zen-hide">
-                    <div className="text-lg sm:text-2xl font-bold text-action-primary tracking-widest leading-tight animate-pulse">
+                    <div className="text-lg sm:text-2xl font-bold text-mono-0 dark:text-mono-1000 tracking-widest leading-tight animate-pulse">
                         {gameState.message}
                     </div>
                 </div>
@@ -108,14 +108,14 @@ export const GenericGameView = React.memo<{ gameState: GameState; actions: any; 
                 {/* Player */}
                 <div className="min-h-[96px] sm:min-h-[120px] flex gap-8 items-center justify-center">
                      <div className="flex flex-col items-center gap-2 scale-110">
-                        <span className="text-lg font-mono font-bold tracking-widest text-action-success">YOU</span>
+                        <span className="text-lg font-mono font-bold tracking-widest text-mono-0 dark:text-mono-1000 font-bold">YOU</span>
                         {gameState.playerCards.length > 0 ? (
                             <Hand
                                 cards={gameState.playerCards}
-                                forcedColor="text-action-success"
+                                forcedColor="text-mono-0 dark:text-mono-1000 font-bold"
                             />
                         ) : (
-                            <div className="w-12 h-[4.5rem] sm:w-14 sm:h-20 md:w-16 md:h-24 border-2 border-dashed border-action-success/50 rounded" />
+                            <div className="w-12 h-[4.5rem] sm:w-14 sm:h-20 md:w-16 md:h-24 border-2 border-dashed border-mono-0/50 rounded" />
                         )}
                     </div>
                 </div>
@@ -123,21 +123,21 @@ export const GenericGameView = React.memo<{ gameState: GameState; actions: any; 
 
             {isWarState ? (
                 <div className="absolute inset-0 z-[60] flex items-center justify-center px-4 bg-black/80 backdrop-blur-sm">
-                    <div className="w-full max-w-md border-2 border-action-primary bg-titanium-900/95 backdrop-blur rounded-lg p-4 shadow-2xl">
+                    <div className="w-full max-w-md border-2 border-mono-0 bg-titanium-900/95 backdrop-blur rounded-lg p-4 shadow-2xl">
                         <div className="text-[10px] text-gray-500 tracking-widest uppercase font-mono">Tie Declared</div>
-                        <div className="mt-1 text-lg font-mono font-bold text-action-primary tracking-widest">WAR OR SURRENDER?</div>
+                        <div className="mt-1 text-lg font-mono font-bold text-mono-0 dark:text-mono-1000 tracking-widest">WAR OR SURRENDER?</div>
                         <div className="mt-4 grid grid-cols-2 gap-2">
                             <button
                                 type="button"
                                 onClick={actions?.casinoWarGoToWar}
-                                className="h-12 rounded border-2 border-action-success bg-action-success/10 text-action-success font-mono font-bold tracking-widest uppercase hover:bg-action-success/20 transition-all"
+                                className="h-12 rounded border-2 border-mono-0 bg-mono-0/10 text-mono-0 dark:text-mono-1000 font-bold font-mono font-bold tracking-widest uppercase hover:bg-mono-0/20 transition-all"
                             >
                                 <span className="ns-keycap">W</span> WAR
                             </button>
                             <button
                                 type="button"
                                 onClick={actions?.casinoWarSurrender}
-                                className="h-12 rounded border-2 border-action-destructive bg-action-destructive/10 text-action-destructive font-mono font-bold tracking-widest uppercase hover:bg-action-destructive/20 transition-all"
+                                className="h-12 rounded border-2 border-mono-400 bg-mono-400/10 text-mono-400 dark:text-mono-500 font-mono font-bold tracking-widest uppercase hover:bg-mono-400/20 transition-all"
                             >
                                 <span className="ns-keycap">S</span> SURRENDER
                             </button>
@@ -153,13 +153,13 @@ export const GenericGameView = React.memo<{ gameState: GameState; actions: any; 
              <GameControlBar
                  primaryAction={
                      isWarState
-                         ? { label: 'WAR', onClick: actions?.casinoWarGoToWar, className: 'border-2 border-action-success bg-action-success text-black hover:bg-white' }
+                         ? { label: 'WAR', onClick: actions?.casinoWarGoToWar, className: 'border-2 border-mono-0 bg-mono-0 text-black hover:bg-white' }
                          : { label: gameState.stage === 'RESULT' ? 'NEW HAND' : 'DEAL', onClick: actions?.deal, className: 'w-full md:w-auto' }
                  }
                  secondaryActions={
                      isWarState
                          ? [
-                             { label: 'SURRENDER', onClick: actions?.casinoWarSurrender, className: 'border-2 border-action-destructive text-action-destructive hover:bg-action-destructive/10' }
+                             { label: 'SURRENDER', onClick: actions?.casinoWarSurrender, className: 'border-2 border-mono-400 text-mono-400 dark:text-mono-500 hover:bg-mono-400/10' }
                          ]
                          : [
                              ...(isCasinoWarBetting ? [{

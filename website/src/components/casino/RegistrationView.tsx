@@ -126,7 +126,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
               <div className="text-caption text-titanium-500 uppercase tracking-widest">
                 Tournament Ends In
               </div>
-              <div className="text-hero text-action-destructive font-semibold tracking-tight font-display">
+              <div className="text-hero text-mono-400 dark:text-mono-500 font-semibold tracking-tight font-display">
                 {formatTime(activeTimeLeft)}
               </div>
             </div>
@@ -151,7 +151,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
             <span className="text-micro text-titanium-500 uppercase tracking-wider">
               Entries Today
             </span>
-            <span className={`text-micro font-semibold ${entriesRemaining > 0 ? 'text-titanium-900' : 'text-action-destructive'}`}>
+            <span className={`text-micro font-semibold ${entriesRemaining > 0 ? 'text-titanium-900' : 'text-mono-400 dark:text-mono-500'}`}>
               {tournamentsPlayedToday}/{maxEntries}
             </span>
           </div>
@@ -166,7 +166,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
               buttonConfig.variant === 'primary'
                 ? 'bg-titanium-900 text-white hover:bg-titanium-800 active:scale-[0.98]'
                 : buttonConfig.variant === 'success'
-                  ? 'bg-action-success/10 text-action-success border border-action-success/30'
+                  ? 'bg-mono-0/10 text-mono-0 dark:text-mono-1000 font-bold border border-mono-0/30'
                   : buttonConfig.variant === 'loading'
                     ? 'bg-titanium-200 text-titanium-500'
                     : 'bg-titanium-100 text-titanium-400'
@@ -181,7 +181,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
           {canEnterTournament && (
             <button
               onClick={onEnterTournament}
-              className="px-6 py-2 rounded-xl text-caption font-medium text-action-primary hover:bg-action-primary/5 transition-colors"
+              className="px-6 py-2 rounded-xl text-caption font-medium text-mono-0 dark:text-mono-1000 hover:bg-mono-0/5 transition-colors"
             >
               Enter Active Tournament →
             </button>
@@ -189,7 +189,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
 
           {/* Status Message */}
           {showStatus && (
-            <p className={`text-caption text-center ${isErrorStatus ? 'text-action-destructive' : 'text-titanium-500'}`}>
+            <p className={`text-caption text-center ${isErrorStatus ? 'text-mono-400 dark:text-mono-500' : 'text-titanium-500'}`}>
               {statusMessage}
               {lastTxSig && (
                 <span className="text-titanium-400"> · {lastTxSig.slice(0, 8)}...</span>
@@ -201,21 +201,21 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
           {passkeyEnabled && (
             <div className="text-center">
               {passkeySession ? (
-                <div className="flex items-center gap-2 text-micro text-action-success">
-                  <span className="w-1.5 h-1.5 rounded-full bg-action-success" />
+                <div className="flex items-center gap-2 text-micro text-mono-0 dark:text-mono-1000 font-bold">
+                  <span className="w-1.5 h-1.5 rounded-full bg-mono-0" />
                   Signed in securely
                 </div>
               ) : (
                 <button
                   onClick={registerPasskey}
                   disabled={passkeyLoading}
-                  className="text-caption text-action-primary hover:underline disabled:opacity-50"
+                  className="text-caption text-mono-0 dark:text-mono-1000 hover:underline disabled:opacity-50"
                 >
                   {passkeyLoading ? 'Connecting...' : 'Sign in securely'}
                 </button>
               )}
               {passkeyError && (
-                <p className="text-micro text-action-destructive mt-1">{passkeyError}</p>
+                <p className="text-micro text-mono-400 dark:text-mono-500 mt-1">{passkeyError}</p>
               )}
             </div>
           )}
@@ -254,7 +254,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
                   return (
                     <div key={game} className="flex justify-between text-caption">
                       <span className="text-titanium-600">{game}</span>
-                      <span className={val >= 0 ? 'text-action-success' : 'text-action-destructive'}>
+                      <span className={val >= 0 ? 'text-mono-0 dark:text-mono-1000 font-bold' : 'text-mono-400 dark:text-mono-500'}>
                         {val >= 0 ? '+' : ''}{val}
                       </span>
                     </div>
@@ -313,7 +313,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
                 <button
                   onClick={() => onBotConfigChange({ ...botConfig, enabled: !botConfig.enabled })}
                   className={`w-12 h-7 rounded-full transition-colors relative ${
-                    botConfig.enabled ? 'bg-action-primary' : 'bg-titanium-200'
+                    botConfig.enabled ? 'bg-mono-0' : 'bg-titanium-200'
                   }`}
                 >
                   <span
@@ -339,7 +339,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
                       step="10"
                       value={botConfig.numBots}
                       onChange={(e) => onBotConfigChange({ ...botConfig, numBots: parseInt(e.target.value) })}
-                      className="w-full accent-action-primary"
+                      className="w-full accent-mono-0"
                     />
                   </div>
 
@@ -356,7 +356,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
                       step="1000"
                       value={botConfig.betIntervalMs}
                       onChange={(e) => onBotConfigChange({ ...botConfig, betIntervalMs: parseInt(e.target.value) })}
-                      className="w-full accent-action-primary"
+                      className="w-full accent-mono-0"
                     />
                   </div>
 
@@ -367,7 +367,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
                       onClick={() => onBotConfigChange({ ...botConfig, randomizeInterval: !botConfig.randomizeInterval })}
                       className={`px-3 py-1 rounded-lg text-micro font-medium transition-colors ${
                         botConfig.randomizeInterval
-                          ? 'bg-action-primary/10 text-action-primary'
+                          ? 'bg-mono-0/10 text-mono-0 dark:text-mono-1000'
                           : 'bg-titanium-200 text-titanium-500'
                       }`}
                     >

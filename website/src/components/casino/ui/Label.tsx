@@ -13,12 +13,13 @@ export const Label: React.FC<LabelProps> = ({
   variant = 'primary',
   size = 'normal'
 }) => {
+  // US-261: Monochrome variants use contrast not color
   const variantClasses = {
     primary: 'text-titanium-600 dark:text-titanium-200',
     secondary: 'text-titanium-500 dark:text-titanium-300',
-    success: 'text-action-success',
-    destructive: 'text-action-destructive',
-    gold: 'text-action-primary',
+    success: 'text-mono-0 dark:text-mono-1000 font-bold',
+    destructive: 'text-mono-400 dark:text-mono-500',
+    gold: 'text-mono-0 dark:text-mono-1000 font-bold',
   };
 
   const sizeClasses = {

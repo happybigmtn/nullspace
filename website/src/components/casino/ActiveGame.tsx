@@ -180,7 +180,7 @@ const SuperModeDisplay: React.FC<SuperModeDisplayProps> = ({ multipliers, reduce
   return (
     <div className="absolute top-4 left-4 max-w-sm bg-white/80 backdrop-blur-xl border border-titanium-200 p-4 rounded-3xl shadow-float z-40">
       <div className="flex items-center justify-between mb-3">
-        <div className="text-[10px] font-bold text-action-primary tracking-[0.2em] uppercase">Super Mode</div>
+        <div className="text-[10px] font-bold text-mono-0 dark:text-mono-1000 tracking-[0.2em] uppercase">Super Mode</div>
         {isRevealing && <div className="text-[9px] font-medium text-titanium-400 uppercase">Space to skip</div>}
       </div>
       <div className="flex flex-wrap gap-2">
@@ -395,7 +395,7 @@ export const ActiveGame: React.FC<ActiveGameProps> = ({ gameState, numberInput, 
           className="group relative flex flex-col items-center gap-6 focus:outline-none"
         >
           <div className="w-48 h-48 rounded-full bg-white border border-titanium-200 shadow-float flex items-center justify-center group-hover:scale-105 group-active:scale-95 transition-all duration-300">
-            <span className="text-7xl font-light text-titanium-200 group-hover:text-action-primary transition-colors">/</span>
+            <span className="text-7xl font-light text-titanium-200 group-hover:text-mono-0 dark:text-mono-1000 transition-colors">/</span>
           </div>
           <div className="flex flex-col items-center gap-1">
             <span className="text-[11px] font-bold text-titanium-400 tracking-[0.3em] uppercase">Select Experience</span>
@@ -509,8 +509,8 @@ export const ActiveGame: React.FC<ActiveGameProps> = ({ gameState, numberInput, 
          </div>
          
          {aiAdvice && !focusMode && (
-             <div className="absolute top-4 right-4 max-w-xs bg-white/90 backdrop-blur-xl border border-action-primary/30 p-5 rounded-[2rem] shadow-float z-40">
-                 <div className="text-[10px] font-bold text-action-primary mb-2 uppercase tracking-[0.2em]">AI Insights</div>
+             <div className="absolute top-4 right-4 max-w-xs bg-white/90 backdrop-blur-xl border border-mono-200 dark:border-mono-700 p-5 rounded-[2rem] shadow-float z-40">
+                 <div className="text-[10px] font-bold text-mono-0 dark:text-mono-1000 mb-2 uppercase tracking-[0.2em]">AI Insights</div>
                  <div className="text-sm text-titanium-800 font-medium leading-relaxed">{aiAdvice}</div>
              </div>
          )}

@@ -84,15 +84,15 @@ export const SicBoView = React.memo<{
         return (
             <div key={idx} className="flex items-center h-5 text-xs w-full">
                 <div className="flex-1 flex justify-end items-center text-right pr-1 overflow-hidden">
-                    {pnlRounded < 0 && <span className="text-action-destructive font-mono text-[10px]">-{Math.abs(pnlRounded).toLocaleString()}</span>}
+                    {pnlRounded < 0 && <span className="text-mono-400 dark:text-mono-500 font-mono text-[10px]">-{Math.abs(pnlRounded).toLocaleString()}</span>}
                 </div>
                 <div className="flex-none w-6 flex justify-center items-center relative">
-                    <span className={`font-mono z-10 text-[10px] ${entry.isTriple ? 'text-action-primary font-bold' : 'text-titanium-400'}`}>
+                    <span className={`font-mono z-10 text-[10px] ${entry.isTriple ? 'text-mono-0 dark:text-mono-1000 font-bold' : 'text-titanium-400'}`}>
                         {entry.label}
                     </span>
                 </div>
                 <div className="flex-1 flex justify-start items-center pl-1 overflow-hidden">
-                    {pnlRounded > 0 && <span className="text-action-success font-mono text-[10px]">+{pnlRounded.toLocaleString()}</span>}
+                    {pnlRounded > 0 && <span className="text-mono-0 dark:text-mono-1000 font-bold font-mono text-[10px]">+{pnlRounded.toLocaleString()}</span>}
                 </div>
             </div>
         );
@@ -106,12 +106,12 @@ export const SicBoView = React.memo<{
             : entry.type === 'SINGLE_2X' ? 'text-cyan-300'
             : entry.type === 'SINGLE_3X' ? 'text-cyan-200'
             : entry.type === 'DOUBLE' ? 'text-purple-400'
-            : 'text-action-primary';
+            : 'text-mono-0 dark:text-mono-1000';
 
         return (
             <div key={idx} className="flex items-center h-5 text-xs w-full">
                 <div className="flex-1 flex justify-end items-center text-right pr-1 overflow-hidden">
-                    {pnlRounded < 0 && <span className="text-action-destructive font-mono text-[10px]">-{Math.abs(pnlRounded).toLocaleString()}</span>}
+                    {pnlRounded < 0 && <span className="text-mono-400 dark:text-mono-500 font-mono text-[10px]">-{Math.abs(pnlRounded).toLocaleString()}</span>}
                 </div>
                 <div className="flex-none w-10 flex justify-center items-center relative">
                     <span className={`font-mono z-10 text-[10px] ${typeColor}`}>
@@ -119,7 +119,7 @@ export const SicBoView = React.memo<{
                     </span>
                 </div>
                 <div className="flex-1 flex justify-start items-center pl-1 overflow-hidden">
-                    {pnlRounded > 0 && <span className="text-action-success font-mono text-[10px]">+{pnlRounded.toLocaleString()}</span>}
+                    {pnlRounded > 0 && <span className="text-mono-0 dark:text-mono-1000 font-bold font-mono text-[10px]">+{pnlRounded.toLocaleString()}</span>}
                 </div>
             </div>
         );
@@ -158,9 +158,9 @@ export const SicBoView = React.memo<{
                     {/* Current Bets Summary */}
                     {gameState.sicBoBets.length > 0 && (
                         <div className="mt-2 flex flex-wrap justify-center gap-2 max-w-md mx-auto">
-                            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-action-success/20 bg-white shadow-soft text-[10px] font-black uppercase tracking-widest">
+                            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-mono-0/20 bg-white shadow-soft text-[10px] font-black uppercase tracking-widest">
                                 <span className="text-titanium-400">Total:</span>
-                                <span className="text-action-success">${gameState.sicBoBets.reduce((a, b) => a + b.amount, 0).toLocaleString()}</span>
+                                <span className="text-mono-0 dark:text-mono-1000 font-bold">${gameState.sicBoBets.reduce((a, b) => a + b.amount, 0).toLocaleString()}</span>
                             </div>
                         </div>
                     )}
@@ -198,7 +198,7 @@ export const SicBoView = React.memo<{
                                           key={t}
                                           type="button"
                                           onClick={() => handleTapPick(t)}
-                                          className="h-14 rounded-2xl border border-titanium-200 bg-titanium-50 text-titanium-900 font-bold hover:border-action-primary transition-all active:scale-95"
+                                          className="h-14 rounded-2xl border border-titanium-200 bg-titanium-50 text-titanium-900 font-bold hover:border-mono-0 transition-all active:scale-95"
                                       >
                                           {t}
                                       </button>
@@ -214,7 +214,7 @@ export const SicBoView = React.memo<{
                                              type="button"
                                              onClick={() => handleTapPick(n)}
                                              className={`h-20 flex flex-col items-center justify-center gap-1 rounded-3xl border-2 transition-all active:scale-95 ${
-                                                 selected ? 'border-action-primary bg-action-primary/5 shadow-inner' : 'border-titanium-100 bg-white'
+                                                 selected ? 'border-mono-0 bg-mono-0/5 shadow-inner' : 'border-titanium-100 bg-white'
                                              }`}
                                          >
                                              <span className="text-2xl font-black text-titanium-900">{n}</span>
@@ -245,7 +245,7 @@ export const SicBoView = React.memo<{
                                         onClick={() => actions?.placeSicBoBet?.(type)}
                                         className={`px-3 py-1.5 rounded-full border text-[10px] font-bold uppercase tracking-tight transition-all active:scale-95 ${
                                             isActive
-                                                ? 'border-action-primary bg-action-primary/10 text-action-primary'
+                                                ? 'border-mono-0 bg-mono-0/10 text-mono-0 dark:text-mono-1000'
                                                 : 'border-titanium-200 bg-white text-titanium-600 hover:border-titanium-400'
                                         }`}
                                     >
@@ -319,7 +319,7 @@ export const SicBoView = React.memo<{
                                                 <div key={i} className={`p-3 rounded-2xl border transition-all ${b.local ? 'bg-titanium-50 border-dashed border-titanium-300' : 'bg-white border-titanium-100 shadow-soft'}`}>
                                                     <div className="flex justify-between items-center">
                                                         <span className="text-[10px] font-bold text-titanium-900 uppercase tracking-tight">{b.type} {b.target ?? ''}</span>
-                                                        <span className="text-xs font-black text-action-success">${b.amount}</span>
+                                                        <span className="text-xs font-black text-mono-0 dark:text-mono-1000 font-bold">${b.amount}</span>
                                                     </div>
                                                 </div>
                                             ))
@@ -347,7 +347,7 @@ export const SicBoView = React.memo<{
                                                     onClick={() => actions?.placeSicBoBet?.(type)}
                                                     className={`py-3 rounded-xl border text-xs font-bold uppercase transition-all active:scale-95 ${
                                                         isActive
-                                                            ? 'border-action-primary bg-action-primary/10 text-action-primary'
+                                                            ? 'border-mono-0 bg-mono-0/10 text-mono-0 dark:text-mono-1000'
                                                             : 'border-titanium-200 bg-titanium-50 text-titanium-700'
                                                     }`}
                                                 >
@@ -407,7 +407,7 @@ export const SicBoView = React.memo<{
                     <button
                         type="button"
                         onClick={actions?.deal}
-                        className="ns-control-primary h-14 px-12 rounded-full border-2 font-bold text-lg font-display tracking-tight uppercase transition-all shadow-soft border-action-primary bg-action-primary text-white hover:bg-action-primary-hover hover:scale-105 active:scale-95"
+                        className="ns-control-primary h-14 px-12 rounded-full border-2 font-bold text-lg font-display tracking-tight uppercase transition-all shadow-soft border-mono-0 bg-mono-0 text-white hover:bg-mono-0-hover hover:scale-105 active:scale-95"
                     >
                         ROLL
                     </button>

@@ -87,7 +87,7 @@ export const Pseudo3DChip: React.FC<Pseudo3DChipProps> = ({
 
   return (
     <div 
-        className={`relative cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action-primary rounded-full transition-transform active:scale-90 hover:scale-110 ${className}`} 
+        className={`relative cursor-pointer group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mono-0 dark:focus-visible:ring-mono-1000 rounded-full transition-transform active:scale-90 hover:scale-110 ${className}`} 
         style={{ width: size, height: size + (Math.min(count, 5) * 3), ...style }}
         onClick={onClick}
         tabIndex={onClick ? 0 : -1}

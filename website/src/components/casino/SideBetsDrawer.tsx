@@ -75,13 +75,13 @@ export const SideBetsDrawer: React.FC<SideBetsDrawerProps> = ({
           disabled
             ? 'border-titanium-200 text-titanium-400 cursor-not-allowed dark:border-titanium-800 dark:text-titanium-500'
             : hasActive
-              ? 'border-action-primary/50 text-action-primary bg-action-primary/10'
+              ? 'border-mono-0/50 text-mono-0 dark:text-mono-1000 bg-mono-0/10'
               : 'border-titanium-300 text-titanium-600 hover:text-titanium-900 hover:border-titanium-500 dark:border-titanium-700 dark:text-titanium-300 dark:hover:text-titanium-100'
         } ${className ?? ''}`}
       >
         {label}
         {count > 0 ? (
-          <span className="ml-2 rounded-full bg-action-primary/20 px-2 py-0.5 text-[10px] font-bold text-action-primary">
+          <span className="ml-2 rounded-full bg-mono-0/20 px-2 py-0.5 text-[10px] font-bold text-mono-0 dark:text-mono-1000">
             {count}
           </span>
         ) : null}

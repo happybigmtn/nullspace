@@ -228,7 +228,7 @@ export const BlackjackView = React.memo<{
                             </div>
                             <Hand
                                 cards={gameState.dealerCards}
-                                forcedColor="text-action-destructive"
+                                forcedColor="text-mono-400 dark:text-mono-500"
                             />
                         </div>
                     ) : (
@@ -241,9 +241,9 @@ export const BlackjackView = React.memo<{
 
                 {/* Connection Warning */}
                 {gameState.message?.includes('OFFLINE') && (
-                    <div className="text-center bg-action-destructive/20 border border-action-destructive/50 rounded-lg px-4 py-2 mx-4">
-                        <p className="text-action-destructive font-bold text-sm">⚠️ Chain Offline - Check Vault Status</p>
-                        <p className="text-action-destructive/80 text-xs">Navigate to Security → Unlock Vault to connect</p>
+                    <div className="text-center bg-mono-400/20 border border-mono-400/50 rounded-lg px-4 py-2 mx-4">
+                        <p className="text-mono-400 dark:text-mono-500 font-bold text-sm">⚠️ Chain Offline - Check Vault Status</p>
+                        <p className="text-mono-400 dark:text-mono-500/80 text-xs">Navigate to Security → Unlock Vault to connect</p>
                     </div>
                 )}
 
@@ -280,10 +280,10 @@ export const BlackjackView = React.memo<{
                         {gameState.playerCards.length > 0 ? (
                              <Hand
                                 cards={gameState.playerCards}
-                                forcedColor="text-action-success"
+                                forcedColor="text-mono-0 dark:text-mono-1000 font-bold"
                             />
                         ) : (
-                            <div className="w-14 h-20 rounded-xl bg-action-success/10" />
+                            <div className="w-14 h-20 rounded-xl bg-mono-0/10" />
                         )}
                     </div>
 
@@ -301,7 +301,7 @@ export const BlackjackView = React.memo<{
 
                 {/* Super Mode - minimal gold accent indicator */}
                 {gameState.superMode?.isActive && (
-                    <div className="text-center text-caption text-action-gold animate-in fade-in">
+                    <div className="text-center text-caption text-mono-0 dark:text-mono-1000 animate-in fade-in">
                         <span className="uppercase tracking-widest">Super Mode</span>
                         {Array.isArray(gameState.superMode.multipliers) && gameState.superMode.multipliers.length > 0 && (
                             <span className="text-display-mono ml-2">
@@ -314,7 +314,7 @@ export const BlackjackView = React.memo<{
                 {/* Analysis panel removed for cleaner UI - analysis still available via 'A' key */}
                 {analysis && (
                     <div className="text-center text-caption text-ns-text-muted animate-in fade-in">
-                        Best: <span className="text-action-primary font-medium">{analysis.bestPlay}</span>
+                        Best: <span className="text-mono-0 dark:text-mono-1000 font-medium">{analysis.bestPlay}</span>
                         <button
                             type="button"
                             onClick={() => setAnalysis(null)}
@@ -351,7 +351,7 @@ export const BlackjackView = React.memo<{
                                                 disabled={sideBetsLocked}
                                                 className={`rounded-xl border px-3 py-3 text-xs font-semibold uppercase tracking-widest transition-all ${
                                                     active
-                                                        ? 'border-action-primary/60 bg-action-primary/10 text-action-primary'
+                                                        ? 'border-mono-0/60 bg-mono-0/10 text-mono-0 dark:text-mono-1000'
                                                         : sideBetsLocked
                                                             ? 'border-titanium-200 text-titanium-400 dark:border-titanium-800 dark:text-titanium-500'
                                                             : 'border-titanium-200 text-titanium-700 hover:border-titanium-500 dark:border-titanium-800 dark:text-titanium-200'
@@ -388,7 +388,7 @@ export const BlackjackView = React.memo<{
                                     onClick={actions?.toggleSuper}
                                     className={`px-3 py-2 rounded-lg text-[10px] font-bold uppercase ${
                                         gameState.activeModifiers.super
-                                            ? 'bg-action-primary/20 text-action-primary border border-action-primary/50'
+                                            ? 'bg-mono-0/20 text-mono-0 dark:text-mono-1000 border border-mono-0/50'
                                             : 'bg-gray-800 text-gray-400 border border-gray-700'
                                     }`}
                                 >
@@ -406,7 +406,7 @@ export const BlackjackView = React.memo<{
                                                 onClick={actions?.toggleShield}
                                                 className={`h-14 px-6 rounded-lg border-2 font-bold text-base tracking-widest uppercase font-mono transition-all ${
                                                     gameState.activeModifiers.shield
-                                                        ? 'border-action-success bg-action-success/20 text-action-success'
+                                                        ? 'border-mono-0 bg-mono-0/20 text-mono-0 dark:text-mono-1000 font-bold'
                                                         : 'border-gray-600 bg-black/60 text-gray-200 hover:bg-gray-700 hover:border-gray-500'
                                                 }`}
                                             >
@@ -417,7 +417,7 @@ export const BlackjackView = React.memo<{
                                                 onClick={actions?.toggleDouble}
                                                 className={`h-14 px-6 rounded-lg border-2 font-bold text-base tracking-widest uppercase font-mono transition-all ${
                                                     gameState.activeModifiers.double
-                                                        ? 'border-action-success bg-action-success/20 text-action-success'
+                                                        ? 'border-mono-0 bg-mono-0/20 text-mono-0 dark:text-mono-1000 font-bold'
                                                         : 'border-gray-600 bg-black/60 text-gray-200 hover:bg-gray-700 hover:border-gray-500'
                                                 }`}
                                             >
@@ -430,7 +430,7 @@ export const BlackjackView = React.memo<{
                                         onClick={actions?.toggleSuper}
                                         className={`h-14 px-6 rounded-lg border-2 font-bold text-base tracking-widest uppercase font-mono transition-all ${
                                             gameState.activeModifiers.super
-                                                ? 'border-action-primary bg-action-primary/20 text-action-primary'
+                                                ? 'border-mono-0 bg-mono-0/20 text-mono-0 dark:text-mono-1000'
                                                 : 'border-gray-600 bg-black/60 text-gray-200 hover:bg-gray-700 hover:border-gray-500'
                                         }`}
                                     >
@@ -467,7 +467,7 @@ export const BlackjackView = React.memo<{
                                         className={`h-14 px-6 rounded-lg border-2 font-bold text-base tracking-widest uppercase font-mono transition-all ${
                                             analysisPending
                                                 ? 'opacity-60 cursor-not-allowed border-gray-800 bg-gray-900/50 text-gray-500'
-                                                : 'border-action-primary bg-action-primary/15 text-action-primary hover:bg-action-primary/25'
+                                                : 'border-mono-0 bg-mono-0/15 text-mono-0 dark:text-mono-1000 hover:bg-mono-0/25'
                                         }`}
                                     >
                                         {analysisPending ? 'ANALYZING' : 'ANALYZE'}
@@ -555,7 +555,7 @@ export const BlackjackView = React.memo<{
                                         className={`h-14 px-6 rounded-lg border-2 font-bold text-base tracking-widest uppercase font-mono transition-all ${
                                             analysisPending
                                                 ? 'opacity-60 cursor-not-allowed border-gray-800 bg-gray-900/50 text-gray-500'
-                                                : 'border-action-primary bg-action-primary/15 text-action-primary hover:bg-action-primary/25'
+                                                : 'border-mono-0 bg-mono-0/15 text-mono-0 dark:text-mono-1000 hover:bg-mono-0/25'
                                         }`}
                                     >
                                         {analysisPending ? 'ANALYZING' : 'ANALYZE'}
@@ -587,9 +587,9 @@ export const BlackjackView = React.memo<{
                                         actions?.deal?.();
                                     }
                                 }}
-                                className="h-10 sm:h-14 md:h-16 px-4 sm:px-6 md:px-8 rounded-lg border-2 font-bold text-xs sm:text-sm md:text-base tracking-widest uppercase font-mono transition-all border-action-primary bg-action-primary/20 text-action-primary hover:bg-action-primary/30"
+                                className="h-10 sm:h-14 md:h-16 px-4 sm:px-6 md:px-8 rounded-lg border-2 font-bold text-xs sm:text-sm md:text-base tracking-widest uppercase font-mono transition-all border-mono-0 bg-mono-0/20 text-mono-0 dark:text-mono-1000 hover:bg-mono-0/30"
                             >
-                                REBET ${gameState.lastBet} <span className="hidden sm:inline text-action-primary/60 ml-1 text-xs">[R]</span>
+                                REBET ${gameState.lastBet} <span className="hidden sm:inline text-mono-0 dark:text-mono-1000/60 ml-1 text-xs">[R]</span>
                             </button>
                         )}
 
@@ -606,10 +606,10 @@ export const BlackjackView = React.memo<{
                             disabled={gameState.stage === 'PLAYING' && !showInsurancePrompt && !canHit}
                             className={`ns-control-primary h-10 sm:h-14 md:h-16 px-6 sm:px-8 md:px-10 rounded-lg border-2 font-bold text-sm sm:text-base md:text-lg tracking-widest uppercase font-mono transition-all shadow-lg ${
                                 showInsurancePrompt
-                                    ? 'border-action-primary bg-action-primary text-black'
+                                    ? 'border-mono-0 bg-mono-0 text-black'
                                     : (gameState.stage === 'PLAYING' && !canHit)
                                         ? 'opacity-50 cursor-not-allowed border-gray-800 bg-gray-900/50 text-gray-700'
-                                        : 'border-action-success bg-action-success text-black'
+                                        : 'border-mono-0 bg-mono-0 text-black'
                             }`}
                         >
                             {(gameState.stage === 'BETTING' || gameState.stage === 'RESULT')

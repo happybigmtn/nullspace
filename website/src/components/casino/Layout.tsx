@@ -51,11 +51,12 @@ export const Header: React.FC<HeaderProps> = ({
     children,
 }) => {
     const sessionValue = formatPnlLabel(sessionDelta) || '$0';
+    // US-261: Monochrome state differentiation - use contrast not color
     const sessionTone =
         sessionDelta > 0
-            ? 'text-action-success'
+            ? 'text-mono-0 dark:text-mono-1000 font-black'
             : sessionDelta < 0
-                ? 'text-action-destructive'
+                ? 'text-mono-400 dark:text-mono-500'
                 : 'text-titanium-600 dark:text-titanium-200';
 
     return (
@@ -76,7 +77,7 @@ export const Header: React.FC<HeaderProps> = ({
                 {showTimer && (
                     <div className="hidden md:flex items-center gap-2 px-3 py-1 rounded-full border border-titanium-200 text-[10px] font-medium uppercase tracking-[0.18em] text-titanium-600 dark:border-titanium-800 dark:text-titanium-300">
                         <span>Timer</span>
-                        <span className={`font-mono font-semibold tabular-nums ${tournamentTime < 60 ? 'text-action-destructive animate-pulse' : 'text-titanium-900 dark:text-titanium-100'}`}>{formatTime(tournamentTime)}</span>
+                        <span className={`font-mono font-semibold tabular-nums ${tournamentTime < 60 ? 'text-mono-0 dark:text-mono-1000 font-black animate-pulse' : 'text-titanium-900 dark:text-titanium-100'}`}>{formatTime(tournamentTime)}</span>
                     </div>
                 )}
 
@@ -106,17 +107,18 @@ export const Header: React.FC<HeaderProps> = ({
     );
 };
 
+// US-261: Tournament alerts use monochrome high-contrast (black bg, white text)
 export const TournamentAlert: React.FC<{ tournamentTime: number }> = ({ tournamentTime }) => {
     if (tournamentTime === 60 || tournamentTime === 59 || tournamentTime === 58) {
         return (
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-action-destructive text-white px-6 py-2 rounded-full font-bold text-xs tracking-widest uppercase shadow-lg z-50 animate-bounce">
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-mono-0 text-mono-1000 px-6 py-2 rounded-full font-bold text-xs tracking-widest uppercase shadow-lg z-50 animate-bounce border border-mono-200">
                 One minute remaining
             </div>
         );
     }
     if (tournamentTime === 30 || tournamentTime === 29 || tournamentTime === 28) {
         return (
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-action-destructive text-white px-6 py-2 rounded-full font-bold text-xs tracking-widest uppercase shadow-lg z-50 animate-bounce">
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-mono-0 text-mono-1000 px-6 py-2 rounded-full font-bold text-xs tracking-widest uppercase shadow-lg z-50 animate-bounce border border-mono-200">
                 30 seconds left
             </div>
         );
@@ -124,7 +126,7 @@ export const TournamentAlert: React.FC<{ tournamentTime: number }> = ({ tourname
     if (tournamentTime <= 5 && tournamentTime > 0) {
         return (
              <div className="absolute inset-0 z-50 flex items-center justify-center pointer-events-none bg-white/20 backdrop-blur-sm">
-                 <div className="text-[12rem] font-light text-action-destructive opacity-80 animate-scale-in tabular-nums">
+                 <div className="text-[12rem] font-light text-mono-0 dark:text-mono-1000 opacity-80 animate-scale-in tabular-nums">
                      {tournamentTime}
                  </div>
              </div>
@@ -200,7 +202,7 @@ const SidebarContent: React.FC<SidebarProps & { compact?: boolean }> = ({
                     </div>
                     <span className={`text-sm font-bold tabular-nums ${
                         isSticky ? 'text-white' :
-                        viewMode === 'PAYOUT' && rank <= bubbleIndex ? 'text-action-success' : 'text-titanium-900'
+                        viewMode === 'PAYOUT' && rank <= bubbleIndex ? 'text-mono-0 font-black' : 'text-titanium-900'
                     }`}>
                         {viewMode === 'RANK' ? `$${Math.floor(displayChips).toLocaleString()}` : getPayout(rank)}
                     </span>
@@ -222,7 +224,8 @@ const SidebarContent: React.FC<SidebarProps & { compact?: boolean }> = ({
 
         const pnlIndex = lines.findIndex((line, idx) => idx > 0 && /^[+-]\$/.test(line));
         const pnlLine = pnlIndex > 0 ? lines[pnlIndex] : null;
-        const pnlClass = pnlLine?.startsWith('+$') ? 'text-action-success' : 'text-action-destructive';
+        // US-261: Monochrome P&L - wins are high contrast black, losses are muted gray
+        const pnlClass = pnlLine?.startsWith('+$') ? 'text-mono-0 dark:text-mono-1000 font-black' : 'text-mono-400 dark:text-mono-500';
         const detailLines = lines.slice(1).filter((_, idx) => (pnlIndex < 0 ? true : idx + 1 !== pnlIndex));
 
         return (
@@ -246,7 +249,8 @@ const SidebarContent: React.FC<SidebarProps & { compact?: boolean }> = ({
         const isWin = bet.pnl > 0;
         const isLoss = bet.pnl < 0;
         const pnlText = formatPnlLabel(bet.pnl) || 'PUSH';
-        const pnlClass = isWin ? 'text-action-success' : isLoss ? 'text-action-destructive' : 'text-titanium-400';
+        // US-261: Monochrome resolved bet styling
+        const pnlClass = isWin ? 'text-mono-0 dark:text-mono-1000 font-black' : isLoss ? 'text-mono-400 dark:text-mono-500' : 'text-titanium-400';
 
         return (
             <div
@@ -346,7 +350,7 @@ export const Footer: React.FC<{ currentBet?: number; className?: string }> = ({ 
                     return (
                         <div key={i} className="flex items-center gap-2 group cursor-pointer">
                             <span className="text-titanium-500 text-[10px] font-mono group-hover:text-titanium-700">^ {i + 1}</span>
-                            <span className={`text-xs font-black tabular-nums transition-all group-hover:scale-110 ${isSelected ? 'text-action-primary' : 'text-titanium-800'}`}>
+                            <span className={`text-xs font-black tabular-nums transition-all group-hover:scale-110 ${isSelected ? 'text-mono-0 dark:text-mono-1000 underline underline-offset-2' : 'text-titanium-800'}`}>
                                 ${bet >= 1000 ? `${bet/1000}k` : bet}
                             </span>
                         </div>
@@ -354,7 +358,7 @@ export const Footer: React.FC<{ currentBet?: number; className?: string }> = ({ 
                 })}
                 <div className="flex items-center gap-2 group cursor-pointer">
                     <span className="text-titanium-500 text-[10px] font-mono group-hover:text-titanium-700">^0</span>
-                    <span className={`text-xs font-black transition-all group-hover:scale-110 ${isCustom ? 'text-action-primary' : 'text-titanium-800'}`}>Custom</span>
+                    <span className={`text-xs font-black transition-all group-hover:scale-110 ${isCustom ? 'text-mono-0 dark:text-mono-1000 underline underline-offset-2' : 'text-titanium-800'}`}>Custom</span>
                 </div>
             </div>
         </footer>
@@ -385,7 +389,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, searchQu
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="px-8 py-6 border-b border-titanium-200 flex items-center gap-4 bg-titanium-100/60 dark:border-titanium-700 dark:bg-titanium-900/70">
-                    <span className="text-action-primary font-black text-xl font-mono">&gt;</span>
+                    <span className="text-mono-0 dark:text-mono-1000 font-black text-xl font-mono">&gt;</span>
                     <input
                         ref={inputRef}
                         type="text"
@@ -405,7 +409,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, searchQu
                             className="flex items-center justify-between px-8 py-4 hover:bg-titanium-100/80 cursor-pointer group transition-all active:scale-[0.99] dark:hover:bg-titanium-800/70"
                         >
                             <div className="flex items-center gap-4">
-                                <div className="w-10 h-10 rounded-xl bg-titanium-100 border border-titanium-300 flex items-center justify-center text-[10px] font-black text-titanium-700 group-hover:bg-action-primary group-hover:text-white transition-colors shadow-soft dark:bg-titanium-800 dark:border-titanium-700 dark:text-titanium-200">
+                                <div className="w-10 h-10 rounded-xl bg-titanium-100 border border-titanium-300 flex items-center justify-center text-[10px] font-black text-titanium-700 group-hover:bg-mono-0 group-hover:text-mono-1000 transition-colors shadow-soft dark:bg-titanium-800 dark:border-titanium-700 dark:text-titanium-200 dark:group-hover:bg-mono-1000 dark:group-hover:text-mono-0">
                                     {i < 9 ? i + 1 : i === 9 ? 0 : ''}
                                 </div>
                                 <span className="text-titanium-900 font-bold text-lg tracking-tight group-hover:translate-x-1 transition-transform dark:text-titanium-100">{game}</span>
@@ -443,7 +447,7 @@ export const CustomBetOverlay: React.FC<{ isOpen: boolean; betString: string; in
                  </div>
                  <div className="flex flex-col gap-4 w-full">
                     <div className="h-1.5 bg-titanium-100 rounded-full w-full overflow-hidden">
-                        <div className="h-full bg-action-primary w-1/3 animate-pulse rounded-full shadow-lg shadow-action-primary/20" />
+                        <div className="h-full bg-mono-0 w-1/3 animate-pulse rounded-full shadow-lg shadow-mono-0/20" />
                     </div>
                     <div className="text-[11px] font-bold text-titanium-400 text-center uppercase tracking-[0.2em] mt-2">
                         Use number keys to enter amount
@@ -550,27 +554,27 @@ export const HelpOverlay: React.FC<HelpOverlayProps> = ({ isOpen, onClose, gameT
                         <Label variant="gold" size="micro" className="border-b border-titanium-100 pb-2 block">System Commands</Label>
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-8">
                             <div className="flex items-center gap-4 group cursor-pointer">
-                                <div className="w-11 h-11 flex items-center justify-center bg-white border border-titanium-200 rounded-xl font-display font-black text-sm text-titanium-900 shadow-soft group-hover:scale-110 group-hover:border-action-primary transition-all">/</div>
+                                <div className="w-11 h-11 flex items-center justify-center bg-white border border-titanium-200 rounded-xl font-display font-black text-sm text-titanium-900 shadow-soft group-hover:scale-110 group-hover:border-mono-0 dark:group-hover:border-mono-1000 transition-all">/</div>
                                 <span className="text-body-sm font-bold text-titanium-800 uppercase tracking-tight">Games</span>
                             </div>
                             <div className="flex items-center gap-4 group cursor-pointer">
-                                <div className="w-11 h-11 flex items-center justify-center bg-white border border-titanium-200 rounded-xl font-display font-black text-sm text-titanium-900 shadow-soft group-hover:scale-110 group-hover:border-action-primary transition-all">?</div>
+                                <div className="w-11 h-11 flex items-center justify-center bg-white border border-titanium-200 rounded-xl font-display font-black text-sm text-titanium-900 shadow-soft group-hover:scale-110 group-hover:border-mono-0 dark:group-hover:border-mono-1000 transition-all">?</div>
                                 <span className="text-body-sm font-bold text-titanium-800 uppercase tracking-tight">Help</span>
                             </div>
                             <div className="flex items-center gap-4 group cursor-pointer">
-                                <div className="w-11 h-11 flex items-center justify-center bg-white border border-titanium-200 rounded-xl font-display font-black text-sm text-titanium-900 shadow-soft group-hover:scale-110 group-hover:border-action-primary transition-all">L</div>
+                                <div className="w-11 h-11 flex items-center justify-center bg-white border border-titanium-200 rounded-xl font-display font-black text-sm text-titanium-900 shadow-soft group-hover:scale-110 group-hover:border-mono-0 dark:group-hover:border-mono-1000 transition-all">L</div>
                                 <span className="text-body-sm font-bold text-titanium-800 uppercase tracking-tight">Feed</span>
                             </div>
                             <div className="flex items-center gap-4 group cursor-pointer">
-                                <div className="w-11 h-11 flex items-center justify-center bg-white border border-titanium-200 rounded-xl font-display font-black text-[10px] text-titanium-900 shadow-soft group-hover:scale-110 group-hover:border-action-primary transition-all">ALT+Z</div>
+                                <div className="w-11 h-11 flex items-center justify-center bg-white border border-titanium-200 rounded-xl font-display font-black text-[10px] text-titanium-900 shadow-soft group-hover:scale-110 group-hover:border-mono-0 dark:group-hover:border-mono-1000 transition-all">ALT+Z</div>
                                 <span className="text-body-sm font-bold text-titanium-800 uppercase tracking-tight">Zen</span>
                             </div>
                             <div className="flex items-center gap-4 group cursor-pointer">
-                                <div className="w-11 h-11 flex items-center justify-center bg-white border border-titanium-200 rounded-xl font-display font-black text-[10px] text-titanium-900 shadow-soft group-hover:scale-110 group-hover:border-action-primary transition-all">ALT+R</div>
+                                <div className="w-11 h-11 flex items-center justify-center bg-white border border-titanium-200 rounded-xl font-display font-black text-[10px] text-titanium-900 shadow-soft group-hover:scale-110 group-hover:border-mono-0 dark:group-hover:border-mono-1000 transition-all">ALT+R</div>
                                 <span className="text-body-sm font-bold text-titanium-800 uppercase tracking-tight">Rewards</span>
                             </div>
                             <div className="flex items-center gap-4 group cursor-pointer">
-                                <div className="w-11 h-11 flex items-center justify-center bg-white border border-titanium-200 rounded-xl font-display font-black text-[10px] text-titanium-900 shadow-soft group-hover:scale-110 group-hover:border-action-primary transition-all">ALT+S</div>
+                                <div className="w-11 h-11 flex items-center justify-center bg-white border border-titanium-200 rounded-xl font-display font-black text-[10px] text-titanium-900 shadow-soft group-hover:scale-110 group-hover:border-mono-0 dark:group-hover:border-mono-1000 transition-all">ALT+S</div>
                                 <span className="text-body-sm font-bold text-titanium-800 uppercase tracking-tight">Safety</span>
                             </div>
                         </div>
@@ -653,7 +657,7 @@ export const ResponsiblePlayOverlay: React.FC<ResponsiblePlayOverlayProps> = ({
                         </div>
                         <div className="bg-titanium-50 p-6 rounded-[32px] border border-titanium-100 shadow-inner-light">
                             <Label size="micro" className="block mb-2 opacity-60">Return</Label>
-                            <span className={`text-2xl font-black tabular-nums ${summary.netPnl < 0 ? 'text-action-destructive' : 'text-action-success'}`}>
+                            <span className={`text-2xl font-black tabular-nums ${summary.netPnl < 0 ? 'text-mono-400 dark:text-mono-500' : 'text-mono-0 dark:text-mono-1000'}`}>
                                 {summary.netPnl >= 0 ? '+' : '-'}${Math.abs(summary.netPnl).toLocaleString()}
                             </span>
                         </div>
@@ -670,7 +674,7 @@ export const ResponsiblePlayOverlay: React.FC<ResponsiblePlayOverlayProps> = ({
                                 <p className="text-xs text-titanium-400 font-bold">Notification cadence</p>
                             </div>
                             <select
-                                className="bg-titanium-50 border border-titanium-200 rounded-2xl px-6 py-3 text-sm font-black text-titanium-800 outline-none focus:border-action-primary transition-all shadow-soft"
+                                className="bg-titanium-50 border border-titanium-200 rounded-2xl px-6 py-3 text-sm font-black text-titanium-800 outline-none focus:border-mono-0 dark:focus:border-mono-1000 transition-all shadow-soft"
                                 value={settings.realityCheckMinutes}
                                 onChange={(e) => setNumber('realityCheckMinutes', e.target.value)}
                             >
@@ -704,7 +708,7 @@ export const ResponsiblePlayOverlay: React.FC<ResponsiblePlayOverlayProps> = ({
                 <div className="p-12 border-t border-titanium-100 bg-titanium-50/50 flex items-center gap-6">
                     <button
                         onClick={onStop}
-                        className="flex-1 h-16 rounded-full border-2 border-action-destructive text-action-destructive font-black text-xs uppercase tracking-[0.3em] hover:bg-action-destructive text-white transition-all active:scale-95 shadow-lg shadow-action-destructive/10"
+                        className="flex-1 h-16 rounded-full border-2 border-mono-400 text-mono-400 font-black text-xs uppercase tracking-[0.3em] hover:bg-mono-400 hover:text-mono-1000 transition-all active:scale-95 shadow-lg shadow-mono-400/10"
                     >
                         End Session
                     </button>

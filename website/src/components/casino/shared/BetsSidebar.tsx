@@ -39,7 +39,7 @@ export function BetsSidebar<T>({
             {/* Confirmed (on-chain) bets */}
             {confirmedBets.length > 0 && (
               <div className="space-y-1">
-                <div className="text-[8px] text-action-success uppercase tracking-widest font-bold font-mono">
+                <div className="text-[8px] text-mono-0 dark:text-mono-1000 font-bold uppercase tracking-widest font-bold font-mono">
                   Confirmed ({confirmedBets.length})
                 </div>
                 {confirmedBets.map((bet, i) => renderBet(bet, i, false))}

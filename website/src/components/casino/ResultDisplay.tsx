@@ -78,37 +78,37 @@ const TIMING = {
   dismissDelay: 200,
 } as const;
 
-/** Outcome-specific colors */
+/** Outcome-specific colors - US-261: Monochrome palette */
 const OUTCOME_COLORS: Record<ResultOutcome, { primary: string; glow: string; bg: string }> = {
   win: {
-    primary: '#34C759', // action-success
-    glow: '#34C759',
-    bg: 'rgba(52, 199, 89, 0.15)',
+    primary: '#000000', // mono-0 (high contrast black for wins)
+    glow: '#FFFFFF',    // white glow on dark, inverts on light mode
+    bg: 'rgba(0, 0, 0, 0.08)',
   },
   blackjack: {
-    primary: '#FFD700', // gold
-    glow: '#FFD700',
-    bg: 'rgba(255, 215, 0, 0.15)',
+    primary: '#000000', // mono-0 (premium win)
+    glow: '#FFFFFF',
+    bg: 'rgba(0, 0, 0, 0.12)',
   },
   jackpot: {
-    primary: '#FFD700',
-    glow: '#FFD700',
-    bg: 'rgba(255, 215, 0, 0.2)',
+    primary: '#000000', // mono-0 (jackpot)
+    glow: '#FFFFFF',
+    bg: 'rgba(0, 0, 0, 0.15)',
   },
   loss: {
-    primary: '#FF3B30', // action-error
-    glow: '#FF3B30',
-    bg: 'rgba(255, 59, 48, 0.08)',
+    primary: '#525252', // mono-400 (muted for losses)
+    glow: '#737373',
+    bg: 'rgba(0, 0, 0, 0.04)',
   },
   push: {
-    primary: '#FF9F0A', // action-warning
-    glow: '#FF9F0A',
-    bg: 'rgba(255, 159, 10, 0.12)',
+    primary: '#737373', // mono-500 (neutral)
+    glow: '#A3A3A3',
+    bg: 'rgba(0, 0, 0, 0.06)',
   },
   war: {
-    primary: '#FF9F0A',
-    glow: '#FF9F0A',
-    bg: 'rgba(255, 159, 10, 0.12)',
+    primary: '#404040', // mono-300 (escalation state)
+    glow: '#525252',
+    bg: 'rgba(0, 0, 0, 0.06)',
   },
 };
 
@@ -336,8 +336,8 @@ export function ResultDisplay({
             <div
               className={cn(
                 'text-5xl font-bold tabular-nums',
-                payout > 0 && 'text-action-success',
-                payout < 0 && 'text-action-error',
+                payout > 0 && 'text-mono-0 dark:text-mono-1000 font-black',
+                payout < 0 && 'text-mono-400 dark:text-mono-500',
                 payout === 0 && 'text-titanium-300'
               )}
             >
@@ -370,7 +370,7 @@ export function ResultDisplay({
                   <span
                     className={cn(
                       'font-medium tabular-nums',
-                      item.amount >= 0 ? 'text-action-success' : 'text-action-error'
+                      item.amount >= 0 ? 'text-mono-0 dark:text-mono-1000 font-black' : 'text-mono-400 dark:text-mono-500'
                     )}
                   >
                     {item.amount >= 0 ? '+' : ''}${Math.abs(item.amount).toLocaleString()}
@@ -393,8 +393,8 @@ export function ResultDisplay({
               <p
                 className={cn(
                   'text-xl font-semibold tabular-nums',
-                  sessionDelta > 0 && 'text-action-success',
-                  sessionDelta < 0 && 'text-action-error',
+                  sessionDelta > 0 && 'text-mono-0 dark:text-mono-1000 font-black',
+                  sessionDelta < 0 && 'text-mono-400 dark:text-mono-500',
                   sessionDelta === 0 && 'text-titanium-300'
                 )}
               >

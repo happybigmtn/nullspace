@@ -366,3 +366,26 @@ Categories by count:
     - Checks auth/gateway health endpoints
 - Blockers: None. Documentation covers full CDN setup for production.
 
+### 2026-01-09 - US-261: Web UI monochrome refactor + alignment cleanup
+- Files: website/src/components/casino/Layout.tsx, website/src/components/casino/ResultDisplay.tsx, website/src/components/casino/ActiveGame.tsx, website/src/components/casino/ui/Label.tsx, and 23 other casino component files
+- Decisions:
+  - Replaced all action-* color accents with monochrome tokens across 27 casino components
+  - Win states: text-mono-0 dark:text-mono-1000 font-bold (high contrast black/white)
+  - Loss states: text-mono-400 dark:text-mono-500 (muted gray)
+  - Primary/interactive: text-mono-0 dark:text-mono-1000 (black/white)
+  - Border accents: border-mono-0, border-mono-400
+  - Removed 270 action-* color references total
+  - ResultDisplay outcome colors converted to grayscale (wins=black, losses=muted)
+  - Label variants (success, destructive, gold) now use contrast instead of hue
+  - Tournament alerts use black background with white text
+  - Session P&L uses weight/contrast instead of green/red
+- Files updated:
+  - Layout.tsx: Header, Footer, TournamentAlert, Sidebar, CommandPalette, HelpOverlay, ResponsiblePlayOverlay
+  - ResultDisplay.tsx: OUTCOME_COLORS, payout text classes
+  - ActiveGame.tsx: AI Insights panel, super mode labels
+  - ui/Label.tsx: Variant color definitions
+  - All 10 game views (Blackjack, Roulette, Craps, Baccarat, etc.)
+  - ModeSelectView.tsx: Floating particles, gradients
+  - Pseudo3DChip.tsx: Focus ring colors
+- Blockers: None. Typecheck and lint pass. Mobile monochrome (US-262) is separate story.
+

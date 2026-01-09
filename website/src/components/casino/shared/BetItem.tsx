@@ -29,7 +29,7 @@ export const BetItem: React.FC<BetItemProps> = ({
       className={`
         flex justify-between items-center text-xs border p-1 rounded cursor-pointer transition-colors
         ${isCandidate
-          ? 'border-action-primary bg-action-primary/10'
+          ? 'border-mono-0 bg-mono-0/10'
           : isPending
             ? 'border-dashed border-amber-600/50 bg-amber-900/20 opacity-80'
             : 'border-gray-800 bg-black/50 hover:bg-gray-800'
@@ -41,10 +41,10 @@ export const BetItem: React.FC<BetItemProps> = ({
         <span
           className={`font-bold font-mono text-[10px] ${
             isCandidate
-              ? 'text-action-primary'
+              ? 'text-mono-0 dark:text-mono-1000'
               : isPending
                 ? 'text-amber-400'
-                : 'text-action-success'
+                : 'text-mono-0 dark:text-mono-1000 font-bold'
           }`}
         >
           {candidateLabel ? `${candidateLabel} ` : ''}
@@ -58,7 +58,7 @@ export const BetItem: React.FC<BetItemProps> = ({
       <div className="text-right">
         <div className="text-white font-mono text-[10px]">${amount}</div>
         {oddsAmount && oddsAmount > 0 && (
-          <div className="text-[9px] text-action-primary font-mono">+${oddsAmount}</div>
+          <div className="text-[9px] text-mono-0 dark:text-mono-1000 font-mono">+${oddsAmount}</div>
         )}
       </div>
     </div>

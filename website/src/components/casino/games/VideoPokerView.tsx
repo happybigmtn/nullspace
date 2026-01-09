@@ -50,7 +50,7 @@ export const VideoPokerView = React.memo<VideoPokerViewProps & { lastWin?: numbe
                             {VIDEO_POKER_PAYTABLE.slice(0, 5).map(row => (
                                 <div key={row.rank} className="flex justify-between text-[10px] font-bold text-titanium-800">
                                     <span>{row.rank}</span>
-                                    <span className="text-action-primary">{row.multiplier}x</span>
+                                    <span className="text-mono-0 dark:text-mono-1000">{row.multiplier}x</span>
                                 </div>
                             ))}
                         </div>
@@ -67,7 +67,7 @@ export const VideoPokerView = React.memo<VideoPokerViewProps & { lastWin?: numbe
                     <div className="flex items-center justify-center gap-2">
                         <div className={`px-4 py-1.5 rounded-full border-2 transition-all shadow-soft ${
                             handMultiplier > 0 
-                                ? 'border-action-success bg-action-success/5 text-action-success scale-110' 
+                                ? 'border-mono-0 bg-mono-0/5 text-mono-0 dark:text-mono-1000 font-bold scale-110' 
                                 : 'border-titanium-200 bg-white text-titanium-400 opacity-60'
                         }`}>
                             <span className="text-xs font-black uppercase tracking-widest">
@@ -90,11 +90,11 @@ export const VideoPokerView = React.memo<VideoPokerViewProps & { lastWin?: numbe
                             className="flex flex-col items-center gap-4 transition-all duration-300 hover:-translate-y-2 active:scale-95 group"
                         >
                              <div className={`relative rounded-2xl transition-all duration-500 ${
-                                card.isHeld ? 'ring-4 ring-action-primary ring-offset-4 shadow-float' : ''
+                                card.isHeld ? 'ring-4 ring-mono-0 dark:ring-mono-1000 ring-offset-4 shadow-float' : ''
                              }`}>
                                 <Hand cards={[card]} />
                                 {card.isHeld && (
-                                    <div className="absolute -top-3 -right-3 bg-action-primary text-white rounded-full w-8 h-8 flex items-center justify-center shadow-lg border-2 border-white">
+                                    <div className="absolute -top-3 -right-3 bg-mono-0 text-white rounded-full w-8 h-8 flex items-center justify-center shadow-lg border-2 border-white">
                                         <span className="text-[10px] font-black">✓</span>
                                     </div>
                                 )}
@@ -123,14 +123,14 @@ export const VideoPokerView = React.memo<VideoPokerViewProps & { lastWin?: numbe
                                     key={row.rank}
                                     className={`flex items-center justify-between p-3 rounded-2xl border transition-all ${
                                         highlightRank === row.rank
-                                            ? 'bg-action-success/5 border-action-success shadow-soft'
+                                            ? 'bg-mono-0/5 border-mono-0 shadow-soft'
                                             : 'bg-white border-titanium-100'
                                     }`}
                                 >
-                                    <span className={`text-[10px] font-bold uppercase tracking-tight ${highlightRank === row.rank ? 'text-action-success' : 'text-titanium-800'}`}>
+                                    <span className={`text-[10px] font-bold uppercase tracking-tight ${highlightRank === row.rank ? 'text-mono-0 dark:text-mono-1000 font-bold' : 'text-titanium-800'}`}>
                                         {row.rank}
                                     </span>
-                                    <span className={`text-xs font-black ${highlightRank === row.rank ? 'text-action-success' : 'text-action-primary'}`}>
+                                    <span className={`text-xs font-black ${highlightRank === row.rank ? 'text-mono-0 dark:text-mono-1000 font-bold' : 'text-mono-0 dark:text-mono-1000'}`}>
                                         {row.multiplier}x
                                     </span>
                                 </div>
@@ -140,7 +140,7 @@ export const VideoPokerView = React.memo<VideoPokerViewProps & { lastWin?: numbe
                     <button
                         type="button"
                         onClick={gameState.stage === 'PLAYING' ? actions?.drawVideoPoker : actions?.deal}
-                        className="ns-control-primary h-14 px-12 rounded-full border-2 font-bold text-lg font-display tracking-tight uppercase transition-all shadow-soft border-action-primary bg-action-primary text-white hover:bg-action-primary-hover hover:scale-105 active:scale-95"
+                        className="ns-control-primary h-14 px-12 rounded-full border-2 font-bold text-lg font-display tracking-tight uppercase transition-all shadow-soft border-mono-0 bg-mono-0 text-white hover:bg-mono-0-hover hover:scale-105 active:scale-95"
                     >
                         {gameState.stage === 'PLAYING' ? 'DRAW' : gameState.stage === 'RESULT' ? 'NEW HAND' : 'DEAL'}
                     </button>
