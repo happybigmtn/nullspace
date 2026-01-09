@@ -861,8 +861,8 @@
         "Apply to casino header, bet slip, and game control bar",
         "Remove ad-hoc per-screen styling overrides"
       ],
-      "passes": false,
-      "notes": "Consolidates the visual system into a tight set of composable primitives."
+      "passes": true,
+      "notes": "Created Glass.tsx with GlassCard, GlassToolbar, GlassChip, GlassModal, GlassSurface components. Defined flat/float/overlay depth scale mapping to LIQUID_CRYSTAL tokens (mist/smoke/fog levels). Applied to Header (flat), Footer (flat), GameControlBar (float), bottom sheet (overlay), CommandPalette (overlay), CustomBetOverlay (overlay). Also created ui/index.ts exports and lib/utils.ts cn() helper."
     },
     {
       "id": "US-267",

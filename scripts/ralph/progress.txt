@@ -497,3 +497,29 @@ Categories by count:
   - animate-lc-sweep, animate-lc-refract animations
 - Docs: Created docs/design.md with complete usage guide, examples, accessibility guidelines
 - Blockers: None. All typechecks and tests pass.
+
+### 2026-01-09 - US-266: Edgy monochrome + Liquid Glass component kit
+- Files: website/src/components/ui/Glass.tsx (new), website/src/components/ui/index.ts (new), website/src/lib/utils.ts (new), website/src/components/casino/Layout.tsx, website/src/components/casino/GameControlBar.tsx
+- Decisions:
+  - Created Glass.tsx with 5 reusable components:
+    - GlassCard: Content panels with configurable padding, radius, and interactive states
+    - GlassToolbar: Horizontal action bars with position presets (top/bottom/inline)
+    - GlassChip: Compact buttons/pills with selected/disabled states
+    - GlassModal: Dialog and sheet overlays with backdrop and close handling
+    - GlassSurface: Generic glass container supporting multiple HTML elements
+  - Defined 3-tier depth scale mapping to Liquid Crystal tokens:
+    - flat: mist level (8% opacity), subtle blur, minimal shadow - for flush surfaces
+    - float: smoke level (18% opacity), standard blur, float shadow - for elevated elements
+    - overlay: fog level (25% opacity), heavy blur, modal shadow - for maximum separation
+  - Each depth includes: bg color, border, backdrop-filter, shadow, and @supports fallback
+  - Applied Glass components to casino UI:
+    - Header: GlassSurface depth="flat" (previously ad-hoc bg-glass-light)
+    - Footer: GlassSurface depth="flat" (previously ad-hoc bg-glass-light)
+    - GameControlBar: GlassSurface depth="float" (previously bg-white/80 backdrop-blur-2xl)
+    - Bottom sheet overlay: GlassSurface depth="overlay"
+    - CommandPalette: GlassSurface depth="overlay"
+    - CustomBetOverlay: GlassSurface depth="overlay"
+  - Created ui/index.ts barrel export for all UI components
+  - Created lib/utils.ts with cn() classname helper (was missing, causing build failure)
+  - Fixed ui/index.ts export: GameSkeleton → GameCardSkeleton (correct export name)
+- Blockers: None. Build passes, pre-existing typecheck errors unrelated to this work.
