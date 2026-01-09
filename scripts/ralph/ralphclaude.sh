@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# Usage: ralph.sh [iterations] [-v|--verbose]
+# Usage: ralphclaude.sh [iterations] [-v|--verbose]
 MAX_ITERATIONS=10
 VERBOSE=false
 
@@ -19,18 +19,6 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 # Change to project root so relative paths in prompt.md work
 cd "$PROJECT_ROOT"
 
-# Colors for output
-CYAN='\033[0;36m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-RED='\033[0;31m'
-DIM='\033[0;90m'
-BOLD='\033[1m'
-NC='\033[0m'
-
-# Codex configuration (override via env vars if needed)
-CODEX_MODEL="${CODEX_MODEL:-gpt-5.2-codex}"
-CODEX_REASONING_EFFORT="${CODEX_REASONING_EFFORT:-xhigh}"
 # Avoid interactive/watch modes in CI-style runs
 export CI="${CI:-1}"
 # Hard stop to prevent hangs (e.g., Jest open-handle stalls)
@@ -44,15 +32,22 @@ run_agent() {
   fi
 }
 
-# Filter function to extract readable output (JSON stream or plain text)
+# Colors for output
+CYAN='\033[0;36m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+RED='\033[0;31m'
+DIM='\033[0;90m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+# Filter function to extract readable output from stream-json
 filter_output() {
   while IFS= read -r line; do
     [[ -z "$line" ]] && continue
 
     # Validate JSON before parsing
     if ! echo "$line" | jq -e . >/dev/null 2>&1; then
-      # Non-JSON output (Codex): print a concise line
-      echo -e "${CYAN}▸${NC} ${line:0:160}"
       continue
     fi
 
@@ -135,18 +130,17 @@ for i in $(seq 1 $MAX_ITERATIONS); do
   echo -e "${BOLD}═══ Iteration $i/$MAX_ITERATIONS ═══${NC}"
 
   if $VERBOSE; then
-    # Verbose: show raw Codex output
-    run_agent codex exec --yolo \
-      -m "$CODEX_MODEL" \
-      -c model_reasoning_effort="$CODEX_REASONING_EFFORT" \
-      -C "$PROJECT_ROOT" - < "$SCRIPT_DIR/prompt.md" 2>&1 \
+    # Verbose: show raw stream-json output
+    run_agent claude --dangerously-skip-permissions --verbose \
+      --output-format stream-json \
+      -p "$(cat "$SCRIPT_DIR/prompt.md")" 2>&1 \
       | tee "$RAWFILE" || true
   else
-    # Concise: summarize output (JSON if available, otherwise plain text)
-    run_agent codex exec --yolo \
-      -m "$CODEX_MODEL" \
-      -c model_reasoning_effort="$CODEX_REASONING_EFFORT" \
-      -C "$PROJECT_ROOT" - < "$SCRIPT_DIR/prompt.md" 2>&1 \
+    # Concise: filter stream-json to readable summaries
+    # Note: stream-json requires --verbose flag
+    run_agent claude --dangerously-skip-permissions --verbose \
+      --output-format stream-json \
+      -p "$(cat "$SCRIPT_DIR/prompt.md")" 2>&1 \
       | tee "$RAWFILE" \
       | filter_output || true
   fi

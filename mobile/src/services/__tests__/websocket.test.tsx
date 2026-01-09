@@ -79,6 +79,20 @@ type HookSnapshot = WebSocketManager & {
 };
 
 const snapshots: HookSnapshot[] = [];
+const renderers: TestRenderer.ReactTestRenderer[] = [];
+
+function renderWithCleanup(node: React.ReactElement) {
+  let renderer: TestRenderer.ReactTestRenderer;
+  act(() => {
+    renderer = TestRenderer.create(node);
+  });
+  renderers.push(renderer!);
+  return renderer!;
+}
+
+function renderHook(url: string) {
+  return renderWithCleanup(<HookProbe url={url} />);
+}
 
 function HookProbe({ url }: { url: string }) {
   const state = useWebSocket(url) as HookSnapshot;
@@ -99,7 +113,7 @@ function getSocket(index = 0): MockWebSocket {
 
 /** Helper to get the last MockWebSocket instance with assertion */
 function getLastSocket(): MockWebSocket {
-  const socket = getLastSocket();
+  const socket = MockWebSocket.instances[MockWebSocket.instances.length - 1];
   if (!socket) {
     throw new Error('MockWebSocket.instances is empty');
   }
@@ -119,7 +133,12 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  jest.runOnlyPendingTimers();
+  act(() => {
+    renderers.splice(0).forEach((renderer) => renderer.unmount());
+  });
+  act(() => {
+    jest.runOnlyPendingTimers();
+  });
   jest.useRealTimers();
   jest.restoreAllMocks();
   jest.clearAllMocks();
@@ -134,7 +153,7 @@ afterAll(() => {
 describe('useWebSocket', () => {
   it('connects, receives messages, and sends payloads', () => {
     act(() => {
-      TestRenderer.create(<HookProbe url="ws://example.test" />);
+      renderHook('ws://example.test');
     });
 
     const socket = getSocket();
@@ -162,7 +181,7 @@ describe('useWebSocket', () => {
 
   it('reconnects after an unclean close with backoff', () => {
     act(() => {
-      TestRenderer.create(<HookProbe url="ws://example.test" />);
+      renderHook('ws://example.test');
     });
 
     const socket = getSocket();
@@ -185,7 +204,7 @@ describe('useWebSocket', () => {
   it('handles clean close without scheduling reconnects', () => {
     jest.spyOn(console, 'log').mockImplementation(() => {});
     act(() => {
-      TestRenderer.create(<HookProbe url="ws://example.test" />);
+      renderHook('ws://example.test');
     });
 
     const socket = getSocket();
@@ -214,7 +233,7 @@ describe('useWebSocket', () => {
     jest.spyOn(console, 'error').mockImplementation(() => {});
     jest.spyOn(console, 'log').mockImplementation(() => {});
     act(() => {
-      TestRenderer.create(<HookProbe url="ws://example.test" />);
+      renderHook('ws://example.test');
     });
 
     const socket = getSocket();
@@ -251,7 +270,7 @@ describe('useWebSocket', () => {
       jest.spyOn(console, 'error').mockImplementation(() => {});
 
       act(() => {
-        TestRenderer.create(<HookProbe url="ws://example.test" />);
+        renderHook('ws://example.test');
       });
 
       // Simulate 10 unclean disconnections and reconnect attempts
@@ -285,7 +304,7 @@ describe('useWebSocket', () => {
 
     it('exposes maxReconnectAttempts constant as 10', () => {
       act(() => {
-        TestRenderer.create(<HookProbe url="ws://example.test" />);
+        renderHook('ws://example.test');
       });
 
       const state = snapshots.at(-1);
@@ -298,7 +317,7 @@ describe('useWebSocket', () => {
       jest.spyOn(console, 'log').mockImplementation(() => {});
 
       act(() => {
-        TestRenderer.create(<HookProbe url="ws://example.test" />);
+        renderHook('ws://example.test');
       });
 
       // Expected delays: 1s, 2s, 4s, 8s, 16s, 30s (capped), 30s, 30s, 30s, 30s
@@ -349,7 +368,7 @@ describe('useWebSocket', () => {
       jest.spyOn(console, 'error').mockImplementation(() => {});
 
       act(() => {
-        TestRenderer.create(<HookProbe url="ws://example.test" />);
+        renderHook('ws://example.test');
       });
 
       // Exhaust reconnect attempts to reach failed state
@@ -395,7 +414,7 @@ describe('useWebSocket', () => {
       jest.spyOn(console, 'error').mockImplementation(() => {});
 
       act(() => {
-        TestRenderer.create(<HookProbe url="ws://example.test" />);
+        renderHook('ws://example.test');
       });
 
       // Exhaust reconnects to failed state
@@ -441,7 +460,7 @@ describe('useWebSocket', () => {
       jest.spyOn(console, 'warn').mockImplementation(() => {});
 
       act(() => {
-        TestRenderer.create(<HookProbe url="ws://example.test" />);
+        renderHook('ws://example.test');
       });
 
       // Socket is in 'connecting' state, messages get queued
@@ -494,7 +513,7 @@ describe('useWebSocket', () => {
       jest.spyOn(console, 'warn').mockImplementation(() => {});
 
       act(() => {
-        TestRenderer.create(<HookProbe url="ws://example.test" />);
+        renderHook('ws://example.test');
       });
 
       const socket = getSocket();
@@ -539,7 +558,7 @@ describe('useWebSocket', () => {
       jest.spyOn(console, 'warn').mockImplementation(() => {});
 
       act(() => {
-        TestRenderer.create(<HookProbe url="ws://example.test" />);
+        renderHook('ws://example.test');
       });
 
       const state = snapshots.at(-1);
@@ -581,7 +600,7 @@ describe('useWebSocket', () => {
       jest.spyOn(console, 'warn').mockImplementation(() => {});
 
       act(() => {
-        TestRenderer.create(<HookProbe url="ws://example.test" />);
+        renderHook('ws://example.test');
       });
 
       const state = snapshots.at(-1);
@@ -609,7 +628,7 @@ describe('useWebSocket', () => {
       jest.spyOn(console, 'error').mockImplementation(() => {});
 
       act(() => {
-        TestRenderer.create(<HookProbe url="ws://example.test" />);
+        renderHook('ws://example.test');
       });
 
       // Exhaust reconnect attempts to reach failed state
@@ -647,7 +666,7 @@ describe('useWebSocket', () => {
       jest.spyOn(console, 'warn').mockImplementation(() => {});
 
       act(() => {
-        TestRenderer.create(<HookProbe url="ws://example.test" />);
+        renderWithCleanup(<HookProbe url="ws://example.test" />);
       });
 
       const initialState = snapshots.at(-1);
@@ -683,7 +702,7 @@ describe('useWebSocket', () => {
       jest.spyOn(console, 'warn').mockImplementation(() => {});
 
       act(() => {
-        TestRenderer.create(<HookProbe url="ws://example.test" />);
+        renderWithCleanup(<HookProbe url="ws://example.test" />);
       });
 
       const state = snapshots.at(-1);
@@ -708,7 +727,7 @@ describe('useWebSocket', () => {
       jest.spyOn(console, 'warn').mockImplementation(() => {});
 
       act(() => {
-        TestRenderer.create(<HookProbe url="ws://example.test" />);
+        renderWithCleanup(<HookProbe url="ws://example.test" />);
       });
 
       const state = snapshots.at(-1);
@@ -752,7 +771,7 @@ describe('useWebSocket', () => {
       jest.spyOn(console, 'warn').mockImplementation(() => {});
 
       act(() => {
-        TestRenderer.create(<HookProbe url="ws://example.test" />);
+        renderWithCleanup(<HookProbe url="ws://example.test" />);
       });
 
       const state = snapshots.at(-1);
@@ -803,7 +822,7 @@ describe('useWebSocket', () => {
       jest.spyOn(console, 'warn').mockImplementation(() => {});
 
       act(() => {
-        TestRenderer.create(<HookProbe url="ws://example.test" />);
+        renderWithCleanup(<HookProbe url="ws://example.test" />);
       });
 
       const state = snapshots.at(-1);
@@ -859,7 +878,7 @@ describe('useWebSocket', () => {
       jest.spyOn(console, 'warn').mockImplementation(() => {});
 
       act(() => {
-        TestRenderer.create(<HookProbe url="ws://example.test" />);
+        renderWithCleanup(<HookProbe url="ws://example.test" />);
       });
 
       const socket = getSocket();
@@ -915,7 +934,7 @@ describe('useWebSocket', () => {
       jest.spyOn(console, 'warn').mockImplementation(() => {});
 
       act(() => {
-        TestRenderer.create(<HookProbe url="ws://example.test" />);
+        renderWithCleanup(<HookProbe url="ws://example.test" />);
       });
 
       const state = snapshots.at(-1);
@@ -969,7 +988,7 @@ describe('useWebSocket', () => {
       jest.spyOn(console, 'warn').mockImplementation(() => {});
 
       act(() => {
-        TestRenderer.create(<HookProbe url="ws://example.test" />);
+        renderWithCleanup(<HookProbe url="ws://example.test" />);
       });
 
       const state = snapshots.at(-1);
@@ -1034,7 +1053,7 @@ describe('useWebSocket', () => {
       jest.spyOn(console, 'warn').mockImplementation(() => {});
 
       act(() => {
-        TestRenderer.create(<HookProbe url="ws://example.test" />);
+        renderWithCleanup(<HookProbe url="ws://example.test" />);
       });
 
       const state = snapshots.at(-1);
@@ -1068,7 +1087,7 @@ describe('useWebSocket', () => {
       jest.spyOn(console, 'warn').mockImplementation(() => {});
 
       act(() => {
-        TestRenderer.create(<HookProbe url="ws://example.test" />);
+        renderWithCleanup(<HookProbe url="ws://example.test" />);
       });
 
       const state = snapshots.at(-1);
@@ -1106,7 +1125,7 @@ describe('useWebSocket', () => {
       jest.spyOn(console, 'warn').mockImplementation(() => {});
 
       act(() => {
-        TestRenderer.create(<HookProbe url="ws://example.test" />);
+        renderWithCleanup(<HookProbe url="ws://example.test" />);
       });
 
       const state = snapshots.at(-1);
@@ -1143,7 +1162,7 @@ describe('useWebSocket', () => {
       jest.spyOn(console, 'warn').mockImplementation(() => {});
 
       act(() => {
-        TestRenderer.create(<HookProbe url="ws://example.test" />);
+        renderWithCleanup(<HookProbe url="ws://example.test" />);
       });
 
       const state = snapshots.at(-1);
@@ -1180,7 +1199,7 @@ describe('useWebSocket', () => {
       jest.spyOn(console, 'warn').mockImplementation(() => {});
 
       act(() => {
-        TestRenderer.create(<HookProbe url="ws://example.test" />);
+        renderWithCleanup(<HookProbe url="ws://example.test" />);
       });
 
       const state = snapshots.at(-1);
@@ -1224,7 +1243,7 @@ describe('useWebSocket', () => {
       jest.spyOn(console, 'warn').mockImplementation(() => {});
 
       act(() => {
-        TestRenderer.create(<HookProbe url="ws://example.test" />);
+        renderWithCleanup(<HookProbe url="ws://example.test" />);
       });
 
       const state = snapshots.at(-1);
@@ -1254,7 +1273,7 @@ describe('useWebSocket', () => {
       jest.spyOn(console, 'warn').mockImplementation(() => {});
 
       act(() => {
-        TestRenderer.create(<HookProbe url="ws://example.test" />);
+        renderWithCleanup(<HookProbe url="ws://example.test" />);
       });
 
       const state = snapshots.at(-1);
@@ -1292,7 +1311,7 @@ describe('useWebSocket', () => {
       jest.spyOn(console, 'warn').mockImplementation(() => {});
 
       act(() => {
-        TestRenderer.create(<HookProbe url="ws://example.test" />);
+        renderWithCleanup(<HookProbe url="ws://example.test" />);
       });
 
       const state = snapshots.at(-1);
@@ -1329,7 +1348,7 @@ describe('useWebSocket', () => {
       jest.spyOn(console, 'warn').mockImplementation(() => {});
 
       act(() => {
-        TestRenderer.create(<HookProbe url="ws://example.test" />);
+        renderWithCleanup(<HookProbe url="ws://example.test" />);
       });
 
       const state = snapshots.at(-1);
@@ -1457,7 +1476,7 @@ describe('useWebSocket', () => {
       // This simulates a clock jump forward (e.g., NTP correction)
 
       act(() => {
-        TestRenderer.create(<HookProbe url="ws://example.test" />);
+        renderWithCleanup(<HookProbe url="ws://example.test" />);
       });
 
       const state = snapshots.at(-1);
@@ -1500,7 +1519,7 @@ describe('useWebSocket', () => {
       // than dropped. The server will validate the nonce anyway.
 
       act(() => {
-        TestRenderer.create(<HookProbe url="ws://example.test" />);
+        renderWithCleanup(<HookProbe url="ws://example.test" />);
       });
 
       const state = snapshots.at(-1);
@@ -1532,7 +1551,7 @@ describe('useWebSocket', () => {
       jest.spyOn(console, 'warn').mockImplementation(() => {});
 
       act(() => {
-        TestRenderer.create(<HookProbe url="ws://example.test" />);
+        renderWithCleanup(<HookProbe url="ws://example.test" />);
       });
 
       const state = snapshots.at(-1);
@@ -1564,7 +1583,7 @@ describe('useWebSocket', () => {
       jest.spyOn(console, 'warn').mockImplementation(() => {});
 
       act(() => {
-        TestRenderer.create(<HookProbe url="ws://example.test" />);
+        renderWithCleanup(<HookProbe url="ws://example.test" />);
       });
 
       const state = snapshots.at(-1);
@@ -1614,7 +1633,7 @@ describe('useWebSocket', () => {
       jest.spyOn(console, 'warn').mockImplementation(() => {});
 
       act(() => {
-        TestRenderer.create(<HookProbe url="ws://example.test" />);
+        renderWithCleanup(<HookProbe url="ws://example.test" />);
       });
 
       const state = snapshots.at(-1);
@@ -1664,7 +1683,7 @@ describe('useWebSocket', () => {
       jest.spyOn(console, 'log').mockImplementation(() => {});
 
       act(() => {
-        TestRenderer.create(<HookProbe url="ws://example.test" />);
+        renderWithCleanup(<HookProbe url="ws://example.test" />);
       });
 
       // Initially 0 attempts
@@ -1691,7 +1710,7 @@ describe('useWebSocket', () => {
       jest.spyOn(console, 'error').mockImplementation(() => {});
 
       act(() => {
-        TestRenderer.create(<HookProbe url="ws://example.test" />);
+        renderWithCleanup(<HookProbe url="ws://example.test" />);
       });
 
       // Exhaust all attempts
@@ -1770,7 +1789,7 @@ describe('multi-game session preservation (US-067)', () => {
     jest.spyOn(console, 'error').mockImplementation(() => {}); // Suppress validation errors
 
     act(() => {
-      TestRenderer.create(<HookProbe url="ws://example.test" />);
+      renderWithCleanup(<HookProbe url="ws://example.test" />);
     });
 
     const socket = getSocket();
@@ -1811,7 +1830,7 @@ describe('multi-game session preservation (US-067)', () => {
     };
 
     act(() => {
-      TestRenderer.create(<BalanceTracker />);
+      renderWithCleanup(<BalanceTracker />);
     });
 
     const socket = getSocket();
@@ -1841,7 +1860,7 @@ describe('multi-game session preservation (US-067)', () => {
 
   it('maintains connection during rapid game switching', () => {
     act(() => {
-      TestRenderer.create(<HookProbe url="ws://example.test" />);
+      renderWithCleanup(<HookProbe url="ws://example.test" />);
     });
 
     const socket = getSocket();
@@ -1879,7 +1898,7 @@ describe('multi-game session preservation (US-067)', () => {
     };
 
     act(() => {
-      TestRenderer.create(<StateTracker />);
+      renderWithCleanup(<StateTracker />);
     });
 
     const socket = getSocket();
@@ -1911,7 +1930,7 @@ describe('multi-game session preservation (US-067)', () => {
     jest.spyOn(console, 'log').mockImplementation(() => {});
 
     act(() => {
-      TestRenderer.create(<HookProbe url="ws://example.test" />);
+      renderWithCleanup(<HookProbe url="ws://example.test" />);
     });
 
     const socket1 = getSocket();
@@ -1966,7 +1985,7 @@ describe('multi-game session preservation (US-067)', () => {
     // 4. Single source of truth for connection status
 
     act(() => {
-      TestRenderer.create(<HookProbe url="ws://example.test" />);
+      renderWithCleanup(<HookProbe url="ws://example.test" />);
     });
 
     // Only one WebSocket instance created
@@ -1990,7 +2009,7 @@ describe('disconnect function (US-068)', () => {
 
   it('closes WebSocket cleanly with code 1000', () => {
     act(() => {
-      TestRenderer.create(<HookProbe url="ws://example.test" />);
+      renderWithCleanup(<HookProbe url="ws://example.test" />);
     });
 
     const socket = getSocket();
@@ -2015,7 +2034,7 @@ describe('disconnect function (US-068)', () => {
     jest.spyOn(console, 'log').mockImplementation(() => {});
 
     act(() => {
-      TestRenderer.create(<HookProbe url="ws://example.test" />);
+      renderWithCleanup(<HookProbe url="ws://example.test" />);
     });
 
     const socket = getSocket();
@@ -2050,7 +2069,7 @@ describe('disconnect function (US-068)', () => {
     jest.spyOn(console, 'log').mockImplementation(() => {});
 
     act(() => {
-      TestRenderer.create(<HookProbe url="ws://example.test" />);
+      renderWithCleanup(<HookProbe url="ws://example.test" />);
     });
 
     const state = snapshots.at(-1);
@@ -2085,7 +2104,7 @@ describe('disconnect function (US-068)', () => {
     jest.spyOn(console, 'log').mockImplementation(() => {});
 
     act(() => {
-      TestRenderer.create(<HookProbe url="ws://example.test" />);
+      renderWithCleanup(<HookProbe url="ws://example.test" />);
     });
 
     const socket = getSocket();
@@ -2114,7 +2133,7 @@ describe('disconnect function (US-068)', () => {
 
   it('sets connection state to disconnected after disconnect', () => {
     act(() => {
-      TestRenderer.create(<HookProbe url="ws://example.test" />);
+      renderWithCleanup(<HookProbe url="ws://example.test" />);
     });
 
     const socket = getSocket();
@@ -2139,7 +2158,7 @@ describe('disconnect function (US-068)', () => {
     jest.spyOn(console, 'log').mockImplementation(() => {});
 
     act(() => {
-      TestRenderer.create(<HookProbe url="ws://example.test" />);
+      renderWithCleanup(<HookProbe url="ws://example.test" />);
     });
 
     const socket = getSocket();
@@ -2192,7 +2211,7 @@ describe('message queue idempotency (US-098)', () => {
     jest.spyOn(console, 'log').mockImplementation(() => {});
 
     act(() => {
-      TestRenderer.create(<HookProbe url="ws://example.test" />);
+      renderWithCleanup(<HookProbe url="ws://example.test" />);
     });
 
     const state = snapshots.at(-1);
@@ -2218,7 +2237,7 @@ describe('message queue idempotency (US-098)', () => {
     jest.spyOn(console, 'log').mockImplementation(() => {});
 
     act(() => {
-      TestRenderer.create(<HookProbe url="ws://example.test" />);
+      renderWithCleanup(<HookProbe url="ws://example.test" />);
     });
 
     const state = snapshots.at(-1);
@@ -2269,7 +2288,7 @@ describe('message queue idempotency (US-098)', () => {
     jest.spyOn(console, 'log').mockImplementation(() => {});
 
     act(() => {
-      TestRenderer.create(<HookProbe url="ws://example.test" />);
+      renderWithCleanup(<HookProbe url="ws://example.test" />);
     });
 
     const socket = getSocket();
@@ -2300,7 +2319,7 @@ describe('message queue idempotency (US-098)', () => {
     jest.spyOn(console, 'warn').mockImplementation(() => {});
 
     act(() => {
-      TestRenderer.create(<HookProbe url="ws://example.test" />);
+      renderWithCleanup(<HookProbe url="ws://example.test" />);
     });
 
     const state = snapshots.at(-1);
@@ -2333,7 +2352,7 @@ describe('message queue idempotency (US-098)', () => {
     jest.spyOn(console, 'log').mockImplementation(() => {});
 
     act(() => {
-      TestRenderer.create(<HookProbe url="ws://example.test" />);
+      renderWithCleanup(<HookProbe url="ws://example.test" />);
     });
 
     // First connection
@@ -2380,7 +2399,7 @@ describe('message queue idempotency (US-098)', () => {
     jest.spyOn(console, 'log').mockImplementation(() => {});
 
     act(() => {
-      TestRenderer.create(<HookProbe url="ws://example.test" />);
+      renderWithCleanup(<HookProbe url="ws://example.test" />);
     });
 
     const state = snapshots.at(-1);
@@ -2439,7 +2458,7 @@ describe('message queue idempotency (US-098)', () => {
     jest.spyOn(console, 'log').mockImplementation(() => {});
 
     act(() => {
-      TestRenderer.create(<HookProbe url="ws://example.test" />);
+      renderWithCleanup(<HookProbe url="ws://example.test" />);
     });
 
     const state = snapshots.at(-1);
@@ -2493,7 +2512,7 @@ describe('onMessageDropped callback (US-099)', () => {
     }
 
     act(() => {
-      TestRenderer.create(<HookProbeWithCallback url="ws://example.test" />);
+      renderWithCleanup(<HookProbeWithCallback url="ws://example.test" />);
     });
 
     const state = snapshots.at(-1);
@@ -2536,7 +2555,7 @@ describe('onMessageDropped callback (US-099)', () => {
     }
 
     act(() => {
-      TestRenderer.create(<HookProbeWithCallback url="ws://example.test" />);
+      renderWithCleanup(<HookProbeWithCallback url="ws://example.test" />);
     });
 
     const state = snapshots.at(-1);
@@ -2579,7 +2598,7 @@ describe('onMessageDropped callback (US-099)', () => {
     }
 
     act(() => {
-      TestRenderer.create(<HookProbeWithCallback url="ws://example.test" />);
+      renderWithCleanup(<HookProbeWithCallback url="ws://example.test" />);
     });
 
     const state = snapshots.at(-1);
@@ -2622,7 +2641,7 @@ describe('onMessageDropped callback (US-099)', () => {
     }
 
     act(() => {
-      TestRenderer.create(<HookProbeWithCallback url="ws://example.test" />);
+      renderWithCleanup(<HookProbeWithCallback url="ws://example.test" />);
     });
 
     const state = snapshots.at(-1);
@@ -2683,7 +2702,7 @@ describe('onMessageDropped callback (US-099)', () => {
     }
 
     act(() => {
-      TestRenderer.create(<HookProbeWithCallback url="ws://example.test" />);
+      renderWithCleanup(<HookProbeWithCallback url="ws://example.test" />);
     });
 
     const state = snapshots.at(-1);
@@ -2730,7 +2749,7 @@ describe('onMessageDropped callback (US-099)', () => {
 
     // Use original HookProbe without callback
     act(() => {
-      TestRenderer.create(<HookProbe url="ws://example.test" />);
+      renderWithCleanup(<HookProbe url="ws://example.test" />);
     });
 
     const state = snapshots.at(-1);
@@ -2784,7 +2803,7 @@ describe('malformed message validation (US-103)', () => {
     jest.spyOn(console, 'error').mockImplementation(() => {});
 
     act(() => {
-      TestRenderer.create(<HookProbe url="ws://example.test" />);
+      renderWithCleanup(<HookProbe url="ws://example.test" />);
     });
 
     const socket = getSocket();
@@ -2808,7 +2827,7 @@ describe('malformed message validation (US-103)', () => {
     jest.spyOn(console, 'error').mockImplementation(() => {});
 
     act(() => {
-      TestRenderer.create(<HookProbe url="ws://example.test" />);
+      renderWithCleanup(<HookProbe url="ws://example.test" />);
     });
 
     const socket = getSocket();
@@ -2830,7 +2849,7 @@ describe('malformed message validation (US-103)', () => {
     jest.spyOn(console, 'error').mockImplementation(() => {});
 
     act(() => {
-      TestRenderer.create(<HookProbe url="ws://example.test" />);
+      renderWithCleanup(<HookProbe url="ws://example.test" />);
     });
 
     const socket = getSocket();
@@ -2850,7 +2869,7 @@ describe('malformed message validation (US-103)', () => {
 
   it('accepts valid game_result messages', () => {
     act(() => {
-      TestRenderer.create(<HookProbe url="ws://example.test" />);
+      renderWithCleanup(<HookProbe url="ws://example.test" />);
     });
 
     const socket = getSocket();
@@ -2870,7 +2889,7 @@ describe('malformed message validation (US-103)', () => {
 
   it('accepts valid error messages', () => {
     act(() => {
-      TestRenderer.create(<HookProbe url="ws://example.test" />);
+      renderWithCleanup(<HookProbe url="ws://example.test" />);
     });
 
     const socket = getSocket();
@@ -2892,7 +2911,7 @@ describe('malformed message validation (US-103)', () => {
     jest.spyOn(console, 'error').mockImplementation(() => {});
 
     act(() => {
-      TestRenderer.create(<HookProbe url="ws://example.test" />);
+      renderWithCleanup(<HookProbe url="ws://example.test" />);
     });
 
     const socket = getSocket();
@@ -2915,7 +2934,7 @@ describe('malformed message validation (US-103)', () => {
     jest.spyOn(console, 'error').mockImplementation(() => {});
 
     act(() => {
-      TestRenderer.create(<HookProbe url="ws://example.test" />);
+      renderWithCleanup(<HookProbe url="ws://example.test" />);
     });
 
     const socket = getSocket();

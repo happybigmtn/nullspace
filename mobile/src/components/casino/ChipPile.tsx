@@ -385,23 +385,25 @@ export const ChipPile = React.memo(function ChipPile({
   testID,
   onChipLand,
 }: ChipPileProps) {
+  const safeChips = chips ?? [];
+
   // Only show most recent chips to prevent visual clutter
   const visibleChips = useMemo(() => {
-    if (chips.length <= MAX_VISIBLE_CHIPS) return chips;
-    return chips.slice(-MAX_VISIBLE_CHIPS);
-  }, [chips]);
+    if (safeChips.length <= MAX_VISIBLE_CHIPS) return safeChips;
+    return safeChips.slice(-MAX_VISIBLE_CHIPS);
+  }, [safeChips]);
 
   // Track which chips are "new" for animation purposes
   const newChipIds = useMemo(() => {
     const now = Date.now();
     return new Set(
-      chips
+      safeChips
         .filter((c) => now - c.placedAt < 500)
         .map((c) => c.id)
     );
-  }, [chips]);
+  }, [safeChips]);
 
-  if (chips.length === 0) {
+  if (safeChips.length === 0) {
     return (
       <View style={styles.emptyContainer} testID={testID}>
         <View style={styles.emptyIndicator}>

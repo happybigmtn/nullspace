@@ -451,13 +451,10 @@ Report vulnerabilities privately:
 
 | Document | Description |
 |----------|-------------|
-| [docs/limits.md](docs/limits.md) | Complete limits inventory with defaults |
-| [docs/observability.md](docs/observability.md) | Metrics, alerting, and SLO details |
-| [docs/persistence.md](docs/persistence.md) | Data persistence and backup strategies |
-| [docs/resource_sizing.md](docs/resource_sizing.md) | Hardware sizing guidance |
-| [docs/backend.md](docs/backend.md) | Backend architecture notes |
-| [docs/SECURITY.md](docs/SECURITY.md) | Security reporting and guidelines |
+| [docs/RUNBOOK.md](docs/RUNBOOK.md) | Operations procedures, deployment, incident response |
+| [docs/STRATEGY.md](docs/STRATEGY.md) | Business strategy, token economics, roadmap |
 | [docs/convex-guidelines.md](docs/convex-guidelines.md) | Convex development guidelines |
+| [docs/SERVERS.md](docs/SERVERS.md) | Staging infrastructure inventory |
 | [AGENTS.md](AGENTS.md) | Agent/automation instructions |
 
 ## License

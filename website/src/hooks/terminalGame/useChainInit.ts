@@ -73,9 +73,11 @@ export const useChainInit = ({
 
     try {
       const networkIdentity = import.meta.env.VITE_IDENTITY as string | undefined;
+      // Use VITE_URL in production (no /api proxy), fall back to /api for dev
+      const baseUrl = import.meta.env.VITE_URL || '/api';
       const wasm = new WasmWrapper(networkIdentity);
       await wasm.init();
-      const client = new CasinoClient('/api', wasm);
+      const client = new CasinoClient(baseUrl, wasm);
       await client.init();
 
       const keypair = client.getOrCreateKeypair();

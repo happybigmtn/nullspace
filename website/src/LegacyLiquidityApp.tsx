@@ -101,7 +101,9 @@ export default function LegacyLiquidityApp() {
         const wasm = new WasmWrapper(identityHex);
         await wasm.init();
 
-        const client = new CasinoClient('/api', wasm);
+        // Use VITE_URL in production (no /api proxy), fall back to /api for dev
+        const baseUrl = import.meta.env.VITE_URL || '/api';
+        const client = new CasinoClient(baseUrl, wasm);
         await client.init();
 
         const keypair = client.getOrCreateKeypair();

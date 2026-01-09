@@ -485,6 +485,7 @@ interface UseErrorRecoveryOptions {
  */
 export function useErrorRecovery(options: UseErrorRecoveryOptions = {}) {
   const { autoDismissDelay = 1000 } = options;
+  const dismissTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [errorState, setErrorState] = React.useState<ErrorState>({
     isVisible: false,
@@ -493,7 +494,19 @@ export function useErrorRecovery(options: UseErrorRecoveryOptions = {}) {
     recoveryState: 'idle',
   });
 
+  const clearDismissTimeout = useCallback(() => {
+    if (dismissTimeoutRef.current) {
+      clearTimeout(dismissTimeoutRef.current);
+      dismissTimeoutRef.current = null;
+    }
+  }, []);
+
+  React.useEffect(() => () => {
+    clearDismissTimeout();
+  }, [clearDismissTimeout]);
+
   const showError = useCallback((type: ErrorType, message: string) => {
+    clearDismissTimeout();
     setErrorState({
       isVisible: true,
       errorType: type,
@@ -501,7 +514,7 @@ export function useErrorRecovery(options: UseErrorRecoveryOptions = {}) {
       recoveryState: 'idle',
     });
     haptics.error();
-  }, []);
+  }, [clearDismissTimeout]);
 
   const startRecovery = useCallback(() => {
     setErrorState(prev => ({
@@ -517,7 +530,8 @@ export function useErrorRecovery(options: UseErrorRecoveryOptions = {}) {
     }));
 
     // Auto-dismiss after delay
-    setTimeout(() => {
+    clearDismissTimeout();
+    dismissTimeoutRef.current = setTimeout(() => {
       setErrorState({
         isVisible: false,
         errorType: 'unknown',
@@ -525,7 +539,7 @@ export function useErrorRecovery(options: UseErrorRecoveryOptions = {}) {
         recoveryState: 'idle',
       });
     }, autoDismissDelay);
-  }, [autoDismissDelay]);
+  }, [autoDismissDelay, clearDismissTimeout]);
 
   const recoveryFailed = useCallback((newMessage?: string) => {
     setErrorState(prev => ({
@@ -536,13 +550,14 @@ export function useErrorRecovery(options: UseErrorRecoveryOptions = {}) {
   }, []);
 
   const clearError = useCallback(() => {
+    clearDismissTimeout();
     setErrorState({
       isVisible: false,
       errorType: 'unknown',
       message: '',
       recoveryState: 'idle',
     });
-  }, []);
+  }, [clearDismissTimeout]);
 
   return {
     errorState,

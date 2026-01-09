@@ -5,6 +5,24 @@ jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock
 
 jest.mock('react-native/Libraries/Animated/NativeAnimatedHelper');
 
+jest.mock('@shopify/react-native-skia', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+
+  const SkiaMock = ({ children }) => React.createElement(View, null, children);
+
+  return {
+    Canvas: SkiaMock,
+    Group: SkiaMock,
+    Circle: SkiaMock,
+    RadialGradient: SkiaMock,
+    Blur: SkiaMock,
+    Paint: SkiaMock,
+    BlendMode: {},
+    vec: (x, y) => ({ x, y }),
+  };
+});
+
 process.env.EXPO_PUBLIC_BILLING_URL ||= 'https://billing.test';
 process.env.EXPO_PUBLIC_OPS_URL ||= 'https://ops.test';
 process.env.EXPO_PUBLIC_WEBSITE_URL ||= 'https://site.test';
@@ -146,6 +164,23 @@ jest.mock('expo-haptics', () => ({
   notificationAsync: jest.fn(),
   selectionAsync: jest.fn(),
 }));
+
+jest.mock('expo-av', () => {
+  const createSound = () => ({
+    setStatusAsync: jest.fn(async () => undefined),
+    stopAsync: jest.fn(async () => undefined),
+    unloadAsync: jest.fn(async () => undefined),
+  });
+
+  return {
+    Audio: {
+      setAudioModeAsync: jest.fn(async () => undefined),
+      Sound: {
+        createAsync: jest.fn(async () => ({ sound: createSound() })),
+      },
+    },
+  };
+});
 
 // Mock AsyncStorage for Expo Go fallback in storage.ts
 jest.mock('@react-native-async-storage/async-storage', () => ({

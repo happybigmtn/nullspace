@@ -24,10 +24,7 @@ Every session, run these steps before doing anything else:
    - `scripts/ralph/prd.json` - the feature list
 
 3. **Verify environment works** before implementing anything new
-   ```bash
-   pnpm type-check
-   pnpm test
-   ```
+   - Run typecheck and tests.
    If these fail, fix them FIRST. Do not start new work on a broken codebase.
 
 ---
@@ -99,12 +96,9 @@ Use Google Chrome (not Chromium) via dev-browser. Review screenshots to verify f
 ## Feedback Loops (Mandatory)
 
 Before committing, ALL must pass:
-
-```bash
-pnpm type-check  # TypeScript errors
-pnpm test        # Unit/integration tests
-pnpm lint        # Code style
-```
+  - Typecheck
+  - Tests
+  - Lint
 
 **Do NOT commit if any feedback loop fails. Fix issues first.**
 

@@ -97,6 +97,7 @@ export function SicBoScreen() {
 
   // DS-047: Track dice rolling state for 3D animation
   const [diceRolling, setDiceRolling] = useState(false);
+  const lastDiceRef = useRef<[number, number, number] | null>(null);
 
   useEffect(() => {
     if (!lastMessage) return;
@@ -108,10 +109,21 @@ export function SicBoScreen() {
       ? payload.dice as [number, number, number]
       : parsedState?.dice ?? null;
 
-    // DS-047: Trigger 3D dice roll animation
+    // DS-047: Trigger 3D dice roll animation when dice values change
     if (dice) {
-      setDiceRolling(true);
-      haptics.diceRoll().catch(() => {});
+      const lastDice = lastDiceRef.current;
+      const isSameDice =
+        lastDice &&
+        lastDice[0] === dice[0] &&
+        lastDice[1] === dice[1] &&
+        lastDice[2] === dice[2];
+      if (!isSameDice) {
+        lastDiceRef.current = dice;
+        setDiceRolling(true);
+        haptics.diceRoll().catch(() => {});
+      }
+    } else {
+      lastDiceRef.current = null;
     }
 
     if (lastMessage.type === 'game_started') {

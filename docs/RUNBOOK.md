@@ -270,7 +270,7 @@ sudo systemctl start nullspace-economy-snapshot.timer
 **Notes:**
 - Scale gateways horizontally; each has its own `MAX_TOTAL_SESSIONS`
 - Validators should be on separate hosts to maintain quorum
-- For 20k+ guidance, see `docs/resource_sizing.md`
+- For 20k+ guidance, see "Resource Sizing" in `README.md`
 
 ### 2.4 Base Server Setup
 
@@ -798,7 +798,7 @@ curl -I https://gateway.nullspace.io/healthz
 
 - Primary responds within 15 minutes; secondary within 30 minutes
 - Escalate to engineering lead if downtime > 30 minutes
-- Document every incident in `docs/updates.md` (root cause + follow-ups)
+- Document every incident with root cause and follow-ups in team incident log
 
 ### 8.2 Consensus Stall
 

@@ -2,7 +2,7 @@ const expoPreset = require("jest-expo/jest-preset");
 
 module.exports = {
   ...expoPreset,
-  testPathIgnorePatterns: ["/node_modules/", "/dist/", "/build/"],
+  testPathIgnorePatterns: ["/node_modules/", "/dist/", "/build/", "/e2e/"],
   transformIgnorePatterns: [
     "node_modules/(?!.*(react-native|@react-native|@react-navigation|@react-native-async-storage|expo(nent)?|@expo|expo-.*|react-native-gesture-handler|react-native-reanimated|react-native-worklets|react-native-safe-area-context|react-native-screens|react-native-mmkv|@shopify)/)",
   ],
@@ -11,6 +11,7 @@ module.exports = {
     ...(expoPreset.moduleNameMapper || {}),
     "^@nullspace/([^/]+)$": "<rootDir>/../packages/$1/dist/index.js",
     "^@nullspace/([^/]+)/(.+)$": "<rootDir>/../packages/$1/dist/$2.js",
+    "^.+/context/ThemeContext$": "<rootDir>/jest/ThemeContextMock.js",
     "^react-native/Libraries/BatchedBridge/NativeModules$":
       "<rootDir>/jest/nativeModulesMock.js",
     "^react-native/Libraries/Animated/NativeAnimatedHelper$":

@@ -1,7 +1,7 @@
 import React from 'react';
-import { Text, TextInput } from 'react-native';
+import { Text } from 'react-native';
 import { act, create } from 'react-test-renderer';
-import { PrimaryButton } from '../../components/ui';
+import { PremiumInput, PrimaryButton } from '../../components/ui';
 import { VaultScreen } from '../VaultScreen';
 import * as vault from '../../services/vault';
 
@@ -44,9 +44,9 @@ describe('VaultScreen', () => {
       await flushPromises();
     });
 
-    const inputs = tree!.root.findAllByType(TextInput);
-    const createInput = inputs.find((node) => node.props.placeholder === 'Create password')!;
-    const confirmInput = inputs.find((node) => node.props.placeholder === 'Confirm password')!;
+    const inputs = tree!.root.findAllByType(PremiumInput);
+    const createInput = inputs.find((node) => node.props.label === 'Create password')!;
+    const confirmInput = inputs.find((node) => node.props.label === 'Confirm password')!;
 
     act(() => {
       createInput.props.onChangeText('secret-1');
@@ -87,8 +87,8 @@ describe('VaultScreen', () => {
     });
 
     const unlockInput = tree!.root
-      .findAllByType(TextInput)
-      .find((node) => node.props.placeholder === 'Vault password')!;
+      .findAllByType(PremiumInput)
+      .find((node) => node.props.label === 'Vault password')!;
 
     act(() => {
       unlockInput.props.onChangeText('hunter2');
@@ -116,8 +116,8 @@ describe('VaultScreen', () => {
     });
 
     const createInput = tree!.root
-      .findAllByType(TextInput)
-      .find((node) => node.props.placeholder === 'Create password')!;
+      .findAllByType(PremiumInput)
+      .find((node) => node.props.label === 'Create password')!;
 
     act(() => {
       createInput.props.onChangeText('shortpw');
@@ -137,9 +137,9 @@ describe('VaultScreen', () => {
       await flushPromises();
     });
 
-    const inputs = tree!.root.findAllByType(TextInput);
-    const createInput = inputs.find((node) => node.props.placeholder === 'Create password')!;
-    const confirmInput = inputs.find((node) => node.props.placeholder === 'Confirm password')!;
+    const inputs = tree!.root.findAllByType(PremiumInput);
+    const createInput = inputs.find((node) => node.props.label === 'Create password')!;
+    const confirmInput = inputs.find((node) => node.props.label === 'Confirm password')!;
     const validPassword = 'securepassword123';
 
     act(() => {

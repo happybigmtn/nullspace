@@ -69,6 +69,7 @@ export const mockUseChipBetting = jest.fn(() => ({
   bet: 0,
   selectedChip: 25,
   balance: 1000,
+  placedChips: [],
   setSelectedChip: jest.fn(),
   placeChip: jest.fn(() => true),
   clearBet: jest.fn(),

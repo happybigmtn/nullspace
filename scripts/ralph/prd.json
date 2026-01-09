@@ -635,7 +635,7 @@
         "Document proxy header expectations in runbooks/Caddy config"
       ],
       "passes": true,
-      "notes": "Implemented getClientIp() with CIDR-based TRUSTED_PROXY_CIDRS config. 28 unit tests. Docs in RUNBOOK.md §1.4.1."
+      "notes": "Implemented getClientIp() with CIDR-based TRUSTED_PROXY_CIDRS config. 28 unit tests. Docs in RUNBOOK.md \u00a71.4.1."
     },
     {
       "id": "US-249",
@@ -709,7 +709,199 @@
         "Verify instructions run cleanly in repo"
       ],
       "passes": true,
-      "notes": "Fixed commands: pnpm typecheck → pnpm type-check, pnpm test --run → pnpm test. Verified commands run correctly."
+      "notes": "Fixed commands: pnpm typecheck \u2192 pnpm type-check, pnpm test --run \u2192 pnpm test. Verified commands run correctly."
+    },
+    {
+      "id": "US-255",
+      "category": "testing",
+      "description": "Align cross-service integration stack with current deployment envs and origin rules",
+      "steps": [
+        "Update tests/integration/docker-compose.cross-service.yml to use current env vars (GATEWAY_ALLOWED_ORIGINS, GATEWAY_ALLOW_NO_ORIGIN, AUTH_ALLOWED_ORIGINS, METRICS_AUTH_TOKEN)",
+        "Add Origin header coverage in cross-service client (web origin + no-origin mobile)",
+        "Run cross-service tests under production-like settings and document required envs"
+      ],
+      "passes": false,
+      "notes": "Current integration compose uses outdated CORS_ORIGINS and does not exercise origin allowlists from the deployment config."
+    },
+    {
+      "id": "US-256",
+      "category": "testing",
+      "description": "Verify chain updates for gateway-initiated bets",
+      "steps": [
+        "Subscribe to simulator /updates (or /mempool) while placing a bet via gateway",
+        "Assert Transaction + Casino events are emitted for the bet",
+        "Verify account state changes via /state or /account endpoint",
+        "Add to cross-service integration suite"
+      ],
+      "passes": false,
+      "notes": "No current E2E test proves that a gateway bet results in on-chain updates being broadcast."
+    },
+    {
+      "id": "US-257",
+      "category": "testing",
+      "description": "Expand full bet-flow coverage across all games in E2E",
+      "steps": [
+        "Add at least one complete bet flow per game (start \u2192 move(s) \u2192 result)",
+        "Validate payouts and balance deltas (tolerance for push states)",
+        "Run these flows in gateway integration or cross-service suite",
+        "Record failures per game for triage"
+      ],
+      "passes": false,
+      "notes": "Current E2E coverage focuses on Blackjack/Hi-Lo; all-bet-types validates acceptance but not full game resolution across all games."
+    },
+    {
+      "id": "US-258",
+      "category": "security",
+      "description": "Fix and validate auth E2E flow (endpoints + CSRF/cookie behavior)",
+      "steps": [
+        "Update cross-service auth tests to use /auth/challenge and /auth/callback/credentials",
+        "Include CSRF token retrieval and cookie handling",
+        "Add negative tests for missing/invalid CSRF",
+        "Verify against staging/testnet auth domain"
+      ],
+      "passes": false,
+      "notes": "Cross-service auth test currently targets /api/auth/challenge which does not exist; CSRF/cookie flows are unverified end-to-end."
+    },
+    {
+      "id": "US-259",
+      "category": "testing",
+      "description": "Automate mobile integration tests against real gateway",
+      "steps": [
+        "Wire mobile/tests/integration to run in CI or a nightly job against a real gateway",
+        "Provide env-configurable GATEWAY_URL and test credentials",
+        "Publish test artifacts (results JSON/logs) for triage"
+      ],
+      "passes": false,
+      "notes": "Mobile integration framework exercises full game flows but is not automated; Detox CI uses mock servers and does not validate on-chain behavior."
+    },
+    {
+      "id": "US-260",
+      "category": "design",
+      "description": "Replace design tokens with edgy monochrome palette + typography",
+      "steps": [
+        "Update packages/design-tokens colors.ts to monochrome palette and semantic aliases",
+        "Remove ACTION and GAME color usage; replace with grayscale state tokens",
+        "Update typography tokens to use Syne (display), Space Grotesk (body), Fragment/JetBrains Mono (mono)",
+        "Update Tailwind + RN theme mappings to new tokens"
+      ],
+      "passes": false,
+      "notes": "Goal: entirely monochrome, high-contrast, edgy visual system."
+    },
+    {
+      "id": "US-261",
+      "category": "design",
+      "description": "Web UI monochrome refactor + alignment cleanup",
+      "steps": [
+        "Refactor casino layout to single primary control surface + single header strip",
+        "Align bet slip, header, and game surface to shared grid",
+        "Replace colored accents with monochrome contrast, textures, and edge highlights",
+        "Remove redundant navigation surfaces"
+      ],
+      "passes": false,
+      "notes": "Reduce clutter and enforce alignment across casino screens."
+    },
+    {
+      "id": "US-262",
+      "category": "design",
+      "description": "Mobile UI monochrome refactor + alignment cleanup",
+      "steps": [
+        "Update mobile theme to monochrome tokens",
+        "Consolidate header + session status into a single strip",
+        "Standardize control bar and bet slip placement across games",
+        "Remove remaining color accents in game screens"
+      ],
+      "passes": false,
+      "notes": "Mobile should mirror the edgy monochrome system and layout discipline."
+    },
+    {
+      "id": "US-263",
+      "category": "design",
+      "description": "Monochrome game differentiation system",
+      "steps": [
+        "Define per-game texture/geometry patterns (no hue)",
+        "Create monochrome iconography set per game",
+        "Apply patterns to tables, headers, and loading states",
+        "Verify accessibility in grayscale"
+      ],
+      "passes": false,
+      "notes": "Game identity via shape/texture instead of color."
+    },
+    {
+      "id": "US-264",
+      "category": "testing",
+      "description": "Monochrome QA guardrails",
+      "steps": [
+        "Add lint/check to block non-token hex colors in web/mobile",
+        "Refresh visual regression baselines after monochrome rollout",
+        "Add quick audit script that flags non-monochrome CSS values"
+      ],
+      "passes": false,
+      "notes": "Prevents color drift and keeps UI strictly monochrome."
+    },
+    {
+      "id": "US-265",
+      "category": "design",
+      "description": "Liquid Crystal material system (monochrome glass)",
+      "steps": [
+        "Define a Liquid Crystal material spec: translucency levels, blur radii, edge highlights, specular gradients",
+        "Implement CSS/RN tokens for glass surfaces (including fallbacks when backdrop-filter is unavailable)",
+        "Limit glass usage to primary surfaces (bet slip, header strip, modal) to protect readability",
+        "Add examples and usage rules in docs/design.md"
+      ],
+      "passes": false,
+      "notes": "Inspired by Apple\u2019s Liquid Glass material (translucent, refractive, adaptive) but constrained to monochrome."
+    },
+    {
+      "id": "US-266",
+      "category": "design",
+      "description": "Edgy monochrome + Liquid Glass component kit",
+      "steps": [
+        "Create reusable components: glass card, glass toolbar, glass chip, glass modal",
+        "Define a single depth scale (flat, float, overlay) with consistent shadows/highlights",
+        "Apply to casino header, bet slip, and game control bar",
+        "Remove ad-hoc per-screen styling overrides"
+      ],
+      "passes": false,
+      "notes": "Consolidates the visual system into a tight set of composable primitives."
+    },
+    {
+      "id": "US-267",
+      "category": "design",
+      "description": "Liquid Crystal typography system",
+      "steps": [
+        "Finalize expressive type pairing (display + body + mono) optimized for edge contrast",
+        "Define tracking/weight rules for labels vs headlines",
+        "Apply tabular-nums to balances/odds",
+        "Update web/mobile typography mapping to new tokens"
+      ],
+      "passes": false,
+      "notes": "Type must feel sharp and sophisticated without sacrificing legibility."
+    },
+    {
+      "id": "US-268",
+      "category": "testing",
+      "description": "Liquid Crystal accessibility + performance guardrails",
+      "steps": [
+        "Enforce WCAG contrast thresholds on glass layers",
+        "Add reduced-motion handling for liquid/specular animations",
+        "Add blur fallbacks for unsupported browsers",
+        "Create performance budgets for blur/backdrop-filter usage"
+      ],
+      "passes": false,
+      "notes": "Glass effects can harm readability and performance if unchecked."
+    },
+    {
+      "id": "US-269",
+      "category": "design",
+      "description": "Liquid Crystal motion language",
+      "steps": [
+        "Define specular sweep + refraction micro-animations for key surfaces",
+        "Standardize motion tiers across web/mobile",
+        "Ensure all motion is subordinate to the bet slip and game state",
+        "Add motion samples to docs/design.md"
+      ],
+      "passes": false,
+      "notes": "Motion should feel like liquid glass reacting to movement, not decorative noise."
     }
   ],
   "verifiedComplete": [
@@ -847,10 +1039,11 @@
   },
   "summary": {
     "complete": 22,
-    "pending": 54,
+    "pending": 69,
     "byCategory": {
       "api": 3,
       "architecture": 1,
+      "design": 8,
       "documentation": 3,
       "infrastructure": 4,
       "observability": 2,
@@ -860,8 +1053,8 @@
       "qa-native": 12,
       "qa-ui": 3,
       "release": 3,
-      "security": 2,
-      "testing": 4
+      "security": 3,
+      "testing": 10
     }
   }
 }
