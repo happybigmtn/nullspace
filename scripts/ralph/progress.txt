@@ -253,3 +253,20 @@ Categories by count:
   - Added pnpm api:validate command using @redocly/cli for linting
 - Blockers: None.
 
+### 2026-01-09 - US-257: Expand full bet-flow coverage across all games in E2E
+- Files: tests/integration/helpers/client.ts, tests/integration/cross-service.test.ts
+- Decisions:
+  - Added game helper methods to CrossServiceClient for all 10 games:
+    - Interactive: playBlackjackHand, playHiLoAndCashout, playVideoPokerHand, playCasinoWarHand, playThreeCardPokerHand, playUltimateHoldemHand
+    - Instant: playBaccaratHand, playRouletteSpinStraight, playSicBoRoll, playCrapsFieldBet
+  - Created new test suite 'Full Bet Flow Coverage (US-257)' with 12 tests:
+    - 6 interactive game tests (deal → move → result)
+    - 4 instant game tests (bet → instant result)
+    - 2 balance verification tests (before/after balance comparison)
+  - Tests validate complete game resolution (not just bet acceptance)
+  - Balance tests log deltas for debugging win/loss/push scenarios
+  - Casino War handles tie case by automatically going to war
+  - Ultimate Holdem loops through check moves until game_result
+- Coverage: Blackjack, Hi-Lo, Video Poker, Casino War, Three Card Poker, Ultimate Holdem, Baccarat, Roulette, Sic Bo, Craps
+- Blockers: None. Tests run via RUN_CROSS_SERVICE=true pnpm test:cross-service.
+

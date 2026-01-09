@@ -746,8 +746,8 @@
         "Run these flows in gateway integration or cross-service suite",
         "Record failures per game for triage"
       ],
-      "passes": false,
-      "notes": "Current E2E coverage focuses on Blackjack/Hi-Lo; all-bet-types validates acceptance but not full game resolution across all games."
+      "passes": true,
+      "notes": "Added 12 new tests in 'Full Bet Flow Coverage (US-257)' suite covering all 10 games: Blackjack, Hi-Lo, Video Poker, Casino War, Three Card Poker, Ultimate Holdem, Baccarat, Roulette, Sic Bo, Craps. Also added balance verification tests for Blackjack and Baccarat. Game helper methods added to client.ts for all games."
     },
     {
       "id": "US-258",

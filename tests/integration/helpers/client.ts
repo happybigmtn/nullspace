@@ -591,6 +591,224 @@ export class CrossServiceClient {
   }
 
   /**
+   * Play a hi-lo round and cashout (always valid, unlike guess which depends on card)
+   */
+  async playHiLoAndCashout(betAmount: number): Promise<{
+    gameStarted: GameMessage;
+    result: GameMessage;
+  }> {
+    const gameStarted = await this.sendAndReceive({
+      type: 'hilo_deal',
+      amount: betAmount,
+    });
+
+    if (gameStarted.type === 'error') {
+      throw new Error(`Game start failed: ${gameStarted.code}`);
+    }
+
+    const result = await this.sendAndReceive({ type: 'hilo_cashout' });
+
+    return { gameStarted, result };
+  }
+
+  /**
+   * Play a video poker hand
+   * US-257: Full bet flow - deal, hold some cards, draw
+   */
+  async playVideoPokerHand(betAmount: number, holds: boolean[] = [true, true, false, false, true]): Promise<{
+    gameStarted: GameMessage;
+    result: GameMessage;
+  }> {
+    const gameStarted = await this.sendAndReceive({
+      type: 'videopoker_deal',
+      amount: betAmount,
+    });
+
+    if (gameStarted.type === 'error') {
+      throw new Error(`Game start failed: ${gameStarted.code}`);
+    }
+
+    // Hold some cards and draw
+    const result = await this.sendAndReceive({
+      type: 'videopoker_hold',
+      holds,
+    });
+
+    return { gameStarted, result };
+  }
+
+  /**
+   * Play a casino war hand
+   * US-257: Casino war may need war decision on tie
+   */
+  async playCasinoWarHand(betAmount: number): Promise<{
+    gameStarted: GameMessage;
+    result: GameMessage;
+  }> {
+    const gameStarted = await this.sendAndReceive({
+      type: 'casinowar_deal',
+      amount: betAmount,
+      tieBet: 0,
+    });
+
+    if (gameStarted.type === 'error') {
+      throw new Error(`Game start failed: ${gameStarted.code}`);
+    }
+
+    // Casino war may return game_started on tie, requiring war/surrender decision
+    if (gameStarted.type === 'game_started') {
+      // Tie situation - go to war
+      const result = await this.sendAndReceive({ type: 'casinowar_war' });
+      return { gameStarted, result };
+    }
+
+    // Non-tie: instant resolution
+    return { gameStarted, result: gameStarted };
+  }
+
+  /**
+   * Play a baccarat hand (instant resolution)
+   * US-257: Baccarat auto-resolves, no moves needed
+   */
+  async playBaccaratHand(betType: 'PLAYER' | 'BANKER' | 'TIE' = 'PLAYER', betAmount: number = 100): Promise<{
+    result: GameMessage;
+  }> {
+    const result = await this.sendAndReceive({
+      type: 'baccarat_deal',
+      bets: [{ type: betType, amount: betAmount }],
+    });
+
+    if (result.type === 'error') {
+      throw new Error(`Game failed: ${result.code}`);
+    }
+
+    return { result };
+  }
+
+  /**
+   * Play a three card poker hand
+   * US-257: Full bet flow - deal, then play or fold
+   */
+  async playThreeCardPokerHand(ante: number, playDecision: 'play' | 'fold' = 'play'): Promise<{
+    gameStarted: GameMessage;
+    result: GameMessage;
+  }> {
+    const gameStarted = await this.sendAndReceive({
+      type: 'threecardpoker_deal',
+      ante,
+      pairPlus: 0,
+    });
+
+    if (gameStarted.type === 'error') {
+      throw new Error(`Game start failed: ${gameStarted.code}`);
+    }
+
+    const moveType = playDecision === 'play' ? 'threecardpoker_play' : 'threecardpoker_fold';
+    const result = await this.sendAndReceive({ type: moveType });
+
+    return { gameStarted, result };
+  }
+
+  /**
+   * Play an ultimate texas holdem hand
+   * US-257: Full bet flow - deal, check/bet through streets, showdown
+   */
+  async playUltimateHoldemHand(ante: number): Promise<{
+    gameStarted: GameMessage;
+    result: GameMessage;
+  }> {
+    const gameStarted = await this.sendAndReceive({
+      type: 'ultimateholdem_deal',
+      ante,
+      blind: ante,
+      trips: 0,
+    });
+
+    if (gameStarted.type === 'error') {
+      throw new Error(`Game start failed: ${gameStarted.code}`);
+    }
+
+    // Simple strategy: check through all streets until game_result
+    let result = await this.sendAndReceive({ type: 'ultimateholdem_check' });
+
+    // May need more checks depending on game state
+    // Continue checking until we get a game_result or the game completes
+    let lastResultJson = JSON.stringify(result);
+    while (result.type === 'game_move' || result.type === 'move_accepted') {
+      // Check again if game continues
+      const nextResult = await this.sendAndReceive({ type: 'ultimateholdem_check' });
+      const nextJson = JSON.stringify(nextResult);
+      if (nextJson === lastResultJson) {
+        // Prevent infinite loop - same response means game is waiting for something else
+        break;
+      }
+      lastResultJson = nextJson;
+      result = nextResult;
+      if (result.type === 'game_result') break;
+    }
+
+    return { gameStarted, result };
+  }
+
+  /**
+   * Play a roulette spin (instant resolution)
+   * US-257: Roulette auto-resolves
+   */
+  async playRouletteSpinStraight(number: number = 17, betAmount: number = 100): Promise<{
+    result: GameMessage;
+  }> {
+    const result = await this.sendAndReceive({
+      type: 'roulette_spin',
+      bets: [{ type: 0, value: number, amount: betAmount }], // type 0 = straight bet
+    });
+
+    if (result.type === 'error') {
+      throw new Error(`Game failed: ${result.code}`);
+    }
+
+    return { result };
+  }
+
+  /**
+   * Play a sic bo roll (instant resolution)
+   * US-257: Sic Bo auto-resolves
+   */
+  async playSicBoRoll(betAmount: number = 100): Promise<{
+    result: GameMessage;
+  }> {
+    const result = await this.sendAndReceive({
+      type: 'sicbo_roll',
+      bets: [{ type: 0, amount: betAmount }], // type 0 = small bet
+    });
+
+    if (result.type === 'error') {
+      throw new Error(`Game failed: ${result.code}`);
+    }
+
+    return { result };
+  }
+
+  /**
+   * Play a craps field bet (instant resolution)
+   * US-257: Craps field bet resolves in one roll
+   */
+  async playCrapsFieldBet(betAmount: number = 100): Promise<{
+    result: GameMessage;
+  }> {
+    const result = await this.sendAndReceive({
+      type: 'craps_bet',
+      betType: 4, // Field bet - always resolves on one roll
+      amount: betAmount,
+    });
+
+    if (result.type === 'error') {
+      throw new Error(`Game failed: ${result.code}`);
+    }
+
+    return { result };
+  }
+
+  /**
    * Clear the message queue
    */
   clearQueue(): void {
