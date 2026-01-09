@@ -61,15 +61,20 @@ const readString = (key: string): string | null => {
 const NODE_ENV = process.env.NODE_ENV ?? 'development';
 const IS_PROD = NODE_ENV === 'production';
 
-const ENABLED = isTruthy(process.env.GATEWAY_LIVE_TABLE_CRAPS ?? (IS_PROD ? '1' : '0'));
+const ENABLED_REQUESTED = isTruthy(process.env.GATEWAY_LIVE_TABLE_CRAPS ?? (IS_PROD ? '1' : '0'));
 const ALLOW_ADMIN_KEY_ENV = !IS_PROD || isTruthy(process.env.GATEWAY_LIVE_TABLE_ALLOW_ADMIN_ENV);
 const ADMIN_KEY_FILE = (process.env.GATEWAY_LIVE_TABLE_ADMIN_KEY_FILE
   ?? process.env.CASINO_ADMIN_PRIVATE_KEY_FILE
   ?? '').trim() || null;
+const ADMIN_KEY_ENV_RAW = (process.env.GATEWAY_LIVE_TABLE_ADMIN_KEY
+  ?? process.env.CASINO_ADMIN_PRIVATE_KEY_HEX
+  ?? '').trim();
+const ADMIN_KEY_AVAILABLE = Boolean(ADMIN_KEY_FILE) || (ALLOW_ADMIN_KEY_ENV && Boolean(ADMIN_KEY_ENV_RAW));
+const ENABLED = ENABLED_REQUESTED && (!IS_PROD || ADMIN_KEY_AVAILABLE);
 
-if (IS_PROD && ENABLED && !ALLOW_ADMIN_KEY_ENV && !ADMIN_KEY_FILE) {
-  throw new Error(
-    'GATEWAY_LIVE_TABLE_ADMIN_KEY_FILE (or CASINO_ADMIN_PRIVATE_KEY_FILE) must be set in production for global table admin access',
+if (IS_PROD && ENABLED_REQUESTED && !ADMIN_KEY_AVAILABLE) {
+  console.warn(
+    '[GlobalTable] Live table craps disabled: missing admin key configuration. Set GATEWAY_LIVE_TABLE_ADMIN_KEY_FILE or enable GATEWAY_LIVE_TABLE_ALLOW_ADMIN_ENV with an admin key.',
   );
 }
 
