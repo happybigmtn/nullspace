@@ -42,8 +42,8 @@
         "Add CPU limits to all services",
         "Verify compose file validates"
       ],
-      "passes": false,
-      "notes": "No resource limits in any docker-compose. PRODUCTION-CRITICAL."
+      "passes": true,
+      "notes": "Created infrastructure/production/docker-compose.yml with CPU/memory limits based on RUNBOOK.md §2.1 Hetzner CPX specs."
     },
     {
       "id": "US-017",

@@ -121,3 +121,16 @@ Categories by count:
 - Docs: Updated RUNBOOK.md §4.2 with reverse proxy CORS guidance
 - Blockers: None. Browser auth flow should now work correctly on staging.
 
+### 2026-01-08 - US-230: Add Docker resource limits to production compose
+- Files: infrastructure/production/docker-compose.yml (new)
+- Decisions:
+  - Created production docker-compose based on staging template
+  - Resource limits derived from RUNBOOK.md §2.1 Hetzner CPX specs:
+    - Simulator: 8 CPU / 14G memory (CPX41)
+    - Gateway, Validators: 4 CPU / 7G each (CPX31)
+    - Auth: 2 CPU / 3G (CPX21)
+    - Website, Caddy: 1 CPU / 256-512M (static serving)
+  - Reservations set at ~25% of limits for scheduling guarantees
+  - Used 80% of spec memory to leave headroom for OS/overhead
+- Blockers: None. File validates with docker compose config.
+
