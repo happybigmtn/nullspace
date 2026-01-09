@@ -102,6 +102,7 @@ export default defineConfig({
     rollupOptions: {
       output: {
         // US-145: Manual chunks to split large dependencies
+        // NOTE: Order matters! More specific matches must come first to avoid circular deps
         manualChunks: (id) => {
           // Split recharts (used by EconomyDashboard) into separate chunk
           if (id.includes('node_modules/recharts') ||
@@ -109,16 +110,21 @@ export default defineConfig({
               id.includes('node_modules/victory-vendor')) {
             return 'vendor-charts';
           }
-          // Split react ecosystem into vendor chunk
-          if (id.includes('node_modules/react') ||
-              id.includes('node_modules/react-dom') ||
-              id.includes('node_modules/react-router') ||
-              id.includes('node_modules/scheduler')) {
+          // Split animation libraries (depends on react, must be separate)
+          if (id.includes('node_modules/@react-spring') ||
+              id.includes('node_modules/framer-motion')) {
+            return 'vendor-animation';
+          }
+          // React ecosystem - keep react-dom with react to avoid circular deps
+          // Also include use-gesture which tightly couples with react
+          if (id.includes('node_modules/react/') ||
+              id.includes('node_modules/react-dom/') ||
+              id.includes('node_modules/scheduler/')) {
             return 'vendor-react';
           }
-          // Split animation libraries
-          if (id.includes('node_modules/@react-spring')) {
-            return 'vendor-animation';
+          // React router in separate chunk (depends on react)
+          if (id.includes('node_modules/react-router')) {
+            return 'vendor-router';
           }
           // Keep other node_modules in default vendor chunk
           if (id.includes('node_modules/')) {
