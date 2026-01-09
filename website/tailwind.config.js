@@ -1,4 +1,4 @@
-import { TITANIUM, SEMANTIC, ACTION, GAME, TYPE_SCALE, FONTS, SHADOW, ELEVATION, GLOW, SPACING_SEMANTIC, RADIUS, CONTAINER } from '@nullspace/design-tokens';
+import { MONO, TITANIUM, SEMANTIC, STATE, EDGE, ACTION, GAME, TYPE_SCALE, FONTS, SHADOW, ELEVATION, GLOW, SPACING_SEMANTIC, RADIUS, CONTAINER } from '@nullspace/design-tokens';
 
 // Helper to convert TYPE_SCALE to Tailwind fontSize format
 const toTailwindFontSize = (style) => [
@@ -14,7 +14,7 @@ const toTailwindFontSize = (style) => [
 const toBoxShadow = (shadow) =>
   `${shadow.offsetX}px ${shadow.offsetY}px ${shadow.blur}px ${shadow.spread}px rgba(0,0,0,${shadow.opacity})`;
 
-// Helper to convert GLOW token to CSS box-shadow string
+// Helper to convert GLOW token to CSS box-shadow string (monochrome-only)
 const toGlow = (glow) => {
   const hex = glow.color;
   const r = parseInt(hex.slice(1, 3), 16);
@@ -32,15 +32,16 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        // Primary UI font: Inter (Superhuman/Linear standard)
-        sans: ['"Inter"', '"SF Pro Display"', '-apple-system', 'BlinkMacSystemFont', 'system-ui', 'sans-serif'],
-        // Headlines: SF Pro Display with Inter fallback
-        display: ['"SF Pro Display"', '"Inter"', '-apple-system', 'system-ui', 'sans-serif'],
-        // Numeric/code: JetBrains Mono for balance displays and technical content
-        mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+        // Monochrome Redesign (US-260) - Updated font stack
+        // Display: Syne for bold, geometric headlines
+        display: [`"${FONTS.display}"`, '"Inter"', '-apple-system', 'system-ui', 'sans-serif'],
+        // Body: Space Grotesk for clean, modern UI text
+        sans: [`"${FONTS.body}"`, '"Inter"', '-apple-system', 'BlinkMacSystemFont', 'system-ui', 'sans-serif'],
+        // Mono: JetBrains Mono for tabular numbers and code
+        mono: [`"${FONTS.mono}"`, 'ui-monospace', 'SFMono-Regular', 'monospace'],
       },
       fontSize: {
-        // Luxury Redesign v4.0 - Strict 4-level hierarchy + micro
+        // Monochrome Redesign - Strict 4-level hierarchy + micro
         // Primary semantic names (use these)
         'micro': toTailwindFontSize(TYPE_SCALE.micro),      // 10px - badges, tiny labels
         'caption': toTailwindFontSize(TYPE_SCALE.caption),  // 12px - labels, hints
@@ -56,24 +57,41 @@ export default {
         'display': toTailwindFontSize(TYPE_SCALE.display),
       },
       colors: {
-        // Titanium neutrals from design tokens
-        titanium: TITANIUM,
+        // Monochrome palette - Primary color system (US-260)
+        mono: MONO,
 
-        // Semantic color aliases - Luxury Redesign v4.0
-        // Use these instead of numbered titanium shades
+        // Semantic color aliases - Monochrome Redesign
+        // Light mode (default)
         'ns-bg': SEMANTIC.light.background,
         'ns-surface': SEMANTIC.light.surface,
+        'ns-surface-elevated': SEMANTIC.light.surfaceElevated,
         'ns-border': SEMANTIC.light.border,
-        'ns-text-muted': SEMANTIC.light.textMuted,
+        'ns-border-subtle': SEMANTIC.light.borderSubtle,
         'ns-text': SEMANTIC.light.textPrimary,
+        'ns-text-secondary': SEMANTIC.light.textSecondary,
+        'ns-text-muted': SEMANTIC.light.textMuted,
+        'ns-text-disabled': SEMANTIC.light.textDisabled,
 
-        // Glass effects (rgba values not in tokens - kept local)
+        // State colors - Monochrome states
+        state: {
+          interactive: STATE.interactive,
+          success: STATE.success,
+          error: STATE.error,
+          warning: STATE.warning,
+          info: STATE.info,
+        },
+
+        // Edge highlights for depth
+        edge: EDGE,
+
+        // Glass effects (monochrome-compatible)
         glass: {
           light: 'rgba(255, 255, 255, 0.75)',
-          dark: 'rgba(28, 28, 30, 0.8)',
+          dark: 'rgba(0, 0, 0, 0.8)',
           border: 'rgba(0, 0, 0, 0.05)',
         },
-        // Action colors from design tokens
+
+        // Legacy action colors (deprecated - maps to monochrome)
         action: {
           indigo: ACTION.indigo,
           indigoHover: ACTION.indigoHover,
@@ -83,12 +101,16 @@ export default {
           error: ACTION.error,
           errorMuted: ACTION.errorMuted,
           warning: ACTION.warning,
-          // Legacy aliases for backward compatibility
+          // Legacy aliases
           primary: ACTION.indigo,
           destructive: ACTION.error,
-          gold: '#FFD700',
+          gold: MONO[0], // Gold -> Black in monochrome
         },
-        // Game color themes from design tokens
+
+        // Legacy titanium (deprecated - use mono instead)
+        titanium: TITANIUM,
+
+        // Legacy game colors (deprecated - all games now use same grayscale)
         game: {
           blackjack: GAME.blackjack,
           roulette: GAME.roulette,
@@ -115,7 +137,10 @@ export default {
         'dropdown': toBoxShadow(SHADOW[ELEVATION.dropdown]),
         'modal': toBoxShadow(SHADOW[ELEVATION.modal]),
         'overlay': toBoxShadow(SHADOW[ELEVATION.overlay]),
-        // Glow effects for focus/highlight states
+        // Glow effects - monochrome compatible (white/black only)
+        'glow-white': '0 0 20px rgba(255,255,255,0.3)',
+        'glow-black': '0 0 20px rgba(0,0,0,0.3)',
+        // Legacy glow effects (deprecated)
         'glow-indigo': toGlow(GLOW.indigo),
         'glow-success': toGlow(GLOW.success),
         'glow-error': toGlow(GLOW.error),
@@ -125,6 +150,8 @@ export default {
         'float': '0 20px 48px rgba(0,0,0,0.08)',
         'inner-light': 'inset 0 1px 0 rgba(255,255,255,0.5)',
         'card-elevated': '0 8px 32px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.8)',
+        // Edge highlights for monochrome depth
+        'edge-highlight': 'inset 0 1px 0 rgba(255,255,255,0.1), inset 0 -1px 0 rgba(0,0,0,0.1)',
       },
       borderRadius: {
         // Border radius from design tokens
@@ -166,8 +193,9 @@ export default {
           '100%': { transform: 'translateX(100%)' },
         },
         'pulse-glow': {
-          '0%, 100%': { boxShadow: '0 0 20px rgba(255,215,0,0.3), inset 0 0 30px rgba(255,215,0,0.05)' },
-          '50%': { boxShadow: '0 0 30px rgba(255,215,0,0.5), inset 0 0 40px rgba(255,215,0,0.1)' },
+          // Monochrome-compatible pulse (white glow)
+          '0%, 100%': { boxShadow: '0 0 20px rgba(255,255,255,0.2), inset 0 0 30px rgba(255,255,255,0.02)' },
+          '50%': { boxShadow: '0 0 30px rgba(255,255,255,0.4), inset 0 0 40px rgba(255,255,255,0.05)' },
         },
         float: {
           '0%, 100%': { transform: 'translateY(0)' },

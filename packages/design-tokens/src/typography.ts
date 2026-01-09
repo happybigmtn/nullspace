@@ -3,24 +3,32 @@
  * Consumed by CSS/Tailwind (web) and StyleSheet (mobile)
  *
  * NO platform-specific code - raw values only
+ *
+ * Monochrome Redesign (US-260):
+ * - Syne: Expressive geometric display font for headlines
+ * - Space Grotesk: Clean, modern sans-serif for body text
+ * - JetBrains Mono: Technical/code font for numbers and data
  */
 
 /**
- * Font family definitions - Luxury Redesign v4.0
+ * Font family definitions - Monochrome Redesign
  *
- * Sans: Inter for all UI text (Superhuman/Linear standard)
- * Display: SF Pro Display for headlines (Apple standard, falls back to system-ui)
- * Mono: JetBrains Mono for numbers, balances, and technical content
+ * Display: Syne - Bold geometric display font with sharp, edgy character
+ * Body: Space Grotesk - Clean, slightly technical sans-serif
+ * Mono: JetBrains Mono - Precise monospace for tabular data and code
  *
- * Font weights limited to: 400 (normal), 500 (medium), 600 (semibold)
- * Only hero headlines may use 700 (bold)
+ * Font weights:
+ * - Display: 600-800 (bold to extrabold for impact)
+ * - Body: 400-500 (regular to medium for readability)
+ * - Mono: 400-500 (regular to medium for clarity)
  */
 export const FONTS = {
-  sans: 'Inter',
-  display: 'SF Pro Display',
+  // Primary fonts - Monochrome Redesign
+  display: 'Syne',
+  body: 'Space Grotesk',
   mono: 'JetBrains Mono',
-  // Legacy aliases for backwards compatibility
-  body: 'Inter',
+  // Legacy alias
+  sans: 'Space Grotesk',
 } as const;
 
 /**

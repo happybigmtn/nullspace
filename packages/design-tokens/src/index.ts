@@ -10,16 +10,29 @@
 
 // Colors
 export {
-  TITANIUM,
+  // Primary monochrome palette
+  MONO,
   SEMANTIC,
+  STATE,
+  EDGE,
+  GAME_PATTERN,
+  // Deprecated - kept for backwards compatibility
+  TITANIUM,
   ACTION,
   GAME,
+  // Type exports
+  type MonoShade,
+  type MonoColor,
   type TitaniumShade,
   type TitaniumColor,
+  type StateCategory,
+  type StateVariant,
   type ActionColor,
   type ActionColorValue,
   type GameId,
   type GameColorScheme,
+  type GamePatternId,
+  type GamePatternConfig,
 } from './colors.js';
 
 // Typography
