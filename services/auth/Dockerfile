@@ -55,15 +55,18 @@ COPY packages/types/package.json /app/packages/types/
 COPY packages/tsconfig/package.json /app/packages/tsconfig/
 
 # Install dependencies
-RUN pnpm install --frozen-lockfile --filter nullspace-auth...
+RUN pnpm install --frozen-lockfile --filter nullspace-auth... --filter @nullspace/types...
 
 COPY services/auth/tsconfig.json /app/services/auth/
 COPY services/auth/src /app/services/auth/src
 COPY website/convex/_generated /app/website/convex/_generated
 COPY --from=wasm-builder /app/website/wasm/pkg /app/website/wasm/pkg
-COPY packages/types/dist /app/packages/types/dist
+COPY packages/types/src /app/packages/types/src
+COPY packages/types/tsconfig*.json /app/packages/types/
 COPY packages/types/*.js /app/packages/types/
 COPY packages/tsconfig/*.json /app/packages/tsconfig/
+
+RUN pnpm -C packages/types exec tsc -p tsconfig.build.json
 
 WORKDIR /app/services/auth
 RUN pnpm run build
