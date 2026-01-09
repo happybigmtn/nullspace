@@ -50,3 +50,17 @@ Categories by count:
   - AI endpoints (lines 961, 977): 503 Service Unavailable (upstream AI service unavailable)
   - Internal failures (freeroll sync, checkout, portal, reconcile): 500 Internal Server Error
 - Blockers: None. Fixed 6 occurrences (1 more than documented in PRD).
+
+### 2026-01-08 - US-234: Add CSRF protection for cookie-authenticated endpoints
+- Files: services/auth/src/server.ts, services/auth/tests/csrf.test.ts, website/src/services/authClient.ts
+- Decisions:
+  - Used double-submit cookie pattern compatible with @auth/express token format
+  - Cookie stores token|SHA256(token+secret), body submits token for verification
+  - Applied requireCsrfToken middleware to 8 state-changing endpoints
+  - Client helper authFetchWithCsrf auto-fetches and includes CSRF token
+  - Used timing-safe comparison to prevent timing attacks on token verification
+- Protected endpoints:
+  - /profile/link-public-key, /profile/evm-challenge, /profile/link-evm
+  - /profile/unlink-evm, /profile/sync-freeroll
+  - /billing/checkout, /billing/portal, /billing/reconcile
+- Blockers: None. Gateway doesn't need CSRF as it uses WebSocket auth, not cookies.

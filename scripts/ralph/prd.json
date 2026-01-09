@@ -2,10 +2,22 @@
   "branchName": "ralph/testnet-production",
   "lastVerified": "2026-01-08",
   "completedWork": {
-    "designSystem": { "stories": 56, "description": "Design tokens, animations, accessibility" },
-    "luxuryRedesign": { "stories": 25, "description": "Premium typography, decluttered UX" },
-    "qaBaseline": { "stories": 6, "description": "Hi-Lo, lobby, deposit, session tests" },
-    "testnetProduction": { "stories": 48, "description": "Infrastructure, deployment, observability" }
+    "designSystem": {
+      "stories": 56,
+      "description": "Design tokens, animations, accessibility"
+    },
+    "luxuryRedesign": {
+      "stories": 25,
+      "description": "Premium typography, decluttered UX"
+    },
+    "qaBaseline": {
+      "stories": 6,
+      "description": "Hi-Lo, lobby, deposit, session tests"
+    },
+    "testnetProduction": {
+      "stories": 48,
+      "description": "Infrastructure, deployment, observability"
+    }
   },
   "stories": [
     {
@@ -111,8 +123,8 @@
         "Generate CSRF tokens for sessions",
         "Verify protection with tests"
       ],
-      "passes": false,
-      "notes": "No CSRF middleware found. SECURITY-CRITICAL."
+      "passes": true,
+      "notes": "CSRF middleware added using double-submit cookie pattern. 8 endpoints protected."
     },
     {
       "id": "US-235",
@@ -611,58 +623,245 @@
       ],
       "passes": false,
       "platform": "native"
+    },
+    {
+      "id": "US-248",
+      "category": "infrastructure",
+      "description": "Honor X-Forwarded-For for gateway IP-based limits and metrics",
+      "steps": [
+        "Add trusted proxy IP extraction (X-Forwarded-For/X-Real-IP) with an allowlist or CIDR config",
+        "Use derived client IP for connection limiter, session rate limits, and metrics logging",
+        "Add tests covering forwarded headers and fallback to socket remoteAddress",
+        "Document proxy header expectations in runbooks/Caddy config"
+      ],
+      "passes": false,
+      "notes": "Gateway runs behind Caddy in staging; current IP handling collapses all clients to proxy IP, breaking per-IP limits and metrics."
+    },
+    {
+      "id": "US-249",
+      "category": "security",
+      "description": "Fix Caddy CORS headers so auth cookie flows and origin allowlists work",
+      "steps": [
+        "Remove Access-Control-Allow-* overrides from infrastructure/staging/Caddyfile or scope them to match allowed origins",
+        "Ensure auth responses include Access-Control-Allow-Credentials and a specific origin",
+        "Validate browser auth flow and preflight behavior on staging"
+      ],
+      "passes": false,
+      "notes": "Caddy currently forces Access-Control-Allow-Origin=* on auth/gateway/indexer, which can override upstream CORS and break credentialed cookies."
+    },
+    {
+      "id": "US-250",
+      "category": "release",
+      "description": "Fail website image builds when required VITE_* args are missing",
+      "steps": [
+        "Add a validation step in build-images.yml to require VITE_URL, VITE_AUTH_URL, VITE_AUTH_PROXY_URL, and VITE_IDENTITY for website builds",
+        "Make the build fail fast if any required var is empty",
+        "Document required GitHub vars in docs/release.md or runbooks"
+      ],
+      "passes": false,
+      "notes": "If build args are unset, the website falls back to localhost endpoints and ships a broken testnet UI."
+    },
+    {
+      "id": "US-251",
+      "category": "api",
+      "description": "Make Stripe billing optional in auth service",
+      "steps": [
+        "Introduce AUTH_BILLING_ENABLED (or similar) flag",
+        "Only require STRIPE_PRICE_TIERS when billing is enabled",
+        "Guard billing endpoints to return a clear 403/503 when disabled",
+        "Update env examples and runbooks",
+        "Add tests for billing-disabled startup"
+      ],
+      "passes": false,
+      "notes": "Auth currently throws if STRIPE_PRICE_TIERS is missing, conflicting with runbook guidance that Stripe is optional for testnet."
+    },
+    {
+      "id": "US-252",
+      "category": "observability",
+      "description": "Accept x-metrics-token for gateway metrics (parity with simulator/auth)",
+      "steps": [
+        "Allow x-metrics-token in gateway metrics auth",
+        "Update observability docs to note accepted headers",
+        "Add a unit test for the alternate header"
+      ],
+      "passes": false,
+      "notes": "Simulator/auth accept Bearer or x-metrics-token; gateway currently only accepts Bearer."
+    },
+    {
+      "id": "US-253",
+      "category": "performance",
+      "description": "Log and alert on super-mode payout saturation",
+      "steps": [
+        "Emit a warning/metric when payout clamps to u64::MAX",
+        "Add a test to verify saturation logging/metric",
+        "Update observability or runbook guidance for monitoring"
+      ],
+      "passes": false,
+      "notes": "Silent saturation can mask payout calculation issues in super-mode scenarios."
+    },
+    {
+      "id": "US-254",
+      "category": "documentation",
+      "description": "Fix Ralph prompt commands to match repo scripts",
+      "steps": [
+        "Update scripts/ralph/prompt.md to use pnpm type-check (not typecheck)",
+        "Update test command to match turbo (pnpm test) or documented package-specific tests",
+        "Verify instructions run cleanly in repo"
+      ],
+      "passes": false,
+      "notes": "Current prompt uses pnpm typecheck and pnpm test --run, which do not exist in package.json."
     }
   ],
   "verifiedComplete": [
-    { "id": "US-223", "title": "Fix React memory leaks", "evidence": "useMemo, useEffect cleanup" },
-    { "id": "US-224", "title": "Code splitting", "evidence": "React.lazy, vite manualChunks" },
-    { "id": "US-225", "title": "Merkle proof caching", "evidence": "Arc<ProofStore> in state.rs" },
-    { "id": "US-226", "title": "Database indexes", "evidence": "CREATE INDEX in explorer" },
-    { "id": "US-240", "title": "Overflow-checks benchmark", "evidence": "Cargo.toml configured" },
-    { "id": "US-216", "title": "DNS configuration", "evidence": "DNS_RECORDS.md, Caddyfile" },
-    { "id": "US-217", "title": "SSL/TLS config", "evidence": "nginx.ssl.conf, Caddyfile" },
-    { "id": "US-219", "title": "Rate limiting", "evidence": "gateway/src/session/limiter.ts" },
-    { "id": "US-220", "title": "DDoS protection", "evidence": "terraform firewall rules" },
-    { "id": "US-221", "title": "Backup procedures", "evidence": "RUNBOOK.md Section 3.7" },
-    { "id": "US-222", "title": "Rollback procedures", "evidence": "RUNBOOK.md" },
-    { "id": "US-231", "title": "OTEL in auth", "evidence": "auth/src/telemetry.ts" },
-    { "id": "US-232", "title": "Terraform backend", "evidence": "S3 backend configured" },
-    { "id": "US-233", "title": "Secret rotation docs", "evidence": "RUNBOOK.md Section 4.6" },
-    { "id": "US-237", "title": "On-chain batching", "evidence": "batch config in craps.ts" },
-    { "id": "US-239", "title": "Version numbers", "evidence": "All npm versions valid" },
-    { "id": "US-247", "title": "Commonware version", "evidence": "0.0.64 is latest" },
-    { "id": "US-010", "title": "Soak test", "evidence": "soak-test.sh executed" },
-    { "id": "US-011", "title": "Bot load test", "evidence": "run-bots.sh exists" },
-    { "id": "US-012", "title": "Global table test", "evidence": "load-test-global-table.mjs" },
-    { "id": "US-241", "title": "Soak test docs", "evidence": "Script executed" },
-    { "id": "US-245", "title": "NAT mitigation docs", "evidence": "RUNBOOK rate limit docs" }
+    {
+      "id": "US-223",
+      "title": "Fix React memory leaks",
+      "evidence": "useMemo, useEffect cleanup"
+    },
+    {
+      "id": "US-224",
+      "title": "Code splitting",
+      "evidence": "React.lazy, vite manualChunks"
+    },
+    {
+      "id": "US-225",
+      "title": "Merkle proof caching",
+      "evidence": "Arc<ProofStore> in state.rs"
+    },
+    {
+      "id": "US-226",
+      "title": "Database indexes",
+      "evidence": "CREATE INDEX in explorer"
+    },
+    {
+      "id": "US-240",
+      "title": "Overflow-checks benchmark",
+      "evidence": "Cargo.toml configured"
+    },
+    {
+      "id": "US-216",
+      "title": "DNS configuration",
+      "evidence": "DNS_RECORDS.md, Caddyfile"
+    },
+    {
+      "id": "US-217",
+      "title": "SSL/TLS config",
+      "evidence": "nginx.ssl.conf, Caddyfile"
+    },
+    {
+      "id": "US-219",
+      "title": "Rate limiting",
+      "evidence": "gateway/src/session/limiter.ts"
+    },
+    {
+      "id": "US-220",
+      "title": "DDoS protection",
+      "evidence": "terraform firewall rules"
+    },
+    {
+      "id": "US-221",
+      "title": "Backup procedures",
+      "evidence": "RUNBOOK.md Section 3.7"
+    },
+    {
+      "id": "US-222",
+      "title": "Rollback procedures",
+      "evidence": "RUNBOOK.md"
+    },
+    {
+      "id": "US-231",
+      "title": "OTEL in auth",
+      "evidence": "auth/src/telemetry.ts"
+    },
+    {
+      "id": "US-232",
+      "title": "Terraform backend",
+      "evidence": "S3 backend configured"
+    },
+    {
+      "id": "US-233",
+      "title": "Secret rotation docs",
+      "evidence": "RUNBOOK.md Section 4.6"
+    },
+    {
+      "id": "US-237",
+      "title": "On-chain batching",
+      "evidence": "batch config in craps.ts"
+    },
+    {
+      "id": "US-239",
+      "title": "Version numbers",
+      "evidence": "All npm versions valid"
+    },
+    {
+      "id": "US-247",
+      "title": "Commonware version",
+      "evidence": "0.0.64 is latest"
+    },
+    {
+      "id": "US-010",
+      "title": "Soak test",
+      "evidence": "soak-test.sh executed"
+    },
+    {
+      "id": "US-011",
+      "title": "Bot load test",
+      "evidence": "run-bots.sh exists"
+    },
+    {
+      "id": "US-012",
+      "title": "Global table test",
+      "evidence": "load-test-global-table.mjs"
+    },
+    {
+      "id": "US-241",
+      "title": "Soak test docs",
+      "evidence": "Script executed"
+    },
+    {
+      "id": "US-245",
+      "title": "NAT mitigation docs",
+      "evidence": "RUNBOOK rate limit docs"
+    }
   ],
   "bugTracker": {
     "fixed": [
-      { "id": "BUG-003", "title": "SafeAreaProvider missing", "resolution": "mobile/App.tsx line 72" },
-      { "id": "BUG-002", "title": "Session not persisted", "resolution": "IndexedDB persistence, expected WS behavior" }
+      {
+        "id": "BUG-003",
+        "title": "SafeAreaProvider missing",
+        "resolution": "mobile/App.tsx line 72"
+      },
+      {
+        "id": "BUG-002",
+        "title": "Session not persisted",
+        "resolution": "IndexedDB persistence, expected WS behavior"
+      }
     ],
     "open": [
-      { "id": "BUG-001", "title": "Chip tap only selects, drag required", "notes": "Needs tutorial hint or tap-to-place" }
+      {
+        "id": "BUG-001",
+        "title": "Chip tap only selects, drag required",
+        "notes": "Needs tutorial hint or tap-to-place"
+      }
     ]
   },
   "summary": {
     "complete": 22,
-    "pending": 47,
+    "pending": 54,
     "byCategory": {
-      "infrastructure": 3,
-      "operations": 3,
-      "api": 2,
-      "security": 1,
-      "documentation": 2,
+      "api": 3,
       "architecture": 1,
-      "testing": 4,
-      "release": 2,
+      "documentation": 3,
+      "infrastructure": 4,
+      "observability": 2,
+      "operations": 3,
       "performance": 2,
-      "observability": 1,
       "qa-game": 12,
+      "qa-native": 12,
       "qa-ui": 3,
-      "qa-native": 12
+      "release": 3,
+      "security": 2,
+      "testing": 4
     }
   }
 }
