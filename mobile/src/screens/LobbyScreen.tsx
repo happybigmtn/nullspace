@@ -27,9 +27,9 @@ import Animated, {
   interpolate,
   Extrapolation,
   runOnJS,
-  LinearTransition,
+  SharedValue,
 } from 'react-native-reanimated';
-import { COLORS, SPACING, TYPOGRAPHY, RADIUS, GAME_COLORS, SPRING } from '../constants/theme';
+import { COLORS, SPACING, TYPOGRAPHY, RADIUS, GAME_COLORS } from '../constants/theme';
 import { SPRING_LIQUID } from '@nullspace/design-tokens';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { haptics } from '../services/haptics';
@@ -46,6 +46,89 @@ interface GameInfo {
   name: string;
   description: string;
   color: string;
+}
+
+/**
+ * DS-041 + DS-043: Parallax Game Card with Staggered Entrance
+ * - Cards enter with choreographed fade + translateY
+ * - Each card translates at 0.5x scroll speed for depth illusion
+ * - Uses SPRING_LIQUID.liquidFloat for natural bounce
+ *
+ * Extracted as standalone component to comply with React hooks rules
+ * (useAnimatedStyle cannot be called inside useCallback)
+ */
+interface ParallaxGameCardProps {
+  game: GameInfo;
+  index: number;
+  scrollY: SharedValue<number>;
+  prefersReducedMotion: boolean;
+  numColumns: number;
+  parallaxFactor: number;
+  onSelect: (gameId: GameId) => void;
+}
+
+function ParallaxGameCard({
+  game,
+  index,
+  scrollY,
+  prefersReducedMotion,
+  numColumns,
+  parallaxFactor,
+  onSelect,
+}: ParallaxGameCardProps) {
+  // Calculate parallax offset - cards further down move more
+  const cardAnimatedStyle = useAnimatedStyle(() => {
+    if (prefersReducedMotion) {
+      return {};
+    }
+    // Only apply parallax when scrolling down (positive scroll)
+    // Each row gets slightly different parallax based on index
+    const rowIndex = Math.floor(index / numColumns);
+    const translateY = interpolate(
+      scrollY.value,
+      [0, 300],
+      [0, -rowIndex * 8 * parallaxFactor], // Subtle parallax: 4px per row
+      Extrapolation.CLAMP
+    );
+    return {
+      transform: [{ translateY }],
+    };
+  });
+
+  /**
+   * DS-043: Staggered entrance with spring physics
+   * - Uses STAGGER.normal (50ms) between cards
+   * - SPRING_LIQUID.liquidFloat for natural bounce
+   * - Respects reduced motion
+   */
+  const enteringAnimation = prefersReducedMotion
+    ? FadeIn.duration(0)
+    : FadeInUp.delay(index * 50)
+        .springify()
+        .mass(SPRING_LIQUID.liquidFloat.mass)
+        .stiffness(SPRING_LIQUID.liquidFloat.stiffness)
+        .damping(SPRING_LIQUID.liquidFloat.damping);
+
+  return (
+    <Animated.View
+      entering={enteringAnimation}
+      style={[styles.gameCardWrapper, cardAnimatedStyle]}
+    >
+      <Pressable
+        onPress={() => onSelect(game.id)}
+        style={({ pressed }) => [
+          styles.gameCard,
+          pressed && styles.gameCardPressed,
+        ]}
+      >
+        <View style={[styles.gameIconContainer, { backgroundColor: game.color + '20' }]}>
+          <GameIcon gameId={game.id} color={game.color} size={24} />
+        </View>
+        <Text style={styles.gameName}>{game.name}</Text>
+        <Text style={styles.gameDescription}>{game.description}</Text>
+      </Pressable>
+    </Animated.View>
+  );
 }
 
 type LeagueEntry = {
@@ -417,71 +500,17 @@ export function LobbyScreen({ navigation }: LobbyScreenProps) {
 
   const numColumns = width >= 900 ? 4 : width >= 700 ? 3 : 2;
 
-  /**
-   * DS-041 + DS-043: Parallax Game Card with Staggered Entrance
-   * - Cards enter with choreographed fade + translateY
-   * - Each card translates at 0.5x scroll speed for depth illusion
-   * - Uses SPRING_LIQUID.liquidFloat for natural bounce
-   */
-  const ParallaxGameCard = useCallback(({ game, index }: { game: GameInfo; index: number }) => {
-    // Calculate parallax offset - cards further down move more
-    const cardAnimatedStyle = useAnimatedStyle(() => {
-      if (prefersReducedMotion) {
-        return {};
-      }
-      // Only apply parallax when scrolling down (positive scroll)
-      // Each row gets slightly different parallax based on index
-      const rowIndex = Math.floor(index / numColumns);
-      const translateY = interpolate(
-        scrollY.value,
-        [0, 300],
-        [0, -rowIndex * 8 * PARALLAX_FACTOR], // Subtle parallax: 4px per row
-        Extrapolation.CLAMP
-      );
-      return {
-        transform: [{ translateY }],
-      };
-    });
-
-    /**
-     * DS-043: Staggered entrance with spring physics
-     * - Uses STAGGER.normal (50ms) between cards
-     * - SPRING_LIQUID.liquidFloat for natural bounce
-     * - Respects reduced motion
-     */
-    const enteringAnimation = prefersReducedMotion
-      ? FadeIn.duration(0)
-      : FadeInUp.delay(index * 50)
-          .springify()
-          .mass(SPRING_LIQUID.liquidFloat.mass)
-          .stiffness(SPRING_LIQUID.liquidFloat.stiffness)
-          .damping(SPRING_LIQUID.liquidFloat.damping);
-
-    return (
-      <Animated.View
-        entering={enteringAnimation}
-        style={[styles.gameCardWrapper, cardAnimatedStyle]}
-      >
-        <Pressable
-          onPress={() => handleGameSelect(game.id)}
-          style={({ pressed }) => [
-            styles.gameCard,
-            pressed && styles.gameCardPressed,
-          ]}
-        >
-          <View style={[styles.gameIconContainer, { backgroundColor: game.color + '20' }]}>
-            <GameIcon gameId={game.id} color={game.color} size={24} />
-          </View>
-          <Text style={styles.gameName}>{game.name}</Text>
-          <Text style={styles.gameDescription}>{game.description}</Text>
-        </Pressable>
-      </Animated.View>
-    );
-  }, [handleGameSelect, prefersReducedMotion, scrollY, numColumns]);
-
   const renderGameCard: ListRenderItem<GameInfo> = useCallback(({ item: game, index }) => (
-    <ParallaxGameCard game={game} index={index} />
-  ), [ParallaxGameCard]);
+    <ParallaxGameCard
+      game={game}
+      index={index}
+      scrollY={scrollY}
+      prefersReducedMotion={prefersReducedMotion}
+      numColumns={numColumns}
+      parallaxFactor={PARALLAX_FACTOR}
+      onSelect={handleGameSelect}
+    />
+  ), [scrollY, prefersReducedMotion, numColumns, handleGameSelect]);
 
   const ListHeader = useCallback(() => (
     <Text style={styles.sectionTitle}>Games</Text>

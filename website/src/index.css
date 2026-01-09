@@ -1833,4 +1833,31 @@ a[href="#app-main"]:focus-visible {
     animation: none !important;
     opacity: 1;
   }
+
+  /* ─────────────────────────────────────────────────────────────────────────────
+   * Liquid Crystal Reduced Motion Handling (US-268)
+   *
+   * Glass effects can cause visual motion even without explicit animation,
+   * due to backdrop blur and refraction effects shifting underlying content.
+   * ───────────────────────────────────────────────────────────────────────────── */
+
+  /* Disable decorative glass animations */
+  .animate-lc-sweep,
+  .animate-lc-refract {
+    animation: none !important;
+  }
+
+  /* Reduce heavy backdrop-filter effects that can cause visual motion */
+  [class*="backdrop-blur-lc-heavy"],
+  [class*="backdrop-blur-lc-frosted"],
+  [class*="backdrop-blur-lc-cinema"] {
+    backdrop-filter: blur(4px) brightness(100%) !important;
+    -webkit-backdrop-filter: blur(4px) brightness(100%) !important;
+  }
+
+  /* Simplify modal/sheet entrance - instant fade instead of scale */
+  .motion-safe\:animate-scale-in {
+    animation: none !important;
+    opacity: 1 !important;
+  }
 }

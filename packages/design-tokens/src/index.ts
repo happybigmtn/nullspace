@@ -232,3 +232,29 @@ export {
   type LiquidCrystalSemanticKey,
   type LiquidCrystalSemanticValue,
 } from './liquid-crystal.js';
+
+// Liquid Crystal Accessibility & Performance (US-268)
+export {
+  // WCAG Contrast utilities
+  WCAG_CONTRAST,
+  parseColor,
+  getRelativeLuminance,
+  getContrastRatio,
+  meetsContrastThreshold,
+  getEffectiveGlassBackground,
+  validateGlassContrast,
+  GLASS_TEXT_COLORS,
+  // Reduced motion
+  REDUCED_MOTION,
+  generateReducedMotionCSS,
+  // Performance budgets
+  PERFORMANCE_BUDGET,
+  isBlurWithinBudget,
+  getRecommendedGlassLevel,
+  // Type exports
+  type MotionPreference,
+  type WCAGLevel,
+  type TextSize,
+  type ViewDensity,
+  type DeviceTier,
+} from './liquid-crystal-a11y.js';

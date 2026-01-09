@@ -116,12 +116,125 @@ For browsers without `backdrop-filter` support, use fallback colors:
 }
 ```
 
-### Accessibility Guidelines
+### Accessibility Guidelines (US-268)
 
-1. **Contrast**: All text on glass surfaces must meet WCAG 2.1 AA (4.5:1 for body, 3:1 for large text)
-2. **Reduced Motion**: Respect `prefers-reduced-motion` for glass animations
-3. **Fallbacks**: Always provide solid-color fallbacks for glass effects
-4. **Primary Surfaces Only**: Limit glass usage to bet slip, header strip, and modals to protect readability
+#### WCAG Contrast Requirements
+
+All text on glass surfaces must meet WCAG 2.1 standards:
+
+| Standard | Normal Text (< 18px) | Large Text (18px+ or 14px+ bold) |
+|----------|---------------------|----------------------------------|
+| **AA** | 4.5:1 | 3.0:1 |
+| **AAA** | 7.0:1 | 4.5:1 |
+
+Use the contrast validation utilities:
+
+```typescript
+import { validateGlassContrast, GLASS_TEXT_COLORS } from '@nullspace/design-tokens';
+
+// Validate a specific combination
+const result = validateGlassContrast(
+  '#1a1a1a',           // text color
+  'smoke',             // glass level
+  '#ffffff',           // base background
+  'light',             // mode
+  { level: 'AA', textSize: 'normal' }
+);
+// { valid: true, ratio: 12.63, threshold: 4.5 }
+
+// Or use pre-calculated safe colors
+const safeText = GLASS_TEXT_COLORS.light.smoke.primary; // '#000000'
+```
+
+#### Reduced Motion
+
+Glass effects are disabled or simplified when `prefers-reduced-motion: reduce`:
+
+- **Disabled**: `animate-lc-sweep`, `animate-lc-refract` (decorative)
+- **Reduced**: Heavy blur (frosted/cinema) → 4px blur (functional but minimal)
+- **Preserved**: Opacity changes, color feedback (essential for understanding)
+
+This is handled automatically in CSS. For programmatic checks:
+
+```typescript
+import { REDUCED_MOTION } from '@nullspace/design-tokens';
+
+// Check if an animation should be disabled
+if (REDUCED_MOTION.disable.includes('lc-sweep')) {
+  // Skip animation
+}
+```
+
+#### Fallbacks
+
+Always provide solid-color fallbacks using `@supports`:
+
+```css
+/* Automatic in Glass components */
+.glass-surface {
+  background-color: var(--glass-bg);
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+  .glass-surface {
+    background-color: var(--fallback-bg);
+  }
+}
+```
+
+#### Usage Limits
+
+Limit glass to primary surfaces only to protect readability:
+- Bet slip
+- Header strip
+- Modals and sheets
+- Tooltips (whisper level only)
+
+Avoid glass on:
+- Body content areas
+- Dense data tables
+- Small text elements
+- Interactive form fields
+
+### Performance Budgets (US-268)
+
+Glass effects are computationally expensive. Follow these budgets:
+
+| Metric | Limit | Rationale |
+|--------|-------|-----------|
+| Max blur radius | 24px | GPU compositing cost |
+| Max glass surfaces | 5 per screen | Stacking context overhead |
+| Max animating glass | 1 per screen | Animated backdrop-filter is expensive |
+
+#### View Density Guidelines
+
+| View Type | Max Glass Level | Animations |
+|-----------|-----------------|------------|
+| Sparse (1-5 elements) | frost | 2 allowed |
+| Medium (6-15 elements) | fog | 1 allowed |
+| Dense (16+ elements) | smoke | 0 allowed |
+
+Use the performance utilities:
+
+```typescript
+import { getRecommendedGlassLevel, isBlurWithinBudget } from '@nullspace/design-tokens';
+
+// Get recommended level based on view density
+const { level, animationsAllowed } = getRecommendedGlassLevel(10);
+// { level: 'fog', animationsAllowed: 1 }
+
+// Check blur is within budget
+isBlurWithinBudget(16); // true (within 24px limit)
+isBlurWithinBudget(32); // false (exceeds budget)
+```
+
+#### Device-Tier Recommendations
+
+| Device | Blur | Animations | Max Blur |
+|--------|------|------------|----------|
+| High-end | Yes | Yes | 32px |
+| Mid-range | Yes | No | 16px |
+| Low-end | No (use fallbacks) | No | 0px |
 
 ### Direct Token Usage (TypeScript)
 
