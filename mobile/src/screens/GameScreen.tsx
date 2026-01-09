@@ -38,7 +38,7 @@ export function GameScreen({ navigation, route }: GameScreenProps) {
   const GameComponent = GAME_COMPONENTS[gameId];
 
   const handleBack = () => {
-    haptics.buttonPress();
+    haptics.buttonPress().catch(() => {});
     navigation.goBack();
   };
 

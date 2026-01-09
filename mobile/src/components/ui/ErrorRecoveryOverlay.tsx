@@ -284,7 +284,7 @@ export function ErrorRecoveryOverlay({
     // Detect recovery success transition
     if (prevRecoveryState.current === 'recovering' && recoveryState === 'success') {
       setShowSuccess(true);
-      haptics.win();
+      haptics.win().catch(() => {});
     }
     prevRecoveryState.current = recoveryState;
   }, [recoveryState]);
@@ -317,17 +317,17 @@ export function ErrorRecoveryOverlay({
   }, [onDismiss]);
 
   const handleRetry = useCallback(() => {
-    haptics.buttonPress();
+    haptics.buttonPress().catch(() => {});
     onRetry?.();
   }, [onRetry]);
 
   const handleReconnect = useCallback(() => {
-    haptics.buttonPress();
+    haptics.buttonPress().catch(() => {});
     onReconnect?.();
   }, [onReconnect]);
 
   const handleGoToLobby = useCallback(() => {
-    haptics.buttonPress();
+    haptics.buttonPress().catch(() => {});
     onGoToLobby?.();
   }, [onGoToLobby]);
 
@@ -513,7 +513,7 @@ export function useErrorRecovery(options: UseErrorRecoveryOptions = {}) {
       message,
       recoveryState: 'idle',
     });
-    haptics.error();
+    haptics.error().catch(() => {});
   }, [clearDismissTimeout]);
 
   const startRecovery = useCallback(() => {

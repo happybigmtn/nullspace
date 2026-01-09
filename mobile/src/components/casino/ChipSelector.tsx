@@ -230,8 +230,8 @@ const Chip = React.memo(function Chip({
     }
   }, [isGold, sheenOffset]);
 
-  const triggerHaptic = () => haptics.chipPlace();
-  const triggerDropHaptic = () => haptics.betConfirm();
+  const triggerHaptic = () => haptics.chipPlace().catch(() => {});
+  const triggerDropHaptic = () => haptics.betConfirm().catch(() => {});
 
   const pan = Gesture.Pan()
     .enabled(!disabled)

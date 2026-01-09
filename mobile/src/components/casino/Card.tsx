@@ -209,7 +209,7 @@ export function Card({
       (finished) => {
         'worklet';
         if (finished && faceUp) {
-          runOnJS(() => haptics.cardDeal())();
+          runOnJS(() => haptics.cardDeal().catch(() => {}))();
           runOnJS(() => {
             onFlipCompleteRef.current?.();
           })();

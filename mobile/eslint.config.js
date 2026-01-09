@@ -12,7 +12,8 @@ const testFiles = [
   "**/*.{spec,test}.{js,jsx,ts,tsx}",
   "**/__mocks__/**/*.{js,jsx,ts,tsx}",
   "src/test-utils/**/*.{js,jsx,ts,tsx}",
-  "jest/setup.{js,ts}",
+  "jest/**/*.{js,ts}",
+  "e2e/**/*.{js,jsx,ts,tsx}",
 ];
 
 module.exports = [
@@ -38,8 +39,10 @@ module.exports = [
       "no-restricted-syntax": [
         "error",
         {
+          // Match haptics.xxx() calls that are NOT part of a .catch() chain
+          // The selector uses :not(:matches(...)) to exclude calls that are the callee object of .catch()
           selector:
-            "CallExpression[callee.object.name='haptics']:not(:has(> MemberExpression[property.name='catch']))",
+            "CallExpression[callee.object.name='haptics']:not([parent.parent.callee.property.name='catch'])",
           message:
             "Haptic calls must use fire-and-forget pattern: haptics.xxx().catch(() => {}). " +
             "Blocking haptics can freeze UI on devices without haptic hardware.",
@@ -62,6 +65,8 @@ module.exports = [
     rules: {
       "@typescript-eslint/array-type": "off",
       "@typescript-eslint/no-require-imports": "off",
+      // Test files need to await haptic calls to test them properly
+      "no-restricted-syntax": "off",
     },
   },
 ];

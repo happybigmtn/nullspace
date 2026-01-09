@@ -87,11 +87,11 @@ export function useChipBetting(options: ChipBettingOptions = {}): ChipBettingRes
     // Use getState() for fresh balance to avoid stale closure issues
     const currentBalance = useGameStore.getState().balance;
     if (bet + value > currentBalance) {
-      haptics.error();
+      haptics.error().catch(() => {});
       return false;
     }
 
-    haptics.chipPlace();
+    haptics.chipPlace().catch(() => {});
     const newBet = bet + value;
     setBetInternal(newBet);
 

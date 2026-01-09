@@ -27,17 +27,17 @@ export function AuthScreen({ navigation }: AuthScreenProps) {
       const success = await authenticateWithBiometrics();
 
       if (success) {
-        haptics.win();
+        haptics.win().catch(() => {});
         authenticate(); // Mark session as authenticated
         // First-time users see onboarding, returning users go to lobby
         const nextScreen = isOnboardingCompleted() ? 'Lobby' : 'Onboarding';
         navigation.replace(nextScreen);
       } else {
-        haptics.loss();
+        haptics.loss().catch(() => {});
         setError('Authentication failed. Please try again.');
       }
     } catch {
-      haptics.loss();
+      haptics.loss().catch(() => {});
       setError('An error occurred. Please try again.');
     } finally {
       setIsAuthenticating(false);
@@ -46,7 +46,7 @@ export function AuthScreen({ navigation }: AuthScreenProps) {
 
   const handleSkip = useCallback(() => {
     // Allow skipping in development/demo mode
-    haptics.buttonPress();
+    haptics.buttonPress().catch(() => {});
     authenticate(); // Mark session as authenticated even in demo
     // First-time users see onboarding, returning users go to lobby
     const nextScreen = isOnboardingCompleted() ? 'Lobby' : 'Onboarding';

@@ -121,7 +121,7 @@ export function LobbyScreen({ navigation }: LobbyScreenProps) {
    */
   const triggerSnapHaptic = useCallback(() => {
     if (prefersReducedMotion) return;
-    haptics.selectionChange();
+    haptics.selectionChange().catch(() => {});
   }, [prefersReducedMotion]);
 
   /**
@@ -329,9 +329,9 @@ export function LobbyScreen({ navigation }: LobbyScreenProps) {
     // First game ever - celebratory haptic feedback
     if (!hasPlayedFirstGame()) {
       markFirstGamePlayed();
-      haptics.jackpot();
+      haptics.jackpot().catch(() => {});
     } else {
-      haptics.selectionChange();
+      haptics.selectionChange().catch(() => {});
     }
     navigation.navigate('Game', { gameId });
   }, [navigation]);
@@ -342,7 +342,7 @@ export function LobbyScreen({ navigation }: LobbyScreenProps) {
    */
   const handleRefresh = useCallback(async () => {
     // Haptic feedback at refresh start
-    haptics.selectionChange();
+    haptics.selectionChange().catch(() => {});
     setRefreshing(true);
 
     // Prepare fade-in animation
@@ -381,10 +381,10 @@ export function LobbyScreen({ navigation }: LobbyScreenProps) {
       );
 
       // Success haptic
-      haptics.win();
+      haptics.win().catch(() => {});
     } catch {
       // Silently fail - network issues shouldn't block UI
-      haptics.error();
+      haptics.error().catch(() => {});
     } finally {
       setRefreshing(false);
     }

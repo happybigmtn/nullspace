@@ -231,19 +231,19 @@ export function OnboardingScreen({ navigation }: OnboardingScreenProps) {
   useEffect(() => {
     const timer = setTimeout(() => {
       setShowButtons(true);
-      haptics.roundStart();
+      haptics.roundStart().catch(() => {});
     }, 1800);
     return () => clearTimeout(timer);
   }, []);
 
   const handleStartPlaying = useCallback(() => {
-    haptics.jackpot();
+    haptics.jackpot().catch(() => {});
     markOnboardingCompleted();
     navigation.replace('Lobby');
   }, [navigation]);
 
   const handleLearnMore = useCallback(() => {
-    haptics.buttonPress();
+    haptics.buttonPress().catch(() => {});
     // For now, just go to lobby - could link to tutorial or help in future
     markOnboardingCompleted();
     navigation.replace('Lobby');

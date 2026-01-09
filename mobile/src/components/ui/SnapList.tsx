@@ -191,7 +191,7 @@ export function SnapList<T>({
       if (disableHaptics || prefersReducedMotion) return;
       if (index !== lastHapticIndex.current) {
         lastHapticIndex.current = index;
-        haptics.selectionChange();
+        haptics.selectionChange().catch(() => {});
       }
     },
     [disableHaptics, prefersReducedMotion]

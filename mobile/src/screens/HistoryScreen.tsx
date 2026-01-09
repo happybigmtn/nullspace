@@ -157,23 +157,23 @@ export function HistoryScreen({ navigation }: HistoryScreenProps) {
   const winRate = calculateWinRate(stats.wins, stats.totalBets);
 
   const handleFilterChange = useCallback((newFilter: DateFilter) => {
-    haptics.selectionChange();
+    haptics.selectionChange().catch(() => {});
     setFilter(newFilter);
   }, []);
 
   const handleRefresh = useCallback(async () => {
-    haptics.selectionChange();
+    haptics.selectionChange().catch(() => {});
     setRefreshing(true);
     // Force re-read from storage
     setRefreshKey((k) => k + 1);
     // Brief delay for UX
     await new Promise((resolve) => setTimeout(resolve, 300));
     setRefreshing(false);
-    haptics.win();
+    haptics.win().catch(() => {});
   }, []);
 
   const handleBack = useCallback(() => {
-    haptics.buttonPress();
+    haptics.buttonPress().catch(() => {});
     navigation.goBack();
   }, [navigation]);
 

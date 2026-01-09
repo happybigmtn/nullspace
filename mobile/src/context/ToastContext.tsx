@@ -395,7 +395,7 @@ function ToastItem({ toast, index, onDismiss }: ToastItemProps) {
       if (event.translationY < SWIPE_THRESHOLD) {
         // Trigger dismiss
         runOnJS(triggerDismiss)();
-        runOnJS(haptics.selectionChange)();
+        runOnJS(() => haptics.selectionChange().catch(() => {}))();
       } else {
         // Spring back
         translateY.value = withSpring(0, { damping: 15, stiffness: 200 });
@@ -406,7 +406,7 @@ function ToastItem({ toast, index, onDismiss }: ToastItemProps) {
 
   // Press to dismiss
   const handlePress = useCallback(() => {
-    haptics.selectionChange();
+    haptics.selectionChange().catch(() => {});
     triggerDismiss();
   }, [triggerDismiss]);
 
@@ -549,13 +549,13 @@ export function ToastProvider({ children }: ToastProviderProps) {
 
       // Haptic feedback based on variant
       if (variant === 'success') {
-        haptics.win();
+        haptics.win().catch(() => {});
       } else if (variant === 'error') {
-        haptics.error();
+        haptics.error().catch(() => {});
       } else if (variant === 'warning') {
-        haptics.push();
+        haptics.push().catch(() => {});
       } else {
-        haptics.selectionChange();
+        haptics.selectionChange().catch(() => {});
       }
 
       return id;

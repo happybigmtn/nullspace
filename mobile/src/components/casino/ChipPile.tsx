@@ -173,7 +173,7 @@ const StackedChip = React.memo(function StackedChip({
   }, [index, totalChips]);
 
   const triggerLandingHaptic = useCallback(() => {
-    haptics.chipPlace();
+    haptics.chipPlace().catch(() => {});
     // DS-054: Trigger liquid ripple effect on chip landing
     if (onLand) {
       onLand(chip.value);
