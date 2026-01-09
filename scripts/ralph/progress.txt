@@ -930,3 +930,27 @@ Categories by count:
 - Evidence: Typecheck passes, lint passes (0 errors), tests added to Detox suite
 - Blockers: None. Detox tests require iOS simulator or Android emulator to execute.
 
+### 2026-01-09 - QA-012: Test Casino War
+- Files: mobile/src/screens/games/CasinoWarScreen.tsx, mobile/e2e/games.test.ts
+- Decisions:
+  - Added testIDs to CasinoWarScreen for E2E testability:
+    - Game area: testID="game-area", testID="cards-container"
+    - Labels: testID="dealer-label", testID="player-label"
+    - Sides: testID="dealer-card-side", testID="player-card-side"
+    - Game message: testID="game-message"
+    - Game result indicators: testID="game-result-{win|loss|none}"
+    - Bet display: testID="bet-container", testID="bet-amount", testID="tie-bet-amount"
+    - Actions: testID="deal-button", testID="action-go-to-war", testID="action-surrender", testID="new-game-button"
+    - Betting: testID="tie-bet-button", testID="clear-button", testID="chip-area"
+  - Created comprehensive 'Casino War (QA-012)' test suite with 15 tests:
+    - Basic War Flow (4 tests): place bet and deal, resolve game, display labels, new game after result
+    - Tie Scenario and War Option (3 tests): show war options on tie, go to war action, increased bet during war
+    - Surrender Option (2 tests): execute surrender, surrender message
+    - Tie Bet 10:1 (2 tests): place/resolve, toggle on/off
+    - Payout Verification (2 tests): resolve win correctly, multiple consecutive games
+    - Clear and Chip Selection (3 tests): clear button, different chip values, accumulation
+  - Tests handle RNG by retrying up to 20 attempts to encounter tie scenarios (~7.7% probability)
+  - Casino War is simplest card game: higher card wins, tie triggers war/surrender choice
+- Evidence: Typecheck passes, lint passes (0 errors)
+- Blockers: None. Detox tests require iOS simulator or Android emulator to execute.
+

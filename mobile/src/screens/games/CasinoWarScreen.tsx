@@ -277,12 +277,12 @@ export function CasinoWarScreen() {
         ) : (
         <>
         {/* Game Area */}
-        <View style={styles.gameArea}>
+        <View style={styles.gameArea} testID="game-area">
         {/* Cards Display */}
-        <View style={styles.cardsContainer}>
+        <View style={styles.cardsContainer} testID="cards-container">
           {/* Dealer Card */}
-          <View style={styles.cardSide}>
-            <Text style={styles.sideLabel}>Dealer</Text>
+          <View style={styles.cardSide} testID="dealer-card-side">
+            <Text style={styles.sideLabel} testID="dealer-label">Dealer</Text>
             {state.dealerCard ? (
               <Animated.View entering={cardEnterLeft}>
                 <Card
@@ -303,8 +303,8 @@ export function CasinoWarScreen() {
           </View>
 
           {/* Player Card */}
-          <View style={styles.cardSide}>
-            <Text style={styles.sideLabel}>You</Text>
+          <View style={styles.cardSide} testID="player-card-side">
+            <Text style={styles.sideLabel} testID="player-label">You</Text>
             {state.playerCard ? (
               <Animated.View entering={cardEnterRight}>
                 <Card
@@ -322,6 +322,7 @@ export function CasinoWarScreen() {
 
         {/* Message */}
         <Text
+          testID="game-message"
           style={[
             styles.message,
             state.lastResult === 'win' && styles.messageWin,
@@ -331,18 +332,22 @@ export function CasinoWarScreen() {
         >
           {state.message}
         </Text>
+        {/* Hidden result indicator for E2E testing */}
+        <Text testID={`game-result-${state.lastResult || 'none'}`} style={{ display: 'none' }}>
+          {state.lastResult}
+        </Text>
 
         {/* Bet Display */}
         {bet > 0 && (
-          <View style={styles.betContainer}>
-            <Text style={styles.betLabel}>
+          <View style={styles.betContainer} testID="bet-container">
+            <Text style={styles.betLabel} testID="bet-label">
               {state.warBet > 0 ? 'Total Bet (War)' : 'Bet'}
             </Text>
-            <Text style={styles.betAmount}>
+            <Text style={styles.betAmount} testID="bet-amount">
               ${bet + state.warBet}
             </Text>
             {state.tieBet > 0 && (
-              <Text style={styles.tieBetAmount}>
+              <Text style={styles.tieBetAmount} testID="tie-bet-amount">
                 Tie Bet: ${state.tieBet}
               </Text>
             )}
@@ -354,12 +359,13 @@ export function CasinoWarScreen() {
             label={state.tieBet > 0 ? `Tie Bet $${state.tieBet}` : 'Add Tie Bet'}
             onPress={handleToggleTieBet}
             variant={state.tieBet > 0 ? 'secondary' : 'ghost'}
+            testID="tie-bet-button"
           />
         )}
       </View>
 
       {/* Actions */}
-      <View style={styles.actions}>
+      <View style={styles.actions} testID="actions-container">
         {state.phase === 'betting' && (
           <PrimaryButton
             label="DEAL"
@@ -367,6 +373,7 @@ export function CasinoWarScreen() {
             disabled={bet === 0 || isDisconnected || isSubmitting}
             variant="primary"
             size="large"
+            testID="deal-button"
           />
         )}
 
@@ -378,12 +385,14 @@ export function CasinoWarScreen() {
               disabled={isDisconnected || isSubmitting}
               variant="primary"
               size="large"
+              testID="action-go-to-war"
             />
             <PrimaryButton
               label="SURRENDER"
               onPress={handleSurrender}
               disabled={isDisconnected || isSubmitting}
               variant="danger"
+              testID="action-surrender"
             />
           </>
         )}
@@ -394,18 +403,20 @@ export function CasinoWarScreen() {
             onPress={handleNewGame}
             variant="primary"
             size="large"
+            testID="new-game-button"
           />
         )}
       </View>
 
       {/* Chip Selector */}
       {state.phase === 'betting' && (
-        <View style={styles.chipArea}>
+        <View style={styles.chipArea} testID="chip-area">
           {bet > 0 && (
             <PrimaryButton
               label="CLEAR"
               onPress={handleClearBets}
               variant="secondary"
+              testID="clear-button"
             />
           )}
           <ChipSelector

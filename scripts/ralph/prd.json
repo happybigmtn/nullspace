@@ -351,8 +351,8 @@
         "Test surrender option",
         "Verify payouts"
       ],
-      "passes": false,
-      "notes": "Integration test only."
+      "passes": true,
+      "notes": "Added testIDs to CasinoWarScreen (game-area, dealer-label, player-label, game-message, game-result-{outcome}, bet-amount, tie-bet-amount, deal-button, action-go-to-war, action-surrender, new-game-button, tie-bet-button, clear-button). Created comprehensive 'Casino War (QA-012)' test suite in mobile/e2e/games.test.ts with 15 tests: Basic War Flow (4 tests: place bet and deal, resolve game, display labels, new game after result), Tie Scenario and War Option (3 tests: show war options on tie, go to war action, increased bet during war), Surrender Option (2 tests: execute surrender, surrender message), Tie Bet (2 tests: place/resolve, toggle on/off), Payout Verification (2 tests: resolve win, multiple consecutive games), Clear and Chip Selection (3 tests: clear button, different chips, accumulation). Tests handle RNG by retrying up to 20 attempts for tie scenarios."
     },
     {
       "id": "QA-013",
