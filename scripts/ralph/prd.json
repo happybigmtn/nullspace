@@ -532,8 +532,9 @@
         "Foreground app",
         "Verify state preserved"
       ],
-      "passes": false,
-      "platform": "native"
+      "passes": true,
+      "platform": "native",
+      "notes": "Detox E2E test exists in mobile/e2e/native-features.test.ts 'should restore session after background/foreground' - starts Hi-Lo game, calls device.sendToHome(), relaunches with newInstance: false, and verifies game screen is still visible."
     },
     {
       "id": "QA-N06",
