@@ -1,0 +1,505 @@
+{
+  "branchName": "ralph/testnet-production",
+  "consolidatedFrom": ["ralph", "ralph2", "ralph3", "ralph4"],
+  "consolidationDate": "2026-01-08",
+  "completedWork": {
+    "designSystem": {
+      "agent": "ralph3",
+      "stories": 56,
+      "phases": 9,
+      "description": "Full design token alignment, spring animations, accessibility, glassmorphism"
+    },
+    "luxuryRedesign": {
+      "agent": "ralph4",
+      "stories": 25,
+      "phases": 6,
+      "description": "Premium typography, decluttered UX, bet controls, auth simplification"
+    },
+    "qaBaseline": {
+      "agent": "ralph2",
+      "stories": 6,
+      "ids": ["QA-001", "QA-002", "QA-003", "QA-004", "QA-005", "QA-006"],
+      "description": "Hi-Lo flow, lobby navigation, deposit flow, session management"
+    },
+    "testnetProduction": {
+      "agent": "ralph",
+      "stories": 48,
+      "description": "Core infrastructure, deployment, observability, protocol features"
+    }
+  },
+  "pendingStories": {
+    "production": [
+      {
+        "id": "US-010",
+        "title": "Execute soak test",
+        "priority": 1,
+        "notes": "STAGING READY: ./scripts/soak-test.sh configs/testnet 4"
+      },
+      {
+        "id": "US-011",
+        "title": "Execute bot load test",
+        "priority": 2,
+        "notes": "STAGING READY: NUM_BOTS=300 DURATION_SECONDS=300"
+      },
+      {
+        "id": "US-012",
+        "title": "Execute global table fanout test",
+        "priority": 3,
+        "notes": "STAGING READY: TOTAL=5000 DURATION=300"
+      },
+      {
+        "id": "US-014",
+        "title": "Test faucet flow end-to-end",
+        "priority": 5,
+        "notes": "Core testnet user journey"
+      },
+      {
+        "id": "US-015",
+        "title": "Test vault-only login on iOS",
+        "priority": 6,
+        "notes": "MANUAL: Requires iOS device"
+      },
+      {
+        "id": "US-016",
+        "title": "Test vault-only login on Android",
+        "priority": 7,
+        "notes": "MANUAL: Requires Android device"
+      },
+      {
+        "id": "US-017",
+        "title": "Test validator restart recovery",
+        "priority": 8,
+        "notes": "Recovery drill per runbook Section 7"
+      },
+      {
+        "id": "US-018",
+        "title": "Test gateway restart recovery",
+        "priority": 9,
+        "notes": "Recovery drill per runbook Section 7"
+      },
+      {
+        "id": "US-019",
+        "title": "Build production mobile APK",
+        "priority": 10,
+        "notes": "MANUAL: Requires EAS account"
+      },
+      {
+        "id": "US-020",
+        "title": "Build production mobile IPA",
+        "priority": 11,
+        "notes": "MANUAL: Requires Apple Developer account"
+      }
+    ],
+    "infrastructure": [
+      {
+        "id": "US-212",
+        "title": "Run cross-service integration tests against staging",
+        "priority": 112
+      },
+      {
+        "id": "US-216",
+        "title": "Verify DNS configuration for production domains",
+        "priority": 92,
+        "notes": "PRODUCTION-CRITICAL"
+      },
+      {
+        "id": "US-217",
+        "title": "Verify SSL/TLS certificate configuration",
+        "priority": 93,
+        "notes": "PRODUCTION-CRITICAL"
+      },
+      {
+        "id": "US-218",
+        "title": "Configure and verify CDN",
+        "priority": 94
+      },
+      {
+        "id": "US-219",
+        "title": "Verify rate limiting configuration",
+        "priority": 95,
+        "notes": "PRODUCTION-CRITICAL"
+      },
+      {
+        "id": "US-220",
+        "title": "Configure DDoS protection",
+        "priority": 96,
+        "notes": "PRODUCTION-CRITICAL"
+      },
+      {
+        "id": "US-221",
+        "title": "Verify backup and restore procedures",
+        "priority": 97,
+        "notes": "PRODUCTION-CRITICAL"
+      },
+      {
+        "id": "US-222",
+        "title": "Document and test rollback procedures",
+        "priority": 98,
+        "notes": "PRODUCTION-CRITICAL"
+      },
+      {
+        "id": "US-229",
+        "title": "Generate production SOPS Age keys",
+        "priority": 105,
+        "notes": "PRODUCTION-CRITICAL"
+      },
+      {
+        "id": "US-230",
+        "title": "Add Docker resource limits to production compose",
+        "priority": 106,
+        "notes": "PRODUCTION-CRITICAL"
+      },
+      {
+        "id": "US-231",
+        "title": "Add OpenTelemetry configuration to auth service",
+        "priority": 107
+      },
+      {
+        "id": "US-232",
+        "title": "Configure Terraform remote state backend",
+        "priority": 108,
+        "notes": "PRODUCTION-CRITICAL"
+      },
+      {
+        "id": "US-233",
+        "title": "Document secret rotation procedures",
+        "priority": 109
+      },
+      {
+        "id": "US-234",
+        "title": "Add CSRF protection for cookie-authenticated endpoints",
+        "priority": 110
+      },
+      {
+        "id": "US-235",
+        "title": "Create OpenAPI/Swagger specifications",
+        "priority": 111
+      }
+    ],
+    "performance": [
+      {
+        "id": "US-223",
+        "title": "Fix React component memory leaks and re-renders",
+        "priority": 99,
+        "notes": "HIGH priority"
+      },
+      {
+        "id": "US-224",
+        "title": "Implement code splitting for game components",
+        "priority": 100,
+        "notes": "Reduce main bundle from 473KB to <200KB"
+      },
+      {
+        "id": "US-225",
+        "title": "Add Merkle proof caching in simulator",
+        "priority": 101,
+        "notes": "Reduce CPU usage by 50%"
+      },
+      {
+        "id": "US-226",
+        "title": "Add missing database indexes for explorer",
+        "priority": 102
+      },
+      {
+        "id": "US-240",
+        "title": "Benchmark Rust overflow-checks performance impact",
+        "priority": 116
+      },
+      {
+        "id": "US-244",
+        "title": "Audit mobile noble cryptography performance",
+        "priority": 120
+      }
+    ],
+    "apiContract": [
+      {
+        "id": "US-227",
+        "title": "Standardize API error response format across services",
+        "priority": 103,
+        "notes": "RFC 7807 Problem Details format"
+      },
+      {
+        "id": "US-228",
+        "title": "Fix incorrect HTTP status codes in auth service",
+        "priority": 104
+      }
+    ],
+    "architecture": [
+      {
+        "id": "US-236",
+        "title": "ARCH-001: Design horizontal scaling for game engine",
+        "priority": 112,
+        "notes": "HIGH - Single-threaded engine bottleneck"
+      },
+      {
+        "id": "US-237",
+        "title": "ARCH-002: Tune on-chain batching for latency optimization",
+        "priority": 113
+      },
+      {
+        "id": "US-238",
+        "title": "ARCH-003: Document Convex self-hosting runbook",
+        "priority": 114
+      },
+      {
+        "id": "US-239",
+        "title": "Fix non-standard version numbers in package.json",
+        "priority": 115
+      },
+      {
+        "id": "US-247",
+        "title": "Verify commonware dependency version",
+        "priority": 123
+      }
+    ],
+    "testing": [
+      {
+        "id": "US-241",
+        "title": "Execute and document soak test results",
+        "priority": 117,
+        "notes": "CRITICAL - Baseline needed for launch"
+      },
+      {
+        "id": "US-242",
+        "title": "Verify mobile vault recovery flow E2E",
+        "priority": 118,
+        "notes": "HIGH - Mobile vault parity"
+      },
+      {
+        "id": "US-243",
+        "title": "Execute and document recovery drills",
+        "priority": 119,
+        "notes": "HIGH - Recovery drill execution"
+      },
+      {
+        "id": "US-245",
+        "title": "Document NAT user rate limiting false positive mitigation",
+        "priority": 121
+      },
+      {
+        "id": "US-246",
+        "title": "Validate KPIs for testnet launch",
+        "priority": 122,
+        "notes": "CRITICAL - KPI validation required"
+      }
+    ],
+    "qaGames": [
+      {
+        "id": "QA-007",
+        "title": "Test Blackjack game - hit/stand flow",
+        "priority": 11
+      },
+      {
+        "id": "QA-008",
+        "title": "Test Blackjack game - double down and split",
+        "priority": 12
+      },
+      {
+        "id": "QA-009",
+        "title": "Test Roulette - all bet categories",
+        "priority": 13
+      },
+      {
+        "id": "QA-010",
+        "title": "Test Baccarat - main bets",
+        "priority": 14
+      },
+      {
+        "id": "QA-011",
+        "title": "Test Baccarat - side bets",
+        "priority": 15
+      },
+      {
+        "id": "QA-012",
+        "title": "Test Casino War - basic and tie scenarios",
+        "priority": 16
+      },
+      {
+        "id": "QA-013",
+        "title": "Test Video Poker - deal and hold mechanics",
+        "priority": 17
+      },
+      {
+        "id": "QA-014",
+        "title": "Test Sic Bo - all bet categories",
+        "priority": 18
+      },
+      {
+        "id": "QA-015",
+        "title": "Test Three Card Poker - ante/play flow",
+        "priority": 19
+      },
+      {
+        "id": "QA-016",
+        "title": "Test Ultimate Texas Holdem - street betting",
+        "priority": 20
+      },
+      {
+        "id": "QA-017",
+        "title": "Test Craps - pass line and come bets",
+        "priority": 21
+      },
+      {
+        "id": "QA-018",
+        "title": "Test Craps - odds and proposition bets",
+        "priority": 22
+      }
+    ],
+    "qaUi": [
+      {
+        "id": "QA-019",
+        "title": "Test chip selector across all games",
+        "priority": 25
+      },
+      {
+        "id": "QA-020",
+        "title": "Test game header and back navigation",
+        "priority": 26
+      },
+      {
+        "id": "QA-021",
+        "title": "Test connection loss and reconnection",
+        "priority": 30
+      },
+      {
+        "id": "QA-022",
+        "title": "Test insufficient balance handling",
+        "priority": 31
+      },
+      {
+        "id": "QA-023",
+        "title": "Test rapid bet submission",
+        "priority": 32
+      },
+      {
+        "id": "QA-024",
+        "title": "Test vault screen access",
+        "priority": 35
+      },
+      {
+        "id": "QA-025",
+        "title": "Document all bugs found during testing",
+        "priority": 40
+      },
+      {
+        "id": "QA-026",
+        "title": "Create visual regression baseline",
+        "priority": 41
+      }
+    ],
+    "qaNative": [
+      {
+        "id": "QA-N01",
+        "title": "[NATIVE] SecureStore wallet persistence",
+        "priority": 50,
+        "platform": "native"
+      },
+      {
+        "id": "QA-N02",
+        "title": "[NATIVE] Vault password 12 char enforcement",
+        "priority": 51,
+        "platform": "native"
+      },
+      {
+        "id": "QA-N03",
+        "title": "[NATIVE] Biometric authentication for vault",
+        "priority": 52,
+        "platform": "native"
+      },
+      {
+        "id": "QA-N04",
+        "title": "[NATIVE] Haptic feedback on game actions",
+        "priority": 53,
+        "platform": "native-device"
+      },
+      {
+        "id": "QA-N05",
+        "title": "[NATIVE] App backgrounding preserves state",
+        "priority": 54,
+        "platform": "native"
+      },
+      {
+        "id": "QA-N06",
+        "title": "[NATIVE] Network loss recovery with airplane mode",
+        "priority": 55,
+        "platform": "native-device"
+      },
+      {
+        "id": "QA-N07",
+        "title": "[NATIVE] Push notification for big wins",
+        "priority": 56,
+        "platform": "native-device"
+      },
+      {
+        "id": "QA-N08",
+        "title": "[NATIVE] Card dealing animation smoothness",
+        "priority": 57,
+        "platform": "native"
+      },
+      {
+        "id": "QA-N09",
+        "title": "[NATIVE] Chip drag gesture on touch screen",
+        "priority": 58,
+        "platform": "native"
+      },
+      {
+        "id": "QA-N10",
+        "title": "[NATIVE] iOS Simulator full game flow",
+        "priority": 60,
+        "platform": "ios"
+      },
+      {
+        "id": "QA-N11",
+        "title": "[NATIVE] Android Emulator full game flow",
+        "priority": 61,
+        "platform": "android"
+      },
+      {
+        "id": "QA-N12",
+        "title": "[NATIVE] Memory stability during extended play",
+        "priority": 62,
+        "platform": "native"
+      }
+    ]
+  },
+  "bugTracker": {
+    "critical": [
+      {
+        "id": "BUG-003",
+        "title": "Missing SafeAreaProvider crashes web app",
+        "fix": "Wrap component tree with SafeAreaProvider in App.tsx",
+        "affectedFile": "mobile/App.tsx"
+      }
+    ],
+    "high": [
+      {
+        "id": "BUG-002",
+        "title": "Session/wallet not persisted on full page reload",
+        "note": "SPA navigation works correctly"
+      }
+    ],
+    "medium": [
+      {
+        "id": "BUG-001",
+        "title": "Chip tap only selects, drag required to place bet",
+        "recommendation": "Add tap-to-place or update tutorial"
+      }
+    ]
+  },
+  "summary": {
+    "totalCompleted": 135,
+    "totalPending": 63,
+    "criticalPending": 12,
+    "categories": {
+      "production": 10,
+      "infrastructure": 15,
+      "performance": 6,
+      "apiContract": 2,
+      "architecture": 5,
+      "testing": 5,
+      "qaGames": 12,
+      "qaUi": 8,
+      "qaNative": 12
+    }
+  }
+}

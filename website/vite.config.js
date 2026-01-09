@@ -101,32 +101,18 @@ export default defineConfig({
     },
     rollupOptions: {
       output: {
-        // US-145: Manual chunks to split large dependencies
-        // NOTE: Order matters! More specific matches must come first to avoid circular deps
+        // US-145: Manual chunks - only split large isolated dependencies
+        // IMPORTANT: Do NOT manually chunk React - causes circular dependency issues
+        // Let Vite/Rollup handle React chunking automatically
         manualChunks: (id) => {
-          // Split recharts (used by EconomyDashboard) into separate chunk
+          // Split recharts (used by EconomyDashboard) - isolated, large
           if (id.includes('node_modules/recharts') ||
               id.includes('node_modules/d3-') ||
               id.includes('node_modules/victory-vendor')) {
             return 'vendor-charts';
           }
-          // Split animation libraries (depends on react, must be separate)
-          if (id.includes('node_modules/@react-spring') ||
-              id.includes('node_modules/framer-motion')) {
-            return 'vendor-animation';
-          }
-          // React ecosystem - keep react-dom with react to avoid circular deps
-          // Also include use-gesture which tightly couples with react
-          if (id.includes('node_modules/react/') ||
-              id.includes('node_modules/react-dom/') ||
-              id.includes('node_modules/scheduler/')) {
-            return 'vendor-react';
-          }
-          // React router in separate chunk (depends on react)
-          if (id.includes('node_modules/react-router')) {
-            return 'vendor-router';
-          }
-          // Keep other node_modules in default vendor chunk
+          // All other node_modules go into single vendor chunk
+          // This avoids circular dependencies between React and its consumers
           if (id.includes('node_modules/')) {
             return 'vendor';
           }
