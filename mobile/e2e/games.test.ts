@@ -1774,3 +1774,495 @@ describe('Baccarat Main Bets (QA-010)', () => {
     });
   });
 });
+
+describe('Baccarat Side Bets (QA-011)', () => {
+  /**
+   * Comprehensive E2E tests for Baccarat side bets
+   * Tests: player pair, banker pair, perfect pair, lucky 6, dragon bets, panda 8
+   * Side bets have lower probability but higher payouts
+   *
+   * Payouts:
+   * - Player/Banker Pair: 11:1 (first two cards form a pair)
+   * - Perfect Pair: 25:1 (identical card pair - same suit and rank)
+   * - Lucky 6: 12:1 / 20:1 (winner with 6, varies by cards)
+   * - Dragon Bonus: up to 30:1 (natural win or large margin)
+   * - Panda 8: 25:1 (player wins with 8 from 3 cards)
+   */
+
+  beforeAll(async () => {
+    await device.launchApp({ newInstance: true });
+    await waitFor(element(by.id('auth-screen')))
+      .toBeVisible()
+      .withTimeout(10000);
+    await element(by.id('auth-continue-button')).tap();
+    await waitFor(element(by.id('lobby-screen')))
+      .toBeVisible()
+      .withTimeout(15000);
+  });
+
+  beforeEach(async () => {
+    // Navigate to Baccarat game
+    await element(by.id('game-card-baccarat')).tap();
+    await waitFor(element(by.id('game-screen-baccarat')))
+      .toBeVisible()
+      .withTimeout(10000);
+  });
+
+  afterEach(async () => {
+    // Return to lobby after each test
+    try {
+      await element(by.id('game-back-button')).tap();
+      await waitFor(element(by.id('lobby-screen')))
+        .toBeVisible()
+        .withTimeout(5000);
+    } catch {
+      // Already on lobby
+      await device.launchApp({ newInstance: false });
+      await waitFor(element(by.id('lobby-screen')))
+        .toBeVisible()
+        .withTimeout(5000);
+    }
+  });
+
+  describe('Player Pair (11:1 payout)', () => {
+    it('should place and resolve a PLAYER PAIR side bet', async () => {
+      // Select chip
+      await element(by.id('chip-5')).tap();
+
+      // Place player pair side bet
+      await element(by.id('bet-area-p-pair')).tap();
+
+      // Verify bet is placed
+      await expect(element(by.id('total-bet-amount'))).toHaveText('$5');
+
+      // Deal the cards
+      await element(by.id('deal-button')).tap();
+
+      // Wait for result
+      await waitFor(element(by.id('new-game-button')))
+        .toBeVisible()
+        .withTimeout(20000);
+
+      // Verify game resolved
+      await expect(element(by.id('player-hand'))).toBeVisible();
+      await expect(element(by.id('banker-hand'))).toBeVisible();
+      await expect(element(by.id('game-message'))).toBeVisible();
+    });
+
+    it('should combine PLAYER PAIR with main bet', async () => {
+      // Place main bet on player
+      await element(by.id('chip-10')).tap();
+      await element(by.id('bet-area-player')).tap();
+      await element(by.id('chip-10')).tap();
+
+      // Add player pair side bet
+      await element(by.id('chip-5')).tap();
+      await element(by.id('bet-area-p-pair')).tap();
+
+      // Total should be 15 (10 main + 5 side)
+      await expect(element(by.id('total-bet-amount'))).toHaveText('$15');
+
+      await element(by.id('deal-button')).tap();
+
+      await waitFor(element(by.id('new-game-button')))
+        .toBeVisible()
+        .withTimeout(20000);
+
+      // Verify game resolved
+      await expect(element(by.id('game-message'))).toBeVisible();
+    });
+  });
+
+  describe('Banker Pair (11:1 payout)', () => {
+    it('should place and resolve a BANKER PAIR side bet', async () => {
+      // Select chip
+      await element(by.id('chip-5')).tap();
+
+      // Place banker pair side bet
+      await element(by.id('bet-area-b-pair')).tap();
+
+      // Verify bet is placed
+      await expect(element(by.id('total-bet-amount'))).toHaveText('$5');
+
+      // Deal the cards
+      await element(by.id('deal-button')).tap();
+
+      // Wait for result
+      await waitFor(element(by.id('new-game-button')))
+        .toBeVisible()
+        .withTimeout(20000);
+
+      // Verify game resolved
+      await expect(element(by.id('player-hand'))).toBeVisible();
+      await expect(element(by.id('banker-hand'))).toBeVisible();
+      await expect(element(by.id('game-message'))).toBeVisible();
+    });
+
+    it('should combine BANKER PAIR with main bet', async () => {
+      // Place main bet on banker
+      await element(by.id('chip-10')).tap();
+      await element(by.id('bet-area-banker')).tap();
+      await element(by.id('chip-10')).tap();
+
+      // Add banker pair side bet
+      await element(by.id('chip-5')).tap();
+      await element(by.id('bet-area-b-pair')).tap();
+
+      // Total should be 15 (10 main + 5 side)
+      await expect(element(by.id('total-bet-amount'))).toHaveText('$15');
+
+      await element(by.id('deal-button')).tap();
+
+      await waitFor(element(by.id('new-game-button')))
+        .toBeVisible()
+        .withTimeout(20000);
+
+      // Verify game resolved
+      await expect(element(by.id('game-message'))).toBeVisible();
+    });
+  });
+
+  describe('Perfect Pair (25:1 payout)', () => {
+    it('should place and resolve a PERFECT PAIR side bet', async () => {
+      // Select chip
+      await element(by.id('chip-5')).tap();
+
+      // Place perfect pair side bet
+      await element(by.id('bet-area-perfect-pair')).tap();
+
+      // Verify bet is placed
+      await expect(element(by.id('total-bet-amount'))).toHaveText('$5');
+
+      // Deal the cards
+      await element(by.id('deal-button')).tap();
+
+      // Wait for result
+      await waitFor(element(by.id('new-game-button')))
+        .toBeVisible()
+        .withTimeout(20000);
+
+      // Verify game resolved
+      await expect(element(by.id('player-hand'))).toBeVisible();
+      await expect(element(by.id('banker-hand'))).toBeVisible();
+      await expect(element(by.id('game-message'))).toBeVisible();
+    });
+
+    it('should combine PERFECT PAIR with BOTH pair bets', async () => {
+      // Place multiple pair bets to test accumulation
+      await element(by.id('chip-5')).tap();
+      await element(by.id('bet-area-p-pair')).tap();
+      await element(by.id('bet-area-b-pair')).tap();
+      await element(by.id('bet-area-perfect-pair')).tap();
+
+      // Total should be 15 (5 + 5 + 5)
+      await expect(element(by.id('total-bet-amount'))).toHaveText('$15');
+
+      await element(by.id('deal-button')).tap();
+
+      await waitFor(element(by.id('new-game-button')))
+        .toBeVisible()
+        .withTimeout(20000);
+
+      // Verify game resolved
+      await expect(element(by.id('game-message'))).toBeVisible();
+    });
+  });
+
+  describe('Lucky 6 (12:1 / 20:1 payout)', () => {
+    it('should place and resolve a LUCKY 6 side bet', async () => {
+      // Lucky 6 wins when the chosen side wins with a total of 6
+      // 12:1 for 2-card 6, 20:1 for 3-card 6
+      await element(by.id('chip-5')).tap();
+
+      // Place lucky 6 side bet
+      await element(by.id('bet-area-lucky6')).tap();
+
+      // Verify bet is placed
+      await expect(element(by.id('total-bet-amount'))).toHaveText('$5');
+
+      // Deal the cards
+      await element(by.id('deal-button')).tap();
+
+      // Wait for result
+      await waitFor(element(by.id('new-game-button')))
+        .toBeVisible()
+        .withTimeout(20000);
+
+      // Verify game resolved
+      await expect(element(by.id('player-hand'))).toBeVisible();
+      await expect(element(by.id('banker-hand'))).toBeVisible();
+      await expect(element(by.id('game-message'))).toBeVisible();
+    });
+
+    it('should combine LUCKY 6 with main BANKER bet', async () => {
+      // Lucky 6 typically pairs with banker bet
+      await element(by.id('chip-10')).tap();
+      await element(by.id('bet-area-banker')).tap();
+      await element(by.id('chip-10')).tap();
+
+      await element(by.id('chip-5')).tap();
+      await element(by.id('bet-area-lucky6')).tap();
+
+      // Total should be 15 (10 main + 5 side)
+      await expect(element(by.id('total-bet-amount'))).toHaveText('$15');
+
+      await element(by.id('deal-button')).tap();
+
+      await waitFor(element(by.id('new-game-button')))
+        .toBeVisible()
+        .withTimeout(20000);
+
+      // Verify game resolved
+      await expect(element(by.id('game-message'))).toBeVisible();
+    });
+  });
+
+  describe('Dragon Bonus (up to 30:1 payout)', () => {
+    it('should place and resolve a PLAYER DRAGON side bet', async () => {
+      // Dragon bonus wins on natural win or large margin victory
+      await element(by.id('chip-5')).tap();
+
+      // Place player dragon side bet
+      await element(by.id('bet-area-p-dragon')).tap();
+
+      // Verify bet is placed
+      await expect(element(by.id('total-bet-amount'))).toHaveText('$5');
+
+      // Deal the cards
+      await element(by.id('deal-button')).tap();
+
+      // Wait for result
+      await waitFor(element(by.id('new-game-button')))
+        .toBeVisible()
+        .withTimeout(20000);
+
+      // Verify game resolved
+      await expect(element(by.id('player-hand'))).toBeVisible();
+      await expect(element(by.id('banker-hand'))).toBeVisible();
+      await expect(element(by.id('game-message'))).toBeVisible();
+    });
+
+    it('should place and resolve a BANKER DRAGON side bet', async () => {
+      await element(by.id('chip-5')).tap();
+
+      // Place banker dragon side bet
+      await element(by.id('bet-area-b-dragon')).tap();
+
+      // Verify bet is placed
+      await expect(element(by.id('total-bet-amount'))).toHaveText('$5');
+
+      // Deal the cards
+      await element(by.id('deal-button')).tap();
+
+      // Wait for result
+      await waitFor(element(by.id('new-game-button')))
+        .toBeVisible()
+        .withTimeout(20000);
+
+      // Verify game resolved
+      await expect(element(by.id('player-hand'))).toBeVisible();
+      await expect(element(by.id('banker-hand'))).toBeVisible();
+      await expect(element(by.id('game-message'))).toBeVisible();
+    });
+
+    it('should combine DRAGON bets with main bet', async () => {
+      // Place main bet
+      await element(by.id('chip-10')).tap();
+      await element(by.id('bet-area-player')).tap();
+      await element(by.id('chip-10')).tap();
+
+      // Add both dragon bets
+      await element(by.id('chip-5')).tap();
+      await element(by.id('bet-area-p-dragon')).tap();
+      await element(by.id('bet-area-b-dragon')).tap();
+
+      // Total should be 20 (10 main + 5 + 5)
+      await expect(element(by.id('total-bet-amount'))).toHaveText('$20');
+
+      await element(by.id('deal-button')).tap();
+
+      await waitFor(element(by.id('new-game-button')))
+        .toBeVisible()
+        .withTimeout(20000);
+
+      // Verify game resolved
+      await expect(element(by.id('game-message'))).toBeVisible();
+    });
+  });
+
+  describe('Panda 8 (25:1 payout)', () => {
+    it('should place and resolve a PANDA 8 side bet', async () => {
+      // Panda 8 wins when player wins with 8 from 3 cards
+      await element(by.id('chip-5')).tap();
+
+      // Place panda 8 side bet
+      await element(by.id('bet-area-panda8')).tap();
+
+      // Verify bet is placed
+      await expect(element(by.id('total-bet-amount'))).toHaveText('$5');
+
+      // Deal the cards
+      await element(by.id('deal-button')).tap();
+
+      // Wait for result
+      await waitFor(element(by.id('new-game-button')))
+        .toBeVisible()
+        .withTimeout(20000);
+
+      // Verify game resolved
+      await expect(element(by.id('player-hand'))).toBeVisible();
+      await expect(element(by.id('banker-hand'))).toBeVisible();
+      await expect(element(by.id('game-message'))).toBeVisible();
+    });
+
+    it('should combine PANDA 8 with main PLAYER bet', async () => {
+      // Panda 8 pairs logically with player bet
+      await element(by.id('chip-10')).tap();
+      await element(by.id('bet-area-player')).tap();
+      await element(by.id('chip-10')).tap();
+
+      await element(by.id('chip-5')).tap();
+      await element(by.id('bet-area-panda8')).tap();
+
+      // Total should be 15 (10 main + 5 side)
+      await expect(element(by.id('total-bet-amount'))).toHaveText('$15');
+
+      await element(by.id('deal-button')).tap();
+
+      await waitFor(element(by.id('new-game-button')))
+        .toBeVisible()
+        .withTimeout(20000);
+
+      // Verify game resolved
+      await expect(element(by.id('game-message'))).toBeVisible();
+    });
+  });
+
+  describe('Multiple Side Bets Combination', () => {
+    it('should place all side bets simultaneously', async () => {
+      // Place every side bet to verify accumulation
+      await element(by.id('chip-5')).tap();
+
+      // TIE (already tested in QA-010 but verify it combines)
+      await element(by.id('bet-area-tie')).tap();
+      // P_PAIR
+      await element(by.id('bet-area-p-pair')).tap();
+      // B_PAIR
+      await element(by.id('bet-area-b-pair')).tap();
+      // PERFECT_PAIR
+      await element(by.id('bet-area-perfect-pair')).tap();
+      // LUCKY6
+      await element(by.id('bet-area-lucky6')).tap();
+      // P_DRAGON
+      await element(by.id('bet-area-p-dragon')).tap();
+      // B_DRAGON
+      await element(by.id('bet-area-b-dragon')).tap();
+      // PANDA8
+      await element(by.id('bet-area-panda8')).tap();
+
+      // Total should be 40 (8 bets x $5)
+      await expect(element(by.id('total-bet-amount'))).toHaveText('$40');
+
+      await element(by.id('deal-button')).tap();
+
+      await waitFor(element(by.id('new-game-button')))
+        .toBeVisible()
+        .withTimeout(20000);
+
+      // Verify game resolved with all side bets
+      await expect(element(by.id('game-message'))).toBeVisible();
+    });
+
+    it('should accumulate multiple chips on same side bet', async () => {
+      // Select chip and place multiple on player pair
+      await element(by.id('chip-5')).tap();
+      await element(by.id('bet-area-p-pair')).tap();
+      await element(by.id('bet-area-p-pair')).tap();
+      await element(by.id('bet-area-p-pair')).tap();
+
+      // Total should be 15 (3 x $5)
+      await expect(element(by.id('total-bet-amount'))).toHaveText('$15');
+
+      await element(by.id('deal-button')).tap();
+
+      await waitFor(element(by.id('new-game-button')))
+        .toBeVisible()
+        .withTimeout(20000);
+
+      // Verify game resolved
+      await expect(element(by.id('game-message'))).toBeVisible();
+    });
+
+    it('should combine main bet with multiple different side bets', async () => {
+      // Place main bet
+      await element(by.id('chip-25')).tap();
+      await element(by.id('bet-area-banker')).tap();
+      await element(by.id('chip-25')).tap();
+
+      // Add diverse side bets
+      await element(by.id('chip-5')).tap();
+      await element(by.id('bet-area-b-pair')).tap();
+      await element(by.id('bet-area-lucky6')).tap();
+
+      await element(by.id('chip-10')).tap();
+      await element(by.id('bet-area-perfect-pair')).tap();
+
+      // Total should be 45 (25 main + 5 + 5 + 10)
+      await expect(element(by.id('total-bet-amount'))).toHaveText('$45');
+
+      await element(by.id('deal-button')).tap();
+
+      await waitFor(element(by.id('new-game-button')))
+        .toBeVisible()
+        .withTimeout(20000);
+
+      // Verify game resolved
+      await expect(element(by.id('game-message'))).toBeVisible();
+    });
+
+    it('should play multiple rounds with varied side bet strategies', async () => {
+      // Round 1: Focus on pair bets
+      await element(by.id('chip-5')).tap();
+      await element(by.id('bet-area-p-pair')).tap();
+      await element(by.id('bet-area-b-pair')).tap();
+
+      await element(by.id('deal-button')).tap();
+      await waitFor(element(by.id('new-game-button')))
+        .toBeVisible()
+        .withTimeout(20000);
+
+      await element(by.id('new-game-button')).tap();
+      await waitFor(element(by.id('deal-button')))
+        .toBeVisible()
+        .withTimeout(5000);
+
+      // Round 2: Focus on dragon bets
+      await element(by.id('chip-5')).tap();
+      await element(by.id('bet-area-p-dragon')).tap();
+      await element(by.id('bet-area-b-dragon')).tap();
+
+      await element(by.id('deal-button')).tap();
+      await waitFor(element(by.id('new-game-button')))
+        .toBeVisible()
+        .withTimeout(20000);
+
+      await element(by.id('new-game-button')).tap();
+      await waitFor(element(by.id('deal-button')))
+        .toBeVisible()
+        .withTimeout(5000);
+
+      // Round 3: High-payout combo
+      await element(by.id('chip-5')).tap();
+      await element(by.id('bet-area-perfect-pair')).tap();
+      await element(by.id('bet-area-panda8')).tap();
+
+      await element(by.id('deal-button')).tap();
+      await waitFor(element(by.id('new-game-button')))
+        .toBeVisible()
+        .withTimeout(20000);
+
+      // Verify final game resolved
+      await expect(element(by.id('game-message'))).toBeVisible();
+    });
+  });
+});

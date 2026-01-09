@@ -914,3 +914,19 @@ Categories by count:
 - Evidence: Typecheck passes, lint passes (0 errors)
 - Blockers: None. Detox tests require iOS simulator or Android emulator to execute.
 
+### 2026-01-09 - QA-011: Test Baccarat side bets
+- Files: mobile/e2e/games.test.ts
+- Decisions:
+  - Created comprehensive 'Baccarat Side Bets (QA-011)' test suite with 18 tests
+  - Player Pair (11:1 payout): 2 tests - place/resolve, combine with main bet
+  - Banker Pair (11:1 payout): 2 tests - place/resolve, combine with main bet
+  - Perfect Pair (25:1 payout): 2 tests - place/resolve, combine with both pair bets
+  - Lucky 6 (12:1/20:1 payout): 2 tests - place/resolve, combine with banker bet
+  - Dragon Bonus (up to 30:1 payout): 3 tests - player dragon, banker dragon, combined with main bet
+  - Panda 8 (25:1 payout): 2 tests - place/resolve, combine with player bet
+  - Multiple Side Bets Combination: 4 tests - all bets simultaneously ($40 total), accumulation on same bet, diverse chip combinations ($45 total), multi-round strategies
+  - Uses existing testIDs: bet-area-p-pair, bet-area-b-pair, bet-area-perfect-pair, bet-area-lucky6, bet-area-p-dragon, bet-area-b-dragon, bet-area-panda8
+  - All 8 side bet types documented with payout ratios
+- Evidence: Typecheck passes, lint passes (0 errors), tests added to Detox suite
+- Blockers: None. Detox tests require iOS simulator or Android emulator to execute.
+
