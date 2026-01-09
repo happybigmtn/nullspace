@@ -954,3 +954,28 @@ Categories by count:
 - Evidence: Typecheck passes, lint passes (0 errors)
 - Blockers: None. Detox tests require iOS simulator or Android emulator to execute.
 
+### 2026-01-09 - QA-013: Test Video Poker deal/hold
+- Files: mobile/src/screens/games/VideoPokerScreen.tsx, mobile/e2e/games.test.ts
+- Decisions:
+  - Added testIDs to VideoPokerScreen for E2E testability:
+    - Game area: testID="game-area", testID="cards-container"
+    - Cards: testID="card-{0-4}", testID="card-placeholder-{0-4}"
+    - Hold badges: testID="hold-badge-{0-4}"
+    - Game message: testID="game-message", testID="payout-amount"
+    - Bet display: testID="bet-container", testID="bet-amount"
+    - Game result indicators: testID="game-result-{win|loss}"
+    - Hand ranking: testID="hand-ranking-{type}" (e.g., hand-ranking-jacks-or-better)
+    - Actions: testID="deal-button", testID="draw-button", testID="new-game-button", testID="try-again-button"
+    - Pay table: testID="pay-table-button", testID="pay-table-modal", testID="pay-table-content", testID="pay-table-close"
+  - Created comprehensive 'Video Poker Deal/Hold Flow (QA-013)' test suite with 19 tests:
+    - Initial Deal (3 tests): place bet and deal 5 cards, show game message, display cards container
+    - Hold Card Selection (4 tests): toggle hold on tap, toggle off on second tap, hold multiple cards independently, hold all 5 cards
+    - Draw and Result (4 tests): draw without holds, draw with some holds, draw with all holds, show win or loss result
+    - Hand Rankings (2 tests): display hand ranking on win, show payout amount (retries up to 10-15 games)
+    - Game Flow Verification (4 tests): new game after result, multiple consecutive games, bet accumulation, different chip values
+    - Pay Table Modal (2 tests): open modal, close modal
+  - Video Poker state machine: betting → initial (after deal) → final (after draw) → result
+  - Hold toggle only active during 'initial' phase
+- Evidence: Typecheck passes, lint passes (0 errors)
+- Blockers: None. Detox tests require iOS simulator or Android emulator to execute.
+

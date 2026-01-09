@@ -306,6 +306,7 @@ export function VideoPokerScreen() {
           <Pressable
             onPress={() => setShowPayTable(true)}
             style={styles.payTableButton}
+            testID="pay-table-button"
           >
             <Text style={styles.payTableText}>Pay Table</Text>
           </Pressable>
@@ -318,15 +319,16 @@ export function VideoPokerScreen() {
         ) : (
         <>
         {/* Game Area */}
-      <View style={styles.gameArea}>
+      <View style={styles.gameArea} testID="game-area">
         {/* Cards Display */}
-        <View style={styles.cardsContainer}>
+        <View style={styles.cardsContainer} testID="cards-container">
           {state.cards.length > 0 ? (
             state.cards.map((card, i) => (
               <Pressable
                 key={i}
                 onPress={() => handleToggleHold(i)}
                 disabled={state.phase !== 'initial'}
+                testID={`card-${i}`}
               >
                 <Animated.View
                   entering={cardEnterFade.delay(i * 100)}
@@ -337,7 +339,7 @@ export function VideoPokerScreen() {
                 >
                   <Card suit={card.suit} rank={card.rank} faceUp={true} />
                   {state.held[i] && (
-                    <View style={styles.holdBadge}>
+                    <View style={styles.holdBadge} testID={`hold-badge-${i}`}>
                       <Text style={styles.holdText}>HOLD</Text>
                     </View>
                   )}
@@ -346,13 +348,14 @@ export function VideoPokerScreen() {
             ))
           ) : (
             Array.from({ length: 5 }).map((_, i) => (
-              <View key={i} style={styles.cardPlaceholder} />
+              <View key={i} style={styles.cardPlaceholder} testID={`card-placeholder-${i}`} />
             ))
           )}
         </View>
 
         {/* Message / Hand */}
         <Text
+          testID="game-message"
           style={[
             styles.message,
             state.payout > 0 && styles.messageWin,
@@ -364,20 +367,30 @@ export function VideoPokerScreen() {
 
         {/* Payout */}
         {state.payout > 0 && (
-          <Text style={styles.payout}>+${state.payout}</Text>
+          <Text testID="payout-amount" style={styles.payout}>+${state.payout}</Text>
         )}
 
         {/* Bet Display */}
         {bet > 0 && (
-          <View style={styles.betContainer}>
+          <View style={styles.betContainer} testID="bet-container">
             <Text style={styles.betLabel}>Bet</Text>
-            <Text style={styles.betAmount}>${bet}</Text>
+            <Text testID="bet-amount" style={styles.betAmount}>${bet}</Text>
           </View>
+        )}
+
+        {/* Hidden game result indicator for E2E testing */}
+        {state.phase === 'result' && (
+          <View testID={`game-result-${state.payout > 0 ? 'win' : 'loss'}`} style={{ width: 0, height: 0 }} />
+        )}
+
+        {/* Hand ranking indicator for E2E testing */}
+        {state.hand && (
+          <View testID={`hand-ranking-${state.hand.toLowerCase().replace(/_/g, '-')}`} style={{ width: 0, height: 0 }} />
         )}
       </View>
 
       {/* Actions */}
-      <View style={styles.actions}>
+      <View style={styles.actions} testID="actions-container">
         {state.phase === 'betting' && (
           <PrimaryButton
             label="DEAL"
@@ -385,6 +398,7 @@ export function VideoPokerScreen() {
             disabled={bet === 0 || isDisconnected || isSubmitting}
             variant="primary"
             size="large"
+            testID="deal-button"
           />
         )}
 
@@ -395,6 +409,7 @@ export function VideoPokerScreen() {
             disabled={isDisconnected || isSubmitting}
             variant="primary"
             size="large"
+            testID="draw-button"
           />
         )}
 
@@ -404,6 +419,7 @@ export function VideoPokerScreen() {
             onPress={handleNewGame}
             variant="primary"
             size="large"
+            testID="new-game-button"
           />
         )}
 
@@ -413,6 +429,7 @@ export function VideoPokerScreen() {
             onPress={handleNewGame}
             variant="primary"
             size="large"
+            testID="try-again-button"
           />
         )}
       </View>
@@ -430,12 +447,12 @@ export function VideoPokerScreen() {
       </GameLayout>
 
       {/* Pay Table Modal */}
-      <Modal visible={showPayTable} transparent animationType="fade">
+      <Modal visible={showPayTable} transparent animationType="fade" testID="pay-table-modal">
         <View style={styles.modalOverlay}>
-          <View style={styles.payTableModal}>
+          <View style={styles.payTableModal} testID="pay-table-content">
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Pay Table</Text>
-              <Pressable onPress={() => setShowPayTable(false)}>
+              <Pressable onPress={() => setShowPayTable(false)} testID="pay-table-close">
                 <Text style={styles.modalClose}>✕</Text>
               </Pressable>
             </View>

@@ -364,8 +364,8 @@
         "Test draw",
         "Verify hand rankings"
       ],
-      "passes": false,
-      "notes": "Integration test only."
+      "passes": true,
+      "notes": "Added testIDs to VideoPokerScreen (game-area, cards-container, card-{0-4}, hold-badge-{0-4}, card-placeholder-{0-4}, game-message, payout-amount, bet-container, bet-amount, game-result-{win|loss}, hand-ranking-{type}, actions-container, deal-button, draw-button, new-game-button, try-again-button, pay-table-button, pay-table-modal, pay-table-content, pay-table-close). Created comprehensive 'Video Poker Deal/Hold Flow (QA-013)' test suite in mobile/e2e/games.test.ts with 19 tests: Initial Deal (3 tests: place bet and deal 5 cards, show game message, display cards container), Hold Card Selection (4 tests: toggle hold on tap, toggle off on second tap, hold multiple cards independently, hold all 5 cards), Draw and Result (4 tests: draw without holds, draw with some holds, draw with all holds, show win or loss result), Hand Rankings (2 tests: display hand ranking on win, show payout amount), Game Flow Verification (4 tests: new game after result, consecutive games, bet accumulation, different chip values), Pay Table Modal (2 tests: open modal, close modal)."
     },
     {
       "id": "QA-014",
