@@ -418,3 +418,16 @@ Categories by count:
 - Test results: 34 tests pass (16 session expiration + 18 health check)
 - Blockers: None. Pre-existing mobile lint issues unrelated.
 
+### 2026-01-09 - US-243: Execute and document recovery drills
+- Files: docs/RUNBOOK.md
+- Decisions:
+  - Added RUNBOOK.md §5.6.4 "Recovery Drill Schedule" with comprehensive ops procedures
+  - Quarterly drill checklist table covering validator, gateway, simulator, and full stack restarts
+  - Automated drill execution command to run both scripts in sequence
+  - Full stack restart drill procedure (semi-annual) with service ordering and verification steps
+  - Drill log template with execution checklist, results tracking, and sign-off
+  - Escalation procedures for drill failures and SLO violations
+  - Dependencies (US-017, US-018) were already complete with recovery times documented
+- Recovery time SLOs: validator < 10s, gateway < 5s
+- Blockers: None. Documentation-only change building on existing drill scripts.
+

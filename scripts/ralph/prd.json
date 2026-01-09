@@ -82,8 +82,8 @@
         "Document recovery times in RUNBOOK.md",
         "Add drill schedule to ops procedures"
       ],
-      "passes": false,
-      "notes": "Depends on US-017, US-018."
+      "passes": true,
+      "notes": "US-017 and US-018 complete. Added RUNBOOK.md §5.6.4 with quarterly drill checklist, automated drill execution commands, full stack restart procedure, drill log template, and escalation procedures."
     },
     {
       "id": "US-227",

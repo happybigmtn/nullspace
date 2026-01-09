@@ -1005,6 +1005,67 @@ This runs the session expiration and health check tests which validate:
 
 **Note:** Extended outages may require manual intervention if validator block queues overflow
 
+#### 5.6.4 Recovery Drill Schedule (US-243)
+
+**Quarterly Drill Checklist:**
+
+| Drill | Frequency | Automated | Last Run | Next Due |
+|-------|-----------|-----------|----------|----------|
+| Validator restart (§5.6.1) | Quarterly | Yes | `./scripts/validator-recovery-drill.sh` | TBD |
+| Gateway restart (§5.6.2) | Quarterly | Yes | `./scripts/gateway-recovery-drill.sh` | TBD |
+| Simulator/Indexer restart (§5.6.3) | Quarterly | Manual | See procedure | TBD |
+| Full stack restart | Semi-annual | Manual | See below | TBD |
+
+**Automated Drill Execution:**
+```bash
+# Run all automated drills in sequence
+./scripts/validator-recovery-drill.sh && \
+./scripts/gateway-recovery-drill.sh && \
+echo "All automated drills passed"
+```
+
+**Full Stack Restart Drill (Semi-Annual):**
+1. Schedule maintenance window (15-30 minutes)
+2. Notify users via status page
+3. Stop services in order: gateway → ops → website → simulator → validators
+4. Verify all services stopped
+5. Start services in order: validators → simulator → website → ops → gateway
+6. Verify via health endpoints:
+   ```bash
+   curl http://localhost:8080/healthz  # simulator
+   curl http://localhost:9000/healthz  # gateway
+   curl http://localhost:9010/readyz   # gateway ready probe
+   ```
+7. Run smoke test (place a bet, verify chain update)
+8. Document results in drill log
+
+**Drill Log Template:**
+```markdown
+## Drill: [Validator Restart / Gateway Restart / Full Stack]
+Date: YYYY-MM-DD
+Operator: [name]
+Environment: [staging / production]
+
+### Execution
+- [ ] Pre-drill health check passed
+- [ ] Drill script executed
+- [ ] Services recovered as expected
+- [ ] Post-drill health check passed
+
+### Results
+- Recovery time: [X] seconds
+- Issues encountered: [none / description]
+- Action items: [none / description]
+
+### Sign-off
+Approved: [name] / Date: [YYYY-MM-DD]
+```
+
+**Drill Failure Escalation:**
+1. If automated drill fails: Check test output, run manually with verbose logging
+2. If manual drill fails: Engage on-call engineer, investigate root cause
+3. If recovery time exceeds SLO (validator > 10s, gateway > 5s): Create incident ticket
+
 ### 5.7 Tournament Scheduler
 
 ```bash
