@@ -1,0 +1,52 @@
+## Codebase Patterns
+
+- Migrations: Use IF NOT EXISTS
+- React: useRef<Timeout | null>(null)
+- WebSocket cleanup: useEffect return function
+- Code splitting: React.lazy() for routes
+- Rust caching: Arc<T> for shared state
+- Error handling: ProtocolError subclasses only
+- State management: Zustand getState() in callbacks
+- Database: CREATE INDEX IF NOT EXISTS
+- Rate limiting: gateway/src/session/limiter.ts
+- Secrets: SOPS + Age via decrypt-secrets.sh
+- Feedback loops: pnpm typecheck && pnpm test && pnpm lint
+
+---
+
+## Progress Log
+
+### 2026-01-08 - Verification Sweep
+- Files: scripts/ralph/prd.json
+- Decisions: Restructured PRD to use category/description/steps format per Ralph Wiggum best practices
+- Blockers: None
+
+Verified 22 stories COMPLETE with codebase evidence. 47 stories remain with `passes: false`.
+
+Priority order for next iterations:
+1. US-234 (security) - CSRF protection, security-critical
+2. US-229 (infrastructure) - SOPS keys, production-critical
+3. US-230 (infrastructure) - Docker limits, production-critical
+4. US-228 (api) - Fix HTTP status codes, small focused change
+5. US-227 (api) - RFC 7807 errors, architectural decision
+
+Categories by count:
+- qa-game: 12
+- qa-native: 12
+- infrastructure: 3
+- operations: 3
+- testing: 4
+- api: 2
+- documentation: 2
+- release: 2
+- performance: 2
+- security: 1
+- architecture: 1
+- observability: 1
+
+### 2026-01-08 - US-228: Fix incorrect HTTP status codes in auth service
+- Files: services/auth/src/server.ts
+- Decisions: Changed 502 (Bad Gateway) to appropriate codes:
+  - AI endpoints (lines 961, 977): 503 Service Unavailable (upstream AI service unavailable)
+  - Internal failures (freeroll sync, checkout, portal, reconcile): 500 Internal Server Error
+- Blockers: None. Fixed 6 occurrences (1 more than documented in PRD).

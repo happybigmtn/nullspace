@@ -893,7 +893,7 @@ app.post("/profile/sync-freeroll", requireAllowedOrigin, profileRateLimit, async
       requestId: res.locals.requestId,
       error: error instanceof Error ? error.message : String(error),
     });
-    res.status(502).json({ error: "freeroll sync failed" });
+    res.status(500).json({ error: "freeroll sync failed" });
     return;
   }
   res.json({ ok: true, ...result });
@@ -958,7 +958,7 @@ app.post("/ai/strategy", requireAllowedOrigin, aiRateLimit, async (req, res) => 
         requestId: res.locals.requestId,
         status: response.status,
       });
-      res.status(502).json({ error: "ai_unavailable" });
+      res.status(503).json({ error: "ai_unavailable" });
       return;
     }
 
@@ -974,7 +974,7 @@ app.post("/ai/strategy", requireAllowedOrigin, aiRateLimit, async (req, res) => 
       requestId: res.locals.requestId,
       error: error instanceof Error ? error.message : String(error),
     });
-    res.status(502).json({ error: "ai_unavailable" });
+    res.status(503).json({ error: "ai_unavailable" });
   }
 });
 
@@ -1033,7 +1033,7 @@ app.post("/billing/checkout", requireAllowedOrigin, billingRateLimit, async (req
       requestId: res.locals.requestId,
       error: error instanceof Error ? error.message : String(error),
     });
-    res.status(502).json({ error: "checkout failed" });
+    res.status(500).json({ error: "checkout failed" });
   }
 });
 
@@ -1080,7 +1080,7 @@ app.post("/billing/portal", requireAllowedOrigin, billingRateLimit, async (req, 
       requestId: res.locals.requestId,
       error: error instanceof Error ? error.message : String(error),
     });
-    res.status(502).json({ error: "portal failed" });
+    res.status(500).json({ error: "portal failed" });
   }
 });
 
@@ -1110,7 +1110,7 @@ app.post("/billing/reconcile", requireAllowedOrigin, billingRateLimit, async (re
       requestId: res.locals.requestId,
       error: error instanceof Error ? error.message : String(error),
     });
-    res.status(502).json({ error: "reconcile failed" });
+    res.status(500).json({ error: "reconcile failed" });
   }
 });
 
