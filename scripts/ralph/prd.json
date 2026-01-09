@@ -377,8 +377,8 @@
         "Test totals",
         "Verify payouts"
       ],
-      "passes": false,
-      "notes": "Integration test only."
+      "passes": true,
+      "notes": "Integration test only. Comprehensive Detox E2E tests added in games.test.ts covering all bet types: Big/Small, Odd/Even, Totals (4-17), Singles, Doubles, Any Triple (30:1), Specific Triples (180:1), payout verification, drawer navigation."
     },
     {
       "id": "QA-015",

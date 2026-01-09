@@ -43,6 +43,8 @@ export interface Dice3DProps {
   skipAnimation?: boolean;
   /** Callback when roll animation completes */
   onRollComplete?: () => void;
+  /** Test ID for E2E testing */
+  testID?: string;
 }
 
 /** Physics constants for dice throw */
@@ -145,6 +147,7 @@ export function Dice3D({
   size = 60,
   skipAnimation = false,
   onRollComplete,
+  testID,
 }: Dice3DProps) {
   // Animation values
   const rotation = useSharedValue(skipAnimation ? 0 : 0);
@@ -312,7 +315,7 @@ export function Dice3D({
   }));
 
   return (
-    <View style={[styles.container, { width: size, height: size }]}>
+    <View style={[styles.container, { width: size, height: size }]} testID={testID}>
       <Animated.View style={[styles.dieWrapper, { width: size, height: size }, animatedStyle]}>
         <DieFace value={value} size={size} />
       </Animated.View>

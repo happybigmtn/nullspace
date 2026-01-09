@@ -979,3 +979,35 @@ Categories by count:
 - Evidence: Typecheck passes, lint passes (0 errors)
 - Blockers: None. Detox tests require iOS simulator or Android emulator to execute.
 
+
+### 2026-01-09 - QA-014: Test Sic Bo all bets
+- Files: mobile/src/screens/games/SicBoScreen.tsx, mobile/src/components/casino/Dice3D.tsx, mobile/e2e/games.test.ts
+- Decisions:
+  - Added testIDs to SicBoScreen for E2E testability:
+    - Dice: testID="dice-container", testID="dice-{0-2}" (via Dice3D prop)
+    - Results: testID="dice-total", testID="game-message", testID="win-amount"
+    - Hidden result indicator: testID="game-result-{win|loss}"
+    - Quick bets: testID="quick-bets-container", testID="bet-area-small", testID="bet-area-big"
+    - Bet summary: testID="bet-summary", testID="total-bet-amount"
+    - Actions: testID="actions-container", testID="roll-button", testID="new-game-button"
+    - Advanced bets drawer: testID="open-advanced-bets", testID="advanced-bets-modal", testID="close-drawer"
+    - Advanced bets scroll: testID="advanced-bets-scroll"
+    - Odd/Even: testID="bet-area-odd", testID="bet-area-even"
+    - Totals: testID="totals-grid", testID="bet-total-{4-17}"
+    - Singles: testID="bet-single-{1-6}"
+    - Doubles: testID="bet-double-{1-6}"
+    - Triples: testID="bet-triple-any", testID="bet-triple-{1-6}"
+  - Extended Dice3D component to accept testID prop
+  - Created comprehensive 'Sic Bo All Bets (QA-014)' test suite with 21 tests:
+    - Big/Small Quick Bets (3 tests): place Big, place Small, combine both (hedge bet)
+    - Odd/Even Bets (2 tests): Odd bet via drawer, Even bet via drawer
+    - Totals Bets (3 tests): total 10, total 11, multiple totals (9-12)
+    - Single Die Bets (2 tests): single 1, single 6
+    - Specific Double Bets (1 test): double 3
+    - Triple Bets (3 tests): Any Triple (30:1), Specific Triple 1 (180:1), all 6 specific triples
+    - Payout Verification (2 tests): display win amount, display dice total
+    - Game Flow Verification (5 tests): new game, multiple games, bet accumulation, chip values, message display
+    - Advanced Bets Drawer (2 tests): open/close drawer, scroll through all bet types
+  - Sic Bo payouts: Big/Small 1:1, Odd/Even 1:1, Totals varies, Singles based on matches, Doubles high, Any Triple 30:1, Specific Triple 180:1
+- Evidence: Typecheck passes, lint passes (0 errors, 124 warnings all pre-existing)
+- Blockers: None. Detox tests require iOS simulator or Android emulator to execute.

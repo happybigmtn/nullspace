@@ -375,6 +375,7 @@ export function SicBoScreen() {
           <Pressable
             onPress={() => setShowAdvanced(true)}
             style={styles.moreBetsButton}
+            testID="open-advanced-bets"
           >
             <Text style={styles.moreBetsText}>Bets ▾</Text>
           </Pressable>
@@ -387,7 +388,7 @@ export function SicBoScreen() {
         ) : (
         <>
         {/* DS-047: 3D Dice Display */}
-      <View style={styles.diceContainer}>
+      <View style={styles.diceContainer} testID="dice-container">
         {state.dice ? (
           <>
             <Dice3D
@@ -396,32 +397,35 @@ export function SicBoScreen() {
               index={0}
               size={56}
               onRollComplete={handleDiceRollComplete}
+              testID="dice-0"
             />
             <Dice3D
               value={state.dice[1]}
               isRolling={diceRolling}
               index={1}
               size={56}
+              testID="dice-1"
             />
             <Dice3D
               value={state.dice[2]}
               isRolling={diceRolling}
               index={2}
               size={56}
+              testID="dice-2"
             />
           </>
         ) : (
           <>
-            <Dice3D value={1} isRolling={false} index={0} size={56} skipAnimation />
-            <Dice3D value={1} isRolling={false} index={1} size={56} skipAnimation />
-            <Dice3D value={1} isRolling={false} index={2} size={56} skipAnimation />
+            <Dice3D value={1} isRolling={false} index={0} size={56} skipAnimation testID="dice-0" />
+            <Dice3D value={1} isRolling={false} index={1} size={56} skipAnimation testID="dice-1" />
+            <Dice3D value={1} isRolling={false} index={2} size={56} skipAnimation testID="dice-2" />
           </>
         )}
       </View>
 
       {/* Total */}
       {state.dice && (
-        <Text style={styles.total}>Total: {state.total}</Text>
+        <Text style={styles.total} testID="dice-total">Total: {state.total}</Text>
       )}
 
       {/* Message */}
@@ -430,17 +434,25 @@ export function SicBoScreen() {
           styles.message,
           state.winAmount > 0 && styles.messageWin,
         ]}
+        testID="game-message"
       >
         {state.message}
       </Text>
 
       {/* Win Amount */}
       {state.winAmount > 0 && (
-        <Text style={styles.winAmount}>+${state.winAmount}</Text>
+        <Text style={styles.winAmount} testID="win-amount">+${state.winAmount}</Text>
+      )}
+
+      {/* Hidden result indicators for E2E testing */}
+      {state.phase === 'result' && (
+        <View style={{ height: 0, overflow: 'hidden' }}>
+          <Text testID={`game-result-${state.winAmount > 0 ? 'win' : 'loss'}`} />
+        </View>
       )}
 
       {/* Quick Bets */}
-      <View style={styles.quickBets}>
+      <View style={styles.quickBets} testID="quick-bets-container">
         <Pressable
           onPress={() => addBet('SMALL')}
           disabled={state.phase !== 'betting' || isDisconnected}
@@ -449,6 +461,7 @@ export function SicBoScreen() {
             pressed && styles.quickBetPressed,
             isDisconnected && styles.quickBetDisabled,
           ]}
+          testID="bet-area-small"
         >
           <Text style={styles.quickBetLabel}>SMALL</Text>
           <Text style={styles.quickBetRange}>4-10</Text>
@@ -463,6 +476,7 @@ export function SicBoScreen() {
             pressed && styles.quickBetPressed,
             isDisconnected && styles.quickBetDisabled,
           ]}
+          testID="bet-area-big"
         >
           <Text style={styles.quickBetLabel}>BIG</Text>
           <Text style={styles.quickBetRange}>11-17</Text>
@@ -472,14 +486,14 @@ export function SicBoScreen() {
 
       {/* Bet Summary */}
       {totalBet > 0 && (
-        <View style={styles.betSummary}>
+        <View style={styles.betSummary} testID="bet-summary">
           <Text style={styles.betLabel}>Total Bet</Text>
-          <Text style={styles.betAmount}>${totalBet}</Text>
+          <Text style={styles.betAmount} testID="total-bet-amount">${totalBet}</Text>
         </View>
       )}
 
       {/* Actions */}
-      <View style={styles.actions}>
+      <View style={styles.actions} testID="actions-container">
         {state.phase === 'betting' && (
           <PrimaryButton
             label="ROLL"
@@ -487,6 +501,7 @@ export function SicBoScreen() {
             disabled={state.bets.length === 0 || isDisconnected || isSubmitting}
             variant="primary"
             size="large"
+            testID="roll-button"
           />
         )}
 
@@ -496,6 +511,7 @@ export function SicBoScreen() {
             onPress={handleNewGame}
             variant="primary"
             size="large"
+            testID="new-game-button"
           />
         )}
       </View>
@@ -513,7 +529,7 @@ export function SicBoScreen() {
       </GameLayout>
 
       {/* Advanced Bets Drawer */}
-      <Modal visible={showAdvanced} transparent animationType="slide">
+      <Modal visible={showAdvanced} transparent animationType="slide" testID="advanced-bets-modal">
         <View style={styles.drawerOverlay}>
           <Animated.View
             entering={drawerEnter}
@@ -521,31 +537,32 @@ export function SicBoScreen() {
             style={styles.drawer}
           >
             <View style={styles.drawerHeader}>
-              <Pressable onPress={() => setShowAdvanced(false)} style={styles.drawerHandle}>
+              <Pressable onPress={() => setShowAdvanced(false)} style={styles.drawerHandle} testID="close-drawer">
                 <Text style={styles.drawerHandleText}>Bets ▾</Text>
               </Pressable>
             </View>
 
-            <ScrollView>
+            <ScrollView testID="advanced-bets-scroll">
               {/* Odd / Even */}
               <Text style={styles.sectionTitle}>Odd / Even</Text>
               <View style={styles.betRow}>
-                <Pressable style={styles.advancedBet} onPress={() => addBet('ODD')}>
+                <Pressable style={styles.advancedBet} onPress={() => addBet('ODD')} testID="bet-area-odd">
                   <Text style={styles.advancedBetText}>ODD</Text>
                 </Pressable>
-                <Pressable style={styles.advancedBet} onPress={() => addBet('EVEN')}>
+                <Pressable style={styles.advancedBet} onPress={() => addBet('EVEN')} testID="bet-area-even">
                   <Text style={styles.advancedBetText}>EVEN</Text>
                 </Pressable>
               </View>
 
               {/* Totals */}
               <Text style={styles.sectionTitle}>Totals</Text>
-              <View style={styles.totalsGrid}>
+              <View style={styles.totalsGrid} testID="totals-grid">
                 {[4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17].map((num) => (
                   <Pressable
                     key={num}
                     style={styles.totalBet}
                     onPress={() => addBet('SUM', num)}
+                    testID={`bet-total-${num}`}
                   >
                     <Text style={styles.totalNumber}>{num}</Text>
                   </Pressable>
@@ -560,6 +577,7 @@ export function SicBoScreen() {
                     key={num}
                     style={styles.singleBet}
                     onPress={() => addBet('SINGLE_DIE', num)}
+                    testID={`bet-single-${num}`}
                   >
                     <Text style={styles.singleNumber}>{getDieFace(num)}</Text>
                   </Pressable>
@@ -574,6 +592,7 @@ export function SicBoScreen() {
                     key={`double-${num}`}
                     style={styles.singleBet}
                     onPress={() => addBet('DOUBLE_SPECIFIC', num)}
+                    testID={`bet-double-${num}`}
                   >
                     <Text style={styles.singleNumber}>{getDieFace(num)}{getDieFace(num)}</Text>
                   </Pressable>
@@ -586,6 +605,7 @@ export function SicBoScreen() {
                 <Pressable
                   style={styles.tripleBet}
                   onPress={() => addBet('TRIPLE_ANY')}
+                  testID="bet-triple-any"
                 >
                   <Text style={styles.tripleLabel}>Any Triple</Text>
                   <Text style={styles.tripleOdds}>30:1</Text>
@@ -597,6 +617,7 @@ export function SicBoScreen() {
                     key={num}
                     style={styles.specificTriple}
                     onPress={() => addBet('TRIPLE_SPECIFIC', num)}
+                    testID={`bet-triple-${num}`}
                   >
                     <Text style={styles.specificTripleText}>
                       {getDieFace(num)}{getDieFace(num)}{getDieFace(num)}
