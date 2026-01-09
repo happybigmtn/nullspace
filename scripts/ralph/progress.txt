@@ -702,3 +702,24 @@ Categories by count:
 - Evidence: All tests pass when run individually and in suite
 - Blockers: None. Marking as passes: true based on existing test coverage.
 
+### 2026-01-09 - QA-N01: Test SecureStore wallet persistence
+- Files: mobile/src/services/__tests__/vault.test.ts
+- Decisions:
+  - Added new 'SecureStore wallet persistence (QA-N01)' test suite with 8 tests:
+    1. vault record persists in SecureStore after creation
+    2. wallet survives app kill (memory cleared, storage persists)
+    3. wallet identity preserved across app restarts
+    4. multiple app restart cycles preserve wallet (5 cycles)
+    5. detects vault on fresh app launch without unlock
+    6. SecureStore key name is stable across versions
+    7. handles case where user reinstalls app (no vault)
+    8. documents the SecureStore persistence mechanism
+  - Tests simulate app kill by calling lockVault() (clears in-memory state)
+  - Mock SecureStore persists across test operations (simulating persistent storage)
+  - Verified: getVaultStatus returns enabled: true after "restart"
+  - Verified: Same publicKeyHex and privateKeyHex after unlock
+  - Verified: 5-cycle restart test passes (walletidentity preserved each time)
+- Architecture insight: expo-secure-store uses hardware-backed keychain on native
+- Evidence: All 71 vault tests pass (63 existing + 8 new)
+- Blockers: None. Pre-existing typecheck errors in other mobile test files (errorReporter, notifications, storage, audio) are unrelated to this work.
+

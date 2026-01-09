@@ -990,4 +990,193 @@ describe('vault', () => {
       expect(vault.getUnlockedVaultPrivateKey()).not.toBeNull();
     });
   });
+
+  describe('SecureStore wallet persistence (QA-N01)', () => {
+    /**
+     * QA-N01: Test SecureStore wallet persistence
+     *
+     * These tests verify that the vault wallet persists across app restarts.
+     * In production:
+     * - Native (iOS/Android): Uses expo-secure-store (hardware-backed keychain)
+     * - Web: Uses EncryptedWebStore (IndexedDB + AES-GCM)
+     *
+     * App restart simulation:
+     * - In-memory state is cleared (unlockedPrivateKey = null)
+     * - SecureStore data persists (mocked by mockSecureStore object)
+     * - On reopen, getVaultStatus() returns enabled: true
+     * - User can unlock with their password to access the wallet
+     */
+
+    it('vault record persists in SecureStore after creation', async () => {
+      const password = 'securePassword123';
+      const publicKeyHex = await vault.createPasswordVault(password);
+
+      // Verify vault record is stored
+      const rawRecord = getRawVaultRecord();
+      expect(rawRecord).not.toBeNull();
+
+      // Parse and verify structure
+      const record = JSON.parse(rawRecord!);
+      expect(record.version).toBe(1);
+      expect(record.kind).toBe('password');
+      expect(record.publicKeyHex).toBe(publicKeyHex);
+      expect(record.saltHex).toHaveLength(64); // 32 bytes
+      expect(record.nonceHex).toHaveLength(48); // 24 bytes
+      expect(record.ciphertextHex).toHaveLength(96); // 32+16 bytes (key + tag)
+    });
+
+    it('wallet survives app kill (memory cleared, storage persists)', async () => {
+      const password = 'myStrongPassword!';
+      const publicKeyHex = await vault.createPasswordVault(password);
+
+      // Simulate app being killed - clear in-memory state
+      vault.lockVault();
+      expect(vault.getUnlockedVaultPrivateKey()).toBeNull();
+
+      // Storage should still have the vault record (simulates persistence)
+      const rawRecord = getRawVaultRecord();
+      expect(rawRecord).not.toBeNull();
+
+      // On app reopen, getVaultStatus should detect the existing vault
+      const status = await vault.getVaultStatus();
+      expect(status.enabled).toBe(true);
+      expect(status.unlocked).toBe(false); // Not unlocked yet
+      expect(status.publicKeyHex).toBe(publicKeyHex);
+      expect(status.corrupted).toBeNull();
+    });
+
+    it('wallet identity preserved across app restarts', async () => {
+      const password = 'persistentPassword1';
+
+      // Session 1: Create vault
+      const originalPublicKey = await vault.createPasswordVault(password);
+      const originalPrivateKey = vault.getUnlockedVaultPrivateKey();
+      expect(originalPrivateKey).not.toBeNull();
+      const originalPrivateKeyHex = await vault.exportVaultPrivateKey();
+
+      // Simulate app kill - only memory is cleared
+      vault.lockVault();
+
+      // Session 2: App reopens, user unlocks
+      const status = await vault.getVaultStatus();
+      expect(status.enabled).toBe(true);
+      expect(status.publicKeyHex).toBe(originalPublicKey);
+
+      // Unlock and verify same wallet identity
+      const unlockedPublicKey = await vault.unlockPasswordVault(password);
+      expect(unlockedPublicKey).toBe(originalPublicKey);
+
+      // Private key should also be the same
+      const recoveredPrivateKeyHex = await vault.exportVaultPrivateKey();
+      expect(recoveredPrivateKeyHex).toBe(originalPrivateKeyHex);
+    });
+
+    it('multiple app restart cycles preserve wallet', async () => {
+      const password = 'restartTestPassword';
+      const publicKeyHex = await vault.createPasswordVault(password);
+
+      // Simulate 5 app restart cycles
+      for (let cycle = 1; cycle <= 5; cycle++) {
+        // App kill - clear memory
+        vault.lockVault();
+
+        // App reopen - check vault exists
+        const status = await vault.getVaultStatus();
+        expect(status.enabled).toBe(true);
+        expect(status.publicKeyHex).toBe(publicKeyHex);
+
+        // User unlocks
+        const unlockedKey = await vault.unlockPasswordVault(password);
+        expect(unlockedKey).toBe(publicKeyHex);
+        expect(vault.getUnlockedVaultPrivateKey()).not.toBeNull();
+      }
+    });
+
+    it('detects vault on fresh app launch without unlock', async () => {
+      const password = 'freshLaunchTest1';
+      const publicKeyHex = await vault.createPasswordVault(password);
+
+      // Simulate app kill
+      vault.lockVault();
+
+      // Fresh app launch - check state without unlocking
+      const isEnabled = await vault.isVaultEnabled();
+      expect(isEnabled).toBe(true);
+
+      const storedPublicKey = await vault.getVaultPublicKeyHex();
+      expect(storedPublicKey).toBe(publicKeyHex);
+
+      // Private key NOT accessible until unlock
+      expect(vault.getUnlockedVaultPrivateKey()).toBeNull();
+    });
+
+    it('SecureStore key name is stable across versions', () => {
+      // Verify the storage key is the documented v1 key
+      // Changing this would break existing user vaults
+      expect(VAULT_RECORD_KEY).toBe('nullspace_vault_record_v1');
+    });
+
+    it('handles case where user reinstalls app (no vault)', async () => {
+      // No vault exists (simulates fresh install after uninstall)
+      const status = await vault.getVaultStatus();
+      expect(status.enabled).toBe(false);
+      expect(status.unlocked).toBe(false);
+      expect(status.publicKeyHex).toBeNull();
+      expect(status.corrupted).toBeNull();
+
+      // isVaultEnabled returns false
+      const isEnabled = await vault.isVaultEnabled();
+      expect(isEnabled).toBe(false);
+    });
+
+    it('documents the SecureStore persistence mechanism', async () => {
+      /**
+       * This test documents how vault persistence works:
+       *
+       * 1. WRITE PATH (createPasswordVault):
+       *    - Generate Ed25519 keypair
+       *    - Encrypt private key with password (PBKDF2 + XChaCha20-Poly1305)
+       *    - Write VaultRecord JSON to SecureStore
+       *    - Store public key and encrypted private key in storage
+       *
+       * 2. READ PATH (getVaultStatus, unlockPasswordVault):
+       *    - Read VaultRecord JSON from SecureStore
+       *    - Parse and validate schema
+       *    - Return public key (no password needed)
+       *    - Decrypt private key only when password provided
+       *
+       * 3. APP LIFECYCLE:
+       *    - App running: unlockedPrivateKey in memory
+       *    - App backgrounded: unlockedPrivateKey may persist (depends on OS)
+       *    - App killed: unlockedPrivateKey = null, SecureStore persists
+       *    - App reopened: Read from SecureStore, require unlock
+       *
+       * 4. SECURITY:
+       *    - Private key never stored unencrypted
+       *    - Password required to decrypt (PBKDF2 prevents brute force)
+       *    - Public key stored in plaintext (used for identity)
+       */
+
+      const password = 'documentationTest';
+      const publicKeyHex = await vault.createPasswordVault(password);
+
+      // Verify write path
+      const rawRecord = getRawVaultRecord();
+      expect(rawRecord).not.toBeNull();
+      const record = JSON.parse(rawRecord!);
+      expect(record.publicKeyHex).toBe(publicKeyHex);
+      expect(record.ciphertextHex).toBeTruthy(); // Encrypted private key
+
+      // Verify read path (no unlock)
+      vault.lockVault();
+      const status = await vault.getVaultStatus();
+      expect(status.enabled).toBe(true);
+      expect(status.publicKeyHex).toBe(publicKeyHex);
+      expect(status.unlocked).toBe(false);
+
+      // Verify decrypt path
+      await vault.unlockPasswordVault(password);
+      expect(vault.getUnlockedVaultPrivateKey()).not.toBeNull();
+    });
+  });
 });
