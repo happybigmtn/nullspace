@@ -20,15 +20,17 @@ testnet.regenesis.dev {
 }
 
 # Auth service
+# NOTE: CORS headers are handled by the upstream auth service.
+# The auth service sets Access-Control-Allow-Origin to the specific origin
+# and Access-Control-Allow-Credentials: true, which is required for
+# cookie-based authentication. Do NOT override with Access-Control-Allow-Origin "*"
+# as browsers reject credentials with wildcard origins.
 auth.testnet.regenesis.dev {
     reverse_proxy nullspace-auth:4000
 
     header {
         Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
         X-Content-Type-Options "nosniff"
-        Access-Control-Allow-Origin "*"
-        Access-Control-Allow-Methods "GET, POST, OPTIONS"
-        Access-Control-Allow-Headers "Content-Type, Authorization"
     }
 
     log {
@@ -38,15 +40,16 @@ auth.testnet.regenesis.dev {
 }
 
 # Gateway (WebSocket + HTTP API)
+# NOTE: CORS headers are handled by the upstream gateway service.
+# The gateway validates origins against GATEWAY_ALLOWED_ORIGINS and sets
+# Access-Control-Allow-Origin to the specific origin. Do NOT override
+# with wildcard as it would break origin validation.
 api.testnet.regenesis.dev {
     reverse_proxy nullspace-gateway:9010
 
     header {
         Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
         X-Content-Type-Options "nosniff"
-        Access-Control-Allow-Origin "*"
-        Access-Control-Allow-Methods "GET, POST, OPTIONS"
-        Access-Control-Allow-Headers "Content-Type, Authorization"
     }
 
     log {
@@ -56,15 +59,14 @@ api.testnet.regenesis.dev {
 }
 
 # Indexer/Simulator API
+# NOTE: CORS headers are handled by the upstream simulator service via
+# ALLOWED_HTTP_ORIGINS. Do NOT override as it would bypass origin validation.
 indexer.testnet.regenesis.dev {
     reverse_proxy nullspace-simulator:8080
 
     header {
         Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
         X-Content-Type-Options "nosniff"
-        Access-Control-Allow-Origin "*"
-        Access-Control-Allow-Methods "GET, POST, OPTIONS"
-        Access-Control-Allow-Headers "Content-Type, Authorization"
     }
 
     log {

@@ -460,13 +460,26 @@ METRICS_AUTH_TOKEN, JWT_SECRET, SESSION_SECRET
 ```bash
 # Production
 GATEWAY_ALLOWED_ORIGINS=https://app.nullspace.io,https://mobile.nullspace.io
+AUTH_ALLOWED_ORIGINS=https://app.nullspace.io
+ALLOWED_HTTP_ORIGINS=https://app.nullspace.io  # For simulator/indexer
 
 # Staging
 GATEWAY_ALLOWED_ORIGINS=https://staging.nullspace.io
+AUTH_ALLOWED_ORIGINS=https://staging.nullspace.io
 ```
 
 - Empty values rejected at startup (production)
 - Set `GATEWAY_ALLOW_NO_ORIGIN=true` for development only
+
+**Important: Reverse Proxy CORS**
+
+Do NOT set `Access-Control-Allow-Origin: *` in the reverse proxy (Caddy/nginx) for auth, gateway, or indexer services. Each service handles its own CORS:
+
+- **Auth service:** Uses `AUTH_ALLOWED_ORIGINS` and sets `credentials: true`. Wildcard origin breaks cookie-based auth (browsers reject credentials with `*`).
+- **Gateway:** Uses `GATEWAY_ALLOWED_ORIGINS` for defense-in-depth origin validation.
+- **Simulator/Indexer:** Uses `ALLOWED_HTTP_ORIGINS` for API access control.
+
+The reverse proxy should only set security headers (HSTS, X-Content-Type-Options) not CORS headers.
 
 ### 4.3 Metrics Authentication
 
