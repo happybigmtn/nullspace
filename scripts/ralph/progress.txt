@@ -270,3 +270,16 @@ Categories by count:
 - Coverage: Blackjack, Hi-Lo, Video Poker, Casino War, Three Card Poker, Ultimate Holdem, Baccarat, Roulette, Sic Bo, Craps
 - Blockers: None. Tests run via RUN_CROSS_SERVICE=true pnpm test:cross-service.
 
+### 2026-01-09 - US-236: Design horizontal scaling strategy for game engine
+- Files: docs/architecture/SCALING.md (new)
+- Decisions:
+  - Created comprehensive scaling strategy document with operational runbook
+  - Gateway scaling: Stateless replicas with IP-hash sticky sessions via load balancer
+  - Simulator scaling: Read/write separation with Postgres streaming replication
+  - Validator scaling: BFT constraints limit to 4-7 nodes (tolerates 1-2 failures)
+  - State partitioning: Account-based sharding by public key prefix (for future use)
+  - Session affinity: Hybrid approach (IP-hash + header fallback) with graceful recovery
+  - Capacity planning: Formulas and cost estimates for 1K-100K player deployments
+- Key insight: Most horizontal scaling achieved at gateway layer while keeping consensus vertically scaled
+- Blockers: None. Documentation-only change.
+

@@ -148,8 +148,8 @@
         "Create scaling runbook",
         "Add to docs/architecture/"
       ],
-      "passes": false,
-      "notes": "General scaling docs exist, need dedicated strategy doc."
+      "passes": true,
+      "notes": "Created docs/architecture/SCALING.md covering: gateway scaling with stateless replicas, simulator read/write separation, validator BFT constraints, account-based partitioning, session affinity strategies, and operational runbook."
     },
     {
       "id": "US-238",
