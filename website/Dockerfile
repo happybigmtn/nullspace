@@ -99,3 +99,4 @@ FROM nginx:1.27-alpine
 
 COPY website/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=web-builder /app/website/dist /usr/share/nginx/html
+# Cache bust: 1767924289
