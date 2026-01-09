@@ -22,8 +22,10 @@ import { Resource } from '@opentelemetry/resources';
 import {
   ATTR_SERVICE_NAME,
   ATTR_SERVICE_VERSION,
-  ATTR_DEPLOYMENT_ENVIRONMENT_NAME,
 } from '@opentelemetry/semantic-conventions';
+
+// deployment.environment.name is in incubating conventions, define directly for stability
+const ATTR_DEPLOYMENT_ENVIRONMENT_NAME = 'deployment.environment.name';
 import {
   trace,
   context,
