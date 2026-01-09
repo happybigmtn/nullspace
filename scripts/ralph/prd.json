@@ -708,8 +708,8 @@
         "Update test command to match turbo (pnpm test) or documented package-specific tests",
         "Verify instructions run cleanly in repo"
       ],
-      "passes": false,
-      "notes": "Current prompt uses pnpm typecheck and pnpm test --run, which do not exist in package.json."
+      "passes": true,
+      "notes": "Fixed commands: pnpm typecheck → pnpm type-check, pnpm test --run → pnpm test. Verified commands run correctly."
     }
   ],
   "verifiedComplete": [

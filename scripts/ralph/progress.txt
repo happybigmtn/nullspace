@@ -76,3 +76,11 @@ Categories by count:
 - Impact: Connection limiter, session rate limits, and metrics now use real client IP
 - Tests: 28 unit tests covering CIDR matching, header extraction, normalization
 - Blockers: None. Caddy already sends X-Forwarded-For headers by default.
+
+### 2026-01-08 - US-254: Fix Ralph prompt commands to match repo scripts
+- Files: scripts/ralph/prompt.md
+- Decisions:
+  - Changed `pnpm typecheck` to `pnpm type-check` (matches root package.json)
+  - Changed `pnpm test --run` to `pnpm test` (--run flag doesn't exist)
+  - Commands appear in both "Startup Sequence" and "Feedback Loops" sections
+- Blockers: None. Pre-existing lint/test failures in mobile package unrelated to this change.
