@@ -771,3 +771,28 @@ Categories by count:
 - Evidence: npm run visual:compare shows 19 passed, 0 failed
 - Blockers: None. All feedback loops pass.
 
+### 2026-01-09 - QA-N08: Test card animation smoothness
+- Files: mobile/src/components/casino/__tests__/CardAnimationSmoothness.test.tsx (new)
+- Decisions:
+  - Created 23 unit tests validating animation performance budgets and configurations
+  - Animation timing validation:
+    - Deal duration: 350ms = 21 frames at 60fps
+    - Stagger delay: 50ms = 3 frames between cards
+    - Total 4-card deal: 500ms (within 1000ms budget)
+    - Flip delay: 80ms = 4.8 frames after landing
+  - Spring configuration validation:
+    - cardDeal damping ratio: 0.786 (optimal range 0.6-1.0)
+    - cardFlip damping ratio: 0.839 (optimal range 0.6-1.0)
+    - Landing spring damping ratio: 0.610 (slightly underdamped for visible bounce)
+    - Spring settle time: ~127ms
+  - Transform complexity: 5 computed values per card per frame (translateX, translateY, rotate, scale, opacity)
+  - Multi-card scaling: 4-card and 8-card deals render without exponential slowdown
+  - Animation overlap: Peak 4 simultaneous cards = 20 calculations per frame
+  - Device tier expectations documented:
+    - High-end (iPhone 14+, Pixel 7+): 60fps, 0% jank
+    - Mid-range (iPhone 11, Pixel 5): 60fps, ≤2% jank
+    - Low-end (iPhone 8, Pixel 3a): 45fps, ≤10% jank
+- Note: Actual 60fps verification on real devices requires Detox with Flashlight performance monitoring
+- Tests: All 23 tests pass
+- Blockers: None.
+
