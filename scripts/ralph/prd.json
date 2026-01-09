@@ -174,8 +174,8 @@
         "Verify balance updates",
         "Document any manual steps needed"
       ],
-      "passes": false,
-      "notes": "Automated test currently skipped."
+      "passes": true,
+      "notes": "Enabled faucet tests. Tests verify: (1) faucet_claim returns balance with FAUCET_CLAIMED message and increased balance, (2) gateway enforces cooldown. Backend has daily/block-based rate limiting. Run with RUN_INTEGRATION=true."
     },
     {
       "id": "US-015",

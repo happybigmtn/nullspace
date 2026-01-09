@@ -174,15 +174,66 @@ describe.skipIf(!INTEGRATION_ENABLED)('Session Management Integration Tests', ()
       expect(typeof finalAmount).toBe('number');
     });
 
-    // Note: The faucet is not currently exposed as a message type in the protocol.
-    // Funds are managed through on-chain transactions, not gateway messages.
-    // These tests are skipped until faucet message support is added.
-    it.skip('should handle faucet request', async () => {
-      // Placeholder - faucet not implemented as gateway message type
+    // Faucet is exposed via the 'faucet_claim' message type.
+    // Gateway rate-limits faucet claims and forwards to simulator's CasinoDeposit.
+    it('should handle faucet request', async () => {
+      const ws = await createConnection();
+      connections.push(ws);
+
+      await waitForReady(ws);
+
+      // Get initial balance
+      const initialBalance = await sendAndReceiveWithTimeout(ws, {
+        type: 'get_balance',
+      });
+      const initialAmount = Number(initialBalance.balance);
+
+      // Request faucet (custom amount)
+      const faucetResponse = await sendAndReceiveWithTimeout(ws, {
+        type: 'faucet_claim',
+        amount: 1000,
+      });
+
+      // Should receive balance update with FAUCET_CLAIMED message
+      expect(faucetResponse.type).toBe('balance');
+      expect(faucetResponse.message).toBe('FAUCET_CLAIMED');
+      expect(faucetResponse.registered).toBe(true);
+      expect(faucetResponse.hasBalance).toBe(true);
+
+      // Balance should have increased
+      const newAmount = Number(faucetResponse.balance);
+      expect(newAmount).toBeGreaterThan(initialAmount);
     });
 
-    it.skip('should enforce faucet cooldown', async () => {
-      // Placeholder - faucet not implemented as gateway message type
+    it('should enforce faucet cooldown', async () => {
+      const ws = await createConnection();
+      connections.push(ws);
+
+      await waitForReady(ws);
+
+      // First faucet claim should succeed (or fail due to backend rate limit)
+      const firstClaim = await sendAndReceiveWithTimeout(ws, {
+        type: 'faucet_claim',
+        amount: 100,
+      });
+
+      // If first claim failed due to backend rate limit, skip cooldown test
+      if (firstClaim.type === 'error') {
+        // Backend has its own rate limiting (daily/block-based)
+        expect(firstClaim.error).toMatch(/cooldown|rate|limit|claimed/i);
+        return;
+      }
+
+      expect(firstClaim.type).toBe('balance');
+
+      // Immediate second claim should fail (gateway cooldown)
+      const secondClaim = await sendAndReceiveWithTimeout(ws, {
+        type: 'faucet_claim',
+        amount: 100,
+      });
+
+      expect(secondClaim.type).toBe('error');
+      expect(secondClaim.error).toMatch(/cooldown/i);
     });
   });
 

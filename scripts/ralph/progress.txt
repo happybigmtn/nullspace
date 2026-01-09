@@ -322,3 +322,13 @@ Categories by count:
 - Current status: 296 violations found (mostly charts, casino UI components)
 - Blockers: None. Audit is informational; strict mode can be added to CI when ready to enforce.
 
+### 2026-01-09 - US-014: Test faucet flow end-to-end
+- Files: gateway/tests/integration/session.test.ts
+- Decisions:
+  - Enabled previously-skipped faucet tests (faucet was already implemented via 'faucet_claim' message type)
+  - Test 1: Verifies faucet_claim returns balance response with FAUCET_CLAIMED message and increased balance
+  - Test 2: Verifies gateway enforces cooldown between claims (or gracefully handles backend rate limiting)
+  - Tests run with RUN_INTEGRATION=true against running simulator
+  - Backend has additional daily/block-based rate limiting (separate from gateway cooldown)
+- Blockers: None. Tests pass when run with integration environment.
+
