@@ -155,6 +155,17 @@ const GAMES: GameInfo[] = [
   { id: 'ultimate_texas_holdem', name: 'Ultimate Holdem', description: 'Bet the streets', color: GAME_COLORS.ultimate_texas_holdem },
 ];
 
+function getFaucetStatusText(status: string, message: string | null): string {
+  switch (status) {
+    case 'success':
+      return 'Faucet claimed';
+    case 'pending':
+      return 'Requesting chips...';
+    default:
+      return message ?? 'Ready to claim';
+  }
+}
+
 export function LobbyScreen({ navigation }: LobbyScreenProps) {
   const { width } = useWindowDimensions();
   const {
@@ -568,11 +579,7 @@ export function LobbyScreen({ navigation }: LobbyScreenProps) {
             <Text style={styles.rewardsLabel}>Testnet faucet</Text>
             <Text style={styles.rewardsValue}>+1,000 chips</Text>
             <Text style={styles.rewardsSub}>
-              {faucetStatus === 'success'
-                ? 'Faucet claimed'
-                : faucetStatus === 'pending'
-                  ? 'Requesting chips...'
-                  : faucetMessage ?? 'Ready to claim'}
+              {getFaucetStatusText(faucetStatus, faucetMessage)}
             </Text>
           </View>
         </View>

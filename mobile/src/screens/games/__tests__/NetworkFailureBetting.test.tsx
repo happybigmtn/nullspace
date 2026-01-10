@@ -25,6 +25,15 @@ const findPrimaryButton = (tree: ReactTestRenderer, label: string) =>
   tree.root.findAllByType(PrimaryButton).find((node) => node.props.label === label);
 
 describe('Network Failure During Bet Submission', () => {
+  let tree: ReactTestRenderer | null = null;
+
+  const renderScreen = async () => {
+    await act(async () => {
+      tree = create(<BlackjackScreen />);
+    });
+    return tree!;
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
     resetGameConnection();
@@ -32,6 +41,7 @@ describe('Network Failure During Bet Submission', () => {
       if (typeof cb === 'function') cb();
       return { cancel: jest.fn(), then: jest.fn(), done: jest.fn() };
     });
+    tree = null;
     // Set up chip betting to have a valid bet
     mockUseChipBetting.mockReturnValue({
       bet: 25,
@@ -44,47 +54,38 @@ describe('Network Failure During Bet Submission', () => {
     });
   });
 
+  afterEach(() => {
+    if (tree) {
+      act(() => {
+        tree?.unmount();
+      });
+      tree = null;
+    }
+    jest.restoreAllMocks();
+  });
+
   describe('send() returns false when disconnected', () => {
     it('send returns false when connectionState is disconnected', async () => {
-      // Start disconnected
       setGameConnectionState('disconnected');
+      await renderScreen();
 
-      let tree!: ReactTestRenderer;
-      await act(async () => {
-        tree = create(<BlackjackScreen />);
-      });
-
-      // Get the send mock and verify it returns false when disconnected
       const sendMock = getSendMock();
-
-      // Attempt to send - should return false
       const result = sendMock({ type: 'blackjack_deal', amount: 25 });
       expect(result).toBe(false);
     });
 
     it('send returns true when connectionState is connected', async () => {
-      // Start connected
       setGameConnectionState('connected');
-
-      let tree!: ReactTestRenderer;
-      await act(async () => {
-        tree = create(<BlackjackScreen />);
-      });
+      await renderScreen();
 
       const sendMock = getSendMock();
-
-      // Attempt to send - should return true when connected
       const result = sendMock({ type: 'blackjack_deal', amount: 25 });
       expect(result).toBe(true);
     });
 
     it('send returns false when connectionState is connecting', async () => {
       setGameConnectionState('connecting');
-
-      let tree!: ReactTestRenderer;
-      await act(async () => {
-        tree = create(<BlackjackScreen />);
-      });
+      await renderScreen();
 
       const sendMock = getSendMock();
       const result = sendMock({ type: 'blackjack_deal', amount: 25 });
@@ -93,11 +94,7 @@ describe('Network Failure During Bet Submission', () => {
 
     it('send returns false when connectionState is failed', async () => {
       setGameConnectionState('failed');
-
-      let tree!: ReactTestRenderer;
-      await act(async () => {
-        tree = create(<BlackjackScreen />);
-      });
+      await renderScreen();
 
       const sendMock = getSendMock();
       const result = sendMock({ type: 'blackjack_deal', amount: 25 });
@@ -109,10 +106,7 @@ describe('Network Failure During Bet Submission', () => {
     it('DEAL button is disabled when disconnected', async () => {
       setGameConnectionState('disconnected');
 
-      let tree!: ReactTestRenderer;
-      await act(async () => {
-        tree = create(<BlackjackScreen />);
-      });
+      const tree = await renderScreen();
 
       const dealButton = findPrimaryButton(tree, 'DEAL');
       expect(dealButton).toBeDefined();
@@ -122,10 +116,7 @@ describe('Network Failure During Bet Submission', () => {
     it('DEAL button is enabled when connected with valid bet', async () => {
       setGameConnectionState('connected');
 
-      let tree!: ReactTestRenderer;
-      await act(async () => {
-        tree = create(<BlackjackScreen />);
-      });
+      const tree = await renderScreen();
 
       const dealButton = findPrimaryButton(tree, 'DEAL');
       expect(dealButton).toBeDefined();
@@ -135,10 +126,7 @@ describe('Network Failure During Bet Submission', () => {
     it('DEAL button is disabled when connecting (not yet connected)', async () => {
       setGameConnectionState('connecting');
 
-      let tree!: ReactTestRenderer;
-      await act(async () => {
-        tree = create(<BlackjackScreen />);
-      });
+      const tree = await renderScreen();
 
       const dealButton = findPrimaryButton(tree, 'DEAL');
       expect(dealButton?.props.disabled).toBe(true);
@@ -147,10 +135,7 @@ describe('Network Failure During Bet Submission', () => {
     it('DEAL button is disabled when connection failed', async () => {
       setGameConnectionState('failed');
 
-      let tree!: ReactTestRenderer;
-      await act(async () => {
-        tree = create(<BlackjackScreen />);
-      });
+      const tree = await renderScreen();
 
       const dealButton = findPrimaryButton(tree, 'DEAL');
       expect(dealButton?.props.disabled).toBe(true);
@@ -162,10 +147,7 @@ describe('Network Failure During Bet Submission', () => {
       // Start disconnected
       setGameConnectionState('disconnected');
 
-      let tree!: ReactTestRenderer;
-      await act(async () => {
-        tree = create(<BlackjackScreen />);
-      });
+      const tree = await renderScreen();
 
       // Button should be disabled
       let dealButton = findPrimaryButton(tree, 'DEAL');
@@ -187,10 +169,7 @@ describe('Network Failure During Bet Submission', () => {
       setGameConnectionState('connecting');
       setReconnectAttempt(2);
 
-      let tree!: ReactTestRenderer;
-      await act(async () => {
-        tree = create(<BlackjackScreen />);
-      });
+      const tree = await renderScreen();
 
       // After max attempts, could transition to failed
       setGameConnectionState('failed');
@@ -207,10 +186,7 @@ describe('Network Failure During Bet Submission', () => {
     it('onRetry function is callable during failed state', async () => {
       setGameConnectionState('failed');
 
-      let tree!: ReactTestRenderer;
-      await act(async () => {
-        tree = create(<BlackjackScreen />);
-      });
+      await renderScreen();
 
       const onRetryMock = getOnRetryMock();
 
@@ -237,10 +213,7 @@ describe('Network Failure During Bet Submission', () => {
       // Start connected
       setGameConnectionState('connected');
 
-      let tree!: ReactTestRenderer;
-      await act(async () => {
-        tree = create(<BlackjackScreen />);
-      });
+      const tree = await renderScreen();
 
       // Disconnect
       setGameConnectionState('disconnected');
@@ -280,10 +253,7 @@ describe('Network Failure During Bet Submission', () => {
 
       setGameConnectionState('connected');
 
-      let tree!: ReactTestRenderer;
-      await act(async () => {
-        tree = create(<BlackjackScreen />);
-      });
+      const tree = await renderScreen();
 
       // Disconnect
       setGameConnectionState('disconnected');
@@ -309,10 +279,7 @@ describe('Network Failure During Bet Submission', () => {
 
       setGameConnectionState('connected');
 
-      let tree!: ReactTestRenderer;
-      await act(async () => {
-        tree = create(<BlackjackScreen />);
-      });
+      const tree = await renderScreen();
 
       // In betting phase, we should see DEAL button
       let dealButton = findPrimaryButton(tree, 'DEAL');
@@ -349,10 +316,7 @@ describe('Network Failure During Bet Submission', () => {
       // Full reconnection cycle
       setGameConnectionState('connected');
 
-      let tree!: ReactTestRenderer;
-      await act(async () => {
-        tree = create(<BlackjackScreen />);
-      });
+      const tree = await renderScreen();
 
       let dealButton = findPrimaryButton(tree, 'DEAL');
       expect(dealButton?.props.disabled).toBe(false);
@@ -387,10 +351,7 @@ describe('Network Failure During Bet Submission', () => {
     it('handles connected -> failed (exhausted retries)', async () => {
       setGameConnectionState('connected');
 
-      let tree!: ReactTestRenderer;
-      await act(async () => {
-        tree = create(<BlackjackScreen />);
-      });
+      const tree = await renderScreen();
 
       // Connection fails after max retries
       setGameConnectionState('failed');

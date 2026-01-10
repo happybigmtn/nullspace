@@ -27,17 +27,17 @@ describe('theme constants', () => {
 
 describe('color palettes', () => {
   describe('LIGHT_COLORS', () => {
-    it('has light background (#F5F5F5)', () => {
-      expect(LIGHT_COLORS.background).toBe('#F5F5F5');
+    it('has pure white background', () => {
+      expect(LIGHT_COLORS.background).toBe('#FFFFFF');
     });
 
-    it('has white surfaces', () => {
-      expect(LIGHT_COLORS.surface).toBe('#FFFFFF');
-      expect(LIGHT_COLORS.surfaceElevated).toBe('#FFFFFF');
+    it('has near-white surfaces for elevation', () => {
+      expect(LIGHT_COLORS.surface).toBe('#FAFAFA');
+      expect(LIGHT_COLORS.surfaceElevated).toBe('#F5F5F5');
     });
 
     it('has dark text for contrast', () => {
-      expect(LIGHT_COLORS.textPrimary).toBe('#171717');
+      expect(LIGHT_COLORS.textPrimary).toBe('#000000');
     });
   });
 
@@ -47,22 +47,23 @@ describe('color palettes', () => {
     });
 
     it('has dark surfaces with elevation differentiation', () => {
-      expect(DARK_COLORS.surface).toBe('#171717');
-      expect(DARK_COLORS.surfaceElevated).toBe('#262626');
+      expect(DARK_COLORS.surface).toBe('#0A0A0A');
+      expect(DARK_COLORS.surfaceElevated).toBe('#141414');
     });
 
     it('has light text for contrast on dark', () => {
-      expect(DARK_COLORS.textPrimary).toBe('#FAFAFA');
+      expect(DARK_COLORS.textPrimary).toBe('#FFFFFF');
     });
 
-    it('has brighter red for dark mode visibility', () => {
-      expect(DARK_COLORS.suitRed).toBe('#FF6B6B');
+    it('uses monochrome suit accents', () => {
+      expect(DARK_COLORS.suitRed).toBe('#737373');
     });
 
-    it('shares brand colors with light mode', () => {
-      expect(DARK_COLORS.primary).toBe(LIGHT_COLORS.primary);
-      expect(DARK_COLORS.success).toBe(LIGHT_COLORS.success);
-      expect(DARK_COLORS.error).toBe(LIGHT_COLORS.error);
+    it('uses inverted monochrome primaries for contrast', () => {
+      expect(LIGHT_COLORS.primary).toBe('#000000');
+      expect(DARK_COLORS.primary).toBe('#FFFFFF');
+      expect(DARK_COLORS.success).toBe('#FFFFFF');
+      expect(DARK_COLORS.error).toBe('#FFFFFF');
     });
   });
 
@@ -87,22 +88,28 @@ describe('color palettes', () => {
 
 describe('dark mode glow effects', () => {
   describe('DARK_MODE_GLOW', () => {
-    it('defines primary glow with indigo shadow', () => {
-      expect(DARK_MODE_GLOW.primary.shadowColor).toBe('#5E5CE6');
-      expect(DARK_MODE_GLOW.primary.shadowOpacity).toBe(0.6);
+    it('defines primary glow with white shadow', () => {
+      expect(DARK_MODE_GLOW.primary.shadowColor).toBe('#FFFFFF');
+      expect(DARK_MODE_GLOW.primary.shadowOpacity).toBe(0.4);
       expect(DARK_MODE_GLOW.primary.shadowRadius).toBe(12);
     });
 
-    it('defines success glow with green shadow', () => {
-      expect(DARK_MODE_GLOW.success.shadowColor).toBe('#34C759');
+    it('defines success glow with white shadow', () => {
+      expect(DARK_MODE_GLOW.success.shadowColor).toBe('#FFFFFF');
+      expect(DARK_MODE_GLOW.success.shadowOpacity).toBe(0.35);
+      expect(DARK_MODE_GLOW.success.shadowRadius).toBe(10);
     });
 
     it('defines gold glow for win states', () => {
-      expect(DARK_MODE_GLOW.gold.shadowColor).toBe('#FFCC00');
+      expect(DARK_MODE_GLOW.gold.shadowColor).toBe('#FFFFFF');
+      expect(DARK_MODE_GLOW.gold.shadowOpacity).toBe(0.5);
+      expect(DARK_MODE_GLOW.gold.shadowRadius).toBe(14);
     });
 
     it('defines error glow for destructive actions', () => {
-      expect(DARK_MODE_GLOW.error.shadowColor).toBe('#FF3B30');
+      expect(DARK_MODE_GLOW.error.shadowColor).toBe('#FFFFFF');
+      expect(DARK_MODE_GLOW.error.shadowOpacity).toBe(0.3);
+      expect(DARK_MODE_GLOW.error.shadowRadius).toBe(8);
     });
 
     it('defines subtle glow for secondary elements', () => {

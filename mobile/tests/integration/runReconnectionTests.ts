@@ -3,14 +3,14 @@
  * US-026: Add WebSocket reconnection integration tests
  *
  * Usage: ts-node tests/integration/runReconnectionTests.ts [gateway-url]
- * Example: ts-node tests/integration/runReconnectionTests.ts ws://localhost:9010
+ * Example: ts-node tests/integration/runReconnectionTests.ts wss://api.testnet.regenesis.dev
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
 import { WebSocketReconnectionTest, ReconnectionTestResult } from './framework/WebSocketReconnectionTest';
 
-const DEFAULT_GATEWAY_URL = process.env.GATEWAY_URL || 'ws://localhost:9010';
+const DEFAULT_GATEWAY_URL = process.env.GATEWAY_URL || 'wss://api.testnet.regenesis.dev';
 const RESULTS_DIR = path.join(__dirname, 'results');
 
 async function runReconnectionTests(gatewayUrl: string): Promise<ReconnectionTestResult> {
@@ -43,13 +43,12 @@ function saveResults(result: ReconnectionTestResult): void {
 }
 
 function printSummary(result: ReconnectionTestResult): void {
+  const passed = result.tests.filter(t => t.passed).length;
+  const failed = result.tests.length - passed;
+
   console.log('\n' + '='.repeat(80));
   console.log('RECONNECTION TEST SUMMARY');
   console.log('='.repeat(80));
-
-  const passed = result.tests.filter(t => t.passed).length;
-  const failed = result.tests.filter(t => !t.passed).length;
-
   console.log(`\nTotal Tests: ${result.tests.length}`);
   console.log(`✓ Passed: ${passed}`);
   console.log(`✗ Failed: ${failed}`);
@@ -57,21 +56,12 @@ function printSummary(result: ReconnectionTestResult): void {
 
   console.log('\nTest Results:');
   for (const test of result.tests) {
-    const status = test.passed ? '✓ PASS' : '✗ FAIL';
-    console.log(`  ${status} | ${test.name}`);
-    if (test.error) {
-      console.log(`         Error: ${test.error}`);
-    }
+    console.log(`  ${test.passed ? '✓ PASS' : '✗ FAIL'} | ${test.name}`);
+    if (test.error) console.log(`         Error: ${test.error}`);
   }
 
   console.log('\n' + '='.repeat(80));
-
-  if (result.passed) {
-    console.log('✓ ALL RECONNECTION TESTS PASSED');
-  } else {
-    console.log(`✗ ${failed} RECONNECTION TEST(S) FAILED`);
-  }
-
+  console.log(result.passed ? '✓ ALL RECONNECTION TESTS PASSED' : `✗ ${failed} RECONNECTION TEST(S) FAILED`);
   console.log('='.repeat(80) + '\n');
 }
 

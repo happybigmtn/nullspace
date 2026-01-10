@@ -13,6 +13,10 @@ on:
         description: 'Platform to test (ios, android, or both)'
         required: false
         default: 'both'
+      backend:
+        description: 'Backend mode (mock or real)'
+        required: false
+        default: 'mock'
 
 env:
   NODE_VERSION: 20
@@ -33,6 +37,9 @@ jobs:
     timeout-minutes: 60
     env:
       DETOX_CONFIGURATION: ios.sim.debug
+      E2E_BACKEND: ${{ github.event.inputs.backend || 'mock' }}
+      EXPO_PUBLIC_WS_URL: ${{ github.event.inputs.backend == 'real' && 'ws://127.0.0.1:9010' }}
+      E2E_SEED: 1
 
     steps:
       - name: Checkout repository
@@ -104,6 +111,7 @@ jobs:
           echo "SIMULATOR_DEVICE_ID=$DEVICE_ID" >> $GITHUB_ENV
 
       - name: Start mock backend
+        if: env.E2E_BACKEND == 'mock'
         run: |
           # Create minimal mock server for E2E tests
           cat > /tmp/mock-server.mjs << 'EOF'
@@ -208,7 +216,7 @@ jobs:
       - name: Cleanup
         if: always()
         run: |
-          if [ -f /tmp/mock-server.pid ]; then
+          if [ "$E2E_BACKEND" = "mock" ] && [ -f /tmp/mock-server.pid ]; then
             kill $(cat /tmp/mock-server.pid) 2>/dev/null || true
           fi
           xcrun simctl shutdown all || true
@@ -242,6 +250,9 @@ jobs:
     timeout-minutes: 60
     env:
       DETOX_CONFIGURATION: android.emu.debug
+      E2E_BACKEND: ${{ github.event.inputs.backend || 'mock' }}
+      EXPO_PUBLIC_WS_URL: ${{ github.event.inputs.backend == 'real' && 'ws://10.0.2.2:9010' }}
+      E2E_SEED: 1
 
     steps:
       - name: Checkout repository
@@ -327,6 +338,7 @@ jobs:
         run: npx detox build --configuration ${{ env.DETOX_CONFIGURATION }}
 
       - name: Start mock backend
+        if: env.E2E_BACKEND == 'mock'
         run: |
           # Same mock server as iOS
           cat > /tmp/mock-server.mjs << 'EOF'
@@ -435,7 +447,7 @@ jobs:
       - name: Cleanup
         if: always()
         run: |
-          if [ -f /tmp/mock-server.pid ]; then
+          if [ "$E2E_BACKEND" = "mock" ] && [ -f /tmp/mock-server.pid ]; then
             kill $(cat /tmp/mock-server.pid) 2>/dev/null || true
           fi
 

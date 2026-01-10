@@ -11,7 +11,7 @@
  * </SwipeModal>
  * ```
  */
-import { ReactNode, useEffect, useState, useCallback, useLayoutEffect } from 'react';
+import { ReactNode, useEffect, useState, useCallback } from 'react';
 import {
   Modal,
   View,
@@ -30,7 +30,6 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withSpring,
-  withTiming,
   runOnJS,
 } from 'react-native-reanimated';
 import {

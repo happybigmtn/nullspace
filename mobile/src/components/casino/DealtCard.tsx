@@ -85,7 +85,7 @@ export interface DealtCardProps {
 }
 
 /** Default stagger delay between cards (ms) - uses STAGGER.normal (50ms) for premium feel */
-const DEFAULT_STAGGER_MS = STAGGER.normal;
+const DEFAULT_STAGGER_MS = STAGGER?.normal ?? 50;
 
 /** Duration of the deal trajectory (ms) */
 const DEAL_DURATION_MS = 350;

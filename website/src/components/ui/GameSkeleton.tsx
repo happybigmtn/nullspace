@@ -2,13 +2,6 @@ import React from 'react';
 import { Skeleton, SkeletonCircle, SkeletonText, SkeletonButton } from './Skeleton';
 import { cn } from '../../lib/utils';
 
-/**
- * Game-specific skeleton components matching casino game layouts
- */
-
-/**
- * Game card skeleton for lobby grid
- */
 interface GameCardSkeletonProps {
   className?: string;
 }
@@ -17,7 +10,7 @@ export function GameCardSkeleton({ className = '' }: GameCardSkeletonProps) {
   return (
     <div
       className={cn(
-        'bg-white dark:bg-titanium-800 rounded-xl overflow-hidden shadow-card',
+        'liquid-card overflow-hidden',
         className
       )}
     >
@@ -36,9 +29,6 @@ export function GameCardSkeleton({ className = '' }: GameCardSkeletonProps) {
   );
 }
 
-/**
- * Lobby grid skeleton - multiple game cards
- */
 interface LobbySkeletonProps {
   cardCount?: number;
   className?: string;
@@ -54,9 +44,6 @@ export function LobbySkeleton({ cardCount = 6, className = '' }: LobbySkeletonPr
   );
 }
 
-/**
- * Playing card skeleton for card games
- */
 interface CardSkeletonProps {
   faceDown?: boolean;
   className?: string;
@@ -68,8 +55,8 @@ export function CardSkeleton({ faceDown = false, className = '' }: CardSkeletonP
       className={cn(
         'w-16 h-24 rounded-lg shadow-md flex items-center justify-center',
         faceDown
-          ? 'bg-titanium-800 dark:bg-titanium-900'
-          : 'bg-white dark:bg-titanium-100',
+          ? 'bg-black/30 dark:bg-white/10'
+          : 'bg-white/70 dark:bg-white/5',
         className
       )}
     >
@@ -83,9 +70,6 @@ export function CardSkeleton({ faceDown = false, className = '' }: CardSkeletonP
   );
 }
 
-/**
- * Blackjack table skeleton
- */
 export function BlackjackSkeleton({ className = '' }: { className?: string }) {
   return (
     <div className={cn('space-y-8 p-6', className)}>
@@ -116,9 +100,6 @@ export function BlackjackSkeleton({ className = '' }: { className?: string }) {
   );
 }
 
-/**
- * Roulette table skeleton
- */
 export function RouletteSkeleton({ className = '' }: { className?: string }) {
   return (
     <div className={cn('space-y-6 p-6', className)}>
@@ -144,9 +125,6 @@ export function RouletteSkeleton({ className = '' }: { className?: string }) {
   );
 }
 
-/**
- * Chip stack skeleton
- */
 interface ChipStackSkeletonProps {
   count?: number;
   className?: string;
@@ -162,14 +140,11 @@ export function ChipStackSkeleton({ count = 5, className = '' }: ChipStackSkelet
   );
 }
 
-/**
- * Dice skeleton for craps/sic bo
- */
 export function DiceSkeleton({ className = '' }: { className?: string }) {
   return (
     <div
       className={cn(
-        'w-12 h-12 rounded-lg bg-titanium-200 dark:bg-titanium-700 skeleton-shimmer flex items-center justify-center',
+        'w-12 h-12 rounded-lg bg-black/10 dark:bg-white/10 skeleton-shimmer flex items-center justify-center',
         className
       )}
     >
@@ -179,7 +154,7 @@ export function DiceSkeleton({ className = '' }: { className?: string }) {
             key={i}
             className={cn(
               'w-1.5 h-1.5 rounded-full',
-              [0, 2, 4, 6, 8].includes(i) ? 'bg-titanium-400' : 'bg-transparent'
+              [0, 2, 4, 6, 8].includes(i) ? 'bg-black/30 dark:bg-white/40' : 'bg-transparent'
             )}
           />
         ))}
@@ -188,9 +163,6 @@ export function DiceSkeleton({ className = '' }: { className?: string }) {
   );
 }
 
-/**
- * Craps table skeleton
- */
 export function CrapsSkeleton({ className = '' }: { className?: string }) {
   return (
     <div className={cn('space-y-6 p-6', className)}>
@@ -215,9 +187,6 @@ export function CrapsSkeleton({ className = '' }: { className?: string }) {
   );
 }
 
-/**
- * Balance display skeleton
- */
 export function BalanceSkeleton({ className = '' }: { className?: string }) {
   return (
     <div className={cn('flex items-center gap-2', className)}>
@@ -227,12 +196,9 @@ export function BalanceSkeleton({ className = '' }: { className?: string }) {
   );
 }
 
-/**
- * Transaction list item skeleton
- */
 export function TransactionSkeleton({ className = '' }: { className?: string }) {
   return (
-    <div className={cn('flex items-center gap-3 py-3 border-b border-titanium-100', className)}>
+    <div className={cn('flex items-center gap-3 py-3 border-b border-black/5 dark:border-white/10', className)}>
       <SkeletonCircle size={36} />
       <div className="flex-1 space-y-1">
         <SkeletonText width="40%" variant="label" />
@@ -246,9 +212,6 @@ export function TransactionSkeleton({ className = '' }: { className?: string }) 
   );
 }
 
-/**
- * Transaction list skeleton
- */
 interface TransactionListSkeletonProps {
   count?: number;
   className?: string;
@@ -267,14 +230,11 @@ export function TransactionListSkeleton({
   );
 }
 
-/**
- * Game control bar skeleton
- */
 export function GameControlBarSkeleton({ className = '' }: { className?: string }) {
   return (
     <div
       className={cn(
-        'fixed bottom-8 left-1/2 -translate-x-1/2 h-16 bg-titanium-100 dark:bg-titanium-800 rounded-full flex items-center justify-between px-4 min-w-[320px] shadow-card',
+        'fixed bottom-8 left-1/2 -translate-x-1/2 h-16 liquid-card flex items-center justify-between px-4 min-w-[320px] shadow-card',
         className
       )}
     >

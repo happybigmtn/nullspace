@@ -137,10 +137,10 @@ function LeaderboardEntry({
       ref={ref}
       className={`flex items-center justify-between rounded-xl border px-3 py-2 ${
         isRevealed ? 'scroll-revealed' : 'scroll-hidden'
-      } ${isYou ? 'border-mono-0/40 bg-mono-0/10 text-mono-0 dark:text-mono-1000' : 'border-titanium-200 dark:border-titanium-800'}`}
+      } ${isYou ? 'border-mono-0/40 bg-mono-0/10 text-mono-0 dark:text-mono-1000' : 'border-ns bg-ns-surface text-ns'}`}
     >
       <div className="flex items-center gap-2">
-        <span className="text-[10px] text-titanium-400">#{index + 1}</span>
+        <span className="text-[10px] text-ns-muted">#{index + 1}</span>
         <span className="font-mono">{formatKey(entry.publicKey)}</span>
         {isYou ? <span className="text-[9px] font-bold uppercase">You</span> : null}
       </div>
@@ -164,12 +164,12 @@ function LeaderboardSection({
   return (
     <div
       ref={containerRef}
-      className={`rounded-3xl border border-titanium-200 bg-white p-5 shadow-soft dark:border-titanium-800 dark:bg-titanium-900/60 ${
+      className={`rounded-3xl liquid-card liquid-sheen p-5 shadow-soft ${
         isContainerRevealed ? 'scroll-revealed' : 'scroll-hidden'
       }`}
     >
       <Label size="micro" variant="primary" className="mb-2 block">Weekly league</Label>
-      <div className="text-sm font-bold text-titanium-900 dark:text-titanium-100">Top players</div>
+      <div className="text-sm font-bold text-ns">Top players</div>
       <div className="mt-3 space-y-2 text-[11px]">
         {leaderboard.slice(0, 5).map((entry, index) => {
           const isYou = publicKeyHex != null && entry.publicKey?.toLowerCase() === publicKeyHex;
@@ -184,7 +184,7 @@ function LeaderboardSection({
           );
         })}
       </div>
-      <div className="mt-2 text-[10px] text-titanium-400">
+      <div className="mt-2 text-[10px] text-ns-muted">
         {leaderboardUpdatedAt ? `Updated ${new Date(leaderboardUpdatedAt).toLocaleTimeString()}` : 'Updated recently'}
       </div>
     </div>
@@ -364,26 +364,26 @@ export const RewardsDrawer: React.FC<RewardsDrawerProps> = ({
   return (
     <div className={`fixed inset-0 z-[120] ${isOpen ? 'pointer-events-auto' : 'pointer-events-none'}`} aria-hidden={!isOpen}>
       <div
-        className={`absolute inset-0 bg-titanium-900/40 backdrop-blur-sm transition-opacity motion-state ${isOpen ? 'opacity-100' : 'opacity-0'}`}
+        className={`absolute inset-0 bg-black/30 backdrop-blur-sm transition-opacity motion-state ${isOpen ? 'opacity-100' : 'opacity-0'}`}
         onClick={onClose}
       />
       <aside
         role="dialog"
         aria-modal="true"
-        className={`absolute right-0 top-0 h-full w-full max-w-md bg-white border-l border-titanium-200 shadow-float transition-transform motion-state ${
+        className={`absolute right-0 top-0 h-full w-full max-w-md bg-ns-surface border-l border-ns shadow-float transition-transform motion-state ${
           isOpen ? 'translate-x-0' : 'translate-x-full'
-        } dark:bg-titanium-900 dark:border-titanium-800`}
+        }`}
       >
         <div className="flex h-full flex-col">
-          <div className="flex items-center justify-between border-b border-titanium-200 px-6 py-5 dark:border-titanium-800">
+          <div className="flex items-center justify-between border-b border-ns px-6 py-5">
             <div>
               <Label size="micro" className="opacity-70">Rewards</Label>
-              <div className="text-xl font-extrabold text-titanium-900 dark:text-titanium-100">Your rewards</div>
+              <div className="text-xl font-extrabold text-ns">Your rewards</div>
             </div>
             <button
               type="button"
               onClick={onClose}
-              className="h-10 w-10 rounded-full border border-titanium-200 text-titanium-400 transition-all hover:text-titanium-900 dark:border-titanium-800 dark:text-titanium-300 dark:hover:text-titanium-100"
+              className="h-10 w-10 rounded-full border border-ns text-ns-muted transition-all hover:text-ns hover:border-ns"
             >
               ✕
             </button>
@@ -391,11 +391,11 @@ export const RewardsDrawer: React.FC<RewardsDrawerProps> = ({
 
           <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
             {event ? (
-              <div className="rounded-3xl border border-titanium-200 bg-titanium-50/70 p-5 dark:border-titanium-800 dark:bg-titanium-900/40">
+              <div className="rounded-3xl liquid-card liquid-sheen p-5">
                 <Label size="micro" variant="primary" className="mb-2 block">Weekly focus</Label>
-                <div className="text-lg font-bold text-titanium-900 dark:text-titanium-100">{event.label}</div>
-                <div className="text-xs text-titanium-500 dark:text-titanium-300 mt-1">{event.focus}</div>
-                <div className="mt-3 text-[10px] font-mono text-titanium-400 dark:text-titanium-400">
+                <div className="text-lg font-bold text-ns">{event.label}</div>
+                <div className="text-xs text-ns-muted mt-1">{event.focus}</div>
+                <div className="mt-3 text-[10px] font-mono text-ns-muted">
                   Ends in {formatCountdownShort(timeLeftMs)}
                 </div>
               </div>
@@ -408,28 +408,28 @@ export const RewardsDrawer: React.FC<RewardsDrawerProps> = ({
                 leaderboardUpdatedAt={leaderboardUpdatedAt}
               />
             ) : leaderboardError ? (
-              <div className="rounded-2xl border border-titanium-200 bg-titanium-50/70 p-4 text-[11px] text-titanium-500 dark:border-titanium-800 dark:bg-titanium-900/40">
+              <div className="rounded-2xl liquid-panel p-4 text-[11px] text-ns-muted">
                 {leaderboardError}
               </div>
             ) : null}
 
             {opsBase && publicKeyHex ? (
-              <div className="rounded-3xl border border-titanium-200 bg-white p-5 shadow-soft dark:border-titanium-800 dark:bg-titanium-900/60">
+              <div className="rounded-3xl liquid-card liquid-sheen p-5 shadow-soft">
                 <Label size="micro" variant="gold" className="mb-2 block">Invite friends</Label>
                 {referralLoading ? (
-                  <div className="text-[11px] text-titanium-400">Loading referral stats…</div>
+                  <div className="text-[11px] text-ns-muted">Loading referral stats…</div>
                 ) : referralSummary ? (
                   <>
-                    <div className="text-lg font-bold text-titanium-900 dark:text-titanium-100">
+                    <div className="text-lg font-bold text-ns">
                       Code: {referralSummary.code ?? '—'}
                     </div>
-                    <div className="mt-2 text-[11px] text-titanium-500 dark:text-titanium-300">
+                    <div className="mt-2 text-[11px] text-ns-muted">
                       Referrals: {referralSummary.referrals} · Qualified: {referralSummary.qualified}
                     </div>
                     {referralSummary.code ? (
                       <button
                         type="button"
-                        className="mt-3 text-[10px] border px-3 py-2 rounded bg-gray-900 border-gray-700 text-gray-200 hover:border-gray-500"
+                        className="mt-3 liquid-chip text-[10px] px-3 py-2 border-ns-border/80 text-ns hover:border-ns-border"
                         onClick={() => {
                           const url = `${window.location.origin}/?ref=${referralSummary.code}`;
                           navigator.clipboard.writeText(url).catch(() => {
@@ -442,22 +442,22 @@ export const RewardsDrawer: React.FC<RewardsDrawerProps> = ({
                     ) : null}
                   </>
                 ) : referralError ? (
-                  <div className="text-[11px] text-titanium-500">{referralError}</div>
+                  <div className="text-[11px] text-ns-muted">{referralError}</div>
                 ) : null}
               </div>
             ) : null}
 
-            <div className="rounded-3xl border border-titanium-200 bg-white p-5 shadow-soft dark:border-titanium-800 dark:bg-titanium-900/60">
+            <div className="rounded-3xl liquid-card liquid-sheen p-5 shadow-soft">
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <Label size="micro" variant="gold" className="mb-1 block">Daily bonus</Label>
-                  <div className="text-lg font-bold text-titanium-900 dark:text-titanium-100">+1,000 RNG</div>
-                  <div className="text-[11px] text-titanium-500 dark:text-titanium-300">
+                  <div className="text-lg font-bold text-ns">+1,000 RNG</div>
+                  <div className="text-[11px] text-ns-muted">
                     {claimedToday ? `Next drop in ${formatCountdownShort(nextResetMs)}` : 'Ready to claim'}
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-1">
-                  <div className="text-[10px] font-bold text-titanium-400 uppercase tracking-widest">Streak</div>
+                  <div className="text-[10px] font-bold text-ns-muted uppercase tracking-widest">Streak</div>
                   <div className="text-lg font-black text-mono-0 dark:text-mono-1000 font-bold">{streak}x</div>
                 </div>
               </div>
@@ -472,24 +472,24 @@ export const RewardsDrawer: React.FC<RewardsDrawerProps> = ({
                 className={`w-full rounded-full px-4 py-2 text-[11px] font-bold uppercase tracking-widest transition-all motion-interaction ${
                   canClaim
                     ? 'bg-mono-0 text-white shadow-soft hover:scale-[1.02]'
-                    : 'bg-titanium-100 text-titanium-400 dark:bg-titanium-800 dark:text-titanium-400'
+                    : 'bg-ns-surface text-ns-muted'
                 }`}
               >
                 {playMode !== 'CASH' ? 'Available in Cash Mode' : claimedToday ? 'Claimed' : isFaucetClaiming ? 'Claiming…' : 'Claim now'}
               </button>
             </div>
 
-            <div className="rounded-3xl border border-titanium-200 bg-white p-5 shadow-soft dark:border-titanium-800 dark:bg-titanium-900/60">
+            <div className="rounded-3xl liquid-card liquid-sheen p-5 shadow-soft">
               <Label size="micro" variant="primary" className="mb-2 block">Wallet</Label>
-              <div className="text-sm font-semibold text-titanium-800 dark:text-titanium-100">
+              <div className="text-sm font-semibold text-ns">
                 Testnet deposits and withdrawals are coming soon.
               </div>
-              <div className="text-[11px] text-titanium-500 dark:text-titanium-300 mt-2">
+              <div className="text-[11px] text-ns-muted mt-2">
                 Use the daily faucet to top up RNG while the bridge flow is finalized.
               </div>
             </div>
 
-            <div className="rounded-3xl border border-titanium-200 bg-white p-5 shadow-soft dark:border-titanium-800 dark:bg-titanium-900/60">
+            <div className="rounded-3xl liquid-card liquid-sheen p-5 shadow-soft">
               <Label size="micro" variant="primary" className="mb-3 block">Missions</Label>
               <div className="space-y-4">
                 {missions.map((mission) => {
@@ -497,13 +497,13 @@ export const RewardsDrawer: React.FC<RewardsDrawerProps> = ({
                   const pct = Math.round((progress / mission.target) * 100);
                   return (
                     <div key={mission.id} className="flex flex-col gap-2">
-                      <div className="flex items-center justify-between text-xs font-semibold text-titanium-800 dark:text-titanium-100">
+                      <div className="flex items-center justify-between text-xs font-semibold text-ns">
                         <span>{mission.label}</span>
-                        <span className="tabular-nums text-titanium-500 dark:text-titanium-300">
+                        <span className="tabular-nums text-ns-muted">
                           {progress}/{mission.target}
                         </span>
                       </div>
-                      <div className="h-2 rounded-full bg-titanium-100 dark:bg-titanium-800 overflow-hidden">
+                      <div className="h-2 rounded-full bg-ns-border/60 overflow-hidden">
                         <div
                           className="h-full bg-mono-0 transition-all motion-state"
                           style={{ width: `${pct}%` }}
@@ -515,11 +515,11 @@ export const RewardsDrawer: React.FC<RewardsDrawerProps> = ({
               </div>
             </div>
 
-            <div className="rounded-3xl border border-titanium-200 bg-white p-5 shadow-soft dark:border-titanium-800 dark:bg-titanium-900/60">
+            <div className="rounded-3xl liquid-card liquid-sheen p-5 shadow-soft">
               <Label size="micro" variant="success" className="mb-3 block">Clubs</Label>
               {!clubJoined ? (
                 <div className="flex flex-col gap-3">
-                  <div className="text-sm font-semibold text-titanium-800 dark:text-titanium-100">
+                  <div className="text-sm font-semibold text-ns">
                     Join a club for weekly goals and lightweight social play.
                   </div>
                   <button
@@ -531,7 +531,7 @@ export const RewardsDrawer: React.FC<RewardsDrawerProps> = ({
                       writeStorage(STORAGE_KEYS.clubBaseline, stats.history.length);
                       writeStorage(STORAGE_KEYS.clubWeek, weekKey);
                     }}
-                    className="rounded-full px-4 py-2 text-[11px] font-bold uppercase tracking-widest bg-titanium-900 text-white shadow-soft hover:scale-[1.02] transition-all dark:bg-mono-0/20 dark:text-mono-0 dark:text-mono-1000"
+                    className="rounded-full px-4 py-2 text-[11px] font-bold uppercase tracking-widest bg-mono-0 text-white shadow-soft hover:scale-[1.02] transition-all"
                   >
                     Join Club
                   </button>
@@ -540,12 +540,12 @@ export const RewardsDrawer: React.FC<RewardsDrawerProps> = ({
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="text-sm font-semibold text-titanium-800 dark:text-titanium-100">Orion Table</div>
-                      <div className="text-[11px] text-titanium-500 dark:text-titanium-300">Weekly goal: 25 hands</div>
+                      <div className="text-sm font-semibold text-ns">Orion Table</div>
+                      <div className="text-[11px] text-ns-muted">Weekly goal: 25 hands</div>
                     </div>
                     <div className="text-xs font-bold text-mono-0 dark:text-mono-1000 font-bold">{clubProgress}/{clubGoal}</div>
                   </div>
-                  <div className="h-2 rounded-full bg-titanium-100 dark:bg-titanium-800 overflow-hidden">
+                  <div className="h-2 rounded-full bg-ns-border/60 overflow-hidden">
                     <div
                       className="h-full bg-mono-0 transition-all motion-state"
                       style={{ width: `${Math.round((clubProgress / clubGoal) * 100)}%` }}
@@ -556,7 +556,7 @@ export const RewardsDrawer: React.FC<RewardsDrawerProps> = ({
             </div>
           </div>
 
-          <div className="border-t border-titanium-200 px-6 py-4 text-[10px] text-titanium-400 dark:border-titanium-800 dark:text-titanium-400">
+          <div className="border-t border-ns px-6 py-4 text-[10px] text-ns-muted">
             Balance today: ${formatAmount(stats.chips)} • Rewards stay calm, no popups.
           </div>
         </div>

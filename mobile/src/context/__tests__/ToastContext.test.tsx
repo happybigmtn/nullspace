@@ -5,6 +5,9 @@ import React from 'react';
 import { act, create, ReactTestRenderer } from 'react-test-renderer';
 import { View } from 'react-native';
 
+// Import after mocks
+import { ToastProvider, useToast } from '../ToastContext';
+
 // Mock haptics - must return async functions since haptics service methods are async
 jest.mock('../../services/haptics', () => ({
   haptics: {
@@ -33,7 +36,7 @@ jest.mock('react-native-safe-area-context', () => ({
 // Mock react-native-reanimated - complete mock for all used exports
 jest.mock('react-native-reanimated', () => {
   const RN = require('react-native');
-  const AnimatedView = ({ children, entering, style, ...props }: { children?: React.ReactNode; entering?: unknown; style?: unknown }) => (
+  const AnimatedView = ({ children, style, ...props }: { children?: React.ReactNode; style?: unknown }) => (
     <RN.View {...props} style={style}>{children}</RN.View>
   );
 
@@ -76,9 +79,6 @@ jest.mock('react-native-gesture-handler', () => ({
     }),
   },
 }));
-
-// Import after mocks
-import { ToastProvider, useToast } from '../ToastContext';
 
 // Get mock reference after imports
 const mockHaptics = jest.requireMock('../../services/haptics').haptics;

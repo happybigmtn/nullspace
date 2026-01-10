@@ -275,17 +275,17 @@ export const CrapsBetMenu: React.FC<CrapsBetMenuProps> = ({
         const colors = {
             green: {
                 active: 'border-green-400 bg-green-500/20 text-green-300 shadow-[0_0_12px_rgba(74,222,128,0.3)]',
-                inactive: 'border-gray-700 bg-gray-900/80 text-gray-300 hover:border-green-600 hover:text-green-400 hover:bg-green-900/20',
+                inactive: 'border-ns-border/70 bg-white/35 dark:bg-black/50 text-ns hover:border-green-600 hover:text-green-400 hover:bg-green-900/20',
                 key: 'text-green-500',
             },
             cyan: {
                 active: 'border-cyan-400 bg-cyan-500/20 text-cyan-300 shadow-[0_0_12px_rgba(34,211,238,0.3)]',
-                inactive: 'border-gray-700 bg-gray-900/80 text-gray-300 hover:border-cyan-600 hover:text-cyan-400 hover:bg-cyan-900/20',
+                inactive: 'border-ns-border/70 bg-white/35 dark:bg-black/50 text-ns hover:border-cyan-600 hover:text-cyan-400 hover:bg-cyan-900/20',
                 key: 'text-cyan-500',
             },
             amber: {
                 active: 'border-amber-400 bg-amber-500/20 text-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.3)]',
-                inactive: 'border-gray-700 bg-gray-900/80 text-gray-300 hover:border-amber-600 hover:text-amber-400 hover:bg-amber-900/20',
+                inactive: 'border-ns-border/70 bg-white/35 dark:bg-black/50 text-ns hover:border-amber-600 hover:text-amber-400 hover:bg-amber-900/20',
                 key: 'text-amber-500',
             },
         };
@@ -303,13 +303,13 @@ export const CrapsBetMenu: React.FC<CrapsBetMenuProps> = ({
                     ${isActive
                         ? colors[color].active
                         : disabled
-                            ? 'border-gray-800 bg-black/50 text-gray-700 cursor-not-allowed'
+                            ? 'border-ns-border/60 bg-black/50 text-ns-muted cursor-not-allowed'
                             : colors[color].inactive
                     }
                 `}
             >
                 <span className="font-bold">{displayLabel}</span>
-                <span className={`text-[9px] mt-0.5 ${isActive ? colors[color].key : 'text-gray-600'}`}>
+                <span className={`text-[9px] mt-0.5 ${isActive ? colors[color].key : 'text-ns-muted'}`}>
                     [{bet.key.toUpperCase()}]
                 </span>
             </button>
@@ -327,12 +327,12 @@ export const CrapsBetMenu: React.FC<CrapsBetMenuProps> = ({
                         h-12 px-4 border rounded font-mono text-sm font-bold tracking-wider transition-all
                         ${activeGroup === 'NORMAL'
                             ? 'border-green-400 bg-green-500/20 text-green-300 shadow-[0_0_15px_rgba(74,222,128,0.3)]'
-                            : 'border-gray-700 bg-gray-900 text-gray-400 hover:border-green-600 hover:text-green-400'
+                            : 'border-ns-border/70 bg-white/40 dark:bg-black/50 text-ns-muted hover:border-green-600 hover:text-green-400'
                         }
                     `}
                 >
                     NORMAL
-                    <span className="ml-1 text-[10px] text-gray-600">[⇧1]</span>
+                    <span className="ml-1 text-[10px] text-ns-muted">[⇧1]</span>
                 </button>
 
                 {activeGroup === 'NORMAL' && (
@@ -353,12 +353,12 @@ export const CrapsBetMenu: React.FC<CrapsBetMenuProps> = ({
                         h-12 px-4 border rounded font-mono text-sm font-bold tracking-wider transition-all
                         ${activeGroup === 'MODERN'
                             ? 'border-cyan-400 bg-cyan-500/20 text-cyan-300 shadow-[0_0_15px_rgba(34,211,238,0.3)]'
-                            : 'border-gray-700 bg-gray-900 text-gray-400 hover:border-cyan-600 hover:text-cyan-400'
+                            : 'border-ns-border/70 bg-white/40 dark:bg-black/50 text-ns-muted hover:border-cyan-600 hover:text-cyan-400'
                         }
                     `}
                 >
                     MODERN
-                    <span className="ml-1 text-[10px] text-gray-600">[⇧2]</span>
+                    <span className="ml-1 text-[10px] text-ns-muted">[⇧2]</span>
                 </button>
 
                 {activeGroup === 'MODERN' && (
@@ -382,12 +382,12 @@ export const CrapsBetMenu: React.FC<CrapsBetMenuProps> = ({
                                 ? 'border-amber-400 bg-amber-500/20 text-amber-300 shadow-[0_0_15px_rgba(251,191,36,0.3)]'
                                 : anyBonusPlaced
                                     ? 'border-amber-600/50 bg-amber-900/20 text-amber-400 hover:border-amber-500 animate-pulse'
-                                    : 'border-gray-700 bg-gray-900 text-gray-400 hover:border-amber-600 hover:text-amber-400'
+                                    : 'border-ns-border/70 bg-white/40 dark:bg-black/50 text-ns-muted hover:border-amber-600 hover:text-amber-400'
                             }
                         `}
                     >
                         BONUS
-                        <span className="ml-1 text-[10px] text-gray-600">[⇧3]</span>
+                        <span className="ml-1 text-[10px] text-ns-muted">[⇧3]</span>
                         {anyBonusPlaced && (
                             <span className="absolute -top-1 -right-1 w-2 h-2 bg-amber-500 rounded-full animate-ping" />
                         )}
@@ -409,16 +409,16 @@ export const CrapsBetMenu: React.FC<CrapsBetMenuProps> = ({
             )}
 
             {/* Divider */}
-            <div className="h-8 w-px bg-gray-800 mx-1" />
+            <div className="h-8 w-px bg-ns-border/60 mx-1" />
 
             {/* Quick Actions */}
             <button
                 type="button"
                 onClick={() => actions?.undoCrapsBet?.()}
-                className="h-12 px-3 border border-gray-700 bg-gray-900 text-gray-400 rounded font-mono text-sm hover:border-red-600 hover:text-red-400 transition-all"
+                className="h-12 px-3 border border-ns-border/70 bg-white/40 dark:bg-black/50 text-ns-muted rounded font-mono text-sm hover:border-red-600 hover:text-red-400 transition-all"
             >
                 UNDO
-                <span className="ml-1 text-[10px] text-gray-600">[U]</span>
+                <span className="ml-1 text-[10px] text-ns-muted">[U]</span>
             </button>
 
             <button
@@ -428,19 +428,19 @@ export const CrapsBetMenu: React.FC<CrapsBetMenuProps> = ({
                     h-12 px-3 border rounded font-mono text-sm transition-all
                     ${gameState.activeModifiers.super
                         ? 'border-yellow-400 bg-yellow-500/20 text-yellow-300 shadow-[0_0_15px_rgba(250,204,21,0.4)] animate-pulse'
-                        : 'border-gray-700 bg-gray-900 text-gray-400 hover:border-yellow-600 hover:text-yellow-400'
+                        : 'border-ns-border/70 bg-white/40 dark:bg-black/50 text-ns-muted hover:border-yellow-600 hover:text-yellow-400'
                     }
                 `}
             >
                 SUPER
-                <span className="ml-1 text-[10px] text-gray-600">[S]</span>
+                <span className="ml-1 text-[10px] text-ns-muted">[S]</span>
             </button>
 
             {/* Keyboard hint toggle */}
             <button
                 type="button"
                 onClick={() => setShowShortcutHint(!showShortcutHint)}
-                className="h-12 w-12 border border-gray-800 bg-gray-900/50 text-gray-600 rounded font-mono text-lg hover:text-green-500 hover:border-green-800 transition-all"
+                className="h-12 w-12 border border-ns-border/60 bg-white/30 dark:bg-black/50 text-ns-muted rounded font-mono text-lg hover:text-green-500 hover:border-green-800 transition-all"
                 title="Keyboard shortcuts"
             >
                 ?
@@ -453,7 +453,7 @@ export const CrapsBetMenu: React.FC<CrapsBetMenuProps> = ({
                     onClick={() => setShowShortcutHint(false)}
                 >
                     <div
-                        className="bg-gray-900 border border-green-900/50 rounded-lg p-6 max-w-lg w-full font-mono text-sm"
+                        className="bg-white/40 dark:bg-black/50 border border-green-900/50 rounded-lg p-6 max-w-lg w-full font-mono text-sm"
                         onClick={e => e.stopPropagation()}
                     >
                         <h3 className="text-green-400 font-bold tracking-widest mb-4 text-center">KEYBOARD SHORTCUTS</h3>
@@ -461,7 +461,7 @@ export const CrapsBetMenu: React.FC<CrapsBetMenuProps> = ({
                         <div className="grid grid-cols-3 gap-4">
                             <div>
                                 <div className="text-green-500 font-bold mb-2 border-b border-green-900/50 pb-1">NORMAL [⇧1]</div>
-                                <div className="space-y-1 text-gray-400">
+                                <div className="space-y-1 text-ns-muted">
                                     {NORMAL_BETS.map(bet => (
                                         <div key={bet.key}>
                                             <span className="text-green-400">{bet.key.toUpperCase()}</span> {bet.label}
@@ -472,7 +472,7 @@ export const CrapsBetMenu: React.FC<CrapsBetMenuProps> = ({
 
                             <div>
                                 <div className="text-cyan-500 font-bold mb-2 border-b border-cyan-900/50 pb-1">MODERN [⇧2]</div>
-                                <div className="space-y-1 text-gray-400">
+                                <div className="space-y-1 text-ns-muted">
                                     {MODERN_BETS.map(bet => (
                                         <div key={bet.key}>
                                             <span className="text-cyan-400">{bet.key.toUpperCase()}</span> {bet.label}
@@ -483,7 +483,7 @@ export const CrapsBetMenu: React.FC<CrapsBetMenuProps> = ({
 
                             <div>
                                 <div className="text-amber-500 font-bold mb-2 border-b border-amber-900/50 pb-1">BONUS [⇧3]</div>
-                                <div className="space-y-1 text-gray-400 text-xs">
+                                <div className="space-y-1 text-ns-muted text-xs">
                                     {BONUS_BETS.map(bet => (
                                         <div key={bet.action}>
                                             <span className="text-amber-400">{bet.key.toUpperCase()}</span> {bet.label}
@@ -493,15 +493,15 @@ export const CrapsBetMenu: React.FC<CrapsBetMenuProps> = ({
                             </div>
                         </div>
 
-                        <div className="mt-4 pt-4 border-t border-gray-800">
-                            <div className="text-center text-gray-500">
-                                <span className="text-gray-400">U</span> Undo •
-                                <span className="text-gray-400 ml-2">S</span> Super •
-                                <span className="text-gray-400 ml-2">C</span> Chips •
-                                <span className="text-gray-400 ml-2">ESC</span> Close
+                        <div className="mt-4 pt-4 border-t border-ns-border/60">
+                            <div className="text-center text-ns-muted">
+                                <span className="text-ns-muted">U</span> Undo •
+                                <span className="text-ns-muted ml-2">S</span> Super •
+                                <span className="text-ns-muted ml-2">C</span> Chips •
+                                <span className="text-ns-muted ml-2">ESC</span> Close
                             </div>
-                            <div className="text-center text-gray-600 text-xs mt-2">
-                                <span className="text-gray-400">1-8</span> Select chip value
+                            <div className="text-center text-ns-muted text-xs mt-2">
+                                <span className="text-ns-muted">1-8</span> Select chip value
                             </div>
                         </div>
 

@@ -17,47 +17,65 @@ export default function AccountPage() {
     };
   }, [pubkey]);
 
-  if (error) return <div className="text-red-400">{error}</div>;
-  if (!account) return <div className="text-gray-300">Loading account...</div>;
+  if (error) return <div className="text-action-destructive">{error}</div>;
+  if (!account) return <div className="text-ns-muted">Loading account...</div>;
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-xl font-semibold break-all">Account</h1>
-        <p className="font-mono break-all text-sm text-terminal-green">{account.public_key}</p>
-        {account.last_updated_height && (
-          <p className="text-gray-400 text-sm">Last seen at height {account.last_updated_height}</p>
-        )}
-        {account.last_nonce !== undefined && account.last_nonce !== null && (
-          <p className="text-gray-400 text-sm">Last nonce: {account.last_nonce}</p>
-        )}
-      </div>
+    <div className="space-y-6">
+      <section className="liquid-card p-5">
+        <div className="space-y-2">
+          <div className="text-[10px] text-ns-muted tracking-[0.32em] uppercase">Account</div>
+          <div className="text-lg font-display tracking-tight text-ns break-all">Account details</div>
+          <div className="liquid-panel p-3 font-mono text-[10px] break-all text-ns">
+            {account.public_key}
+          </div>
+        </div>
 
-      <div>
-        <h2 className="text-lg font-semibold mb-2">Transactions</h2>
-        {account.txs.length === 0 && <div className="text-gray-500 text-sm">No transactions indexed.</div>}
-        <ul className="space-y-2">
-          {account.txs.map((hash) => (
-            <li key={hash} className="font-mono text-xs bg-gray-900 border border-gray-800 rounded p-2">
-              <Link to={`/explorer/tx/${hash}`} className="text-terminal-green hover:underline">
-                {hash}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </div>
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+          <div className="liquid-panel p-3">
+            <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase">Last seen</div>
+            <div className="text-ns">
+              {account.last_updated_height ? `Height ${account.last_updated_height}` : '—'}
+            </div>
+          </div>
+          <div className="liquid-panel p-3">
+            <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase">Last nonce</div>
+            <div className="text-ns">{account.last_nonce ?? '—'}</div>
+          </div>
+        </div>
+      </section>
 
-      <div>
-        <h2 className="text-lg font-semibold mb-2">Events</h2>
-        {account.events.length === 0 && <div className="text-gray-500 text-sm">No events recorded.</div>}
-        <ul className="text-sm text-gray-200 space-y-1">
-          {account.events.map((ev, idx) => (
-            <li key={`${ev}-${idx}`} className="bg-gray-900 border border-gray-800 rounded px-2 py-1 inline-block mr-2 mb-2">
-              {ev}
-            </li>
-          ))}
-        </ul>
-      </div>
+      <section className="liquid-card p-5">
+        <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase mb-3">Transactions</div>
+        {account.txs.length === 0 ? (
+          <div className="text-[11px] text-ns-muted">No transactions indexed.</div>
+        ) : (
+          <ul className="space-y-2">
+            {account.txs.map((hash) => (
+              <li key={hash} className="font-mono text-[10px] liquid-panel p-2 break-all">
+                <Link to={`/explorer/tx/${hash}`} className="text-ns hover:underline">
+                  {hash}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="liquid-card p-5">
+        <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase mb-3">Events</div>
+        {account.events.length === 0 ? (
+          <div className="text-[11px] text-ns-muted">No events recorded.</div>
+        ) : (
+          <div className="flex flex-wrap gap-2 text-[10px]">
+            {account.events.map((ev, idx) => (
+              <span key={`${ev}-${idx}`} className="liquid-chip px-3 py-1 text-ns">
+                {ev}
+              </span>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 }

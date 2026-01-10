@@ -38,7 +38,7 @@ jest.mock('../../services', () => ({
 }));
 
 jest.mock('../../services/haptics', () => ({
-  haptics: { selectionChange: jest.fn() },
+  haptics: { selectionChange: jest.fn(() => Promise.resolve()) },
 }));
 
 const readText = (node: any) => {

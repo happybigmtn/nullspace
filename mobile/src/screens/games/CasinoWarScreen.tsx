@@ -41,6 +41,19 @@ const TUTORIAL_STEPS: TutorialStep[] = [
   },
 ];
 
+function getNextPhase(
+  stage: string,
+  currentPhase: CasinoWarState['phase']
+): CasinoWarState['phase'] {
+  if (stage === 'war') {
+    return currentPhase === 'war' ? 'war' : 'war_choice';
+  }
+  if (stage === 'complete') {
+    return 'result';
+  }
+  return 'betting';
+}
+
 export function CasinoWarScreen() {
   // Shared hooks for connection, betting, and submission debouncing
   const { isDisconnected, send, lastMessage, connectionStatusProps } = useGameConnection<GameMessage>();
@@ -91,14 +104,7 @@ export function CasinoWarScreen() {
           if (!isMounted.current) return;
           setIsParsingState(false);
           setState((prev) => {
-            const nextPhase =
-              parsedState.stage === 'war'
-                ? prev.phase === 'war'
-                  ? 'war'
-                  : 'war_choice'
-                : parsedState.stage === 'complete'
-                  ? 'result'
-                  : 'betting';
+            const nextPhase = getNextPhase(parsedState.stage, prev.phase);
 
             return {
               ...prev,

@@ -12,13 +12,13 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({ className, variant = '
   const isDark = theme === 'dark';
 
   const segmented = (
-    <span className="inline-flex items-center gap-1 rounded-full bg-titanium-200 p-0.5 text-[10px] font-bold uppercase tracking-widest dark:bg-titanium-800">
+    <span className="inline-flex items-center gap-1 rounded-full liquid-chip p-0.5 text-[10px] font-bold uppercase tracking-[0.28em]">
       <span
         className={[
           'px-2 py-0.5 rounded-full transition-colors',
           isDark
-            ? 'text-titanium-600 dark:text-titanium-400'
-            : 'bg-titanium-900 text-white shadow-soft dark:bg-white dark:text-titanium-900',
+            ? 'text-ns-muted'
+            : 'bg-black/80 text-white shadow-soft dark:bg-white/80 dark:text-black',
         ].join(' ')}
       >
         Light
@@ -27,8 +27,8 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({ className, variant = '
         className={[
           'px-2 py-0.5 rounded-full transition-colors',
           isDark
-            ? 'bg-titanium-900 text-white shadow-soft dark:bg-white dark:text-titanium-900'
-            : 'text-titanium-600 dark:text-titanium-400',
+            ? 'bg-black/80 text-white shadow-soft dark:bg-white/80 dark:text-black'
+            : 'text-ns-muted',
         ].join(' ')}
       >
         Dark
@@ -45,7 +45,7 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({ className, variant = '
         aria-label={`Switch to ${nextTheme} mode`}
         aria-pressed={isDark}
       >
-        <span className="text-sm font-semibold text-titanium-800 dark:text-titanium-100">Theme</span>
+        <span className="text-sm font-semibold text-ns">Theme</span>
         {segmented}
       </button>
     );
@@ -58,15 +58,13 @@ export const ThemeToggle: React.FC<ThemeToggleProps> = ({ className, variant = '
       aria-label={`Switch to ${nextTheme} mode`}
       aria-pressed={isDark}
       className={[
-        'inline-flex items-center gap-3 rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-colors shadow-soft',
-        'border-titanium-300 bg-white text-titanium-900 hover:border-titanium-500',
-        'dark:border-titanium-700 dark:bg-titanium-900/70 dark:text-titanium-100 dark:hover:border-titanium-500',
+        'inline-flex items-center gap-3 rounded-full liquid-chip px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.28em] transition-colors shadow-soft text-ns',
         className ?? '',
       ]
         .join(' ')
         .trim()}
     >
-      <span className="text-titanium-600 dark:text-titanium-300">Theme</span>
+      <span className="text-ns-muted">Theme</span>
       {segmented}
     </button>
   );

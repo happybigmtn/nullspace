@@ -141,7 +141,7 @@ export const Pseudo3DWheel: React.FC<Pseudo3DWheelProps> = ({
         <div className={`relative aspect-square ${className}`} style={{ width: 320, height: 320, ...style }}>
             <div className="absolute inset-4 rounded-full aspect-square bg-black/20 blur-2xl" />
 
-            <div className="absolute inset-0 rounded-full aspect-square border-[12px] border-titanium-200 shadow-float flex items-center justify-center bg-titanium-100 overflow-hidden">
+            <div className="absolute inset-0 rounded-full aspect-square border-[12px] border-ns shadow-float flex items-center justify-center bg-ns-surface overflow-hidden">
                 
                 <animated.div 
                     className="w-full h-full rounded-full relative shadow-inner"

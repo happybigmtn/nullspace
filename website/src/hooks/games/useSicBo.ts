@@ -33,7 +33,7 @@ export const useSicBo = ({
   autoPlayDraftRef
 }: UseSicBoProps) => {
 
-  const placeSicBoBet = useCallback((type: SicBoBet['type'], target?: number, stateOverride?: GameState, statsOverride?: PlayerStats) => {
+  const placeSicBoBet = useCallback((type: SicBoBet['type'], target?: number, stateOverride?: GameState, statsOverride?: PlayerStats): boolean => {
     const state = stateOverride ?? gameState;
     const player = statsOverride ?? stats;
     const existing = state.sicBoBets.some(b => b.type === type && b.target === target);
@@ -47,10 +47,13 @@ export const useSicBo = ({
         message: `REMOVED ${type}`,
         sicBoInputMode: 'NONE'
       }));
-      return;
+      return true;
     }
 
-    if (player.chips < state.bet) return;
+    if (player.chips < state.bet) {
+      setGameState(prev => ({ ...prev, message: 'INSUFFICIENT FUNDS' }));
+      return false;
+    }
     setGameState(prev => ({
       ...prev,
       sicBoUndoStack: [...prev.sicBoUndoStack, prev.sicBoBets],
@@ -59,6 +62,7 @@ export const useSicBo = ({
       sicBoInputMode: 'NONE',
       sessionWager: prev.sessionWager + prev.bet
     }));
+    return true;
   }, [gameState.sicBoBets, gameState.bet, stats.chips, setGameState]);
 
   const undoSicBoBet = useCallback(() => {

@@ -10,27 +10,18 @@ import { animated, useSpring, to } from '@react-spring/web';
 import { SPRING_CONFIGS, SPRING_LIQUID_CONFIGS, type SpringPreset } from '../../utils/motion';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
-// Simple className joiner
 const cn = (...args: (string | boolean | undefined | null)[]) =>
   args.filter(Boolean).join(' ');
 
-// Instant config for reduced motion
 const INSTANT_CONFIG = { duration: 0 };
 
-// Anticipation constants - subtle is key
 const ANTICIPATION = {
-  /** Lift on hover (px) */
   hoverLift: 2,
-  /** Scale on hover */
   hoverScale: 1.01,
-  /** Shadow expansion on hover */
   hoverShadow: 1.3,
-  /** Breathing animation scale range */
   breatheMin: 1.0,
   breatheMax: 1.02,
-  /** Breathing cycle duration (ms) */
   breatheDuration: 8000,
-  /** Idle timeout before breathing starts (ms) */
   idleTimeout: 5000,
 };
 
@@ -96,13 +87,11 @@ export const AnimatedButton = forwardRef<
       ? INSTANT_CONFIG
       : SPRING_CONFIGS[springPreset];
 
-    // Track interaction state for breathing
     const [isIdle, setIsIdle] = useState(false);
     const [isHovered, setIsHovered] = useState(false);
     const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const lastInteractionRef = useRef<number>(Date.now());
 
-    // Spring values: scale, shadow, lift (translateY), breathe
     const [spring, api] = useSpring(() => ({
       scale: 1,
       shadow: 1,
@@ -113,7 +102,6 @@ export const AnimatedButton = forwardRef<
 
     const isDisabled = disabled || loading;
 
-    // Reset idle timer on any interaction
     const resetIdleTimer = () => {
       lastInteractionRef.current = Date.now();
       setIsIdle(false);
@@ -129,7 +117,6 @@ export const AnimatedButton = forwardRef<
       }
     };
 
-    // Start breathing animation when idle
     useEffect(() => {
       if (!enableBreathing || prefersReducedMotion || isDisabled || isHovered) {
         api.start({ breathe: 1 });
@@ -159,7 +146,6 @@ export const AnimatedButton = forwardRef<
       };
     }, [isIdle, enableBreathing, prefersReducedMotion, isDisabled, isHovered, api]);
 
-    // Initialize idle timer on mount
     useEffect(() => {
       if (enableBreathing && !prefersReducedMotion && !isDisabled) {
         resetIdleTimer();
@@ -172,7 +158,6 @@ export const AnimatedButton = forwardRef<
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [enableBreathing, prefersReducedMotion, isDisabled]);
 
-    // Hover handlers - anticipatory lift and shadow expansion
     const handleMouseEnter = () => {
       if (prefersReducedMotion || isDisabled) return;
       setIsHovered(true);
@@ -198,7 +183,6 @@ export const AnimatedButton = forwardRef<
       });
     };
 
-    // Press handlers - scale down and reduce shadow
     const handleMouseDown = () => {
       if (prefersReducedMotion || isDisabled) return;
       resetIdleTimer();
@@ -225,25 +209,22 @@ export const AnimatedButton = forwardRef<
       }
     };
 
-    // Base styles
     const baseStyles =
-      'relative inline-flex items-center justify-center font-semibold rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2';
+      'relative inline-flex items-center justify-center font-semibold rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-action-primary/50 focus-visible:ring-offset-2';
 
-    // Variant styles
     const variantStyles = {
       primary:
-        'bg-action-indigo text-white hover:bg-action-indigoHover focus-visible:ring-action-indigo disabled:bg-titanium-300 disabled:text-titanium-500',
+        'bg-action-primary text-white hover:bg-action-primary/90 border border-black/10 dark:border-white/10 disabled:bg-black/10 disabled:text-ns-muted',
       secondary:
-        'bg-titanium-100 text-titanium-900 hover:bg-titanium-200 focus-visible:ring-titanium-400 disabled:bg-titanium-100 disabled:text-titanium-400',
+        'bg-white/70 dark:bg-white/10 text-ns hover:bg-white/90 dark:hover:bg-white/20 border border-black/10 dark:border-white/10 disabled:bg-black/5 disabled:text-ns-muted',
       ghost:
-        'bg-transparent text-titanium-700 hover:bg-titanium-100 focus-visible:ring-titanium-400 disabled:text-titanium-400',
+        'bg-transparent text-ns-muted hover:text-ns hover:bg-black/5 dark:hover:bg-white/10 border border-black/5 dark:border-white/10 disabled:text-ns-muted',
       danger:
-        'bg-action-error text-white hover:bg-red-600 focus-visible:ring-action-error disabled:bg-titanium-300 disabled:text-titanium-500',
+        'bg-action-error text-white hover:bg-action-error/90 border border-black/10 dark:border-white/10 disabled:bg-black/10 disabled:text-ns-muted',
       success:
-        'bg-action-success text-white hover:bg-green-600 focus-visible:ring-action-success disabled:bg-titanium-300 disabled:text-titanium-500',
+        'bg-action-success text-white hover:bg-action-success/90 border border-black/10 dark:border-white/10 disabled:bg-black/10 disabled:text-ns-muted',
     };
 
-    // Size styles (min-h-11 = 44px minimum touch target per WCAG 2.2 SC 2.5.8)
     const sizeStyles = {
       sm: 'px-3 py-1.5 text-sm gap-1.5 min-h-10',
       md: 'px-4 py-2 text-sm gap-2 min-h-11',
@@ -251,8 +232,6 @@ export const AnimatedButton = forwardRef<
       xl: 'px-8 py-4 text-lg gap-3 min-h-14',
     };
 
-    // Shadow styles - interpolated via spring.shadow value
-    // Shadow value ranges: 0.5 (pressed), 1.0 (rest), 1.3 (hover expanded)
     const getShadow = (shadowVal: number) => {
       if (shadowVal <= 0.75) {
         // Pressed state - minimal shadow
@@ -386,7 +365,6 @@ export const AnimatedIconButton = forwardRef<
       config,
     }));
 
-    // Hover handlers - anticipatory scale up and lift
     const handleMouseEnter = () => {
       if (prefersReducedMotion || disabled) return;
       setIsHovered(true);
@@ -410,7 +388,6 @@ export const AnimatedIconButton = forwardRef<
 
     const handleMouseUp = () => {
       if (prefersReducedMotion || disabled) return;
-      // Return to hover state if still hovered
       if (isHovered) {
         api.start({ scale: 1.1, lift: -1 });
       } else {
@@ -418,7 +395,6 @@ export const AnimatedIconButton = forwardRef<
       }
     };
 
-    // Size styles (min 40px touch target, md=44px per WCAG 2.2 SC 2.5.8)
     const sizeStyles = {
       sm: 'w-10 h-10',
       md: 'w-11 h-11',
@@ -427,11 +403,11 @@ export const AnimatedIconButton = forwardRef<
 
     const variantStyles = {
       primary:
-        'bg-action-indigo text-white hover:bg-action-indigoHover disabled:bg-titanium-300',
+        'bg-action-primary text-white hover:bg-action-primary/90 border border-black/10 dark:border-white/10 disabled:bg-black/10 disabled:text-ns-muted',
       secondary:
-        'bg-titanium-100 text-titanium-700 hover:bg-titanium-200 disabled:bg-titanium-100',
+        'bg-white/70 dark:bg-white/10 text-ns hover:bg-white/90 dark:hover:bg-white/20 border border-black/10 dark:border-white/10 disabled:bg-black/5 disabled:text-ns-muted',
       ghost:
-        'bg-transparent text-titanium-600 hover:bg-titanium-100 disabled:text-titanium-400',
+        'bg-transparent text-ns-muted hover:text-ns hover:bg-black/5 dark:hover:bg-white/10 border border-black/5 dark:border-white/10 disabled:text-ns-muted',
     };
 
     return (
@@ -439,7 +415,7 @@ export const AnimatedIconButton = forwardRef<
         ref={ref}
         disabled={disabled}
         className={cn(
-          'inline-flex items-center justify-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-titanium-400',
+          'inline-flex items-center justify-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-action-primary/50',
           sizeStyles[size],
           variantStyles[variant],
           disabled && 'cursor-not-allowed',

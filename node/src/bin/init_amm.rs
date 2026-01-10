@@ -45,10 +45,20 @@ async fn submit_transactions(
     let submission = Submission::Transactions(txs);
     let encoded = submission.encode().to_vec();
 
+    // Extract origin from URL for CORS
+    let origin = if url.contains("testnet.regenesis.dev") {
+        "https://testnet.regenesis.dev"
+    } else if url.contains("localhost") || url.contains("127.0.0.1") {
+        "http://localhost:5173"
+    } else {
+        "https://testnet.regenesis.dev"
+    };
+
     let resp = client
         .post(format!("{}/submit", url))
         .body(encoded)
         .header("Content-Type", "application/octet-stream")
+        .header("Origin", origin)
         .send()
         .await?;
 
@@ -66,8 +76,20 @@ async fn wait_for_block(client: &Client, url: &str) -> anyhow::Result<()> {
     // Wait for the transaction to be included in a block
     tokio::time::sleep(Duration::from_millis(500)).await;
 
+    // Extract origin from URL for CORS
+    let origin = if url.contains("testnet.regenesis.dev") {
+        "https://testnet.regenesis.dev"
+    } else if url.contains("localhost") || url.contains("127.0.0.1") {
+        "http://localhost:5173"
+    } else {
+        "https://testnet.regenesis.dev"
+    };
+
     // Verify health
-    let resp = client.get(format!("{}/healthz", url)).send().await?;
+    let resp = client.get(format!("{}/healthz", url))
+        .header("Origin", origin)
+        .send()
+        .await?;
     if !resp.status().is_success() {
         anyhow::bail!("Health check failed after transaction");
     }
@@ -85,7 +107,17 @@ async fn main() -> anyhow::Result<()> {
 
     // Check health first
     let health_url = format!("{}/healthz", args.url);
-    let resp = client.get(&health_url).send().await?;
+    let origin = if args.url.contains("testnet.regenesis.dev") {
+        "https://testnet.regenesis.dev"
+    } else if args.url.contains("localhost") || args.url.contains("127.0.0.1") {
+        "http://localhost:5173"
+    } else {
+        "https://testnet.regenesis.dev"
+    };
+    let resp = client.get(&health_url)
+        .header("Origin", origin)
+        .send()
+        .await?;
     if !resp.status().is_success() {
         anyhow::bail!("Health check failed: {}", resp.status());
     }

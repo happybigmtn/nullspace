@@ -12,7 +12,7 @@
  * - AUTH_ALLOWED_ORIGINS: Comma-separated list of allowed origins for auth service CORS
  * - METRICS_AUTH_TOKEN: Shared token for metrics endpoint authentication
  *
- * See docker-compose.cross-service.yml for default values used in testing.
+ * Defaults target the testnet deployment; override via env vars for local runs.
  */
 
 import { exec } from 'child_process';
@@ -26,35 +26,54 @@ export interface ServiceConfig {
   timeout: number;
 }
 
+// Default to fully local, hermetic endpoints so automation can run without
+// internet access or staging dependencies. CI overrides these when targeting
+// hosted environments.
+const DEFAULT_WEBSITE_URL =
+  process.env.TEST_ORIGIN ||
+  process.env.WEBSITE_URL ||
+  'http://127.0.0.1:5173';
+const DEFAULT_CONVEX_URL =
+  process.env.CONVEX_URL || 'http://127.0.0.1:3210';
+const DEFAULT_AUTH_URL =
+  process.env.AUTH_URL || 'http://127.0.0.1:4000';
+const DEFAULT_BACKEND_URL =
+  process.env.BACKEND_URL || 'http://127.0.0.1:8080';
+const DEFAULT_GATEWAY_HTTP_URL =
+  process.env.GATEWAY_HTTP_URL || 'http://127.0.0.1:9010';
+const DEFAULT_GATEWAY_WS_URL =
+  process.env.GATEWAY_WS_URL || 'ws://127.0.0.1:9010';
+
 export const DEFAULT_SERVICES: ServiceConfig[] = [
   {
     name: 'convex',
-    healthUrl: process.env.CONVEX_URL || 'http://localhost:3210',
+    healthUrl: DEFAULT_CONVEX_URL,
     timeout: 30000,
   },
   {
     name: 'auth',
-    healthUrl: process.env.AUTH_URL || 'http://localhost:4000',
+    healthUrl: DEFAULT_AUTH_URL,
     timeout: 30000,
   },
   {
     name: 'simulator',
-    healthUrl: process.env.BACKEND_URL || 'http://localhost:8080',
+    healthUrl: DEFAULT_BACKEND_URL,
     timeout: 60000,
   },
   {
     name: 'gateway',
-    healthUrl: process.env.GATEWAY_HTTP_URL || 'http://localhost:9010',
+    healthUrl: DEFAULT_GATEWAY_HTTP_URL,
     timeout: 30000,
   },
 ];
 
 export const SERVICE_URLS = {
-  convex: process.env.CONVEX_URL || 'http://localhost:3210',
-  auth: process.env.AUTH_URL || 'http://localhost:4000',
-  simulator: process.env.BACKEND_URL || 'http://localhost:8080',
-  gatewayHttp: process.env.GATEWAY_HTTP_URL || 'http://localhost:9010',
-  gatewayWs: process.env.GATEWAY_WS_URL || 'ws://localhost:9010',
+  website: DEFAULT_WEBSITE_URL,
+  convex: DEFAULT_CONVEX_URL,
+  auth: DEFAULT_AUTH_URL,
+  simulator: DEFAULT_BACKEND_URL,
+  gatewayHttp: DEFAULT_GATEWAY_HTTP_URL,
+  gatewayWs: DEFAULT_GATEWAY_WS_URL,
 };
 
 /**
@@ -66,8 +85,13 @@ export async function checkServiceHealth(
 ): Promise<boolean> {
   try {
     const fullUrl = url.endsWith('/') ? `${url}${path.slice(1)}` : `${url}${path}`;
+    const headers: Record<string, string> = {};
+    if (DEFAULT_WEBSITE_URL) {
+      headers['Origin'] = DEFAULT_WEBSITE_URL;
+    }
     const response = await fetch(fullUrl, {
       method: 'GET',
+      headers,
       signal: AbortSignal.timeout(5000),
     });
     return response.ok;

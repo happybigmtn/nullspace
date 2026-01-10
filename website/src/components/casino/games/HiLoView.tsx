@@ -5,6 +5,32 @@ import { Hand } from '../GameComponents';
 import { MobileDrawer } from '../MobileDrawer';
 import { GameControlBar } from '../GameControlBar';
 
+type HiLoTone = 'destructive' | 'primary' | 'success';
+
+/** Helper to get button class based on tone */
+function getHiLoToneClass(tone: HiLoTone): string {
+    switch (tone) {
+        case 'destructive':
+            return 'border-mono-400 text-mono-400 dark:text-mono-500 hover:bg-mono-400/10';
+        case 'success':
+            return 'border-mono-0 text-mono-0 dark:text-mono-1000 font-bold hover:bg-mono-0/10';
+        default:
+            return 'border-mono-0 text-mono-0 dark:text-mono-1000 hover:bg-mono-0/10';
+    }
+}
+
+/** Helper to get keycap class based on tone */
+function getHiLoKeycapClass(tone: HiLoTone): string {
+    switch (tone) {
+        case 'destructive':
+            return 'text-mono-400 dark:text-mono-500';
+        case 'success':
+            return 'text-mono-0 dark:text-mono-1000 font-bold';
+        default:
+            return 'text-mono-0 dark:text-mono-1000';
+    }
+}
+
 interface HiLoViewProps {
     gameState: GameState;
     actions?: {
@@ -31,7 +57,7 @@ export const HiLoView = React.memo<HiLoViewProps & { lastWin?: number; playMode?
     );
 
     const options = useMemo(() => {
-        const list: Array<{ id: 'LOWER' | 'SAME' | 'HIGHER'; label: string; key: string; multiplier: number; tone: 'destructive' | 'primary' | 'success' }> = [];
+        const list: Array<{ id: 'LOWER' | 'SAME' | 'HIGHER'; label: string; key: string; multiplier: number; tone: HiLoTone }> = [];
         if (showLower) list.push({ id: 'LOWER', label: 'LOWER', key: 'L', multiplier: lowerMultiplier, tone: 'destructive' });
         if (showSame) list.push({ id: 'SAME', label: 'SAME', key: 'S', multiplier: sameMultiplier, tone: 'primary' });
         if (showHigher) list.push({ id: 'HIGHER', label: 'HIGHER', key: 'H', multiplier: higherMultiplier, tone: 'success' });
@@ -41,15 +67,15 @@ export const HiLoView = React.memo<HiLoViewProps & { lastWin?: number; playMode?
     return (
         <>
             <div className="flex-1 w-full flex flex-col items-center justify-start sm:justify-center gap-4 sm:gap-6 md:gap-8 relative z-10 pt-8 sm:pt-10 pb-32">
-                <h1 className="absolute top-0 text-xl font-bold text-gray-500 tracking-widest uppercase zen-hide">HILO</h1>
+                <h1 className="absolute top-0 text-xl font-semibold text-ns-muted tracking-[0.35em] uppercase zen-hide">HILO</h1>
                 <div className="absolute top-2 left-2 z-40">
                     <MobileDrawer label="INFO" title="HILO">
                         <div className="space-y-3">
-                            <div className="text-[11px] text-gray-300 leading-relaxed">
+                            <div className="text-[11px] text-ns leading-relaxed">
                                 Guess whether the next card is higher or lower than the current card. Cash out anytime to
                                 lock in the pot.
                             </div>
-                            <div className="text-[10px] text-gray-600 leading-relaxed">
+                            <div className="text-[10px] text-ns-muted leading-relaxed">
                                 Multipliers shown are based on remaining winning ranks (A is low, K is high).
                             </div>
                         </div>
@@ -65,7 +91,7 @@ export const HiLoView = React.memo<HiLoViewProps & { lastWin?: number; playMode?
 
                 {/* Center Info */}
                 <div className="text-center space-y-3 relative z-20 zen-hide">
-                        <div className="text-lg sm:text-2xl font-bold text-mono-0 dark:text-mono-1000 tracking-widest leading-tight animate-pulse">
+                        <div className="text-lg sm:text-2xl font-bold text-ns tracking-tight leading-tight animate-pulse">
                             {gameState.message}
                         </div>
                 </div>
@@ -74,11 +100,11 @@ export const HiLoView = React.memo<HiLoViewProps & { lastWin?: number; playMode?
                 <div className="min-h-[96px] sm:min-h-[120px] flex gap-8 items-center justify-center">
                     {gameState.playerCards.length > 0 && (
                         <div className="flex flex-col gap-2 items-center">
-                            <span className="text-xs uppercase tracking-widest text-gray-500">CURRENT CARD</span>
+                            <span className="text-xs uppercase tracking-widest text-ns-muted">CURRENT CARD</span>
                             <div className="flex items-center gap-4">
                                 {/* LEFT PROJECTION */}
                                 <div className="text-right opacity-80 min-w-[56px]">
-                                    <div className="text-[10px] text-gray-500 uppercase tracking-wider font-mono">
+                                    <div className="text-[10px] text-ns-muted uppercase tracking-wider font-mono">
                                         {showLower ? 'LOWER' : showSame && !showHigher ? 'SAME' : '—'}
                                     </div>
                                     <div className="text-mono-0 dark:text-mono-1000 font-bold font-mono font-bold text-sm">
@@ -90,7 +116,7 @@ export const HiLoView = React.memo<HiLoViewProps & { lastWin?: number; playMode?
 
                                 {/* RIGHT PROJECTION */}
                                 <div className="text-left opacity-80 min-w-[56px]">
-                                    <div className="text-[10px] text-gray-500 uppercase tracking-wider font-mono">
+                                    <div className="text-[10px] text-ns-muted uppercase tracking-wider font-mono">
                                         {showHigher ? 'HIGHER' : showSame && !showLower ? 'SAME' : '—'}
                                     </div>
                                     <div className="text-mono-0 dark:text-mono-1000 font-bold font-mono font-bold text-sm">
@@ -100,7 +126,7 @@ export const HiLoView = React.memo<HiLoViewProps & { lastWin?: number; playMode?
                             </div>
                             {showSame && showLower && showHigher && (
                                 <div className="text-center opacity-80">
-                                    <div className="text-[10px] text-gray-500 uppercase tracking-wider font-mono">SAME</div>
+                                    <div className="text-[10px] text-ns-muted uppercase tracking-wider font-mono">SAME</div>
                                     <div className="text-mono-0 dark:text-mono-1000 font-mono font-bold text-sm">
                                         {formatMultiplier(sameMultiplier)}
                                     </div>
@@ -114,7 +140,7 @@ export const HiLoView = React.memo<HiLoViewProps & { lastWin?: number; playMode?
                 <div className="min-h-[48px] sm:min-h-[60px] flex items-center justify-center zen-hide">
                      {gameState.playerCards.length > 1 && (
                         <div className="flex flex-col items-center gap-2">
-                            <span className="text-[11px] uppercase tracking-widest text-gray-400">CARD HISTORY</span>
+                            <span className="text-[11px] uppercase tracking-widest text-ns-muted">CARD HISTORY</span>
                             <div className="flex gap-2 opacity-80 scale-90 origin-top">
                                 {gameState.playerCards.slice(0, -1).slice(-8).map((c, i) => (
                                     <Hand key={i} cards={[c]} />
@@ -152,31 +178,23 @@ export const HiLoView = React.memo<HiLoViewProps & { lastWin?: number; playMode?
                     <button
                         type="button"
                         onClick={actions?.hiloCashout}
-                        className="w-full h-12 rounded border-2 border-mono-0 bg-mono-0/10 text-mono-0 dark:text-mono-1000 font-mono font-bold tracking-widest uppercase hover:bg-mono-0/20 transition-all"
+                        className="w-full h-12 liquid-chip border-2 border-mono-0 bg-mono-0/10 text-mono-0 dark:text-mono-1000 font-mono font-bold tracking-widest uppercase hover:bg-mono-0/20 transition-all"
                     >
                         <span className="ns-keycap">C</span> CASHOUT · LOCK POT
                     </button>
                     <div className={`mt-2 grid ${options.length === 3 ? 'grid-cols-3' : 'grid-cols-2'} gap-2`}>
                         {options.map((option) => {
-                            const toneClass = option.tone === 'destructive'
-                                ? 'border-mono-400 text-mono-400 dark:text-mono-500 hover:bg-mono-400/10'
-                                : option.tone === 'success'
-                                    ? 'border-mono-0 text-mono-0 dark:text-mono-1000 font-bold hover:bg-mono-0/10'
-                                    : 'border-mono-0 text-mono-0 dark:text-mono-1000 hover:bg-mono-0/10';
-                            const keycapClass = option.tone === 'destructive'
-                                ? 'text-mono-400 dark:text-mono-500'
-                                : option.tone === 'success'
-                                    ? 'text-mono-0 dark:text-mono-1000 font-bold'
-                                    : 'text-mono-0 dark:text-mono-1000';
+                            const toneClass = getHiLoToneClass(option.tone);
+                            const keycapClass = getHiLoKeycapClass(option.tone);
 
                             return (
                                 <button
                                     key={option.id}
                                     type="button"
                                     onClick={() => actions?.hiloPlay?.(option.id)}
-                                    className={`h-16 rounded border-2 bg-black/50 transition-all flex flex-col items-center justify-center ${toneClass}`}
+                                    className={`h-16 liquid-chip border-2 transition-all flex flex-col items-center justify-center ${toneClass}`}
                                 >
-                                    <div className="text-[10px] text-gray-400 tracking-widest uppercase font-mono">
+                                    <div className="text-[10px] text-ns-muted tracking-widest uppercase font-mono">
                                         <span className={`ns-keycap font-bold ${keycapClass}`}>{option.key}</span> {option.label}
                                     </div>
                                     <div className={`font-mono font-bold text-sm ${keycapClass}`}>

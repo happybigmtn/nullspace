@@ -58,13 +58,13 @@ export const BigWinEffect: React.FC<BigWinEffectProps> = ({ amount, show, durati
                 <div className="flex flex-col items-center">
                     <span className="text-sm font-black text-mono-0 dark:text-mono-1000 tracking-[0.5em] uppercase mb-4">Grand Win</span>
                     <h2 
-                        className="text-9xl font-extrabold text-titanium-900 tracking-tighter leading-none mb-4"
+                        className="text-9xl font-extrabold text-ns tracking-tighter leading-none mb-4"
                         style={{ fontFamily: 'Outfit' }}
                     >
                         ${amount.toLocaleString()}
                     </h2>
                 </div>
-                <div className="bg-titanium-900 text-white rounded-full px-8 py-2 shadow-lg scale-110">
+                <div className="bg-mono-0 text-white rounded-full px-8 py-2 shadow-lg scale-110">
                     <span className="text-xs font-bold uppercase tracking-[0.3em]">Balance Credited</span>
                 </div>
             </div>

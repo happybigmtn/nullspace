@@ -86,6 +86,20 @@ jest.mock('../../../services/haptics', () => ({
 
 // Mock design tokens
 jest.mock('@nullspace/design-tokens', () => ({
+  // Minimal monochrome palette required by ResultReveal (US-262)
+  MONO: {
+    0: '#000000',
+    500: '#737373',
+    700: '#D4D4D4',
+    1000: '#FFFFFF',
+  },
+  // Animation stagger tokens used by downstream components
+  STAGGER: {
+    fast: 30,
+    normal: 50,
+    slow: 100,
+    dramatic: 150,
+  },
   ACTION: {
     success: '#34C759',
     error: '#FF3B30',

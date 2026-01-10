@@ -42,11 +42,11 @@ export default {
       fontFamily: {
         // Monochrome Redesign (US-260) - Updated font stack
         // Display: Syne for bold, geometric headlines
-        display: [`"${FONTS.display}"`, '"Inter"', '-apple-system', 'system-ui', 'sans-serif'],
+        display: [`"${FONTS.display}"`, '"Syne"', '"Space Grotesk"', 'sans-serif'],
         // Body: Space Grotesk for clean, modern UI text
-        sans: [`"${FONTS.body}"`, '"Inter"', '-apple-system', 'BlinkMacSystemFont', 'system-ui', 'sans-serif'],
+        sans: [`"${FONTS.body}"`, '"Space Grotesk"', '"Syne"', 'sans-serif'],
         // Mono: JetBrains Mono for tabular numbers and code
-        mono: [`"${FONTS.mono}"`, 'ui-monospace', 'SFMono-Regular', 'monospace'],
+        mono: [`"${FONTS.mono}"`, '"JetBrains Mono"', '"Space Mono"', 'monospace'],
       },
       fontSize: {
         // Monochrome Redesign - Strict 4-level hierarchy + micro

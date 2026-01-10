@@ -39,7 +39,7 @@ export const VideoPokerView = React.memo<VideoPokerViewProps & { lastWin?: numbe
         <div className="flex-1 w-full flex flex-col items-center justify-start sm:justify-center gap-12 relative pt-12 animate-scale-in">
             <div className="absolute top-4 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1">
                 <Label size="micro">Video Poker</Label>
-                <div className="h-1 w-8 bg-titanium-200 rounded-full" />
+                <div className="h-1 w-8 bg-ns-border rounded-full opacity-60" />
             </div>
 
             <div className="absolute top-2 left-2 z-40">
@@ -48,7 +48,7 @@ export const VideoPokerView = React.memo<VideoPokerViewProps & { lastWin?: numbe
                         <Label size="micro">Paytable</Label>
                         <div className="grid grid-cols-1 gap-1">
                             {VIDEO_POKER_PAYTABLE.slice(0, 5).map(row => (
-                                <div key={row.rank} className="flex justify-between text-[10px] font-bold text-titanium-800">
+                                <div key={row.rank} className="flex justify-between text-[10px] font-bold text-ns">
                                     <span>{row.rank}</span>
                                     <span className="text-mono-0 dark:text-mono-1000">{row.multiplier}x</span>
                                 </div>
@@ -60,7 +60,7 @@ export const VideoPokerView = React.memo<VideoPokerViewProps & { lastWin?: numbe
 
             {/* Center Info */}
             <div className="text-center space-y-4 relative z-20">
-                <h2 className="text-3xl sm:text-4xl font-extrabold text-titanium-900 tracking-tight font-display zen-hide">
+                <h2 className="text-3xl sm:text-4xl font-extrabold text-ns tracking-tight font-display zen-hide">
                     {gameState.message || 'Deal to Start'}
                 </h2>
                 {handLabel && gameState.stage !== 'BETTING' && (
@@ -68,7 +68,7 @@ export const VideoPokerView = React.memo<VideoPokerViewProps & { lastWin?: numbe
                         <div className={`px-4 py-1.5 rounded-full border-2 transition-all shadow-soft ${
                             handMultiplier > 0 
                                 ? 'border-mono-0 bg-mono-0/5 text-mono-0 dark:text-mono-1000 font-bold scale-110' 
-                                : 'border-titanium-200 bg-white text-titanium-400 opacity-60'
+                                : 'border-ns bg-ns-surface text-ns-muted opacity-70'
                         }`}>
                             <span className="text-xs font-black uppercase tracking-widest">
                                 {handLabel} {handMultiplier > 0 ? `· ${handMultiplier}x` : ''}
@@ -114,20 +114,20 @@ export const VideoPokerView = React.memo<VideoPokerViewProps & { lastWin?: numbe
 
 
             {/* Control Bar */}
-            <div className="ns-controlbar zen-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-titanium-50/95 backdrop-blur border-t border-titanium-200 z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
+            <div className="ns-controlbar zen-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 liquid-card rounded-none md:rounded-t-3xl backdrop-blur border-t border-ns z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
                 <div className="h-auto md:h-20 flex flex-col md:flex-row items-stretch md:items-center justify-center gap-2 p-2 md:px-4">
                     <PanelDrawer label="Paytable" title="VIDEO POKER PAYTABLE" className="hidden md:inline-flex">
                         <div className="space-y-2">
                             {VIDEO_POKER_PAYTABLE.map((row) => (
                                 <div
                                     key={row.rank}
-                                    className={`flex items-center justify-between p-3 rounded-2xl border transition-all ${
+                                    className={`flex items-center justify-between p-3 rounded-2xl transition-all liquid-panel ${
                                         highlightRank === row.rank
-                                            ? 'bg-mono-0/5 border-mono-0 shadow-soft'
-                                            : 'bg-white border-titanium-100'
+                                            ? 'border-mono-0 shadow-soft'
+                                            : 'border-ns'
                                     }`}
                                 >
-                                    <span className={`text-[10px] font-bold uppercase tracking-tight ${highlightRank === row.rank ? 'text-mono-0 dark:text-mono-1000 font-bold' : 'text-titanium-800'}`}>
+                                    <span className={`text-[10px] font-bold uppercase tracking-tight ${highlightRank === row.rank ? 'text-mono-0 dark:text-mono-1000 font-bold' : 'text-ns'}`}>
                                         {row.rank}
                                     </span>
                                     <span className={`text-xs font-black ${highlightRank === row.rank ? 'text-mono-0 dark:text-mono-1000 font-bold' : 'text-mono-0 dark:text-mono-1000'}`}>

@@ -11,16 +11,19 @@
 export function isValidAddressFormat(address: string): boolean {
   if (!address) return false;
 
-  // Remove 0x prefix if present
-  const cleaned = address.startsWith('0x') || address.startsWith('0X')
-    ? address.slice(2)
-    : address;
-
-  // Must be exactly 40 hex characters
+  const cleaned = stripPrefix(address);
   if (cleaned.length !== 40) return false;
-
-  // Must be valid hex
   return /^[0-9a-fA-F]{40}$/.test(cleaned);
+}
+
+/**
+ * Strip 0x/0X prefix from address if present
+ */
+function stripPrefix(address: string): string {
+  if (address.startsWith('0x') || address.startsWith('0X')) {
+    return address.slice(2);
+  }
+  return address;
 }
 
 /**
@@ -30,12 +33,7 @@ export function normalizeAddress(address: string): string {
   if (!isValidAddressFormat(address)) {
     throw new Error(`Invalid address format: ${address}`);
   }
-
-  const cleaned = address.startsWith('0x') || address.startsWith('0X')
-    ? address.slice(2)
-    : address;
-
-  return '0x' + cleaned.toLowerCase();
+  return '0x' + stripPrefix(address).toLowerCase();
 }
 
 /**
@@ -47,23 +45,13 @@ export function toChecksumAddress(address: string): string {
     throw new Error(`Invalid address format: ${address}`);
   }
 
-  // Normalize to lowercase without prefix
-  const cleaned = (address.startsWith('0x') || address.startsWith('0X')
-    ? address.slice(2)
-    : address
-  ).toLowerCase();
-
-  // Keccak256 hash of the lowercase address (as ASCII)
+  const cleaned = stripPrefix(address).toLowerCase();
   const hash = keccak256(cleaned);
 
   let checksummed = '0x';
   for (let i = 0; i < 40; i++) {
-    // If the i-th character of the hash is >= 8, uppercase the i-th character of the address
-    if (parseInt(hash[i], 16) >= 8) {
-      checksummed += cleaned[i].toUpperCase();
-    } else {
-      checksummed += cleaned[i];
-    }
+    const shouldUppercase = parseInt(hash[i], 16) >= 8;
+    checksummed += shouldUppercase ? cleaned[i].toUpperCase() : cleaned[i];
   }
 
   return checksummed;
@@ -75,16 +63,12 @@ export function toChecksumAddress(address: string): string {
 export function isValidChecksum(address: string): boolean {
   if (!isValidAddressFormat(address)) return false;
 
-  // If all lowercase or all uppercase, checksum doesn't apply
-  const cleaned = address.startsWith('0x') || address.startsWith('0X')
-    ? address.slice(2)
-    : address;
-
-  if (cleaned === cleaned.toLowerCase() || cleaned === cleaned.toUpperCase()) {
+  const cleaned = stripPrefix(address);
+  const isUniformCase = cleaned === cleaned.toLowerCase() || cleaned === cleaned.toUpperCase();
+  if (isUniformCase) {
     return true;
   }
 
-  // Mixed case - verify checksum
   try {
     return toChecksumAddress(address) === address;
   } catch {

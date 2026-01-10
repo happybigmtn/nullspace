@@ -69,36 +69,36 @@ export const LiquidityPanel: React.FC<LiquidityPanelProps> = ({
   };
 
   return (
-    <section className="border border-gray-800 rounded p-4 bg-gray-900/30 lg:col-span-2">
-      <div className="text-xs text-gray-400 tracking-widest mb-3">AMM (RNG/vUSDT)</div>
+    <section className="liquid-card p-5 lg:col-span-2">
+      <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase mb-3">AMM (RNG/vUSDT)</div>
 
       <div className="grid grid-cols-2 gap-3 text-sm">
-        <div className="border border-gray-800 rounded p-3 bg-black/30">
-          <div className="text-[10px] text-gray-500 tracking-widest">RESERVE RNG</div>
-          <div className="text-white mt-1">{amm?.reserveRng ?? 0}</div>
+        <div className="liquid-panel p-3">
+          <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase">Reserve RNG</div>
+          <div className="text-ns mt-1">{amm?.reserveRng ?? 0}</div>
         </div>
-        <div className="border border-gray-800 rounded p-3 bg-black/30">
-          <div className="text-[10px] text-gray-500 tracking-widest">RESERVE vUSDT</div>
-          <div className="text-white mt-1">{amm?.reserveVusdt ?? 0}</div>
+        <div className="liquid-panel p-3">
+          <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase">Reserve vUSDT</div>
+          <div className="text-ns mt-1">{amm?.reserveVusdt ?? 0}</div>
         </div>
-        <div className="border border-gray-800 rounded p-3 bg-black/30">
-          <div className="text-[10px] text-gray-500 tracking-widest">PRICE</div>
-          <div className="text-white mt-1">{ammDerived.price === null ? '—' : ammDerived.price.toFixed(6)}</div>
-          <div className="text-[10px] text-gray-600">vUSDT per RNG</div>
+        <div className="liquid-panel p-3">
+          <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase">Price</div>
+          <div className="text-ns mt-1">{ammDerived.price === null ? '—' : ammDerived.price.toFixed(6)}</div>
+          <div className="text-[10px] text-ns-muted">vUSDT per RNG</div>
         </div>
-        <div className="border border-gray-800 rounded p-3 bg-black/30">
-          <div className="text-[10px] text-gray-500 tracking-widest">TVL</div>
-          <div className="text-white mt-1">{ammDerived.tvlVusdt.toString()}</div>
-          <div className="text-[10px] text-gray-600">~vUSDT</div>
+        <div className="liquid-panel p-3">
+          <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase">TVL</div>
+          <div className="text-ns mt-1">{ammDerived.tvlVusdt.toString()}</div>
+          <div className="text-[10px] text-ns-muted">~vUSDT</div>
         </div>
       </div>
 
-      <div className="mt-4 border-t border-gray-800 pt-4 space-y-3">
-        <div className="text-[10px] text-gray-500 tracking-widest">LIQUIDITY</div>
-        <div className="text-[10px] text-gray-600">
-          LP shares: <span className="text-white">{lpBalance?.balance ?? 0}</span>
+      <div className="mt-4 border-t border-black/10 dark:border-white/10 pt-4 space-y-3">
+        <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase">Liquidity</div>
+        <div className="text-[10px] text-ns-muted">
+          LP shares: <span className="text-ns">{lpBalance?.balance ?? 0}</span>
         </div>
-        <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-gray-600 tracking-widest uppercase">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-ns-muted tracking-[0.28em] uppercase">
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <input
               type="checkbox"
@@ -109,11 +109,11 @@ export const LiquidityPanel: React.FC<LiquidityPanelProps> = ({
             />
             Auto-match ratio
           </label>
-          <div className="text-gray-500 normal-case tracking-normal">{ratioHint}</div>
+          <div className="text-ns-muted normal-case tracking-normal">{ratioHint}</div>
         </div>
         <div className="grid grid-cols-2 gap-2">
           <input
-            className="bg-gray-950 border border-gray-800 rounded px-2 py-1 text-xs"
+            className="liquid-input px-3 py-2 text-xs"
             value={addLiqRng}
             onChange={(e) => {
               setLastEdited('RNG');
@@ -126,7 +126,7 @@ export const LiquidityPanel: React.FC<LiquidityPanelProps> = ({
             pattern="[0-9]*"
           />
           <input
-            className="bg-gray-950 border border-gray-800 rounded px-2 py-1 text-xs"
+            className="liquid-input px-3 py-2 text-xs"
             value={addLiqVusdt}
             onChange={(e) => {
               setLastEdited('vUSDT');
@@ -140,7 +140,7 @@ export const LiquidityPanel: React.FC<LiquidityPanelProps> = ({
           />
         </div>
         <button
-          className="w-full text-xs px-3 py-2 rounded border border-action-success text-action-success hover:bg-action-success/10"
+          className="w-full text-xs px-3 py-2 rounded-full liquid-chip text-action-success hover:shadow-soft"
           onClick={onAddLiquidity}
         >
           Add Liquidity
@@ -148,7 +148,7 @@ export const LiquidityPanel: React.FC<LiquidityPanelProps> = ({
 
         <div className="flex items-center gap-2">
           <input
-            className="flex-1 bg-gray-950 border border-gray-800 rounded px-2 py-1 text-xs"
+            className="flex-1 liquid-input px-3 py-2 text-xs"
             value={removeLiqShares}
             onChange={(e) => setRemoveLiqShares(e.target.value)}
             placeholder="Shares"
@@ -156,7 +156,7 @@ export const LiquidityPanel: React.FC<LiquidityPanelProps> = ({
             pattern="[0-9]*"
           />
           <button
-            className="text-xs px-3 py-1 rounded border border-gray-700 text-gray-300 hover:border-gray-500"
+            className="text-xs px-3 py-2 rounded-full liquid-chip text-ns hover:shadow-soft"
             onClick={onRemoveLiquidity}
           >
             Remove

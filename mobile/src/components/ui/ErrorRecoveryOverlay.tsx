@@ -22,17 +22,14 @@
  * ```
  */
 import React, { useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
   withSpring,
   withSequence,
-  runOnJS,
   Easing,
-  interpolate,
-  Extrapolation,
 } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
 import { COLORS, SPACING, TYPOGRAPHY, RADIUS } from '../../constants/theme';
@@ -82,8 +79,6 @@ interface ErrorIconProps {
 }
 
 function ErrorIcon({ type, size = 24, color = COLORS.textPrimary }: ErrorIconProps) {
-  const strokeWidth = 2;
-
   switch (type) {
     case 'network':
       // WiFi icon with X

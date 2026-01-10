@@ -327,25 +327,25 @@ export default function LegacyStakingApp() {
   };
 
   return (
-    <div className="min-h-screen bg-titanium-900 text-white font-mono p-4">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-800 pb-3 mb-4">
+    <div className="min-h-screen liquid-shell text-ns font-sans p-6">
+      <header className="liquid-card px-4 py-3 flex flex-wrap items-center justify-between gap-3 mb-4">
         <div className="flex items-center gap-3 flex-wrap">
           <PlaySwapStakeTabs />
           <div className="text-lg font-bold tracking-widest">Staking</div>
-          <div className="text-[10px] text-gray-500 tracking-widest">{status}</div>
+          <div className="text-[10px] text-ns-muted tracking-widest">{status}</div>
         </div>
         <div className="flex flex-wrap items-center gap-2 justify-end">
           <AuthStatusPill publicKeyHex={publicKeyHexRef.current} className="w-full sm:w-auto" />
           {lastTxSig ? (
-            <div className="text-[10px] text-gray-500 tracking-widest">LAST TX: {lastTxSig}</div>
+            <div className="text-[10px] text-ns-muted tracking-widest">LAST TX: {lastTxSig}</div>
           ) : null}
         </div>
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Wallet */}
-        <section className="border border-gray-800 rounded p-4 bg-gray-900/30">
-          <div className="text-xs text-gray-400 tracking-widest mb-3">WALLET</div>
+        <section className="liquid-card p-4">
+          <div className="text-xs text-ns-muted tracking-widest mb-3">WALLET</div>
           <div className="space-y-2 text-sm">
             <div>
               Registered:{' '}
@@ -354,31 +354,31 @@ export default function LegacyStakingApp() {
               </span>
             </div>
             <div>
-              RNG: <span className="text-white">{player?.chips ?? 0}</span>
+              RNG: <span className="text-ns">{player?.chips ?? 0}</span>
             </div>
             <div>
-              vUSDT: <span className="text-white">{player?.vusdtBalance ?? 0}</span>
+              vUSDT: <span className="text-ns">{player?.vusdtBalance ?? 0}</span>
             </div>
-            <div className="text-[10px] text-gray-600 break-all">PK: {publicKeyHexRef.current ?? '—'}</div>
+            <div className="text-[10px] text-ns-muted break-all">PK: {publicKeyHexRef.current ?? '—'}</div>
           </div>
 
           <div className="mt-4 space-y-2">
             <div className="flex items-center gap-2">
               <input
-                className="flex-1 bg-gray-950 border border-gray-800 rounded px-2 py-1 text-xs"
+                className="flex-1 liquid-input px-3 py-2 text-xs"
                 value={registerName}
                 onChange={(e) => setRegisterName(e.target.value)}
                 placeholder="Name"
               />
               <button
-                className="text-xs px-3 py-1 rounded border border-action-success text-action-success hover:bg-action-success/10"
+                className="liquid-chip text-xs px-3 py-1 border-action-success text-action-success hover:bg-action-success/10"
                 onClick={ensureRegistered}
               >
                 Register
               </button>
             </div>
             <button
-              className="w-full text-xs px-3 py-2 rounded border border-action-success text-action-success hover:bg-action-success/10"
+              className="w-full liquid-chip text-xs px-3 py-2 border-action-success text-action-success hover:bg-action-success/10"
               onClick={claimFaucet}
             >
               Daily Faucet (1000 RNG)
@@ -387,23 +387,23 @@ export default function LegacyStakingApp() {
         </section>
 
         {/* Stake */}
-        <section className="border border-gray-800 rounded p-4 bg-gray-900/30">
-          <div className="text-xs text-gray-400 tracking-widest mb-3">STAKE RNG</div>
+        <section className="liquid-card p-4">
+          <div className="text-xs text-ns-muted tracking-widest mb-3">STAKE RNG</div>
 
             <div className="grid grid-cols-2 gap-3 text-sm">
-              <div className="border border-gray-800 rounded p-3 bg-black/30">
-                <div className="text-[10px] text-gray-500 tracking-widest">YOUR STAKE</div>
-                <div className="text-white mt-1">{staker?.balance ?? 0}</div>
-                <div className="text-[10px] text-gray-600">unlock @ {derived.unlockTs || '—'}</div>
-                <div className="text-[10px] text-gray-600">
+              <div className="liquid-panel p-3">
+                <div className="text-[10px] text-ns-muted tracking-widest">YOUR STAKE</div>
+                <div className="text-ns mt-1">{staker?.balance ?? 0}</div>
+                <div className="text-[10px] text-ns-muted">unlock @ {derived.unlockTs || '—'}</div>
+                <div className="text-[10px] text-ns-muted">
                   unclaimed {derived.unclaimedRewards.toString()}
                 </div>
               </div>
-              <div className="border border-gray-800 rounded p-3 bg-black/30">
-                <div className="text-[10px] text-gray-500 tracking-widest">VOTING POWER</div>
-                <div className="text-white mt-1">{derived.vp.toString()}</div>
-                <div className="text-[10px] text-gray-600">share ~ {(derived.shareBps / 100).toFixed(2)}%</div>
-                <div className="text-[10px] text-gray-600">
+              <div className="liquid-panel p-3">
+                <div className="text-[10px] text-ns-muted tracking-widest">VOTING POWER</div>
+                <div className="text-ns mt-1">{derived.vp.toString()}</div>
+                <div className="text-[10px] text-ns-muted">share ~ {(derived.shareBps / 100).toFixed(2)}%</div>
+                <div className="text-[10px] text-ns-muted">
                   claimable {derived.claimableRewards.toString()}
                 </div>
               </div>
@@ -412,13 +412,13 @@ export default function LegacyStakingApp() {
           <div className="mt-4 space-y-2">
             <div className="grid grid-cols-2 gap-2">
               <input
-                className="bg-gray-950 border border-gray-800 rounded px-2 py-1 text-xs"
+                className="liquid-input px-3 py-2 text-xs"
                 value={stakeAmount}
                 onChange={(e) => setStakeAmount(e.target.value)}
                 placeholder="Amount (RNG)"
               />
               <input
-                className="bg-gray-950 border border-gray-800 rounded px-2 py-1 text-xs"
+                className="liquid-input px-3 py-2 text-xs"
                 value={stakeDuration}
                 onChange={(e) => setStakeDuration(e.target.value)}
                 placeholder="Duration (blocks)"
@@ -426,16 +426,16 @@ export default function LegacyStakingApp() {
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <button
-                className="flex-1 text-xs px-3 py-2 rounded border border-action-success text-action-success hover:bg-action-success/10"
+                className="flex-1 liquid-chip text-xs px-3 py-2 border-action-success text-action-success hover:bg-action-success/10"
                 onClick={stake}
               >
                 Stake
               </button>
               <button
-                className={`text-xs px-3 py-2 rounded border ${
+                className={`liquid-chip text-xs px-3 py-2 ${
                   derived.locked
-                    ? 'border-gray-800 text-gray-600 cursor-not-allowed'
-                    : 'border-gray-700 text-gray-300 hover:border-gray-500'
+                    ? 'border-ns-border/60 text-ns-muted cursor-not-allowed'
+                    : 'border-ns-border/80 text-ns hover:border-ns-border'
                 }`}
                 onClick={unstake}
                 disabled={derived.locked}
@@ -444,10 +444,10 @@ export default function LegacyStakingApp() {
                 Unstake
               </button>
               <button
-                className={`text-xs px-3 py-2 rounded border ${
+                className={`liquid-chip text-xs px-3 py-2 ${
                   derived.claimableRewards === 0n
-                    ? 'border-gray-800 text-gray-600 cursor-not-allowed'
-                    : 'border-gray-700 text-gray-300 hover:border-gray-500'
+                    ? 'border-ns-border/60 text-ns-muted cursor-not-allowed'
+                    : 'border-ns-border/80 text-ns hover:border-ns-border'
                 }`}
                 onClick={claimRewards}
                 disabled={derived.claimableRewards === 0n}
@@ -458,12 +458,12 @@ export default function LegacyStakingApp() {
             </div>
 
             {derived.locked && (
-              <div className="text-[10px] text-gray-500">
+              <div className="text-[10px] text-ns-muted">
                 Locked: {derived.remainingBlocks} blocks ({formatApproxTimeFromBlocks(derived.remainingBlocks)})
               </div>
             )}
 
-            <div className="text-[10px] text-gray-600 leading-relaxed">
+            <div className="text-[10px] text-ns-muted leading-relaxed">
               Rewards are funded from positive epoch net PnL and distributed pro-rata by voting power (amount * duration).
               Call “Process Epoch” after ~100 blocks to roll the epoch and update the reward pool.
             </div>
@@ -471,59 +471,59 @@ export default function LegacyStakingApp() {
         </section>
 
         {/* House */}
-        <section className="border border-gray-800 rounded p-4 bg-gray-900/30">
-          <div className="text-xs text-gray-400 tracking-widest mb-3">HOUSE / REWARDS</div>
+        <section className="liquid-card p-4">
+          <div className="text-xs text-ns-muted tracking-widest mb-3">HOUSE / REWARDS</div>
           <div className="space-y-2 text-sm">
             <div className="flex items-center justify-between">
-              <span className="text-gray-500">Epoch</span>
-              <span className="text-white">{house?.currentEpoch ?? 0}</span>
+              <span className="text-ns-muted">Epoch</span>
+              <span className="text-ns">{house?.currentEpoch ?? 0}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-gray-500">Net PnL</span>
-              <span className="text-white">{house?.netPnl ?? '0'}</span>
+              <span className="text-ns-muted">Net PnL</span>
+              <span className="text-ns">{house?.netPnl ?? '0'}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-gray-500">Total Staked</span>
-              <span className="text-white">{house?.totalStakedAmount ?? 0}</span>
+              <span className="text-ns-muted">Total Staked</span>
+              <span className="text-ns">{house?.totalStakedAmount ?? 0}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-gray-500">Total Voting Power</span>
-              <span className="text-white">{house?.totalVotingPower ?? '0'}</span>
+              <span className="text-ns-muted">Total Voting Power</span>
+              <span className="text-ns">{house?.totalVotingPower ?? '0'}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-gray-500">AMM Fees</span>
-              <span className="text-white">{house?.accumulatedFees ?? 0}</span>
+              <span className="text-ns-muted">AMM Fees</span>
+              <span className="text-ns">{house?.accumulatedFees ?? 0}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-gray-500">Total Burned</span>
-              <span className="text-white">{house?.totalBurned ?? 0}</span>
+              <span className="text-ns-muted">Total Burned</span>
+              <span className="text-ns">{house?.totalBurned ?? 0}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-gray-500">Total Issuance</span>
-              <span className="text-white">{house?.totalIssuance ?? 0}</span>
+              <span className="text-ns-muted">Total Issuance</span>
+              <span className="text-ns">{house?.totalIssuance ?? 0}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-gray-500">Reward Pool</span>
-              <span className="text-white">{derived.rewardPool.toString()}</span>
+              <span className="text-ns-muted">Reward Pool</span>
+              <span className="text-ns">{derived.rewardPool.toString()}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-gray-500">Reward Carry</span>
-              <span className="text-white">{house?.stakingRewardCarry ?? 0}</span>
+              <span className="text-ns-muted">Reward Carry</span>
+              <span className="text-ns">{house?.stakingRewardCarry ?? 0}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-gray-500">View</span>
-              <span className="text-white">{currentView ?? '—'}</span>
+              <span className="text-ns-muted">View</span>
+              <span className="text-ns">{currentView ?? '—'}</span>
             </div>
           </div>
 
-          <div className="mt-4 border-t border-gray-800 pt-4 space-y-2">
+          <div className="mt-4 border-t border-ns-border/60 pt-4 space-y-2">
             <button
-              className="w-full text-xs px-3 py-2 rounded border border-gray-700 text-gray-300 hover:border-gray-500"
+              className="w-full liquid-chip text-xs px-3 py-2 border-ns-border/80 text-ns hover:border-ns-border"
               onClick={processEpoch}
             >
               Process Epoch (dev)
             </button>
-            <div className="text-[10px] text-gray-600">
+            <div className="text-[10px] text-ns-muted">
               Anyone can call this in dev; later it’s a keeper/admin action.
             </div>
           </div>
@@ -531,16 +531,16 @@ export default function LegacyStakingApp() {
       </div>
 
       {/* Activity */}
-      <section className="mt-4 border border-gray-800 rounded p-4 bg-gray-900/20">
-        <div className="text-xs text-gray-400 tracking-widest mb-3">ACTIVITY</div>
+      <section className="mt-4 liquid-card p-4">
+        <div className="text-xs text-ns-muted tracking-widest mb-3">ACTIVITY</div>
         {activity.length === 0 ? (
-          <div className="text-[10px] text-gray-600">No activity yet.</div>
+          <div className="text-[10px] text-ns-muted">No activity yet.</div>
         ) : (
-          <ul className="space-y-1 text-[10px] text-gray-400">
+          <ul className="space-y-1 text-[10px] text-ns-muted">
             {activity.map((a) => (
               <li key={a.ts} className="flex items-start gap-2">
-                <span className="text-gray-600">{new Date(a.ts).toLocaleTimeString()}</span>
-                <span className="text-gray-300">{a.message}</span>
+                <span className="text-ns-muted">{new Date(a.ts).toLocaleTimeString()}</span>
+                <span className="text-ns">{a.message}</span>
               </li>
             ))}
           </ul>

@@ -29,34 +29,31 @@ import {
   decodeGlobalTableRoundLookup,
 } from '../codec/index.js';
 import type { GlobalTableBet } from '../codec/events.js';
+import { logInfo, logWarn } from '../logger.js';
 
-const isTruthy = (value: string | undefined): boolean => {
+function isTruthy(value: string | undefined): boolean {
   if (!value) return false;
   return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase());
-};
+}
 
-const readMs = (key: string, fallback: number): number => {
-  const raw = process.env[key];
-  const parsed = raw ? Number(raw) : NaN;
+function readMs(key: string, fallback: number): number {
+  const parsed = Number(process.env[key]);
   return Number.isFinite(parsed) ? parsed : fallback;
-};
+}
 
-const readInt = (key: string, fallback: number): number => {
-  const raw = process.env[key];
-  const parsed = raw ? Number.parseInt(raw, 10) : NaN;
+function readInt(key: string, fallback: number): number {
+  const parsed = Number.parseInt(process.env[key] ?? '', 10);
   return Number.isFinite(parsed) ? parsed : fallback;
-};
+}
 
-const readFloat = (key: string, fallback: number): number => {
-  const raw = process.env[key];
-  const parsed = raw ? Number.parseFloat(raw) : NaN;
+function readFloat(key: string, fallback: number): number {
+  const parsed = Number.parseFloat(process.env[key] ?? '');
   return Number.isFinite(parsed) ? parsed : fallback;
-};
+}
 
-const readString = (key: string): string | null => {
-  const raw = process.env[key]?.trim();
-  return raw ? raw : null;
-};
+function readString(key: string): string | null {
+  return process.env[key]?.trim() || null;
+}
 
 const NODE_ENV = process.env.NODE_ENV ?? 'development';
 const IS_PROD = NODE_ENV === 'production';
@@ -71,6 +68,9 @@ const ADMIN_KEY_ENV_RAW = (process.env.GATEWAY_LIVE_TABLE_ADMIN_KEY
   ?? '').trim();
 const ADMIN_KEY_AVAILABLE = Boolean(ADMIN_KEY_FILE) || (ALLOW_ADMIN_KEY_ENV && Boolean(ADMIN_KEY_ENV_RAW));
 const ENABLED = ENABLED_REQUESTED && (!IS_PROD || ADMIN_KEY_AVAILABLE);
+
+const formatBets = (bets: GlobalTableBet[]): string[] =>
+  bets.map((bet) => `${bet.betType}:${bet.target}:${bet.amount.toString()}`);
 
 if (IS_PROD && ENABLED_REQUESTED && !ADMIN_KEY_AVAILABLE) {
   console.warn(
@@ -149,74 +149,55 @@ interface StoredBet {
 
 type LiveTablePhase = 'betting' | 'locked' | 'rolling' | 'payout' | 'cooldown';
 
-const betTypeToView = (
-  betType: number,
-  target: number
-): { type: string; target?: number } => {
-  switch (betType) {
-    case 0:
-      return { type: 'PASS' };
-    case 1:
-      return { type: 'DONT_PASS' };
-    case 2:
-      return { type: 'COME' };
-    case 3:
-      return { type: 'DONT_COME' };
-    case 4:
-      return { type: 'FIELD' };
-    case 5:
-      return { type: 'YES', target };
-    case 6:
-      return { type: 'NO', target };
-    case 7:
-      return { type: 'NEXT', target };
-    case 8:
-      return { type: 'HARDWAY', target: 4 };
-    case 9:
-      return { type: 'HARDWAY', target: 6 };
-    case 10:
-      return { type: 'HARDWAY', target: 8 };
-    case 11:
-      return { type: 'HARDWAY', target: 10 };
-    case 12:
-      return { type: 'FIRE' };
-    case 15:
-      return { type: 'ATS_SMALL' };
-    case 16:
-      return { type: 'ATS_TALL' };
-    case 17:
-      return { type: 'ATS_ALL' };
-    case 18:
-      return { type: 'MUGGSY' };
-    case 19:
-      return { type: 'DIFF_DOUBLES' };
-    case 20:
-      return { type: 'RIDE_LINE' };
-    case 21:
-      return { type: 'REPLAY' };
-    case 22:
-      return { type: 'HOT_ROLLER' };
-    default:
-      return { type: `BET_${betType}` };
-  }
+const BET_TYPE_NAMES: Record<number, string> = {
+  0: 'PASS',
+  1: 'DONT_PASS',
+  2: 'COME',
+  3: 'DONT_COME',
+  4: 'FIELD',
+  5: 'YES',
+  6: 'NO',
+  7: 'NEXT',
+  12: 'FIRE',
+  15: 'ATS_SMALL',
+  16: 'ATS_TALL',
+  17: 'ATS_ALL',
+  18: 'MUGGSY',
+  19: 'DIFF_DOUBLES',
+  20: 'RIDE_LINE',
+  21: 'REPLAY',
+  22: 'HOT_ROLLER',
 };
 
-const mapPhase = (phase: number): LiveTablePhase => {
-  switch (phase) {
-    case 0:
-      return 'betting';
-    case 1:
-      return 'locked';
-    case 2:
-      return 'rolling';
-    case 3:
-      return 'payout';
-    case 4:
-      return 'cooldown';
-    default:
-      return 'betting';
-  }
+const HARDWAY_BET_TYPE_TO_TARGET: Record<number, number> = {
+  8: 4,
+  9: 6,
+  10: 8,
+  11: 10,
 };
+
+function betTypeToView(
+  betType: number,
+  target: number
+): { type: string; target?: number } {
+  if (betType >= 8 && betType <= 11) {
+    return { type: 'HARDWAY', target: HARDWAY_BET_TYPE_TO_TARGET[betType] };
+  }
+
+  const name = BET_TYPE_NAMES[betType];
+  if (!name) {
+    return { type: `BET_${betType}` };
+  }
+
+  const hasTarget = betType >= 5 && betType <= 7;
+  return hasTarget ? { type: name, target } : { type: name };
+}
+
+const PHASE_MAP: LiveTablePhase[] = ['betting', 'locked', 'rolling', 'payout', 'cooldown'];
+
+function mapPhase(phase: number): LiveTablePhase {
+  return PHASE_MAP[phase] ?? 'betting';
+}
 
 const parseHexKey = (raw?: string): Uint8Array | null => {
   if (!raw) return null;
@@ -716,18 +697,39 @@ export class OnchainCrapsTable {
   private handleGlobalTableEvent = (event: GlobalTableEvent): void => {
     switch (event.type) {
       case 'round_opened': {
+        logInfo('[GlobalTable] Round opened', {
+          gameType: event.round.gameType,
+          roundId: event.round.roundId.toString(),
+          phase: event.round.phase,
+          phaseEndsAtMs: event.round.phaseEndsAtMs.toString(),
+          mainPoint: event.round.mainPoint,
+          totals: event.round.totals.length,
+        });
         this.applyRoundUpdate(event.round);
         this.botQueue = this.bots.map((bot) => bot.publicKeyHex);
         this.requestBroadcast(true);
         break;
       }
       case 'locked': {
+        logInfo('[GlobalTable] Round locked', {
+          gameType: event.gameType,
+          roundId: event.roundId.toString(),
+          phaseEndsAtMs: event.phaseEndsAtMs.toString(),
+        });
         this.roundId = event.roundId;
         this.setPhase('locked', CONFIG.lockMs);
         this.requestBroadcast(true);
         break;
       }
       case 'outcome': {
+        logInfo('[GlobalTable] Round outcome', {
+          gameType: event.round.gameType,
+          roundId: event.round.roundId.toString(),
+          d1: event.round.d1,
+          d2: event.round.d2,
+          mainPoint: event.round.mainPoint,
+          madePointsMask: event.round.madePointsMask,
+        });
         this.applyRoundUpdate(event.round);
         this.pendingSettlements = new Set(this.activePlayers);
         this.settleInFlight.clear();
@@ -735,6 +737,10 @@ export class OnchainCrapsTable {
         break;
       }
       case 'finalized': {
+        logInfo('[GlobalTable] Round finalized', {
+          gameType: event.gameType,
+          roundId: event.roundId.toString(),
+        });
         this.roundId = event.roundId;
         this.setPhase('cooldown', CONFIG.cooldownMs);
         this.requestBroadcast(true);
@@ -742,6 +748,18 @@ export class OnchainCrapsTable {
       }
       case 'bet_accepted': {
         const playerHex = Buffer.from(event.player).toString('hex');
+        logInfo('[GlobalTable] Bet accepted', {
+          player: playerHex,
+          roundId: event.roundId.toString(),
+          bets: formatBets(event.bets),
+          balanceSnapshot: event.balanceSnapshot
+            ? {
+                chips: event.balanceSnapshot.chips.toString(),
+                vusdt: event.balanceSnapshot.vusdt.toString(),
+                rng: event.balanceSnapshot.rng.toString(),
+              }
+            : undefined,
+        });
         if (this.roundId !== event.roundId) {
           this.roundId = event.roundId;
           if (this.phase !== 'betting') {
@@ -768,6 +786,12 @@ export class OnchainCrapsTable {
       }
       case 'bet_rejected': {
         const playerHex = Buffer.from(event.player).toString('hex');
+        logWarn('[GlobalTable] Bet rejected', {
+          player: playerHex,
+          roundId: event.roundId.toString(),
+          errorCode: event.errorCode,
+          message: event.message,
+        });
         this.sendConfirmation(
           playerHex,
           'failed',
@@ -777,6 +801,19 @@ export class OnchainCrapsTable {
       }
       case 'player_settled': {
         const playerHex = Buffer.from(event.player).toString('hex');
+        logInfo('[GlobalTable] Player settled', {
+          player: playerHex,
+          roundId: event.roundId.toString(),
+          payout: event.payout.toString(),
+          bets: formatBets(event.myBets),
+          balanceSnapshot: event.balanceSnapshot
+            ? {
+                chips: event.balanceSnapshot.chips.toString(),
+                vusdt: event.balanceSnapshot.vusdt.toString(),
+                rng: event.balanceSnapshot.rng.toString(),
+              }
+            : undefined,
+        });
         const before = this.playerBets.get(playerHex) ?? new Map<string, StoredBet>();
         const after = this.buildBetMap(event.myBets);
         this.playerBets.set(playerHex, after);
@@ -1295,7 +1332,9 @@ export class OnchainCrapsTable {
     if (!this.deps) return false;
     const { submitClient, nonceManager, backendUrl } = this.deps;
 
-    return nonceManager.withLock(signer.publicKeyHex, async (nonce) => {
+    return nonceManager.withLock(signer.publicKeyHex, async () => {
+      await nonceManager.maybeSync(signer.publicKeyHex, backendUrl);
+      const nonce = nonceManager.getCurrentNonce(signer.publicKeyHex);
       const tx = buildTransaction(nonce, instruction, signer.privateKey);
       const submission = wrapSubmission(tx);
       const result = await submitClient.submit(submission);

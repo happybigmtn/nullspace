@@ -17,9 +17,9 @@ export const CardRender: React.FC<{ card: Card; small?: boolean; forcedColor?: s
       <div
         className={`${
           small ? 'w-9 h-[3.25rem] sm:w-10 sm:h-14 md:w-11 md:h-[4rem]' : 'w-12 h-[4.5rem] sm:w-14 sm:h-20 md:w-16 md:h-24'
-        } bg-titanium-200 border border-gray-600 rounded flex items-center justify-center`}
+        } liquid-panel flex items-center justify-center`}
       >
-        <span className="text-gray-500 opacity-50 text-xs">?</span>
+        <span className="text-ns-muted opacity-60 text-xs">?</span>
       </div>
     );
   }
@@ -67,7 +67,7 @@ export const CardRender: React.FC<{ card: Card; small?: boolean; forcedColor?: s
 
 export const Hand: React.FC<{ cards: Card[]; title?: string; forcedColor?: string }> = ({ cards, title, forcedColor }) => (
   <div className="flex flex-col gap-2 items-center">
-    {title && <span className={`text-xs uppercase tracking-widest ${forcedColor ? forcedColor : 'text-gray-500'}`}>{title}</span>}
+    {title && <span className={`text-xs uppercase tracking-widest ${forcedColor ? forcedColor : 'text-ns-muted'}`}>{title}</span>}
     <div className="flex flex-wrap justify-center gap-2">
       {cards.map((c, i) => (
         <CardRender
@@ -81,7 +81,7 @@ export const Hand: React.FC<{ cards: Card[]; title?: string; forcedColor?: strin
       {cards.length === 0 && (
         <div
           className={`w-14 h-20 border border-dashed rounded-lg opacity-30 ${
-            forcedColor ? `border-${forcedColor.replace('text-', '')}` : 'border-gray-500'
+            forcedColor ? `border-${forcedColor.replace('text-', '')}` : 'border-ns-border/60'
           }`}
         />
       )}
@@ -425,7 +425,7 @@ export const DiceThrow2D: React.FC<{
 
   return (
     <div className={`flex flex-col items-center ${className ?? ''}`}>
-      {label && <span className="text-xs uppercase tracking-widest text-gray-500 mb-2">{label}</span>}
+      {label && <span className="text-xs uppercase tracking-widest text-ns-muted mb-2">{label}</span>}
       <div
         ref={containerRef}
         className={`relative w-full ${maxWidthClass} ${heightClass} overflow-hidden`}

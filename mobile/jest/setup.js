@@ -5,6 +5,11 @@ jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock
 
 jest.mock('react-native/Libraries/Animated/NativeAnimatedHelper');
 
+// Use real design tokens by default to avoid stale mocks across test suites
+jest.mock('@nullspace/design-tokens', () =>
+  jest.requireActual('../../packages/design-tokens/dist/index.js')
+);
+
 jest.mock('@shopify/react-native-skia', () => {
   const React = require('react');
   const { View } = require('react-native');
@@ -34,6 +39,8 @@ jest.mock('@shopify/react-native-skia', () => {
 process.env.EXPO_PUBLIC_BILLING_URL ||= 'https://billing.test';
 process.env.EXPO_PUBLIC_OPS_URL ||= 'https://ops.test';
 process.env.EXPO_PUBLIC_WEBSITE_URL ||= 'https://site.test';
+// Lower vault PBKDF2 cost in test runs to avoid long hangs
+process.env.VAULT_KDF_ITERATIONS ||= '2000';
 
 const { webcrypto } = require('crypto');
 

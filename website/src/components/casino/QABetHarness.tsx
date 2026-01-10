@@ -854,9 +854,9 @@ export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, 
   if (!enabled) return null;
 
   return (
-    <div className={`fixed bottom-4 left-4 z-[120] w-[320px] rounded-2xl border border-titanium-200 bg-white/90 p-4 shadow-float backdrop-blur ${className ?? ''}`}>
+    <div className={`fixed bottom-4 left-4 z-[120] w-[320px] rounded-2xl liquid-card liquid-sheen border border-ns p-4 shadow-float ${className ?? ''}`}>
       <div className="flex items-center justify-between">
-        <div className="text-[11px] font-bold tracking-[0.2em] text-titanium-500 uppercase">QA Bets</div>
+        <div className="text-[11px] font-bold tracking-[0.2em] text-ns-muted uppercase">QA Bets</div>
         <div className={`text-[10px] font-bold ${running ? 'text-mono-0 dark:text-mono-1000' : summary.failures ? 'text-mono-400 dark:text-mono-500' : 'text-mono-0 dark:text-mono-1000 font-bold'}`}>
           {running ? 'RUNNING' : summary.failures ? `${summary.failures} FAIL` : 'READY'}
         </div>
@@ -865,7 +865,7 @@ export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, 
         <button
           type="button"
           data-testid="qa-run-bet-suite"
-          className="flex-1 rounded-full border border-titanium-200 bg-titanium-900 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-white"
+          className="flex-1 rounded-full border border-mono-0 bg-mono-0 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-white"
           disabled={running}
           onClick={() => {
             clearResults();
@@ -877,24 +877,24 @@ export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, 
         <button
           type="button"
           data-testid="qa-clear-bet-suite"
-          className="rounded-full border border-titanium-200 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-titanium-700"
+          className="rounded-full border border-ns px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-ns-muted"
           disabled={running}
           onClick={clearResults}
         >
           Clear
         </button>
       </div>
-      <div className="mt-2 text-[10px] text-titanium-500">
+      <div className="mt-2 text-[10px] text-ns-muted">
         Total: {summary.total} {summary.failures ? `| Failures: ${summary.failures}` : ''}
       </div>
-      <div className="mt-3 max-h-40 overflow-auto rounded-xl border border-titanium-100 bg-white">
+      <div className="mt-3 max-h-40 overflow-auto rounded-xl liquid-panel border border-ns">
         {logs.length === 0 ? (
-          <div className="p-3 text-[10px] text-titanium-400">No QA logs yet.</div>
+          <div className="p-3 text-[10px] text-ns-muted">No QA logs yet.</div>
         ) : (
           logs.slice(-12).map((entry) => (
             <div
               key={entry.id}
-              className={`px-3 py-1 text-[10px] ${entry.level === 'error' ? 'text-mono-400 dark:text-mono-500' : entry.level === 'success' ? 'text-mono-0 dark:text-mono-1000 font-bold' : 'text-titanium-600'}`}
+              className={`px-3 py-1 text-[10px] ${entry.level === 'error' ? 'text-mono-400 dark:text-mono-500' : entry.level === 'success' ? 'text-mono-0 dark:text-mono-1000 font-bold' : 'text-ns-muted'}`}
             >
               {new Date(entry.ts).toLocaleTimeString()} {entry.message}
             </div>

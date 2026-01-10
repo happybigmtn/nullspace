@@ -12,6 +12,40 @@ import WebSocket from 'ws';
 import crypto from 'crypto';
 import { SERVICE_URLS } from './services.js';
 
+const parseTimeout = (value: string | undefined, fallback: number): number => {
+  if (!value) return fallback;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+const parseRetries = (value: string | undefined, fallback: number): number => {
+  if (!value) return fallback;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : fallback;
+};
+
+const IS_TESTNET = SERVICE_URLS.gatewayWs.includes('testnet.regenesis.dev');
+const DEFAULT_RESPONSE_TIMEOUT_MS = parseTimeout(
+  process.env.TEST_RESPONSE_TIMEOUT_MS,
+  IS_TESTNET ? 45000 : 30000
+);
+const DEFAULT_MESSAGE_TIMEOUT_MS = parseTimeout(
+  process.env.TEST_MESSAGE_TIMEOUT_MS,
+  DEFAULT_RESPONSE_TIMEOUT_MS
+);
+const DEFAULT_CONNECT_TIMEOUT_MS = parseTimeout(
+  process.env.TEST_CONNECT_TIMEOUT_MS,
+  IS_TESTNET ? 60000 : 30000
+);
+const DEFAULT_READY_TIMEOUT_MS = parseTimeout(
+  process.env.TEST_READY_TIMEOUT_MS,
+  IS_TESTNET ? 120000 : 60000
+);
+const DEFAULT_RESPONSE_RETRIES = parseRetries(
+  process.env.TEST_RESPONSE_RETRIES,
+  0
+);
+
 /**
  * Simple cookie jar for tracking cookies across requests
  */
@@ -128,6 +162,7 @@ export type ClientMode = 'web' | 'mobile';
  */
 export class CrossServiceClient {
   private ws: WebSocket | null = null;
+  private connecting: Promise<void> | null = null;
   private user: TestUser;
   private messageQueue: GameMessage[] = [];
   private messageHandlers: Map<string, (msg: GameMessage) => void> = new Map();
@@ -151,7 +186,7 @@ export class CrossServiceClient {
       mode?: ClientMode;
       /**
        * Custom origin to send (only used in 'web' mode).
-       * Defaults to http://localhost:5173
+       * Defaults to testnet website origin
        */
       origin?: string;
     }
@@ -162,7 +197,7 @@ export class CrossServiceClient {
     this.gatewayUrl = options?.gatewayUrl || SERVICE_URLS.gatewayWs;
     this.authUrl = options?.authUrl || SERVICE_URLS.auth;
     this.mode = options?.mode ?? 'web';
-    this.origin = options?.origin ?? 'http://localhost:5173';
+    this.origin = options?.origin ?? process.env.TEST_ORIGIN ?? SERVICE_URLS.website;
     this.cookieJar = new CookieJar();
   }
 
@@ -186,7 +221,7 @@ export class CrossServiceClient {
    * In 'web' mode, sends Origin header to validate CORS allowlist.
    * In 'mobile' mode, no Origin header (native app behavior).
    */
-  async connect(timeoutMs = 30000): Promise<void> {
+  async connect(timeoutMs = DEFAULT_CONNECT_TIMEOUT_MS): Promise<void> {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         reject(new Error('WebSocket connection timeout'));
@@ -244,6 +279,28 @@ export class CrossServiceClient {
     this.messageHandlers.clear();
   }
 
+  private async ensureConnected(): Promise<void> {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      return;
+    }
+    if (this.connecting) {
+      await this.connecting;
+      return;
+    }
+
+    this.disconnect();
+    this.connecting = (async () => {
+      await this.connect(DEFAULT_CONNECT_TIMEOUT_MS);
+      await this.waitForReady(DEFAULT_READY_TIMEOUT_MS);
+    })();
+
+    try {
+      await this.connecting;
+    } finally {
+      this.connecting = null;
+    }
+  }
+
   /**
    * Send a message to the gateway
    */
@@ -257,7 +314,10 @@ export class CrossServiceClient {
   /**
    * Wait for a specific message type
    */
-  async waitForMessage(messageType: string, timeoutMs = 30000): Promise<GameMessage> {
+  async waitForMessage(
+    messageType: string,
+    timeoutMs = DEFAULT_MESSAGE_TIMEOUT_MS
+  ): Promise<GameMessage> {
     // Check queue first
     const index = this.messageQueue.findIndex((msg) => msg.type === messageType);
     if (index !== -1) {
@@ -288,37 +348,51 @@ export class CrossServiceClient {
    */
   async sendAndReceive(
     message: object,
-    timeoutMs = 30000
+    timeoutMs = DEFAULT_RESPONSE_TIMEOUT_MS
   ): Promise<GameMessage> {
-    return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        reject(new Error('Response timeout'));
-      }, timeoutMs);
+    const maxRetries = DEFAULT_RESPONSE_RETRIES;
+    let attempt = 0;
+    while (true) {
+      await this.ensureConnected();
+      try {
+        return await new Promise((resolve, reject) => {
+          const timer = setTimeout(() => {
+            reject(new Error('Response timeout'));
+          }, timeoutMs);
 
-      const handler = (data: WebSocket.Data) => {
-        clearTimeout(timer);
-        this.ws?.off('message', handler);
-        try {
-          resolve(JSON.parse(data.toString()));
-        } catch (err) {
-          reject(err);
+          const handler = (data: WebSocket.Data) => {
+            clearTimeout(timer);
+            this.ws?.off('message', handler);
+            try {
+              resolve(JSON.parse(data.toString()));
+            } catch (err) {
+              reject(err);
+            }
+          };
+
+          this.ws?.on('message', handler);
+          this.send(message);
+        });
+      } catch (error) {
+        const messageText = error instanceof Error ? error.message : String(error);
+        const retryable =
+          messageText.includes('Response timeout') || messageText.includes('WebSocket not connected');
+        if (!retryable || attempt >= maxRetries) {
+          throw error;
         }
-      };
-
-      this.ws?.on('message', handler);
-      this.send(message);
-    });
+        attempt += 1;
+        this.disconnect();
+      }
+    }
   }
 
   /**
    * Wait for session_ready and registration
    */
-  async waitForReady(timeoutMs = 60000): Promise<void> {
-    // Wait for session_ready
+  async waitForReady(timeoutMs = DEFAULT_READY_TIMEOUT_MS): Promise<void> {
     const sessionMsg = await this.waitForMessage('session_ready', timeoutMs);
     this.user.sessionId = sessionMsg.sessionId as string;
 
-    // Poll for registration and balance
     const startTime = Date.now();
     while (Date.now() - startTime < timeoutMs) {
       const balance = await this.sendAndReceive({ type: 'get_balance' });
@@ -391,6 +465,9 @@ export class CrossServiceClient {
     this.storeCookiesFromResponse(response);
 
     if (!response.ok) {
+      if (response.status >= 500) {
+        throw new Error(`Auth service unavailable (${response.status})`);
+      }
       throw new Error(`CSRF token fetch failed: ${response.status}`);
     }
 
@@ -438,6 +515,9 @@ export class CrossServiceClient {
     this.storeCookiesFromResponse(response);
 
     if (!response.ok) {
+      if (response.status >= 500) {
+        throw new Error(`Auth service unavailable (${response.status})`);
+      }
       throw new Error(`Auth challenge failed: ${response.status}`);
     }
 
@@ -548,18 +628,41 @@ export class CrossServiceClient {
     gameStarted: GameMessage;
     result: GameMessage;
   }> {
+    const startGame = async (): Promise<GameMessage> =>
+      this.sendAndReceive({
+        type: 'blackjack_deal',
+        amount: betAmount,
+      });
+
     // Start game
-    const gameStarted = await this.sendAndReceive({
-      type: 'blackjack_deal',
-      amount: betAmount,
-    });
+    let gameStarted = await startGame();
+
+    if (gameStarted.type === 'error' && gameStarted.code === 'GAME_IN_PROGRESS') {
+      // Wait for any in-flight game to complete, then retry once.
+      try {
+        await this.waitForMessage('game_result', DEFAULT_RESPONSE_TIMEOUT_MS);
+      } catch {
+        // If we still didn't see completion, try again anyway.
+      }
+      gameStarted = await startGame();
+    }
 
     if (gameStarted.type === 'error') {
       throw new Error(`Game start failed: ${gameStarted.code}`);
     }
 
     // Simple strategy: always stand
-    const result = await this.sendAndReceive({ type: 'blackjack_stand' });
+    let result = await this.sendAndReceive({ type: 'blackjack_stand' });
+
+    // If we only got an ack or intermediate move, wait for completion so
+    // follow-up tests don't trip GAME_IN_PROGRESS.
+    if (result.type === 'move_accepted' || result.type === 'game_move') {
+      try {
+        result = await this.waitForMessage('game_result', DEFAULT_RESPONSE_TIMEOUT_MS);
+      } catch {
+        // If no final result arrives, keep the intermediate response.
+      }
+    }
 
     return { gameStarted, result };
   }

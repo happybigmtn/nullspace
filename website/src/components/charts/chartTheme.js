@@ -1,0 +1,27 @@
+export const CHART_THEME = {
+  grid: 'var(--lc-chart-grid)',
+  axis: 'var(--lc-chart-axis)',
+  tooltip: {
+    backgroundColor: 'var(--lc-chart-tooltip-bg)',
+    border: '1px solid var(--lc-chart-tooltip-border)',
+    borderColor: 'var(--lc-chart-tooltip-border)',
+    borderRadius: '12px',
+    padding: '8px 10px',
+    color: 'var(--lc-chart-tooltip-text)',
+  },
+  itemStyle: { color: 'var(--lc-chart-tooltip-text)' },
+  labelStyle: { color: 'var(--lc-chart-tooltip-text)' },
+  series: {
+    aqua: 'var(--lc-chart-1)',
+    aquaSoft: 'var(--lc-chart-1-soft)',
+    mint: 'var(--lc-chart-2)',
+    mintSoft: 'var(--lc-chart-2-soft)',
+    amber: 'var(--lc-chart-3)',
+    amberSoft: 'var(--lc-chart-3-soft)',
+    rose: 'var(--lc-chart-4)',
+    roseSoft: 'var(--lc-chart-4-soft)',
+    violet: 'var(--lc-chart-5)',
+    violetSoft: 'var(--lc-chart-5-soft)',
+    neutral: 'var(--lc-chart-neutral)',
+  },
+};

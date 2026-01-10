@@ -15,6 +15,7 @@ import { GenericGameView } from './games/GenericGameView';
 import { BigWinEffect } from './BigWinEffect';
 import { BetSlip } from './shared';
 import { Label } from './ui/Label';
+import { USE_CLASSIC_CASINO_UI } from '../../config/casinoUI';
 
 // Helper functions for formatting multipliers
 const cardRankName = (id: number): string => {
@@ -178,21 +179,21 @@ const SuperModeDisplay: React.FC<SuperModeDisplayProps> = ({ multipliers, reduce
   const isRevealing = revealedCount < multipliers.length && !skipped;
 
   return (
-    <div className="absolute top-4 left-4 max-w-sm bg-white/80 backdrop-blur-xl border border-titanium-200 p-4 rounded-3xl shadow-float z-40">
+    <div className="absolute top-4 left-4 max-w-sm liquid-card liquid-sheen border border-ns p-4 rounded-3xl shadow-float z-40">
       <div className="flex items-center justify-between mb-3">
         <div className="text-[10px] font-bold text-mono-0 dark:text-mono-1000 tracking-[0.2em] uppercase">Super Mode</div>
-        {isRevealing && <div className="text-[9px] font-medium text-titanium-400 uppercase">Space to skip</div>}
+        {isRevealing && <div className="text-[9px] font-medium text-ns-muted uppercase">Space to skip</div>}
       </div>
       <div className="flex flex-wrap gap-2">
         {visibleMultipliers.map((m, idx) => (
           <span
             key={`${m.id}-${m.superType}-${idx}`}
-            className="px-3 py-1.5 rounded-full bg-titanium-50 border border-titanium-100 text-titanium-900 text-[11px] font-bold shadow-sm"
+            className="px-3 py-1.5 rounded-full liquid-chip border border-ns text-ns text-[11px] font-bold shadow-sm"
           >
             {formatMultiplier(m)}
           </span>
         ))}
-        {multipliers.length === 0 && <span className="text-[11px] font-medium text-titanium-400 italic">Active</span>}
+        {multipliers.length === 0 && <span className="text-[11px] font-medium text-ns-muted italic">Active</span>}
       </div>
     </div>
   );
@@ -386,6 +387,81 @@ export const ActiveGame: React.FC<ActiveGameProps> = ({ gameState, numberInput, 
     }
   }, [showFirstHand, firstHandKey, totalBet, gameState.stage]);
 
+  /**
+   * Classic UI branch: minimal overlays and the straightforward control surface
+   * we used right after removing React Three Fiber. Keeps all logic intact but
+   * drops the recent glass/monochrome layers, bet slip, and shortcut chrome.
+   */
+  if (USE_CLASSIC_CASINO_UI) {
+    if (gameState.type === GameType.NONE) {
+      return (
+        <div className="flex-1 flex flex-col items-center justify-center gap-4">
+          <button
+            type="button"
+            onClick={handleOpen}
+            className="flex flex-col items-center justify-center gap-4 focus:outline-none focus:ring-2 focus:ring-terminal-green/40 rounded"
+          >
+            <div
+              className="text-[12rem] font-bold text-terminal-green leading-none animate-pulse cursor-pointer select-none"
+              style={{ textShadow: '0 0 40px rgba(0, 255, 136, 0.5), 0 0 80px rgba(0, 255, 136, 0.3)' }}
+            >
+              /
+            </div>
+            <div className="text-sm text-gray-600 tracking-[0.3em] uppercase">press to play</div>
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <>
+        <div className="flex justify-center z-30 pointer-events-none select-none mb-2">
+          <div className="px-3 py-1 rounded border border-gray-800 bg-black/60 text-[10px] tracking-widest uppercase text-gray-300">
+            NEXT: <span className="text-white">{nextActionLabel()}</span>
+          </div>
+        </div>
+
+        {gameState.superMode?.isActive && (
+          <SuperModeDisplay
+            multipliers={gameState.superMode.multipliers || []}
+            reducedMotion={reducedMotion}
+          />
+        )}
+
+        <BigWinEffect
+          amount={displayWin}
+          show={gameState.stage === 'RESULT' && displayWin > 0}
+          durationMs={gameState.type === GameType.BLACKJACK ? 1000 : undefined}
+          reducedMotion={reducedMotion}
+        />
+
+        <div className="flex-1 flex flex-col items-center justify-center min-h-0 w-full">
+          {gameState.type === GameType.BLACKJACK && <BlackjackView gameState={gameState} actions={actions} lastWin={displayWin} playMode={playMode} />}
+          {gameState.type === GameType.CRAPS && <CrapsView gameState={gameState} actions={actions} lastWin={displayWin} playMode={playMode} currentBet={currentBet} onBetChange={onBetChange} />}
+          {gameState.type === GameType.BACCARAT && <BaccaratView gameState={gameState} actions={actions} lastWin={displayWin} playMode={playMode} />}
+          {gameState.type === GameType.ROULETTE && <RouletteView gameState={gameState} numberInput={numberInput} actions={actions} lastWin={displayWin} playMode={playMode} />}
+          {gameState.type === GameType.SIC_BO && <SicBoView gameState={gameState} numberInput={numberInput} actions={actions} lastWin={displayWin} playMode={playMode} />}
+          {gameState.type === GameType.HILO && <HiLoView gameState={gameState} actions={actions} lastWin={displayWin} playMode={playMode} />}
+          {gameState.type === GameType.VIDEO_POKER && (
+            <VideoPokerView gameState={gameState} onToggleHold={onToggleHold} actions={actions} lastWin={displayWin} playMode={playMode} />
+          )}
+          {gameState.type === GameType.THREE_CARD && <ThreeCardPokerView gameState={gameState} actions={actions} lastWin={displayWin} playMode={playMode} />}
+          {gameState.type === GameType.ULTIMATE_HOLDEM && <UltimateHoldemView gameState={gameState} actions={actions} lastWin={displayWin} playMode={playMode} />}
+          {gameState.type === GameType.CASINO_WAR && (
+            <GenericGameView gameState={gameState} actions={actions} lastWin={displayWin} playMode={playMode} />
+          )}
+        </div>
+
+        {aiAdvice && (
+          <div className="absolute top-4 right-4 max-w-xs bg-terminal-black border border-terminal-accent p-4 rounded shadow-lg z-40 text-xs">
+            <div className="font-bold text-terminal-accent mb-1">AI ADVICE</div>
+            {aiAdvice}
+          </div>
+        )}
+      </>
+    );
+  }
+
   if (gameState.type === GameType.NONE) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-8 py-12">
@@ -394,12 +470,12 @@ export const ActiveGame: React.FC<ActiveGameProps> = ({ gameState, numberInput, 
           onClick={handleOpen}
           className="group relative flex flex-col items-center gap-6 focus:outline-none"
         >
-          <div className="w-48 h-48 rounded-full bg-white border border-titanium-200 shadow-float flex items-center justify-center group-hover:scale-105 group-active:scale-95 transition-all duration-300">
-            <span className="text-7xl font-light text-titanium-200 group-hover:text-mono-0 dark:text-mono-1000 transition-colors">/</span>
+          <div className="w-48 h-48 rounded-full liquid-card liquid-sheen border border-ns shadow-float flex items-center justify-center group-hover:scale-105 group-active:scale-95 transition-all duration-300">
+            <span className="text-7xl font-light text-ns-muted group-hover:text-mono-0 dark:text-mono-1000 transition-colors">/</span>
           </div>
           <div className="flex flex-col items-center gap-1">
-            <span className="text-[11px] font-bold text-titanium-400 tracking-[0.3em] uppercase">Select Experience</span>
-            <span className="text-[10px] text-titanium-300 font-medium uppercase">Press / to start</span>
+            <span className="text-[11px] font-bold text-ns-muted tracking-[0.3em] uppercase">Select Experience</span>
+            <span className="text-[10px] text-ns-muted font-medium uppercase">Press / to start</span>
           </div>
         </button>
       </div>
@@ -410,32 +486,32 @@ export const ActiveGame: React.FC<ActiveGameProps> = ({ gameState, numberInput, 
     <>
          <div className={`flex flex-col items-center gap-3 z-30 pointer-events-none select-none ${focusMode ? 'mb-2' : 'mb-6'}`}>
              {focusMode ? (
-                 <div className="flex flex-wrap items-center justify-center gap-3 text-[11px] font-medium text-titanium-600 dark:text-titanium-300">
-                     <span className="uppercase tracking-[0.24em] text-[9px] font-semibold text-titanium-400 dark:text-titanium-400">Status</span>
-                     <span className="text-titanium-800 dark:text-titanium-100">{nextActionLabel()}</span>
-                     <span className="h-3 w-px bg-titanium-200 dark:bg-titanium-800" />
-                     <span className="uppercase tracking-[0.24em] text-[9px] font-semibold text-titanium-400 dark:text-titanium-400">Bet</span>
-                     <span className="text-titanium-800 dark:text-titanium-100">${formatAmount(totalBet)}</span>
-                     <span className="text-titanium-500 dark:text-titanium-300">Odds {oddsLabel}</span>
+                 <div className="flex flex-wrap items-center justify-center gap-3 text-[11px] font-medium text-ns-muted">
+                     <span className="uppercase tracking-[0.24em] text-[9px] font-semibold text-ns-muted">Status</span>
+                     <span className="text-ns">{nextActionLabel()}</span>
+                     <span className="h-3 w-px bg-ns-border opacity-60" />
+                     <span className="uppercase tracking-[0.24em] text-[9px] font-semibold text-ns-muted">Bet</span>
+                     <span className="text-ns">${formatAmount(totalBet)}</span>
+                     <span className="text-ns-muted">Odds {oddsLabel}</span>
                      {typeof maxWin === 'number' && (
-                       <span className="text-titanium-500 dark:text-titanium-300">Max ${formatAmount(maxWin)}</span>
+                       <span className="text-ns-muted">Max ${formatAmount(maxWin)}</span>
                      )}
                  </div>
              ) : (
                <>
-                 <div className="px-4 py-1.5 rounded-full border border-titanium-300 bg-white backdrop-blur-md shadow-soft text-[10px] font-bold tracking-widest uppercase text-titanium-700">
-                     Status: <span className="text-titanium-900">{nextActionLabel()}</span>
+                 <div className="px-4 py-1.5 rounded-full border border-ns bg-ns-surface backdrop-blur-md shadow-soft text-[10px] font-bold tracking-widest uppercase text-ns-muted">
+                     Status: <span className="text-ns">{nextActionLabel()}</span>
                  </div>
                  <BetSlip totalBet={totalBet} oddsLabel={oddsLabel} maxWin={maxWin ?? undefined} />
                </>
              )}
              {parsedShortcuts.length > 0 && (
-               <div className="flex flex-wrap items-center justify-center gap-2 text-[9px] uppercase tracking-[0.2em] text-titanium-500 dark:text-titanium-300 zen-quiet">
+               <div className="flex flex-wrap items-center justify-center gap-2 text-[9px] uppercase tracking-[0.2em] text-ns-muted zen-quiet">
                  {parsedShortcuts.map((shortcut) => (
                    <div key={`${shortcut.key}-${shortcut.label}`} className="flex items-center gap-2">
                      <span className="ns-keycap">{shortcut.key}</span>
                      {shortcut.label ? (
-                       <span className="text-titanium-500 dark:text-titanium-300">
+                       <span className="text-ns-muted">
                          {shortcut.label}
                        </span>
                      ) : null}
@@ -447,12 +523,12 @@ export const ActiveGame: React.FC<ActiveGameProps> = ({ gameState, numberInput, 
 
          {showShortcutOverlay && parsedShortcuts.length > 0 && (
            <div className="absolute top-16 left-1/2 -translate-x-1/2 z-40 pointer-events-none animate-scale-in">
-             <div className="flex flex-wrap items-center justify-center gap-2 rounded-full border border-titanium-200 bg-white/80 px-3 py-2 shadow-soft backdrop-blur-md dark:border-titanium-800 dark:bg-titanium-900/80">
+             <div className="flex flex-wrap items-center justify-center gap-2 rounded-full border border-ns bg-ns-surface px-3 py-2 shadow-soft backdrop-blur-md">
                {parsedShortcuts.map((shortcut) => (
                  <div key={`${shortcut.key}-${shortcut.label}`} className="flex items-center gap-2">
                    <span className="ns-keycap">{shortcut.key}</span>
                    {shortcut.label ? (
-                     <span className="text-[9px] uppercase tracking-[0.2em] text-titanium-500 dark:text-titanium-300">
+                     <span className="text-[9px] uppercase tracking-[0.2em] text-ns-muted">
                        {shortcut.label}
                      </span>
                    ) : null}
@@ -464,12 +540,12 @@ export const ActiveGame: React.FC<ActiveGameProps> = ({ gameState, numberInput, 
 
          {showFirstHand && !focusMode && (
             <div className="flex justify-center mb-4">
-              <div className="max-w-md rounded-3xl border border-titanium-300 bg-white px-5 py-4 text-center shadow-soft backdrop-blur-md motion-state dark:border-titanium-700 dark:bg-titanium-900/70">
+              <div className="max-w-md rounded-3xl liquid-card liquid-sheen border border-ns px-5 py-4 text-center shadow-soft backdrop-blur-md motion-state">
                 <Label size="micro" variant="primary" className="mb-2 block">First hand</Label>
-                <div className="text-sm font-semibold text-titanium-900 dark:text-titanium-100">
+                <div className="text-sm font-semibold text-ns">
                   Pick a chip, place your bet, then confirm the play.
                 </div>
-                <div className="mt-2 text-[10px] font-bold uppercase tracking-widest text-titanium-600 dark:text-titanium-300">
+                <div className="mt-2 text-[10px] font-bold uppercase tracking-widest text-ns-muted">
                   Provably fair • On-chain settlement
                 </div>
               </div>
@@ -509,9 +585,9 @@ export const ActiveGame: React.FC<ActiveGameProps> = ({ gameState, numberInput, 
          </div>
          
          {aiAdvice && !focusMode && (
-             <div className="absolute top-4 right-4 max-w-xs bg-white/90 backdrop-blur-xl border border-mono-200 dark:border-mono-700 p-5 rounded-[2rem] shadow-float z-40">
+             <div className="absolute top-4 right-4 max-w-xs liquid-card liquid-sheen border border-ns p-5 rounded-[2rem] shadow-float z-40">
                  <div className="text-[10px] font-bold text-mono-0 dark:text-mono-1000 mb-2 uppercase tracking-[0.2em]">AI Insights</div>
-                 <div className="text-sm text-titanium-800 font-medium leading-relaxed">{aiAdvice}</div>
+                 <div className="text-sm text-ns font-medium leading-relaxed">{aiAdvice}</div>
              </div>
          )}
     </>

@@ -203,7 +203,7 @@ export const AuthStatusPill: React.FC<AuthStatusPillProps> = ({ publicKeyHex, cl
     typeof window !== 'undefined' ? authLinks.signOut(window.location.href) : authLinks.signOut();
 
   const pillClass = [
-    'flex flex-wrap items-center gap-3 rounded-full border border-titanium-200 bg-white shadow-soft px-4 py-1.5 text-[10px] font-bold tracking-widest uppercase dark:border-titanium-800 dark:bg-titanium-900/70 dark:text-titanium-100',
+    'flex flex-wrap items-center gap-3 liquid-chip px-4 py-1.5 text-[10px] font-semibold tracking-[0.26em] uppercase shadow-soft text-ns',
     className ?? '',
   ]
     .join(' ')
@@ -211,11 +211,11 @@ export const AuthStatusPill: React.FC<AuthStatusPillProps> = ({ publicKeyHex, cl
 
   return (
     <div className={pillClass}>
-      <span className="text-titanium-400">Auth</span>
+      <span className="text-ns-muted">Auth</span>
       {loading ? (
-        <span className="text-titanium-300">Checking…</span>
+        <span className="text-ns-muted">Checking…</span>
       ) : session ? (
-        <span className="text-titanium-900 dark:text-titanium-100 max-w-[140px] truncate" title={displayName}>
+        <span className="text-ns max-w-[140px] truncate" title={displayName}>
           {displayLabel}
         </span>
       ) : (
@@ -225,30 +225,29 @@ export const AuthStatusPill: React.FC<AuthStatusPillProps> = ({ publicKeyHex, cl
               type="button"
               onClick={onKeySignIn}
               disabled={signInBusy}
-              className={`px-3 py-1 rounded-full transition-all duration-200 ${
-                signInBusy
-                  ? 'bg-titanium-100 text-titanium-300 dark:bg-titanium-800 dark:text-titanium-400'
-                  : 'bg-action-primary text-white shadow-sm hover:scale-105 active:scale-95 dark:bg-action-primary/20 dark:text-action-primary dark:shadow-none'
-              }`}
+              className={[
+                'px-3 py-1 rounded-full liquid-chip transition-all duration-200',
+                signInBusy ? 'text-ns-muted opacity-60' : 'text-ns hover:shadow-soft',
+              ].join(' ')}
             >
               {signInBusy ? 'Signing…' : 'Sign in'}
             </button>
           ) : vaultStatus.supported ? (
-            <Link to="/security" className="text-action-primary hover:opacity-70 transition-opacity">
+            <Link to="/security" className="text-ns hover:text-ns-muted transition-opacity">
               Unlock
             </Link>
           ) : (
-            <span className="text-titanium-300 italic">Vault Unavailable</span>
+            <span className="text-ns-muted italic">Vault Unavailable</span>
           )}
         </>
       )}
 
       {session ? (
         <>
-          <div className="h-3 w-px bg-titanium-200 dark:bg-titanium-800" />
+          <div className="h-3 w-px bg-black/10 dark:bg-white/10" />
           {!activeEntitlement && stripeTiers.length > 1 ? (
             <select
-              className="bg-white border border-titanium-200 rounded-lg px-2 py-0.5 text-[10px] font-bold text-titanium-800 outline-none dark:bg-titanium-900 dark:border-titanium-800 dark:text-titanium-100"
+              className="liquid-input px-2 py-0.5 text-[10px] font-semibold outline-none"
               value={selectedTier}
               onChange={(event) => setSelectedTier(event.target.value)}
             >
@@ -266,12 +265,12 @@ export const AuthStatusPill: React.FC<AuthStatusPillProps> = ({ publicKeyHex, cl
               billingBusy ||
               (!activeEntitlement && !fallbackPriceId && stripeTiers.length === 0)
             }
-            className="px-3 py-1 rounded-full bg-titanium-100 text-titanium-800 border border-titanium-200 hover:border-titanium-400 transition-all dark:bg-titanium-800 dark:text-titanium-100 dark:border-titanium-800 dark:hover:border-titanium-500"
+            className="px-3 py-1 rounded-full liquid-chip text-ns transition-all hover:shadow-soft"
           >
             {activeEntitlement ? 'Account' : 'Join'}
           </button>
-          <div className="h-3 w-px bg-titanium-200 dark:bg-titanium-800" />
-          <a href={signOutUrl} className="text-titanium-400 hover:text-titanium-900 transition-colors dark:text-titanium-400 dark:hover:text-titanium-100">
+          <div className="h-3 w-px bg-black/10 dark:bg-white/10" />
+          <a href={signOutUrl} className="text-ns-muted hover:text-ns transition-colors">
             Exit
           </a>
         </>

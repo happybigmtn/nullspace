@@ -204,9 +204,23 @@ export class CasinoClient {
   buildUpdatesCandidates(filterHex) {
     const candidates = [];
 
+    // Optional explicit WebSocket endpoint override
+    const explicitWs = import.meta.env.VITE_WS_URL;
+    if (explicitWs) {
+      try {
+        const url = new URL(explicitWs);
+        const secure = url.protocol === 'https:' || url.protocol === 'wss:';
+        const wsProtocol = secure ? 'wss:' : 'ws:';
+        candidates.push(`${wsProtocol}//${url.host}/updates/${filterHex}`);
+      } catch (e) {
+        console.warn('Invalid VITE_WS_URL for WebSocket:', explicitWs, e);
+      }
+    }
+
     // FIRST: Try direct connection to VITE_URL (most reliable for WebSockets)
     const directUrl = import.meta.env.VITE_URL;
     const toWsUrl = (rawUrl) => {
+      if (!rawUrl || rawUrl.startsWith('/')) return null; // ignore relative URLs
       try {
         const url = new URL(rawUrl);
         const secure = url.protocol === 'https:' || url.protocol === 'wss:';
@@ -574,9 +588,13 @@ export class CasinoClient {
             } else if (event.data instanceof ArrayBuffer) {
               // ArrayBuffer - convert directly
               bytes = new Uint8Array(event.data);
-            } else if (Buffer.isBuffer(event.data)) {
+            } else if (typeof Buffer !== 'undefined' && Buffer.isBuffer(event.data)) {
               // Node.js environment - Buffer is already a Uint8Array
               bytes = new Uint8Array(event.data);
+            } else if (typeof event.data === 'string') {
+              // Some proxies may send string control frames; ignore them
+              logDebug('[WebSocket] Skipping string message:', event.data.slice(0, 80));
+              return;
             } else {
               console.warn('Unknown WebSocket message type:', typeof event.data);
               return;

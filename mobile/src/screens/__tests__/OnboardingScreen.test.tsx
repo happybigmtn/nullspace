@@ -7,9 +7,9 @@ import { markOnboardingCompleted } from '../../services';
 
 jest.mock('../../services/haptics', () => ({
   haptics: {
-    roundStart: jest.fn(),
-    jackpot: jest.fn(),
-    buttonPress: jest.fn(),
+    roundStart: jest.fn(() => Promise.resolve()),
+    jackpot: jest.fn(() => Promise.resolve()),
+    buttonPress: jest.fn(() => Promise.resolve()),
   },
 }));
 

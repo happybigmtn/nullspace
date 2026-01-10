@@ -25,6 +25,22 @@ End-to-end tests that validate the full user journey across all services:
 2. **Node.js 20+** - For gateway and tests
 3. **pnpm** - Package manager
 
+### Quick Start (Testnet)
+
+Defaults target the testnet deployment, so you can run:
+
+```bash
+cd tests/integration
+pnpm install
+RUN_CROSS_SERVICE=true pnpm test
+```
+
+To include chain update verification (US-256) on testnet:
+
+```bash
+RUN_CROSS_SERVICE=true RUN_CHAIN_UPDATES=true pnpm test
+```
+
 ### Quick Start (Local Services)
 
 Start each service in a separate terminal:
@@ -39,6 +55,12 @@ pnpm -C gateway start
 # Terminal 3: Run tests
 cd tests/integration
 pnpm install
+BACKEND_URL=http://localhost:8080 \
+GATEWAY_HTTP_URL=http://localhost:9010 \
+GATEWAY_WS_URL=ws://localhost:9010 \
+AUTH_URL=http://localhost:4000 \
+CONVEX_URL=http://localhost:3210 \
+TEST_ORIGIN=http://localhost:5173 \
 RUN_CROSS_SERVICE=true pnpm test
 ```
 
@@ -52,7 +74,13 @@ cd tests/integration
 # Start all services
 docker compose -f docker-compose.cross-service.yml up -d --wait
 
-# Run tests
+# Run tests against the local stack
+BACKEND_URL=http://localhost:8080 \
+GATEWAY_HTTP_URL=http://localhost:9010 \
+GATEWAY_WS_URL=ws://localhost:9010 \
+AUTH_URL=http://localhost:4000 \
+CONVEX_URL=http://localhost:3210 \
+TEST_ORIGIN=http://localhost:5173 \
 RUN_CROSS_SERVICE=true pnpm test
 
 # Cleanup
@@ -72,10 +100,14 @@ See `.github/workflows/cross-service-integration.yml`
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `RUN_CROSS_SERVICE` | `false` | Enable cross-service tests |
-| `BACKEND_URL` | `http://localhost:8080` | Simulator HTTP URL |
-| `GATEWAY_HTTP_URL` | `http://localhost:9010` | Gateway HTTP URL |
-| `GATEWAY_WS_URL` | `ws://localhost:9010` | Gateway WebSocket URL |
-| `AUTH_URL` | `http://localhost:4000` | Auth service URL |
+| `RUN_CHAIN_UPDATES` | `false` on testnet, `true` locally | Enable US-256 chain update tests (simulator /updates WS) |
+| `BACKEND_URL` | `https://indexer.testnet.regenesis.dev` | Simulator/Indexer HTTP URL |
+| `GATEWAY_HTTP_URL` | `https://api.testnet.regenesis.dev` | Gateway HTTP URL |
+| `GATEWAY_WS_URL` | `wss://api.testnet.regenesis.dev` | Gateway WebSocket URL |
+| `AUTH_URL` | `https://auth.testnet.regenesis.dev` | Auth service URL |
+| `CONVEX_URL` | `https://convex.testnet.regenesis.dev` | Convex URL |
+| `TEST_ORIGIN` | `https://testnet.regenesis.dev` | Origin header for web-mode tests |
+| `TEST_ALT_ORIGIN` | _(unset)_ | Optional additional allowed origin for CORS test |
 
 ## Test Architecture
 
@@ -117,6 +149,12 @@ docker compose -f docker-compose.cross-service.yml logs
 
 Ensure all services are healthy:
 ```bash
+# Testnet
+curl https://indexer.testnet.regenesis.dev/healthz
+curl https://api.testnet.regenesis.dev/healthz
+curl https://auth.testnet.regenesis.dev/healthz
+
+# Local (if using local services)
 curl http://localhost:8080/healthz  # Simulator
 curl http://localhost:9010/healthz  # Gateway
 curl http://localhost:4000/healthz  # Auth (optional)

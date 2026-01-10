@@ -60,6 +60,32 @@ const HAND_NAMES: Record<ThreeCardPokerHand, string> = {
   HIGH_CARD: 'High Card',
 };
 
+function getPhaseFromStage(stage: string): ThreeCardPokerState['phase'] {
+  switch (stage) {
+    case 'decision':
+      return 'dealt';
+    case 'awaiting':
+      return 'showdown';
+    case 'complete':
+      return 'result';
+    default:
+      return 'betting';
+  }
+}
+
+function getMessageFromStage(stage: string): string {
+  switch (stage) {
+    case 'decision':
+      return 'Play or Fold?';
+    case 'awaiting':
+      return 'Revealing dealer...';
+    case 'complete':
+      return 'Round complete';
+    default:
+      return 'Place your Ante';
+  }
+}
+
 export function ThreeCardPokerScreen() {
   // Shared hook for connection (ThreeCardPoker has multi-bet so keeps custom bet state)
   const { isDisconnected, send, lastMessage, connectionStatusProps } = useGameConnection<GameMessage>();
@@ -144,20 +170,8 @@ export function ThreeCardPokerScreen() {
           progressiveBet: parsed.progressiveBet > 0 ? parsed.progressiveBet : prev.progressiveBet,
           dealerRevealed: parsed.stage === 'awaiting' || parsed.stage === 'complete',
           parseError: null,
-          phase: parsed.stage === 'decision'
-            ? 'dealt'
-            : parsed.stage === 'awaiting'
-              ? 'showdown'
-              : parsed.stage === 'complete'
-                ? 'result'
-                : 'betting',
-          message: parsed.stage === 'decision'
-            ? 'Play or Fold?'
-            : parsed.stage === 'awaiting'
-              ? 'Revealing dealer...'
-              : parsed.stage === 'complete'
-                ? 'Round complete'
-                : 'Place your Ante',
+          phase: getPhaseFromStage(parsed.stage),
+          message: getMessageFromStage(parsed.stage),
         }));
       });
       return;

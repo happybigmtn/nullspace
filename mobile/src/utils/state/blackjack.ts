@@ -58,14 +58,12 @@ export function parseBlackjackState(stateBlob: Uint8Array): BlackjackStateUpdate
   const derivedPlayerTotal = playerCards.length > 0 ? calculateBlackjackTotal(playerCards) : 0;
   const derivedDealerTotal = dealerCards.length > 0 ? calculateBlackjackTotal(dealerCards) : 0;
 
-  const phase: BlackjackPhase =
-    parsed.stage === 0
-      ? 'betting'
-      : parsed.stage === 1
-        ? 'player_turn'
-        : parsed.stage === 2
-          ? 'dealer_turn'
-          : 'result';
+  const phaseMap: Record<number, BlackjackPhase> = {
+    0: 'betting',
+    1: 'player_turn',
+    2: 'dealer_turn',
+  };
+  const phase: BlackjackPhase = phaseMap[parsed.stage] ?? 'result';
   const actionMask = parsed.actionMask ?? 0;
 
   return {

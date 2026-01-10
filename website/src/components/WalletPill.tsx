@@ -75,7 +75,7 @@ export const WalletPill: React.FC<WalletPillProps> = ({
     return (
       <div
         className={[
-          'flex items-center gap-3 rounded-full border border-titanium-200 bg-white shadow-soft px-4 py-2 dark:border-titanium-800 dark:bg-titanium-900/70',
+          'relative flex items-center gap-3 liquid-chip px-4 py-2 shadow-soft',
           className ?? '',
         ]
           .join(' ')
@@ -89,13 +89,13 @@ export const WalletPill: React.FC<WalletPillProps> = ({
                 ? 'bg-action-destructive'
                 : isConnected
                   ? 'bg-action-success'
-                  : 'bg-titanium-300'
+                  : 'bg-black/20 dark:bg-white/20'
             }`}
           />
           {!isConnected && vaultStatus.supported && (
             <Link
               to="/security"
-              className="text-caption font-medium text-action-primary hover:underline"
+              className="text-[10px] uppercase tracking-[0.3em] font-semibold text-ns hover:text-ns-muted"
             >
               Connect
             </Link>
@@ -105,14 +105,14 @@ export const WalletPill: React.FC<WalletPillProps> = ({
         {/* Balance Display */}
         {isConnected && (
           <>
-            <div className="h-4 w-px bg-titanium-200 dark:bg-titanium-800" />
+            <div className="h-4 w-px bg-black/10 dark:bg-white/10" />
             <button
               type="button"
               onClick={() => setShowDetails(!showDetails)}
               className="flex items-center gap-1 hover:opacity-80 transition-opacity"
             >
-              <span className="text-micro text-titanium-500 uppercase tracking-wider">Balance</span>
-              <span className="text-body font-semibold text-titanium-900 dark:text-titanium-100">
+              <span className="text-[10px] uppercase tracking-[0.3em] text-ns-muted">Balance</span>
+              <span className="text-body font-semibold text-ns">
                 <AnimatedInteger value={totalBalance} flashOnChange />
               </span>
             </button>
@@ -121,40 +121,40 @@ export const WalletPill: React.FC<WalletPillProps> = ({
 
         {/* Offline Warning */}
         {isOffline && (
-          <span className="text-micro text-action-destructive uppercase tracking-wider">
+          <span className="text-[10px] uppercase tracking-[0.3em] text-action-destructive">
             Offline
           </span>
         )}
 
         {/* Expanded Details */}
         {showDetails && isConnected && (
-          <div className="absolute top-full left-0 right-0 mt-2 p-4 bg-white rounded-2xl shadow-float border border-titanium-100 dark:bg-titanium-900 dark:border-titanium-800 z-50">
+          <div className="absolute top-full right-0 mt-2 w-64 p-4 liquid-card z-50">
             <div className="space-y-2 text-caption">
               <div className="flex justify-between">
-                <span className="text-titanium-500">RNG</span>
-                <span className="text-titanium-900 dark:text-titanium-100 font-medium">
+                <span className="text-ns-muted">RNG</span>
+                <span className="text-ns font-medium">
                   {toNumber(rng)?.toLocaleString() ?? '—'}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-titanium-500">vUSDT</span>
-                <span className="text-titanium-900 dark:text-titanium-100 font-medium">
+                <span className="text-ns-muted">vUSDT</span>
+                <span className="text-ns font-medium">
                   {toNumber(vusdt)?.toLocaleString() ?? '—'}
                 </span>
               </div>
               {credits !== undefined && (
                 <div className="flex justify-between">
-                  <span className="text-titanium-500">Credits</span>
-                  <span className="text-titanium-900 dark:text-titanium-100 font-medium">
+                  <span className="text-ns-muted">Credits</span>
+                  <span className="text-ns font-medium">
                     {toNumber(credits)?.toLocaleString() ?? '—'}
                   </span>
                 </div>
               )}
               {effectivePubkey && (
-                <div className="pt-2 border-t border-titanium-100 dark:border-titanium-800">
+                <div className="pt-2 border-t border-black/10 dark:border-white/10">
                   <Link
                     to={`/explorer/account/${effectivePubkey}`}
-                    className="text-micro text-action-primary hover:underline"
+                    className="text-[10px] uppercase tracking-[0.3em] text-ns hover:text-ns-muted"
                   >
                     View Account →
                   </Link>
@@ -170,10 +170,10 @@ export const WalletPill: React.FC<WalletPillProps> = ({
   // Full technical view (for settings/admin pages)
   const vault = useMemo(() => {
     if (!vaultStatus.supported) {
-      return { label: 'Unsupported', className: 'text-titanium-300' };
+      return { label: 'Unsupported', className: 'text-ns-muted' };
     }
     if (!vaultStatus.enabled) {
-      return { label: 'Disabled', className: 'text-titanium-400' };
+      return { label: 'Disabled', className: 'text-ns-muted' };
     }
     if (vaultStatus.unlocked) {
       return { label: 'Unlocked', className: 'text-action-success' };
@@ -188,7 +188,7 @@ export const WalletPill: React.FC<WalletPillProps> = ({
   return (
     <div
       className={[
-        'flex flex-wrap items-center gap-3 rounded-full border border-titanium-200 bg-white shadow-soft px-4 py-2 dark:border-titanium-800 dark:bg-titanium-900/70 dark:text-titanium-100',
+        'flex flex-wrap items-center gap-3 liquid-chip px-4 py-2 shadow-soft',
         className ?? '',
       ]
         .join(' ')
@@ -200,11 +200,11 @@ export const WalletPill: React.FC<WalletPillProps> = ({
             to="/security"
             className="flex items-center gap-2 group transition-opacity hover:opacity-70"
           >
-            <span className="text-titanium-400 text-[10px] font-bold tracking-widest uppercase">Vault</span>
+            <span className="text-ns-muted text-[10px] font-bold tracking-[0.28em] uppercase">Vault</span>
             <span className={`text-[10px] font-bold uppercase ${vault.className}`}>{vault.label}</span>
           </Link>
 
-          <div className="h-3 w-px bg-titanium-200 dark:bg-titanium-800" />
+          <div className="h-3 w-px bg-black/10 dark:bg-white/10" />
         </>
       )}
 
@@ -213,21 +213,21 @@ export const WalletPill: React.FC<WalletPillProps> = ({
           <span className={`text-[10px] font-bold uppercase tracking-widest ${networkTone}`}>
             {networkText}
           </span>
-          <div className="h-3 w-px bg-titanium-200 dark:bg-titanium-800" />
+          <div className="h-3 w-px bg-black/10 dark:bg-white/10" />
         </>
       ) : null}
 
-      <div className="flex items-center gap-4 text-[10px] tracking-widest uppercase font-bold text-titanium-400 whitespace-nowrap">
+      <div className="flex items-center gap-4 text-[10px] tracking-[0.28em] uppercase font-bold text-ns-muted whitespace-nowrap">
         <span>
           RNG{' '}
           {toNumber(rng) !== null ? (
             <AnimatedInteger
               value={toNumber(rng)!}
-              className="text-titanium-900 dark:text-titanium-100"
+              className="text-ns"
               flashOnChange
             />
           ) : (
-            <span className="text-titanium-900 dark:text-titanium-100">—</span>
+            <span className="text-ns">—</span>
           )}
         </span>
         <span>
@@ -235,11 +235,11 @@ export const WalletPill: React.FC<WalletPillProps> = ({
           {toNumber(vusdt) !== null ? (
             <AnimatedInteger
               value={toNumber(vusdt)!}
-              className="text-titanium-900 dark:text-titanium-100"
+              className="text-ns"
               flashOnChange
             />
           ) : (
-            <span className="text-titanium-900 dark:text-titanium-100">—</span>
+            <span className="text-ns">—</span>
           )}
         </span>
         {credits !== undefined || creditsLocked !== undefined ? (
@@ -248,11 +248,11 @@ export const WalletPill: React.FC<WalletPillProps> = ({
             {toNumber(credits) !== null ? (
               <AnimatedInteger
                 value={toNumber(credits)!}
-                className="text-titanium-900 dark:text-titanium-100"
+                className="text-ns"
                 flashOnChange
               />
             ) : (
-              <span className="text-titanium-900 dark:text-titanium-100">—</span>
+              <span className="text-ns">—</span>
             )}
           </span>
         ) : null}
@@ -260,10 +260,10 @@ export const WalletPill: React.FC<WalletPillProps> = ({
 
       {effectivePubkey ? (
         <>
-          <div className="h-3 w-px bg-titanium-200 dark:bg-titanium-800" />
+          <div className="h-3 w-px bg-black/10 dark:bg-white/10" />
           <Link
             to={`/explorer/account/${effectivePubkey}`}
-            className="text-[10px] font-bold tracking-widest uppercase text-action-primary hover:opacity-70 transition-opacity"
+            className="text-[10px] font-bold tracking-[0.28em] uppercase text-ns hover:text-ns-muted transition-opacity"
             title={effectivePubkey}
           >
             PK {shortHex(effectivePubkey, 6, 4)}

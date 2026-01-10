@@ -36,12 +36,19 @@ jobs:
     - name: Install cargo-llvm-cov
       uses: taiki-e/install-action@cargo-llvm-cov
     - name: Generate JS coverage
-      run: node scripts/coverage-all.mjs --skip-rust
+      run: node scripts/coverage-all.mjs --skip-rust --fail-under=70
     - name: Generate coverage report
-      run: cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
+      run: cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info 2>&1 | tee /tmp/rust-cov.log
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v4
       with:
         files: lcov.info,packages/constants/coverage/lcov.info,packages/design-tokens/coverage/lcov.info,packages/game-state/coverage/lcov.info,packages/protocol/coverage/lcov.info,packages/types/coverage/lcov.info,mobile/coverage/lcov.info,gateway/coverage/lcov.info,website/coverage/lcov.info
         fail_ci_if_error: true
         token: ${{ secrets.CODECOV_TOKEN }}
+
+    - name: Upload coverage logs
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-logs
+        path: /tmp/rust-cov.log

@@ -284,6 +284,11 @@ impl<'a, S: State> Layer<'a, S> {
         if let Some(event) = self.update_casino_leaderboard(public, &player).await? {
             events.push(event);
         }
+        tracing::info!(
+            player = ?public,
+            name = name,
+            "casino player registered"
+        );
 
         Ok(events)
     }
@@ -358,6 +363,12 @@ impl<'a, S: State> Layer<'a, S> {
         if let Some(event) = self.update_casino_leaderboard(public, &player).await? {
             events.push(event);
         }
+        tracing::info!(
+            player = ?public,
+            amount = amount,
+            new_chips = player.balances.chips,
+            "casino deposit accepted"
+        );
 
         Ok(events)
     }
@@ -535,6 +546,7 @@ impl<'a, S: State> Layer<'a, S> {
             game_type = ?session.game_type,
             bet = session.bet,
             tournament = session.is_tournament,
+            super_mode = session.super_mode.is_active,
             "casino game started"
         );
 
@@ -748,6 +760,7 @@ impl<'a, S: State> Layer<'a, S> {
         let now = self.seed_view.saturating_mul(SECS_PER_VIEW);
         let payload_len = payload.len();
         let payload_action = payload.first().copied();
+        let payload_prefix = payload_prefix_hex(payload, 12);
 
         // Process move
         session.move_count += 1;
@@ -779,7 +792,6 @@ impl<'a, S: State> Layer<'a, S> {
                         "Deck exhausted, no more cards available",
                     ),
                 };
-                let payload_prefix = payload_prefix_hex(payload, 12);
                 tracing::warn!(
                     player = ?public,
                     session_id = session_id,
@@ -799,13 +811,49 @@ impl<'a, S: State> Layer<'a, S> {
                 ));
             }
         };
-        tracing::debug!(
-            player = ?public,
-            session_id = session_id,
-            game_type = ?session.game_type,
-            move_count = session.move_count,
-            "casino move processed"
-        );
+        match &result {
+            crate::casino::GameResult::Continue(logs) => {
+                tracing::info!(
+                    player = ?public,
+                    session_id = session_id,
+                    game_type = ?session.game_type,
+                    move_count = session.move_count,
+                    payload_len = payload_len,
+                    payload_action = payload_action,
+                    payload_prefix = %payload_prefix,
+                    logs_len = logs.len(),
+                    logs = ?logs,
+                    "casino move accepted"
+                );
+            }
+            crate::casino::GameResult::ContinueWithUpdate { payout, logs } => {
+                tracing::info!(
+                    player = ?public,
+                    session_id = session_id,
+                    game_type = ?session.game_type,
+                    move_count = session.move_count,
+                    payload_len = payload_len,
+                    payload_action = payload_action,
+                    payload_prefix = %payload_prefix,
+                    payout = *payout,
+                    logs_len = logs.len(),
+                    logs = ?logs,
+                    "casino move accepted"
+                );
+            }
+            _ => {
+                tracing::info!(
+                    player = ?public,
+                    session_id = session_id,
+                    game_type = ?session.game_type,
+                    move_count = session.move_count,
+                    payload_len = payload_len,
+                    payload_action = payload_action,
+                    payload_prefix = %payload_prefix,
+                    "casino move accepted"
+                );
+            }
+        }
 
         let result = self
             .apply_progressive_meters_for_completion(&session, result)
@@ -2041,6 +2089,23 @@ impl<'a, S: State> Layer<'a, S> {
         round_id: u64,
         bets: &[nullspace_types::casino::GlobalTableBet],
     ) -> anyhow::Result<Vec<Event>> {
+        let reject = |error_code: u8, message: &str| {
+            tracing::warn!(
+                player = ?public,
+                game_type = ?game_type,
+                round_id = round_id,
+                error_code = error_code,
+                message = message,
+                "global table bet rejected"
+            );
+            Ok(vec![Event::GlobalTableBetRejected {
+                player: public.clone(),
+                round_id,
+                error_code,
+                message: message.to_string(),
+            }])
+        };
+
         if game_type != nullspace_types::casino::GameType::Craps {
             return Ok(casino_error_vec(
                 public,
@@ -2051,46 +2116,27 @@ impl<'a, S: State> Layer<'a, S> {
         }
 
         if bets.is_empty() {
-            return Ok(vec![Event::GlobalTableBetRejected {
-                player: public.clone(),
-                round_id,
-                error_code: nullspace_types::casino::ERROR_INVALID_BET,
-                message: "No bets provided".to_string(),
-            }]);
+            return reject(nullspace_types::casino::ERROR_INVALID_BET, "No bets provided");
         }
 
         let config = match self.get(Key::GlobalTableConfig(game_type)).await? {
             Some(Value::GlobalTableConfig(config)) => config,
             _ => {
-                return Ok(vec![Event::GlobalTableBetRejected {
-                    player: public.clone(),
-                    round_id,
-                    error_code: nullspace_types::casino::ERROR_INVALID_MOVE,
-                    message: "Global table config missing".to_string(),
-                }])
+                return reject(
+                    nullspace_types::casino::ERROR_INVALID_MOVE,
+                    "Global table config missing",
+                )
             }
         };
 
         let now_ms = self.seed_view.saturating_mul(MS_PER_VIEW);
         let mut round = match self.get(Key::GlobalTableRound(game_type)).await? {
             Some(Value::GlobalTableRound(round)) => round,
-            _ => {
-                return Ok(vec![Event::GlobalTableBetRejected {
-                    player: public.clone(),
-                    round_id,
-                    error_code: nullspace_types::casino::ERROR_INVALID_MOVE,
-                    message: "Round not initialized".to_string(),
-                }])
-            }
+            _ => return reject(nullspace_types::casino::ERROR_INVALID_MOVE, "Round not initialized"),
         };
 
         if round.round_id != round_id {
-            return Ok(vec![Event::GlobalTableBetRejected {
-                player: public.clone(),
-                round_id,
-                error_code: nullspace_types::casino::ERROR_INVALID_MOVE,
-                message: "Round ID mismatch".to_string(),
-            }]);
+            return reject(nullspace_types::casino::ERROR_INVALID_MOVE, "Round ID mismatch");
         }
 
         if !matches!(
@@ -2098,23 +2144,19 @@ impl<'a, S: State> Layer<'a, S> {
             nullspace_types::casino::GlobalTablePhase::Betting
         ) || now_ms >= round.phase_ends_at_ms
         {
-            return Ok(vec![Event::GlobalTableBetRejected {
-                player: public.clone(),
-                round_id,
-                error_code: nullspace_types::casino::ERROR_INVALID_MOVE,
-                message: "Betting window closed".to_string(),
-            }]);
+            return reject(
+                nullspace_types::casino::ERROR_INVALID_MOVE,
+                "Betting window closed",
+            );
         }
 
         let mut player = match self.casino_player_or_error(public, None).await? {
             Ok(player) => player,
             Err(_) => {
-                return Ok(vec![Event::GlobalTableBetRejected {
-                    player: public.clone(),
-                    round_id,
-                    error_code: nullspace_types::casino::ERROR_PLAYER_NOT_FOUND,
-                    message: "Player not found".to_string(),
-                }])
+                return reject(
+                    nullspace_types::casino::ERROR_PLAYER_NOT_FOUND,
+                    "Player not found",
+                )
             }
         };
 
@@ -2146,21 +2188,17 @@ impl<'a, S: State> Layer<'a, S> {
         };
 
         if player_session.last_settled_round.saturating_add(1) != round.round_id {
-            return Ok(vec![Event::GlobalTableBetRejected {
-                player: public.clone(),
-                round_id,
-                error_code: nullspace_types::casino::ERROR_INVALID_MOVE,
-                message: "Previous round not settled".to_string(),
-            }]);
+            return reject(
+                nullspace_types::casino::ERROR_INVALID_MOVE,
+                "Previous round not settled",
+            );
         }
 
         if bets.len() > config.max_bets_per_round as usize {
-            return Ok(vec![Event::GlobalTableBetRejected {
-                player: public.clone(),
-                round_id,
-                error_code: nullspace_types::casino::ERROR_INVALID_BET,
-                message: "Too many bets submitted".to_string(),
-            }]);
+            return reject(
+                nullspace_types::casino::ERROR_INVALID_BET,
+                "Too many bets submitted",
+            );
         }
 
         ensure_craps_session_state(&mut player_session.session, &round, &self.seed);
@@ -2170,12 +2208,10 @@ impl<'a, S: State> Layer<'a, S> {
         let mut delta: i64 = 0;
         for bet in bets {
             if bet.amount < config.min_bet || bet.amount > config.max_bet {
-                return Ok(vec![Event::GlobalTableBetRejected {
-                    player: public.clone(),
-                    round_id,
-                    error_code: nullspace_types::casino::ERROR_INVALID_BET,
-                    message: "Bet amount out of range".to_string(),
-                }]);
+                return reject(
+                    nullspace_types::casino::ERROR_INVALID_BET,
+                    "Bet amount out of range",
+                );
             }
             let mut payload = Vec::with_capacity(11);
             payload.push(0);
@@ -2191,12 +2227,7 @@ impl<'a, S: State> Layer<'a, S> {
             let result = match result {
                 Ok(result) => result,
                 Err(_) => {
-                    return Ok(vec![Event::GlobalTableBetRejected {
-                        player: public.clone(),
-                        round_id,
-                        error_code: nullspace_types::casino::ERROR_INVALID_BET,
-                        message: "Invalid bet".to_string(),
-                    }])
+                    return reject(nullspace_types::casino::ERROR_INVALID_BET, "Invalid bet")
                 }
             };
             delta = delta.saturating_add(game_result_delta(&result));
@@ -2208,12 +2239,10 @@ impl<'a, S: State> Layer<'a, S> {
                 .and_then(|v| u64::try_from(v).ok())
                 .unwrap_or(0);
             if player.balances.chips < deduction {
-                return Ok(vec![Event::GlobalTableBetRejected {
-                    player: public.clone(),
-                    round_id,
-                    error_code: nullspace_types::casino::ERROR_INSUFFICIENT_FUNDS,
-                    message: "Insufficient chips".to_string(),
-                }]);
+                return reject(
+                    nullspace_types::casino::ERROR_INSUFFICIENT_FUNDS,
+                    "Insufficient chips",
+                );
             }
             player.balances.chips = player.balances.chips.saturating_sub(deduction);
             if deduction > 0 {
@@ -2243,6 +2272,20 @@ impl<'a, S: State> Layer<'a, S> {
         self.insert(
             Key::GlobalTableRound(game_type),
             Value::GlobalTableRound(round),
+        );
+
+        let mut total_wagered = 0u64;
+        for bet in bets {
+            total_wagered = total_wagered.saturating_add(bet.amount);
+        }
+        tracing::info!(
+            player = ?public,
+            game_type = ?game_type,
+            round_id = round_id,
+            bets_len = bets.len(),
+            total_wagered = total_wagered,
+            bets = ?bets,
+            "global table bets accepted"
         );
 
         let mut events = vec![Event::GlobalTableBetAccepted {
@@ -2511,6 +2554,17 @@ impl<'a, S: State> Layer<'a, S> {
             round.epoch_point_established = state.epoch_point_established;
             round.field_paytable = state.field_paytable;
         }
+        let roll_total = round.d1.saturating_add(round.d2);
+        tracing::info!(
+            game_type = ?game_type,
+            round_id = round.round_id,
+            d1 = round.d1,
+            d2 = round.d2,
+            total = roll_total,
+            main_point = round.main_point,
+            epoch_point_established = round.epoch_point_established,
+            "global table outcome revealed"
+        );
 
         round.phase = nullspace_types::casino::GlobalTablePhase::Payout;
         round.phase_ends_at_ms = now_ms.saturating_add(config.payout_ms);
@@ -3270,18 +3324,19 @@ fn log_game_completion(
     session: &nullspace_types::casino::GameSession,
     result: &crate::casino::GameResult,
 ) {
-    let (outcome, payout, loss) = match result {
-        crate::casino::GameResult::Win(amount, _) => ("win", Some(*amount), None),
-        crate::casino::GameResult::Push(amount, _) => ("push", Some(*amount), None),
-        crate::casino::GameResult::Loss(_) => ("loss", None, None),
-        crate::casino::GameResult::LossWithExtraDeduction(amount, _) => {
-            ("loss_extra", None, Some(*amount))
+    let (outcome, payout, loss, logs) = match result {
+        crate::casino::GameResult::Win(amount, logs) => ("win", Some(*amount), None, Some(logs)),
+        crate::casino::GameResult::Push(amount, logs) => ("push", Some(*amount), None, Some(logs)),
+        crate::casino::GameResult::Loss(logs) => ("loss", None, None, Some(logs)),
+        crate::casino::GameResult::LossWithExtraDeduction(amount, logs) => {
+            ("loss_extra", None, Some(*amount), Some(logs))
         }
-        crate::casino::GameResult::LossPreDeducted(amount, _) => {
-            ("loss_prededucted", None, Some(*amount))
+        crate::casino::GameResult::LossPreDeducted(amount, logs) => {
+            ("loss_prededucted", None, Some(*amount), Some(logs))
         }
         _ => return,
     };
+    let logs_len = logs.map(|value| value.len()).unwrap_or(0);
     tracing::info!(
         player = ?public,
         session_id = session.id,
@@ -3289,6 +3344,8 @@ fn log_game_completion(
         outcome,
         payout,
         loss,
+        logs_len,
+        logs = ?logs,
         "casino game completed"
     );
 }

@@ -64,37 +64,37 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
     return (
         <>
             <div className="flex-1 w-full flex flex-col items-center justify-start sm:justify-center gap-4 sm:gap-6 md:gap-4 relative z-10 pt-8 sm:pt-10 pb-24 sm:pb-20 md:px-24 lg:px-40">
-                <h1 className="absolute top-0 text-xl font-bold text-gray-500 tracking-widest uppercase">ULTIMATE TEXAS HOLD'EM</h1>
+                <h1 className="absolute top-0 text-xl font-semibold text-ns-muted tracking-[0.35em] uppercase">ULTIMATE TEXAS HOLD'EM</h1>
                 <div className="absolute top-2 left-2 z-40">
                     <MobileDrawer label="INFO" title="ULTIMATE TEXAS HOLD'EM">
                         <div className="space-y-3">
-                            <div className="border border-gray-800 rounded bg-black/40 p-2">
-                                <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-2 border-b border-gray-800 pb-1 text-center">
+                            <div className="liquid-panel p-2">
+                                <div className="text-[10px] text-ns-muted uppercase tracking-widest mb-2 border-b border-ns-border/60 pb-1 text-center">
                                     Blind Bonus
                                 </div>
                                 <div className="space-y-2 text-[10px]">
-                                    <div className="flex justify-between"><span className="text-gray-400">Royal Flush</span><span className="text-mono-0 dark:text-mono-1000">500:1</span></div>
-                                    <div className="flex justify-between"><span className="text-gray-400">Straight Flush</span><span className="text-mono-0 dark:text-mono-1000">50:1</span></div>
-                                    <div className="flex justify-between"><span className="text-gray-400">Four of Kind</span><span className="text-mono-0 dark:text-mono-1000">10:1</span></div>
-                                    <div className="flex justify-between"><span className="text-gray-400">Full House</span><span className="text-mono-0 dark:text-mono-1000">3:1</span></div>
-                                    <div className="flex justify-between"><span className="text-gray-400">Flush</span><span className="text-mono-0 dark:text-mono-1000">3:2</span></div>
-                                    <div className="flex justify-between"><span className="text-gray-400">Straight</span><span className="text-mono-0 dark:text-mono-1000">1:1</span></div>
-                                    <div className="border-t border-gray-800 pt-2 mt-2 text-[10px] text-gray-500 italic">
+                                    <div className="flex justify-between"><span className="text-ns-muted">Royal Flush</span><span className="text-mono-0 dark:text-mono-1000">500:1</span></div>
+                                    <div className="flex justify-between"><span className="text-ns-muted">Straight Flush</span><span className="text-mono-0 dark:text-mono-1000">50:1</span></div>
+                                    <div className="flex justify-between"><span className="text-ns-muted">Four of Kind</span><span className="text-mono-0 dark:text-mono-1000">10:1</span></div>
+                                    <div className="flex justify-between"><span className="text-ns-muted">Full House</span><span className="text-mono-0 dark:text-mono-1000">3:1</span></div>
+                                    <div className="flex justify-between"><span className="text-ns-muted">Flush</span><span className="text-mono-0 dark:text-mono-1000">3:2</span></div>
+                                    <div className="flex justify-between"><span className="text-ns-muted">Straight</span><span className="text-mono-0 dark:text-mono-1000">1:1</span></div>
+                                    <div className="border-t border-ns-border/60 pt-2 mt-2 text-[10px] text-ns-muted italic">
                                         Dealer must have pair+ to qualify
                                     </div>
                                 </div>
                             </div>
-                            <div className="border border-gray-800 rounded bg-black/40 p-2">
-                                <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-2 border-b border-gray-800 pb-1 text-center">
+                            <div className="liquid-panel p-2">
+                                <div className="text-[10px] text-ns-muted uppercase tracking-widest mb-2 border-b border-ns-border/60 pb-1 text-center">
                                     Betting Guide
                                 </div>
-                                <div className="space-y-2 text-[10px] text-gray-400">
-                                    <div className="border-b border-gray-800 pb-2">
+                                <div className="space-y-2 text-[10px] text-ns-muted">
+                                    <div className="border-b border-ns-border/60 pb-2">
                                         <div className="text-mono-0 dark:text-mono-1000 font-bold mb-1">PRE-FLOP</div>
                                         <div>• Check OR</div>
                                         <div>• Bet 3x/4x Ante</div>
                                     </div>
-                                    <div className="border-b border-gray-800 pb-2">
+                                    <div className="border-b border-ns-border/60 pb-2">
                                         <div className="text-mono-0 dark:text-mono-1000 font-bold mb-1">FLOP</div>
                                         <div>• Check OR</div>
                                         <div>• Bet 2x Ante</div>
@@ -134,13 +134,13 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
 
                 {/* Community Cards */}
                 <div className="flex flex-col items-center gap-2">
-                    <span className="text-xs uppercase tracking-widest text-gray-500">COMMUNITY</span>
+                    <span className="text-xs uppercase tracking-widest text-ns-muted">COMMUNITY</span>
                     <div className="flex gap-1 sm:gap-1.5 md:gap-2">
                         {gameState.communityCards.length > 0 ? (
                             <Hand cards={gameState.communityCards} />
                         ) : (
                             [0, 1, 2, 3, 4].map(i => (
-                                <div key={i} className="w-12 h-[4.5rem] sm:w-14 sm:h-20 md:w-16 md:h-24 border border-dashed border-gray-700 rounded" />
+                                <div key={i} className="w-12 h-[4.5rem] sm:w-14 sm:h-20 md:w-16 md:h-24 border border-dashed border-ns-border/70 rounded" />
                             ))
                         )}
                     </div>
@@ -149,7 +149,7 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
                 {/* 6-Card Bonus Cards */}
                 {gameState.uthBonusCards.length > 0 && (
                     <div className="flex flex-col items-center gap-2">
-                        <span className="text-xs uppercase tracking-widest text-gray-500">6-CARD BONUS</span>
+                        <span className="text-xs uppercase tracking-widest text-ns-muted">6-CARD BONUS</span>
                         <div className="flex gap-2">
                             <Hand cards={gameState.uthBonusCards} />
                         </div>
@@ -158,22 +158,22 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
 
                 {/* Center Info */}
                 <div className="text-center space-y-2 relative z-20">
-                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded border bg-black/40 text-[10px] tracking-widest uppercase border-gray-800 text-gray-400">
-                        <span className="text-gray-500">{gameState.stage}</span>
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded border bg-black/40 text-[10px] tracking-widest uppercase border-ns-border/60 text-ns-muted">
+                        <span className="text-ns-muted">{gameState.stage}</span>
                         {stageDesc ? (
                             <>
-                                <span className="text-gray-700">•</span>
+                                <span className="text-ns-muted">•</span>
                                 <span className="text-mono-0 dark:text-mono-1000">{stageDesc}</span>
                             </>
                         ) : null}
-                        <span className="text-gray-700">•</span>
-                        <span className="text-gray-500">TOTAL</span>
+                        <span className="text-ns-muted">•</span>
+                        <span className="text-ns-muted">TOTAL</span>
                         <span className="text-mono-0 dark:text-mono-1000">${baseTotalBet.toLocaleString()}</span>
                     </div>
                     <div className="text-base sm:text-lg font-semibold text-mono-0 dark:text-mono-1000 tracking-widest leading-tight animate-pulse zen-hide">
                         {gameState.message}
                     </div>
-                    <div className="text-xs text-gray-500 flex flex-wrap gap-x-4 gap-y-1 justify-center">
+                    <div className="text-xs text-ns-muted flex flex-wrap gap-x-4 gap-y-1 justify-center">
                         <span>ANTE: ${gameState.bet.toLocaleString()}</span>
                         <span>BLIND: ${gameState.bet.toLocaleString()}</span>
                         {gameState.uthTripsBet > 0 && <span>TRIPS: ${gameState.uthTripsBet.toLocaleString()}</span>}
@@ -182,7 +182,7 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
                     </div>
                     <div
                         className={`inline-flex items-center gap-2 px-3 py-1 rounded border bg-black/40 text-[10px] tracking-widest ${
-                            gameState.uthProgressiveBet > 0 ? 'border-mono-0/40 text-mono-0 dark:text-mono-1000' : 'border-gray-800 text-gray-600'
+                            gameState.uthProgressiveBet > 0 ? 'border-mono-0/40 text-mono-0 dark:text-mono-1000' : 'border-ns-border/60 text-ns-muted'
                         }`}
                     >
                         <span>PROG JACKPOT</span>
@@ -218,7 +218,7 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
             {/* Guide Drawer */}
 
             {/* Controls */}
-            <div className="ns-controlbar zen-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-titanium-900/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
+            <div className="ns-controlbar zen-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 liquid-card rounded-none md:rounded-t-3xl backdrop-blur border-t border-ns-border/60 z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
                 <div className="h-auto md:h-20 flex flex-col md:flex-row items-stretch md:items-center justify-between md:justify-center gap-2 p-2 md:px-4">
                     {/* Desktop: Grouped Controls */}
                     <div className="hidden md:flex items-center gap-4 flex-1">
@@ -227,12 +227,12 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
                                 {/* NORMAL BETS GROUP */}
                                 <div className="flex items-center gap-2">
                                     <span className="text-[10px] text-mono-0 dark:text-mono-1000 font-bold font-bold tracking-widest uppercase font-mono">NORMAL:</span>
-                                    <div className="h-6 w-px bg-gray-700" />
-                                    <span className="text-xs text-gray-500 font-mono">Ante + Blind</span>
+                                    <div className="h-6 w-px bg-ns-border/60" />
+                                    <span className="text-xs text-ns-muted font-mono">Ante + Blind</span>
                                 </div>
 
                                 {/* Spacer */}
-                                <div className="h-8 w-px bg-gray-700" />
+                                <div className="h-8 w-px bg-ns-border/60" />
 
                                 <SideBetsDrawer
                                     title="HOLD'EM SIDE BETS"
@@ -251,12 +251,12 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
                                                     className={`rounded-xl border px-3 py-3 text-xs font-semibold uppercase tracking-widest transition-all ${
                                                         active
                                                             ? 'border-mono-0/60 bg-mono-0/10 text-mono-0 dark:text-mono-1000'
-                                                            : 'border-titanium-200 text-titanium-700 hover:border-titanium-500 dark:border-titanium-800 dark:text-titanium-200'
+                                                            : 'border-ns bg-ns-surface text-ns hover:border-mono-0/40'
                                                     }`}
                                                 >
                                                     <div className="flex items-center justify-between gap-2">
                                                         <span>{bet.label}</span>
-                                                        <span className="text-[10px] font-mono text-titanium-400">[{bet.key}]</span>
+                                                        <span className="text-[10px] font-mono text-ns-muted">[{bet.key}]</span>
                                                     </div>
                                                 </button>
                                             );
@@ -269,26 +269,26 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
                                         <div>
                                             <Label size="micro" className="mb-2 block">Blind Bonus</Label>
                                             <div className="space-y-2 text-[10px]">
-                                                <div className="flex justify-between"><span className="text-titanium-600">Royal Flush</span><span className="text-mono-0 dark:text-mono-1000">500:1</span></div>
-                                                <div className="flex justify-between"><span className="text-titanium-600">Straight Flush</span><span className="text-mono-0 dark:text-mono-1000">50:1</span></div>
-                                                <div className="flex justify-between"><span className="text-titanium-600">Four of Kind</span><span className="text-mono-0 dark:text-mono-1000">10:1</span></div>
-                                                <div className="flex justify-between"><span className="text-titanium-600">Full House</span><span className="text-mono-0 dark:text-mono-1000">3:1</span></div>
-                                                <div className="flex justify-between"><span className="text-titanium-600">Flush</span><span className="text-mono-0 dark:text-mono-1000">3:2</span></div>
-                                                <div className="flex justify-between"><span className="text-titanium-600">Straight</span><span className="text-mono-0 dark:text-mono-1000">1:1</span></div>
-                                                <div className="border-t border-titanium-200 pt-2 mt-2 text-[9px] text-titanium-500 italic">
+                                                <div className="flex justify-between"><span className="text-ns-muted">Royal Flush</span><span className="text-mono-0 dark:text-mono-1000">500:1</span></div>
+                                                <div className="flex justify-between"><span className="text-ns-muted">Straight Flush</span><span className="text-mono-0 dark:text-mono-1000">50:1</span></div>
+                                                <div className="flex justify-between"><span className="text-ns-muted">Four of Kind</span><span className="text-mono-0 dark:text-mono-1000">10:1</span></div>
+                                                <div className="flex justify-between"><span className="text-ns-muted">Full House</span><span className="text-mono-0 dark:text-mono-1000">3:1</span></div>
+                                                <div className="flex justify-between"><span className="text-ns-muted">Flush</span><span className="text-mono-0 dark:text-mono-1000">3:2</span></div>
+                                                <div className="flex justify-between"><span className="text-ns-muted">Straight</span><span className="text-mono-0 dark:text-mono-1000">1:1</span></div>
+                                                <div className="border-t border-ns pt-2 mt-2 text-[9px] text-ns-muted italic">
                                                     Dealer must have pair or better to qualify
                                                 </div>
                                             </div>
                                         </div>
                                         <div>
                                             <Label size="micro" className="mb-2 block">Betting</Label>
-                                            <div className="space-y-2 text-[10px] text-titanium-500">
-                                                <div className="border-b border-titanium-200 pb-2">
+                                            <div className="space-y-2 text-[10px] text-ns-muted">
+                                                <div className="border-b border-ns pb-2">
                                                     <div className="text-mono-0 dark:text-mono-1000 font-bold mb-1">Pre-flop</div>
                                                     <div>• Check OR</div>
                                                     <div>• Bet 3x/4x Ante</div>
                                                 </div>
-                                                <div className="border-b border-titanium-200 pb-2">
+                                                <div className="border-b border-ns pb-2">
                                                     <div className="text-mono-0 dark:text-mono-1000 font-bold mb-1">Flop</div>
                                                     <div>• Check OR</div>
                                                     <div>• Bet 2x Ante</div>
@@ -304,7 +304,7 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
                                 </PanelDrawer>
 
                                 {/* Spacer */}
-                                {(playMode !== 'CASH' || gameState.activeModifiers.super) && <div className="h-8 w-px bg-gray-700" />}
+                                {(playMode !== 'CASH' || gameState.activeModifiers.super) && <div className="h-8 w-px bg-ns-border/60" />}
 
                                 {/* MODIFIERS GROUP */}
                                 {playMode !== 'CASH' && (
@@ -314,7 +314,7 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
                                             className={`px-3 py-1 rounded border-2 text-xs font-bold font-mono tracking-wider transition-colors ${
                                                 gameState.activeModifiers.shield
                                                     ? 'border-blue-400 bg-blue-500/20 text-blue-300'
-                                                    : 'border-gray-700 bg-black/50 text-gray-400 hover:bg-gray-800'
+                                                    : 'border-ns-border/70 bg-black/50 text-ns-muted hover:bg-white/55 dark:bg-black/40'
                                             }`}
                                         >
                                             SHIELD
@@ -324,7 +324,7 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
                                             className={`px-3 py-1 rounded border-2 text-xs font-bold font-mono tracking-wider transition-colors ${
                                                 gameState.activeModifiers.double
                                                     ? 'border-purple-400 bg-purple-500/20 text-purple-300'
-                                                    : 'border-gray-700 bg-black/50 text-gray-400 hover:bg-gray-800'
+                                                    : 'border-ns-border/70 bg-black/50 text-ns-muted hover:bg-white/55 dark:bg-black/40'
                                             }`}
                                         >
                                             DOUBLE
@@ -336,7 +336,7 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
                                     className={`px-3 py-1 rounded border-2 text-xs font-bold font-mono tracking-wider transition-colors ${
                                         gameState.activeModifiers.super
                                             ? 'border-yellow-400 bg-yellow-500/20 text-yellow-300'
-                                            : 'border-gray-700 bg-black/50 text-gray-400 hover:bg-gray-800'
+                                            : 'border-ns-border/70 bg-black/50 text-ns-muted hover:bg-white/55 dark:bg-black/40'
                                     }`}
                                 >
                                     SUPER
@@ -426,7 +426,7 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
                                                         className={`py-3 rounded border text-xs font-bold ${
                                                             active
                                                                 ? 'border-amber-400 bg-amber-500/20 text-amber-300'
-                                                                : 'border-gray-700 bg-gray-900 text-gray-400'
+                                                                : 'border-ns-border/70 bg-white/40 dark:bg-black/50 text-ns-muted'
                                                         }`}
                                                     >
                                                         {bet.label}
@@ -436,8 +436,8 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
                                         </div>
                                     </SideBetsDrawer>
                                     <BetsDrawer title="MODIFIERS">
-                                        <div className="rounded border border-gray-800 bg-black/40 p-2 space-y-2">
-                                            <div className="text-[10px] text-cyan-500 font-bold tracking-widest border-b border-gray-800 pb-1">MODIFIERS</div>
+                                        <div className="liquid-panel p-2 space-y-2">
+                                            <div className="text-[10px] text-cyan-500 font-bold tracking-widest border-b border-ns-border/60 pb-1">MODIFIERS</div>
                                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                                 {playMode !== 'CASH' && (
                                                     <>
@@ -446,7 +446,7 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
                                                             className={`py-3 rounded border text-xs font-bold ${
                                                                 gameState.activeModifiers.shield
                                                                     ? 'border-blue-400 bg-blue-500/20 text-blue-300'
-                                                                    : 'border-gray-700 bg-gray-900 text-gray-400'
+                                                                    : 'border-ns-border/70 bg-white/40 dark:bg-black/50 text-ns-muted'
                                                             }`}
                                                         >
                                                             SHIELD
@@ -456,7 +456,7 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
                                                             className={`py-3 rounded border text-xs font-bold ${
                                                                 gameState.activeModifiers.double
                                                                     ? 'border-purple-400 bg-purple-500/20 text-purple-300'
-                                                                    : 'border-gray-700 bg-gray-900 text-gray-400'
+                                                                    : 'border-ns-border/70 bg-white/40 dark:bg-black/50 text-ns-muted'
                                                             }`}
                                                         >
                                                             DOUBLE
@@ -468,7 +468,7 @@ export const UltimateHoldemView = React.memo<UltimateHoldemViewProps & { lastWin
                                                     className={`py-3 rounded border text-xs font-bold ${
                                                         gameState.activeModifiers.super
                                                             ? 'border-yellow-400 bg-yellow-500/20 text-yellow-300'
-                                                            : 'border-gray-700 bg-gray-900 text-gray-400'
+                                                            : 'border-ns-border/70 bg-white/40 dark:bg-black/50 text-ns-muted'
                                                     }`}
                                                 >
                                                     SUPER

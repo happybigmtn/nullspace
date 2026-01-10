@@ -13,14 +13,11 @@ import { View } from 'react-native';
 import { Card } from '../Card';
 import { ChipSelector } from '../ChipSelector';
 
-// Get mocked reanimated for inspection
-const reanimatedMock = jest.requireMock('react-native-reanimated');
-
 jest.mock('../../../services/haptics', () => ({
   haptics: {
-    cardDeal: jest.fn(),
-    chipPlace: jest.fn(),
-    betConfirm: jest.fn(),
+    cardDeal: jest.fn(() => Promise.resolve()),
+    chipPlace: jest.fn(() => Promise.resolve()),
+    betConfirm: jest.fn(() => Promise.resolve()),
   },
 }));
 

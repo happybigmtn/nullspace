@@ -20,20 +20,20 @@ export function BetsSidebar<T>({
   return (
     <div
       className={`
-        hidden md:flex absolute top-0 right-0 bottom-24 w-36
-        bg-titanium-900/80 border-l-2 border-gray-700 p-2 backdrop-blur-sm z-30
+        hidden md:flex absolute top-0 right-0 bottom-24 w-40
+        liquid-card rounded-l-3xl rounded-r-none p-3 z-30
         flex-col zen-hide ${className}
       `}
     >
       {/* Header */}
-      <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-2 border-b border-gray-800 pb-1 flex-none text-center">
+      <div className="text-[10px] text-ns-muted uppercase tracking-widest mb-2 border-b border-ns-border/60 pb-1 flex-none text-center">
         {title}
       </div>
 
       {/* Scrollable Content */}
       <div className="flex-1 overflow-y-auto flex flex-col space-y-2">
         {hasNoBets ? (
-          <div className="text-center text-[10px] text-gray-700 italic">NO BETS</div>
+          <div className="text-center text-[10px] text-ns-muted italic">NO BETS</div>
         ) : (
           <>
             {/* Confirmed (on-chain) bets */}

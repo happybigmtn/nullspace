@@ -21,6 +21,66 @@
   },
   "stories": [
     {
+      "id": "AUTO-005",
+      "category": "automation",
+      "description": "Add rollback hook on failed smoke",
+      "steps": [
+        "Trigger rollback workflow/Helm rollback when post-deploy smoke fails",
+        "Notify channel/issue with failure + rollback status",
+        "Re-run health-check to verify rollback success"
+      ],
+      "passes": false,
+      "notes": "Imported from automation-roadmap (status in-progress) on 2026-01-09"
+    },
+    {
+      "id": "AUTO-004",
+      "category": "automation",
+      "description": "Run staging smoke after deploy-staging",
+      "steps": [
+        "Attach Playwright smoke + scripts/health-check.sh to deploy-staging workflow",
+        "Upload smoke artifacts/screenshots and fail deployment on smoke failure",
+        "Report status back to PR/Slack and gate rollout"
+      ],
+      "passes": false,
+      "notes": "Imported from automation-roadmap (status in-progress) on 2026-01-09"
+    },
+    {
+      "id": "AUTO-003",
+      "category": "automation",
+      "description": "Auto-rerun failed shards once and mark flaky",
+      "steps": [
+        "Detect failed shards/jobs and rerun once automatically",
+        "Mark rerun results as flaky in CI summaries/artifacts",
+        "Publish rerun logs and tests.json for triage"
+      ],
+      "passes": false,
+      "notes": "Imported from automation-roadmap (status in-progress) on 2026-01-09"
+    },
+    {
+      "id": "AUTO-002",
+      "category": "automation",
+      "description": "Seed deterministic game outcomes for repeatable tests",
+      "steps": [
+        "Add deterministic RNG seeds/fixtures to simulator + mock backend",
+        "Expose a shared E2E_SEED flag across smoke, gateway integration, and mobile tests",
+        "Document seeded fixtures and refresh golden vectors where applicable"
+      ],
+      "passes": false,
+      "notes": "Imported from automation-roadmap (status in-progress) on 2026-01-09"
+    },
+    {
+      "id": "AUTO-001",
+      "category": "automation",
+      "description": "Point mobile/web E2E to local stack instead of mocks (detox-vs-stack)",
+      "steps": [
+        "Default mobile/web E2E configs to local gateway/auth from agent-up stack",
+        "Plumb env flags (GATEWAY_URL/AUTH_URL/E2E_SEED) through smoke + mobile runners",
+        "Add CI target that runs against local stack with published artifacts"
+      ],
+      "passes": false,
+      "notes": "Imported from automation-roadmap (status in-progress) on 2026-01-09"
+    },
+    {
       "id": "US-229",
       "category": "infrastructure",
       "description": "Generate production SOPS Age keys",
@@ -907,6 +967,32 @@
       ],
       "passes": true,
       "notes": "Created liquid-crystal-motion.ts with motion tiers (none/reduced/standard/elevated), priority hierarchy (gameResult > gameAction > userFeedback > uiState > decorative), specular sweep, refraction pulse, edge glow, shimmer, float, breathe, and ripple animations. Added CSS keyframes/classes to Tailwind config and index.css. Documented in docs/design.md with usage examples for web (Tailwind) and mobile (Reanimated)."
+    },
+    {
+      "id": "US-270",
+      "category": "architecture",
+      "description": "Implement protocol version header handling in Rust backend and remove gateway stripVersionHeader hack",
+      "steps": [
+        "Update types/src/execution.rs Instruction::read (and any opcode readers) to detect an optional leading protocol version byte (v1) and gracefully reject unknown versions",
+        "Align @nullspace/protocol encoding/decoding + golden vectors with the version header, then remove stripVersionHeader from gateway handlers so we send versioned payloads end-to-end",
+        "Add cross-service regression tests that submit a versioned transaction through the gateway into the simulator and assert the opcode is parsed correctly; include a negative test for unsupported versions",
+        "Document version-negotiation rules in packages/protocol/README.md and RUNBOOK.md"
+      ],
+      "passes": false,
+      "notes": "Gateway currently strips the version byte because the Rust decoder treats the first byte as the opcode; this is the remaining protocol fragility blocking removal of the workaround."
+    },
+    {
+      "id": "US-271",
+      "category": "operations",
+      "description": "Enforce simulator/gateway origin allowlists for testnet to prevent CORS drift",
+      "steps": [
+        "Add explicit ALLOWED_HTTP_ORIGINS/ALLOWED_WS_ORIGINS values for gateway+website origins to configs/testnet (and any compose/env artifacts)",
+        "Create a CI/preflight check that fails when required gateway origins are missing from simulator allowlists",
+        "Add a startup validation in simulator (and gateway health check) that warns/errors when the configured gateway origin is not allowed",
+        "Document required origins in RUNBOOK.md and infrastructure docs"
+      ],
+      "passes": false,
+      "notes": "configs/testnet currently ship without ALLOWED_HTTP_ORIGINS, and simulator rejects browser requests when the allowlist is empty; we need guardrails so gateway/testnet origins cannot drift."
     }
   ],
   "verifiedComplete": [

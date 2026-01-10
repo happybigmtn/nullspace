@@ -133,6 +133,7 @@ export default function TerminalPage() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [input, setInput] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
+  const lastMessageRef = useRef<string | null>(null);
 
   const append = (text: string) => {
     const ts = new Date().toLocaleTimeString();
@@ -151,6 +152,14 @@ export default function TerminalPage() {
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [logs]);
+
+  // Surface latest game message into the terminal log so classic UI users see errors (e.g., insufficient funds)
+  useEffect(() => {
+    const msg = gameState.message;
+    if (!msg || msg === lastMessageRef.current) return;
+    lastMessageRef.current = msg;
+    append(msg);
+  }, [gameState.message]);
 
   const setBet = (amt: number) => {
     actions.setBetAmount(amt);
@@ -272,8 +281,8 @@ export default function TerminalPage() {
             append('Usage: /roulette <type> [target]');
             break;
           }
-          actions.placeRouletteBet?.(type, target);
-          append(`ROULETTE ${type}${target !== undefined ? ` ${target}` : ''}`);
+          const ok = actions.placeRouletteBet?.(type, target);
+          append(ok === false ? 'INSUFFICIENT FUNDS' : `ROULETTE ${type}${target !== undefined ? ` ${target}` : ''}`);
           break;
         }
         case 'craps': {
@@ -294,8 +303,8 @@ export default function TerminalPage() {
             append('Usage: /sicbo <type> [target]');
             break;
           }
-          actions.placeSicBoBet?.(type, target);
-          append(`SICBO ${type}${target !== undefined ? ` ${target}` : ''}`);
+          const ok = actions.placeSicBoBet?.(type, target);
+          append(ok === false ? 'INSUFFICIENT FUNDS' : `SICBO ${type}${target !== undefined ? ` ${target}` : ''}`);
           break;
         }
         case 'undo': {

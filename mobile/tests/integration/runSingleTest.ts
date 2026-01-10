@@ -5,7 +5,7 @@
 import { RouletteTest } from './games/RouletteTest';
 
 async function main() {
-  const gatewayUrl = process.env.GATEWAY_URL || 'ws://localhost:9010';
+  const gatewayUrl = process.env.GATEWAY_URL || 'wss://api.testnet.regenesis.dev';
   console.log(`Testing against: ${gatewayUrl}`);
 
   const test = new RouletteTest({ gatewayUrl, timeout: 10000 });

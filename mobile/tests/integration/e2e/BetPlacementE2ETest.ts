@@ -45,6 +45,39 @@ class BetPlacementE2ETest {
   }
 
   /**
+   * Poll for account registration with balance
+   */
+  private async waitForRegistration(maxAttempts = 20): Promise<GameMessage> {
+    for (let attempts = 1; attempts <= maxAttempts; attempts++) {
+      await new Promise((r) => setTimeout(r, 100));
+      this.client.send({ type: 'get_balance' });
+      const balanceMsg = await this.client.waitForMessage('balance', 2000);
+
+      if (balanceMsg.registered && balanceMsg.hasBalance) {
+        return balanceMsg;
+      }
+    }
+    throw new Error(`Account registration failed after ${maxAttempts * 100}ms`);
+  }
+
+  /**
+   * Wait for game outcome (move, result, or error)
+   */
+  private async waitForGameOutcome(timeoutMs = 5000): Promise<{ type: string; msg: GameMessage }> {
+    const result = await Promise.race([
+      this.client.waitForMessage('game_move', timeoutMs).then((msg) => ({ type: 'move', msg })),
+      this.client.waitForMessage('game_result', timeoutMs).then((msg) => ({ type: 'result', msg })),
+      this.client.waitForMessage('error', timeoutMs).then((msg) => ({ type: 'error', msg })),
+    ]);
+
+    if (result.type === 'error') {
+      throw new Error(`Game error: ${JSON.stringify(result.msg)}`);
+    }
+
+    return result;
+  }
+
+  /**
    * Record a step in the E2E flow
    */
   private recordStep(
@@ -107,25 +140,7 @@ class BetPlacementE2ETest {
 
     // Step 3: Wait for account registration + get balance
     const balanceInfo = await this.executeStep('3. Account Registration & Balance', async () => {
-      let balanceMsg: GameMessage | undefined;
-      let attempts = 0;
-      const maxAttempts = 20;
-
-      do {
-        await new Promise((r) => setTimeout(r, 100));
-        this.client.send({ type: 'get_balance' });
-        balanceMsg = await this.client.waitForMessage('balance', 2000);
-        attempts++;
-
-        if (balanceMsg.registered && balanceMsg.hasBalance) {
-          break;
-        }
-      } while (attempts < maxAttempts);
-
-      if (!balanceMsg?.hasBalance) {
-        throw new Error(`Account registration failed after ${attempts * 100}ms`);
-      }
-
+      const balanceMsg = await this.waitForRegistration();
       this.initialBalance = parseFloat(balanceMsg.balance as string);
       return {
         balance: this.initialBalance,
@@ -199,26 +214,7 @@ class BetPlacementE2ETest {
 
     // Step 9: Game resolution
     const gameResult = await this.executeStep('9. Game Resolution', async () => {
-      // Wait for either game_move or game_result
-      const result = await Promise.race([
-        this.client.waitForMessage('game_move', 5000).then((msg) => ({
-          type: 'move',
-          msg,
-        })),
-        this.client.waitForMessage('game_result', 5000).then((msg) => ({
-          type: 'result',
-          msg,
-        })),
-        this.client.waitForMessage('error', 5000).then((msg) => ({
-          type: 'error',
-          msg,
-        })),
-      ]);
-
-      if (result.type === 'error') {
-        throw new Error(`Game error: ${JSON.stringify(result.msg)}`);
-      }
-
+      const result = await this.waitForGameOutcome();
       return result.msg;
     });
 
@@ -278,20 +274,7 @@ class BetPlacementE2ETest {
     });
 
     const balanceInfo = await this.executeStep('3. Account Registration', async () => {
-      let balanceMsg: GameMessage | undefined;
-      let attempts = 0;
-
-      do {
-        await new Promise((r) => setTimeout(r, 100));
-        this.client.send({ type: 'get_balance' });
-        balanceMsg = await this.client.waitForMessage('balance', 2000);
-        attempts++;
-      } while (!balanceMsg?.hasBalance && attempts < 20);
-
-      if (!balanceMsg?.hasBalance) {
-        throw new Error('Account registration failed');
-      }
-
+      const balanceMsg = await this.waitForRegistration();
       this.initialBalance = parseFloat(balanceMsg.balance as string);
       return { balance: this.initialBalance };
     });
@@ -313,25 +296,7 @@ class BetPlacementE2ETest {
 
     // Atomic games resolve immediately
     const gameResult = await this.executeStep('7. Game Resolution (atomic)', async () => {
-      const result = await Promise.race([
-        this.client.waitForMessage('game_move', 5000).then((msg) => ({
-          type: 'move',
-          msg,
-        })),
-        this.client.waitForMessage('game_result', 5000).then((msg) => ({
-          type: 'result',
-          msg,
-        })),
-        this.client.waitForMessage('error', 5000).then((msg) => ({
-          type: 'error',
-          msg,
-        })),
-      ]);
-
-      if (result.type === 'error') {
-        throw new Error(`Game error: ${JSON.stringify(result.msg)}`);
-      }
-
+      const result = await this.waitForGameOutcome();
       return result.msg;
     });
 
@@ -370,17 +335,8 @@ class BetPlacementE2ETest {
     });
 
     const balanceInfo = await this.executeStep('3. Get Balance', async () => {
-      let balanceMsg: GameMessage | undefined;
-      let attempts = 0;
-
-      do {
-        await new Promise((r) => setTimeout(r, 100));
-        this.client.send({ type: 'get_balance' });
-        balanceMsg = await this.client.waitForMessage('balance', 2000);
-        attempts++;
-      } while (!balanceMsg?.hasBalance && attempts < 20);
-
-      this.initialBalance = parseFloat(balanceMsg?.balance as string) || 0;
+      const balanceMsg = await this.waitForRegistration();
+      this.initialBalance = parseFloat(balanceMsg.balance as string);
       return { balance: this.initialBalance };
     });
 
@@ -398,29 +354,19 @@ class BetPlacementE2ETest {
     });
 
     await this.executeStep('5. Error Response', async () => {
-      // Should receive error, not game_started
       const result = await Promise.race([
-        this.client
-          .waitForMessage('error', 5000)
-          .then((msg) => ({ type: 'error' as const, msg })),
-        this.client
-          .waitForMessage('game_started', 5000)
-          .then((msg) => ({ type: 'started' as const, msg })),
+        this.client.waitForMessage('error', 5000).then((msg) => ({ type: 'error' as const, msg })),
+        this.client.waitForMessage('game_started', 5000).then((msg) => ({ type: 'started' as const, msg })),
       ]);
 
       if (result.type === 'started') {
         throw new Error('Game started with excessive bet - validation failed!');
       }
 
-      this.logger.info('Error received', {
-        code: result.msg.code,
-        message: result.msg.message,
-      });
+      this.logger.info('Error received', { code: result.msg.code, message: result.msg.message });
 
-      // Verify it's an insufficient balance error
       const errorCode = result.msg.code as string;
       if (!errorCode.includes('INSUFFICIENT') && !errorCode.includes('BALANCE')) {
-        // Accept any error that rejects the bet
         this.logger.warn(`Unexpected error code: ${errorCode}`);
       }
 
@@ -461,17 +407,8 @@ class BetPlacementE2ETest {
     });
 
     await this.executeStep('3. Account Registration', async () => {
-      let balanceMsg: GameMessage | undefined;
-      let attempts = 0;
-
-      do {
-        await new Promise((r) => setTimeout(r, 100));
-        this.client.send({ type: 'get_balance' });
-        balanceMsg = await this.client.waitForMessage('balance', 2000);
-        attempts++;
-      } while (!balanceMsg?.hasBalance && attempts < 20);
-
-      this.initialBalance = parseFloat(balanceMsg?.balance as string) || 0;
+      const balanceMsg = await this.waitForRegistration();
+      this.initialBalance = parseFloat(balanceMsg.balance as string);
       return { balance: this.initialBalance };
     });
 
@@ -497,16 +434,10 @@ class BetPlacementE2ETest {
         this.client.send({ type: 'blackjack_stand' });
       });
 
-      const gameResult = await this.executeStep(
-        `Game ${i}/3: Resolution`,
-        async () => {
-          const result = await Promise.race([
-            this.client.waitForMessage('game_move', 5000).then((msg) => msg),
-            this.client.waitForMessage('game_result', 5000).then((msg) => msg),
-          ]);
-          return result;
-        }
-      );
+      const gameResult = await this.executeStep(`Game ${i}/3: Resolution`, async () => {
+        const result = await this.waitForGameOutcome();
+        return result.msg;
+      });
 
       await this.executeStep(`Game ${i}/3: Verify Balance`, async () => {
         this.client.send({ type: 'get_balance' });
@@ -603,7 +534,7 @@ class BetPlacementE2ETest {
 
 // Main runner
 async function main(): Promise<void> {
-  const gatewayUrl = process.env.GATEWAY_URL || 'ws://localhost:9010';
+  const gatewayUrl = process.env.GATEWAY_URL || 'wss://api.testnet.regenesis.dev';
 
   console.log(`\n🎲 E2E Bet Placement Integration Tests`);
   console.log(`   Gateway: ${gatewayUrl}\n`);

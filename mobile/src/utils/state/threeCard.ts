@@ -16,9 +16,12 @@ export function parseThreeCardState(stateBlob: Uint8Array): ThreeCardStateUpdate
   if (!parsed) {
     return null;
   }
-  const stageByte = parsed.stage;
-  const stage =
-    stageByte === 1 ? 'decision' : stageByte === 2 ? 'awaiting' : stageByte === 3 ? 'complete' : 'betting';
+  const stageMap: Record<number, ThreeCardStateUpdate['stage']> = {
+    1: 'decision',
+    2: 'awaiting',
+    3: 'complete',
+  };
+  const stage = stageMap[parsed.stage] ?? 'betting';
 
   const playerCards: Card[] = [];
   for (const cardId of parsed.playerCards) {

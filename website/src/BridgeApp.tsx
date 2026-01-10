@@ -408,7 +408,7 @@ export default function BridgeApp() {
     : '-';
 
   return (
-    <div className="min-h-screen bg-titanium-900 text-white">
+    <div className="min-h-screen text-ns font-sans space-y-6">
       <PageHeader
         title="Bridge"
         status={<ConnectionStatus />}
@@ -427,37 +427,53 @@ export default function BridgeApp() {
         }
       />
 
-      <div className="px-4 py-6 space-y-6">
+      <div className="space-y-6">
+        <div className="liquid-card p-5">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="text-[10px] text-ns-muted tracking-[0.32em] uppercase">Bridge</div>
+              <div className="text-lg font-display tracking-tight text-ns">Move RNG between networks</div>
+              <div className="text-[11px] text-ns-muted">
+                Choose a direction, submit the transaction, then track confirmations below.
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-[10px] tracking-[0.28em] uppercase">
+              <div className="liquid-chip px-3 py-1 text-ns-muted">Commonware → EVM</div>
+              <div className="liquid-chip px-3 py-1 text-ns-muted">EVM → Commonware</div>
+            </div>
+          </div>
+        </div>
+
         <div className="grid gap-6 lg:grid-cols-2">
-          <section className="border border-gray-800 rounded-lg bg-gray-900/40 p-4 space-y-4">
-            <div className="text-xs text-gray-400 tracking-widest">COMMONWARE → EVM</div>
-            <div className="text-[11px] text-gray-500">
+          <section className="liquid-card p-5 space-y-4">
+            <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase">Commonware → EVM</div>
+            <div className="text-[11px] text-ns-muted">
               Withdraw RNG to Ethereum (lock/mint). Withdrawals respect daily caps and delay windows.
             </div>
             <div className="grid gap-3">
-              <label className="text-[11px] text-gray-400">
+              <label className="text-[11px] text-ns-muted">
                 Amount (RNG)
                 <input
                   value={withdrawAmount}
                   onChange={(e) => setWithdrawAmount(e.target.value)}
-                  className="mt-1 w-full rounded border border-gray-800 bg-black/60 px-3 py-2 text-sm"
+                  className="mt-1 w-full liquid-input px-3 py-2 text-sm"
                   placeholder="0"
                   inputMode="numeric"
                 />
               </label>
-              <label className="text-[11px] text-gray-400">
+              <label className="text-[11px] text-ns-muted">
                 EVM destination (0x...)
                 <input
                   value={withdrawDestination}
                   onChange={(e) => setWithdrawDestination(e.target.value)}
-                  className="mt-1 w-full rounded border border-gray-800 bg-black/60 px-3 py-2 text-sm"
+                  className="mt-1 w-full liquid-input px-3 py-2 text-sm"
                   placeholder="0xEvmAddress"
                 />
               </label>
             </div>
-            <div className="text-[11px] text-gray-500 grid gap-1">
-              <div>Daily cap remaining: <span className="text-white">{withdrawCapLabel}</span></div>
-              <div>Delay: <span className="text-white">{policyLimits.delaySecs ? `${policyLimits.delaySecs}s` : '-'}</span></div>
+            <div className="text-[11px] text-ns-muted grid gap-1">
+              <div>Daily cap remaining: <span className="text-ns">{withdrawCapLabel}</span></div>
+              <div>Delay: <span className="text-ns">{policyLimits.delaySecs ? `${policyLimits.delaySecs}s` : '-'}</span></div>
             </div>
             {withdrawValidation ? (
               <div className="text-[11px] text-action-destructive">{withdrawValidation}</div>
@@ -465,57 +481,57 @@ export default function BridgeApp() {
             <button
               onClick={onWithdraw}
               disabled={!canWithdraw}
-              className={`w-full rounded px-3 py-2 text-xs font-bold tracking-widest uppercase border ${
+              className={`w-full rounded-full px-3 py-2 text-xs font-bold tracking-[0.28em] uppercase liquid-chip ${
                 canWithdraw
-                  ? 'border-action-success text-action-success hover:bg-action-success/10'
-                  : 'border-gray-800 text-gray-600 cursor-not-allowed'
+                  ? 'text-action-success hover:shadow-soft'
+                  : 'text-ns-muted opacity-60 cursor-not-allowed'
               }`}
             >
               Request Withdrawal
             </button>
           </section>
 
-          <section className="border border-gray-800 rounded-lg bg-gray-900/40 p-4 space-y-4">
-            <div className="text-xs text-gray-400 tracking-widest">EVM → COMMONWARE</div>
-            <div className="text-[11px] text-gray-500">
+          <section className="liquid-card p-5 space-y-4">
+            <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase">EVM → Commonware</div>
+            <div className="text-[11px] text-ns-muted">
               Deposit RNG on Ethereum and receive credited RNG once the relayer confirms the lockbox event.
             </div>
             {!hasEvmProvider() ? (
               <div className="text-[11px] text-action-destructive">Install an EVM wallet to deposit.</div>
             ) : (
-              <div className="flex items-center justify-between text-[11px] text-gray-500">
+              <div className="flex items-center justify-between text-[11px] text-ns-muted">
                 <div>
                   Wallet: {evmInfo ? (
-                    <span className="text-white">{shortHex(evmInfo.address)}</span>
+                    <span className="text-ns">{shortHex(evmInfo.address)}</span>
                   ) : (
-                    <span className="text-gray-600">Not connected</span>
+                    <span className="text-ns-muted">Not connected</span>
                   )}
                 </div>
                 <button
                   onClick={onConnectEvm}
-                  className="rounded border border-gray-800 px-3 py-1 text-[10px] tracking-widest uppercase text-gray-300 hover:border-gray-600"
+                  className="rounded-full liquid-chip px-3 py-1 text-[10px] tracking-[0.28em] uppercase text-ns hover:shadow-soft"
                 >
                   {evmInfo ? 'Refresh' : 'Connect'}
                 </button>
               </div>
             )}
             <div className="grid gap-3">
-              <label className="text-[11px] text-gray-400">
+              <label className="text-[11px] text-ns-muted">
                 Amount (RNG)
                 <input
                   value={depositAmount}
                   onChange={(e) => setDepositAmount(e.target.value)}
-                  className="mt-1 w-full rounded border border-gray-800 bg-black/60 px-3 py-2 text-sm"
+                  className="mt-1 w-full liquid-input px-3 py-2 text-sm"
                   placeholder="0"
                   inputMode="numeric"
                 />
               </label>
-              <label className="text-[11px] text-gray-400">
+              <label className="text-[11px] text-ns-muted">
                 Destination (Commonware public key)
                 <input
                   value={depositDestination}
                   onChange={(e) => setDepositDestination(e.target.value)}
-                  className="mt-1 w-full rounded border border-gray-800 bg-black/60 px-3 py-2 text-sm"
+                  className="mt-1 w-full liquid-input px-3 py-2 text-sm"
                   placeholder="0xPublicKey"
                 />
               </label>
@@ -532,42 +548,44 @@ export default function BridgeApp() {
             <button
               onClick={onDeposit}
               disabled={!canDeposit}
-              className={`w-full rounded px-3 py-2 text-xs font-bold tracking-widest uppercase border ${
+              className={`w-full rounded-full px-3 py-2 text-xs font-bold tracking-[0.28em] uppercase liquid-chip ${
                 canDeposit
-                  ? 'border-action-success text-action-success hover:bg-action-success/10'
-                  : 'border-gray-800 text-gray-600 cursor-not-allowed'
+                  ? 'text-action-success hover:shadow-soft'
+                  : 'text-ns-muted opacity-60 cursor-not-allowed'
               }`}
             >
               {evmBusy ? 'Submitting...' : 'Approve + Deposit'}
             </button>
             {evmConfigOk ? (
-              <div className="text-[10px] text-gray-600">
-                Lockbox: <span className="text-gray-400">{shortHex(EVM_LOCKBOX_ADDRESS)}</span>{' '}
-                | RNG: <span className="text-gray-400">{shortHex(EVM_RNG_ADDRESS)}</span>
+              <div className="text-[10px] text-ns-muted">
+                Lockbox: <span className="text-ns-muted">{shortHex(EVM_LOCKBOX_ADDRESS)}</span>{' '}
+                | RNG: <span className="text-ns-muted">{shortHex(EVM_RNG_ADDRESS)}</span>
               </div>
             ) : (
-              <div className="text-[10px] text-gray-600">
+              <div className="text-[10px] text-ns-muted">
                 Configure `VITE_EVM_CHAIN_ID`, `VITE_EVM_LOCKBOX_ADDRESS`, and `VITE_EVM_RNG_ADDRESS` to enable deposits.
               </div>
             )}
           </section>
         </div>
 
-        <section className="border border-gray-800 rounded p-4 bg-gray-900/30">
-          <div className="text-xs text-gray-400 tracking-widest mb-3">PENDING WITHDRAWALS</div>
+        <section className="liquid-card p-5">
+          <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase mb-3">Pending Withdrawals</div>
           {pendingWithdrawals.length === 0 ? (
-            <div className="text-[11px] text-gray-600">No bridge withdrawals yet.</div>
+            <div className="text-[11px] text-ns-muted">No bridge withdrawals yet.</div>
           ) : (
             <div className="space-y-2 text-[11px]">
               {pendingWithdrawals.map((item) => (
-                <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-900 py-1">
-                  <div className="min-w-0">
-                    <div className="text-gray-400">#{item.id} → {shortHex(item.destination)}</div>
-                    <div className="text-white">{formatInteger(item.amount)} RNG</div>
+                <div key={item.id} className="liquid-panel px-3 py-2 flex flex-wrap items-center justify-between gap-3">
+                  <div className="min-w-0 space-y-1">
+                    <div className="text-ns-muted">#{item.id} → {shortHex(item.destination)}</div>
+                    <div className="text-ns">{formatInteger(item.amount)} RNG</div>
                   </div>
-                  <div className="text-right text-gray-500">
-                    <div>{item.status === 'finalized' ? 'FINALIZED' : 'PENDING'}</div>
-                    <div>
+                  <div className="text-right text-ns-muted">
+                    <div className="text-[10px] tracking-widest">
+                      {item.status === 'finalized' ? 'FINALIZED' : 'PENDING'}
+                    </div>
+                    <div className="text-[10px]">
                       Available: {item.availableTs ? new Date(item.availableTs * 1000).toLocaleTimeString() : '-'}
                     </div>
                   </div>
@@ -577,57 +595,60 @@ export default function BridgeApp() {
           )}
         </section>
 
-        <section className="border border-gray-800 rounded p-4 bg-gray-900/30">
-          <div className="text-xs text-gray-400 tracking-widest mb-3">ACTIVITY</div>
-          <div className="space-y-1 text-[11px] text-gray-300">
-            {activity.length === 0 ? <div className="text-gray-600">No activity yet.</div> : null}
-            {activity.map((item) => {
-              const isTx = item.type === 'tx';
-              const message = isTx ? item.finalMessage ?? item.message : item.message;
-              const when = new Date(isTx ? item.updatedTs : item.ts).toLocaleTimeString();
-              const label = isTx
-                ? item.status === 'submitted'
-                  ? 'PENDING'
-                  : item.status === 'confirmed'
-                    ? 'OK'
-                    : 'FAIL'
-                : item.level === 'error'
-                  ? 'ERROR'
-                  : item.level === 'success'
-                    ? 'OK'
-                    : 'INFO';
-              const labelClass = isTx
-                ? item.status === 'confirmed'
-                  ? 'text-action-success'
-                  : item.status === 'failed'
-                    ? 'text-action-destructive'
-                    : 'text-gray-500'
-                : item.level === 'error'
-                  ? 'text-action-destructive'
-                  : item.level === 'success'
+        <section className="liquid-card p-5">
+          <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase mb-3">Activity</div>
+          {activity.length === 0 ? (
+            <div className="text-[11px] text-ns-muted">No activity yet.</div>
+          ) : (
+            <div className="space-y-2 text-[11px] text-ns-muted">
+              {activity.map((item) => {
+                const isTx = item.type === 'tx';
+                const message = isTx ? item.finalMessage ?? item.message : item.message;
+                const when = new Date(isTx ? item.updatedTs : item.ts).toLocaleTimeString();
+                const label = isTx
+                  ? item.status === 'submitted'
+                    ? 'PENDING'
+                    : item.status === 'confirmed'
+                      ? 'OK'
+                      : 'FAIL'
+                  : item.level === 'error'
+                    ? 'ERROR'
+                    : item.level === 'success'
+                      ? 'OK'
+                      : 'INFO';
+                const labelClass = isTx
+                  ? item.status === 'confirmed'
                     ? 'text-action-success'
-                    : 'text-gray-500';
+                    : item.status === 'failed'
+                      ? 'text-action-destructive'
+                      : 'text-ns-muted'
+                  : item.level === 'error'
+                    ? 'text-action-destructive'
+                    : item.level === 'success'
+                      ? 'text-action-success'
+                      : 'text-ns-muted';
 
-              const messageNode =
-                isTx && item.txDigest ? (
-                  <Link to={`/explorer/tx/${item.txDigest}`} className="truncate hover:underline" title={item.txDigest}>
-                    {message}
-                  </Link>
-                ) : (
-                  <div className="truncate">{message}</div>
-                );
+                const messageNode =
+                  isTx && item.txDigest ? (
+                    <Link to={`/explorer/tx/${item.txDigest}`} className="truncate hover:underline" title={item.txDigest}>
+                      {message}
+                    </Link>
+                  ) : (
+                    <div className="truncate">{message}</div>
+                  );
 
-              return (
-                <div key={item.id} className="flex items-center justify-between gap-3 border-b border-gray-900 py-1">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className={`text-[10px] tracking-widest ${labelClass}`}>{label}</div>
-                    <div className="min-w-0 flex-1">{messageNode}</div>
+                return (
+                  <div key={item.id} className="liquid-panel px-3 py-2 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className={`text-[10px] tracking-widest ${labelClass}`}>{label}</div>
+                      <div className="min-w-0 flex-1 text-ns">{messageNode}</div>
+                    </div>
+                    <div className="text-[10px] text-ns-muted">{when}</div>
                   </div>
-                  <div className="text-[10px] text-gray-600">{when}</div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </section>
       </div>
     </div>

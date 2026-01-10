@@ -28,9 +28,9 @@ jest.mock('../../../context/ThemeContext', () => ({
 // Mock haptics - must be defined before jest.mock
 jest.mock('../../../services/haptics', () => ({
   haptics: {
-    buttonPress: jest.fn(),
-    error: jest.fn(),
-    win: jest.fn(),
+    buttonPress: jest.fn(() => Promise.resolve()),
+    error: jest.fn(() => Promise.resolve()),
+    win: jest.fn(() => Promise.resolve()),
   },
 }));
 
@@ -44,6 +44,9 @@ describe('ErrorRecoveryOverlay', () => {
   });
 
   afterEach(() => {
+    act(() => {
+      jest.runOnlyPendingTimers();
+    });
     jest.useRealTimers();
   });
 
@@ -579,9 +582,6 @@ function getAllTextContent(tree: ReturnType<typeof create>): string {
   const textNodes = tree.root.findAllByType(Text);
   return textNodes.map((node) => {
     const { children } = node.props;
-    if (Array.isArray(children)) {
-      return children.join('');
-    }
-    return String(children ?? '');
+    return Array.isArray(children) ? children.join('') : String(children ?? '');
   }).join(' ');
 }

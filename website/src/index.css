@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap');
 @import "tailwindcss";
 
 @layer theme {
@@ -48,29 +47,73 @@
     --a11y-btn-error-text: #ffffff;   /* White on error red, 3.55:1 (large text only) */
 
     /* ─────────────────────────────────────────────────────────────────────────────
-     * Semantic Color Tokens - Luxury Redesign v4.0
+     * Liquid Crystal Core Palette
      *
-     * 5 essential colors for the entire UI:
-     * - background: Page/app background
-     * - surface: Cards, panels, modals
-     * - border: Dividers, outlines
-     * - text-muted: Secondary text, hints
-     * - text: Primary text
+     * Subtle prismatic highlights over a neutral base. Designed to feel
+     * soft, luminous, and precise without overwhelming the content.
      * ───────────────────────────────────────────────────────────────────────────── */
-    --ns-background: #FAFAFA;   /* titanium-50 */
-    --ns-surface: #F5F5F5;      /* titanium-100 */
-    --ns-border: #E5E5E5;       /* titanium-200 */
-    --ns-text-muted: #525252;   /* titanium-600 */
-    --ns-text: #171717;         /* titanium-900 */
+    --lc-ink: #0f1319;
+    --lc-ink-muted: #4b5565;
+    --lc-bg: #f5f7fb;
+    --lc-bg-deep: #eef2f8;
+    --lc-surface: rgba(255, 255, 255, 0.72);
+    --lc-surface-strong: rgba(255, 255, 255, 0.92);
+    --lc-border: rgba(15, 19, 25, 0.12);
+    --lc-glow-1: rgba(102, 202, 255, 0.35);
+    --lc-glow-2: rgba(255, 214, 153, 0.28);
+    --lc-glow-3: rgba(156, 255, 226, 0.26);
+    --lc-chart-grid: rgba(15, 19, 25, 0.12);
+    --lc-chart-axis: rgba(75, 85, 101, 0.75);
+    --lc-chart-tooltip-bg: rgba(255, 255, 255, 0.94);
+    --lc-chart-tooltip-border: rgba(15, 19, 25, 0.12);
+    --lc-chart-tooltip-text: rgba(15, 19, 25, 0.9);
+    --lc-chart-1: rgba(96, 186, 255, 0.9);
+    --lc-chart-1-soft: rgba(96, 186, 255, 0.22);
+    --lc-chart-2: rgba(104, 217, 184, 0.9);
+    --lc-chart-2-soft: rgba(104, 217, 184, 0.22);
+    --lc-chart-3: rgba(255, 196, 128, 0.9);
+    --lc-chart-3-soft: rgba(255, 196, 128, 0.22);
+    --lc-chart-4: rgba(232, 130, 156, 0.9);
+    --lc-chart-4-soft: rgba(232, 130, 156, 0.22);
+    --lc-chart-5: rgba(170, 160, 255, 0.9);
+    --lc-chart-5-soft: rgba(170, 160, 255, 0.22);
+    --lc-chart-neutral: rgba(15, 19, 25, 0.4);
+
+    /* ─────────────────────────────────────────────────────────────────────────────
+     * Semantic Color Tokens - Liquid Crystal v1
+     * ───────────────────────────────────────────────────────────────────────────── */
+    --ns-background: var(--lc-bg);
+    --ns-surface: var(--lc-surface);
+    --ns-border: var(--lc-border);
+    --ns-text-muted: var(--lc-ink-muted);
+    --ns-text: var(--lc-ink);
   }
 
   .dark {
+    /* Liquid Crystal - Dark */
+    --lc-ink: #edf1f7;
+    --lc-ink-muted: #b7c0cc;
+    --lc-bg: #0b0f14;
+    --lc-bg-deep: #101722;
+    --lc-surface: rgba(17, 23, 31, 0.72);
+    --lc-surface-strong: rgba(20, 26, 36, 0.9);
+    --lc-border: rgba(236, 240, 247, 0.12);
+    --lc-glow-1: rgba(98, 210, 255, 0.18);
+    --lc-glow-2: rgba(255, 205, 150, 0.16);
+    --lc-glow-3: rgba(152, 255, 224, 0.12);
+    --lc-chart-grid: rgba(236, 240, 247, 0.12);
+    --lc-chart-axis: rgba(183, 192, 204, 0.85);
+    --lc-chart-tooltip-bg: rgba(17, 23, 31, 0.92);
+    --lc-chart-tooltip-border: rgba(236, 240, 247, 0.12);
+    --lc-chart-tooltip-text: rgba(237, 241, 247, 0.9);
+    --lc-chart-neutral: rgba(237, 241, 247, 0.4);
+
     /* Dark mode semantic colors */
-    --ns-background: #0A0A0A;   /* titanium-950 */
-    --ns-surface: #171717;      /* titanium-900 */
-    --ns-border: #404040;       /* titanium-700 */
-    --ns-text-muted: #A3A3A3;   /* titanium-400 */
-    --ns-text: #FAFAFA;         /* titanium-50 */
+    --ns-background: var(--lc-bg);
+    --ns-surface: var(--lc-surface);
+    --ns-border: var(--lc-border);
+    --ns-text-muted: var(--lc-ink-muted);
+    --ns-text: var(--lc-ink);
     /* Dark mode accessible text colors */
     --a11y-text-primary: #FAFAFA;     /* titanium-50, 18.97:1 on titanium-950 */
     --a11y-text-secondary: #D4D4D4;   /* titanium-300, 13.36:1 on titanium-950 */
@@ -85,17 +128,164 @@
 }
 
 body {
-  background-color: #f9f9f9; /* titanium-50 */
-  color: #2c2c2e; /* titanium-800 */
-  font-family: 'Inter', 'SF Pro Display', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  background-color: var(--lc-bg);
+  background-image:
+    radial-gradient(1200px 520px at -10% -20%, var(--lc-glow-1), transparent 60%),
+    radial-gradient(900px 560px at 110% 10%, var(--lc-glow-2), transparent 55%),
+    radial-gradient(900px 720px at 50% 120%, var(--lc-glow-3), transparent 60%);
+  color: var(--lc-ink);
+  font-family: 'Space Grotesk', 'Syne', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   letter-spacing: -0.01em;
 }
 
 .dark body {
-  background-color: #111111; /* terminal-dark */
-  color: #f2f2f7; /* titanium-100 */
+  background-color: var(--lc-bg);
+  color: var(--lc-ink);
+}
+
+/* Liquid crystal shell wrapper */
+.liquid-shell {
+  position: relative;
+  isolation: isolate;
+  min-height: 100%;
+  background-color: var(--lc-bg);
+  background-image:
+    radial-gradient(900px 520px at 6% 0%, var(--lc-glow-1), transparent 60%),
+    radial-gradient(700px 520px at 95% 8%, var(--lc-glow-2), transparent 58%),
+    radial-gradient(900px 720px at 50% 100%, var(--lc-glow-3), transparent 60%);
+}
+
+.liquid-shell::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(120deg, rgba(255, 255, 255, 0.08), transparent 55%),
+    linear-gradient(0deg, rgba(255, 255, 255, 0.05), transparent 55%);
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.dark .liquid-shell::before {
+  background-image:
+    linear-gradient(120deg, rgba(255, 255, 255, 0.06), transparent 55%),
+    linear-gradient(0deg, rgba(255, 255, 255, 0.04), transparent 55%);
+}
+
+.liquid-shell::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 36px 36px;
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.dark .liquid-shell::after {
+  opacity: 0.2;
+}
+
+.liquid-shell > * {
+  position: relative;
+  z-index: 1;
+}
+
+.liquid-card {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  background: var(--lc-surface);
+  border: 1px solid var(--lc-border);
+  border-radius: 1.5rem;
+  box-shadow:
+    0 24px 60px rgba(15, 19, 25, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(18px) saturate(130%);
+}
+
+.liquid-card::before {
+  content: '';
+  position: absolute;
+  inset: -20% -10% 40% -10%;
+  background:
+    radial-gradient(80% 60% at 0% 0%, rgba(255, 255, 255, 0.65), transparent 70%),
+    radial-gradient(80% 60% at 100% 0%, rgba(255, 255, 255, 0.35), transparent 70%);
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.dark .liquid-card::before {
+  opacity: 0.3;
+}
+
+.dark .liquid-card {
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.liquid-chip {
+  position: relative;
+  overflow: hidden;
+  background: var(--lc-surface-strong);
+  border: 1px solid var(--lc-border);
+  border-radius: 999px;
+  backdrop-filter: blur(14px) saturate(130%);
+}
+
+.liquid-chip::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, rgba(255, 255, 255, 0.3), transparent 60%);
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.liquid-panel {
+  background: var(--lc-surface-strong);
+  border: 1px solid var(--lc-border);
+  border-radius: 1rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(12px) saturate(120%);
+}
+
+.liquid-sheen {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.liquid-sheen::before {
+  content: '';
+  position: absolute;
+  inset: -40% -20% 30% -20%;
+  background:
+    radial-gradient(70% 60% at 0% 0%, rgba(255, 255, 255, 0.5), transparent 70%),
+    radial-gradient(60% 60% at 100% 0%, rgba(255, 255, 255, 0.25), transparent 70%);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.dark .liquid-sheen::before {
+  opacity: 0.25;
+}
+
+.liquid-sheen > * {
+  position: relative;
+  z-index: 1;
+}
+
+.liquid-input {
+  background: var(--lc-surface-strong);
+  border: 1px solid var(--lc-border);
+  border-radius: 0.9rem;
+  color: var(--lc-ink);
 }
 
 /* Mode select tokens */
@@ -374,21 +564,21 @@ a[href="#app-main"]:focus-visible {
 
 /* Casino contrast helpers */
 .casino-contrast {
-  --casino-muted: #2c2c2e;
-  --casino-muted-strong: #1c1c1e;
-  --casino-muted-soft: #3a3a3c;
+  --casino-muted: var(--casino-text-muted);
+  --casino-muted-strong: var(--casino-text);
+  --casino-muted-soft: var(--casino-text-muted);
 }
 
 .dark .casino-contrast {
-  --casino-muted: #f2f2f7;
-  --casino-muted-strong: #ffffff;
-  --casino-muted-soft: #d1d1d6;
+  --casino-muted: var(--casino-text-muted);
+  --casino-muted-strong: var(--casino-text);
+  --casino-muted-soft: var(--casino-text-muted);
 }
 
 .casino-contrast[data-contrast="dark"] {
-  --casino-muted: #f2f2f7;
-  --casino-muted-strong: #ffffff;
-  --casino-muted-soft: #d1d1d6;
+  --casino-muted: var(--casino-text-muted);
+  --casino-muted-strong: var(--casino-text);
+  --casino-muted-soft: var(--casino-text-muted);
 }
 
 .casino-contrast .text-gray-500 {
@@ -411,6 +601,14 @@ a[href="#app-main"]:focus-visible {
   color: var(--casino-muted-soft);
 }
 
+.casino-contrast .text-gray-700 {
+  color: var(--casino-muted);
+}
+
+.casino-contrast .text-gray-800 {
+  color: var(--casino-muted-strong);
+}
+
 .casino-contrast .text-titanium-400 {
   color: var(--casino-muted);
 }
@@ -425,6 +623,31 @@ a[href="#app-main"]:focus-visible {
 
 .casino-contrast .text-titanium-200 {
   color: var(--casino-muted-soft);
+}
+
+.casino-shell .text-titanium-900,
+.casino-shell .text-titanium-800,
+.casino-shell .text-titanium-700 {
+  color: var(--casino-text);
+}
+
+.casino-shell .text-titanium-600,
+.casino-shell .text-titanium-500,
+.casino-shell .text-titanium-400,
+.casino-shell .text-titanium-300,
+.casino-shell .text-titanium-200,
+.casino-shell .text-titanium-100 {
+  color: var(--casino-text-muted);
+}
+
+.casino-shell .border-titanium-100,
+.casino-shell .border-titanium-200 {
+  border-color: var(--casino-border);
+}
+
+.casino-shell .border-titanium-300,
+.casino-shell .border-titanium-400 {
+  border-color: var(--casino-border-strong);
 }
 
 .casino-contrast .opacity-60 {
@@ -625,27 +848,27 @@ a[href="#app-main"]:focus-visible {
 
 /* Casino surface tokens */
 .casino-surface {
-  --casino-surface: #f2f2f7;
-  --casino-panel: #ffffff;
-  --casino-panel-muted: #f2f2f7;
-  --casino-panel-strong: #e5e5ea;
-  --casino-border: #c7c7cc;
-  --casino-border-strong: #b0b0b5;
-  --casino-text: #1c1c1e;
-  --casino-text-muted: #3a3a3c;
-  --casino-overlay: rgba(255, 255, 255, 0.92);
+  --casino-surface: var(--lc-bg);
+  --casino-panel: var(--lc-surface);
+  --casino-panel-muted: rgba(255, 255, 255, 0.6);
+  --casino-panel-strong: rgba(255, 255, 255, 0.85);
+  --casino-border: var(--lc-border);
+  --casino-border-strong: rgba(15, 19, 25, 0.18);
+  --casino-text: var(--lc-ink);
+  --casino-text-muted: var(--lc-ink-muted);
+  --casino-overlay: rgba(255, 255, 255, 0.7);
 }
 
 .casino-shell {
-  --casino-surface: #f2f2f7;
-  --casino-panel: #ffffff;
-  --casino-panel-muted: #f2f2f7;
-  --casino-panel-strong: #e5e5ea;
-  --casino-border: #c7c7cc;
-  --casino-border-strong: #b0b0b5;
-  --casino-text: #1c1c1e;
-  --casino-text-muted: #3a3a3c;
-  --casino-overlay: rgba(255, 255, 255, 0.92);
+  --casino-surface: var(--lc-bg);
+  --casino-panel: var(--lc-surface);
+  --casino-panel-muted: rgba(255, 255, 255, 0.6);
+  --casino-panel-strong: rgba(255, 255, 255, 0.85);
+  --casino-border: var(--lc-border);
+  --casino-border-strong: rgba(15, 19, 25, 0.18);
+  --casino-text: var(--lc-ink);
+  --casino-text-muted: var(--lc-ink-muted);
+  --casino-overlay: rgba(255, 255, 255, 0.7);
 }
 
 .casino-shell[data-zen="true"] .zen-hide {
@@ -687,27 +910,27 @@ a[href="#app-main"]:focus-visible {
 }
 
 .casino-shell[data-casino-theme="dark"] .casino-surface {
-  --casino-surface: #101012;
-  --casino-panel: #1c1c1e;
-  --casino-panel-muted: #151518;
-  --casino-panel-strong: #2c2c2e;
-  --casino-border: #3a3a3c;
-  --casino-border-strong: #4a4a4d;
-  --casino-text: #f2f2f7;
-  --casino-text-muted: #d1d1d6;
-  --casino-overlay: rgba(10, 10, 12, 0.88);
+  --casino-surface: var(--lc-bg);
+  --casino-panel: var(--lc-surface);
+  --casino-panel-muted: rgba(20, 26, 36, 0.55);
+  --casino-panel-strong: rgba(20, 26, 36, 0.8);
+  --casino-border: var(--lc-border);
+  --casino-border-strong: rgba(236, 240, 247, 0.2);
+  --casino-text: var(--lc-ink);
+  --casino-text-muted: var(--lc-ink-muted);
+  --casino-overlay: rgba(10, 14, 18, 0.6);
 }
 
 .casino-shell[data-casino-theme="dark"] {
-  --casino-surface: #101012;
-  --casino-panel: #1c1c1e;
-  --casino-panel-muted: #151518;
-  --casino-panel-strong: #2c2c2e;
-  --casino-border: #3a3a3c;
-  --casino-border-strong: #4a4a4d;
-  --casino-text: #f2f2f7;
-  --casino-text-muted: #d1d1d6;
-  --casino-overlay: rgba(10, 10, 12, 0.88);
+  --casino-surface: var(--lc-bg);
+  --casino-panel: var(--lc-surface);
+  --casino-panel-muted: rgba(20, 26, 36, 0.55);
+  --casino-panel-strong: rgba(20, 26, 36, 0.8);
+  --casino-border: var(--lc-border);
+  --casino-border-strong: rgba(236, 240, 247, 0.2);
+  --casino-text: var(--lc-ink);
+  --casino-text-muted: var(--lc-ink-muted);
+  --casino-overlay: rgba(10, 14, 18, 0.6);
 }
 
 /* Force readable casino surfaces in light theme, even if dark classes leak in */
@@ -779,6 +1002,19 @@ a[href="#app-main"]:focus-visible {
   color: var(--casino-text);
 }
 
+.casino-shell[data-casino-theme="light"] .casino-surface .from-gray-950 {
+  --tw-gradient-from: rgba(255, 255, 255, 0.95) var(--tw-gradient-from-position);
+  --tw-gradient-to: rgba(255, 255, 255, 0) var(--tw-gradient-to-position);
+}
+
+.casino-shell[data-casino-theme="light"] .casino-surface .via-black {
+  --tw-gradient-stops: var(--tw-gradient-from), rgba(255, 255, 255, 0.65) var(--tw-gradient-via-position), var(--tw-gradient-to);
+}
+
+.casino-shell[data-casino-theme="light"] .casino-surface .to-gray-950 {
+  --tw-gradient-to: rgba(255, 255, 255, 0.9) var(--tw-gradient-to-position);
+}
+
 .casino-shell[data-casino-theme="light"] .casino-surface .bg-titanium-900.text-white,
 .casino-shell[data-casino-theme="light"] .casino-surface .bg-titanium-900\/95.text-white,
 .casino-shell[data-casino-theme="light"] .casino-surface .bg-titanium-900\/80.text-white,
@@ -802,6 +1038,22 @@ a[href="#app-main"]:focus-visible {
 .casino-shell[data-casino-theme="light"] .casino-surface .bg-black\/40 .text-white,
 .casino-shell[data-casino-theme="light"] .casino-surface .bg-gray-900 .text-white,
 .casino-shell[data-casino-theme="light"] .casino-surface .bg-gray-900\/50 .text-white {
+  color: var(--casino-text);
+}
+
+.casino-shell[data-casino-theme="dark"] .casino-surface .bg-gray-900,
+.casino-shell[data-casino-theme="dark"] .casino-surface .bg-gray-900\/80,
+.casino-shell[data-casino-theme="dark"] .casino-surface .bg-gray-900\/50,
+.casino-shell[data-casino-theme="dark"] .casino-surface .bg-gray-900\/40,
+.casino-shell[data-casino-theme="dark"] .casino-surface .bg-gray-900\/30,
+.casino-shell[data-casino-theme="dark"] .casino-surface .bg-gray-900\/20 {
+  background-color: var(--casino-panel-muted);
+  color: var(--casino-text);
+}
+
+.casino-shell[data-casino-theme="dark"] .casino-surface .bg-gray-800,
+.casino-shell[data-casino-theme="dark"] .casino-surface .bg-gray-800\/50 {
+  background-color: var(--casino-panel-strong);
   color: var(--casino-text);
 }
 
@@ -1089,7 +1341,7 @@ a[href="#app-main"]:focus-visible {
   line-height: 3.5rem;    /* 56px */
   font-weight: 600;
   letter-spacing: -0.02em;
-  font-family: 'SF Pro Display', 'Inter', -apple-system, system-ui, sans-serif;
+  font-family: 'Syne', 'Space Grotesk', sans-serif;
 }
 
 .text-headline {
@@ -1124,6 +1376,7 @@ a[href="#app-main"]:focus-visible {
 /* Background colors */
 .bg-ns-background { background-color: var(--ns-background); }
 .bg-ns-surface { background-color: var(--ns-surface); }
+.bg-ns-border { background-color: var(--ns-border); }
 
 /* Border colors */
 .border-ns { border-color: var(--ns-border); }
@@ -1133,6 +1386,10 @@ a[href="#app-main"]:focus-visible {
 .text-ns { color: var(--ns-text); }
 .text-ns-primary { color: var(--ns-text); }
 .text-ns-muted { color: var(--ns-text-muted); }
+
+.placeholder-ns-muted::placeholder {
+  color: var(--ns-text-muted);
+}
 
 /* Titanium & Glass Utilities */
 .bg-glass-light {

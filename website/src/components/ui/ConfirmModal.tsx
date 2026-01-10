@@ -14,12 +14,10 @@ type ConfirmModalProps = {
   onConfirm: () => void;
 };
 
-// Instant config for reduced motion users
 const INSTANT_CONFIG = { duration: 0 };
 
-// Glass effect values from design tokens (GLASS.medium)
 const GLASS_MEDIUM = {
-  blur: 16, // BLUR.md
+  blur: 16,
   background: 'rgba(255, 255, 255, 0.15)',
   border: 'rgba(255, 255, 255, 0.15)',
 };
@@ -45,14 +43,12 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [onClose, open]);
 
-  // Animated backdrop blur - tracks modal open progress
   const backdropSpring = useSpring({
     blur: open ? GLASS_MEDIUM.blur : 0,
     opacity: open ? 1 : 0,
     config: prefersReducedMotion ? INSTANT_CONFIG : SPRING_LIQUID_CONFIGS.liquidMorph,
   });
 
-  // Spring transition for modal content
   const transitions = useTransition(open, {
     from: prefersReducedMotion
       ? { opacity: 0 }
@@ -69,11 +65,10 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
   return transitions((style, show) =>
     show ? (
       <div className="fixed inset-0 z-[90] flex items-center justify-center p-4">
-        {/* Animated glassmorphism backdrop */}
         <animated.button
           type="button"
           aria-label="Close dialog"
-          className="absolute inset-0 bg-black/70"
+          className="absolute inset-0 bg-black/20"
           style={
             prefersReducedMotion
               ? { opacity: backdropSpring.opacity }
@@ -85,9 +80,8 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
           }
           onClick={loading ? undefined : onClose}
         />
-        {/* Modal content with glass border */}
         <animated.div
-          className="relative w-full max-w-md rounded-lg shadow-2xl overflow-hidden"
+          className="relative w-full max-w-md liquid-card overflow-hidden"
           style={{
             opacity: style.opacity,
             transform: prefersReducedMotion
@@ -96,16 +90,8 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
                   [style.scale, style.y],
                   (s, y) => `scale(${s}) translateY(${y}px)`
                 ),
-            // Glass border effect
-            border: `1px solid ${GLASS_MEDIUM.border}`,
-            backgroundColor: 'rgb(23, 23, 23)', // titanium-950 base
-            boxShadow: `
-              0 25px 50px -12px rgba(0, 0, 0, 0.5),
-              inset 0 1px 1px rgba(255, 255, 255, 0.05)
-            `,
           }}
         >
-          {/* Glass sheen effect */}
           <div
             className="absolute inset-0 pointer-events-none"
             style={{
@@ -114,14 +100,14 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
           />
 
           <div className="relative z-10">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800/50">
-              <div className="text-[10px] text-gray-500 tracking-widest uppercase">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-black/10 dark:border-white/10">
+              <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase">
                 {title}
               </div>
               <button
                 type="button"
                 onClick={loading ? undefined : onClose}
-                className="text-[10px] px-2 py-1 rounded border border-gray-700 bg-black/40 text-gray-400 hover:border-gray-500"
+                className="text-[10px] px-2 py-1 rounded-full liquid-chip text-ns hover:shadow-soft"
               >
                 ESC
               </button>
@@ -129,11 +115,11 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
 
             <div className="p-4">{children}</div>
 
-            <div className="px-4 py-3 border-t border-gray-800/50 flex items-center justify-end gap-2">
+            <div className="px-4 py-3 border-t border-black/10 dark:border-white/10 flex items-center justify-end gap-2">
               <button
                 type="button"
                 onClick={loading ? undefined : onClose}
-                className="h-11 px-4 rounded border border-gray-700 text-gray-300 text-[10px] tracking-widest uppercase hover:border-gray-500 active:scale-[0.98] transition-transform"
+                className="h-11 px-4 rounded-full liquid-chip text-[10px] tracking-[0.28em] uppercase text-ns hover:shadow-soft active:scale-[0.98] transition-transform"
                 disabled={loading}
               >
                 {cancelText}
@@ -141,7 +127,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
               <button
                 type="button"
                 onClick={loading ? undefined : onConfirm}
-                className="h-11 px-4 rounded border border-action-destructive text-action-destructive text-[10px] tracking-widest uppercase hover:bg-action-destructive/10 active:scale-[0.98] transition-transform disabled:opacity-60 disabled:cursor-not-allowed"
+                className="h-11 px-4 rounded-full liquid-chip text-action-destructive text-[10px] tracking-[0.28em] uppercase hover:shadow-soft active:scale-[0.98] transition-transform disabled:opacity-60 disabled:cursor-not-allowed"
                 disabled={loading}
               >
                 {loading ? 'Confirming…' : confirmText}

@@ -6,14 +6,14 @@
  * state is NOT preserved across reconnections. This is documentation, not a bug fix.
  *
  * Usage: npx tsx tests/integration/runInFlightGameStateTests.ts [gateway-url]
- * Example: npx tsx tests/integration/runInFlightGameStateTests.ts ws://localhost:9010
+ * Example: npx tsx tests/integration/runInFlightGameStateTests.ts wss://api.testnet.regenesis.dev
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
 import { InFlightGameStateTest, InFlightGameStateTestResult } from './framework/InFlightGameStateTest';
 
-const DEFAULT_GATEWAY_URL = process.env.GATEWAY_URL || 'ws://localhost:9010';
+const DEFAULT_GATEWAY_URL = process.env.GATEWAY_URL || 'wss://api.testnet.regenesis.dev';
 const RESULTS_DIR = path.join(__dirname, 'results');
 
 async function runInFlightGameStateTests(gatewayUrl: string): Promise<InFlightGameStateTestResult> {
@@ -50,13 +50,12 @@ function saveResults(result: InFlightGameStateTestResult): void {
 }
 
 function printSummary(result: InFlightGameStateTestResult): void {
+  const passed = result.tests.filter(t => t.passed).length;
+  const failed = result.tests.length - passed;
+
   console.log('\n' + '='.repeat(80));
   console.log('IN-FLIGHT GAME STATE TEST SUMMARY');
   console.log('='.repeat(80));
-
-  const passed = result.tests.filter(t => t.passed).length;
-  const failed = result.tests.filter(t => !t.passed).length;
-
   console.log(`\nTotal Tests: ${result.tests.length}`);
   console.log(`✓ Passed: ${passed}`);
   console.log(`✗ Failed: ${failed}`);
@@ -64,14 +63,9 @@ function printSummary(result: InFlightGameStateTestResult): void {
 
   console.log('\nTest Results:');
   for (const test of result.tests) {
-    const status = test.passed ? '✓ PASS' : '✗ FAIL';
-    console.log(`  ${status} | ${test.name}`);
-    if (test.finding) {
-      console.log(`         Finding: ${test.finding}`);
-    }
-    if (test.error) {
-      console.log(`         Error: ${test.error}`);
-    }
+    console.log(`  ${test.passed ? '✓ PASS' : '✗ FAIL'} | ${test.name}`);
+    if (test.finding) console.log(`         Finding: ${test.finding}`);
+    if (test.error) console.log(`         Error: ${test.error}`);
   }
 
   console.log('\n' + '='.repeat(80));
@@ -86,14 +80,12 @@ function printSummary(result: InFlightGameStateTestResult): void {
   console.log('─'.repeat(80));
 
   console.log('\n' + '='.repeat(80));
-
   if (result.passed) {
     console.log('✓ ALL IN-FLIGHT GAME STATE TESTS PASSED');
     console.log('  (Architecture behavior documented as expected)');
   } else {
     console.log(`✗ ${failed} IN-FLIGHT GAME STATE TEST(S) FAILED`);
   }
-
   console.log('='.repeat(80) + '\n');
 }
 

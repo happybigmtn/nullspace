@@ -340,11 +340,10 @@ pub struct IndexedEvents {
 
 impl IndexedEvents {
     pub fn update_for_account(&self, account: &PublicKey) -> Option<EncodedUpdate> {
-        if let Some(update) = self.account_updates.get(account) {
-            Some(update.clone())
-        } else {
-            self.public_update.clone()
-        }
+        self.account_updates
+            .get(account)
+            .cloned()
+            .or_else(|| self.public_update.clone())
     }
 
     pub fn update_for_session(&self, session_id: u64) -> Option<EncodedUpdate> {

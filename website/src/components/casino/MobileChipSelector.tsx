@@ -53,8 +53,8 @@ export const MobileChipSelector: React.FC<MobileChipSelectorProps> = ({ currentB
 
     const buttonStyle = fixedMode ? {} : { left: pos.x, top: pos.y };
     const buttonClass = fixedMode
-        ? `relative flex items-center justify-center w-10 h-10 rounded-full border border-titanium-200 bg-white shadow-soft transition-shadow active:shadow-md ${className || ''}`
-        : `fixed sm:hidden z-50 flex items-center justify-center w-14 h-14 rounded-full border border-titanium-200 bg-white/80 backdrop-blur-xl shadow-float transition-all active:scale-95 touch-none ${className || ''}`;
+        ? `relative flex items-center justify-center w-10 h-10 rounded-full liquid-panel shadow-soft transition-shadow active:shadow-md ${className || ''}`
+        : `fixed sm:hidden z-50 flex items-center justify-center w-14 h-14 rounded-full liquid-card shadow-float backdrop-blur-xl transition-all active:scale-95 touch-none ${className || ''}`;
 
     const menuStyle = fixedMode
         ? { top: '3.5rem', right: '0.5rem' }
@@ -72,8 +72,8 @@ export const MobileChipSelector: React.FC<MobileChipSelectorProps> = ({ currentB
                 className={buttonClass}
             >
                 <div className="flex flex-col items-center leading-none">
-                    <span className={`${fixedMode ? 'text-[6px]' : 'text-[8px]'} text-titanium-400 font-bold uppercase tracking-[0.2em] mb-0.5`}>Bet</span>
-                    <span className={`${fixedMode ? 'text-[10px]' : 'text-sm'} font-bold text-titanium-900 tabular-nums`}>
+                    <span className={`${fixedMode ? 'text-[6px]' : 'text-[8px]'} text-ns-muted font-bold uppercase tracking-[0.2em] mb-0.5`}>Bet</span>
+                    <span className={`${fixedMode ? 'text-[10px]' : 'text-sm'} font-bold text-ns tabular-nums`}>
                         {currentBet >= 1000 ? `${currentBet / 1000}k` : currentBet}
                     </span>
                 </div>
@@ -82,9 +82,9 @@ export const MobileChipSelector: React.FC<MobileChipSelectorProps> = ({ currentB
             {/* Chip Selection Menu */}
             {isOpen && (
                 <>
-                    <div className="fixed inset-0 z-40 bg-titanium-900/10 backdrop-blur-md" onClick={() => setIsOpen(false)} />
+                    <div className="fixed inset-0 z-40 bg-black/20 backdrop-blur-md" onClick={() => setIsOpen(false)} />
                     <div
-                        className="fixed z-50 flex flex-col gap-3 p-3 bg-white/90 border border-titanium-200 rounded-[32px] shadow-float backdrop-blur-xl animate-scale-in origin-top overflow-y-auto max-h-[60vh] scrollbar-hide"
+                        className="fixed z-50 flex flex-col gap-3 p-3 liquid-card liquid-sheen rounded-[32px] shadow-float backdrop-blur-xl animate-scale-in origin-top overflow-y-auto max-h-[60vh] scrollbar-hide"
                         style={menuStyle}
                     >
                         {CHIPS.map((chip) => (
@@ -94,8 +94,8 @@ export const MobileChipSelector: React.FC<MobileChipSelectorProps> = ({ currentB
                                 onClick={() => handleSelect(chip)}
                                 className={`w-12 h-12 rounded-full border flex items-center justify-center transition-all duration-200 flex-shrink-0 font-bold text-xs tabular-nums ${
                                     currentBet === chip
-                                        ? 'bg-titanium-900 text-white border-titanium-900 shadow-md scale-110'
-                                        : 'bg-white text-titanium-800 border-titanium-200 hover:border-titanium-400'
+                                        ? 'bg-mono-0 text-white border-mono-0 shadow-md scale-110'
+                                        : 'bg-ns-surface text-ns border-ns hover:border-ns'
                                 }`}
                             >
                                 <span>
