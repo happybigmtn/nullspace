@@ -142,6 +142,10 @@ export default function TerminalPage() {
   const [historyIdx, setHistoryIdx] = useState<number | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [suggestionIdx, setSuggestionIdx] = useState(0);
+  const [reverseSearchActive, setReverseSearchActive] = useState(false);
+  const [reverseSearchTerm, setReverseSearchTerm] = useState('');
+  const [reverseSearchMatch, setReverseSearchMatch] = useState<string | null>(null);
+  const [inProgress, setInProgress] = useState(false);
   const [vaultStatus, setVaultStatus] = useState(() => getVaultStatusSync());
   const [vaultBusy, setVaultBusy] = useState(false);
   const [vaultError, setVaultError] = useState<string | null>(null);
@@ -163,13 +167,13 @@ export default function TerminalPage() {
     if (lc.startsWith('/game ')) {
       const q = lc.replace('/game', '').trim();
       return Object.keys(gameAliases)
-        .filter((g) => g.startsWith(q))
+        .filter((g) => g.includes(q))
         .slice(0, 6)
         .map((g) => `/game ${g}`);
     }
 
     const matchingCommands = commandNames
-      .filter((c) => c.startsWith(trimmed) || c.includes(trimmed))
+      .filter((c) => c.startsWith(trimmed) || c.includes(lc))
       .slice(0, 8);
 
     // If user typed '/r' suggest roulette/craps/sicbo
@@ -274,13 +278,55 @@ export default function TerminalPage() {
   const submitLine = async (text: string) => {
     const trimmed = text.trim();
     if (!trimmed) return;
+    if (inProgress) {
+      append('Busy… wait for current action to finish.');
+      return;
+    }
     setHistory((h) => [...h.slice(-99), trimmed]);
     setHistoryIdx(null);
     setInput('');
-    await handleCommand(trimmed);
+    setReverseSearchActive(false);
+    setReverseSearchTerm('');
+    setReverseSearchMatch(null);
+    setInProgress(true);
+    try {
+      await handleCommand(trimmed);
+    } finally {
+      setInProgress(false);
+    }
   };
 
   const handleComposerKey = async (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // ctrl+r : reverse search through history
+    if (e.ctrlKey && e.key.toLowerCase() === 'r') {
+      e.preventDefault();
+      const term = reverseSearchActive ? reverseSearchTerm : '';
+      const match = findReverseMatch(term, history);
+      setReverseSearchActive(true);
+      setReverseSearchTerm(term);
+      setReverseSearchMatch(match);
+      if (match) setInput(match);
+      return;
+    }
+
+    if (reverseSearchActive) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setReverseSearchActive(false);
+        setReverseSearchTerm('');
+        setReverseSearchMatch(null);
+        return;
+      }
+      if (e.key.length === 1 && !e.metaKey && !e.ctrlKey) {
+        const nextTerm = reverseSearchTerm + e.key;
+        const match = findReverseMatch(nextTerm, history);
+        setReverseSearchTerm(nextTerm);
+        setReverseSearchMatch(match);
+        if (match) setInput(match);
+        return;
+      }
+    }
+
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       await submitLine(input);
@@ -562,6 +608,23 @@ export default function TerminalPage() {
     <span className="px-2 py-1 rounded border border-[#1f2937] bg-[#0b0f1a] text-xs text-[#e5e7eb]">{k}</span>
   );
 
+  const findReverseMatch = (term: string, hist: string[]): string | null => {
+    const t = term.toLowerCase();
+    for (let i = hist.length - 1; i >= 0; i -= 1) {
+      if (!t || hist[i].toLowerCase().includes(t)) return hist[i];
+    }
+    return null;
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const text = e.clipboardData.getData('text') ?? '';
+    if (text.length <= 800) return; // allow small pastes
+    e.preventDefault();
+    const preview = text.slice(0, 400);
+    setInput((prev) => `${prev}${prev ? '\n' : ''}${preview}`);
+    append(`Large paste truncated to 400 chars. Use /paste to send full content if needed.`);
+  };
+
   const composerRows = Math.min(6, Math.max(1, input.split('\n').length));
 
   return (
@@ -703,9 +766,15 @@ export default function TerminalPage() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleComposerKey}
+            onPaste={handlePaste}
           />
-          {suggestions.length > 0 && (
+          {(suggestions.length > 0 || reverseSearchActive) && (
             <div className="flex flex-wrap gap-2 text-[11px] text-[#9ca3af]">
+              {reverseSearchActive && (
+                <div className="px-2 py-1 rounded border border-[#334155] bg-[#0f172a] text-[#e5e7eb]">
+                  ⌃R search: “{reverseSearchTerm || '…'}” {reverseSearchMatch ? `→ ${reverseSearchMatch}` : '(no match)'}
+                </div>
+              )}
               {suggestions.map((s, idx) => (
                 <button
                   key={s}
