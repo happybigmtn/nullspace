@@ -29,6 +29,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { QABetHarness } from './components/casino/QABetHarness';
 import { playSfx, setSfxEnabled } from './services/sfx';
 import { track } from './services/telemetry';
+import { ConnectionStatus } from './components/ConnectionStatus';
 
 // Menu
 const SORTED_GAMES = Object.values(GameType).filter(g => g !== GameType.NONE).sort();
@@ -465,7 +466,7 @@ export default function CasinoApp() {
 
   return (
     <div
-      className="flex flex-col h-[100dvh] w-screen bg-titanium-100 text-titanium-900 font-sans overflow-hidden select-none dark:bg-titanium-900 dark:text-titanium-100 casino-shell"
+      className="flex flex-col h-[100dvh] w-screen liquid-shell text-ns font-sans overflow-hidden select-none casino-shell"
       data-casino-theme={casinoTheme}
       data-zen={focusMode ? 'true' : 'false'}
       onKeyDown={(e) => {
@@ -528,10 +529,10 @@ export default function CasinoApp() {
                    className={`hidden md:inline-flex ${focusMode ? 'zen-hide' : ''}`}
                />
                <HamburgerMenu
-                   playMode={playMode}
-                   onSetPlayMode={setPlayMode}
-                   onOpenSafety={() => openResponsiblePlay('settings')}
-                   onOpenRewards={() => setRewardsOpen(true)}
+                  playMode={playMode}
+                  onSetPlayMode={setPlayMode}
+                  onOpenSafety={() => openResponsiblePlay('settings')}
+                  onOpenRewards={() => setRewardsOpen(true)}
                    onToggleHelp={toggleHelp}
                    soundEnabled={soundEnabled}
                    onToggleSound={() => setSoundEnabled((v) => !v)}
@@ -542,29 +543,31 @@ export default function CasinoApp() {
                    publicKeyHex={walletPublicKeyHex}
                    focusMode={focusMode}
                    onToggleFocus={() => setFocusMode((v) => !v)}
-                   walletSlot={
-                     <div className="flex flex-col gap-3">
-                       <AuthStatusPill publicKeyHex={walletPublicKeyHex} />
-                       <WalletPill
-                         rng={walletRng}
+                  walletSlot={
+                    <div className="flex flex-col gap-3">
+                      <AuthStatusPill publicKeyHex={walletPublicKeyHex} />
+                      <WalletPill
+                        rng={walletRng}
                          vusdt={walletVusdt}
                          credits={walletCredits}
                          creditsLocked={walletCreditsLocked}
                          pubkeyHex={walletPublicKeyHex}
                          networkLabel={networkLabel}
-                         networkStatus={networkStatus}
-                       />
-                     </div>
-                   }
-               />
-           </div>
-       </Header>
+                        networkStatus={networkStatus}
+                      />
+                    </div>
+                  }
+              />
+              {/* Always surface vault/connection state without leaving the game screen */}
+              <ConnectionStatus className="hidden md:inline-flex" />
+          </div>
+      </Header>
 
 	       <div className="flex flex-1 overflow-hidden relative">
 	          <main
               id="casino-main"
               tabIndex={-1}
-              className={`flex-1 flex flex-col relative bg-titanium-50 p-4 sm:p-6 overflow-y-auto scrollbar-hide ${gameState.type !== GameType.NONE ? 'pb-28' : ''}`}
+              className={`flex-1 flex flex-col relative bg-transparent p-4 sm:p-6 overflow-y-auto scrollbar-hide ${gameState.type !== GameType.NONE ? 'pb-28' : ''}`}
             >
 	             {gameState.type === GameType.NONE ? (
 	               <div className="mb-4 lg:hidden space-y-3">
