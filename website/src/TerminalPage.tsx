@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { GameType, RouletteBet, SicBoBet, CrapsBet } from './types';
 import { useTerminalGame } from './hooks/useTerminalGame';
 import { useSharedCasinoConnection } from './chain/CasinoConnectionContext';
-import { getVaultStatusSync, unlockPasskeyVault, unlockPasswordVault } from './security/keyVault';
+import { createPasswordVault, getVaultStatusSync, unlockPasskeyVault, unlockPasswordVault } from './security/keyVault';
 import { subscribeVault } from './security/vaultRuntime';
 
 type LogEntry = { ts: string; text: string };
@@ -103,10 +103,11 @@ const crapsAlias = (raw?: string): CrapsBet['type'] | null => {
   return map[t] ?? null;
 };
 
-const commandTable = [
-  ['/help', 'Show commands'],
-  ['/status', 'Connection, vault, balance'],
-  ['/unlock [password]', 'Unlock vault (passkey prompt or password)'],
+  const commandTable = [
+    ['/help', 'Show commands'],
+    ['/status', 'Connection, vault, balance'],
+    ['/unlock [password]', 'Unlock vault (passkey or password)'],
+    ['/unlock create <password>', 'Create+unlock password vault (testing)'],
   ['/games', 'List games'],
   ['/game <name>', 'Switch game'],
   ['/bet <amt>', 'Set base bet'],
@@ -401,16 +402,40 @@ export default function TerminalPage() {
             append('Vaults not supported in this browser.');
             break;
           }
-          if (!snapshot.enabled) {
-            append('No vault found. Open Security to create one.');
-            break;
-          }
-          if (snapshot.unlocked) {
-            append('Vault already unlocked.');
-            break;
-          }
           if (vaultBusy) {
             append('Vault unlock already in progress…');
+            break;
+          }
+          // Create password vault inline when none exists: /unlock create <password>
+          if (!snapshot.enabled) {
+            if (args[0]?.toLowerCase() === 'create') {
+              const suppliedPwd = args.slice(1).join(' ');
+              const pwd = suppliedPwd || window.prompt('Set vault password (min 8 chars)') || '';
+              if (!pwd) {
+                append('Password required to create vault.');
+                break;
+              }
+              setVaultBusy(true);
+              append('Creating password vault…');
+              try {
+                await createPasswordVault(pwd, { migrateExistingCasinoKey: true });
+                setVaultStatus(getVaultStatusSync());
+                append('Vault created and unlocked.');
+              } catch (e: any) {
+                const msg = formatVaultError(e);
+                setVaultError(msg);
+                append(`Vault creation failed: ${msg}`);
+              } finally {
+                setVaultBusy(false);
+              }
+              break;
+            }
+            append('No vault found. Use /unlock create <password> to create one.');
+            break;
+          }
+
+          if (snapshot.unlocked) {
+            append('Vault already unlocked.');
             break;
           }
           if (snapshot.kind === 'password') {

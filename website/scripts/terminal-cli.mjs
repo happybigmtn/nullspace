@@ -53,7 +53,7 @@ async function run() {
   await page.goto(baseUrl, { waitUntil: 'networkidle' });
 
   const focusInput = async () => {
-    const input = await page.waitForSelector('input[placeholder="/help"]', { timeout: inputTimeout });
+    const input = await page.waitForSelector('textarea[placeholder*="/help"]', { timeout: inputTimeout });
     await input.focus();
     return input;
   };

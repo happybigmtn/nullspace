@@ -40,6 +40,7 @@ const suites = [
   {
     name: 'blackjack-all-sides',
     commands: [
+      '/unlock create terminal-test-1', // ensure vault exists/unlocks
       '/status',
       '/game blackjack',
       '/bet 25',
