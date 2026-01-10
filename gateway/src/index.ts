@@ -90,7 +90,11 @@ const parsePositiveInt = (
 const PORT = parsePositiveInt('GATEWAY_PORT', 9010, { requiredInProd: true });
 const DEFAULT_BACKEND_URL = IS_PROD ? 'http://10.0.1.2:8080' : 'http://localhost:8080';
 const BACKEND_URL = readStringEnv('BACKEND_URL', DEFAULT_BACKEND_URL, true);
-const GATEWAY_ORIGIN = readStringEnv('GATEWAY_ORIGIN', `http://localhost:${PORT}`, true);
+// In staging/prod we want a sensible default so deployments don't depend on env files
+// being perfectly populated. Fall back to the public gateway URL so signatures encode
+// the correct origin even when the env var is absent.
+const DEFAULT_GATEWAY_ORIGIN = IS_PROD ? 'https://api.testnet.regenesis.dev' : `http://localhost:${PORT}`;
+const GATEWAY_ORIGIN = readStringEnv('GATEWAY_ORIGIN', DEFAULT_GATEWAY_ORIGIN, true);
 const GATEWAY_DATA_DIR = readStringEnv('GATEWAY_DATA_DIR', '.gateway-data', true);
 const MAX_CONNECTIONS_PER_IP = parsePositiveInt('MAX_CONNECTIONS_PER_IP', 5, { requiredInProd: true });
 const MAX_TOTAL_SESSIONS = parsePositiveInt('MAX_TOTAL_SESSIONS', 1000, { requiredInProd: true });
@@ -158,7 +162,11 @@ initializeCors({
 
 // Initialize trusted proxy configuration for IP extraction (US-248)
 // When behind Caddy/nginx, this allows using X-Forwarded-For for real client IP
-initializeTrustedProxies();
+// Trust the Docker bridge network by default in staging/prod so that client IPs are
+// preserved behind Caddy/NGINX and rate limiting works per real user instead of the
+// proxy’s IP. Env can override with TRUSTED_PROXY_CIDRS.
+const DEFAULT_TRUSTED_PROXY_CIDRS = IS_PROD ? ['docker'] : [];
+initializeTrustedProxies({ trustedCidrs: DEFAULT_TRUSTED_PROXY_CIDRS });
 
 // Core services
 const nonceManager = new NonceManager({ origin: GATEWAY_ORIGIN, dataDir: GATEWAY_DATA_DIR });
