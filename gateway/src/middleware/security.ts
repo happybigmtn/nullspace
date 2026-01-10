@@ -172,6 +172,11 @@ export function enforceHttps(req: IncomingMessage, res: ServerResponse): boolean
     return true;
   }
 
+  // Always allow local health checks over HTTP
+  if (req.url && req.url.startsWith('/healthz')) {
+    return true;
+  }
+
   // Allow local/health checks over HTTP (e.g., container healthcheck hitting 127.0.0.1)
   const host = (req.headers.host || '').toLowerCase();
   const isLocalHost = host.startsWith('127.0.0.1') || host.startsWith('localhost');
