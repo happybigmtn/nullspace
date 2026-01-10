@@ -8,6 +8,20 @@ import { logDebug } from '../utils/logger.js';
 const FETCH_RETRY_DELAY_MS = 1000;
 // Timeout for individual fetch requests
 const FETCH_TIMEOUT_MS = 10000;
+
+const normalizeBaseUrl = (baseUrl) => {
+  if (!baseUrl) return baseUrl;
+  if (baseUrl.startsWith('/')) return baseUrl;
+  try {
+    const url = new URL(baseUrl);
+    if (url.protocol === 'ws:') url.protocol = 'http:';
+    if (url.protocol === 'wss:') url.protocol = 'https:';
+    const normalized = url.toString();
+    return normalized.endsWith('/') ? normalized.slice(0, -1) : normalized;
+  } catch {
+    return baseUrl;
+  }
+};
 /**
  * Generate a cryptographically secure request ID
  * US-140: Use crypto.getRandomValues() for unpredictable IDs
@@ -38,7 +52,7 @@ export class CasinoClient {
     if (!wasm) {
       throw new Error('WasmWrapper is required for CasinoClient');
     }
-    this.baseUrl = baseUrl;
+    this.baseUrl = normalizeBaseUrl(baseUrl);
     this.wasm = wasm;
     this.updatesWs = null;
     this.sessionWs = null;
@@ -192,23 +206,29 @@ export class CasinoClient {
 
     // FIRST: Try direct connection to VITE_URL (most reliable for WebSockets)
     const directUrl = import.meta.env.VITE_URL;
-    if (directUrl) {
+    const toWsUrl = (rawUrl) => {
       try {
-        const url = new URL(directUrl);
-        const directWsUrl = url.protocol === 'https:'
-          ? `wss://${url.host}/updates/${filterHex}`
-          : `ws://${url.host}/updates/${filterHex}`;
-        candidates.push(directWsUrl);
+        const url = new URL(rawUrl);
+        const secure = url.protocol === 'https:' || url.protocol === 'wss:';
+        const wsProtocol = secure ? 'wss:' : 'ws:';
+        return `${wsProtocol}//${url.host}/updates/${filterHex}`;
       } catch (e) {
-        console.warn('Invalid VITE_URL for WebSocket:', directUrl, e);
+        console.warn('Invalid VITE_URL for WebSocket:', rawUrl, e);
+        return null;
       }
-    } else if (this.baseUrl.startsWith('http://') || this.baseUrl.startsWith('https://')) {
+    };
+    if (directUrl) {
+      const wsUrl = toWsUrl(directUrl);
+      if (wsUrl) candidates.push(wsUrl);
+    } else if (
+      this.baseUrl.startsWith('http://') ||
+      this.baseUrl.startsWith('https://') ||
+      this.baseUrl.startsWith('ws://') ||
+      this.baseUrl.startsWith('wss://')
+    ) {
       // Full URL provided, convert to WebSocket URL
-      const url = new URL(this.baseUrl);
-      const wsUrl = url.protocol === 'https:'
-        ? `wss://${url.host}/updates/${filterHex}`
-        : `ws://${url.host}/updates/${filterHex}`;
-      candidates.push(wsUrl);
+      const wsUrl = toWsUrl(this.baseUrl);
+      if (wsUrl) candidates.push(wsUrl);
     }
 
     // SECOND: Try same-origin proxy (for production where direct connection may be blocked)

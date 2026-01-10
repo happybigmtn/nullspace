@@ -7,7 +7,7 @@ import { CasinoClient } from '../../api/client';
 import { CasinoChainService } from '../../services/CasinoChainService';
 import { CHAIN_TO_FRONTEND_GAME_TYPE } from '../../services/games';
 import { logDebug } from '../../utils/logger';
-import { getCasinoKeyIdForStorage } from '../../security/keyVault';
+import { getCasinoKeyIdForStorage, getVaultRecord } from '../../security/keyVault';
 import { subscribeVault } from '../../security/vaultRuntime';
 
 type UseChainInitArgs = {
@@ -85,10 +85,19 @@ export const useChainInit = ({
         console.warn('[useChainInit] No keypair available (vault locked?)');
         wasVaultLockedRef.current = true;
         setIsOnChain(false);
+        let vaultMessage = 'UNLOCK VAULT — OPEN VAULT TAB';
+        try {
+          const record = await getVaultRecord();
+          if (!record) {
+            vaultMessage = 'CREATE VAULT — OPEN VAULT TAB';
+          }
+        } catch {
+          // ignore vault lookup errors
+        }
         setGameState(prev => ({
           ...prev,
           stage: 'BETTING',
-          message: 'UNLOCK VAULT — OPEN VAULT TAB',
+          message: vaultMessage,
         }));
         isInitializingRef.current = false;
         return;

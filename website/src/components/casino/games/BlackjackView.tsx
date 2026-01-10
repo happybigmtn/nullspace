@@ -100,18 +100,22 @@ export const BlackjackView = React.memo<{
     const formatCompletedTitle = (idx: number, h: any) => {
         const bet = typeof h?.bet === 'number' ? h.bet : 0;
         const res = typeof h?.result === 'number' ? h.result : null;
-        const tag =
-            h?.surrendered
-                ? 'SURRENDER'
-                : h?.message
-                    ? String(h.message).toUpperCase()
-                    : res === null
-                        ? 'DONE'
-                        : res > 0
-                            ? `+${res}`
-                            : res < 0
-                                ? `-${Math.abs(res)}`
-                                : 'PUSH';
+
+        let tag: string;
+        if (h?.surrendered) {
+            tag = 'SURRENDER';
+        } else if (h?.message) {
+            tag = String(h.message).toUpperCase();
+        } else if (res === null) {
+            tag = 'DONE';
+        } else if (res > 0) {
+            tag = `+${res}`;
+        } else if (res < 0) {
+            tag = `-${Math.abs(res)}`;
+        } else {
+            tag = 'PUSH';
+        }
+
         return `HAND ${idx + 1} · $${bet} · ${tag}`;
     };
 
@@ -186,14 +190,10 @@ export const BlackjackView = React.memo<{
     }, [activeSideBets]);
     const displaySideBets = activeSideBets.length > 0
         ? activeSideBets
-        : gameState.stage !== 'BETTING'
-            ? lastSideBets
-            : [];
+        : (gameState.stage !== 'BETTING' ? lastSideBets : []);
     const sideBetCount = activeSideBets.length > 0
         ? activeSideBets.length
-        : gameState.stage !== 'BETTING'
-            ? lastSideBets.length
-            : 0;
+        : (gameState.stage !== 'BETTING' ? lastSideBets.length : 0);
     const sideBetsLocked = gameState.stage !== 'BETTING';
 
     return (
@@ -201,13 +201,13 @@ export const BlackjackView = React.memo<{
             <div className="flex-1 w-full flex flex-col items-center justify-start sm:justify-center gap-8 relative pt-12 pb-24 animate-scale-in">
                 <div className="absolute top-4 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1">
                     <Label size="micro">Blackjack</Label>
-                    <div className="h-1 w-8 bg-titanium-200 rounded-full" />
+                    <div className="h-1 w-8 bg-ns-border rounded-full opacity-60" />
                 </div>
                 
                 <div className="absolute top-2 left-2 z-40">
                     <MobileDrawer label="INFO" title="BLACKJACK">
                         <div className="space-y-4 p-2">
-                            <p className="text-body text-ns-text leading-relaxed">
+                            <p className="text-body text-ns leading-relaxed">
                                 Get as close to 21 as possible without going over. Dealer stands on 17.
                             </p>
                             <div className="pt-4">
@@ -224,7 +224,7 @@ export const BlackjackView = React.memo<{
                         <div className="flex flex-col items-center gap-4">
                             <div className="flex items-center gap-3">
                                 <Label variant="destructive">Dealer</Label>
-                                <span className="text-display-mono text-headline text-ns-text">{dealerValue}</span>
+                            <span className="text-display-mono text-headline text-ns">{dealerValue}</span>
                             </div>
                             <Hand
                                 cards={gameState.dealerCards}
@@ -234,7 +234,7 @@ export const BlackjackView = React.memo<{
                     ) : (
                         <div className="flex flex-col items-center gap-3">
                              <Label variant="secondary">Dealer</Label>
-                             <div className="w-14 h-20 rounded-xl bg-titanium-100/50 dark:bg-titanium-800/30" />
+                             <div className="w-14 h-20 rounded-xl liquid-panel" />
                         </div>
                     )}
                 </div>
@@ -243,13 +243,13 @@ export const BlackjackView = React.memo<{
                 {gameState.message?.includes('OFFLINE') && (
                     <div className="text-center bg-mono-400/20 border border-mono-400/50 rounded-lg px-4 py-2 mx-4">
                         <p className="text-mono-400 dark:text-mono-500 font-bold text-sm">⚠️ Chain Offline - Check Vault Status</p>
-                        <p className="text-mono-400 dark:text-mono-500/80 text-xs">Navigate to Security → Unlock Vault to connect</p>
+                        <p className="text-mono-400 dark:text-mono-500/80 text-xs">Navigate to Security → Unlock or create your vault to connect</p>
                     </div>
                 )}
 
                 {/* Center Info */}
                 <div className="text-center relative z-20 px-6">
-                    <h2 className="text-2xl sm:text-3xl font-bold text-titanium-900 tracking-tight font-display animate-scale-in">
+                    <h2 className="text-2xl sm:text-3xl font-bold text-ns tracking-tight font-display animate-scale-in">
                         {gameState.message || 'Place Your Bet'}
                     </h2>
                 </div>
@@ -272,7 +272,7 @@ export const BlackjackView = React.memo<{
                     <div className="flex flex-col items-center gap-4 scale-110">
                         <div className="flex items-center gap-3">
                             <Label variant="gold">You</Label>
-                            <span className="text-display-mono text-headline text-ns-text">{playerValue}</span>
+                            <span className="text-display-mono text-headline text-ns">{playerValue}</span>
                             {(gameState.completedHands.length > 0 || gameState.blackjackStack.length > 0) ? (
                                 <span className="text-caption uppercase tracking-widest ml-2">Hand {activeHandNumber}</span>
                             ) : null}
@@ -291,7 +291,7 @@ export const BlackjackView = React.memo<{
                     {gameState.blackjackStack.length > 0 && (
                             <div className="flex gap-2 opacity-30 scale-90 origin-left">
                             {gameState.blackjackStack.map((h, i) => (
-                                <div key={i} className="w-14 h-20 rounded-xl bg-titanium-200/50 dark:bg-titanium-700/30 flex items-center justify-center">
+                                <div key={i} className="w-14 h-20 rounded-xl liquid-panel flex items-center justify-center">
                                     <Label size="micro">Wait</Label>
                                 </div>
                             ))}
@@ -313,12 +313,12 @@ export const BlackjackView = React.memo<{
 
                 {/* Analysis panel removed for cleaner UI - analysis still available via 'A' key */}
                 {analysis && (
-                    <div className="text-center text-caption text-ns-text-muted animate-in fade-in">
+                    <div className="text-center text-caption text-ns-muted animate-in fade-in">
                         Best: <span className="text-mono-0 dark:text-mono-1000 font-medium">{analysis.bestPlay}</span>
                         <button
                             type="button"
                             onClick={() => setAnalysis(null)}
-                            className="ml-2 text-ns-text-muted hover:text-ns-text"
+                            className="ml-2 text-ns-muted hover:text-ns"
                         >
                             ×
                         </button>
@@ -328,7 +328,7 @@ export const BlackjackView = React.memo<{
 
             {/* CONTROLS */}
             {/* Keyboard shortcuts removed for cleaner UI - shortcuts still work, press ? for help */}
-            <div className="ns-controlbar zen-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-titanium-900/95 backdrop-blur z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
+            <div className="ns-controlbar zen-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 liquid-card rounded-none md:rounded-t-3xl backdrop-blur border-t border-ns z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
                 <div className="h-14 sm:h-16 md:h-20 flex items-center justify-center gap-2 sm:gap-3 p-2 md:px-4">
                     {/* Side Bets - Desktop only drawer, mobile uses simplified button */}
                     <div className="hidden sm:flex items-center gap-2">
@@ -353,16 +353,16 @@ export const BlackjackView = React.memo<{
                                                     active
                                                         ? 'border-mono-0/60 bg-mono-0/10 text-mono-0 dark:text-mono-1000'
                                                         : sideBetsLocked
-                                                            ? 'border-titanium-200 text-titanium-400 dark:border-titanium-800 dark:text-titanium-500'
-                                                            : 'border-titanium-200 text-titanium-700 hover:border-titanium-500 dark:border-titanium-800 dark:text-titanium-200'
+                                                            ? 'border-ns text-ns-muted'
+                                                            : 'border-ns text-ns hover:border-ns'
                                                 }`}
                                             >
                                                 <div className="flex items-center justify-between gap-2">
                                                     <span>{bet.id}</span>
-                                                    <span className="text-[10px] font-mono text-titanium-400">[{bet.shortcut}]</span>
+                                                    <span className="text-[10px] font-mono text-ns-muted">[{bet.shortcut}]</span>
                                                 </div>
                                                 {bet.amount > 0 ? (
-                                                    <div className="mt-1 text-[10px] tracking-[0.2em] text-titanium-500">
+                                                    <div className="mt-1 text-[10px] tracking-[0.2em] text-ns-muted">
                                                         ${bet.amount.toLocaleString()}
                                                     </div>
                                                 ) : null}
@@ -371,7 +371,7 @@ export const BlackjackView = React.memo<{
                                     })}
                                 </div>
                                 {sideBetsLocked ? (
-                                    <div className="text-[10px] uppercase tracking-[0.24em] text-titanium-400">
+                                    <div className="text-[10px] uppercase tracking-[0.24em] text-ns-muted">
                                         Locked until next hand
                                     </div>
                                 ) : null}
@@ -389,7 +389,7 @@ export const BlackjackView = React.memo<{
                                     className={`px-3 py-2 rounded-lg text-[10px] font-bold uppercase ${
                                         gameState.activeModifiers.super
                                             ? 'bg-mono-0/20 text-mono-0 dark:text-mono-1000 border border-mono-0/50'
-                                            : 'bg-gray-800 text-gray-400 border border-gray-700'
+                                            : 'bg-white/55 dark:bg-black/40 text-ns-muted border border-ns-border/70'
                                     }`}
                                 >
                                     Super
@@ -407,10 +407,10 @@ export const BlackjackView = React.memo<{
                                                 className={`h-14 px-6 rounded-lg border-2 font-bold text-base tracking-widest uppercase font-mono transition-all ${
                                                     gameState.activeModifiers.shield
                                                         ? 'border-mono-0 bg-mono-0/20 text-mono-0 dark:text-mono-1000 font-bold'
-                                                        : 'border-gray-600 bg-black/60 text-gray-200 hover:bg-gray-700 hover:border-gray-500'
+                                                        : 'border-ns-border/70 bg-black/60 text-ns hover:bg-black/40 hover:border-ns-border'
                                                 }`}
                                             >
-                                                SHIELD <span className="text-gray-500 ml-1 text-xs">[Z]</span>
+                                                SHIELD <span className="text-ns-muted ml-1 text-xs">[Z]</span>
                                             </button>
                                             <button
                                                 type="button"
@@ -418,10 +418,10 @@ export const BlackjackView = React.memo<{
                                                 className={`h-14 px-6 rounded-lg border-2 font-bold text-base tracking-widest uppercase font-mono transition-all ${
                                                     gameState.activeModifiers.double
                                                         ? 'border-mono-0 bg-mono-0/20 text-mono-0 dark:text-mono-1000 font-bold'
-                                                        : 'border-gray-600 bg-black/60 text-gray-200 hover:bg-gray-700 hover:border-gray-500'
+                                                        : 'border-ns-border/70 bg-black/60 text-ns hover:bg-black/40 hover:border-ns-border'
                                                 }`}
                                             >
-                                                DOUBLE <span className="text-gray-500 ml-1 text-xs">[X]</span>
+                                                DOUBLE <span className="text-ns-muted ml-1 text-xs">[X]</span>
                                             </button>
                                         </>
                                     )}
@@ -431,10 +431,10 @@ export const BlackjackView = React.memo<{
                                         className={`h-14 px-6 rounded-lg border-2 font-bold text-base tracking-widest uppercase font-mono transition-all ${
                                             gameState.activeModifiers.super
                                                 ? 'border-mono-0 bg-mono-0/20 text-mono-0 dark:text-mono-1000'
-                                                : 'border-gray-600 bg-black/60 text-gray-200 hover:bg-gray-700 hover:border-gray-500'
+                                                : 'border-ns-border/70 bg-black/60 text-ns hover:bg-black/40 hover:border-ns-border'
                                         }`}
                                     >
-                                        SUPER <span className="text-gray-500 ml-1 text-xs">[G]</span>
+                                        SUPER <span className="text-ns-muted ml-1 text-xs">[G]</span>
                                     </button>
                                 </div>
                             </div>
@@ -446,7 +446,7 @@ export const BlackjackView = React.memo<{
                                 <button
                                     type="button"
                                     onClick={() => actions?.bjInsurance?.(false)}
-                                    className="px-3 py-2 rounded-lg text-[10px] font-bold uppercase bg-gray-800 text-gray-400 border border-gray-700"
+                                    className="px-3 py-2 rounded-lg text-[10px] font-bold uppercase bg-white/55 dark:bg-black/40 text-ns-muted border border-ns-border/70"
                                 >
                                     No
                                 </button>
@@ -455,9 +455,9 @@ export const BlackjackView = React.memo<{
                                 <button
                                     type="button"
                                     onClick={() => actions?.bjInsurance?.(false)}
-                                    className="h-14 px-8 rounded-lg border-2 font-bold text-base tracking-widest uppercase font-mono transition-all border-gray-600 bg-black/60 text-gray-200 hover:bg-gray-700 hover:border-gray-500"
+                                    className="h-14 px-8 rounded-lg border-2 font-bold text-base tracking-widest uppercase font-mono transition-all border-ns-border/70 bg-black/60 text-ns hover:bg-black/40 hover:border-ns-border"
                                 >
-                                    NO <span className="text-gray-500 ml-1 text-xs">[N]</span>
+                                    NO <span className="text-ns-muted ml-1 text-xs">[N]</span>
                                 </button>
                                 {canAnalyze && (
                                     <button
@@ -466,7 +466,7 @@ export const BlackjackView = React.memo<{
                                         disabled={analysisPending}
                                         className={`h-14 px-6 rounded-lg border-2 font-bold text-base tracking-widest uppercase font-mono transition-all ${
                                             analysisPending
-                                                ? 'opacity-60 cursor-not-allowed border-gray-800 bg-gray-900/50 text-gray-500'
+                                                ? 'opacity-60 cursor-not-allowed border-ns-border/60 bg-white/30 dark:bg-black/50 text-ns-muted'
                                                 : 'border-mono-0 bg-mono-0/15 text-mono-0 dark:text-mono-1000 hover:bg-mono-0/25'
                                         }`}
                                     >
@@ -485,8 +485,8 @@ export const BlackjackView = React.memo<{
                                     disabled={!canStand}
                                     className={`px-3 py-2 rounded-lg text-[10px] font-bold uppercase ${
                                         canStand
-                                            ? 'bg-gray-800 text-gray-300 border border-gray-700'
-                                            : 'opacity-40 bg-gray-900 text-gray-600 border border-gray-800'
+                                            ? 'bg-white/55 dark:bg-black/40 text-ns border border-ns-border/70'
+                                            : 'opacity-40 bg-white/40 dark:bg-black/50 text-ns-muted border border-ns-border/60'
                                     }`}
                                 >
                                     Stand
@@ -495,7 +495,7 @@ export const BlackjackView = React.memo<{
                                     <button
                                         type="button"
                                         onClick={actions?.bjDouble}
-                                        className="px-3 py-2 rounded-lg text-[10px] font-bold uppercase bg-gray-800 text-gray-300 border border-gray-700"
+                                        className="px-3 py-2 rounded-lg text-[10px] font-bold uppercase bg-white/55 dark:bg-black/40 text-ns border border-ns-border/70"
                                     >
                                         x2
                                     </button>
@@ -504,7 +504,7 @@ export const BlackjackView = React.memo<{
                                     <button
                                         type="button"
                                         onClick={actions?.bjSplit}
-                                        className="px-3 py-2 rounded-lg text-[10px] font-bold uppercase bg-gray-800 text-gray-300 border border-gray-700"
+                                        className="px-3 py-2 rounded-lg text-[10px] font-bold uppercase bg-white/55 dark:bg-black/40 text-ns border border-ns-border/70"
                                     >
                                         Split
                                     </button>
@@ -517,11 +517,11 @@ export const BlackjackView = React.memo<{
                                     disabled={!canStand}
                                     className={`h-14 px-8 rounded-lg border-2 font-bold text-base tracking-widest uppercase font-mono transition-all ${
                                         canStand
-                                            ? 'border-gray-600 bg-black/60 text-gray-200 hover:bg-gray-700 hover:border-gray-500'
-                                            : 'opacity-50 cursor-not-allowed border-gray-800 bg-gray-900/50 text-gray-700'
+                                            ? 'border-ns-border/70 bg-black/60 text-ns hover:bg-black/40 hover:border-ns-border'
+                                            : 'opacity-50 cursor-not-allowed border-ns-border/60 bg-white/30 dark:bg-black/50 text-ns-muted'
                                     }`}
                                 >
-                                    STAND <span className="text-gray-500 ml-1 text-xs">[S]</span>
+                                    STAND <span className="text-ns-muted ml-1 text-xs">[S]</span>
                                 </button>
                                 <button
                                     type="button"
@@ -529,11 +529,11 @@ export const BlackjackView = React.memo<{
                                     disabled={!canDouble}
                                     className={`h-14 px-8 rounded-lg border-2 font-bold text-base tracking-widest uppercase font-mono transition-all ${
                                         canDouble
-                                            ? 'border-gray-600 bg-black/60 text-gray-200 hover:bg-gray-700 hover:border-gray-500'
-                                            : 'opacity-50 cursor-not-allowed border-gray-800 bg-gray-900/50 text-gray-700'
+                                            ? 'border-ns-border/70 bg-black/60 text-ns hover:bg-black/40 hover:border-ns-border'
+                                            : 'opacity-50 cursor-not-allowed border-ns-border/60 bg-white/30 dark:bg-black/50 text-ns-muted'
                                     }`}
                                 >
-                                    DOUBLE <span className="text-gray-500 ml-1 text-xs">[D]</span>
+                                    DOUBLE <span className="text-ns-muted ml-1 text-xs">[D]</span>
                                 </button>
                                 <button
                                     type="button"
@@ -541,11 +541,11 @@ export const BlackjackView = React.memo<{
                                     disabled={!canSplit}
                                     className={`h-14 px-8 rounded-lg border-2 font-bold text-base tracking-widest uppercase font-mono transition-all ${
                                         canSplit
-                                            ? 'border-gray-600 bg-black/60 text-gray-200 hover:bg-gray-700 hover:border-gray-500'
-                                            : 'opacity-50 cursor-not-allowed border-gray-800 bg-gray-900/50 text-gray-700'
+                                            ? 'border-ns-border/70 bg-black/60 text-ns hover:bg-black/40 hover:border-ns-border'
+                                            : 'opacity-50 cursor-not-allowed border-ns-border/60 bg-white/30 dark:bg-black/50 text-ns-muted'
                                     }`}
                                 >
-                                    SPLIT <span className="text-gray-500 ml-1 text-xs">[P]</span>
+                                    SPLIT <span className="text-ns-muted ml-1 text-xs">[P]</span>
                                 </button>
                                 {canAnalyze && (
                                     <button
@@ -554,7 +554,7 @@ export const BlackjackView = React.memo<{
                                         disabled={analysisPending}
                                         className={`h-14 px-6 rounded-lg border-2 font-bold text-base tracking-widest uppercase font-mono transition-all ${
                                             analysisPending
-                                                ? 'opacity-60 cursor-not-allowed border-gray-800 bg-gray-900/50 text-gray-500'
+                                                ? 'opacity-60 cursor-not-allowed border-ns-border/60 bg-white/30 dark:bg-black/50 text-ns-muted'
                                                 : 'border-mono-0 bg-mono-0/15 text-mono-0 dark:text-mono-1000 hover:bg-mono-0/25'
                                         }`}
                                     >
@@ -608,7 +608,7 @@ export const BlackjackView = React.memo<{
                                 showInsurancePrompt
                                     ? 'border-mono-0 bg-mono-0 text-black'
                                     : (gameState.stage === 'PLAYING' && !canHit)
-                                        ? 'opacity-50 cursor-not-allowed border-gray-800 bg-gray-900/50 text-gray-700'
+                                        ? 'opacity-50 cursor-not-allowed border-ns-border/60 bg-white/30 dark:bg-black/50 text-ns-muted'
                                         : 'border-mono-0 bg-mono-0 text-black'
                             }`}
                         >

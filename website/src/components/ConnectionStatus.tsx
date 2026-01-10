@@ -20,7 +20,7 @@ type ConnectionStatusType =
  * LUX-024: Action-oriented status messages
  * Every message tells users what happened + what to do
  */
-const statusLabel = (status: string) => {
+const statusLabel = (status: string, vaultMissing: boolean) => {
   switch (status) {
     case 'connected':
       return 'Online';
@@ -29,7 +29,7 @@ const statusLabel = (status: string) => {
     case 'offline':
       return 'Reconnecting...';
     case 'vault_locked':
-      return 'Tap to unlock';
+      return vaultMissing ? 'Create vault' : 'Tap to unlock';
     case 'missing_identity':
       return 'Complete setup';
     case 'error':
@@ -128,7 +128,7 @@ const StatusIcon = ({ status }: { status: string }) => {
 };
 
 export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({ className }) => {
-  const { status, statusDetail, error, refreshOnce } = useSharedCasinoConnection();
+  const { status, statusDetail, error, refreshOnce, vaultMode } = useSharedCasinoConnection();
   const prefersReducedMotion = useReducedMotion();
 
   // Track previous status for transition detection
@@ -136,7 +136,8 @@ export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({ className })
   const [showReconnectFlash, setShowReconnectFlash] = useState(false);
   const [showErrorShake, setShowErrorShake] = useState(false);
 
-  const label = statusLabel(status);
+  const vaultMissing = status === 'vault_locked' && vaultMode === 'missing';
+  const label = statusLabel(status, vaultMissing);
   const detail = statusDetail ?? error;
   const display = detail ?? label;
   const title = detail && detail !== label ? detail : undefined;
@@ -216,7 +217,7 @@ export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({ className })
     <animated.div
       className={[
         // LUX-024: Updated to luxury aesthetic
-        'flex items-center gap-2 rounded-full border border-titanium-200 bg-white/80 backdrop-blur-sm px-3 py-1.5 relative overflow-hidden shadow-soft dark:border-titanium-800 dark:bg-titanium-900/80',
+        'flex items-center gap-2 liquid-chip px-3 py-1.5 relative overflow-hidden shadow-soft',
         className ?? '',
       ]
         .join(' ')
@@ -278,16 +279,16 @@ export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({ className })
       {showUnlock ? (
         <Link
           to="/security"
-          className="text-[10px] text-action-success hover:underline"
+          className="text-[10px] uppercase tracking-[0.3em] text-ns hover:text-ns-muted"
         >
-          Unlock
+          {vaultMissing ? 'Create' : 'Unlock'}
         </Link>
       ) : null}
       {showRetry ? (
         <button
           type="button"
           onClick={() => void refreshOnce()}
-          className="text-micro font-semibold border border-titanium-300 rounded-full px-3 py-1 text-titanium-600 hover:border-titanium-400 hover:text-titanium-800 transition-colors dark:border-titanium-700 dark:text-titanium-400 dark:hover:border-titanium-600 dark:hover:text-titanium-200"
+          className="text-[10px] uppercase tracking-[0.28em] font-semibold liquid-chip px-3 py-1 text-ns hover:shadow-soft transition-colors"
         >
           Retry
         </button>

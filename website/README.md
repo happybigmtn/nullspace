@@ -29,7 +29,7 @@ Create `website/.env.local` with the following variables:
 # Generate with: node scripts/generate-keys.mjs
 VITE_IDENTITY=<96-byte-hex-identity>
 
-# Required: Simulator URL (REST API)
+# Required: Simulator URL (REST API, http/https)
 VITE_URL=http://localhost:8080
 
 # Optional: Gateway WebSocket URL (for session-based games)

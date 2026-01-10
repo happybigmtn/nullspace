@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { WasmWrapper } from '../api/wasm.js';
 import { CasinoClient } from '../api/client.js';
+import { getVaultRecord } from '../security/keyVault';
+import { subscribeVault } from '../security/vaultRuntime';
 
 export type ConnectionStatus =
   | 'missing_identity'
@@ -9,6 +11,8 @@ export type ConnectionStatus =
   | 'connected'
   | 'offline'
   | 'error';
+
+export type VaultMode = 'unknown' | 'missing' | 'locked' | 'unlocked';
 
 export type CasinoConnection = {
   status: ConnectionStatus;
@@ -20,6 +24,7 @@ export type CasinoConnection = {
   currentView: number | null;
   refreshOnce: () => Promise<void>;
   onEvent: (name: string, handler: (evt: any) => void) => () => void;
+  vaultMode: VaultMode;
 };
 
 const IS_DEV = Boolean(import.meta.env?.DEV);
@@ -28,6 +33,7 @@ const MISSING_IDENTITY_DETAIL = IS_DEV
   : 'Identity not configured. Refresh the page or contact support.';
 const OFFLINE_DETAIL = 'Offline - check your connection and retry.';
 const VAULT_LOCKED_DETAIL = 'Vault locked. Open Security to unlock.';
+const VAULT_MISSING_DETAIL = 'No vault found. Open Security to create one.';
 const ERROR_DETAIL = IS_DEV
   ? 'Failed to connect. Check simulator + validators.'
   : 'Failed to connect. Check your connection and retry.';
@@ -40,10 +46,21 @@ export function useCasinoConnection(baseUrl = '/api'): CasinoConnection {
   const [wasm, setWasm] = useState<WasmWrapper | null>(null);
   const [keypair, setKeypair] = useState<{ publicKey: Uint8Array; publicKeyHex: string } | null>(null);
   const [currentView, setCurrentView] = useState<number | null>(null);
+  const [vaultMode, setVaultMode] = useState<VaultMode>('unknown');
   const [refreshToken, setRefreshToken] = useState(0);
   const [online, setOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine));
 
   const clientRef = useRef<CasinoClient | null>(null);
+  const statusRef = useRef<ConnectionStatus>(status);
+  const vaultModeRef = useRef<VaultMode>(vaultMode);
+
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
+
+  useEffect(() => {
+    vaultModeRef.current = vaultMode;
+  }, [vaultMode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -69,6 +86,7 @@ export function useCasinoConnection(baseUrl = '/api'): CasinoConnection {
         }
 
         setStatus('connecting');
+        setVaultMode('unknown');
 
         const wasmWrapper = new WasmWrapper(identityHex);
         const casinoClient = new CasinoClient(baseUrl, wasmWrapper);
@@ -82,11 +100,25 @@ export function useCasinoConnection(baseUrl = '/api'): CasinoConnection {
           } catch {
             // ignore
           }
+          let detail = VAULT_LOCKED_DETAIL;
+          let nextVaultMode: VaultMode = 'locked';
+          try {
+            const record = await getVaultRecord();
+            if (!record) {
+              detail = VAULT_MISSING_DETAIL;
+              nextVaultMode = 'missing';
+            }
+          } catch {
+            // ignore vault record lookup failures
+          }
+          if (cancelled) return;
+          setVaultMode(nextVaultMode);
           setStatus('vault_locked');
-          setStatusDetail(VAULT_LOCKED_DETAIL);
+          setStatusDetail(detail);
           return;
         }
 
+        setVaultMode('unlocked');
         await casinoClient.switchUpdates(kp.publicKey);
         await casinoClient.waitForFirstSeed?.().catch(() => undefined);
 
@@ -149,6 +181,20 @@ export function useCasinoConnection(baseUrl = '/api'): CasinoConnection {
     };
   }, [baseUrl, online, refreshToken]);
 
+  useEffect(() => {
+    const unsubscribe = subscribeVault((vault) => {
+      const unlocked = !!vault;
+      if (!unlocked && vaultModeRef.current === 'missing') {
+        return;
+      }
+      setVaultMode(unlocked ? 'unlocked' : 'locked');
+      if (unlocked && statusRef.current === 'vault_locked') {
+        setRefreshToken((token) => token + 1);
+      }
+    });
+    return unsubscribe;
+  }, []);
+
   const refreshOnce = useCallback(async () => {
     setRefreshToken((token) => token + 1);
   }, []);
@@ -171,5 +217,5 @@ export function useCasinoConnection(baseUrl = '/api'): CasinoConnection {
     return c.onEvent(name, handler);
   }, []);
 
-  return { status, statusDetail, error, client, wasm, keypair, currentView, refreshOnce, onEvent };
+  return { status, statusDetail, error, client, wasm, keypair, currentView, refreshOnce, onEvent, vaultMode };
 }

@@ -1325,6 +1325,124 @@ To investigate failures:
 2. Run locally with the same gateway URL
 3. Check gateway/simulator health
 
+### 6.8 Android E2E Testing (Headless)
+
+Detox E2E tests can be run headlessly on Linux without a physical device using the Android Emulator with KVM acceleration.
+
+#### 6.8.1 Prerequisites
+
+- **Linux** with KVM enabled (`/dev/kvm` accessible)
+- **Java 17+**: `sudo apt install openjdk-17-jdk`
+- **Node.js 20+** and **pnpm**
+- **~10GB disk space** for Android SDK
+
+#### 6.8.2 One-Time Setup
+
+```bash
+# Install Android SDK, emulator, and create AVD
+./scripts/setup-android-sdk.sh
+
+# Or manually:
+source scripts/android-env.sh
+```
+
+This installs:
+- Android SDK command-line tools
+- Android platform-tools and emulator
+- API 34 system image (google_apis/x86_64)
+- Pixel 7 AVD named `Pixel_7_API_34`
+
+#### 6.8.3 Running E2E Tests
+
+```bash
+# Run all E2E tests (uses testnet backend by default)
+./scripts/run-mobile-e2e.sh
+
+# Run specific test file
+./scripts/run-mobile-e2e.sh --test games
+
+# Force rebuild before testing
+./scripts/run-mobile-e2e.sh --build
+
+# Keep emulator running after tests (for debugging)
+./scripts/run-mobile-e2e.sh --no-cleanup
+
+# Use local mock backend instead of testnet
+./scripts/run-mobile-e2e.sh --mock-backend
+```
+
+#### 6.8.4 Manual Emulator Control
+
+```bash
+# Start emulator headlessly
+./scripts/android-emulator.sh start
+
+# Check status
+./scripts/android-emulator.sh status
+
+# Set up port forwarding (for mock backend)
+./scripts/android-emulator.sh forward
+
+# Stop emulator
+./scripts/android-emulator.sh stop
+```
+
+#### 6.8.5 Mock Backend
+
+The mock backend provides a minimal game server for isolated E2E testing.
+Use `--mock-backend` (or `USE_MOCK_BACKEND=true`) with the test runner to
+enable it:
+
+```bash
+# Start mock backend on port 9010
+node scripts/mock-backend.mjs
+
+# Custom port
+MOCK_PORT=8080 node scripts/mock-backend.mjs
+
+# Health check
+curl http://localhost:9010/healthz
+```
+
+Features:
+- Authentication flow simulation
+- Faucet claims
+- Game result generation (Hi-Lo, Blackjack, Roulette, etc.)
+- Balance tracking per session
+
+#### 6.8.6 CI Integration
+
+The GitHub Actions workflow `mobile-e2e.yml` runs E2E tests on:
+- **iOS**: macOS runner with Xcode simulator
+- **Android**: Ubuntu runner with AVD (uses `reactivecircus/android-emulator-runner`)
+
+Both platforms can run against testnet by default. Use the mock backend only
+when you need isolated/local E2E coverage.
+
+#### 6.8.7 Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| Emulator fails to start | Check KVM: `ls -l /dev/kvm` |
+| Emulator very slow | Enable KVM: `sudo usermod -aG kvm $USER && reboot` |
+| Build fails | Run `cd mobile && npx expo prebuild --platform android --clean` |
+| ADB not found | Run `source scripts/android-env.sh` |
+| Tests timeout | Increase timeout in `.detoxrc.js` or check emulator boot |
+
+#### 6.8.8 Agent Usage
+
+Claude agents can run E2E tests autonomously using:
+
+```bash
+# Full automated test run (testnet backend by default)
+./scripts/run-mobile-e2e.sh
+
+# Check results
+cat mobile/artifacts/detox.log 2>/dev/null || echo "No artifacts"
+```
+
+The script handles all setup (emulator, optional mock backend, port forwarding) and cleanup automatically.
+
 ---
 
 ## 7. Release Process
@@ -1384,7 +1502,7 @@ The website image build **requires** these GitHub repository variables (Settings
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `VITE_URL` | WebSocket gateway URL | `wss://gateway.nullspace.io` |
+| `VITE_URL` | Simulator/Indexer base URL (HTTP) | `https://indexer.nullspace.io` |
 | `VITE_AUTH_URL` | Auth service URL | `https://auth.nullspace.io` |
 | `VITE_AUTH_PROXY_URL` | Auth proxy/callback URL | `https://auth.nullspace.io/api/auth` |
 | `VITE_IDENTITY` | Network identity (hex) | `abc123...` |

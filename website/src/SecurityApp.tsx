@@ -272,8 +272,10 @@ export default function SecurityApp() {
     }
 
     if (!botRef.current) {
+      // Use VITE_URL in production (no /api proxy), fall back to /api for dev
+      const baseUrl = import.meta.env.VITE_URL || '/api';
       botRef.current = new VaultBetBot({
-        baseUrl: '/api',
+        baseUrl,
         identityHex,
         privateKeyBytes: vault.nullspaceEd25519PrivateKey,
         onLog: pushBotLog,
@@ -370,7 +372,7 @@ export default function SecurityApp() {
   };
 
   return (
-    <div className="min-h-screen w-screen bg-titanium-900 text-white font-mono">
+    <div className="min-h-screen text-ns font-sans space-y-6">
       <PageHeader
         title="Vaults"
         status={status}
@@ -378,25 +380,28 @@ export default function SecurityApp() {
         right={<AuthStatusPill publicKeyHex={publicKeyHex} />}
       />
 
-      <div className="max-w-4xl mx-auto p-4 space-y-4">
+      <div className="space-y-6">
         {error && (
-          <div className="text-xs text-action-destructive border border-action-destructive/40 rounded bg-action-destructive/10 p-2">
+          <div className="liquid-panel px-3 py-2 text-xs text-action-destructive">
             {error}
           </div>
         )}
 
-        <div className="border border-gray-800 rounded bg-gray-900/30 p-4">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <div className="text-[10px] text-gray-500 tracking-widest">SECURITY</div>
-              <div className="text-lg font-bold mt-1">Passkey Vault (recommended)</div>
-              <div className="text-xs text-gray-500 mt-2">
+        <div className="liquid-card p-5">
+          <div className="flex flex-wrap items-start justify-between gap-6">
+            <div className="space-y-2">
+              <div className="text-[10px] text-ns-muted tracking-[0.32em] uppercase">Primary</div>
+              <div className="text-lg font-display tracking-tight text-ns">Passkey Vault</div>
+              <div className="text-[11px] text-ns-muted">
+                Recommended. Stored locally with device-backed security.
+              </div>
+              <div className="text-[10px] text-ns-muted">
                 Vault: <span className="text-action-success">{passkeyLabel}</span>
                 {passkeySupported ? (
                   <>
-                    <span className="text-gray-700"> · </span>
+                    <span className="text-ns-muted"> · </span>
                     Active:{' '}
-                    <span className={passkeyActive ? 'text-action-success' : 'text-gray-500'}>
+                    <span className={passkeyActive ? 'text-action-success' : 'text-ns-muted'}>
                       {passkeyActive ? 'YES' : 'NO'}
                     </span>
                   </>
@@ -409,59 +414,59 @@ export default function SecurityApp() {
                 ) : null}
               </div>
               {!identityOk && (
-                <div className="text-xs text-action-destructive mt-2">Missing `VITE_IDENTITY` (required to verify chain state).</div>
+                <div className="text-[11px] text-action-destructive">Missing `VITE_IDENTITY` (required to verify chain state).</div>
               )}
             </div>
 
-            <div className="flex flex-col gap-2 items-end">
+            <div className="flex flex-wrap gap-2">
               {!hasVault && passkeySupported && (
                 <button
-                  className="text-[10px] border px-3 py-2 rounded bg-action-success/20 border-action-success text-action-success hover:bg-action-success/30"
+                  className="text-[10px] px-3 py-2 rounded-full liquid-chip text-action-success hover:shadow-soft"
                   onClick={onCreatePasskeyVault}
                 >
-                  CREATE PASSKEY VAULT
+                  Create passkey vault
                 </button>
               )}
 
               {passkeyActive && !unlocked && (
                 <button
-                  className="text-[10px] border px-3 py-2 rounded bg-gray-900 border-gray-700 text-gray-200 hover:border-gray-500"
+                  className="text-[10px] px-3 py-2 rounded-full liquid-chip text-ns hover:shadow-soft"
                   onClick={onUnlockPasskeyVault}
                 >
-                  UNLOCK WITH PASSKEY
+                  Unlock with passkey
                 </button>
               )}
 
               {passkeyActive && unlocked && (
                 <button
-                  className="text-[10px] border px-3 py-2 rounded bg-gray-900 border-gray-700 text-gray-200 hover:border-gray-500"
+                  className="text-[10px] px-3 py-2 rounded-full liquid-chip text-ns hover:shadow-soft"
                   onClick={onLockVault}
                 >
-                  LOCK VAULT
+                  Lock vault
                 </button>
               )}
 
               {passkeyActive && (
                 <button
-                  className="text-[10px] border px-3 py-2 rounded bg-gray-900 border-gray-800 text-gray-400 hover:border-action-destructive hover:text-action-destructive"
+                  className="text-[10px] px-3 py-2 rounded-full liquid-chip text-action-destructive hover:shadow-soft"
                   onClick={onDeleteVault}
                 >
-                  DELETE VAULT
+                  Delete vault
                 </button>
               )}
             </div>
           </div>
 
-          <div className="mt-4 text-[10px] text-gray-500 leading-relaxed">
+          <div className="mt-4 text-[10px] text-ns-muted leading-relaxed">
             Passkeys unlock a local encrypted vault (stored in IndexedDB). The vault stores:
-            <ul className="list-disc ml-5 mt-2 space-y-1 text-gray-500">
+            <ul className="list-disc ml-5 mt-2 space-y-1 text-ns-muted">
               <li>Casino betting key (ed25519) for onchain transactions</li>
               <li>Chat key material (placeholder until XMTP integration)</li>
             </ul>
             <div className="mt-2">
-              After unlocking, reload the app to ensure all pages pick up the vault-held keys.
+              After unlocking, return to your game — the connection should refresh automatically.
               <button
-                className="ml-2 text-[10px] border px-2 py-1 rounded bg-gray-900 border-gray-800 text-gray-300 hover:border-gray-600"
+                className="ml-2 text-[10px] px-2 py-1 rounded-full liquid-chip text-ns hover:shadow-soft"
                 onClick={() => window.location.reload()}
               >
                 RELOAD
@@ -470,18 +475,21 @@ export default function SecurityApp() {
           </div>
         </div>
 
-        <div className="border border-gray-800 rounded bg-gray-900/30 p-4">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <div className="text-[10px] text-gray-500 tracking-widest">SECURITY</div>
-              <div className="text-lg font-bold mt-1">Password Vault (fallback)</div>
-              <div className="text-xs text-gray-500 mt-2">
+        <div className="liquid-card p-5">
+          <div className="flex flex-wrap items-start justify-between gap-6">
+            <div className="space-y-2">
+              <div className="text-[10px] text-ns-muted tracking-[0.32em] uppercase">Fallback</div>
+              <div className="text-lg font-display tracking-tight text-ns">Password Vault</div>
+              <div className="text-[11px] text-ns-muted">
+                Use only if passkeys are unavailable on this device.
+              </div>
+              <div className="text-[10px] text-ns-muted">
                 Vault: <span className="text-action-success">{passwordLabel}</span>
                 {passwordSupported ? (
                   <>
-                    <span className="text-gray-700"> · </span>
+                    <span className="text-ns-muted"> · </span>
                     Active:{' '}
-                    <span className={passwordActive ? 'text-action-success' : 'text-gray-500'}>
+                    <span className={passwordActive ? 'text-action-success' : 'text-ns-muted'}>
                       {passwordActive ? 'YES' : 'NO'}
                     </span>
                   </>
@@ -494,29 +502,29 @@ export default function SecurityApp() {
                 ) : null}
               </div>
               {!passwordSupported && (
-                <div className="text-xs text-gray-500 mt-2">Password vaults need WebCrypto + IndexedDB support.</div>
+                <div className="text-[11px] text-ns-muted">Password vaults need WebCrypto + IndexedDB support.</div>
               )}
               {passkeyActive && (
-                <div className="text-xs text-gray-500 mt-2">Passkey vault is active. Delete it to switch vault types.</div>
+                <div className="text-[11px] text-ns-muted">Passkey vault is active. Delete it to switch vault types.</div>
               )}
             </div>
 
-            <div className="flex flex-col gap-2 items-end">
+            <div className="flex flex-wrap gap-2">
               {passwordActive && unlocked && (
                 <button
-                  className="text-[10px] border px-3 py-2 rounded bg-gray-900 border-gray-700 text-gray-200 hover:border-gray-500"
+                  className="text-[10px] px-3 py-2 rounded-full liquid-chip text-ns hover:shadow-soft"
                   onClick={onLockVault}
                 >
-                  LOCK VAULT
+                  Lock vault
                 </button>
               )}
 
               {passwordActive && (
                 <button
-                  className="text-[10px] border px-3 py-2 rounded bg-gray-900 border-gray-800 text-gray-400 hover:border-action-destructive hover:text-action-destructive"
+                  className="text-[10px] px-3 py-2 rounded-full liquid-chip text-action-destructive hover:shadow-soft"
                   onClick={onDeleteVault}
                 >
-                  DELETE VAULT
+                  Delete vault
                 </button>
               )}
             </div>
@@ -526,23 +534,23 @@ export default function SecurityApp() {
             <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
               <input
                 type="password"
-                className="text-xs px-3 py-2 rounded bg-black/40 border border-gray-800 text-gray-200 focus:outline-none focus:border-gray-600"
+                className="text-xs px-3 py-2 rounded liquid-input focus:outline-none"
                 placeholder="Create password (min 8 chars)"
                 value={passwordCreate}
                 onChange={(e) => setPasswordCreate(e.target.value)}
               />
               <input
                 type="password"
-                className="text-xs px-3 py-2 rounded bg-black/40 border border-gray-800 text-gray-200 focus:outline-none focus:border-gray-600"
+                className="text-xs px-3 py-2 rounded liquid-input focus:outline-none"
                 placeholder="Confirm password"
                 value={passwordConfirm}
                 onChange={(e) => setPasswordConfirm(e.target.value)}
               />
               <button
-                className="text-[10px] border px-3 py-2 rounded bg-action-success/20 border-action-success text-action-success hover:bg-action-success/30 md:col-span-2"
+                className="text-[10px] px-3 py-2 rounded-full liquid-chip text-action-success hover:shadow-soft md:col-span-2"
                 onClick={onCreatePasswordVault}
               >
-                CREATE PASSWORD VAULT
+                Create password vault
               </button>
             </div>
           )}
@@ -551,38 +559,38 @@ export default function SecurityApp() {
             <div className="mt-4 flex flex-col md:flex-row gap-3">
               <input
                 type="password"
-                className="text-xs px-3 py-2 rounded bg-black/40 border border-gray-800 text-gray-200 focus:outline-none focus:border-gray-600 flex-1"
+                className="text-xs px-3 py-2 rounded liquid-input focus:outline-none flex-1"
                 placeholder="Enter password to unlock"
                 value={passwordUnlock}
                 onChange={(e) => setPasswordUnlock(e.target.value)}
               />
               <button
-                className="text-[10px] border px-3 py-2 rounded bg-gray-900 border-gray-700 text-gray-200 hover:border-gray-500"
+                className="text-[10px] px-3 py-2 rounded-full liquid-chip text-ns hover:shadow-soft"
                 onClick={onUnlockPasswordVault}
               >
-                UNLOCK WITH PASSWORD
+                Unlock with password
               </button>
             </div>
           )}
 
-          <div className="mt-4 text-[10px] text-gray-500 leading-relaxed">
+          <div className="mt-4 text-[10px] text-ns-muted leading-relaxed">
             Password vaults encrypt keys locally with PBKDF2 + AES-GCM. Keep the password in a manager —
             if you lose it, the vault cannot be recovered. No keys leave the device.
           </div>
         </div>
 
         {showDevTools && (
-          <div className="border border-gray-800 rounded bg-gray-900/30 p-4">
+          <div className="liquid-card p-5">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <div className="text-[10px] text-gray-500 tracking-widest">DEV</div>
+                <div className="text-[10px] text-ns-muted tracking-widest">DEV</div>
                 <div className="text-sm font-bold mt-1">Flags + Telemetry</div>
-                <div className="text-xs text-gray-400 mt-1">
+                <div className="text-xs text-ns-muted mt-1">
                   Feature flags switch between new and legacy pages. Telemetry is stored locally (dev-only by default).
                 </div>
               </div>
               <button
-                className="text-[10px] border px-3 py-2 rounded bg-gray-900 border-gray-700 text-gray-200 hover:border-gray-500"
+                className="text-[10px] px-3 py-2 rounded-full liquid-chip text-ns hover:shadow-soft"
                 onClick={() => window.location.reload()}
               >
                 RELOAD
@@ -590,14 +598,14 @@ export default function SecurityApp() {
             </div>
 
             {devMessage ? (
-              <div className="mt-3 text-[10px] text-gray-300 border border-gray-800 rounded bg-black/40 px-3 py-2">
+              <div className="mt-3 text-[10px] text-ns liquid-panel px-3 py-2">
                 {devMessage}
               </div>
             ) : null}
 
             <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="border border-gray-800 rounded bg-black/30 p-3">
-                <div className="text-[10px] text-gray-500 tracking-widest mb-2">FEATURE FLAGS</div>
+              <div className="liquid-panel p-3">
+                <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase mb-2">Feature Flags</div>
                 <div className="space-y-2">
                   {(
                     [
@@ -606,12 +614,12 @@ export default function SecurityApp() {
                     ] satisfies Array<{ key: FeatureFlag; label: string }>
                   ).map((f) => (
                     <div key={f.key} className="flex items-center justify-between gap-3">
-                      <div className="text-[11px] text-gray-400">{f.label}</div>
+                      <div className="text-[11px] text-ns-muted">{f.label}</div>
                       <button
                         type="button"
                         onClick={() => onToggleFlag(f.key)}
-                        className={`text-[10px] px-2 py-1 rounded border ${
-                          flags[f.key] ? 'border-action-success text-action-success' : 'border-gray-800 text-gray-500'
+                        className={`text-[10px] px-2 py-1 rounded-full liquid-chip ${
+                          flags[f.key] ? 'text-action-success' : 'text-ns-muted'
                         }`}
                       >
                         {flags[f.key] ? 'ON' : 'OFF'}
@@ -619,25 +627,25 @@ export default function SecurityApp() {
                     </div>
                   ))}
                 </div>
-                <div className="mt-2 text-[10px] text-gray-600">Tip: navigate away/back (or reload) to apply immediately.</div>
+                <div className="mt-2 text-[10px] text-ns-muted">Tip: navigate away/back (or reload) to apply immediately.</div>
               </div>
 
-              <div className="border border-gray-800 rounded bg-black/30 p-3">
-                <div className="text-[10px] text-gray-500 tracking-widest mb-2">TELEMETRY</div>
+              <div className="liquid-panel p-3">
+                <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase mb-2">Telemetry</div>
                 <div className="flex items-center justify-between gap-3">
-                  <div className="text-[11px] text-gray-400">
+                  <div className="text-[11px] text-ns-muted">
                     Enabled:{' '}
-                    <span className={telemetryEnabled ? 'text-action-success' : 'text-gray-500'}>
+                    <span className={telemetryEnabled ? 'text-action-success' : 'text-ns-muted'}>
                       {telemetryEnabled ? 'YES' : 'NO'}
                     </span>
-                    <span className="text-gray-700"> · </span>
-                    Events: <span className="text-white">{telemetryCount}</span>
+                    <span className="text-ns-muted"> · </span>
+                    Events: <span className="text-ns">{telemetryCount}</span>
                   </div>
                   <button
                     type="button"
                     onClick={onToggleTelemetry}
-                    className={`text-[10px] px-2 py-1 rounded border ${
-                      telemetryEnabled ? 'border-action-success text-action-success' : 'border-gray-800 text-gray-500'
+                    className={`text-[10px] px-2 py-1 rounded-full liquid-chip ${
+                      telemetryEnabled ? 'text-action-success' : 'text-ns-muted'
                     }`}
                   >
                     {telemetryEnabled ? 'ON' : 'OFF'}
@@ -647,73 +655,73 @@ export default function SecurityApp() {
                   <button
                     type="button"
                     onClick={onExportTelemetry}
-                    className="text-[10px] border px-3 py-2 rounded bg-gray-900 border-gray-700 text-gray-200 hover:border-gray-500"
+                    className="text-[10px] px-3 py-2 rounded-full liquid-chip text-ns hover:shadow-soft"
                   >
                     EXPORT JSON
                   </button>
                   <button
                     type="button"
                     onClick={onClearTelemetry}
-                    className="text-[10px] border px-3 py-2 rounded bg-gray-900 border-gray-800 text-gray-400 hover:border-action-destructive hover:text-action-destructive"
+                    className="text-[10px] px-3 py-2 rounded-full liquid-chip text-action-destructive hover:shadow-soft"
                   >
                     CLEAR
                   </button>
                 </div>
-                <div className="mt-2 text-[10px] text-gray-600">
+                <div className="mt-2 text-[10px] text-ns-muted">
                   Export copies to clipboard when available; otherwise downloads a file.
                 </div>
               </div>
 
-              <div className="border border-gray-800 rounded bg-black/30 p-3">
-                <div className="text-[10px] text-gray-500 tracking-widest mb-2">ACTIVITY</div>
-                <div className="text-[11px] text-gray-400">
-                  Total: <span className="text-white">{activityCounts.total}</span>
-                  <span className="text-gray-700"> · </span>
-                  Econ: <span className="text-white">{activityCounts.economy}</span>
-                  <span className="text-gray-700"> · </span>
-                  Stake: <span className="text-white">{activityCounts.staking}</span>
+              <div className="liquid-panel p-3">
+                <div className="text-[10px] text-ns-muted tracking-widest mb-2">ACTIVITY</div>
+                <div className="text-[11px] text-ns-muted">
+                  Total: <span className="text-ns">{activityCounts.total}</span>
+                  <span className="text-ns-muted"> · </span>
+                  Econ: <span className="text-ns">{activityCounts.economy}</span>
+                  <span className="text-ns-muted"> · </span>
+                  Stake: <span className="text-ns">{activityCounts.staking}</span>
                 </div>
-                <div className="text-[11px] text-gray-500 mt-1">
-                  Casino: <span className="text-gray-300">{activityCounts.casino}</span>
-                  <span className="text-gray-700"> · </span>
-                  Security: <span className="text-gray-300">{activityCounts.security}</span>
+                <div className="text-[11px] text-ns-muted mt-1">
+                  Casino: <span className="text-ns">{activityCounts.casino}</span>
+                  <span className="text-ns-muted"> · </span>
+                  Security: <span className="text-ns">{activityCounts.security}</span>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button
                     type="button"
                     onClick={onExportActivity}
-                    className="text-[10px] border px-3 py-2 rounded bg-gray-900 border-gray-700 text-gray-200 hover:border-gray-500"
+                    className="text-[10px] px-3 py-2 rounded-full liquid-chip text-ns hover:shadow-soft"
                   >
                     EXPORT JSON
                   </button>
                   <button
                     type="button"
                     onClick={onClearActivity}
-                    className="text-[10px] border px-3 py-2 rounded bg-gray-900 border-gray-800 text-gray-400 hover:border-action-destructive hover:text-action-destructive"
+                    className="text-[10px] px-3 py-2 rounded-full liquid-chip text-action-destructive hover:shadow-soft"
                   >
                     CLEAR
                   </button>
                 </div>
-                <div className="mt-2 text-[10px] text-gray-600">Tracks pending/confirmed actions and links to receipts.</div>
+                <div className="mt-2 text-[10px] text-ns-muted">Tracks pending/confirmed actions and links to receipts.</div>
               </div>
             </div>
           </div>
         )}
 
-        <div className="border border-gray-800 rounded bg-gray-900/30 p-4">
+        <div className="liquid-card p-5">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <div className="text-[10px] text-gray-500 tracking-widest">POC</div>
+              <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase">POC</div>
               <div className="text-sm font-bold mt-1">Vault Bot Bets</div>
-              <div className="text-xs text-gray-400 mt-1">Uses the vault-held betting key to submit randomized casino games.</div>
+              <div className="text-xs text-ns-muted mt-1">Uses the vault-held betting key to submit randomized casino games.</div>
             </div>
             <div className="flex items-center gap-2">
               {!botRunning ? (
                 <button
-                  className={`text-[10px] border px-3 py-2 rounded ${
+                  className={`text-[10px] px-3 py-2 rounded-full liquid-chip ${
                     unlocked
-                      ? 'bg-action-success/20 border-action-success text-action-success hover:bg-action-success/30'
-                      : 'bg-gray-900 border-gray-800 text-gray-500 cursor-not-allowed'
+                      ? 'text-action-success hover:shadow-soft'
+                      : 'text-ns-muted opacity-60 cursor-not-allowed'
                   }`}
                   onClick={startBot}
                   disabled={!unlocked}
@@ -722,7 +730,7 @@ export default function SecurityApp() {
                 </button>
               ) : (
                 <button
-                  className="text-[10px] border px-3 py-2 rounded bg-gray-900 border-gray-700 text-gray-200 hover:border-gray-500"
+                  className="text-[10px] px-3 py-2 rounded-full liquid-chip text-ns hover:shadow-soft"
                   onClick={stopBot}
                 >
                   STOP BOT
@@ -732,10 +740,10 @@ export default function SecurityApp() {
           </div>
 
           <div className="mt-3">
-            <div className="text-[10px] text-gray-500 tracking-widest mb-2">LOGS</div>
-            <div className="border border-gray-800 rounded bg-titanium-900/60 p-2 h-40 overflow-y-auto text-xs text-gray-300">
+            <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase mb-2">Logs</div>
+            <div className="liquid-panel p-2 h-40 overflow-y-auto text-xs text-ns">
               {botLogs.length === 0 ? (
-                <div className="text-gray-600">No bot activity yet.</div>
+                <div className="text-ns-muted">No bot activity yet.</div>
               ) : (
                 botLogs.map((l, idx) => (
                   <div key={idx} className="whitespace-pre-wrap break-words">
