@@ -149,12 +149,10 @@ const suites = [
 const runSuite = (suite) =>
   new Promise((resolve, reject) => {
     const script = suite.commands.join(';');
-    const args = ['scripts/terminal-cli.mjs', '--base', baseUrl, '--script', script, '--delay', String(delay)];
+    const args = ['--base', baseUrl, '--script', script, '--delay', String(delay)];
     if (headed) args.push('--headed');
-  const p = spawn('node', args, {
-    stdio: 'inherit',
-    cwd: new URL('.', import.meta.url).pathname,
-  });
+    const cliPath = new URL('./terminal-cli.mjs', import.meta.url).pathname;
+    const p = spawn('node', [cliPath, ...args], { stdio: 'inherit' });
     p.on('exit', (code) => {
       if (code === 0) resolve();
       else reject(new Error(`Suite ${suite.name} failed with code ${code}`));
