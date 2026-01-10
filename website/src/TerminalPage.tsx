@@ -124,6 +124,8 @@ const commandTable = [
   ['/zero', 'Cycle roulette zero rule'],
 ];
 
+const commandNames = commandTable.map(([cmd]) => cmd);
+
 const headerLine = (pieces: string[]) => {
   const body = pieces.join(' ─ ');
   return `┌ ${body} ─${'─'.repeat(Math.max(0, 78 - body.length))}`;
@@ -136,6 +138,10 @@ export default function TerminalPage() {
   const accent = '#7cf0c5';
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [input, setInput] = useState('');
+  const [history, setHistory] = useState<string[]>([]);
+  const [historyIdx, setHistoryIdx] = useState<number | null>(null);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggestionIdx, setSuggestionIdx] = useState(0);
   const [vaultStatus, setVaultStatus] = useState(() => getVaultStatusSync());
   const [vaultBusy, setVaultBusy] = useState(false);
   const [vaultError, setVaultError] = useState<string | null>(null);
@@ -146,6 +152,33 @@ export default function TerminalPage() {
   const append = (text: string) => {
     const ts = new Date().toLocaleTimeString();
     setLogs((l) => [...l.slice(-199), { ts, text }]);
+  };
+
+  const computeSuggestions = (value: string): string[] => {
+    const trimmed = value.trim();
+    if (!trimmed.startsWith('/')) return [];
+
+    const lc = trimmed.toLowerCase();
+
+    if (lc.startsWith('/game ')) {
+      const q = lc.replace('/game', '').trim();
+      return Object.keys(gameAliases)
+        .filter((g) => g.startsWith(q))
+        .slice(0, 6)
+        .map((g) => `/game ${g}`);
+    }
+
+    const matchingCommands = commandNames
+      .filter((c) => c.startsWith(trimmed) || c.includes(trimmed))
+      .slice(0, 8);
+
+    // If user typed '/r' suggest roulette/craps/sicbo
+    const extra: string[] = [];
+    if ('/roulette'.startsWith(lc)) extra.push('/roulette <type> [n]');
+    if ('/craps'.startsWith(lc)) extra.push('/craps <type> [n]');
+    if ('/sicbo'.startsWith(lc)) extra.push('/sicbo <type> [n]');
+
+    return [...matchingCommands, ...extra].filter((v, i, arr) => arr.indexOf(v) === i);
   };
 
   useEffect(() => {
@@ -160,6 +193,12 @@ export default function TerminalPage() {
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [logs]);
+
+  useEffect(() => {
+    const next = computeSuggestions(input);
+    setSuggestions(next);
+    setSuggestionIdx(0);
+  }, [input]);
 
   useEffect(() => {
     // Keep vault state in sync with unlock events + occasional refresh for metadata changes.
@@ -230,6 +269,60 @@ export default function TerminalPage() {
   const setBet = (amt: number) => {
     actions.setBetAmount(amt);
     append(`BET ${amt}`);
+  };
+
+  const submitLine = async (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    setHistory((h) => [...h.slice(-99), trimmed]);
+    setHistoryIdx(null);
+    setInput('');
+    await handleCommand(trimmed);
+  };
+
+  const handleComposerKey = async (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      await submitLine(input);
+      return;
+    }
+
+    if (suggestions.length > 0 && e.key === 'Tab') {
+      e.preventDefault();
+      const delta = e.shiftKey ? -1 : 1;
+      const nextIdx = (suggestionIdx + delta + suggestions.length) % suggestions.length;
+      setSuggestionIdx(nextIdx);
+      setInput(suggestions[nextIdx] + (suggestions[nextIdx].includes(' ') ? ' ' : ' '));
+      setHistoryIdx(null);
+      return;
+    }
+
+    if (e.key === 'ArrowUp' && !e.metaKey && !e.ctrlKey) {
+      e.preventDefault();
+      setHistoryIdx((idx) => {
+        const next = idx === null ? history.length - 1 : Math.max(idx - 1, 0);
+        const item = history[next];
+        if (item !== undefined) setInput(item);
+        return history.length === 0 ? null : next;
+      });
+      return;
+    }
+
+    if (e.key === 'ArrowDown' && !e.metaKey && !e.ctrlKey) {
+      e.preventDefault();
+      setHistoryIdx((idx) => {
+        if (idx === null) return null;
+        const next = idx + 1;
+        if (next >= history.length) {
+          setInput('');
+          return null;
+        }
+        const item = history[next];
+        if (item !== undefined) setInput(item);
+        return next;
+      });
+      return;
+    }
   };
 
   const handleCommand = async (raw: string) => {
@@ -469,6 +562,8 @@ export default function TerminalPage() {
     <span className="px-2 py-1 rounded border border-[#1f2937] bg-[#0b0f1a] text-xs text-[#e5e7eb]">{k}</span>
   );
 
+  const composerRows = Math.min(6, Math.max(1, input.split('\n').length));
+
   return (
     <div className="min-h-screen bg-[#05070f] text-[#e5e7eb] font-mono flex flex-col">
       <div className="bg-gradient-to-r from-[#0b1325] via-[#0c152c] to-[#0b1325] border-b border-[#111827] px-4 py-4">
@@ -591,26 +686,52 @@ export default function TerminalPage() {
       </div>
 
       <form
-        className="border-t border-[#111827] bg-[#0a0f1a] px-4 py-3 flex items-center gap-3 shadow-[0_-6px_30px_rgba(0,0,0,0.35)]"
+        className="border-t border-[#111827] bg-[#0a0f1a] px-4 py-3 flex items-start gap-3 shadow-[0_-6px_30px_rgba(0,0,0,0.35)]"
         onSubmit={(e) => {
           e.preventDefault();
-          const text = input;
-          setInput('');
-          void handleCommand(text);
+          void submitLine(input);
         }}
       >
-        <span className="text-[#6b7280] text-sm">casino $</span>
-        <input
-          className="flex-1 bg-transparent border-none outline-none text-sm text-[#e5e7eb] placeholder-[#4b5563]"
-          autoFocus
-          spellCheck="false"
-          placeholder="/help"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-        />
-        <div className="hidden md:flex items-center gap-2 text-xs text-[#6b7280]">
+        <span className="text-[#6b7280] text-sm pt-1">casino $</span>
+        <div className="flex-1 flex flex-col gap-2">
+          <textarea
+            className="w-full bg-transparent border border-[#1f2937] rounded px-3 py-2 text-sm text-[#e5e7eb] placeholder-[#4b5563] focus:outline-none focus:border-[#334155] resize-none"
+            rows={composerRows}
+            autoFocus
+            spellCheck="false"
+            placeholder="/help   •  Enter to send, Shift+Enter for newline, Tab to autocomplete"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleComposerKey}
+          />
+          {suggestions.length > 0 && (
+            <div className="flex flex-wrap gap-2 text-[11px] text-[#9ca3af]">
+              {suggestions.map((s, idx) => (
+                <button
+                  key={s}
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    setInput(s + (s.endsWith(' ') ? '' : ' '));
+                    setSuggestionIdx(idx);
+                  }}
+                  className={`px-2 py-1 rounded border ${
+                    idx === suggestionIdx ? 'border-[#334155] bg-[#0f172a]' : 'border-[#1f2937] bg-[#0b0f1a]'
+                  } hover:border-[#334155] transition`}
+                >
+                  <span className={idx === suggestionIdx ? 'text-[#e5e7eb]' : 'text-[#c7d2fe]'}>{s}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="hidden md:flex items-center gap-2 text-xs text-[#6b7280] pt-1">
           <Key k="Enter" />
           <span>send</span>
+          <Key k="Shift+Enter" />
+          <span>newline</span>
+          <Key k="Tab" />
+          <span>cycle cmds</span>
         </div>
       </form>
     </div>
