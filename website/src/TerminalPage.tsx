@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { GameType, RouletteBet, SicBoBet, CrapsBet } from './types';
 import { useTerminalGame } from './hooks/useTerminalGame';
 import { useSharedCasinoConnection } from './chain/CasinoConnectionContext';
+import { getVaultStatusSync, unlockPasskeyVault, unlockPasswordVault } from './security/keyVault';
+import { subscribeVault } from './security/vaultRuntime';
 
 type LogEntry = { ts: string; text: string };
 
@@ -104,6 +106,7 @@ const crapsAlias = (raw?: string): CrapsBet['type'] | null => {
 const commandTable = [
   ['/help', 'Show commands'],
   ['/status', 'Connection, vault, balance'],
+  ['/unlock [password]', 'Unlock vault (passkey prompt or password)'],
   ['/games', 'List games'],
   ['/game <name>', 'Switch game'],
   ['/bet <amt>', 'Set base bet'],
@@ -132,6 +135,10 @@ export default function TerminalPage() {
 
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [input, setInput] = useState('');
+  const [vaultStatus, setVaultStatus] = useState(() => getVaultStatusSync());
+  const [vaultBusy, setVaultBusy] = useState(false);
+  const [vaultError, setVaultError] = useState<string | null>(null);
+  const [vaultPassword, setVaultPassword] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastMessageRef = useRef<string | null>(null);
 
@@ -153,6 +160,16 @@ export default function TerminalPage() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [logs]);
 
+  useEffect(() => {
+    // Keep vault state in sync with unlock events + occasional refresh for metadata changes.
+    const unsubscribe = subscribeVault(() => setVaultStatus(getVaultStatusSync()));
+    const interval = window.setInterval(() => setVaultStatus(getVaultStatusSync()), 15000);
+    return () => {
+      unsubscribe?.();
+      window.clearInterval(interval);
+    };
+  }, []);
+
   // Surface latest game message into the terminal log so classic UI users see errors (e.g., insufficient funds)
   useEffect(() => {
     const msg = gameState.message;
@@ -160,6 +177,54 @@ export default function TerminalPage() {
     lastMessageRef.current = msg;
     append(msg);
   }, [gameState.message]);
+
+  const formatVaultError = (e: any): string => {
+    const msg = e?.message ?? String(e);
+    if (msg === 'passkey-prf-unsupported') {
+      return 'Passkey lacks required extensions. Try a platform passkey or different authenticator.';
+    }
+    if (msg === 'password-too-short') return 'Password too short (min 8 chars).';
+    if (msg === 'password-required') return 'Enter your vault password.';
+    if (msg === 'password-invalid') return 'Incorrect password or corrupted vault.';
+    if (msg === 'vault-kind-mismatch') return 'Vault type mismatch — recreate or switch in Security.';
+    if (msg === 'vault-not-found') return 'No vault found. Create one in Security.';
+    return msg;
+  };
+
+  const unlockWithPasskey = async () => {
+    setVaultError(null);
+    setVaultBusy(true);
+    append('Unlocking vault with passkey…');
+    try {
+      await unlockPasskeyVault();
+      setVaultStatus(getVaultStatusSync());
+      append('Vault unlocked.');
+    } catch (e: any) {
+      const msg = formatVaultError(e);
+      setVaultError(msg);
+      append(`Vault unlock failed: ${msg}`);
+    } finally {
+      setVaultBusy(false);
+    }
+  };
+
+  const unlockWithPassword = async (password: string) => {
+    setVaultError(null);
+    setVaultBusy(true);
+    append('Unlocking vault with password…');
+    try {
+      await unlockPasswordVault(password);
+      setVaultStatus(getVaultStatusSync());
+      setVaultPassword('');
+      append('Vault unlocked.');
+    } catch (e: any) {
+      const msg = formatVaultError(e);
+      setVaultError(msg);
+      append(`Vault unlock failed: ${msg}`);
+    } finally {
+      setVaultBusy(false);
+    }
+  };
 
   const setBet = (amt: number) => {
     actions.setBetAmount(amt);
@@ -188,6 +253,37 @@ export default function TerminalPage() {
           append(
             `Game=${gameState.type} Stage=${gameState.stage} Bet=${gameState.bet} Chips=${stats.chips ?? 0} Session=${gameState.sessionWager ?? 0}`,
           );
+          break;
+        }
+        case 'unlock': {
+          const snapshot = getVaultStatusSync();
+          if (!snapshot.supported) {
+            append('Vaults not supported in this browser.');
+            break;
+          }
+          if (!snapshot.enabled) {
+            append('No vault found. Open Security to create one.');
+            break;
+          }
+          if (snapshot.unlocked) {
+            append('Vault already unlocked.');
+            break;
+          }
+          if (vaultBusy) {
+            append('Vault unlock already in progress…');
+            break;
+          }
+          if (snapshot.kind === 'password') {
+            const supplied = args.join(' ');
+            const pwd = supplied || window.prompt('Enter vault password') || '';
+            if (!pwd) {
+              append('Password required to unlock vault.');
+              break;
+            }
+            await unlockWithPassword(pwd);
+          } else {
+            await unlockWithPasskey();
+          }
           break;
         }
         case 'games': {
@@ -346,12 +442,78 @@ export default function TerminalPage() {
     [gameState.type, gameState.stage, gameState.bet, gameState.sessionWager, stats.chips],
   );
 
+  const vaultBadge = useMemo(() => {
+    if (!vaultStatus.supported) return 'unsupported';
+    if (!vaultStatus.enabled) return 'missing';
+    return vaultStatus.unlocked ? 'unlocked' : 'locked';
+  }, [vaultStatus.enabled, vaultStatus.supported, vaultStatus.unlocked]);
+
+  const vaultHint = useMemo(() => {
+    if (!vaultStatus.supported) return 'Vaults require WebCrypto + IndexedDB (use a modern browser).';
+    if (!vaultStatus.enabled) return 'No vault found. Open Security to create one.';
+    if (vaultStatus.unlocked) return `Vault ready (${vaultStatus.kind ?? 'unknown'}).`;
+    if (vaultStatus.kind === 'password') return 'Enter password to unlock.';
+    if (vaultStatus.kind === 'passkey') return 'Use your passkey to unlock.';
+    return 'Unlock required to play.';
+  }, [vaultStatus]);
+
   return (
     <div className="min-h-screen bg-[#050505] text-[#e5e7eb] font-mono flex flex-col">
       <div className="px-3 pt-3 text-xs text-[#9ca3af] whitespace-pre">
         {header}
         {'\n'}
         {statusLine}
+      </div>
+
+      <div className="px-3 mt-2">
+        <div className="border border-[#1f2937] rounded-sm bg-[#0b0b0f] p-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div className="space-y-1">
+            <div className="text-xs text-[#9ca3af] uppercase">Vault</div>
+            <div className="text-sm">{vaultBadge.toUpperCase()}</div>
+            <div className="text-xs text-[#6b7280]">{vaultHint}</div>
+            {vaultError && <div className="text-xs text-red-400">{vaultError}</div>}
+          </div>
+          <div className="flex flex-col md:flex-row gap-2 md:items-center md:justify-end">
+            {!vaultStatus.enabled && (
+              <a
+                className="px-3 py-2 text-xs border border-[#1f2937] rounded-sm bg-[#111827] hover:bg-[#1f2937]"
+                href="/security"
+              >
+                Open Security
+              </a>
+            )}
+            {vaultStatus.enabled && vaultStatus.kind === 'passkey' && (
+              <button
+                type="button"
+                disabled={vaultBusy}
+                onClick={unlockWithPasskey}
+                className="px-3 py-2 text-xs border border-[#1f2937] rounded-sm bg-[#111827] hover:bg-[#1f2937] disabled:opacity-50"
+              >
+                {vaultBusy ? 'Unlocking…' : 'Unlock with passkey'}
+              </button>
+            )}
+            {vaultStatus.enabled && vaultStatus.kind === 'password' && (
+              <div className="flex gap-2 items-center">
+                <input
+                  type="password"
+                  className="bg-[#0b0b0f] border border-[#1f2937] rounded-sm px-2 py-1 text-sm w-40"
+                  placeholder="Vault password"
+                  value={vaultPassword}
+                  onChange={(e) => setVaultPassword(e.target.value)}
+                  disabled={vaultBusy}
+                />
+                <button
+                  type="button"
+                  disabled={vaultBusy || !vaultPassword}
+                  onClick={() => unlockWithPassword(vaultPassword)}
+                  className="px-3 py-2 text-xs border border-[#1f2937] rounded-sm bg-[#111827] hover:bg-[#1f2937] disabled:opacity-50"
+                >
+                  {vaultBusy ? 'Unlocking…' : 'Unlock vault'}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       <div className="mt-2 grid md:grid-cols-[320px_1fr] gap-2 px-3 pb-2">
