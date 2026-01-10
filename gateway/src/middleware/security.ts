@@ -36,19 +36,17 @@ let corsConfig: CorsConfig | null = null;
  * Call this at startup to configure allowed origins.
  * In production, throws if no origins are configured.
  */
-export function initializeCors(config?: Partial<CorsConfig>): void {
-  const origins = config?.allowedOrigins ?? (
-    (process.env.GATEWAY_ALLOWED_ORIGINS ?? '')
-      .split(',')
-      .map(v => v.trim())
-      .filter(Boolean)
-  );
+function parseOrigins(raw: string): string[] {
+  return raw.split(',').map(v => v.trim()).filter(Boolean);
+}
 
-  const allowNoOrigin = config?.allowNoOrigin ?? (
-    ['1', 'true', 'yes'].includes(
-      String(process.env.GATEWAY_ALLOW_NO_ORIGIN ?? '').toLowerCase()
-    )
-  );
+function parseBooleanEnv(value: string | undefined): boolean {
+  return ['1', 'true', 'yes'].includes(String(value ?? '').toLowerCase());
+}
+
+export function initializeCors(config?: Partial<CorsConfig>): void {
+  const origins = config?.allowedOrigins ?? parseOrigins(process.env.GATEWAY_ALLOWED_ORIGINS ?? '');
+  const allowNoOrigin = config?.allowNoOrigin ?? parseBooleanEnv(process.env.GATEWAY_ALLOW_NO_ORIGIN);
 
   // Defense-in-depth: enforce origins are configured in production
   if (IS_PRODUCTION && origins.length === 0) {
@@ -174,13 +172,20 @@ export function enforceHttps(req: IncomingMessage, res: ServerResponse): boolean
     return true;
   }
 
+  // Allow local/health checks over HTTP (e.g., container healthcheck hitting 127.0.0.1)
+  const host = (req.headers.host || '').toLowerCase();
+  const isLocalHost = host.startsWith('127.0.0.1') || host.startsWith('localhost');
+  if (isLocalHost) {
+    return true;
+  }
+
   // Check protocol from request or X-Forwarded-Proto header (for reverse proxies)
   const proto = (req.headers['x-forwarded-proto'] as string) ||
                 ((req.socket as any).encrypted ? 'https' : 'http');
 
   if (proto !== 'https') {
-    const host = req.headers.host || 'localhost';
-    const redirectUrl = `https://${host}${req.url}`;
+    const redirectHost = req.headers.host || 'localhost';
+    const redirectUrl = `https://${redirectHost}${req.url}`;
 
     res.statusCode = 301; // Permanent redirect
     res.setHeader('Location', redirectUrl);
