@@ -2,14 +2,14 @@ import React from 'react';
 
 const LoadingScreen = () => {
   return (
-    <div className="min-h-screen loading-bg-shift flex flex-col items-center justify-center p-6 gap-10 animate-scale-in">
+    <div className="min-h-screen loading-bg-shift liquid-shell flex flex-col items-center justify-center p-6 gap-10 animate-scale-in">
       {/* Premium Multi-layer Spinner */}
       <div className="relative">
         {/* Outer glow ring */}
         <div className="absolute inset-[-8px] rounded-full loading-spinner-glow opacity-50" />
 
         {/* Background ring */}
-        <div className="w-28 h-28 rounded-full border-[3px] border-titanium-200/30 dark:border-titanium-700/30" />
+        <div className="w-28 h-28 rounded-full border-[3px] border-black/10 dark:border-white/10" />
 
         {/* Gradient stroke spinner - outer layer */}
         <div
@@ -40,10 +40,10 @@ const LoadingScreen = () => {
 
       {/* Premium Typography */}
       <div className="flex flex-col items-center gap-3">
-        <span className="text-[9px] font-black text-titanium-400 dark:text-titanium-500 tracking-[0.5em] uppercase">
+        <span className="text-[9px] font-black text-ns-muted tracking-[0.5em] uppercase">
           Initialising
         </span>
-        <h2 className="text-2xl font-bold text-titanium-900 dark:text-titanium-100 tracking-tight font-display">
+        <h2 className="text-2xl font-bold text-ns tracking-tight font-display">
           Nullspace
         </h2>
       </div>
@@ -62,7 +62,7 @@ const LoadingScreen = () => {
       </div>
 
       {/* Subtle tagline */}
-      <div className="text-[10px] text-titanium-400 dark:text-titanium-500 tracking-widest font-medium">
+      <div className="text-[10px] text-ns-muted tracking-widest font-medium">
         Provably Fair Gaming
       </div>
     </div>

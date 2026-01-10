@@ -6,6 +6,12 @@ import { join } from 'node:path';
 const args = new Set(process.argv.slice(2));
 const skipJs = args.has('--skip-js');
 const skipRust = args.has('--skip-rust');
+const failUnder = (() => {
+  const raw = [...args].find((a) => a.startsWith('--fail-under='));
+  if (!raw) return null;
+  const value = Number(raw.split('=')[1]);
+  return Number.isFinite(value) ? value : null;
+})();
 
 const run = (label, cmd, cmdArgs) => {
   const result = spawnSync(cmd, cmdArgs, { stdio: 'inherit' });
@@ -186,3 +192,14 @@ if (rustSummary) {
   printLine('Rust lines', rustSummary.covered, rustSummary.total);
 }
 printLine('Overall lines', overallLinesCovered, overallLinesTotal);
+
+if (failUnder !== null) {
+  if (overallLinesTotal === 0) {
+    throw new Error('No coverage data produced; cannot enforce threshold');
+  }
+  const pct = (overallLinesCovered / overallLinesTotal) * 100;
+  if (pct < failUnder) {
+    throw new Error(`Coverage ${pct.toFixed(2)}% is below threshold ${failUnder}%`);
+  }
+  console.log(`Threshold check passed (${pct.toFixed(2)}% >= ${failUnder}%)`);
+}

@@ -40,22 +40,22 @@ export const PanelDrawer: React.FC<PanelDrawerProps> = ({
 
   const overlay = isOpen ? (
     <div className="fixed inset-0 z-[110]" data-testid="panel-drawer">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setOpen(false)} />
+      <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={() => setOpen(false)} />
       <div
-        className="absolute left-1/2 top-1/2 w-[92%] max-w-xl -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-titanium-200 bg-white shadow-float overflow-hidden dark:border-titanium-800 dark:bg-titanium-900"
+        className="absolute left-1/2 top-1/2 w-[92%] max-w-xl -translate-x-1/2 -translate-y-1/2 liquid-card overflow-hidden"
         data-testid="panel-drawer-panel"
       >
-        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-titanium-200 bg-titanium-50/70 dark:border-titanium-800 dark:bg-titanium-900/70">
+        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-black/10 dark:border-white/10 bg-white/50">
           <div className="flex items-center gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-[0.24em] text-titanium-500">{title}</span>
+            <span className="text-[10px] font-bold uppercase tracking-[0.24em] text-ns-muted">{title}</span>
             {shortcutHint ? (
-              <span className="text-[10px] font-mono text-titanium-400">[{shortcutHint}]</span>
+              <span className="text-[10px] font-mono text-ns-muted">[{shortcutHint}]</span>
             ) : null}
           </div>
           <button
             type="button"
             onClick={() => setOpen(false)}
-            className="text-[10px] font-semibold uppercase tracking-[0.2em] text-titanium-500 hover:text-titanium-900 dark:hover:text-titanium-100"
+            className="text-[10px] font-semibold uppercase tracking-[0.2em] text-ns-muted hover:text-ns"
           >
             Close
           </button>
@@ -71,17 +71,17 @@ export const PanelDrawer: React.FC<PanelDrawerProps> = ({
         type="button"
         onClick={() => setOpen(true)}
         disabled={disabled}
-        className={`relative h-10 px-4 rounded-full border text-[11px] font-semibold uppercase tracking-[0.24em] transition-all ${
+        className={`relative h-10 px-4 rounded-full liquid-chip text-[11px] font-semibold uppercase tracking-[0.24em] transition-all ${
           disabled
-            ? 'border-titanium-200 text-titanium-400 cursor-not-allowed dark:border-titanium-800 dark:text-titanium-500'
+            ? 'opacity-60 cursor-not-allowed'
             : hasActive
-              ? 'border-mono-0/50 text-mono-0 dark:text-mono-1000 bg-mono-0/10'
-              : 'border-titanium-300 text-titanium-600 hover:text-titanium-900 hover:border-titanium-500 dark:border-titanium-700 dark:text-titanium-300 dark:hover:text-titanium-100'
+              ? 'text-ns border-black/20'
+              : 'text-ns-muted hover:text-ns'
         } ${className ?? ''}`}
       >
         {label}
         {count > 0 ? (
-          <span className="ml-2 rounded-full bg-mono-0/20 px-2 py-0.5 text-[10px] font-bold text-mono-0 dark:text-mono-1000">
+          <span className="ml-2 rounded-full bg-black/10 px-2 py-0.5 text-[10px] font-bold text-ns">
             {count}
           </span>
         ) : null}

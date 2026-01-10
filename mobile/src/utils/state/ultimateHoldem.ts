@@ -18,19 +18,14 @@ export function parseUltimateHoldemState(stateBlob: Uint8Array): UltimateHoldemS
     return null;
   }
 
-  const stageByte = parsed.stage;
-  const stage: UltimateHoldemStateUpdate['stage'] =
-    stageByte === 1
-      ? 'preflop'
-      : stageByte === 2
-        ? 'flop'
-        : stageByte === 3
-          ? 'river'
-          : stageByte === 4
-            ? 'showdown'
-            : stageByte === 5
-              ? 'result'
-              : 'betting';
+  const stageMap: Record<number, UltimateHoldemStateUpdate['stage']> = {
+    1: 'preflop',
+    2: 'flop',
+    3: 'river',
+    4: 'showdown',
+    5: 'result',
+  };
+  const stage: UltimateHoldemStateUpdate['stage'] = stageMap[parsed.stage] ?? 'betting';
 
   const playerCards: Card[] = [];
   for (const cardId of parsed.playerCards) {

@@ -20,7 +20,7 @@ import {
   DURATION,
   SPRING,
   SPRING_LIQUID,
-  STAGGER,
+  STAGGER as STAGGER_TOKENS,
   EASING_LUXURY,
   // Opacity
   OPACITY_SEMANTIC,
@@ -45,6 +45,14 @@ import {
   LC_SPRING,
   GAME_STATE_MOTION_RULES,
 } from '@nullspace/design-tokens';
+
+// Fallback to prevent test environments from crashing if tokens are mocked incompletely
+const STAGGER = STAGGER_TOKENS ?? {
+  fast: 30,
+  normal: 50,
+  slow: 100,
+  dramatic: 150,
+};
 
 /**
  * Font family constants - synced with @nullspace/design-tokens

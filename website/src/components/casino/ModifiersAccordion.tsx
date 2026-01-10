@@ -91,25 +91,25 @@ export const ModifiersAccordion: React.FC<ModifiersAccordionProps> = ({
     });
 
     return (
-        <div className={`bg-titanium-50 rounded-2xl border border-titanium-200 overflow-hidden ${className}`}>
+        <div className={`liquid-panel rounded-2xl border border-ns overflow-hidden ${className}`}>
             {/* Header / Toggle */}
             <button
                 type="button"
                 onClick={() => setIsExpanded(!isExpanded)}
-                className="w-full flex items-center justify-between px-4 py-3 hover:bg-titanium-100 transition-colors motion-interaction"
+                className="w-full flex items-center justify-between px-4 py-3 hover:bg-ns-surface transition-colors motion-interaction"
                 aria-expanded={isExpanded}
                 aria-controls="modifiers-content"
             >
                 <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-titanium-700">Modifiers</span>
+                    <span className="text-sm font-semibold text-ns">Modifiers</span>
                     {activeCount > 0 && (
-                        <span className="px-2 py-0.5 text-[10px] font-bold bg-titanium-900 text-white rounded-full">
+                        <span className="px-2 py-0.5 text-[10px] font-bold bg-mono-0 text-white rounded-full">
                             {activeCount}
                         </span>
                     )}
                 </div>
                 <animated.div style={{ transform: chevronSpring.rotate.to((r) => `rotate(${r}deg)`) }}>
-                    <ChevronDown className="w-4 h-4 text-titanium-400" />
+                    <ChevronDown className="w-4 h-4 text-ns-muted" />
                 </animated.div>
             </button>
 
@@ -130,17 +130,17 @@ export const ModifiersAccordion: React.FC<ModifiersAccordionProps> = ({
                             onClick={mod.onToggle}
                             className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-all motion-interaction ${
                                 mod.active
-                                    ? 'bg-titanium-900 text-white'
-                                    : 'bg-white text-titanium-700 border border-titanium-200 hover:border-titanium-400'
+                                    ? 'bg-mono-0 text-white'
+                                    : 'bg-ns-surface text-ns border border-ns hover:border-ns'
                             }`}
                         >
                             <div className="flex items-center gap-2">
-                                <span className={mod.active ? 'text-white' : 'text-titanium-400'}>
+                                <span className={mod.active ? 'text-white' : 'text-ns-muted'}>
                                     {mod.icon}
                                 </span>
                                 <span className="text-xs font-bold tracking-wider">{mod.label}</span>
                             </div>
-                            <span className={`text-[10px] ${mod.active ? 'text-titanium-300' : 'text-titanium-400'}`}>
+                            <span className={`text-[10px] ${mod.active ? 'text-white/70' : 'text-ns-muted'}`}>
                                 {mod.description}
                             </span>
                         </button>

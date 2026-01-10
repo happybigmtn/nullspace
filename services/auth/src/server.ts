@@ -32,26 +32,26 @@ import {
  * @param problem - Problem details object or status code with title
  * @param instance - Optional request ID for correlation
  */
-const sendProblem = (
+function sendProblem(
   res: express.Response,
   problem: ProblemDetails,
   instance?: string,
-): void => {
+): void {
   const response = instance ? { ...problem, instance: `/request/${instance}` } : problem;
   res.status(problem.status).contentType(PROBLEM_JSON_CONTENT_TYPE).json(response);
-};
+}
 
 // Avoid pulling Convex source files into the auth build output.
 const require = createRequire(import.meta.url);
 const { api } = require("website/convex/_generated/api.js") as { api: any };
 
-const required = (name: string): string => {
+function required(name: string): string {
   const value = process.env[name];
   if (!value) {
     throw new Error(`Missing ${name}`);
   }
   return value;
-};
+}
 
 const convex = new ConvexHttpClient(required("CONVEX_URL"), {
   skipConvexDeploymentUrlCheck: true,
@@ -67,20 +67,20 @@ const challengeTtlMaxMs =
 const effectiveChallengeTtlMs = Math.min(challengeTtlMs, challengeTtlMaxMs);
 const ED25519_SPKI_PREFIX = Buffer.from("302a300506032b6570032100", "hex");
 
-const normalizeEvmAddress = (value: string): string | null => {
+function normalizeEvmAddress(value: string): string | null {
   try {
     return ethers.getAddress(value);
   } catch {
     return null;
   }
-};
+}
 
 
-const verifySignature = (
+function verifySignature(
   publicKeyHex: string,
   signatureHex: string,
   challengeHex: string,
-): boolean => {
+): boolean {
   try {
     const keyBytes = Buffer.from(publicKeyHex, "hex");
     const sigBytes = Buffer.from(signatureHex, "hex");
@@ -91,34 +91,34 @@ const verifySignature = (
   } catch {
     return false;
   }
-};
+}
 
-const verifyEvmSignature = (
+function verifyEvmSignature(
   address: string,
   message: string,
   signature: string,
-): boolean => {
+): boolean {
   try {
     const recovered = ethers.verifyMessage(message, signature);
     return normalizeEvmAddress(recovered)?.toLowerCase() === address.toLowerCase();
   } catch {
     return false;
   }
-};
+}
 
-const parseAllowedOrigins = (): string[] => {
+function parseAllowedOrigins(): string[] {
   return (process.env.AUTH_ALLOWED_ORIGINS ?? "")
     .split(",")
     .map((value) => value.trim())
     .filter(Boolean);
-};
+}
 
-const parseAllowedChainIds = (): number[] => {
+function parseAllowedChainIds(): number[] {
   return (process.env.EVM_ALLOWED_CHAIN_IDS ?? "")
     .split(",")
     .map((value) => Number(value.trim()))
     .filter((value) => Number.isFinite(value) && value > 0);
-};
+}
 
 const allowedOrigins = parseAllowedOrigins();
 if (allowedOrigins.length === 0) {
@@ -134,7 +134,7 @@ const aiStrategyDisabled = ["1", "true", "yes"].includes(
 const geminiApiKey = process.env.GEMINI_API_KEY ?? "";
 const geminiModel = process.env.GEMINI_MODEL ?? "gemini-1.5-flash";
 
-const getRequestOrigin = (req: express.Request): string | null => {
+function getRequestOrigin(req: express.Request): string | null {
   const originHeader = req.headers.origin;
   if (typeof originHeader === "string" && originHeader) {
     return originHeader;
@@ -148,12 +148,14 @@ const getRequestOrigin = (req: express.Request): string | null => {
     }
   }
   return null;
-};
+}
 
-const isAllowedChainId = (chainId: number): boolean => {
-  if (allowedChainIds.length === 0) return true;
+function isAllowedChainId(chainId: number): boolean {
+  if (allowedChainIds.length === 0) {
+    return true;
+  }
   return allowedChainIds.includes(chainId);
-};
+}
 
 const requireAllowedOrigin: express.RequestHandler = (req, res, next) => {
   const origin = getRequestOrigin(req);
@@ -172,9 +174,11 @@ const requireAllowedOrigin: express.RequestHandler = (req, res, next) => {
 // Uses the same token format as @auth/express for compatibility
 const AUTH_SECRET = required("AUTH_SECRET");
 
-const parseCookies = (cookieHeader: string | undefined): Map<string, string> => {
+function parseCookies(cookieHeader: string | undefined): Map<string, string> {
   const cookies = new Map<string, string>();
-  if (!cookieHeader) return cookies;
+  if (!cookieHeader) {
+    return cookies;
+  }
   for (const part of cookieHeader.split(";")) {
     const [name, ...rest] = part.trim().split("=");
     if (name && rest.length > 0) {
@@ -186,40 +190,39 @@ const parseCookies = (cookieHeader: string | undefined): Map<string, string> => 
     }
   }
   return cookies;
-};
+}
 
-const createCsrfHash = async (token: string, secret: string): Promise<string> => {
+async function createCsrfHash(token: string, secret: string): Promise<string> {
   const data = new TextEncoder().encode(`${token}${secret}`);
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
   return Buffer.from(hashBuffer).toString("hex");
-};
+}
 
-const getCsrfCookieName = (): string => {
-  // Match @auth/express cookie naming convention
-  // Production uses __Host- prefix, dev doesn't
+function getCsrfCookieName(): string {
   const useSecureCookies = process.env.NODE_ENV === "production";
   return useSecureCookies ? "__Host-authjs.csrf-token" : "authjs.csrf-token";
-};
+}
 
-const verifyCsrfToken = async (
+async function verifyCsrfToken(
   cookieValue: string | undefined,
   bodyValue: string | undefined,
-): Promise<boolean> => {
-  if (!cookieValue || !bodyValue) return false;
+): Promise<boolean> {
+  if (!cookieValue || !bodyValue) {
+    return false;
+  }
 
-  // Cookie format is "token|hash"
   const [cookieToken, cookieHash] = cookieValue.split("|");
-  if (!cookieToken || !cookieHash) return false;
+  if (!cookieToken || !cookieHash) {
+    return false;
+  }
 
-  // Verify the hash matches
   const expectedHash = await createCsrfHash(cookieToken, AUTH_SECRET);
   if (!timingSafeStringEqual(cookieHash, expectedHash)) {
     return false;
   }
 
-  // Verify the submitted token matches the cookie token
   return timingSafeStringEqual(cookieToken, bodyValue);
-};
+}
 
 const requireCsrfToken: express.RequestHandler = async (req, res, next) => {
   const cookies = parseCookies(req.headers.cookie);
@@ -281,20 +284,21 @@ const requireMetricsAuth: express.RequestHandler = (req, res, next) => {
   }), res.locals.requestId);
 };
 
-const parseStripeTierMap = (raw: string): Map<string, string> => {
+function parseStripeTierMap(raw: string): Map<string, string> {
   const map = new Map<string, string>();
-  raw
+  const entries = raw
     .split(",")
     .map((entry) => entry.trim())
-    .filter(Boolean)
-    .forEach((entry) => {
-      const [tier, priceId] = entry.split(":").map((value) => value.trim());
-      if (tier && priceId) {
-        map.set(priceId, tier);
-      }
-    });
+    .filter(Boolean);
+
+  for (const entry of entries) {
+    const [tier, priceId] = entry.split(":").map((value) => value.trim());
+    if (tier && priceId) {
+      map.set(priceId, tier);
+    }
+  }
   return map;
-};
+}
 
 // US-251: Make Stripe billing optional
 // AUTH_BILLING_ENABLED defaults to true for backward compatibility
@@ -307,7 +311,7 @@ if (billingEnabled && stripeTierMap.size === 0) {
   throw new Error("STRIPE_PRICE_TIERS must be set when billing is enabled");
 }
 
-const resolveStripeTier = (priceId: string, tier?: string): string => {
+function resolveStripeTier(priceId: string, tier?: string): string {
   const expectedTier = stripeTierMap.get(priceId);
   if (!expectedTier) {
     throw new Error("priceId not allowed");
@@ -316,9 +320,9 @@ const resolveStripeTier = (priceId: string, tier?: string): string => {
     throw new Error("tier does not match price");
   }
   return expectedTier;
-};
+}
 
-const ensureAllowedRedirect = (value: string): string => {
+function ensureAllowedRedirect(value: string): string {
   let url: URL;
   try {
     url = new URL(value);
@@ -329,18 +333,20 @@ const ensureAllowedRedirect = (value: string): string => {
     throw new Error("redirect origin not allowed");
   }
   return url.toString();
-};
+}
 
 type RateLimitBucket = {
   count: number;
   resetAt: number;
 };
 
-const parsePositiveInt = (value: string | undefined, fallback: number): number => {
+function parsePositiveInt(value: string | undefined, fallback: number): number {
   const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
+  }
   return Math.floor(parsed);
-};
+}
 
 const ENTITLEMENTS_MAX = Math.min(
   parsePositiveInt(process.env.AUTH_ENTITLEMENTS_MAX, 100),
@@ -355,8 +361,10 @@ const rateBucketCleanupMs = parsePositiveInt(
 );
 let lastRateBucketCleanup = 0;
 
-const cleanupRateBuckets = (now: number) => {
-  if (rateBuckets.size === 0) return;
+function cleanupRateBuckets(now: number): void {
+  if (rateBuckets.size === 0) {
+    return;
+  }
   if (now - lastRateBucketCleanup < rateBucketCleanupMs && rateBuckets.size <= rateBucketMax) {
     return;
   }
@@ -372,12 +380,14 @@ const cleanupRateBuckets = (now: number) => {
     for (const key of rateBuckets.keys()) {
       rateBuckets.delete(key);
       removed += 1;
-      if (removed >= toRemove) break;
+      if (removed >= toRemove) {
+        break;
+      }
     }
   }
-};
+}
 
-const rateLimit = (keyPrefix: string, windowMs: number, max: number): express.RequestHandler => {
+function rateLimit(keyPrefix: string, windowMs: number, max: number): express.RequestHandler {
   return (req, res, next) => {
     const now = Date.now();
     cleanupRateBuckets(now);
@@ -402,7 +412,7 @@ const rateLimit = (keyPrefix: string, windowMs: number, max: number): express.Re
     bucket.count += 1;
     next();
   };
-};
+}
 
 const challengeRateLimit = rateLimit(
   "challenge",
@@ -449,22 +459,23 @@ type TimingSample = {
 const counters = new Map<string, number>();
 const timings = new Map<string, TimingSample>();
 
-const inc = (name: string, value = 1) => {
+function inc(name: string, value = 1): void {
   counters.set(name, (counters.get(name) ?? 0) + value);
-};
+}
 
-const observe = (name: string, ms: number) => {
+function observe(name: string, ms: number): void {
   const sample = timings.get(name) ?? { count: 0, totalMs: 0, maxMs: 0 };
   sample.count += 1;
   sample.totalMs += ms;
   sample.maxMs = Math.max(sample.maxMs, ms);
   timings.set(name, sample);
-};
+}
 
-const escapePromLabel = (value: string) =>
-  value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n");
+function escapePromLabel(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n");
+}
 
-const renderPrometheusMetrics = () => {
+function renderPrometheusMetrics(): string {
   const lines: string[] = [];
   lines.push("# TYPE nullspace_auth_counter_total counter");
   for (const [name, value] of counters.entries()) {
@@ -483,28 +494,33 @@ const renderPrometheusMetrics = () => {
     lines.push(`nullspace_auth_timing_avg_ms{key="${label}"} ${avgMs}`);
   }
   return `${lines.join("\n")}\n`;
-};
+}
 
-const logJson = (level: "info" | "warn" | "error", message: string, data: any) => {
+function logJson(level: "info" | "warn" | "error", message: string, data: any): void {
   const line = JSON.stringify({ level, message, ...data });
-  if (level === "error") {
-    console.error(line);
-  } else if (level === "warn") {
-    console.warn(line);
-  } else {
-    console.info(line);
+  switch (level) {
+    case "error":
+      console.error(line);
+      break;
+    case "warn":
+      console.warn(line);
+      break;
+    default:
+      console.info(line);
   }
-};
+}
 
 const opsBase = (process.env.OPS_ANALYTICS_URL ?? process.env.OPS_URL ?? "").trim().replace(/\/$/, "");
 const opsEventsUrl = opsBase.endsWith("/analytics/events") ? opsBase : opsBase ? `${opsBase}/analytics/events` : "";
 
-const sendOpsEvent = async (
+async function sendOpsEvent(
   name: string,
   props?: Record<string, unknown>,
   actor?: { publicKey?: string },
-) => {
-  if (!opsEventsUrl) return;
+): Promise<void> {
+  if (!opsEventsUrl) {
+    return;
+  }
   try {
     await fetch(opsEventsUrl, {
       method: "POST",
@@ -518,7 +534,7 @@ const sendOpsEvent = async (
   } catch {
     // ignore ops analytics failures
   }
-};
+}
 
 const credentialsProvider = Credentials({
   credentials: {

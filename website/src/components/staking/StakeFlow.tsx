@@ -46,15 +46,15 @@ export const StakeFlow: React.FC<StakeFlowProps> = ({
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between gap-2 text-[10px] text-gray-600 tracking-widest uppercase">
+      <div className="flex items-center justify-between gap-2 text-[10px] text-ns-muted tracking-[0.28em] uppercase">
         <span>Amount (RNG)</span>
         <span>
-          Balance <span className="text-white">{stakeBalance.toString()}</span>
+          Balance <span className="text-ns">{stakeBalance.toString()}</span>
         </span>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <input
-          className="flex-1 min-w-[180px] h-11 bg-gray-950 border border-gray-800 rounded px-2 text-xs"
+          className="flex-1 min-w-[180px] h-11 liquid-input px-3 text-xs"
           value={stakeAmount}
           onChange={(e) => setStakeAmount(e.target.value)}
           placeholder="Amount (RNG)"
@@ -63,7 +63,7 @@ export const StakeFlow: React.FC<StakeFlowProps> = ({
         />
         <button
           type="button"
-          className="h-11 px-3 rounded border border-gray-800 text-gray-300 text-[10px] tracking-widest uppercase hover:border-gray-600 hover:text-white"
+          className="h-11 px-3 rounded-full liquid-chip text-ns text-[10px] tracking-[0.28em] uppercase hover:shadow-soft"
           onClick={() => setStakeAmount(stakeBalance.toString())}
           disabled={stakeBalance <= 0n}
           title="Max"
@@ -74,7 +74,7 @@ export const StakeFlow: React.FC<StakeFlowProps> = ({
           <button
             key={pct}
             type="button"
-            className="h-11 px-3 rounded border border-gray-800 text-gray-300 text-[10px] tracking-widest uppercase hover:border-gray-600 hover:text-white"
+            className="h-11 px-3 rounded-full liquid-chip text-ns text-[10px] tracking-[0.28em] uppercase hover:shadow-soft"
             onClick={() => setStakePercent(pct)}
             disabled={stakeBalance <= 0n}
             title={`${pct}%`}
@@ -84,9 +84,9 @@ export const StakeFlow: React.FC<StakeFlowProps> = ({
         ))}
       </div>
 
-      <div className="flex items-center justify-between gap-2 text-[10px] text-gray-600 tracking-widest uppercase">
+      <div className="flex items-center justify-between gap-2 text-[10px] text-ns-muted tracking-[0.28em] uppercase">
         <span>Duration (blocks)</span>
-        <span className="text-gray-500">
+        <span className="text-ns-muted">
           {stakeDurationParsed && stakeDurationParsed > 0n && stakeDurationParsed < 1_000_000n
             ? formatApproxTimeFromBlocks(Number(stakeDurationParsed))
             : '—'}
@@ -94,7 +94,7 @@ export const StakeFlow: React.FC<StakeFlowProps> = ({
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <input
-          className="flex-1 min-w-[180px] h-11 bg-gray-950 border border-gray-800 rounded px-2 text-xs"
+          className="flex-1 min-w-[180px] h-11 liquid-input px-3 text-xs"
           value={stakeDuration}
           onChange={(e) => setStakeDuration(e.target.value)}
           placeholder="Duration (blocks)"
@@ -105,7 +105,7 @@ export const StakeFlow: React.FC<StakeFlowProps> = ({
           <button
             key={blocks}
             type="button"
-            className="h-11 px-3 rounded border border-gray-800 text-gray-300 text-[10px] tracking-widest uppercase hover:border-gray-600 hover:text-white"
+            className="h-11 px-3 rounded-full liquid-chip text-ns text-[10px] tracking-[0.28em] uppercase hover:shadow-soft"
             onClick={() => setStakeDuration(String(blocks))}
             title={`${blocks} blocks`}
           >
@@ -116,10 +116,10 @@ export const StakeFlow: React.FC<StakeFlowProps> = ({
 
       <div className="flex flex-wrap items-center gap-2">
         <button
-          className={`flex-1 text-xs px-3 py-2 rounded border ${
+          className={`flex-1 text-xs px-3 py-2 rounded-full liquid-chip ${
             canStake
-              ? 'border-action-success text-action-success hover:bg-action-success/10'
-              : 'border-gray-800 text-gray-600 cursor-not-allowed'
+              ? 'text-action-success hover:shadow-soft'
+              : 'text-ns-muted opacity-60 cursor-not-allowed'
           }`}
           onClick={() => (canStake ? setConfirmOpen(true) : null)}
           disabled={!canStake}
@@ -127,10 +127,10 @@ export const StakeFlow: React.FC<StakeFlowProps> = ({
           Stake
         </button>
         <button
-          className={`text-xs px-3 py-2 rounded border ${
+          className={`text-xs px-3 py-2 rounded-full liquid-chip ${
             derived.locked
-              ? 'border-gray-800 text-gray-600 cursor-not-allowed'
-              : 'border-gray-700 text-gray-300 hover:border-gray-500'
+              ? 'text-ns-muted opacity-60 cursor-not-allowed'
+              : 'text-ns hover:shadow-soft'
           }`}
           onClick={onUnstake}
           disabled={derived.locked}
@@ -139,10 +139,10 @@ export const StakeFlow: React.FC<StakeFlowProps> = ({
           Unstake
         </button>
         <button
-          className={`text-xs px-3 py-2 rounded border ${
+          className={`text-xs px-3 py-2 rounded-full liquid-chip ${
             derived.claimableRewards === 0n
-              ? 'border-gray-800 text-gray-600 cursor-not-allowed'
-              : 'border-gray-700 text-gray-300 hover:border-gray-500'
+              ? 'text-ns-muted opacity-60 cursor-not-allowed'
+              : 'text-ns hover:shadow-soft'
           }`}
           onClick={onClaimRewards}
           disabled={derived.claimableRewards === 0n}
@@ -153,16 +153,16 @@ export const StakeFlow: React.FC<StakeFlowProps> = ({
       </div>
 
       {derived.locked && (
-        <div className="text-[10px] text-gray-500">
+        <div className="text-[10px] text-ns-muted">
           Locked: {derived.remainingBlocks} blocks ({formatApproxTimeFromBlocks(derived.remainingBlocks)})
         </div>
       )}
 
-      {stakeValidationMessage ? (
+      {stakeValidationMessage && (
         <div className="text-[10px] text-action-destructive">{stakeValidationMessage}</div>
-      ) : null}
+      )}
 
-      <div className="text-[10px] text-gray-600 leading-relaxed">
+      <div className="text-[10px] text-ns-muted leading-relaxed">
         Rewards are funded from positive epoch net PnL and distributed pro-rata by voting power (amount * duration). Call
         “Process Epoch” after ~100 blocks to roll the epoch and update the reward pool.
       </div>
@@ -186,30 +186,30 @@ export const StakeFlow: React.FC<StakeFlowProps> = ({
         }}
       >
         <div className="space-y-3 text-sm">
-          <div className="text-[10px] text-gray-500 tracking-widest uppercase">Summary</div>
+          <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase">Summary</div>
           <div className="grid grid-cols-2 gap-2 text-[11px]">
-            <div className="text-gray-500">Amount</div>
-            <div className="text-white text-right">
+            <div className="text-ns-muted">Amount</div>
+            <div className="text-ns text-right">
               {stakeAmountParsed === null ? '—' : stakeAmountParsed.toString()} RNG
             </div>
-            <div className="text-gray-500">Duration</div>
-            <div className="text-white text-right">
+            <div className="text-ns-muted">Duration</div>
+            <div className="text-ns text-right">
               {stakeDurationParsed === null ? '—' : stakeDurationParsed.toString()} blocks
             </div>
-            <div className="text-gray-500">Voting power</div>
-            <div className="text-white text-right">
+            <div className="text-ns-muted">Voting power</div>
+            <div className="text-ns text-right">
               {stakeAmountParsed && stakeDurationParsed
                 ? (stakeAmountParsed * stakeDurationParsed).toString()
                 : '—'}
             </div>
-            <div className="text-gray-500">Unlock ETA</div>
-            <div className="text-white text-right">
+            <div className="text-ns-muted">Unlock ETA</div>
+            <div className="text-ns text-right">
               {stakeDurationParsed && stakeDurationParsed > 0n && stakeDurationParsed < 1_000_000n
                 ? formatApproxTimeFromBlocks(Number(stakeDurationParsed))
                 : '—'}
             </div>
           </div>
-          <div className="text-[10px] text-gray-600 leading-relaxed">
+          <div className="text-[10px] text-ns-muted leading-relaxed">
             Voting power = amount × duration. Rewards depend on future epoch net PnL.
           </div>
         </div>

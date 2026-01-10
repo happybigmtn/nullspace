@@ -1,14 +1,16 @@
 import React from 'react';
 
 const StatsCard = ({ title, value, subtext, trend }) => {
-  const trendColor = trend === 'up' ? 'text-green-400' : trend === 'down' ? 'text-red-400' : 'text-gray-400';
+  const trendColor = trend === 'up' ? 'text-action-success' : trend === 'down' ? 'text-action-destructive' : 'text-ns-muted';
   
   return (
-    <div className="bg-gray-900 p-6 rounded-lg border border-gray-800 shadow-xl">
-      <h4 className="text-gray-400 text-sm uppercase tracking-wide font-bold mb-2">{title}</h4>
-      <div className="flex items-baseline gap-2">
-        <span className="text-3xl font-mono text-gray-100 font-bold">{value}</span>
-        {subtext && <span className={`text-sm ${trendColor}`}>{subtext}</span>}
+    <div className="liquid-panel p-4">
+      <div className="text-[10px] uppercase tracking-[0.32em] text-ns-muted">{title}</div>
+      <div className="mt-3 flex items-baseline justify-between gap-2">
+        <span className="text-2xl font-mono text-ns font-semibold tabular-nums">{value}</span>
+        {subtext ? (
+          <span className={`text-[10px] uppercase tracking-[0.28em] ${trendColor}`}>{subtext}</span>
+        ) : null}
       </div>
     </div>
   );

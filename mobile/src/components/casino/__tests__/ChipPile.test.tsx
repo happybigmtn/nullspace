@@ -23,21 +23,18 @@ jest.mock('react-native-reanimated', () => {
 // Mock haptics
 jest.mock('../../../services/haptics', () => ({
   haptics: {
-    chipPlace: jest.fn(),
+    chipPlace: jest.fn(() => Promise.resolve()),
   },
 }));
 
-// Helper to find text - handles both string and array children
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const findTextWithContent = (texts: any[], content: string) => {
-  return texts.find((t) => {
+const findTextWithContent = (texts: any[], content: string) =>
+  texts.find((t) => {
     const children = t.props?.children;
     if (typeof children === 'string') return children === content;
     if (typeof children === 'number') return String(children) === content;
     if (Array.isArray(children)) return children.join('') === content;
     return false;
   });
-};
 
 describe('ChipPile', () => {
   const createChip = (value: 1 | 5 | 25 | 100 | 500 | 1000, id?: string): PlacedChip => ({

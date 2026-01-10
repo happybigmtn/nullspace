@@ -16,8 +16,7 @@ const formatAmount = (amount: number) => {
 export const BetSlip: React.FC<BetSlipProps> = ({ totalBet, oddsLabel, maxWin, className }) => (
   <div
     className={[
-      'flex flex-wrap items-center gap-4 rounded-full border border-titanium-200 bg-white/70 px-4 py-2 shadow-soft backdrop-blur-md',
-      'dark:border-titanium-800 dark:bg-titanium-900/70 dark:text-titanium-100',
+      'flex flex-wrap items-center gap-4 rounded-full border border-ns bg-ns-surface px-4 py-2 shadow-soft backdrop-blur-md text-ns',
       'motion-state',
       className ?? '',
     ]
@@ -29,26 +28,26 @@ export const BetSlip: React.FC<BetSlipProps> = ({ totalBet, oddsLabel, maxWin, c
     <div className="flex flex-col gap-1">
       <Label size="micro">Bet Slip</Label>
       <div className="flex items-baseline gap-2">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-titanium-400">Total</span>
-        <span className="text-sm font-bold tabular-nums text-titanium-900 dark:text-titanium-100">
+        <span className="text-[10px] font-bold uppercase tracking-widest text-ns-muted">Total</span>
+        <span className="text-sm font-bold tabular-nums text-ns">
           ${formatAmount(totalBet)}
         </span>
       </div>
     </div>
 
-    <div className="h-6 w-px bg-titanium-200 dark:bg-titanium-800" />
+    <div className="h-6 w-px bg-ns-border opacity-60" />
 
     <div className="flex flex-col gap-1">
       <Label size="micro">Odds</Label>
-      <div className="text-sm font-bold text-titanium-800 dark:text-titanium-100">{oddsLabel}</div>
+      <div className="text-sm font-bold text-ns">{oddsLabel}</div>
     </div>
 
     {typeof maxWin === 'number' && (
       <>
-        <div className="h-6 w-px bg-titanium-200 dark:bg-titanium-800" />
+        <div className="h-6 w-px bg-ns-border opacity-60" />
         <div className="flex flex-col gap-1">
           <Label size="micro">Max Win</Label>
-          <div className="text-sm font-bold text-titanium-800 dark:text-titanium-100">
+          <div className="text-sm font-bold text-ns">
             ${formatAmount(maxWin)}
           </div>
         </div>

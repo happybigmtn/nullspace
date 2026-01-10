@@ -110,10 +110,10 @@ export const PlaySwapStakeTabs: React.FC<TabsProps> = ({
 
   const tabClass = (active: boolean) =>
     [
-      'relative z-10 inline-flex shrink-0 whitespace-nowrap items-center justify-center h-9 px-4 rounded-full text-micro font-semibold tracking-wider uppercase transition-colors duration-150',
+      'relative z-10 inline-flex shrink-0 whitespace-nowrap items-center justify-center h-9 px-4 rounded-full text-[10px] font-semibold tracking-[0.28em] uppercase transition-colors duration-150',
       active
-        ? 'text-white dark:text-white'
-        : 'text-titanium-500 hover:text-titanium-700 dark:text-titanium-400 dark:hover:text-titanium-200',
+        ? 'text-ns'
+        : 'text-ns-muted hover:text-ns',
     ].join(' ');
 
   const navStyle = useMode
@@ -162,9 +162,7 @@ export const PlaySwapStakeTabs: React.FC<TabsProps> = ({
       onKeyDown={handleKeyDown}
       className={[
         'relative flex items-center gap-1 max-w-full overflow-x-auto scrollbar-hide p-1 rounded-full',
-        // LUX-020: Remove outer border - pill alone provides structure
-        // LUX-021: gap-1 (4px) aligns with 4px grid
-        'bg-titanium-100/30 dark:bg-titanium-800/30',
+        'liquid-chip',
         className ?? '',
       ]
         .join(' ')
@@ -177,7 +175,7 @@ export const PlaySwapStakeTabs: React.FC<TabsProps> = ({
             ...indicatorSpring,
             ...indicatorBgStyle,
           }}
-          className="absolute z-0 h-9 rounded-full bg-titanium-900 shadow-soft dark:bg-action-primary"
+          className="absolute z-0 h-9 rounded-full bg-white/80 border border-black/10 shadow-soft dark:bg-white/10 dark:border-white/10"
           aria-hidden="true"
         />
       )}

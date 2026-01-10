@@ -56,7 +56,7 @@ type NonceStore = {
   adminPublicKeyHex: string;
 };
 
-const readSecretFile = async (filePath: string, label: string): Promise<string | null> => {
+async function readSecretFile(filePath: string, label: string): Promise<string | null> {
   try {
     const fs = await import("fs/promises");
     const contents = await fs.readFile(filePath, "utf8");
@@ -70,9 +70,9 @@ const readSecretFile = async (filePath: string, label: string): Promise<string |
     console.warn(`[auth] Failed to read ${label} file: ${filePath}`, error);
     return null;
   }
-};
+}
 
-const readSecretUrl = async (url: string, label: string): Promise<string | null> => {
+async function readSecretUrl(url: string, label: string): Promise<string | null> {
   try {
     const headers: Record<string, string> = {};
     const bearer = process.env.CASINO_ADMIN_PRIVATE_KEY_TOKEN;
@@ -98,19 +98,23 @@ const readSecretUrl = async (url: string, label: string): Promise<string | null>
     console.warn(`[auth] Failed to fetch ${label} from URL: ${url}`, error);
     return null;
   }
-};
+}
 
-const resolveAdminKeyHex = async (): Promise<string> => {
+async function resolveAdminKeyHex(): Promise<string> {
   const secretUrl = process.env.CASINO_ADMIN_PRIVATE_KEY_URL;
   if (secretUrl) {
     const fromUrl = await readSecretUrl(secretUrl, "admin key");
-    if (fromUrl) return fromUrl;
+    if (fromUrl) {
+      return fromUrl;
+    }
   }
 
   const filePath = process.env.CASINO_ADMIN_PRIVATE_KEY_FILE;
   if (filePath) {
     const fromFile = await readSecretFile(filePath, "admin key");
-    if (fromFile) return fromFile;
+    if (fromFile) {
+      return fromFile;
+    }
   }
 
   const fromEnv = process.env.CASINO_ADMIN_PRIVATE_KEY_HEX ?? "";
@@ -125,14 +129,14 @@ const resolveAdminKeyHex = async (): Promise<string> => {
     );
   }
   return "";
-};
+}
 
 
 let wasmPromise: Promise<WasmModule | null> | null = null;
 let adminQueue: Promise<unknown> = Promise.resolve();
 let nonceStorePromise: Promise<NonceStore | null> | null = null;
 
-const loadWasm = async (): Promise<WasmModule | null> => {
+async function loadWasm(): Promise<WasmModule | null> {
   if (!wasmPromise) {
     wasmPromise = (async () => {
       const wasmModulePath = require.resolve("website/wasm/pkg/nullspace_wasm.js");
@@ -148,9 +152,9 @@ const loadWasm = async (): Promise<WasmModule | null> => {
     });
   }
   return wasmPromise;
-};
+}
 
-const initAdminState = async (adminKeyHex: string): Promise<AdminState | null> => {
+async function initAdminState(adminKeyHex: string): Promise<AdminState | null> {
   const normalizedKey = normalizeHex(adminKeyHex);
   const identityHex = normalizeHex(process.env.CASINO_IDENTITY_HEX ?? "");
   const baseUrl = process.env.CASINO_API_URL ?? "http://localhost:8080/api";
@@ -165,7 +169,9 @@ const initAdminState = async (adminKeyHex: string): Promise<AdminState | null> =
   }
 
   const wasm = await loadWasm();
-  if (!wasm) return null;
+  if (!wasm) {
+    return null;
+  }
 
   const adminKeyBytes = hexToBytes(normalizedKey);
   const signer = wasm.Signer.from_bytes(adminKeyBytes);
@@ -173,9 +179,9 @@ const initAdminState = async (adminKeyHex: string): Promise<AdminState | null> =
   const identityBytes = hexToBytes(identityHex);
 
   return { wasm, signer, adminPublicKeyBytes, identityBytes, baseUrl };
-};
+}
 
-const initNonceStore = async (state: AdminState): Promise<NonceStore | null> => {
+async function initNonceStore(state: AdminState): Promise<NonceStore | null> {
   const convexUrl = process.env.CONVEX_URL ?? "";
   const serviceToken = process.env.CONVEX_SERVICE_TOKEN ?? "";
   if (!convexUrl || !serviceToken) {
@@ -190,12 +196,12 @@ const initNonceStore = async (state: AdminState): Promise<NonceStore | null> => 
     serviceToken,
     adminPublicKeyHex: bytesToHex(state.adminPublicKeyBytes),
   };
-};
+}
 
 let adminStatePromise: Promise<AdminState | null> | null = null;
 let adminStateKeyHex: string | null = null;
 
-const getAdminState = async (): Promise<AdminState | null> => {
+async function getAdminState(): Promise<AdminState | null> {
   const resolvedKeyHex = normalizeHex(await resolveAdminKeyHex());
   if (adminStatePromise && adminStateKeyHex === resolvedKeyHex) {
     return adminStatePromise;
@@ -207,9 +213,9 @@ const getAdminState = async (): Promise<AdminState | null> => {
     return null;
   });
   return adminStatePromise;
-};
+}
 
-const getNonceStore = async (state: AdminState): Promise<NonceStore | null> => {
+async function getNonceStore(state: AdminState): Promise<NonceStore | null> {
   if (!nonceStorePromise) {
     nonceStorePromise = initNonceStore(state).catch((error) => {
       console.warn("[auth] Failed to init nonce store:", error);
@@ -217,42 +223,48 @@ const getNonceStore = async (state: AdminState): Promise<NonceStore | null> => {
     });
   }
   return nonceStorePromise;
-};
+}
 
-const enqueueAdmin = async <T>(task: () => Promise<T>): Promise<T> => {
+async function enqueueAdmin<T>(task: () => Promise<T>): Promise<T> {
   const next = adminQueue.then(task, task);
   adminQueue = next.then(
     () => undefined,
     () => undefined,
   );
   return next;
-};
+}
 
-const queryState = async (
+async function queryState(
   state: AdminState,
   keyBytes: Uint8Array,
-): Promise<any | null> => {
+): Promise<any | null> {
   const hashed = state.wasm.hash_key(keyBytes);
   const hexKey = bytesToHex(hashed);
   const response = await fetch(`${state.baseUrl}/state/${hexKey}`);
-  if (response.status === 404) return null;
+  if (response.status === 404) {
+    return null;
+  }
   if (!response.ok) {
     throw new Error(`State query failed (${response.status})`);
   }
   const buffer = await response.arrayBuffer();
   const bytes = new Uint8Array(buffer);
-  if (bytes.length === 0) return null;
+  if (bytes.length === 0) {
+    return null;
+  }
   return state.wasm.decode_lookup(bytes, state.identityBytes);
-};
+}
 
-const getAccountNonce = async (state: AdminState): Promise<number> => {
+async function getAccountNonce(state: AdminState): Promise<number> {
   const keyBytes = state.wasm.encode_account_key(state.adminPublicKeyBytes);
   const value = await queryState(state, keyBytes);
-  if (!value || value.type !== "Account") return 0;
+  if (!value || value.type !== "Account") {
+    return 0;
+  }
   return Number(value.nonce ?? 0);
-};
+}
 
-const reserveNonce = async (state: AdminState): Promise<number> => {
+async function reserveNonce(state: AdminState): Promise<number> {
   const store = await getNonceStore(state);
   if (store) {
     const fallbackNonce = await getAccountNonce(state);
@@ -273,28 +285,32 @@ const reserveNonce = async (state: AdminState): Promise<number> => {
   const nonce = state.nextNonce;
   state.nextNonce += 1;
   return nonce;
-};
+}
 
-const resetNonceStore = async (state: AdminState): Promise<void> => {
+async function resetNonceStore(state: AdminState): Promise<void> {
   state.nextNonce = undefined;
   const store = await getNonceStore(state);
-  if (!store) return;
+  if (!store) {
+    return;
+  }
   const chainNonce = await getAccountNonce(state);
   await store.client.mutation(api.admin.resetAdminNonce, {
     serviceToken: store.serviceToken,
     adminPublicKey: store.adminPublicKeyHex,
     nextNonce: chainNonce,
   });
-};
+}
 
-const getPlayer = async (state: AdminState, publicKeyBytes: Uint8Array): Promise<any | null> => {
+async function getPlayer(state: AdminState, publicKeyBytes: Uint8Array): Promise<any | null> {
   const keyBytes = state.wasm.encode_casino_player_key(publicKeyBytes);
   const value = await queryState(state, keyBytes);
-  if (!value || value.type !== "CasinoPlayer") return null;
+  if (!value || value.type !== "CasinoPlayer") {
+    return null;
+  }
   return value;
-};
+}
 
-const submitTransaction = async (state: AdminState, tx: Uint8Array): Promise<void> => {
+async function submitTransaction(state: AdminState, tx: Uint8Array): Promise<void> {
   const submission = state.wasm.wrap_transaction_submission(tx);
   const response = await fetch(`${state.baseUrl}/submit`, {
     method: "POST",
@@ -307,7 +323,7 @@ const submitTransaction = async (state: AdminState, tx: Uint8Array): Promise<voi
     const text = await response.text();
     throw new Error(`Submit failed (${response.status}): ${text}`);
   }
-};
+}
 
 export const syncFreerollLimit = async (
   publicKeyHex: string,

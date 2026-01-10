@@ -53,6 +53,25 @@ const TUTORIAL_STEPS: TutorialStep[] = [
   },
 ];
 
+function getPhaseMessage(phase: BlackjackState['phase']): string {
+  switch (phase) {
+    case 'betting':
+      return 'Place your bet';
+    case 'player_turn':
+      return 'Your turn';
+    case 'dealer_turn':
+      return "Dealer's turn";
+    default:
+      return 'Round complete';
+  }
+}
+
+function getResultMessage(won: boolean, push: boolean): string {
+  if (won) return 'You win!';
+  if (push) return 'Push';
+  return 'Dealer wins';
+}
+
 export function BlackjackScreen() {
   // Shared hooks for connection, betting, and submission debouncing
   const { isDisconnected, send, lastMessage, connectionStatusProps } = useGameConnection<GameMessage>();
@@ -142,13 +161,7 @@ export function BlackjackScreen() {
           phase: parsed.phase,
           lastResult: parsed.phase === 'result' ? prev.lastResult : null,
           parseError: null,
-          message: parsed.phase === 'betting'
-            ? 'Place your bet'
-            : parsed.phase === 'player_turn'
-              ? 'Your turn'
-              : parsed.phase === 'dealer_turn'
-                ? 'Dealer\'s turn'
-                : 'Round complete',
+          message: getPhaseMessage(parsed.phase),
         }));
         setIsParsingState(false);
       });
@@ -191,11 +204,7 @@ export function BlackjackScreen() {
         lastResult: won ? 'win' : push ? 'push' : 'loss',
         message: typeof payload.message === 'string'
           ? payload.message
-          : won
-            ? 'You win!'
-            : push
-              ? 'Push'
-              : 'Dealer wins',
+          : getResultMessage(won, push),
       }));
       return;
     }

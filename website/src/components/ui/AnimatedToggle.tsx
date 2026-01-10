@@ -77,17 +77,15 @@ export const AnimatedToggle = forwardRef<HTMLButtonElement, AnimatedToggleProps>
     const config = prefersReducedMotion ? INSTANT_CONFIG : TOGGLE_SPRING;
     const sizeConfig = SIZES[size];
 
-    // Spring for thumb position with overshoot
     const spring = useSpring({
       x: checked ? sizeConfig.thumbOn : sizeConfig.thumbOff,
       scale: 1,
       config,
     });
 
-    // Track and thumb colors
     const trackBg = checked
       ? 'bg-action-primary'
-      : 'bg-titanium-200 dark:bg-titanium-700';
+      : 'bg-white/70 dark:bg-white/10';
 
     return (
       <button
@@ -99,7 +97,7 @@ export const AnimatedToggle = forwardRef<HTMLButtonElement, AnimatedToggleProps>
         disabled={disabled}
         onClick={onToggle}
         className={[
-          'relative inline-flex items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-action-primary focus-visible:ring-offset-2',
+          'relative inline-flex items-center rounded-full border border-black/10 dark:border-white/10 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-action-primary focus-visible:ring-offset-2',
           sizeConfig.track,
           trackBg,
           disabled && 'opacity-50 cursor-not-allowed',
@@ -110,7 +108,6 @@ export const AnimatedToggle = forwardRef<HTMLButtonElement, AnimatedToggleProps>
           .trim()}
         {...props}
       >
-        {/* Animated thumb */}
         <animated.span
           className={[
             'absolute rounded-full bg-white shadow-soft',
@@ -151,14 +148,14 @@ export const AnimatedToggleWithLabel = forwardRef<
       className ?? '',
     ].join(' ')}
   >
-    <span className="text-body text-titanium-700 dark:text-titanium-300 font-medium">
+    <span className="text-body text-ns font-medium">
       {label}
     </span>
     <div className="flex items-center gap-2">
       {showState && (
         <span
           className={`text-caption font-semibold ${
-            checked ? 'text-action-success' : 'text-titanium-400'
+            checked ? 'text-action-success' : 'text-ns-muted'
           }`}
         >
           {checked ? 'On' : 'Off'}

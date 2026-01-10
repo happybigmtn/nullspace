@@ -11,7 +11,7 @@ import { ChevronDown, Settings } from 'lucide-react';
  * LUX-014: Redesigned RegistrationView with luxury aesthetic
  *
  * Design principles:
- * - Light titanium background, not terminal-black
+ * - Liquid crystal background, not terminal-black
  * - Countdown as hero visual element
  * - Clean typography hierarchy (no excessive monospace)
  * - Stats as clean cards, not bordered grids
@@ -101,20 +101,20 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
   const buttonConfig = getButtonConfig();
 
   return (
-    <div className="min-h-screen w-screen bg-titanium-50 flex flex-col items-center justify-start p-4 sm:p-6 md:p-8 overflow-auto">
+    <div className="min-h-screen w-screen liquid-shell text-ns flex flex-col items-center justify-start p-4 sm:p-6 md:p-8 overflow-auto">
       {/* Mode Tabs */}
       <div className="max-w-2xl w-full mb-6 flex justify-center">
         <PlaySwapStakeTabs />
       </div>
 
       {/* Main Content Card */}
-      <div className="max-w-2xl w-full bg-white rounded-3xl shadow-float p-6 sm:p-8 md:p-10 space-y-8">
+      <div className="max-w-2xl w-full liquid-card liquid-sheen rounded-3xl shadow-float p-6 sm:p-8 md:p-10 space-y-8">
         {/* Header */}
         <div className="text-center">
-          <h1 className="text-headline font-semibold text-titanium-900 tracking-tight">
+          <h1 className="text-headline font-semibold text-ns tracking-tight">
             Freeroll Tournament
           </h1>
-          <p className="text-caption text-titanium-600 mt-1">
+          <p className="text-caption text-ns-muted mt-1">
             Play free, win real rewards
           </p>
         </div>
@@ -123,7 +123,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
         <div className="text-center py-6">
           {activeTimeLeft > 0 ? (
             <div className="space-y-2">
-              <div className="text-caption text-titanium-500 uppercase tracking-widest">
+              <div className="text-caption text-ns-muted uppercase tracking-widest">
                 Tournament Ends In
               </div>
               <div className="text-hero text-mono-400 dark:text-mono-500 font-semibold tracking-tight font-display">
@@ -132,14 +132,14 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
             </div>
           ) : (
             <div className="space-y-2">
-              <div className="text-caption text-titanium-500 uppercase tracking-widest">
+              <div className="text-caption text-ns-muted uppercase tracking-widest">
                 Next Tournament In
               </div>
-              <div className="text-hero text-titanium-900 font-semibold tracking-tight font-display">
+              <div className="text-hero text-ns font-semibold tracking-tight font-display">
                 {formatTime(nextStartIn)}
               </div>
               {nextTournamentId !== null && (
-                <div className="text-micro text-titanium-400">
+                <div className="text-micro text-ns-muted">
                   Tournament #{nextTournamentId}
                 </div>
               )}
@@ -147,11 +147,11 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
           )}
 
           {/* Entries Badge */}
-          <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 bg-titanium-100 rounded-full">
-            <span className="text-micro text-titanium-500 uppercase tracking-wider">
+          <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 liquid-chip rounded-full">
+            <span className="text-micro text-ns-muted uppercase tracking-wider">
               Entries Today
             </span>
-            <span className={`text-micro font-semibold ${entriesRemaining > 0 ? 'text-titanium-900' : 'text-mono-400 dark:text-mono-500'}`}>
+            <span className={`text-micro font-semibold ${entriesRemaining > 0 ? 'text-ns' : 'text-mono-400 dark:text-mono-500'}`}>
               {tournamentsPlayedToday}/{maxEntries}
             </span>
           </div>
@@ -164,17 +164,17 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
             disabled={buttonConfig.disabled}
             className={`w-full max-w-xs px-8 py-4 rounded-2xl font-semibold text-body transition-all motion-interaction ${
               buttonConfig.variant === 'primary'
-                ? 'bg-titanium-900 text-white hover:bg-titanium-800 active:scale-[0.98]'
+                ? 'bg-mono-0 text-white hover:bg-mono-0/90 active:scale-[0.98]'
                 : buttonConfig.variant === 'success'
                   ? 'bg-mono-0/10 text-mono-0 dark:text-mono-1000 font-bold border border-mono-0/30'
-                  : buttonConfig.variant === 'loading'
-                    ? 'bg-titanium-200 text-titanium-500'
-                    : 'bg-titanium-100 text-titanium-400'
+                : buttonConfig.variant === 'loading'
+                    ? 'bg-ns-surface text-ns-muted'
+                    : 'bg-ns-surface text-ns-muted'
             }`}
           >
             {buttonConfig.text}
             {!isRegistered && (
-              <span className="ml-2 text-titanium-500 text-caption">[R]</span>
+              <span className="ml-2 text-ns-muted text-caption">[R]</span>
             )}
           </button>
 
@@ -189,10 +189,10 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
 
           {/* Status Message */}
           {showStatus && (
-            <p className={`text-caption text-center ${isErrorStatus ? 'text-mono-400 dark:text-mono-500' : 'text-titanium-500'}`}>
+            <p className={`text-caption text-center ${isErrorStatus ? 'text-mono-400 dark:text-mono-500' : 'text-ns-muted'}`}>
               {statusMessage}
               {lastTxSig && (
-                <span className="text-titanium-400"> · {lastTxSig.slice(0, 8)}...</span>
+                <span className="text-ns-muted"> · {lastTxSig.slice(0, 8)}...</span>
               )}
             </p>
           )}
@@ -222,21 +222,21 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
         </div>
 
         {/* Stats Section - Clean Typography */}
-        <div className="pt-6 border-t border-titanium-100">
+        <div className="pt-6 border-t border-ns">
           <div className="grid grid-cols-2 gap-6">
             <div className="text-center">
-              <div className="text-micro text-titanium-500 uppercase tracking-wider mb-1">
+              <div className="text-micro text-ns-muted uppercase tracking-wider mb-1">
                 Your Balance
               </div>
-              <div className="text-headline text-titanium-900 font-semibold font-display">
+              <div className="text-headline text-ns font-semibold font-display">
                 ${stats.chips.toLocaleString()}
               </div>
             </div>
             <div className="text-center">
-              <div className="text-micro text-titanium-500 uppercase tracking-wider mb-1">
+              <div className="text-micro text-ns-muted uppercase tracking-wider mb-1">
                 Current Rank
               </div>
-              <div className="text-headline text-titanium-900 font-semibold font-display">
+              <div className="text-headline text-ns font-semibold font-display">
                 #{stats.rank}
               </div>
             </div>
@@ -245,7 +245,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
           {/* PNL by Game - Subtle List */}
           {Object.keys(stats.pnlByGame).length > 0 && (
             <div className="mt-6 space-y-2">
-              <div className="text-micro text-titanium-500 uppercase tracking-wider">
+              <div className="text-micro text-ns-muted uppercase tracking-wider">
                 Performance by Game
               </div>
               <div className="space-y-1">
@@ -253,7 +253,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
                   const val = pnl as number;
                   return (
                     <div key={game} className="flex justify-between text-caption">
-                      <span className="text-titanium-600">{game}</span>
+                      <span className="text-ns-muted">{game}</span>
                       <span className={val >= 0 ? 'text-mono-0 dark:text-mono-1000 font-bold' : 'text-mono-400 dark:text-mono-500'}>
                         {val >= 0 ? '+' : ''}{val}
                       </span>
@@ -267,21 +267,21 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
 
         {/* Registered Players */}
         {leaderboard.length > 0 && (
-          <div className="pt-4 border-t border-titanium-100">
-            <div className="text-micro text-titanium-500 uppercase tracking-wider mb-2">
+          <div className="pt-4 border-t border-ns">
+            <div className="text-micro text-ns-muted uppercase tracking-wider mb-2">
               Players ({leaderboard.length})
             </div>
             <div className="flex flex-wrap gap-2">
               {leaderboard.slice(0, 8).map((p, i) => (
                 <span
                   key={i}
-                  className="px-2 py-1 bg-titanium-100 rounded-lg text-micro text-titanium-700"
+                  className="px-2 py-1 liquid-chip rounded-lg text-micro text-ns"
                 >
                   {p.name}
                 </span>
               ))}
               {leaderboard.length > 8 && (
-                <span className="px-2 py-1 text-micro text-titanium-400">
+                <span className="px-2 py-1 text-micro text-ns-muted">
                   +{leaderboard.length - 8} more
                 </span>
               )}
@@ -290,10 +290,10 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
         )}
 
         {/* Advanced Settings Toggle */}
-        <div className="pt-4 border-t border-titanium-100">
+        <div className="pt-4 border-t border-ns">
           <button
             onClick={() => setShowAdvanced(!showAdvanced)}
-            className="w-full flex items-center justify-between py-2 text-caption text-titanium-500 hover:text-titanium-700 transition-colors"
+            className="w-full flex items-center justify-between py-2 text-caption text-ns-muted hover:text-ns transition-colors"
           >
             <div className="flex items-center gap-2">
               <Settings className="w-4 h-4" />
@@ -303,21 +303,21 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
           </button>
 
           {showAdvanced && (
-            <div className="mt-4 p-4 bg-titanium-50 rounded-2xl space-y-4">
+            <div className="mt-4 p-4 liquid-panel rounded-2xl space-y-4">
               {/* Bot Toggle */}
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-caption text-titanium-700 font-medium">Bot Opponents</div>
-                  <div className="text-micro text-titanium-500">Add AI players to the tournament</div>
+                  <div className="text-caption text-ns font-medium">Bot Opponents</div>
+                  <div className="text-micro text-ns-muted">Add AI players to the tournament</div>
                 </div>
                 <button
                   onClick={() => onBotConfigChange({ ...botConfig, enabled: !botConfig.enabled })}
                   className={`w-12 h-7 rounded-full transition-colors relative ${
-                    botConfig.enabled ? 'bg-mono-0' : 'bg-titanium-200'
+                    botConfig.enabled ? 'bg-mono-0' : 'bg-ns-border'
                   }`}
                 >
                   <span
-                    className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow-sm transition-transform ${
+                    className={`absolute top-1 w-5 h-5 rounded-full bg-ns-surface shadow-sm transition-transform ${
                       botConfig.enabled ? 'left-6' : 'left-1'
                     }`}
                   />
@@ -325,10 +325,10 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
               </div>
 
               {botConfig.enabled && (
-                <div className="space-y-3 pt-3 border-t border-titanium-200">
+                <div className="space-y-3 pt-3 border-t border-ns">
                   {/* Number of Bots */}
                   <div>
-                    <div className="flex justify-between text-micro text-titanium-600 mb-1">
+                    <div className="flex justify-between text-micro text-ns-muted mb-1">
                       <span>Number of Bots</span>
                       <span className="font-medium">{botConfig.numBots}</span>
                     </div>
@@ -345,7 +345,7 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
 
                   {/* Bet Interval */}
                   <div>
-                    <div className="flex justify-between text-micro text-titanium-600 mb-1">
+                    <div className="flex justify-between text-micro text-ns-muted mb-1">
                       <span>Bet Interval</span>
                       <span className="font-medium">{botConfig.betIntervalMs / 1000}s</span>
                     </div>
@@ -362,13 +362,13 @@ export const RegistrationView: React.FC<RegistrationViewProps> = ({
 
                   {/* Randomize Toggle */}
                   <div className="flex items-center justify-between">
-                    <span className="text-micro text-titanium-600">Randomize Timing</span>
+                    <span className="text-micro text-ns-muted">Randomize Timing</span>
                     <button
                       onClick={() => onBotConfigChange({ ...botConfig, randomizeInterval: !botConfig.randomizeInterval })}
                       className={`px-3 py-1 rounded-lg text-micro font-medium transition-colors ${
                         botConfig.randomizeInterval
                           ? 'bg-mono-0/10 text-mono-0 dark:text-mono-1000'
-                          : 'bg-titanium-200 text-titanium-500'
+                          : 'bg-ns-surface text-ns-muted'
                       }`}
                     >
                       {botConfig.randomizeInterval ? 'Random' : 'Fixed'}

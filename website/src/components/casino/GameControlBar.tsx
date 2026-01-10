@@ -8,6 +8,7 @@ import { useMagneticCursor } from '../../hooks/useMagneticCursor';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { SPRING_LIQUID_CONFIGS } from '../../utils/motion';
 import { GlassSurface } from '../ui';
+import { USE_CLASSIC_CASINO_UI } from '../../config/casinoUI';
 
 /**
  * Breathing animation constants for idle CTA
@@ -82,6 +83,124 @@ export const GameControlBar: React.FC<GameControlBarProps> = ({
     modifiers,
 }) => {
     const [menuOpen, setMenuOpen] = useState(false);
+    /**
+     * Classic (simplified) UI path.
+     * Drops glass/magnetic/accordion flourishes in favor of the lightweight
+     * floating island used right after we removed React Three Fiber.
+     */
+    if (USE_CLASSIC_CASINO_UI) {
+        return (
+            <>
+                <div
+                    role="group"
+                    aria-label={ariaLabel}
+                    className={`fixed bottom-6 left-4 right-4 h-16 bg-black/80 backdrop-blur-xl rounded-full border border-white/10 shadow-lg flex items-center justify-between px-3 z-50 ${className}`}
+                >
+                    <div className="flex flex-col pl-2">
+                        <span className="text-[10px] text-gray-400 tracking-widest font-medium">
+                            {showBetSelector ? 'BET' : 'BALANCE'}
+                        </span>
+                        <span className="text-white font-semibold text-sm tabular-nums tracking-wide">
+                            {showBetSelector && currentBet !== undefined ? `$${currentBet}` : balance}
+                        </span>
+                    </div>
+
+                    {primaryAction && (
+                        <button
+                            type="button"
+                            onClick={primaryAction.onClick}
+                            disabled={primaryAction.disabled}
+                            className={`absolute -top-6 left-1/2 -translate-x-1/2 w-20 h-20 rounded-full shadow-xl flex items-center justify-center text-white font-bold tracking-widest text-sm transition-all
+                                ${primaryAction.disabled ? 'bg-gray-700 cursor-not-allowed' : 'bg-action-primary hover:scale-105 active:scale-95'} ${primaryAction.className || ''}`}
+                        >
+                            {primaryAction.label}
+                        </button>
+                    )}
+
+                    <button
+                        onClick={() => setMenuOpen(true)}
+                        className="p-3 rounded-full hover:bg-white/10 active:scale-95 transition-colors"
+                        aria-label="Open menu"
+                    >
+                        <Grid className="text-white w-6 h-6" />
+                    </button>
+                </div>
+
+                <div
+                    className={`fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm transition-opacity duration-200 ${
+                        menuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+                    }`}
+                    onClick={() => setMenuOpen(false)}
+                >
+                    <div
+                        className={`absolute bottom-0 left-0 right-0 bg-white dark:bg-zinc-900 rounded-t-3xl p-6 pb-10 transition-transform duration-200 ${
+                            menuOpen ? 'translate-y-0' : 'translate-y-full'
+                        }`}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="w-12 h-1 bg-gray-300 dark:bg-gray-700 rounded-full mx-auto mb-6" />
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white tracking-tight">
+                                {mobileMenuLabel}
+                            </h3>
+                            <button onClick={() => setMenuOpen(false)} className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full">
+                                <X className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+                            </button>
+                        </div>
+
+                        {children && <div className="mb-4">{children}</div>}
+
+                        {modifiers && (
+                            <div className="grid grid-cols-3 gap-2 mb-4">
+                                {(['shield', 'double', 'super'] as const).map((key) => {
+                                    const mod = modifiers[key];
+                                    if (!mod || !mod.available) return null;
+                                    return (
+                                        <button
+                                            key={key}
+                                            type="button"
+                                            onClick={mod.onToggle}
+                                            className={`h-12 rounded-xl border text-sm font-semibold ${
+                                                mod.active ? 'bg-action-primary text-white border-action-primary' : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200'
+                                            }`}
+                                        >
+                                            {key.toUpperCase()}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        <div className="grid grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto">
+                            {secondaryActions.map((action, i) =>
+                                action.type === 'divider' ? (
+                                    <div key={i} className="col-span-2 text-gray-400 text-xs font-medium tracking-widest text-center py-2 uppercase">
+                                        {action.label}
+                                    </div>
+                                ) : (
+                                    <button
+                                        key={i}
+                                        type="button"
+                                        onClick={() => {
+                                            action.onClick?.();
+                                        }}
+                                        disabled={action.disabled}
+                                        className={`h-14 rounded-xl flex flex-col items-center justify-center gap-1 transition-all ${
+                                            action.active
+                                                ? 'bg-action-primary text-white shadow-lg shadow-blue-500/20'
+                                                : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700'
+                                        } ${action.disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    >
+                                        <span className="font-semibold text-sm">{action.label}</span>
+                                    </button>
+                                )
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </>
+        );
+    }
     const prefersReducedMotion = useReducedMotion();
 
     // Breathing animation state (DS-056)
@@ -175,7 +294,7 @@ export const GameControlBar: React.FC<GameControlBarProps> = ({
             {/* Main Floating Island - US-266: Using GlassSurface for consistent glass effect */}
             <GlassSurface depth="float" as="div" className={`${baseContainerClasses} ${className}`}>
                 {/* Left: Balance/Bet Info - LUX-010: Inline bet selector */}
-                <div className="flex flex-col pl-4 pr-3 border-r border-titanium-100">
+                <div className="flex flex-col pl-4 pr-3 border-r border-ns-border/60">
                     {showBetSelector && currentBet !== undefined && onBetChange ? (
                         <InlineBetSelector
                             currentBet={currentBet}
@@ -187,7 +306,7 @@ export const GameControlBar: React.FC<GameControlBarProps> = ({
                     ) : (
                         <>
                             <Label className="mb-0.5">Balance</Label>
-                            <span className="text-titanium-900 font-bold text-sm tabular-nums tracking-tight">{balance}</span>
+                            <span className="text-ns font-bold text-sm tabular-nums tracking-tight">{balance}</span>
                         </>
                     )}
                 </div>
@@ -228,14 +347,14 @@ export const GameControlBar: React.FC<GameControlBarProps> = ({
                             }}
                             className={`w-24 h-24 rounded-full flex items-center justify-center text-white font-semibold tracking-[0.15em] text-sm transition-all motion-interaction
                             ${primaryAction.disabled
-                                ? 'bg-titanium-300 text-titanium-500 cursor-not-allowed opacity-50'
-                                : 'bg-titanium-900 hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl ring-4 ring-titanium-900/20'
+                                ? 'bg-ns-border/60 text-ns-muted cursor-not-allowed opacity-60'
+                                : 'bg-action-primary hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl ring-4 ring-action-primary/20'
                             } ${primaryAction.className || ''}`}
                         >
                             {primaryAction.label}
                         </animated.button>
                         {/* Shadow accent for FAB */}
-                        {!primaryAction.disabled && <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-12 h-4 bg-black/10 blur-xl rounded-full -z-10" />}
+                        {!primaryAction.disabled && <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-12 h-4 bg-black/5 blur-xl rounded-full -z-10" />}
                     </div>
                 )}
 
@@ -244,10 +363,10 @@ export const GameControlBar: React.FC<GameControlBarProps> = ({
                     {children && <div className="hidden sm:flex">{children}</div>}
                     <button
                         onClick={() => setMenuOpen(true)}
-                        className="w-11 h-11 flex items-center justify-center rounded-full hover:bg-titanium-100 active:scale-95 transition-all motion-interaction group"
+                        className="w-11 h-11 flex items-center justify-center rounded-full hover:bg-white/60 active:scale-95 transition-all motion-interaction group"
                         aria-label="Open menu"
                     >
-                        <Grid className="text-titanium-400 group-hover:text-titanium-900 w-5 h-5" strokeWidth={2.5} />
+                        <Grid className="text-ns-muted group-hover:text-ns w-5 h-5" strokeWidth={2.5} />
                     </button>
                 </div>
             </GlassSurface>
@@ -267,17 +386,17 @@ export const GameControlBar: React.FC<GameControlBarProps> = ({
                     onClick={(e: React.MouseEvent) => e.stopPropagation()}
                 >
                     {/* Sheet Handle */}
-                    <div className="w-12 h-1 bg-titanium-200 rounded-full mx-auto mb-8" />
+                    <div className="w-12 h-1 bg-ns-border/60 rounded-full mx-auto mb-8" />
 
                     {/* Header */}
                     <div className="flex justify-between items-center mb-8">
                         <div className="flex flex-col">
                             <Label>{mobileMenuLabel}</Label>
-                            <h3 className="text-2xl font-bold text-titanium-900 tracking-tight mt-1">Actions</h3>
+                            <h3 className="text-2xl font-bold text-ns tracking-tight mt-1">Actions</h3>
                         </div>
                         <button
                             onClick={() => setMenuOpen(false)}
-                            className="w-11 h-11 bg-titanium-100 rounded-full flex items-center justify-center text-titanium-400 hover:text-titanium-900 transition-colors"
+                            className="w-11 h-11 liquid-chip flex items-center justify-center text-ns-muted hover:text-ns transition-colors"
                             aria-label="Close menu"
                         >
                             <X className="w-5 h-5" />
@@ -286,7 +405,7 @@ export const GameControlBar: React.FC<GameControlBarProps> = ({
 
                     {/* Actions Grid */}
                     <div className="flex flex-col gap-4 max-h-[60vh] overflow-y-auto scrollbar-hide">
-                         {children && <div className="p-4 bg-titanium-50 rounded-3xl border border-titanium-100">{children}</div>}
+                         {children && <div className="p-4 liquid-panel rounded-3xl border border-ns-border/60">{children}</div>}
 
                         {/* LUX-012: Modifiers Accordion - collapsed by default */}
                         {modifiers && (
@@ -300,7 +419,7 @@ export const GameControlBar: React.FC<GameControlBarProps> = ({
                                     action.type === 'divider' ? (
                                         <div key={i} className="col-span-2 mt-2">
                                             <Label>{action.label}</Label>
-                                            <div className="h-px bg-titanium-100 w-full mt-2" />
+                                            <div className="h-px bg-ns-border/60 w-full mt-2" />
                                         </div>
                                     ) : (
                                         <button
@@ -312,8 +431,8 @@ export const GameControlBar: React.FC<GameControlBarProps> = ({
                                             disabled={action.disabled}
                                             className={`h-16 rounded-[24px] flex flex-col items-center justify-center gap-1 transition-all motion-interaction shadow-soft border ${
                                                 action.active
-                                                    ? 'bg-titanium-900 text-white border-titanium-900 shadow-lg'
-                                                    : 'bg-white text-titanium-800 border-titanium-200 hover:border-titanium-400'
+                                                    ? 'bg-action-primary text-white border-action-primary shadow-lg'
+                                                    : 'bg-white/70 text-ns border-ns-border/60 hover:border-ns-border'
                                             } ${action.disabled ? 'opacity-40 cursor-not-allowed' : 'active:scale-95'}`}
                                         >
                                             <span className="font-bold text-sm tracking-tight">{action.label}</span>

@@ -1,0 +1,51 @@
+version: 1
+owner: agent
+streams:
+  - id: ci-hardening
+    goal: Make CI results fully decisive (no soft-fail jobs)
+    tasks:
+      - id: coverage-threshold
+        desc: Enforce repo-wide coverage >=70% via scripts/coverage-all.mjs --fail-under
+        status: done
+      - id: sast-fatal
+        desc: Fail build on Semgrep high severity
+        status: done
+      - id: trivy-fatal
+        desc: Fail build on HIGH/CRITICAL container scan
+        status: done
+  - id: hermetic-runtime
+    goal: One-command local bringup with seeded data
+    tasks:
+      - id: agent-up-down
+        desc: Provide agent-up/down scripts to start/stop all services locally
+        status: done
+      - id: detox-vs-stack
+        desc: Point mobile/web E2E to local stack instead of mocks
+        status: in-progress
+      - id: seed-fixtures
+        desc: Seed deterministic game outcomes for repeatable tests
+        status: in-progress
+  - id: flake-visibility
+    goal: Detect and quarantine flaky tests automatically
+    tasks:
+      - id: log-bundles
+        desc: Upload standardized logs/artifacts on all test failures
+        status: done
+      - id: auto-rerun
+        desc: Auto-rerun failed shards once and mark flaky
+        status: in-progress
+  - id: post-deploy-safety
+    goal: Automated smoke + rollback for staging/prod
+    tasks:
+      - id: staging-smoke
+        desc: Run health-check and Playwright smoke after deploy-staging
+        status: in-progress
+      - id: rollback-hook
+        desc: Add rollback on failed smoke
+        status: in-progress
+  - id: perf-budgets
+    goal: Prevent regressions in app performance
+    tasks:
+      - id: lighthouse-lite
+        desc: Add perf budget check via Playwright navigation timings in React workflow
+        status: done

@@ -55,15 +55,10 @@ export class WebSocketTestClient {
         try {
           const message = JSON.parse(data.toString()) as GameMessage;
           this.logger.debug('Received message', { type: message.type });
-
-          // Add to queue
           this.messageQueue.push(message);
 
-          // Call type-specific handler if registered
           const handler = this.messageHandlers.get(message.type);
-          if (handler) {
-            handler(message);
-          }
+          if (handler) handler(message);
         } catch (error) {
           this.logger.error('Failed to parse message', error);
         }
@@ -115,10 +110,7 @@ export class WebSocketTestClient {
     this.logger.debug(`Waiting for message type: ${messageType}`);
 
     return new Promise((resolve, reject) => {
-      // Check if message is already in queue
-      const existingIndex = this.messageQueue.findIndex(
-        (msg) => msg.type === messageType
-      );
+      const existingIndex = this.messageQueue.findIndex(msg => msg.type === messageType);
       if (existingIndex !== -1) {
         const message = this.messageQueue[existingIndex]!;
         this.messageQueue.splice(existingIndex, 1);
@@ -126,7 +118,6 @@ export class WebSocketTestClient {
         return resolve(message);
       }
 
-      // Set up handler for new messages
       const timeoutId = setTimeout(() => {
         this.messageHandlers.delete(messageType);
         this.logger.error(`Timeout waiting for ${messageType}`);

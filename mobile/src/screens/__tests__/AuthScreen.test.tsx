@@ -21,10 +21,10 @@ jest.mock('../../services/auth', () => ({
 
 jest.mock('../../services/haptics', () => ({
   haptics: {
-    win: jest.fn(),
-    loss: jest.fn(),
-    buttonPress: jest.fn(),
-    betConfirm: jest.fn(),
+    win: jest.fn(() => Promise.resolve()),
+    loss: jest.fn(() => Promise.resolve()),
+    buttonPress: jest.fn(() => Promise.resolve()),
+    betConfirm: jest.fn(() => Promise.resolve()),
   },
 }));
 

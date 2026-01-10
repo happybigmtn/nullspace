@@ -280,19 +280,17 @@ impl Events {
             });
         }
         let mut hasher = Standard::<Sha256>::new();
-        if verify_proof(
+        verify_proof(
             &mut hasher,
             &self.events_proof,
             Location::from(self.progress.events_start_op),
             &self.events_proof_ops,
             &self.progress.events_root,
-        ) {
-            Ok(())
-        } else {
-            Err(VerifyError::EventsProofInvalid(
-                "proof verification failed".to_string(),
-            ))
-        }
+        )
+        .then_some(())
+        .ok_or_else(|| {
+            VerifyError::EventsProofInvalid("proof verification failed".to_string())
+        })
     }
 }
 impl Write for Events {
@@ -352,17 +350,15 @@ impl Lookup {
 
         // Verify the proof
         let mut hasher = Standard::<Sha256>::new();
-        if verify_proof(
+        verify_proof(
             &mut hasher,
             &self.proof,
             Location::from(self.location),
             std::slice::from_ref(&self.operation),
             &self.progress.state_root,
-        ) {
-            Ok(())
-        } else {
-            Err(VerifyError::LookupProofInvalid)
-        }
+        )
+        .then_some(())
+        .ok_or(VerifyError::LookupProofInvalid)
     }
 }
 
@@ -443,16 +439,14 @@ impl FilteredEvents {
             .iter()
             .map(|(loc, op)| (Location::from(*loc), op.clone()))
             .collect();
-        if verify_multi_proof(
+        verify_multi_proof(
             &mut hasher,
             &self.events_proof,
             &events_with_locations,
             &self.progress.events_root,
-        ) {
-            Ok(())
-        } else {
-            Err(VerifyError::FilteredEventsProofInvalid)
-        }
+        )
+        .then_some(())
+        .ok_or(VerifyError::FilteredEventsProofInvalid)
     }
 }
 

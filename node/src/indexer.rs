@@ -329,13 +329,11 @@ where
     type Item = Result<Pending, I::Error>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        match Pin::new(&mut self.rx).poll_next(cx) {
-            Poll::Ready(Some(item)) => {
-                self.queue_depth.dec();
-                Poll::Ready(Some(item))
-            }
-            other => other,
+        let poll = Pin::new(&mut self.rx).poll_next(cx);
+        if matches!(&poll, Poll::Ready(Some(_))) {
+            self.queue_depth.dec();
         }
+        poll
     }
 }
 

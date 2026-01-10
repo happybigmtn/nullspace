@@ -70,7 +70,7 @@ export const Pseudo3DCard: React.FC<Pseudo3DCardProps> = ({
       >
         {/* Front Face */}
         <div
-          className="absolute inset-0 w-full h-full rounded-xl backface-hidden overflow-hidden border border-titanium-200"
+          className="absolute inset-0 w-full h-full rounded-xl backface-hidden overflow-hidden border border-ns"
           style={{
             transform: 'rotateY(0deg)',
             background: 'linear-gradient(145deg, #ffffff 0%, #f6f6f8 60%, #ededf0 100%)',
@@ -113,7 +113,7 @@ export const Pseudo3DCard: React.FC<Pseudo3DCardProps> = ({
 
         {/* Back Face */}
         <div
-          className="absolute inset-0 w-full h-full rounded-xl backface-hidden overflow-hidden border border-titanium-800 shadow-inner"
+          className="absolute inset-0 w-full h-full rounded-xl backface-hidden overflow-hidden border border-ns shadow-inner"
           style={{
             transform: 'rotateY(180deg)',
             background: 'linear-gradient(145deg, #1c1c1e 0%, #0f0f12 100%)',

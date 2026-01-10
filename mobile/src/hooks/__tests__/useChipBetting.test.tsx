@@ -31,8 +31,8 @@ function renderHook<T>(hook: () => T): HookResult<T> {
 
 jest.mock('../../services/haptics', () => ({
   haptics: {
-    chipPlace: jest.fn(),
-    error: jest.fn(),
+    chipPlace: jest.fn(() => Promise.resolve()),
+    error: jest.fn(() => Promise.resolve()),
   },
 }));
 
@@ -48,15 +48,21 @@ const initialState = {
   faucetMessage: null,
 };
 
+const setGameState = (state: Parameters<typeof useGameStore.setState>[0]) => {
+  act(() => {
+    useGameStore.setState(state);
+  });
+};
+
 beforeEach(() => {
-  useGameStore.setState(initialState);
+  setGameState(initialState);
   (haptics.chipPlace as jest.Mock).mockClear();
   (haptics.error as jest.Mock).mockClear();
 });
 
 describe('useChipBetting', () => {
   it('initializes with defaults and updates selected chip', () => {
-    useGameStore.setState({ balance: 100 });
+    setGameState({ balance: 100 });
     const { getResult, unmount } = renderHook(() => useChipBetting());
 
     expect(getResult().bet).toBe(0);
@@ -73,7 +79,7 @@ describe('useChipBetting', () => {
   });
 
   it('places chips within balance and notifies bet changes', () => {
-    useGameStore.setState({ balance: 75 });
+    setGameState({ balance: 75 });
     const onBetChange = jest.fn();
     const { getResult, unmount } = renderHook(() =>
       useChipBetting({ initialChip: 5, onBetChange })
@@ -89,7 +95,6 @@ describe('useChipBetting', () => {
     expect(getResult().bet).toBe(25);
     expect(onBetChange).toHaveBeenCalledWith(25);
 
-    // Place 25 twice to add 50 more (25 + 25 + 25 = 75)
     act(() => {
       getResult().placeChip(25);
     });
@@ -103,7 +108,7 @@ describe('useChipBetting', () => {
   });
 
   it('rejects chips that exceed balance', () => {
-    useGameStore.setState({ balance: 20 });
+    setGameState({ balance: 20 });
     const { getResult, unmount } = renderHook(() => useChipBetting());
 
     let ok = true;
@@ -118,7 +123,7 @@ describe('useChipBetting', () => {
   });
 
   it('clears and sets bets explicitly', () => {
-    useGameStore.setState({ balance: 300 });
+    setGameState({ balance: 300 });
     const onBetChange = jest.fn();
     const { getResult, unmount } = renderHook(() => useChipBetting({ onBetChange }));
 
@@ -139,7 +144,7 @@ describe('useChipBetting', () => {
   });
 
   it('tracks placed chips for pile visualization (US-122)', () => {
-    useGameStore.setState({ balance: 500 });
+    setGameState({ balance: 500 });
     const { getResult, unmount } = renderHook(() => useChipBetting());
 
     // Initially empty
@@ -175,7 +180,7 @@ describe('useChipBetting', () => {
   });
 
   it('placedChips rotation is between -15 and 15 degrees', () => {
-    useGameStore.setState({ balance: 1000 });
+    setGameState({ balance: 1000 });
     const { getResult, unmount } = renderHook(() => useChipBetting());
 
     // Place multiple chips
@@ -195,7 +200,7 @@ describe('useChipBetting', () => {
   });
 
   it('rejected chip does not add to placedChips', () => {
-    useGameStore.setState({ balance: 10 });
+    setGameState({ balance: 10 });
     const { getResult, unmount } = renderHook(() => useChipBetting());
 
     // Try to place chip that exceeds balance
@@ -211,7 +216,7 @@ describe('useChipBetting', () => {
 
   it('rejects chip when cumulative bet would exceed balance', () => {
     // Balance of 50, try to place two 25 chips then a third
-    useGameStore.setState({ balance: 50 });
+    setGameState({ balance: 50 });
     const { getResult, unmount } = renderHook(() => useChipBetting());
 
     // First chip should succeed
@@ -240,7 +245,7 @@ describe('useChipBetting', () => {
   });
 
   it('rejects all chips when balance is zero', () => {
-    useGameStore.setState({ balance: 0 });
+    setGameState({ balance: 0 });
     const { getResult, unmount } = renderHook(() => useChipBetting());
 
     // Even $1 chip should be rejected
@@ -264,7 +269,7 @@ describe('useChipBetting', () => {
 
   it('uses fresh balance from getState() not stale closure', () => {
     // Start with balance of 100
-    useGameStore.setState({ balance: 100 });
+    setGameState({ balance: 100 });
     const { getResult, unmount } = renderHook(() => useChipBetting());
 
     // Place 25 twice = 50, should succeed
@@ -280,9 +285,7 @@ describe('useChipBetting', () => {
 
     // Simulate balance update (e.g., server adjusted balance down)
     // This mimics what happens when another transaction consumes balance
-    act(() => {
-      useGameStore.setState({ balance: 60 });
-    });
+    setGameState({ balance: 60 });
 
     // Try to place another 25, should fail (50 + 25 = 75 > new balance 60)
     act(() => {
@@ -295,15 +298,13 @@ describe('useChipBetting', () => {
   });
 
   it('reports balance correctly from store', () => {
-    useGameStore.setState({ balance: 500 });
+    setGameState({ balance: 500 });
     const { getResult, unmount } = renderHook(() => useChipBetting());
 
     expect(getResult().balance).toBe(500);
 
     // Update store balance
-    act(() => {
-      useGameStore.setState({ balance: 250 });
-    });
+    setGameState({ balance: 250 });
 
     // Hook should reflect updated balance
     expect(getResult().balance).toBe(250);
@@ -313,7 +314,7 @@ describe('useChipBetting', () => {
   describe('balance race conditions', () => {
     it('handles balance update during betting phase without stale data', () => {
       // Start with sufficient balance
-      useGameStore.setState({ balance: 200 });
+      setGameState({ balance: 200 });
       const { getResult, unmount } = renderHook(() => useChipBetting());
 
       // First chip during betting phase
@@ -325,9 +326,7 @@ describe('useChipBetting', () => {
       expect(getResult().bet).toBe(100);
 
       // Simulate server balance update mid-betting (e.g., faucet payout or another game result)
-      act(() => {
-        useGameStore.setState({ balance: 300 });
-      });
+      setGameState({ balance: 300 });
 
       // Should now be able to place larger chips due to increased balance
       act(() => {
@@ -347,7 +346,7 @@ describe('useChipBetting', () => {
     });
 
     it('handles concurrent chip placements with balance checks', () => {
-      useGameStore.setState({ balance: 100 });
+      setGameState({ balance: 100 });
       const { getResult, unmount } = renderHook(() => useChipBetting());
 
       // Simulate rapid chip placements (each in separate act for state updates)
@@ -377,7 +376,7 @@ describe('useChipBetting', () => {
 
     it('rejects bet when balance decreases below current bet + chip value', () => {
       // Start with balance that allows multiple chips
-      useGameStore.setState({ balance: 150 });
+      setGameState({ balance: 150 });
       const { getResult, unmount } = renderHook(() => useChipBetting());
 
       // Place 100, should succeed
@@ -387,9 +386,7 @@ describe('useChipBetting', () => {
       expect(getResult().bet).toBe(100);
 
       // Balance decreases (another transaction, server correction, etc.)
-      act(() => {
-        useGameStore.setState({ balance: 110 });
-      });
+      setGameState({ balance: 110 });
 
       // Next chip should fail: 100 + 25 = 125 > 110
       let ok = true;
@@ -410,7 +407,7 @@ describe('useChipBetting', () => {
     });
 
     it('detects exact boundary condition: bet + chip = balance', () => {
-      useGameStore.setState({ balance: 100 });
+      setGameState({ balance: 100 });
       const { getResult, unmount } = renderHook(() => useChipBetting());
 
       // Place 25 twice to get 50
@@ -445,7 +442,7 @@ describe('useChipBetting', () => {
 
     it('handles balance decrease to below current bet gracefully', () => {
       // Edge case: balance decreases to less than what was already bet
-      useGameStore.setState({ balance: 100 });
+      setGameState({ balance: 100 });
       const { getResult, unmount } = renderHook(() => useChipBetting());
 
       // Bet 75
@@ -462,9 +459,7 @@ describe('useChipBetting', () => {
 
       // Balance mysteriously drops to 50 (less than current bet!)
       // This could happen in edge cases with concurrent transactions
-      act(() => {
-        useGameStore.setState({ balance: 50 });
-      });
+      setGameState({ balance: 50 });
 
       // Any additional chip should fail since we're already over balance
       let ok = true;
@@ -478,7 +473,7 @@ describe('useChipBetting', () => {
     });
 
     it('multiple balance updates between chip placements', () => {
-      useGameStore.setState({ balance: 50 });
+      setGameState({ balance: 50 });
       const { getResult, unmount } = renderHook(() => useChipBetting());
 
       // First chip
@@ -488,9 +483,7 @@ describe('useChipBetting', () => {
       expect(getResult().bet).toBe(25);
 
       // Balance increases
-      act(() => {
-        useGameStore.setState({ balance: 100 });
-      });
+      setGameState({ balance: 100 });
 
       // Second chip now works (place 25 twice to get 75 total)
       act(() => {
@@ -502,9 +495,7 @@ describe('useChipBetting', () => {
       expect(getResult().bet).toBe(75);
 
       // Balance decreases
-      act(() => {
-        useGameStore.setState({ balance: 80 });
-      });
+      setGameState({ balance: 80 });
 
       // Third chip fails: 75 + 25 = 100 > 80
       let ok = true;

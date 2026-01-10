@@ -78,11 +78,11 @@ export const GameOptionsSection: React.FC<SectionProps> = ({
   });
 
   return (
-    <div className={`border-b border-titanium-100 dark:border-titanium-800 last:border-b-0 ${className}`}>
+    <div className={`border-b border-ns last:border-b-0 ${className}`}>
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between py-3 px-1 text-caption font-medium text-titanium-600 hover:text-titanium-900 dark:text-titanium-400 dark:hover:text-titanium-100 transition-colors"
+        className="w-full flex items-center justify-between py-3 px-1 text-caption font-medium text-ns-muted hover:text-ns transition-colors"
         aria-expanded={isOpen}
       >
         <span className="uppercase tracking-wider text-micro">{title}</span>
@@ -170,7 +170,7 @@ export const GameOptionsDrawer: React.FC<GameOptionsDrawerProps> = ({
 
         {/* Panel */}
         <animated.div
-          className={`relative w-full ${SIZE_CLASSES[size]} max-h-[85vh] rounded-2xl bg-white dark:bg-titanium-900 border border-titanium-200 dark:border-titanium-800 shadow-float overflow-hidden flex flex-col`}
+          className={`relative w-full ${SIZE_CLASSES[size]} max-h-[85vh] rounded-2xl liquid-card liquid-sheen border border-ns shadow-float overflow-hidden flex flex-col`}
           style={{
             opacity: style.opacity,
             transform: prefersReducedMotion
@@ -183,13 +183,13 @@ export const GameOptionsDrawer: React.FC<GameOptionsDrawerProps> = ({
           aria-label={title}
         >
           {/* Header */}
-          <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-titanium-100 dark:border-titanium-800 bg-titanium-50/50 dark:bg-titanium-900/50">
+          <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-ns bg-ns-surface">
             <div className="flex items-center gap-3">
-              <h2 className="text-caption font-semibold uppercase tracking-widest text-titanium-700 dark:text-titanium-300">
+              <h2 className="text-caption font-semibold uppercase tracking-widest text-ns-muted">
                 {title}
               </h2>
               {shortcutHint && (
-                <kbd className="text-micro font-mono text-titanium-400 bg-titanium-100 dark:bg-titanium-800 px-1.5 py-0.5 rounded">
+                <kbd className="text-micro font-mono text-ns-muted liquid-chip px-1.5 py-0.5 rounded">
                   {shortcutHint}
                 </kbd>
               )}
@@ -197,7 +197,7 @@ export const GameOptionsDrawer: React.FC<GameOptionsDrawerProps> = ({
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="p-2 rounded-lg text-titanium-400 hover:text-titanium-900 hover:bg-titanium-100 dark:hover:text-titanium-100 dark:hover:bg-titanium-800 transition-colors"
+              className="p-2 rounded-lg text-ns-muted hover:text-ns hover:bg-ns-surface transition-colors"
               aria-label="Close"
             >
               <X className="w-5 h-5" />
@@ -215,19 +215,19 @@ export const GameOptionsDrawer: React.FC<GameOptionsDrawerProps> = ({
 
   // Trigger button styles
   const triggerClasses = variant === 'compact'
-    ? `h-9 px-3 rounded-xl text-micro font-semibold uppercase tracking-wider transition-all ${
+    ? `h-9 px-3 rounded-xl text-micro font-semibold uppercase tracking-wider transition-all liquid-chip ${
         disabled
-          ? 'text-titanium-400 cursor-not-allowed'
+          ? 'text-ns-muted cursor-not-allowed'
           : hasActive
             ? 'text-mono-0 dark:text-mono-1000 bg-mono-0/10'
-            : 'text-titanium-600 hover:text-titanium-900 dark:text-titanium-400 dark:hover:text-titanium-100'
+            : 'text-ns-muted hover:text-ns'
       }`
-    : `h-10 px-4 rounded-full border text-caption font-semibold uppercase tracking-widest transition-all ${
+    : `h-10 px-4 rounded-full border text-caption font-semibold uppercase tracking-widest transition-all liquid-chip ${
         disabled
-          ? 'border-titanium-200 text-titanium-400 cursor-not-allowed dark:border-titanium-800 dark:text-titanium-500'
+          ? 'border-ns text-ns-muted cursor-not-allowed'
           : hasActive
             ? 'border-mono-0/50 text-mono-0 dark:text-mono-1000 bg-mono-0/10'
-            : 'border-titanium-300 text-titanium-600 hover:text-titanium-900 hover:border-titanium-500 dark:border-titanium-700 dark:text-titanium-300 dark:hover:text-titanium-100'
+            : 'border-ns text-ns-muted hover:text-ns hover:border-ns'
       }`;
 
   return (

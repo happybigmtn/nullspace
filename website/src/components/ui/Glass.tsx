@@ -129,7 +129,7 @@ export const GlassCard: React.FC<GlassCardProps> = ({
   className = '',
   'data-testid': testId,
 }) => {
-  const baseClasses = `${getGlassClasses(depth)} ${PADDING_CLASSES[padding]} ${RADIUS_CLASSES[radius]}`;
+  const baseClasses = `${getGlassClasses(depth)} liquid-sheen ${PADDING_CLASSES[padding]} ${RADIUS_CLASSES[radius]}`;
   const interactiveClasses = interactive
     ? 'transition-all duration-200 hover:shadow-lg active:scale-[0.98] cursor-pointer motion-safe:motion-interaction'
     : '';
@@ -188,15 +188,20 @@ export const GlassToolbar: React.FC<GlassToolbarProps> = ({
   className = '',
   'data-testid': testId,
 }) => {
-  const baseClasses = `flex items-center gap-2 px-4 py-2 ${getGlassClasses(depth)} rounded-full ${JUSTIFY_CLASSES[justify]}`;
+  const baseClasses = `flex items-center gap-2 px-4 py-2 ${getGlassClasses(depth)} liquid-sheen rounded-full ${JUSTIFY_CLASSES[justify]}`;
 
-  const positionClasses = fixed
-    ? position === 'top'
-      ? 'fixed top-4 left-1/2 -translate-x-1/2 z-50'
-      : position === 'bottom'
-        ? 'fixed bottom-8 left-1/2 -translate-x-1/2 z-50'
-        : ''
-    : '';
+  const getPositionClasses = () => {
+    if (!fixed) return '';
+    switch (position) {
+      case 'top':
+        return 'fixed top-4 left-1/2 -translate-x-1/2 z-50';
+      case 'bottom':
+        return 'fixed bottom-8 left-1/2 -translate-x-1/2 z-50';
+      default:
+        return '';
+    }
+  };
+  const positionClasses = getPositionClasses();
 
   return (
     <div
@@ -247,13 +252,14 @@ export const GlassChip: React.FC<GlassChipProps> = ({
   const effectiveDepth = selected ? 'overlay' : depth;
 
   const baseClasses = `inline-flex items-center ${CHIP_SIZE_CLASSES[size]} rounded-full font-medium transition-all duration-150`;
-  const glassClasses = getGlassClasses(effectiveDepth);
+  const glassClasses = `${getGlassClasses(effectiveDepth)} liquid-sheen`;
 
-  const stateClasses = disabled
-    ? 'opacity-40 cursor-not-allowed'
-    : onClick
-      ? 'cursor-pointer hover:brightness-95 active:scale-95 motion-safe:motion-interaction'
-      : '';
+  const getStateClasses = () => {
+    if (disabled) return 'opacity-40 cursor-not-allowed';
+    if (onClick) return 'cursor-pointer hover:brightness-95 active:scale-95 motion-safe:motion-interaction';
+    return '';
+  };
+  const stateClasses = getStateClasses();
 
   const selectedClasses = selected
     ? 'text-mono-1000 dark:text-mono-0 font-semibold'
@@ -320,7 +326,7 @@ export const GlassModal: React.FC<GlassModalProps> = ({
   'data-testid': testId,
 }) => {
   // Always use overlay depth for modals
-  const glassClasses = getGlassClasses('overlay');
+  const glassClasses = `${getGlassClasses('overlay')} liquid-sheen`;
 
   if (!open) return null;
 
@@ -380,7 +386,6 @@ export const GlassModal: React.FC<GlassModalProps> = ({
     );
   }
 
-  // Sheet variant - slides in from edge
   const sheetClasses = sheetPosition === 'bottom'
     ? 'bottom-0 left-0 right-0 rounded-t-3xl max-h-[90vh]'
     : 'top-0 right-0 bottom-0 w-full max-w-md rounded-l-3xl';
@@ -463,7 +468,7 @@ export const GlassSurface: React.FC<GlassSurfaceProps> = ({
   'aria-label': ariaLabel,
   'data-testid': testId,
 }) => {
-  const glassClasses = getGlassClasses(depth);
+  const glassClasses = `${getGlassClasses(depth)} liquid-sheen`;
 
   return (
     <Element

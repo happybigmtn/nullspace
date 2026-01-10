@@ -24,7 +24,19 @@ export type VaultCorruptionReason =
   | 'wrong_kind' // JSON valid but kind !== 'password'
   | 'missing_fields' // Required fields are missing
   | null; // No corruption detected (or no vault exists)
-const PASSWORD_KDF_ITERATIONS = 250_000;
+const DEFAULT_PASSWORD_KDF_ITERATIONS = 250_000;
+
+// Allow tests (or controlled environments) to lower KDF cost via env var so
+// suites don't hang on expensive PBKDF2. Production defaults remain unchanged.
+const PASSWORD_KDF_ITERATIONS = (() => {
+  const raw = process.env.VAULT_KDF_ITERATIONS ?? process.env.EXPO_PUBLIC_VAULT_KDF_ITERATIONS;
+  const parsed = raw ? Number(raw) : NaN;
+  if (Number.isFinite(parsed) && parsed > 0) {
+    // Clamp to a reasonable minimum to avoid accidental zero/negative values
+    return Math.max(1_000, Math.floor(parsed));
+  }
+  return DEFAULT_PASSWORD_KDF_ITERATIONS;
+})();
 const SALT_BYTES = 32;
 const NONCE_BYTES = 24;
 const PRIVATE_KEY_BYTES = 32;

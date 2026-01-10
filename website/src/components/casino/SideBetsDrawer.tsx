@@ -42,20 +42,20 @@ export const SideBetsDrawer: React.FC<SideBetsDrawerProps> = ({
     <div className="fixed inset-0 z-[100]" data-testid="side-bets-drawer">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setOpen(false)} />
       <div
-        className="absolute left-1/2 top-1/2 w-[92%] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-titanium-200 bg-white shadow-float overflow-hidden dark:border-titanium-800 dark:bg-titanium-900"
+        className="absolute left-1/2 top-1/2 w-[92%] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl liquid-card liquid-sheen shadow-float overflow-hidden"
         data-testid="side-bets-panel"
       >
-        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-titanium-200 bg-titanium-50/70 dark:border-titanium-800 dark:bg-titanium-900/70">
+        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-ns bg-ns-surface">
           <div className="flex items-center gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-[0.24em] text-titanium-500">{title}</span>
+            <span className="text-[10px] font-bold uppercase tracking-[0.24em] text-ns-muted">{title}</span>
             {shortcutHint ? (
-              <span className="text-[10px] font-mono text-titanium-400">[{shortcutHint}]</span>
+              <span className="text-[10px] font-mono text-ns-muted">[{shortcutHint}]</span>
             ) : null}
           </div>
           <button
             type="button"
             onClick={() => setOpen(false)}
-            className="text-[10px] font-semibold uppercase tracking-[0.2em] text-titanium-500 hover:text-titanium-900 dark:hover:text-titanium-100"
+            className="text-[10px] font-semibold uppercase tracking-[0.2em] text-ns-muted hover:text-ns"
           >
             Close
           </button>
@@ -71,12 +71,12 @@ export const SideBetsDrawer: React.FC<SideBetsDrawerProps> = ({
         type="button"
         onClick={() => setOpen(true)}
         disabled={disabled}
-        className={`relative h-10 px-4 rounded-full border text-[11px] font-semibold uppercase tracking-[0.24em] transition-all ${
+        className={`relative h-10 px-4 rounded-full border text-[11px] font-semibold uppercase tracking-[0.24em] transition-all liquid-chip ${
           disabled
-            ? 'border-titanium-200 text-titanium-400 cursor-not-allowed dark:border-titanium-800 dark:text-titanium-500'
+            ? 'border-ns text-ns-muted cursor-not-allowed'
             : hasActive
               ? 'border-mono-0/50 text-mono-0 dark:text-mono-1000 bg-mono-0/10'
-              : 'border-titanium-300 text-titanium-600 hover:text-titanium-900 hover:border-titanium-500 dark:border-titanium-700 dark:text-titanium-300 dark:hover:text-titanium-100'
+              : 'border-ns text-ns-muted hover:text-ns'
         } ${className ?? ''}`}
       >
         {label}

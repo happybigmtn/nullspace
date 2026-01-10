@@ -67,6 +67,21 @@ const NEXT_TARGETS = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 const HARDWAY_TARGETS = [4, 6, 8, 10];
 type LiveTablePhase = 'betting' | 'locked' | 'rolling' | 'payout' | 'cooldown';
 
+function getLiveTableMessage(phase: LiveTablePhase, seconds: number): string {
+  switch (phase) {
+    case 'betting':
+      return `Global roll in ${seconds}s - Place your bets`;
+    case 'locked':
+      return 'Bets locked';
+    case 'rolling':
+      return 'Global roll in progress...';
+    case 'payout':
+      return 'Paying out...';
+    default:
+      return 'Next round soon';
+  }
+}
+
 export function CrapsScreen() {
   // Shared hook for connection (Craps has multi-bet array so keeps custom bet state)
   const { isDisconnected, send, lastMessage, connectionStatusProps } = useGameConnection<GameMessage>();
@@ -184,15 +199,7 @@ export function CrapsScreen() {
         ? payload.playerCount
         : liveTableRef.current.playerCount;
       const seconds = Math.max(0, Math.ceil(timeRemainingMs / 1000));
-      const liveMessage = phase === 'betting'
-        ? `Global roll in ${seconds}s - Place your bets`
-        : phase === 'locked'
-          ? 'Bets locked'
-          : phase === 'rolling'
-            ? 'Global roll in progress...'
-            : phase === 'payout'
-              ? 'Paying out...'
-              : 'Next round soon';
+      const liveMessage = getLiveTableMessage(phase, seconds);
 
       const nextBets = Array.isArray(payload.myBets)
         ? payload.myBets

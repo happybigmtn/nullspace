@@ -11,8 +11,8 @@
  * - Animated gesture hints
  * - Smooth spring transitions between steps
  */
-import { View, Text, StyleSheet, Pressable, Modal, type LayoutRectangle } from 'react-native';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, Pressable, Modal } from 'react-native';
+import { useState, useEffect } from 'react';
 import { BlurView } from 'expo-blur';
 import Animated, {
   FadeIn,
@@ -30,8 +30,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { haptics } from '../../services/haptics';
 import { isTutorialCompleted, markTutorialCompleted } from '../../services/storage';
-import { SPACING, RADIUS, TYPOGRAPHY, DARK_MODE_GLOW, ANIMATION } from '../../constants/theme';
-import { OPACITY_SEMANTIC, OPACITY } from '@nullspace/design-tokens';
+import { SPACING, RADIUS, TYPOGRAPHY, DARK_MODE_GLOW } from '../../constants/theme';
+import { OPACITY } from '@nullspace/design-tokens';
 import { useTheme } from '../../context/ThemeContext';
 import { useThemedColors } from '../../hooks/useThemedColors';
 import { useReducedMotion } from '../../hooks/useReducedMotion';

@@ -368,52 +368,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Run smoke tests
+      - name: Run health checks
+        run: ./scripts/health-check.sh
+
+      - name: Run smoke Playwright (website)
         env:
-          INDEXER_URL: ${{ vars.STAGING_INDEXER_URL }}
-          GATEWAY_URL: ${{ vars.STAGING_GATEWAY_URL }}
-          AUTH_URL: ${{ vars.STAGING_AUTH_URL }}
-          METRICS_TOKEN: ${{ secrets.STAGING_METRICS_TOKEN }}
+          BASE_URL: https://testnet.regenesis.dev
         run: |
           set -euo pipefail
-          echo "=== Running Post-Deployment Smoke Tests ==="
-          FAILED=0
-
-          # Test 1: Indexer health
-          echo "Testing indexer health at ${INDEXER_URL:-'(not set)'}..."
-          if [[ -n "${INDEXER_URL:-}" ]] && curl -sf --max-time 10 "${INDEXER_URL}/healthz" > /dev/null; then
-            echo "Indexer health check passed"
-          else
-            echo "Indexer health check failed or URL not set"
-            FAILED=1
-          fi
-
-          # Test 2: Gateway health
-          echo "Testing gateway health at ${GATEWAY_URL:-'(not set)'}..."
-          if [[ -n "${GATEWAY_URL:-}" ]] && curl -sf --max-time 10 "${GATEWAY_URL}/healthz" > /dev/null; then
-            echo "Gateway health check passed"
-          else
-            echo "Gateway health check failed or URL not set"
-            FAILED=1
-          fi
-
-          # Test 3: Auth service health
-          echo "Testing auth service health at ${AUTH_URL:-'(not set)'}..."
-          if [[ -n "${AUTH_URL:-}" ]] && curl -sf --max-time 10 "${AUTH_URL}/healthz" > /dev/null; then
-            echo "Auth service health check passed"
-          else
-            echo "Auth service health check failed or URL not set"
-            FAILED=1
-          fi
-
-          echo ""
-          if [[ $FAILED -eq 0 ]]; then
-            echo "=== All smoke tests passed ==="
-          else
-            echo "=== Some smoke tests failed (may need URL variables configured) ==="
-            # Don't fail the workflow if URLs aren't configured yet
-            exit 0
-          fi
+          cd website
+          npm ci
+          npm run test:smoke || npm run test:smoke || (echo "Smoke failed after retry" && exit 1)
 
   # Notify deployment result
   notify-result:
@@ -445,3 +410,86 @@ jobs:
               }]
             }" \
             "$SLACK_WEBHOOK_URL" || echo "Slack notification failed (non-fatal)"
+
+  rollback:
+    runs-on: ubuntu-latest
+    needs: [prepare, deploy-website, smoke-tests]
+    if: needs.smoke-tests.result == 'failure'
+    steps:
+      - name: Setup SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.STAGING_SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H ${{ secrets.STAGING_HOST_GATEWAY }} >> ~/.ssh/known_hosts 2>/dev/null || true
+          ssh-keyscan -H ${{ secrets.STAGING_HOST_SIMULATOR }} >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Download secrets
+        uses: actions/download-artifact@v4
+        with:
+          name: staging-secrets
+          path: /tmp/secrets
+
+      - name: Determine rollback tag
+        id: rollback_tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CURRENT_SHA: ${{ github.sha }}
+          ROLLBACK_TAG: ${{ vars.STAGING_ROLLBACK_TAG }}
+        run: |
+          if [ -n "${ROLLBACK_TAG:-}" ]; then
+            echo "tag=${ROLLBACK_TAG}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          CANDIDATE=$(gh run list --workflow build-images.yml --branch main --json headSha,conclusion --limit 20 | jq -r '.[] | select(.conclusion=="success" and .headSha != env.CURRENT_SHA) | .headSha' | head -1)
+          if [ -z "$CANDIDATE" ]; then
+            echo "tag=latest" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=sha-$(echo "$CANDIDATE" | cut -c1-7)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Roll back simulator and gateway to previous-good
+        env:
+          HOST_SIM: ${{ secrets.STAGING_HOST_SIMULATOR }}
+          HOST_GW: ${{ secrets.STAGING_HOST_GATEWAY }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_REGISTRY: ghcr.io
+          IMAGE_PREFIX: ${{ github.repository_owner }}/nullspace
+          OWNER: ${{ github.repository_owner }}
+          ROLLBACK_TAG: ${{ steps.rollback_tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          TAG="${ROLLBACK_TAG:-latest}"
+          ssh -o StrictHostKeyChecking=no root@"$HOST_SIM" <<DEPLOY_SIM
+            set -euo pipefail
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$OWNER" --password-stdin
+            docker pull $GHCR_REGISTRY/$IMAGE_PREFIX-simulator:$TAG
+            docker stop nullspace-simulator 2>/dev/null || true
+            docker rm nullspace-simulator 2>/dev/null || true
+            docker run -d --name nullspace-simulator \
+              --restart unless-stopped \
+              --env-file /etc/nullspace/simulator.env \
+              -p 8080:8080 \
+              -v /var/lib/nullspace/simulator:/data \
+              $GHCR_REGISTRY/$IMAGE_PREFIX-simulator:$TAG
+          DEPLOY_SIM
+
+          ssh -o StrictHostKeyChecking=no root@"$HOST_GW" <<DEPLOY_GW
+            set -euo pipefail
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$OWNER" --password-stdin
+            docker pull $GHCR_REGISTRY/$IMAGE_PREFIX-gateway:$TAG
+            docker stop nullspace-gateway 2>/dev/null || true
+            docker rm nullspace-gateway 2>/dev/null || true
+            docker run -d --name nullspace-gateway \
+              --restart unless-stopped \
+              --env-file /etc/nullspace/gateway.env \
+              -p 9010:9010 \
+              -v /var/lib/nullspace/gateway:/data \
+              $GHCR_REGISTRY/$IMAGE_PREFIX-gateway:$TAG
+          DEPLOY_GW
+
+      - name: Clean up
+        if: always()
+        run: rm -f ~/.ssh/id_ed25519

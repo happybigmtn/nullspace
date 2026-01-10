@@ -12,53 +12,57 @@ import {
   ReferenceLine,
 } from 'recharts';
 import { transformCollateralSeries } from '../../utils/chartHelpers';
+import { CHART_THEME } from './chartTheme';
 
 const CollateralChart = ({ data }) => {
   const chartData = useMemo(() => transformCollateralSeries(data), [data]);
 
   return (
-    <div className="bg-gray-900 p-4 rounded-lg border border-gray-800 shadow-xl h-96">
-      <h3 className="text-xl font-bold text-gray-100 mb-4 font-mono">Collateral vs Debt (Agg.)</h3>
+    <div className="liquid-card p-5 h-96">
+      <h3 className="text-lg font-display tracking-tight text-ns mb-4">Collateral vs debt (agg.)</h3>
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={chartData}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+          <CartesianGrid strokeDasharray="2 6" stroke={CHART_THEME.grid} />
           <XAxis
             dataKey="timestamp"
-            stroke="#9ca3af"
+            stroke={CHART_THEME.axis}
+            tick={{ fill: CHART_THEME.axis, fontSize: 10 }}
             tickFormatter={(ts) => new Date(ts).toLocaleTimeString()}
           />
-          <YAxis yAxisId="left" stroke="#9ca3af" />
-          <YAxis yAxisId="right" orientation="right" stroke="#9ca3af" domain={[0, 1]} tickFormatter={(v) => `${(v * 100).toFixed(0)}%`} />
+          <YAxis yAxisId="left" stroke={CHART_THEME.axis} tick={{ fill: CHART_THEME.axis, fontSize: 10 }} />
+          <YAxis yAxisId="right" orientation="right" stroke={CHART_THEME.axis} tick={{ fill: CHART_THEME.axis, fontSize: 10 }} domain={[0, 1]} tickFormatter={(v) => `${(v * 100).toFixed(0)}%`} />
           <Tooltip
-            contentStyle={{ backgroundColor: '#111827', borderColor: '#374151' }}
+            contentStyle={CHART_THEME.tooltip}
+            itemStyle={CHART_THEME.itemStyle}
+            labelStyle={CHART_THEME.labelStyle}
             labelFormatter={(ts) => new Date(ts).toLocaleTimeString()}
           />
-          <Legend />
+          <Legend wrapperStyle={{ color: CHART_THEME.axis, fontSize: 11 }} />
           <Area
             yAxisId="left"
             type="monotone"
             dataKey="collateral_vusd"
             name="Collateral (vUSD)"
-            stroke="#22d3ee"
-            fill="#22d3ee33"
+            stroke={CHART_THEME.series.aqua}
+            fill={CHART_THEME.series.aquaSoft}
           />
           <Area
             yAxisId="left"
             type="monotone"
             dataKey="debt"
             name="Debt (vUSD)"
-            stroke="#fb7185"
-            fill="#fb718533"
+            stroke={CHART_THEME.series.rose}
+            fill={CHART_THEME.series.roseSoft}
           />
           <Line
             yAxisId="right"
             type="monotone"
             dataKey="ltv"
             name="LTV"
-            stroke="#f59e0b"
+            stroke={CHART_THEME.series.amber}
             dot={false}
           />
-          <ReferenceLine yAxisId="right" y={0.6} stroke="#ef4444" strokeDasharray="4 4" label={{ value: '60% Liq. Threshold', fill: '#ef4444', position: 'insideTopRight' }} />
+          <ReferenceLine yAxisId="right" y={0.6} stroke={CHART_THEME.series.rose} strokeDasharray="4 4" label={{ value: '60% Liq. Threshold', fill: CHART_THEME.series.rose, position: 'insideTopRight' }} />
         </ComposedChart>
       </ResponsiveContainer>
     </div>

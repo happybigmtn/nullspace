@@ -100,10 +100,10 @@ export default function EconomyApp() {
 
   const economyTabClass = ({ isActive }: { isActive: boolean }) =>
     [
-      'flex-1 sm:flex-none inline-flex items-center justify-center h-11 px-3 rounded border text-[10px] tracking-widest uppercase transition-colors',
+      'flex-1 sm:flex-none inline-flex items-center justify-center h-11 px-4 rounded-full liquid-chip text-[10px] tracking-[0.28em] uppercase transition-colors',
       isActive
-        ? 'border-action-success text-action-success bg-action-success/10'
-        : 'border-gray-800 text-gray-400 hover:border-gray-600 hover:text-white',
+        ? 'text-ns border-black/20'
+        : 'text-ns-muted hover:text-ns',
     ].join(' ');
 
   useEffect(() => {
@@ -797,7 +797,7 @@ export default function EconomyApp() {
   }, [activeTab, swapDirection]);
 
   return (
-    <div className="min-h-screen bg-titanium-900 text-white font-mono">
+    <div className="min-h-screen text-ns font-sans space-y-6">
       <PageHeader
         title={`Economy — ${tabTitle}`}
         status={<ConnectionStatus />}
@@ -812,92 +812,134 @@ export default function EconomyApp() {
               creditsLocked={player?.freerollCreditsLocked}
               pubkeyHex={connection.keypair?.publicKeyHex}
             />
-            {lastTxSig ? (
-              lastTxDigest ? (
-                <Link
-                  to={`/explorer/tx/${lastTxDigest}`}
-                  className="text-[10px] text-action-success tracking-widest hover:underline"
-                  title={lastTxDigest}
-                >
-                  LAST TX: {lastTxSig}
-                </Link>
-              ) : (
-                <div className="text-[10px] text-gray-500 tracking-widest">LAST TX: {lastTxSig}</div>
-              )
-            ) : null}
           </>
         }
       />
 
-      <div className="px-4 py-3 border-b border-gray-800 bg-titanium-900/90 backdrop-blur">
-        <nav className="flex items-center gap-2">
-          <NavLink to="/swap" end className={economyTabClass}>
-            Swap
-          </NavLink>
-          <NavLink to="/borrow" className={economyTabClass}>
-            Borrow
-          </NavLink>
-          <NavLink to="/liquidity" className={economyTabClass}>
-            Liquidity
-          </NavLink>
-        </nav>
+      <div className="liquid-card p-5">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="text-[10px] text-ns-muted tracking-[0.32em] uppercase">Mode</div>
+            <div className="text-lg font-display tracking-tight text-ns">Swap · Borrow · Liquidity</div>
+            <div className="text-[11px] text-ns-muted">
+              Choose a lane. Every action updates your onchain position instantly.
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <nav className="flex flex-wrap items-center gap-2">
+              <NavLink to="/swap" end className={economyTabClass}>
+                Swap
+              </NavLink>
+              <NavLink to="/borrow" className={economyTabClass}>
+                Borrow
+              </NavLink>
+              <NavLink to="/liquidity" className={economyTabClass}>
+                Liquidity
+              </NavLink>
+            </nav>
+            {lastTxSig ? (
+              lastTxDigest ? (
+                <Link
+                  to={`/explorer/tx/${lastTxDigest}`}
+                  className="h-10 px-4 rounded-full liquid-chip text-[10px] tracking-[0.28em] uppercase text-action-success hover:shadow-soft"
+                  title={lastTxDigest}
+                >
+                  Last Tx {lastTxSig}
+                </Link>
+              ) : (
+                <div className="h-10 px-4 rounded-full liquid-chip text-[10px] tracking-[0.28em] uppercase text-ns-muted">
+                  Last Tx {lastTxSig}
+                </div>
+              )
+            ) : null}
+          </div>
+        </div>
       </div>
 
-      <div className="p-4">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Wallet */}
-        <section className="border border-gray-800 rounded p-4 bg-gray-900/30 lg:col-span-1">
-	          <div className="text-xs text-gray-400 tracking-widest mb-3">WALLET</div>
-	          <div className="space-y-2 text-sm">
-	            <div>Registered: <span className={isRegistered ? 'text-action-success' : 'text-action-destructive'}>{isRegistered ? 'YES' : 'NO'}</span></div>
-	            <div>RNG: <span className="text-white">{player?.chips ?? 0}</span></div>
-	            <div>vUSDT: <span className="text-white">{player?.vusdtBalance ?? 0}</span></div>
-            <div>
-              Credits:{' '}
-              <span className="text-white">{player?.freerollCredits ?? 0}</span>
-              <span className="text-[10px] text-gray-500"> / locked {player?.freerollCreditsLocked ?? 0}</span>
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+          {/* Wallet */}
+          <section className="liquid-card p-5 lg:col-span-1 space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-[10px] text-ns-muted tracking-[0.32em] uppercase">Start here</div>
+                <div className="text-lg font-display tracking-tight text-ns mt-1">Wallet + Access</div>
+                <div className="text-[11px] text-ns-muted mt-2">
+                  Register once, then claim a daily faucet to start trading.
+                </div>
+              </div>
+              <div className="liquid-chip px-3 py-1 text-[10px] tracking-[0.28em] uppercase text-ns">
+                Step 1
+              </div>
             </div>
-	            <div className="text-[10px] text-gray-600 break-all">PK: {connection.keypair?.publicKeyHex ?? '—'}</div>
-	          </div>
+
+            <div className="grid grid-cols-2 gap-2 text-[11px]">
+              <div className="liquid-panel p-3">
+                <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase">Registered</div>
+                <div className={isRegistered ? 'text-action-success' : 'text-action-destructive'}>
+                  {isRegistered ? 'YES' : 'NO'}
+                </div>
+              </div>
+              <div className="liquid-panel p-3">
+                <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase">RNG</div>
+                <div className="text-ns">{player?.chips ?? 0}</div>
+              </div>
+              <div className="liquid-panel p-3">
+                <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase">vUSDT</div>
+                <div className="text-ns">{player?.vusdtBalance ?? 0}</div>
+              </div>
+              <div className="liquid-panel p-3">
+                <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase">Credits</div>
+                <div className="text-ns">{player?.freerollCredits ?? 0}</div>
+                <div className="text-[10px] text-ns-muted">Locked {player?.freerollCreditsLocked ?? 0}</div>
+              </div>
+            </div>
+
+            <div className="liquid-panel p-3 text-[10px] text-ns-muted break-all">
+              <div className="tracking-[0.28em] uppercase text-ns-muted">Public Key</div>
+              <div className="text-ns mt-1">{connection.keypair?.publicKeyHex ?? '—'}</div>
+            </div>
+
             {treasury ? (
-              <div className="mt-4 border-t border-gray-800 pt-3 space-y-1 text-[10px] text-gray-400">
-                <div className="tracking-widest text-gray-500">TREASURY</div>
-                <div className="grid grid-cols-2 gap-2 text-gray-300">
-                  <div>Auction: <span className="text-white">{treasury.auctionAllocationRng ?? 0}</span></div>
-                  <div>Liquidity: <span className="text-white">{treasury.liquidityReserveRng ?? 0}</span></div>
-                  <div>Bonus: <span className="text-white">{treasury.bonusPoolRng ?? 0}</span></div>
-                  <div>Players: <span className="text-white">{treasury.playerAllocationRng ?? 0}</span></div>
-                  <div>Treasury: <span className="text-white">{treasury.treasuryAllocationRng ?? 0}</span></div>
-                  <div>Team: <span className="text-white">{treasury.teamAllocationRng ?? 0}</span></div>
+              <div className="liquid-panel p-3 space-y-2 text-[10px] text-ns-muted">
+                <div className="tracking-[0.32em] uppercase text-ns-muted">Treasury</div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>Auction: <span className="text-ns">{treasury.auctionAllocationRng ?? 0}</span></div>
+                  <div>Liquidity: <span className="text-ns">{treasury.liquidityReserveRng ?? 0}</span></div>
+                  <div>Bonus: <span className="text-ns">{treasury.bonusPoolRng ?? 0}</span></div>
+                  <div>Players: <span className="text-ns">{treasury.playerAllocationRng ?? 0}</span></div>
+                  <div>Treasury: <span className="text-ns">{treasury.treasuryAllocationRng ?? 0}</span></div>
+                  <div>Team: <span className="text-ns">{treasury.teamAllocationRng ?? 0}</span></div>
                 </div>
               </div>
             ) : null}
 
-          <div className="mt-4 space-y-2">
-            <div className="flex items-center gap-2">
-              <input
-                className="flex-1 bg-gray-950 border border-gray-800 rounded px-2 py-1 text-xs"
-                value={registerName}
-                onChange={(e) => setRegisterName(e.target.value)}
-                placeholder="Name"
-              />
+            <div className="liquid-panel p-3 space-y-2">
+              <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase">Profile</div>
+              <div className="flex items-center gap-2">
+                <input
+                  className="flex-1 liquid-input px-3 py-2 text-xs"
+                  value={registerName}
+                  onChange={(e) => setRegisterName(e.target.value)}
+                  placeholder="Name"
+                />
+                <button
+                  className="text-xs px-3 py-2 rounded-full liquid-chip text-action-success hover:shadow-soft"
+                  onClick={ensureRegistered}
+                >
+                  Register
+                </button>
+              </div>
               <button
-                className="text-xs px-3 py-1 rounded border border-action-success text-action-success hover:bg-action-success/10"
-                onClick={ensureRegistered}
+                className="w-full text-xs px-3 py-2 rounded-full liquid-chip text-action-success hover:shadow-soft"
+                onClick={claimFaucet}
               >
-                Register
+                Daily Faucet (1000 RNG)
               </button>
             </div>
-            <button
-              className="w-full text-xs px-3 py-2 rounded border border-action-success bg-action-success/10 text-action-success hover:bg-action-success/20"
-              onClick={claimFaucet}
-            >
-              Daily Faucet (1000 RNG)
-            </button>
-	          </div>
-        </section>
+          </section>
 
-        {activeTab === 'swap' ? (
+          {activeTab === 'swap' ? (
             <SwapPanel
               amm={amm}
               ammDerived={ammDerived}
@@ -906,127 +948,130 @@ export default function EconomyApp() {
               swapDirection={swapDirection}
               slippageBps={slippageBps}
               swapAmountIn={swapAmountIn}
-            setSwapDirection={setSwapDirection}
-            setSlippageBps={setSlippageBps}
-            setSwapAmountIn={setSwapAmountIn}
-            onSubmitSwap={submitSwap}
-          />
-        ) : null}
-
-        {activeTab === 'liquidity' ? (
-          <Suspense
-            fallback={
-              <section className="border border-gray-800 rounded p-4 bg-gray-900/30 lg:col-span-2">
-                <div className="text-xs text-gray-400 tracking-widest mb-3">AMM (RNG/vUSDT)</div>
-                <div className="text-[11px] text-gray-600">Loading…</div>
-              </section>
-            }
-          >
-            <LiquidityPanel
-              amm={amm}
-              ammDerived={ammDerived}
-              lpBalance={lpBalance}
-              addLiqRng={addLiqRng}
-              addLiqVusdt={addLiqVusdt}
-              removeLiqShares={removeLiqShares}
-              setAddLiqRng={setAddLiqRng}
-              setAddLiqVusdt={setAddLiqVusdt}
-              setRemoveLiqShares={setRemoveLiqShares}
-              onAddLiquidity={addLiquidity}
-              onRemoveLiquidity={removeLiquidity}
+              setSwapDirection={setSwapDirection}
+              setSlippageBps={setSlippageBps}
+              setSwapAmountIn={setSwapAmountIn}
+              onSubmitSwap={submitSwap}
             />
-          </Suspense>
-        ) : null}
+          ) : null}
 
-        {activeTab === 'borrow' ? (
-          <Suspense
-            fallback={
-              <section className="border border-gray-800 rounded p-4 bg-gray-900/30 lg:col-span-2">
-                <div className="text-xs text-gray-400 tracking-widest mb-3">VAULT (CDP)</div>
-                <div className="text-[11px] text-gray-600">Loading…</div>
-              </section>
-            }
-          >
-            <BorrowPanel
-              vault={vault}
-              vaultDerived={vaultDerived}
-              house={house}
-              savingsPool={savingsPool}
-              savingsBalance={savingsBalance}
-              collateralAmount={collateralAmount}
-              borrowAmount={borrowAmount}
-              repayAmount={repayAmount}
-              savingsDepositAmount={savingsDepositAmount}
-              savingsWithdrawAmount={savingsWithdrawAmount}
-              setCollateralAmount={setCollateralAmount}
-              setBorrowAmount={setBorrowAmount}
-              setRepayAmount={setRepayAmount}
-              setSavingsDepositAmount={setSavingsDepositAmount}
-              setSavingsWithdrawAmount={setSavingsWithdrawAmount}
-              onCreateVault={createVault}
-              onDepositCollateral={depositCollateral}
-              onBorrowVusdt={borrowVusdt}
-              onRepayVusdt={repayVusdt}
-              onDepositSavings={depositSavings}
-              onWithdrawSavings={withdrawSavings}
-              onClaimSavingsRewards={claimSavingsRewards}
-            />
-          </Suspense>
-        ) : null}
+          {activeTab === 'liquidity' ? (
+            <Suspense
+              fallback={
+                <section className="liquid-card p-5 lg:col-span-2">
+                  <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase mb-3">AMM (RNG/vUSDT)</div>
+                  <div className="text-[11px] text-ns-muted">Loading…</div>
+                </section>
+              }
+            >
+              <LiquidityPanel
+                amm={amm}
+                ammDerived={ammDerived}
+                lpBalance={lpBalance}
+                addLiqRng={addLiqRng}
+                addLiqVusdt={addLiqVusdt}
+                removeLiqShares={removeLiqShares}
+                setAddLiqRng={setAddLiqRng}
+                setAddLiqVusdt={setAddLiqVusdt}
+                setRemoveLiqShares={setRemoveLiqShares}
+                onAddLiquidity={addLiquidity}
+                onRemoveLiquidity={removeLiquidity}
+              />
+            </Suspense>
+          ) : null}
+
+          {activeTab === 'borrow' ? (
+            <Suspense
+              fallback={
+                <section className="liquid-card p-5 lg:col-span-2">
+                  <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase mb-3">Vault (CDP)</div>
+                  <div className="text-[11px] text-ns-muted">Loading…</div>
+                </section>
+              }
+            >
+              <BorrowPanel
+                vault={vault}
+                vaultDerived={vaultDerived}
+                house={house}
+                savingsPool={savingsPool}
+                savingsBalance={savingsBalance}
+                collateralAmount={collateralAmount}
+                borrowAmount={borrowAmount}
+                repayAmount={repayAmount}
+                savingsDepositAmount={savingsDepositAmount}
+                savingsWithdrawAmount={savingsWithdrawAmount}
+                setCollateralAmount={setCollateralAmount}
+                setBorrowAmount={setBorrowAmount}
+                setRepayAmount={setRepayAmount}
+                setSavingsDepositAmount={setSavingsDepositAmount}
+                setSavingsWithdrawAmount={setSavingsWithdrawAmount}
+                onCreateVault={createVault}
+                onDepositCollateral={depositCollateral}
+                onBorrowVusdt={borrowVusdt}
+                onRepayVusdt={repayVusdt}
+                onDepositSavings={depositSavings}
+                onWithdrawSavings={withdrawSavings}
+                onClaimSavingsRewards={claimSavingsRewards}
+              />
+            </Suspense>
+          ) : null}
         </div>
 
-      <section className="mt-4 border border-gray-800 rounded p-4 bg-gray-900/30">
-        <div className="text-xs text-gray-400 tracking-widest mb-3">ACTIVITY</div>
-        <div className="space-y-1 text-[11px] text-gray-300">
-          {activity.length === 0 ? <div className="text-gray-600">No activity yet.</div> : null}
-          {activity.map((item) => {
-            const isTx = item.type === 'tx';
-            const message = isTx ? item.finalMessage ?? item.message : item.message;
-            const when = new Date(isTx ? item.updatedTs : item.ts).toLocaleTimeString();
-            const label = isTx
-              ? item.status === 'submitted'
-                ? 'PENDING'
-                : item.status === 'confirmed'
-                  ? 'OK'
-                  : 'FAIL'
-              : item.level === 'error'
-                ? 'ERROR'
-                : item.level === 'success'
-                  ? 'OK'
-                  : 'INFO';
-            const labelClass = isTx
-              ? item.status === 'confirmed'
-                ? 'text-action-success'
-                : item.status === 'failed'
-                  ? 'text-action-destructive'
-                  : 'text-gray-500'
-              : item.level === 'error'
-                ? 'text-action-destructive'
-                : item.level === 'success'
-                  ? 'text-action-success'
-                  : 'text-gray-500';
+        <section className="liquid-card p-5">
+          <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase mb-3">Activity</div>
+          {activity.length === 0 ? (
+            <div className="text-[11px] text-ns-muted">No activity yet.</div>
+          ) : (
+            <div className="space-y-2 text-[11px] text-ns-muted">
+              {activity.map((item) => {
+                const isTx = item.type === 'tx';
+                const message = isTx ? item.finalMessage ?? item.message : item.message;
+                const when = new Date(isTx ? item.updatedTs : item.ts).toLocaleTimeString();
+                const label = isTx
+                  ? item.status === 'submitted'
+                    ? 'PENDING'
+                    : item.status === 'confirmed'
+                      ? 'OK'
+                      : 'FAIL'
+                  : item.level === 'error'
+                    ? 'ERROR'
+                    : item.level === 'success'
+                      ? 'OK'
+                      : 'INFO';
+                const labelClass = isTx
+                  ? item.status === 'confirmed'
+                    ? 'text-action-success'
+                    : item.status === 'failed'
+                      ? 'text-action-destructive'
+                      : 'text-ns-muted'
+                  : item.level === 'error'
+                    ? 'text-action-destructive'
+                    : item.level === 'success'
+                      ? 'text-action-success'
+                      : 'text-ns-muted';
 
-            const messageNode =
-              isTx && item.txDigest ? (
-                <Link to={`/explorer/tx/${item.txDigest}`} className="truncate hover:underline" title={item.txDigest}>
-                  {message}
-                </Link>
-              ) : (
-                <div className="truncate">{message}</div>
-              );
+                const messageNode =
+                  isTx && item.txDigest ? (
+                    <Link to={`/explorer/tx/${item.txDigest}`} className="truncate hover:underline" title={item.txDigest}>
+                      {message}
+                    </Link>
+                  ) : (
+                    <div className="truncate">{message}</div>
+                  );
 
-            return (
-              <div key={item.id} className="flex items-center justify-between gap-3 border-b border-gray-900 py-1">
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className={`text-[10px] tracking-widest ${labelClass}`}>{label}</div>
-                  <div className="min-w-0 flex-1">{messageNode}</div>
-                </div>
-                <div className="text-[10px] text-gray-600">{when}</div>
-              </div>
-            );
-          })}
-        </div>
-      </section>
+                return (
+                  <div key={item.id} className="liquid-panel px-3 py-2 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className={`text-[10px] tracking-widest ${labelClass}`}>{label}</div>
+                      <div className="min-w-0 flex-1 text-ns">{messageNode}</div>
+                    </div>
+                    <div className="text-[10px] text-ns-muted">{when}</div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
       </div>
     </div>
   );

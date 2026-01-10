@@ -20,18 +20,15 @@ import {
   Group,
   Blur,
   Paint,
-  BlendMode,
 } from '@shopify/react-native-skia';
 import Animated, {
   useSharedValue,
-  useAnimatedStyle,
   withSpring,
   withTiming,
   withSequence,
   withDelay,
   runOnJS,
   useAnimatedReaction,
-  SharedValue,
 } from 'react-native-reanimated';
 import { SPRING_LIQUID, DURATION } from '@nullspace/design-tokens';
 
@@ -324,14 +321,14 @@ const CHIP_COLOR_MAP: Record<number, number> = {
  */
 export interface ChipPileWithRippleProps {
   /** Array of placed chips */
-  chips: Array<{
+  chips: {
     id: string;
     value: number;
     rotation: number;
     placedAt: number;
     scatterX?: number;
     scatterY?: number;
-  }>;
+  }[];
   /** Total bet amount */
   totalBet: number;
   /** Show the counter overlay */

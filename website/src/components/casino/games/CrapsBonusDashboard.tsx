@@ -36,7 +36,7 @@ const VUMeter: React.FC<{
     if (orientation === 'vertical') {
         return (
             <div className="flex flex-col items-center gap-1">
-                {label && <span className="text-[8px] text-gray-400 uppercase tracking-wider">{label}</span>}
+                {label && <span className="text-[8px] text-ns-muted uppercase tracking-wider">{label}</span>}
                 <div className="flex flex-col-reverse gap-0.5">
                     {Array.from({ length: segments }).map((_, i) => {
                         const isActive = i < filledSegments;
@@ -52,14 +52,14 @@ const VUMeter: React.FC<{
                                             : segmentPercentage >= 50
                                                 ? 'bg-amber-400 shadow-[0_0_6px_#fbbf24]'
                                                 : 'bg-green-400 shadow-[0_0_4px_#4ade80]'
-                                        : 'bg-gray-800'
+                                        : 'bg-white/55 dark:bg-black/40'
                                     }
                                 `}
                             />
                         );
                     })}
                 </div>
-                {showValue && <span className="text-[10px] font-mono text-gray-400">{value}</span>}
+                {showValue && <span className="text-[10px] font-mono text-ns-muted">{value}</span>}
             </div>
         );
     }
@@ -68,9 +68,9 @@ const VUMeter: React.FC<{
         <div className="flex flex-col gap-1 w-full">
             {label && (
                 <div className="flex items-center justify-between">
-                    <span className="text-[9px] text-gray-500 uppercase tracking-wider">{label}</span>
+                    <span className="text-[9px] text-ns-muted uppercase tracking-wider">{label}</span>
                     {showValue && (
-                        <span className={`text-[10px] font-mono font-bold ${isHot ? 'text-amber-400' : 'text-gray-400'}`}>
+                        <span className={`text-[10px] font-mono font-bold ${isHot ? 'text-amber-400' : 'text-ns-muted'}`}>
                             {value}/{max}
                         </span>
                     )}
@@ -91,7 +91,7 @@ const VUMeter: React.FC<{
                                         : segmentPercentage >= 50
                                             ? 'bg-amber-400 shadow-[0_0_4px_#fbbf24]'
                                             : 'bg-green-400 shadow-[0_0_3px_#4ade80]'
-                                    : 'bg-gray-800/50'
+                                    : 'bg-white/45 dark:bg-black/40'
                                 }
                             `}
                         />
@@ -125,7 +125,7 @@ const LEDSegment: React.FC<{
                     ? hot
                         ? 'bg-amber-500/30 border-amber-400 text-amber-300 shadow-[0_0_12px_#fbbf24,inset_0_0_8px_#fbbf24] animate-pulse'
                         : 'bg-green-500/20 border-green-400 text-green-300 shadow-[0_0_8px_#4ade80,inset_0_0_4px_#4ade80]'
-                    : 'bg-gray-900/80 border-gray-800 text-gray-500'
+                    : 'bg-white/35 dark:bg-black/50 border-ns-border/60 text-ns-muted'
                 }
             `}
         >
@@ -151,7 +151,7 @@ const BetHeader: React.FC<{
                 {isHot && '>>> '}{title}{isHot && ' <<<'}
             </span>
             {progress && (
-                <span className="font-mono text-[9px] px-1.5 py-0.5 rounded bg-gray-900 text-gray-300 border border-gray-700">
+                <span className="font-mono text-[9px] px-1.5 py-0.5 rounded bg-white/40 dark:bg-black/50 text-ns border border-ns-border/70">
                     {progress}
                 </span>
             )}
@@ -162,7 +162,7 @@ const BetHeader: React.FC<{
                     WIN ${(amount * (payout + 1)).toLocaleString()}
                 </span>
             )}
-            <span className="font-mono text-[10px] text-gray-300">${amount}</span>
+            <span className="font-mono text-[10px] text-ns">${amount}</span>
         </div>
     </div>
 );
@@ -175,7 +175,7 @@ const FireBetSection: React.FC<{ bet: CrapsBet; madePointsMask: number }> = ({ b
     const currentPayout = FIRE_PAYOUTS[madeCount] || 0;
 
     return (
-        <div className={`p-3 rounded-lg border ${isHot ? 'border-amber-500/50 bg-amber-950/20' : 'border-gray-800 bg-gray-900/50'}`}>
+        <div className={`p-3 rounded-lg border ${isHot ? 'border-amber-500/50 bg-amber-950/20' : 'border-ns-border/60 bg-white/30 dark:bg-black/50'}`}>
             <BetHeader
                 title="FIRE"
                 amount={bet.amount}
@@ -208,7 +208,7 @@ const FireBetSection: React.FC<{ bet: CrapsBet; madePointsMask: number }> = ({ b
                                 ? 'bg-amber-500/30 border-amber-400 text-amber-300 animate-pulse'
                                 : madeCount === tier - 1
                                     ? 'bg-green-900/30 border-green-600/50 text-green-400'
-                                    : 'bg-gray-900 border-gray-800 text-gray-500'
+                                    : 'bg-white/40 dark:bg-black/50 border-ns-border/60 text-ns-muted'
                             }
                         `}
                     >
@@ -245,10 +245,10 @@ const ATSSection: React.FC<{ bets: CrapsBet[] }> = ({ bets }) => {
         const isHot = hits >= 4;
 
         return (
-            <div className={`p-2 rounded border ${isHot ? 'border-amber-500/40 bg-amber-950/10' : 'border-gray-800 bg-gray-900/30'}`}>
+            <div className={`p-2 rounded border ${isHot ? 'border-amber-500/40 bg-amber-950/10' : 'border-ns-border/60 bg-white/25 dark:bg-black/45'}`}>
                 <div className="flex items-center justify-between mb-1">
                     <span className={`font-mono text-[9px] font-bold ${isHot ? 'text-amber-400' : 'text-green-500'}`}>{label}</span>
-                    <span className="font-mono text-[9px] text-gray-400">${bet.amount}</span>
+                    <span className="font-mono text-[9px] text-ns-muted">${bet.amount}</span>
                 </div>
                 <div className="flex items-center gap-0.5 mb-1">
                     {nums.map((num, i) => {
@@ -271,16 +271,16 @@ const ATSSection: React.FC<{ bets: CrapsBet[] }> = ({ bets }) => {
 
     return (
         <div className="space-y-2">
-            <div className="font-mono text-[9px] text-gray-400 uppercase tracking-wider">ALL TALL SMALL</div>
+            <div className="font-mono text-[9px] text-ns-muted uppercase tracking-wider">ALL TALL SMALL</div>
             <div className="grid grid-cols-2 gap-2">
                 <ATSRow label="SMALL" bet={smallBet} nums={[2, 3, 4, 5, 6]} isSmall={true} />
                 <ATSRow label="TALL" bet={tallBet} nums={[8, 9, 10, 11, 12]} isSmall={false} />
             </div>
             {allBet && (
-                <div className={`p-2 rounded border ${allBet ? 'border-gray-800 bg-gray-900/30' : ''}`}>
+                <div className={`p-2 rounded border ${allBet ? 'border-ns-border/60 bg-white/25 dark:bg-black/45' : ''}`}>
                     <div className="flex items-center justify-between mb-1">
                         <span className="font-mono text-[9px] font-bold text-green-500">ALL</span>
-                        <span className="font-mono text-[9px] text-gray-400">${allBet.amount} • 175x</span>
+                        <span className="font-mono text-[9px] text-ns-muted">${allBet.amount} • 175x</span>
                     </div>
                     <VUMeter
                         value={getHits(allBet.progressMask || 0, true) + getHits(allBet.progressMask || 0, false)}
@@ -301,7 +301,7 @@ const DiffDoublesSection: React.FC<{ bet: CrapsBet }> = ({ bet }) => {
     const currentPayout = DIFF_DOUBLES_PAYOUTS[hitCount] || 0;
 
     return (
-        <div className={`p-3 rounded-lg border ${isHot ? 'border-amber-500/50 bg-amber-950/20' : 'border-gray-800 bg-gray-900/50'}`}>
+        <div className={`p-3 rounded-lg border ${isHot ? 'border-amber-500/50 bg-amber-950/20' : 'border-ns-border/60 bg-white/30 dark:bg-black/50'}`}>
             <BetHeader
                 title="DOUBLES"
                 amount={bet.amount}
@@ -321,7 +321,7 @@ const DiffDoublesSection: React.FC<{ bet: CrapsBet }> = ({ bet }) => {
                                 ? isHot
                                     ? 'bg-amber-500/20 border-amber-400/60 text-amber-300 shadow-[0_0_8px_#fbbf24]'
                                     : 'bg-green-500/20 border-green-400/60 text-green-300 shadow-[0_0_6px_#4ade80]'
-                                : 'bg-gray-900 border-gray-800 text-gray-700'
+                                : 'bg-white/40 dark:bg-black/50 border-ns-border/60 text-ns-muted'
                             }
                         `}
                     >
@@ -342,7 +342,7 @@ const RideLineSection: React.FC<{ bet: CrapsBet }> = ({ bet }) => {
     const currentPayout = RIDE_LINE_PAYOUTS[wins] || 0;
 
     return (
-        <div className={`p-3 rounded-lg border ${isHot ? 'border-amber-500/50 bg-amber-950/20' : 'border-gray-800 bg-gray-900/50'}`}>
+        <div className={`p-3 rounded-lg border ${isHot ? 'border-amber-500/50 bg-amber-950/20' : 'border-ns-border/60 bg-white/30 dark:bg-black/50'}`}>
             <BetHeader
                 title="RIDE THE LINE"
                 amount={bet.amount}
@@ -363,7 +363,7 @@ const RideLineSection: React.FC<{ bet: CrapsBet }> = ({ bet }) => {
                                 ? 'bg-green-500/20 border-green-400/50 text-green-300'
                                 : wins === tier - 1
                                     ? 'bg-amber-500/10 border-amber-500/30 text-amber-400 animate-pulse'
-                                    : 'bg-gray-900 border-gray-800 text-gray-500'
+                                    : 'bg-white/40 dark:bg-black/50 border-ns-border/60 text-ns-muted'
                             }
                         `}
                     >
@@ -385,19 +385,19 @@ const ReplaySection: React.FC<{ bet: CrapsBet }> = ({ bet }) => {
     const isHot = maxCount >= 3;
 
     return (
-        <div className={`p-3 rounded-lg border ${isHot ? 'border-amber-500/50 bg-amber-950/20' : 'border-gray-800 bg-gray-900/50'}`}>
+        <div className={`p-3 rounded-lg border ${isHot ? 'border-amber-500/50 bg-amber-950/20' : 'border-ns-border/60 bg-white/30 dark:bg-black/50'}`}>
             <BetHeader title="REPLAY" amount={bet.amount} progress={`MAX ${maxCount}x`} isHot={isHot} />
 
             <div className="grid grid-cols-6 gap-1">
                 {counts.map(({ point, count }) => (
                     <div key={point} className="flex flex-col items-center gap-1">
                         <VUMeter value={count} max={4} size="sm" showValue={false} orientation="vertical" />
-                        <span className={`font-mono text-[9px] ${count >= 3 ? 'text-amber-400' : 'text-gray-400'}`}>{point}</span>
+                        <span className={`font-mono text-[9px] ${count >= 3 ? 'text-amber-400' : 'text-ns-muted'}`}>{point}</span>
                     </div>
                 ))}
             </div>
 
-            <div className="mt-2 text-center font-mono text-[8px] text-gray-400">
+            <div className="mt-2 text-center font-mono text-[8px] text-ns-muted">
                 3x = 70-120x • 4x = UP TO 1000x
             </div>
         </div>
@@ -422,7 +422,7 @@ const HotRollerSection: React.FC<{ bet: CrapsBet }> = ({ bet }) => {
     const currentPayout = HOT_ROLLER_PAYOUTS[completedPoints] || 0;
 
     return (
-        <div className={`p-3 rounded-lg border ${isHot ? 'border-amber-500/50 bg-amber-950/20' : 'border-gray-800 bg-gray-900/50'}`}>
+        <div className={`p-3 rounded-lg border ${isHot ? 'border-amber-500/50 bg-amber-950/20' : 'border-ns-border/60 bg-white/30 dark:bg-black/50'}`}>
             <BetHeader
                 title="HOT ROLLER"
                 amount={bet.amount}
@@ -441,7 +441,7 @@ const HotRollerSection: React.FC<{ bet: CrapsBet }> = ({ bet }) => {
                                 ? 'bg-amber-500/30 border-amber-400 text-amber-300 shadow-[0_0_8px_#fbbf24] animate-pulse'
                                 : waysHit > 0
                                     ? 'bg-green-500/10 border-green-600/50 text-green-400'
-                                    : 'bg-gray-900 border-gray-800 text-gray-500'
+                                    : 'bg-white/40 dark:bg-black/50 border-ns-border/60 text-ns-muted'
                             }
                         `}
                     >
@@ -462,7 +462,7 @@ const MuggsySection: React.FC<{ bet: CrapsBet }> = ({ bet }) => {
     const isHot = stage === 1;
 
     return (
-        <div className={`p-3 rounded-lg border ${isHot ? 'border-amber-500/50 bg-amber-950/20' : 'border-gray-800 bg-gray-900/50'}`}>
+        <div className={`p-3 rounded-lg border ${isHot ? 'border-amber-500/50 bg-amber-950/20' : 'border-ns-border/60 bg-white/30 dark:bg-black/50'}`}>
             <BetHeader title="MUGGSY" amount={bet.amount} isHot={isHot} />
 
             <div className="flex items-center gap-2">
@@ -470,18 +470,18 @@ const MuggsySection: React.FC<{ bet: CrapsBet }> = ({ bet }) => {
                     flex-1 p-2 rounded border text-center font-mono text-[10px]
                     ${stage === 0
                         ? 'bg-green-500/20 border-green-400/50 text-green-300 animate-pulse'
-                        : 'bg-gray-900 border-gray-800 text-gray-400'
+                        : 'bg-white/40 dark:bg-black/50 border-ns-border/60 text-ns-muted'
                     }
                 `}>
                     COME-OUT 7<br />
                     <span className="text-[9px] opacity-70">2:1</span>
                 </div>
-                <div className="text-gray-700">→</div>
+                <div className="text-ns-muted">→</div>
                 <div className={`
                     flex-1 p-2 rounded border text-center font-mono text-[10px]
                     ${stage === 1
                         ? 'bg-amber-500/20 border-amber-400/50 text-amber-300 animate-pulse shadow-[0_0_10px_#fbbf24]'
-                        : 'bg-gray-900 border-gray-800 text-gray-400'
+                        : 'bg-white/40 dark:bg-black/50 border-ns-border/60 text-ns-muted'
                     }
                 `}>
                     POINT-7<br />
@@ -533,8 +533,8 @@ export const CrapsBonusDashboard: React.FC<CrapsBonusDashboardProps> = ({
 
     return (
         <div className={`
-            relative overflow-hidden rounded-lg border border-gray-800
-            bg-gradient-to-b from-gray-950 via-black to-gray-950
+            relative overflow-hidden rounded-lg border border-ns-border/60
+            bg-gradient-to-b from-white/70 via-white/40 to-white/70 dark:from-black/60 dark:via-black/40 dark:to-black/60
             ${className}
         `}>
             {/* Scanline overlay */}
@@ -546,7 +546,7 @@ export const CrapsBonusDashboard: React.FC<CrapsBonusDashboardProps> = ({
             />
 
             {/* Header */}
-            <div className="px-4 py-2 border-b border-gray-800 bg-gray-900/50 flex items-center justify-between">
+            <div className="px-4 py-2 border-b border-ns-border/60 bg-white/30 dark:bg-black/50 flex items-center justify-between">
                 <span className="font-mono text-[10px] text-green-500 tracking-widest uppercase">
                     SIDE BETS ACTIVE
                 </span>

@@ -72,6 +72,23 @@ const HAND_NAMES: Record<PokerHand, string> = {
   NOTHING: 'High Card',
 };
 
+function getMessageFromStage(stage: GamePhase | string): string {
+  switch (stage) {
+    case 'preflop':
+      return 'Bet 4x or Check';
+    case 'flop':
+      return 'Bet 2x or Check';
+    case 'river':
+      return 'Bet 1x or Fold';
+    case 'showdown':
+      return 'Revealing dealer...';
+    case 'result':
+      return 'Round complete';
+    default:
+      return 'Place Ante & Blind';
+  }
+}
+
 export function UltimateTXHoldemScreen() {
   // Shared hook for connection (UTH has multi-bet so keeps custom bet state)
   const { isDisconnected, send, lastMessage, connectionStatusProps } = useGameConnection<GameMessage>();
@@ -164,17 +181,7 @@ export function UltimateTXHoldemScreen() {
           dealerRevealed: parsed.stage === 'showdown' || parsed.stage === 'result',
           parseError: null,
           phase: parsed.stage,
-          message: parsed.stage === 'preflop'
-            ? 'Bet 4x or Check'
-            : parsed.stage === 'flop'
-              ? 'Bet 2x or Check'
-              : parsed.stage === 'river'
-                ? 'Bet 1x or Fold'
-                : parsed.stage === 'showdown'
-                  ? 'Revealing dealer...'
-                  : parsed.stage === 'result'
-                    ? 'Round complete'
-                    : 'Place Ante & Blind',
+          message: getMessageFromStage(parsed.stage),
         }));
       });
       return;

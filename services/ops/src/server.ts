@@ -13,16 +13,18 @@ app.use(express.json({ limit: "2mb" }));
 
 const PORT = Number.parseInt(process.env.OPS_PORT ?? "9020", 10);
 
-const resolveDataDir = (): string => {
+function resolveDataDir(): string {
   const envDir = process.env.OPS_DATA_DIR?.trim();
-  if (envDir) return path.resolve(envDir);
+  if (envDir) {
+    return path.resolve(envDir);
+  }
   const cwd = process.cwd();
   const candidateRoot = path.resolve(cwd, "data");
   if (fs.existsSync(candidateRoot)) {
     return path.join(candidateRoot, "ops");
   }
   return path.resolve(cwd, "..", "..", "data", "ops");
-};
+}
 
 const DATA_DIR = resolveDataDir();
 const EVENTS_DIR = path.join(DATA_DIR, "events");
@@ -75,9 +77,9 @@ app.use(
   }),
 );
 
-const ensureDir = async (dir: string) => {
+async function ensureDir(dir: string): Promise<void> {
   await fsp.mkdir(dir, { recursive: true });
-};
+}
 
 await ensureDir(DATA_DIR);
 await ensureDir(EVENTS_DIR);
@@ -114,26 +116,28 @@ const requireAdmin: express.RequestHandler = (req, res, next) => {
   res.status(401).json({ error: "unauthorized" });
 };
 
-const readJson = async <T>(filePath: string, fallback: T): Promise<T> => {
+async function readJson<T>(filePath: string, fallback: T): Promise<T> {
   try {
     const raw = await fsp.readFile(filePath, "utf8");
     return JSON.parse(raw) as T;
   } catch {
     return fallback;
   }
-};
+}
 
-const writeJson = async (filePath: string, data: unknown) => {
+async function writeJson(filePath: string, data: unknown): Promise<void> {
   const tmpPath = `${filePath}.tmp`;
   await fsp.writeFile(tmpPath, `${JSON.stringify(data, null, 2)}\n`, "utf8");
   await fsp.rename(tmpPath, filePath);
-};
+}
 
-const appendNdjson = async (filePath: string, rows: unknown[]) => {
-  if (rows.length === 0) return;
+async function appendNdjson(filePath: string, rows: unknown[]): Promise<void> {
+  if (rows.length === 0) {
+    return;
+  }
   const lines = rows.map((row) => JSON.stringify(row)).join("\n") + "\n";
   await fsp.appendFile(filePath, lines, "utf8");
-};
+}
 
 
 type JsonRecord = Record<string, unknown>;
@@ -293,17 +297,23 @@ const REFERRAL_PROGRESS_PATH = path.join(DATA_DIR, "referral-progress.json");
 const PUSH_PATH = path.join(DATA_DIR, "push-tokens.json");
 const CAMPAIGNS_PATH = path.join(DATA_DIR, "campaigns.json");
 
-const getActorId = (actor?: ActorInfo): string | null => {
+function getActorId(actor?: ActorInfo): string | null {
   const publicKey = actor?.publicKey ? normalizeHex(actor.publicKey) : "";
-  if (publicKey && publicKey.length === 64) return publicKey;
+  if (publicKey && publicKey.length === 64) {
+    return publicKey;
+  }
   const deviceId = actor?.deviceId ? String(actor.deviceId).trim() : "";
-  if (deviceId) return deviceId;
+  if (deviceId) {
+    return deviceId;
+  }
   return null;
-};
+}
 
-const sanitizeName = (name: string): string => name.trim().slice(0, 128);
+function sanitizeName(name: string): string {
+  return name.trim().slice(0, 128);
+}
 
-const normalizeEvent = (
+function normalizeEvent(
   input: AnalyticsEventInput,
   defaults: {
     actor?: ActorInfo;
@@ -311,13 +321,16 @@ const normalizeEvent = (
     session?: AnalyticsSession;
   },
   receivedAt: number,
-): AnalyticsEvent | null => {
+): AnalyticsEvent | null {
   const name = typeof input.name === "string" ? sanitizeName(input.name) : "";
-  if (!name) return null;
+  if (!name) {
+    return null;
+  }
   const ts = Number.isFinite(input.ts) ? Number(input.ts) : receivedAt;
   const actor = { ...defaults.actor, ...input.actor } as ActorInfo | undefined;
   const source = { ...defaults.source, ...input.source } as AnalyticsSource | undefined;
   const session = { ...defaults.session, ...input.session } as AnalyticsSession | undefined;
+
   const props =
     input.props && typeof input.props === "object" && !Array.isArray(input.props)
       ? (input.props as JsonRecord)
@@ -342,12 +355,14 @@ const normalizeEvent = (
     meta,
     receivedAt,
   };
-};
+}
 
-const updateActorsStore = (store: ActorsStore, events: AnalyticsEvent[]) => {
+function updateActorsStore(store: ActorsStore, events: AnalyticsEvent[]): void {
   for (const event of events) {
     const actorId = getActorId(event.actor);
-    if (!actorId) continue;
+    if (!actorId) {
+      continue;
+    }
     const existing = store.actors[actorId];
     if (!existing) {
       store.actors[actorId] = {
@@ -367,14 +382,24 @@ const updateActorsStore = (store: ActorsStore, events: AnalyticsEvent[]) => {
     existing.lastSeen = Math.max(existing.lastSeen, event.ts);
     existing.events += 1;
     existing.lastEvent = event.name;
-    if (event.actor?.platform) existing.platform = event.actor.platform;
-    if (event.actor?.appVersion) existing.appVersion = event.actor.appVersion;
-    if (event.actor?.locale) existing.locale = event.actor.locale;
-    if (event.actor?.publicKey) existing.publicKey = event.actor.publicKey;
-    if (event.actor?.deviceId) existing.deviceId = event.actor.deviceId;
+    if (event.actor?.platform) {
+      existing.platform = event.actor.platform;
+    }
+    if (event.actor?.appVersion) {
+      existing.appVersion = event.actor.appVersion;
+    }
+    if (event.actor?.locale) {
+      existing.locale = event.actor.locale;
+    }
+    if (event.actor?.publicKey) {
+      existing.publicKey = event.actor.publicKey;
+    }
+    if (event.actor?.deviceId) {
+      existing.deviceId = event.actor.deviceId;
+    }
   }
   store.updatedAt = Date.now();
-};
+}
 
 const leaguePointsMode = String(process.env.OPS_LEAGUE_POINTS_MODE ?? "wager")
   .trim()
@@ -383,26 +408,36 @@ const includeFreeroll = ["1", "true", "yes"].includes(
   String(process.env.OPS_LEAGUE_INCLUDE_FREEROLL ?? "").toLowerCase(),
 );
 
-const computePoints = (event: AnalyticsEvent): number => {
+function computePoints(event: AnalyticsEvent): number {
   const wagerRaw = event.props?.wager;
   const netRaw = event.props?.netPnL;
   const wager = typeof wagerRaw === "number" ? wagerRaw : Number(wagerRaw ?? 0);
   const netPnl = typeof netRaw === "number" ? netRaw : Number(netRaw ?? 0);
-  let points = 0;
-  if (leaguePointsMode === "net") {
-    points = Math.max(0, Math.floor(netPnl));
-  } else if (leaguePointsMode === "net-abs") {
-    points = Math.max(0, Math.floor(Math.abs(netPnl)));
-  } else {
-    points = Math.max(0, Math.floor(wager));
-  }
-  if (!Number.isFinite(points) || points <= 0) points = 1;
-  const superRound = Boolean(event.props?.superRound ?? event.props?.super);
-  if (superRound) points *= 2;
-  return points;
-};
 
-const shouldScoreEvent = (event: AnalyticsEvent): boolean => {
+  let points: number;
+  switch (leaguePointsMode) {
+    case "net":
+      points = Math.max(0, Math.floor(netPnl));
+      break;
+    case "net-abs":
+      points = Math.max(0, Math.floor(Math.abs(netPnl)));
+      break;
+    default:
+      points = Math.max(0, Math.floor(wager));
+  }
+
+  if (!Number.isFinite(points) || points <= 0) {
+    points = 1;
+  }
+
+  const superRound = Boolean(event.props?.superRound ?? event.props?.super);
+  if (superRound) {
+    points *= 2;
+  }
+  return points;
+}
+
+function shouldScoreEvent(event: AnalyticsEvent): boolean {
   if (event.name !== "casino.game.completed" && event.name !== "casino.super.round_completed") {
     return false;
   }
@@ -415,12 +450,16 @@ const shouldScoreEvent = (event: AnalyticsEvent): boolean => {
     return false;
   }
   return true;
-};
+}
 
-const updateLeagueBoard = async (event: AnalyticsEvent) => {
-  if (!shouldScoreEvent(event)) return;
+async function updateLeagueBoard(event: AnalyticsEvent): Promise<void> {
+  if (!shouldScoreEvent(event)) {
+    return;
+  }
   const publicKey = event.actor?.publicKey ? normalizeHex(event.actor.publicKey) : "";
-  if (!publicKey) return;
+  if (!publicKey) {
+    return;
+  }
 
   const weekKey = formatWeekKey(event.ts);
   const seasonKey = formatSeasonKey(event.ts);
@@ -470,9 +509,9 @@ const updateLeagueBoard = async (event: AnalyticsEvent) => {
 
   await writeJson(leaguePath, league);
   await writeJson(seasonPath, season);
-};
+}
 
-const createReferralCode = (publicKey: string, existingCodes: Record<string, { publicKey: string }>) => {
+function createReferralCode(publicKey: string, existingCodes: Record<string, { publicKey: string }>): string {
   const base = crypto.createHash("sha256").update(publicKey).digest("hex").slice(0, 8).toUpperCase();
   let code = base;
   let attempt = 0;
@@ -481,15 +520,19 @@ const createReferralCode = (publicKey: string, existingCodes: Record<string, { p
     code = `${base}${attempt}`.slice(0, 10).toUpperCase();
   }
   return code;
-};
+}
 
 const referralMinGames = Number.parseInt(process.env.OPS_REFERRAL_MIN_GAMES ?? "10", 10);
 const referralMinDays = Number.parseInt(process.env.OPS_REFERRAL_MIN_DAYS ?? "3", 10);
 
-const updateReferralProgress = async (event: AnalyticsEvent) => {
-  if (!shouldScoreEvent(event)) return;
+async function updateReferralProgress(event: AnalyticsEvent): Promise<void> {
+  if (!shouldScoreEvent(event)) {
+    return;
+  }
   const publicKey = event.actor?.publicKey ? normalizeHex(event.actor.publicKey) : "";
-  if (!publicKey) return;
+  if (!publicKey) {
+    return;
+  }
 
   const progress = await readJson<ReferralProgressStore>(REFERRAL_PROGRESS_PATH, {
     updatedAt: Date.now(),
@@ -525,10 +568,12 @@ const updateReferralProgress = async (event: AnalyticsEvent) => {
       await writeJson(REFERRALS_PATH, referralStore);
     }
   }
-};
+}
 
-const ingestEvents = async (events: AnalyticsEvent[]) => {
-  if (events.length === 0) return;
+async function ingestEvents(events: AnalyticsEvent[]): Promise<void> {
+  if (events.length === 0) {
+    return;
+  }
   const dayBuckets = new Map<string, AnalyticsEvent[]>();
   for (const event of events) {
     const dayKey = formatDayKey(event.ts);
@@ -553,7 +598,7 @@ const ingestEvents = async (events: AnalyticsEvent[]) => {
     await updateLeagueBoard(event);
     await updateReferralProgress(event);
   }
-};
+}
 
 app.get("/healthz", (_req, res) => {
   res.status(200).json({ ok: true });
@@ -591,7 +636,7 @@ app.post("/analytics/events", async (req, res) => {
   res.status(202).json({ received: normalized.length });
 });
 
-const loadEventsInRange = async (since: number, until: number): Promise<AnalyticsEvent[]> => {
+async function loadEventsInRange(since: number, until: number): Promise<AnalyticsEvent[]> {
   const events: AnalyticsEvent[] = [];
   const startDate = new Date(since);
   startDate.setUTCHours(0, 0, 0, 0);
@@ -618,16 +663,22 @@ const loadEventsInRange = async (since: number, until: number): Promise<Analytic
     cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
   return events;
-};
+}
 
-const parseDateInput = (value: string | undefined, fallback: number): number => {
-  if (!value) return fallback;
+function parseDateInput(value: string | undefined, fallback: number): number {
+  if (!value) {
+    return fallback;
+  }
   const numeric = Number(value);
-  if (Number.isFinite(numeric) && numeric > 0) return numeric;
+  if (Number.isFinite(numeric) && numeric > 0) {
+    return numeric;
+  }
   const parsed = Date.parse(value);
-  if (Number.isFinite(parsed)) return parsed;
+  if (Number.isFinite(parsed)) {
+    return parsed;
+  }
   return fallback;
-};
+}
 
 app.get("/analytics/kpis", async (req, res) => {
   const now = Date.now();
@@ -884,7 +935,7 @@ app.post("/push/register", async (req, res) => {
   res.json({ ok: true });
 });
 
-const resolveTokensForSegment = async (segment?: SegmentFilter): Promise<PushToken[]> => {
+async function resolveTokensForSegment(segment?: SegmentFilter): Promise<PushToken[]> {
   const store = await readJson<PushStore>(PUSH_PATH, { updatedAt: Date.now(), tokens: {} });
   let tokens = Object.values(store.tokens);
   if (segment?.publicKeys && segment.publicKeys.length > 0) {
@@ -909,9 +960,9 @@ const resolveTokensForSegment = async (segment?: SegmentFilter): Promise<PushTok
     });
   }
   return tokens;
-};
+}
 
-const sendExpoPush = async (messages: JsonRecord[]) => {
+async function sendExpoPush(messages: JsonRecord[]): Promise<unknown> {
   const endpoint = process.env.OPS_EXPO_ENDPOINT ?? "https://exp.host/--/api/v2/push/send";
   const accessToken = process.env.OPS_EXPO_ACCESS_TOKEN;
   const response = await fetch(endpoint, {
@@ -927,9 +978,9 @@ const sendExpoPush = async (messages: JsonRecord[]) => {
     throw new Error(`Expo push failed: ${response.status} ${text.slice(0, 200)}`);
   }
   return await response.json();
-};
+}
 
-const sendPushToTokens = async (payload: {
+async function sendPushToTokens(payload: {
   title: string;
   body: string;
   data?: JsonRecord;
@@ -956,7 +1007,7 @@ const sendPushToTokens = async (payload: {
   }
 
   return { sent: messages.length, results };
-};
+}
 
 app.post("/push/send", requireAdmin, async (req, res) => {
   const title = String(req.body?.title ?? "").trim();
@@ -1011,7 +1062,7 @@ app.get("/crm/campaigns", requireAdmin, async (_req, res) => {
   res.json(store);
 });
 
-const processCampaigns = async () => {
+async function processCampaigns(): Promise<void> {
   const store = await readJson<CampaignStore>(CAMPAIGNS_PATH, { updatedAt: Date.now(), campaigns: [] });
   const now = Date.now();
   let changed = false;
@@ -1040,7 +1091,7 @@ const processCampaigns = async () => {
     store.updatedAt = Date.now();
     await writeJson(CAMPAIGNS_PATH, store);
   }
-};
+}
 
 setInterval(() => {
   void processCampaigns();

@@ -43,8 +43,8 @@ impl Read for GlobalTablePhase {
     type Cfg = ();
 
     fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
-        GlobalTablePhase::try_from(u8::read(reader)?)
-            .map_err(|_| Error::InvalidEnum(0))
+        let value = u8::read(reader)?;
+        GlobalTablePhase::try_from(value).map_err(|_| Error::InvalidEnum(value))
     }
 }
 

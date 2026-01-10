@@ -5,7 +5,7 @@ import { GameScreen } from '../GameScreen';
 import { haptics } from '../../services/haptics';
 
 jest.mock('../../services/haptics', () => ({
-  haptics: { buttonPress: jest.fn() },
+  haptics: { buttonPress: jest.fn(() => Promise.resolve()) },
 }));
 
 jest.mock('../../components/game', () => ({

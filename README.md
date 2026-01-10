@@ -90,6 +90,17 @@ echo $! > network.pid
 echo "UI: http://127.0.0.1:${WEB_PORT}"
 ```
 
+### Agent Loops (self-executing)
+- `./scripts/agent-loop.sh` is the single-button loop: brings up the stack (simulator/gateway/auth/convex), runs gateway integration, website smoke, and perf budget, then tears down.
+- Defaults are agent-first: `SMOKE_BACKEND=mock` (deterministic seeds), skips gateway/website boot, reclaims port 9010, and drives smoke/perf via cached Vite preview (`SMOKE_PREVIEW=1`, `SMOKE_SKIP_BUILD=1`) on ports 4180/4181.
+- Flags: `FAST=1` (skip gateway integration), `KEEP_UP=1` (leave services running), `SMOKE_BACKEND=mock|real`, `E2E_SEED=<int>`, `SMOKE_KILL_PORT=1`, `SMOKE_PREVIEW_PORT`/`SMOKE_PORT`, `SKIP_LOCALNET=1`, `SKIP_WEBSITE=1`.
+- Quick runs:
+  - Mock/deterministic (fastest): `SMOKE_BACKEND=mock ./scripts/agent-loop.sh`
+  - Real stack validation: `SMOKE_BACKEND=real ./scripts/agent-loop.sh`
+- `./scripts/agent-up.sh` / `./scripts/agent-down.sh` boot/stop the stack for longer sessions (configurable via `SKIP_*` and `WEB_PORT`).
+- `./scripts/agent-next.sh` surfaces the next automation priorities from `plans/automation-roadmap.yml` so agents can self-select work without a human queue.
+- All loops are non-interactive and idempotent: they seed missing config (`website/.env.local`, Convex env), reclaim ports, and log to `/tmp/*` so agents can parse results automatically.
+
 ### Stop Services
 
 ```bash
@@ -163,10 +174,40 @@ Each game runs a repeating schedule tuned for excitement and clarity:
 3. **GlobalTableTotals (PDA/account)** - Aggregate totals per bet type for UI heatmaps
 4. **PlayerRoundBets (per player, per round)** - Player's bets for settlement
 
+### Casino Games
+
+10 fully on-chain casino games with provably fair RNG:
+
+| Game | Type | House Edge | Key Feature |
+|------|------|------------|-------------|
+| Blackjack | Cards | 0.5-1.0% | Multi-hand, split/double |
+| Roulette | Wheel | 2.7% (EU) | 20 simultaneous bets |
+| Craps | Dice | 1.4% (Pass) | Full odds betting |
+| Baccarat | Cards | 1.06% | Player/Banker/Tie |
+| Sic Bo | Dice | 2.8% | Big/Small/Totals |
+| Video Poker | Cards | 0.5-2% | Jacks or Better |
+| Casino War | Cards | 2.9% | Fast resolution |
+| HiLo | Cards | 2-4% | Streak multipliers |
+| Three Card Poker | Cards | 3.4% | Progressive jackpot |
+| Ultimate Texas | Cards | 2.2% | Hold'em variant |
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed game implementations and bet limits.
+
 ### RNG/Fairness
 
-Recommended: derive outcome from consensus RNG (seed) for the block after lock:
-`roll = H(seed || round_id || game_id)` with the hash committed at lock time. This keeps outcomes deterministic and auditable on-chain.
+All outcomes derived from a cryptographic hash chain seeded by validator consensus:
+
+```
+outcome = SHA256(network_seed || session_id || move_number)
+```
+
+| Guarantee | Mechanism |
+|-----------|-----------|
+| **Deterministic** | SHA256 hash chain—any round can be re-verified |
+| **Unpredictable** | Seed derived from >66% validator agreement, committed at lock |
+| **Isolated** | Per-session isolation prevents cross-player prediction |
+| **Auditable** | Full state snapshots enable replay of any historical round |
+| **Non-manipulable** | Seed fixed before bets placed, no player input to RNG |
 
 ## Project Structure
 
@@ -451,6 +492,7 @@ Report vulnerabilities privately:
 
 | Document | Description |
 |----------|-------------|
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Complete technical architecture for auditors and CTO |
 | [docs/RUNBOOK.md](docs/RUNBOOK.md) | Operations procedures, deployment, incident response |
 | [docs/STRATEGY.md](docs/STRATEGY.md) | Business strategy, token economics, roadmap |
 | [docs/convex-guidelines.md](docs/convex-guidelines.md) | Convex development guidelines |

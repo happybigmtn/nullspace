@@ -69,7 +69,7 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
       >
         {/* Animated glassmorphism backdrop */}
         <animated.div
-          className="absolute inset-0 bg-black/70"
+          className="absolute inset-0 bg-black/40"
           style={
             prefersReducedMotion
               ? { opacity: backdropSpring.opacity }
@@ -85,7 +85,7 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
         />
         {/* Panel with glass border */}
         <animated.div
-          className="relative w-[92%] max-w-sm sm:max-w-md max-h-[80vh] sm:max-h-[85vh] rounded-xl shadow-2xl overflow-hidden flex flex-col"
+          className="relative w-[92%] max-w-sm sm:max-w-md max-h-[80vh] sm:max-h-[85vh] liquid-card liquid-sheen overflow-hidden flex flex-col"
           style={{
             opacity: style.opacity,
             transform: prefersReducedMotion
@@ -94,34 +94,19 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
                   [style.scale, style.y],
                   (s, y) => `scale(${s}) translateY(${y}px)`
                 ),
-            border: `1px solid ${GLASS_MEDIUM.border}`,
-            backgroundColor: 'rgb(23, 23, 23)', // titanium-950
-            boxShadow: `
-              0 25px 50px -12px rgba(0, 0, 0, 0.5),
-              inset 0 1px 1px rgba(255, 255, 255, 0.05)
-            `,
           }}
           data-testid="mobile-drawer-panel"
           data-drawer-label={label}
         >
-          {/* Glass sheen effect */}
-          <div
-            className="absolute inset-0 pointer-events-none"
-            style={{
-              background:
-                'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 50%)',
-            }}
-          />
-
           <div className="relative z-10 flex flex-col h-full">
-            <div className="flex items-center justify-between px-3 py-2 border-b border-gray-800/50">
-              <div className="text-[10px] text-gray-500 uppercase tracking-widest">
+            <div className="flex items-center justify-between px-3 py-2 border-b border-ns-border/60">
+              <div className="text-[10px] text-ns-muted uppercase tracking-widest">
                 {title}
               </div>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="text-xs px-3 py-2 min-h-10 rounded border border-gray-700 bg-black/40 text-gray-400 hover:border-gray-500"
+                className="liquid-chip text-xs px-3 py-2 min-h-10 border-ns-border/80 text-ns hover:border-ns-border"
                 aria-label="Close drawer"
               >
                 ESC
@@ -139,7 +124,7 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className={`md:hidden text-xs tracking-widest uppercase font-mono px-3 py-2 min-h-11 rounded border border-gray-700 bg-black/40 text-gray-300 hover:border-gray-500 hover:text-white ${className ?? ''}`}
+        className={`md:hidden liquid-chip text-xs tracking-widest uppercase px-3 py-2 min-h-11 text-ns ${className ?? ''}`}
       >
         {label}
       </button>

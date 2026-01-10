@@ -6,9 +6,9 @@ const MaintenancePage = () => {
   };
 
   return (
-    <div className="fixed inset-0 h-screen w-screen overflow-hidden bg-titanium-50 font-sans flex items-center justify-center p-6">
-      <div 
-        className="max-w-md w-full bg-white rounded-[40px] p-12 shadow-float border border-titanium-200 flex flex-col items-center text-center gap-8 animate-scale-in group cursor-pointer"
+    <div className="fixed inset-0 h-screen w-screen overflow-hidden liquid-shell font-sans flex items-center justify-center p-6">
+      <div
+        className="max-w-md w-full liquid-card liquid-sheen p-10 flex flex-col items-center text-center gap-8 animate-scale-in group cursor-pointer"
         onClick={handleLogoClick}
       >
         {/* Animated Floating Icon */}
@@ -20,20 +20,20 @@ const MaintenancePage = () => {
         </div>
 
         <div className="flex flex-col gap-3">
-          <span className="text-[10px] font-black text-titanium-400 tracking-[0.4em] uppercase">System Status</span>
-          <h1 className="text-3xl font-extrabold text-titanium-900 tracking-tight font-display leading-tight">
+          <span className="text-[10px] font-semibold text-ns-muted tracking-[0.4em] uppercase">System Status</span>
+          <h1 className="text-2xl font-semibold text-ns tracking-tight font-display leading-tight">
             Undergoing Maintenance.
           </h1>
-          <p className="text-body-sm text-titanium-500 font-medium leading-relaxed px-4">
+          <p className="text-[11px] text-ns-muted leading-relaxed px-4">
             We're enhancing the Nullspace experience. Please check back shortly for the updated interface.
           </p>
         </div>
 
-        <div className="w-full h-px bg-titanium-100" />
+        <div className="w-full h-px bg-black/10 dark:bg-white/10" />
 
         <div className="flex flex-col items-center gap-4">
-            <span className="text-[10px] font-bold text-titanium-300 uppercase tracking-widest">Stay Connected</span>
-            <div className="px-6 py-3 rounded-full bg-titanium-900 text-white font-bold text-xs uppercase tracking-widest shadow-lg shadow-titanium-900/20 group-hover:scale-105 active:scale-95 transition-all">
+            <span className="text-[10px] font-semibold text-ns-muted uppercase tracking-widest">Stay Connected</span>
+            <div className="px-6 py-3 rounded-full liquid-chip text-ns text-[10px] uppercase tracking-[0.28em] shadow-soft group-hover:scale-105 active:scale-95 transition-all">
                 @commonwarexyz
             </div>
         </div>

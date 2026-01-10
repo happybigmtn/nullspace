@@ -5,7 +5,7 @@ import { Card, HiddenCard } from '../Card';
 import type { Suit, Rank } from '../../../types';
 
 jest.mock('../../../services/haptics', () => ({
-  haptics: { cardDeal: jest.fn() },
+  haptics: { cardDeal: jest.fn(() => Promise.resolve()) },
 }));
 
 // Mock COLORS for testing color assertions

@@ -96,17 +96,18 @@ export class TestLogger {
    */
   exportLogs(filepath: string): void {
     const fs = require('fs');
+    const countByLevel = (level: LogLevel) => this.getLogsByLevel(level).length;
     const data = {
       testName: this.testName,
       duration: Date.now() - this.startTime,
       logs: this.logs,
       summary: {
         total: this.logs.length,
-        debug: this.getLogsByLevel(LogLevel.DEBUG).length,
-        info: this.getLogsByLevel(LogLevel.INFO).length,
-        warn: this.getLogsByLevel(LogLevel.WARN).length,
-        error: this.getLogsByLevel(LogLevel.ERROR).length,
-        success: this.getLogsByLevel(LogLevel.SUCCESS).length,
+        debug: countByLevel(LogLevel.DEBUG),
+        info: countByLevel(LogLevel.INFO),
+        warn: countByLevel(LogLevel.WARN),
+        error: countByLevel(LogLevel.ERROR),
+        success: countByLevel(LogLevel.SUCCESS),
       },
     };
 

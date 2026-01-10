@@ -23,11 +23,10 @@ import type { Session, SessionCreateOptions } from "../types/session.js";
 import type { GameType } from "@nullspace/types";
 import { CASINO_INITIAL_CHIPS } from "@nullspace/constants/limits";
 
-const readEnvLimit = (key: string, fallback: number): number => {
-	const raw = process.env[key];
-	const parsed = raw ? Number(raw) : NaN;
+function readEnvLimit(key: string, fallback: number): number {
+	const parsed = Number(process.env[key]);
 	return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-};
+}
 
 const SESSION_CREATE_LIMIT = {
 	points: readEnvLimit("GATEWAY_SESSION_RATE_LIMIT_POINTS", 10),
@@ -202,6 +201,17 @@ export class SessionManager {
 
 		// Step 2: Register player (grants INITIAL_CHIPS automatically)
 		// Now the WebSocket is ready to receive the registration result
+		try {
+			await this.nonceManager.syncFromBackend(
+				session.publicKeyHex,
+				this.getBackendUrl(),
+			);
+		} catch (err) {
+			logWarn(
+				`Nonce sync failed for ${session.playerName}:`,
+				err,
+			);
+		}
 		const registerResult = await this.registerPlayer(session);
 		if (!registerResult) {
 			logWarn(`Registration failed for ${session.playerName}`);
@@ -214,20 +224,43 @@ export class SessionManager {
 	}
 
 	/**
-	 * Register player on-chain (CasinoRegister)
+	 * Submit a transaction with retry on nonce mismatch
 	 */
-	private async registerPlayer(session: Session): Promise<boolean> {
-		return this.nonceManager.withLock(session.publicKeyHex, async (nonce) => {
-			const instruction = encodeCasinoRegister(session.playerName);
+	private async submitWithRetry(
+		session: Session,
+		instruction: Uint8Array,
+		onSuccess: () => void,
+		actionName: string
+	): Promise<boolean> {
+		return this.nonceManager.withLock(session.publicKeyHex, async () => {
+			await this.nonceManager.maybeSync(
+				session.publicKeyHex,
+				this.getBackendUrl(),
+			);
+
+			const trySubmit = async (nonce: bigint): Promise<boolean> => {
+				const tx = buildTransaction(nonce, instruction, session.privateKey);
+				const submission = wrapSubmission(tx);
+				const result = await this.submitClient.submit(submission);
+
+				if (result.accepted) {
+					this.nonceManager.setCurrentNonce(session.publicKeyHex, nonce + 1n);
+					onSuccess();
+					logDebug(`${actionName} for ${session.playerName}`);
+					return true;
+				}
+				return false;
+			};
+
+			const nonce = this.nonceManager.getCurrentNonce(session.publicKeyHex);
 			const tx = buildTransaction(nonce, instruction, session.privateKey);
 			const submission = wrapSubmission(tx);
-
 			const result = await this.submitClient.submit(submission);
 
 			if (result.accepted) {
-				session.registered = true;
 				this.nonceManager.setCurrentNonce(session.publicKeyHex, nonce + 1n);
-				logDebug(`Registered player: ${session.playerName}`);
+				onSuccess();
+				logDebug(`${actionName} for ${session.playerName}`);
 				return true;
 			}
 
@@ -243,30 +276,28 @@ export class SessionManager {
 					const retryNonce = this.nonceManager.getCurrentNonce(
 						session.publicKeyHex,
 					);
-					const retryTx = buildTransaction(
-						retryNonce,
-						instruction,
-						session.privateKey,
-					);
-					const retrySubmission = wrapSubmission(retryTx);
-					const retryResult = await this.submitClient.submit(retrySubmission);
-					if (retryResult.accepted) {
-						session.registered = true;
-						this.nonceManager.setCurrentNonce(
-							session.publicKeyHex,
-							retryNonce + 1n,
-						);
-						logDebug(`Registered player: ${session.playerName}`);
+					if (await trySubmit(retryNonce)) {
 						return true;
 					}
 				}
 			}
 
-			logWarn(
-				`Registration rejected for ${session.playerName}: ${result.error}`,
-			);
+			logWarn(`${actionName} rejected for ${session.playerName}: ${result.error}`);
 			return false;
 		});
+	}
+
+	/**
+	 * Register player on-chain (CasinoRegister)
+	 */
+	private async registerPlayer(session: Session): Promise<boolean> {
+		const instruction = encodeCasinoRegister(session.playerName);
+		return this.submitWithRetry(
+			session,
+			instruction,
+			() => { session.registered = true; },
+			'Registered player'
+		);
 	}
 
 	/**
@@ -276,56 +307,16 @@ export class SessionManager {
 		session: Session,
 		amount: bigint,
 	): Promise<boolean> {
-		return this.nonceManager.withLock(session.publicKeyHex, async (nonce) => {
-			const instruction = encodeCasinoDeposit(amount);
-			const tx = buildTransaction(nonce, instruction, session.privateKey);
-			const submission = wrapSubmission(tx);
-
-			const result = await this.submitClient.submit(submission);
-
-			if (result.accepted) {
+		const instruction = encodeCasinoDeposit(amount);
+		return this.submitWithRetry(
+			session,
+			instruction,
+			() => {
 				session.hasBalance = true;
 				session.balance = session.balance + amount;
-				this.nonceManager.setCurrentNonce(session.publicKeyHex, nonce + 1n);
-				logDebug(`Deposited ${amount} chips for ${session.playerName}`);
-				return true;
-			}
-
-			if (
-				result.error &&
-				this.nonceManager.handleRejection(session.publicKeyHex, result.error)
-			) {
-				const synced = await this.nonceManager.syncFromBackend(
-					session.publicKeyHex,
-					this.getBackendUrl(),
-				);
-				if (synced) {
-					const retryNonce = this.nonceManager.getCurrentNonce(
-						session.publicKeyHex,
-					);
-					const retryTx = buildTransaction(
-						retryNonce,
-						instruction,
-						session.privateKey,
-					);
-					const retrySubmission = wrapSubmission(retryTx);
-					const retryResult = await this.submitClient.submit(retrySubmission);
-					if (retryResult.accepted) {
-						session.hasBalance = true;
-						session.balance = session.balance + amount;
-						this.nonceManager.setCurrentNonce(
-							session.publicKeyHex,
-							retryNonce + 1n,
-						);
-						logDebug(`Deposited ${amount} chips for ${session.playerName}`);
-						return true;
-					}
-				}
-			}
-
-			logWarn(`Deposit rejected for ${session.playerName}: ${result.error}`);
-			return false;
-		});
+			},
+			`Deposited ${amount} chips`
+		);
 	}
 
 	/**

@@ -169,6 +169,37 @@ export class UpdatesClient extends EventEmitter {
       logDebug(`[UpdatesClient] Extracted ${events.length} casino events`);
       for (const event of events) {
         logDebug(`[UpdatesClient] Received event: ${event.type} for session ${event.sessionId}`);
+        if (event.type === 'started') {
+          logInfo('[UpdatesClient] Game started', {
+            sessionId: event.sessionId.toString(),
+            gameType: event.gameType,
+            bet: event.bet?.toString(),
+            stateBytes: event.initialState ? event.initialState.length : 0,
+          });
+        } else if (event.type === 'completed') {
+          logInfo('[UpdatesClient] Game completed', {
+            sessionId: event.sessionId.toString(),
+            gameType: event.gameType,
+            payout: event.payout?.toString(),
+            finalChips: event.finalChips?.toString(),
+            wasShielded: event.wasShielded,
+            wasDoubled: event.wasDoubled,
+            balanceSnapshot: event.balanceSnapshot
+              ? {
+                  chips: event.balanceSnapshot.chips.toString(),
+                  vusdt: event.balanceSnapshot.vusdt.toString(),
+                  rng: event.balanceSnapshot.rng.toString(),
+                }
+              : undefined,
+          });
+        } else if (event.type === 'error') {
+          logWarn('[UpdatesClient] Game error', {
+            sessionId: event.sessionId.toString(),
+            gameType: event.gameType,
+            errorCode: event.errorCode,
+            message: event.errorMessage,
+          });
+        }
 
         // Store for session-based waiting FIRST (before emit to avoid race)
         const pending = this.pendingEvents.get(event.sessionId) ?? [];
@@ -229,6 +260,52 @@ export class UpdatesClient extends EventEmitter {
   }
 
   /**
+   * Wait for a game event matching a predicate
+   */
+  private waitForEventMatching(
+    predicate: (e: CasinoGameEvent) => boolean,
+    timeoutMs: number,
+    timeoutMessage: string
+  ): Promise<CasinoGameEvent> {
+    return new Promise((resolve, reject) => {
+      const checkPendingAndResolve = (): boolean => {
+        for (const [, events] of this.pendingEvents) {
+          const existing = events.find(predicate);
+          if (existing) {
+            const idx = events.indexOf(existing);
+            events.splice(idx, 1);
+            resolve(existing);
+            return true;
+          }
+        }
+        return false;
+      };
+
+      const timeout = setTimeout(() => {
+        this.off('gameEvent', handler);
+        if (!checkPendingAndResolve()) {
+          reject(new Error(timeoutMessage));
+        }
+      }, timeoutMs);
+
+      const handler = (event: CasinoGameEvent) => {
+        if (predicate(event)) {
+          clearTimeout(timeout);
+          this.off('gameEvent', handler);
+          resolve(event);
+        }
+      };
+
+      this.on('gameEvent', handler);
+
+      if (checkPendingAndResolve()) {
+        clearTimeout(timeout);
+        this.off('gameEvent', handler);
+      }
+    });
+  }
+
+  /**
    * Wait for ANY game event of a specific type (ignores session ID)
    * Use this when filtering by Account since a player has one game at a time
    */
@@ -236,95 +313,22 @@ export class UpdatesClient extends EventEmitter {
     eventType: CasinoGameEvent['type'],
     timeoutMs = 30000
   ): Promise<CasinoGameEvent> {
-    // Wait for the event
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        this.off('gameEvent', handler);
-        // Check pending one more time before rejecting (race condition safety)
-        for (const [, events] of this.pendingEvents) {
-          const existing = events.find((e) => e.type === eventType);
-          if (existing) {
-            const idx = events.indexOf(existing);
-            events.splice(idx, 1);
-            resolve(existing);
-            return;
-          }
-        }
-        reject(new Error(`Timeout waiting for ${eventType} event`));
-      }, timeoutMs);
-
-      const handler = (event: CasinoGameEvent) => {
-        if (event.type === eventType) {
-          clearTimeout(timeout);
-          this.off('gameEvent', handler);
-          resolve(event);
-        }
-      };
-
-      // Set up listener FIRST
-      this.on('gameEvent', handler);
-
-      // THEN check if we already have an event (might have arrived while setting up)
-      for (const [, events] of this.pendingEvents) {
-        const existing = events.find((e) => e.type === eventType);
-        if (existing) {
-          clearTimeout(timeout);
-          this.off('gameEvent', handler);
-          const idx = events.indexOf(existing);
-          events.splice(idx, 1);
-          resolve(existing);
-          return;
-        }
-      }
-    });
+    return this.waitForEventMatching(
+      (e) => e.type === eventType,
+      timeoutMs,
+      `Timeout waiting for ${eventType} event`
+    );
   }
 
   /**
    * Wait for 'started' OR 'error' event (game start or rejection)
    */
   async waitForStartedOrError(timeoutMs = 30000): Promise<CasinoGameEvent> {
-    const isMatch = (e: CasinoGameEvent) => e.type === 'started' || e.type === 'error';
-
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        this.off('gameEvent', handler);
-        // Check pending one more time before rejecting
-        for (const [, events] of this.pendingEvents) {
-          const existing = events.find(isMatch);
-          if (existing) {
-            const idx = events.indexOf(existing);
-            events.splice(idx, 1);
-            resolve(existing);
-            return;
-          }
-        }
-        reject(new Error('Timeout waiting for started/error event'));
-      }, timeoutMs);
-
-      const handler = (event: CasinoGameEvent) => {
-        if (isMatch(event)) {
-          clearTimeout(timeout);
-          this.off('gameEvent', handler);
-          resolve(event);
-        }
-      };
-
-      // Set up listener FIRST
-      this.on('gameEvent', handler);
-
-      // THEN check if we already have an event
-      for (const [, events] of this.pendingEvents) {
-        const existing = events.find(isMatch);
-        if (existing) {
-          clearTimeout(timeout);
-          this.off('gameEvent', handler);
-          const idx = events.indexOf(existing);
-          events.splice(idx, 1);
-          resolve(existing);
-          return;
-        }
-      }
-    });
+    return this.waitForEventMatching(
+      (e) => e.type === 'started' || e.type === 'error',
+      timeoutMs,
+      'Timeout waiting for started/error event'
+    );
   }
 
   /**
@@ -332,50 +336,11 @@ export class UpdatesClient extends EventEmitter {
    * Error events are also matched since a move can be rejected
    */
   async waitForMoveOrComplete(timeoutMs = 30000): Promise<CasinoGameEvent> {
-    const isMatch = (e: CasinoGameEvent) =>
-      e.type === 'moved' || e.type === 'completed' || e.type === 'error';
-
-    // Wait for the event
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        this.off('gameEvent', handler);
-        // Check pending one more time before rejecting
-        for (const [, events] of this.pendingEvents) {
-          const existing = events.find(isMatch);
-          if (existing) {
-            const idx = events.indexOf(existing);
-            events.splice(idx, 1);
-            resolve(existing);
-            return;
-          }
-        }
-        reject(new Error('Timeout waiting for move/complete event'));
-      }, timeoutMs);
-
-      const handler = (event: CasinoGameEvent) => {
-        if (isMatch(event)) {
-          clearTimeout(timeout);
-          this.off('gameEvent', handler);
-          resolve(event);
-        }
-      };
-
-      // Set up listener FIRST
-      this.on('gameEvent', handler);
-
-      // THEN check if we already have an event
-      for (const [, events] of this.pendingEvents) {
-        const existing = events.find(isMatch);
-        if (existing) {
-          clearTimeout(timeout);
-          this.off('gameEvent', handler);
-          const idx = events.indexOf(existing);
-          events.splice(idx, 1);
-          resolve(existing);
-          return;
-        }
-      }
-    });
+    return this.waitForEventMatching(
+      (e) => e.type === 'moved' || e.type === 'completed' || e.type === 'error',
+      timeoutMs,
+      'Timeout waiting for move/complete event'
+    );
   }
 
   /**

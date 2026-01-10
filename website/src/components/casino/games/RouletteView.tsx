@@ -7,6 +7,22 @@ import { PanelDrawer } from '../PanelDrawer';
 import { Pseudo3DWheel } from '../pseudo3d/Pseudo3DWheel';
 import { Label } from '../ui/Label';
 
+/** Helper to get roulette number text color class based on the color */
+function getRouletteColorClass(num: number): string {
+    const color = getRouletteColor(num);
+    if (color === 'RED') return 'text-mono-400 dark:text-mono-500';
+    if (color === 'BLACK') return 'text-ns';
+    return 'text-mono-0 dark:text-mono-1000 font-bold';
+}
+
+/** Helper for history chip border/text color */
+function getRouletteChipColorClass(num: number): string {
+    const color = getRouletteColor(num);
+    if (color === 'RED') return 'border-mono-400 text-mono-400 dark:text-mono-500';
+    if (color === 'BLACK') return 'border-ns text-ns';
+    return 'border-mono-0 text-mono-0 dark:text-mono-1000 font-bold';
+}
+
 type RouletteViewProps = {
     gameState: GameState;
     numberInput?: string;
@@ -113,13 +129,12 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
         const pnl = exposureByNumber[num] ?? 0;
         const maxScale = Math.max(100, totalBet * 36); 
         const barPercent = Math.min(Math.abs(pnl) / maxScale * 50, 50);
-        const color = getRouletteColor(num);
-        const colorClass = color === 'RED' ? 'text-mono-400 dark:text-mono-500' : color === 'BLACK' ? 'text-titanium-900' : 'text-mono-0 dark:text-mono-1000 font-bold';
+        const colorClass = getRouletteColorClass(num);
 
         return (
             <div key={num} className="flex items-center h-6 text-xs px-2">
                 <div className="flex-1 flex justify-end items-center pr-2 gap-1">
-                    {pnl < 0 && <span className="text-[9px] font-bold text-titanium-400 tabular-nums">{Math.abs(pnl)}</span>}
+                    {pnl < 0 && <span className="text-[9px] font-bold text-ns-muted tabular-nums">{Math.abs(pnl)}</span>}
                     {pnl < 0 && (
                         <div className="bg-mono-400/40 h-2 rounded-full" style={{ width: `${barPercent}%` }} />
                     )}
@@ -129,7 +144,7 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
                     {pnl > 0 && (
                         <div className="bg-mono-0/40 h-2 rounded-full" style={{ width: `${barPercent}%` }} />
                     )}
-                    {pnl > 0 && <span className="text-[9px] font-bold text-titanium-400 tabular-nums">{pnl}</span>}
+                    {pnl > 0 && <span className="text-[9px] font-bold text-ns-muted tabular-nums">{pnl}</span>}
                 </div>
             </div>
         );
@@ -140,9 +155,9 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
             <div className="flex-1 w-full flex flex-col items-center justify-start sm:justify-center gap-8 relative pt-10 pb-24 animate-scale-in">
             <div className="absolute top-2 left-2 z-40">
                 <MobileDrawer label="INFO" title="ROULETTE">
-                    <div className="space-y-3 text-xs text-titanium-600">
+                    <div className="space-y-3 text-xs text-ns-muted">
                         <p>Pick outside bets or choose a number for straight and split plays.</p>
-                        <p className="text-[10px] uppercase tracking-widest text-titanium-400">Spin with Space or tap Spin.</p>
+                        <p className="text-[10px] uppercase tracking-widest text-ns-muted">Spin with Space or tap Spin.</p>
                     </div>
                 </MobileDrawer>
             </div>
@@ -157,8 +172,8 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
                     />
                     {/* Floating current number display */}
                     {!isSpinning && lastNum !== null && (
-                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-full w-16 h-16 flex items-center justify-center shadow-float border border-titanium-100 animate-scale-in">
-                            <span className={`text-2xl font-black ${getRouletteColor(lastNum) === 'RED' ? 'text-mono-400 dark:text-mono-500' : getRouletteColor(lastNum) === 'BLACK' ? 'text-titanium-900' : 'text-mono-0 dark:text-mono-1000 font-bold'}`}>
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 liquid-panel rounded-full w-16 h-16 flex items-center justify-center shadow-float animate-scale-in">
+                            <span className={`text-2xl font-black ${getRouletteColorClass(lastNum)}`}>
                                 {formatRouletteNumber(lastNum)}
                             </span>
                         </div>
@@ -168,18 +183,14 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
                  <div className="flex flex-col items-center gap-4">
                     <div className="text-center">
                         <Label variant={isSpinning ? 'gold' : 'primary'}>{isSpinning ? 'Wheel spinning...' : 'Ready to play'}</Label>
-                        <h2 className="text-2xl font-bold text-titanium-900 tracking-tight mt-1 zen-hide">{gameState.message || 'Place your bets'}</h2>
+                        <h2 className="text-2xl font-bold text-ns tracking-tight mt-1 zen-hide">{gameState.message || 'Place your bets'}</h2>
                     </div>
 
                     {/* Compact History */}
                     {gameState.rouletteHistory.length > 0 && (
-                        <div className="flex gap-1.5 p-1.5 bg-titanium-100 rounded-full border border-titanium-200 zen-hide">
+                        <div className="flex gap-1.5 p-1.5 liquid-chip shadow-soft zen-hide">
                             {gameState.rouletteHistory.slice(-6).reverse().map((num, i) => (
-                                <div key={i} className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black border transition-all ${
-                                    getRouletteColor(num) === 'RED' ? 'bg-white border-mono-400 text-mono-400 dark:text-mono-500' : 
-                                    getRouletteColor(num) === 'BLACK' ? 'bg-white border-titanium-900 text-titanium-900' : 
-                                    'bg-white border-mono-0 text-mono-0 dark:text-mono-1000 font-bold'
-                                } shadow-soft`}>
+                                <div key={i} className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black border transition-all liquid-chip ${getRouletteChipColorClass(num)} shadow-soft`}>
                                     {formatRouletteNumber(num)}
                                 </div>
                             ))}
@@ -190,11 +201,11 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
 
 
             {gameState.rouletteInputMode !== 'NONE' && (
-                <div className="absolute inset-0 bg-titanium-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={closeInput}>
-                    <div className="w-full max-w-lg bg-white rounded-3xl border border-titanium-200 p-5 shadow-float" onClick={(e) => e.stopPropagation()}>
+                <div className="absolute inset-0 bg-black/40 backdrop-blur-lg z-50 flex items-center justify-center p-4" onClick={closeInput}>
+                    <div className="w-full max-w-lg liquid-card liquid-sheen rounded-3xl p-5 shadow-float" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-between mb-3">
                             <Label size="micro">{rouletteInputLabel}</Label>
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-titanium-400">{numberInput || 'Pick a number'}</span>
+                            <span className="text-[10px] font-bold uppercase tracking-widest text-ns-muted">{numberInput || 'Pick a number'}</span>
                         </div>
                         <div className="grid grid-cols-6 gap-2">
                             {inputNumbers.map((value) => {
@@ -214,8 +225,8 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
                                             isActive
                                                 ? 'border-mono-0 bg-mono-0/10 text-mono-0 dark:text-mono-1000'
                                                 : isValid
-                                                    ? 'border-titanium-200 bg-titanium-50 text-titanium-700'
-                                                    : 'border-titanium-100 bg-titanium-100 text-titanium-300 cursor-not-allowed'
+                                                    ? 'border-ns bg-ns-surface text-ns'
+                                                    : 'border-ns bg-ns-surface text-ns-muted opacity-40 cursor-not-allowed'
                                         }`}
                                     >
                                         {formatRouletteNumber(value)}
@@ -226,7 +237,7 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
                         <button
                             type="button"
                             onClick={closeInput}
-                            className="mt-4 w-full py-3 rounded-full bg-titanium-900 text-white text-xs font-bold uppercase tracking-widest active:scale-95"
+                            className="mt-4 w-full py-3 rounded-full bg-mono-0 text-white text-xs font-bold uppercase tracking-widest active:scale-95"
                         >
                             Cancel
                         </button>
@@ -236,7 +247,7 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
         </div>
 
         {/* Control Bar */}
-            <div className="ns-controlbar zen-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-titanium-50/95 backdrop-blur border-t border-titanium-200 z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
+            <div className="ns-controlbar zen-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 liquid-card rounded-none md:rounded-t-3xl backdrop-blur border-t border-ns z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
             <div className="h-auto md:h-20 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2 p-2 md:px-4">
                 <div className="hidden md:flex items-center gap-2 flex-1 flex-wrap">
                     <div className="flex items-center gap-1 flex-wrap">
@@ -257,7 +268,7 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
                                     className={`px-3 py-1.5 rounded-full border text-[10px] font-bold uppercase tracking-tight transition-all active:scale-95 ${
                                         active
                                             ? 'border-mono-0 bg-mono-0/10 text-mono-0 dark:text-mono-1000'
-                                            : 'border-titanium-200 bg-white text-titanium-600 hover:border-titanium-400'
+                                            : 'border-ns bg-ns-surface text-ns hover:border-mono-0/40'
                                     }`}
                                 >
                                     {bet.label}
@@ -270,7 +281,7 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
                             className={`px-3 py-1.5 rounded-full border text-[10px] font-bold uppercase tracking-tight transition-all active:scale-95 ${
                                 hasBet('ZERO')
                                     ? 'border-mono-0 bg-mono-0/10 text-mono-0 dark:text-mono-1000'
-                                    : 'border-titanium-200 bg-white text-titanium-600 hover:border-titanium-400'
+                                    : 'border-ns bg-ns-surface text-ns hover:border-mono-0/40'
                             }`}
                         >
                             0
@@ -282,7 +293,7 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
                                 className={`px-3 py-1.5 rounded-full border text-[10px] font-bold uppercase tracking-tight transition-all active:scale-95 ${
                                     hasBet('STRAIGHT', ROULETTE_DOUBLE_ZERO)
                                         ? 'border-mono-0 bg-mono-0/10 text-mono-0 dark:text-mono-1000'
-                                        : 'border-titanium-200 bg-white text-titanium-600 hover:border-titanium-400'
+                                        : 'border-ns bg-ns-surface text-ns hover:border-mono-0/40'
                                 }`}
                             >
                                 00
@@ -290,7 +301,7 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
                         )}
                     </div>
 
-                    <div className="h-6 w-px bg-titanium-200" />
+                    <div className="h-6 w-px bg-ns-border opacity-60" />
 
                     <div className="flex items-center gap-1 flex-wrap">
                         {([
@@ -310,7 +321,7 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
                                     className={`px-2.5 py-1.5 rounded-full border text-[10px] font-bold uppercase tracking-tight transition-all active:scale-95 ${
                                         active
                                             ? 'border-mono-0 bg-mono-0/10 text-mono-0 dark:text-mono-1000'
-                                            : 'border-titanium-200 bg-white text-titanium-600 hover:border-titanium-400'
+                                            : 'border-ns bg-ns-surface text-ns hover:border-mono-0/40'
                                     }`}
                                 >
                                     {bet.label}
@@ -319,7 +330,7 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
                         })}
                     </div>
 
-                    <div className="h-6 w-px bg-titanium-200" />
+                    <div className="h-6 w-px bg-ns-border opacity-60" />
 
                     <div className="flex items-center gap-1 flex-wrap">
                         {([
@@ -337,7 +348,7 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
                                 className={`px-2.5 py-1.5 rounded-full border text-[10px] font-bold uppercase tracking-tight transition-all active:scale-95 ${
                                     gameState.rouletteInputMode === entry.mode
                                         ? 'border-mono-0 bg-mono-0/10 text-mono-0 dark:text-mono-1000'
-                                        : 'border-titanium-200 bg-white text-titanium-600 hover:border-titanium-400'
+                                        : 'border-ns bg-ns-surface text-ns hover:border-mono-0/40'
                                 }`}
                             >
                                 {entry.label}
@@ -345,14 +356,14 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
                         ))}
                     </div>
 
-                    <div className="h-6 w-px bg-titanium-200" />
+                    <div className="h-6 w-px bg-ns-border opacity-60" />
 
                     <div className="flex items-center gap-1 flex-wrap">
                         <button
                             type="button"
                             onClick={actions?.undoRouletteBet}
                             disabled={gameState.rouletteUndoStack.length === 0}
-                            className="px-3 py-1.5 rounded-full border border-titanium-200 bg-white text-titanium-400 text-[10px] font-bold uppercase tracking-tight hover:border-titanium-400 transition-all active:scale-95 disabled:opacity-30"
+                            className="px-3 py-1.5 rounded-full border border-ns bg-ns-surface text-ns-muted text-[10px] font-bold uppercase tracking-tight hover:border-ns transition-all active:scale-95 disabled:opacity-30"
                         >
                             Undo
                         </button>
@@ -360,14 +371,14 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
                             type="button"
                             onClick={actions?.rebetRoulette}
                             disabled={gameState.rouletteLastRoundBets.length === 0}
-                            className="px-3 py-1.5 rounded-full border border-titanium-200 bg-white text-titanium-400 text-[10px] font-bold uppercase tracking-tight hover:border-titanium-400 transition-all active:scale-95 disabled:opacity-30"
+                            className="px-3 py-1.5 rounded-full border border-ns bg-ns-surface text-ns-muted text-[10px] font-bold uppercase tracking-tight hover:border-ns transition-all active:scale-95 disabled:opacity-30"
                         >
                             Rebet
                         </button>
                         <button
                             type="button"
                             onClick={actions?.cycleRouletteZeroRule}
-                            className="px-3 py-1.5 rounded-full border border-titanium-200 bg-white text-titanium-600 text-[10px] font-bold uppercase tracking-tight hover:border-titanium-400 transition-all active:scale-95"
+                            className="px-3 py-1.5 rounded-full border border-ns bg-ns-surface text-ns text-[10px] font-bold uppercase tracking-tight hover:border-mono-0/40 transition-all active:scale-95"
                         >
                             Rule: {zeroRuleLabel}
                         </button>
@@ -377,7 +388,7 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
                             className={`px-3 py-1.5 rounded-full border text-[10px] font-bold uppercase tracking-tight transition-all active:scale-95 ${
                                 gameState.activeModifiers.super
                                     ? 'border-mono-0 bg-mono-0/10 text-mono-0 dark:text-mono-1000'
-                                    : 'border-titanium-200 bg-white text-titanium-600 hover:border-titanium-400'
+                                : 'border-ns bg-ns-surface text-ns hover:border-mono-0/40'
                             }`}
                         >
                             Super
@@ -386,7 +397,7 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
                             <div className="space-y-6">
                                 <div>
                                     <Label size="micro" className="mb-2 block">Exposure</Label>
-                                    <div className="max-h-56 overflow-y-auto scrollbar-hide rounded-2xl border border-titanium-200 bg-titanium-50/60 p-2">
+                                    <div className="max-h-56 overflow-y-auto scrollbar-hide rounded-2xl liquid-panel p-2">
                                         {Array.from({ length: exposureByNumber.length }, (_, i) => i).map(num => renderExposureRow(num))}
                                     </div>
                                 </div>
@@ -394,15 +405,15 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
                                     <Label size="micro" className="mb-2 block">Active Bets</Label>
                                     <div className="space-y-2">
                                         {gameState.rouletteBets.length === 0 ? (
-                                            <div className="text-center py-6 text-[11px] text-titanium-500 uppercase tracking-widest">No bets placed</div>
+                                            <div className="text-center py-6 text-[11px] text-ns-muted uppercase tracking-widest">No bets placed</div>
                                         ) : (
                                             gameState.rouletteBets.map((b, i) => (
-                                                <div key={i} className={`flex justify-between items-center p-3 rounded-2xl border transition-all ${b.local ? 'bg-titanium-50 border-dashed border-titanium-300' : 'bg-white border-titanium-100 shadow-soft'}`}>
+                                                <div key={i} className={`flex justify-between items-center p-3 rounded-2xl border transition-all ${b.local ? 'bg-ns-surface border-dashed border-ns' : 'bg-ns-surface border-ns shadow-soft'}`}>
                                                     <div className="flex flex-col">
-                                                        <span className="text-[10px] font-bold text-titanium-900 uppercase tracking-tight">
+                                                        <span className="text-[10px] font-bold text-ns uppercase tracking-tight">
                                                             {b.type} {b.type === 'STRAIGHT' && typeof b.target === 'number' ? formatRouletteNumber(b.target) : b.target ?? ''}
                                                         </span>
-                                                        <span className="text-[9px] font-bold text-titanium-400 uppercase">{b.local ? 'Pending' : 'Confirmed'}</span>
+                                                        <span className="text-[9px] font-bold text-ns-muted uppercase">{b.local ? 'Pending' : 'Confirmed'}</span>
                                                     </div>
                                                     <span className="text-xs font-bold text-mono-0 dark:text-mono-1000 font-bold">${b.amount}</span>
                                                 </div>
@@ -418,7 +429,7 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
                 <div className="flex md:hidden items-center gap-2">
                     <BetsDrawer title="PLACE BETS">
                         <div className="space-y-4">
-                            <div className="rounded-2xl border border-titanium-100 bg-white p-3 space-y-2">
+                            <div className="rounded-2xl liquid-panel p-3 space-y-2">
                                 <Label size="micro">Quick Bets</Label>
                                 <div className="grid grid-cols-3 gap-2">
                                     {([
@@ -438,7 +449,7 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
                                                 className={`py-3 rounded-xl border text-xs font-bold uppercase transition-all active:scale-95 ${
                                                     active
                                                         ? 'border-mono-0 bg-mono-0/10 text-mono-0 dark:text-mono-1000'
-                                                        : 'border-titanium-200 bg-titanium-50 text-titanium-700'
+                                                        : 'border-ns bg-ns-surface text-ns'
                                                 }`}
                                             >
                                                 {bet.label}
@@ -448,7 +459,7 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
                                 </div>
                             </div>
 
-                            <div className="rounded-2xl border border-titanium-100 bg-white p-3 space-y-2">
+                            <div className="rounded-2xl liquid-panel p-3 space-y-2">
                                 <Label size="micro">Dozens & Columns</Label>
                                 <div className="grid grid-cols-3 gap-2">
                                     {([
@@ -468,7 +479,7 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
                                                 className={`py-3 rounded-xl border text-[11px] font-bold uppercase transition-all active:scale-95 ${
                                                     active
                                                         ? 'border-mono-0 bg-mono-0/10 text-mono-0 dark:text-mono-1000'
-                                                        : 'border-titanium-200 bg-titanium-50 text-titanium-700'
+                                                        : 'border-ns bg-ns-surface text-ns'
                                                 }`}
                                             >
                                                 {bet.label}
@@ -478,7 +489,7 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
                                 </div>
                             </div>
 
-                            <div className="rounded-2xl border border-titanium-100 bg-white p-3 space-y-2">
+                            <div className="rounded-2xl liquid-panel p-3 space-y-2">
                                 <Label size="micro">Zero</Label>
                                 <div className="grid grid-cols-2 gap-2">
                                     <button
@@ -487,7 +498,7 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
                                         className={`py-3 rounded-xl border text-xs font-bold uppercase transition-all active:scale-95 ${
                                             hasBet('ZERO')
                                                 ? 'border-mono-0 bg-mono-0/10 text-mono-0 dark:text-mono-1000'
-                                                : 'border-titanium-200 bg-titanium-50 text-titanium-700'
+                                                : 'border-ns bg-ns-surface text-ns'
                                         }`}
                                     >
                                         0
@@ -499,7 +510,7 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
                                             className={`py-3 rounded-xl border text-xs font-bold uppercase transition-all active:scale-95 ${
                                                 hasBet('STRAIGHT', ROULETTE_DOUBLE_ZERO)
                                                     ? 'border-mono-0 bg-mono-0/10 text-mono-0 dark:text-mono-1000'
-                                                    : 'border-titanium-200 bg-titanium-50 text-titanium-700'
+                                                    : 'border-ns bg-ns-surface text-ns'
                                             }`}
                                         >
                                             00
@@ -508,7 +519,7 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
                                 </div>
                             </div>
 
-                            <div className="rounded-2xl border border-titanium-100 bg-white p-3 space-y-2">
+                            <div className="rounded-2xl liquid-panel p-3 space-y-2">
                                 <Label size="micro">Number Bets</Label>
                                 <div className="grid grid-cols-2 gap-2">
                                     {([
@@ -523,7 +534,7 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
                                             key={entry.mode}
                                             type="button"
                                             onClick={() => openInputMode(entry.mode)}
-                                            className="py-3 rounded-xl border border-titanium-200 bg-titanium-50 text-titanium-700 text-xs font-bold uppercase transition-all active:scale-95"
+                                        className="py-3 rounded-xl border border-ns bg-ns-surface text-ns text-xs font-bold uppercase transition-all active:scale-95"
                                         >
                                             {entry.label}
                                         </button>
@@ -531,14 +542,14 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
                                 </div>
                             </div>
 
-                            <div className="rounded-2xl border border-titanium-100 bg-white p-3 space-y-2">
+                            <div className="rounded-2xl liquid-panel p-3 space-y-2">
                                 <Label size="micro">Actions</Label>
                                 <div className="grid grid-cols-2 gap-2">
                                     <button
                                         type="button"
                                         onClick={actions?.undoRouletteBet}
                                         disabled={gameState.rouletteUndoStack.length === 0}
-                                        className="py-3 rounded-xl border border-titanium-200 bg-white text-titanium-400 text-xs font-bold uppercase transition-all active:scale-95 disabled:opacity-30"
+                                        className="py-3 rounded-xl border border-ns bg-ns-surface text-ns-muted text-xs font-bold uppercase transition-all active:scale-95 disabled:opacity-30"
                                     >
                                         Undo
                                     </button>
@@ -546,14 +557,14 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
                                         type="button"
                                         onClick={actions?.rebetRoulette}
                                         disabled={gameState.rouletteLastRoundBets.length === 0}
-                                        className="py-3 rounded-xl border border-titanium-200 bg-white text-titanium-400 text-xs font-bold uppercase transition-all active:scale-95 disabled:opacity-30"
+                                        className="py-3 rounded-xl border border-ns bg-ns-surface text-ns-muted text-xs font-bold uppercase transition-all active:scale-95 disabled:opacity-30"
                                     >
                                         Rebet
                                     </button>
                                     <button
                                         type="button"
                                         onClick={actions?.cycleRouletteZeroRule}
-                                        className="py-3 rounded-xl border border-titanium-200 bg-white text-titanium-700 text-xs font-bold uppercase transition-all active:scale-95"
+                                        className="py-3 rounded-xl border border-ns bg-ns-surface text-ns text-xs font-bold uppercase transition-all active:scale-95"
                                     >
                                         Rule: {zeroRuleLabel}
                                     </button>
@@ -563,7 +574,7 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
                                         className={`py-3 rounded-xl border text-xs font-bold uppercase transition-all active:scale-95 ${
                                             gameState.activeModifiers.super
                                                 ? 'border-mono-0 bg-mono-0/10 text-mono-0 dark:text-mono-1000'
-                                                : 'border-titanium-200 bg-titanium-50 text-titanium-700'
+                                                : 'border-ns bg-ns-surface text-ns'
                                         }`}
                                     >
                                         Super

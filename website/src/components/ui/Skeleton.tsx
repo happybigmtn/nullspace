@@ -38,20 +38,21 @@ export function Skeleton({
   shimmer = true,
 }: SkeletonProps) {
   const baseClasses = cn(
-    'bg-titanium-200 dark:bg-titanium-700',
+    'bg-black/5 dark:bg-white/10',
     shimmer && 'skeleton-shimmer',
     className
   );
 
+  const getBorderRadius = () => {
+    if (radius === 'full') return '9999px';
+    if (typeof radius === 'number') return `${radius}px`;
+    return radius;
+  };
+
   const computedStyle: CSSProperties = {
     width: typeof width === 'number' ? `${width}px` : width,
     height: typeof height === 'number' ? `${height}px` : height,
-    borderRadius:
-      radius === 'full'
-        ? '9999px'
-        : typeof radius === 'number'
-        ? `${radius}px`
-        : radius,
+    borderRadius: getBorderRadius(),
     ...style,
   };
 
@@ -173,7 +174,7 @@ export function SkeletonCard({
 }: SkeletonCardProps) {
   return (
     <div
-      className={cn('bg-white dark:bg-titanium-800 rounded-lg overflow-hidden', className)}
+      className={cn('liquid-panel rounded-lg overflow-hidden', className)}
       style={{ width: typeof width === 'number' ? `${width}px` : width }}
     >
       <Skeleton width="100%" height={imageHeight} shimmer={shimmer} />
@@ -321,7 +322,7 @@ export function LoadingText({ text = '...', className = '' }: LoadingTextProps) 
   return (
     <span
       className={cn(
-        'inline-block animate-pulse text-titanium-400 dark:text-titanium-500',
+        'inline-block animate-pulse text-ns-muted',
         className
       )}
       aria-live="polite"
