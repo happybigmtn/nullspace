@@ -29,6 +29,8 @@ const commands = scriptInput
   .filter(Boolean);
 const delayMs = Number(getArg('delay', '350'));
 const headless = getArg('headed', process.env.HEADED) ? false : true;
+const inputTimeout = Number(getArg('input-timeout', '15000'));
+const commandTimeout = Number(getArg('command-timeout', '30000'));
 
 const log = (...msg) => process.stdout.write(msg.join(' ') + '\n');
 
@@ -49,13 +51,36 @@ async function run() {
   });
 
   await page.goto(baseUrl, { waitUntil: 'networkidle' });
-  await page.waitForSelector('input[placeholder="/help"]', { timeout: 15000 });
+
+  const focusInput = async () => {
+    const input = await page.waitForSelector('input[placeholder="/help"]', { timeout: inputTimeout });
+    await input.focus();
+    return input;
+  };
+
+  let input = await focusInput();
 
   for (const cmd of commands) {
-    await page.fill('input[placeholder="/help"]', cmd);
-    await page.keyboard.press('Enter');
-    log(`[cmd] ${cmd}`);
-    await page.waitForTimeout(delayMs);
+    try {
+      await input.fill('');
+      await input.type(cmd, { delay: 10 });
+      await page.keyboard.press('Enter');
+      log(`[cmd] ${cmd}`);
+      const wait = commandTimeout > delayMs ? delayMs : commandTimeout;
+      await page.waitForTimeout(wait);
+    } catch (err) {
+      // Try to refocus once if the input vanished
+      try {
+        input = await focusInput();
+        await input.fill('');
+        await input.type(cmd, { delay: 10 });
+        await page.keyboard.press('Enter');
+        log(`[cmd retry] ${cmd}`);
+        await page.waitForTimeout(delayMs);
+      } catch (err2) {
+        throw err2;
+      }
+    }
   }
 
   // Grab the log panel text for verification
