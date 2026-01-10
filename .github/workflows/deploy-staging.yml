@@ -377,8 +377,9 @@ jobs:
         run: |
           set -euo pipefail
           cd website
-          npm ci
-          npm run test:smoke || npm run test:smoke || (echo "Smoke failed after retry" && exit 1)
+          corepack enable
+          pnpm install --frozen-lockfile --ignore-scripts
+          pnpm run smoke || pnpm run smoke || (echo "Smoke failed after retry" && exit 1)
 
   # Notify deployment result
   notify-result:
