@@ -133,6 +133,7 @@ export default function TerminalPage() {
   const { status, statusDetail, vaultMode } = useSharedCasinoConnection();
   const { stats, gameState, isOnChain, actions } = useTerminalGame('CASH');
 
+  const accent = '#7cf0c5';
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [input, setInput] = useState('');
   const [vaultStatus, setVaultStatus] = useState(() => getVaultStatusSync());
@@ -457,26 +458,61 @@ export default function TerminalPage() {
     return 'Unlock required to play.';
   }, [vaultStatus]);
 
+  const Pill = ({ label, value }: { label: string; value: string }) => (
+    <div className="flex items-center gap-2 text-xs">
+      <span className="uppercase tracking-[0.08em] text-[#9ca3af]">{label}</span>
+      <span className="px-2 py-1 rounded bg-[#0b0f1a] border border-[#1f2937] text-[#e5e7eb]">{value}</span>
+    </div>
+  );
+
+  const Key = ({ k }: { k: string }) => (
+    <span className="px-2 py-1 rounded border border-[#1f2937] bg-[#0b0f1a] text-xs text-[#e5e7eb]">{k}</span>
+  );
+
   return (
-    <div className="min-h-screen bg-[#050505] text-[#e5e7eb] font-mono flex flex-col">
-      <div className="px-3 pt-3 text-xs text-[#9ca3af] whitespace-pre">
-        {header}
-        {'\n'}
-        {statusLine}
+    <div className="min-h-screen bg-[#05070f] text-[#e5e7eb] font-mono flex flex-col">
+      <div className="bg-gradient-to-r from-[#0b1325] via-[#0c152c] to-[#0b1325] border-b border-[#111827] px-4 py-4">
+        <div className="flex items-start justify-between gap-6">
+          <div className="space-y-2">
+            <div className="text-[10px] tracking-[0.2em] uppercase text-[#8b95a5]">Nullspace · Terminal</div>
+            <div className="inline-flex items-center gap-2 text-lg font-semibold">
+              <span className="text-[#e5e7eb]">Codex‑style TUI</span>
+              <span className="h-1 w-6 rounded-full" style={{ background: accent }} />
+            </div>
+            <div className="flex flex-wrap gap-4">
+              <Pill label="Conn" value={statusDetail ? `${status} / ${statusDetail}` : status} />
+              <Pill label="Vault" value={vaultBadge.toUpperCase()} />
+              <Pill label="Game" value={`${gameState.type} @ ${gameState.stage}`} />
+              <Pill label="Bet" value={String(gameState.bet)} />
+              <Pill label="Chips" value={String(stats.chips ?? 0)} />
+              <Pill label="On-chain" value={String(isOnChain)} />
+            </div>
+          </div>
+          <div className="hidden md:flex items-center gap-2 text-xs text-[#9ca3af]">
+            <Key k="↑↓" />
+            <span>scroll</span>
+            <Key k="/status" />
+            <span>session info</span>
+            <Key k="/unlock" />
+            <span>unlock vault</span>
+          </div>
+        </div>
       </div>
 
-      <div className="px-3 mt-2">
-        <div className="border border-[#1f2937] rounded-sm bg-[#0b0b0f] p-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+      <div className="px-4 pt-3">
+        <div className="border border-[#1f2937] rounded bg-[#0a0f1a] p-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3 shadow-[0_10px_30px_rgba(0,0,0,0.35)]">
           <div className="space-y-1">
-            <div className="text-xs text-[#9ca3af] uppercase">Vault</div>
-            <div className="text-sm">{vaultBadge.toUpperCase()}</div>
-            <div className="text-xs text-[#6b7280]">{vaultHint}</div>
+            <div className="text-[11px] tracking-[0.15em] text-[#9ca3af] uppercase">Vault state</div>
+            <div className="text-sm flex items-center gap-2">
+              <span className="text-[#e5e7eb] font-semibold">{vaultBadge.toUpperCase()}</span>
+              <span className="text-[#6b7280]">{vaultHint}</span>
+            </div>
             {vaultError && <div className="text-xs text-red-400">{vaultError}</div>}
           </div>
-          <div className="flex flex-col md:flex-row gap-2 md:items-center md:justify-end">
+          <div className="flex flex-col md:flex-row gap-2 md:items-center md:justify-end w-full md:w-auto">
             {!vaultStatus.enabled && (
               <a
-                className="px-3 py-2 text-xs border border-[#1f2937] rounded-sm bg-[#111827] hover:bg-[#1f2937]"
+                className="px-3 py-2 text-xs border border-[#1f2937] rounded bg-[#0e1625] hover:bg-[#111c2e] transition"
                 href="/security"
               >
                 Open Security
@@ -487,16 +523,16 @@ export default function TerminalPage() {
                 type="button"
                 disabled={vaultBusy}
                 onClick={unlockWithPasskey}
-                className="px-3 py-2 text-xs border border-[#1f2937] rounded-sm bg-[#111827] hover:bg-[#1f2937] disabled:opacity-50"
+                className="px-3 py-2 text-xs border border-[#1f2937] rounded bg-[#0e1625] hover:bg-[#111c2e] disabled:opacity-50 transition"
               >
                 {vaultBusy ? 'Unlocking…' : 'Unlock with passkey'}
               </button>
             )}
             {vaultStatus.enabled && vaultStatus.kind === 'password' && (
-              <div className="flex gap-2 items-center">
+              <div className="flex gap-2 items-center w-full md:w-auto">
                 <input
                   type="password"
-                  className="bg-[#0b0b0f] border border-[#1f2937] rounded-sm px-2 py-1 text-sm w-40"
+                  className="bg-[#0b0f1a] border border-[#1f2937] rounded px-2 py-1 text-sm w-full md:w-44"
                   placeholder="Vault password"
                   value={vaultPassword}
                   onChange={(e) => setVaultPassword(e.target.value)}
@@ -506,7 +542,7 @@ export default function TerminalPage() {
                   type="button"
                   disabled={vaultBusy || !vaultPassword}
                   onClick={() => unlockWithPassword(vaultPassword)}
-                  className="px-3 py-2 text-xs border border-[#1f2937] rounded-sm bg-[#111827] hover:bg-[#1f2937] disabled:opacity-50"
+                  className="px-3 py-2 text-xs border border-[#1f2937] rounded bg-[#0e1625] hover:bg-[#111c2e] disabled:opacity-50 transition"
                 >
                   {vaultBusy ? 'Unlocking…' : 'Unlock vault'}
                 </button>
@@ -516,15 +552,15 @@ export default function TerminalPage() {
         </div>
       </div>
 
-      <div className="mt-2 grid md:grid-cols-[320px_1fr] gap-2 px-3 pb-2">
-        <div className="border border-[#1f2937] rounded-sm bg-[#0b0b0f]">
-          <div className="px-3 py-2 text-xs text-[#9ca3af] flex justify-between">
+      <div className="mt-3 grid md:grid-cols-[320px_1fr] gap-3 px-4 pb-3">
+        <div className="border border-[#1f2937] rounded bg-[#0b0f1a] shadow-[0_10px_30px_rgba(0,0,0,0.25)]">
+          <div className="px-3 py-2 text-xs text-[#9ca3af] flex justify-between items-center border-b border-[#1f2937]">
             <span>Commands</span>
-            <span>?</span>
+            <span className="text-[#6b7280]">⌘</span>
           </div>
-          <div className="border-t border-[#1f2937] divide-y divide-[#1f2937] text-sm">
+          <div className="divide-y divide-[#1f2937] text-sm">
             {commandTable.map(([cmd, desc]) => (
-              <div key={cmd} className="px-3 py-1 flex justify-between">
+              <div key={cmd} className="px-3 py-1.5 flex justify-between">
                 <span className="text-[#e5e7eb]">{cmd}</span>
                 <span className="text-[#6b7280] text-xs">{desc}</span>
               </div>
@@ -532,22 +568,22 @@ export default function TerminalPage() {
           </div>
         </div>
 
-        <div className="border border-[#1f2937] rounded-sm bg-[#0b0b0f] flex flex-col">
-          <div className="px-3 py-2 text-xs text-[#9ca3af] flex justify-between">
-            <span>Log</span>
+        <div className="border border-[#1f2937] rounded bg-[#0b0f1a] flex flex-col shadow-[0_14px_40px_rgba(0,0,0,0.35)]">
+          <div className="px-3 py-2 text-xs text-[#9ca3af] flex justify-between border-b border-[#1f2937]">
+            <span>Session Log</span>
             <span>
               {status}{statusDetail ? ` / ${statusDetail}` : ''} · Vault {vaultMode}
             </span>
           </div>
           <div
             ref={scrollRef}
-            className="flex-1 overflow-auto px-3 py-2 space-y-1 text-sm leading-5"
-            style={{ minHeight: '320px' }}
+            className="flex-1 overflow-auto px-3 py-3 space-y-2 text-sm leading-5 bg-gradient-to-b from-[#0b0f1a] via-[#0b0f1a] to-[#0c1524]"
+            style={{ minHeight: '360px' }}
           >
             {logs.map((l, idx) => (
-              <div key={`${idx}-${l.ts}`} className="whitespace-pre-wrap">
-                <span className="text-[#6b7280] mr-2">{l.ts}</span>
-                <span>{l.text}</span>
+              <div key={`${idx}-${l.ts}`} className="whitespace-pre-wrap flex gap-2">
+                <span className="text-[#6b7280] min-w-[64px]">{l.ts}</span>
+                <span className="text-[#e5e7eb]">{l.text}</span>
               </div>
             ))}
           </div>
@@ -555,7 +591,7 @@ export default function TerminalPage() {
       </div>
 
       <form
-        className="border-t border-[#1f2937] bg-[#0b0b0f] px-3 py-2 flex items-center gap-2"
+        className="border-t border-[#111827] bg-[#0a0f1a] px-4 py-3 flex items-center gap-3 shadow-[0_-6px_30px_rgba(0,0,0,0.35)]"
         onSubmit={(e) => {
           e.preventDefault();
           const text = input;
@@ -572,6 +608,10 @@ export default function TerminalPage() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
         />
+        <div className="hidden md:flex items-center gap-2 text-xs text-[#6b7280]">
+          <Key k="Enter" />
+          <span>send</span>
+        </div>
       </form>
     </div>
   );
