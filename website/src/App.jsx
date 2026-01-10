@@ -4,6 +4,7 @@ import { isFeatureEnabled } from './services/featureFlags';
 import { ToastHost } from './components/ui/ToastHost';
 import { InstallBanner } from './components/ui/InstallBanner';
 import { captureReferralFromSearch, claimReferralIfReady } from './services/referrals';
+import { CasinoConnectionProvider } from './chain/CasinoConnectionContext';
 // Import vaultRuntime in main bundle to ensure it's not duplicated across lazy chunks
 // This ensures the in-memory vault state is shared between CasinoApp and SecurityApp
 import './security/vaultRuntime';
@@ -19,6 +20,7 @@ const EconomyApp = lazy(() => import('./EconomyApp'));
 const StakingApp = lazy(() => import('./StakingApp'));
 const BridgeApp = lazy(() => import('./BridgeApp'));
 const SecurityApp = lazy(() => import('./SecurityApp'));
+const TerminalPage = lazy(() => import('./TerminalPage'));
 
 const LegacyEconomyApp = lazy(() => import('./LegacyLiquidityApp'));
 const LegacyStakingApp = lazy(() => import('./LegacyStakingApp'));
@@ -29,6 +31,7 @@ const BlockDetailPage = lazy(() => import('./explorer/BlockDetailPage'));
 const TxDetailPage = lazy(() => import('./explorer/TxDetailPage'));
 const AccountPage = lazy(() => import('./explorer/AccountPage'));
 const TokensPage = lazy(() => import('./explorer/TokensPage'));
+const BASE_URL = import.meta.env.VITE_URL || '/api';
 
 const EconomyRoute = () => (isFeatureEnabled('new_economy_ui') ? <EconomyApp /> : <LegacyEconomyApp />);
 const StakingRoute = () => (isFeatureEnabled('new_staking_ui') ? <StakingApp /> : <LegacyStakingApp />);
@@ -49,39 +52,44 @@ const ReferralListener = () => {
 function App() {
   return (
     <BrowserRouter>
-      <ToastHost />
-      <InstallBanner />
-      <ReferralListener />
-      <Suspense
-        fallback={
-          <div className="min-h-screen bg-terminal-black text-white flex items-center justify-center font-mono">
-            <div className="text-[10px] tracking-widest text-gray-400">LOADING…</div>
-          </div>
-        }
-      >
-        <Routes>
-          <Route path="/" element={<CasinoApp />} />
-          <Route element={<AppLayout />}>
-          <Route path="economy" element={<EconomyDashboard />} />
-          <Route path="analytics" element={<OpsAnalyticsDashboard />} />
-          <Route element={<ChainConnectionLayout />}>
-              <Route path="swap" element={<EconomyRoute />} />
-              <Route path="borrow" element={<EconomyRoute />} />
-              <Route path="stake" element={<StakingRoute />} />
-              <Route path="liquidity" element={<EconomyRoute />} />
-              <Route path="bridge" element={<BridgeApp />} />
+      <CasinoConnectionProvider baseUrl={BASE_URL}>
+        <ToastHost />
+        <InstallBanner />
+        <ReferralListener />
+        <Suspense
+          fallback={
+            <div className="min-h-screen liquid-shell flex items-center justify-center text-ns font-sans">
+              <div className="liquid-card px-6 py-4 text-[11px] uppercase tracking-[0.3em] text-ns-muted">
+                Loading…
+              </div>
+            </div>
+          }
+        >
+          <Routes>
+            <Route path="/" element={<CasinoApp />} />
+            <Route element={<AppLayout />}>
+              <Route path="economy" element={<EconomyDashboard />} />
+              <Route path="analytics" element={<OpsAnalyticsDashboard />} />
+              <Route element={<ChainConnectionLayout />}>
+                <Route path="swap" element={<EconomyRoute />} />
+                <Route path="borrow" element={<EconomyRoute />} />
+                <Route path="stake" element={<StakingRoute />} />
+                <Route path="liquidity" element={<EconomyRoute />} />
+                <Route path="bridge" element={<BridgeApp />} />
+              </Route>
+              <Route path="security" element={<SecurityApp />} />
+              <Route path="explorer" element={<ExplorerLayout />}>
+                <Route index element={<BlocksPage />} />
+                <Route path="blocks/:id" element={<BlockDetailPage />} />
+                <Route path="tx/:hash" element={<TxDetailPage />} />
+                <Route path="account/:pubkey" element={<AccountPage />} />
+                <Route path="tokens" element={<TokensPage />} />
+              </Route>
+              <Route path="terminal" element={<TerminalPage />} />
             </Route>
-            <Route path="security" element={<SecurityApp />} />
-            <Route path="explorer" element={<ExplorerLayout />}>
-              <Route index element={<BlocksPage />} />
-              <Route path="blocks/:id" element={<BlockDetailPage />} />
-              <Route path="tx/:hash" element={<TxDetailPage />} />
-              <Route path="account/:pubkey" element={<AccountPage />} />
-              <Route path="tokens" element={<TokensPage />} />
-            </Route>
-          </Route>
-        </Routes>
-      </Suspense>
+          </Routes>
+        </Suspense>
+      </CasinoConnectionProvider>
     </BrowserRouter>
   );
 }
