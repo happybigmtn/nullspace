@@ -31,8 +31,10 @@
     "visual:capture": "node scripts/visual-regression.mjs capture",
     "visual:compare": "node scripts/visual-regression.mjs compare",
     "visual:update": "VISUAL_UPDATE=1 node scripts/visual-regression.mjs capture",
+    "terminal:smoke": "node scripts/terminal-cli.mjs",
     "build:analyze": "ANALYZE=true npm run build",
-    "bundle:check": "node scripts/check-bundle-sizes.mjs"
+    "bundle:check": "node scripts/check-bundle-sizes.mjs",
+    "perf:budget": "node scripts/perf-budget.mjs"
   },
   "keywords": [],
   "author": "",
