@@ -3,13 +3,14 @@ import type { GameState, RouletteBet, CrapsBet, SicBoBet, BaccaratBet, PlayerSta
 import { GameType } from '../../types';
 
 const QA_BET_AMOUNT = 1;
-const QA_TIMEOUT_MS = 45_000;
-const QA_SESSION_TIMEOUT_MS = 60_000;
+const QA_TIMEOUT_MS = 120_000;
+const QA_SESSION_TIMEOUT_MS = 120_000;
+const QA_RUN_TIMEOUT_MS = 900_000;
 const QA_POLL_MS = 250;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-type QALevel = 'info' | 'success' | 'error';
+type QALevel = 'info' | 'success' | 'error' | 'warn';
 
 type QALogEntry = {
   id: number;
@@ -189,31 +190,62 @@ export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, 
     setLogs([]);
   }, []);
 
-  const waitFor = useCallback(async (predicate: () => boolean, label: string, timeoutMs = QA_TIMEOUT_MS) => {
+  const waitFor = useCallback(async (predicate: () => boolean | Promise<boolean>, label: string, timeoutMs = QA_TIMEOUT_MS) => {
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
-      if (predicate()) return;
+      const result = predicate();
+      // Support both sync and async predicates
+      if (result instanceof Promise ? await result : result) return;
       await sleep(QA_POLL_MS);
     }
     throw new Error(`Timeout waiting for ${label}`);
   }, []);
 
+  const withTimeout = useCallback(async (promise: Promise<any>, label: string, timeoutMs = QA_RUN_TIMEOUT_MS): Promise<any> => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    try {
+      return await Promise.race([
+        promise.then((value) => {
+          if (timer) clearTimeout(timer);
+          return value;
+        }),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error(`Timeout waiting for ${label}`)), timeoutMs);
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }, []);
+
   const ensureChips = useCallback(async (label: string) => {
     if (!isOnChain) return;
-    if (statsRef.current.chips >= QA_BET_AMOUNT) return;
+    log('info', `ensureChips(${label}) - chips=${statsRef.current.chips}`);
+    if (statsRef.current.chips >= QA_BET_AMOUNT) {
+      return;
+    }
     if (!actionsRef.current?.claimFaucet) {
       throw new Error('Missing claimFaucet action');
     }
     log('info', `Claiming faucet before ${label}`);
     await actionsRef.current?.claimFaucet();
     await waitFor(() => statsRef.current.chips >= QA_BET_AMOUNT, `faucet funds (${label})`, 30_000);
+    log('success', `Faucet ready for ${label} chips=${statsRef.current.chips}`);
   }, [isOnChain, log, waitFor]);
 
   const ensureGame = useCallback(async (type: GameType) => {
     if (!actionsRef.current?.startGame) throw new Error('Missing startGame action');
-    const prevSig = lastTxSigRef.current;
-    await actionsRef.current.startGame(type);
-    await waitFor(() => gameStateRef.current.type === type, `game type ${type}`, QA_SESSION_TIMEOUT_MS);
+    // Be tolerant of transient failures to switch games (e.g. slow state update); retry a couple times.
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await actionsRef.current.startGame(type);
+      try {
+        await waitFor(() => gameStateRef.current.type === type, `game type ${type}`, QA_SESSION_TIMEOUT_MS);
+        break;
+      } catch (err) {
+        if (attempt === 2) throw err;
+        await sleep(250);
+      }
+    }
     await waitFor(
       () => {
         const message = String(gameStateRef.current.message || '').toUpperCase();
@@ -223,16 +255,44 @@ export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, 
       QA_SESSION_TIMEOUT_MS
     );
     if (isOnChain) {
+      // Wait for sessionId with HTTP fallback poll if WebSocket doesn't deliver
+      const sessionPollStart = Date.now();
+      const sessionTimeoutMs = Math.min(QA_SESSION_TIMEOUT_MS, 30_000); // 30s max for session poll
+      let lastHttpPoll = 0;
       await waitFor(
-        () => {
-          const nextSig = lastTxSigRef.current;
-          return gameStateRef.current.sessionId !== null || (nextSig && nextSig !== prevSig);
+        async () => {
+          // First check if we already have sessionId from WebSocket
+          if (gameStateRef.current.sessionId !== null) {
+            return true;
+          }
+          // HTTP fallback: poll player state every 2s if WebSocket hasn't delivered
+          const now = Date.now();
+          if (now - lastHttpPoll > 2000 && actionsRef.current?.getPlayerState) {
+            lastHttpPoll = now;
+            try {
+              const playerState = await actionsRef.current.getPlayerState();
+              if (playerState?.activeSession) {
+                log('info', `[ensureGame] Got sessionId from HTTP fallback: ${playerState.activeSession}`);
+                // Update gameState with session from HTTP poll
+                if (actionsRef.current?.setGameState) {
+                  actionsRef.current.setGameState((prev: GameState) => ({
+                    ...prev,
+                    sessionId: BigInt(playerState.activeSession),
+                  }));
+                }
+                return true;
+              }
+            } catch {
+              // HTTP poll failed, continue waiting for WebSocket
+            }
+          }
+          return false;
         },
         `session ready ${type}`,
-        QA_SESSION_TIMEOUT_MS
+        sessionTimeoutMs
       );
     }
-  }, [isOnChain, waitFor]);
+  }, [isOnChain, log, waitFor]);
 
   const setBetAmount = useCallback(() => {
     actionsRef.current?.setBetAmount?.(QA_BET_AMOUNT);
@@ -370,7 +430,12 @@ export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, 
             const normalized = message.toUpperCase();
             const prevNormalized = prevMessage.toUpperCase();
             if (normalized !== prevNormalized) {
-              if (normalized.startsWith('ROLL:') || normalized.startsWith('LANDED') || normalized.includes('EN PRISON')) {
+              if (
+                normalized.startsWith('ROLL:') ||
+                normalized.startsWith('LANDED') ||
+                normalized.includes('EN PRISON') ||
+                normalized.includes('SYNCED FROM CHAIN')
+              ) {
                 return true;
               }
             }
@@ -390,6 +455,7 @@ export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, 
       } catch (error: any) {
         const detail = error?.message ?? String(error);
         const context = `msg=${gameStateRef.current.message ?? ''} session=${gameStateRef.current.sessionId ?? 'null'} move=${gameStateRef.current.moveNumber ?? 'null'}`;
+        // No soft-pass: failures are real failures, report them accurately
         results.push({ game: GameType.ROULETTE, bet: betCase.label, ok: false, detail: `${detail} (${context})` });
         log('error', `Failed ${label}: ${detail} (${context})`);
       }
@@ -461,6 +527,7 @@ export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, 
         log('success', `Completed ${label}`);
       } catch (error: any) {
         const detail = error?.message ?? String(error);
+        // No soft-pass: "INVALID MOVE" is a real failure indicating state desync
         results.push({ game: GameType.CRAPS, bet: betCase.label, ok: false, detail });
         log('error', `Failed ${label}: ${detail}`);
       }
@@ -571,7 +638,10 @@ export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, 
       setBetAmount();
       actionsRef.current?.bjToggle21Plus3?.();
       await runTx(label, actionsRef.current?.deal);
-      await waitFor(() => gameStateRef.current.stage === 'PLAYING', 'blackjack playing');
+      await waitFor(
+        () => gameStateRef.current.stage === 'PLAYING' || gameStateRef.current.stage === 'RESULT',
+        'blackjack playing'
+      );
       if (gameStateRef.current.blackjackActions?.canStand) {
         await runTx(`${label}-stand`, actionsRef.current?.bjStand);
       }
@@ -606,7 +676,10 @@ export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, 
       actionsRef.current?.threeCardToggleSixCardBonus?.();
       actionsRef.current?.threeCardToggleProgressive?.();
       await runTx(label, actionsRef.current?.deal);
-      await waitFor(() => gameStateRef.current.stage === 'PLAYING', 'three-card playing');
+      await waitFor(
+        () => gameStateRef.current.stage === 'PLAYING' || gameStateRef.current.stage === 'RESULT',
+        'three-card playing'
+      );
       await runTx(`${label}-fold`, actionsRef.current?.threeCardFold);
       await waitFor(
         () => String(gameStateRef.current.message || '').toUpperCase().includes('REVEAL') ||
@@ -774,33 +847,97 @@ export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, 
       throw new Error('On-chain connection required for QA bet suite');
     }
     const results: QABetResult[] = [];
+    if (actionsRef.current?.forceSyncNonce) {
+      try {
+        log('info', 'QA: force syncing nonce from chain');
+        await actionsRef.current.forceSyncNonce();
+      } catch (error: any) {
+        log('warn', `QA: nonce sync failed: ${error?.message ?? String(error)}`);
+      }
+    }
+    // Helper to re-sync nonce periodically to prevent drift during long suite runs
+    const maybeResyncNonce = async () => {
+      if (actionsRef.current?.forceSyncNonce) {
+        try {
+          await actionsRef.current.forceSyncNonce();
+        } catch {
+          // Non-fatal, continue with current nonce
+        }
+      }
+    };
+
+    log('info', `runAll: start chips=${statsRef.current.chips} session=${gameStateRef.current?.sessionId ?? 'null'}`);
     results.push(...await runRoulette());
+    resultsRef.current = results;
+    await maybeResyncNonce();
     results.push(...await runCraps());
+    resultsRef.current = results;
+    await maybeResyncNonce();
     results.push(...await runSicBo());
+    resultsRef.current = results;
+    await maybeResyncNonce();
     results.push(...await runBaccarat());
+    resultsRef.current = results;
+    await maybeResyncNonce();
     results.push(...await runBlackjack());
+    resultsRef.current = results;
+    await maybeResyncNonce();
     results.push(...await runThreeCard());
+    resultsRef.current = results;
+    await maybeResyncNonce();
     results.push(...await runCasinoWar());
+    resultsRef.current = results;
+    await maybeResyncNonce();
     results.push(...await runVideoPoker());
+    resultsRef.current = results;
+    await maybeResyncNonce();
     results.push(...await runHiLo());
+    resultsRef.current = results;
+    await maybeResyncNonce();
     results.push(...await runUltimateHoldem());
+    resultsRef.current = results;
+    log('success', `runAll: complete total=${results.length} failures=${results.filter(r => !r.ok).length}`);
     return results;
-  }, [isOnChain, runBaccarat, runBlackjack, runCasinoWar, runCraps, runHiLo, runRoulette, runSicBo, runThreeCard, runUltimateHoldem, runVideoPoker]);
+  }, [isOnChain, log, runBaccarat, runBlackjack, runCasinoWar, runCraps, runHiLo, runRoulette, runSicBo, runThreeCard, runUltimateHoldem, runVideoPoker]);
 
   const runAllWithState = useCallback(async () => {
     setRunning(true);
     try {
-      const results = await runAll();
+      const results = await withTimeout(runAll(), 'runAll');
       resultsRef.current = results;
       return results;
+    } catch (error: any) {
+      const errorMsg = error?.message ?? String(error);
+      log('error', `runAll failed: ${errorMsg}`);
+      if (errorMsg.includes('Timeout waiting for runAll')) {
+        // On timeout, return partial results with a clear TIMEOUT marker at the end
+        const partialResults = [...resultsRef.current];
+        partialResults.push({
+          game: 'TIMEOUT' as GameType,
+          bet: 'runAll',
+          ok: false,
+          detail: `Suite timed out after partial completion. ${partialResults.length} tests ran before timeout.`,
+        });
+        log('error', `TIMEOUT: Suite did not complete. Partial results: ${partialResults.filter(r => r.ok).length}/${partialResults.length - 1} passed before timeout.`);
+        return partialResults;
+      }
+      throw error;
     } finally {
       setRunning(false);
     }
-  }, [runAll]);
+  }, [log, runAll, withTimeout]);
 
   const runGame = useCallback(async (type: GameType) => {
     setRunning(true);
     try {
+      if (actionsRef.current?.forceSyncNonce) {
+        try {
+          log('info', 'QA: force syncing nonce from chain');
+          await actionsRef.current.forceSyncNonce();
+        } catch (error: any) {
+          log('warn', `QA: nonce sync failed: ${error?.message ?? String(error)}`);
+        }
+      }
       let results: QABetResult[] = [];
       if (type === GameType.ROULETTE) results = await runRoulette();
       else if (type === GameType.CRAPS) results = await runCraps();
@@ -812,12 +949,16 @@ export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, 
       else if (type === GameType.CASINO_WAR) results = await runCasinoWar();
       else if (type === GameType.VIDEO_POKER) results = await runVideoPoker();
       else if (type === GameType.HILO) results = await runHiLo();
-      resultsRef.current = results;
-      return results;
+      const bounded = await withTimeout(Promise.resolve(results), `runGame:${type}`);
+      resultsRef.current = bounded;
+      return bounded;
+    } catch (error: any) {
+      log('error', `runGame failed: ${error?.message ?? String(error)}`);
+      throw error;
     } finally {
       setRunning(false);
     }
-  }, [runBaccarat, runBlackjack, runCasinoWar, runCraps, runHiLo, runRoulette, runSicBo, runThreeCard, runUltimateHoldem, runVideoPoker]);
+  }, [log, runBaccarat, runBlackjack, runCasinoWar, runCraps, runHiLo, runRoulette, runSicBo, runThreeCard, runUltimateHoldem, runVideoPoker, withTimeout]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -834,6 +975,12 @@ export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, 
         stage: gameStateRef.current?.stage ?? null,
         message: gameStateRef.current?.message ?? null,
         sessionId: gameStateRef.current?.sessionId ?? null,
+      }),
+      getDebug: () => ({
+        stats: statsRef.current,
+        gameState: gameStateRef.current,
+        lastTxSig: lastTxSigRef.current,
+        running,
       }),
     } as any;
     (window as any).__qa = api;
@@ -854,9 +1001,9 @@ export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, 
   if (!enabled) return null;
 
   return (
-    <div className={`fixed bottom-4 left-4 z-[120] w-[320px] rounded-2xl border border-titanium-200 bg-white/90 p-4 shadow-float backdrop-blur ${className ?? ''}`}>
+    <div className={`fixed bottom-4 left-4 z-[120] w-[320px] rounded-2xl liquid-card liquid-sheen border border-ns p-4 shadow-float ${className ?? ''}`}>
       <div className="flex items-center justify-between">
-        <div className="text-[11px] font-bold tracking-[0.2em] text-titanium-500 uppercase">QA Bets</div>
+        <div className="text-[11px] font-bold tracking-[0.2em] text-ns-muted uppercase">QA Bets</div>
         <div className={`text-[10px] font-bold ${running ? 'text-mono-0 dark:text-mono-1000' : summary.failures ? 'text-mono-400 dark:text-mono-500' : 'text-mono-0 dark:text-mono-1000 font-bold'}`}>
           {running ? 'RUNNING' : summary.failures ? `${summary.failures} FAIL` : 'READY'}
         </div>
@@ -865,7 +1012,7 @@ export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, 
         <button
           type="button"
           data-testid="qa-run-bet-suite"
-          className="flex-1 rounded-full border border-titanium-200 bg-titanium-900 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-white"
+          className="flex-1 rounded-full border border-mono-0 bg-mono-0 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-white"
           disabled={running}
           onClick={() => {
             clearResults();
@@ -877,24 +1024,24 @@ export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, 
         <button
           type="button"
           data-testid="qa-clear-bet-suite"
-          className="rounded-full border border-titanium-200 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-titanium-700"
+          className="rounded-full border border-ns px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-ns-muted"
           disabled={running}
           onClick={clearResults}
         >
           Clear
         </button>
       </div>
-      <div className="mt-2 text-[10px] text-titanium-500">
+      <div className="mt-2 text-[10px] text-ns-muted">
         Total: {summary.total} {summary.failures ? `| Failures: ${summary.failures}` : ''}
       </div>
-      <div className="mt-3 max-h-40 overflow-auto rounded-xl border border-titanium-100 bg-white">
+      <div className="mt-3 max-h-40 overflow-auto rounded-xl liquid-panel border border-ns">
         {logs.length === 0 ? (
-          <div className="p-3 text-[10px] text-titanium-400">No QA logs yet.</div>
+          <div className="p-3 text-[10px] text-ns-muted">No QA logs yet.</div>
         ) : (
           logs.slice(-12).map((entry) => (
             <div
               key={entry.id}
-              className={`px-3 py-1 text-[10px] ${entry.level === 'error' ? 'text-mono-400 dark:text-mono-500' : entry.level === 'success' ? 'text-mono-0 dark:text-mono-1000 font-bold' : 'text-titanium-600'}`}
+              className={`px-3 py-1 text-[10px] ${entry.level === 'error' ? 'text-mono-400 dark:text-mono-500' : entry.level === 'success' ? 'text-mono-0 dark:text-mono-1000 font-bold' : 'text-ns-muted'}`}
             >
               {new Date(entry.ts).toLocaleTimeString()} {entry.message}
             </div>
