@@ -151,14 +151,11 @@ jobs:
         if: always()
         run: rm -f ~/.ssh/id_ed25519
 
-  # Deploy validator nodes
+  # Deploy validator nodes (4 validators on a single consolidated host for BFT consensus)
   deploy-validators:
     runs-on: ubuntu-latest
     needs: [prepare, deploy-simulator]
     if: always() && needs.prepare.result == 'success' && needs.deploy-simulator.result == 'success'
-    strategy:
-      matrix:
-        node: [1, 2, 3]
     steps:
       - name: Setup SSH
         env:
@@ -174,15 +171,15 @@ jobs:
           name: staging-secrets
           path: /tmp/secrets
 
-      - name: Deploy validator node ${{ matrix.node }}
+      - name: Deploy all validator nodes to consolidated host
         env:
-          HOST: ${{ matrix.node == 1 && secrets.STAGING_HOST_NODE1 || matrix.node == 2 && secrets.STAGING_HOST_NODE2 || secrets.STAGING_HOST_NODE3 }}
+          # All validators run on a single host (use NODE1 secret, or set STAGING_HOST_VALIDATORS)
+          HOST: ${{ secrets.STAGING_HOST_VALIDATORS || secrets.STAGING_HOST_NODE1 }}
           IMAGE_TAG: ${{ needs.prepare.outputs.image_tag }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NODE_NUM: ${{ matrix.node }}
         run: |
           set -euo pipefail
-          echo "Deploying validator node $NODE_NUM to $HOST..."
+          echo "Deploying all 4 validator nodes to consolidated host $HOST..."
 
           ssh-keyscan -H $HOST >> ~/.ssh/known_hosts 2>/dev/null || true
 
@@ -191,22 +188,63 @@ jobs:
             ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$HOST "mkdir -p /etc/nullspace"
           scp -o StrictHostKeyChecking=no /tmp/secrets/node.env $DEPLOY_USER@$HOST:/etc/nullspace/
 
-          # Deploy via SSH
+          # Deploy all 4 validators via SSH (each with unique container name, ports, and data volume)
+          # BFT requires n >= 3f+1 validators; with 4 validators, f=1 fault tolerance
           ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$HOST << DEPLOY
             set -euo pipefail
             echo "$GHCR_TOKEN" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
             docker pull $GHCR_REGISTRY/$IMAGE_PREFIX-node:$IMAGE_TAG || docker pull $GHCR_REGISTRY/$IMAGE_PREFIX-node:latest
-            docker stop nullspace-node 2>/dev/null || true
-            docker rm nullspace-node 2>/dev/null || true
-            docker run -d --name nullspace-node \
+
+            # Deploy validator 1
+            docker stop nullspace-node-1 2>/dev/null || true
+            docker rm nullspace-node-1 2>/dev/null || true
+            docker run -d --name nullspace-node-1 \
               --restart unless-stopped \
               --env-file /etc/nullspace/node.env \
-              -e NODE_ID=$NODE_NUM \
+              -e NODE_ID=1 \
               -p 9001:9001 \
               -p 9100:9100 \
-              -v /var/lib/nullspace/node:/data \
+              -v /var/lib/nullspace/node-1:/data \
               $GHCR_REGISTRY/$IMAGE_PREFIX-node:$IMAGE_TAG
-            docker ps | grep nullspace-node
+
+            # Deploy validator 2
+            docker stop nullspace-node-2 2>/dev/null || true
+            docker rm nullspace-node-2 2>/dev/null || true
+            docker run -d --name nullspace-node-2 \
+              --restart unless-stopped \
+              --env-file /etc/nullspace/node.env \
+              -e NODE_ID=2 \
+              -p 9002:9001 \
+              -p 9101:9100 \
+              -v /var/lib/nullspace/node-2:/data \
+              $GHCR_REGISTRY/$IMAGE_PREFIX-node:$IMAGE_TAG
+
+            # Deploy validator 3
+            docker stop nullspace-node-3 2>/dev/null || true
+            docker rm nullspace-node-3 2>/dev/null || true
+            docker run -d --name nullspace-node-3 \
+              --restart unless-stopped \
+              --env-file /etc/nullspace/node.env \
+              -e NODE_ID=3 \
+              -p 9003:9001 \
+              -p 9102:9100 \
+              -v /var/lib/nullspace/node-3:/data \
+              $GHCR_REGISTRY/$IMAGE_PREFIX-node:$IMAGE_TAG
+
+            # Deploy validator 4
+            docker stop nullspace-node-4 2>/dev/null || true
+            docker rm nullspace-node-4 2>/dev/null || true
+            docker run -d --name nullspace-node-4 \
+              --restart unless-stopped \
+              --env-file /etc/nullspace/node.env \
+              -e NODE_ID=4 \
+              -p 9004:9001 \
+              -p 9103:9100 \
+              -v /var/lib/nullspace/node-4:/data \
+              $GHCR_REGISTRY/$IMAGE_PREFIX-node:$IMAGE_TAG
+
+            echo "All 4 validators deployed:"
+            docker ps --filter "name=nullspace-node"
           DEPLOY
 
       - name: Clean up
@@ -368,52 +406,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Run smoke tests
+      - name: Run health checks
+        run: ./scripts/health-check.sh
+
+      - name: Run smoke Playwright (website)
         env:
-          INDEXER_URL: ${{ vars.STAGING_INDEXER_URL }}
-          GATEWAY_URL: ${{ vars.STAGING_GATEWAY_URL }}
-          AUTH_URL: ${{ vars.STAGING_AUTH_URL }}
-          METRICS_TOKEN: ${{ secrets.STAGING_METRICS_TOKEN }}
+          BASE_URL: https://testnet.regenesis.dev
         run: |
           set -euo pipefail
-          echo "=== Running Post-Deployment Smoke Tests ==="
-          FAILED=0
-
-          # Test 1: Indexer health
-          echo "Testing indexer health at ${INDEXER_URL:-'(not set)'}..."
-          if [[ -n "${INDEXER_URL:-}" ]] && curl -sf --max-time 10 "${INDEXER_URL}/healthz" > /dev/null; then
-            echo "Indexer health check passed"
-          else
-            echo "Indexer health check failed or URL not set"
-            FAILED=1
-          fi
-
-          # Test 2: Gateway health
-          echo "Testing gateway health at ${GATEWAY_URL:-'(not set)'}..."
-          if [[ -n "${GATEWAY_URL:-}" ]] && curl -sf --max-time 10 "${GATEWAY_URL}/healthz" > /dev/null; then
-            echo "Gateway health check passed"
-          else
-            echo "Gateway health check failed or URL not set"
-            FAILED=1
-          fi
-
-          # Test 3: Auth service health
-          echo "Testing auth service health at ${AUTH_URL:-'(not set)'}..."
-          if [[ -n "${AUTH_URL:-}" ]] && curl -sf --max-time 10 "${AUTH_URL}/healthz" > /dev/null; then
-            echo "Auth service health check passed"
-          else
-            echo "Auth service health check failed or URL not set"
-            FAILED=1
-          fi
-
-          echo ""
-          if [[ $FAILED -eq 0 ]]; then
-            echo "=== All smoke tests passed ==="
-          else
-            echo "=== Some smoke tests failed (may need URL variables configured) ==="
-            # Don't fail the workflow if URLs aren't configured yet
-            exit 0
-          fi
+          cd website
+          npm ci
+          npm run test:smoke || npm run test:smoke || (echo "Smoke failed after retry" && exit 1)
 
   # Notify deployment result
   notify-result:
@@ -445,3 +448,120 @@ jobs:
               }]
             }" \
             "$SLACK_WEBHOOK_URL" || echo "Slack notification failed (non-fatal)"
+
+  rollback:
+    runs-on: ubuntu-latest
+    needs: [prepare, deploy-website, smoke-tests]
+    if: needs.smoke-tests.result == 'failure'
+    steps:
+      - name: Setup SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.STAGING_SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H ${{ secrets.STAGING_HOST_GATEWAY }} >> ~/.ssh/known_hosts 2>/dev/null || true
+          ssh-keyscan -H ${{ secrets.STAGING_HOST_SIMULATOR }} >> ~/.ssh/known_hosts 2>/dev/null || true
+          ssh-keyscan -H ${{ secrets.STAGING_HOST_VALIDATORS || secrets.STAGING_HOST_NODE1 }} >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Download secrets
+        uses: actions/download-artifact@v4
+        with:
+          name: staging-secrets
+          path: /tmp/secrets
+
+      - name: Determine rollback tag
+        id: rollback_tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CURRENT_SHA: ${{ github.sha }}
+          ROLLBACK_TAG: ${{ vars.STAGING_ROLLBACK_TAG }}
+        run: |
+          if [ -n "${ROLLBACK_TAG:-}" ]; then
+            echo "tag=${ROLLBACK_TAG}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          CANDIDATE=$(gh run list --workflow build-images.yml --branch main --json headSha,conclusion --limit 20 | jq -r '.[] | select(.conclusion=="success" and .headSha != env.CURRENT_SHA) | .headSha' | head -1)
+          if [ -z "$CANDIDATE" ]; then
+            echo "tag=latest" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=sha-$(echo "$CANDIDATE" | cut -c1-7)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Roll back simulator, gateway, and validators to previous-good
+        env:
+          HOST_SIM: ${{ secrets.STAGING_HOST_SIMULATOR }}
+          HOST_GW: ${{ secrets.STAGING_HOST_GATEWAY }}
+          HOST_VALIDATORS: ${{ secrets.STAGING_HOST_VALIDATORS || secrets.STAGING_HOST_NODE1 }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_REGISTRY: ghcr.io
+          IMAGE_PREFIX: ${{ github.repository_owner }}/nullspace
+          OWNER: ${{ github.repository_owner }}
+          ROLLBACK_TAG: ${{ steps.rollback_tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          TAG="${ROLLBACK_TAG:-latest}"
+          ssh -o StrictHostKeyChecking=no root@"$HOST_SIM" <<DEPLOY_SIM
+            set -euo pipefail
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$OWNER" --password-stdin
+            docker pull $GHCR_REGISTRY/$IMAGE_PREFIX-simulator:$TAG
+            docker stop nullspace-simulator 2>/dev/null || true
+            docker rm nullspace-simulator 2>/dev/null || true
+            docker run -d --name nullspace-simulator \
+              --restart unless-stopped \
+              --env-file /etc/nullspace/simulator.env \
+              -p 8080:8080 \
+              -v /var/lib/nullspace/simulator:/data \
+              $GHCR_REGISTRY/$IMAGE_PREFIX-simulator:$TAG
+          DEPLOY_SIM
+
+          ssh -o StrictHostKeyChecking=no root@"$HOST_GW" <<DEPLOY_GW
+            set -euo pipefail
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$OWNER" --password-stdin
+            docker pull $GHCR_REGISTRY/$IMAGE_PREFIX-gateway:$TAG
+            docker stop nullspace-gateway 2>/dev/null || true
+            docker rm nullspace-gateway 2>/dev/null || true
+            docker run -d --name nullspace-gateway \
+              --restart unless-stopped \
+              --env-file /etc/nullspace/gateway.env \
+              -p 9010:9010 \
+              -v /var/lib/nullspace/gateway:/data \
+              $GHCR_REGISTRY/$IMAGE_PREFIX-gateway:$TAG
+          DEPLOY_GW
+
+          # Roll back all 4 validators on consolidated host (BFT: n=4, f=1)
+          ssh -o StrictHostKeyChecking=no root@"$HOST_VALIDATORS" <<DEPLOY_VALIDATORS
+            set -euo pipefail
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$OWNER" --password-stdin
+            docker pull $GHCR_REGISTRY/$IMAGE_PREFIX-node:$TAG
+
+            for i in 1 2 3 4; do
+              docker stop nullspace-node-\$i 2>/dev/null || true
+              docker rm nullspace-node-\$i 2>/dev/null || true
+            done
+
+            docker run -d --name nullspace-node-1 --restart unless-stopped \
+              --env-file /etc/nullspace/node.env -e NODE_ID=1 \
+              -p 9001:9001 -p 9100:9100 -v /var/lib/nullspace/node-1:/data \
+              $GHCR_REGISTRY/$IMAGE_PREFIX-node:$TAG
+
+            docker run -d --name nullspace-node-2 --restart unless-stopped \
+              --env-file /etc/nullspace/node.env -e NODE_ID=2 \
+              -p 9002:9001 -p 9101:9100 -v /var/lib/nullspace/node-2:/data \
+              $GHCR_REGISTRY/$IMAGE_PREFIX-node:$TAG
+
+            docker run -d --name nullspace-node-3 --restart unless-stopped \
+              --env-file /etc/nullspace/node.env -e NODE_ID=3 \
+              -p 9003:9001 -p 9102:9100 -v /var/lib/nullspace/node-3:/data \
+              $GHCR_REGISTRY/$IMAGE_PREFIX-node:$TAG
+
+            docker run -d --name nullspace-node-4 --restart unless-stopped \
+              --env-file /etc/nullspace/node.env -e NODE_ID=4 \
+              -p 9004:9001 -p 9103:9100 -v /var/lib/nullspace/node-4:/data \
+              $GHCR_REGISTRY/$IMAGE_PREFIX-node:$TAG
+          DEPLOY_VALIDATORS
+
+      - name: Clean up
+        if: always()
+        run: rm -f ~/.ssh/id_ed25519

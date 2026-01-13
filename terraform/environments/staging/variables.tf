@@ -29,13 +29,13 @@ variable "gateway_count" {
 }
 
 variable "validator_count" {
-  description = "Number of validator nodes (minimum 3 for BFT)"
+  description = "Number of validator nodes (minimum 4 for BFT with f=1 fault tolerance)"
   type        = number
-  default     = 3
+  default     = 4
 
   validation {
-    condition     = var.validator_count >= 3
-    error_message = "At least 3 validators required for BFT consensus."
+    condition     = var.validator_count >= 4
+    error_message = "At least 4 validators required for BFT consensus (n >= 3f+1, f=1)."
   }
 }
 
