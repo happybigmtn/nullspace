@@ -256,8 +256,6 @@ export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, 
     );
     if (isOnChain) {
       // Wait for sessionId with HTTP fallback poll if WebSocket doesn't deliver
-      const sessionPollStart = Date.now();
-      const sessionTimeoutMs = Math.min(QA_SESSION_TIMEOUT_MS, 30_000); // 30s max for session poll
       let lastHttpPoll = 0;
       await waitFor(
         async () => {
@@ -273,11 +271,15 @@ export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, 
               const playerState = await actionsRef.current.getPlayerState();
               if (playerState?.activeSession) {
                 log('info', `[ensureGame] Got sessionId from HTTP fallback: ${playerState.activeSession}`);
-                // Update gameState with session from HTTP poll
-                if (actionsRef.current?.setGameState) {
+                // Use syncSessionId to update both the ref and state (fixes move submission)
+                const sessionBigInt = BigInt(playerState.activeSession);
+                if (actionsRef.current?.syncSessionId) {
+                  actionsRef.current.syncSessionId(sessionBigInt);
+                } else if (actionsRef.current?.setGameState) {
+                  // Fallback for backwards compatibility
                   actionsRef.current.setGameState((prev: GameState) => ({
                     ...prev,
-                    sessionId: BigInt(playerState.activeSession),
+                    sessionId: sessionBigInt,
                   }));
                 }
                 return true;
@@ -289,7 +291,7 @@ export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, 
           return false;
         },
         `session ready ${type}`,
-        sessionTimeoutMs
+        QA_SESSION_TIMEOUT_MS
       );
     }
   }, [isOnChain, log, waitFor]);
