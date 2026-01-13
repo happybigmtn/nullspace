@@ -10,7 +10,7 @@ polynomial: "00000000040385a5cfe0aef544f32090e7740eda6c4714c8dc7ee861a6ecf9bf2a6
 # Network (Docker: internal 9001 mapped to external 9001)
 port: 9001
 metrics_port: 9100
-indexer: "http://indexer.testnet.regenesis.dev"
+indexer: "https://indexer.testnet.regenesis.dev"
 
 # Storage (Docker volume mount)
 directory: "/data"
