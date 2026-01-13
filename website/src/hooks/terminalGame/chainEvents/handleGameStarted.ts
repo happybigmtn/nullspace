@@ -40,6 +40,18 @@ export const createGameStartedHandler = ({
 }: HandleGameStartedArgs) => (event: CasinoGameStartedEvent) => {
   const eventSessionId = BigInt(event.sessionId);
   const currentId = currentSessionIdRef.current ? BigInt(currentSessionIdRef.current) : null;
+  console.error('[qa-game] GameStarted received, event session:', eventSessionId.toString(), 'current ref:', currentId?.toString() ?? 'null', 'match:', currentId !== null && eventSessionId === currentId);
+
+  if (currentId === null) {
+    logDebug('[handleGameStarted] event without current session', {
+      eventSessionId: eventSessionId.toString(),
+    });
+  } else if (eventSessionId !== currentId) {
+    logDebug('[handleGameStarted] session mismatch', {
+      eventSessionId: eventSessionId.toString(),
+      currentSessionId: currentId.toString(),
+    });
+  }
 
   if (currentId !== null && eventSessionId === currentId) {
     clearChainResponseTimeout();

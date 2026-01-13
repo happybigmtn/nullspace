@@ -79,3 +79,7 @@ backups/
 # Website log
 website.log
 docker/observability/metrics_auth_token
+
+# Docker image tarballs
+*.tar
+*.tar.gz

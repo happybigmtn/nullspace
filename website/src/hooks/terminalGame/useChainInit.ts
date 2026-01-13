@@ -73,6 +73,17 @@ export const useChainInit = ({
 
     try {
       const networkIdentity = import.meta.env.VITE_IDENTITY as string | undefined;
+      if (!networkIdentity) {
+        console.error('[useChainInit] VITE_IDENTITY not set - cannot initialize chain');
+        setIsOnChain(false);
+        setGameState(prev => ({
+          ...prev,
+          stage: 'BETTING',
+          message: 'IDENTITY NOT CONFIGURED — CONTACT SUPPORT',
+        }));
+        isInitializingRef.current = false;
+        return;
+      }
       // Use VITE_URL in production (no /api proxy), fall back to /api for dev
       const baseUrl = import.meta.env.VITE_URL || '/api';
       const wasm = new WasmWrapper(networkIdentity);
