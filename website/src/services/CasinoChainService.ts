@@ -21,6 +21,7 @@ interface NonceManagerMethods {
   submitCasinoToggleShield: () => Promise<NonceManagerResult>;
   submitCasinoToggleDouble: () => Promise<NonceManagerResult>;
   submitCasinoToggleSuper: () => Promise<NonceManagerResult>;
+  forceSyncFromChain?: () => Promise<void>;
 }
 
 // Use intersection type instead of extends to avoid strict inheritance issues
@@ -521,6 +522,33 @@ export class CasinoChainService {
   async toggleSuper(): Promise<{ txHash?: string }> {
     const result = await this.client.nonceManager.submitCasinoToggleSuper();
     return { txHash: result.txHash };
+  }
+
+  /**
+   * Force-sync nonce from chain (QA recovery).
+   */
+  async forceSyncNonce(): Promise<void> {
+    const nonceManager = (this.client as CasinoClientWithNonceManager).nonceManager as NonceManagerMethods;
+    if (typeof nonceManager.forceSyncFromChain === 'function') {
+      await nonceManager.forceSyncFromChain();
+    }
+  }
+
+  /**
+   * Get current player state (for QA harness HTTP fallback).
+   */
+  async getPlayerState(): Promise<{ activeSession: string | null } | null> {
+    try {
+      const keypair = (this.client as any).getKeypair?.();
+      if (!keypair?.publicKey) return null;
+      const playerState = await (this.client as any).getCasinoPlayer(keypair.publicKey);
+      if (!playerState) return null;
+      return {
+        activeSession: playerState.activeSession ?? null,
+      };
+    } catch {
+      return null;
+    }
   }
 
   /**

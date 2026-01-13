@@ -1,4 +1,5 @@
 import type { MutableRefObject, Dispatch, SetStateAction } from 'react';
+import { useCallback } from 'react';
 import { useThreeCardPoker } from '../games/useThreeCardPoker';
 import { useBlackjack } from '../games/useBlackjack';
 import { useBaccarat } from '../games/useBaccarat';
@@ -47,6 +48,21 @@ export const useGameActions = ({
   startGame,
   setLastTxSig,
 }: UseGameActionsArgs) => {
+  const forceSyncNonce = useCallback(async () => {
+    if (!chainService) return;
+    if (typeof (chainService as any).forceSyncNonce === 'function') {
+      await (chainService as any).forceSyncNonce();
+    }
+  }, [chainService]);
+
+  // Expose getPlayerState for QA harness HTTP fallback when WS fails
+  const getPlayerState = useCallback(async () => {
+    if (!chainService) return null;
+    if (typeof (chainService as any).getPlayerState === 'function') {
+      return (chainService as any).getPlayerState();
+    }
+    return null;
+  }, [chainService]);
   const {
     threeCardPlay,
     threeCardFold,
@@ -213,6 +229,8 @@ export const useGameActions = ({
     });
 
   return {
+    forceSyncNonce,
+    getPlayerState,
     bjHit,
     bjStand,
     bjDouble,
