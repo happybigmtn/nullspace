@@ -87,7 +87,7 @@ Based on `docs/hetzner-deployment-runbook.md`:
 |---------------|----------------|----------------|--------------------------|
 | Gateway       | 2x CPX31       | 4x CPX31       | Horizontal scaling       |
 | Simulator     | 1x CPX41       | 1x CPX51       | Single instance, scale up|
-| Validators    | 3x CPX31       | 4x CPX31       | BFT quorum (f=1)         |
+| Validators    | 4x (consolidated) | 4x CPX31    | BFT quorum (n=4, f=1)    |
 | Auth          | 1x CPX21       | 1x CPX31       | Stateless               |
 | Database      | 1x CPX41 +50GB | 1x CPX51 +200GB| Persistent volume       |
 | Observability | 1x CPX31       | 1x CPX41       | Prometheus/Grafana/Loki  |

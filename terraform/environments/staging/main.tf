@@ -90,7 +90,8 @@ module "simulator" {
   depends_on = [module.network, module.firewall]
 }
 
-# Validator nodes (3x CPX31 for BFT consensus)
+# Validator nodes (4x for BFT consensus with f=1 fault tolerance)
+# In staging, these run as containers on a single consolidated host
 module "validators" {
   source = "../../modules/server"
 

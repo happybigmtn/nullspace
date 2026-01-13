@@ -127,11 +127,16 @@ export const GameControlBar: React.FC<GameControlBarProps> = ({
                 </div>
 
                 <div
-                    className={`fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm transition-opacity duration-200 ${
+                    className={`fixed inset-0 z-[60] transition-opacity duration-200 ${
                         menuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
                     }`}
-                    onClick={() => setMenuOpen(false)}
                 >
+                    <button
+                        type="button"
+                        aria-label="Close menu"
+                        className="absolute inset-0 bg-black/60 backdrop-blur-sm cursor-default"
+                        onClick={() => setMenuOpen(false)}
+                    />
                     <div
                         className={`absolute bottom-0 left-0 right-0 bg-white dark:bg-zinc-900 rounded-t-3xl p-6 pb-10 transition-transform duration-200 ${
                             menuOpen ? 'translate-y-0' : 'translate-y-full'
@@ -143,7 +148,11 @@ export const GameControlBar: React.FC<GameControlBarProps> = ({
                             <h3 className="text-lg font-bold text-gray-900 dark:text-white tracking-tight">
                                 {mobileMenuLabel}
                             </h3>
-                            <button onClick={() => setMenuOpen(false)} className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full">
+                            <button
+                                onClick={() => setMenuOpen(false)}
+                                aria-label="Close menu"
+                                className="p-2 bg-gray-100 dark:bg-gray-800 rounded-full focus-visible:ring-2 focus-visible:ring-action-primary/50"
+                            >
                                 <X className="w-5 h-5 text-gray-600 dark:text-gray-300" />
                             </button>
                         </div>
@@ -373,11 +382,16 @@ export const GameControlBar: React.FC<GameControlBarProps> = ({
 
             {/* Bottom Sheet / Menu Overlay - US-266: Using consistent backdrop */}
             <div
-                className={`fixed inset-0 z-[60] bg-mono-0/20 dark:bg-mono-0/40 backdrop-blur-sm transition-opacity motion-state ${
+                className={`fixed inset-0 z-[60] transition-opacity motion-state ${
                     menuOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
                 }`}
-                onClick={() => setMenuOpen(false)}
             >
+                <button
+                    type="button"
+                    aria-label="Close menu"
+                    className="absolute inset-0 bg-mono-0/20 dark:bg-mono-0/40 backdrop-blur-sm cursor-default"
+                    onClick={() => setMenuOpen(false)}
+                />
                 <GlassSurface
                     depth="overlay"
                     className={`absolute bottom-0 left-0 right-0 rounded-t-[40px] p-8 pb-12 transition-transform motion-state ${
@@ -396,7 +410,7 @@ export const GameControlBar: React.FC<GameControlBarProps> = ({
                         </div>
                         <button
                             onClick={() => setMenuOpen(false)}
-                            className="w-11 h-11 liquid-chip flex items-center justify-center text-ns-muted hover:text-ns transition-colors"
+                            className="w-11 h-11 liquid-chip flex items-center justify-center text-ns-muted hover:text-ns transition-colors focus-visible:ring-2 focus-visible:ring-action-primary/50"
                             aria-label="Close menu"
                         >
                             <X className="w-5 h-5" />

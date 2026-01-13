@@ -3,7 +3,6 @@ import { GameState, RouletteBet } from '../../../types';
 import { getRouletteColor, calculateRouletteExposure, formatRouletteNumber, ROULETTE_DOUBLE_ZERO } from '../../../utils/gameUtils';
 import { MobileDrawer } from '../MobileDrawer';
 import { BetsDrawer } from '../BetsDrawer';
-import { PanelDrawer } from '../PanelDrawer';
 import { Pseudo3DWheel } from '../pseudo3d/Pseudo3DWheel';
 import { Label } from '../ui/Label';
 
@@ -188,12 +187,21 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
 
                     {/* Compact History */}
                     {gameState.rouletteHistory.length > 0 && (
-                        <div className="flex gap-1.5 p-1.5 liquid-chip shadow-soft zen-hide">
-                            {gameState.rouletteHistory.slice(-6).reverse().map((num, i) => (
-                                <div key={i} className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black border transition-all liquid-chip ${getRouletteChipColorClass(num)} shadow-soft`}>
-                                    {formatRouletteNumber(num)}
-                                </div>
-                            ))}
+                        <div className="flex gap-1.5 p-1.5 liquid-chip shadow-soft zen-hide" role="list" aria-label="Recent results">
+                            {gameState.rouletteHistory.slice(-6).reverse().map((num, i) => {
+                                const color = getRouletteColor(num);
+                                const colorLabel = color === 'RED' ? 'red' : color === 'BLACK' ? 'black' : 'green';
+                                return (
+                                    <div
+                                        key={i}
+                                        role="listitem"
+                                        aria-label={`${formatRouletteNumber(num)} - ${colorLabel}`}
+                                        className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black border transition-all liquid-chip ${getRouletteChipColorClass(num)} shadow-soft`}
+                                    >
+                                        {formatRouletteNumber(num)}
+                                    </div>
+                                );
+                            })}
                         </div>
                     )}
                  </div>
@@ -201,7 +209,18 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
 
 
             {gameState.rouletteInputMode !== 'NONE' && (
-                <div className="absolute inset-0 bg-black/40 backdrop-blur-lg z-50 flex items-center justify-center p-4" onClick={closeInput}>
+                <div
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label="Select number"
+                    className="absolute inset-0 z-50 flex items-center justify-center p-4"
+                >
+                    <button
+                        type="button"
+                        aria-label="Cancel selection"
+                        className="absolute inset-0 bg-black/40 backdrop-blur-lg cursor-default"
+                        onClick={closeInput}
+                    />
                     <div className="w-full max-w-lg liquid-card liquid-sheen rounded-3xl p-5 shadow-float" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-between mb-3">
                             <Label size="micro">{rouletteInputLabel}</Label>
@@ -393,11 +412,19 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
                         >
                             Super
                         </button>
-                        <PanelDrawer label="Table" title="ROULETTE TABLE" count={gameState.rouletteBets.length} className="hidden md:inline-flex">
-                            <div className="space-y-6">
+                        <div className="hidden md:block">
+                            <div className="ml-3 rounded-3xl liquid-panel border border-ns/40 px-4 py-3 space-y-4 shadow-soft">
+                                <div className="flex items-center justify-between">
+                                    <div className="text-[10px] font-bold uppercase tracking-tight text-ns">Roulette Table</div>
+                                    {gameState.rouletteBets.length > 0 && (
+                                        <span className="text-[10px] font-bold text-ns-muted">
+                                            {gameState.rouletteBets.length} bets
+                                        </span>
+                                    )}
+                                </div>
                                 <div>
                                     <Label size="micro" className="mb-2 block">Exposure</Label>
-                                    <div className="max-h-56 overflow-y-auto scrollbar-hide rounded-2xl liquid-panel p-2">
+                                    <div className="max-h-56 overflow-y-auto scrollbar-hide rounded-2xl bg-ns-surface/60 p-2 border border-ns/30">
                                         {Array.from({ length: exposureByNumber.length }, (_, i) => i).map(num => renderExposureRow(num))}
                                     </div>
                                 </div>
@@ -415,14 +442,14 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
                                                         </span>
                                                         <span className="text-[9px] font-bold text-ns-muted uppercase">{b.local ? 'Pending' : 'Confirmed'}</span>
                                                     </div>
-                                                    <span className="text-xs font-bold text-mono-0 dark:text-mono-1000 font-bold">${b.amount}</span>
+                                                    <span className="text-xs font-bold text-mono-0 dark:text-mono-1000">${b.amount}</span>
                                                 </div>
                                             ))
                                         )}
                                     </div>
                                 </div>
                             </div>
-                        </PanelDrawer>
+                        </div>
                     </div>
                 </div>
 
