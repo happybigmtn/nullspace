@@ -76,7 +76,9 @@ export const useStartGame = ({
     if (type === GameType.ULTIMATE_HOLDEM) {
       uthBackendStageRef.current = 0;
     }
+    console.error('[qa-start] autoPlayDraftRef check - draft:', autoPlayDraftRef.current ? `type=${autoPlayDraftRef.current.type}` : 'null', 'startType:', type);
     if (autoPlayDraftRef.current && autoPlayDraftRef.current.type !== type) {
+      console.error('[qa-start] Clearing autoPlayDraftRef due to type mismatch');
       autoPlayDraftRef.current = null;
     }
 
@@ -151,6 +153,9 @@ export const useStartGame = ({
 
     if (isOnChain && chainService) {
       try {
+        // Mark as pending immediately to prevent fallback poll from clearing the session
+        isPendingRef.current = true;
+
         const chainOk = await ensureChainResponsive();
         if (!chainOk) {
           clearChainResponseTimeout();
@@ -236,15 +241,25 @@ export const useStartGame = ({
 
         const chainGameType = GAME_TYPE_MAP[type];
         const sessionId = chainService.generateNextSessionId();
+        console.error('[qa-start] Setting currentSessionIdRef to:', sessionId.toString());
         currentSessionIdRef.current = sessionId;
         gameTypeRef.current = type;
         setCurrentSessionId(sessionId);
         sessionStartChipsRef.current.set(sessionId, currentChipsRef.current);
+        setGameState(prev => ({
+          ...prev,
+          sessionId: Number(sessionId),
+          moveNumber: 0,
+        }));
 
         const autoDraft = autoPlayDraftRef.current;
+        console.error('[qa-start] Converting draft to plan - autoDraft:', autoDraft ? `type=${autoDraft.type}` : 'null', 'type:', type, 'sessionId:', sessionId.toString());
         if (autoDraft && autoDraft.type === type) {
           autoPlayPlanRef.current = { ...autoDraft, sessionId };
+          console.error('[qa-start] Plan created:', autoPlayPlanRef.current ? `type=${autoPlayPlanRef.current.type}` : 'null');
           autoPlayDraftRef.current = null;
+        } else {
+          console.error('[qa-start] No plan created - autoDraft was null or type mismatch');
         }
 
         const initialBetAmount = isTableGame ? 0n : BigInt(gameState.bet);
@@ -277,7 +292,7 @@ export const useStartGame = ({
         setGameState(prev => ({
           ...prev,
           stage: 'BETTING',
-          message: 'TRANSACTION FAILED - TRY AGAIN',
+          message: `TRANSACTION FAILED - ${error?.message ?? 'TRY AGAIN'}`,
         }));
       }
     } else {

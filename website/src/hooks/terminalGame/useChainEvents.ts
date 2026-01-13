@@ -3,11 +3,13 @@ import type { Dispatch, SetStateAction, MutableRefObject } from 'react';
 import type { CasinoChainService } from '../../services/CasinoChainService';
 import type { CasinoClient } from '../../api/client';
 import { GameState, GameType, LeaderboardEntry, PlayerStats } from '../../types';
+import { GameType as ChainGameType } from '@nullspace/types/casino';
 import { logDebug } from '../../utils/logger';
 import type { CrapsChainRollLog } from '../../services/games';
 import { createGameStartedHandler } from './chainEvents/handleGameStarted';
 import { createGameMovedHandler } from './chainEvents/handleGameMoved';
 import { createGameCompletedHandler } from './chainEvents/handleGameCompleted';
+import { CHAIN_TO_FRONTEND_GAME_TYPE } from '../../services/games';
 
 type CrapsPendingRollLog = {
   sessionId: bigint;
@@ -247,11 +249,11 @@ export const useChainEvents = ({
        unsubError();
        clearChainResponseTimeout();
      };
-   }, [
-     chainService,
-     isOnChain,
-     applySessionMeta,
-     clearChainResponseTimeout,
+  }, [
+    chainService,
+    isOnChain,
+    applySessionMeta,
+    clearChainResponseTimeout,
      clientRef,
      currentChipsRef,
      currentSessionIdRef,
@@ -279,12 +281,117 @@ export const useChainEvents = ({
      playerSyncMinIntervalMs,
      crapsPendingRollLogRef,
      crapsChainRollLogRef,
-     isRegisteredRef,
-   ]);
+    isRegisteredRef,
+  ]);
 
-   useEffect(() => {
-     const client = clientRef.current as any;
-     if (!client) return;
+  // Fallback polling for simulator deployments that omit signed update proofs.
+  useEffect(() => {
+    if (!isOnChain) return;
+    let cancelled = false;
+
+    const poll = async () => {
+      const client = clientRef.current;
+      if (!client || cancelled) return;
+
+      try {
+        if (publicKeyBytesRef.current) {
+          const playerState = await client.getCasinoPlayer(publicKeyBytesRef.current);
+          if (playerState) {
+            lastBalanceUpdateRef.current = Date.now();
+            setStats((prev) => ({
+              ...prev,
+              chips: Number(playerState.chips ?? prev.chips),
+              shields: playerState.shields ?? prev.shields,
+              doubles: playerState.doubles ?? prev.doubles,
+              auraMeter: playerState.auraMeter ?? prev.auraMeter ?? 0,
+            }));
+            setWalletRng(Number(playerState.chips ?? currentChipsRef.current));
+            setWalletVusdt(Number(playerState.vusdtBalance ?? 0));
+            setWalletCredits(Number(playerState.freerollCredits ?? 0));
+            setWalletCreditsLocked(Number(playerState.freerollCreditsLocked ?? 0));
+          }
+        }
+
+        const sessionId = currentSessionIdRef.current;
+        console.error('[qa-poll] Fallback poll, sessionId:', sessionId?.toString() ?? 'null');
+        if (sessionId !== null && client?.getCasinoSession) {
+          const session = await client.getCasinoSession(sessionId);
+          console.error('[qa-poll] getCasinoSession result:', session ? 'exists' : 'null/undefined');
+          if (session?.stateBlob) {
+            const frontendType =
+              CHAIN_TO_FRONTEND_GAME_TYPE[session.gameType as ChainGameType] ??
+              gameTypeRef.current ??
+              GameType.NONE;
+            applySessionMeta(sessionId, Number(session.moveCount ?? gameStateRef.current.moveNumber ?? 0));
+            parseGameState(session.stateBlob, frontendType);
+            setGameState((prev) => ({
+              ...prev,
+              type: frontendType,
+              sessionId: Number(sessionId),
+              bet: typeof session.bet === 'bigint' ? Number(session.bet) : Number(session.bet ?? prev.bet),
+              stage: 'PLAYING',
+              message: 'SYNCED FROM CHAIN',
+              superMode: session.superMode ?? prev.superMode ?? null,
+            }));
+          } else if (!session) {
+            // Session was deleted (game completed on chain) - transition to RESULT
+            // This handles the case where WebSocket CasinoGameCompleted event wasn't received
+            // BUT: Don't reset if:
+            // - We're still waiting for the game to start (session pending on chain)
+            // - There's a pending transaction (waiting for confirmation)
+            const currentStage = gameStateRef.current?.stage;
+            const hasPending = isPendingRef.current || pendingMoveCountRef.current > 0;
+            console.error('[qa-poll] Session not found! stage:', currentStage, 'hasPending:', hasPending);
+            if (currentStage === 'PLAYING' && !hasPending) {
+              console.error('[qa-poll] Game was PLAYING with no pending tx, setting currentSessionIdRef to null');
+              logDebug('[useChainEvents] Session deleted on chain, transitioning to RESULT');
+              currentSessionIdRef.current = null;
+              setGameState((prev) => ({
+                ...prev,
+                stage: 'RESULT',
+                sessionId: null,
+                message: prev.message?.includes('SYNCED') ? 'ROUND COMPLETE' : prev.message,
+                moveNumber: 0,
+                sessionWager: 0,
+                sessionInterimPayout: 0,
+                superMode: null,
+              }));
+            }
+          }
+        }
+      } catch (error) {
+        logDebug('[useChainEvents] Poll fallback failed:', error);
+      }
+    };
+
+    const interval = setInterval(poll, 2_000);
+    void poll();
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [
+    applySessionMeta,
+    clientRef,
+    currentChipsRef,
+    currentSessionIdRef,
+    gameStateRef,
+    gameTypeRef,
+    isOnChain,
+    lastBalanceUpdateRef,
+    parseGameState,
+    publicKeyBytesRef,
+    setGameState,
+    setStats,
+    setWalletCredits,
+    setWalletCreditsLocked,
+    setWalletRng,
+    setWalletVusdt,
+  ]);
+
+  useEffect(() => {
+    const client = clientRef.current as any;
+    if (!client) return;
 
      void (async () => {
        try {

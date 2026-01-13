@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { type AuthProfile, getProfile } from '../services/authClient';
+import { type AuthProfile, getProfile, isAuthEnabled } from '../services/authClient';
 
 type AuthState = {
   session: AuthProfile['session'];
@@ -19,6 +19,11 @@ export function useAuthSession() {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
+      if (!isAuthEnabled()) {
+        setState({ session: null, entitlements: [], evmLink: null });
+        setError(null);
+        return;
+      }
       const profile = await getProfile();
       setState({
         session: profile.session,

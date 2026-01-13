@@ -1,6 +1,24 @@
 const authBase =
   (import.meta.env.VITE_AUTH_URL as string | undefined)?.replace(/\/$/, "") ??
   "";
+export const isAuthConfigured = authBase.length > 0;
+export const isAuthEnabled = (): boolean => {
+  if (!isAuthConfigured) return false;
+  const envQa =
+    typeof import.meta !== 'undefined' &&
+    !!(import.meta as any)?.env?.VITE_QA_BETS;
+  if (envQa) return false;
+  if (typeof window === 'undefined') return true;
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const qaParam = params.get('qa');
+    const qaFlag = qaParam === '1' || qaParam?.toLowerCase() === 'true';
+    const storedFlag = localStorage.getItem('qa_bets_enabled') === 'true';
+    return !(qaFlag || storedFlag);
+  } catch {
+    return true;
+  }
+};
 
 export type AuthSessionUser = {
   id?: string;

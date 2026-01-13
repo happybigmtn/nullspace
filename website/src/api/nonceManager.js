@@ -22,10 +22,36 @@ export class NonceManager {
 
   withSigningKey(createTxFn) {
     const isProd = typeof import.meta !== 'undefined' && import.meta.env?.PROD === true;
+    const allowLegacyKeys = (() => {
+      const envAllowLegacy =
+        typeof import.meta !== 'undefined' &&
+        (import.meta.env?.DEV ||
+          !!import.meta.env?.VITE_ALLOW_LEGACY_KEYS ||
+          !!import.meta.env?.VITE_QA_BETS);
+      const runtimeQaAllowLegacy = (() => {
+        if (typeof window === 'undefined') return false;
+        try {
+          const params = new URLSearchParams(window.location.search);
+          const qaParam = params.get('qa');
+          const qaFlag = qaParam === '1' || qaParam?.toLowerCase() === 'true';
+          const storedFlag = localStorage.getItem('qa_allow_legacy') === 'true';
+          if (qaFlag) {
+            localStorage.setItem('qa_allow_legacy', 'true');
+            localStorage.setItem('qa_bets_enabled', 'true');
+            localStorage.setItem('nullspace_vault_enabled', 'false');
+          }
+          return qaFlag || storedFlag;
+        } catch {
+          return false;
+        }
+      })();
+      return envAllowLegacy || runtimeQaAllowLegacy;
+    })();
+    const shouldClearKeypair = isProd && !allowLegacyKeys;
 
     if (this.wasm?.keypair) {
       const tx = createTxFn();
-      if (isProd) {
+      if (shouldClearKeypair) {
         try {
           this.wasm.clearKeypair?.();
         } catch {
@@ -50,7 +76,7 @@ export class NonceManager {
     try {
       this.wasm.createKeypair(keyBytes);
       const tx = createTxFn();
-      if (isProd) {
+      if (shouldClearKeypair) {
         try {
           this.wasm.clearKeypair?.();
         } catch {
@@ -73,6 +99,35 @@ export class NonceManager {
     if (!publicKeyHex || !publicKeyBytes) {
       throw new Error('Public key is required for initialization');
     }
+
+    // Staging nonce floors to bridge stale indexer (safe to keep in client; keys are public).
+    // Disabled in QA/test harness to avoid forcing stale nonces after a reset.
+    const qaMode = (() => {
+      if (typeof window === 'undefined') return false;
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const qaParam = params.get('qa');
+        const qaFlag = qaParam === '1' || qaParam?.toLowerCase() === 'true';
+        const storedFlag = localStorage.getItem('qa_bets_enabled') === 'true';
+        return qaFlag || storedFlag;
+      } catch {
+        return false;
+      }
+    })();
+    const floorsDisabled =
+      qaMode ||
+      (typeof import.meta !== 'undefined' &&
+        (!!import.meta.env?.VITE_DISABLE_NONCE_FLOOR ||
+          !!import.meta.env?.VITE_QA_BETS));
+
+    const FLOOR_MAP = floorsDisabled
+      ? {}
+      : {
+          // Admin key (prod/staging) - keep only when floors enabled intentionally
+          '6aba3e7532fc030a7cd3be155b5a73d04efea737ad9a95f4226bc3781bae5b9f': 1720,
+          // QA bot player key
+          'f4e4eb95ed3c2ec516faf73d61160e8f600389e1d983f18973a561f788177d24': 8
+        };
 
     this.publicKeyHex = publicKeyHex;
     this.publicKeyBytes = publicKeyBytes;
@@ -103,6 +158,12 @@ export class NonceManager {
 
     // Do initial sync with provided account
     this.syncWithAccountState(account);
+
+    // Apply nonce floor when indexer lags chain
+    const floor = FLOOR_MAP[publicKeyHex];
+    if (typeof floor === 'number' && floor > this.getCurrentNonce()) {
+      this.setNonce(floor);
+    }
 
     // Start periodic resubmission only (no more polling for nonce)
     this.startPeriodicResubmission();
@@ -149,14 +210,31 @@ export class NonceManager {
     }
 
     if (!account) {
-      // Account doesn't exist on chain - always ensure clean state
+      // When running QA/test harness, prefer keeping the client nonce we injected
+      // even if the indexer doesn't have the account yet (common right after a reset).
+      const qaMode =
+        (typeof window !== 'undefined' &&
+          (localStorage.getItem('qa_bets_enabled') === 'true' ||
+            new URLSearchParams(window.location.search).get('qa') === '1')) ||
+        (typeof import.meta !== 'undefined' &&
+          !!import.meta.env?.VITE_QA_BETS);
+
       const localNonce = this.getCurrentNonce();
       const pendingTxs = this.getPendingTransactions();
 
-      if (localNonce > 0 || pendingTxs.length > 0) {
-        logDebug(`Account not found on chain - resetting state (localNonce=${localNonce}, pendingTxs=${pendingTxs.length})`);
-        this.resetNonce();
-        this.cleanupAllTransactions();
+      if (!qaMode) {
+        // Non-QA: clean state if account is missing
+        if (localNonce > 0 || pendingTxs.length > 0) {
+          logDebug(
+            `Account not found on chain - resetting state (localNonce=${localNonce}, pendingTxs=${pendingTxs.length})`
+          );
+          this.resetNonce();
+          this.cleanupAllTransactions();
+        }
+      } else {
+        logDebug(
+          `[QA] Account not found on chain; preserving local nonce ${localNonce} and pending=${pendingTxs.length}`
+        );
       }
       return;
     }
@@ -191,14 +269,13 @@ export class NonceManager {
 
     // Always sync local nonce to match server - chain is source of truth
     if (serverNonce !== localNonce) {
+      const targetNonce = localNonce > serverNonce ? localNonce : serverNonce;
       if (localNonce > serverNonce) {
-        logDebug(`Local nonce (${localNonce}) is ahead of server (${serverNonce}) - resetting to server nonce`);
-        // Also clear stale pending transactions when resetting backwards
-        this.cleanupAllTransactions();
+        logDebug(`Local nonce (${localNonce}) ahead of server (${serverNonce}) - keeping local nonce`);
       } else {
         logDebug(`Advancing local nonce from ${localNonce} to ${serverNonce}`);
       }
-      this.setNonce(serverNonce);
+      this.setNonce(targetNonce);
     }
   }
 
@@ -229,6 +306,39 @@ export class NonceManager {
   resetNonce() {
     const key = 'casino_nonce';
     localStorage.setItem(key, '0');
+  }
+
+  /**
+   * Force-sync nonce from on-chain account state and clear pending txs.
+   * Intended for QA recovery when local nonce drifts from chain.
+   */
+  async forceSyncFromChain() {
+    if (!this.publicKeyBytes) {
+      console.warn('[NonceManager] forceSyncFromChain: no public key set');
+      return;
+    }
+    let chainNonce = null;
+    try {
+      const account = await this.client.getAccount(this.publicKeyBytes);
+      if (account && account.nonce !== null && account.nonce !== undefined) {
+        chainNonce = Number(account.nonce);
+      }
+    } catch (error) {
+      console.warn('[NonceManager] forceSyncFromChain: account fetch failed', error?.message ?? error);
+    }
+
+    if (!Number.isFinite(chainNonce)) {
+      chainNonce = 0;
+    }
+
+    const localNonce = this.getCurrentNonce();
+    const pendingCount = this.getPendingTransactions().length;
+    if (localNonce !== chainNonce || pendingCount > 0) {
+      logDebug(`[NonceManager] Force sync: ${localNonce} -> ${chainNonce} (pending=${pendingCount})`);
+    }
+
+    this.setNonce(chainNonce);
+    this.cleanupAllTransactions();
   }
 
   /**

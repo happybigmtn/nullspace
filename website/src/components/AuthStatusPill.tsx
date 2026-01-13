@@ -15,6 +15,7 @@ import {
   requestAuthChallenge,
   signInWithKey,
   unlinkEvmAddress,
+  isAuthEnabled,
 } from '../services/authClient';
 import { connectEvmWallet, hasEvmProvider, signEvmMessage } from '../services/evmWallet';
 
@@ -39,6 +40,7 @@ export const AuthStatusPill: React.FC<AuthStatusPillProps> = ({ publicKeyHex, cl
   const [signInError, setSignInError] = useState<string | null>(null);
   const stripeTiers = useMemo(() => getStripeTiers(), []);
   const [selectedTier, setSelectedTier] = useState(() => stripeTiers[0]?.tier ?? '');
+  const authEnabled = isAuthEnabled();
 
   const activeEntitlement = useMemo(
     () => entitlements.find((item) => ACTIVE_STATUSES.has(item.status)) ?? null,
@@ -208,6 +210,15 @@ export const AuthStatusPill: React.FC<AuthStatusPillProps> = ({ publicKeyHex, cl
   ]
     .join(' ')
     .trim();
+
+  if (!authEnabled) {
+    return (
+      <div className={pillClass}>
+        <span className="text-ns-muted">Auth</span>
+        <span className="text-ns-muted">Disabled</span>
+      </div>
+    );
+  }
 
   return (
     <div className={pillClass}>
