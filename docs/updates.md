@@ -1,5 +1,33 @@
 # Infrastructure Updates
 
+## 2026-01-13: Per-Node YAML Configuration for Validators
+
+**Change**: Validators now use individual YAML config files instead of shared env files.
+
+**Files**:
+- `configs/staging/node{0-3}.yaml` - Per-node configuration with individual keys
+- `configs/staging/peers.yaml` - Peer address mappings (host IP: 5.161.124.82)
+
+**Container Layout** (0-indexed to match config files):
+- `nullspace-node-0`: port 9001, config node0.yaml
+- `nullspace-node-1`: port 9002, config node1.yaml
+- `nullspace-node-2`: port 9003, config node2.yaml
+- `nullspace-node-3`: port 9004, config node3.yaml
+
+**Network Identity** (seed 20260113):
+```
+85a5cfe0aef544f32090e7740eda6c4714c8dc7ee861a6ecf9bf2a6d148611fb0e51d185356686a9af2ea4fafaec78dd051e683f366f7d81e7bb2da0877ed6001f769ba014b4c81dfc00ad776da9dffdf5dd39c1bc7eddfcf7d64139d6252867
+```
+
+**Threshold**: 3/4 signatures required for consensus.
+
+**Node binary invocation**:
+```bash
+nullspace-node --config /etc/nullspace/node0.yaml --peers /etc/nullspace/peers.yaml
+```
+
+---
+
 ## 2026-01-13: Consolidated Validator Architecture (4 Validators for BFT)
 
 **Change**: All 4 validator nodes now run on a single host instead of separate machines.

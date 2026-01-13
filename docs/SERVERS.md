@@ -17,16 +17,16 @@ Last Updated: 2026-01-13
 | 178.156.212.135 | Website + Gateway | testnet.regenesis.dev, api.testnet.regenesis.dev | 80, 443, 8080 (internal), 9010 (internal) |
 | 5.161.209.39 | Auth Service | auth.testnet.regenesis.dev | 80, 443, 4000 (internal) |
 | 5.161.67.36 | Simulator/Indexer | indexer.testnet.regenesis.dev | 80, 443, 8080 (internal) |
-| TBD | Validators (consolidated) | N/A (internal only) | 9001-9004 (P2P), 9100-9103 (metrics) |
+| 5.161.124.82 | Validators (ns-db-1) | N/A (internal only) | 9001-9004 (P2P), 9100-9103 (metrics) |
 
-### Validator Container Layout (single host)
+### Validator Container Layout (5.161.124.82)
 
-| Container | NODE_ID | P2P Port | Metrics Port | Data Volume |
-|-----------|---------|----------|--------------|-------------|
-| nullspace-node-1 | 1 | 9001 | 9100 | /var/lib/nullspace/node-1 |
-| nullspace-node-2 | 2 | 9002 | 9101 | /var/lib/nullspace/node-2 |
-| nullspace-node-3 | 3 | 9003 | 9102 | /var/lib/nullspace/node-3 |
-| nullspace-node-4 | 4 | 9004 | 9103 | /var/lib/nullspace/node-4 |
+| Container | Config File | P2P Port | Metrics Port | Data Volume |
+|-----------|-------------|----------|--------------|-------------|
+| nullspace-node-0 | node0.yaml | 9001 | 9100 | /var/lib/nullspace/node-0 |
+| nullspace-node-1 | node1.yaml | 9002 | 9101 | /var/lib/nullspace/node-1 |
+| nullspace-node-2 | node2.yaml | 9003 | 9102 | /var/lib/nullspace/node-2 |
+| nullspace-node-3 | node3.yaml | 9004 | 9103 | /var/lib/nullspace/node-3 |
 
 ## SSH Access
 
@@ -56,9 +56,8 @@ ssh root@5.161.209.39 -i ~/.ssh/id_ed25519_github
 # Indexer/Simulator Server
 ssh root@5.161.67.36 -i ~/.ssh/id_ed25519_github
 
-# Validators (consolidated - all 4 run on single host)
-# Update IP below once consolidated validator host is provisioned
-ssh root@<VALIDATORS_HOST_IP> -i ~/.ssh/id_ed25519_github
+# Validators (consolidated on ns-db-1 - all 4 run on single host)
+ssh root@5.161.124.82 -i ~/.ssh/id_ed25519_github
 ```
 
 ## Service Configuration
@@ -106,21 +105,27 @@ api.testnet.regenesis.dev {
 **Environment Files:**
 - `/etc/nullspace/simulator.env`
 
-### Validator Nodes (Consolidated Host)
+### Validator Nodes (5.161.124.82 - ns-db-1)
 
-All 4 validators run on a single host for BFT consensus (n=4, f=1 fault tolerance).
+All 4 validators run on ns-db-1 for BFT consensus (n=4, f=1 fault tolerance, 3/4 threshold).
 
 **Docker Containers:**
-- `nullspace-node-1`: P2P 9001, metrics 9100
-- `nullspace-node-2`: P2P 9002, metrics 9101
-- `nullspace-node-3`: P2P 9003, metrics 9102
-- `nullspace-node-4`: P2P 9004, metrics 9103
+- `nullspace-node-0`: P2P 9001, metrics 9100 (config: node0.yaml)
+- `nullspace-node-1`: P2P 9002, metrics 9101 (config: node1.yaml)
+- `nullspace-node-2`: P2P 9003, metrics 9102 (config: node2.yaml)
+- `nullspace-node-3`: P2P 9004, metrics 9103 (config: node3.yaml)
 
-**Environment Files:**
-- `/etc/nullspace/node.env` (shared config, NODE_ID set per container)
+**Configuration Files:**
+- `/etc/nullspace/node{0-3}.yaml` - Per-node YAML configs with individual keys
+- `/etc/nullspace/peers.yaml` - Peer address mappings
+
+**Node binary invocation:**
+```bash
+--config /etc/nullspace/node0.yaml --peers /etc/nullspace/peers.yaml
+```
 
 **Data Volumes:**
-- `/var/lib/nullspace/node-1` through `/var/lib/nullspace/node-4`
+- `/var/lib/nullspace/node-0` through `/var/lib/nullspace/node-3`
 
 ## DNS Records (Cloudflare)
 
@@ -151,15 +156,15 @@ docker logs -f nullspace-gateway --tail 100
 docker logs -f nullspace-auth --tail 100
 docker logs -f nullspace-simulator --tail 100
 
-# Validator logs (on consolidated host)
+# Validator logs (on ns-db-1: 5.161.124.82)
+docker logs -f nullspace-node-0 --tail 100
 docker logs -f nullspace-node-1 --tail 100
 docker logs -f nullspace-node-2 --tail 100
 docker logs -f nullspace-node-3 --tail 100
-docker logs -f nullspace-node-4 --tail 100
 
 # View all validator logs at once
-docker logs -f nullspace-node-1 & docker logs -f nullspace-node-2 & \
-docker logs -f nullspace-node-3 & docker logs -f nullspace-node-4
+docker logs -f nullspace-node-0 & docker logs -f nullspace-node-1 & \
+docker logs -f nullspace-node-2 & docker logs -f nullspace-node-3
 ```
 
 ### Restarting Services

@@ -6,21 +6,32 @@
 - Ask before deleting files to resolve type/lint failures.
 - Always check `git status` before committing; never amend without explicit approval.
 
+## Browser Automation
+
+Use `agent-browser` for web automation. Run `agent-browser --help` for all commands.
+
+Core workflow:
+
+1. `agent-browser open <url>` - Navigate to page
+2. `agent-browser snapshot -i` - Get interactive elements with refs (@e1, @e2)
+3. `agent-browser click @e1` / `fill @e2 "text"` - Interact using refs
+4. Re-snapshot after page changes
+
 ## Infrastructure
 
 ### Staging Environment (testnet.regenesis.dev)
 
 **SSH Access:** `ssh -i ~/.ssh/id_ed25519_hetzner root@<server-ip>`
 
-| Server | IP | Private IP | Role |
-|--------|-----|------------|------|
-| ns-sim-1 | 5.161.67.36 | 10.0.1.2 | Indexer/Simulator |
-| ns-gw-1 | 178.156.212.135 | 10.0.1.6 | Gateway + Website |
-| ns-auth-1 | 5.161.209.39 | 10.0.1.5 | Auth Service |
-| ns-db-1 | 5.161.124.82 | 10.0.1.1 | Convex (self-hosted) |
-| ns-node-1/2/3 | - | 10.0.1.3/4/7 | Validator Nodes |
+| Server        | IP              | Private IP   | Role                          |
+| ------------- | --------------- | ------------ | ----------------------------- |
+| ns-sim-1      | 5.161.67.36     | 10.0.1.2     | Indexer/Simulator             |
+| ns-gw-1       | 178.156.212.135 | 10.0.1.6     | Gateway + Website             |
+| ns-auth-1     | 5.161.209.39    | 10.0.1.7     | Auth Service                  |
+| ns-db-1       | 5.161.124.82    | 10.0.1.1     | Validators (4x consolidated)  |
 
 **Services & URLs:**
+
 - Website: https://testnet.regenesis.dev (ns-gw-1:8080)
 - Gateway: https://api.testnet.regenesis.dev (ns-gw-1:9010)
 - Indexer: https://indexer.testnet.regenesis.dev (ns-sim-1:8080)
@@ -28,6 +39,7 @@
 - Convex: https://convex.testnet.regenesis.dev (ns-db-1:3210)
 
 **Hetzner CLI:** Use `hcloud` for firewall/server management:
+
 ```bash
 hcloud firewall list
 hcloud server list
@@ -39,13 +51,29 @@ hcloud firewall add-rule <firewall> --direction in --protocol tcp --port <port> 
 **Config Locations:** `/etc/nullspace/*.env` on each server. Docker containers use `--env-file`.
 
 ### Network Identity (Staging)
+
 ```
-92124c5a292d8a6c083c732fa9b454d661c123ac4ba289e691f64e83a56ade2e7efd0abd8c2078b143a24f346192ed6518b670e6c26c9026d58e090592755bd1488f6dcea305d504fc2103ad9d35f81fc86cd143e10bbb736e6566f94fcf40ad
+85a5cfe0aef544f32090e7740eda6c4714c8dc7ee861a6ecf9bf2a6d148611fb0e51d185356686a9af2ea4fafaec78dd051e683f366f7d81e7bb2da0877ed6001f769ba014b4c81dfc00ad776da9dffdf5dd39c1bc7eddfcf7d64139d6252867
 ```
+
+### Current Infrastructure Notes (Jan 2026)
+
+- Active servers: `ns-sim-1` cpx41 (simulator), `ns-db-1` cpx41 (validators), `ns-gw-1` cpx31 (gateway/website), `ns-auth-1` cpx21 (auth).
+- 4 validators consolidated on ns-db-1 (5.161.124.82) for BFT consensus (n≥3f+1, f=1 fault tolerance).
+- Validators use per-node YAML config files (`configs/staging/node{0-3}.yaml`) with individual keys, not shared env files.
+- Docker port mapping: external 9001-9004 → internal 9001 per container.
+- Threshold: 3/4 signatures required for consensus.
+
+### Current Chain Debugging Context (Jan 2026)
+
+- Admin `CasinoRegister` and QA register txs are confirmed executing (nonce increments), but `GlobalTableInit` and `GlobalTableOpenRound` do not execute (admin nonce stays at 1).
+- Mempool shows pending admin txs (`future_nonce_total` > 0), yet blocks show `tx_count: 0` and config keys like `/state/<global-table-config-hash>` return 404.
+- Suspected causes: protocol mismatch between node image and client/instruction encoding, or transactions dropped before inclusion.
 
 ### CI/CD
 
 **Workflows:**
+
 - `build-images.yml` - Builds Docker images on push to main
 - `deploy-staging.yml` - Deploys to staging (auto on push, manual via workflow_dispatch)
 
@@ -55,12 +83,14 @@ hcloud firewall add-rule <firewall> --direction in --protocol tcp --port <port> 
 ### Testing
 
 **Local Development:**
+
 ```bash
 cargo run --bin nullspace-simulator -- --identity <hex>  # Backend
 pnpm -C website dev                                       # Frontend
 ```
 
 **Test Commands:**
+
 ```bash
 cargo test                           # Rust unit tests
 pnpm test                            # JS/TS tests (all packages)
@@ -80,3 +110,13 @@ When modifying binary protocol encoding/decoding:
 3. **Golden Vectors**: Update `packages/protocol/test/fixtures/golden-vectors.json` and any hardcoded byte expectations.
 4. **Round-Trip Tests**: If Rust doesn’t support the version yet, strip the header before sending to Rust.
 5. **Craps HARDWAY**: Encode via `CRAPS_HARDWAY_MAP`; target becomes 0.
+
+## Agent-Native Development (default stance)
+
+- Follow the Every.to “Agent-Native Software” guide: enforce parity (anything in the UI must be doable via tools/CLI), granularity (atomic tools over monolith flows), composability (features = prompts + tools), emergent capability (open-ended prompts reveal missing tools), and improvement-over-time (prompts/configs can ship without code).
+- Default to agent-first delivery: single non-interactive entrypoints, deterministic seeds/fixtures, idempotent scripts, and zero manual checkpoints.
+- Prefer machine-readable outputs (JSON/YAML) and structured logs to stdout + CI artifacts; never rely on local shell state.
+- Make configuration explicit and flaggable: env/CLI switches with safe local defaults; secrets live in env files or secret stores, never personal shells.
+- Bake in self-healing: pre-flight health checks, bounded retries where safe, graceful teardown/cleanup, and port reclamation to avoid stuck runs.
+- Every new feature ships with an executable “golden path” (update `scripts/agent-up.sh`/`agent-loop.sh`/tests) plus fixtures/golden vectors to keep validation green by default.
+- Document failure modes and recovery steps inline (README/AGENTS) so agents can autonomously choose next priorities.

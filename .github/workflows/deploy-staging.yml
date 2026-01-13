@@ -157,6 +157,9 @@ jobs:
     needs: [prepare, deploy-simulator]
     if: always() && needs.prepare.result == 'success' && needs.deploy-simulator.result == 'success'
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Setup SSH
         env:
           SSH_PRIVATE_KEY: ${{ secrets.STAGING_SSH_PRIVATE_KEY }}
@@ -164,12 +167,6 @@ jobs:
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-
-      - name: Download secrets
-        uses: actions/download-artifact@v4
-        with:
-          name: staging-secrets
-          path: /tmp/secrets
 
       - name: Deploy all validator nodes to consolidated host
         env:
@@ -183,65 +180,71 @@ jobs:
 
           ssh-keyscan -H $HOST >> ~/.ssh/known_hosts 2>/dev/null || true
 
-          # Copy node config
-          scp -o StrictHostKeyChecking=no /tmp/secrets/node.env $DEPLOY_USER@$HOST:/etc/nullspace/ 2>/dev/null || \
-            ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$HOST "mkdir -p /etc/nullspace"
-          scp -o StrictHostKeyChecking=no /tmp/secrets/node.env $DEPLOY_USER@$HOST:/etc/nullspace/
+          # Create config directory on remote host
+          ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$HOST "mkdir -p /etc/nullspace"
+
+          # Copy per-node config files and peers file
+          scp -o StrictHostKeyChecking=no configs/staging/node0.yaml $DEPLOY_USER@$HOST:/etc/nullspace/
+          scp -o StrictHostKeyChecking=no configs/staging/node1.yaml $DEPLOY_USER@$HOST:/etc/nullspace/
+          scp -o StrictHostKeyChecking=no configs/staging/node2.yaml $DEPLOY_USER@$HOST:/etc/nullspace/
+          scp -o StrictHostKeyChecking=no configs/staging/node3.yaml $DEPLOY_USER@$HOST:/etc/nullspace/
+          scp -o StrictHostKeyChecking=no configs/staging/peers.yaml $DEPLOY_USER@$HOST:/etc/nullspace/
 
           # Deploy all 4 validators via SSH (each with unique container name, ports, and data volume)
           # BFT requires n >= 3f+1 validators; with 4 validators, f=1 fault tolerance
+          # Node binary requires: --config <yaml_file> --peers <peers_file>
           ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$HOST << DEPLOY
             set -euo pipefail
             echo "$GHCR_TOKEN" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
             docker pull $GHCR_REGISTRY/$IMAGE_PREFIX-node:$IMAGE_TAG || docker pull $GHCR_REGISTRY/$IMAGE_PREFIX-node:latest
 
-            # Deploy validator 1
+            # Deploy validator 0 (node0.yaml)
+            docker stop nullspace-node-0 2>/dev/null || true
+            docker rm nullspace-node-0 2>/dev/null || true
+            docker run -d --name nullspace-node-0 \
+              --restart unless-stopped \
+              -p 9001:9001 \
+              -p 9100:9100 \
+              -v /var/lib/nullspace/node-0:/data \
+              -v /etc/nullspace:/etc/nullspace:ro \
+              $GHCR_REGISTRY/$IMAGE_PREFIX-node:$IMAGE_TAG \
+              --config /etc/nullspace/node0.yaml --peers /etc/nullspace/peers.yaml
+
+            # Deploy validator 1 (node1.yaml)
             docker stop nullspace-node-1 2>/dev/null || true
             docker rm nullspace-node-1 2>/dev/null || true
             docker run -d --name nullspace-node-1 \
               --restart unless-stopped \
-              --env-file /etc/nullspace/node.env \
-              -e NODE_ID=1 \
-              -p 9001:9001 \
-              -p 9100:9100 \
+              -p 9002:9001 \
+              -p 9101:9100 \
               -v /var/lib/nullspace/node-1:/data \
-              $GHCR_REGISTRY/$IMAGE_PREFIX-node:$IMAGE_TAG
+              -v /etc/nullspace:/etc/nullspace:ro \
+              $GHCR_REGISTRY/$IMAGE_PREFIX-node:$IMAGE_TAG \
+              --config /etc/nullspace/node1.yaml --peers /etc/nullspace/peers.yaml
 
-            # Deploy validator 2
+            # Deploy validator 2 (node2.yaml)
             docker stop nullspace-node-2 2>/dev/null || true
             docker rm nullspace-node-2 2>/dev/null || true
             docker run -d --name nullspace-node-2 \
               --restart unless-stopped \
-              --env-file /etc/nullspace/node.env \
-              -e NODE_ID=2 \
-              -p 9002:9001 \
-              -p 9101:9100 \
+              -p 9003:9001 \
+              -p 9102:9100 \
               -v /var/lib/nullspace/node-2:/data \
-              $GHCR_REGISTRY/$IMAGE_PREFIX-node:$IMAGE_TAG
+              -v /etc/nullspace:/etc/nullspace:ro \
+              $GHCR_REGISTRY/$IMAGE_PREFIX-node:$IMAGE_TAG \
+              --config /etc/nullspace/node2.yaml --peers /etc/nullspace/peers.yaml
 
-            # Deploy validator 3
+            # Deploy validator 3 (node3.yaml)
             docker stop nullspace-node-3 2>/dev/null || true
             docker rm nullspace-node-3 2>/dev/null || true
             docker run -d --name nullspace-node-3 \
               --restart unless-stopped \
-              --env-file /etc/nullspace/node.env \
-              -e NODE_ID=3 \
-              -p 9003:9001 \
-              -p 9102:9100 \
-              -v /var/lib/nullspace/node-3:/data \
-              $GHCR_REGISTRY/$IMAGE_PREFIX-node:$IMAGE_TAG
-
-            # Deploy validator 4
-            docker stop nullspace-node-4 2>/dev/null || true
-            docker rm nullspace-node-4 2>/dev/null || true
-            docker run -d --name nullspace-node-4 \
-              --restart unless-stopped \
-              --env-file /etc/nullspace/node.env \
-              -e NODE_ID=4 \
               -p 9004:9001 \
               -p 9103:9100 \
-              -v /var/lib/nullspace/node-4:/data \
-              $GHCR_REGISTRY/$IMAGE_PREFIX-node:$IMAGE_TAG
+              -v /var/lib/nullspace/node-3:/data \
+              -v /etc/nullspace:/etc/nullspace:ro \
+              $GHCR_REGISTRY/$IMAGE_PREFIX-node:$IMAGE_TAG \
+              --config /etc/nullspace/node3.yaml --peers /etc/nullspace/peers.yaml
 
             echo "All 4 validators deployed:"
             docker ps --filter "name=nullspace-node"
@@ -531,35 +534,40 @@ jobs:
           DEPLOY_GW
 
           # Roll back all 4 validators on consolidated host (BFT: n=4, f=1)
+          # Validators use config files: --config /etc/nullspace/node{N}.yaml --peers /etc/nullspace/peers.yaml
           ssh -o StrictHostKeyChecking=no root@"$HOST_VALIDATORS" <<DEPLOY_VALIDATORS
             set -euo pipefail
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$OWNER" --password-stdin
             docker pull $GHCR_REGISTRY/$IMAGE_PREFIX-node:$TAG
 
-            for i in 1 2 3 4; do
+            for i in 0 1 2 3; do
               docker stop nullspace-node-\$i 2>/dev/null || true
               docker rm nullspace-node-\$i 2>/dev/null || true
             done
 
+            docker run -d --name nullspace-node-0 --restart unless-stopped \
+              -p 9001:9001 -p 9100:9100 -v /var/lib/nullspace/node-0:/data \
+              -v /etc/nullspace:/etc/nullspace:ro \
+              $GHCR_REGISTRY/$IMAGE_PREFIX-node:$TAG \
+              --config /etc/nullspace/node0.yaml --peers /etc/nullspace/peers.yaml
+
             docker run -d --name nullspace-node-1 --restart unless-stopped \
-              --env-file /etc/nullspace/node.env -e NODE_ID=1 \
-              -p 9001:9001 -p 9100:9100 -v /var/lib/nullspace/node-1:/data \
-              $GHCR_REGISTRY/$IMAGE_PREFIX-node:$TAG
+              -p 9002:9001 -p 9101:9100 -v /var/lib/nullspace/node-1:/data \
+              -v /etc/nullspace:/etc/nullspace:ro \
+              $GHCR_REGISTRY/$IMAGE_PREFIX-node:$TAG \
+              --config /etc/nullspace/node1.yaml --peers /etc/nullspace/peers.yaml
 
             docker run -d --name nullspace-node-2 --restart unless-stopped \
-              --env-file /etc/nullspace/node.env -e NODE_ID=2 \
-              -p 9002:9001 -p 9101:9100 -v /var/lib/nullspace/node-2:/data \
-              $GHCR_REGISTRY/$IMAGE_PREFIX-node:$TAG
+              -p 9003:9001 -p 9102:9100 -v /var/lib/nullspace/node-2:/data \
+              -v /etc/nullspace:/etc/nullspace:ro \
+              $GHCR_REGISTRY/$IMAGE_PREFIX-node:$TAG \
+              --config /etc/nullspace/node2.yaml --peers /etc/nullspace/peers.yaml
 
             docker run -d --name nullspace-node-3 --restart unless-stopped \
-              --env-file /etc/nullspace/node.env -e NODE_ID=3 \
-              -p 9003:9001 -p 9102:9100 -v /var/lib/nullspace/node-3:/data \
-              $GHCR_REGISTRY/$IMAGE_PREFIX-node:$TAG
-
-            docker run -d --name nullspace-node-4 --restart unless-stopped \
-              --env-file /etc/nullspace/node.env -e NODE_ID=4 \
-              -p 9004:9001 -p 9103:9100 -v /var/lib/nullspace/node-4:/data \
-              $GHCR_REGISTRY/$IMAGE_PREFIX-node:$TAG
+              -p 9004:9001 -p 9103:9100 -v /var/lib/nullspace/node-3:/data \
+              -v /etc/nullspace:/etc/nullspace:ro \
+              $GHCR_REGISTRY/$IMAGE_PREFIX-node:$TAG \
+              --config /etc/nullspace/node3.yaml --peers /etc/nullspace/peers.yaml
           DEPLOY_VALIDATORS
 
       - name: Clean up
