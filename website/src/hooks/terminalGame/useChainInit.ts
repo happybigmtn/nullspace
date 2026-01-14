@@ -32,7 +32,7 @@ type UseChainInitArgs = {
   setCurrentSessionId: Dispatch<SetStateAction<bigint | null>>;
   applySessionMeta: (sessionId: bigint | null, moveNumber?: number) => void;
   gameTypeRef: MutableRefObject<GameType>;
-  parseGameState: (stateBlob: Uint8Array, gameType?: GameType) => void;
+  parseGameState: (stateBlob: Uint8Array | string, gameType?: GameType) => void;
 };
 
 export const useChainInit = ({

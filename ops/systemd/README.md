@@ -29,3 +29,16 @@ sudo systemctl start nullspace-simulator nullspace-node nullspace-auth \
 sudo systemctl enable nullspace-economy-snapshot.timer
 sudo systemctl start nullspace-economy-snapshot.timer
 ```
+
+Consensus watchdog (recommended for 24/7 staging uptime):
+```
+sudo install -m 0755 scripts/consensus-watchdog.sh /usr/local/bin/nullspace-consensus-watchdog.sh
+sudo systemctl daemon-reload
+sudo systemctl enable nullspace-consensus-watchdog.timer
+sudo systemctl start nullspace-consensus-watchdog.timer
+```
+
+Defaults:
+- Restarts validators that fall behind by `LAG_THRESHOLD` (default 100).
+- Detects stalled consensus when max finalized height doesn’t advance for `STALL_SECONDS` (default 120s).
+- Optional data quarantine requires `WIPE_STALE=1` (not enabled by default).

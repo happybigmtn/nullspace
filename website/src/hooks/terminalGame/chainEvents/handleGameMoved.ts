@@ -26,7 +26,7 @@ type HandleGameMovedArgs = {
   crapsPendingRollLogRef: MutableRefObject<CrapsPendingRollLog>;
   crapsChainRollLogRef: CrapsChainRollRef;
   applySessionMeta: (sessionId: bigint | null, moveNumber?: number) => void;
-  parseGameState: (stateBlob: Uint8Array, gameType?: GameType) => void;
+  parseGameState: (stateBlob: Uint8Array | string, gameType?: GameType) => void;
   playModeRef: MutableRefObject<'CASH' | 'FREEROLL' | null>;
   clientRef: MutableRefObject<CasinoClient | null>;
   publicKeyBytesRef: MutableRefObject<Uint8Array | null>;

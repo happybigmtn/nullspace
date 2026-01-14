@@ -170,6 +170,7 @@ export const useRoulette = ({
     }
 
     // If on-chain mode with no session, auto-start a new game
+    console.error('[qa-roulette] spinRoulette check - sessionRef:', currentSessionIdRef.current?.toString() ?? 'null', 'isOnChain:', isOnChain);
     if (isOnChain && chainService && !currentSessionIdRef.current) {
       if (state.rouletteIsPrison) {
         setGameState(prev => ({ ...prev, message: 'PRISON - WAIT FOR SESSION' }));

@@ -57,8 +57,29 @@ export default function CasinoApp() {
   const chainUrl = String(import.meta.env.VITE_CHAIN_URL ?? import.meta.env.VITE_URL ?? '');
   const networkLabel = chainUrl.includes('localhost') || chainUrl.includes('127.0.0.1') ? 'Localnet' : 'Testnet';
   const networkStatus = isOnChain ? 'online' : 'offline';
-  const qaEnabled = String(import.meta.env.VITE_QA_BETS ?? '').toLowerCase() === 'true'
-    || String(import.meta.env.VITE_QA_BETS ?? '') === '1';
+  const qaEnabled = useMemo(() => {
+    const envFlag = String(import.meta.env.VITE_QA_BETS ?? '').toLowerCase();
+    if (envFlag === 'true' || envFlag === '1') return true;
+
+    if (typeof window === 'undefined') return false;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const qaParam = params.get('qa');
+      const qaFlag = qaParam === '1' || qaParam?.toLowerCase() === 'true';
+      const stored = localStorage.getItem('qa_bets_enabled') === 'true';
+
+      if (qaFlag) {
+        localStorage.setItem('qa_bets_enabled', 'true');
+        localStorage.setItem('qa_allow_legacy', 'true');
+        localStorage.setItem('nullspace_vault_enabled', 'false');
+        return true;
+      }
+
+      return stored;
+    } catch {
+      return false;
+    }
+  }, []);
 
   // UI State
   const [commandOpen, setCommandOpen] = useState(false);
@@ -158,6 +179,15 @@ export default function CasinoApp() {
       else delete document.documentElement.dataset.touchMode;
     }
   }, [touchMode]);
+
+  // Auto-claim faucet in QA mode so automated bet harness always has funds
+  useEffect(() => {
+    if (!qaEnabled) return;
+    if (!isOnChain) return;
+    if (isFaucetClaiming) return;
+    if ((stats.chips ?? 0) > 0) return;
+    actions?.claimFaucet?.();
+  }, [qaEnabled, isOnChain, isFaucetClaiming, stats.chips, actions]);
 
   const openCommandPalette = () => {
     track('ui.command_palette.opened', { surface: 'casino' });

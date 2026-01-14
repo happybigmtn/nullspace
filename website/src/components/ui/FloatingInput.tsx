@@ -19,6 +19,7 @@ import React, {
   useRef,
   useState,
   useCallback,
+  useId,
   type InputHTMLAttributes,
   type ChangeEvent,
   type FocusEvent,
@@ -122,6 +123,8 @@ export const FloatingInput = forwardRef<FloatingInputHandle, FloatingInputProps>
     const [hasValue, setHasValue] = useState(
       Boolean(value || defaultValue)
     );
+    const generatedId = useId();
+    const inputId = inputProps.id || `floating-input-${generatedId}`;
 
     const springConfig = prefersReducedMotion
       ? INSTANT_CONFIG
@@ -313,6 +316,7 @@ export const FloatingInput = forwardRef<FloatingInputHandle, FloatingInputProps>
         >
           {/* Floating label */}
           <animated.label
+            htmlFor={inputId}
             className={cn(
               'absolute top-1/2 pointer-events-none origin-left',
               currentSize.label,
@@ -334,9 +338,12 @@ export const FloatingInput = forwardRef<FloatingInputHandle, FloatingInputProps>
           {/* Input */}
           <input
             ref={inputRef}
+            id={inputId}
             value={value}
             defaultValue={defaultValue}
             disabled={disabled}
+            aria-invalid={hasError}
+            aria-describedby={hasError && errorMessage ? `${inputId}-error` : undefined}
             onFocus={handleFocus}
             onBlur={handleBlur}
             onChange={handleChange}
@@ -367,7 +374,7 @@ export const FloatingInput = forwardRef<FloatingInputHandle, FloatingInputProps>
 
         {/* Error message */}
         {hasError && errorMessage && (
-          <p className="mt-1.5 text-sm text-action-error">{errorMessage}</p>
+          <p id={`${inputId}-error`} role="alert" className="mt-1.5 text-sm text-action-error">{errorMessage}</p>
         )}
       </div>
     );

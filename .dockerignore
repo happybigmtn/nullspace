@@ -1,5 +1,4 @@
 # Build artifacts
-target/
 **/*.rs.bk
 .turbo/
 logs/

@@ -163,8 +163,10 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
         show ? (
           <>
             {/* Backdrop */}
-            <div
-              className="fixed inset-0 z-[90] bg-black/20 backdrop-blur-sm"
+            <button
+              type="button"
+              aria-label="Close menu"
+              className="fixed inset-0 z-[90] bg-black/20 backdrop-blur-sm cursor-default"
               onClick={close}
             />
 

@@ -18,7 +18,7 @@ type UseChainTimeoutsArgs = {
   clientRef: MutableRefObject<{ getCasinoSession?: (id: bigint) => Promise<any> } | null>;
   gameTypeRef: MutableRefObject<GameType>;
   gameStateRef: MutableRefObject<GameState | null>;
-  parseGameState: (stateBlob: Uint8Array, gameType?: GameType) => void;
+  parseGameState: (stateBlob: Uint8Array | string, gameType?: GameType) => void;
   runAutoPlayForSession: (sessionId: bigint, frontendGameType: GameType) => void;
 };
 

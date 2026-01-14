@@ -26,7 +26,7 @@ type UseDealArgs = {
   autoPlayPlanRef: MutableRefObject<AutoPlayPlan | null>;
   gameTypeRef: MutableRefObject<GameType>;
   clientRef: MutableRefObject<any>;
-  parseGameState: (stateBlob: Uint8Array, gameType?: GameType) => void;
+  parseGameState: (stateBlob: Uint8Array | string, gameType?: GameType) => void;
   rollCraps: () => void;
   spinRoulette: () => void;
   rollSicBo: () => void;

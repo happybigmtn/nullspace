@@ -20,8 +20,19 @@ export const BetsDrawer: React.FC<BetsDrawerProps> = ({ title = 'PLACE BETS', ch
   }, [open]);
 
   const overlay = open ? (
-    <div className="fixed inset-0 z-[100] md:hidden" data-testid="bets-drawer">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setOpen(false)} />
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Bets drawer"
+      className="fixed inset-0 z-[100] md:hidden"
+      data-testid="bets-drawer"
+    >
+      <button
+        type="button"
+        aria-label="Close bets drawer"
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm cursor-default"
+        onClick={() => setOpen(false)}
+      />
       <div
         className="absolute bottom-4 left-1/2 -translate-x-1/2 w-[92%] max-w-sm sm:max-w-md max-h-[80vh] sm:max-h-[85vh] liquid-card liquid-sheen overflow-hidden flex flex-col"
         data-testid="bets-drawer-panel"
@@ -32,7 +43,7 @@ export const BetsDrawer: React.FC<BetsDrawerProps> = ({ title = 'PLACE BETS', ch
             type="button"
             onClick={() => setOpen(false)}
             aria-label="Close Bets"
-            className="liquid-chip flex items-center gap-1 px-3 py-1 text-[10px] uppercase tracking-[0.3em] text-ns"
+            className="liquid-chip flex items-center gap-1 px-3 py-1 text-[10px] uppercase tracking-[0.3em] text-ns focus-visible:ring-2 focus-visible:ring-action-primary/50"
           >
             <span>Bets</span>
             <span aria-hidden>▾</span>

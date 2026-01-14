@@ -321,6 +321,11 @@ const Chip = React.memo(function Chip({
           selected && styles.chipSelected,
           animatedStyle,
         ]}
+        accessible={true}
+        accessibilityRole="button"
+        accessibilityLabel={`$${value} ${colors.label} chip`}
+        accessibilityState={{ selected, disabled }}
+        accessibilityHint="Tap to select, drag to place bet"
       >
         {/* Edge grooves - concentric rings */}
         <ChipEdgeRings
@@ -376,7 +381,12 @@ export const ChipSelector = React.memo(function ChipSelector({
   );
 
   return (
-    <View style={styles.container} testID="chip-selector">
+    <View
+      style={styles.container}
+      testID="chip-selector"
+      accessibilityRole="radiogroup"
+      accessibilityLabel="Chip selector"
+    >
       {CHIP_VALUES.map((value, index) => (
         <Chip
           key={value}

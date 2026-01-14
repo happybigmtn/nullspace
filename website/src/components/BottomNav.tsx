@@ -145,13 +145,13 @@ export const BottomNav: React.FC = () => {
                 key={item.to}
                 ref={setRef(item.to)}
                 to={item.to}
-                className={`relative z-10 flex-1 flex flex-col items-center justify-center gap-1 min-h-[44px] transition-all duration-200 ${
+                className={`relative z-10 flex-1 flex flex-col items-center justify-center gap-1 min-h-[44px] transition-all duration-200 focus-visible:ring-2 focus-visible:ring-action-primary/50 rounded-lg ${
                   isActive
                     ? 'text-ns'
                     : 'text-ns-muted hover:text-ns'
                 }`}
                 aria-current={isActive ? 'page' : undefined}
-                title={item.label}
+                aria-label={item.label}
               >
                 <span
                   className={`transition-transform duration-200 ${

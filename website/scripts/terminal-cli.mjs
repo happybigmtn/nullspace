@@ -21,14 +21,14 @@ const getArg = (name, fallback) => {
 };
 
 const baseInput = getArg('base', process.env.BASE || 'https://testnet.regenesis.dev/terminal');
-const baseUrl = baseInput.endsWith('/terminal') ? baseInput : `${baseInput.replace(/\/+$/, '')}/terminal`;
+const normalizedBase = baseInput.endsWith('/terminal') ? baseInput : `${baseInput.replace(/\/+$/, '')}/terminal`;
+const baseUrl = normalizedBase.includes('?') ? `${normalizedBase}&qa=1` : `${normalizedBase}?qa=1`;
 const scriptInput = getArg('script', process.env.COMMANDS || '/status;/games;/bet 25;/deal');
 const commands = scriptInput
   .split(/;|\n/)
   .map((c) => c.trim())
   .filter(Boolean);
-const delayMs = Number(getArg('delay', '600'));
-const initialWaitMs = Number(getArg('initial-wait', '1200'));
+const delayMs = Number(getArg('delay', '350'));
 const headless = getArg('headed', process.env.HEADED) ? false : true;
 const inputTimeout = Number(getArg('input-timeout', '15000'));
 const commandTimeout = Number(getArg('command-timeout', '30000'));
@@ -41,7 +41,17 @@ async function run() {
     headless,
     args: ['--no-sandbox', '--disable-dev-shm-usage'],
   });
-  const page = await browser.newPage({ viewport: { width: 1220, height: 900 } });
+  const context = await browser.newContext({ baseURL: baseUrl, bypassCSP: true });
+  const page = await context.newPage({ viewport: { width: 1220, height: 900 } });
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem('qa_allow_legacy', 'true');
+      localStorage.setItem('qa_bets_enabled', 'true');
+      localStorage.setItem('nullspace_vault_enabled', 'false');
+    } catch {
+      // ignore
+    }
+  });
 
   page.on('console', (msg) => {
     const text = msg.text();
@@ -52,13 +62,14 @@ async function run() {
   });
 
   await page.goto(baseUrl, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(initialWaitMs);
 
-  const focusInput = async () => {
-    const input = await page.waitForSelector('textarea[placeholder*="/help"]', { timeout: inputTimeout });
-    await input.focus();
-    return input;
-  };
+const focusInput = async () => {
+  const input =
+    (await page.waitForSelector('textarea[placeholder*="/help"]', { timeout: inputTimeout })) ||
+    (await page.waitForSelector('textarea', { timeout: inputTimeout }));
+  await input.focus();
+  return input;
+};
 
   let input = await focusInput();
 
@@ -68,9 +79,7 @@ async function run() {
       await input.type(cmd, { delay: 10 });
       await page.keyboard.press('Enter');
       log(`[cmd] ${cmd}`);
-      const extra =
-        cmd.startsWith('/game') || cmd.startsWith('/unlock') || cmd.startsWith('/status') ? delayMs : 0;
-      const wait = Math.min(commandTimeout, delayMs + extra);
+      const wait = commandTimeout > delayMs ? delayMs : commandTimeout;
       await page.waitForTimeout(wait);
     } catch (err) {
       // Try to refocus once if the input vanished
@@ -80,7 +89,7 @@ async function run() {
         await input.type(cmd, { delay: 10 });
         await page.keyboard.press('Enter');
         log(`[cmd retry] ${cmd}`);
-        await page.waitForTimeout(Math.min(commandTimeout, delayMs * 2));
+        await page.waitForTimeout(delayMs);
       } catch (err2) {
         throw err2;
       }

@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useCallback, useState } from 'react';
 import { GameState, SicBoBet } from '../../../types';
 import { MobileDrawer } from '../MobileDrawer';
 import { BetsDrawer } from '../BetsDrawer';
-import { PanelDrawer } from '../PanelDrawer';
 import { getSicBoTotalItems, getSicBoCombinationItems, calculateSicBoTotalExposure, calculateSicBoCombinationExposure } from '../../../utils/gameUtils';
 import { DiceThrow2D } from '../GameComponents';
 import { Label } from '../ui/Label';
@@ -302,17 +301,23 @@ export const SicBoView = React.memo<{
                         >
                             Rebet
                         </button>
-                        <PanelDrawer label="Table" title="SIC BO TABLE" count={gameState.sicBoBets.length} className="hidden md:inline-flex">
-                            <div className="space-y-6">
+                        <div className="hidden md:block">
+                            <div className="ml-3 rounded-3xl liquid-panel border border-ns/40 px-4 py-3 space-y-4 shadow-soft">
+                                <div className="flex items-center justify-between">
+                                    <div className="text-[10px] font-bold uppercase tracking-tight text-ns">Sic Bo Table</div>
+                                    {gameState.sicBoBets.length > 0 && (
+                                        <span className="text-[10px] font-bold text-ns-muted">{gameState.sicBoBets.length} bets</span>
+                                    )}
+                                </div>
                                 <div>
                                     <Label size="micro" className="mb-2 block">Totals</Label>
-                                    <div className="max-h-40 overflow-y-auto scrollbar-hide rounded-2xl liquid-panel p-2">
+                                    <div className="max-h-40 overflow-y-auto scrollbar-hide rounded-2xl bg-ns-surface/60 p-2 border border-ns/30">
                                         {totalItems.map((entry, idx) => renderTotalRow(entry, idx))}
                                     </div>
                                 </div>
                                 <div>
                                     <Label size="micro" className="mb-2 block">Combos</Label>
-                                    <div className="max-h-40 overflow-y-auto scrollbar-hide rounded-2xl liquid-panel p-2">
+                                    <div className="max-h-40 overflow-y-auto scrollbar-hide rounded-2xl bg-ns-surface/60 p-2 border border-ns/30">
                                         {combinationItems.slice(0, 18).map((entry, idx) => renderComboRow(entry, idx))}
                                     </div>
                                 </div>
@@ -326,7 +331,7 @@ export const SicBoView = React.memo<{
                                                 <div key={i} className={`p-3 rounded-2xl border transition-all ${b.local ? 'bg-ns-surface border-dashed border-ns' : 'bg-ns-surface border-ns shadow-soft'}`}>
                                                     <div className="flex justify-between items-center">
                                                         <span className="text-[10px] font-bold text-ns uppercase tracking-tight">{b.type} {b.target ?? ''}</span>
-                                                        <span className="text-xs font-black text-mono-0 dark:text-mono-1000 font-bold">${b.amount}</span>
+                                                        <span className="text-xs font-black text-mono-0 dark:text-mono-1000">${b.amount}</span>
                                                     </div>
                                                 </div>
                                             ))
@@ -334,7 +339,7 @@ export const SicBoView = React.memo<{
                                     </div>
                                 </div>
                             </div>
-                        </PanelDrawer>
+                        </div>
                     </div>
 
                     {/* Mobile: Bet Menu Drawer */}

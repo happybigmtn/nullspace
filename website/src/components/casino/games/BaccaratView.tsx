@@ -6,7 +6,6 @@ import { cardIdToString } from '../../../services/games';
 import { MobileDrawer } from '../MobileDrawer';
 import { BetsDrawer } from '../BetsDrawer';
 import { SideBetsDrawer } from '../SideBetsDrawer';
-import { PanelDrawer } from '../PanelDrawer';
 import { Label } from '../ui/Label';
 
 type BetGroup = 'NONE' | 'BONUS';
@@ -301,8 +300,15 @@ export const BaccaratView = React.memo<{
                             </div>
                         </SideBetsDrawer>
 
-                        <PanelDrawer label="Table" title="BACCARAT TABLE" count={baccaratBetCount} className="hidden md:inline-flex">
-                            <div className="space-y-6">
+                        <div className="hidden md:block">
+                            <div className="ml-3 rounded-3xl liquid-panel border border-ns/40 px-4 py-3 space-y-6 shadow-soft">
+                                <div className="flex items-center justify-between">
+                                    <div className="text-[10px] font-bold uppercase tracking-tight text-ns">Baccarat Table</div>
+                                    {baccaratBetCount > 0 && (
+                                        <span className="text-[10px] font-bold text-ns-muted">{baccaratBetCount} bets</span>
+                                    )}
+                                </div>
+
                                 <div>
                                     <div className="flex items-center gap-2 mb-2">
                                         <button
@@ -436,7 +442,7 @@ export const BaccaratView = React.memo<{
                                     </div>
                                 </div>
                             </div>
-                        </PanelDrawer>
+                        </div>
 
                         {/* Actions */}
                         <div className="flex items-center gap-2">

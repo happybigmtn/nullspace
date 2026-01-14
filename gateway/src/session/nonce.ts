@@ -20,6 +20,10 @@ type NonceManagerOptions = {
   minSyncIntervalMs?: number | string;
 };
 
+// Previously we used hardcoded nonce floors to bridge indexer lag in staging.
+// They now drift far beyond live backend nonces and block submissions, so disable them.
+const HARDCODED_FLOORS: Record<string, bigint> = {};
+
 const DEFAULT_DATA_DIR = '.gateway-data';
 const DEFAULT_NONCE_FILE = 'nonces.json';
 const LEGACY_NONCE_FILE = '.gateway-nonces.json';
@@ -182,6 +186,7 @@ export class NonceManager {
    * Call this when nonce mismatch is detected
    */
   async syncFromBackend(publicKeyHex: string, backendUrl: string): Promise<boolean> {
+    const floor = HARDCODED_FLOORS[publicKeyHex];
     try {
       const response = await fetch(`${backendUrl}/account/${publicKeyHex}`, {
         headers: {
@@ -190,7 +195,10 @@ export class NonceManager {
       });
       if (response.ok) {
         const account = await response.json();
-        const onChainNonce = BigInt(account.nonce);
+        let onChainNonce = BigInt(account.nonce);
+        if (floor !== undefined && floor > onChainNonce) {
+          onChainNonce = floor;
+        }
 
         const current = this.nonces.get(publicKeyHex);
         if (current !== undefined) {
@@ -199,6 +207,7 @@ export class NonceManager {
             console.warn(
               `Backend nonce behind local for ${publicKeyHex.slice(0, 8)}; keeping local nonce ${current} (drift=${drift})`
             );
+            this.nonces.set(publicKeyHex, current);
           } else {
             this.nonces.set(publicKeyHex, onChainNonce);
           }

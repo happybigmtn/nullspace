@@ -286,7 +286,11 @@ export function SkeletonWrapper({
   className = '',
 }: SkeletonWrapperProps) {
   return (
-    <div className={cn('relative', className)}>
+    <div
+      className={cn('relative', className)}
+      aria-busy={loading}
+      aria-label={loading ? 'Loading content' : undefined}
+    >
       {/* Skeleton */}
       <div
         className={cn(

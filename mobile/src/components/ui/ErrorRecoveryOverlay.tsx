@@ -337,7 +337,14 @@ export function ErrorRecoveryOverlay({
   if (!isVisible && !showSuccess) return null;
 
   return (
-    <View style={StyleSheet.absoluteFill} testID={testID} pointerEvents="box-none">
+    <View
+      style={StyleSheet.absoluteFill}
+      testID={testID}
+      pointerEvents="box-none"
+      accessibilityRole="alert"
+      accessibilityLabel={`${getErrorTitle(errorType)}: ${message}`}
+      accessibilityLiveRegion="assertive"
+    >
       {/* Dimmed background overlay */}
       <Animated.View
         style={[styles.overlay, overlayStyle]}
@@ -389,6 +396,9 @@ export function ErrorRecoveryOverlay({
               disabled={isRecovering}
               activeOpacity={0.7}
               testID="error-reconnect-button"
+              accessibilityRole="button"
+              accessibilityLabel={isRecovering ? 'Connecting' : 'Reconnect'}
+              accessibilityState={{ disabled: isRecovering }}
             >
               <Text style={[styles.actionText, styles.primaryText]}>
                 {isRecovering ? 'Connecting...' : 'Reconnect'}
@@ -403,6 +413,9 @@ export function ErrorRecoveryOverlay({
               disabled={isRecovering}
               activeOpacity={0.7}
               testID="error-retry-button"
+              accessibilityRole="button"
+              accessibilityLabel="Retry"
+              accessibilityState={{ disabled: isRecovering }}
             >
               <Text style={[styles.actionText, styles.primaryText]}>Retry</Text>
             </TouchableOpacity>
@@ -414,6 +427,8 @@ export function ErrorRecoveryOverlay({
               onPress={handleGoToLobby}
               activeOpacity={0.7}
               testID="error-lobby-button"
+              accessibilityRole="button"
+              accessibilityLabel="Back to Lobby"
             >
               <Text style={[styles.actionText, styles.secondaryText]}>Back to Lobby</Text>
             </TouchableOpacity>

@@ -112,6 +112,8 @@ export function GlassModal({
           exiting={FadeOut.duration(150)}
           style={StyleSheet.absoluteFill}
           onPress={closeOnBackdrop ? onClose : undefined}
+          accessibilityRole="button"
+          accessibilityLabel="Close modal"
         >
           <BlurView
             intensity={blurIntensity}
@@ -138,6 +140,8 @@ export function GlassModal({
             position === 'bottom' && styles.contentBottom,
           ]}
           pointerEvents="box-none"
+          accessibilityViewIsModal={true}
+          accessibilityRole="dialog"
         >
           {/* Glass content card */}
           <Animated.View

@@ -26,6 +26,10 @@ path = "src/bin/init_amm.rs"
 name = "game-round-trip"
 path = "src/bin/game_round_trip.rs"
 
+[[bin]]
+name = "decode-submission"
+path = "src/bin/decode_submission.rs"
+
 [dependencies]
 nullspace-types = { workspace = true }
 nullspace-client = { workspace = true }
@@ -54,6 +58,7 @@ tracing-subscriber = { workspace = true, features = ["fmt", "json"] }
 governor = { workspace = true }
 prometheus-client = { workspace = true }
 clap = { workspace = true }
+hex = "0.4"
 serde = { workspace = true, features = ["derive"] }
 serde_yaml = { workspace = true }
 rayon = { workspace = true }

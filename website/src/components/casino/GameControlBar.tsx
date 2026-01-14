@@ -169,7 +169,7 @@ export const GameControlBar: React.FC<GameControlBarProps> = ({
                                             key={key}
                                             type="button"
                                             onClick={mod.onToggle}
-                                            className={`h-12 rounded-xl border text-sm font-semibold ${
+                                            className={`h-12 rounded-xl border text-sm font-semibold focus-visible:ring-2 focus-visible:ring-action-primary/50 ${
                                                 mod.active ? 'bg-action-primary text-white border-action-primary' : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200'
                                             }`}
                                         >

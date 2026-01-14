@@ -11,12 +11,16 @@ set -euo pipefail
 #   KEEP_UP=1        Leave services running after tests
 #   SMOKE_BACKEND=mock|real  Choose smoke backend (default: mock for determinism)
 #   E2E_SEED         Seed for mock backend determinism (default: 1)
+#   QA_SIMPLE=1      Use minimal QA stack (simulator + single node + website)
+#   QA_BET_SUITE=1   Run QA bet harness after QA_SIMPLE stack is up
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FAST="${FAST:-0}"
 KEEP_UP="${KEEP_UP:-0}"
 SMOKE_BACKEND="${SMOKE_BACKEND:-mock}"
 E2E_SEED="${E2E_SEED:-1}"
+QA_SIMPLE="${QA_SIMPLE:-0}"
+QA_BET_SUITE="${QA_BET_SUITE:-0}"
 SKIP_AUTH="${SKIP_AUTH:-1}"
 SKIP_GATEWAY="${SKIP_GATEWAY:-0}"
 SMOKE_PREVIEW="${SMOKE_PREVIEW:-1}"
@@ -39,11 +43,17 @@ if [ "$SMOKE_BACKEND" = "mock" ]; then
   SMOKE_KILL_PORT=1
 fi
 
-log "Starting services via agent-up.sh"
-E2E_SEED="$E2E_SEED" SMOKE_BACKEND="$SMOKE_BACKEND" SKIP_AUTH="$SKIP_AUTH" SKIP_GATEWAY="$SKIP_GATEWAY" SKIP_WEBSITE="${SKIP_WEBSITE:-0}" SKIP_LOCALNET="$SKIP_LOCALNET" GATEWAY_SKIP_EVENT_WAIT=1 WEB_PORT="$WEB_PORT" ./scripts/agent-up.sh
-
-EXIT_CODE=0
-trap 'EXIT_CODE=$?; if [ "$KEEP_UP" != "1" ]; then ./scripts/agent-down.sh; fi; exit $EXIT_CODE' EXIT INT TERM
+if [ "$QA_SIMPLE" = "1" ]; then
+  log "Starting services via qa-simplify-up.sh"
+  WEB_PORT="$WEB_PORT" ./scripts/qa-simplify-up.sh
+  EXIT_CODE=0
+  trap 'EXIT_CODE=$?; if [ "$KEEP_UP" != "1" ]; then ./scripts/qa-simplify-down.sh; fi; exit $EXIT_CODE' EXIT INT TERM
+else
+  log "Starting services via agent-up.sh"
+  E2E_SEED="$E2E_SEED" SMOKE_BACKEND="$SMOKE_BACKEND" SKIP_AUTH="$SKIP_AUTH" SKIP_GATEWAY="$SKIP_GATEWAY" SKIP_WEBSITE="${SKIP_WEBSITE:-0}" SKIP_LOCALNET="$SKIP_LOCALNET" GATEWAY_SKIP_EVENT_WAIT=1 WEB_PORT="$WEB_PORT" ./scripts/agent-up.sh
+  EXIT_CODE=0
+  trap 'EXIT_CODE=$?; if [ "$KEEP_UP" != "1" ]; then ./scripts/agent-down.sh; fi; exit $EXIT_CODE' EXIT INT TERM
+fi
 
 run_or_fail() {
   local cmd="$1"
@@ -51,15 +61,23 @@ run_or_fail() {
   bash -lc "$cmd"
 }
 
-if [ "$FAST" != "1" ] && [ "$SKIP_GATEWAY" != "1" ]; then
-  run_or_fail "GATEWAY_SKIP_EVENT_WAIT=1 pnpm -C gateway test:integration"
-fi
-
-if [ "${SKIP_WEBSITE:-0}" = "1" ]; then
-  run_or_fail "SMOKE_BACKEND=${SMOKE_BACKEND} E2E_SEED=${E2E_SEED} SMOKE_PORT=4173 SMOKE_PREVIEW=${SMOKE_PREVIEW} SMOKE_PREVIEW_PORT=4180 SMOKE_SKIP_BUILD=${SMOKE_SKIP_BUILD} SMOKE_KILL_PORT=${SMOKE_KILL_PORT} npm -C website run smoke"
+if [ "$QA_SIMPLE" = "1" ]; then
+  if [ "$QA_BET_SUITE" = "1" ]; then
+    run_or_fail "QA_BASE_URL=http://127.0.0.1:${WEB_PORT} node website/scripts/qa-bet-suite.mjs"
+  else
+    run_or_fail "SMOKE_BACKEND=real SMOKE_USE_EXISTING=1 SMOKE_BASE_URL=http://127.0.0.1:${WEB_PORT} SMOKE_PREVIEW_PORT=4180 npm -C website run smoke"
+  fi
 else
-  run_or_fail "SMOKE_BACKEND=${SMOKE_BACKEND} E2E_SEED=${E2E_SEED} SMOKE_USE_EXISTING=1 SMOKE_BASE_URL=http://127.0.0.1:${WEB_PORT} SMOKE_PREVIEW_PORT=4180 npm -C website run smoke"
+  if [ "$FAST" != "1" ] && [ "$SKIP_GATEWAY" != "1" ]; then
+    run_or_fail "GATEWAY_SKIP_EVENT_WAIT=1 pnpm -C gateway test:integration"
+  fi
+
+  if [ "${SKIP_WEBSITE:-0}" = "1" ]; then
+    run_or_fail "SMOKE_BACKEND=${SMOKE_BACKEND} E2E_SEED=${E2E_SEED} SMOKE_PORT=4173 SMOKE_PREVIEW=${SMOKE_PREVIEW} SMOKE_PREVIEW_PORT=4180 SMOKE_SKIP_BUILD=${SMOKE_SKIP_BUILD} SMOKE_KILL_PORT=${SMOKE_KILL_PORT} npm -C website run smoke"
+  else
+    run_or_fail "SMOKE_BACKEND=${SMOKE_BACKEND} E2E_SEED=${E2E_SEED} SMOKE_USE_EXISTING=1 SMOKE_BASE_URL=http://127.0.0.1:${WEB_PORT} SMOKE_PREVIEW_PORT=4180 npm -C website run smoke"
+  fi
+  run_or_fail "PREVIEW_PORT=4181 BASE_URL=http://127.0.0.1:4181 npm -C website run perf:budget"
 fi
-run_or_fail "PREVIEW_PORT=4181 BASE_URL=http://127.0.0.1:4181 npm -C website run perf:budget"
 
 log "Agent loop completed successfully"

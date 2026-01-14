@@ -4,7 +4,6 @@ import { GameState } from '../../../types';
 import { DiceThrow2D } from '../GameComponents';
 import { MobileDrawer } from '../MobileDrawer';
 import { BetsDrawer } from '../BetsDrawer';
-import { PanelDrawer } from '../PanelDrawer';
 import { InlineBetSelector } from '../InlineBetSelector';
 import { Label } from '../ui/Label';
 import { calculateCrapsExposure, canPlaceCrapsBonusBets } from '../../../utils/gameUtils';
@@ -390,7 +389,7 @@ export const CrapsView = React.memo<{
                             canPlaceBonus={canPlaceBonus}
                             playMode={playMode}
                         />
-                        <PanelDrawer label="Table" title="CRAPS TABLE" count={gameState.crapsBets.length} className="hidden md:inline-flex">
+                        <div className="hidden md:block">
                             <div className="space-y-6">
                                 <div>
                                     <div className="flex items-center gap-2 mb-3">
@@ -555,7 +554,7 @@ export const CrapsView = React.memo<{
                                     </div>
                                 </div>
                             </div>
-                        </PanelDrawer>
+                        </div>
                     </div>
 
                     {/* Desktop: Bet Selector + ROLL Button - LUX-010 */}

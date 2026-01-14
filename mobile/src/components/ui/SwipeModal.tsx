@@ -220,6 +220,8 @@ export function SwipeModal({
             exiting={FadeOut.duration(150)}
             style={[StyleSheet.absoluteFill, animatedBackdropStyle]}
             onPress={closeOnBackdrop ? onClose : undefined}
+            accessibilityRole="button"
+            accessibilityLabel="Close modal"
           >
             <BlurView
               intensity={blurIntensity}
@@ -239,7 +241,12 @@ export function SwipeModal({
           </AnimatedPressable>
 
           {/* Content wrapper */}
-          <View style={styles.contentWrapper} pointerEvents="box-none">
+          <View
+            style={styles.contentWrapper}
+            pointerEvents="box-none"
+            accessibilityViewIsModal={true}
+            accessibilityRole="dialog"
+          >
             <GestureDetector gesture={panGesture}>
               <Animated.View
                 entering={
@@ -257,7 +264,12 @@ export function SwipeModal({
               >
                 {/* Drag handle */}
                 {showHandle && (
-                  <View style={styles.handleContainer}>
+                  <View
+                    style={styles.handleContainer}
+                    accessible={true}
+                    accessibilityLabel="Drag handle"
+                    accessibilityHint="Swipe down to dismiss"
+                  >
                     <View
                       style={[
                         styles.handle,

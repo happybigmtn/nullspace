@@ -248,6 +248,7 @@ export function PrimaryButton({
         style,
       ]}
       accessibilityRole="button"
+      accessibilityLabel={label}
       accessibilityState={{ disabled }}
     >
       <Text

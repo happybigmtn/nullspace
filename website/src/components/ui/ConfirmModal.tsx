@@ -64,7 +64,12 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
 
   return transitions((style, show) =>
     show ? (
-      <div className="fixed inset-0 z-[90] flex items-center justify-center p-4">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="confirm-modal-title"
+        className="fixed inset-0 z-[90] flex items-center justify-center p-4"
+      >
         <animated.button
           type="button"
           aria-label="Close dialog"
@@ -101,15 +106,16 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
 
           <div className="relative z-10">
             <div className="flex items-center justify-between px-4 py-3 border-b border-black/10 dark:border-white/10">
-              <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase">
+              <div id="confirm-modal-title" className="text-[10px] text-ns-muted tracking-[0.28em] uppercase">
                 {title}
               </div>
               <button
                 type="button"
                 onClick={loading ? undefined : onClose}
-                className="text-[10px] px-2 py-1 rounded-full liquid-chip text-ns hover:shadow-soft"
+                aria-label="Close dialog (press Escape)"
+                className="text-[10px] px-2 py-1 rounded-full liquid-chip text-ns hover:shadow-soft focus-visible:ring-2 focus-visible:ring-action-primary/50"
               >
-                ESC
+                <span aria-hidden="true">ESC</span>
               </button>
             </div>
 
@@ -119,7 +125,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
               <button
                 type="button"
                 onClick={loading ? undefined : onClose}
-                className="h-11 px-4 rounded-full liquid-chip text-[10px] tracking-[0.28em] uppercase text-ns hover:shadow-soft active:scale-[0.98] transition-transform"
+                className="h-11 px-4 rounded-full liquid-chip text-[10px] tracking-[0.28em] uppercase text-ns hover:shadow-soft active:scale-[0.98] transition-transform focus-visible:ring-2 focus-visible:ring-action-primary/50"
                 disabled={loading}
               >
                 {cancelText}
@@ -127,7 +133,7 @@ export const ConfirmModal: React.FC<ConfirmModalProps> = ({
               <button
                 type="button"
                 onClick={loading ? undefined : onConfirm}
-                className="h-11 px-4 rounded-full liquid-chip text-action-destructive text-[10px] tracking-[0.28em] uppercase hover:shadow-soft active:scale-[0.98] transition-transform disabled:opacity-60 disabled:cursor-not-allowed"
+                className="h-11 px-4 rounded-full liquid-chip text-action-destructive text-[10px] tracking-[0.28em] uppercase hover:shadow-soft active:scale-[0.98] transition-transform disabled:opacity-60 disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-action-primary/50"
                 disabled={loading}
               >
                 {loading ? 'Confirming…' : confirmText}

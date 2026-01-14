@@ -19,6 +19,7 @@ COPY execution/Cargo.toml ./execution/
 COPY simulator/Cargo.toml ./simulator/
 COPY types/Cargo.toml ./types/
 COPY website/wasm/Cargo.toml ./website/wasm/
+COPY terminal-cli/Cargo.toml ./terminal-cli/
 
 RUN mkdir -p node/src client/src execution/src simulator/src types/src website/wasm/src && \
     echo "fn main() {}" > node/src/main.rs && \
@@ -38,6 +39,7 @@ COPY execution/ ./execution/
 COPY simulator/ ./simulator/
 COPY types/ ./types/
 COPY website/wasm/ ./website/wasm/
+COPY terminal-cli/ ./terminal-cli/
 COPY packages/types/ ./packages/types/
 
 RUN wasm-pack build --target web --out-dir pkg website/wasm
@@ -78,6 +80,10 @@ ARG VITE_IDENTITY
 ARG VITE_URL
 ARG VITE_AUTH_URL
 ARG VITE_AUTH_PROXY_URL
+ARG VITE_WS_URL
+ARG VITE_ALLOW_LEGACY_KEYS
+ARG VITE_QA_BETS
+ARG VITE_ENABLE_SIMULATOR_PASSKEYS
 ARG VITE_STRIPE_TIERS
 ARG VITE_STRIPE_PRICE_ID
 ARG VITE_STRIPE_TIER
@@ -86,6 +92,10 @@ ENV VITE_IDENTITY=$VITE_IDENTITY \
     VITE_URL=$VITE_URL \
     VITE_AUTH_URL=$VITE_AUTH_URL \
     VITE_AUTH_PROXY_URL=$VITE_AUTH_PROXY_URL \
+    VITE_WS_URL=$VITE_WS_URL \
+    VITE_ALLOW_LEGACY_KEYS=$VITE_ALLOW_LEGACY_KEYS \
+    VITE_QA_BETS=$VITE_QA_BETS \
+    VITE_ENABLE_SIMULATOR_PASSKEYS=$VITE_ENABLE_SIMULATOR_PASSKEYS \
     VITE_STRIPE_TIERS=$VITE_STRIPE_TIERS \
     VITE_STRIPE_PRICE_ID=$VITE_STRIPE_PRICE_ID \
     VITE_STRIPE_TIER=$VITE_STRIPE_TIER

@@ -36,3 +36,7 @@ commonware-math = { workspace = true }
 [[bench]]
 name = "tournament_membership"
 harness = false
+
+[[bin]]
+name = "keyhash"
+path = "src/bin/keyhash.rs"

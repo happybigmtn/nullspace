@@ -109,7 +109,9 @@ export const WalletPill: React.FC<WalletPillProps> = ({
             <button
               type="button"
               onClick={() => setShowDetails(!showDetails)}
-              className="flex items-center gap-1 hover:opacity-80 transition-opacity"
+              aria-expanded={showDetails}
+              aria-haspopup="true"
+              className="flex items-center gap-1 hover:opacity-80 transition-opacity focus-visible:ring-2 focus-visible:ring-action-primary/50 rounded"
             >
               <span className="text-[10px] uppercase tracking-[0.3em] text-ns-muted">Balance</span>
               <span className="text-body font-semibold text-ns">
@@ -128,7 +130,11 @@ export const WalletPill: React.FC<WalletPillProps> = ({
 
         {/* Expanded Details */}
         {showDetails && isConnected && (
-          <div className="absolute top-full right-0 mt-2 w-64 p-4 liquid-card z-50">
+          <div
+            role="menu"
+            aria-label="Wallet details"
+            className="absolute top-full right-0 mt-2 w-64 p-4 liquid-card z-50"
+          >
             <div className="space-y-2 text-caption">
               <div className="flex justify-between">
                 <span className="text-ns-muted">RNG</span>

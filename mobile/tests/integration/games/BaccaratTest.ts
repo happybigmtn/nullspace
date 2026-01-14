@@ -149,31 +149,26 @@ export class BaccaratTest extends BaseGameTest {
   private async testMultipleBets(): Promise<void> {
     this.logger.info('--- Test: Multiple Bets (Atomic Batch) ---');
 
-    const betPerPosition = 5;
-    const totalBet = betPerPosition * 4; // 4 bets
+    const betPerPosition = 2;
+    const bets = [
+      { type: 'PLAYER', amount: betPerPosition },
+      { type: 'BANKER', amount: betPerPosition },
+      { type: 'TIE', amount: betPerPosition },
+      { type: 'P_PAIR', amount: betPerPosition },
+      { type: 'B_PAIR', amount: betPerPosition },
+      { type: 'LUCKY6', amount: betPerPosition },
+      { type: 'P_DRAGON', amount: betPerPosition },
+      { type: 'B_DRAGON', amount: betPerPosition },
+      { type: 'PANDA8', amount: betPerPosition },
+      { type: 'PERFECT_PAIR', amount: betPerPosition },
+    ];
+    const totalBet = bets.length * betPerPosition;
     const balanceBefore = this.currentBalance;
 
     // Place multiple bets using baccarat_deal
     this.client.send({
       type: 'baccarat_deal',
-      bets: [
-        {
-          type: 'PLAYER',
-          amount: betPerPosition,
-        },
-        {
-          type: 'BANKER',
-          amount: betPerPosition,
-        },
-        {
-          type: 'TIE',
-          amount: betPerPosition,
-        },
-        {
-          type: 'P_PAIR',
-          amount: betPerPosition,
-        },
-      ],
+      bets,
     });
 
     await this.assertMessageReceived('game_started');

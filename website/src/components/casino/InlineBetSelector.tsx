@@ -160,10 +160,10 @@ export const InlineBetSelector: React.FC<InlineBetSelectorProps> = ({
                     type="button"
                     onClick={() => decrement()}
                     disabled={disabled || !canDecrement}
-                    className={`w-9 h-9 rounded-full flex items-center justify-center border transition-all motion-interaction
+                    className={`w-11 h-11 rounded-full flex items-center justify-center border transition-all motion-interaction
                         ${disabled || !canDecrement
                             ? 'bg-ns-surface border-ns text-ns-muted cursor-not-allowed'
-                            : 'bg-ns-surface border-ns text-ns hover:border-ns active:scale-95'
+                            : 'bg-ns-surface border-ns text-ns hover:border-ns active:scale-95 focus-visible:ring-2 focus-visible:ring-action-primary/50'
                         }`}
                     aria-label="Decrease bet"
                 >
@@ -180,10 +180,10 @@ export const InlineBetSelector: React.FC<InlineBetSelectorProps> = ({
                     type="button"
                     onClick={() => increment()}
                     disabled={disabled || !canIncrement}
-                    className={`w-9 h-9 rounded-full flex items-center justify-center border transition-all motion-interaction
+                    className={`w-11 h-11 rounded-full flex items-center justify-center border transition-all motion-interaction
                         ${disabled || !canIncrement
                             ? 'bg-ns-surface border-ns text-ns-muted cursor-not-allowed'
-                            : 'bg-ns-surface border-ns text-ns hover:border-ns active:scale-95'
+                            : 'bg-ns-surface border-ns text-ns hover:border-ns active:scale-95 focus-visible:ring-2 focus-visible:ring-action-primary/50'
                         }`}
                     aria-label="Increase bet"
                 >
@@ -205,10 +205,10 @@ export const InlineBetSelector: React.FC<InlineBetSelectorProps> = ({
                             type="button"
                             onClick={onClick}
                             disabled={disabled}
-                            className={`flex-1 h-7 rounded-full text-[10px] font-semibold tracking-wider uppercase transition-all motion-interaction
+                            className={`flex-1 min-h-[44px] rounded-full text-[10px] font-semibold tracking-wider uppercase transition-all motion-interaction
                                 ${disabled
                                     ? 'bg-ns-surface text-ns-muted cursor-not-allowed'
-                                    : 'bg-ns-surface text-ns-muted hover:text-ns active:scale-95'
+                                    : 'bg-ns-surface text-ns-muted hover:text-ns active:scale-95 focus-visible:ring-2 focus-visible:ring-action-primary/50'
                                 }`}
                         >
                             {label}

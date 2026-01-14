@@ -2,8 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { GameType, RouletteBet, SicBoBet, CrapsBet } from './types';
 import { useTerminalGame } from './hooks/useTerminalGame';
 import { useSharedCasinoConnection } from './chain/CasinoConnectionContext';
-import { createPasswordVault, getVaultStatusSync, unlockPasskeyVault, unlockPasswordVault } from './security/keyVault';
-import { subscribeVault } from './security/vaultRuntime';
 
 type LogEntry = { ts: string; text: string };
 
@@ -103,11 +101,9 @@ const crapsAlias = (raw?: string): CrapsBet['type'] | null => {
   return map[t] ?? null;
 };
 
-  const commandTable = [
-    ['/help', 'Show commands'],
-    ['/status', 'Connection, vault, balance'],
-    ['/unlock [password]', 'Unlock vault (passkey or password)'],
-    ['/unlock create <password>', 'Create+unlock password vault (testing)'],
+const commandTable = [
+  ['/help', 'Show commands'],
+  ['/status', 'Connection, vault, balance'],
   ['/games', 'List games'],
   ['/game <name>', 'Switch game'],
   ['/bet <amt>', 'Set base bet'],
@@ -125,8 +121,6 @@ const crapsAlias = (raw?: string): CrapsBet['type'] | null => {
   ['/zero', 'Cycle roulette zero rule'],
 ];
 
-const commandNames = commandTable.map(([cmd]) => cmd);
-
 const headerLine = (pieces: string[]) => {
   const body = pieces.join(' ─ ');
   return `┌ ${body} ─${'─'.repeat(Math.max(0, 78 - body.length))}`;
@@ -136,54 +130,14 @@ export default function TerminalPage() {
   const { status, statusDetail, vaultMode } = useSharedCasinoConnection();
   const { stats, gameState, isOnChain, actions } = useTerminalGame('CASH');
 
-  const accent = '#7cf0c5';
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [input, setInput] = useState('');
-  const [history, setHistory] = useState<string[]>([]);
-  const [historyIdx, setHistoryIdx] = useState<number | null>(null);
-  const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [suggestionIdx, setSuggestionIdx] = useState(0);
-  const [reverseSearchActive, setReverseSearchActive] = useState(false);
-  const [reverseSearchTerm, setReverseSearchTerm] = useState('');
-  const [reverseSearchMatch, setReverseSearchMatch] = useState<string | null>(null);
-  const [inProgress, setInProgress] = useState(false);
-  const [vaultStatus, setVaultStatus] = useState(() => getVaultStatusSync());
-  const [vaultBusy, setVaultBusy] = useState(false);
-  const [vaultError, setVaultError] = useState<string | null>(null);
-  const [vaultPassword, setVaultPassword] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastMessageRef = useRef<string | null>(null);
 
   const append = (text: string) => {
     const ts = new Date().toLocaleTimeString();
     setLogs((l) => [...l.slice(-199), { ts, text }]);
-  };
-
-  const computeSuggestions = (value: string): string[] => {
-    const trimmed = value.trim();
-    if (!trimmed.startsWith('/')) return [];
-
-    const lc = trimmed.toLowerCase();
-
-    if (lc.startsWith('/game ')) {
-      const q = lc.replace('/game', '').trim();
-      return Object.keys(gameAliases)
-        .filter((g) => g.includes(q))
-        .slice(0, 6)
-        .map((g) => `/game ${g}`);
-    }
-
-    const matchingCommands = commandNames
-      .filter((c) => c.startsWith(trimmed) || c.includes(lc))
-      .slice(0, 8);
-
-    // If user typed '/r' suggest roulette/craps/sicbo
-    const extra: string[] = [];
-    if ('/roulette'.startsWith(lc)) extra.push('/roulette <type> [n]');
-    if ('/craps'.startsWith(lc)) extra.push('/craps <type> [n]');
-    if ('/sicbo'.startsWith(lc)) extra.push('/sicbo <type> [n]');
-
-    return [...matchingCommands, ...extra].filter((v, i, arr) => arr.indexOf(v) === i);
   };
 
   useEffect(() => {
@@ -199,22 +153,6 @@ export default function TerminalPage() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [logs]);
 
-  useEffect(() => {
-    const next = computeSuggestions(input);
-    setSuggestions(next);
-    setSuggestionIdx(0);
-  }, [input]);
-
-  useEffect(() => {
-    // Keep vault state in sync with unlock events + occasional refresh for metadata changes.
-    const unsubscribe = subscribeVault(() => setVaultStatus(getVaultStatusSync()));
-    const interval = window.setInterval(() => setVaultStatus(getVaultStatusSync()), 15000);
-    return () => {
-      unsubscribe?.();
-      window.clearInterval(interval);
-    };
-  }, []);
-
   // Surface latest game message into the terminal log so classic UI users see errors (e.g., insufficient funds)
   useEffect(() => {
     const msg = gameState.message;
@@ -223,153 +161,9 @@ export default function TerminalPage() {
     append(msg);
   }, [gameState.message]);
 
-  const formatVaultError = (e: any): string => {
-    const msg = e?.message ?? String(e);
-    if (msg === 'passkey-prf-unsupported') {
-      return 'Passkey lacks required extensions. Try a platform passkey or different authenticator.';
-    }
-    if (msg === 'password-too-short') return 'Password too short (min 8 chars).';
-    if (msg === 'password-required') return 'Enter your vault password.';
-    if (msg === 'password-invalid') return 'Incorrect password or corrupted vault.';
-    if (msg === 'vault-kind-mismatch') return 'Vault type mismatch — recreate or switch in Security.';
-    if (msg === 'vault-not-found') return 'No vault found. Create one in Security.';
-    return msg;
-  };
-
-  const unlockWithPasskey = async () => {
-    setVaultError(null);
-    setVaultBusy(true);
-    append('Unlocking vault with passkey…');
-    try {
-      await unlockPasskeyVault();
-      setVaultStatus(getVaultStatusSync());
-      append('Vault unlocked.');
-    } catch (e: any) {
-      const msg = formatVaultError(e);
-      setVaultError(msg);
-      append(`Vault unlock failed: ${msg}`);
-    } finally {
-      setVaultBusy(false);
-    }
-  };
-
-  const unlockWithPassword = async (password: string) => {
-    setVaultError(null);
-    setVaultBusy(true);
-    append('Unlocking vault with password…');
-    try {
-      await unlockPasswordVault(password);
-      setVaultStatus(getVaultStatusSync());
-      setVaultPassword('');
-      append('Vault unlocked.');
-    } catch (e: any) {
-      const msg = formatVaultError(e);
-      setVaultError(msg);
-      append(`Vault unlock failed: ${msg}`);
-    } finally {
-      setVaultBusy(false);
-    }
-  };
-
   const setBet = (amt: number) => {
     actions.setBetAmount(amt);
     append(`BET ${amt}`);
-  };
-
-  const submitLine = async (text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed) return;
-    if (inProgress) {
-      append('Busy… wait for current action to finish.');
-      return;
-    }
-    setHistory((h) => [...h.slice(-99), trimmed]);
-    setHistoryIdx(null);
-    setInput('');
-    setReverseSearchActive(false);
-    setReverseSearchTerm('');
-    setReverseSearchMatch(null);
-    setInProgress(true);
-    try {
-      await handleCommand(trimmed);
-    } finally {
-      setInProgress(false);
-    }
-  };
-
-  const handleComposerKey = async (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // ctrl+r : reverse search through history
-    if (e.ctrlKey && e.key.toLowerCase() === 'r') {
-      e.preventDefault();
-      const term = reverseSearchActive ? reverseSearchTerm : '';
-      const match = findReverseMatch(term, history);
-      setReverseSearchActive(true);
-      setReverseSearchTerm(term);
-      setReverseSearchMatch(match);
-      if (match) setInput(match);
-      return;
-    }
-
-    if (reverseSearchActive) {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        setReverseSearchActive(false);
-        setReverseSearchTerm('');
-        setReverseSearchMatch(null);
-        return;
-      }
-      if (e.key.length === 1 && !e.metaKey && !e.ctrlKey) {
-        const nextTerm = reverseSearchTerm + e.key;
-        const match = findReverseMatch(nextTerm, history);
-        setReverseSearchTerm(nextTerm);
-        setReverseSearchMatch(match);
-        if (match) setInput(match);
-        return;
-      }
-    }
-
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      await submitLine(input);
-      return;
-    }
-
-    if (suggestions.length > 0 && e.key === 'Tab') {
-      e.preventDefault();
-      const delta = e.shiftKey ? -1 : 1;
-      const nextIdx = (suggestionIdx + delta + suggestions.length) % suggestions.length;
-      setSuggestionIdx(nextIdx);
-      setInput(suggestions[nextIdx] + (suggestions[nextIdx].includes(' ') ? ' ' : ' '));
-      setHistoryIdx(null);
-      return;
-    }
-
-    if (e.key === 'ArrowUp' && !e.metaKey && !e.ctrlKey) {
-      e.preventDefault();
-      setHistoryIdx((idx) => {
-        const next = idx === null ? history.length - 1 : Math.max(idx - 1, 0);
-        const item = history[next];
-        if (item !== undefined) setInput(item);
-        return history.length === 0 ? null : next;
-      });
-      return;
-    }
-
-    if (e.key === 'ArrowDown' && !e.metaKey && !e.ctrlKey) {
-      e.preventDefault();
-      setHistoryIdx((idx) => {
-        if (idx === null) return null;
-        const next = idx + 1;
-        if (next >= history.length) {
-          setInput('');
-          return null;
-        }
-        const item = history[next];
-        if (item !== undefined) setInput(item);
-        return next;
-      });
-      return;
-    }
   };
 
   const handleCommand = async (raw: string) => {
@@ -394,61 +188,6 @@ export default function TerminalPage() {
           append(
             `Game=${gameState.type} Stage=${gameState.stage} Bet=${gameState.bet} Chips=${stats.chips ?? 0} Session=${gameState.sessionWager ?? 0}`,
           );
-          break;
-        }
-        case 'unlock': {
-          const snapshot = getVaultStatusSync();
-          if (!snapshot.supported) {
-            append('Vaults not supported in this browser.');
-            break;
-          }
-          if (vaultBusy) {
-            append('Vault unlock already in progress…');
-            break;
-          }
-          // Create password vault inline when none exists: /unlock create <password>
-          if (!snapshot.enabled) {
-            if (args[0]?.toLowerCase() === 'create') {
-              const suppliedPwd = args.slice(1).join(' ');
-              const pwd = suppliedPwd || window.prompt('Set vault password (min 8 chars)') || '';
-              if (!pwd) {
-                append('Password required to create vault.');
-                break;
-              }
-              setVaultBusy(true);
-              append('Creating password vault…');
-              try {
-                await createPasswordVault(pwd, { migrateExistingCasinoKey: true });
-                setVaultStatus(getVaultStatusSync());
-                append('Vault created and unlocked.');
-              } catch (e: any) {
-                const msg = formatVaultError(e);
-                setVaultError(msg);
-                append(`Vault creation failed: ${msg}`);
-              } finally {
-                setVaultBusy(false);
-              }
-              break;
-            }
-            append('No vault found. Use /unlock create <password> to create one.');
-            break;
-          }
-
-          if (snapshot.unlocked) {
-            append('Vault already unlocked.');
-            break;
-          }
-          if (snapshot.kind === 'password') {
-            const supplied = args.join(' ');
-            const pwd = supplied || window.prompt('Enter vault password') || '';
-            if (!pwd) {
-              append('Password required to unlock vault.');
-              break;
-            }
-            await unlockWithPassword(pwd);
-          } else {
-            await unlockWithPasskey();
-          }
           break;
         }
         case 'games': {
@@ -607,143 +346,23 @@ export default function TerminalPage() {
     [gameState.type, gameState.stage, gameState.bet, gameState.sessionWager, stats.chips],
   );
 
-  const vaultBadge = useMemo(() => {
-    if (!vaultStatus.supported) return 'unsupported';
-    if (!vaultStatus.enabled) return 'missing';
-    return vaultStatus.unlocked ? 'unlocked' : 'locked';
-  }, [vaultStatus.enabled, vaultStatus.supported, vaultStatus.unlocked]);
-
-  const vaultHint = useMemo(() => {
-    if (!vaultStatus.supported) return 'Vaults require WebCrypto + IndexedDB (use a modern browser).';
-    if (!vaultStatus.enabled) return 'No vault found. Open Security to create one.';
-    if (vaultStatus.unlocked) return `Vault ready (${vaultStatus.kind ?? 'unknown'}).`;
-    if (vaultStatus.kind === 'password') return 'Enter password to unlock.';
-    if (vaultStatus.kind === 'passkey') return 'Use your passkey to unlock.';
-    return 'Unlock required to play.';
-  }, [vaultStatus]);
-
-  const Pill = ({ label, value }: { label: string; value: string }) => (
-    <div className="flex items-center gap-2 text-xs">
-      <span className="uppercase tracking-[0.08em] text-[#9ca3af]">{label}</span>
-      <span className="px-2 py-1 rounded bg-[#0b0f1a] border border-[#1f2937] text-[#e5e7eb]">{value}</span>
-    </div>
-  );
-
-  const Key = ({ k }: { k: string }) => (
-    <span className="px-2 py-1 rounded border border-[#1f2937] bg-[#0b0f1a] text-xs text-[#e5e7eb]">{k}</span>
-  );
-
-  const findReverseMatch = (term: string, hist: string[]): string | null => {
-    const t = term.toLowerCase();
-    for (let i = hist.length - 1; i >= 0; i -= 1) {
-      if (!t || hist[i].toLowerCase().includes(t)) return hist[i];
-    }
-    return null;
-  };
-
-  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const text = e.clipboardData.getData('text') ?? '';
-    if (text.length <= 800) return; // allow small pastes
-    e.preventDefault();
-    const preview = text.slice(0, 400);
-    setInput((prev) => `${prev}${prev ? '\n' : ''}${preview}`);
-    append(`Large paste truncated to 400 chars. Use /paste to send full content if needed.`);
-  };
-
-  const composerRows = Math.min(6, Math.max(1, input.split('\n').length));
-
   return (
-    <div className="min-h-screen bg-[#05070f] text-[#e5e7eb] font-mono flex flex-col">
-      <div className="bg-gradient-to-r from-[#0b1325] via-[#0c152c] to-[#0b1325] border-b border-[#111827] px-4 py-4">
-        <div className="flex items-start justify-between gap-6">
-          <div className="space-y-2">
-            <div className="text-[10px] tracking-[0.2em] uppercase text-[#8b95a5]">Nullspace · Terminal</div>
-            <div className="inline-flex items-center gap-2 text-lg font-semibold">
-              <span className="text-[#e5e7eb]">Codex‑style TUI</span>
-              <span className="h-1 w-6 rounded-full" style={{ background: accent }} />
-            </div>
-            <div className="flex flex-wrap gap-4">
-              <Pill label="Conn" value={statusDetail ? `${status} / ${statusDetail}` : status} />
-              <Pill label="Vault" value={vaultBadge.toUpperCase()} />
-              <Pill label="Game" value={`${gameState.type} @ ${gameState.stage}`} />
-              <Pill label="Bet" value={String(gameState.bet)} />
-              <Pill label="Chips" value={String(stats.chips ?? 0)} />
-              <Pill label="On-chain" value={String(isOnChain)} />
-            </div>
-          </div>
-          <div className="hidden md:flex items-center gap-2 text-xs text-[#9ca3af]">
-            <Key k="↑↓" />
-            <span>scroll</span>
-            <Key k="/status" />
-            <span>session info</span>
-            <Key k="/unlock" />
-            <span>unlock vault</span>
-          </div>
-        </div>
+    <div className="min-h-screen bg-[#050505] text-[#e5e7eb] font-mono flex flex-col">
+      <div className="px-3 pt-3 text-xs text-[#9ca3af] whitespace-pre">
+        {header}
+        {'\n'}
+        {statusLine}
       </div>
 
-      <div className="px-4 pt-3">
-        <div className="border border-[#1f2937] rounded bg-[#0a0f1a] p-3 flex flex-col md:flex-row md:items-center md:justify-between gap-3 shadow-[0_10px_30px_rgba(0,0,0,0.35)]">
-          <div className="space-y-1">
-            <div className="text-[11px] tracking-[0.15em] text-[#9ca3af] uppercase">Vault state</div>
-            <div className="text-sm flex items-center gap-2">
-              <span className="text-[#e5e7eb] font-semibold">{vaultBadge.toUpperCase()}</span>
-              <span className="text-[#6b7280]">{vaultHint}</span>
-            </div>
-            {vaultError && <div className="text-xs text-red-400">{vaultError}</div>}
-          </div>
-          <div className="flex flex-col md:flex-row gap-2 md:items-center md:justify-end w-full md:w-auto">
-            {!vaultStatus.enabled && (
-              <a
-                className="px-3 py-2 text-xs border border-[#1f2937] rounded bg-[#0e1625] hover:bg-[#111c2e] transition"
-                href="/security"
-              >
-                Open Security
-              </a>
-            )}
-            {vaultStatus.enabled && vaultStatus.kind === 'passkey' && (
-              <button
-                type="button"
-                disabled={vaultBusy}
-                onClick={unlockWithPasskey}
-                className="px-3 py-2 text-xs border border-[#1f2937] rounded bg-[#0e1625] hover:bg-[#111c2e] disabled:opacity-50 transition"
-              >
-                {vaultBusy ? 'Unlocking…' : 'Unlock with passkey'}
-              </button>
-            )}
-            {vaultStatus.enabled && vaultStatus.kind === 'password' && (
-              <div className="flex gap-2 items-center w-full md:w-auto">
-                <input
-                  type="password"
-                  className="bg-[#0b0f1a] border border-[#1f2937] rounded px-2 py-1 text-sm w-full md:w-44"
-                  placeholder="Vault password"
-                  value={vaultPassword}
-                  onChange={(e) => setVaultPassword(e.target.value)}
-                  disabled={vaultBusy}
-                />
-                <button
-                  type="button"
-                  disabled={vaultBusy || !vaultPassword}
-                  onClick={() => unlockWithPassword(vaultPassword)}
-                  className="px-3 py-2 text-xs border border-[#1f2937] rounded bg-[#0e1625] hover:bg-[#111c2e] disabled:opacity-50 transition"
-                >
-                  {vaultBusy ? 'Unlocking…' : 'Unlock vault'}
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-3 grid md:grid-cols-[320px_1fr] gap-3 px-4 pb-3">
-        <div className="border border-[#1f2937] rounded bg-[#0b0f1a] shadow-[0_10px_30px_rgba(0,0,0,0.25)]">
-          <div className="px-3 py-2 text-xs text-[#9ca3af] flex justify-between items-center border-b border-[#1f2937]">
+      <div className="mt-2 grid md:grid-cols-[320px_1fr] gap-2 px-3 pb-2">
+        <div className="border border-[#1f2937] rounded-sm bg-[#0b0b0f]">
+          <div className="px-3 py-2 text-xs text-[#9ca3af] flex justify-between">
             <span>Commands</span>
-            <span className="text-[#6b7280]">⌘</span>
+            <span>?</span>
           </div>
-          <div className="divide-y divide-[#1f2937] text-sm">
+          <div className="border-t border-[#1f2937] divide-y divide-[#1f2937] text-sm">
             {commandTable.map(([cmd, desc]) => (
-              <div key={cmd} className="px-3 py-1.5 flex justify-between">
+              <div key={cmd} className="px-3 py-1 flex justify-between">
                 <span className="text-[#e5e7eb]">{cmd}</span>
                 <span className="text-[#6b7280] text-xs">{desc}</span>
               </div>
@@ -751,22 +370,22 @@ export default function TerminalPage() {
           </div>
         </div>
 
-        <div className="border border-[#1f2937] rounded bg-[#0b0f1a] flex flex-col shadow-[0_14px_40px_rgba(0,0,0,0.35)]">
-          <div className="px-3 py-2 text-xs text-[#9ca3af] flex justify-between border-b border-[#1f2937]">
-            <span>Session Log</span>
+        <div className="border border-[#1f2937] rounded-sm bg-[#0b0b0f] flex flex-col">
+          <div className="px-3 py-2 text-xs text-[#9ca3af] flex justify-between">
+            <span>Log</span>
             <span>
               {status}{statusDetail ? ` / ${statusDetail}` : ''} · Vault {vaultMode}
             </span>
           </div>
           <div
             ref={scrollRef}
-            className="flex-1 overflow-auto px-3 py-3 space-y-2 text-sm leading-5 bg-gradient-to-b from-[#0b0f1a] via-[#0b0f1a] to-[#0c1524]"
-            style={{ minHeight: '360px' }}
+            className="flex-1 overflow-auto px-3 py-2 space-y-1 text-sm leading-5"
+            style={{ minHeight: '320px' }}
           >
             {logs.map((l, idx) => (
-              <div key={`${idx}-${l.ts}`} className="whitespace-pre-wrap flex gap-2">
-                <span className="text-[#6b7280] min-w-[64px]">{l.ts}</span>
-                <span className="text-[#e5e7eb]">{l.text}</span>
+              <div key={`${idx}-${l.ts}`} className="whitespace-pre-wrap">
+                <span className="text-[#6b7280] mr-2">{l.ts}</span>
+                <span>{l.text}</span>
               </div>
             ))}
           </div>
@@ -774,59 +393,23 @@ export default function TerminalPage() {
       </div>
 
       <form
-        className="border-t border-[#111827] bg-[#0a0f1a] px-4 py-3 flex items-start gap-3 shadow-[0_-6px_30px_rgba(0,0,0,0.35)]"
+        className="border-t border-[#1f2937] bg-[#0b0b0f] px-3 py-2 flex items-center gap-2"
         onSubmit={(e) => {
           e.preventDefault();
-          void submitLine(input);
+          const text = input;
+          setInput('');
+          void handleCommand(text);
         }}
       >
-        <span className="text-[#6b7280] text-sm pt-1">casino $</span>
-        <div className="flex-1 flex flex-col gap-2">
-          <textarea
-            className="w-full bg-transparent border border-[#1f2937] rounded px-3 py-2 text-sm text-[#e5e7eb] placeholder-[#4b5563] focus:outline-none focus:border-[#334155] resize-none"
-            rows={composerRows}
-            autoFocus
-            spellCheck="false"
-            placeholder="/help   •  Enter to send, Shift+Enter for newline, Tab to autocomplete"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleComposerKey}
-            onPaste={handlePaste}
-          />
-          {(suggestions.length > 0 || reverseSearchActive) && (
-            <div className="flex flex-wrap gap-2 text-[11px] text-[#9ca3af]">
-              {reverseSearchActive && (
-                <div className="px-2 py-1 rounded border border-[#334155] bg-[#0f172a] text-[#e5e7eb]">
-                  ⌃R search: “{reverseSearchTerm || '…'}” {reverseSearchMatch ? `→ ${reverseSearchMatch}` : '(no match)'}
-                </div>
-              )}
-              {suggestions.map((s, idx) => (
-                <button
-                  key={s}
-                  type="button"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    setInput(s + (s.endsWith(' ') ? '' : ' '));
-                    setSuggestionIdx(idx);
-                  }}
-                  className={`px-2 py-1 rounded border ${
-                    idx === suggestionIdx ? 'border-[#334155] bg-[#0f172a]' : 'border-[#1f2937] bg-[#0b0f1a]'
-                  } hover:border-[#334155] transition`}
-                >
-                  <span className={idx === suggestionIdx ? 'text-[#e5e7eb]' : 'text-[#c7d2fe]'}>{s}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="hidden md:flex items-center gap-2 text-xs text-[#6b7280] pt-1">
-          <Key k="Enter" />
-          <span>send</span>
-          <Key k="Shift+Enter" />
-          <span>newline</span>
-          <Key k="Tab" />
-          <span>cycle cmds</span>
-        </div>
+        <span className="text-[#6b7280] text-sm">casino $</span>
+        <input
+          className="flex-1 bg-transparent border-none outline-none text-sm text-[#e5e7eb] placeholder-[#4b5563]"
+          autoFocus
+          spellCheck="false"
+          placeholder="/help"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+        />
       </form>
     </div>
   );

@@ -249,6 +249,37 @@ async function handleMessage(ws: WebSocket, rawData: Buffer): Promise<void> {
     return;
   }
 
+  // Optional: client-signed raw submission (bypass gateway signing)
+  if (msgType === 'submit_raw') {
+    const session = sessionManager.getSession(ws);
+    if (!session) {
+      sendError(ws, ErrorCodes.SESSION_EXPIRED, 'No active session', traceId);
+      return;
+    }
+    const submissionB64 = typeof msg.submission === 'string' ? msg.submission : null;
+    if (!submissionB64) {
+      sendError(ws, ErrorCodes.INVALID_MESSAGE, 'submission (base64) required', traceId);
+      return;
+    }
+    try {
+      const bytes = Buffer.from(submissionB64, 'base64');
+      const result = await submitClient.submit(bytes);
+      if (result.accepted) {
+        send(ws, { type: 'submit_result', accepted: true }, traceId);
+      } else {
+        send(ws, { type: 'submit_result', accepted: false, error: result.error ?? 'rejected' }, traceId);
+      }
+    } catch (err) {
+      sendError(
+        ws,
+        ErrorCodes.BACKEND_UNAVAILABLE,
+        err instanceof Error ? err.message : 'submit failed',
+        traceId
+      );
+    }
+    return;
+  }
+
   // Wrap game operations in a trace span
   await withSpan(`gateway.${msgType}`, async (span) => {
     addSpanAttributes(span, {
@@ -444,6 +475,46 @@ const server = createServer(async (req, res) => {
       res.setHeader('Content-Type', 'application/json');
       res.end(JSON.stringify({ ok: false, backend: 'unreachable' }));
     }
+    return;
+  }
+
+  // HTTP submission endpoint (parity with simulator HTTP /submit)
+  if (req.method === 'POST' && path === '/submit') {
+    const MAX_BODY_BYTES = 1 * 1024 * 1024; // 1MB guard
+    let received = 0;
+    const chunks: Buffer[] = [];
+
+    req.on('data', (chunk: Buffer) => {
+      received += chunk.length;
+      if (received > MAX_BODY_BYTES) {
+        res.statusCode = 413;
+        res.end('Request entity too large');
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+
+    req.on('end', async () => {
+      logInfo(
+        `[HTTP submit] recv bytes=${received} origin=${req.headers.origin ?? 'none'} ua=${req.headers['user-agent'] ?? 'n/a'}`
+      );
+      try {
+        const body = Buffer.concat(chunks);
+        const result = await submitClient.submit(body);
+        if (result.accepted) {
+          res.statusCode = 200;
+          res.end();
+        } else {
+          res.statusCode = 400;
+          res.end(result.error ?? 'rejected');
+        }
+      } catch (err) {
+        res.statusCode = 502;
+        res.end(err instanceof Error ? err.message : 'submit failed');
+      }
+    });
+
     return;
   }
 
