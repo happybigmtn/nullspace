@@ -986,7 +986,7 @@ async function sendPushToTokens(payload: {
   data?: JsonRecord;
   segment?: SegmentFilter;
   tokens?: string[];
-}) => {
+}) {
   const tokens = payload.tokens?.length
     ? payload.tokens.map((token) => ({ token }))
     : await resolveTokensForSegment(payload.segment);
