@@ -39,6 +39,7 @@ export type UseChainEventsArgs = {
   applySessionMeta: (sessionId: bigint | null, moveNumber?: number) => void;
   parseGameState: (stateBlob: Uint8Array | string, gameType?: GameType) => void;
   clearChainResponseTimeout: () => void;
+  armChainResponseTimeout: (context: string, expectedSessionId?: bigint | null) => void;
   runAutoPlayForSession: (sessionId: bigint, frontendGameType: GameType) => void;
   clientRef: MutableRefObject<CasinoClient | null>;
   playModeRef: MutableRefObject<'instant' | 'animated'>;
@@ -76,6 +77,7 @@ export const useChainEvents = ({
   applySessionMeta,
   parseGameState,
   clearChainResponseTimeout,
+  armChainResponseTimeout,
   runAutoPlayForSession,
   clientRef,
   publicKeyBytesRef,
@@ -104,6 +106,7 @@ export const useChainEvents = ({
        pendingMoveCountRef,
        applySessionMeta,
        clearChainResponseTimeout,
+       armChainResponseTimeout,
        clientRef,
        setGameState,
        parseGameState,
@@ -118,12 +121,14 @@ export const useChainEvents = ({
        gameStateRef,
        isPendingRef,
        pendingMoveCountRef,
-       crapsPendingRollLogRef,
+     crapsPendingRollLogRef,
        crapsChainRollLogRef,
        applySessionMeta,
+       clearChainResponseTimeout,
+       armChainResponseTimeout,
        parseGameState,
-       playModeRef,
-       clientRef,
+     playModeRef,
+     clientRef,
        publicKeyBytesRef,
        lastBalanceUpdateRef,
        currentChipsRef,

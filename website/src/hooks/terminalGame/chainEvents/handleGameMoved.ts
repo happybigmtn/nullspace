@@ -26,6 +26,8 @@ type HandleGameMovedArgs = {
   crapsPendingRollLogRef: MutableRefObject<CrapsPendingRollLog>;
   crapsChainRollLogRef: CrapsChainRollRef;
   applySessionMeta: (sessionId: bigint | null, moveNumber?: number) => void;
+  clearChainResponseTimeout: () => void;
+  armChainResponseTimeout: (context: string, expectedSessionId?: bigint | null) => void;
   parseGameState: (stateBlob: Uint8Array | string, gameType?: GameType) => void;
   playModeRef: MutableRefObject<'CASH' | 'FREEROLL' | null>;
   clientRef: MutableRefObject<CasinoClient | null>;
@@ -53,6 +55,8 @@ export const createGameMovedHandler = ({
   crapsPendingRollLogRef,
   crapsChainRollLogRef,
   applySessionMeta,
+  clearChainResponseTimeout,
+  armChainResponseTimeout,
   parseGameState,
   playModeRef,
   clientRef,
@@ -73,6 +77,7 @@ export const createGameMovedHandler = ({
   const currentId = currentSessionIdRef.current ? BigInt(currentSessionIdRef.current) : null;
 
   if (currentId !== null && eventSessionId === currentId) {
+    clearChainResponseTimeout();
     applySessionMeta(eventSessionId, event.moveNumber);
     const stateBlob = event.newState;
 
@@ -218,6 +223,7 @@ export const createGameMovedHandler = ({
             new Uint8Array([6])
           );
           if (result.txHash) setLastTxSig(result.txHash);
+          armChainResponseTimeout('BLACKJACK AUTO-REVEAL', currentSessionIdRef.current);
         } catch (error) {
           console.error('[chainEvents] Blackjack auto-reveal failed:', error);
           isPendingRef.current = false;

@@ -16,6 +16,7 @@ type HandleGameStartedArgs = {
   pendingMoveCountRef: MutableRefObject<number>;
   applySessionMeta: (sessionId: bigint | null, moveNumber?: number) => void;
   clearChainResponseTimeout: () => void;
+  armChainResponseTimeout: (context: string, expectedSessionId?: bigint | null) => void;
   clientRef: MutableRefObject<CasinoClient | null>;
   setGameState: Dispatch<SetStateAction<GameState>>;
   parseGameState: (stateBlob: Uint8Array | string, gameType?: GameType) => void;
@@ -32,6 +33,7 @@ export const createGameStartedHandler = ({
   pendingMoveCountRef,
   applySessionMeta,
   clearChainResponseTimeout,
+  armChainResponseTimeout,
   clientRef,
   setGameState,
   parseGameState,
@@ -107,6 +109,7 @@ export const createGameStartedHandler = ({
               const payload = new Uint8Array([0]);
               const result = await chainService.sendMove(currentSessionIdRef.current!, payload);
               if (result.txHash) setLastTxSig(result.txHash);
+              armChainResponseTimeout('CASINO WAR AUTO-CONFIRM', currentSessionIdRef.current);
               setGameState(prev => ({ ...prev, message: 'COMPARING...' }));
             } catch (error) {
               console.error('[chainEvents] Casino War auto-confirm failed:', error);
@@ -139,6 +142,7 @@ export const createGameStartedHandler = ({
             const payload = new Uint8Array([0]);
             const result = await chainService.sendMove(currentSessionIdRef.current!, payload);
             if (result.txHash) setLastTxSig(result.txHash);
+            armChainResponseTimeout('BLACKJACK AUTO-DEAL', currentSessionIdRef.current);
             setGameState(prev => ({ ...prev, message: 'DEALING...' }));
           } catch (error) {
             console.error('[chainEvents] Blackjack auto-deal failed:', error);
