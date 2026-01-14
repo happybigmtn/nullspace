@@ -176,9 +176,17 @@ impl Reporter for Mailbox {
     async fn report(&mut self, activity: Self::Activity) {
         match activity {
             Activity::Notarization(notarization) => {
+                tracing::debug!(
+                    view = notarization.round().view().get(),
+                    "seeder reporter received notarization"
+                );
                 let _ = self.put(notarization.seed()).await;
             }
             Activity::Finalization(finalization) => {
+                tracing::debug!(
+                    view = finalization.round().view().get(),
+                    "seeder reporter received finalization"
+                );
                 let _ = self.put(finalization.seed()).await;
             }
             _ => {}

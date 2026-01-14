@@ -71,6 +71,11 @@ name = "sybil-scan"
 path = "src/bin/sybil_scan.rs"
 required-features = []
 
+[[bin]]
+name = "seed-submit"
+path = "src/bin/seed_submit.rs"
+required-features = []
+
 [dependencies.clap]
 workspace = true
 

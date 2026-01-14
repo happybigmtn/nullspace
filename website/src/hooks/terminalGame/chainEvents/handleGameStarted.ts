@@ -18,7 +18,7 @@ type HandleGameStartedArgs = {
   clearChainResponseTimeout: () => void;
   clientRef: MutableRefObject<CasinoClient | null>;
   setGameState: Dispatch<SetStateAction<GameState>>;
-  parseGameState: (stateBlob: Uint8Array, gameType?: GameType) => void;
+  parseGameState: (stateBlob: Uint8Array | string, gameType?: GameType) => void;
   setLastTxSig: (sig: string | null) => void;
   runAutoPlayForSession: (sessionId: bigint, frontendGameType: GameType) => void;
 };

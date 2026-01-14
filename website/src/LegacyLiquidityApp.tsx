@@ -429,49 +429,49 @@ export default function LegacyLiquidityApp() {
   };
 
   return (
-    <div className="min-h-screen bg-titanium-900 text-white font-mono p-4">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-800 pb-3 mb-4">
+    <div className="min-h-screen liquid-shell text-ns font-sans p-6">
+      <header className="liquid-card px-4 py-3 flex flex-wrap items-center justify-between gap-3 mb-4">
         <div className="flex items-center gap-3">
           <PlaySwapStakeTabs />
           <div className="text-lg font-bold tracking-widest">Liquidity / AMM</div>
-          <div className="text-[10px] text-gray-500 tracking-widest">{status}</div>
+          <div className="text-[10px] text-ns-muted tracking-widest">{status}</div>
         </div>
         <div className="flex flex-wrap items-center gap-2 justify-end">
           <AuthStatusPill publicKeyHex={publicKeyHexRef.current} className="w-full sm:w-auto" />
           {lastTxSig ? (
-            <div className="text-[10px] text-gray-500 tracking-widest">LAST TX: {lastTxSig}</div>
+            <div className="text-[10px] text-ns-muted tracking-widest">LAST TX: {lastTxSig}</div>
           ) : null}
         </div>
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Wallet */}
-        <section className="border border-gray-800 rounded p-4 bg-gray-900/30">
-          <div className="text-xs text-gray-400 tracking-widest mb-3">WALLET</div>
+        <section className="liquid-card p-4">
+          <div className="text-xs text-ns-muted tracking-widest mb-3">WALLET</div>
           <div className="space-y-2 text-sm">
             <div>Registered: <span className={isRegistered ? 'text-action-success' : 'text-action-destructive'}>{isRegistered ? 'YES' : 'NO'}</span></div>
-            <div>RNG: <span className="text-white">{player?.chips ?? 0}</span></div>
-            <div>vUSDT: <span className="text-white">{player?.vusdtBalance ?? 0}</span></div>
-            <div className="text-[10px] text-gray-600 break-all">PK: {publicKeyHexRef.current ?? '—'}</div>
+            <div>RNG: <span className="text-ns">{player?.chips ?? 0}</span></div>
+            <div>vUSDT: <span className="text-ns">{player?.vusdtBalance ?? 0}</span></div>
+            <div className="text-[10px] text-ns-muted break-all">PK: {publicKeyHexRef.current ?? '—'}</div>
           </div>
 
           <div className="mt-4 space-y-2">
             <div className="flex items-center gap-2">
               <input
-                className="flex-1 bg-gray-950 border border-gray-800 rounded px-2 py-1 text-xs"
+                className="flex-1 liquid-input px-3 py-2 text-xs"
                 value={registerName}
                 onChange={(e) => setRegisterName(e.target.value)}
                 placeholder="Name"
               />
               <button
-                className="text-xs px-3 py-1 rounded border border-action-success text-action-success hover:bg-action-success/10"
+                className="liquid-chip text-xs px-3 py-1 border-action-success text-action-success hover:bg-action-success/10"
                 onClick={ensureRegistered}
               >
                 Register
               </button>
             </div>
             <button
-              className="w-full text-xs px-3 py-2 rounded border border-action-success bg-action-success/10 text-action-success hover:bg-action-success/20"
+              className="w-full liquid-chip text-xs px-3 py-2 border-action-success bg-action-success/10 text-action-success hover:bg-action-success/20"
               onClick={claimFaucet}
             >
               Daily Faucet (1000 RNG)
@@ -480,34 +480,34 @@ export default function LegacyLiquidityApp() {
         </section>
 
         {/* AMM */}
-        <section className="border border-gray-800 rounded p-4 bg-gray-900/30">
-          <div className="text-xs text-gray-400 tracking-widest mb-3">AMM (RNG/vUSDT)</div>
+        <section className="liquid-card p-4">
+          <div className="text-xs text-ns-muted tracking-widest mb-3">AMM (RNG/vUSDT)</div>
           <div className="grid grid-cols-2 gap-3 text-sm">
-            <div className="border border-gray-800 rounded p-3 bg-black/30">
-              <div className="text-[10px] text-gray-500 tracking-widest">RESERVE RNG</div>
-              <div className="text-white mt-1">{amm?.reserveRng ?? 0}</div>
+            <div className="liquid-panel p-3">
+              <div className="text-[10px] text-ns-muted tracking-widest">RESERVE RNG</div>
+              <div className="text-ns mt-1">{amm?.reserveRng ?? 0}</div>
             </div>
-            <div className="border border-gray-800 rounded p-3 bg-black/30">
-              <div className="text-[10px] text-gray-500 tracking-widest">RESERVE vUSDT</div>
-              <div className="text-white mt-1">{amm?.reserveVusdt ?? 0}</div>
+            <div className="liquid-panel p-3">
+              <div className="text-[10px] text-ns-muted tracking-widest">RESERVE vUSDT</div>
+              <div className="text-ns mt-1">{amm?.reserveVusdt ?? 0}</div>
             </div>
-            <div className="border border-gray-800 rounded p-3 bg-black/30">
-              <div className="text-[10px] text-gray-500 tracking-widest">PRICE</div>
-              <div className="text-white mt-1">{derived.price === null ? '—' : derived.price.toFixed(6)}</div>
-              <div className="text-[10px] text-gray-600">vUSDT per RNG</div>
+            <div className="liquid-panel p-3">
+              <div className="text-[10px] text-ns-muted tracking-widest">PRICE</div>
+              <div className="text-ns mt-1">{derived.price === null ? '—' : derived.price.toFixed(6)}</div>
+              <div className="text-[10px] text-ns-muted">vUSDT per RNG</div>
             </div>
-            <div className="border border-gray-800 rounded p-3 bg-black/30">
-              <div className="text-[10px] text-gray-500 tracking-widest">TVL</div>
-              <div className="text-white mt-1">{derived.tvlVusdt.toString()}</div>
-              <div className="text-[10px] text-gray-600">~vUSDT</div>
+            <div className="liquid-panel p-3">
+              <div className="text-[10px] text-ns-muted tracking-widest">TVL</div>
+              <div className="text-ns mt-1">{derived.tvlVusdt.toString()}</div>
+              <div className="text-[10px] text-ns-muted">~vUSDT</div>
             </div>
           </div>
 
-          <div className="mt-4 border-t border-gray-800 pt-4 space-y-3">
-            <div className="text-[10px] text-gray-500 tracking-widest">SWAP</div>
+          <div className="mt-4 border-t border-ns-border/60 pt-4 space-y-3">
+            <div className="text-[10px] text-ns-muted tracking-widest">SWAP</div>
             <div className="flex items-center gap-2">
               <select
-                className="bg-gray-950 border border-gray-800 rounded px-2 py-1 text-xs"
+                className="liquid-input px-3 py-2 text-xs"
                 value={swapDirection}
                 onChange={(e) => setSwapDirection(e.target.value as any)}
               >
@@ -515,7 +515,7 @@ export default function LegacyLiquidityApp() {
                 <option value="SELL_RNG">Sell RNG (RNG → vUSDT)</option>
               </select>
               <select
-                className="bg-gray-950 border border-gray-800 rounded px-2 py-1 text-xs"
+                className="liquid-input px-3 py-2 text-xs"
                 value={slippageBps}
                 onChange={(e) => setSlippageBps(parseInt(e.target.value))}
               >
@@ -528,13 +528,13 @@ export default function LegacyLiquidityApp() {
 
             <div className="flex items-center gap-2">
               <input
-                className="flex-1 bg-gray-950 border border-gray-800 rounded px-2 py-1 text-xs"
+                className="flex-1 liquid-input px-3 py-2 text-xs"
                 value={swapAmountIn}
                 onChange={(e) => setSwapAmountIn(e.target.value)}
                 placeholder="Amount in"
               />
               <button
-                className="text-xs px-3 py-1 rounded border border-action-destructive text-action-destructive hover:bg-action-destructive/10"
+                className="liquid-chip text-xs px-3 py-1 border-action-destructive text-action-destructive hover:bg-action-destructive/10"
                 onClick={submitSwap}
               >
                 Swap
@@ -548,33 +548,33 @@ export default function LegacyLiquidityApp() {
               const { out, fee, burned } = estimateSwapOut(amm, amtIn, isBuyingRng);
               const minOut = (out * BigInt(10_000 - slippageBps)) / 10_000n;
               return (
-                <div className="text-[10px] text-gray-500 leading-relaxed">
-                  Est. out: <span className="text-white">{out.toString()}</span> · Min out: <span className="text-white">{minOut.toString()}</span>
+                <div className="text-[10px] text-ns-muted leading-relaxed">
+                  Est. out: <span className="text-ns">{out.toString()}</span> · Min out: <span className="text-ns">{minOut.toString()}</span>
                   {burned > 0n ? ` · Burn: ${burned.toString()}` : ''}{fee > 0n ? ` · Fee: ${fee.toString()}` : ''}
                 </div>
               );
             })()}
           </div>
 
-          <div className="mt-4 border-t border-gray-800 pt-4 space-y-3">
-            <div className="text-[10px] text-gray-500 tracking-widest">LIQUIDITY</div>
-            <div className="text-[10px] text-gray-600">LP shares: <span className="text-white">{lpBalance?.balance ?? 0}</span></div>
+          <div className="mt-4 border-t border-ns-border/60 pt-4 space-y-3">
+            <div className="text-[10px] text-ns-muted tracking-widest">LIQUIDITY</div>
+            <div className="text-[10px] text-ns-muted">LP shares: <span className="text-ns">{lpBalance?.balance ?? 0}</span></div>
             <div className="grid grid-cols-2 gap-2">
               <input
-                className="bg-gray-950 border border-gray-800 rounded px-2 py-1 text-xs"
+                className="liquid-input px-3 py-2 text-xs"
                 value={addLiqRng}
                 onChange={(e) => setAddLiqRng(e.target.value)}
                 placeholder="RNG"
               />
               <input
-                className="bg-gray-950 border border-gray-800 rounded px-2 py-1 text-xs"
+                className="liquid-input px-3 py-2 text-xs"
                 value={addLiqVusdt}
                 onChange={(e) => setAddLiqVusdt(e.target.value)}
                 placeholder="vUSDT"
               />
             </div>
             <button
-              className="w-full text-xs px-3 py-2 rounded border border-action-success text-action-success hover:bg-action-success/10"
+              className="w-full liquid-chip text-xs px-3 py-2 border-action-success text-action-success hover:bg-action-success/10"
               onClick={addLiquidity}
             >
               Add Liquidity
@@ -582,13 +582,13 @@ export default function LegacyLiquidityApp() {
 
             <div className="flex items-center gap-2">
               <input
-                className="flex-1 bg-gray-950 border border-gray-800 rounded px-2 py-1 text-xs"
+                className="flex-1 liquid-input px-3 py-2 text-xs"
                 value={removeLiqShares}
                 onChange={(e) => setRemoveLiqShares(e.target.value)}
                 placeholder="Shares"
               />
               <button
-                className="text-xs px-3 py-1 rounded border border-gray-700 text-gray-300 hover:border-gray-500"
+                className="liquid-chip text-xs px-3 py-1 border-ns-border/80 text-ns hover:border-ns-border"
                 onClick={removeLiquidity}
               >
                 Remove
@@ -598,46 +598,46 @@ export default function LegacyLiquidityApp() {
         </section>
 
         {/* Vault */}
-        <section className="border border-gray-800 rounded p-4 bg-gray-900/30">
-          <div className="text-xs text-gray-400 tracking-widest mb-3">VAULT (CDP)</div>
+        <section className="liquid-card p-4">
+          <div className="text-xs text-ns-muted tracking-widest mb-3">VAULT (CDP)</div>
 
           <div className="grid grid-cols-2 gap-3 text-sm">
-            <div className="border border-gray-800 rounded p-3 bg-black/30">
-              <div className="text-[10px] text-gray-500 tracking-widest">COLLATERAL RNG</div>
-              <div className="text-white mt-1">{vault?.collateralRng ?? 0}</div>
+            <div className="liquid-panel p-3">
+              <div className="text-[10px] text-ns-muted tracking-widest">COLLATERAL RNG</div>
+              <div className="text-ns mt-1">{vault?.collateralRng ?? 0}</div>
             </div>
-            <div className="border border-gray-800 rounded p-3 bg-black/30">
-              <div className="text-[10px] text-gray-500 tracking-widest">DEBT vUSDT</div>
-              <div className="text-white mt-1">{vault?.debtVusdt ?? 0}</div>
+            <div className="liquid-panel p-3">
+              <div className="text-[10px] text-ns-muted tracking-widest">DEBT vUSDT</div>
+              <div className="text-ns mt-1">{vault?.debtVusdt ?? 0}</div>
             </div>
-            <div className="border border-gray-800 rounded p-3 bg-black/30">
-              <div className="text-[10px] text-gray-500 tracking-widest">LTV</div>
-              <div className="text-white mt-1">{(derived.ltvBps / 100).toFixed(2)}%</div>
-              <div className="text-[10px] text-gray-600">max 30-45%</div>
+            <div className="liquid-panel p-3">
+              <div className="text-[10px] text-ns-muted tracking-widest">LTV</div>
+              <div className="text-ns mt-1">{(derived.ltvBps / 100).toFixed(2)}%</div>
+              <div className="text-[10px] text-ns-muted">max 30-45%</div>
             </div>
-            <div className="border border-gray-800 rounded p-3 bg-black/30">
-              <div className="text-[10px] text-gray-500 tracking-widest">AVAILABLE BORROW</div>
-              <div className="text-white mt-1">{derived.availableDebt.toString()}</div>
-              <div className="text-[10px] text-gray-600">vUSDT</div>
+            <div className="liquid-panel p-3">
+              <div className="text-[10px] text-ns-muted tracking-widest">AVAILABLE BORROW</div>
+              <div className="text-ns mt-1">{derived.availableDebt.toString()}</div>
+              <div className="text-[10px] text-ns-muted">vUSDT</div>
             </div>
           </div>
 
           <div className="mt-4 space-y-2">
             <button
-              className="w-full text-xs px-3 py-2 rounded border border-action-success text-action-success hover:bg-action-success/10"
+              className="w-full liquid-chip text-xs px-3 py-2 border-action-success text-action-success hover:bg-action-success/10"
               onClick={createVault}
             >
               Create Vault
             </button>
             <div className="flex items-center gap-2">
               <input
-                className="flex-1 bg-gray-950 border border-gray-800 rounded px-2 py-1 text-xs"
+                className="flex-1 liquid-input px-3 py-2 text-xs"
                 value={collateralAmount}
                 onChange={(e) => setCollateralAmount(e.target.value)}
                 placeholder="Deposit collateral (RNG)"
               />
               <button
-                className="text-xs px-3 py-1 rounded border border-action-success text-action-success hover:bg-action-success/10"
+                className="liquid-chip text-xs px-3 py-1 border-action-success text-action-success hover:bg-action-success/10"
                 onClick={depositCollateral}
               >
                 Deposit
@@ -645,13 +645,13 @@ export default function LegacyLiquidityApp() {
             </div>
             <div className="flex items-center gap-2">
               <input
-                className="flex-1 bg-gray-950 border border-gray-800 rounded px-2 py-1 text-xs"
+                className="flex-1 liquid-input px-3 py-2 text-xs"
                 value={borrowAmount}
                 onChange={(e) => setBorrowAmount(e.target.value)}
                 placeholder="Borrow (vUSDT)"
               />
               <button
-                className="text-xs px-3 py-1 rounded border border-action-destructive text-action-destructive hover:bg-action-destructive/10"
+                className="liquid-chip text-xs px-3 py-1 border-action-destructive text-action-destructive hover:bg-action-destructive/10"
                 onClick={borrowVusdt}
               >
                 Borrow
@@ -659,13 +659,13 @@ export default function LegacyLiquidityApp() {
             </div>
             <div className="flex items-center gap-2">
               <input
-                className="flex-1 bg-gray-950 border border-gray-800 rounded px-2 py-1 text-xs"
+                className="flex-1 liquid-input px-3 py-2 text-xs"
                 value={repayAmount}
                 onChange={(e) => setRepayAmount(e.target.value)}
                 placeholder="Repay (vUSDT)"
               />
               <button
-                className="text-xs px-3 py-1 rounded border border-gray-700 text-gray-300 hover:border-gray-500"
+                className="liquid-chip text-xs px-3 py-1 border-ns-border/80 text-ns hover:border-ns-border"
                 onClick={repayVusdt}
               >
                 Repay
@@ -674,26 +674,26 @@ export default function LegacyLiquidityApp() {
           </div>
 
           {SHOW_DEBUG ? (
-            <div className="mt-4 border-t border-gray-800 pt-4">
-              <div className="text-[10px] text-gray-500 tracking-widest mb-2">HOUSE (DEBUG)</div>
-              <div className="text-[10px] text-gray-600 space-y-1">
-                <div>Burned: <span className="text-white">{house?.totalBurned ?? 0}</span></div>
-                <div>Issuance: <span className="text-white">{house?.totalIssuance ?? 0}</span></div>
-                <div>Fees: <span className="text-white">{house?.accumulatedFees ?? 0}</span></div>
+            <div className="mt-4 border-t border-ns-border/60 pt-4">
+              <div className="text-[10px] text-ns-muted tracking-widest mb-2">HOUSE (DEBUG)</div>
+              <div className="text-[10px] text-ns-muted space-y-1">
+                <div>Burned: <span className="text-ns">{house?.totalBurned ?? 0}</span></div>
+                <div>Issuance: <span className="text-ns">{house?.totalIssuance ?? 0}</span></div>
+                <div>Fees: <span className="text-ns">{house?.accumulatedFees ?? 0}</span></div>
               </div>
             </div>
           ) : null}
         </section>
       </div>
 
-      <section className="mt-4 border border-gray-800 rounded p-4 bg-gray-900/30">
-        <div className="text-xs text-gray-400 tracking-widest mb-3">ACTIVITY</div>
-        <div className="space-y-1 text-[11px] text-gray-300">
-          {activity.length === 0 ? <div className="text-gray-600">No activity yet.</div> : null}
+      <section className="mt-4 liquid-card p-4">
+        <div className="text-xs text-ns-muted tracking-widest mb-3">ACTIVITY</div>
+        <div className="space-y-1 text-[11px] text-ns">
+          {activity.length === 0 ? <div className="text-ns-muted">No activity yet.</div> : null}
           {activity.map((item) => (
-            <div key={item.ts} className="flex items-center justify-between gap-3 border-b border-gray-900 py-1">
+            <div key={item.ts} className="flex items-center justify-between gap-3 border-b border-ns-border/40 py-1">
               <div className="truncate">{item.message}</div>
-              <div className="text-[10px] text-gray-600">{new Date(item.ts).toLocaleTimeString()}</div>
+              <div className="text-[10px] text-ns-muted">{new Date(item.ts).toLocaleTimeString()}</div>
             </div>
           ))}
         </div>

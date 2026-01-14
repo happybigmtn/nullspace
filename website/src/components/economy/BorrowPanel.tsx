@@ -61,58 +61,57 @@ export const BorrowPanel: React.FC<BorrowPanelProps> = ({
   onClaimSavingsRewards,
 }) => {
   const health = useMemo(() => {
-    const ltvBps = vaultDerived.ltvBps;
-    const maxLtv = vaultDerived.maxLtvBps;
-    const liquidation = vaultDerived.liquidationThresholdBps;
-    const safeCutoff = Math.max(1, Math.floor(maxLtv * 0.8));
+    const { ltvBps, maxLtvBps, liquidationThresholdBps } = vaultDerived;
+    const safeCutoff = Math.max(1, Math.floor(maxLtvBps * 0.8));
+
     if (ltvBps < safeCutoff) return { label: 'SAFE', className: 'text-action-success' };
-    if (ltvBps < liquidation) return { label: 'CAUTION', className: 'text-action-primary' };
+    if (ltvBps < liquidationThresholdBps) return { label: 'CAUTION', className: 'text-action-primary' };
     return { label: 'RISK', className: 'text-action-destructive' };
-  }, [vaultDerived.liquidationThresholdBps, vaultDerived.ltvBps, vaultDerived.maxLtvBps]);
+  }, [vaultDerived]);
 
   return (
-    <section className="border border-gray-800 rounded p-4 bg-gray-900/30 lg:col-span-2">
-      <div className="text-xs text-gray-400 tracking-widest mb-3">VAULT (CDP)</div>
+    <section className="liquid-card p-5 lg:col-span-2">
+      <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase mb-3">Vault (CDP)</div>
 
       <div className="grid grid-cols-2 gap-3 text-sm">
-        <div className="border border-gray-800 rounded p-3 bg-black/30">
-          <div className="text-[10px] text-gray-500 tracking-widest">COLLATERAL RNG</div>
-          <div className="text-white mt-1">{vault?.collateralRng ?? 0}</div>
+        <div className="liquid-panel p-3">
+          <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase">Collateral RNG</div>
+          <div className="text-ns mt-1">{vault?.collateralRng ?? 0}</div>
         </div>
-        <div className="border border-gray-800 rounded p-3 bg-black/30">
-          <div className="text-[10px] text-gray-500 tracking-widest">DEBT vUSDT</div>
-          <div className="text-white mt-1">{vault?.debtVusdt ?? 0}</div>
+        <div className="liquid-panel p-3">
+          <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase">Debt vUSDT</div>
+          <div className="text-ns mt-1">{vault?.debtVusdt ?? 0}</div>
         </div>
-        <div className="border border-gray-800 rounded p-3 bg-black/30">
-          <div className="text-[10px] text-gray-500 tracking-widest">LTV</div>
+        <div className="liquid-panel p-3">
+          <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase">LTV</div>
           <div className="flex items-baseline gap-2 mt-1">
-            <div className="text-white">{(vaultDerived.ltvBps / 100).toFixed(2)}%</div>
+            <div className="text-ns">{(vaultDerived.ltvBps / 100).toFixed(2)}%</div>
             <div className={['text-[10px] tracking-widest', health.className].join(' ')}>{health.label}</div>
           </div>
-          <div className="text-[10px] text-gray-600">
+          <div className="text-[10px] text-ns-muted">
             max {(vaultDerived.maxLtvBps / 100).toFixed(2)}% · {vaultDerived.tierLabel}
           </div>
-          <div className="text-[10px] text-gray-600">
+          <div className="text-[10px] text-ns-muted">
             liq {(vaultDerived.liquidationThresholdBps / 100).toFixed(2)}% · fee {(vaultDerived.stabilityFeeAprBps / 100).toFixed(2)}% APR
           </div>
         </div>
-        <div className="border border-gray-800 rounded p-3 bg-black/30">
-          <div className="text-[10px] text-gray-500 tracking-widest">AVAILABLE BORROW</div>
-          <div className="text-white mt-1">{vaultDerived.availableDebt.toString()}</div>
-          <div className="text-[10px] text-gray-600">vUSDT</div>
+        <div className="liquid-panel p-3">
+          <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase">Available Borrow</div>
+          <div className="text-ns mt-1">{vaultDerived.availableDebt.toString()}</div>
+          <div className="text-[10px] text-ns-muted">vUSDT</div>
         </div>
       </div>
 
       <div className="mt-4 space-y-2">
         <button
-          className="w-full text-xs px-3 py-2 rounded border border-action-success text-action-success hover:bg-action-success/10"
+          className="w-full text-xs px-3 py-2 rounded-full liquid-chip text-action-success hover:shadow-soft"
           onClick={onCreateVault}
         >
           Create Vault
         </button>
         <div className="flex items-center gap-2">
           <input
-            className="flex-1 bg-gray-950 border border-gray-800 rounded px-2 py-1 text-xs"
+            className="flex-1 liquid-input px-3 py-2 text-xs"
             value={collateralAmount}
             onChange={(e) => setCollateralAmount(e.target.value)}
             placeholder="Deposit collateral (RNG)"
@@ -120,7 +119,7 @@ export const BorrowPanel: React.FC<BorrowPanelProps> = ({
             pattern="[0-9]*"
           />
           <button
-            className="text-xs px-3 py-1 rounded border border-action-success text-action-success hover:bg-action-success/10"
+            className="text-xs px-3 py-2 rounded-full liquid-chip text-action-success hover:shadow-soft"
             onClick={onDepositCollateral}
           >
             Deposit
@@ -128,7 +127,7 @@ export const BorrowPanel: React.FC<BorrowPanelProps> = ({
         </div>
         <div className="flex items-center gap-2">
           <input
-            className="flex-1 bg-gray-950 border border-gray-800 rounded px-2 py-1 text-xs"
+            className="flex-1 liquid-input px-3 py-2 text-xs"
             value={borrowAmount}
             onChange={(e) => setBorrowAmount(e.target.value)}
             placeholder="Borrow (vUSDT)"
@@ -136,7 +135,7 @@ export const BorrowPanel: React.FC<BorrowPanelProps> = ({
             pattern="[0-9]*"
           />
           <button
-            className="text-xs px-3 py-1 rounded border border-action-destructive text-action-destructive hover:bg-action-destructive/10"
+            className="text-xs px-3 py-2 rounded-full liquid-chip text-action-destructive hover:shadow-soft"
             onClick={onBorrowVusdt}
           >
             Borrow
@@ -144,7 +143,7 @@ export const BorrowPanel: React.FC<BorrowPanelProps> = ({
         </div>
         <div className="flex items-center gap-2">
           <input
-            className="flex-1 bg-gray-950 border border-gray-800 rounded px-2 py-1 text-xs"
+            className="flex-1 liquid-input px-3 py-2 text-xs"
             value={repayAmount}
             onChange={(e) => setRepayAmount(e.target.value)}
             placeholder="Repay (vUSDT)"
@@ -152,7 +151,7 @@ export const BorrowPanel: React.FC<BorrowPanelProps> = ({
             pattern="[0-9]*"
           />
           <button
-            className="text-xs px-3 py-1 rounded border border-gray-700 text-gray-300 hover:border-gray-500"
+            className="text-xs px-3 py-2 rounded-full liquid-chip text-ns hover:shadow-soft"
             onClick={onRepayVusdt}
           >
             Repay
@@ -160,31 +159,31 @@ export const BorrowPanel: React.FC<BorrowPanelProps> = ({
         </div>
       </div>
 
-      <div className="mt-6 border-t border-gray-800 pt-4">
-        <div className="text-[10px] text-gray-500 tracking-widest">SAVINGS (vUSDT)</div>
+      <div className="mt-6 border-t border-black/10 dark:border-white/10 pt-4">
+        <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase">Savings (vUSDT)</div>
         <div className="grid grid-cols-2 gap-3 text-sm mt-3">
-          <div className="border border-gray-800 rounded p-3 bg-black/30">
-            <div className="text-[10px] text-gray-500 tracking-widest">DEPOSIT BALANCE</div>
-            <div className="text-white mt-1">{savingsBalance?.depositBalance ?? 0}</div>
+          <div className="liquid-panel p-3">
+            <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase">Deposit Balance</div>
+            <div className="text-ns mt-1">{savingsBalance?.depositBalance ?? 0}</div>
           </div>
-          <div className="border border-gray-800 rounded p-3 bg-black/30">
-            <div className="text-[10px] text-gray-500 tracking-widest">UNCLAIMED</div>
-            <div className="text-white mt-1">{savingsBalance?.unclaimedRewards ?? 0}</div>
+          <div className="liquid-panel p-3">
+            <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase">Unclaimed</div>
+            <div className="text-ns mt-1">{savingsBalance?.unclaimedRewards ?? 0}</div>
           </div>
-          <div className="border border-gray-800 rounded p-3 bg-black/30">
-            <div className="text-[10px] text-gray-500 tracking-widest">POOL TVL</div>
-            <div className="text-white mt-1">{savingsPool?.totalDeposits ?? 0}</div>
+          <div className="liquid-panel p-3">
+            <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase">Pool TVL</div>
+            <div className="text-ns mt-1">{savingsPool?.totalDeposits ?? 0}</div>
           </div>
-          <div className="border border-gray-800 rounded p-3 bg-black/30">
-            <div className="text-[10px] text-gray-500 tracking-widest">REWARDS ACCRUED</div>
-            <div className="text-white mt-1">{savingsPool?.totalRewardsAccrued ?? 0}</div>
+          <div className="liquid-panel p-3">
+            <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase">Rewards Accrued</div>
+            <div className="text-ns mt-1">{savingsPool?.totalRewardsAccrued ?? 0}</div>
           </div>
         </div>
 
         <div className="mt-3 space-y-2">
           <div className="flex items-center gap-2">
             <input
-              className="flex-1 bg-gray-950 border border-gray-800 rounded px-2 py-1 text-xs"
+              className="flex-1 liquid-input px-3 py-2 text-xs"
               value={savingsDepositAmount}
               onChange={(e) => setSavingsDepositAmount(e.target.value)}
               placeholder="Deposit (vUSDT)"
@@ -192,7 +191,7 @@ export const BorrowPanel: React.FC<BorrowPanelProps> = ({
               pattern="[0-9]*"
             />
             <button
-              className="text-xs px-3 py-1 rounded border border-action-success text-action-success hover:bg-action-success/10"
+              className="text-xs px-3 py-2 rounded-full liquid-chip text-action-success hover:shadow-soft"
               onClick={onDepositSavings}
             >
               Deposit
@@ -200,7 +199,7 @@ export const BorrowPanel: React.FC<BorrowPanelProps> = ({
           </div>
           <div className="flex items-center gap-2">
             <input
-              className="flex-1 bg-gray-950 border border-gray-800 rounded px-2 py-1 text-xs"
+              className="flex-1 liquid-input px-3 py-2 text-xs"
               value={savingsWithdrawAmount}
               onChange={(e) => setSavingsWithdrawAmount(e.target.value)}
               placeholder="Withdraw (vUSDT)"
@@ -208,14 +207,14 @@ export const BorrowPanel: React.FC<BorrowPanelProps> = ({
               pattern="[0-9]*"
             />
             <button
-              className="text-xs px-3 py-1 rounded border border-gray-700 text-gray-300 hover:border-gray-500"
+              className="text-xs px-3 py-2 rounded-full liquid-chip text-ns hover:shadow-soft"
               onClick={onWithdrawSavings}
             >
               Withdraw
             </button>
           </div>
           <button
-            className="w-full text-xs px-3 py-2 rounded border border-action-primary text-action-primary hover:bg-action-primary/10"
+            className="w-full text-xs px-3 py-2 rounded-full liquid-chip text-action-primary hover:shadow-soft"
             onClick={onClaimSavingsRewards}
           >
             Claim Savings Rewards
@@ -223,36 +222,36 @@ export const BorrowPanel: React.FC<BorrowPanelProps> = ({
         </div>
       </div>
 
-      {SHOW_DEBUG ? (
-        <details className="mt-4 border-t border-gray-800 pt-4">
-          <summary className="text-[10px] text-gray-500 tracking-widest cursor-pointer select-none">
-            HOUSE (DEBUG)
+      {SHOW_DEBUG && (
+        <details className="mt-4 border-t border-black/10 dark:border-white/10 pt-4">
+          <summary className="text-[10px] text-ns-muted tracking-[0.28em] uppercase cursor-pointer select-none">
+            House (Debug)
           </summary>
-          <div className="mt-2 text-[10px] text-gray-600 space-y-1">
+          <div className="mt-2 text-[10px] text-ns-muted space-y-1">
             <div>
-              Burned: <span className="text-white">{house?.totalBurned ?? 0}</span>
+              Burned: <span className="text-ns">{house?.totalBurned ?? 0}</span>
             </div>
             <div>
-              Issuance: <span className="text-white">{house?.totalIssuance ?? 0}</span>
+              Issuance: <span className="text-ns">{house?.totalIssuance ?? 0}</span>
             </div>
             <div>
-              Fees: <span className="text-white">{house?.accumulatedFees ?? 0}</span>
+              Fees: <span className="text-ns">{house?.accumulatedFees ?? 0}</span>
             </div>
             <div>
-              vUSDT debt: <span className="text-white">{house?.totalVusdtDebt ?? 0}</span>
+              vUSDT debt: <span className="text-ns">{house?.totalVusdtDebt ?? 0}</span>
             </div>
             <div>
-              Stability fees: <span className="text-white">{house?.stabilityFeesAccrued ?? 0}</span>
+              Stability fees: <span className="text-ns">{house?.stabilityFeesAccrued ?? 0}</span>
             </div>
             <div>
-              Recovery pool: <span className="text-white">{house?.recoveryPoolVusdt ?? 0}</span>
+              Recovery pool: <span className="text-ns">{house?.recoveryPoolVusdt ?? 0}</span>
             </div>
             <div>
-              Recovered: <span className="text-white">{house?.recoveryPoolRetired ?? 0}</span>
+              Recovered: <span className="text-ns">{house?.recoveryPoolRetired ?? 0}</span>
             </div>
           </div>
         </details>
-      ) : null}
+      )}
     </section>
   );
 };

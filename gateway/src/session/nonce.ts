@@ -17,11 +17,35 @@ type NonceManagerOptions = {
   dataDir?: string;
   legacyPath?: string;
   origin?: string;
+  minSyncIntervalMs?: number | string;
 };
+
+// Previously we used hardcoded nonce floors to bridge indexer lag in staging.
+// They now drift far beyond live backend nonces and block submissions, so disable them.
+const HARDCODED_FLOORS: Record<string, bigint> = {};
 
 const DEFAULT_DATA_DIR = '.gateway-data';
 const DEFAULT_NONCE_FILE = 'nonces.json';
 const LEGACY_NONCE_FILE = '.gateway-nonces.json';
+const DEFAULT_NONCE_SYNC_INTERVAL_MS = 5_000;
+
+function parsePositiveInt(input: number | string | null | undefined): number | null {
+  if (typeof input === 'number') {
+    return Number.isFinite(input) && input > 0 ? Math.floor(input) : null;
+  }
+  if (typeof input === 'string') {
+    const trimmed = input.trim();
+    if (trimmed.length === 0) return null;
+    const parsed = Number.parseInt(trimmed, 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  }
+  return null;
+}
+
+function resolveSyncIntervalMs(input?: number | string | null): number {
+  const parsed = parsePositiveInt(input);
+  return parsed ?? DEFAULT_NONCE_SYNC_INTERVAL_MS;
+}
 
 export class NonceManager {
   private nonces: Map<string, bigint> = new Map();
@@ -31,12 +55,17 @@ export class NonceManager {
   private dataDir: string;
   private legacyPath: string;
   private origin: string;
+  private minSyncIntervalMs: number;
+  private lastSync: Map<string, number> = new Map();
 
   constructor(options: NonceManagerOptions = {}) {
     this.dataDir = resolve(options.dataDir ?? process.env.GATEWAY_DATA_DIR ?? DEFAULT_DATA_DIR);
     this.persistPath = join(this.dataDir, DEFAULT_NONCE_FILE);
     this.legacyPath = resolve(options.legacyPath ?? LEGACY_NONCE_FILE);
     this.origin = options.origin ?? 'http://localhost:9010';
+    const syncIntervalInput =
+      options.minSyncIntervalMs ?? process.env.GATEWAY_NONCE_SYNC_INTERVAL_MS ?? null;
+    this.minSyncIntervalMs = resolveSyncIntervalMs(syncIntervalInput);
     this.ensureDataDir();
     this.migrateLegacyFile();
   }
@@ -157,6 +186,7 @@ export class NonceManager {
    * Call this when nonce mismatch is detected
    */
   async syncFromBackend(publicKeyHex: string, backendUrl: string): Promise<boolean> {
+    const floor = HARDCODED_FLOORS[publicKeyHex];
     try {
       const response = await fetch(`${backendUrl}/account/${publicKeyHex}`, {
         headers: {
@@ -165,14 +195,22 @@ export class NonceManager {
       });
       if (response.ok) {
         const account = await response.json();
-        const onChainNonce = BigInt(account.nonce);
+        let onChainNonce = BigInt(account.nonce);
+        if (floor !== undefined && floor > onChainNonce) {
+          onChainNonce = floor;
+        }
 
         const current = this.nonces.get(publicKeyHex);
-        // Guard against backend resets (e.g., indexer restart) clobbering a known nonce.
-        if (current !== undefined && current > 0n && onChainNonce === 0n) {
-          console.warn(
-            `Backend nonce reset detected for ${publicKeyHex.slice(0, 8)}; keeping local nonce ${current}`
-          );
+        if (current !== undefined) {
+          const drift = current > onChainNonce ? current - onChainNonce : onChainNonce - current;
+          if (current > onChainNonce) {
+            console.warn(
+              `Backend nonce behind local for ${publicKeyHex.slice(0, 8)}; keeping local nonce ${current} (drift=${drift})`
+            );
+            this.nonces.set(publicKeyHex, current);
+          } else {
+            this.nonces.set(publicKeyHex, onChainNonce);
+          }
         } else {
           // Set to on-chain nonce (transactions will use this + 1)
           this.nonces.set(publicKeyHex, onChainNonce);
@@ -189,13 +227,24 @@ export class NonceManager {
   }
 
   /**
+   * Sync nonce from backend at a limited interval per public key.
+   */
+  async maybeSync(publicKeyHex: string, backendUrl: string): Promise<boolean> {
+    const now = Date.now();
+    const last = this.lastSync.get(publicKeyHex) ?? 0;
+    if (now - last < this.minSyncIntervalMs) {
+      return false;
+    }
+    this.lastSync.set(publicKeyHex, now);
+    return this.syncFromBackend(publicKeyHex, backendUrl);
+  }
+
+  /**
    * Check if error indicates nonce mismatch
    */
   isNonceMismatch(error: string): boolean {
     const lowerError = error.toLowerCase();
-    return lowerError.includes('nonce') ||
-           lowerError.includes('invalidnonce') ||
-           lowerError.includes('replay');
+    return ['nonce', 'invalidnonce', 'replay'].some(keyword => lowerError.includes(keyword));
   }
 
   /**

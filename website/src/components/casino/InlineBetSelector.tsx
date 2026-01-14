@@ -160,10 +160,10 @@ export const InlineBetSelector: React.FC<InlineBetSelectorProps> = ({
                     type="button"
                     onClick={() => decrement()}
                     disabled={disabled || !canDecrement}
-                    className={`w-9 h-9 rounded-full flex items-center justify-center border transition-all motion-interaction
+                    className={`w-11 h-11 rounded-full flex items-center justify-center border transition-all motion-interaction
                         ${disabled || !canDecrement
-                            ? 'bg-titanium-50 border-titanium-100 text-titanium-300 cursor-not-allowed'
-                            : 'bg-white border-titanium-200 text-titanium-600 hover:border-titanium-400 hover:text-titanium-900 active:scale-95'
+                            ? 'bg-ns-surface border-ns text-ns-muted cursor-not-allowed'
+                            : 'bg-ns-surface border-ns text-ns hover:border-ns active:scale-95 focus-visible:ring-2 focus-visible:ring-action-primary/50'
                         }`}
                     aria-label="Decrease bet"
                 >
@@ -171,7 +171,7 @@ export const InlineBetSelector: React.FC<InlineBetSelectorProps> = ({
                 </button>
 
                 <div className="flex-1 min-w-[80px] text-center">
-                    <span className="text-display-mono text-lg font-semibold text-titanium-900 tabular-nums">
+                    <span className="text-display-mono text-lg font-semibold text-ns tabular-nums">
                         ${formatBet(currentBet)}
                     </span>
                 </div>
@@ -180,10 +180,10 @@ export const InlineBetSelector: React.FC<InlineBetSelectorProps> = ({
                     type="button"
                     onClick={() => increment()}
                     disabled={disabled || !canIncrement}
-                    className={`w-9 h-9 rounded-full flex items-center justify-center border transition-all motion-interaction
+                    className={`w-11 h-11 rounded-full flex items-center justify-center border transition-all motion-interaction
                         ${disabled || !canIncrement
-                            ? 'bg-titanium-50 border-titanium-100 text-titanium-300 cursor-not-allowed'
-                            : 'bg-white border-titanium-200 text-titanium-600 hover:border-titanium-400 hover:text-titanium-900 active:scale-95'
+                            ? 'bg-ns-surface border-ns text-ns-muted cursor-not-allowed'
+                            : 'bg-ns-surface border-ns text-ns hover:border-ns active:scale-95 focus-visible:ring-2 focus-visible:ring-action-primary/50'
                         }`}
                     aria-label="Increase bet"
                 >
@@ -205,10 +205,10 @@ export const InlineBetSelector: React.FC<InlineBetSelectorProps> = ({
                             type="button"
                             onClick={onClick}
                             disabled={disabled}
-                            className={`flex-1 h-7 rounded-full text-[10px] font-semibold tracking-wider uppercase transition-all motion-interaction
+                            className={`flex-1 min-h-[44px] rounded-full text-[10px] font-semibold tracking-wider uppercase transition-all motion-interaction
                                 ${disabled
-                                    ? 'bg-titanium-50 text-titanium-300 cursor-not-allowed'
-                                    : 'bg-titanium-100 text-titanium-600 hover:bg-titanium-200 hover:text-titanium-900 active:scale-95'
+                                    ? 'bg-ns-surface text-ns-muted cursor-not-allowed'
+                                    : 'bg-ns-surface text-ns-muted hover:text-ns active:scale-95 focus-visible:ring-2 focus-visible:ring-action-primary/50'
                                 }`}
                         >
                             {label}

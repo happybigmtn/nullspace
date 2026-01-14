@@ -34,7 +34,11 @@ export const runAutoPlayPlanForSession = (
   }: AutoPlayDeps,
 ) => {
   const plan = autoPlayPlanRef.current;
-  if (!plan || plan.sessionId !== sessionId) return;
+  console.error('[qa-autoplay] runAutoPlayPlanForSession called, session:', sessionId.toString(), 'gameType:', frontendGameType, 'plan:', plan ? `type=${plan.type} planSession=${plan.sessionId?.toString()}` : 'null');
+  if (!plan || plan.sessionId !== sessionId) {
+    console.error('[qa-autoplay] skipping - no plan or session mismatch');
+    return;
+  }
 
   autoPlayPlanRef.current = null;
 

@@ -197,18 +197,36 @@ const EconomyDashboard = () => {
 
   if (usingPublic) {
     if (publicLoading) {
-      return <div className="text-gray-100 p-8 text-center bg-gray-950 min-h-screen">Loading Public Snapshot...</div>;
+      return (
+        <div className="min-h-screen flex items-center justify-center text-ns">
+          <div className="liquid-card p-6 text-center">Loading Public Snapshot...</div>
+        </div>
+      );
     }
     if (!effectiveData.length) {
       return (
-        <div className="text-gray-100 p-8 text-center bg-gray-950 min-h-screen">
-          {publicError ?? 'Public snapshot unavailable.'}
+        <div className="min-h-screen flex items-center justify-center text-ns">
+          <div className="liquid-card p-6 text-center">
+            {publicError ?? 'Public snapshot unavailable.'}
+          </div>
         </div>
       );
     }
   } else {
-    if (loading) return <div className="text-gray-100 p-8 text-center bg-gray-950 min-h-screen">Loading Analytics...</div>;
-    if (!data.length) return <div className="text-gray-100 p-8 text-center bg-gray-950 min-h-screen">No Data Available</div>;
+    if (loading) {
+      return (
+        <div className="min-h-screen flex items-center justify-center text-ns">
+          <div className="liquid-card p-6 text-center">Loading Analytics...</div>
+        </div>
+      );
+    }
+    if (!data.length) {
+      return (
+        <div className="min-h-screen flex items-center justify-center text-ns">
+          <div className="liquid-card p-6 text-center">No Data Available</div>
+        </div>
+      );
+    }
   }
 
   const last = effectiveData[effectiveData.length - 1];
@@ -223,35 +241,56 @@ const EconomyDashboard = () => {
   const sourceLabel = usingPublic ? 'Public Snapshot' : 'Live';
 
   return (
-    <div className="bg-gray-950 min-h-screen text-gray-100 p-8 font-sans">
-      <div className="max-w-7xl mx-auto space-y-8">
-        <header>
-          <h1 className="text-4xl font-bold mb-2">Nullspace Analytics</h1>
-          <p className="text-gray-400">Real-time economic monitoring ({sourceLabel})</p>
+    <div className="min-h-screen text-ns font-sans">
+      <div className="max-w-7xl mx-auto space-y-6">
+        <header className="liquid-card p-5">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="text-[10px] text-ns-muted tracking-[0.32em] uppercase">Analytics</div>
+              <div className="text-lg font-display tracking-tight text-ns">Economy overview</div>
+              <div className="text-[11px] text-ns-muted">
+                Real-time economic monitoring.
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="liquid-chip px-3 py-1 text-[10px] tracking-[0.28em] uppercase text-ns-muted">
+                {sourceLabel}
+              </div>
+              <div className="text-[10px] text-ns-muted">
+                Updated {new Date(last.timestamp).toLocaleTimeString()}
+              </div>
+            </div>
+          </div>
         </header>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <StatsCard
-            title="RNG Price"
-            value={`$${(last.rng_price || 0).toFixed(4)}`}
-            trend={last.rng_price > first.rng_price ? 'up' : 'down'}
-            subtext="vUSDT"
-          />
-          <StatsCard title="Circulating Supply" value={supply.toLocaleString()} subtext="RNG" />
-          <StatsCard title="Total Issuance" value={Number(last.total_issuance || 0).toLocaleString()} subtext="RNG" />
-          <StatsCard title="Total Burned" value={Number(last.total_burned || 0).toLocaleString()} subtext="RNG" trend="down" />
-          <StatsCard title="Burn Rate" value={`${burnRate}/s`} subtext="Avg" trend="down" />
-          <StatsCard title="Accumulated Fees" value={Number(last.accumulated_fees || 0).toLocaleString()} subtext="RNG" />
-          <StatsCard title="House PnL" value={Number(last.house_pnl || 0).toLocaleString()} subtext="RNG" />
-          <StatsCard title="vUSDT Debt" value={Number(last.total_vusdt_debt || 0).toLocaleString()} subtext="vUSDT" />
-          <StatsCard title="Stability Fees" value={Number(last.stability_fees_accrued || 0).toLocaleString()} subtext="vUSDT" />
-          <StatsCard title="Pool TVL" value={`$${tvl.toLocaleString()}`} subtext="vUSDT" trend="up" />
-          <StatsCard title="LP Share Price" value={`$${lpPrice.toFixed(4)}`} subtext="vUSDT / LP" trend="up" />
-          <StatsCard title="Top 1% Share" value={top1Share} subtext="Supply" />
-          <StatsCard title="Gini" value={gini} subtext={`Players ${effectiveDistribution.players}`} />
-        </div>
+        <section className="liquid-card p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-[10px] text-ns-muted tracking-[0.32em] uppercase">Key metrics</div>
+            <div className="text-[10px] text-ns-muted">Source {sourceLabel}</div>
+          </div>
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <StatsCard
+              title="RNG Price"
+              value={`$${(last.rng_price || 0).toFixed(4)}`}
+              trend={last.rng_price > first.rng_price ? 'up' : 'down'}
+              subtext="vUSDT"
+            />
+            <StatsCard title="Circulating Supply" value={supply.toLocaleString()} subtext="RNG" />
+            <StatsCard title="Total Issuance" value={Number(last.total_issuance || 0).toLocaleString()} subtext="RNG" />
+            <StatsCard title="Total Burned" value={Number(last.total_burned || 0).toLocaleString()} subtext="RNG" trend="down" />
+            <StatsCard title="Burn Rate" value={`${burnRate}/s`} subtext="Avg" trend="down" />
+            <StatsCard title="Accumulated Fees" value={Number(last.accumulated_fees || 0).toLocaleString()} subtext="RNG" />
+            <StatsCard title="House PnL" value={Number(last.house_pnl || 0).toLocaleString()} subtext="RNG" />
+            <StatsCard title="vUSDT Debt" value={Number(last.total_vusdt_debt || 0).toLocaleString()} subtext="vUSDT" />
+            <StatsCard title="Stability Fees" value={Number(last.stability_fees_accrued || 0).toLocaleString()} subtext="vUSDT" />
+            <StatsCard title="Pool TVL" value={`$${tvl.toLocaleString()}`} subtext="vUSDT" trend="up" />
+            <StatsCard title="LP Share Price" value={`$${lpPrice.toFixed(4)}`} subtext="vUSDT / LP" trend="up" />
+            <StatsCard title="Top 1% Share" value={top1Share} subtext="Supply" />
+            <StatsCard title="Gini" value={gini} subtext={`Players ${effectiveDistribution.players}`} />
+          </div>
+        </section>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <SupplyChart data={effectiveData} />
           <IssuanceChart data={effectiveData} />
         </div>

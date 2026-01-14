@@ -8,6 +8,8 @@ import { resolve } from 'path'
 const shouldAnalyze = process.env.ANALYZE === 'true';
 
 const backendUrl = process.env.VITE_URL || 'http://localhost:8080';
+// Allow a separate proxy target for local dev to avoid CORS when VITE_URL is external
+const devProxyTarget = process.env.VITE_DEV_PROXY_TARGET || backendUrl;
 const authProxyUrl = process.env.VITE_AUTH_PROXY_URL || 'http://localhost:4000';
 let backendOrigin = '';
 try {
@@ -68,21 +70,21 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api': {
-        target: backendUrl,
+        target: devProxyTarget,
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
         ws: true
       },
       '/auth': {
-        target: authProxyUrl,
+        target: devProxyTarget.replace('api.', 'auth.'),
         changeOrigin: true,
       },
       '/profile': {
-        target: authProxyUrl,
+        target: devProxyTarget.replace('api.', 'auth.'),
         changeOrigin: true,
       },
       '/billing': {
-        target: authProxyUrl,
+        target: devProxyTarget.replace('api.', 'auth.'),
         changeOrigin: true,
       }
     }

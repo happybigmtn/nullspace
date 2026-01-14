@@ -83,7 +83,9 @@ fi
 
 # Extract identity for simulator
 IDENTITY=""
-if [ -f "$CONFIG_DIR/.env.local" ]; then
+if [ -f "$CONFIG_DIR/identity.hex" ]; then
+    IDENTITY=$(tr -d '\r\n' < "$CONFIG_DIR/identity.hex")
+elif [ -f "$CONFIG_DIR/.env.local" ]; then
     IDENTITY=$(grep -E "^VITE_IDENTITY=" "$CONFIG_DIR/.env.local" | head -1 | cut -d= -f2- | tr -d '"')
 fi
 

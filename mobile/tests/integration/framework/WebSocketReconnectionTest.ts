@@ -17,11 +17,11 @@ export interface ReconnectionTestConfig {
 export interface ReconnectionTestResult {
   passed: boolean;
   duration: number;
-  tests: Array<{
+  tests: {
     name: string;
     passed: boolean;
     error?: string;
-  }>;
+  }[];
 }
 
 /**
@@ -34,7 +34,7 @@ export class WebSocketReconnectionTest {
   private sessionId: string | null = null;
   private publicKey: string | null = null;
   private initialBalance: number = 0;
-  private testResults: Array<{ name: string; passed: boolean; error?: string }> = [];
+  private testResults: { name: string; passed: boolean; error?: string }[] = [];
 
   constructor(private config: ReconnectionTestConfig) {
     this.logger = new TestLogger('WebSocketReconnection');
@@ -92,6 +92,19 @@ export class WebSocketReconnectionTest {
     };
   }
 
+  private async waitForRegistration(maxAttempts = 20): Promise<GameMessage> {
+    for (let attempts = 1; attempts <= maxAttempts; attempts++) {
+      await new Promise(r => setTimeout(r, 100));
+      this.client.send({ type: 'get_balance' });
+      const balanceMsg = await this.client.waitForMessage('balance', 2000);
+
+      if (balanceMsg.registered && balanceMsg.hasBalance) {
+        return balanceMsg;
+      }
+    }
+    throw new Error(`Account registration failed after ${maxAttempts * 100}ms`);
+  }
+
   private async setup(): Promise<void> {
     this.logger.info('=== Test Setup ===');
 
@@ -106,25 +119,7 @@ export class WebSocketReconnectionTest {
       publicKey: this.publicKey,
     });
 
-    // Wait for registration and get initial balance
-    let balanceMsg: GameMessage;
-    let attempts = 0;
-    const maxAttempts = 20;
-
-    do {
-      await new Promise(r => setTimeout(r, 100));
-      this.client.send({ type: 'get_balance' });
-      balanceMsg = await this.client.waitForMessage('balance', 2000);
-      attempts++;
-    } while (
-      (!(balanceMsg.registered as boolean) || !(balanceMsg.hasBalance as boolean)) &&
-      attempts < maxAttempts
-    );
-
-    if (!(balanceMsg.hasBalance as boolean)) {
-      throw new Error(`Account registration failed after ${attempts * 100}ms`);
-    }
-
+    const balanceMsg = await this.waitForRegistration();
     this.initialBalance = parseFloat(balanceMsg.balance as string);
     this.logger.success('Account ready', { balance: this.initialBalance });
   }

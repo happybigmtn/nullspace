@@ -256,7 +256,7 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
                         <button
                             type="button"
                             onClick={closeInput}
-                            className="mt-4 w-full py-3 rounded-full bg-mono-0 text-white text-xs font-bold uppercase tracking-widest active:scale-95"
+                            className="mt-4 w-full py-3 rounded-full bg-mono-0 text-white text-xs font-bold uppercase tracking-widest active:scale-95 focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:ring-offset-2"
                         >
                             Cancel
                         </button>

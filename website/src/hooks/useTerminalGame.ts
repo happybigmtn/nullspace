@@ -53,6 +53,21 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
     [refs.gameStateRef, setters.setGameState],
   );
 
+  // QA helper: Sync sessionId to both state and ref (for HTTP fallback scenarios)
+  const syncSessionId = useCallback(
+    (sessionId: bigint | null) => {
+      refs.currentSessionIdRef.current = sessionId;
+      setters.setCurrentSessionId(sessionId);
+      const sessionValue = sessionId !== null ? Number(sessionId) : null;
+      setters.setGameState((prev) => {
+        const next = { ...prev, sessionId: sessionValue };
+        refs.gameStateRef.current = next;
+        return next;
+      });
+    },
+    [refs.currentSessionIdRef, refs.gameStateRef, setters.setCurrentSessionId, setters.setGameState],
+  );
+
   useFreerollScheduler({
     playMode,
     clientRef: refs.clientRef,
@@ -100,13 +115,22 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
   });
 
   const parseGameState = useCallback(
-    (stateBlob: Uint8Array, gameType?: GameType) => {
+    (stateBlob: Uint8Array | string, gameType?: GameType) => {
       try {
         const currentType = gameType ?? state.gameState.type;
         const fallbackState = refs.gameStateRef.current ?? state.gameState;
 
+        // Convert hex string to Uint8Array if needed (WASM bridge returns hex strings)
+        let blobBytes: Uint8Array;
+        if (typeof stateBlob === 'string') {
+          const hex = stateBlob.startsWith('0x') ? stateBlob.slice(2) : stateBlob;
+          blobBytes = new Uint8Array(hex.match(/.{1,2}/g)?.map(byte => parseInt(byte, 16)) ?? []);
+        } else {
+          blobBytes = stateBlob;
+        }
+
         applyGameStateFromBlob({
-          stateBlob,
+          stateBlob: blobBytes,
           gameType: currentType,
           fallbackState,
           setGameState: setters.setGameState,
@@ -357,6 +381,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
       toggleDouble,
       toggleSuper,
       deal,
+      syncSessionId, // QA: Sync sessionId to both ref and state for HTTP fallback
       ...gameActions,
       ...tournamentActions,
     },

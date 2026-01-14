@@ -3,6 +3,11 @@ import { Link } from 'react-router-dom';
 import { animated, useSpring, useTransition, config } from '@react-spring/web';
 import { useSharedCasinoConnection } from '../chain/CasinoConnectionContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import {
+  createPasswordVault,
+  unlockPasswordVault,
+  getVaultStatusSync,
+} from '../security/keyVault';
 
 type ConnectionStatusProps = {
   className?: string;
@@ -130,6 +135,13 @@ const StatusIcon = ({ status }: { status: string }) => {
 export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({ className }) => {
   const { status, statusDetail, error, refreshOnce, vaultMode } = useSharedCasinoConnection();
   const prefersReducedMotion = useReducedMotion();
+  const [vaultModalOpen, setVaultModalOpen] = useState(false);
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [vaultError, setVaultError] = useState<string | null>(null);
+
+  const vaultState = getVaultStatusSync();
+  const vaultExists = vaultState.enabled && !!vaultState.kind;
 
   // Track previous status for transition detection
   const prevStatusRef = useRef(status);
@@ -145,6 +157,28 @@ export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({ className })
   const showUnlock = status === 'vault_locked';
   const isConnecting = status === 'connecting';
   const isError = status === 'error' || status === 'offline';
+  const canInlineCreate = vaultState.passwordSupported;
+
+  const handleVaultSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!password) return;
+    setBusy(true);
+    setVaultError(null);
+    try {
+      if (vaultExists) {
+        await unlockPasswordVault(password);
+      } else if (canInlineCreate) {
+        await createPasswordVault(password, { migrateExistingCasinoKey: true });
+      }
+      setPassword('');
+      setVaultModalOpen(false);
+      refreshOnce();
+    } catch (err: any) {
+      setVaultError(err?.message ?? 'Unable to unlock vault');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   // Detect reconnection success - show brief celebration
   useEffect(() => {
@@ -276,14 +310,13 @@ export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({ className })
         {display}
       </animated.span>
 
-      {showUnlock ? (
-        <Link
-          to="/security"
-          className="text-[10px] uppercase tracking-[0.3em] text-ns hover:text-ns-muted"
-        >
-          {vaultMissing ? 'Create' : 'Unlock'}
-        </Link>
-      ) : null}
+      <button
+        type="button"
+        onClick={() => setVaultModalOpen(true)}
+        className="text-[10px] uppercase tracking-[0.3em] text-ns hover:text-ns-muted"
+      >
+        {vaultExists ? 'Vault' : vaultMissing ? 'Create' : 'Unlock'}
+      </button>
       {showRetry ? (
         <button
           type="button"
@@ -292,6 +325,66 @@ export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({ className })
         >
           Retry
         </button>
+      ) : null}
+
+      {vaultModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-black/90 shadow-2xl border border-black/10 dark:border-white/10 p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-xs uppercase tracking-[0.28em] text-ns-muted">
+                  {vaultExists ? 'Unlock vault' : 'Create vault'}
+                </div>
+                <div className="text-lg font-semibold text-ns">On-chain casino key</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setVaultModalOpen(false)}
+                className="text-sm text-ns-muted hover:text-ns"
+              >
+                ✕
+              </button>
+            </div>
+            <form onSubmit={handleVaultSubmit} className="space-y-3">
+              <div>
+                <label className="text-xs uppercase tracking-[0.26em] text-ns-muted">Password</label>
+                <input
+                  type="password"
+                  value={password}
+                  autoFocus
+                  minLength={8}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-black/10 dark:border-white/10 bg-white/70 dark:bg-white/5 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-action-primary"
+                  placeholder={vaultExists ? 'Enter vault password' : 'Create a strong password'}
+                />
+              </div>
+              {vaultError ? (
+                <div className="text-xs text-action-destructive">{vaultError}</div>
+              ) : null}
+              <div className="flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  className="text-xs uppercase tracking-[0.28em] text-ns-muted hover:text-ns"
+                  onClick={() => setVaultModalOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={busy || password.length < 8}
+                  className="px-4 py-2 rounded-lg bg-action-primary text-white text-xs uppercase tracking-[0.3em] disabled:opacity-40"
+                >
+                  {busy ? 'Working…' : vaultExists ? 'Unlock' : 'Create'}
+                </button>
+              </div>
+            </form>
+            {!vaultExists && !canInlineCreate ? (
+              <p className="text-xs text-ns-muted">
+                Passkeys are not available on this device. Open Security to finish setup.
+              </p>
+            ) : null}
+          </div>
+        </div>
       ) : null}
     </animated.div>
   );

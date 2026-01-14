@@ -318,9 +318,10 @@ export const BlackjackView = React.memo<{
                         <button
                             type="button"
                             onClick={() => setAnalysis(null)}
-                            className="ml-2 text-ns-muted hover:text-ns"
+                            aria-label="Dismiss analysis"
+                            className="ml-2 text-ns-muted hover:text-ns focus-visible:ring-2 focus-visible:ring-action-primary/50 rounded"
                         >
-                            ×
+                            <span aria-hidden="true">×</span>
                         </button>
                     </div>
                 )}

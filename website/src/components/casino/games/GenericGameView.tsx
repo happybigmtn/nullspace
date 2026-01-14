@@ -23,10 +23,12 @@ export const GenericGameView = React.memo<{ gameState: GameState; actions: any; 
         return null;
     }, [isCasinoWar, gameState.casinoWarOutcome]);
     const warAccentColor = useMemo(() => {
-        if (!warOutcome) return undefined;
-        if (warOutcome === 'player') return '#22ff88';
-        if (warOutcome === 'dealer') return '#f87171';
-        return '#f4c542';
+        switch (warOutcome) {
+            case 'player': return '#22ff88';
+            case 'dealer': return '#f87171';
+            case 'tie': return '#f4c542';
+            default: return undefined;
+        }
     }, [warOutcome]);
     const warGlow = useMemo(() => (warAccentColor ? `${warAccentColor}33` : undefined), [warAccentColor]);
     const [warTrend, setWarTrend] = useState<Array<'player' | 'dealer' | 'tie'>>([]);
@@ -50,9 +52,9 @@ export const GenericGameView = React.memo<{ gameState: GameState; actions: any; 
                 className="flex-1 w-full flex flex-col items-center justify-start sm:justify-center gap-4 sm:gap-6 md:gap-8 relative z-10 pt-8 sm:pt-10 pb-24 sm:pb-20"
                 style={warGlow ? { background: `radial-gradient(circle at 50% 20%, ${warGlow}, transparent 65%)` } : undefined}
             >
-                <h1 className="absolute top-0 text-xl font-bold text-gray-500 tracking-widest uppercase zen-hide">{gameTitle}</h1>
+                <h1 className="absolute top-0 text-xl font-semibold text-ns-muted tracking-[0.35em] uppercase zen-hide">{gameTitle}</h1>
                 {isCasinoWar && warTrend.length > 0 && (
-                    <div className="absolute top-7 flex items-center gap-2 text-[9px] font-mono tracking-[0.3em] text-gray-500 zen-hide">
+                    <div className="absolute top-7 flex items-center gap-2 text-[9px] font-mono tracking-[0.3em] text-ns-muted zen-hide">
                         <span>TREND</span>
                         <div className="flex items-center gap-1">
                             {warTrend.map((outcome, index) => (
@@ -71,10 +73,10 @@ export const GenericGameView = React.memo<{ gameState: GameState; actions: any; 
                 <div className="absolute top-2 left-2 z-40">
                     <MobileDrawer label="INFO" title={gameTitle}>
                         <div className="space-y-3">
-                            <div className="text-[11px] text-gray-300 leading-relaxed">
+                            <div className="text-[11px] text-ns leading-relaxed">
                                 Higher card wins. On a tie you can choose WAR (risk more for a second draw) or SURRENDER (take a smaller loss).
                             </div>
-                            <div className="text-[10px] text-gray-600 leading-relaxed">
+                            <div className="text-[10px] text-ns-muted leading-relaxed">
                                 Controls: DEAL (Space). If tie: WAR (W) or SURRENDER (S). Optional TIE side bet (T).
                             </div>
                         </div>
@@ -100,7 +102,7 @@ export const GenericGameView = React.memo<{ gameState: GameState; actions: any; 
 
                 {/* Center Info */}
                 <div className="text-center space-y-3 relative z-20 zen-hide">
-                    <div className="text-lg sm:text-2xl font-bold text-mono-0 dark:text-mono-1000 tracking-widest leading-tight animate-pulse">
+                    <div className="text-lg sm:text-2xl font-bold text-ns tracking-tight leading-tight animate-pulse">
                         {gameState.message}
                     </div>
                 </div>
@@ -122,27 +124,27 @@ export const GenericGameView = React.memo<{ gameState: GameState; actions: any; 
             </div>
 
             {isWarState ? (
-                <div className="absolute inset-0 z-[60] flex items-center justify-center px-4 bg-black/80 backdrop-blur-sm">
-                    <div className="w-full max-w-md border-2 border-mono-0 bg-titanium-900/95 backdrop-blur rounded-lg p-4 shadow-2xl">
-                        <div className="text-[10px] text-gray-500 tracking-widest uppercase font-mono">Tie Declared</div>
-                        <div className="mt-1 text-lg font-mono font-bold text-mono-0 dark:text-mono-1000 tracking-widest">WAR OR SURRENDER?</div>
+                <div className="absolute inset-0 z-[60] flex items-center justify-center px-4 bg-black/40 backdrop-blur-sm">
+                    <div className="w-full max-w-md liquid-card liquid-sheen p-5">
+                        <div className="text-[10px] text-ns-muted tracking-[0.3em] uppercase font-mono">Tie Declared</div>
+                        <div className="mt-1 text-lg font-mono font-bold text-ns tracking-[0.2em]">War or surrender?</div>
                         <div className="mt-4 grid grid-cols-2 gap-2">
                             <button
                                 type="button"
                                 onClick={actions?.casinoWarGoToWar}
-                                className="h-12 rounded border-2 border-mono-0 bg-mono-0/10 text-mono-0 dark:text-mono-1000 font-bold font-mono font-bold tracking-widest uppercase hover:bg-mono-0/20 transition-all"
+                                className="h-12 liquid-chip border-mono-0 bg-mono-0/10 text-mono-0 dark:text-mono-1000 font-bold font-mono tracking-widest uppercase hover:bg-mono-0/20 transition-all"
                             >
                                 <span className="ns-keycap">W</span> WAR
                             </button>
                             <button
                                 type="button"
                                 onClick={actions?.casinoWarSurrender}
-                                className="h-12 rounded border-2 border-mono-400 bg-mono-400/10 text-mono-400 dark:text-mono-500 font-mono font-bold tracking-widest uppercase hover:bg-mono-400/20 transition-all"
+                                className="h-12 liquid-chip border-mono-400 bg-mono-400/10 text-mono-400 dark:text-mono-500 font-mono font-bold tracking-widest uppercase hover:bg-mono-400/20 transition-all"
                             >
                                 <span className="ns-keycap">S</span> SURRENDER
                             </button>
                         </div>
-                        <div className="mt-3 text-[10px] text-gray-500 leading-relaxed font-mono">
+                        <div className="mt-3 text-[10px] text-ns-muted leading-relaxed font-mono">
                             War requires an additional wager; surrender ends the hand with a smaller loss.
                         </div>
                     </div>

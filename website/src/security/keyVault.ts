@@ -72,6 +72,7 @@ const LS_VAULT_KIND = 'nullspace_vault_kind';
 const LS_VAULT_ID = 'nullspace_vault_id';
 const LS_VAULT_CREDENTIAL_ID = 'nullspace_vault_credential_id';
 const LS_CASINO_PUBLIC_KEY_HEX = 'casino_public_key_hex';
+const SS_UNLOCKED_VAULT = 'nullspace_unlocked_vault';
 const LS_LEGACY_PRIVATE_KEY = 'casino_private_key';
 const LS_MIGRATION_DISMISSED = 'nullspace_migration_dismissed';
 const VAULT_KIND_PASSKEY: VaultKind = 'passkey';
@@ -89,6 +90,13 @@ function isVaultStorageSupported(): boolean {
   if (typeof indexedDB === 'undefined') return false;
   if (typeof TextEncoder === 'undefined' || typeof TextDecoder === 'undefined') return false;
   return true;
+}
+
+// Attempt to restore an unlocked vault from the current session so users don't
+// have to re-enter their password when navigating between pages.
+// This is session-scoped (clears on tab close) and expires after a few hours.
+if (isVaultStorageSupported()) {
+  tryRestoreUnlockedVault();
 }
 
 export function isPasskeyVaultSupported(): boolean {
@@ -225,12 +233,60 @@ function setVaultMeta(meta: {
   }
 }
 
+function persistUnlockedVaultSession(unlocked: UnlockedVault) {
+  if (!isBrowser()) return;
+  try {
+    const payload = {
+      ...unlocked,
+      nullspaceEd25519PrivateKey: bytesToBase64Url(unlocked.nullspaceEd25519PrivateKey),
+      chatEvmPrivateKey: bytesToBase64Url(unlocked.chatEvmPrivateKey),
+    };
+    sessionStorage.setItem(SS_UNLOCKED_VAULT, JSON.stringify(payload));
+  } catch {
+    // ignore persistence errors
+  }
+}
+
+function tryRestoreUnlockedVault(): UnlockedVault | null {
+  if (!isBrowser()) return null;
+  try {
+    const raw = sessionStorage.getItem(SS_UNLOCKED_VAULT);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as UnlockedVault & {
+      nullspaceEd25519PrivateKey: string;
+      chatEvmPrivateKey: string;
+    };
+    // Expire after 6 hours to limit exposure of cached secrets.
+    if (Date.now() - parsed.unlockedAtMs > 6 * 60 * 60 * 1000) {
+      sessionStorage.removeItem(SS_UNLOCKED_VAULT);
+      return null;
+    }
+    const restored: UnlockedVault = {
+      vaultId: parsed.vaultId,
+      credentialId: parsed.credentialId,
+      unlockedAtMs: parsed.unlockedAtMs,
+      nullspaceEd25519PrivateKey: base64UrlToBytes(parsed.nullspaceEd25519PrivateKey),
+      chatEvmPrivateKey: base64UrlToBytes(parsed.chatEvmPrivateKey),
+      nullspacePublicKeyHex: parsed.nullspacePublicKeyHex,
+    };
+    setUnlockedVault(restored);
+    return restored;
+  } catch {
+    return null;
+  }
+}
+
 function clearVaultMeta() {
   localStorage.removeItem(LS_VAULT_ENABLED);
   localStorage.removeItem(LS_VAULT_KIND);
   localStorage.removeItem(LS_VAULT_ID);
   localStorage.removeItem(LS_VAULT_CREDENTIAL_ID);
   localStorage.removeItem(LS_CASINO_PUBLIC_KEY_HEX);
+  try {
+    sessionStorage.removeItem(SS_UNLOCKED_VAULT);
+  } catch {
+    // ignore
+  }
 }
 
 function normalizeRpId(hostname: string): string {
@@ -673,6 +729,7 @@ export async function unlockPasskeyVault(): Promise<UnlockedVault> {
   });
 
   setUnlockedVault(unlocked);
+  persistUnlockedVaultSession(unlocked);
   return unlocked;
 }
 
@@ -714,11 +771,17 @@ export async function unlockPasswordVault(password: string): Promise<UnlockedVau
   });
 
   setUnlockedVault(unlocked);
+  persistUnlockedVaultSession(unlocked);
   return unlocked;
 }
 
 export function lockPasskeyVault() {
   clearUnlockedVault();
+  try {
+    sessionStorage.removeItem(SS_UNLOCKED_VAULT);
+  } catch {
+    // ignore
+  }
 }
 
 export function getVaultStatusSync(): {

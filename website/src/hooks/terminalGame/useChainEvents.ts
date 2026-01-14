@@ -37,7 +37,7 @@ export type UseChainEventsArgs = {
   crapsPendingRollLogRef: MutableRefObject<CrapsPendingRollLog>;
   crapsChainRollLogRef: CrapsChainRollRef;
   applySessionMeta: (sessionId: bigint | null, moveNumber?: number) => void;
-  parseGameState: (stateBlob: Uint8Array, gameType?: GameType) => void;
+  parseGameState: (stateBlob: Uint8Array | string, gameType?: GameType) => void;
   clearChainResponseTimeout: () => void;
   runAutoPlayForSession: (sessionId: bigint, frontendGameType: GameType) => void;
   clientRef: MutableRefObject<CasinoClient | null>;
@@ -324,13 +324,26 @@ export const useChainEvents = ({
               GameType.NONE;
             applySessionMeta(sessionId, Number(session.moveCount ?? gameStateRef.current.moveNumber ?? 0));
             parseGameState(session.stateBlob, frontendType);
+            // Preserve parsed stage/message instead of forcing PLAYING/SYNCED,
+            // which can disable betting or actions when the session is in BETTING/RESULT.
+            const sessionBetRaw =
+              typeof session.bet === 'bigint'
+                ? Number(session.bet)
+                : (session.bet ?? null);
+            const isTableGame =
+              frontendType === GameType.BACCARAT
+              || frontendType === GameType.CRAPS
+              || frontendType === GameType.ROULETTE
+              || frontendType === GameType.SIC_BO;
+            const shouldSyncBet =
+              sessionBetRaw !== null
+              && Number.isFinite(sessionBetRaw)
+              && (sessionBetRaw > 0 || !isTableGame);
             setGameState((prev) => ({
               ...prev,
               type: frontendType,
               sessionId: Number(sessionId),
-              bet: typeof session.bet === 'bigint' ? Number(session.bet) : Number(session.bet ?? prev.bet),
-              stage: 'PLAYING',
-              message: 'SYNCED FROM CHAIN',
+              bet: shouldSyncBet ? Number(sessionBetRaw) : prev.bet,
               superMode: session.superMode ?? prev.superMode ?? null,
             }));
           } else if (!session) {

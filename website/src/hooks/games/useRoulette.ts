@@ -34,12 +34,12 @@ export const useRoulette = ({
   autoPlayDraftRef
 }: UseRouletteProps) => {
 
-  const placeRouletteBet = useCallback((type: RouletteBet['type'], target?: number, stateOverride?: GameState, statsOverride?: PlayerStats) => {
+  const placeRouletteBet = useCallback((type: RouletteBet['type'], target?: number, stateOverride?: GameState, statsOverride?: PlayerStats): boolean => {
     const state = stateOverride ?? gameState;
     const player = statsOverride ?? stats;
     if (state.rouletteIsPrison) {
       setGameState(prev => ({ ...prev, message: 'EN PRISON - NO NEW BETS' }));
-      return;
+      return false;
     }
 
     const existing = state.rouletteBets.some(b => b.type === type && b.target === target);
@@ -53,10 +53,13 @@ export const useRoulette = ({
         rouletteInputMode: 'NONE',
         sessionWager: Math.max(0, prev.sessionWager - removedAmount)
       }));
-      return;
+      return true;
     }
 
-    if (player.chips < state.bet) return;
+    if (player.chips < state.bet) {
+      setGameState(prev => ({ ...prev, message: 'INSUFFICIENT FUNDS' }));
+      return false;
+    }
     setGameState(prev => ({
       ...prev,
       rouletteUndoStack: [...prev.rouletteUndoStack, prev.rouletteBets],
@@ -65,6 +68,7 @@ export const useRoulette = ({
       rouletteInputMode: 'NONE',
       sessionWager: prev.sessionWager + prev.bet
     }));
+    return true;
   }, [gameState.rouletteIsPrison, gameState.rouletteBets, gameState.bet, stats.chips, setGameState]);
 
   const cycleRouletteZeroRule = useCallback(async () => {
@@ -166,6 +170,7 @@ export const useRoulette = ({
     }
 
     // If on-chain mode with no session, auto-start a new game
+    console.error('[qa-roulette] spinRoulette check - sessionRef:', currentSessionIdRef.current?.toString() ?? 'null', 'isOnChain:', isOnChain);
     if (isOnChain && chainService && !currentSessionIdRef.current) {
       if (state.rouletteIsPrison) {
         setGameState(prev => ({ ...prev, message: 'PRISON - WAIT FOR SESSION' }));

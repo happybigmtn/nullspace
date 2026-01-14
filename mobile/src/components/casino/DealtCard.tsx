@@ -85,7 +85,7 @@ export interface DealtCardProps {
 }
 
 /** Default stagger delay between cards (ms) - uses STAGGER.normal (50ms) for premium feel */
-const DEFAULT_STAGGER_MS = STAGGER.normal;
+const DEFAULT_STAGGER_MS = STAGGER?.normal ?? 50;
 
 /** Duration of the deal trajectory (ms) */
 const DEAL_DURATION_MS = 350;
@@ -336,6 +336,9 @@ export function DealtCard({
       <Animated.View
         style={[styles.container, trajectoryStyle]}
         onLayout={handleLayout}
+        accessible={true}
+        accessibilityRole="image"
+        accessibilityLabel={shouldFlip ? `${rank} of ${suit}` : 'Face down card'}
       >
         <GestureDetector gesture={parallaxGesture}>
           <Animated.View style={[styles.parallaxContainer, parallaxStyle]}>
@@ -351,6 +354,9 @@ export function DealtCard({
     <Animated.View
       style={[styles.container, trajectoryStyle]}
       onLayout={handleLayout}
+      accessible={true}
+      accessibilityRole="image"
+      accessibilityLabel={shouldFlip ? `${rank} of ${suit}` : 'Face down card'}
     >
       {cardContent}
     </Animated.View>
@@ -479,6 +485,9 @@ export function DealtHiddenCard({
     <Animated.View
       style={[styles.container, trajectoryStyle]}
       onLayout={handleLayout}
+      accessible={true}
+      accessibilityRole="image"
+      accessibilityLabel="Face down card"
     >
       <HiddenCard size={size} />
     </Animated.View>

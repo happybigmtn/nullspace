@@ -47,12 +47,12 @@ export interface TutorialSpotlightProps {
 const GestureIcon = ({ gesture }: { gesture?: TutorialStep['gesture'] }) => {
   if (!gesture) return null;
 
-  const gestureClass =
-    gesture === 'tap'
-      ? 'animate-pulse'
-      : gesture.startsWith('swipe')
-        ? 'animate-bounce'
-        : '';
+  const getGestureClass = () => {
+    if (gesture === 'tap') return 'animate-pulse';
+    if (gesture?.startsWith('swipe')) return 'animate-bounce';
+    return '';
+  };
+  const gestureClass = getGestureClass();
 
   const icons: Record<string, ReactNode> = {
     tap: (
@@ -244,7 +244,7 @@ export function TutorialSpotlight({
       {tooltipTransitions((style, item) =>
         item !== null ? (
           <animated.div
-            className="absolute max-w-sm bg-titanium-900 rounded-xl p-4 shadow-2xl border border-titanium-700"
+            className="absolute max-w-sm liquid-card liquid-sheen p-4"
             style={{
               ...style,
               top: tooltipPos.top,
@@ -257,22 +257,23 @@ export function TutorialSpotlight({
               {steps.map((_, i) => (
                 <div
                   key={i}
-                  className={`h-1.5 rounded-full transition-all duration-300 ${
+                  className={[
+                    'h-1.5 rounded-full transition-all duration-300',
                     i === currentStep
-                      ? 'w-6 bg-action-indigo'
+                      ? 'w-6 bg-action-primary/80'
                       : i < currentStep
-                        ? 'w-1.5 bg-action-indigo/50'
-                        : 'w-1.5 bg-titanium-600'
-                  }`}
+                        ? 'w-1.5 bg-action-primary/40'
+                        : 'w-1.5 bg-black/20 dark:bg-white/20',
+                  ].join(' ')}
                 />
               ))}
             </div>
 
             {/* Content */}
-            <h3 className="text-sm font-semibold text-white text-center uppercase tracking-widest mb-2">
+            <h3 className="text-[11px] font-semibold text-ns text-center uppercase tracking-[0.28em] mb-2">
               {step.title}
             </h3>
-            <p className="text-sm text-titanium-300 text-center mb-4">{step.description}</p>
+            <p className="text-[11px] text-ns-muted text-center mb-4">{step.description}</p>
 
             {/* Gesture hint */}
             <div className="flex justify-center">
@@ -283,7 +284,7 @@ export function TutorialSpotlight({
             <div className="flex items-center justify-between mt-4">
               <button
                 onClick={handleSkip}
-                className="text-xs text-titanium-400 hover:text-white transition-colors uppercase"
+                className="text-[10px] text-ns-muted hover:text-ns transition-colors uppercase tracking-[0.28em]"
               >
                 Skip
               </button>
@@ -291,14 +292,14 @@ export function TutorialSpotlight({
                 {currentStep > 0 && (
                   <button
                     onClick={handlePrev}
-                    className="px-3 py-1.5 text-xs border border-titanium-600 rounded-md text-titanium-300 hover:border-titanium-400 hover:text-white transition-colors"
+                    className="px-3 py-1.5 text-[10px] rounded-full liquid-chip text-ns-muted uppercase tracking-[0.28em] hover:text-ns hover:shadow-soft transition-colors"
                   >
                     Back
                   </button>
                 )}
                 <button
                   onClick={handleNext}
-                  className="px-4 py-1.5 text-xs bg-action-indigo rounded-md text-white hover:bg-action-indigoHover transition-colors font-medium"
+                  className="px-4 py-1.5 text-[10px] rounded-full liquid-chip text-ns uppercase tracking-[0.28em] hover:shadow-soft transition-colors"
                 >
                   {currentStep === steps.length - 1 ? 'Got it!' : 'Next'}
                 </button>

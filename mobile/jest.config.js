@@ -7,8 +7,11 @@ module.exports = {
     "node_modules/(?!.*(react-native|@react-native|@react-navigation|@react-native-async-storage|expo(nent)?|@expo|expo-.*|react-native-gesture-handler|react-native-reanimated|react-native-worklets|react-native-safe-area-context|react-native-screens|react-native-mmkv|@shopify)/)",
   ],
   setupFilesAfterEnv: ["<rootDir>/jest/setup.js"],
+  // Reduce worker count to curb memory spikes from heavy component suites
+  maxWorkers: 1,
   moduleNameMapper: {
     ...(expoPreset.moduleNameMapper || {}),
+    // Use prebuilt CJS-compatible outputs for workspace packages
     "^@nullspace/([^/]+)$": "<rootDir>/../packages/$1/dist/index.js",
     "^@nullspace/([^/]+)/(.+)$": "<rootDir>/../packages/$1/dist/$2.js",
     "^.+/context/ThemeContext$": "<rootDir>/jest/ThemeContextMock.js",

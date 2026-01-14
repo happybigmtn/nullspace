@@ -301,7 +301,7 @@ export function ResultDisplay({
       {/* Content */}
       <div className="flex items-center justify-center h-full p-4">
         <animated.div
-          className="relative bg-titanium-900/95 rounded-2xl p-8 min-w-[300px] max-w-md border border-titanium-700/50 shadow-2xl"
+          className="relative liquid-card liquid-sheen rounded-2xl p-8 min-w-[300px] max-w-md border border-ns shadow-2xl"
           style={{
             transform: to(
               [cardSpring.scale, cardSpring.y],
@@ -330,7 +330,7 @@ export function ResultDisplay({
             isVisible={isVisible}
             className="text-center mb-4"
           >
-            <p className="text-titanium-400 text-sm uppercase tracking-wider mb-1">
+            <p className="text-ns-muted text-sm uppercase tracking-wider mb-1">
               {isLoss ? 'Lost' : isWin ? 'Won' : 'Returned'}
             </p>
             <div
@@ -338,7 +338,7 @@ export function ResultDisplay({
                 'text-5xl font-bold tabular-nums',
                 payout > 0 && 'text-mono-0 dark:text-mono-1000 font-black',
                 payout < 0 && 'text-mono-400 dark:text-mono-500',
-                payout === 0 && 'text-titanium-300'
+                payout === 0 && 'text-ns-muted'
               )}
             >
               {payout >= 0 ? '+' : ''}
@@ -350,7 +350,7 @@ export function ResultDisplay({
               />
             </div>
             {bet > 0 && payout > 0 && (
-              <p className="text-titanium-500 text-sm mt-1">
+              <p className="text-ns-muted text-sm mt-1">
                 {((payout / bet) + 1).toFixed(1)}x return
               </p>
             )}
@@ -358,7 +358,7 @@ export function ResultDisplay({
 
           {/* Breakdown for complex wins */}
           {showBreakdown && (
-            <div className="border-t border-titanium-700/50 pt-4 mt-4">
+            <div className="border-t border-ns pt-4 mt-4">
               {breakdown.map((item, index) => (
                 <RevealElement
                   key={item.label}
@@ -366,7 +366,7 @@ export function ResultDisplay({
                   isVisible={isVisible}
                   className="flex justify-between py-1"
                 >
-                  <span className="text-titanium-400">{item.label}</span>
+                  <span className="text-ns-muted">{item.label}</span>
                   <span
                     className={cn(
                       'font-medium tabular-nums',
@@ -385,9 +385,9 @@ export function ResultDisplay({
             <RevealElement
               delay={TIMING.deltaDelay}
               isVisible={isVisible}
-              className="border-t border-titanium-700/30 pt-4 mt-4 text-center"
+              className="border-t border-ns pt-4 mt-4 text-center"
             >
-              <p className="text-titanium-500 text-xs uppercase tracking-wider mb-1">
+              <p className="text-ns-muted text-xs uppercase tracking-wider mb-1">
                 Session
               </p>
               <p
@@ -395,7 +395,7 @@ export function ResultDisplay({
                   'text-xl font-semibold tabular-nums',
                   sessionDelta > 0 && 'text-mono-0 dark:text-mono-1000 font-black',
                   sessionDelta < 0 && 'text-mono-400 dark:text-mono-500',
-                  sessionDelta === 0 && 'text-titanium-300'
+                  sessionDelta === 0 && 'text-ns-muted'
                 )}
               >
                 {sessionDelta >= 0 ? '+' : ''}${Math.abs(sessionDelta).toLocaleString()}
@@ -409,7 +409,7 @@ export function ResultDisplay({
             isVisible={isVisible}
             className="text-center mt-6"
           >
-            <p className="text-titanium-500 text-xs">
+            <p className="text-ns-muted text-xs">
               Click or press any key to continue
             </p>
           </RevealElement>

@@ -9,7 +9,7 @@
  *
  * Different choreography for win/loss/push outcomes.
  */
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, Dimensions, Pressable } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -20,12 +20,11 @@ import Animated, {
   withSpring,
   Easing,
   interpolate,
-  interpolateColor,
   FadeIn,
   FadeOut,
 } from 'react-native-reanimated';
 import { BlurView } from 'expo-blur';
-import { COLORS, TYPOGRAPHY, SPACING, RADIUS, DARK_MODE_GLOW, GLASS } from '../../constants/theme';
+import { TYPOGRAPHY, SPACING, RADIUS, GLASS } from '../../constants/theme';
 import { MONO } from '@nullspace/design-tokens';
 import { haptics } from '../../services/haptics';
 import type { CelebrationIntensity } from '../../hooks/useCelebration';

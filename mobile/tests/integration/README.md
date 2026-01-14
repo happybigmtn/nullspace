@@ -29,7 +29,7 @@ npm install --save-dev ws @types/ws ts-node
 
 **Run all tests:**
 ```bash
-# Using default gateway (ws://localhost:9010)
+# Using default gateway (wss://api.testnet.regenesis.dev)
 npx ts-node tests/integration/runTests.ts
 
 # Specify custom gateway URL
@@ -41,7 +41,7 @@ GATEWAY_URL=ws://your-gateway:9010 npx ts-node tests/integration/runTests.ts
 
 **Run individual game test:**
 ```bash
-npx ts-node -e "import('./tests/integration/games/BlackjackTest').then(m => new m.BlackjackTest({ gatewayUrl: 'ws://localhost:9010' }).run())"
+npx ts-node -e "import('./tests/integration/games/BlackjackTest').then(m => new m.BlackjackTest({ gatewayUrl: 'wss://api.testnet.regenesis.dev' }).run())"
 ```
 
 ## Architecture
@@ -176,7 +176,7 @@ Results are saved to `tests/integration/results/test-results-[timestamp].json`:
 ```json
 {
   "timestamp": "2026-01-05T10:30:00.000Z",
-  "gatewayUrl": "ws://localhost:9010",
+  "gatewayUrl": "wss://api.testnet.regenesis.dev",
   "tests": {
     "Blackjack": {
       "passed": true,
@@ -212,13 +212,13 @@ The test runner provides detailed console output:
 ║         Nullspace Mobile Integration Test Suite             ║
 ╚══════════════════════════════════════════════════════════════╝
 
-Gateway URL: ws://localhost:9010
+Gateway URL: wss://api.testnet.regenesis.dev
 Start Time: 2026-01-05T10:30:00.000Z
 
 ================================================================================
 Running: Blackjack
 ================================================================================
-[0.50s] [INFO] [Blackjack] Connecting to ws://localhost:9010
+[0.50s] [INFO] [Blackjack] Connecting to wss://api.testnet.regenesis.dev
 [1.20s] [SUCCESS] [Blackjack] WebSocket connected
 [1.35s] [SUCCESS] [Blackjack] Session established
 ...
@@ -305,7 +305,7 @@ Record game results for reporting and analysis.
 **Symptom**: `WebSocket connection timeout`
 
 **Solutions**:
-- Verify gateway is running: `curl http://localhost:9010`
+- Verify gateway is running: `curl https://api.testnet.regenesis.dev/healthz`
 - Check gateway URL is correct
 - Ensure firewall allows connection
 - Increase timeout in test config
@@ -369,7 +369,7 @@ jobs:
         run: npm install
 
       - name: Run Integration Tests
-        run: npx ts-node tests/integration/runTests.ts ws://localhost:9010
+        run: npx ts-node tests/integration/runTests.ts wss://api.testnet.regenesis.dev
 
       - name: Upload Results
         if: always()

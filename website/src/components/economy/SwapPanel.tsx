@@ -72,7 +72,12 @@ export const SwapPanel: React.FC<SwapPanelProps> = ({
     const sellTaxMax = Number(policy.sellTaxMaxBps ?? 0);
     const outflowLow = Number(policy.sellTaxOutflowLowBps ?? 0);
     const outflowMid = Number(policy.sellTaxOutflowMidBps ?? 0);
-    const currentSellTaxBps = outflowBps < outflowLow ? sellTaxMin : outflowBps < outflowMid ? sellTaxMid : sellTaxMax;
+    const getCurrentSellTaxBps = () => {
+      if (outflowBps < outflowLow) return sellTaxMin;
+      if (outflowBps < outflowMid) return sellTaxMid;
+      return sellTaxMax;
+    };
+    const currentSellTaxBps = getCurrentSellTaxBps();
     return {
       dailySellCap,
       dailyBuyCap,
@@ -124,35 +129,35 @@ export const SwapPanel: React.FC<SwapPanelProps> = ({
   };
 
   return (
-    <section className="border border-gray-800 rounded p-4 bg-gray-900/30 lg:col-span-2">
-      <div className="text-xs text-gray-400 tracking-widest mb-3">AMM (RNG/vUSDT)</div>
+    <section className="liquid-card p-5 lg:col-span-2">
+      <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase mb-3">AMM (RNG/vUSDT)</div>
 
       <div className="grid grid-cols-2 gap-3 text-sm">
-        <div className="border border-gray-800 rounded p-3 bg-black/30">
-          <div className="text-[10px] text-gray-500 tracking-widest">RESERVE RNG</div>
-          <div className="text-white mt-1">{amm?.reserveRng ?? 0}</div>
+        <div className="liquid-panel p-3">
+          <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase">Reserve RNG</div>
+          <div className="text-ns mt-1">{amm?.reserveRng ?? 0}</div>
         </div>
-        <div className="border border-gray-800 rounded p-3 bg-black/30">
-          <div className="text-[10px] text-gray-500 tracking-widest">RESERVE vUSDT</div>
-          <div className="text-white mt-1">{amm?.reserveVusdt ?? 0}</div>
+        <div className="liquid-panel p-3">
+          <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase">Reserve vUSDT</div>
+          <div className="text-ns mt-1">{amm?.reserveVusdt ?? 0}</div>
         </div>
-        <div className="border border-gray-800 rounded p-3 bg-black/30">
-          <div className="text-[10px] text-gray-500 tracking-widest">PRICE</div>
-          <div className="text-white mt-1">{ammDerived.price === null ? '—' : ammDerived.price.toFixed(6)}</div>
-          <div className="text-[10px] text-gray-600">vUSDT per RNG</div>
+        <div className="liquid-panel p-3">
+          <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase">Price</div>
+          <div className="text-ns mt-1">{ammDerived.price === null ? '—' : ammDerived.price.toFixed(6)}</div>
+          <div className="text-[10px] text-ns-muted">vUSDT per RNG</div>
         </div>
-        <div className="border border-gray-800 rounded p-3 bg-black/30">
-          <div className="text-[10px] text-gray-500 tracking-widest">TVL</div>
-          <div className="text-white mt-1">{ammDerived.tvlVusdt.toString()}</div>
-          <div className="text-[10px] text-gray-600">~vUSDT</div>
+        <div className="liquid-panel p-3">
+          <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase">TVL</div>
+          <div className="text-ns mt-1">{ammDerived.tvlVusdt.toString()}</div>
+          <div className="text-[10px] text-ns-muted">~vUSDT</div>
         </div>
       </div>
 
-      <div className="mt-4 border-t border-gray-800 pt-4 space-y-3">
-        <div className="text-[10px] text-gray-500 tracking-widest">SWAP</div>
+      <div className="mt-4 border-t border-black/10 dark:border-white/10 pt-4 space-y-3">
+        <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase">Swap</div>
         <div className="flex items-center gap-2">
           <select
-            className="bg-gray-950 border border-gray-800 rounded px-2 py-1 text-xs"
+            className="liquid-input px-3 py-2 text-xs"
             value={swapDirection}
             onChange={(e) => setSwapDirection(e.target.value as any)}
           >
@@ -161,14 +166,14 @@ export const SwapPanel: React.FC<SwapPanelProps> = ({
           </select>
           <button
             type="button"
-            className="h-11 px-3 rounded border border-gray-800 text-gray-300 text-[10px] tracking-widest uppercase hover:border-gray-600 hover:text-white"
+            className="h-11 px-3 rounded-full liquid-chip text-ns text-[10px] tracking-[0.28em] uppercase hover:shadow-soft"
             onClick={() => setSwapDirection(swapDirection === 'BUY_RNG' ? 'SELL_RNG' : 'BUY_RNG')}
             title="Flip direction"
           >
             Flip
           </button>
           <select
-            className="bg-gray-950 border border-gray-800 rounded px-2 py-1 text-xs"
+            className="liquid-input px-3 py-2 text-xs"
             value={slippageBps}
             onChange={(e) => setSlippageBps(parseInt(e.target.value))}
           >
@@ -179,16 +184,16 @@ export const SwapPanel: React.FC<SwapPanelProps> = ({
           </select>
         </div>
 
-        <div className="flex items-center justify-between gap-2 text-[10px] text-gray-600 tracking-widest uppercase">
+        <div className="flex items-center justify-between gap-2 text-[10px] text-ns-muted tracking-[0.28em] uppercase">
           <span>Amount In ({inToken})</span>
           <span>
-            Balance <span className="text-white">{balanceIn.toString()}</span>
+            Balance <span className="text-ns">{balanceIn.toString()}</span>
           </span>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <input
-            className="flex-1 min-w-[180px] h-11 bg-gray-950 border border-gray-800 rounded px-2 text-xs"
+            className="flex-1 min-w-[180px] h-11 liquid-input px-3 text-xs"
             value={swapAmountIn}
             onChange={(e) => setSwapAmountIn(e.target.value)}
             placeholder={`Amount in ${inToken}`}
@@ -197,7 +202,7 @@ export const SwapPanel: React.FC<SwapPanelProps> = ({
           />
           <button
             type="button"
-            className="h-11 px-3 rounded border border-gray-800 text-gray-300 text-[10px] tracking-widest uppercase hover:border-gray-600 hover:text-white"
+            className="h-11 px-3 rounded-full liquid-chip text-ns text-[10px] tracking-[0.28em] uppercase hover:shadow-soft"
             onClick={() => setSwapAmountIn(balanceIn.toString())}
             disabled={balanceIn <= 0n}
             title="Max"
@@ -208,7 +213,7 @@ export const SwapPanel: React.FC<SwapPanelProps> = ({
             <button
               key={pct}
               type="button"
-              className="h-11 px-3 rounded border border-gray-800 text-gray-300 text-[10px] tracking-widest uppercase hover:border-gray-600 hover:text-white"
+              className="h-11 px-3 rounded-full liquid-chip text-ns text-[10px] tracking-[0.28em] uppercase hover:shadow-soft"
               onClick={() => setPercent(pct)}
               disabled={balanceIn <= 0n}
               title={`${pct}%`}
@@ -218,10 +223,10 @@ export const SwapPanel: React.FC<SwapPanelProps> = ({
           ))}
           <button
             className={[
-              'h-11 px-3 rounded border text-[10px] tracking-widest uppercase',
+              'h-11 px-4 rounded-full liquid-chip text-[10px] tracking-[0.28em] uppercase',
               canSubmit
-                ? 'border-action-destructive text-action-destructive hover:bg-action-destructive/10'
-                : 'border-gray-800 text-gray-600 cursor-not-allowed',
+                ? 'text-action-destructive hover:shadow-soft'
+                : 'text-ns-muted opacity-60 cursor-not-allowed',
             ].join(' ')}
             onClick={() => (canSubmit ? setConfirmOpen(true) : null)}
             disabled={!canSubmit}
@@ -233,29 +238,29 @@ export const SwapPanel: React.FC<SwapPanelProps> = ({
         {validationMessage ? (
           <div className="text-[10px] text-action-destructive">{validationMessage}</div>
         ) : (
-          <div className="text-[10px] text-gray-500 leading-relaxed">
-            Est. out: <span className="text-white">{quote.out.toString()}</span> · Min out:{' '}
-            <span className="text-white">{quote.minOut.toString()}</span>
+          <div className="text-[10px] text-ns-muted leading-relaxed">
+            Est. out: <span className="text-ns">{quote.out.toString()}</span> · Min out:{' '}
+            <span className="text-ns">{quote.minOut.toString()}</span>
             {quote.burned > 0n ? ` · Burn: ${quote.burned.toString()}` : ''}
             {quote.fee > 0n ? ` · Fee: ${quote.fee.toString()}` : ''}
           </div>
         )}
-        {policyInfo ? (
-          <div className="text-[10px] text-gray-600 leading-relaxed">
+        {policyInfo && (
+          <div className="text-[10px] text-ns-muted leading-relaxed">
             {swapDirection === 'SELL_RNG' ? (
               <>
-                Daily sell: <span className="text-white">{policyInfo.dailyNetSell.toString()}</span> /{' '}
-                <span className="text-white">{policyInfo.dailySellCap.toString()}</span>
+                Daily sell: <span className="text-ns">{policyInfo.dailyNetSell.toString()}</span> /{' '}
+                <span className="text-ns">{policyInfo.dailySellCap.toString()}</span>
                 {' '}· Sell tax {policyInfo.currentSellTaxBps / 100}% (band {policyInfo.sellTaxMin / 100}-{policyInfo.sellTaxMax / 100}%)
               </>
             ) : (
               <>
-                Daily buy: <span className="text-white">{policyInfo.dailyNetBuy.toString()}</span> /{' '}
-                <span className="text-white">{policyInfo.dailyBuyCap.toString()}</span>
+                Daily buy: <span className="text-ns">{policyInfo.dailyNetBuy.toString()}</span> /{' '}
+                <span className="text-ns">{policyInfo.dailyBuyCap.toString()}</span>
               </>
             )}
           </div>
-        ) : null}
+        )}
       </div>
 
       <ConfirmModal
@@ -278,38 +283,38 @@ export const SwapPanel: React.FC<SwapPanelProps> = ({
         }}
       >
         <div className="space-y-3 text-sm">
-          <div className="text-[10px] text-gray-500 tracking-widest uppercase">Summary</div>
+          <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase">Summary</div>
           <div className="grid grid-cols-2 gap-2 text-[11px]">
-            <div className="text-gray-500">You pay</div>
-            <div className="text-white text-right">
+            <div className="text-ns-muted">You pay</div>
+            <div className="text-ns text-right">
               {amountInParsed === null ? '—' : amountInParsed.toString()} {inToken}
             </div>
-            <div className="text-gray-500">Est. receive</div>
-            <div className="text-white text-right">
+            <div className="text-ns-muted">Est. receive</div>
+            <div className="text-ns text-right">
               {quote.out.toString()} {swapDirection === 'BUY_RNG' ? 'RNG' : 'vUSDT'}
             </div>
-            <div className="text-gray-500">Min receive</div>
-            <div className="text-white text-right">
+            <div className="text-ns-muted">Min receive</div>
+            <div className="text-ns text-right">
               {quote.minOut.toString()} {swapDirection === 'BUY_RNG' ? 'RNG' : 'vUSDT'}
             </div>
-            <div className="text-gray-500">Price tolerance</div>
-            <div className="text-white text-right">{(slippageBps / 100).toFixed(2)}%</div>
-            {quote.burned > 0n ? (
+            <div className="text-ns-muted">Price tolerance</div>
+            <div className="text-ns text-right">{(slippageBps / 100).toFixed(2)}%</div>
+            {quote.burned > 0n && (
               <>
-                <div className="text-gray-500">Burn</div>
-                <div className="text-white text-right">{quote.burned.toString()} RNG</div>
+                <div className="text-ns-muted">Burn</div>
+                <div className="text-ns text-right">{quote.burned.toString()} RNG</div>
               </>
-            ) : null}
-            {quote.fee > 0n ? (
+            )}
+            {quote.fee > 0n && (
               <>
-                <div className="text-gray-500">Fee</div>
-                <div className="text-white text-right">
+                <div className="text-ns-muted">Fee</div>
+                <div className="text-ns text-right">
                   {quote.fee.toString()} {inToken}
                 </div>
               </>
-            ) : null}
+            )}
           </div>
-          <div className="text-[10px] text-gray-600 leading-relaxed">
+          <div className="text-[10px] text-ns-muted leading-relaxed">
             You may be prompted to unlock your vault to confirm this transaction.
           </div>
         </div>

@@ -20,7 +20,7 @@ export const EventChip: React.FC<EventChipProps> = ({ className, variant = 'pill
     <div className={[baseClass, event.className, className ?? ''].join(' ').trim()}>
       <span className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-70">Event</span>
       <span className="text-xs font-bold">{event.label}</span>
-      <span className="text-[10px] font-mono text-titanium-500 dark:text-titanium-300">Ends in {countdown}</span>
+      <span className="text-[10px] font-mono text-ns-muted">Ends in {countdown}</span>
     </div>
   );
 };

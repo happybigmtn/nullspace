@@ -1,5 +1,6 @@
 import React from 'react';
 import { ThemeToggle } from './ui/ThemeToggle';
+import { GlassSurface } from './ui';
 
 type PageHeaderProps = {
   title: string;
@@ -12,31 +13,40 @@ type PageHeaderProps = {
 export const PageHeader: React.FC<PageHeaderProps> = ({ title, status, leading, right, className }) => {
   const statusNode =
     status === null || status === undefined ? null : typeof status === 'string' ? (
-      <div className="text-[10px] text-gray-500 tracking-widest">{status}</div>
+      <div className="liquid-chip px-3 py-1 text-[10px] uppercase tracking-[0.3em] text-ns-muted">
+        {status}
+      </div>
     ) : (
       status
     );
-  const rightNode = (
-    <div className="flex items-center gap-3 flex-wrap">
-      {right ? right : null}
-      <ThemeToggle />
-    </div>
-  );
   return (
-    <header
+    <GlassSurface
+      as="header"
+      depth="flat"
       className={[
-        'border-b border-gray-800 bg-titanium-900/90 backdrop-blur px-4 py-3 flex flex-wrap items-center justify-between gap-3',
+        'liquid-card p-5',
         className ?? '',
       ]
         .join(' ')
         .trim()}
     >
-      <div className="flex items-center gap-3 flex-wrap min-w-0">
-        {leading ? <div className="hidden sm:block">{leading}</div> : null}
-        <div className="text-lg font-bold tracking-widest">{title}</div>
-        {statusNode}
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-3 min-w-0">
+            <h1 className="text-xl sm:text-2xl font-display tracking-tight text-ns">{title}</h1>
+            {statusNode}
+          </div>
+          <div className="flex items-center gap-3 flex-wrap">
+            {right ? right : null}
+            <ThemeToggle />
+          </div>
+        </div>
+        {leading ? (
+          <div className="flex items-center gap-3">
+            {leading}
+          </div>
+        ) : null}
       </div>
-      {rightNode}
-    </header>
+    </GlassSurface>
   );
 };

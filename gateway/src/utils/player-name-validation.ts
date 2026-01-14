@@ -33,6 +33,10 @@ export interface PlayerNameValidationResult {
   sanitized?: string;
 }
 
+function validationError(error: string): PlayerNameValidationResult {
+  return { valid: false, error };
+}
+
 /**
  * Validate a player name
  *
@@ -40,75 +44,40 @@ export interface PlayerNameValidationResult {
  * @returns Validation result with error message if invalid
  */
 export function validatePlayerName(name: unknown): PlayerNameValidationResult {
-  // Type check
   if (typeof name !== 'string') {
-    return {
-      valid: false,
-      error: 'Player name must be a string',
-    };
+    return validationError('Player name must be a string');
   }
 
-  // Empty check
   if (!name || name.length === 0) {
-    return {
-      valid: false,
-      error: 'Player name cannot be empty',
-    };
+    return validationError('Player name cannot be empty');
   }
 
-  // Whitespace-only check
   const trimmed = name.trim();
   if (trimmed.length === 0) {
-    return {
-      valid: false,
-      error: 'Player name cannot be whitespace only',
-    };
+    return validationError('Player name cannot be whitespace only');
   }
 
-  // Minimum length check
   if (trimmed.length < PLAYER_NAME_MIN_LENGTH) {
-    return {
-      valid: false,
-      error: `Player name must be at least ${PLAYER_NAME_MIN_LENGTH} characters`,
-    };
+    return validationError(`Player name must be at least ${PLAYER_NAME_MIN_LENGTH} characters`);
   }
 
-  // Maximum length check
   if (trimmed.length > PLAYER_NAME_MAX_LENGTH) {
-    return {
-      valid: false,
-      error: `Player name cannot exceed ${PLAYER_NAME_MAX_LENGTH} characters`,
-    };
+    return validationError(`Player name cannot exceed ${PLAYER_NAME_MAX_LENGTH} characters`);
   }
 
-  // Character restriction check
   if (!ALLOWED_CHARS_REGEX.test(trimmed)) {
-    return {
-      valid: false,
-      error: 'Player name can only contain letters, numbers, underscores, hyphens, and spaces',
-    };
+    return validationError('Player name can only contain letters, numbers, underscores, hyphens, and spaces');
   }
 
-  // Check for consecutive spaces
   if (/\s{2,}/.test(trimmed)) {
-    return {
-      valid: false,
-      error: 'Player name cannot contain consecutive spaces',
-    };
+    return validationError('Player name cannot contain consecutive spaces');
   }
 
-  // Check for leading/trailing hyphens or underscores
   if (/^[-_]|[-_]$/.test(trimmed)) {
-    return {
-      valid: false,
-      error: 'Player name cannot start or end with hyphen or underscore',
-    };
+    return validationError('Player name cannot start or end with hyphen or underscore');
   }
 
-  return {
-    valid: true,
-    sanitized: trimmed,
-  };
+  return { valid: true, sanitized: trimmed };
 }
 
 /**

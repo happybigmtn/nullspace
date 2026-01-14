@@ -21,7 +21,8 @@ const getArg = (name, fallback) => {
 };
 
 const baseInput = getArg('base', process.env.BASE || 'https://testnet.regenesis.dev/terminal');
-const baseUrl = baseInput.endsWith('/terminal') ? baseInput : `${baseInput.replace(/\/+$/, '')}/terminal`;
+const normalizedBase = baseInput.endsWith('/terminal') ? baseInput : `${baseInput.replace(/\/+$/, '')}/terminal`;
+const baseUrl = normalizedBase.includes('?') ? `${normalizedBase}&qa=1` : `${normalizedBase}?qa=1`;
 const scriptInput = getArg('script', process.env.COMMANDS || '/status;/games;/bet 25;/deal');
 const commands = scriptInput
   .split(/;|\n/)
@@ -40,7 +41,17 @@ async function run() {
     headless,
     args: ['--no-sandbox', '--disable-dev-shm-usage'],
   });
-  const page = await browser.newPage({ viewport: { width: 1220, height: 900 } });
+  const context = await browser.newContext({ baseURL: baseUrl, bypassCSP: true });
+  const page = await context.newPage({ viewport: { width: 1220, height: 900 } });
+  await page.addInitScript(() => {
+    try {
+      localStorage.setItem('qa_allow_legacy', 'true');
+      localStorage.setItem('qa_bets_enabled', 'true');
+      localStorage.setItem('nullspace_vault_enabled', 'false');
+    } catch {
+      // ignore
+    }
+  });
 
   page.on('console', (msg) => {
     const text = msg.text();
@@ -52,11 +63,13 @@ async function run() {
 
   await page.goto(baseUrl, { waitUntil: 'networkidle' });
 
-  const focusInput = async () => {
-    const input = await page.waitForSelector('input[placeholder="/help"]', { timeout: inputTimeout });
-    await input.focus();
-    return input;
-  };
+const focusInput = async () => {
+  const input =
+    (await page.waitForSelector('textarea[placeholder*="/help"]', { timeout: inputTimeout })) ||
+    (await page.waitForSelector('textarea', { timeout: inputTimeout }));
+  await input.focus();
+  return input;
+};
 
   let input = await focusInput();
 

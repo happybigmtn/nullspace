@@ -4,13 +4,14 @@
  */
 import WebSocket from 'ws';
 
-const GATEWAY_URL = 'ws://localhost:9010';
+const GATEWAY_URL = process.env.GATEWAY_URL ?? 'ws://localhost:9010';
 
 interface GameResult {
   name: string;
   status: 'success' | 'failed';
   startResponse?: string;
   moveResponse?: string;
+  summary?: string;
   error?: string;
 }
 
@@ -26,7 +27,7 @@ const GAMES = [
   // Games with special parameters
   { name: 'Baccarat', start: { type: 'baccarat_deal', bets: [{ type: 'PLAYER', amount: 100 }] }, move: null, instant: true }, // Auto-resolves (atomic batch)
   { name: 'Three Card Poker', start: { type: 'threecardpoker_deal', ante: 100 }, move: { type: 'threecardpoker_play' } },
-  { name: 'Ultimate Holdem', start: { type: 'ultimateholdem_deal', ante: 100, blind: 100 }, move: { type: 'ultimateholdem_check' } },
+  { name: 'Ultimate Holdem', start: { type: 'ultimateholdem_deal', ante: 100, blind: 100 }, move: { type: 'ultimateholdem_bet', multiplier: 4 } },
 
   // Instant games - resolve on start
   // Roulette: type 0 = straight bet on number 17
@@ -46,7 +47,7 @@ function createConnection(): Promise<WebSocket> {
   });
 }
 
-function sendAndReceive(ws: WebSocket, msg: unknown, timeout = 35000): Promise<Record<string, unknown>> {
+function sendAndReceive(ws: WebSocket, msg: unknown, timeout = 60000): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('Response timeout')), timeout);
 
@@ -83,7 +84,7 @@ async function waitForReady(ws: WebSocket): Promise<void> {
   // Poll for registration completion
   for (let i = 0; i < 30; i++) {
     const balance = await sendAndReceive(ws, { type: 'get_balance' });
-    if (balance.registered && balance.hasBalance) {
+    if ((balance as { registered?: boolean }).registered && (balance as { hasBalance?: boolean }).hasBalance) {
       return;
     }
     await new Promise(r => setTimeout(r, 200));
@@ -101,48 +102,69 @@ async function testGame(game: typeof GAMES[0]): Promise<GameResult> {
     // Start game
     const startResponse = await sendAndReceive(ws, game.start);
 
+    if (startResponse.type === 'error') {
+      return {
+        name: game.name,
+        status: 'failed',
+        error: (startResponse as { message?: string }).message
+      };
+    }
+
+    const summary = typeof (startResponse as { summary?: string }).summary === 'string'
+      ? (startResponse as { summary?: string }).summary
+      : undefined;
+
+    const okStartTypes = ['game_started', 'game_move', 'game_result', 'move_accepted'];
+    if (!okStartTypes.includes(startResponse.type as string)) {
+      return {
+        name: game.name,
+        status: 'failed',
+        startResponse: startResponse.type as string,
+        error: `Unexpected start response: ${startResponse.type}`
+      };
+    }
+
     if (game.instant) {
-      // Instant games return move_accepted directly (or game_result)
-      if (startResponse.type === 'move_accepted' || startResponse.type === 'game_result') {
-        return {
-          name: game.name,
-          status: 'success',
-          startResponse: startResponse.type
-        };
-      }
-    } else {
-      // Regular games return game_started
-      if (startResponse.type !== 'game_started') {
+      return {
+        name: game.name,
+        status: 'success',
+        startResponse: startResponse.type as string,
+        summary,
+      };
+    }
+
+    // Make a move if defined
+    if (game.move) {
+      const moveResponse = await sendAndReceive(ws, game.move);
+      if (moveResponse.type === 'error') {
         return {
           name: game.name,
           status: 'failed',
-          startResponse: startResponse.type,
-          error: `Expected game_started, got ${startResponse.type}`
+          startResponse: startResponse.type as string,
+          moveResponse: 'error',
+          error: (moveResponse as { message?: string }).message
         };
       }
 
-      // Make a move if defined
-      if (game.move) {
-        const moveResponse = await sendAndReceive(ws, game.move);
-        if (moveResponse.type === 'error') {
-          return {
-            name: game.name,
-            status: 'failed',
-            startResponse: 'game_started',
-            moveResponse: 'error',
-            error: (moveResponse as { message?: string }).message
-          };
-        }
-        return {
-          name: game.name,
-          status: 'success',
-          startResponse: 'game_started',
-          moveResponse: moveResponse.type as string
-        };
-      }
+      const moveSummary = typeof (moveResponse as { summary?: string }).summary === 'string'
+        ? (moveResponse as { summary?: string }).summary
+        : summary;
+
+      return {
+        name: game.name,
+        status: 'success',
+        startResponse: startResponse.type as string,
+        moveResponse: moveResponse.type as string,
+        summary: moveSummary,
+      };
     }
 
-    return { name: game.name, status: 'success', startResponse: startResponse.type as string };
+    return {
+      name: game.name,
+      status: 'success',
+      startResponse: startResponse.type as string,
+      summary,
+    };
   } catch (err) {
     return {
       name: game.name,
@@ -170,7 +192,8 @@ async function runAllTests() {
     results.push(result);
 
     if (result.status === 'success') {
-      console.log(`✅ ${result.startResponse}${result.moveResponse ? ' → ' + result.moveResponse : ''}`);
+      const summary = result.summary ? ` | ${result.summary}` : '';
+      console.log(`✅ ${result.startResponse}${result.moveResponse ? ' → ' + result.moveResponse : ''}${summary}`);
     } else {
       console.log(`❌ ${result.error}`);
     }

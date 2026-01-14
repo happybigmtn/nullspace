@@ -418,7 +418,7 @@ export default function StakingApp() {
   };
 
   return (
-    <div className="min-h-screen bg-titanium-900 text-white font-mono">
+    <div className="min-h-screen text-ns font-sans space-y-6">
       <PageHeader
         title="Staking"
         status={<ConnectionStatus />}
@@ -433,74 +433,110 @@ export default function StakingApp() {
               creditsLocked={player?.freerollCreditsLocked}
               pubkeyHex={connection.keypair?.publicKeyHex}
             />
-            <button
-              type="button"
-              onClick={() => setShowAdvanced((v) => !v)}
-              className={[
-                'h-11 px-3 rounded border text-[10px] tracking-widest uppercase transition-colors',
-                showAdvanced
-                  ? 'border-action-success text-action-success bg-action-success/10'
-                  : 'border-gray-800 text-gray-400 hover:border-gray-600 hover:text-white',
-              ].join(' ')}
-              title="Show advanced / dev controls"
-            >
-              Advanced
-            </button>
-            {lastTxSig ? (
-              lastTxDigest ? (
-                <Link
-                  to={`/explorer/tx/${lastTxDigest}`}
-                  className="text-[10px] text-action-success tracking-widest hover:underline"
-                  title={lastTxDigest}
-                >
-                  LAST TX: {lastTxSig}
-                </Link>
-              ) : (
-                <div className="text-[10px] text-gray-500 tracking-widest">LAST TX: {lastTxSig}</div>
-              )
-            ) : null}
           </>
         }
       />
 
-      <div className="p-4">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="space-y-6">
+        <div className="liquid-card p-5">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="text-[10px] text-ns-muted tracking-[0.32em] uppercase">Earn</div>
+              <div className="text-lg font-display tracking-tight text-ns">Stake RNG</div>
+              <div className="text-[11px] text-ns-muted">
+                Lock RNG for a duration to earn network rewards. Unstake after the timer ends.
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowAdvanced((v) => !v)}
+                className={[
+                  'h-10 px-4 rounded-full liquid-chip text-[10px] tracking-[0.28em] uppercase transition-colors',
+                  showAdvanced
+                    ? 'text-action-success'
+                    : 'text-ns-muted hover:text-ns',
+                ].join(' ')}
+                title="Show advanced / dev controls"
+              >
+                Advanced
+              </button>
+              {lastTxSig ? (
+                lastTxDigest ? (
+                  <Link
+                    to={`/explorer/tx/${lastTxDigest}`}
+                    className="h-10 px-4 rounded-full liquid-chip text-[10px] tracking-[0.28em] uppercase text-action-success hover:shadow-soft"
+                    title={lastTxDigest}
+                  >
+                    Last Tx {lastTxSig}
+                  </Link>
+                ) : (
+                  <div className="h-10 px-4 rounded-full liquid-chip text-[10px] tracking-[0.28em] uppercase text-ns-muted">
+                    Last Tx {lastTxSig}
+                  </div>
+                )
+              ) : null}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Wallet */}
-          <section className="border border-gray-800 rounded p-4 bg-gray-900/30">
-            <div className="text-xs text-gray-400 tracking-widest mb-3">WALLET</div>
-            <div className="space-y-2 text-sm">
+          <section className="liquid-card p-5 space-y-4">
+            <div className="flex items-start justify-between gap-3">
               <div>
-                Registered:{' '}
-                <span className={isRegistered ? 'text-action-success' : 'text-action-destructive'}>
-                  {isRegistered ? 'YES' : 'NO'}
-                </span>
+                <div className="text-[10px] text-ns-muted tracking-[0.32em] uppercase">Start here</div>
+                <div className="text-lg font-display tracking-tight text-ns mt-1">Wallet + Access</div>
+                <div className="text-[11px] text-ns-muted mt-2">
+                  Register once and claim a daily faucet before staking.
+                </div>
               </div>
-              <div>
-                RNG: <span className="text-white">{player?.chips ?? 0}</span>
+              <div className="liquid-chip px-3 py-1 text-[10px] tracking-[0.28em] uppercase text-ns">
+                Step 1
               </div>
-              <div>
-                vUSDT: <span className="text-white">{player?.vusdtBalance ?? 0}</span>
-              </div>
-              <div className="text-[10px] text-gray-600 break-all">PK: {connection.keypair?.publicKeyHex ?? '—'}</div>
             </div>
 
-            <div className="mt-4 space-y-2">
+            <div className="grid grid-cols-2 gap-2 text-[11px]">
+              <div className="liquid-panel p-3">
+                <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase">Registered</div>
+                <div className={isRegistered ? 'text-action-success' : 'text-action-destructive'}>
+                  {isRegistered ? 'YES' : 'NO'}
+                </div>
+              </div>
+              <div className="liquid-panel p-3">
+                <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase">RNG</div>
+                <div className="text-ns">{player?.chips ?? 0}</div>
+              </div>
+              <div className="liquid-panel p-3">
+                <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase">vUSDT</div>
+                <div className="text-ns">{player?.vusdtBalance ?? 0}</div>
+              </div>
+              <div className="liquid-panel p-3">
+                <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase">Public Key</div>
+                <div className="text-[10px] text-ns-muted break-all mt-1">
+                  {connection.keypair?.publicKeyHex ?? '—'}
+                </div>
+              </div>
+            </div>
+
+            <div className="liquid-panel p-3 space-y-2">
+              <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase">Profile</div>
               <div className="flex items-center gap-2">
                 <input
-                  className="flex-1 bg-gray-950 border border-gray-800 rounded px-2 py-1 text-xs"
+                  className="flex-1 liquid-input px-3 py-2 text-xs"
                   value={registerName}
                   onChange={(e) => setRegisterName(e.target.value)}
                   placeholder="Name"
                 />
                 <button
-                  className="text-xs px-3 py-1 rounded border border-action-success text-action-success hover:bg-action-success/10"
+                  className="text-xs px-3 py-2 rounded-full liquid-chip text-action-success hover:shadow-soft"
                   onClick={ensureRegistered}
                 >
                   Register
                 </button>
               </div>
               <button
-                className="w-full text-xs px-3 py-2 rounded border border-action-success text-action-success hover:bg-action-success/10"
+                className="w-full text-xs px-3 py-2 rounded-full liquid-chip text-action-success hover:shadow-soft"
                 onClick={claimFaucet}
               >
                 Daily Faucet (1000 RNG)
@@ -511,13 +547,13 @@ export default function StakingApp() {
           {/* Stake */}
           <section
             className={[
-              'border border-gray-800 rounded p-4 bg-gray-900/30',
+              'liquid-card p-5',
               showAdvanced ? '' : 'lg:col-span-2',
             ]
               .join(' ')
               .trim()}
           >
-            <div className="text-xs text-gray-400 tracking-widest mb-3">STAKE RNG</div>
+            <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase mb-3">Stake RNG</div>
 
             <StakingDashboard staker={staker} derived={derived} />
 
@@ -554,12 +590,12 @@ export default function StakingApp() {
         </div>
 
         {/* Activity */}
-        <section className="mt-4 border border-gray-800 rounded p-4 bg-gray-900/20">
-          <div className="text-xs text-gray-400 tracking-widest mb-3">ACTIVITY</div>
+        <section className="liquid-card p-5">
+          <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase mb-3">Activity</div>
           {activity.length === 0 ? (
-            <div className="text-[10px] text-gray-600">No activity yet.</div>
+            <div className="text-[11px] text-ns-muted">No activity yet.</div>
           ) : (
-            <ul className="space-y-1 text-[10px] text-gray-400">
+            <div className="space-y-2 text-[11px] text-ns-muted">
               {activity.map((item) => {
                 const isTx = item.type === 'tx';
                 const message = isTx ? item.finalMessage ?? item.message : item.message;
@@ -580,35 +616,37 @@ export default function StakingApp() {
                     ? 'text-action-success'
                     : item.status === 'failed'
                       ? 'text-action-destructive'
-                      : 'text-gray-500'
+                      : 'text-ns-muted'
                   : item.level === 'error'
                     ? 'text-action-destructive'
                     : item.level === 'success'
                       ? 'text-action-success'
-                      : 'text-gray-500';
+                      : 'text-ns-muted';
 
                 const messageNode =
                   isTx && item.txDigest ? (
                     <Link
                       to={`/explorer/tx/${item.txDigest}`}
-                      className="text-gray-300 hover:underline"
+                      className="truncate hover:underline"
                       title={item.txDigest}
                     >
                       {message}
                     </Link>
                   ) : (
-                    <span className="text-gray-300">{message}</span>
+                    <span className="truncate">{message}</span>
                   );
 
                 return (
-                  <li key={item.id} className="flex items-start gap-2">
-                    <span className="text-gray-600">{when}</span>
-                    <span className={`text-[10px] tracking-widest ${labelClass}`}>{label}</span>
-                    {messageNode}
-                  </li>
+                  <div key={item.id} className="liquid-panel px-3 py-2 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className={`text-[10px] tracking-widest ${labelClass}`}>{label}</div>
+                      <div className="min-w-0 flex-1 text-ns">{messageNode}</div>
+                    </div>
+                    <div className="text-[10px] text-ns-muted">{when}</div>
+                  </div>
                 );
               })}
-            </ul>
+            </div>
           )}
         </section>
       </div>

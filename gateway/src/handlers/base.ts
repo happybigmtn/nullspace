@@ -19,19 +19,23 @@ import { logDebug, logInfo, logWarn } from '../logger.js';
 import { stripVersionHeader } from '@nullspace/protocol';
 
 /** Timeout for waiting for game events (ms) */
-const GAME_EVENT_TIMEOUT = (() => {
-  const raw = process.env.GATEWAY_EVENT_TIMEOUT_MS;
-  const parsed = raw ? Number(raw) : NaN;
+function getGameEventTimeout(): number {
+  const parsed = Number(process.env.GATEWAY_EVENT_TIMEOUT_MS);
   if (Number.isFinite(parsed) && parsed >= 0) {
     return parsed;
   }
   // Match mobile test timeout (60s) to prevent premature timeouts during slow backend processing
   return process.env.NODE_ENV === 'production' ? 30000 : 60000;
-})();
+}
 
-const LOG_MOVE_PAYLOADS = ['1', 'true', 'yes', 'on'].includes(
-  String(process.env.GATEWAY_LOG_MOVE_PAYLOADS ?? '').toLowerCase()
-);
+const GAME_EVENT_TIMEOUT = getGameEventTimeout();
+
+function parseBooleanEnv(value: string | undefined): boolean {
+  return ['1', 'true', 'yes', 'on'].includes(String(value ?? '').toLowerCase());
+}
+
+const LOG_MOVE_PAYLOADS = parseBooleanEnv(process.env.GATEWAY_LOG_MOVE_PAYLOADS);
+const SKIP_EVENT_WAIT = parseBooleanEnv(process.env.GATEWAY_SKIP_EVENT_WAIT);
 
 const payloadPreviewHex = (payload: Uint8Array, maxBytes = 12): string => {
   if (payload.length === 0) return '';
@@ -102,7 +106,10 @@ export abstract class GameHandler {
       };
     }
 
-    return nonceManager.withLock(session.publicKeyHex, async (nonce) => {
+    return nonceManager.withLock(session.publicKeyHex, async () => {
+      await nonceManager.maybeSync(session.publicKeyHex, backendUrl);
+      const nonce = nonceManager.getCurrentNonce(session.publicKeyHex);
+
       // Encode and submit
       const instruction = encodeCasinoStartGame(this.gameType, bet, gameSessionId);
       const tx = buildTransaction(nonce, instruction, session.privateKey);
@@ -115,8 +122,8 @@ export abstract class GameHandler {
         session.gameType = this.gameType;
         nonceManager.setCurrentNonce(session.publicKeyHex, nonce + 1n);
 
-        // Wait for CasinoGameStarted or CasinoError event from backend
-        const gameEvent = await this.waitForEvent(session, 'started');
+        // Wait for CasinoGameStarted or CasinoError event from backend (optional)
+        const gameEvent = SKIP_EVENT_WAIT ? null : await this.waitForEvent(session, 'started');
 
         if (gameEvent) {
           if (gameEvent.type === 'error') {
@@ -305,7 +312,9 @@ export abstract class GameHandler {
       });
     }
 
-    return nonceManager.withLock(session.publicKeyHex, async (nonce) => {
+    return nonceManager.withLock(session.publicKeyHex, async () => {
+      await nonceManager.maybeSync(session.publicKeyHex, backendUrl);
+      const nonce = nonceManager.getCurrentNonce(session.publicKeyHex);
       const instruction = encodeCasinoGameMove(gameSessionId, strippedPayload);
       const tx = buildTransaction(nonce, instruction, session.privateKey);
       const submission = wrapSubmission(tx);
@@ -315,8 +324,8 @@ export abstract class GameHandler {
       if (result.accepted) {
         nonceManager.setCurrentNonce(session.publicKeyHex, nonce + 1n);
 
-        // Wait for either CasinoGameMoved or CasinoGameCompleted event
-        const gameEvent = await this.waitForMoveOrComplete(session);
+        // Wait for either CasinoGameMoved or CasinoGameCompleted event (optional)
+        const gameEvent = SKIP_EVENT_WAIT ? null : await this.waitForMoveOrComplete(session);
 
         if (gameEvent) {
           if (gameEvent.type === 'error') {
@@ -465,6 +474,9 @@ export abstract class GameHandler {
     session: Session,
     eventType: CasinoGameEvent['type']
   ): Promise<CasinoGameEvent | null> {
+    if (SKIP_EVENT_WAIT) {
+      return null;
+    }
     if (!session.updatesClient) {
       logWarn('No updates client connected, skipping event wait');
       return null;
@@ -488,6 +500,9 @@ export abstract class GameHandler {
   private async waitForMoveOrComplete(
     session: Session
   ): Promise<CasinoGameEvent | null> {
+    if (SKIP_EVENT_WAIT) {
+      return null;
+    }
     const accountClient = session.updatesClient;
     const sessionClient = session.sessionUpdatesClient ?? accountClient;
 
@@ -635,19 +650,8 @@ export abstract class GameHandler {
       gameType: event.gameType ?? session.gameType ?? this.gameType,
     };
 
-    // Determine win/loss status
     const payout = event.payout ?? 0n;
-    if (payout > 0n) {
-      response.won = true;
-      response.message = `You win ${payout}!`;
-    } else if (payout < 0n) {
-      response.won = false;
-      response.message = 'You lose!';
-    } else {
-      response.won = false;
-      response.push = true;
-      response.message = 'Push - bet returned';
-    }
+    Object.assign(response, this.buildWinLossStatus(payout));
 
     // Parse JSON logs for detailed game state
     if (event.logs && event.logs.length > 0) {
@@ -674,7 +678,19 @@ export abstract class GameHandler {
    * Parse initial state based on game type (override in subclasses if needed)
    */
   protected parseInitialState(state: Uint8Array): Record<string, unknown> {
-    // Default: return raw state as hex
     return { rawState: Buffer.from(state).toString('hex') };
+  }
+
+  /**
+   * Build win/loss status object from payout amount
+   */
+  private buildWinLossStatus(payout: bigint): { won: boolean; message: string; push?: boolean } {
+    if (payout > 0n) {
+      return { won: true, message: `You win ${payout}!` };
+    }
+    if (payout < 0n) {
+      return { won: false, message: 'You lose!' };
+    }
+    return { won: false, push: true, message: 'Push - bet returned' };
   }
 }

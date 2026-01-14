@@ -465,7 +465,7 @@ function parseCasinoError(reader: BinaryReader): CasinoGameEvent {
 }
 
 function skipProgress(reader: BinaryReader): void {
-  // Progress is fixed-size: view, height, 3 digests, 4 u64s (total 144 bytes)
+  // Progress uses fixed-width u64 fields (commonware-codec)
   reader.readU64BE(); // view
   reader.readU64BE(); // height
   reader.readBytes(DIGEST_SIZE); // block_digest
@@ -478,10 +478,10 @@ function skipProgress(reader: BinaryReader): void {
 }
 
 function skipCertificate(reader: BinaryReader): void {
-  // Certificate<Item<Digest>, Signature> with MinSig (G1, 48 bytes)
+  // Aggregation certificate uses a single threshold signature (MinSig -> G1, 48 bytes)
   reader.readVarint(); // Item index (UInt)
   reader.readBytes(DIGEST_SIZE); // Item digest
-  reader.readBytes(BLS_G1_SIGNATURE_SIZE); // Signature (G1)
+  reader.readBytes(BLS_G1_SIGNATURE_SIZE); // Signature
 }
 
 function skipProof(reader: BinaryReader): void {
@@ -843,6 +843,49 @@ function parseGlobalTableEventWithTag(
   }
 }
 
+function decodeOutput(
+  reader: BinaryReader,
+  casino: CasinoGameEvent[],
+  global: GlobalTableEvent[],
+  contextLabel: string
+): void {
+  const outputKind = reader.readU8();
+  if (outputKind === 0x00) {
+    const tag = reader.readU8();
+    const casinoEvent = parseCasinoEventWithTag(reader, tag);
+    if (casinoEvent) {
+      if (validateEvent(casinoEvent)) {
+        casino.push(casinoEvent);
+      }
+      return;
+    }
+
+    const globalEvent = parseGlobalTableEventWithTag(reader, tag);
+    if (globalEvent) {
+      if (validateGlobalTableEvent(globalEvent)) {
+        global.push(globalEvent);
+      }
+      return;
+    }
+
+    skipEventByTag(reader, tag);
+    return;
+  }
+
+  if (outputKind === 0x01) {
+    skipTransaction(reader);
+    return;
+  }
+
+  if (outputKind === 0x02) {
+    reader.readU64BE();
+    reader.readU64BE();
+    return;
+  }
+
+  throw new Error(`Unexpected Output kind ${outputKind} in ${contextLabel}`);
+}
+
 function decodeFilteredEvents(
   data: Uint8Array
 ): { casino: CasinoGameEvent[]; global: GlobalTableEvent[] } {
@@ -864,66 +907,14 @@ function decodeFilteredEvents(
   for (let i = 0; i < opsLen; i += 1) {
     reader.readU64BE(); // location
     const context = reader.readU8();
-    if (context === 0x05 || context === 0x01) {
-      const outputKind = reader.readU8();
-      if (outputKind === 0x00) {
-        const tag = reader.readU8();
-        const casinoEvent = parseCasinoEventWithTag(reader, tag);
-        if (casinoEvent) {
-          if (validateEvent(casinoEvent)) {
-            casino.push(casinoEvent);
-          }
-          continue;
-        }
-
-        const globalEvent = parseGlobalTableEventWithTag(reader, tag);
-        if (globalEvent) {
-          if (validateGlobalTableEvent(globalEvent)) {
-            global.push(globalEvent);
-          }
-          continue;
-        }
-
-        skipEventByTag(reader, tag);
-      } else if (outputKind === 0x01) {
-        skipTransaction(reader);
-      } else if (outputKind === 0x02) {
-        reader.readU64BE();
-        reader.readU64BE();
-      } else {
-        throw new Error(`Unexpected Output kind ${outputKind} in FilteredEvents`);
-      }
-    } else if (context === 0x04 || context === 0x00) {
+    if (context === 0x01) {
+      decodeOutput(reader, casino, global, 'FilteredEvents');
+    } else if (context === 0x00) {
       const hasValue = reader.readBool();
       if (!hasValue) {
         continue;
       }
-      const outputKind = reader.readU8();
-      if (outputKind === 0x00) {
-        const tag = reader.readU8();
-        const casinoEvent = parseCasinoEventWithTag(reader, tag);
-        if (casinoEvent) {
-          if (validateEvent(casinoEvent)) {
-            casino.push(casinoEvent);
-          }
-          continue;
-        }
-        const globalEvent = parseGlobalTableEventWithTag(reader, tag);
-        if (globalEvent) {
-          if (validateGlobalTableEvent(globalEvent)) {
-            global.push(globalEvent);
-          }
-          continue;
-        }
-        skipEventByTag(reader, tag);
-      } else if (outputKind === 0x01) {
-        skipTransaction(reader);
-      } else if (outputKind === 0x02) {
-        reader.readU64BE();
-        reader.readU64BE();
-      } else {
-        throw new Error(`Unexpected Output kind ${outputKind} in FilteredEvents commit`);
-      }
+      decodeOutput(reader, casino, global, 'FilteredEvents commit');
     } else {
       throw new Error(`Unknown keyless op context ${context}`);
     }
@@ -952,66 +943,14 @@ function decodeEvents(
   const opsLen = reader.readVarint();
   for (let i = 0; i < opsLen; i += 1) {
     const context = reader.readU8();
-    if (context === 0x05 || context === 0x01) {
-      const outputKind = reader.readU8();
-      if (outputKind === 0x00) {
-        const tag = reader.readU8();
-        const casinoEvent = parseCasinoEventWithTag(reader, tag);
-        if (casinoEvent) {
-          if (validateEvent(casinoEvent)) {
-            casino.push(casinoEvent);
-          }
-          continue;
-        }
-
-        const globalEvent = parseGlobalTableEventWithTag(reader, tag);
-        if (globalEvent) {
-          if (validateGlobalTableEvent(globalEvent)) {
-            global.push(globalEvent);
-          }
-          continue;
-        }
-
-        skipEventByTag(reader, tag);
-      } else if (outputKind === 0x01) {
-        skipTransaction(reader);
-      } else if (outputKind === 0x02) {
-        reader.readU64BE();
-        reader.readU64BE();
-      } else {
-        throw new Error(`Unexpected Output kind ${outputKind} in Events`);
-      }
-    } else if (context === 0x04 || context === 0x00) {
+    if (context === 0x01) {
+      decodeOutput(reader, casino, global, 'Events');
+    } else if (context === 0x00) {
       const hasValue = reader.readBool();
       if (!hasValue) {
         continue;
       }
-      const outputKind = reader.readU8();
-      if (outputKind === 0x00) {
-        const tag = reader.readU8();
-        const casinoEvent = parseCasinoEventWithTag(reader, tag);
-        if (casinoEvent) {
-          if (validateEvent(casinoEvent)) {
-            casino.push(casinoEvent);
-          }
-          continue;
-        }
-        const globalEvent = parseGlobalTableEventWithTag(reader, tag);
-        if (globalEvent) {
-          if (validateGlobalTableEvent(globalEvent)) {
-            global.push(globalEvent);
-          }
-          continue;
-        }
-        skipEventByTag(reader, tag);
-      } else if (outputKind === 0x01) {
-        skipTransaction(reader);
-      } else if (outputKind === 0x02) {
-        reader.readU64BE();
-        reader.readU64BE();
-      } else {
-        throw new Error(`Unexpected Output kind ${outputKind} in Events commit`);
-      }
+      decodeOutput(reader, casino, global, 'Events commit');
     } else {
       throw new Error(`Unknown keyless op context ${context}`);
     }
@@ -1072,100 +1011,20 @@ function parseGlobalTableRound(reader: BinaryReader): GlobalTableRound {
   };
 }
 
+/**
+ * Parse a GlobalTableEvent by reading the tag and delegating to parseGlobalTableEventWithTag
+ */
 function parseGlobalTableEvent(reader: BinaryReader): GlobalTableEvent | null {
   const tag = reader.readU8();
-
-  switch (tag) {
-    case GLOBAL_TABLE_EVENT_TAGS.GLOBAL_TABLE_ROUND_OPENED:
-      return { type: 'round_opened', round: parseGlobalTableRound(reader) };
-    case GLOBAL_TABLE_EVENT_TAGS.GLOBAL_TABLE_BET_ACCEPTED: {
-      const player = reader.readPublicKey();
-      const roundId = reader.readU64BE();
-      const betsLen = reader.readVarint();
-      const bets: GlobalTableBet[] = [];
-      for (let i = 0; i < betsLen; i += 1) {
-        bets.push(readGlobalTableBet(reader));
-      }
-      const balanceSnapshot = reader.readPlayerBalanceSnapshot();
-      return {
-        type: 'bet_accepted',
-        player,
-        roundId,
-        bets,
-        balanceSnapshot,
-      };
-    }
-    case GLOBAL_TABLE_EVENT_TAGS.GLOBAL_TABLE_BET_REJECTED: {
-      const player = reader.readPublicKey();
-      const roundId = reader.readU64BE();
-      const errorCode = reader.readU8();
-      const message = reader.readStringU32();
-      return {
-        type: 'bet_rejected',
-        player,
-        roundId,
-        errorCode,
-        message,
-      };
-    }
-    case GLOBAL_TABLE_EVENT_TAGS.GLOBAL_TABLE_LOCKED:
-      return {
-        type: 'locked',
-        gameType: reader.readU8(),
-        roundId: reader.readU64BE(),
-        phaseEndsAtMs: reader.readU64BE(),
-      };
-    case GLOBAL_TABLE_EVENT_TAGS.GLOBAL_TABLE_OUTCOME:
-      return { type: 'outcome', round: parseGlobalTableRound(reader) };
-    case GLOBAL_TABLE_EVENT_TAGS.GLOBAL_TABLE_PLAYER_SETTLED: {
-      const player = reader.readPublicKey();
-      const roundId = reader.readU64BE();
-      const payout = reader.readI64BE();
-      const balanceSnapshot = reader.readPlayerBalanceSnapshot();
-      const myBetsLen = reader.readVarint();
-      const myBets: GlobalTableBet[] = [];
-      for (let i = 0; i < myBetsLen; i += 1) {
-        myBets.push(readGlobalTableBet(reader));
-      }
-      return {
-        type: 'player_settled',
-        player,
-        roundId,
-        payout,
-        balanceSnapshot,
-        myBets,
-      };
-    }
-    case GLOBAL_TABLE_EVENT_TAGS.GLOBAL_TABLE_FINALIZED:
-      return {
-        type: 'finalized',
-        gameType: reader.readU8(),
-        roundId: reader.readU64BE(),
-      };
-    default:
-      return null;
-  }
+  return parseGlobalTableEventWithTag(reader, tag);
 }
 
 /**
- * Parse an Event from binary data
+ * Parse an Event by reading the tag and delegating to parseCasinoEventWithTag
  */
 function parseEvent(reader: BinaryReader): CasinoGameEvent | null {
   const tag = reader.readU8();
-
-  switch (tag) {
-    case EVENT_TAGS.CASINO_GAME_STARTED:
-      return parseCasinoGameStarted(reader);
-    case EVENT_TAGS.CASINO_GAME_MOVED:
-      return parseCasinoGameMoved(reader);
-    case EVENT_TAGS.CASINO_GAME_COMPLETED:
-      return parseCasinoGameCompleted(reader);
-    case EVENT_TAGS.CASINO_ERROR:
-      return parseCasinoError(reader);
-    default:
-      // Unknown or non-casino event
-      return null;
-  }
+  return parseCasinoEventWithTag(reader, tag);
 }
 
 /**
@@ -1449,12 +1308,16 @@ export function parseGameLog(log: string): Record<string, unknown> | null {
     const hasMultiplier = Object.prototype.hasOwnProperty.call(data, 'multiplier');
     if (!hasHand || !hasMultiplier) return data;
 
-    const handRaw = data.hand;
     const handIdRaw = data.handId;
-    const handFromId =
-      typeof handIdRaw === 'number' && Number.isFinite(handIdRaw) ? handIdRaw
-      : typeof handRaw === 'number' && Number.isFinite(handRaw) ? handRaw
-      : null;
+    const handRaw = data.hand;
+
+    let handFromId: number | null = null;
+    if (typeof handIdRaw === 'number' && Number.isFinite(handIdRaw)) {
+      handFromId = handIdRaw;
+    } else if (typeof handRaw === 'number' && Number.isFinite(handRaw)) {
+      handFromId = handRaw;
+    }
+
     if (handFromId !== null) {
       data.handId = handFromId;
       if (typeof data.hand !== 'string') {

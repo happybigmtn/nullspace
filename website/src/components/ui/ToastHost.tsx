@@ -18,13 +18,10 @@ function levelClasses(level: Toast['level']) {
     case 'error':
       return 'border-action-destructive text-action-destructive';
     default:
-      return 'border-gray-700 text-gray-400';
+      return 'border-ns-border/60 text-ns-muted';
   }
 }
 
-/**
- * Progress bar that shows remaining time before auto-dismiss
- */
 function ProgressBar({
   duration,
   isPaused,
@@ -53,7 +50,7 @@ function ProgressBar({
   }
 
   return (
-    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-titanium-700/30 overflow-hidden rounded-b">
+    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-ns-border/40 overflow-hidden rounded-b">
       <div
         className="h-full bg-current transition-all duration-100 ease-linear"
         style={{ width: `${progress}%` }}
@@ -62,9 +59,6 @@ function ProgressBar({
   );
 }
 
-/**
- * Individual toast item with swipe-to-dismiss
- */
 function ToastItem({
   toast,
   index,
@@ -82,10 +76,8 @@ function ToastItem({
     config: config.stiff,
   }));
 
-  // Swipe gesture for touch dismiss
   const bind = useDrag(
     ({ movement: [mx], velocity: [vx], direction: [dx], cancel, active }) => {
-      // Only allow swiping right (to dismiss)
       if (mx < 0) {
         api.start({ x: 0 });
         return;
@@ -94,7 +86,6 @@ function ToastItem({
       if (active) {
         api.start({ x: mx, immediate: true });
       } else {
-        // If swiped far enough or fast enough, dismiss
         if (mx > 100 || (vx > 0.5 && dx > 0)) {
           api.start({
             x: 400,
@@ -109,7 +100,6 @@ function ToastItem({
     { axis: 'x', filterTaps: true }
   );
 
-  // Calculate remaining time for progress bar
   const remainingTime = useMemo(() => {
     return Math.max(0, toast.expiresAt - Date.now());
   }, [toast.expiresAt]);
@@ -119,14 +109,14 @@ function ToastItem({
     isInternal ? (
       <Link
         to={toast.href}
-        className="text-[11px] text-gray-200 hover:underline"
+        className="text-[11px] text-ns hover:underline"
       >
         {toast.message}
       </Link>
     ) : (
       <a
         href={toast.href}
-        className="text-[11px] text-gray-200 hover:underline"
+        className="text-[11px] text-ns hover:underline"
         target="_blank"
         rel="noreferrer"
       >
@@ -134,7 +124,7 @@ function ToastItem({
       </a>
     )
   ) : (
-    <div className="text-[11px] text-gray-200">{toast.message}</div>
+    <div className="text-[11px] text-ns">{toast.message}</div>
   );
 
   return (
@@ -150,7 +140,7 @@ function ToastItem({
             }
       }
       className={[
-        'relative pointer-events-auto w-[min(92vw,420px)] rounded border bg-titanium-900/95 backdrop-blur px-3 py-2 shadow-lg cursor-grab active:cursor-grabbing',
+        'relative pointer-events-auto w-[min(92vw,420px)] liquid-card liquid-sheen px-3 py-2 cursor-grab active:cursor-grabbing',
         levelClasses(toast.level),
       ].join(' ')}
       role="status"
@@ -165,7 +155,7 @@ function ToastItem({
         <button
           type="button"
           onClick={() => onDismiss(toast.id)}
-          className="text-gray-500 hover:text-white text-[12px] leading-none px-1"
+          className="text-ns-muted hover:text-ns text-[12px] leading-none px-1"
           aria-label="Dismiss"
         >
           ✕
@@ -203,7 +193,6 @@ export function ToastHost() {
     };
   }, [timers]);
 
-  // Spring transitions for enter/exit
   const transitions = useTransition(toasts, {
     keys: (t) => t.id,
     from: prefersReducedMotion

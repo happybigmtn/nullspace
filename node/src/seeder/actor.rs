@@ -415,7 +415,18 @@ impl<
                 // Get next seed
                 let seed = match storage.get(cursor).await {
                     Ok(Some(seed)) => seed,
-                    Ok(None) => break,
+                    Ok(None) => {
+                        // Attempt to skip forward to the next available contiguous range so we don't get stuck
+                        // when early seeds are missing (e.g., after prune or restart).
+                        if let Some((start, _end)) =
+                            storage.ranges().find(|(s, e)| *e >= cursor && *s >= cursor)
+                        {
+                            cursor = start;
+                            seed_upload_lag.set(cursor.saturating_sub(boundary) as i64);
+                            continue;
+                        }
+                        break;
+                    }
                     Err(err) => {
                         error!(?err, cursor, "failed to get seed");
                         return;

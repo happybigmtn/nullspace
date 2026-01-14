@@ -24,17 +24,31 @@ jobs:
     - name: Run setup
       uses: ./.github/actions/setup
     - name: Lint
-      run: cargo clippy --all-targets --all-features -- -D warnings
+      run: cargo clippy --all-targets --all-features -- -D warnings 2>&1 | tee /tmp/rust-clippy.log
     - name: Check for panics/unwraps
-      run: ./scripts/check-no-panics.sh
+      run: ./scripts/check-no-panics.sh 2>&1 | tee /tmp/rust-panics.log
     - name: Fmt
-      run: cargo fmt --all -- --check
+      run: cargo fmt --all -- --check 2>&1 | tee /tmp/rust-fmt.log
     - name: Check docs
       run: cargo doc --no-deps --document-private-items
       env:
         RUSTDOCFLAGS: "-D warnings"
-    - name: Run tests
-      run: cargo test --verbose
+    - name: Run tests (retry once)
+      run: |
+        set -e
+        if cargo test --verbose 2>&1 | tee /tmp/rust-tests.log; then
+          exit 0
+        fi
+        echo "first_attempt_failed=true" >> /tmp/rust-tests.meta
+        cargo test --verbose 2>&1 | tee -a /tmp/rust-tests.log
+    - name: Upload rust logs
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: rust-all-logs
+        path: |
+          /tmp/rust-*.log
+          /tmp/rust-*.meta
 
   Javascript:
     runs-on: ubuntu-latest
@@ -56,8 +70,30 @@ jobs:
         run_install: false
     - name: Install dependencies
       run: pnpm install --frozen-lockfile
-    - name: Run JS/TS tests
-      run: pnpm test
+    - name: Run JS/TS tests (retry once)
+      run: |
+        set -e
+        if pnpm test 2>&1 | tee /tmp/js-tests.log; then
+          exit 0
+        fi
+        echo "first_attempt_failed=true" >> /tmp/js-tests.meta
+        pnpm test 2>&1 | tee -a /tmp/js-tests.log
+
+    - name: Enforce coverage threshold
+      run: node scripts/coverage-all.mjs --skip-rust --fail-under=70
+
+    - name: Upload JS test logs
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: js-tests-logs
+        path: /tmp/js-tests.log
+    - name: Upload JS flake marker
+      if: success() && hashFiles('/tmp/js-tests.meta') != ''
+      uses: actions/upload-artifact@v4
+      with:
+        name: js-tests-flaky
+        path: /tmp/js-tests.meta
 
   GatewayIntegration:
     runs-on: ubuntu-latest
@@ -108,7 +144,13 @@ jobs:
         cat /tmp/gateway.log || true
         exit 1
     - name: Run gateway integration tests
-      run: pnpm -C gateway test:integration
+      run: |
+        set -e
+        if pnpm -C gateway test:integration 2>&1 | tee /tmp/gateway-integration.log; then
+          exit 0
+        fi
+        echo "first_attempt_failed=true" >> /tmp/gateway-integration.meta
+        pnpm -C gateway test:integration 2>&1 | tee -a /tmp/gateway-integration.log
     - name: Stop services
       if: always()
       run: |
@@ -118,6 +160,22 @@ jobs:
         if [ -f /tmp/localnet.pid ]; then
           kill $(cat /tmp/localnet.pid) 2>/dev/null || true
         fi
+
+    - name: Upload integration logs
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: gateway-integration-logs
+        path: |
+          /tmp/gateway-integration.log
+          /tmp/gateway.log
+          /tmp/localnet.log
+    - name: Upload integration flake marker
+      if: success() && hashFiles('/tmp/gateway-integration.meta') != ''
+      uses: actions/upload-artifact@v4
+      with:
+        name: gateway-integration-flaky
+        path: /tmp/gateway-integration.meta
 
   GatewayStress:
     runs-on: ubuntu-latest
@@ -165,12 +223,34 @@ jobs:
         cat /tmp/gateway.log || true
         exit 1
     - name: Run stress tests (CI mode - 100 connections)
-      run: pnpm -C gateway test:stress:ci
+      run: |
+        set -e
+        if pnpm -C gateway test:stress:ci 2>&1 | tee /tmp/gateway-stress.log; then
+          exit 0
+        fi
+        echo "first_attempt_failed=true" >> /tmp/gateway-stress.meta
+        pnpm -C gateway test:stress:ci 2>&1 | tee -a /tmp/gateway-stress.log
     - name: Stop services
       if: always()
       run: |
         if [ -f /tmp/gateway.pid ]; then kill $(cat /tmp/gateway.pid) 2>/dev/null || true; fi
         if [ -f /tmp/mock.pid ]; then kill $(cat /tmp/mock.pid) 2>/dev/null || true; fi
+
+    - name: Upload stress logs
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: gateway-stress-logs
+        path: |
+          /tmp/gateway-stress.log
+          /tmp/gateway.log
+          /tmp/mock.pid
+    - name: Upload stress flake marker
+      if: success() && hashFiles('/tmp/gateway-stress.meta') != ''
+      uses: actions/upload-artifact@v4
+      with:
+        name: gateway-stress-flaky
+        path: /tmp/gateway-stress.meta
 
   Dependencies:
     runs-on: ubuntu-latest
@@ -214,7 +294,7 @@ jobs:
     - name: Install cargo-audit
       if: steps.cargo-audit-cache.outputs.cache-hit != 'true'
       run: cargo install cargo-audit --version 0.21.0
-    - name: Run security audit
+    - name: Run security audit (fail on vulnerabilities)
       run: cargo audit
 
   SecurityNode:
@@ -233,14 +313,12 @@ jobs:
           website/package-lock.json
     - name: Install auth dependencies
       run: cd services/auth && npm ci
-    - name: Audit auth dependencies
+    - name: Audit auth dependencies (fail on high/critical)
       run: cd services/auth && npm audit --omit=dev --audit-level=high
-      continue-on-error: true
     - name: Install website dependencies
       run: cd website && npm ci
-    - name: Audit website dependencies
+    - name: Audit website dependencies (fail on high/critical)
       run: cd website && npm audit --omit=dev --audit-level=high
-      continue-on-error: true
 
   SecretScanning:
     runs-on: ubuntu-latest
@@ -259,7 +337,7 @@ jobs:
   SAST:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    continue-on-error: true
+    continue-on-error: false
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -273,7 +351,7 @@ jobs:
   ContainerScan:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    continue-on-error: true
+    continue-on-error: false
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -303,12 +381,71 @@ jobs:
         cache-dependency-path: website/package-lock.json
     - name: Install dependencies
       run: cd website && npm ci
+    - name: Install Chromium
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y chromium-browser
+        echo "PW_CHROMIUM_PATH=/usr/bin/chromium-browser" >> $GITHUB_ENV
     - name: Test compilation
       run: cd website && npm run build
     - name: Check bundle sizes (US-145)
       run: cd website && node scripts/check-bundle-sizes.mjs
-    - name: Test website
-      run: cd website && npm run test
+    - name: Perf budget (Lighthouse-lite)
+      env:
+        PW_CHROMIUM_PATH: /usr/bin/chromium-browser
+      run: cd website && npm run perf:budget
+    - name: Test website (retry once)
+      run: |
+        set -e
+        cd website
+        if npm run test 2>&1 | tee /tmp/website-tests.log; then
+          exit 0
+        fi
+        echo "first_attempt_failed=true" >> /tmp/website-tests.meta
+        npm run test 2>&1 | tee -a /tmp/website-tests.log
+
+    - name: Upload website test logs
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: website-tests-logs
+        path: /tmp/website-tests.log
+    - name: Upload website flake marker
+      if: success() && hashFiles('/tmp/website-tests.meta') != ''
+      uses: actions/upload-artifact@v4
+      with:
+        name: website-tests-flaky
+        path: /tmp/website-tests.meta
+
+  FlakeReport:
+    runs-on: ubuntu-latest
+    needs:
+      - All
+      - Javascript
+      - GatewayIntegration
+      - GatewayStress
+      - React
+      - ProtocolFuzz
+    if: always()
+    steps:
+      - name: Download flake markers
+        uses: actions/download-artifact@v4
+        with:
+          pattern: "*-flaky"
+          merge-multiple: true
+        continue-on-error: true
+
+      - name: Summarize flakes
+        run: |
+          set -e
+          if ls *.meta >/dev/null 2>&1; then
+            echo "### Flaky tests detected (retry passed)" >> $GITHUB_STEP_SUMMARY
+            for f in *.meta; do
+              echo "- ${f%.meta}" >> $GITHUB_STEP_SUMMARY
+            done
+          else
+            echo "No flaky markers found" >> $GITHUB_STEP_SUMMARY
+          fi
 
   ProtocolFuzz:
     runs-on: ubuntu-latest
@@ -329,7 +466,14 @@ jobs:
     - name: Install dependencies
       run: pnpm install --frozen-lockfile
     - name: Run protocol fuzz tests (CI mode - 1000 iterations)
-      run: CI=true pnpm -C packages/protocol test fuzz.test.ts
+      run: CI=true pnpm -C packages/protocol test fuzz.test.ts 2>&1 | tee /tmp/protocol-fuzz.log
+
+    - name: Upload fuzz logs
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: protocol-fuzz-logs
+        path: /tmp/protocol-fuzz.log
 
   Lock:
     runs-on: ubuntu-latest

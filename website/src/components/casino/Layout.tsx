@@ -5,6 +5,7 @@ import { PanelDrawer } from './PanelDrawer';
 import { Label } from './ui/Label';
 import { ThemeToggle } from '../ui/ThemeToggle';
 import { GlassSurface, GlassModal } from '../ui';
+import { USE_CLASSIC_CASINO_UI } from '../../config/casinoUI';
 
 interface HeaderProps {
     phase: string;
@@ -51,28 +52,77 @@ export const Header: React.FC<HeaderProps> = ({
     sessionMinutes = 0,
     children,
 }) => {
+    if (USE_CLASSIC_CASINO_UI) {
+        return (
+            <header className="h-12 border-b-2 border-gray-700 flex items-center justify-between px-2 sm:px-4 z-10 bg-terminal-black/90 backdrop-blur">
+                <div className="flex items-center gap-2 sm:gap-4">
+                    <span className="font-bold tracking-tighter text-white text-sm sm:text-base">null<span className="text-terminal-green">/</span>space</span>
+                    <div className="hidden sm:flex items-center gap-2">
+                        <button
+                            onClick={() => setFocusMode(!focusMode)}
+                            className={`text-[10px] border px-1.5 py-0.5 rounded transition-colors ${focusMode ? 'bg-terminal-green text-black border-terminal-green' : 'text-gray-600 bg-gray-900 border-gray-800 hover:border-gray-600'}`}
+                        >
+                            {focusMode ? 'FOCUS ON' : 'FOCUS OFF'}
+                        </button>
+                        {onOpenCommandPalette && (
+                            <button
+                                type="button"
+                                onClick={onOpenCommandPalette}
+                                className="text-[10px] border px-1.5 py-0.5 rounded transition-colors text-gray-300 bg-gray-900 border-gray-800 hover:border-gray-600 hover:text-white"
+                            >
+                                GAMES
+                            </button>
+                        )}
+                        {onToggleHelp ? (
+                            <button
+                                type="button"
+                                onClick={onToggleHelp}
+                                className="text-[10px] border px-1.5 py-0.5 rounded transition-colors text-gray-300 bg-gray-900 border-gray-800 hover:border-gray-600 hover:text-white"
+                            >
+                                HELP
+                            </button>
+                        ) : null}
+                    </div>
+                </div>
+                <div className="flex items-center gap-2 sm:gap-4 md:gap-6 text-xs sm:text-sm">
+                    {showTimer && (
+                        <div className="flex items-center gap-1 sm:gap-2">
+                            <span className="text-gray-500 hidden sm:inline">TIMER</span>
+                            <span className={`font-bold ${tournamentTime < 60 ? 'text-terminal-accent animate-pulse' : 'text-white'}`}>{formatTime(tournamentTime)}</span>
+                        </div>
+                    )}
+                    <div className="flex items-center gap-1 sm:gap-2">
+                        <span className="text-gray-500 hidden sm:inline">CHIPS</span>
+                        <span className="text-white font-bold text-sm sm:text-lg">${stats.chips.toLocaleString()}</span>
+                    </div>
+                    {children}
+                </div>
+            </header>
+        );
+    }
+
     const sessionValue = formatPnlLabel(sessionDelta) || '$0';
     // US-261: Monochrome state differentiation - use contrast not color
     const sessionTone =
         sessionDelta > 0
-            ? 'text-mono-0 dark:text-mono-1000 font-black'
+            ? 'text-ns font-bold'
             : sessionDelta < 0
-                ? 'text-mono-400 dark:text-mono-500'
-                : 'text-titanium-600 dark:text-titanium-200';
+                ? 'text-ns-muted'
+                : 'text-ns-muted';
 
     return (
         <GlassSurface
             as="header"
             depth="flat"
-            className="h-14 flex items-center justify-between px-6 z-10 sticky top-0 dark:text-titanium-100"
+            className="h-16 flex items-center justify-between px-6 z-20 sticky top-3 mx-4 rounded-2xl liquid-card"
         >
             <div className="flex items-center gap-4">
-                <span className="font-display font-semibold tracking-tight text-titanium-900 dark:text-titanium-100 text-base">nullspace</span>
+                <span className="font-display font-semibold tracking-tight text-ns text-base">nullspace</span>
                 {onOpenCommandPalette && (
                     <button
                         type="button"
                         onClick={onOpenCommandPalette}
-                        className="inline-flex items-center gap-2 h-8 px-3 rounded-full border border-titanium-200 text-[10px] font-medium uppercase tracking-[0.18em] text-titanium-600 hover:text-titanium-900 hover:border-titanium-400 transition-colors dark:border-titanium-800 dark:text-titanium-300 dark:hover:text-titanium-100"
+                        className="inline-flex items-center gap-2 h-8 px-3 rounded-full liquid-chip text-[10px] font-medium uppercase tracking-[0.28em] text-ns hover:text-ns-muted transition-colors"
                     >
                         Games <span className="text-[9px] font-mono">/</span>
                     </button>
@@ -80,9 +130,9 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
             <div className="flex items-center gap-4">
                 {showTimer && (
-                    <div className="hidden md:flex items-center gap-2 px-3 py-1 rounded-full border border-titanium-200 text-[10px] font-medium uppercase tracking-[0.18em] text-titanium-600 dark:border-titanium-800 dark:text-titanium-300">
+                    <div className="hidden md:flex items-center gap-2 px-3 py-1 rounded-full liquid-chip text-[10px] font-medium uppercase tracking-[0.28em] text-ns-muted">
                         <span>Timer</span>
-                        <span className={`font-mono font-semibold tabular-nums ${tournamentTime < 60 ? 'text-mono-0 dark:text-mono-1000 font-black animate-pulse' : 'text-titanium-900 dark:text-titanium-100'}`}>{formatTime(tournamentTime)}</span>
+                        <span className={`font-mono font-semibold tabular-nums ${tournamentTime < 60 ? 'text-ns font-black animate-pulse' : 'text-ns'}`}>{formatTime(tournamentTime)}</span>
                     </div>
                 )}
 
@@ -93,14 +143,14 @@ export const Header: React.FC<HeaderProps> = ({
                             <span className={`text-sm font-bold tabular-nums leading-none ${sessionTone}`}>
                                 {sessionValue}
                             </span>
-                            <span className="text-[9px] font-medium text-titanium-600 dark:text-titanium-300">
+                            <span className="text-[9px] font-medium text-ns-muted">
                                 {sessionMinutes > 0 ? `${sessionMinutes}m` : 'Live'}
                             </span>
                         </div>
                     )}
                     <div className="flex flex-col items-end">
                         <Label size="micro" className="mb-0.5">Balance</Label>
-                        <span className="text-titanium-900 dark:text-titanium-100 font-semibold text-base tracking-tight tabular-nums leading-none font-display">
+                        <span className="text-ns font-semibold text-base tracking-tight tabular-nums leading-none font-display">
                             ${stats.chips.toLocaleString()}
                         </span>
                     </div>
@@ -198,23 +248,23 @@ const SidebarContent: React.FC<SidebarProps & { compact?: boolean }> = ({
             <React.Fragment key={isSticky ? 'sticky-you' : i}>
                 <div className={`flex justify-between items-center py-2 px-4 rounded-xl transition-colors ${
                     isSticky
-                        ? 'bg-titanium-900 text-white shadow-lg'
-                        : isUser ? 'bg-titanium-100 text-titanium-900' : 'text-titanium-800'
+                        ? 'bg-mono-0/90 text-white shadow-float'
+                        : isUser ? 'bg-ns-surface text-ns' : 'text-ns'
                 }`}>
                     <div className="flex items-center gap-3">
-                        <span className={`text-[10px] font-bold font-mono w-4 text-center ${isSticky ? 'text-titanium-400' : 'text-titanium-300'}`}>{rank}</span>
-                        <span className={`text-sm font-semibold ${isSticky ? 'text-white' : 'text-titanium-800'}`}>{entry.name}</span>
+                        <span className={`text-[10px] font-bold font-mono w-4 text-center ${isSticky ? 'text-white/70' : 'text-ns-muted'}`}>{rank}</span>
+                        <span className={`text-sm font-semibold ${isSticky ? 'text-white' : 'text-ns'}`}>{entry.name}</span>
                     </div>
                     <span className={`text-sm font-bold tabular-nums ${
                         isSticky ? 'text-white' :
-                        viewMode === 'PAYOUT' && rank <= bubbleIndex ? 'text-mono-0 font-black' : 'text-titanium-900'
+                        viewMode === 'PAYOUT' && rank <= bubbleIndex ? 'text-mono-0 font-black' : 'text-ns'
                     }`}>
                         {viewMode === 'RANK' ? `$${Math.floor(displayChips).toLocaleString()}` : getPayout(rank)}
                     </span>
                 </div>
                 {!isSticky && isMoneyCutoff && (
-                    <div className="border-b border-titanium-200 my-3 relative h-px mx-2">
-                        <span className="absolute left-1/2 -top-2 -translate-x-1/2 bg-white px-2 text-[9px] font-bold text-titanium-400 tracking-widest uppercase">
+                    <div className="border-b border-ns my-3 relative h-px mx-2">
+                        <span className="absolute left-1/2 -top-2 -translate-x-1/2 bg-ns-surface px-2 text-[9px] font-bold text-ns-muted tracking-widest uppercase">
                             Money Line
                         </span>
                     </div>
@@ -234,15 +284,15 @@ const SidebarContent: React.FC<SidebarProps & { compact?: boolean }> = ({
         const detailLines = lines.slice(1).filter((_, idx) => (pnlIndex < 0 ? true : idx + 1 !== pnlIndex));
 
         return (
-            <div key={key} className="flex flex-col gap-1 py-3 border-b border-titanium-100 last:border-0 px-2">
-                <div className="text-xs font-bold text-titanium-800 leading-tight"> &gt; {lines[0]}</div>
+            <div key={key} className="flex flex-col gap-1 py-3 border-b border-ns last:border-0 px-2">
+                <div className="text-xs font-bold text-ns leading-tight"> &gt; {lines[0]}</div>
                 {pnlLine && (
                     <div className={`${pnlClass} text-xs font-black tabular-nums`}>
                         {pnlLine}
                     </div>
                 )}
                 {detailLines.map((line, i) => (
-                    <div key={i} className="text-[10px] font-medium text-titanium-600 leading-snug">
+                    <div key={i} className="text-[10px] font-medium text-ns-muted leading-snug">
                         {line}
                     </div>
                 ))}
@@ -255,14 +305,14 @@ const SidebarContent: React.FC<SidebarProps & { compact?: boolean }> = ({
         const isLoss = bet.pnl < 0;
         const pnlText = formatPnlLabel(bet.pnl) || 'PUSH';
         // US-261: Monochrome resolved bet styling
-        const pnlClass = isWin ? 'text-mono-0 dark:text-mono-1000 font-black' : isLoss ? 'text-mono-400 dark:text-mono-500' : 'text-titanium-400';
+        const pnlClass = isWin ? 'text-mono-0 dark:text-mono-1000 font-black' : isLoss ? 'text-mono-400 dark:text-mono-500' : 'text-ns-muted';
 
         return (
             <div
                 key={`${resolvedBetsKey}-${bet.id}-${idx}`}
-                className="bg-white border border-titanium-200 rounded-2xl px-4 py-2.5 flex items-center justify-between shadow-soft"
+                className="liquid-panel border border-ns rounded-2xl px-4 py-2.5 flex items-center justify-between shadow-soft"
             >
-                <span className="text-[11px] font-black text-titanium-900 uppercase tracking-tight truncate mr-2">{bet.label}</span>
+                <span className="text-[11px] font-black text-ns uppercase tracking-tight truncate mr-2">{bet.label}</span>
                 <span className={`text-[11px] font-black tabular-nums ${pnlClass}`}>{pnlText}</span>
             </div>
         );
@@ -275,7 +325,7 @@ const SidebarContent: React.FC<SidebarProps & { compact?: boolean }> = ({
                     <Label variant="primary">{viewMode === 'RANK' ? 'Live Feed' : 'Payouts'}</Label>
                     <button
                         onClick={onToggleView}
-                        className="text-[10px] font-bold text-titanium-600 bg-titanium-100 px-3 py-1 rounded-full hover:bg-titanium-200 transition-colors"
+                        className="text-[10px] font-bold text-ns-muted liquid-chip px-3 py-1 rounded-full hover:text-ns transition-colors"
                     >
                         View
                     </button>
@@ -293,7 +343,7 @@ const SidebarContent: React.FC<SidebarProps & { compact?: boolean }> = ({
             </div>
 
             {resolvedEntries.length > 0 && (
-                <div className={`flex-none border-t border-titanium-200 ${compact ? 'px-4 pb-4 pt-3' : 'p-6 bg-titanium-50'}`}>
+                <div className={`flex-none border-t border-ns ${compact ? 'px-4 pb-4 pt-3' : 'p-6 bg-ns-surface'}`}>
                     <Label className="mb-4 text-center block" size="micro">Last Resolved</Label>
                     <div className="flex flex-col gap-2">
                         {resolvedEntries.slice(0, 5).map((bet, i) => renderResolvedBet(bet, i))}
@@ -301,12 +351,12 @@ const SidebarContent: React.FC<SidebarProps & { compact?: boolean }> = ({
                 </div>
             )}
 
-            <div className={`flex-1 border-t border-titanium-200 flex flex-col min-h-0 ${compact ? 'px-4 pt-4 pb-3' : 'p-6 bg-white'}`}>
+            <div className={`flex-1 border-t border-ns flex flex-col min-h-0 ${compact ? 'px-4 pt-4 pb-3' : 'p-6 bg-ns-surface'}`}>
                 <Label className="mb-4 block" size="micro">{isCraps ? 'Roll Log' : 'History'}</Label>
                 <div className={`flex-1 overflow-y-auto flex flex-col scrollbar-hide min-h-0 ${compact ? 'max-h-48' : ''}`}>
                     {isCraps ? (
                         crapsEventLog.length === 0 ? (
-                        <div className="text-titanium-500 text-xs italic">No rolls recorded.</div>
+                        <div className="text-ns-muted text-xs italic">No rolls recorded.</div>
                         ) : (
                             [...crapsEventLog].reverse().slice(0, 20).map((event, i) => {
                                 const diceLabel = event.dice?.length === 2 ? ` (${event.dice.join('-')})` : '';
@@ -324,33 +374,39 @@ const SidebarContent: React.FC<SidebarProps & { compact?: boolean }> = ({
 };
 
 export const Sidebar: React.FC<SidebarProps> = (props) => (
-    <aside className="w-72 border-l border-titanium-200 bg-white hidden lg:flex flex-col">
-        <SidebarContent {...props} />
-    </aside>
+    USE_CLASSIC_CASINO_UI ? null : (
+        <aside className="w-72 border-l border-ns bg-ns-surface hidden lg:flex flex-col">
+            <SidebarContent {...props} />
+        </aside>
+    )
 );
 
 export const SidebarDrawer: React.FC<SidebarProps & { className?: string; open?: boolean; onOpenChange?: (open: boolean) => void }> = ({ className, open, onOpenChange, ...props }) => (
-    <PanelDrawer
-        label="Feed"
-        title={props.viewMode === 'RANK' ? 'LIVE FEED' : 'PAYOUTS'}
-        shortcutHint="Alt+L"
-        className={className}
-        open={open}
-        onOpenChange={onOpenChange}
-    >
-        <SidebarContent {...props} compact />
-    </PanelDrawer>
+    USE_CLASSIC_CASINO_UI ? null : (
+        <PanelDrawer
+            label="Feed"
+            title={props.viewMode === 'RANK' ? 'LIVE FEED' : 'PAYOUTS'}
+            shortcutHint="Alt+L"
+            className={className}
+            open={open}
+            onOpenChange={onOpenChange}
+        >
+            <SidebarContent {...props} compact />
+        </PanelDrawer>
+    )
 );
 
 export const Footer: React.FC<{ currentBet?: number; className?: string }> = ({ currentBet, className }) => {
     const bets = [1, 5, 25, 100, 500, 1000, 5000, 10000, 50000];
     const isCustom = currentBet && !bets.includes(currentBet);
 
+    if (USE_CLASSIC_CASINO_UI) return null;
+
     return (
         <GlassSurface
             as="footer"
             depth="flat"
-            className={`hidden lg:flex fixed bottom-0 left-0 right-0 h-10 items-center justify-center gap-8 px-6 z-20 dark:text-titanium-100 ${className ?? ''}`}
+            className={`hidden lg:flex fixed bottom-0 left-0 right-0 h-10 items-center justify-center gap-8 px-6 z-20 text-ns ${className ?? ''}`}
         >
             <Label size="micro">Quick Bet Keys</Label>
             <div className="flex gap-6">
@@ -358,16 +414,16 @@ export const Footer: React.FC<{ currentBet?: number; className?: string }> = ({ 
                     const isSelected = currentBet === bet;
                     return (
                         <div key={i} className="flex items-center gap-2 group cursor-pointer">
-                            <span className="text-titanium-500 text-[10px] font-mono group-hover:text-titanium-700">^ {i + 1}</span>
-                            <span className={`text-xs font-black tabular-nums transition-all group-hover:scale-110 ${isSelected ? 'text-mono-0 dark:text-mono-1000 underline underline-offset-2' : 'text-titanium-800'}`}>
+                            <span className="text-ns-muted text-[10px] font-mono group-hover:text-ns">^ {i + 1}</span>
+                            <span className={`text-xs font-black tabular-nums transition-all group-hover:scale-110 ${isSelected ? 'text-mono-0 dark:text-mono-1000 underline underline-offset-2' : 'text-ns'}`}>
                                 ${bet >= 1000 ? `${bet/1000}k` : bet}
                             </span>
                         </div>
                     );
                 })}
                 <div className="flex items-center gap-2 group cursor-pointer">
-                    <span className="text-titanium-500 text-[10px] font-mono group-hover:text-titanium-700">^0</span>
-                    <span className={`text-xs font-black transition-all group-hover:scale-110 ${isCustom ? 'text-mono-0 dark:text-mono-1000 underline underline-offset-2' : 'text-titanium-800'}`}>Custom</span>
+                    <span className="text-ns-muted text-[10px] font-mono group-hover:text-ns">^0</span>
+                    <span className={`text-xs font-black transition-all group-hover:scale-110 ${isCustom ? 'text-mono-0 dark:text-mono-1000 underline underline-offset-2' : 'text-ns'}`}>Custom</span>
                 </div>
             </div>
         </GlassSurface>
@@ -398,39 +454,39 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, searchQu
                 className="w-full max-w-[640px] rounded-[32px] overflow-hidden flex flex-col max-h-[60vh] animate-scale-in"
                 onClick={(e: React.MouseEvent) => e.stopPropagation()}
             >
-                <div className="px-8 py-6 border-b border-titanium-200 flex items-center gap-4 bg-titanium-100/60 dark:border-titanium-700 dark:bg-titanium-900/70">
+                <div className="px-8 py-6 border-b border-ns flex items-center gap-4 bg-ns-surface">
                     <span className="text-mono-0 dark:text-mono-1000 font-black text-xl font-mono">&gt;</span>
                     <input
                         ref={inputRef}
                         type="text"
                         value={searchQuery}
                         onChange={(e) => onSearchChange(e.target.value)}
-                        className="flex-1 bg-transparent outline-none text-titanium-900 placeholder-titanium-600 font-bold text-xl tracking-tight dark:text-titanium-100 dark:placeholder-titanium-300"
+                        className="flex-1 bg-transparent outline-none text-ns placeholder-ns-muted font-bold text-xl tracking-tight"
                         placeholder="Search Nullspace..."
                         autoFocus
                     />
-                    <div className="text-[10px] font-black text-titanium-700 bg-white border border-titanium-300 px-3 py-1.5 rounded-full uppercase tracking-widest dark:bg-titanium-800 dark:border-titanium-600 dark:text-titanium-200">Esc</div>
+                    <div className="text-[10px] font-black text-ns-muted liquid-chip border-ns px-3 py-1.5 uppercase tracking-widest">Esc</div>
                 </div>
                 <div className="flex-1 overflow-y-auto py-4 scrollbar-hide">
                     {filtered.map((game, i) => (
                         <div
                             key={game}
                             onClick={() => onSelectGame(game)}
-                            className="flex items-center justify-between px-8 py-4 hover:bg-titanium-100/80 cursor-pointer group transition-all active:scale-[0.99] dark:hover:bg-titanium-800/70"
+                            className="flex items-center justify-between px-8 py-4 hover:bg-white/60 cursor-pointer group transition-all active:scale-[0.99]"
                         >
                             <div className="flex items-center gap-4">
-                                <div className="w-10 h-10 rounded-xl bg-titanium-100 border border-titanium-300 flex items-center justify-center text-[10px] font-black text-titanium-700 group-hover:bg-mono-0 group-hover:text-mono-1000 transition-colors shadow-soft dark:bg-titanium-800 dark:border-titanium-700 dark:text-titanium-200 dark:group-hover:bg-mono-1000 dark:group-hover:text-mono-0">
+                                <div className="w-10 h-10 rounded-xl liquid-panel flex items-center justify-center text-[10px] font-black text-ns-muted group-hover:bg-mono-0 group-hover:text-mono-1000 transition-colors shadow-soft">
                                     {i < 9 ? i + 1 : i === 9 ? 0 : ''}
                                 </div>
-                                <span className="text-titanium-900 font-bold text-lg tracking-tight group-hover:translate-x-1 transition-transform dark:text-titanium-100">{game}</span>
+                                <span className="text-ns font-bold text-lg tracking-tight group-hover:translate-x-1 transition-transform">{game}</span>
                             </div>
-                            <span className="text-titanium-600 font-bold text-[10px] uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity dark:text-titanium-300">
+                            <span className="text-ns-muted font-bold text-[10px] uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
                                 Launch Game
                             </span>
                         </div>
                     ))}
                     {filtered.length === 0 && (
-                        <div className="px-8 py-12 text-titanium-600 text-center italic font-semibold dark:text-titanium-300">No results found.</div>
+                        <div className="px-8 py-12 text-ns-muted text-center italic font-semibold">No results found.</div>
                     )}
                 </div>
             </GlassSurface>
@@ -445,8 +501,8 @@ export const CustomBetOverlay: React.FC<{ isOpen: boolean; betString: string; in
          <div className="fixed inset-0 bg-mono-0/20 dark:bg-mono-0/40 backdrop-blur-sm z-[100] flex items-center justify-center px-4">
              <GlassSurface depth="overlay" className="rounded-[48px] p-12 flex flex-col items-center gap-8 w-full max-w-md animate-scale-in">
                  <Label size="micro" variant="primary">Set Custom Wager</Label>
-                 <div className="flex items-center text-8xl text-titanium-900 font-extrabold tracking-tighter font-display">
-                     <span className="text-titanium-200">$</span>
+                 <div className="flex items-center text-8xl text-ns font-extrabold tracking-tighter font-display">
+                     <span className="text-ns-muted">$</span>
                      <input
                         ref={inputRef}
                         type="text"
@@ -456,10 +512,10 @@ export const CustomBetOverlay: React.FC<{ isOpen: boolean; betString: string; in
                      />
                  </div>
                  <div className="flex flex-col gap-4 w-full">
-                    <div className="h-1.5 bg-titanium-100 rounded-full w-full overflow-hidden">
+                    <div className="h-1.5 bg-ns-border rounded-full w-full overflow-hidden opacity-60">
                         <div className="h-full bg-mono-0 w-1/3 animate-pulse rounded-full shadow-lg shadow-mono-0/20" />
                     </div>
-                    <div className="text-[11px] font-bold text-titanium-400 text-center uppercase tracking-[0.2em] mt-2">
+                    <div className="text-[11px] font-bold text-ns-muted text-center uppercase tracking-[0.2em] mt-2">
                         Use number keys to enter amount
                     </div>
                  </div>
@@ -484,27 +540,27 @@ export const HelpOverlay: React.FC<HelpOverlayProps> = ({ isOpen, onClose, gameT
         if (!detailInfo) return null;
 
         return (
-            <div className="fixed inset-0 bg-titanium-900/40 backdrop-blur-md z-[110] flex items-center justify-center p-6">
-                <div className="bg-white rounded-[40px] shadow-float max-w-md w-full flex flex-col border border-titanium-200 overflow-hidden animate-scale-in">
-                    <div className="p-10 border-b border-titanium-100 bg-titanium-50/50">
+            <div className="fixed inset-0 bg-black/30 backdrop-blur-md z-[110] flex items-center justify-center p-6">
+                <div className="liquid-card liquid-sheen rounded-[40px] shadow-float max-w-md w-full flex flex-col border border-ns overflow-hidden animate-scale-in">
+                    <div className="p-10 border-b border-ns bg-ns-surface">
                          <Label variant="gold" size="micro" className="mb-3 block">Instruction Detail</Label>
-                         <h2 className="text-3xl font-extrabold text-titanium-900 tracking-tight">{detailInfo.title}</h2>
+                         <h2 className="text-3xl font-extrabold text-ns tracking-tight">{detailInfo.title}</h2>
                     </div>
                     <div className="p-10 space-y-10">
                         <div>
                             <Label variant="success" size="micro" className="mb-2 block">Win Condition</Label>
-                            <p className="text-base text-titanium-800 font-semibold leading-relaxed">{detailInfo.win}</p>
+                            <p className="text-base text-ns font-semibold leading-relaxed">{detailInfo.win}</p>
                         </div>
                         <div>
                             <Label variant="destructive" size="micro" className="mb-2 block">Loss Condition</Label>
-                            <p className="text-base text-titanium-800 font-semibold leading-relaxed">{detailInfo.loss}</p>
+                            <p className="text-base text-ns font-semibold leading-relaxed">{detailInfo.loss}</p>
                         </div>
-                        <div className="bg-titanium-50 p-6 rounded-3xl border border-titanium-100 shadow-inner-light">
+                        <div className="liquid-panel p-6 rounded-3xl shadow-inner-light">
                             <Label variant="primary" size="micro" className="mb-2 block opacity-50">Practical Example</Label>
-                            <p className="text-xs text-titanium-600 font-bold font-mono leading-relaxed">{detailInfo.example}</p>
+                            <p className="text-xs text-ns-muted font-bold font-mono leading-relaxed">{detailInfo.example}</p>
                         </div>
                     </div>
-                    <button onClick={onClose} className="p-6 text-center text-xs font-black text-titanium-400 uppercase tracking-[0.3em] border-t border-titanium-100 hover:bg-titanium-50 transition-colors active:scale-95">
+                    <button onClick={onClose} className="p-6 text-center text-xs font-black text-ns-muted uppercase tracking-[0.3em] border-t border-ns hover:bg-ns-surface transition-colors active:scale-95">
                         Back to List
                     </button>
                 </div>
@@ -517,11 +573,11 @@ export const HelpOverlay: React.FC<HelpOverlayProps> = ({ isOpen, onClose, gameT
     const renderGridItems = (items: {key: string, label: string}[]) => (
         <div className="grid grid-cols-2 gap-4">
             {items.map(item => (
-                <div key={item.key} className="flex items-center gap-4 bg-titanium-50 border border-titanium-100 p-3 rounded-2xl shadow-soft group hover:bg-white transition-all">
-                    <div className="w-11 h-11 flex items-center justify-center bg-titanium-900 text-white rounded-xl font-display font-black text-sm shadow-md group-hover:scale-110 transition-transform">
+                <div key={item.key} className="flex items-center gap-4 liquid-panel p-3 rounded-2xl shadow-soft group hover:bg-ns-surface transition-all">
+                    <div className="w-11 h-11 flex items-center justify-center bg-mono-0 text-white rounded-xl font-display font-black text-sm shadow-md group-hover:scale-110 transition-transform">
                         {item.key}
                     </div>
-                    <span className="text-body-sm font-bold text-titanium-800 uppercase tracking-tight">{item.label}</span>
+                    <span className="text-body-sm font-bold text-ns uppercase tracking-tight">{item.label}</span>
                 </div>
             ))}
         </div>
@@ -542,56 +598,56 @@ export const HelpOverlay: React.FC<HelpOverlayProps> = ({ isOpen, onClose, gameT
                     {key: 'SPACE', label: 'Spin'}
                 ]);
             default:
-                return <div className="text-titanium-400 font-bold text-center py-12 italic">Standard interaction: [SPACE] to confirm.</div>;
+                return <div className="text-ns-muted font-bold text-center py-12 italic">Standard interaction: [SPACE] to confirm.</div>;
         }
     };
 
     return (
-        <div className="fixed inset-0 bg-titanium-900/40 backdrop-blur-md z-[100] flex items-center justify-center p-6" onClick={onClose}>
-            <div className="bg-white rounded-[48px] shadow-float max-w-2xl w-full flex flex-col border border-titanium-200 overflow-hidden animate-scale-in" onClick={e => e.stopPropagation()}>
-                <div className="p-10 border-b border-titanium-100 flex justify-between items-center bg-titanium-50/50">
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-md z-[100] flex items-center justify-center p-6" onClick={onClose}>
+            <div className="liquid-card liquid-sheen rounded-[48px] shadow-float max-w-2xl w-full flex flex-col border border-ns overflow-hidden animate-scale-in" onClick={e => e.stopPropagation()}>
+                <div className="p-10 border-b border-ns flex justify-between items-center bg-ns-surface">
                     <div>
-                        <h2 className="text-3xl font-extrabold text-titanium-900 tracking-tight">Manual</h2>
+                        <h2 className="text-3xl font-extrabold text-ns tracking-tight">Manual</h2>
                         <Label variant="primary" size="micro" className="mt-1 block opacity-60">Keyboard shortcuts for power users</Label>
                     </div>
-                    <button onClick={onClose} className="w-12 h-12 flex items-center justify-center bg-white rounded-full border border-titanium-200 text-titanium-400 hover:text-titanium-900 transition-all hover:scale-110 active:scale-90 shadow-soft">
+                    <button onClick={onClose} className="w-12 h-12 flex items-center justify-center liquid-panel rounded-full border border-ns text-ns-muted hover:text-ns transition-all hover:scale-110 active:scale-90 shadow-soft">
                         ✕
                     </button>
                 </div>
 
                 <div className="p-10 overflow-y-auto space-y-12 scrollbar-hide">
                     <div className="space-y-6">
-                        <Label variant="gold" size="micro" className="border-b border-titanium-100 pb-2 block">System Commands</Label>
+                        <Label variant="gold" size="micro" className="border-b border-ns pb-2 block">System Commands</Label>
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-8">
                             <div className="flex items-center gap-4 group cursor-pointer">
-                                <div className="w-11 h-11 flex items-center justify-center bg-white border border-titanium-200 rounded-xl font-display font-black text-sm text-titanium-900 shadow-soft group-hover:scale-110 group-hover:border-mono-0 dark:group-hover:border-mono-1000 transition-all">/</div>
-                                <span className="text-body-sm font-bold text-titanium-800 uppercase tracking-tight">Games</span>
+                                <div className="w-11 h-11 flex items-center justify-center liquid-panel border border-ns rounded-xl font-display font-black text-sm text-ns shadow-soft group-hover:scale-110 group-hover:border-mono-0 transition-all">/</div>
+                                <span className="text-body-sm font-bold text-ns uppercase tracking-tight">Games</span>
                             </div>
                             <div className="flex items-center gap-4 group cursor-pointer">
-                                <div className="w-11 h-11 flex items-center justify-center bg-white border border-titanium-200 rounded-xl font-display font-black text-sm text-titanium-900 shadow-soft group-hover:scale-110 group-hover:border-mono-0 dark:group-hover:border-mono-1000 transition-all">?</div>
-                                <span className="text-body-sm font-bold text-titanium-800 uppercase tracking-tight">Help</span>
+                                <div className="w-11 h-11 flex items-center justify-center liquid-panel border border-ns rounded-xl font-display font-black text-sm text-ns shadow-soft group-hover:scale-110 group-hover:border-mono-0 transition-all">?</div>
+                                <span className="text-body-sm font-bold text-ns uppercase tracking-tight">Help</span>
                             </div>
                             <div className="flex items-center gap-4 group cursor-pointer">
-                                <div className="w-11 h-11 flex items-center justify-center bg-white border border-titanium-200 rounded-xl font-display font-black text-sm text-titanium-900 shadow-soft group-hover:scale-110 group-hover:border-mono-0 dark:group-hover:border-mono-1000 transition-all">L</div>
-                                <span className="text-body-sm font-bold text-titanium-800 uppercase tracking-tight">Feed</span>
+                                <div className="w-11 h-11 flex items-center justify-center liquid-panel border border-ns rounded-xl font-display font-black text-sm text-ns shadow-soft group-hover:scale-110 group-hover:border-mono-0 transition-all">L</div>
+                                <span className="text-body-sm font-bold text-ns uppercase tracking-tight">Feed</span>
                             </div>
                             <div className="flex items-center gap-4 group cursor-pointer">
-                                <div className="w-11 h-11 flex items-center justify-center bg-white border border-titanium-200 rounded-xl font-display font-black text-[10px] text-titanium-900 shadow-soft group-hover:scale-110 group-hover:border-mono-0 dark:group-hover:border-mono-1000 transition-all">ALT+Z</div>
-                                <span className="text-body-sm font-bold text-titanium-800 uppercase tracking-tight">Zen</span>
+                                <div className="w-11 h-11 flex items-center justify-center liquid-panel border border-ns rounded-xl font-display font-black text-[10px] text-ns shadow-soft group-hover:scale-110 group-hover:border-mono-0 transition-all">ALT+Z</div>
+                                <span className="text-body-sm font-bold text-ns uppercase tracking-tight">Zen</span>
                             </div>
                             <div className="flex items-center gap-4 group cursor-pointer">
-                                <div className="w-11 h-11 flex items-center justify-center bg-white border border-titanium-200 rounded-xl font-display font-black text-[10px] text-titanium-900 shadow-soft group-hover:scale-110 group-hover:border-mono-0 dark:group-hover:border-mono-1000 transition-all">ALT+R</div>
-                                <span className="text-body-sm font-bold text-titanium-800 uppercase tracking-tight">Rewards</span>
+                                <div className="w-11 h-11 flex items-center justify-center liquid-panel border border-ns rounded-xl font-display font-black text-[10px] text-ns shadow-soft group-hover:scale-110 group-hover:border-mono-0 transition-all">ALT+R</div>
+                                <span className="text-body-sm font-bold text-ns uppercase tracking-tight">Rewards</span>
                             </div>
                             <div className="flex items-center gap-4 group cursor-pointer">
-                                <div className="w-11 h-11 flex items-center justify-center bg-white border border-titanium-200 rounded-xl font-display font-black text-[10px] text-titanium-900 shadow-soft group-hover:scale-110 group-hover:border-mono-0 dark:group-hover:border-mono-1000 transition-all">ALT+S</div>
-                                <span className="text-body-sm font-bold text-titanium-800 uppercase tracking-tight">Safety</span>
+                                <div className="w-11 h-11 flex items-center justify-center liquid-panel border border-ns rounded-xl font-display font-black text-[10px] text-ns shadow-soft group-hover:scale-110 group-hover:border-mono-0 transition-all">ALT+S</div>
+                                <span className="text-body-sm font-bold text-ns uppercase tracking-tight">Safety</span>
                             </div>
                         </div>
                     </div>
 
                     <div className="space-y-6">
-                        <Label variant="primary" size="micro" className="border-b border-titanium-100 pb-2 block underline-offset-8">Game Operations [{gameType}]</Label>
+                        <Label variant="primary" size="micro" className="border-b border-ns pb-2 block underline-offset-8">Game Operations [{gameType}]</Label>
                         {getContent()}
                     </div>
                 </div>
@@ -650,41 +706,41 @@ export const ResponsiblePlayOverlay: React.FC<ResponsiblePlayOverlayProps> = ({
     };
 
     return (
-        <div className="fixed inset-0 bg-titanium-900/60 backdrop-blur-lg z-[100] flex items-center justify-center p-6" onClick={onClose}>
-            <div className="bg-white rounded-[48px] shadow-float max-xl w-full flex flex-col border border-titanium-200 overflow-hidden animate-scale-in" onClick={e => e.stopPropagation()}>
-                <div className="p-12 border-b border-titanium-100 bg-titanium-50/50 text-center">
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-lg z-[100] flex items-center justify-center p-6" onClick={onClose}>
+            <div className="liquid-card liquid-sheen rounded-[48px] shadow-float max-xl w-full flex flex-col border border-ns overflow-hidden animate-scale-in" onClick={e => e.stopPropagation()}>
+                <div className="p-12 border-b border-ns bg-ns-surface text-center">
                     <Label variant="destructive" size="micro" className="mb-4 block tracking-[0.4em]">
                         {mode === 'reality' ? 'Player Protection' : 'Operation Settings'}
                     </Label>
-                    <h2 className="text-4xl font-extrabold text-titanium-900 tracking-tight font-display">Session Insight</h2>
+                    <h2 className="text-4xl font-extrabold text-ns tracking-tight font-display">Session Insight</h2>
                 </div>
 
                 <div className="p-12 space-y-12">
                     <div className="grid grid-cols-3 gap-6">
-                        <div className="bg-titanium-50 p-6 rounded-[32px] border border-titanium-100 shadow-inner-light">
+                        <div className="liquid-panel p-6 rounded-[32px] shadow-inner-light">
                             <Label size="micro" className="block mb-2 opacity-60">Time</Label>
-                            <span className="text-2xl font-black text-titanium-900 tabular-nums">{summary.sessionMinutes}m</span>
+                            <span className="text-2xl font-black text-ns tabular-nums">{summary.sessionMinutes}m</span>
                         </div>
-                        <div className="bg-titanium-50 p-6 rounded-[32px] border border-titanium-100 shadow-inner-light">
+                        <div className="liquid-panel p-6 rounded-[32px] shadow-inner-light">
                             <Label size="micro" className="block mb-2 opacity-60">Return</Label>
                             <span className={`text-2xl font-black tabular-nums ${summary.netPnl < 0 ? 'text-mono-400 dark:text-mono-500' : 'text-mono-0 dark:text-mono-1000'}`}>
                                 {summary.netPnl >= 0 ? '+' : '-'}${Math.abs(summary.netPnl).toLocaleString()}
                             </span>
                         </div>
-                        <div className="bg-titanium-50 p-6 rounded-[32px] border border-titanium-100 shadow-inner-light">
+                        <div className="liquid-panel p-6 rounded-[32px] shadow-inner-light">
                             <Label size="micro" className="block mb-2 opacity-60">Bankroll</Label>
-                            <span className="text-2xl font-black text-titanium-900 tabular-nums">${summary.chips.toLocaleString()}</span>
+                            <span className="text-2xl font-black text-ns tabular-nums">${summary.chips.toLocaleString()}</span>
                         </div>
                     </div>
 
                     <div className="space-y-8">
                         <div className="flex items-center justify-between group">
                             <div>
-                                <h4 className="text-base font-black text-titanium-900 uppercase tracking-tight">Reality Check</h4>
-                                <p className="text-xs text-titanium-400 font-bold">Notification cadence</p>
+                                <h4 className="text-base font-black text-ns uppercase tracking-tight">Reality Check</h4>
+                                <p className="text-xs text-ns-muted font-bold">Notification cadence</p>
                             </div>
                             <select
-                                className="bg-titanium-50 border border-titanium-200 rounded-2xl px-6 py-3 text-sm font-black text-titanium-800 outline-none focus:border-mono-0 dark:focus:border-mono-1000 transition-all shadow-soft"
+                                className="bg-ns-surface border border-ns rounded-2xl px-6 py-3 text-sm font-black text-ns outline-none focus:border-mono-0 transition-all shadow-soft"
                                 value={settings.realityCheckMinutes}
                                 onChange={(e) => setNumber('realityCheckMinutes', e.target.value)}
                             >
@@ -697,15 +753,15 @@ export const ResponsiblePlayOverlay: React.FC<ResponsiblePlayOverlayProps> = ({
 
                         <div className="flex items-center justify-between">
                             <div>
-                                <h4 className="text-base font-black text-titanium-900 uppercase tracking-tight">Cooldown Mode</h4>
-                                <p className="text-xs text-titanium-400 font-bold">{cooldownMinutes > 0 ? `Active for ${cooldownMinutes}m` : 'Pause active participation'}</p>
+                                <h4 className="text-base font-black text-ns uppercase tracking-tight">Cooldown Mode</h4>
+                                <p className="text-xs text-ns-muted font-bold">{cooldownMinutes > 0 ? `Active for ${cooldownMinutes}m` : 'Pause active participation'}</p>
                             </div>
                             <div className="flex gap-3">
                                 {[15, 30, 60].map(m => (
                                     <button 
                                         key={m}
                                         onClick={() => onCooldown(m)}
-                                        className="w-12 h-12 rounded-2xl border border-titanium-200 text-xs font-black text-titanium-800 hover:bg-titanium-900 hover:text-white transition-all shadow-soft active:scale-90"
+                                        className="w-12 h-12 rounded-2xl border border-ns text-xs font-black text-ns hover:bg-mono-0 hover:text-white transition-all shadow-soft active:scale-90"
                                     >
                                         {m}
                                     </button>
@@ -715,7 +771,7 @@ export const ResponsiblePlayOverlay: React.FC<ResponsiblePlayOverlayProps> = ({
                     </div>
                 </div>
 
-                <div className="p-12 border-t border-titanium-100 bg-titanium-50/50 flex items-center gap-6">
+                <div className="p-12 border-t border-ns bg-ns-surface flex items-center gap-6">
                     <button
                         onClick={onStop}
                         className="flex-1 h-16 rounded-full border-2 border-mono-400 text-mono-400 font-black text-xs uppercase tracking-[0.3em] hover:bg-mono-400 hover:text-mono-1000 transition-all active:scale-95 shadow-lg shadow-mono-400/10"
@@ -724,7 +780,7 @@ export const ResponsiblePlayOverlay: React.FC<ResponsiblePlayOverlayProps> = ({
                     </button>
                     <button
                         onClick={mode === 'reality' ? onContinue : onClose}
-                        className="flex-1 h-16 rounded-full bg-titanium-900 text-white font-black text-xs uppercase tracking-[0.3em] shadow-xl shadow-titanium-900/30 hover:scale-[1.02] active:scale-95 transition-all"
+                        className="flex-1 h-16 rounded-full bg-mono-0 text-white font-black text-xs uppercase tracking-[0.3em] shadow-xl shadow-mono-0/30 hover:scale-[1.02] active:scale-95 transition-all"
                     >
                         {mode === 'reality' ? 'Continue' : 'Acknowledge'}
                     </button>

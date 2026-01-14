@@ -17,8 +17,11 @@ export function parseCasinoWarState(stateBlob: Uint8Array): CasinoWarStateUpdate
 
   const playerCard = isHiddenCard(parsed.playerCard) ? null : decodeCardId(parsed.playerCard);
   const dealerCard = isHiddenCard(parsed.dealerCard) ? null : decodeCardId(parsed.dealerCard);
-  const stageByte = parsed.stage;
-  const stage = stageByte === 1 ? 'war' : stageByte === 2 ? 'complete' : 'betting';
+  const stageMap: Record<number, CasinoWarStateUpdate['stage']> = {
+    1: 'war',
+    2: 'complete',
+  };
+  const stage = stageMap[parsed.stage] ?? 'betting';
 
   const tieBetValue = typeof parsed.tieBet === 'bigint' ? Number(parsed.tieBet) : parsed.tieBet;
   const tieBet = Number.isFinite(tieBetValue) ? tieBetValue : 0;

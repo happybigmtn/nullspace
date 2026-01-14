@@ -17,6 +17,7 @@ export class CrapsTest extends BaseGameTest {
     await this.testDontPass();
     await this.testFieldBet();
     await this.testMultipleBets();
+    await this.testAllBetTypes();
   }
 
   /**
@@ -197,6 +198,55 @@ export class CrapsTest extends BaseGameTest {
       PASS: passWins ? 'WON' : 'PUSH/LOST',
       FIELD: fieldWins ? 'WON' : 'LOST',
       'YES(6)': yesWins ? 'WON' : 'LOST',
+    });
+  }
+
+  /**
+   * Test 5: Cover all craps bet types at least once
+   */
+  private async testAllBetTypes(): Promise<void> {
+    this.logger.info('--- Test: All Craps Bet Types ---');
+
+    const betPer = 2;
+    const bets = [
+      { type: 'PASS', amount: betPer },
+      { type: 'DONT_PASS', amount: betPer },
+      { type: 'COME', amount: betPer },
+      { type: 'DONT_COME', amount: betPer },
+      { type: 'FIELD', amount: betPer },
+      { type: 'YES', target: 6, amount: betPer },
+      { type: 'NO', target: 6, amount: betPer },
+      { type: 'NEXT', target: 6, amount: betPer },
+      { type: 'HARDWAY', target: 6, amount: betPer },
+      { type: 'FIRE', amount: betPer },
+      { type: 'ATS_SMALL', amount: betPer },
+      { type: 'ATS_TALL', amount: betPer },
+      { type: 'ATS_ALL', amount: betPer },
+      { type: 'MUGGSY', amount: betPer },
+      { type: 'DIFF_DOUBLES', amount: betPer },
+      { type: 'RIDE_LINE', amount: betPer },
+      { type: 'REPLAY', amount: betPer },
+      { type: 'HOT_ROLLER', amount: betPer },
+    ];
+
+    this.client.send({
+      type: 'craps_roll',
+      bets,
+    });
+
+    await this.assertMessageReceived('game_started');
+    const outcome = await this.waitForGameOutcome();
+    const gameResult = outcome.message;
+    const payout = parseFloat(gameResult.payout as string);
+    const dice = gameResult.dice as [number, number];
+    const total = dice[0] + dice[1];
+
+    this.recordGameResult(bets.length * betPer, `all-bets roll (${total})`, payout);
+
+    this.logger.info('All-bets result', {
+      dice,
+      total,
+      payout,
     });
   }
 }

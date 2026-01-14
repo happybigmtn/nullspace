@@ -51,24 +51,15 @@ const CRITICAL_ENV_VARS = [
 function isPlaceholder(value: string): boolean {
   const lowerValue = value.toLowerCase().trim();
 
-  // Check exact matches
-  for (const pattern of PLACEHOLDER_PATTERNS) {
-    if (lowerValue.includes(pattern.toLowerCase())) {
-      return true;
-    }
+  if (lowerValue === '') {
+    return true;
   }
 
-  // Check for patterns like "your_*_here"
   if (/your_.*_here/.test(lowerValue)) {
     return true;
   }
 
-  // Check for empty or whitespace-only values
-  if (value.trim() === '') {
-    return true;
-  }
-
-  return false;
+  return PLACEHOLDER_PATTERNS.some(pattern => lowerValue.includes(pattern.toLowerCase()));
 }
 
 /**

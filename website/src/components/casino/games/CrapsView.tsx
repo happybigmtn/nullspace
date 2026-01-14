@@ -4,12 +4,37 @@ import { GameState } from '../../../types';
 import { DiceThrow2D } from '../GameComponents';
 import { MobileDrawer } from '../MobileDrawer';
 import { BetsDrawer } from '../BetsDrawer';
-import { PanelDrawer } from '../PanelDrawer';
 import { InlineBetSelector } from '../InlineBetSelector';
 import { Label } from '../ui/Label';
 import { calculateCrapsExposure, canPlaceCrapsBonusBets } from '../../../utils/gameUtils';
 import { CrapsBonusDashboard } from './CrapsBonusDashboard';
 import { CrapsBetMenu } from './CrapsBetMenu';
+
+/** Helper to determine exposure row number color class */
+function getExposureRowColorClass(
+    num: number,
+    isHighlight: boolean,
+    isHard?: boolean
+): string {
+    if (isHighlight) return 'text-yellow-400 bg-yellow-400/20 rounded';
+    if (num === 7) return 'text-mono-400 dark:text-mono-500';
+    if (isHard === true) return 'text-mono-0 dark:text-mono-1000';
+    if (isHard === false) return 'text-ns-muted';
+    return 'text-white';
+}
+
+/** Helper for desktop exposure row (slightly different default) */
+function getDesktopExposureRowColorClass(
+    num: number,
+    isHighlight: boolean,
+    isHard?: boolean
+): string {
+    if (isHighlight) return 'text-yellow-400 bg-yellow-400/20 rounded';
+    if (num === 7) return 'text-mono-400 dark:text-mono-500';
+    if (isHard === true) return 'text-mono-0 dark:text-mono-1000';
+    if (isHard === false) return 'text-ns-muted';
+    return 'text-ns';
+}
 
 export const CrapsView = React.memo<{
     gameState: GameState;
@@ -60,7 +85,7 @@ export const CrapsView = React.memo<{
         const hasDontPassBet = gameState.crapsBets.some(b => b.type === 'DONT_PASS');
         if (hasPassBet) return 'border-mono-0 text-mono-0 dark:text-mono-1000 font-bold';
         if (hasDontPassBet) return 'border-mono-400 text-mono-400 dark:text-mono-500';
-        return 'border-gray-700 text-gray-700';
+        return 'border-ns-border/70 text-ns-muted';
     }, [gameState.crapsBets]);
 
     // Bonus bets can only be placed before epoch point is established
@@ -87,12 +112,12 @@ export const CrapsView = React.memo<{
     return (
         <>
             <div className="flex-1 w-full flex flex-col items-center justify-start sm:justify-center gap-4 sm:gap-6 relative pt-8 sm:pt-10 pb-24 sm:pb-20">
-                <h1 className="absolute top-0 text-xl font-bold text-gray-500 tracking-widest uppercase">CRAPS</h1>
+                <h1 className="absolute top-0 text-xl font-semibold text-ns-muted tracking-[0.35em] uppercase">CRAPS</h1>
                 <div className="absolute top-2 left-2 z-40">
                     <MobileDrawer label="INFO" title="CRAPS">
                         <div className="space-y-3">
-                            <div className="border border-gray-800 rounded bg-black/40 p-2">
-                                <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-2 border-b border-gray-800 pb-1 text-center">
+                            <div className="liquid-panel p-2">
+                                <div className="text-[10px] text-ns-muted uppercase tracking-widest mb-2 border-b border-ns-border/60 pb-1 text-center">
                                     Exposure
                                 </div>
                                 <div className="flex flex-col space-y-1">
@@ -139,12 +164,7 @@ export const CrapsView = React.memo<{
                                                             </span>
                                                         )}
                                                     </div>
-                                                    <div className={`w-9 text-center font-bold flex-shrink-0 ${
-                                                        isHighlight ? 'text-yellow-400 bg-yellow-400/20 rounded' :
-                                                        row.num === 7 ? 'text-mono-400 dark:text-mono-500' :
-                                                        row.isHard === true ? 'text-mono-0 dark:text-mono-1000' :
-                                                        row.isHard === false ? 'text-gray-400' : 'text-white'
-                                                    }`}>
+                                                    <div className={`w-9 text-center font-bold flex-shrink-0 ${getExposureRowColorClass(row.num, isHighlight, row.isHard)}`}>
                                                         {row.label}
                                                     </div>
                                                     <div className="w-14 flex justify-start items-center pl-2 overflow-hidden">
@@ -161,8 +181,8 @@ export const CrapsView = React.memo<{
                                 </div>
                             </div>
 
-                            <div className="border border-gray-800 rounded bg-black/40 p-2">
-                                <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-2 border-b border-gray-800 pb-1 text-center">
+                            <div className="liquid-panel p-2">
+                                <div className="text-[10px] text-ns-muted uppercase tracking-widest mb-2 border-b border-ns-border/60 pb-1 text-center">
                                     Table Bets
                                 </div>
                                 <div className="flex flex-col space-y-1">
@@ -171,12 +191,12 @@ export const CrapsView = React.memo<{
                                             const candidateIdx = gameState.crapsOddsCandidates?.indexOf(i);
                                             const isCandidate = candidateIdx !== undefined && candidateIdx !== -1;
                                             return (
-                                                <div key={i} onClick={() => isCandidate ? actions?.addCrapsOdds?.(candidateIdx) : actions?.placeCrapsBet?.(b.type, b.target)} className={`flex justify-between items-center text-xs border p-1 rounded cursor-pointer transition-colors ${isCandidate ? 'border-mono-0 bg-mono-0/10' : 'border-gray-800 bg-black/50 hover:bg-gray-800'}`}>
+                                                <div key={i} onClick={() => isCandidate ? actions?.addCrapsOdds?.(candidateIdx) : actions?.placeCrapsBet?.(b.type, b.target)} className={`flex justify-between items-center text-xs border p-1 rounded cursor-pointer transition-colors ${isCandidate ? 'border-mono-0 bg-mono-0/10' : 'border-ns-border/60 bg-white/40 dark:bg-black/50 hover:bg-white/60 dark:bg-white/45 dark:bg-black/50'}`}>
                                                 <div className="flex flex-col">
                                                     <span className={`font-bold text-[10px] ${isCandidate ? 'text-mono-0 dark:text-mono-1000' : 'text-mono-0 dark:text-mono-1000 font-bold'}`}>
                                                         {isCandidate ? `[${candidateIdx! + 1}] ` : ''}{b.type}{b.target !== undefined ? ` ${b.target}` : ''}
                                                     </span>
-                                                    <span className="text-[9px] text-gray-500">{b.status === 'PENDING' ? 'WAIT' : 'ON'}</span>
+                                                    <span className="text-[9px] text-ns-muted">{b.status === 'PENDING' ? 'WAIT' : 'ON'}</span>
                                                 </div>
                                                 <div className="text-right">
                                                     <div className="text-white text-[10px]">${b.amount}</div>
@@ -186,7 +206,7 @@ export const CrapsView = React.memo<{
                                             );
                                         })
                                     ) : (
-                                        <div className="text-center text-[10px] text-gray-700 italic">NO BETS</div>
+                                        <div className="text-center text-[10px] text-ns-muted italic">NO BETS</div>
                                     )}
                                 </div>
                             </div>
@@ -222,7 +242,7 @@ export const CrapsView = React.memo<{
                                 }`}>
                                     {bet.target}
                                 </div>
-                                <span className="text-[9px] text-gray-500">${bet.amount + (bet.oddsAmount || 0)}</span>
+                                <span className="text-[9px] text-ns-muted">${bet.amount + (bet.oddsAmount || 0)}</span>
                             </div>
                             );
                         })}
@@ -231,8 +251,8 @@ export const CrapsView = React.memo<{
 
                 {/* Point Indicator - Centered */}
                 <div className="flex flex-col items-center gap-2">
-                    <span className="text-xs uppercase tracking-widest text-gray-500">POINT</span>
-                    <div className={`w-16 h-16 md:w-20 md:h-20 border-2 flex items-center justify-center text-xl sm:text-2xl font-bold rounded-full shadow-[0_0_15px_rgba(0,0,0,0.5)] ${gameState.crapsPoint ? pointColor : 'border-gray-700 text-gray-700'}`}>
+                    <span className="text-xs uppercase tracking-widest text-ns-muted">POINT</span>
+                    <div className={`w-16 h-16 md:w-20 md:h-20 border-2 flex items-center justify-center text-xl sm:text-2xl font-bold rounded-full shadow-[0_0_15px_rgba(0,0,0,0.5)] ${gameState.crapsPoint ? pointColor : 'border-ns-border/70 text-ns-muted'}`}>
                         {gameState.crapsPoint || "OFF"}
                     </div>
                 </div>
@@ -246,9 +266,9 @@ export const CrapsView = React.memo<{
                     </div>
                     {gameState.crapsRollHistory.length > 0 && (
                         <div className={`text-[11px] sm:text-[10px] tracking-widest mt-1 flex items-center justify-center gap-1 transition-opacity duration-200 ${showOutcome ? 'opacity-100' : 'opacity-0'}`}>
-                            <span className="text-gray-400">LAST:</span>
+                            <span className="text-ns-muted">LAST:</span>
                             {gameState.crapsRollHistory.slice(-10).map((roll, i, arr) => (
-                                <span key={i} className={`${i === arr.length - 1 ? 'text-yellow-400 font-bold' : roll === 7 ? 'text-mono-400 dark:text-mono-500' : 'text-gray-400'}`}>
+                                <span key={i} className={`${i === arr.length - 1 ? 'text-yellow-400 font-bold' : roll === 7 ? 'text-mono-400 dark:text-mono-500' : 'text-ns-muted'}`}>
                                     {roll}{i < arr.length - 1 ? ' -' : ''}
                                 </span>
                             ))}
@@ -279,7 +299,7 @@ export const CrapsView = React.memo<{
                 {/* Super Mode Info - Animated */}
                 {gameState.superMode?.isActive && (
                     <div className="w-full max-w-md mx-auto px-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                        <div className="relative bg-titanium-900/95 border-2 border-mono-0 rounded text-center overflow-hidden
+                        <div className="relative liquid-card liquid-sheen border-2 border-mono-0 rounded text-center overflow-hidden
                                         shadow-[0_0_20px_rgba(255,215,0,0.3),inset_0_0_30px_rgba(255,215,0,0.05)]
                                         animate-pulse-glow">
                             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-mono-1000/10 to-transparent
@@ -307,7 +327,7 @@ export const CrapsView = React.memo<{
                                         ))}
                                     </div>
                                 ) : (
-                                    <div className="text-[10px] text-gray-400 font-mono animate-pulse">Loading multipliers...</div>
+                                    <div className="text-[10px] text-ns-muted font-mono animate-pulse">Loading multipliers...</div>
                                 )}
                             </div>
                         </div>
@@ -315,7 +335,7 @@ export const CrapsView = React.memo<{
                 )}
 
                 {/* Mobile: Core Bets & Active Bets */}
-                <div className="w-full mt-4 p-2 border-t border-gray-800 bg-gray-900/20 md:hidden">
+                <div className="w-full mt-4 p-2 border-t border-ns-border/60 bg-white/30 dark:bg-white/45 dark:bg-black/50 md:hidden">
                     {/* Core Betting Buttons - Always visible on mobile */}
                     <div className="flex gap-2 mb-3">
                         <button
@@ -323,7 +343,7 @@ export const CrapsView = React.memo<{
                             className={`flex-1 py-3 rounded border text-xs font-bold tracking-wider transition-colors ${
                                 betTypes.has('PASS') || betTypes.has('COME')
                                     ? 'border-mono-0 bg-mono-0/20 text-mono-0 dark:text-mono-1000 font-bold'
-                                    : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'
+                                    : 'border-ns-border/70 bg-white/40 dark:bg-black/50 text-ns hover:bg-white/60 dark:bg-white/45 dark:bg-black/50'
                             }`}
                         >
                             {gameState.crapsPoint ? 'COME' : 'PASS'}
@@ -333,7 +353,7 @@ export const CrapsView = React.memo<{
                             className={`flex-1 py-3 rounded border text-xs font-bold tracking-wider transition-colors ${
                                 betTypes.has('DONT_PASS') || betTypes.has('DONT_COME')
                                     ? 'border-mono-400 bg-mono-400/20 text-mono-400 dark:text-mono-500'
-                                    : 'border-gray-700 bg-black/50 text-gray-300 hover:bg-gray-800'
+                                    : 'border-ns-border/70 bg-white/40 dark:bg-black/50 text-ns hover:bg-white/60 dark:bg-white/45 dark:bg-black/50'
                             }`}
                         >
                             {gameState.crapsPoint ? "DON'T" : "DON'T PASS"}
@@ -343,13 +363,13 @@ export const CrapsView = React.memo<{
                     {/* Active Bets */}
                     {gameState.crapsBets.length > 0 && (
                         <div className="mb-2">
-                            <span className="text-[10px] text-gray-500 tracking-widest uppercase mb-1 block">ACTIVE BETS</span>
+                            <span className="text-[10px] text-ns-muted tracking-widest uppercase mb-1 block">ACTIVE BETS</span>
                             <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
                                 {gameState.crapsBets.map((b, i) => (
-                                    <div key={i} onClick={() => actions?.placeCrapsBet?.(b.type, b.target)} className="flex-none flex flex-col items-center border border-gray-800 bg-black/50 p-1 rounded min-w-[60px] cursor-pointer hover:bg-gray-800 transition-colors">
+                                    <div key={i} onClick={() => actions?.placeCrapsBet?.(b.type, b.target)} className="flex-none flex flex-col items-center border border-ns-border/60 bg-white/40 dark:bg-black/50 p-1 rounded min-w-[60px] cursor-pointer hover:bg-white/60 dark:bg-white/45 dark:bg-black/50 transition-colors">
                                         <span className="text-[9px] text-mono-0 dark:text-mono-1000 font-bold font-bold">{b.type}</span>
                                         <span className="text-[9px] text-white">${b.amount + (b.oddsAmount || 0)}</span>
-                                        {b.target !== undefined && <span className="text-[8px] text-gray-500">{b.target}</span>}
+                                        {b.target !== undefined && <span className="text-[8px] text-ns-muted">{b.target}</span>}
                                     </div>
                                 ))}
                             </div>
@@ -359,7 +379,7 @@ export const CrapsView = React.memo<{
             </div>
 
             {/* CONTROLS */}
-            <div className="ns-controlbar zen-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 bg-titanium-900/95 backdrop-blur border-t-2 border-gray-700 z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
+            <div className="ns-controlbar zen-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 liquid-card rounded-none md:rounded-t-3xl backdrop-blur border-t border-ns-border/60 z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
                 <div className="h-16 md:h-20 flex items-center justify-between md:justify-center gap-2 p-2 md:px-4">
                     {/* Bet Menu */}
                     <div className="hidden md:flex items-center gap-2 flex-1">
@@ -369,7 +389,7 @@ export const CrapsView = React.memo<{
                             canPlaceBonus={canPlaceBonus}
                             playMode={playMode}
                         />
-                        <PanelDrawer label="Table" title="CRAPS TABLE" count={gameState.crapsBets.length} className="hidden md:inline-flex">
+                        <div className="hidden md:block">
                             <div className="space-y-6">
                                 <div>
                                     <div className="flex items-center gap-2 mb-3">
@@ -378,7 +398,7 @@ export const CrapsView = React.memo<{
                                             className={`flex-1 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest transition-colors ${
                                                 leftSidebarView === 'EXPOSURE'
                                                     ? 'text-mono-0 dark:text-mono-1000 font-bold border border-mono-0 bg-mono-0/10'
-                                                    : 'text-titanium-500 border border-titanium-200 hover:text-titanium-800'
+                                                    : 'text-ns-muted border border-ns hover:text-ns'
                                             }`}
                                         >
                                             Exposure
@@ -388,7 +408,7 @@ export const CrapsView = React.memo<{
                                             className={`flex-1 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest transition-colors ${
                                                 leftSidebarView === 'SIDE_BETS'
                                                     ? 'text-amber-500 border border-amber-400 bg-amber-400/10'
-                                                    : 'text-titanium-500 border border-titanium-200 hover:text-titanium-800'
+                                                    : 'text-ns-muted border border-ns hover:text-ns'
                                             }`}
                                         >
                                             Bonus
@@ -396,7 +416,7 @@ export const CrapsView = React.memo<{
                                     </div>
 
                                     {leftSidebarView === 'EXPOSURE' ? (
-                                        <div className="max-h-52 overflow-y-auto scrollbar-hide rounded-2xl border border-titanium-200 bg-titanium-50/60 p-2">
+                                        <div className="max-h-52 overflow-y-auto scrollbar-hide rounded-2xl liquid-panel p-2">
                                             {(() => {
                                                 const hardwayTargets = [4, 6, 8, 10];
                                                 const activeHardways = gameState.crapsBets
@@ -439,12 +459,7 @@ export const CrapsView = React.memo<{
                                                                     </span>
                                                                 )}
                                                             </div>
-                                                            <div className={`w-10 text-center font-bold relative flex-shrink-0 ${
-                                                                isHighlight ? 'text-yellow-400 bg-yellow-400/20 rounded' :
-                                                                row.num === 7 ? 'text-mono-400 dark:text-mono-500' :
-                                                                row.isHard === true ? 'text-mono-0 dark:text-mono-1000' :
-                                                                row.isHard === false ? 'text-titanium-500' : 'text-titanium-900'
-                                                            }`}>
+                                                            <div className={`w-10 text-center font-bold relative flex-shrink-0 ${getDesktopExposureRowColorClass(row.num, isHighlight, row.isHard)}`}>
                                                                 {row.label}
                                                             </div>
                                                             <div className="w-20 flex justify-start items-center pl-2 overflow-hidden">
@@ -489,7 +504,7 @@ export const CrapsView = React.memo<{
                                                                 ? 'border-mono-0 bg-mono-0/10'
                                                                 : isPending
                                                                     ? 'border-amber-400/50 bg-amber-500/10'
-                                                                    : 'border-titanium-200 bg-white hover:bg-titanium-50'
+                                                                    : 'border-ns bg-ns-surface hover:bg-ns-surface'
                                                         }`}
                                                     >
                                                         <div className="flex flex-col">
@@ -498,10 +513,10 @@ export const CrapsView = React.memo<{
                                                             }`}>
                                                                 {isCandidate ? `[${candidateIdx! + 1}] ` : ''}{b.type}{b.target !== undefined ? ` ${b.target}` : ''}
                                                             </span>
-                                                            <span className="text-[9px] text-titanium-500">{b.status === 'PENDING' ? 'WAIT' : 'ON'}</span>
+                                                            <span className="text-[9px] text-ns-muted">{b.status === 'PENDING' ? 'WAIT' : 'ON'}</span>
                                                         </div>
                                                         <div className="text-right">
-                                                            <div className="text-titanium-900 text-[10px]">${b.amount + (b.oddsAmount || 0)}</div>
+                                                            <div className="text-ns text-[10px]">${b.amount + (b.oddsAmount || 0)}</div>
                                                             {b.localOddsAmount && b.localOddsAmount > 0 && (
                                                                 <div className="text-[9px] text-amber-500">+${b.localOddsAmount} odds pending</div>
                                                             )}
@@ -511,7 +526,7 @@ export const CrapsView = React.memo<{
                                             };
 
                                             if (confirmedBets.length === 0 && pendingBets.length === 0) {
-                                                return <div className="text-center text-[10px] text-titanium-500 uppercase tracking-widest">No bets</div>;
+                                                return <div className="text-center text-[10px] text-ns-muted uppercase tracking-widest">No bets</div>;
                                             }
 
                                             return (
@@ -539,7 +554,7 @@ export const CrapsView = React.memo<{
                                     </div>
                                 </div>
                             </div>
-                        </PanelDrawer>
+                        </div>
                     </div>
 
                     {/* Desktop: Bet Selector + ROLL Button - LUX-010 */}
@@ -568,35 +583,35 @@ export const CrapsView = React.memo<{
                         <BetsDrawer title="PLACE BETS">
                             <div className="space-y-4">
                                 {/* Normal Bets */}
-                                <div className="rounded border border-gray-800 bg-black/40 p-2 space-y-2">
-                                    <div className="text-[10px] text-green-500 font-bold tracking-widest border-b border-gray-800 pb-1">NORMAL BETS</div>
+                                <div className="liquid-panel p-2 space-y-2">
+                                    <div className="text-[10px] text-green-500 font-bold tracking-widest border-b border-ns-border/60 pb-1">NORMAL BETS</div>
                                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                        <button onClick={() => actions?.placeCrapsBet?.(gameState.crapsPoint ? 'COME' : 'PASS')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('PASS') || betTypes.has('COME') ? 'border-green-400 bg-green-500/20 text-green-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>
+                                        <button onClick={() => actions?.placeCrapsBet?.(gameState.crapsPoint ? 'COME' : 'PASS')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('PASS') || betTypes.has('COME') ? 'border-green-400 bg-green-500/20 text-green-300' : 'border-ns-border/70 bg-white/40 dark:bg-black/50 text-ns-muted'}`}>
                                             {gameState.crapsPoint ? 'COME' : 'PASS'}
                                         </button>
-                                        <button onClick={() => actions?.placeCrapsBet?.(gameState.crapsPoint ? 'DONT_COME' : 'DONT_PASS')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('DONT_PASS') || betTypes.has('DONT_COME') ? 'border-green-400 bg-green-500/20 text-green-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>
+                                        <button onClick={() => actions?.placeCrapsBet?.(gameState.crapsPoint ? 'DONT_COME' : 'DONT_PASS')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('DONT_PASS') || betTypes.has('DONT_COME') ? 'border-green-400 bg-green-500/20 text-green-300' : 'border-ns-border/70 bg-white/40 dark:bg-black/50 text-ns-muted'}`}>
                                             {gameState.crapsPoint ? "DON'T" : "D.PASS"}
                                         </button>
-                                        <button onClick={() => actions?.placeCrapsBet?.('FIELD')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('FIELD') ? 'border-green-400 bg-green-500/20 text-green-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>FIELD</button>
-                                        <button onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, crapsInputMode: 'HARDWAY' }))} className={`py-3 rounded border text-xs font-bold ${betTypes.has('HARDWAY') ? 'border-green-400 bg-green-500/20 text-green-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>HARD</button>
-                                        <button onClick={() => actions?.addCrapsOdds?.()} className="py-3 rounded border text-xs font-bold border-gray-700 bg-gray-900 text-gray-400">ODDS</button>
+                                        <button onClick={() => actions?.placeCrapsBet?.('FIELD')} className={`py-3 rounded border text-xs font-bold ${betTypes.has('FIELD') ? 'border-green-400 bg-green-500/20 text-green-300' : 'border-ns-border/70 bg-white/40 dark:bg-black/50 text-ns-muted'}`}>FIELD</button>
+                                        <button onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, crapsInputMode: 'HARDWAY' }))} className={`py-3 rounded border text-xs font-bold ${betTypes.has('HARDWAY') ? 'border-green-400 bg-green-500/20 text-green-300' : 'border-ns-border/70 bg-white/40 dark:bg-black/50 text-ns-muted'}`}>HARD</button>
+                                        <button onClick={() => actions?.addCrapsOdds?.()} className="py-3 rounded border text-xs font-bold border-ns-border/70 bg-white/40 dark:bg-black/50 text-ns-muted">ODDS</button>
                                     </div>
                                 </div>
 
                                 {/* Modern Bets */}
-                                <div className="rounded border border-gray-800 bg-black/40 p-2 space-y-2">
-                                    <div className="text-[10px] text-cyan-500 font-bold tracking-widest border-b border-gray-800 pb-1">MODERN BETS</div>
+                                <div className="liquid-panel p-2 space-y-2">
+                                    <div className="text-[10px] text-cyan-500 font-bold tracking-widest border-b border-ns-border/60 pb-1">MODERN BETS</div>
                                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                        <button onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, crapsInputMode: 'YES' }))} className={`py-3 rounded border text-xs font-bold ${betTypes.has('YES') ? 'border-cyan-400 bg-cyan-500/20 text-cyan-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>YES</button>
-                                        <button onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, crapsInputMode: 'NO' }))} className={`py-3 rounded border text-xs font-bold ${betTypes.has('NO') ? 'border-cyan-400 bg-cyan-500/20 text-cyan-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>NO</button>
-                                        <button onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, crapsInputMode: 'NEXT' }))} className={`py-3 rounded border text-xs font-bold ${betTypes.has('NEXT') ? 'border-cyan-400 bg-cyan-500/20 text-cyan-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>NEXT</button>
+                                        <button onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, crapsInputMode: 'YES' }))} className={`py-3 rounded border text-xs font-bold ${betTypes.has('YES') ? 'border-cyan-400 bg-cyan-500/20 text-cyan-300' : 'border-ns-border/70 bg-white/40 dark:bg-black/50 text-ns-muted'}`}>YES</button>
+                                        <button onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, crapsInputMode: 'NO' }))} className={`py-3 rounded border text-xs font-bold ${betTypes.has('NO') ? 'border-cyan-400 bg-cyan-500/20 text-cyan-300' : 'border-ns-border/70 bg-white/40 dark:bg-black/50 text-ns-muted'}`}>NO</button>
+                                        <button onClick={() => actions?.setGameState?.((prev: any) => ({ ...prev, crapsInputMode: 'NEXT' }))} className={`py-3 rounded border text-xs font-bold ${betTypes.has('NEXT') ? 'border-cyan-400 bg-cyan-500/20 text-cyan-300' : 'border-ns-border/70 bg-white/40 dark:bg-black/50 text-ns-muted'}`}>NEXT</button>
                                     </div>
                                 </div>
 
                                 {/* Bonus Bets */}
                                 {(canPlaceBonus || Object.values(bonusBetsPlaced).some(v => v)) && (
-                                    <div className="rounded border border-gray-800 bg-black/40 p-2 space-y-2">
-                                        <div className="text-[10px] text-amber-500 font-bold tracking-widest border-b border-gray-800 pb-1">BONUS BETS</div>
+                                    <div className="liquid-panel p-2 space-y-2">
+                                        <div className="text-[10px] text-amber-500 font-bold tracking-widest border-b border-ns-border/60 pb-1">BONUS BETS</div>
                                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                             {[
                                                 { key: 'FIRE', label: 'FIRE', placed: bonusBetsPlaced.fire },
@@ -617,8 +632,8 @@ export const CrapsView = React.memo<{
                                                         bet.placed
                                                             ? 'border-amber-400 bg-amber-500/20 text-amber-300'
                                                             : !canPlaceBonus
-                                                                ? 'border-gray-800 bg-gray-900/50 text-gray-700 cursor-not-allowed'
-                                                                : 'border-gray-700 bg-gray-900 text-gray-400'
+                                                                ? 'border-ns-border/60 bg-white/30 dark:bg-black/50 text-ns-muted cursor-not-allowed'
+                                                                : 'border-ns-border/70 bg-white/40 dark:bg-black/50 text-ns-muted'
                                                     }`}
                                                 >
                                                     {bet.label}
@@ -629,10 +644,10 @@ export const CrapsView = React.memo<{
                                 )}
 
                                 {/* Actions */}
-                                <div className="rounded border border-gray-800 bg-black/40 p-2">
+                                <div className="liquid-panel p-2">
                                     <div className="grid grid-cols-2 gap-2">
-                                        <button onClick={actions?.undoCrapsBet} className="flex-1 py-3 rounded border border-gray-700 bg-gray-900 text-gray-400 text-xs font-bold">UNDO</button>
-                                        <button onClick={actions?.toggleSuper} className={`flex-1 py-3 rounded border text-xs font-bold ${gameState.activeModifiers.super ? 'border-yellow-400 bg-yellow-500/20 text-yellow-300' : 'border-gray-700 bg-gray-900 text-gray-400'}`}>SUPER</button>
+                                        <button onClick={actions?.undoCrapsBet} className="flex-1 py-3 rounded border border-ns-border/70 bg-white/40 dark:bg-black/50 text-ns-muted text-xs font-bold">UNDO</button>
+                                        <button onClick={actions?.toggleSuper} className={`flex-1 py-3 rounded border text-xs font-bold ${gameState.activeModifiers.super ? 'border-yellow-400 bg-yellow-500/20 text-yellow-300' : 'border-ns-border/70 bg-white/40 dark:bg-black/50 text-ns-muted'}`}>SUPER</button>
                                     </div>
                                 </div>
                             </div>
@@ -652,9 +667,9 @@ export const CrapsView = React.memo<{
 
             {/* MODAL */}
             {gameState.crapsInputMode !== 'NONE' && (
-                     <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={closeInput}>
-                         <div className="bg-titanium-900 border border-mono-0 p-4 sm:p-6 rounded-lg shadow-xl flex flex-col items-center gap-4 w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
-                             <div className="text-sm tracking-widest text-gray-400 uppercase">SELECT {gameState.crapsInputMode} NUMBER</div>
+                     <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={closeInput}>
+                         <div className="liquid-card liquid-sheen p-4 sm:p-6 flex flex-col items-center gap-4 w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
+                             <div className="text-sm tracking-widest text-ns-muted uppercase">SELECT {gameState.crapsInputMode} NUMBER</div>
                              <div className="grid grid-cols-4 gap-3">
                                  {(() => {
                                      let numbersToRender: { num: number, label: string, payout?: string }[] = [];
@@ -706,11 +721,11 @@ export const CrapsView = React.memo<{
                                                     onClick={() => actions?.placeCrapsNumberBet?.(gameState.crapsInputMode, item.num)}
                                                     className="flex flex-col items-center gap-1"
                                                 >
-                                                    <div className="w-12 h-12 flex items-center justify-center border border-mono-400 rounded bg-gray-900 text-mono-400 dark:text-mono-500 font-bold text-lg relative">
+                                                    <div className="w-12 h-12 flex items-center justify-center border border-mono-400 rounded bg-white/40 dark:bg-black/50 text-mono-400 dark:text-mono-500 font-bold text-lg relative">
                                                         7
                                                         <span className="absolute bottom-0.5 text-[8px] text-mono-0 dark:text-mono-1000">{item.payout}</span>
                                                     </div>
-                                                    <div className="text-[10px] text-gray-500 bg-gray-800 px-1 rounded uppercase">
+                                                    <div className="text-[10px] text-ns-muted bg-white/60 dark:bg-white/45 dark:bg-black/50 px-1 rounded uppercase">
                                                         KEY 7
                                                     </div>
                                                 </button>
@@ -724,11 +739,11 @@ export const CrapsView = React.memo<{
                                                 onClick={() => actions?.placeCrapsNumberBet?.(gameState.crapsInputMode, item.num)}
                                                 className="flex flex-col items-center gap-1"
                                             >
-                                                <div className="w-12 h-12 flex items-center justify-center border border-gray-700 rounded bg-gray-900 text-white font-bold text-lg relative">
+                                                <div className="w-12 h-12 flex items-center justify-center border border-ns-border/70 rounded bg-white/40 dark:bg-black/50 text-white font-bold text-lg relative">
                                                     {item.num}
                                                     {item.payout && <span className="absolute bottom-0.5 text-[8px] text-mono-0 dark:text-mono-1000">({item.payout})</span>}
                                                 </div>
-                                                <div className="text-[10px] text-gray-500 bg-gray-800 px-1 rounded uppercase">
+                                                <div className="text-[10px] text-ns-muted bg-white/60 dark:bg-white/45 dark:bg-black/50 px-1 rounded uppercase">
                                                     KEY {item.label}
                                                 </div>
                                             </button>
@@ -736,7 +751,7 @@ export const CrapsView = React.memo<{
                                      });
                                  })()}
                              </div>
-                             <div className="text-xs text-gray-500 mt-2 text-center">Tap outside to cancel. Keyboard: [ESC] CANCEL</div>
+                             <div className="text-xs text-ns-muted mt-2 text-center">Tap outside to cancel. Keyboard: [ESC] CANCEL</div>
                          </div>
                      </div>
                 )}

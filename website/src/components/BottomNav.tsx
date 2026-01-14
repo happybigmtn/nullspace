@@ -1,7 +1,7 @@
 import React, { useRef, useState, useLayoutEffect, useCallback } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useSpring, animated } from '@react-spring/web';
-import { Gamepad2, Gift, Shield, User } from 'lucide-react';
+import { Gamepad2, LineChart, Shield, Layers } from 'lucide-react';
 import { SPRING_LIQUID_CONFIGS } from '../utils/motion';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
@@ -26,20 +26,30 @@ type BottomNavItem = {
 const NAV_ITEMS: BottomNavItem[] = [
   {
     to: '/',
-    label: 'Games',
-    icon: <Gamepad2 className="w-6 h-6" />,
+    label: 'Play',
+    icon: <Gamepad2 className="w-5 h-5" />,
     match: (path) => path === '/',
   },
   {
-    to: '/rewards',
-    label: 'Rewards',
-    icon: <Gift className="w-6 h-6" />,
-    match: (path) => path.startsWith('/rewards'),
+    to: '/economy',
+    label: 'Economy',
+    icon: <LineChart className="w-5 h-5" />,
+    match: (path) =>
+      path.startsWith('/economy') ||
+      path.startsWith('/swap') ||
+      path.startsWith('/borrow') ||
+      path.startsWith('/liquidity'),
+  },
+  {
+    to: '/stake',
+    label: 'Stake',
+    icon: <Layers className="w-5 h-5" />,
+    match: (path) => path.startsWith('/stake'),
   },
   {
     to: '/security',
-    label: 'Account',
-    icon: <Shield className="w-6 h-6" />,
+    label: 'Vault',
+    icon: <Shield className="w-5 h-5" />,
     match: (path) => path.startsWith('/security'),
   },
 ];
@@ -69,9 +79,10 @@ export const BottomNav: React.FC = () => {
     const containerRect = containerRef.current.getBoundingClientRect();
     const itemRect = itemEl.getBoundingClientRect();
 
+    const inset = 6;
     setIndicatorStyle({
-      left: itemRect.left - containerRect.left + itemRect.width / 2 - 16, // Center 32px indicator
-      width: 32,
+      left: itemRect.left - containerRect.left + inset,
+      width: Math.max(24, itemRect.width - inset * 2),
     });
   }, [activeItem]);
 
@@ -104,59 +115,58 @@ export const BottomNav: React.FC = () => {
   return (
     <nav
       aria-label="Primary navigation"
-      className="fixed bottom-0 left-0 right-0 sm:hidden z-40 bg-white/80 dark:bg-titanium-900/90 backdrop-blur-lg border-t border-titanium-200 dark:border-titanium-800"
+      className="fixed bottom-0 left-0 right-0 sm:hidden z-40"
       style={{
-        height: 'calc(var(--bottom-nav-h) + env(safe-area-inset-bottom))',
         paddingBottom: 'env(safe-area-inset-bottom)',
       }}
     >
-      <div ref={containerRef} className="h-full flex items-stretch relative max-w-md mx-auto">
-        {/* Animated indicator pill */}
-        {activeItem && (
-          <animated.div
-            className="absolute top-2 h-1 bg-titanium-900 dark:bg-action-primary rounded-full"
-            style={{
-              left: spring.left,
-              width: spring.width,
-            }}
-            aria-hidden="true"
-          />
-        )}
+      <div className="mx-auto w-full max-w-md px-3 pb-3">
+        <div
+          ref={containerRef}
+          className="relative flex items-center justify-between gap-1 liquid-card h-16 px-2"
+        >
+          {/* Animated indicator pill */}
+          {activeItem && (
+            <animated.div
+              className="absolute top-2 bottom-2 rounded-2xl bg-white/70 dark:bg-white/5 border border-black/10 dark:border-white/10 shadow-soft"
+              style={{
+                left: spring.left,
+                width: spring.width,
+              }}
+              aria-hidden="true"
+            />
+          )}
 
-        {/* Nav items */}
-        {NAV_ITEMS.map((item) => {
-          const isActive = activeItem?.to === item.to;
-          return (
-            <Link
-              key={item.to}
-              ref={setRef(item.to)}
-              to={item.to}
-              className={`flex-1 flex flex-col items-center justify-center gap-1 min-h-[44px] transition-all duration-200 ${
-                isActive
-                  ? 'text-titanium-900 dark:text-white'
-                  : 'text-titanium-400 hover:text-titanium-600 dark:text-titanium-500 dark:hover:text-titanium-300'
-              }`}
-              aria-current={isActive ? 'page' : undefined}
-              title={item.label}
-            >
-              <span
-                className={`transition-transform duration-200 ${
-                  isActive && !prefersReducedMotion ? 'scale-110' : 'scale-100'
+          {/* Nav items */}
+          {NAV_ITEMS.map((item) => {
+            const isActive = activeItem?.to === item.to;
+            return (
+              <Link
+                key={item.to}
+                ref={setRef(item.to)}
+                to={item.to}
+                className={`relative z-10 flex-1 flex flex-col items-center justify-center gap-1 min-h-[44px] transition-all duration-200 focus-visible:ring-2 focus-visible:ring-action-primary/50 rounded-lg ${
+                  isActive
+                    ? 'text-ns'
+                    : 'text-ns-muted hover:text-ns'
                 }`}
+                aria-current={isActive ? 'page' : undefined}
+                aria-label={item.label}
               >
-                {item.icon}
-              </span>
-              {/* Label only visible for active item */}
-              <span
-                className={`text-micro uppercase tracking-wider font-medium transition-opacity duration-200 ${
-                  isActive ? 'opacity-100' : 'opacity-0'
-                }`}
-              >
-                {item.label}
-              </span>
-            </Link>
-          );
-        })}
+                <span
+                  className={`transition-transform duration-200 ${
+                    isActive && !prefersReducedMotion ? 'scale-110' : 'scale-100'
+                  }`}
+                >
+                  {item.icon}
+                </span>
+                <span className="text-[10px] uppercase tracking-[0.28em] font-semibold">
+                  {item.label}
+                </span>
+              </Link>
+            );
+          })}
+        </div>
       </div>
     </nav>
   );

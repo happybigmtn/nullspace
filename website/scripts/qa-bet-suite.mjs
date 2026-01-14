@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 
-const BASE_URL = process.env.QA_BASE_URL ?? 'http://127.0.0.1:3000';
+const BASE_URL = process.env.QA_BASE_URL ?? 'http://localhost:3000';
 const DEFAULT_API_BASE = (() => {
   try {
     const parsed = new URL(BASE_URL);
@@ -13,7 +13,7 @@ const DEFAULT_API_BASE = (() => {
   } catch {
     // ignore
   }
-  return 'http://127.0.0.1:8080';
+  return 'http://localhost:8080';
 })();
 const API_BASE = process.env.QA_API_BASE ?? DEFAULT_API_BASE;
 const CHROMIUM_PATH = process.env.PW_CHROMIUM_PATH || '/usr/bin/chromium';

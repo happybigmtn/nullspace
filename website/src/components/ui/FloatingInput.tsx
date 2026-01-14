@@ -19,36 +19,30 @@ import React, {
   useRef,
   useState,
   useCallback,
+  useId,
   type InputHTMLAttributes,
   type ChangeEvent,
   type FocusEvent,
 } from 'react';
-import { animated, useSpring, to, config } from '@react-spring/web';
+import { animated, useSpring, to } from '@react-spring/web';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 
-// Simple className joiner
 const cn = (...args: (string | boolean | undefined | null)[]) =>
   args.filter(Boolean).join(' ');
 
-// Instant config for reduced motion
 const INSTANT_CONFIG = { duration: 0 };
 
-// Animation constants
 const FLOAT_LABEL = {
-  /** Label translateY when floating (px) */
   translateY: -20,
-  /** Label scale when floating */
   scale: 0.85,
-  /** Animation duration (ms) */
   duration: 200,
 };
 
-// Colors as hex strings for interpolation
 const COLORS = {
-  labelDefault: '#6B7280', // titanium-500
+  labelDefault: '#4B5565', // lc-ink-muted
   labelFocused: '#6366F1', // action-indigo
   labelError: '#EF4444', // action-error
-  borderDefault: '#D1D5DB', // titanium-300
+  borderDefault: '#D6DDE7', // lc-border (approx)
   borderFocused: '#6366F1', // action-indigo
   borderError: '#EF4444', // action-error
   success: '#22C55E', // action-success
@@ -129,6 +123,8 @@ export const FloatingInput = forwardRef<FloatingInputHandle, FloatingInputProps>
     const [hasValue, setHasValue] = useState(
       Boolean(value || defaultValue)
     );
+    const generatedId = useId();
+    const inputId = inputProps.id || `floating-input-${generatedId}`;
 
     const springConfig = prefersReducedMotion
       ? INSTANT_CONFIG
@@ -286,14 +282,12 @@ export const FloatingInput = forwardRef<FloatingInputHandle, FloatingInputProps>
 
     const currentSize = sizeStyles[size];
 
-    // Interpolate border color
     const getBorderColor = (progress: number) => {
       if (progress >= 1.5) return COLORS.borderError;
       if (progress >= 0.5) return COLORS.borderFocused;
       return COLORS.borderDefault;
     };
 
-    // Interpolate label color
     const getLabelColor = (progress: number) => {
       if (progress >= 1.5) return COLORS.labelError;
       if (progress >= 0.5) return COLORS.labelFocused;
@@ -304,9 +298,9 @@ export const FloatingInput = forwardRef<FloatingInputHandle, FloatingInputProps>
       <div className={cn('relative', containerClassName)}>
         <animated.div
           className={cn(
-            'relative rounded-lg border bg-white transition-shadow',
+            'relative rounded-lg border bg-white/80 dark:bg-white/5 transition-shadow',
             currentSize.container,
-            disabled && 'bg-titanium-50 cursor-not-allowed',
+            disabled && 'bg-black/5 dark:bg-white/5 cursor-not-allowed',
             className
           )}
           style={{
@@ -322,10 +316,11 @@ export const FloatingInput = forwardRef<FloatingInputHandle, FloatingInputProps>
         >
           {/* Floating label */}
           <animated.label
+            htmlFor={inputId}
             className={cn(
               'absolute top-1/2 pointer-events-none origin-left',
               currentSize.label,
-              disabled && 'text-titanium-400'
+              disabled && 'text-ns-muted'
             )}
             style={{
               transform: to(
@@ -343,17 +338,20 @@ export const FloatingInput = forwardRef<FloatingInputHandle, FloatingInputProps>
           {/* Input */}
           <input
             ref={inputRef}
+            id={inputId}
             value={value}
             defaultValue={defaultValue}
             disabled={disabled}
+            aria-invalid={hasError}
+            aria-describedby={hasError && errorMessage ? `${inputId}-error` : undefined}
             onFocus={handleFocus}
             onBlur={handleBlur}
             onChange={handleChange}
             className={cn(
               'w-full h-full bg-transparent outline-none',
               currentSize.input,
-              disabled && 'cursor-not-allowed text-titanium-500',
-              'text-titanium-900 placeholder-transparent'
+              disabled && 'cursor-not-allowed text-ns-muted',
+              'text-ns placeholder-transparent'
             )}
             {...inputProps}
           />
@@ -376,7 +374,7 @@ export const FloatingInput = forwardRef<FloatingInputHandle, FloatingInputProps>
 
         {/* Error message */}
         {hasError && errorMessage && (
-          <p className="mt-1.5 text-sm text-action-error">{errorMessage}</p>
+          <p id={`${inputId}-error`} role="alert" className="mt-1.5 text-sm text-action-error">{errorMessage}</p>
         )}
       </div>
     );

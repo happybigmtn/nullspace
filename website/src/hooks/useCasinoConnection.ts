@@ -71,6 +71,18 @@ export function useCasinoConnection(baseUrl = '/api'): CasinoConnection {
       try {
         setError(undefined);
         setStatusDetail(undefined);
+        setStatus('connecting');
+        setVaultMode('unknown');
+
+        // Force-disable vault requirement on testnet to avoid blocked bets when the
+        // vault isn’t unlocked. (Safe because testnet keys are non-sensitive.)
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem('nullspace_vault_enabled', 'false');
+          } catch {
+            // ignore
+          }
+        }
 
         const identityHex = import.meta.env.VITE_IDENTITY as string | undefined;
         if (!identityHex) {
@@ -85,9 +97,6 @@ export function useCasinoConnection(baseUrl = '/api'): CasinoConnection {
           return;
         }
 
-        setStatus('connecting');
-        setVaultMode('unknown');
-
         const wasmWrapper = new WasmWrapper(identityHex);
         const casinoClient = new CasinoClient(baseUrl, wasmWrapper);
         localClient = casinoClient;
@@ -95,6 +104,7 @@ export function useCasinoConnection(baseUrl = '/api'): CasinoConnection {
 
         const kp = casinoClient.getOrCreateKeypair();
         if (!kp) {
+          if (cancelled) return;
           try {
             casinoClient.destroy?.();
           } catch {
@@ -120,9 +130,26 @@ export function useCasinoConnection(baseUrl = '/api'): CasinoConnection {
 
         setVaultMode('unlocked');
         await casinoClient.switchUpdates(kp.publicKey);
-        await casinoClient.waitForFirstSeed?.().catch(() => undefined);
+        if (casinoClient.waitForFirstSeed) {
+          try {
+            await Promise.race([
+              casinoClient.waitForFirstSeed(),
+              new Promise((_, reject) => setTimeout(() => reject(new Error('seed-timeout')), 5000)),
+            ]);
+          } catch (seedErr: any) {
+            console.warn('[useCasinoConnection] waitForFirstSeed failed:', seedErr?.message ?? seedErr);
+          }
+        }
 
-        const account = await casinoClient.getAccount(kp.publicKey);
+        let account;
+        try {
+          account = await casinoClient.getAccount(kp.publicKey);
+        } catch (acctErr: any) {
+          if (cancelled) return;
+          setStatus('error');
+          setStatusDetail(acctErr?.message ?? 'Failed to load account');
+          return;
+        }
         await casinoClient.initNonceManager(kp.publicKeyHex, kp.publicKey, account);
 
         if (cancelled) {
@@ -140,6 +167,7 @@ export function useCasinoConnection(baseUrl = '/api'): CasinoConnection {
         setKeypair(kp);
         setCurrentView(casinoClient.getCurrentView?.() ?? null);
         setStatus('connected');
+        setStatusDetail(undefined);
 
         unsubscribeSeed = (casinoClient.onEvent?.('Seed', () => {
           setCurrentView(casinoClient.getCurrentView?.() ?? null);

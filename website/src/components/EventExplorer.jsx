@@ -1,6 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import RetroBox from './RetroBox';
-import RetroText from './RetroText';
 import { generateTrainerName } from '../utils/trainerUtils';
 import { logDebug } from '../utils/logger.js';
 
@@ -52,9 +50,9 @@ const EventExplorer = ({ client, onBack }) => {
     unsubscribeRef.current = client.onEvent('*', (event) => {
       // Filter out Seed events
       if (event.type === 'Seed') return;
-      
+
       const eventId = `${event.type}-${Date.now()}-${Math.random()}`;
-      
+
       setEvents(prev => {
         // Add new event at the beginning (newest first)
         const newEvents = [{ ...event, timestamp: Date.now(), id: eventId }, ...prev];
@@ -64,10 +62,10 @@ const EventExplorer = ({ client, onBack }) => {
         }
         return newEvents;
       });
-      
+
       // Mark this event as new for animation
       setNewEventIds(prev => new Set([...prev, eventId]));
-      
+
       // Remove from new events after animation completes
       setTimeout(() => {
         setNewEventIds(prev => {
@@ -85,353 +83,235 @@ const EventExplorer = ({ client, onBack }) => {
     };
   }, [client, isPaused]);
 
+  const getMoveType = (moveIndex) => {
+    if (moveIndex === 0) return 'DEFEND';
+    return `ATTACK ${moveIndex}`;
+  };
+
+  const getInstructionDisplay = (instruction) => {
+    if (typeof instruction === 'string') {
+      return instruction;
+    }
+    if (instruction && typeof instruction === 'object') {
+      if (instruction.type) return instruction.type;
+      return Object.keys(instruction)[0] || 'Unknown';
+    }
+    return 'Unknown';
+  };
+
+  const Line = ({ label, value, mono = false, className = '' }) => (
+    <div className={`text-[11px] text-ns ${className}`.trim()}>
+      <span className="text-ns-muted">{label}:</span>{' '}
+      <span className={mono ? 'font-mono break-all' : undefined}>{value}</span>
+    </div>
+  );
+
+  const Section = ({ title, children }) => (
+    <div className="liquid-panel p-3">
+      <div className="text-[10px] uppercase tracking-[0.28em] text-ns-muted">{title}</div>
+      <div className="mt-2 space-y-1">{children}</div>
+    </div>
+  );
+
+  const EventCard = ({ title, time, children }) => (
+    <div className="liquid-card p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-[10px] uppercase tracking-[0.32em] text-ns-muted">{title}</div>
+        <div className="text-[10px] text-ns-muted">{time}</div>
+      </div>
+      <div className="mt-3 space-y-1">{children}</div>
+    </div>
+  );
+
   const renderEventCard = (event) => {
     const time = new Date(event.timestamp).toLocaleTimeString();
-    
+
     switch (event.type) {
       case 'Generated':
         return (
-          <div className="border-4 border-retro-blue bg-retro-white p-4">
-            <div className="flex justify-between items-start mb-2">
-              <RetroText className="text-sm font-bold text-retro-blue">CHARACTER GENERATED</RetroText>
-              <RetroText className="text-xs text-retro-blue">{time}</RetroText>
-            </div>
-            <div className="space-y-1">
-              <RetroText className="text-xs text-retro-blue">
-                Player: {generateTrainerName(event.account)}
-              </RetroText>
-              <RetroText className="text-xs text-retro-blue break-all">
-                Account: {event.account}
-              </RetroText>
-              {event.creature_name && (
-                <RetroText className="text-xs text-retro-blue">
-                  Creature: {event.creature_name}
-                </RetroText>
-              )}
-              {event.creature && (
-                <>
-                  {!event.creature_name && event.creature.name && (
-                    <RetroText className="text-xs text-retro-blue">
-                      Creature: {event.creature.name}
-                    </RetroText>
-                  )}
-                  {event.creature.health && (
-                    <RetroText className="text-xs text-retro-blue">
-                      Health: {event.creature.health} HP
-                    </RetroText>
-                  )}
-                  {event.creature.type && (
-                    <RetroText className="text-xs text-retro-blue">
-                      Type: {event.creature.type}
-                    </RetroText>
-                  )}
-                  {event.creature.moves && event.creature.moves.length > 0 && (
-                    <RetroText className="text-xs text-retro-blue">
-                      Moves: {event.creature.moves.length}
-                    </RetroText>
-                  )}
-                </>
-              )}
-              {event.nonce !== undefined && (
-                <RetroText className="text-xs text-retro-blue">
-                  Nonce: {event.nonce}
-                </RetroText>
-              )}
-            </div>
-          </div>
+          <EventCard title="Character generated" time={time}>
+            <Line label="Player" value={generateTrainerName(event.account)} />
+            <Line label="Account" value={event.account} mono />
+            {event.creature_name && <Line label="Creature" value={event.creature_name} />}
+            {event.creature && (
+              <>
+                {!event.creature_name && event.creature.name && (
+                  <Line label="Creature" value={event.creature.name} />
+                )}
+                {event.creature.health !== undefined && (
+                  <Line label="Health" value={`${event.creature.health} HP`} />
+                )}
+                {event.creature.type && <Line label="Type" value={event.creature.type} />}
+                {event.creature.moves && event.creature.moves.length > 0 && (
+                  <Line label="Moves" value={event.creature.moves.length} />
+                )}
+              </>
+            )}
+            {event.nonce !== undefined && <Line label="Nonce" value={event.nonce} />}
+          </EventCard>
         );
-      
+
       case 'Matched':
         return (
-          <div className="border-4 border-retro-blue bg-retro-white p-4">
-            <div className="flex justify-between items-start mb-2">
-              <RetroText className="text-sm font-bold text-retro-blue">BATTLE MATCHED</RetroText>
-              <RetroText className="text-xs text-retro-blue">{time}</RetroText>
-            </div>
-            <div className="space-y-1">
-              <RetroText className="text-xs text-retro-blue">
-                Player A: {generateTrainerName(event.player_a)}
-              </RetroText>
-              <RetroText className="text-xs text-retro-blue">
-                Player B: {generateTrainerName(event.player_b)}
-              </RetroText>
-              <RetroText className="text-xs text-retro-blue break-all">
-                Battle ID: {event.battle}
-              </RetroText>
-              {event.turn !== undefined && (
-                <RetroText className="text-xs text-retro-blue">
-                  Starting Turn: {event.turn}
-                </RetroText>
-              )}
-              {event.expiry !== undefined && (
-                <RetroText className="text-xs text-retro-blue">
-                  First Move Expiry: {event.expiry}
-                </RetroText>
-              )}
-            </div>
-          </div>
+          <EventCard title="Battle matched" time={time}>
+            <Line label="Player A" value={generateTrainerName(event.player_a)} />
+            <Line label="Player B" value={generateTrainerName(event.player_b)} />
+            <Line label="Battle ID" value={event.battle} mono />
+            {event.turn !== undefined && <Line label="Starting turn" value={event.turn} />}
+            {event.expiry !== undefined && <Line label="First move expiry" value={event.expiry} />}
+          </EventCard>
         );
-      
-      case 'Moved':
-        // Determine move types
-        const getMoveType = (moveIndex) => {
-          if (moveIndex === 0) return 'DEFEND';
-          return `ATTACK ${moveIndex}`;
-        };
-        
-        // Check for KO
+
+      case 'Moved': {
         const playerAKO = event.player_a_health === 0;
         const playerBKO = event.player_b_health === 0;
-        
+        const playerAMove = event.player_a_move !== undefined
+          ? `${getMoveType(event.player_a_move)}${event.player_a_power !== undefined && event.player_a_power > 0 ? ` (Power ${event.player_a_power})` : ''}`
+          : null;
+        const playerBMove = event.player_b_move !== undefined
+          ? `${getMoveType(event.player_b_move)}${event.player_b_power !== undefined && event.player_b_power > 0 ? ` (Power ${event.player_b_power})` : ''}`
+          : null;
+
         return (
-          <div className="border-4 border-retro-blue bg-retro-white p-4">
-            <div className="flex justify-between items-start mb-2">
-              <RetroText className="text-sm font-bold text-retro-blue">MOVE REVEALED</RetroText>
-              <RetroText className="text-xs text-retro-blue">{time}</RetroText>
+          <EventCard title="Move revealed" time={time}>
+            <Line label="Battle" value={event.battle} mono />
+            <Line label="Round" value={event.round} />
+            {event.expiry !== undefined && <Line label="Next move deadline" value={event.expiry} />}
+            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <Section title={`Player A${playerAKO ? ' · KO' : ''}`}>
+                {event.player_a_health !== undefined && (
+                  <Line label="Health" value={`${event.player_a_health} HP`} />
+                )}
+                {playerAMove && <Line label="Move" value={playerAMove} />}
+              </Section>
+              <Section title={`Player B${playerBKO ? ' · KO' : ''}`}>
+                {event.player_b_health !== undefined && (
+                  <Line label="Health" value={`${event.player_b_health} HP`} />
+                )}
+                {playerBMove && <Line label="Move" value={playerBMove} />}
+              </Section>
             </div>
-            <div className="space-y-1">
-              <RetroText className="text-xs text-retro-blue break-all">
-                Battle: {event.battle}
-              </RetroText>
-              <RetroText className="text-xs text-retro-blue font-bold">
-                Round {event.round}
-              </RetroText>
-              {event.expiry !== undefined && (
-                <RetroText className="text-xs text-retro-blue">
-                  Next Move Deadline: {event.expiry}
-                </RetroText>
-              )}
-              
-              <div className="mt-2 pt-2 border-t-2 border-retro-blue">
-                {/* Player A Status */}
-                <div className="mb-2">
-                  <RetroText className="text-xs text-retro-blue font-bold">
-                    PLAYER A {playerAKO && '- KO!'}
-                  </RetroText>
-                  {event.player_a_health !== undefined && (
-                    <RetroText className="text-xs text-retro-blue">
-                      Health: {event.player_a_health} HP
-                    </RetroText>
-                  )}
-                  {event.player_a_move !== undefined && (
-                    <RetroText className="text-xs text-retro-blue">
-                      Move: {getMoveType(event.player_a_move)} {event.player_a_power !== undefined && event.player_a_power > 0 && 
-                        `(Power: ${event.player_a_power})`}
-                    </RetroText>
-                  )}
-                </div>
-                
-                {/* Player B Status */}
-                <div>
-                  <RetroText className="text-xs text-retro-blue font-bold">
-                    PLAYER B {playerBKO && '- KO!'}
-                  </RetroText>
-                  {event.player_b_health !== undefined && (
-                    <RetroText className="text-xs text-retro-blue">
-                      Health: {event.player_b_health} HP
-                    </RetroText>
-                  )}
-                  {event.player_b_move !== undefined && (
-                    <RetroText className="text-xs text-retro-blue">
-                      Move: {getMoveType(event.player_b_move)} {event.player_b_power !== undefined && event.player_b_power > 0 && 
-                        `(Power: ${event.player_b_power})`}
-                    </RetroText>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
+          </EventCard>
         );
-      
+      }
+
       case 'Locked':
         return (
-          <div className="border-4 border-retro-blue bg-retro-white p-4">
-            <div className="flex justify-between items-start mb-2">
-              <RetroText className="text-sm font-bold text-retro-blue">MOVE LOCKED</RetroText>
-              <RetroText className="text-xs text-retro-blue">{time}</RetroText>
-            </div>
-            <div className="space-y-1">
-              <RetroText className="text-xs text-retro-blue break-all">
-                Battle: {event.battle}
-              </RetroText>
-              {event.locker && (
-                <RetroText className="text-xs text-retro-blue break-all">
-                  Locker: {event.locker}
-                </RetroText>
-              )}
-              {event.observer && (
-                <RetroText className="text-xs text-retro-blue break-all">
-                  Observer: {event.observer}
-                </RetroText>
-              )}
-              {event.round !== undefined && (
-                <RetroText className="text-xs text-retro-blue">
-                  Round: {event.round}
-                </RetroText>
-              )}
-              {event.ciphertext && (
-                <RetroText className="text-xs text-retro-blue break-all">
-                  Ciphertext: {event.ciphertext}
-                </RetroText>
-              )}
-            </div>
-          </div>
+          <EventCard title="Move locked" time={time}>
+            <Line label="Battle" value={event.battle} mono />
+            {event.locker && <Line label="Locker" value={event.locker} mono />}
+            {event.observer && <Line label="Observer" value={event.observer} mono />}
+            {event.round !== undefined && <Line label="Round" value={event.round} />}
+            {event.ciphertext && <Line label="Ciphertext" value={event.ciphertext} mono />}
+          </EventCard>
         );
-      
+
       case 'Transaction':
-        const getInstructionDisplay = (instruction) => {
-          if (typeof instruction === 'string') {
-            return instruction;
-          }
-          if (instruction && typeof instruction === 'object') {
-            if (instruction.type) return instruction.type;
-            return Object.keys(instruction)[0] || 'Unknown';
-          }
-          return 'Unknown';
-        };
-        
         return (
-          <div className="border-4 border-retro-white bg-retro-blue p-4">
-            <div className="flex justify-between items-start mb-2">
-              <RetroText className="text-sm font-bold text-retro-white">TRANSACTION</RetroText>
-              <RetroText className="text-xs text-retro-white">{time}</RetroText>
-            </div>
-            <div className="space-y-1">
-              {event.instruction && (
-                <RetroText className="text-xs text-retro-white">
-                  Instruction: {getInstructionDisplay(event.instruction)}
-                </RetroText>
-              )}
-              {event.nonce !== undefined && (
-                <RetroText className="text-xs text-retro-white">
-                  Nonce: {event.nonce}
-                </RetroText>
-              )}
-              {event.public && (
-                <RetroText className="text-xs text-retro-white break-all">
-                  Public: {event.public}
-                </RetroText>
-              )}
-            </div>
-          </div>
+          <EventCard title="Transaction" time={time}>
+            {event.instruction && (
+              <Line label="Instruction" value={getInstructionDisplay(event.instruction)} />
+            )}
+            {event.nonce !== undefined && <Line label="Nonce" value={event.nonce} />}
+            {event.public && <Line label="Public" value={event.public} mono />}
+          </EventCard>
         );
-      
-      case 'Settled':
-        // Determine winner name based on outcome
+
+      case 'Settled': {
         let winnerName = 'DRAW';
         if (event.outcome === 'PlayerA' && event.player_a) {
           winnerName = generateTrainerName(event.player_a);
         } else if (event.outcome === 'PlayerB' && event.player_b) {
           winnerName = generateTrainerName(event.player_b);
         }
-        
-        // Calculate ELO changes
-        const playerAEloChange = event.player_a_new.elo - event.player_a_old.elo;
-        const playerBEloChange = event.player_b_new.elo - event.player_b_old.elo;
-        
+
+        const playerAEloChange = (event.player_a_new?.elo ?? 0) - (event.player_a_old?.elo ?? 0);
+        const playerBEloChange = (event.player_b_new?.elo ?? 0) - (event.player_b_old?.elo ?? 0);
+
         return (
-          <div className="border-4 border-retro-blue bg-retro-white p-4">
-            <div className="flex justify-between items-start mb-2">
-              <RetroText className="text-sm font-bold text-retro-blue">BATTLE SETTLED</RetroText>
-              <RetroText className="text-xs text-retro-blue">{time}</RetroText>
+          <EventCard title="Battle settled" time={time}>
+            <Line label="Battle" value={event.battle} mono />
+            <Line label="Winner" value={winnerName} className="font-semibold" />
+            {event.round !== undefined && <Line label="Rounds" value={event.round} />}
+            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <Section title={`${generateTrainerName(event.player_a)} · Player A`}>
+                <Line
+                  label="ELO"
+                  value={`${event.player_a_new?.elo ?? '-'} (${playerAEloChange > 0 ? '+' : ''}${playerAEloChange})`}
+                />
+              </Section>
+              <Section title={`${generateTrainerName(event.player_b)} · Player B`}>
+                <Line
+                  label="ELO"
+                  value={`${event.player_b_new?.elo ?? '-'} (${playerBEloChange > 0 ? '+' : ''}${playerBEloChange})`}
+                />
+              </Section>
             </div>
-            <div className="space-y-1">
-              <RetroText className="text-xs text-retro-blue break-all">
-                Battle: {event.battle}
-              </RetroText>
-              <RetroText className="text-xs text-retro-blue font-bold">
-                Winner: {winnerName}
-              </RetroText>
-              {event.round !== undefined && (
-                <RetroText className="text-xs text-retro-blue">
-                  Rounds: {event.round}
-                </RetroText>
-              )}
-              
-              <div className="mt-2 pt-2 border-t-2 border-retro-blue">
-                <RetroText className="text-xs text-retro-blue font-bold">
-                  {generateTrainerName(event.player_a)} (Player A)
-                </RetroText>
-                <RetroText className="text-xs text-retro-blue">
-                  ELO: {event.player_a_new.elo} ({playerAEloChange > 0 ? '+' : ''}{playerAEloChange})
-                </RetroText>
-                
-                <RetroText className="text-xs text-retro-blue font-bold mt-2">
-                  {generateTrainerName(event.player_b)} (Player B)
-                </RetroText>
-                <RetroText className="text-xs text-retro-blue">
-                  ELO: {event.player_b_new.elo} ({playerBEloChange > 0 ? '+' : ''}{playerBEloChange})
-                </RetroText>
-              </div>
-            </div>
-          </div>
+          </EventCard>
         );
-      
+      }
+
       default:
         return (
-          <div className="border-4 border-retro-blue bg-retro-white p-4">
-            <div className="flex justify-between items-start mb-2">
-              <RetroText className="text-sm font-bold text-retro-blue">
-                {event.type?.toUpperCase() || 'UNKNOWN'}
-              </RetroText>
-              <RetroText className="text-xs text-retro-blue">{time}</RetroText>
-            </div>
-            <div className="space-y-1">
-              {Object.entries(event).filter(([key]) => key !== 'type' && key !== 'timestamp').map(([key, value]) => (
-                <RetroText key={key} className="text-xs text-retro-blue">
-                  {key}: {typeof value === 'object' ? JSON.stringify(value) : String(value)}
-                </RetroText>
+          <EventCard title={event.type?.toUpperCase() || 'UNKNOWN'} time={time}>
+            {Object.entries(event)
+              .filter(([key]) => key !== 'type' && key !== 'timestamp')
+              .map(([key, value]) => (
+                <Line
+                  key={key}
+                  label={key}
+                  value={typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                  mono={typeof value === 'string' && value.length > 16}
+                />
               ))}
-            </div>
-          </div>
+          </EventCard>
         );
     }
   };
 
   return (
-    <div className="bg-retro-blue min-h-screen">
+    <div className="min-h-screen liquid-shell text-ns font-sans">
       {/* Fixed Header */}
-      <div className="sticky top-0 z-10 bg-retro-blue border-b-4 border-retro-white">
-        <RetroBox className="p-4 sm:p-6 lg:p-8 w-full rounded-none border-x-0 border-t-0">
-        <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-          <RetroText className="text-xl sm:text-2xl lg:text-3xl font-bold text-retro-white">
-            EVENT EXPLORER
-          </RetroText>
-          
-          <div className="flex gap-2">
-            <button
-              onClick={() => setIsPaused(!isPaused)}
-              className="border-4 border-retro-white bg-retro-blue px-4 py-2 hover:bg-retro-white hover:text-retro-blue transition-all text-retro-white group"
-            >
-              <RetroText className="text-sm font-bold text-retro-white group-hover:text-retro-blue">
-                {isPaused ? 'RESUME' : 'PAUSE'}
-              </RetroText>
-            </button>
-            
-            <button
-              onClick={onBack}
-              className="border-4 border-retro-white bg-retro-blue px-4 py-2 hover:bg-retro-white hover:text-retro-blue transition-all text-retro-white group"
-            >
-              <RetroText className="text-sm font-bold text-retro-white group-hover:text-retro-blue">
-                BACK
-              </RetroText>
-            </button>
+      <div className="sticky top-0 z-10">
+        <div className="border-b border-black/5 dark:border-white/10 bg-white/70 dark:bg-black/30 backdrop-blur-xl">
+          <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-4">
+            <div className="liquid-card p-4 sm:p-5">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="text-[10px] text-ns-muted tracking-[0.32em] uppercase">Live stream</div>
+                  <div className="text-lg font-display tracking-tight text-ns">Event Explorer</div>
+                  <div className="text-[11px] text-ns-muted">
+                    Real-time protocol events for ops and debugging.
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setIsPaused(!isPaused)}
+                    className="px-4 py-2 rounded-full liquid-chip text-[10px] uppercase tracking-[0.28em] text-ns hover:shadow-soft"
+                  >
+                    {isPaused ? 'Resume' : 'Pause'}
+                  </button>
+                  <button
+                    onClick={onBack}
+                    className="px-4 py-2 rounded-full liquid-chip text-[10px] uppercase tracking-[0.28em] text-ns hover:shadow-soft"
+                  >
+                    Back
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-        </RetroBox>
       </div>
 
       {/* Content Area */}
-      <div className="p-2 sm:p-4 lg:p-8">
-        {/* Event Stream Content */}
+      <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-6">
         {events.length === 0 ? (
-          <RetroText className="text-retro-white">
-            Waiting for events...
-          </RetroText>
+          <div className="text-[11px] text-ns-muted">Waiting for events...</div>
         ) : (
           <div className="space-y-3">
             {events.map((event, idx) => (
-              <div 
+              <div
                 key={event.id || idx}
                 className={newEventIds.has(event.id) ? 'animate-slideIn' : ''}
               >

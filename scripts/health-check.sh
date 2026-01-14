@@ -34,6 +34,42 @@ check_endpoint() {
     fi
 }
 
+check_block_freshness() {
+    local url="$1"
+    local max_age_sec="${2:-120}"
+    echo -n "Checking chain freshness... "
+
+    local json
+    if ! json=$(curl -s --max-time 10 "$url"); then
+        echo -e "${RED}DOWN${NC}"
+        ALL_HEALTHY=false
+        return 1
+    fi
+
+    local indexed_ms
+    indexed_ms=$(python - <<'PY' <<<"$json"
+import json,sys
+data=json.load(sys.stdin)
+print(data["blocks"][0]["indexed_at_ms"])
+PY
+    )
+    local now_ms
+    now_ms=$(python - <<'PY'
+import time
+print(int(time.time()*1000))
+PY
+    )
+    local age_sec=$(( (now_ms - indexed_ms) / 1000 ))
+    if [ "$age_sec" -le "$max_age_sec" ]; then
+        echo -e "${GREEN}UP${NC} (${age_sec}s)"
+        return 0
+    else
+        echo -e "${RED}STALE${NC} (${age_sec}s)"
+        ALL_HEALTHY=false
+        return 1
+    fi
+}
+
 echo "=========================================="
 echo "Staging Environment Health Check"
 echo "Started at: $(date)"
@@ -46,6 +82,7 @@ check_endpoint "Auth Service" "https://auth.testnet.regenesis.dev/healthz"
 check_endpoint "Indexer Service" "https://indexer.testnet.regenesis.dev/healthz"
 check_endpoint "Gateway API" "https://api.testnet.regenesis.dev/healthz" "-H 'Origin: https://testnet.regenesis.dev'"
 check_endpoint "Convex Service" "https://convex.testnet.regenesis.dev"
+check_block_freshness "https://testnet.regenesis.dev/api/explorer/blocks?offset=0&limit=1" "120"
 
 echo
 echo "=========================================="

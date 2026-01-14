@@ -17,12 +17,12 @@ export interface TestResult {
   duration: number;
   errors: string[];
   warnings: string[];
-  gameResults: Array<{
+  gameResults: {
     bet: number;
     result: string;
     payout: number;
     balanceChange: number;
-  }>;
+  }[];
 }
 
 export abstract class BaseGameTest {
@@ -34,12 +34,12 @@ export abstract class BaseGameTest {
   protected currentBalance: number = 0;
   protected errors: string[] = [];
   protected warnings: string[] = [];
-  protected gameResults: Array<{
+  protected gameResults: {
     bet: number;
     result: string;
     payout: number;
     balanceChange: number;
-  }> = [];
+  }[] = [];
 
   constructor(protected config: GameTestConfig) {
     this.logger = new TestLogger(config.testName);
@@ -51,15 +51,29 @@ export abstract class BaseGameTest {
   }
 
   /**
+   * Poll for account registration with balance
+   */
+  protected async waitForRegistration(maxAttempts = 20): Promise<GameMessage> {
+    for (let attempts = 1; attempts <= maxAttempts; attempts++) {
+      await new Promise((r) => setTimeout(r, 100));
+      this.client.send({ type: 'get_balance' });
+      const balanceMsg = await this.client.waitForMessage('balance', 2000);
+
+      if (balanceMsg.registered && balanceMsg.hasBalance) {
+        return balanceMsg;
+      }
+    }
+    throw new Error(`Account registration failed after ${maxAttempts * 100}ms`);
+  }
+
+  /**
    * Setup: Connect to gateway and establish session
    */
   async setup(): Promise<void> {
     this.logger.info('=== Test Setup ===');
 
-    // Connect to WebSocket
     await this.client.connect();
 
-    // Wait for session_ready
     const sessionReady = await this.client.waitForMessage('session_ready');
     this.sessionId = sessionReady.sessionId as string;
     this.publicKey = sessionReady.publicKey as string;
@@ -69,41 +83,15 @@ export abstract class BaseGameTest {
       publicKey: this.publicKey,
     });
 
-    // Wait for account registration to complete
-    // The backend automatically registers accounts asynchronously
-    let balanceMsg: any;
-    let attempts = 0;
-    const maxAttempts = 20; // 2 seconds max (100ms * 20)
+    const balanceMsg = await this.waitForRegistration();
 
-    do {
-      await new Promise((r) => setTimeout(r, 100)); // Wait 100ms between attempts
-      this.client.send({ type: 'get_balance' });
-      balanceMsg = await this.client.waitForMessage('balance', 2000);
-      attempts++;
-
-      // Exit early if registered and has balance flag
-      if (balanceMsg.registered && balanceMsg.hasBalance) {
-        break;
-      }
-    } while (
-      (!balanceMsg.registered || !balanceMsg.hasBalance) &&
-      attempts < maxAttempts
-    );
-
-    // Set initial balance (may be 0 in test mode)
     this.initialBalance = parseFloat(balanceMsg.balance as string);
     this.currentBalance = this.initialBalance;
-
-    if (!balanceMsg.hasBalance) {
-      throw new Error(`Account registration failed after ${attempts * 100}ms`);
-    }
 
     this.logger.success('Account ready', {
       balance: this.initialBalance,
       registered: balanceMsg.registered,
       hasBalance: balanceMsg.hasBalance,
-      attempts,
-      waitTimeMs: attempts * 100,
     });
   }
 

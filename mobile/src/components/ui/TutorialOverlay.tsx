@@ -11,8 +11,8 @@
  * - Animated gesture hints
  * - Smooth spring transitions between steps
  */
-import { View, Text, StyleSheet, Pressable, Modal, type LayoutRectangle } from 'react-native';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, Pressable, Modal } from 'react-native';
+import { useState, useEffect } from 'react';
 import { BlurView } from 'expo-blur';
 import Animated, {
   FadeIn,
@@ -30,8 +30,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { haptics } from '../../services/haptics';
 import { isTutorialCompleted, markTutorialCompleted } from '../../services/storage';
-import { SPACING, RADIUS, TYPOGRAPHY, DARK_MODE_GLOW, ANIMATION } from '../../constants/theme';
-import { OPACITY_SEMANTIC, OPACITY } from '@nullspace/design-tokens';
+import { SPACING, RADIUS, TYPOGRAPHY, DARK_MODE_GLOW } from '../../constants/theme';
+import { OPACITY } from '@nullspace/design-tokens';
 import { useTheme } from '../../context/ThemeContext';
 import { useThemedColors } from '../../hooks/useThemedColors';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -221,7 +221,13 @@ export function TutorialOverlay({
       </Animated.View>
 
       {/* Content positioned at bottom */}
-      <View style={styles.contentWrapper} pointerEvents="box-none">
+      <View
+        style={styles.contentWrapper}
+        pointerEvents="box-none"
+        accessibilityViewIsModal={true}
+        accessibilityRole="dialog"
+        accessibilityLabel={`Tutorial step ${currentStep + 1} of ${steps.length}`}
+      >
         <Animated.View
           entering={SlideInDown.springify().damping(18).stiffness(120)}
           exiting={FadeOut.duration(200)}
@@ -256,7 +262,16 @@ export function TutorialOverlay({
             </View>
           )}
 
-          <View style={styles.progress}>
+          <View
+            style={styles.progress}
+            accessibilityRole="progressbar"
+            accessibilityLabel={`Step ${currentStep + 1} of ${steps.length}`}
+            accessibilityValue={{
+              min: 1,
+              max: steps.length,
+              now: currentStep + 1,
+            }}
+          >
             {steps.map((_, i) => (
               <View
                 key={i}
@@ -271,7 +286,12 @@ export function TutorialOverlay({
           </View>
 
           <View style={styles.actions}>
-            <Pressable onPress={handleSkip} style={styles.skipButton}>
+            <Pressable
+              onPress={handleSkip}
+              style={styles.skipButton}
+              accessibilityRole="button"
+              accessibilityLabel="Skip tutorial"
+            >
               <Text style={[styles.skipText, { color: colors.textMuted }]}>
                 Skip tutorial
               </Text>
@@ -279,6 +299,8 @@ export function TutorialOverlay({
             <Pressable
               onPress={handleNext}
               style={[styles.nextButton, { backgroundColor: colors.primary, borderColor: colors.primary }]}
+              accessibilityRole="button"
+              accessibilityLabel={currentStep === steps.length - 1 ? 'Finish tutorial' : 'Go to next step'}
             >
               <Text style={[styles.nextText, { color: colors.background }]}>
                 {currentStep === steps.length - 1 ? 'GOT IT' : 'NEXT'}

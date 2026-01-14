@@ -256,8 +256,6 @@ export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, 
     );
     if (isOnChain) {
       // Wait for sessionId with HTTP fallback poll if WebSocket doesn't deliver
-      const sessionPollStart = Date.now();
-      const sessionTimeoutMs = Math.min(QA_SESSION_TIMEOUT_MS, 30_000); // 30s max for session poll
       let lastHttpPoll = 0;
       await waitFor(
         async () => {
@@ -273,11 +271,15 @@ export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, 
               const playerState = await actionsRef.current.getPlayerState();
               if (playerState?.activeSession) {
                 log('info', `[ensureGame] Got sessionId from HTTP fallback: ${playerState.activeSession}`);
-                // Update gameState with session from HTTP poll
-                if (actionsRef.current?.setGameState) {
+                // Use syncSessionId to update both the ref and state (fixes move submission)
+                const sessionBigInt = BigInt(playerState.activeSession);
+                if (actionsRef.current?.syncSessionId) {
+                  actionsRef.current.syncSessionId(sessionBigInt);
+                } else if (actionsRef.current?.setGameState) {
+                  // Fallback for backwards compatibility
                   actionsRef.current.setGameState((prev: GameState) => ({
                     ...prev,
-                    sessionId: BigInt(playerState.activeSession),
+                    sessionId: sessionBigInt,
                   }));
                 }
                 return true;
@@ -289,7 +291,7 @@ export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, 
           return false;
         },
         `session ready ${type}`,
-        sessionTimeoutMs
+        QA_SESSION_TIMEOUT_MS
       );
     }
   }, [isOnChain, log, waitFor]);
@@ -415,8 +417,8 @@ export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, 
           rouletteBets: [{ type: betCase.type, amount: QA_BET_AMOUNT, target: betCase.target }],
         };
         const prevHistoryLen = gameStateRef.current.rouletteHistory?.length ?? 0;
-        const prevMessage = String(gameStateRef.current.message ?? '');
         const prevSessionId = gameStateRef.current.sessionId ?? null;
+        const prevMoveNumber = gameStateRef.current.moveNumber ?? 0;
         if (!actionsRef.current?.spinRoulette) {
           throw new Error('Missing spinRoulette action');
         }
@@ -424,24 +426,17 @@ export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, 
         await waitFor(
           () => {
             const state = gameStateRef.current;
+            // Game completed - stage reached RESULT
+            if (state.stage === 'RESULT') return true;
+            // History updated = game complete
             const historyLen = state.rouletteHistory?.length ?? 0;
             if (historyLen > prevHistoryLen) return true;
-            const message = String(state.message ?? '');
-            const normalized = message.toUpperCase();
-            const prevNormalized = prevMessage.toUpperCase();
-            if (normalized !== prevNormalized) {
-              if (
-                normalized.startsWith('ROLL:') ||
-                normalized.startsWith('LANDED') ||
-                normalized.includes('EN PRISON') ||
-                normalized.includes('SYNCED FROM CHAIN')
-              ) {
-                return true;
-              }
-            }
-            if (prevSessionId && state.sessionId === null && state.stage === 'RESULT') {
-              return true;
-            }
+            // Move number advanced = transaction processed
+            const moveNumber = state.moveNumber ?? 0;
+            if (moveNumber > prevMoveNumber) return true;
+            // Session closed after processing
+            if (prevSessionId && state.sessionId === null) return true;
+            // Check for failure messages
             return isFailureMessage(state.message);
           },
           `roulette result ${betCase.label}`,
@@ -501,21 +496,30 @@ export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, 
         const prevRollLen = gameStateRef.current.crapsRollHistory?.length ?? 0;
         const prevSig = lastTxSigRef.current;
         const prevMove = gameStateRef.current.moveNumber ?? 0;
+        const prevSessionId = gameStateRef.current.sessionId ?? null;
         if (!actionsRef.current?.rollCraps) {
           throw new Error('Missing rollCraps action');
         }
         await actionsRef.current.rollCraps(crapsOverride);
         await waitFor(
           () => {
-            const dice = gameStateRef.current.dice ?? [];
+            const state = gameStateRef.current;
+            // Game stage reached RESULT
+            if (state.stage === 'RESULT') return true;
+            // Dice rolled
+            const dice = state.dice ?? [];
             const hasDice = dice.length >= 2 && dice[0] > 0 && dice[1] > 0;
+            if (hasDice) return true;
+            // Transaction processed (sig or move changed)
             const nextSig = lastTxSigRef.current;
-            const nextMove = gameStateRef.current.moveNumber ?? 0;
-            const moved = Boolean((nextSig && nextSig !== prevSig) || nextMove !== prevMove);
-            return hasDice ||
-              moved ||
-              (gameStateRef.current.crapsRollHistory?.length ?? 0) > prevRollLen ||
-              isCrapsFailureMessage(gameStateRef.current.message);
+            const nextMove = state.moveNumber ?? 0;
+            if ((nextSig && nextSig !== prevSig) || nextMove !== prevMove) return true;
+            // Roll history updated
+            if ((state.crapsRollHistory?.length ?? 0) > prevRollLen) return true;
+            // Session closed
+            if (prevSessionId && state.sessionId === null) return true;
+            // Check for failure
+            return isCrapsFailureMessage(state.message);
           },
           `craps roll ${betCase.label}`,
           QA_TIMEOUT_MS
@@ -566,21 +570,30 @@ export const QABetHarness: React.FC<QABetHarnessProps> = ({ enabled, gameState, 
         const prevHistoryLen = gameStateRef.current.sicBoHistory?.length ?? 0;
         const prevSig = lastTxSigRef.current;
         const prevMove = gameStateRef.current.moveNumber ?? 0;
+        const prevSessionId = gameStateRef.current.sessionId ?? null;
         if (!actionsRef.current?.rollSicBo) {
           throw new Error('Missing rollSicBo action');
         }
         await actionsRef.current.rollSicBo(sicBoOverride);
         await waitFor(
           () => {
-            const dice = gameStateRef.current.dice ?? [];
+            const state = gameStateRef.current;
+            // Game stage reached RESULT
+            if (state.stage === 'RESULT') return true;
+            // Dice rolled (3 dice for Sic Bo)
+            const dice = state.dice ?? [];
             const hasDice = dice.length >= 3 && dice[0] > 0 && dice[1] > 0 && dice[2] > 0;
+            if (hasDice) return true;
+            // Transaction processed (sig or move changed)
             const nextSig = lastTxSigRef.current;
-            const nextMove = gameStateRef.current.moveNumber ?? 0;
-            const moved = Boolean((nextSig && nextSig !== prevSig) || nextMove !== prevMove);
-            return hasDice ||
-              moved ||
-              (gameStateRef.current.sicBoHistory?.length ?? 0) > prevHistoryLen ||
-              isFailureMessage(gameStateRef.current.message);
+            const nextMove = state.moveNumber ?? 0;
+            if ((nextSig && nextSig !== prevSig) || nextMove !== prevMove) return true;
+            // History updated
+            if ((state.sicBoHistory?.length ?? 0) > prevHistoryLen) return true;
+            // Session closed
+            if (prevSessionId && state.sessionId === null) return true;
+            // Check for failure
+            return isFailureMessage(state.message);
           },
           `sicbo roll ${betCase.label}`,
           QA_TIMEOUT_MS

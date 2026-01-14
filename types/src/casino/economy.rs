@@ -720,16 +720,15 @@ impl Read for TreasuryBucket {
 
     fn read_cfg(reader: &mut impl Buf, _: &Self::Cfg) -> Result<Self, Error> {
         let value = u8::read(reader)?;
-        let bucket = match value {
-            0 => Self::Auction,
-            1 => Self::Liquidity,
-            2 => Self::Bonus,
-            3 => Self::Player,
-            4 => Self::Treasury,
-            5 => Self::Team,
-            _ => return Err(Error::InvalidEnum(value)),
-        };
-        Ok(bucket)
+        match value {
+            0 => Ok(Self::Auction),
+            1 => Ok(Self::Liquidity),
+            2 => Ok(Self::Bonus),
+            3 => Ok(Self::Player),
+            4 => Ok(Self::Treasury),
+            5 => Ok(Self::Team),
+            _ => Err(Error::InvalidEnum(value)),
+        }
     }
 }
 

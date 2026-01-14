@@ -409,7 +409,7 @@ describe('NonceManager', () => {
       expect(guardActivates).toBe(true);
 
       // Document: console.warn is called with message like:
-      // "Backend nonce reset detected for abc123; keeping local nonce 43"
+      // "Backend nonce behind local for abc123; keeping local nonce 43 (drift=43)"
     });
 
     it('DOCS: nonce recovery behavior in edge cases table', () => {

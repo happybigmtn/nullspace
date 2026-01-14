@@ -74,7 +74,7 @@ export const Pseudo3DChip: React.FC<Pseudo3DChipProps> = ({
                 
                 {isTop && (
                     <div className="w-3/4 h-3/4 bg-white/95 rounded-full flex items-center justify-center border border-black/5 shadow-inner z-10">
-                         <span className="text-[11px] font-black text-titanium-900 tabular-nums" style={{ fontFamily: 'Space Grotesk' }}>
+                         <span className="text-[11px] font-black text-ns tabular-nums" style={{ fontFamily: 'Space Grotesk' }}>
                             {value >= 1000 ? `${value/1000}k` : value}
                          </span>
                     </div>
@@ -98,7 +98,7 @@ export const Pseudo3DChip: React.FC<Pseudo3DChipProps> = ({
         </animated.div>
         
         {count > 1 && (
-            <div className="absolute -top-3 -right-3 bg-titanium-900 text-white text-[9px] font-black px-2 py-0.5 rounded-full z-50 shadow-sm border border-white/20 tabular-nums">
+            <div className="absolute -top-3 -right-3 bg-mono-0 text-white text-[9px] font-black px-2 py-0.5 rounded-full z-50 shadow-sm border border-white/20 tabular-nums">
                 {count}
             </div>
         )}

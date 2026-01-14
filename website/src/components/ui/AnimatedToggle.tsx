@@ -38,25 +38,28 @@ interface AnimatedToggleProps
 
 const INSTANT_CONFIG = { duration: 0 };
 
-// Size configurations
+// Size configurations - all sizes have min 44px touch target height for WCAG 2.5.5
 const SIZES = {
   sm: {
     track: 'w-10 h-6',
     thumb: 'w-4 h-4',
     thumbOff: 4, // px from left when off
     thumbOn: 20, // px from left when on
+    touchTarget: 'min-h-[44px] py-2', // Extra padding for touch target
   },
   md: {
     track: 'w-12 h-7',
     thumb: 'w-5 h-5',
     thumbOff: 4,
     thumbOn: 24,
+    touchTarget: 'min-h-[44px]',
   },
   lg: {
     track: 'w-14 h-8',
     thumb: 'w-6 h-6',
     thumbOff: 4,
     thumbOn: 28,
+    touchTarget: '',
   },
 };
 
@@ -77,17 +80,15 @@ export const AnimatedToggle = forwardRef<HTMLButtonElement, AnimatedToggleProps>
     const config = prefersReducedMotion ? INSTANT_CONFIG : TOGGLE_SPRING;
     const sizeConfig = SIZES[size];
 
-    // Spring for thumb position with overshoot
     const spring = useSpring({
       x: checked ? sizeConfig.thumbOn : sizeConfig.thumbOff,
       scale: 1,
       config,
     });
 
-    // Track and thumb colors
     const trackBg = checked
       ? 'bg-action-primary'
-      : 'bg-titanium-200 dark:bg-titanium-700';
+      : 'bg-white/70 dark:bg-white/10';
 
     return (
       <button
@@ -99,9 +100,8 @@ export const AnimatedToggle = forwardRef<HTMLButtonElement, AnimatedToggleProps>
         disabled={disabled}
         onClick={onToggle}
         className={[
-          'relative inline-flex items-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-action-primary focus-visible:ring-offset-2',
-          sizeConfig.track,
-          trackBg,
+          'relative inline-flex items-center justify-center rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-action-primary focus-visible:ring-offset-2',
+          sizeConfig.touchTarget,
           disabled && 'opacity-50 cursor-not-allowed',
           className ?? '',
         ]
@@ -110,18 +110,25 @@ export const AnimatedToggle = forwardRef<HTMLButtonElement, AnimatedToggleProps>
           .trim()}
         {...props}
       >
-        {/* Animated thumb */}
-        <animated.span
+        <span
           className={[
-            'absolute rounded-full bg-white shadow-soft',
-            sizeConfig.thumb,
+            'relative inline-flex items-center rounded-full border border-black/10 dark:border-white/10',
+            sizeConfig.track,
+            trackBg,
           ].join(' ')}
-          style={{
-            left: spring.x,
-            top: '50%',
-            transform: 'translateY(-50%)',
-          }}
-        />
+        >
+          <animated.span
+            className={[
+              'absolute rounded-full bg-white shadow-soft',
+              sizeConfig.thumb,
+            ].join(' ')}
+            style={{
+              left: spring.x,
+              top: '50%',
+              transform: 'translateY(-50%)',
+            }}
+          />
+        </span>
       </button>
     );
   }
@@ -151,14 +158,14 @@ export const AnimatedToggleWithLabel = forwardRef<
       className ?? '',
     ].join(' ')}
   >
-    <span className="text-body text-titanium-700 dark:text-titanium-300 font-medium">
+    <span className="text-body text-ns font-medium">
       {label}
     </span>
     <div className="flex items-center gap-2">
       {showState && (
         <span
           className={`text-caption font-semibold ${
-            checked ? 'text-action-success' : 'text-titanium-400'
+            checked ? 'text-action-success' : 'text-ns-muted'
           }`}
         >
           {checked ? 'On' : 'Off'}

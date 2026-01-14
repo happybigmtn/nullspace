@@ -1,0 +1,1 @@
+replace our /ai/strategy with the best local model that can take in a current hand state and output a recommended action. research the best model for this strategy and whether we can run it locally in a way that minimizes latency form a user experience standpoint.

@@ -1,5 +1,6 @@
 import React from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
+import { CHART_THEME } from './chartTheme';
 
 const PnLChart = ({ data }) => {
   // Find epoch changes
@@ -14,24 +15,27 @@ const PnLChart = ({ data }) => {
   });
 
   return (
-    <div className="bg-gray-900 p-4 rounded-lg border border-gray-800 shadow-xl h-96">
-      <h3 className="text-xl font-bold text-gray-100 mb-4 font-mono">House PnL (Epoch Cycles)</h3>
+    <div className="liquid-card p-5 h-96">
+      <h3 className="text-lg font-display tracking-tight text-ns mb-4">House PnL (epoch cycles)</h3>
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+          <CartesianGrid strokeDasharray="2 6" stroke={CHART_THEME.grid} />
           <XAxis 
             dataKey="timestamp" 
-            stroke="#9ca3af" 
+            stroke={CHART_THEME.axis}
+            tick={{ fill: CHART_THEME.axis, fontSize: 10 }}
             tickFormatter={(ts) => new Date(ts).toLocaleTimeString()}
           />
-          <YAxis stroke="#9ca3af" />
+          <YAxis stroke={CHART_THEME.axis} tick={{ fill: CHART_THEME.axis, fontSize: 10 }} />
           <Tooltip 
-            contentStyle={{ backgroundColor: '#111827', borderColor: '#374151' }}
+            contentStyle={CHART_THEME.tooltip}
+            itemStyle={CHART_THEME.itemStyle}
+            labelStyle={CHART_THEME.labelStyle}
           />
           <Line 
             type="stepAfter" 
             dataKey="house_pnl" 
-            stroke="#8b5cf6" 
+            stroke={CHART_THEME.series.violet}
             strokeWidth={2} 
             dot={false} 
             name="Net PnL"
@@ -40,8 +44,8 @@ const PnLChart = ({ data }) => {
             <ReferenceLine 
               key={i} 
               x={e.timestamp} 
-              stroke="#fbbf24" 
-              label={{ value: `Epoch ${e.epoch}`, fill: '#fbbf24', position: 'insideTopLeft' }} 
+              stroke={CHART_THEME.series.amber}
+              label={{ value: `Epoch ${e.epoch}`, fill: CHART_THEME.series.amber, position: 'insideTopLeft' }} 
             />
           ))}
         </LineChart>

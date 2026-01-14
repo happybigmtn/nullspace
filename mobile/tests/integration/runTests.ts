@@ -18,7 +18,7 @@ import { UltimateHoldemTest } from './games/UltimateHoldemTest';
 import { TestResult } from './framework/BaseGameTest';
 
 // Configuration
-const DEFAULT_GATEWAY_URL = process.env.GATEWAY_URL || 'ws://localhost:9010';
+const DEFAULT_GATEWAY_URL = process.env.GATEWAY_URL || 'wss://api.testnet.regenesis.dev';
 const RESULTS_DIR = path.join(__dirname, 'results');
 
 interface TestSuiteResult {
@@ -171,28 +171,18 @@ function printFinalSummary(results: TestSuiteResult): void {
   }
 
   console.log('\nGame Statistics:');
-  let totalGames = 0;
-  let totalWins = 0;
-  let totalBet = 0;
-  let totalPayout = 0;
-
-  for (const result of Object.values(results.tests)) {
-    for (const game of result.gameResults) {
-      totalGames++;
-      if (game.result.includes('won') || game.result.includes('blackjack')) {
-        totalWins++;
-      }
-      totalBet += game.bet;
-      totalPayout += game.payout;
-    }
-  }
+  const allGames = Object.values(results.tests).flatMap(r => r.gameResults);
+  const totalGames = allGames.length;
+  const totalWins = allGames.filter(g => g.result.includes('won') || g.result.includes('blackjack')).length;
+  const totalBet = allGames.reduce((sum, g) => sum + g.bet, 0);
+  const totalPayout = allGames.reduce((sum, g) => sum + g.payout, 0);
 
   console.log(`  Total Games Played: ${totalGames}`);
-  console.log(`  Wins: ${totalWins} (${((totalWins / totalGames) * 100).toFixed(1)}%)`);
+  console.log(`  Wins: ${totalWins} (${totalGames > 0 ? ((totalWins / totalGames) * 100).toFixed(1) : 0}%)`);
   console.log(`  Total Bet: ${totalBet.toFixed(2)}`);
   console.log(`  Total Payout: ${totalPayout.toFixed(2)}`);
   console.log(`  Net P/L: ${(totalPayout - totalBet).toFixed(2)}`);
-  console.log(`  RTP: ${((totalPayout / totalBet) * 100).toFixed(2)}%`);
+  console.log(`  RTP: ${totalBet > 0 ? ((totalPayout / totalBet) * 100).toFixed(2) : 0}%`);
 
   console.log('\n' + '='.repeat(80));
 

@@ -500,7 +500,11 @@ export function useWebSocket<T extends GameMessage = GameMessage>(
  * Get WebSocket URL from environment
  */
 export function getWebSocketUrl(): string {
-  const configured = process.env.EXPO_PUBLIC_WS_URL;
+  // Agent-native: allow explicit override for CI/local stacks.
+  const configured =
+    process.env.EXPO_PUBLIC_WS_URL ||
+    process.env.E2E_WS_URL ||
+    process.env.SMOKE_WS_URL;
   if (configured) return configured;
 
   if (__DEV__) {

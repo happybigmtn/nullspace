@@ -15,7 +15,7 @@ The comprehensive integration testing framework for all 10 Nullspace casino game
 ## Test Run Results
 
 **Command**: `npm run test:integration:local`
-**Gateway URL**: `ws://localhost:9010`
+**Gateway URL**: `wss://api.testnet.regenesis.dev`
 **Result**: All 10 tests executed successfully (failed as expected - no gateway running)
 
 ### Test Execution Summary

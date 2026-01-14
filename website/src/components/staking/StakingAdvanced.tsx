@@ -11,59 +11,59 @@ type StakingAdvancedProps = {
 
 export const StakingAdvanced: React.FC<StakingAdvancedProps> = ({ house, derived, currentView, onProcessEpoch }) => {
   return (
-    <section className="border border-gray-800 rounded p-4 bg-gray-900/30">
-      <div className="text-xs text-gray-400 tracking-widest mb-3">HOUSE / REWARDS</div>
+    <section className="liquid-card p-5">
+      <div className="text-[10px] text-ns-muted tracking-[0.28em] uppercase mb-3">House / Rewards</div>
       <div className="space-y-2 text-sm">
         <div className="flex items-center justify-between">
-          <span className="text-gray-500">Epoch</span>
-          <span className="text-white">{house?.currentEpoch ?? 0}</span>
+          <span className="text-ns-muted">Epoch</span>
+          <span className="text-ns">{house?.currentEpoch ?? 0}</span>
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-gray-500">Net PnL</span>
-          <span className="text-white">{house?.netPnl ?? '0'}</span>
+          <span className="text-ns-muted">Net PnL</span>
+          <span className="text-ns">{house?.netPnl ?? '0'}</span>
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-gray-500">Total Staked</span>
-          <span className="text-white">{house?.totalStakedAmount ?? 0}</span>
+          <span className="text-ns-muted">Total Staked</span>
+          <span className="text-ns">{house?.totalStakedAmount ?? 0}</span>
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-gray-500">Total Voting Power</span>
-          <span className="text-white">{house?.totalVotingPower ?? '0'}</span>
+          <span className="text-ns-muted">Total Voting Power</span>
+          <span className="text-ns">{house?.totalVotingPower ?? '0'}</span>
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-gray-500">AMM Fees</span>
-          <span className="text-white">{house?.accumulatedFees ?? 0}</span>
+          <span className="text-ns-muted">AMM Fees</span>
+          <span className="text-ns">{house?.accumulatedFees ?? 0}</span>
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-gray-500">Total Burned</span>
-          <span className="text-white">{house?.totalBurned ?? 0}</span>
+          <span className="text-ns-muted">Total Burned</span>
+          <span className="text-ns">{house?.totalBurned ?? 0}</span>
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-gray-500">Total Issuance</span>
-          <span className="text-white">{house?.totalIssuance ?? 0}</span>
+          <span className="text-ns-muted">Total Issuance</span>
+          <span className="text-ns">{house?.totalIssuance ?? 0}</span>
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-gray-500">Reward Pool</span>
-          <span className="text-white">{derived.rewardPool.toString()}</span>
+          <span className="text-ns-muted">Reward Pool</span>
+          <span className="text-ns">{derived.rewardPool.toString()}</span>
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-gray-500">Reward Carry</span>
-          <span className="text-white">{house?.stakingRewardCarry ?? 0}</span>
+          <span className="text-ns-muted">Reward Carry</span>
+          <span className="text-ns">{house?.stakingRewardCarry ?? 0}</span>
         </div>
         <div className="flex items-center justify-between">
-          <span className="text-gray-500">View</span>
-          <span className="text-white">{currentView ?? '—'}</span>
+          <span className="text-ns-muted">View</span>
+          <span className="text-ns">{currentView ?? '—'}</span>
         </div>
       </div>
 
-      <div className="mt-4 border-t border-gray-800 pt-4 space-y-2">
+      <div className="mt-4 border-t border-black/10 dark:border-white/10 pt-4 space-y-2">
         <button
-          className="w-full text-xs px-3 py-2 rounded border border-gray-700 text-gray-300 hover:border-gray-500"
+          className="w-full text-xs px-3 py-2 rounded-full liquid-chip text-ns hover:shadow-soft"
           onClick={onProcessEpoch}
         >
           Process Epoch (dev)
         </button>
-        <div className="text-[10px] text-gray-600">Anyone can call this in dev; later it’s a keeper/admin action.</div>
+        <div className="text-[10px] text-ns-muted">Anyone can call this in dev; later it’s a keeper/admin action.</div>
       </div>
     </section>
   );

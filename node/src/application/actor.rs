@@ -422,6 +422,15 @@ impl<
         let txs_executed: Counter<u64, AtomicU64> = Counter::default();
         let state_metadata_read_errors: Counter<u64, AtomicU64> = Counter::default();
         let nonce_read_errors: Counter<u64, AtomicU64> = Counter::default();
+        let pending_batches: Counter<u64, AtomicU64> = Counter::default();
+        let pending_transactions: Counter<u64, AtomicU64> = Counter::default();
+        let pending_transactions_added: Counter<u64, AtomicU64> = Counter::default();
+        let pending_transactions_dropped_nonce: Counter<u64, AtomicU64> = Counter::default();
+        let pending_transactions_future_nonce: Counter<u64, AtomicU64> = Counter::default();
+        let pending_transactions_cache_hits: Counter<u64, AtomicU64> = Counter::default();
+        let pending_transactions_cache_misses: Counter<u64, AtomicU64> = Counter::default();
+        let candidate_nonce_mismatches: Counter<u64, AtomicU64> = Counter::default();
+        let candidate_prepare_errors: Counter<u64, AtomicU64> = Counter::default();
         let state_transition_errors: Counter<u64, AtomicU64> = Counter::default();
         let storage_prune_errors: Counter<u64, AtomicU64> = Counter::default();
         let ancestry_latency = Histogram::new(LATENCY.into_iter());
@@ -450,6 +459,51 @@ impl<
             "nonce_read_errors",
             "Number of account nonce read errors in application actor",
             nonce_read_errors.clone(),
+        );
+        self.context.register(
+            "pending_batches",
+            "Number of mempool batches received from the indexer",
+            pending_batches.clone(),
+        );
+        self.context.register(
+            "pending_transactions",
+            "Number of mempool transactions received from the indexer",
+            pending_transactions.clone(),
+        );
+        self.context.register(
+            "pending_transactions_added",
+            "Number of mempool transactions added after nonce checks",
+            pending_transactions_added.clone(),
+        );
+        self.context.register(
+            "pending_transactions_dropped_nonce",
+            "Number of mempool transactions dropped due to nonce below next",
+            pending_transactions_dropped_nonce.clone(),
+        );
+        self.context.register(
+            "pending_transactions_future_nonce",
+            "Number of mempool transactions with nonce above next (queued for future)",
+            pending_transactions_future_nonce.clone(),
+        );
+        self.context.register(
+            "pending_transactions_cache_hits",
+            "Number of nonce cache hits while processing mempool transactions",
+            pending_transactions_cache_hits.clone(),
+        );
+        self.context.register(
+            "pending_transactions_cache_misses",
+            "Number of nonce cache misses while processing mempool transactions",
+            pending_transactions_cache_misses.clone(),
+        );
+        self.context.register(
+            "candidate_nonce_mismatches",
+            "Number of candidate transactions rejected due to nonce mismatch during propose",
+            candidate_nonce_mismatches.clone(),
+        );
+        self.context.register(
+            "candidate_prepare_errors",
+            "Number of candidate transactions rejected due to prepare errors during propose",
+            candidate_prepare_errors.clone(),
         );
         self.context.register(
             "state_transition_errors",
@@ -891,21 +945,47 @@ impl<
                                 let candidates = mempool.peek_batch(MAX_BLOCK_TRANSACTIONS * 2);
                                 let considered = candidates.len();
                                 let mut transactions = Vec::new();
+                                let mut rejected_nonce = 0u64;
+                                let mut rejected_other = 0u64;
                                 for tx in candidates {
                                     if transactions.len() >= MAX_BLOCK_TRANSACTIONS {
                                         break;
                                     }
 
                                     // Attempt to apply
-                                    if apply_transaction_nonce(
+                                    if let Err(err) = apply_transaction_nonce(
                                         state_for_nonce.clone(),
                                         &mut pending_nonces,
                                         tx.public.clone(),
                                         tx.nonce,
                                     )
                                     .await
-                                    .is_err()
                                     {
+                                        match err {
+                                            PrepareError::NonceMismatch { expected, got } => {
+                                                candidate_nonce_mismatches.inc();
+                                                if rejected_nonce < 3 {
+                                                    debug!(
+                                                        public = ?tx.public,
+                                                        expected,
+                                                        got,
+                                                        "candidate transaction rejected (nonce mismatch)"
+                                                    );
+                                                }
+                                                rejected_nonce = rejected_nonce.saturating_add(1);
+                                            }
+                                            PrepareError::State(err) => {
+                                                candidate_prepare_errors.inc();
+                                                if rejected_other < 3 {
+                                                    warn!(
+                                                        public = ?tx.public,
+                                                        ?err,
+                                                        "candidate transaction rejected (prepare error)"
+                                                    );
+                                                }
+                                                rejected_other = rejected_other.saturating_add(1);
+                                            }
+                                        }
                                         continue;
                                     }
 
@@ -916,6 +996,14 @@ impl<
 
                                 // Update metrics
                                 txs_considered.inc_by(considered as u64);
+                                if rejected_nonce > 0 || rejected_other > 0 {
+                                    debug!(
+                                        considered,
+                                        rejected_nonce,
+                                        rejected_other,
+                                        "candidate transactions rejected during propose"
+                                    );
+                                }
 
                                 // When ancestry for propose is provided, we can attempt to pack a block.
                                 //
@@ -1206,16 +1294,22 @@ impl<
                     };
 
                     // Process transactions (already verified in indexer client)
+                    pending_batches.inc();
+                    pending_transactions.inc_by(pending.transactions.len() as u64);
+                    let mut dropped_nonce = 0u64;
+                    let mut future_nonce = 0u64;
+                    let mut added = 0u64;
+                    let mut sample_dropped = 0u64;
                     for tx in pending.transactions {
                         // Check if below next
                         let now = self.context.current();
                         let cached_next = next_nonce_cache.get(now, &tx.public);
-                        let next = match cached_next {
-                            Some(next) => next,
+                        let (next, cache_hit) = match cached_next {
+                            Some(next) => (next, true),
                             None => match fetch_account_nonce(state.clone(), tx.public.clone()).await {
                                 Ok(next) => {
                                     next_nonce_cache.insert(now, tx.public.clone(), next);
-                                    next
+                                    (next, false)
                                 }
                                 Err(err) => {
                                     nonce_read_errors.inc();
@@ -1228,14 +1322,44 @@ impl<
                                 }
                             },
                         };
+                        if cache_hit {
+                            pending_transactions_cache_hits.inc();
+                        } else {
+                            pending_transactions_cache_misses.inc();
+                        }
                         if tx.nonce < next {
                             // If below next, we drop the incoming transaction
-                            debug!(tx = tx.nonce, state = next, "dropping incoming transaction");
+                            pending_transactions_dropped_nonce.inc();
+                            dropped_nonce = dropped_nonce.saturating_add(1);
+                            if sample_dropped < 3 {
+                                info!(
+                                    public = ?tx.public,
+                                    tx_nonce = tx.nonce,
+                                    next_nonce = next,
+                                    cache_hit,
+                                    "dropping incoming transaction (nonce below next)"
+                                );
+                                sample_dropped = sample_dropped.saturating_add(1);
+                            }
                             continue;
+                        }
+                        if tx.nonce > next {
+                            pending_transactions_future_nonce.inc();
+                            future_nonce = future_nonce.saturating_add(1);
                         }
 
                         // Add to mempool
                         mempool.add(tx);
+                        pending_transactions_added.inc();
+                        added = added.saturating_add(1);
+                    }
+                    if dropped_nonce > 0 || future_nonce > 0 {
+                        info!(
+                            added,
+                            dropped_nonce,
+                            future_nonce,
+                            "processed mempool batch"
+                        );
                     }
                 }
             }

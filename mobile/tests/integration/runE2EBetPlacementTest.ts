@@ -5,13 +5,13 @@
  * Or:  ts-node tests/integration/runE2EBetPlacementTest.ts
  *
  * Environment:
- *   GATEWAY_URL - WebSocket URL for gateway (default: ws://localhost:9010)
+ *   GATEWAY_URL - WebSocket URL for gateway (default: wss://api.testnet.regenesis.dev)
  */
 
 import { BetPlacementE2ETest } from './e2e/BetPlacementE2ETest';
 
 async function main(): Promise<void> {
-  const gatewayUrl = process.env.GATEWAY_URL || 'ws://localhost:9010';
+  const gatewayUrl = process.env.GATEWAY_URL || 'wss://api.testnet.regenesis.dev';
 
   console.log('╔══════════════════════════════════════════════════════════════╗');
   console.log('║       E2E Bet Placement Flow Integration Test (US-061)       ║');

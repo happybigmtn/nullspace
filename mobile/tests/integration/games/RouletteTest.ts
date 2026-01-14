@@ -17,6 +17,7 @@ export class RouletteTest extends BaseGameTest {
     await this.testMultipleBets();
     await this.testColorBets();
     await this.testNumberBets();
+    await this.testAdvancedBets();
   }
 
   /**
@@ -208,5 +209,47 @@ export class RouletteTest extends BaseGameTest {
 
       this.logger.debug(`Bet on ${num}, result: ${resultNumber}`);
     }
+  }
+
+  /**
+   * Test 5: Advanced bet types (dozens/columns/layout bets)
+   */
+  private async testAdvancedBets(): Promise<void> {
+    this.logger.info('--- Test: Advanced Bet Types ---');
+
+    const betAmount = 5;
+    const bets = [
+      { type: 'dozen_1', amount: betAmount },
+      { type: 'col_1', amount: betAmount },
+      { type: 'split_h', target: 1, amount: betAmount },   // 1-2
+      { type: 'split_v', target: 1, amount: betAmount },   // 1-4
+      { type: 'street', target: 1, amount: betAmount },    // 1-2-3
+      { type: 'corner', target: 1, amount: betAmount },    // 1-2-4-5
+      { type: 'six_line', target: 1, amount: betAmount },  // 1-6
+      { type: 'zero', amount: betAmount },                 // straight on zero
+    ];
+
+    this.client.send({
+      type: 'roulette_spin',
+      bets,
+    });
+
+    await this.assertMessageReceived('game_started');
+
+    const outcome = await this.waitForGameOutcome();
+    const gameResult = outcome.message;
+    const payout = parseFloat(gameResult.payout as string);
+    const winningNumber = gameResult.winningNumber as number;
+
+    this.recordGameResult(
+      bets.length * betAmount,
+      `advanced bets (number: ${winningNumber})`,
+      payout,
+    );
+
+    this.logger.info('Advanced bet result', {
+      number: winningNumber,
+      payout,
+    });
   }
 }

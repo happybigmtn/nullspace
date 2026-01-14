@@ -17,6 +17,7 @@ export class SicBoTest extends BaseGameTest {
     await this.testBigBet();
     await this.testSingleNumber();
     await this.testMultipleBets();
+    await this.testAllBetTypes();
   }
 
   /**
@@ -233,5 +234,46 @@ export class SicBoTest extends BaseGameTest {
       odd: total % 2 === 1 ? 'WON' : 'LOST',
       'single(6)': sixCount > 0 ? `WON (${sixCount}x)` : 'LOST',
     });
+  }
+
+  /**
+   * Test 5: Cover all Sic Bo bet types once
+   */
+  private async testAllBetTypes(): Promise<void> {
+    this.logger.info('--- Test: All Sic Bo Bet Types ---');
+
+    const betPer = 2;
+    const bets = [
+      { type: 'SMALL', amount: betPer },
+      { type: 'BIG', amount: betPer },
+      { type: 'ODD', amount: betPer },
+      { type: 'EVEN', amount: betPer },
+      { type: 'TRIPLE_SPECIFIC', target: 3, amount: betPer },
+      { type: 'TRIPLE_ANY', amount: betPer },
+      { type: 'DOUBLE_SPECIFIC', target: 3, amount: betPer },
+      { type: 'SUM', target: 9, amount: betPer },
+      { type: 'SINGLE_DIE', target: 5, amount: betPer },
+      { type: 'DOMINO', target: 0x12, amount: betPer }, // 1-2 combo
+      { type: 'HOP3_EASY', target: 0b000111, amount: betPer }, // 1/2/3
+      { type: 'HOP3_HARD', target: 0x25, amount: betPer }, // double 2 + single 5
+      { type: 'HOP4_EASY', target: 0b0001111, amount: betPer }, // 1/2/3/4
+    ];
+
+    this.client.send({
+      type: 'sic_bo_roll',
+      bets,
+    });
+
+    await this.assertMessageReceived('game_started');
+
+    const outcome = await this.waitForGameOutcome();
+    const gameResult = outcome.message;
+    const payout = parseFloat(gameResult.payout as string);
+    const dice = gameResult.dice as [number, number, number];
+    const total = dice[0] + dice[1] + dice[2];
+
+    this.recordGameResult(bets.length * betPer, `all-bets dice:${dice} total:${total}`, payout);
+
+    this.logger.info('All Sic Bo bet result', { dice, total, payout });
   }
 }

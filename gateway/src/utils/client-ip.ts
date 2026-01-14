@@ -157,27 +157,17 @@ function ipMatchesCidr(ip: string, cidr: { ip: bigint; prefixLen: number; isIpv6
  */
 let parsedCidrs: Array<{ ip: bigint; prefixLen: number; isIpv6: boolean }> = [];
 
+const CIDR_SHORTHANDS: Record<string, string[]> = {
+  loopback: ['127.0.0.0/8', '::1/128'],
+  private: ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', 'fc00::/7'],
+  docker: ['172.16.0.0/12'],
+};
+
 /**
  * Expand shorthand CIDR names
  */
 function expandCidrShorthand(cidr: string): string[] {
-  switch (cidr.toLowerCase()) {
-    case 'loopback':
-      return ['127.0.0.0/8', '::1/128'];
-    case 'private':
-      return [
-        '10.0.0.0/8',
-        '172.16.0.0/12',
-        '192.168.0.0/16',
-        'fc00::/7', // IPv6 unique local
-      ];
-    case 'docker':
-      return [
-        '172.16.0.0/12', // Docker default bridge range
-      ];
-    default:
-      return [cidr];
-  }
+  return CIDR_SHORTHANDS[cidr.toLowerCase()] ?? [cidr];
 }
 
 /**

@@ -10,6 +10,18 @@ import WebSocket from 'ws';
 import { EventEmitter } from 'events';
 import { SERVICE_URLS } from './services.js';
 
+const parseTimeout = (value: string | undefined, fallback: number): number => {
+  if (!value) return fallback;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+const IS_TESTNET = SERVICE_URLS.simulator.includes('testnet.regenesis.dev');
+const DEFAULT_UPDATE_TIMEOUT_MS = parseTimeout(
+  process.env.TEST_UPDATES_TIMEOUT_MS,
+  IS_TESTNET ? 120000 : 30000
+);
+
 /**
  * UpdatesFilter types matching backend (commonware-codec encoding)
  */
@@ -104,7 +116,7 @@ export class UpdatesClient extends EventEmitter {
     // Convert http(s) to ws(s)
     this.url = base.replace(/^http/, 'ws');
     // Origin for server-to-server requests (must match ALLOWED_WS_ORIGINS)
-    this.origin = origin || 'http://localhost:9010';
+    this.origin = origin || process.env.TEST_ORIGIN || SERVICE_URLS.website;
   }
 
   /**
@@ -187,7 +199,7 @@ export class UpdatesClient extends EventEmitter {
   /**
    * Wait for at least one update message
    */
-  async waitForUpdate(timeoutMs = 30000): Promise<Uint8Array> {
+  async waitForUpdate(timeoutMs = DEFAULT_UPDATE_TIMEOUT_MS): Promise<Uint8Array> {
     // Check if we already have an update
     if (this.rawMessages.length > 0) {
       return this.rawMessages[0]!;
@@ -212,7 +224,10 @@ export class UpdatesClient extends EventEmitter {
   /**
    * Wait for multiple update messages
    */
-  async waitForUpdates(count: number, timeoutMs = 30000): Promise<Uint8Array[]> {
+  async waitForUpdates(
+    count: number,
+    timeoutMs = DEFAULT_UPDATE_TIMEOUT_MS
+  ): Promise<Uint8Array[]> {
     // Check if we already have enough
     if (this.rawMessages.length >= count) {
       return this.rawMessages.slice(0, count);
@@ -296,7 +311,7 @@ export async function getAccountState(
   const response = await fetch(`${url}/account/${publicKeyHex}`, {
     method: 'GET',
     headers: {
-      Origin: 'http://localhost:9010',
+      Origin: process.env.TEST_ORIGIN ?? SERVICE_URLS.website,
     },
   });
 
