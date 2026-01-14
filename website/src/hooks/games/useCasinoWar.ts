@@ -86,6 +86,7 @@ export const useCasinoWar = ({
     currentSessionIdRef,
     setLastTxSig,
     setGameState,
+    armChainResponseTimeout,
   ]);
 
   const casinoWarGoToWar = useCallback(async () => {
@@ -126,6 +127,7 @@ export const useCasinoWar = ({
     currentSessionIdRef,
     setLastTxSig,
     setGameState,
+    armChainResponseTimeout,
   ]);
 
   const casinoWarSurrender = useCallback(async () => {

@@ -19,10 +19,12 @@ interface UseCrapsProps {
   chainService: CasinoChainService | null;
   currentSessionIdRef: MutableRefObject<bigint | null>;
   isPendingRef: MutableRefObject<boolean>;
+  pendingMoveCountRef: MutableRefObject<number>;
   setLastTxSig: (sig: string | null) => void;
   isOnChain: boolean;
   startGame: (type: GameType) => void;
   autoPlayDraftRef: MutableRefObject<AutoPlayDraft | null>;
+  armChainResponseTimeout: (context: string, expectedSessionId?: bigint | null) => void;
 }
 
 export const useCraps = ({
@@ -32,10 +34,12 @@ export const useCraps = ({
   chainService,
   currentSessionIdRef,
   isPendingRef,
+  pendingMoveCountRef,
   setLastTxSig,
   isOnChain,
   startGame,
-  autoPlayDraftRef
+  autoPlayDraftRef,
+  armChainResponseTimeout,
 }: UseCrapsProps) => {
 
   const localBetCost = useCallback((bet: CrapsBet): number => {
@@ -271,6 +275,7 @@ export const useCraps = ({
        const state = stateOverride ?? gameState;
        const hasSession = !!currentSessionIdRef.current;
        const stagedLocalBets = state.crapsBets.filter(b => b.local === true);
+       const betsWithStagedOdds = state.crapsBets.filter(b => (b.localOddsAmount ?? 0) > 0);
 
        // No auto-rebet - only use explicitly staged bets
        const betsToPlace = stagedLocalBets;
@@ -312,11 +317,14 @@ export const useCraps = ({
              if (isActive === false) {
                currentSessionIdRef.current = null;
                isPendingRef.current = false;
+               pendingMoveCountRef.current = 0;
                autoPlayDraftRef.current = { type: GameType.CRAPS, crapsBets: stagedLocalBets };
                setGameState(prev => ({ ...prev, message: 'SESSION ENDED - STARTING NEW...' }));
                startGame(GameType.CRAPS);
                return;
              }
+
+             pendingMoveCountRef.current = stagedLocalBets.length + betsWithStagedOdds.length + 1;
 
              // First, place any staged local bets on chain (command 0: place bet)
              // Each bet is: [0, bet_type, target, amount:u64 BE]
@@ -333,6 +341,7 @@ export const useCraps = ({
                try {
                  const betResult = await chainService.sendMove(currentSessionIdRef.current!, payload);
                  if (betResult.txHash) setLastTxSig(betResult.txHash);
+                 armChainResponseTimeout('CRAPS BET', currentSessionIdRef.current);
                } catch (err) {
                  console.error('[useCraps] Bet placement error:', err);
                  throw err;
@@ -349,7 +358,6 @@ export const useCraps = ({
 
              // Second, send any staged odds (command 1: add odds)
              // Each odds is: [1, amount:u64 BE]
-             const betsWithStagedOdds = state.crapsBets.filter(b => (b.localOddsAmount ?? 0) > 0);
              for (const bet of betsWithStagedOdds) {
                const oddsAmount = bet.localOddsAmount!;
                const payload = new Uint8Array(9);
@@ -358,6 +366,7 @@ export const useCraps = ({
 
                const oddsResult = await chainService.sendMove(currentSessionIdRef.current!, payload);
                if (oddsResult.txHash) setLastTxSig(oddsResult.txHash);
+               armChainResponseTimeout('CRAPS ODDS', currentSessionIdRef.current);
              }
 
              // Clear localOddsAmount after sending (chain state will update oddsAmount)
@@ -371,10 +380,12 @@ export const useCraps = ({
              // Then roll dice
              const result = await chainService.sendMove(currentSessionIdRef.current!, new Uint8Array([CrapsMove.Roll]));
              if (result.txHash) setLastTxSig(result.txHash);
+             armChainResponseTimeout('CRAPS ROLL', currentSessionIdRef.current);
              setGameState(prev => ({ ...prev, message: 'ROLLING...' }));
            } catch (e) {
                console.error('Roll failed', e);
                isPendingRef.current = false;
+               pendingMoveCountRef.current = 0;
                setGameState(prev => ({ ...prev, message: 'ROLL FAILED' }));
            }
            return;
@@ -383,7 +394,7 @@ export const useCraps = ({
        // Local mode not supported - require on-chain session
        setGameState(prev => ({ ...prev, message: 'OFFLINE - CHECK CONNECTION' }));
 
-  }, [gameState.crapsBets, gameState.crapsPoint, currentSessionIdRef, chainService, isOnChain, isPendingRef, startGame, setGameState, setLastTxSig, autoPlayDraftRef]);
+  }, [gameState.crapsBets, gameState.crapsPoint, currentSessionIdRef, chainService, isOnChain, isPendingRef, pendingMoveCountRef, startGame, setGameState, setLastTxSig, autoPlayDraftRef, armChainResponseTimeout]);
 
   return {
     placeCrapsBet,

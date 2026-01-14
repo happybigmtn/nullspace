@@ -18,6 +18,7 @@ type AutoPlayDeps = {
   currentSessionIdRef: MutableRefObject<bigint | null>;
   setGameState: Dispatch<SetStateAction<GameState>>;
   setLastTxSig: (sig: string | null) => void;
+  armChainResponseTimeout: (context: string, expectedSessionId?: bigint | null) => void;
 };
 
 export const runAutoPlayPlanForSession = (
@@ -31,6 +32,7 @@ export const runAutoPlayPlanForSession = (
     currentSessionIdRef,
     setGameState,
     setLastTxSig,
+    armChainResponseTimeout,
   }: AutoPlayDeps,
 ) => {
   const plan = autoPlayPlanRef.current;
@@ -75,6 +77,7 @@ export const runAutoPlayPlanForSession = (
         const atomicPayload = serializeBaccaratAtomicBatch(betsToPlace);
         const result = await chainService.sendMove(sessionId, atomicPayload);
         if (result.txHash) setLastTxSig(result.txHash);
+        armChainResponseTimeout('BACCARAT AUTO', sessionId);
         return;
       }
 
@@ -98,6 +101,7 @@ export const runAutoPlayPlanForSession = (
           const rulePayload = new Uint8Array([3, ruleByte]);
           const ruleRes = await chainService.sendMove(sessionId, rulePayload);
           if (ruleRes.txHash) setLastTxSig(ruleRes.txHash);
+          armChainResponseTimeout('ROULETTE RULE AUTO', sessionId);
         } else {
           pendingMoveCountRef.current = 1;
         }
@@ -106,6 +110,7 @@ export const runAutoPlayPlanForSession = (
         const atomicPayload = serializeRouletteAtomicBatch(plan.rouletteBets);
         const result = await chainService.sendMove(sessionId, atomicPayload);
         if (result.txHash) setLastTxSig(result.txHash);
+        armChainResponseTimeout('ROULETTE AUTO', sessionId);
 
         setGameState(prev => ({
           ...prev,
@@ -124,6 +129,7 @@ export const runAutoPlayPlanForSession = (
         const atomicPayload = serializeSicBoAtomicBatch(plan.sicBoBets);
         const result = await chainService.sendMove(sessionId, atomicPayload);
         if (result.txHash) setLastTxSig(result.txHash);
+        armChainResponseTimeout('SIC BO AUTO', sessionId);
 
         setGameState(prev => ({
           ...prev,
@@ -142,6 +148,7 @@ export const runAutoPlayPlanForSession = (
         const atomicPayload = serializeCrapsAtomicBatch(plan.crapsBets);
         const result = await chainService.sendMove(sessionId, atomicPayload);
         if (result.txHash) setLastTxSig(result.txHash);
+        armChainResponseTimeout('CRAPS AUTO', sessionId);
 
         setGameState(prev => ({
           ...prev,

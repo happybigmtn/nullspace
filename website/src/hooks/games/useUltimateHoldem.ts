@@ -12,6 +12,7 @@ interface UseUltimateHoldemProps {
   isOnChain: boolean;
   uthBackendStageRef: MutableRefObject<number>;
   setLastTxSig: (sig: string | null) => void;
+  armChainResponseTimeout: (context: string, expectedSessionId?: bigint | null) => void;
 }
 
 export const useUltimateHoldem = ({
@@ -23,6 +24,7 @@ export const useUltimateHoldem = ({
   isOnChain,
   uthBackendStageRef,
   setLastTxSig,
+  armChainResponseTimeout,
 }: UseUltimateHoldemProps) => {
   const uthToggleTrips = useCallback(async () => {
     if (gameState.type !== GameType.ULTIMATE_HOLDEM) return;
@@ -151,6 +153,7 @@ export const useUltimateHoldem = ({
         const payload = new Uint8Array([0]);
         const result = await chainService.sendMove(currentSessionIdRef.current, payload);
         if (result.txHash) setLastTxSig(result.txHash);
+        armChainResponseTimeout('ULTIMATE HOLDEM CHECK', currentSessionIdRef.current);
         setGameState(prev => ({ ...prev, message: 'CHECKING...' }));
         return;
       } catch (error) {
@@ -172,6 +175,7 @@ export const useUltimateHoldem = ({
     uthBackendStageRef,
     setLastTxSig,
     setGameState,
+    armChainResponseTimeout,
   ]);
 
   const uhBet = useCallback(async (multiplier: number) => {
@@ -212,6 +216,7 @@ export const useUltimateHoldem = ({
 
         const result = await chainService.sendMove(currentSessionIdRef.current, payload);
         if (result.txHash) setLastTxSig(result.txHash);
+        armChainResponseTimeout(`ULTIMATE HOLDEM BET ${multiplier}X`, currentSessionIdRef.current);
 
         const betAmount = gameState.bet * multiplier;
         setGameState(prev => ({
@@ -240,6 +245,7 @@ export const useUltimateHoldem = ({
     uthBackendStageRef,
     setLastTxSig,
     setGameState,
+    armChainResponseTimeout,
   ]);
 
   const uhFold = useCallback(async () => {
@@ -261,6 +267,7 @@ export const useUltimateHoldem = ({
         const payload = new Uint8Array([4]);
         const result = await chainService.sendMove(currentSessionIdRef.current, payload);
         if (result.txHash) setLastTxSig(result.txHash);
+        armChainResponseTimeout('ULTIMATE HOLDEM FOLD', currentSessionIdRef.current);
         setGameState(prev => ({ ...prev, message: 'FOLDING...' }));
         return;
       } catch (error) {
@@ -282,6 +289,7 @@ export const useUltimateHoldem = ({
     uthBackendStageRef,
     setLastTxSig,
     setGameState,
+    armChainResponseTimeout,
   ]);
 
   return {

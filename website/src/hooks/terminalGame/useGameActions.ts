@@ -27,6 +27,7 @@ interface UseGameActionsArgs {
   baccaratSelectionRef: MutableRefObject<'PLAYER' | 'BANKER'>;
   uthBackendStageRef: MutableRefObject<number>;
   autoPlayDraftRef: MutableRefObject<AutoPlayDraft | null>;
+  armChainResponseTimeout: (context: string, expectedSessionId?: bigint | null) => void;
   startGame: (type: GameType) => Promise<void> | void;
   setLastTxSig: (sig: string | null) => void;
 }
@@ -45,6 +46,7 @@ export const useGameActions = ({
   baccaratSelectionRef,
   uthBackendStageRef,
   autoPlayDraftRef,
+  armChainResponseTimeout,
   startGame,
   setLastTxSig,
 }: UseGameActionsArgs) => {
@@ -78,6 +80,7 @@ export const useGameActions = ({
     isOnChain,
     currentSessionIdRef,
     isPendingRef,
+    armChainResponseTimeout,
     setLastTxSig,
   });
 
@@ -101,6 +104,7 @@ export const useGameActions = ({
     isOnChain,
     currentSessionIdRef,
     isPendingRef,
+    armChainResponseTimeout,
     setLastTxSig,
   });
 
@@ -133,6 +137,8 @@ export const useGameActions = ({
     chainService,
     currentSessionIdRef,
     isPendingRef,
+    pendingMoveCountRef,
+    armChainResponseTimeout,
     setLastTxSig,
     isOnChain,
     startGame,
@@ -154,6 +160,7 @@ export const useGameActions = ({
     currentSessionIdRef,
     isPendingRef,
     pendingMoveCountRef,
+    armChainResponseTimeout,
     setLastTxSig,
     isOnChain,
     startGame,
@@ -174,6 +181,7 @@ export const useGameActions = ({
     currentSessionIdRef,
     isPendingRef,
     pendingMoveCountRef,
+    armChainResponseTimeout,
     setLastTxSig,
     isOnChain,
     startGame,
@@ -183,25 +191,22 @@ export const useGameActions = ({
   const { toggleHold, drawVideoPoker } = useVideoPoker({
     gameState,
     setGameState,
-    stats,
-    setStats,
     chainService,
     currentSessionIdRef,
-    isPendingRef,
-    setLastTxSig,
     isOnChain,
+    setLastTxSig,
+    armChainResponseTimeout,
   });
 
   const { hiloPlay, hiloCashout } = useHiLo({
     gameState,
     setGameState,
-    stats,
-    setStats,
     chainService,
     currentSessionIdRef,
     isPendingRef,
-    setLastTxSig,
     isOnChain,
+    setLastTxSig,
+    armChainResponseTimeout,
   });
 
   const { casinoWarToggleTieBet, casinoWarGoToWar, casinoWarSurrender } = useCasinoWar({
@@ -212,6 +217,7 @@ export const useGameActions = ({
     chainService,
     currentSessionIdRef,
     isPendingRef,
+    armChainResponseTimeout,
     setLastTxSig,
     isOnChain,
   });
@@ -225,6 +231,7 @@ export const useGameActions = ({
       isPendingRef,
       isOnChain,
       uthBackendStageRef,
+      armChainResponseTimeout,
       setLastTxSig,
     });
 

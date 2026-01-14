@@ -13,6 +13,7 @@ interface UseThreeCardPokerProps {
   currentSessionIdRef: MutableRefObject<bigint | null>;
   isPendingRef: MutableRefObject<boolean>;
   setLastTxSig: (sig: string | null) => void;
+  armChainResponseTimeout: (context: string, expectedSessionId?: bigint | null) => void;
 }
 
 export const useThreeCardPoker = ({
@@ -23,7 +24,8 @@ export const useThreeCardPoker = ({
   isOnChain,
   currentSessionIdRef,
   isPendingRef,
-  setLastTxSig
+  setLastTxSig,
+  armChainResponseTimeout,
 }: UseThreeCardPokerProps) => {
 
   const threeCardTogglePairPlus = useCallback(async () => {
@@ -116,6 +118,7 @@ export const useThreeCardPoker = ({
           const payload = new Uint8Array([ThreeCardMove.Play]);
           const result = await chainService.sendMove(currentSessionIdRef.current, payload);
           if (result.txHash) setLastTxSig(result.txHash);
+          armChainResponseTimeout('THREE CARD PLAY', currentSessionIdRef.current);
           setGameState(prev => ({
               ...prev,
               message: 'PLAYING...',
@@ -134,7 +137,7 @@ export const useThreeCardPoker = ({
 
       // Local mode not supported - require on-chain session
       setGameState(prev => ({ ...prev, message: 'OFFLINE - CHECK CONNECTION' }));
-  }, [gameState.type, gameState.stage, isOnChain, chainService, currentSessionIdRef, isPendingRef, setLastTxSig, setGameState]);
+  }, [gameState.type, gameState.stage, isOnChain, chainService, currentSessionIdRef, isPendingRef, setLastTxSig, setGameState, armChainResponseTimeout]);
 
   const threeCardFold = useCallback(async () => {
       if (gameState.type !== GameType.THREE_CARD || gameState.stage !== 'PLAYING') return;
@@ -151,6 +154,7 @@ export const useThreeCardPoker = ({
           const payload = new Uint8Array([ThreeCardMove.Fold]);
           const result = await chainService.sendMove(currentSessionIdRef.current, payload);
           if (result.txHash) setLastTxSig(result.txHash);
+          armChainResponseTimeout('THREE CARD FOLD', currentSessionIdRef.current);
           setGameState(prev => ({ ...prev, message: 'FOLDING...' }));
           return;
         // NOTE: Do NOT clear isPendingRef here - wait for CasinoGameMoved event
@@ -165,7 +169,7 @@ export const useThreeCardPoker = ({
 
       // Local mode not supported - require on-chain session
       setGameState(prev => ({ ...prev, message: 'OFFLINE - CHECK CONNECTION' }));
-  }, [gameState.type, gameState.stage, isOnChain, chainService, currentSessionIdRef, isPendingRef, setLastTxSig, setGameState]);
+  }, [gameState.type, gameState.stage, isOnChain, chainService, currentSessionIdRef, isPendingRef, setLastTxSig, setGameState, armChainResponseTimeout]);
 
   return {
       threeCardPlay,

@@ -17,6 +17,7 @@ interface UseRouletteProps {
   isOnChain: boolean;
   startGame: (type: GameType) => void;
   autoPlayDraftRef: MutableRefObject<AutoPlayDraft | null>;
+  armChainResponseTimeout: (context: string, expectedSessionId?: bigint | null) => void;
 }
 
 export const useRoulette = ({
@@ -31,7 +32,8 @@ export const useRoulette = ({
   setLastTxSig,
   isOnChain,
   startGame,
-  autoPlayDraftRef
+  autoPlayDraftRef,
+  armChainResponseTimeout,
 }: UseRouletteProps) => {
 
   const placeRouletteBet = useCallback((type: RouletteBet['type'], target?: number, stateOverride?: GameState, statsOverride?: PlayerStats): boolean => {
@@ -109,13 +111,14 @@ export const useRoulette = ({
         const payload = new Uint8Array([RouletteMove.SetRules, ruleByte]);
         const result = await chainService.sendMove(currentSessionIdRef.current, payload);
         if (result.txHash) setLastTxSig(result.txHash);
+        armChainResponseTimeout('ROULETTE RULE', currentSessionIdRef.current);
       } catch (e) {
         console.error('[useRoulette] Rule update failed:', e);
         isPendingRef.current = false;
         setGameState(prev => ({ ...prev, message: 'RULE UPDATE FAILED' }));
       }
     }
-  }, [gameState.type, gameState.rouletteZeroRule, gameState.rouletteIsPrison, isOnChain, chainService, currentSessionIdRef, isPendingRef, setLastTxSig, setGameState]);
+  }, [gameState.type, gameState.rouletteZeroRule, gameState.rouletteIsPrison, isOnChain, chainService, currentSessionIdRef, isPendingRef, setLastTxSig, setGameState, armChainResponseTimeout]);
 
   const undoRouletteBet = useCallback(() => {
     if (gameState.rouletteUndoStack.length === 0) return;
@@ -198,6 +201,7 @@ export const useRoulette = ({
         const spinPayload = new Uint8Array([RouletteMove.Spin]);
         const result = await chainService.sendMove(currentSessionIdRef.current, spinPayload);
         if (result.txHash) setLastTxSig(result.txHash);
+        armChainResponseTimeout('ROULETTE SPIN', currentSessionIdRef.current);
         return;
       }
 
@@ -209,6 +213,7 @@ export const useRoulette = ({
         const atomicPayload = serializeRouletteAtomicBatch(betsToSpin);
         const result = await chainService.sendMove(currentSessionIdRef.current, atomicPayload);
         if (result.txHash) setLastTxSig(result.txHash);
+        armChainResponseTimeout('ROULETTE SPIN', currentSessionIdRef.current);
 
         // Update UI
         setGameState(prev => ({
@@ -232,9 +237,21 @@ export const useRoulette = ({
       setGameState(prev => ({ ...prev, message: 'OFFLINE - CHECK CONNECTION' }));
     }
   }, [
-    gameState.rouletteIsPrison, gameState.rouletteBets, gameState.rouletteLastRoundBets,
-    gameState.rouletteZeroRule, stats.chips, isOnChain, chainService, currentSessionIdRef,
-    isPendingRef, pendingMoveCountRef, setLastTxSig, startGame, autoPlayDraftRef, setGameState
+    gameState.rouletteIsPrison,
+    gameState.rouletteBets,
+    gameState.rouletteLastRoundBets,
+    gameState.rouletteZeroRule,
+    stats.chips,
+    isOnChain,
+    chainService,
+    currentSessionIdRef,
+    isPendingRef,
+    pendingMoveCountRef,
+    setLastTxSig,
+    startGame,
+    autoPlayDraftRef,
+    setGameState,
+    armChainResponseTimeout,
   ]);
 
   return {

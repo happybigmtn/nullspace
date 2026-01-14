@@ -1005,7 +1005,56 @@ This runs the session expiration and health check tests which validate:
 
 **Note:** Extended outages may require manual intervention if validator block queues overflow
 
-#### 5.6.4 Recovery Drill Schedule (US-243)
+#### 5.6.4 Testnet Consensus Stall Recovery (Staging)
+
+**Symptoms:**
+- Website shows **“waiting for chain”** or gameplay stalls mid-round.
+- Indexer explorer height stops advancing.
+- Validator metrics show `nullspace_engine_marshal_finalized_height` stuck for >2 minutes.
+
+**Fast verification:**
+```bash
+# From any machine with access:
+./scripts/health-check.sh
+curl -s https://testnet.regenesis.dev/api/explorer/blocks?offset=0&limit=1 | head -c 300
+```
+
+**Destructive recovery (resets validator state):**
+> ⚠️ This wipes validator state on `ns-db-1`. Use only after confirming a stall.
+
+```bash
+# Validators host (ns-db-1 / 5.161.124.82)
+docker stop nullspace-node-0 nullspace-node-1 nullspace-node-2 nullspace-node-3
+rm -rf /var/lib/nullspace/node-0 /var/lib/nullspace/node-1 /var/lib/nullspace/node-2 /var/lib/nullspace/node-3
+install -d -o nullspace -g nullspace /var/lib/nullspace/node-0 /var/lib/nullspace/node-1 /var/lib/nullspace/node-2 /var/lib/nullspace/node-3
+docker start nullspace-node-0 nullspace-node-1 nullspace-node-2 nullspace-node-3
+```
+
+**One-shot helper (runs the same sequence over SSH):**
+```bash
+CONFIRM_RESET=1 ./scripts/testnet-consensus-recover.sh
+```
+
+```bash
+# Simulator host (ns-sim-1 / 5.161.67.36)
+docker restart nullspace-simulator
+
+# Gateway + Website host (ns-gw-1 / 178.156.212.135)
+docker restart nullspace-gateway nullspace-website
+```
+
+**Post-recovery checks:**
+```bash
+curl -s https://indexer.testnet.regenesis.dev/healthz
+curl -s https://testnet.regenesis.dev/api/explorer/blocks?offset=0&limit=1 | head -c 300
+```
+
+**Make it stick (watchdog):**
+```bash
+sudo systemctl enable --now nullspace-consensus-watchdog.timer
+```
+
+#### 5.6.5 Recovery Drill Schedule (US-243)
 
 **Quarterly Drill Checklist:**
 
@@ -1454,9 +1503,7 @@ The script handles all setup (emulator, optional mock backend, port forwarding) 
 - Run E2E scripts before each release:
   ```bash
   website/scripts/e2e-auth-billing.mjs
-  website/scripts/layout-smoke.mjs
   ```
-- If running WebKit layout smoke on Arch, use `website/scripts/setup-webkit-libs.sh`
 
 ### 7.2 Security Scanning
 

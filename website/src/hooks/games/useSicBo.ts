@@ -16,6 +16,7 @@ interface UseSicBoProps {
   isOnChain: boolean;
   startGame: (type: GameType) => void;
   autoPlayDraftRef: MutableRefObject<AutoPlayDraft | null>;
+  armChainResponseTimeout: (context: string, expectedSessionId?: bigint | null) => void;
 }
 
 export const useSicBo = ({
@@ -30,7 +31,8 @@ export const useSicBo = ({
   setLastTxSig,
   isOnChain,
   startGame,
-  autoPlayDraftRef
+  autoPlayDraftRef,
+  armChainResponseTimeout,
 }: UseSicBoProps) => {
 
   const placeSicBoBet = useCallback((type: SicBoBet['type'], target?: number, stateOverride?: GameState, statsOverride?: PlayerStats): boolean => {
@@ -135,6 +137,7 @@ export const useSicBo = ({
         const atomicPayload = serializeSicBoAtomicBatch(betsToRoll);
         const result = await chainService.sendMove(currentSessionIdRef.current!, atomicPayload);
         if (result.txHash) setLastTxSig(result.txHash);
+        armChainResponseTimeout('SIC BO ROLL', currentSessionIdRef.current);
 
         // Update UI
         setGameState(prev => ({
@@ -158,9 +161,19 @@ export const useSicBo = ({
       setGameState(prev => ({ ...prev, message: 'OFFLINE - CHECK CONNECTION' }));
     }
   }, [
-    gameState.sicBoBets, gameState.sicBoLastRoundBets, stats.chips,
-    isOnChain, chainService, currentSessionIdRef, isPendingRef, pendingMoveCountRef,
-    setLastTxSig, startGame, autoPlayDraftRef, setGameState
+    gameState.sicBoBets,
+    gameState.sicBoLastRoundBets,
+    stats.chips,
+    isOnChain,
+    chainService,
+    currentSessionIdRef,
+    isPendingRef,
+    pendingMoveCountRef,
+    setLastTxSig,
+    startGame,
+    autoPlayDraftRef,
+    setGameState,
+    armChainResponseTimeout,
   ]);
 
   return {

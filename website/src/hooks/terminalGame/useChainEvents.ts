@@ -259,6 +259,7 @@ export const useChainEvents = ({
     isOnChain,
     applySessionMeta,
     clearChainResponseTimeout,
+    armChainResponseTimeout,
      clientRef,
      currentChipsRef,
      currentSessionIdRef,
@@ -327,8 +328,18 @@ export const useChainEvents = ({
               CHAIN_TO_FRONTEND_GAME_TYPE[session.gameType as ChainGameType] ??
               gameTypeRef.current ??
               GameType.NONE;
-            applySessionMeta(sessionId, Number(session.moveCount ?? gameStateRef.current.moveNumber ?? 0));
+            const prevMoveNumber = gameStateRef.current?.moveNumber ?? 0;
+            const nextMoveNumber = Number(session.moveCount ?? prevMoveNumber);
+            const moveAdvanced = nextMoveNumber > prevMoveNumber;
+            applySessionMeta(sessionId, nextMoveNumber);
             parseGameState(session.stateBlob, frontendType);
+            if (moveAdvanced) {
+              clearChainResponseTimeout();
+              isPendingRef.current = false;
+              pendingMoveCountRef.current = 0;
+              crapsPendingRollLogRef.current = null;
+              crapsChainRollLogRef.current = null;
+            }
             // Preserve parsed stage/message instead of forcing PLAYING/SYNCED,
             // which can disable betting or actions when the session is in BETTING/RESULT.
             const sessionBetRaw =
@@ -390,6 +401,7 @@ export const useChainEvents = ({
     };
   }, [
     applySessionMeta,
+    clearChainResponseTimeout,
     clientRef,
     currentChipsRef,
     currentSessionIdRef,
@@ -405,6 +417,10 @@ export const useChainEvents = ({
     setWalletCreditsLocked,
     setWalletRng,
     setWalletVusdt,
+    isPendingRef,
+    pendingMoveCountRef,
+    crapsPendingRollLogRef,
+    crapsChainRollLogRef,
   ]);
 
   useEffect(() => {

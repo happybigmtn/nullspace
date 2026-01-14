@@ -77,7 +77,6 @@ export const createGameMovedHandler = ({
   const currentId = currentSessionIdRef.current ? BigInt(currentSessionIdRef.current) : null;
 
   if (currentId !== null && eventSessionId === currentId) {
-    clearChainResponseTimeout();
     applySessionMeta(eventSessionId, event.moveNumber);
     const stateBlob = event.newState;
 
@@ -201,6 +200,9 @@ export const createGameMovedHandler = ({
       }
     } else {
       isPendingRef.current = false;
+    }
+    if (pendingMoveCountRef.current === 0) {
+      clearChainResponseTimeout();
     }
 
     const isBlackjackAwaitingReveal =

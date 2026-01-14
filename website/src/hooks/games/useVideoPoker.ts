@@ -9,6 +9,7 @@ interface UseVideoPokerProps {
   currentSessionIdRef: MutableRefObject<bigint | null>;
   isOnChain: boolean;
   setLastTxSig: (sig: string | null) => void;
+  armChainResponseTimeout: (context: string, expectedSessionId?: bigint | null) => void;
 }
 
 export const useVideoPoker = ({
@@ -18,6 +19,7 @@ export const useVideoPoker = ({
   currentSessionIdRef,
   isOnChain,
   setLastTxSig,
+  armChainResponseTimeout,
 }: UseVideoPokerProps) => {
   const toggleHold = useCallback((idx: number) => {
     if (gameState.type !== GameType.VIDEO_POKER) return;
@@ -37,6 +39,7 @@ export const useVideoPoker = ({
         const payload = new Uint8Array([holdMask]);
         const result = await chainService.sendMove(currentSessionIdRef.current, payload);
         if (result.txHash) setLastTxSig(result.txHash);
+        armChainResponseTimeout('VIDEO POKER DRAW', currentSessionIdRef.current);
         setGameState(prev => ({ ...prev, message: 'DRAWING...' }));
         return;
       } catch (error) {
@@ -47,7 +50,7 @@ export const useVideoPoker = ({
     }
 
     setGameState(prev => ({ ...prev, message: 'OFFLINE - CHECK CONNECTION' }));
-  }, [gameState.playerCards, isOnChain, chainService, currentSessionIdRef, setLastTxSig, setGameState]);
+  }, [gameState.playerCards, isOnChain, chainService, currentSessionIdRef, setLastTxSig, setGameState, armChainResponseTimeout]);
 
   return { toggleHold, drawVideoPoker };
 };

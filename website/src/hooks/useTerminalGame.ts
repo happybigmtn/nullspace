@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import type { GameType } from '../types';
 import { applyGameStateFromBlob } from '../services/games';
 import { useTerminalGameState } from './terminalGame/useTerminalGameState';
@@ -21,6 +21,7 @@ import {
 
 export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => {
   const { state, setters, refs } = useTerminalGameState(playMode);
+  const armChainResponseTimeoutRef = useRef<(context: string, expectedSessionId?: bigint | null) => void>(() => {});
 
   const runAutoPlayForSession = useCallback(
     (sessionId: bigint, frontendGameType: GameType) => {
@@ -32,6 +33,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
         currentSessionIdRef: refs.currentSessionIdRef,
         setGameState: setters.setGameState,
         setLastTxSig: setters.setLastTxSig,
+        armChainResponseTimeout: armChainResponseTimeoutRef.current,
       });
     },
     [state.chainService, setters.setGameState, setters.setLastTxSig],
@@ -188,6 +190,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
     parseGameState,
     runAutoPlayForSession,
   });
+  armChainResponseTimeoutRef.current = armChainResponseTimeout;
 
   const startGame = useStartGame({
     gameState: state.gameState,
@@ -247,6 +250,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
     baccaratSelectionRef: refs.baccaratSelectionRef,
     uthBackendStageRef: refs.uthBackendStageRef,
     autoPlayDraftRef: refs.autoPlayDraftRef,
+    armChainResponseTimeout,
     startGame,
     setLastTxSig: setters.setLastTxSig,
   });
@@ -273,6 +277,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
     rollSicBo: gameActions.rollSicBo,
     startGame,
     setLastTxSig: setters.setLastTxSig,
+    armChainResponseTimeout,
   });
 
   const tournamentActions = useTournamentActions({
@@ -325,6 +330,7 @@ export const useTerminalGame = (playMode: 'CASH' | 'FREEROLL' | null = null) => 
     applySessionMeta,
     parseGameState,
     clearChainResponseTimeout,
+    armChainResponseTimeout,
     runAutoPlayForSession,
     clientRef: refs.clientRef,
     publicKeyBytesRef: refs.publicKeyBytesRef,

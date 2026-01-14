@@ -431,5 +431,6 @@ export const useDeal = ({
     setStats,
     startGame,
     stats,
+    armChainResponseTimeout,
   ]);
 };

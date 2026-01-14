@@ -11,6 +11,7 @@ interface UseHiLoProps {
   isPendingRef: MutableRefObject<boolean>;
   isOnChain: boolean;
   setLastTxSig: (sig: string | null) => void;
+  armChainResponseTimeout: (context: string, expectedSessionId?: bigint | null) => void;
 }
 
 export const useHiLo = ({
@@ -21,6 +22,7 @@ export const useHiLo = ({
   isPendingRef,
   isOnChain,
   setLastTxSig,
+  armChainResponseTimeout,
 }: UseHiLoProps) => {
   const hiloPlay = useCallback(async (guess: 'HIGHER' | 'LOWER' | 'SAME') => {
     if (isPendingRef.current) {
@@ -35,6 +37,7 @@ export const useHiLo = ({
         const payload = new Uint8Array([payloadByte]);
         const result = await chainService.sendMove(currentSessionIdRef.current, payload);
         if (result.txHash) setLastTxSig(result.txHash);
+        armChainResponseTimeout(`HILO ${guess}`, currentSessionIdRef.current);
         setGameState(prev => ({ ...prev, message: `GUESSING ${guess}...` }));
         return;
       } catch (error) {
@@ -46,7 +49,7 @@ export const useHiLo = ({
     }
 
     setGameState(prev => ({ ...prev, message: 'OFFLINE - CHECK CONNECTION' }));
-  }, [chainService, currentSessionIdRef, isOnChain, isPendingRef, setLastTxSig, setGameState]);
+  }, [chainService, currentSessionIdRef, isOnChain, isPendingRef, setLastTxSig, setGameState, armChainResponseTimeout]);
 
   const hiloCashout = useCallback(async () => {
     if (isPendingRef.current) {
@@ -59,6 +62,7 @@ export const useHiLo = ({
         isPendingRef.current = true;
         const result = await chainService.sendMove(currentSessionIdRef.current, new Uint8Array([2]));
         if (result.txHash) setLastTxSig(result.txHash);
+        armChainResponseTimeout('HILO CASHOUT', currentSessionIdRef.current);
         setGameState(prev => ({ ...prev, message: 'CASHING OUT...' }));
         return;
       } catch (error) {
@@ -70,7 +74,7 @@ export const useHiLo = ({
     }
 
     setGameState(prev => ({ ...prev, message: 'OFFLINE - CHECK CONNECTION' }));
-  }, [chainService, currentSessionIdRef, isOnChain, isPendingRef, setLastTxSig, setGameState]);
+  }, [chainService, currentSessionIdRef, isOnChain, isPendingRef, setLastTxSig, setGameState, armChainResponseTimeout]);
 
   return { hiloPlay, hiloCashout };
 };

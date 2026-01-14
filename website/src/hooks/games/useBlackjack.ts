@@ -13,6 +13,7 @@ interface UseBlackjackProps {
   currentSessionIdRef: MutableRefObject<bigint | null>;
   isPendingRef: MutableRefObject<boolean>;
   setLastTxSig: (sig: string | null) => void;
+  armChainResponseTimeout: (context: string, expectedSessionId?: bigint | null) => void;
 }
 
 export const useBlackjack = ({
@@ -23,7 +24,8 @@ export const useBlackjack = ({
   isOnChain,
   currentSessionIdRef,
   isPendingRef,
-  setLastTxSig
+  setLastTxSig,
+  armChainResponseTimeout,
 }: UseBlackjackProps) => {
 
   const bjHit = useCallback(async () => {
@@ -40,6 +42,7 @@ export const useBlackjack = ({
         isPendingRef.current = true;
         const result = await chainService.sendMove(currentSessionIdRef.current, new Uint8Array([BlackjackMove.Hit]));
         if (result.txHash) setLastTxSig(result.txHash);
+        armChainResponseTimeout('BLACKJACK HIT', currentSessionIdRef.current);
         setGameState(prev => ({ ...prev, message: 'HITTING...' }));
         return;
       } catch (error) {
@@ -52,7 +55,7 @@ export const useBlackjack = ({
 
     // Local mode not supported - require on-chain session
     setGameState(prev => ({ ...prev, message: 'OFFLINE - CHECK CONNECTION' }));
-  }, [gameState.blackjackActions, isPendingRef, isOnChain, chainService, currentSessionIdRef, setLastTxSig, setGameState]);
+  }, [gameState.blackjackActions, isPendingRef, isOnChain, chainService, currentSessionIdRef, setLastTxSig, setGameState, armChainResponseTimeout]);
 
   const bjStand = useCallback(async () => {
     if (isPendingRef.current) {
@@ -68,6 +71,7 @@ export const useBlackjack = ({
         isPendingRef.current = true;
         const result = await chainService.sendMove(currentSessionIdRef.current, new Uint8Array([BlackjackMove.Stand]));
         if (result.txHash) setLastTxSig(result.txHash);
+        armChainResponseTimeout('BLACKJACK STAND', currentSessionIdRef.current);
         setGameState(prev => ({ ...prev, message: 'STANDING...' }));
         return;
       } catch (error) {
@@ -80,7 +84,7 @@ export const useBlackjack = ({
 
     // Local mode not supported - require on-chain session
     setGameState(prev => ({ ...prev, message: 'OFFLINE - CHECK CONNECTION' }));
-  }, [gameState.blackjackActions, isPendingRef, isOnChain, chainService, currentSessionIdRef, setLastTxSig, setGameState]);
+  }, [gameState.blackjackActions, isPendingRef, isOnChain, chainService, currentSessionIdRef, setLastTxSig, setGameState, armChainResponseTimeout]);
 
   const bjDouble = useCallback(async () => {
     if (isPendingRef.current) {
@@ -96,6 +100,7 @@ export const useBlackjack = ({
         isPendingRef.current = true;
         const result = await chainService.sendMove(currentSessionIdRef.current, new Uint8Array([BlackjackMove.Double]));
         if (result.txHash) setLastTxSig(result.txHash);
+        armChainResponseTimeout('BLACKJACK DOUBLE', currentSessionIdRef.current);
         setGameState(prev => ({ ...prev, message: 'DOUBLING...' }));
         return;
       } catch (error) {
@@ -108,7 +113,7 @@ export const useBlackjack = ({
 
     // Local mode not supported - require on-chain session
     setGameState(prev => ({ ...prev, message: 'OFFLINE - CHECK CONNECTION' }));
-  }, [gameState.blackjackActions, isPendingRef, isOnChain, chainService, currentSessionIdRef, setLastTxSig, setGameState]);
+  }, [gameState.blackjackActions, isPendingRef, isOnChain, chainService, currentSessionIdRef, setLastTxSig, setGameState, armChainResponseTimeout]);
 
   const bjSplit = useCallback(async () => {
     if (!gameState.blackjackActions?.canSplit) {
@@ -128,6 +133,7 @@ export const useBlackjack = ({
         isPendingRef.current = true;
         const result = await chainService.sendMove(currentSessionIdRef.current, new Uint8Array([BlackjackMove.Split]));
         if (result.txHash) setLastTxSig(result.txHash);
+        armChainResponseTimeout('BLACKJACK SPLIT', currentSessionIdRef.current);
         setGameState(prev => ({ ...prev, message: 'SPLITTING...' }));
         return;
       } catch (error) {
@@ -140,7 +146,7 @@ export const useBlackjack = ({
 
     // Local mode not supported - require on-chain session
     setGameState(prev => ({ ...prev, message: 'OFFLINE - CHECK CONNECTION' }));
-  }, [gameState.blackjackActions, gameState.bet, stats.chips, isOnChain, chainService, currentSessionIdRef, isPendingRef, setLastTxSig, setGameState]);
+  }, [gameState.blackjackActions, gameState.bet, stats.chips, isOnChain, chainService, currentSessionIdRef, isPendingRef, setLastTxSig, setGameState, armChainResponseTimeout]);
 
   const bjInsurance = useCallback((take: boolean) => {
     // Insurance is only available on-chain via chain events
