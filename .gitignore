@@ -41,6 +41,14 @@ vite.log
 nohup.out
 *.log
 
+# Temporary files
+tmp-*.png
+**/tmp-*.png
+
+# Local build artifacts
+build-node/
+build-sim/
+
 # Runtime artifacts
 *.pid
 data/
