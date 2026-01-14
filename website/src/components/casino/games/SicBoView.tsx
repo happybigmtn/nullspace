@@ -150,10 +150,26 @@ export const SicBoView = React.memo<{
 
                 {/* Dice Display */}
                 <div className="min-h-[110px] flex items-center justify-center">
-                    <DiceThrow2D
-                        values={gameState.dice}
-                        rollKey={gameState.sicBoHistory.length}
-                    />
+                    {gameState.dice.length === 0 ? (
+                        /* Placeholder dice before first roll */
+                        <div className="flex gap-4 opacity-40">
+                            {[1, 2, 3].map((_, i) => (
+                                <div
+                                    key={i}
+                                    className="w-14 h-14 rounded-xl border-2 border-dashed border-ns-border flex items-center justify-center"
+                                >
+                                    <span className="text-2xl text-ns-muted">?</span>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <DiceThrow2D
+                            values={gameState.dice}
+                            rollKey={gameState.sicBoHistory.length}
+                            settleToRow
+                            flatOnSettle
+                        />
+                    )}
                 </div>
 
                 {/* Center Info */}

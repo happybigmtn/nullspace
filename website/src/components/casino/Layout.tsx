@@ -12,13 +12,9 @@ interface HeaderProps {
     tournamentTime: number;
     stats: PlayerStats;
     lastTxSig?: string;
-    focusMode: boolean;
-    setFocusMode: (mode: boolean) => void;
     showTimer?: boolean;
     onOpenCommandPalette?: () => void;
     onToggleHelp?: () => void;
-    touchMode?: boolean;
-    onToggleTouchMode?: () => void;
     soundEnabled?: boolean;
     onToggleSound?: () => void;
     reducedMotion?: boolean;
@@ -35,13 +31,9 @@ export const Header: React.FC<HeaderProps> = ({
     tournamentTime,
     stats,
     lastTxSig,
-    focusMode,
-    setFocusMode,
     showTimer = true,
     onOpenCommandPalette,
     onToggleHelp,
-    touchMode = false,
-    onToggleTouchMode,
     soundEnabled = true,
     onToggleSound,
     reducedMotion = false,
@@ -58,12 +50,6 @@ export const Header: React.FC<HeaderProps> = ({
                 <div className="flex items-center gap-2 sm:gap-4">
                     <span className="font-bold tracking-tighter text-white text-sm sm:text-base">null<span className="text-terminal-green">/</span>space</span>
                     <div className="hidden sm:flex items-center gap-2">
-                        <button
-                            onClick={() => setFocusMode(!focusMode)}
-                            className={`text-[10px] border px-1.5 py-0.5 rounded transition-colors ${focusMode ? 'bg-terminal-green text-black border-terminal-green' : 'text-gray-600 bg-gray-900 border-gray-800 hover:border-gray-600'}`}
-                        >
-                            {focusMode ? 'FOCUS ON' : 'FOCUS OFF'}
-                        </button>
                         {onOpenCommandPalette && (
                             <button
                                 type="button"
@@ -630,10 +616,6 @@ export const HelpOverlay: React.FC<HelpOverlayProps> = ({ isOpen, onClose, gameT
                             <div className="flex items-center gap-4 group cursor-pointer">
                                 <div className="w-11 h-11 flex items-center justify-center liquid-panel border border-ns rounded-xl font-display font-black text-sm text-ns shadow-soft group-hover:scale-110 group-hover:border-mono-0 transition-all">L</div>
                                 <span className="text-body-sm font-bold text-ns uppercase tracking-tight">Feed</span>
-                            </div>
-                            <div className="flex items-center gap-4 group cursor-pointer">
-                                <div className="w-11 h-11 flex items-center justify-center liquid-panel border border-ns rounded-xl font-display font-black text-[10px] text-ns shadow-soft group-hover:scale-110 group-hover:border-mono-0 transition-all">ALT+Z</div>
-                                <span className="text-body-sm font-bold text-ns uppercase tracking-tight">Zen</span>
                             </div>
                             <div className="flex items-center gap-4 group cursor-pointer">
                                 <div className="w-11 h-11 flex items-center justify-center liquid-panel border border-ns rounded-xl font-display font-black text-[10px] text-ns shadow-soft group-hover:scale-110 group-hover:border-mono-0 transition-all">ALT+R</div>

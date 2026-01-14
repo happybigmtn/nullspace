@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { GameType } from './types';
 import { ROULETTE_DOUBLE_ZERO } from './utils/gameUtils';
 import { useTerminalGame } from './hooks/useTerminalGame';
@@ -26,7 +26,6 @@ import { RegistrationView } from './components/casino/RegistrationView';
 import { ActiveGame } from './components/casino/ActiveGame';
 import { RewardsDrawer } from './components/casino/RewardsDrawer';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { QABetHarness } from './components/casino/QABetHarness';
 import { playSfx, setSfxEnabled } from './services/sfx';
 import { track } from './services/telemetry';
 import { ConnectionStatus } from './components/ConnectionStatus';
@@ -53,34 +52,10 @@ export default function CasinoApp() {
   // Mode selection (Cash vs Freeroll)
   const [playMode, setPlayMode] = useState<PlayMode | null>(null);
 
-  const { stats, gameState, setGameState, aiAdvice, tournamentTime, phase, leaderboard, isRegistered, walletRng, walletVusdt, walletCredits, walletCreditsLocked, walletPublicKeyHex, lastTxSig, isOnChain, botConfig, setBotConfig, isRegisteringOrJoining, isFaucetClaiming, freerollActiveTournamentId, freerollActiveTimeLeft, freerollActivePrizePool, freerollActivePlayerCount, playerActiveTournamentId, freerollNextStartIn, freerollNextTournamentId, freerollIsJoinedNext, tournamentsPlayedToday, tournamentDailyLimit, actions } = useTerminalGame(playMode);
+  const { stats, gameState, setGameState, tournamentTime, phase, leaderboard, isRegistered, walletRng, walletVusdt, walletCredits, walletCreditsLocked, walletPublicKeyHex, lastTxSig, isOnChain, botConfig, setBotConfig, isRegisteringOrJoining, isFaucetClaiming, freerollActiveTournamentId, freerollActiveTimeLeft, freerollActivePrizePool, freerollActivePlayerCount, playerActiveTournamentId, freerollNextStartIn, freerollNextTournamentId, freerollIsJoinedNext, tournamentsPlayedToday, tournamentDailyLimit, actions } = useTerminalGame(playMode);
   const chainUrl = String(import.meta.env.VITE_CHAIN_URL ?? import.meta.env.VITE_URL ?? '');
   const networkLabel = chainUrl.includes('localhost') || chainUrl.includes('127.0.0.1') ? 'Localnet' : 'Testnet';
   const networkStatus = isOnChain ? 'online' : 'offline';
-  const qaEnabled = useMemo(() => {
-    const envFlag = String(import.meta.env.VITE_QA_BETS ?? '').toLowerCase();
-    if (envFlag === 'true' || envFlag === '1') return true;
-
-    if (typeof window === 'undefined') return false;
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const qaParam = params.get('qa');
-      const qaFlag = qaParam === '1' || qaParam?.toLowerCase() === 'true';
-      const stored = localStorage.getItem('qa_bets_enabled') === 'true';
-
-      if (qaFlag) {
-        localStorage.setItem('qa_bets_enabled', 'true');
-        localStorage.setItem('qa_allow_legacy', 'true');
-        localStorage.setItem('nullspace_vault_enabled', 'false');
-        return true;
-      }
-
-      return stored;
-    } catch {
-      return false;
-    }
-  }, []);
-
   // UI State
   const [commandOpen, setCommandOpen] = useState(false);
   const [customBetOpen, setCustomBetOpen] = useState(false);
@@ -91,15 +66,7 @@ export default function CasinoApp() {
   const [leaderboardView, setLeaderboardView] = useState<'RANK' | 'PAYOUT'>('RANK');
   const [feedOpen, setFeedOpen] = useState(false);
   const [numberInputString, setNumberInputString] = useState("");
-  const [focusMode, setFocusMode] = useState(true);
   const [rewardsOpen, setRewardsOpen] = useState(false);
-  const [touchMode, setTouchMode] = useState(() => {
-    try {
-      return localStorage.getItem('nullspace_touch_mode') === 'true';
-    } catch {
-      return false;
-    }
-  });
   const [soundEnabled, setSoundEnabled] = useState(() => {
     try {
       const raw = localStorage.getItem('nullspace_sound_enabled');
@@ -167,27 +134,6 @@ export default function CasinoApp() {
       // ignore
     }
   }, [rp]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('nullspace_touch_mode', touchMode ? 'true' : 'false');
-    } catch {
-      // ignore
-    }
-    if (typeof document !== 'undefined') {
-      if (touchMode) document.documentElement.dataset.touchMode = 'true';
-      else delete document.documentElement.dataset.touchMode;
-    }
-  }, [touchMode]);
-
-  // Auto-claim faucet in QA mode so automated bet harness always has funds
-  useEffect(() => {
-    if (!qaEnabled) return;
-    if (!isOnChain) return;
-    if (isFaucetClaiming) return;
-    if ((stats.chips ?? 0) > 0) return;
-    actions?.claimFaucet?.();
-  }, [qaEnabled, isOnChain, isFaucetClaiming, stats.chips, actions]);
 
   const openCommandPalette = () => {
     track('ui.command_palette.opened', { surface: 'casino' });
@@ -338,8 +284,6 @@ export default function CasinoApp() {
     setBetAmount: safeSetBetAmount,
   };
 
-  const qaActions = { ...actions, setGameState };
-
   useEffect(() => {
     if (!playMode) return;
     if (rp.realityCheckMinutes <= 0) return;
@@ -367,7 +311,6 @@ export default function CasinoApp() {
           setCustomBetString, setNumberInputString,
           startGame: safeActions.startGame,
           setBetAmount: safeActions.setBetAmount,
-          toggleFocus: () => setFocusMode((prev) => !prev),
           openRewards: () => setRewardsOpen(true),
           openSafety: () => openResponsiblePlay('settings'),
           toggleFeed: () => setFeedOpen((prev) => !prev),
@@ -498,7 +441,7 @@ export default function CasinoApp() {
     <div
       className="flex flex-col h-[100dvh] w-screen liquid-shell text-ns font-sans overflow-hidden select-none casino-shell"
       data-casino-theme={casinoTheme}
-      data-zen={focusMode ? 'true' : 'false'}
+      data-zen="true"
       onKeyDown={(e) => {
         if (e.key === 'Enter') {
             if (commandOpen) handleCommandEnter();
@@ -518,13 +461,9 @@ export default function CasinoApp() {
            tournamentTime={playMode === 'FREEROLL' ? tournamentTime : 0}
            stats={stats}
            lastTxSig={lastTxSig ?? undefined}
-           focusMode={focusMode}
-           setFocusMode={setFocusMode}
            showTimer={playMode === 'FREEROLL'}
            onOpenCommandPalette={openCommandPalette}
            onToggleHelp={toggleHelp}
-           touchMode={touchMode}
-           onToggleTouchMode={() => setTouchMode((v) => !v)}
            soundEnabled={soundEnabled}
            onToggleSound={() => setSoundEnabled((v) => !v)}
            reducedMotion={reducedMotion}
@@ -556,7 +495,7 @@ export default function CasinoApp() {
                    onToggleView={() => setLeaderboardView(prev => prev === 'RANK' ? 'PAYOUT' : 'RANK')}
                    open={feedOpen}
                    onOpenChange={setFeedOpen}
-                   className={`hidden md:inline-flex ${focusMode ? 'zen-hide' : ''}`}
+                   className="hidden md:inline-flex zen-hide"
                />
                <HamburgerMenu
                   playMode={playMode}
@@ -566,27 +505,8 @@ export default function CasinoApp() {
                    onToggleHelp={toggleHelp}
                    soundEnabled={soundEnabled}
                    onToggleSound={() => setSoundEnabled((v) => !v)}
-                   touchMode={touchMode}
-                   onToggleTouchMode={() => setTouchMode((v) => !v)}
                    reducedMotion={reducedMotion}
                    onToggleReducedMotion={() => setReducedMotion((v) => !v)}
-                   publicKeyHex={walletPublicKeyHex}
-                   focusMode={focusMode}
-                   onToggleFocus={() => setFocusMode((v) => !v)}
-                  walletSlot={
-                    <div className="flex flex-col gap-3">
-                      <AuthStatusPill publicKeyHex={walletPublicKeyHex} />
-                      <WalletPill
-                        rng={walletRng}
-                         vusdt={walletVusdt}
-                         credits={walletCredits}
-                         creditsLocked={walletCreditsLocked}
-                         pubkeyHex={walletPublicKeyHex}
-                         networkLabel={networkLabel}
-                        networkStatus={networkStatus}
-                      />
-                    </div>
-                  }
               />
               {/* Always surface vault/connection state without leaving the game screen */}
               <ConnectionStatus className="hidden md:inline-flex" />
@@ -622,14 +542,12 @@ export default function CasinoApp() {
                     chips={stats.chips}
                     numberInput={numberInputString}
                     onToggleHold={safeActions.toggleHold}
-                    aiAdvice={aiAdvice}
                     actions={{ ...safeActions, setGameState }}
                     onOpenCommandPalette={openCommandPalette}
                     reducedMotion={reducedMotion}
                     playMode={playMode}
                     currentBet={gameState.bet}
                     onBetChange={safeActions.setBetAmount}
-                    focusMode={focusMode}
                  />
                </ErrorBoundary>
              </div>
@@ -637,7 +555,7 @@ export default function CasinoApp() {
        </div>
 
        {gameState.type !== GameType.NONE && (
-           <Footer currentBet={gameState.bet} className={focusMode ? 'zen-hide' : ''} />
+           <Footer currentBet={gameState.bet} className="zen-hide" />
        )}
 
        {/* MODALS */}
@@ -704,15 +622,6 @@ export default function CasinoApp() {
            onStop={stopPlaying}
        />
 
-       <QABetHarness
-           enabled={qaEnabled}
-           gameState={gameState}
-           stats={stats}
-           actions={qaActions}
-           lastTxSig={lastTxSig}
-           isOnChain={isOnChain}
-           className={focusMode ? 'zen-hide' : ''}
-       />
     </div>
   );
 }

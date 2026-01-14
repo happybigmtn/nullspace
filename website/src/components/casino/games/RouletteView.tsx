@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useEffect, useState } from 'react';
 import { GameState, RouletteBet } from '../../../types';
 import { getRouletteColor, calculateRouletteExposure, formatRouletteNumber, ROULETTE_DOUBLE_ZERO } from '../../../utils/gameUtils';
 import { MobileDrawer } from '../MobileDrawer';
@@ -31,6 +31,7 @@ type RouletteViewProps = {
 };
 
 export const RouletteView = React.memo(({ gameState, numberInput = "", actions, lastWin, playMode }: RouletteViewProps) => {
+    const [toolsOpen, setToolsOpen] = useState(false);
     const lastNum = useMemo(() =>
         gameState.rouletteHistory.length > 0 ? gameState.rouletteHistory[gameState.rouletteHistory.length - 1] : null,
         [gameState.rouletteHistory]
@@ -148,6 +149,22 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
             </div>
         );
     }, [exposureByNumber, totalBet]);
+
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.altKey || e.ctrlKey || e.metaKey) return;
+            if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+            const key = e.key.toLowerCase();
+            if (key === 't') {
+                e.preventDefault();
+                setToolsOpen((prev) => !prev);
+                return;
+            }
+            if (e.key === 'Escape') setToolsOpen(false);
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, []);
 
     return (
         <>
@@ -407,21 +424,46 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
                             className={`px-3 py-1.5 rounded-full border text-[10px] font-bold uppercase tracking-tight transition-all active:scale-95 ${
                                 gameState.activeModifiers.super
                                     ? 'border-mono-0 bg-mono-0/10 text-mono-0 dark:text-mono-1000'
-                                : 'border-ns bg-ns-surface text-ns hover:border-mono-0/40'
+                                    : 'border-ns bg-ns-surface text-ns hover:border-mono-0/40'
                             }`}
                         >
                             Super
                         </button>
-                        <div className="hidden md:block">
-                            <div className="ml-3 rounded-3xl liquid-panel border border-ns/40 px-4 py-3 space-y-4 shadow-soft">
-                                <div className="flex items-center justify-between">
-                                    <div className="text-[10px] font-bold uppercase tracking-tight text-ns">Roulette Table</div>
-                                    {gameState.rouletteBets.length > 0 && (
-                                        <span className="text-[10px] font-bold text-ns-muted">
-                                            {gameState.rouletteBets.length} bets
-                                        </span>
-                                    )}
-                                </div>
+                        <button
+                            type="button"
+                            onClick={() => setToolsOpen((prev) => !prev)}
+                            className={`hidden md:inline-flex px-3 py-1.5 rounded-full border text-[10px] font-bold uppercase tracking-tight transition-all active:scale-95 ${
+                                toolsOpen
+                                    ? 'border-mono-0 bg-mono-0/10 text-mono-0 dark:text-mono-1000'
+                                    : 'border-ns bg-ns-surface text-ns hover:border-mono-0/40'
+                            }`}
+                        >
+                            Table
+                        </button>
+                    </div>
+                </div>
+
+                {toolsOpen && (
+                    <>
+                        <button
+                            type="button"
+                            aria-label="Close table tools"
+                            onClick={() => setToolsOpen(false)}
+                            className="hidden md:block fixed inset-0 z-30 bg-black/20"
+                        />
+                        <div className="hidden md:block fixed bottom-24 right-6 z-40 w-80">
+                        <div className="liquid-card liquid-sheen border border-ns/40 rounded-3xl p-4 shadow-float">
+                            <div className="flex items-center justify-between mb-3">
+                                <div className="text-[10px] font-bold uppercase tracking-[0.3em] text-ns-muted">Roulette Table</div>
+                                <button
+                                    type="button"
+                                    onClick={() => setToolsOpen(false)}
+                                    className="liquid-chip px-2 py-1 text-[10px] text-ns-muted"
+                                >
+                                    Close
+                                </button>
+                            </div>
+                            <div className="space-y-4">
                                 <div>
                                     <Label size="micro" className="mb-2 block">Exposure</Label>
                                     <div className="max-h-56 overflow-y-auto scrollbar-hide rounded-2xl bg-ns-surface/60 p-2 border border-ns/30">
@@ -430,7 +472,7 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
                                 </div>
                                 <div>
                                     <Label size="micro" className="mb-2 block">Active Bets</Label>
-                                    <div className="space-y-2">
+                                    <div className="space-y-2 max-h-56 overflow-y-auto scrollbar-hide rounded-2xl bg-ns-surface/40 p-2 border border-ns/20">
                                         {gameState.rouletteBets.length === 0 ? (
                                             <div className="text-center py-6 text-[11px] text-ns-muted uppercase tracking-widest">No bets placed</div>
                                         ) : (
@@ -450,8 +492,9 @@ export const RouletteView = React.memo(({ gameState, numberInput = "", actions, 
                                 </div>
                             </div>
                         </div>
-                    </div>
-                </div>
+                        </div>
+                    </>
+                )}
 
                 <div className="flex md:hidden items-center gap-2">
                     <BetsDrawer title="PLACE BETS">

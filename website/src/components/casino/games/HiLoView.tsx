@@ -48,21 +48,32 @@ export const HiLoView = React.memo<HiLoViewProps & { lastWin?: number; playMode?
     const lowerMultiplier = nextMultipliers?.lower ?? 0;
     const higherMultiplier = nextMultipliers?.higher ?? 0;
     const sameMultiplier = nextMultipliers?.same ?? 0;
+
+    // Detect edge cards (A is lowest, K is highest)
+    const isLowestCard = currentCard?.rank === 'A';
+    const isHighestCard = currentCard?.rank === 'K';
+    const isEdgeCard = isLowestCard || isHighestCard;
+
+    // Show buttons based on multipliers, but always show SAME at edge cards
     const showLower = lowerMultiplier > 0;
     const showHigher = higherMultiplier > 0;
-    const showSame = sameMultiplier > 0;
+    // SAME should always be available, especially at edge cards where one direction is blocked
+    const showSame = sameMultiplier > 0 || isEdgeCard;
 
     const formatMultiplier = (bps: number) => (
         bps > 0 ? `${(bps / 10_000).toFixed(2)}x` : '—'
     );
 
+    // Default SAME multiplier for edge cards if not provided (12:1 = 120000 bps)
+    const effectiveSameMultiplier = sameMultiplier > 0 ? sameMultiplier : (isEdgeCard ? 120000 : 0);
+
     const options = useMemo(() => {
         const list: Array<{ id: 'LOWER' | 'SAME' | 'HIGHER'; label: string; key: string; multiplier: number; tone: HiLoTone }> = [];
         if (showLower) list.push({ id: 'LOWER', label: 'LOWER', key: 'L', multiplier: lowerMultiplier, tone: 'destructive' });
-        if (showSame) list.push({ id: 'SAME', label: 'SAME', key: 'S', multiplier: sameMultiplier, tone: 'primary' });
+        if (showSame) list.push({ id: 'SAME', label: 'SAME', key: 'S', multiplier: effectiveSameMultiplier, tone: 'primary' });
         if (showHigher) list.push({ id: 'HIGHER', label: 'HIGHER', key: 'H', multiplier: higherMultiplier, tone: 'success' });
         return list;
-    }, [showLower, showSame, showHigher, lowerMultiplier, sameMultiplier, higherMultiplier]);
+    }, [showLower, showSame, showHigher, lowerMultiplier, effectiveSameMultiplier, higherMultiplier]);
 
     return (
         <>
@@ -108,7 +119,7 @@ export const HiLoView = React.memo<HiLoViewProps & { lastWin?: number; playMode?
                                         {showLower ? 'LOWER' : showSame && !showHigher ? 'SAME' : '—'}
                                     </div>
                                     <div className="text-mono-0 dark:text-mono-1000 font-bold font-mono font-bold text-sm">
-                                        {showLower ? formatMultiplier(lowerMultiplier) : showSame && !showHigher ? formatMultiplier(sameMultiplier) : '—'}
+                                        {showLower ? formatMultiplier(lowerMultiplier) : showSame && !showHigher ? formatMultiplier(effectiveSameMultiplier) : '—'}
                                     </div>
                                 </div>
 
@@ -120,7 +131,7 @@ export const HiLoView = React.memo<HiLoViewProps & { lastWin?: number; playMode?
                                         {showHigher ? 'HIGHER' : showSame && !showLower ? 'SAME' : '—'}
                                     </div>
                                     <div className="text-mono-0 dark:text-mono-1000 font-bold font-mono font-bold text-sm">
-                                        {showHigher ? formatMultiplier(higherMultiplier) : showSame && !showLower ? formatMultiplier(sameMultiplier) : '—'}
+                                        {showHigher ? formatMultiplier(higherMultiplier) : showSame && !showLower ? formatMultiplier(effectiveSameMultiplier) : '—'}
                                     </div>
                                 </div>
                             </div>
@@ -128,7 +139,7 @@ export const HiLoView = React.memo<HiLoViewProps & { lastWin?: number; playMode?
                                 <div className="text-center opacity-80">
                                     <div className="text-[10px] text-ns-muted uppercase tracking-wider font-mono">SAME</div>
                                     <div className="text-mono-0 dark:text-mono-1000 font-mono font-bold text-sm">
-                                        {formatMultiplier(sameMultiplier)}
+                                        {formatMultiplier(effectiveSameMultiplier)}
                                     </div>
                                 </div>
                             )}

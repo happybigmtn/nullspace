@@ -17,7 +17,6 @@ interface KeyboardControlsProps {
       setNumberInputString: (v: string | ((prev: string) => string)) => void;
       startGame: (g: GameType) => void;
       setBetAmount: (n: number) => void;
-      toggleFocus?: () => void;
       openRewards?: () => void;
       openSafety?: () => void;
       toggleFeed?: () => void;
@@ -96,11 +95,6 @@ export const useKeyboardControls = ({
             }
 
             // Global Shortcuts
-            if (e.altKey && e.key.toLowerCase() === 'z') {
-                e.preventDefault();
-                uiActions.toggleFocus?.();
-                return;
-            }
             if (e.altKey && e.key.toLowerCase() === 'r') {
                 e.preventDefault();
                 uiActions.openRewards?.();
@@ -348,26 +342,31 @@ export const useKeyboardControls = ({
                 if (k === 'w') gameActions.casinoWarGoToWar();
                 if (k === 's') gameActions.casinoWarSurrender();
             } else if (gameState.type === GameType.ULTIMATE_HOLDEM) {
+                // Side bets during BETTING stage
                 if (gameState.stage === 'BETTING') {
                     if (k === 't') gameActions.uthToggleTrips();
                     if (e.key === '6') { gameActions.uthToggleSixCardBonus(); return; }
                     if (k === 'j') gameActions.uthToggleProgressive();
-                    return;
+                    // Don't return - allow SPACE to deal
                 }
+                // Skip action shortcuts during REVEAL phase
                 if (gameState.message.includes('REVEAL')) return;
-                if (k === 'c') gameActions.uhCheck();
-                if (k === 'f') gameActions.uhFold();
-                // For betting, we override the standard bet shortcuts in Ultimate Holdem
-                if (gameState.communityCards.length === 0) {
-                    // Pre-flop: 3x or 4x
-                    if (e.key === '3') { gameActions.uhBet(3); return; }
-                    if (e.key === '4') { gameActions.uhBet(4); return; }
-                } else if (gameState.communityCards.length === 3) {
-                    // Flop: 2x
-                    if (e.key === '2') { gameActions.uhBet(2); return; }
-                } else if (gameState.communityCards.length === 5) {
-                    // River: 1x
-                    if (e.key === '1') { gameActions.uhBet(1); return; }
+                // Playing stage actions
+                if (gameState.stage === 'PLAYING') {
+                    if (k === 'c') gameActions.uhCheck();
+                    if (k === 'f') gameActions.uhFold();
+                    // For betting, we override the standard bet shortcuts in Ultimate Holdem
+                    if (gameState.communityCards.length === 0) {
+                        // Pre-flop: 3x or 4x
+                        if (e.key === '3') { gameActions.uhBet(3); return; }
+                        if (e.key === '4') { gameActions.uhBet(4); return; }
+                    } else if (gameState.communityCards.length === 3) {
+                        // Flop: 2x
+                        if (e.key === '2') { gameActions.uhBet(2); return; }
+                    } else if (gameState.communityCards.length === 5) {
+                        // River: 1x
+                        if (e.key === '1') { gameActions.uhBet(1); return; }
+                    }
                 }
             } else if (gameState.type === GameType.CRAPS) {
                 // Handle Odds Selection Mode

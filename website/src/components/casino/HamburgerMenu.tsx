@@ -23,14 +23,8 @@ interface HamburgerMenuProps {
   onToggleHelp: () => void;
   soundEnabled: boolean;
   onToggleSound: () => void;
-  touchMode: boolean;
-  onToggleTouchMode: () => void;
   reducedMotion: boolean;
   onToggleReducedMotion: () => void;
-  publicKeyHex?: string | null;
-  focusMode?: boolean;
-  onToggleFocus?: () => void;
-  walletSlot?: React.ReactNode;
 }
 
 const INSTANT_CONFIG = { duration: 0 };
@@ -45,8 +39,6 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
   onToggleSound,
   reducedMotion,
   onToggleReducedMotion,
-  focusMode,
-  onToggleFocus,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
@@ -195,9 +187,6 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
               <div className="py-2">
                 <ToggleItem label="Sound" value={soundEnabled} onToggle={onToggleSound} />
                 <ToggleItem label="Motion" value={!reducedMotion} onToggle={onToggleReducedMotion} />
-                {onToggleFocus && (
-                  <ToggleItem label="Focus" value={Boolean(focusMode)} onToggle={onToggleFocus} />
-                )}
               </div>
 
               {/* Divider */}

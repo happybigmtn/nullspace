@@ -46,7 +46,8 @@ export const CrapsView = React.memo<{
     /** LUX-010: Balance for inline bet selector calculations */
     balance?: number;
 }>(({ gameState, actions, lastWin, playMode, currentBet, onBetChange, balance = 1000 }) => {
-    const [leftSidebarView, setLeftSidebarView] = useState<'EXPOSURE' | 'SIDE_BETS'>('EXPOSURE');
+    const [leftSidebarView, setLeftSidebarView] = useState<'EXPOSURE' | 'SIDE_BETS' | 'BETS'>('EXPOSURE');
+    const [toolsOpen, setToolsOpen] = useState(false);
     const [diceSettled, setDiceSettled] = useState(true);
     const [showOutcome, setShowOutcome] = useState(true);
 
@@ -105,9 +106,32 @@ export const CrapsView = React.memo<{
         replay: gameState.crapsBets.some(b => b.type === 'REPLAY'),
         hotRoller: gameState.crapsBets.some(b => b.type === 'HOT_ROLLER'),
     }), [gameState.crapsBets]);
+    const showBonusTab = canPlaceBonus || Object.values(bonusBetsPlaced).some(Boolean);
 
     const betTypes = useMemo(() => new Set(gameState.crapsBets.map((b) => b.type)), [gameState.crapsBets]);
     const closeInput = () => actions?.setGameState?.((prev: any) => ({ ...prev, crapsInputMode: 'NONE' }));
+
+    useEffect(() => {
+        if (!showBonusTab && leftSidebarView === 'SIDE_BETS') {
+            setLeftSidebarView('EXPOSURE');
+        }
+    }, [leftSidebarView, showBonusTab]);
+
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.altKey || e.ctrlKey || e.metaKey) return;
+            if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+            const key = e.key.toLowerCase();
+            if (key === 't') {
+                e.preventDefault();
+                setToolsOpen((prev) => !prev);
+                return;
+            }
+            if (e.key === 'Escape') setToolsOpen(false);
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, []);
 
     return (
         <>
@@ -378,183 +402,231 @@ export const CrapsView = React.memo<{
                 </div>
             </div>
 
+            {toolsOpen && (
+                <>
+                    <button
+                        type="button"
+                        aria-label="Close tools"
+                        onClick={() => setToolsOpen(false)}
+                        className="hidden md:block fixed inset-0 z-30 bg-black/20"
+                    />
+                    <div className="hidden md:block fixed bottom-24 right-6 z-40 w-80">
+                        <div className="liquid-card liquid-sheen border border-ns/40 rounded-3xl p-4 shadow-float">
+                        <div className="flex items-center justify-between mb-3">
+                            <div className="text-[10px] font-bold uppercase tracking-[0.3em] text-ns-muted">Craps Tools</div>
+                            <button
+                                type="button"
+                                onClick={() => setToolsOpen(false)}
+                                className="liquid-chip px-2 py-1 text-[10px] text-ns-muted"
+                            >
+                                Close
+                            </button>
+                        </div>
+                        <div className="flex items-center gap-2 mb-3">
+                            <button
+                                type="button"
+                                onClick={() => setLeftSidebarView('EXPOSURE')}
+                                className={`flex-1 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest transition-colors ${
+                                    leftSidebarView === 'EXPOSURE'
+                                        ? 'text-mono-0 dark:text-mono-1000 border border-mono-0 bg-mono-0/10'
+                                        : 'text-ns-muted border border-ns hover:text-ns'
+                                }`}
+                            >
+                                Exposure
+                            </button>
+                            {showBonusTab && (
+                                <button
+                                    type="button"
+                                    onClick={() => setLeftSidebarView('SIDE_BETS')}
+                                    className={`flex-1 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest transition-colors ${
+                                        leftSidebarView === 'SIDE_BETS'
+                                            ? 'text-amber-500 border border-amber-400 bg-amber-400/10'
+                                            : 'text-ns-muted border border-ns hover:text-ns'
+                                    }`}
+                                >
+                                    Bonus
+                                </button>
+                            )}
+                            <button
+                                type="button"
+                                onClick={() => setLeftSidebarView('BETS')}
+                                className={`flex-1 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest transition-colors ${
+                                    leftSidebarView === 'BETS'
+                                        ? 'text-mono-0 dark:text-mono-1000 border border-mono-0 bg-mono-0/10'
+                                        : 'text-ns-muted border border-ns hover:text-ns'
+                                }`}
+                            >
+                                Bets
+                            </button>
+                        </div>
+
+                        {leftSidebarView === 'EXPOSURE' && (
+                            <div className="max-h-64 overflow-y-auto scrollbar-hide rounded-2xl liquid-panel p-2">
+                                {(() => {
+                                    const hardwayTargets = [4, 6, 8, 10];
+                                    const activeHardways = gameState.crapsBets
+                                        .filter(b => b.type === 'HARDWAY')
+                                        .map(b => b.target!);
+
+                                    const rows: { num: number; label: string; isHard?: boolean }[] = [];
+
+                                    [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].forEach(num => {
+                                        if (hardwayTargets.includes(num) && activeHardways.includes(num)) {
+                                            rows.push({ num, label: `${num}H`, isHard: true });
+                                            rows.push({ num, label: `${num}E`, isHard: false });
+                                        } else {
+                                            rows.push({ num, label: num.toString() });
+                                        }
+                                    });
+
+                                    const formatPnl = (n: number) => {
+                                        const abs = Math.abs(n);
+                                        if (abs >= 1000000) return `${(abs / 1000000).toFixed(1)}M`;
+                                        if (abs >= 10000) return `${Math.round(abs / 1000)}K`;
+                                        if (abs >= 1000) return `${(abs / 1000).toFixed(1)}K`;
+                                        return abs.toString();
+                                    };
+
+                                    return rows.map((row, idx) => {
+                                        const pnl = row.isHard !== undefined
+                                            ? calculateCrapsExposure(row.num, gameState.crapsPoint, gameState.crapsBets, row.isHard)
+                                            : calculateCrapsExposure(row.num, gameState.crapsPoint, gameState.crapsBets);
+
+                                        const pnlRounded = Math.round(pnl);
+                                        const isHighlight = row.num === currentRoll;
+
+                                        return (
+                                            <div key={idx} className="flex items-center h-7 text-base">
+                                                <div className="w-20 flex justify-end items-center pr-2 overflow-hidden">
+                                                    {pnlRounded < 0 && (
+                                                        <span className="text-mono-400 dark:text-mono-500 font-mono text-sm whitespace-nowrap">
+                                                            -{formatPnl(pnlRounded)}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className={`w-10 text-center font-bold relative flex-shrink-0 ${getDesktopExposureRowColorClass(row.num, isHighlight, row.isHard)}`}>
+                                                    {row.label}
+                                                </div>
+                                                <div className="w-20 flex justify-start items-center pl-2 overflow-hidden">
+                                                    {pnlRounded > 0 && (
+                                                        <span className="text-mono-0 dark:text-mono-1000 font-bold font-mono text-sm whitespace-nowrap">
+                                                            +{formatPnl(pnlRounded)}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    });
+                                })()}
+                            </div>
+                        )}
+
+                        {leftSidebarView === 'SIDE_BETS' && (
+                            <CrapsBonusDashboard
+                                bets={gameState.crapsBets}
+                                madePointsMask={gameState.crapsMadePointsMask}
+                                compact={true}
+                            />
+                        )}
+
+                        {leftSidebarView === 'BETS' && (
+                            <div className="space-y-2">
+                                <Label size="micro" className="mb-2 block">Table Bets</Label>
+                                <div className="space-y-2">
+                                    {(() => {
+                                        const confirmedBets = gameState.crapsBets.filter(b => b.local !== true);
+                                        const pendingBets = gameState.crapsBets.filter(b => b.local === true);
+
+                                        const renderBet = (b: typeof gameState.crapsBets[0], i: number, isPending: boolean) => {
+                                            const globalIdx = gameState.crapsBets.indexOf(b);
+                                            const candidateIdx = gameState.crapsOddsCandidates?.indexOf(globalIdx);
+                                            const isCandidate = candidateIdx !== undefined && candidateIdx !== -1;
+
+                                            return (
+                                                <div
+                                                    key={i}
+                                                    onClick={() => isCandidate ? actions?.addCrapsOdds?.(candidateIdx) : actions?.placeCrapsBet?.(b.type, b.target)}
+                                                    className={`flex justify-between items-center text-xs border p-2 rounded cursor-pointer transition-colors ${
+                                                        isCandidate
+                                                            ? 'border-mono-0 bg-mono-0/10'
+                                                            : isPending
+                                                                ? 'border-amber-400/50 bg-amber-500/10'
+                                                                : 'border-ns bg-ns-surface hover:bg-ns-surface'
+                                                    }`}
+                                                >
+                                                    <div className="flex flex-col">
+                                                        <span className={`font-bold text-[10px] ${
+                                                            isCandidate ? 'text-mono-0 dark:text-mono-1000' : isPending ? 'text-amber-500' : 'text-mono-0 dark:text-mono-1000 font-bold'
+                                                        }`}>
+                                                            {isCandidate ? `[${candidateIdx! + 1}] ` : ''}{b.type}{b.target !== undefined ? ` ${b.target}` : ''}
+                                                        </span>
+                                                        <span className="text-[9px] text-ns-muted">{b.status === 'PENDING' ? 'WAIT' : 'ON'}</span>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <div className="text-ns text-[10px]">${b.amount + (b.oddsAmount || 0)}</div>
+                                                        {b.localOddsAmount && b.localOddsAmount > 0 && (
+                                                            <div className="text-[9px] text-amber-500">+${b.localOddsAmount} odds pending</div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        };
+
+                                        if (confirmedBets.length === 0 && pendingBets.length === 0) {
+                                            return <div className="text-center text-[10px] text-ns-muted uppercase tracking-widest">No bets</div>;
+                                        }
+
+                                        return (
+                                            <>
+                                                {confirmedBets.length > 0 && (
+                                                    <div className="space-y-1">
+                                                        <div className="text-[8px] text-mono-0 dark:text-mono-1000 font-bold uppercase tracking-widest font-bold">
+                                                            Confirmed ({confirmedBets.length})
+                                                        </div>
+                                                        {confirmedBets.map((b, i) => renderBet(b, i, false))}
+                                                    </div>
+                                                )}
+
+                                                {pendingBets.length > 0 && (
+                                                    <div className="space-y-1">
+                                                        <div className="text-[8px] text-amber-500 uppercase tracking-widest font-bold">
+                                                            Pending ({pendingBets.length})
+                                                        </div>
+                                                        {pendingBets.map((b, i) => renderBet(b, i, true))}
+                                                    </div>
+                                                )}
+                                            </>
+                                        );
+                                    })()}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </>
+            )}
+
             {/* CONTROLS */}
             <div className="ns-controlbar zen-controlbar fixed bottom-0 left-0 right-0 md:sticky md:bottom-0 liquid-card rounded-none md:rounded-t-3xl backdrop-blur border-t border-ns-border/60 z-50 pb-[env(safe-area-inset-bottom)] md:pb-0">
-                <div className="h-16 md:h-20 flex items-center justify-between md:justify-center gap-2 p-2 md:px-4">
+                <div className="h-16 md:h-20 flex items-center justify-between gap-2 p-2 md:px-4">
                     {/* Bet Menu */}
-                    <div className="hidden md:flex items-center gap-2 flex-1">
+                    <div className="hidden md:flex items-center gap-3">
                         <CrapsBetMenu
                             gameState={gameState}
                             actions={actions}
                             canPlaceBonus={canPlaceBonus}
                             playMode={playMode}
                         />
-                        <div className="hidden md:block">
-                            <div className="space-y-6">
-                                <div>
-                                    <div className="flex items-center gap-2 mb-3">
-                                        <button
-                                            onClick={() => setLeftSidebarView('EXPOSURE')}
-                                            className={`flex-1 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest transition-colors ${
-                                                leftSidebarView === 'EXPOSURE'
-                                                    ? 'text-mono-0 dark:text-mono-1000 font-bold border border-mono-0 bg-mono-0/10'
-                                                    : 'text-ns-muted border border-ns hover:text-ns'
-                                            }`}
-                                        >
-                                            Exposure
-                                        </button>
-                                        <button
-                                            onClick={() => setLeftSidebarView('SIDE_BETS')}
-                                            className={`flex-1 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest transition-colors ${
-                                                leftSidebarView === 'SIDE_BETS'
-                                                    ? 'text-amber-500 border border-amber-400 bg-amber-400/10'
-                                                    : 'text-ns-muted border border-ns hover:text-ns'
-                                            }`}
-                                        >
-                                            Bonus
-                                        </button>
-                                    </div>
-
-                                    {leftSidebarView === 'EXPOSURE' ? (
-                                        <div className="max-h-52 overflow-y-auto scrollbar-hide rounded-2xl liquid-panel p-2">
-                                            {(() => {
-                                                const hardwayTargets = [4, 6, 8, 10];
-                                                const activeHardways = gameState.crapsBets
-                                                    .filter(b => b.type === 'HARDWAY')
-                                                    .map(b => b.target!);
-
-                                                const rows: { num: number; label: string; isHard?: boolean }[] = [];
-
-                                                [2,3,4,5,6,7,8,9,10,11,12].forEach(num => {
-                                                    if (hardwayTargets.includes(num) && activeHardways.includes(num)) {
-                                                        rows.push({ num, label: `${num}H`, isHard: true });
-                                                        rows.push({ num, label: `${num}E`, isHard: false });
-                                                    } else {
-                                                        rows.push({ num, label: num.toString() });
-                                                    }
-                                                });
-
-                                                const formatPnl = (n: number) => {
-                                                    const abs = Math.abs(n);
-                                                    if (abs >= 1000000) return `${(abs / 1000000).toFixed(1)}M`;
-                                                    if (abs >= 10000) return `${Math.round(abs / 1000)}K`;
-                                                    if (abs >= 1000) return `${(abs / 1000).toFixed(1)}K`;
-                                                    return abs.toString();
-                                                };
-
-                                                return rows.map((row, idx) => {
-                                                    const pnl = row.isHard !== undefined
-                                                        ? calculateCrapsExposure(row.num, gameState.crapsPoint, gameState.crapsBets, row.isHard)
-                                                        : calculateCrapsExposure(row.num, gameState.crapsPoint, gameState.crapsBets);
-
-                                                    const pnlRounded = Math.round(pnl);
-                                                    const isHighlight = row.num === currentRoll;
-
-                                                    return (
-                                                        <div key={idx} className="flex items-center h-7 text-base">
-                                                            <div className="w-20 flex justify-end items-center pr-2 overflow-hidden">
-                                                                {pnlRounded < 0 && (
-                                                                    <span className="text-mono-400 dark:text-mono-500 font-mono text-sm whitespace-nowrap">
-                                                                        -{formatPnl(pnlRounded)}
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                            <div className={`w-10 text-center font-bold relative flex-shrink-0 ${getDesktopExposureRowColorClass(row.num, isHighlight, row.isHard)}`}>
-                                                                {row.label}
-                                                            </div>
-                                                            <div className="w-20 flex justify-start items-center pl-2 overflow-hidden">
-                                                                {pnlRounded > 0 && (
-                                                                    <span className="text-mono-0 dark:text-mono-1000 font-bold font-mono text-sm whitespace-nowrap">
-                                                                        +{formatPnl(pnlRounded)}
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                });
-                                            })()}
-                                        </div>
-                                    ) : (
-                                        <CrapsBonusDashboard
-                                            bets={gameState.crapsBets}
-                                            madePointsMask={gameState.crapsMadePointsMask}
-                                            compact={true}
-                                        />
-                                    )}
-                                </div>
-
-                                <div>
-                                    <Label size="micro" className="mb-2 block">Table Bets</Label>
-                                    <div className="space-y-2">
-                                        {(() => {
-                                            const confirmedBets = gameState.crapsBets.filter(b => b.local !== true);
-                                            const pendingBets = gameState.crapsBets.filter(b => b.local === true);
-
-                                            const renderBet = (b: typeof gameState.crapsBets[0], i: number, isPending: boolean) => {
-                                                const globalIdx = gameState.crapsBets.indexOf(b);
-                                                const candidateIdx = gameState.crapsOddsCandidates?.indexOf(globalIdx);
-                                                const isCandidate = candidateIdx !== undefined && candidateIdx !== -1;
-
-                                                return (
-                                                    <div
-                                                        key={i}
-                                                        onClick={() => isCandidate ? actions?.addCrapsOdds?.(candidateIdx) : actions?.placeCrapsBet?.(b.type, b.target)}
-                                                        className={`flex justify-between items-center text-xs border p-2 rounded cursor-pointer transition-colors ${
-                                                            isCandidate
-                                                                ? 'border-mono-0 bg-mono-0/10'
-                                                                : isPending
-                                                                    ? 'border-amber-400/50 bg-amber-500/10'
-                                                                    : 'border-ns bg-ns-surface hover:bg-ns-surface'
-                                                        }`}
-                                                    >
-                                                        <div className="flex flex-col">
-                                                            <span className={`font-bold text-[10px] ${
-                                                                isCandidate ? 'text-mono-0 dark:text-mono-1000' : isPending ? 'text-amber-500' : 'text-mono-0 dark:text-mono-1000 font-bold'
-                                                            }`}>
-                                                                {isCandidate ? `[${candidateIdx! + 1}] ` : ''}{b.type}{b.target !== undefined ? ` ${b.target}` : ''}
-                                                            </span>
-                                                            <span className="text-[9px] text-ns-muted">{b.status === 'PENDING' ? 'WAIT' : 'ON'}</span>
-                                                        </div>
-                                                        <div className="text-right">
-                                                            <div className="text-ns text-[10px]">${b.amount + (b.oddsAmount || 0)}</div>
-                                                            {b.localOddsAmount && b.localOddsAmount > 0 && (
-                                                                <div className="text-[9px] text-amber-500">+${b.localOddsAmount} odds pending</div>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                );
-                                            };
-
-                                            if (confirmedBets.length === 0 && pendingBets.length === 0) {
-                                                return <div className="text-center text-[10px] text-ns-muted uppercase tracking-widest">No bets</div>;
-                                            }
-
-                                            return (
-                                                <>
-                                                    {confirmedBets.length > 0 && (
-                                                        <div className="space-y-1">
-                                                            <div className="text-[8px] text-mono-0 dark:text-mono-1000 font-bold uppercase tracking-widest font-bold">
-                                                                Confirmed ({confirmedBets.length})
-                                                            </div>
-                                                            {confirmedBets.map((b, i) => renderBet(b, i, false))}
-                                                        </div>
-                                                    )}
-
-                                                    {pendingBets.length > 0 && (
-                                                        <div className="space-y-1">
-                                                            <div className="text-[8px] text-amber-500 uppercase tracking-widest font-bold">
-                                                                Pending ({pendingBets.length})
-                                                            </div>
-                                                            {pendingBets.map((b, i) => renderBet(b, i, true))}
-                                                        </div>
-                                                    )}
-                                                </>
-                                            );
-                                        })()}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setToolsOpen((prev) => !prev)}
+                            className={`liquid-chip px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.28em] transition-all ${
+                                toolsOpen
+                                    ? 'border-mono-0 bg-mono-0/10 text-mono-0 dark:text-mono-1000'
+                                    : 'border-ns-border/70 text-ns-muted hover:border-ns'
+                            }`}
+                        >
+                            Tools
+                        </button>
                     </div>
 
                     {/* Desktop: Bet Selector + ROLL Button - LUX-010 */}

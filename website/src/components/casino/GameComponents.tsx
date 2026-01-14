@@ -265,14 +265,15 @@ export const DiceThrow2D: React.FC<{
     }
 
     // Physics constants for realistic craps throw
-    const restitution = 0.65; // Bounce off walls
-    const wallKick = 0.55; // Extra kick when hitting the craps wall
-    const floorRestitution = 0.45; // Softer bounce off felt
-    const rollingFriction = 0.982; // Gradual slowdown on table
-    const centerAttraction = 0.01; // Gentle pull toward center
-    const settleThreshold = 0.28; // Velocity threshold to consider settled
-    const gravity = 0.14; // Simulated downward force on the table
-    const MAX_DURATION_MS = 3200; // Safety timeout
+    const restitution = 0.72; // Bounce off walls (higher = bouncier)
+    const wallKick = 0.85; // Extra kick when hitting the craps back wall
+    const floorRestitution = 0.55; // Bounce off felt (simulates hopping)
+    const rollingFriction = 0.978; // Gradual slowdown on table
+    const centerAttraction = 0.008; // Gentle pull toward center
+    const settleThreshold = 0.25; // Velocity threshold to consider settled
+    const gravity = 0.18; // Simulated downward force on the table
+    const MAX_DURATION_MS = 3500; // Safety timeout
+    const verticalBounceChance = 0.15; // Random chance for dice to hop
 
     const step = (time: number) => {
       if (startTimeRef.current === null) {
@@ -327,26 +328,42 @@ export const DiceThrow2D: React.FC<{
         rot += vel.vr * dtScale;
         rollRotation = rot + (vel.cumulativeX / circumference) * 360;
 
-        // Wall bounces (craps wall on the right)
+        // Wall bounces (craps wall on the right - main bounce point)
         if (x <= 0) {
           x = 0;
           vel.vx = Math.abs(vel.vx) * restitution;
+          // Add some chaos on left wall bounce too
+          vel.vy += (Math.random() - 0.5) * 1.5;
+          vel.vr += (Math.random() - 0.5) * 4;
         } else if (x >= boundsX) {
+          // Main craps back wall - dice hit hard and bounce chaotically
           x = boundsX;
           vel.vx = -Math.abs(vel.vx) * restitution;
-          vel.vy += (Math.random() - 0.5) * 2.6 * wallKick;
-          vel.vr += (Math.random() - 0.5) * 6 * wallKick;
+          // Strong vertical kick from wall (simulates pyramid rubber)
+          vel.vy += (Math.random() - 0.5) * 4 * wallKick;
+          // Heavy spin from wall impact
+          vel.vr += (Math.random() - 0.5) * 12 * wallKick;
+          // Random horizontal scatter
+          vel.vx += (Math.random() - 0.5) * 3 * wallKick;
         }
 
-        // Vertical bounds (keep on table)
+        // Vertical bounds (keep on table) with realistic hop physics
         if (y >= boundsY) {
           y = boundsY;
+          const speed = Math.sqrt(vel.vx * vel.vx + vel.vy * vel.vy);
+          // Bounce up with diminishing returns
           vel.vy = -Math.abs(vel.vy) * floorRestitution;
-          vel.vx *= 0.92;
-          vel.vr *= 0.85;
+          vel.vx *= 0.94;
+          vel.vr *= 0.88;
+          // Random hop when moving fast enough (simulates dice tumbling)
+          if (speed > 2 && Math.random() < verticalBounceChance) {
+            vel.vy -= (1.5 + Math.random() * 2);
+            vel.vr += (Math.random() - 0.5) * 8;
+          }
         } else if (y <= 0) {
           y = 0;
           vel.vy = Math.abs(vel.vy) * floorRestitution;
+          vel.vr += (Math.random() - 0.5) * 3;
         }
 
         // Check if this die has settled

@@ -249,9 +249,30 @@ export const BlackjackView = React.memo<{
 
                 {/* Center Info */}
                 <div className="text-center relative z-20 px-6">
-                    <h2 className="text-2xl sm:text-3xl font-bold text-ns tracking-tight font-display animate-scale-in">
+                    <h2 className="text-2xl sm:text-3xl font-bold text-ns tracking-tight font-display animate-scale-in zen-hide">
                         {gameState.message || 'Place Your Bet'}
                     </h2>
+                    {/* Result summary - always visible */}
+                    {gameState.stage === 'RESULT' && (
+                        <div className="mt-2 flex items-center justify-center gap-4 text-sm font-mono">
+                            <span className="text-ns-muted">You: <span className="text-ns font-bold">{playerValue}</span></span>
+                            <span className="text-ns-muted">Dealer: <span className="text-ns font-bold">{dealerValue}</span></span>
+                            {typeof playerValue === 'number' && typeof dealerValue === 'number' && (
+                                <span className={`font-bold ${
+                                    playerValue > 21 ? 'text-mono-400' :
+                                    dealerValue > 21 || playerValue > dealerValue ? 'text-mono-0 dark:text-mono-1000' :
+                                    playerValue === dealerValue ? 'text-ns-muted' :
+                                    'text-mono-400'
+                                }`}>
+                                    {playerValue > 21 ? 'BUST' :
+                                     playerValue === 21 && gameState.playerCards.length === 2 ? 'BLACKJACK!' :
+                                     dealerValue > 21 ? 'DEALER BUST' :
+                                     playerValue > dealerValue ? 'WIN' :
+                                     playerValue === dealerValue ? 'PUSH' : 'LOSE'}
+                                </span>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {/* Player Area - Highlighted */}

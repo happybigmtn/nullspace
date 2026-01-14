@@ -875,6 +875,10 @@ a[href="#app-main"]:focus-visible {
   display: none !important;
 }
 
+.casino-shell[data-zen="true"] .ns-keycap {
+  display: none !important;
+}
+
 .casino-shell[data-zen="true"] .zen-soft {
   opacity: 0.6;
 }
