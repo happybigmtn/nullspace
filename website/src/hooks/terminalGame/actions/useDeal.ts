@@ -32,6 +32,7 @@ type UseDealArgs = {
   rollSicBo: () => void;
   startGame: (type: GameType) => Promise<void>;
   setLastTxSig: (sig: string | null) => void;
+  armChainResponseTimeout: (context: string, expectedSessionId?: bigint | null) => void;
 };
 
 export const useDeal = ({
@@ -56,6 +57,7 @@ export const useDeal = ({
   rollSicBo,
   startGame,
   setLastTxSig,
+  armChainResponseTimeout,
 }: UseDealArgs) => {
   return useCallback(async () => {
     if (gameState.type === GameType.NONE) return;
@@ -128,6 +130,7 @@ export const useDeal = ({
           const atomicPayload = serializeBaccaratAtomicBatch(betsToPlace);
           const result = await chainService.sendMove(sessionId, atomicPayload);
           if (result.txHash) setLastTxSig(result.txHash);
+          armChainResponseTimeout('BACCARAT DEAL', sessionId);
           return;
         } catch (error) {
           console.error('[useDeal] Baccarat deal failed:', error);
@@ -152,6 +155,7 @@ export const useDeal = ({
           const payload = new Uint8Array([0]);
           const result = await chainService.sendMove(sessionId, payload);
           if (result.txHash) setLastTxSig(result.txHash);
+          armChainResponseTimeout('CASINO WAR DEAL', sessionId);
           setGameState(prev => ({ ...prev, message: 'DEALING...' }));
           return;
         } catch (error) {
@@ -199,6 +203,7 @@ export const useDeal = ({
             }));
             const result = await chainService.sendMove(sessionId, payload);
             if (result.txHash) setLastTxSig(result.txHash);
+            armChainResponseTimeout('BLACKJACK DEAL', sessionId);
             return;
           } catch (error) {
             console.error('[useDeal] Blackjack Deal failed:', error);
@@ -214,6 +219,7 @@ export const useDeal = ({
             setGameState(prev => ({ ...prev, message: 'REVEALING...' }));
             const result = await chainService.sendMove(sessionId, new Uint8Array([6]));
             if (result.txHash) setLastTxSig(result.txHash);
+            armChainResponseTimeout('BLACKJACK REVEAL', sessionId);
             return;
           } catch (error) {
             console.error('[useDeal] Blackjack Reveal failed:', error);
@@ -253,6 +259,7 @@ export const useDeal = ({
 
             const result = await chainService.sendMove(sessionId, payload);
             if (result.txHash) setLastTxSig(result.txHash);
+            armChainResponseTimeout('THREE CARD DEAL', sessionId);
             return;
           } catch (error) {
             console.error('[useDeal] Three Card Deal failed:', error);
@@ -268,6 +275,7 @@ export const useDeal = ({
             setGameState(prev => ({ ...prev, message: 'REVEALING...' }));
             const result = await chainService.sendMove(sessionId, new Uint8Array([4]));
             if (result.txHash) setLastTxSig(result.txHash);
+            armChainResponseTimeout('THREE CARD REVEAL', sessionId);
             return;
           } catch (error) {
             console.error('[useDeal] Three Card Reveal failed:', error);
@@ -308,6 +316,7 @@ export const useDeal = ({
 
             const result = await chainService.sendMove(sessionId, payload);
             if (result.txHash) setLastTxSig(result.txHash);
+            armChainResponseTimeout('ULTIMATE HOLDEM DEAL', sessionId);
             return;
           } catch (error) {
             console.error('[useDeal] Ultimate Holdem Deal failed:', error);
@@ -323,6 +332,7 @@ export const useDeal = ({
             setGameState(prev => ({ ...prev, message: 'REVEALING...' }));
             const result = await chainService.sendMove(sessionId, new Uint8Array([7]));
             if (result.txHash) setLastTxSig(result.txHash);
+            armChainResponseTimeout('ULTIMATE HOLDEM REVEAL', sessionId);
             return;
           } catch (error) {
             console.error('[useDeal] Ultimate Holdem Reveal failed:', error);

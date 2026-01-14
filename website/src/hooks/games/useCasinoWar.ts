@@ -12,6 +12,7 @@ interface UseCasinoWarProps {
   isPendingRef: MutableRefObject<boolean>;
   isOnChain: boolean;
   setLastTxSig: (sig: string | null) => void;
+  armChainResponseTimeout: (context: string, expectedSessionId?: bigint | null) => void;
 }
 
 export const useCasinoWar = ({
@@ -23,6 +24,7 @@ export const useCasinoWar = ({
   isPendingRef,
   isOnChain,
   setLastTxSig,
+  armChainResponseTimeout,
 }: UseCasinoWarProps) => {
   const casinoWarToggleTieBet = useCallback(async () => {
     if (gameState.type !== GameType.CASINO_WAR) return;
@@ -56,6 +58,7 @@ export const useCasinoWar = ({
         new DataView(payload.buffer).setBigUint64(1, BigInt(nextAmount), false);
         const result = await chainService.sendMove(currentSessionIdRef.current, payload);
         if (result.txHash) setLastTxSig(result.txHash);
+        armChainResponseTimeout('CASINO WAR TIE BET', currentSessionIdRef.current);
         return;
       } catch (error) {
         console.error('[useCasinoWar] Tie bet update failed:', error);
@@ -101,6 +104,7 @@ export const useCasinoWar = ({
         const payload = new Uint8Array([1]);
         const result = await chainService.sendMove(currentSessionIdRef.current, payload);
         if (result.txHash) setLastTxSig(result.txHash);
+        armChainResponseTimeout('CASINO WAR GO', currentSessionIdRef.current);
         setGameState(prev => ({ ...prev, message: 'GOING TO WAR...' }));
         return;
       } catch (error) {
@@ -140,6 +144,7 @@ export const useCasinoWar = ({
         const payload = new Uint8Array([2]);
         const result = await chainService.sendMove(currentSessionIdRef.current, payload);
         if (result.txHash) setLastTxSig(result.txHash);
+        armChainResponseTimeout('CASINO WAR SURRENDER', currentSessionIdRef.current);
         setGameState(prev => ({ ...prev, message: 'SURRENDERING...' }));
         return;
       } catch (error) {
@@ -161,6 +166,7 @@ export const useCasinoWar = ({
     currentSessionIdRef,
     setLastTxSig,
     setGameState,
+    armChainResponseTimeout,
   ]);
 
   return { casinoWarToggleTieBet, casinoWarGoToWar, casinoWarSurrender };
