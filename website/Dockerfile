@@ -19,7 +19,6 @@ COPY execution/Cargo.toml ./execution/
 COPY simulator/Cargo.toml ./simulator/
 COPY types/Cargo.toml ./types/
 COPY website/wasm/Cargo.toml ./website/wasm/
-COPY terminal-cli/Cargo.toml ./terminal-cli/
 
 RUN mkdir -p node/src client/src execution/src simulator/src types/src website/wasm/src && \
     echo "fn main() {}" > node/src/main.rs && \
@@ -39,7 +38,6 @@ COPY execution/ ./execution/
 COPY simulator/ ./simulator/
 COPY types/ ./types/
 COPY website/wasm/ ./website/wasm/
-COPY terminal-cli/ ./terminal-cli/
 COPY packages/types/ ./packages/types/
 
 RUN wasm-pack build --target web --out-dir pkg website/wasm

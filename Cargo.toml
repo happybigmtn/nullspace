@@ -6,7 +6,6 @@ members = [
     "simulator",
     "types",
     "website/wasm",
-    "terminal-cli",
 ]
 resolver = "2"
 
