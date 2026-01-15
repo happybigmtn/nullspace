@@ -159,10 +159,13 @@ export class NonceManager {
     // Do initial sync with provided account
     this.syncWithAccountState(account);
 
-    // Apply nonce floor when indexer lags chain
-    const floor = FLOOR_MAP[publicKeyHex];
-    if (typeof floor === 'number' && floor > this.getCurrentNonce()) {
-      this.setNonce(floor);
+    // Apply nonce floor when indexer lags chain - but ONLY if account exists.
+    // If account is null, the chain was reset and we should start from 0.
+    if (account) {
+      const floor = FLOOR_MAP[publicKeyHex];
+      if (typeof floor === 'number' && floor > this.getCurrentNonce()) {
+        this.setNonce(floor);
+      }
     }
 
     // Start periodic resubmission only (no more polling for nonce)
