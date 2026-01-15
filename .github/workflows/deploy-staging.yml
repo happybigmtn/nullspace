@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      reset_chain:
+        description: 'Reset chain data (clear all validator state)'
+        type: boolean
+        default: false
 
 # Ensure only one staging deployment runs at a time
 concurrency:
@@ -166,6 +171,30 @@ jobs:
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
+
+      - name: Reset chain data (if requested)
+        if: ${{ github.event.inputs.reset_chain == 'true' }}
+        env:
+          HOST: ${{ secrets.STAGING_HOST_VALIDATORS || secrets.STAGING_HOST_NODE1 }}
+        run: |
+          set -euo pipefail
+          echo "Resetting chain data on $HOST..."
+          ssh-keyscan -H $HOST >> ~/.ssh/known_hosts 2>/dev/null || true
+
+          ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$HOST << 'RESET'
+            set -euo pipefail
+            echo "Stopping all validator containers..."
+            docker stop nullspace-node-0 nullspace-node-1 nullspace-node-2 nullspace-node-3 2>/dev/null || true
+            docker rm -f nullspace-node-0 nullspace-node-1 nullspace-node-2 nullspace-node-3 2>/dev/null || true
+
+            echo "Clearing validator data directories..."
+            rm -rf /var/lib/nullspace/node-0/* 2>/dev/null || true
+            rm -rf /var/lib/nullspace/node-1/* 2>/dev/null || true
+            rm -rf /var/lib/nullspace/node-2/* 2>/dev/null || true
+            rm -rf /var/lib/nullspace/node-3/* 2>/dev/null || true
+
+            echo "Chain data reset complete."
+          RESET
 
       - name: Deploy all validator nodes to consolidated host
         env:
