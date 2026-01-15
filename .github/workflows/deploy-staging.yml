@@ -122,6 +122,25 @@ jobs:
           name: staging-secrets
           path: /tmp/secrets
 
+      - name: Reset simulator data (if requested)
+        if: ${{ github.event.inputs.reset_chain == 'true' }}
+        env:
+          HOST: ${{ secrets.STAGING_HOST_SIMULATOR }}
+        run: |
+          set -euo pipefail
+          echo "Resetting simulator data on $HOST..."
+          ssh -o StrictHostKeyChecking=no $DEPLOY_USER@$HOST << 'RESET'
+            set -euo pipefail
+            echo "Stopping simulator container..."
+            docker stop nullspace-simulator 2>/dev/null || true
+            docker rm -f nullspace-simulator 2>/dev/null || true
+
+            echo "Clearing simulator data directory..."
+            rm -rf /var/lib/nullspace/simulator/* 2>/dev/null || true
+
+            echo "Simulator data reset complete."
+          RESET
+
       - name: Deploy simulator
         env:
           HOST: ${{ secrets.STAGING_HOST_SIMULATOR }}
