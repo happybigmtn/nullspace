@@ -210,31 +210,17 @@ export class NonceManager {
     }
 
     if (!account) {
-      // When running QA/test harness, prefer keeping the client nonce we injected
-      // even if the indexer doesn't have the account yet (common right after a reset).
-      const qaMode =
-        (typeof window !== 'undefined' &&
-          (localStorage.getItem('qa_bets_enabled') === 'true' ||
-            new URLSearchParams(window.location.search).get('qa') === '1')) ||
-        (typeof import.meta !== 'undefined' &&
-          !!import.meta.env?.VITE_QA_BETS);
-
+      // Account not found on chain - reset state to avoid submitting with stale nonce
+      // This can happen after chain reset or for genuinely new accounts
       const localNonce = this.getCurrentNonce();
       const pendingTxs = this.getPendingTransactions();
 
-      if (!qaMode) {
-        // Non-QA: clean state if account is missing
-        if (localNonce > 0 || pendingTxs.length > 0) {
-          logDebug(
-            `Account not found on chain - resetting state (localNonce=${localNonce}, pendingTxs=${pendingTxs.length})`
-          );
-          this.resetNonce();
-          this.cleanupAllTransactions();
-        }
-      } else {
+      if (localNonce > 0 || pendingTxs.length > 0) {
         logDebug(
-          `[QA] Account not found on chain; preserving local nonce ${localNonce} and pending=${pendingTxs.length}`
+          `Account not found on chain - resetting state (localNonce=${localNonce}, pendingTxs=${pendingTxs.length})`
         );
+        this.resetNonce();
+        this.cleanupAllTransactions();
       }
       return;
     }
