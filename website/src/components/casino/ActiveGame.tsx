@@ -157,17 +157,45 @@ export const ActiveGame: React.FC<ActiveGameProps> = ({ gameState, numberInput, 
     const primary = primaryActionLabel();
     const msg = (gameState.message ?? '').toString().toUpperCase();
 
-    if (gameState.stage === 'BETTING') return `Place bets then ${primary}`;
+    // Show actual game message if it's meaningful (not generic)
+    const genericMessages = ['PLACE YOUR BETS', 'CHOOSE YOUR MOVE', 'PLACE BET', ''];
+    if (msg && !genericMessages.includes(msg)) {
+      return msg;
+    }
+
+    // Handle different game stages
     if (gameState.stage === 'RESULT') return `Next hand: ${primary}`;
 
-    if (gameState.type === GameType.BLACKJACK) {
-      if (msg.includes('INSURANCE')) return 'Insurance offered';
-      return 'Standard actions available';
+    // Game-specific guidance based on type
+    switch (gameState.type) {
+      case GameType.BACCARAT:
+        return 'Select PLAYER or BANKER then DEAL';
+      case GameType.BLACKJACK:
+        if (msg.includes('INSURANCE')) return 'Insurance offered';
+        if (gameState.stage === 'PLAYING') return 'Hit, Stand, or Double';
+        return `Place bet then ${primary}`;
+      case GameType.CASINO_WAR:
+        return `Place bet then ${primary}`;
+      case GameType.CRAPS:
+        return 'Place bets then ROLL';
+      case GameType.HILO:
+        if (gameState.stage === 'PLAYING') return 'Higher, Lower, or Cashout';
+        return `Place bet then ${primary}`;
+      case GameType.ROULETTE:
+        return 'Place bets then SPIN';
+      case GameType.SIC_BO:
+        return 'Place bets then ROLL';
+      case GameType.THREE_CARD:
+        return `Ante up then ${primary}`;
+      case GameType.ULTIMATE_HOLDEM:
+        return `Ante + Blind then ${primary}`;
+      case GameType.VIDEO_POKER:
+        if (gameState.stage === 'PLAYING') return 'Select cards to HOLD';
+        return `Place bet then ${primary}`;
+      default:
+        if (gameState.stage === 'BETTING') return `Place bets then ${primary}`;
+        return 'Choose your move';
     }
-    if (gameState.type === GameType.HILO) return 'Higher, lower, or cashout';
-    if (gameState.type === GameType.VIDEO_POKER) return 'Select cards to hold';
-    
-    return 'Choose your move';
   };
 
   const displayWin = gameState.stage === 'RESULT' ? gameState.lastResult : 0;
@@ -260,8 +288,8 @@ export const ActiveGame: React.FC<ActiveGameProps> = ({ gameState, numberInput, 
     return (
       <>
         <div className="flex justify-center z-30 pointer-events-none select-none mb-2">
-          <div className="px-3 py-1 rounded border border-gray-800 bg-black/60 text-[10px] tracking-widest uppercase text-gray-300">
-            NEXT: <span className="text-white">{nextActionLabel()}</span>
+          <div className="px-3 py-1 rounded border border-ns-border bg-ns-surface/90 text-[10px] tracking-widest uppercase text-ns-muted">
+            NEXT: <span className="text-ns font-semibold">{nextActionLabel()}</span>
           </div>
         </div>
 
