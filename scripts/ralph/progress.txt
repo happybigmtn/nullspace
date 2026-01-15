@@ -752,25 +752,6 @@ Categories by count:
 - Evidence: Test already exists and covers all required steps. Marking as passes: true.
 - Blockers: None. Test requires Detox environment with iOS simulator or Android emulator to execute.
 
-### 2026-01-09 - QA-026: Create visual regression baseline
-- Files: website/scripts/visual-regression.mjs, website/tests/visual-snapshots/baseline/*.png (19 files)
-- Decisions:
-  - Extended existing visual-regression.mjs to cover all 10 game screens (was only blackjack, roulette)
-  - Created createGameScreen() helper to generate game screen configs programmatically
-  - GAME_CONFIGS array maps game ID to GameType enum name for command palette search
-  - Game names must match GameType enum exactly (e.g., 'CASINO_WAR', 'SIC_BO', 'THREE_CARD')
-  - Light mode: All 10 games captured (14 total with mode-select, lobby, mobile)
-  - Dark mode: Blackjack, roulette, baccarat as representative samples (5 total)
-  - Total: 19 baseline screenshots covering complete UI surface
-  - CI workflow (visual-regression.yml) already configured:
-    - Runs on PR changes to website/src, packages/design-tokens
-    - Auto-uploads artifacts for diff review
-    - Comments on PR with failure details
-    - Supports 'update-baselines' label for auto-update
-- Games covered: blackjack, roulette, baccarat, craps, hilo, sic-bo, video-poker, casino-war, three-card-poker, ultimate-holdem
-- Evidence: npm run visual:compare shows 19 passed, 0 failed
-- Blockers: None. All feedback loops pass.
-
 ### 2026-01-09 - QA-N08: Test card animation smoothness
 - Files: mobile/src/components/casino/__tests__/CardAnimationSmoothness.test.tsx (new)
 - Decisions:

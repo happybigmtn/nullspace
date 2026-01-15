@@ -4,10 +4,9 @@ Focus files:
 - `gateway/tests/integration/all-bet-types.test.ts` (gateway integration)
 - `node/src/tests.rs` (node simulation)
 - `packages/protocol/test/fuzz.test.ts` (protocol fuzzing)
-- `.github/workflows/visual-regression.yml` (visual regression)
 - `tests/integration/cross-service.test.ts` (cross-service integration)
 
-Goal: explain how our multi-layered testing strategy validates the entire stack from protocol encoding to UI rendering to distributed consensus. For every excerpt, you will see why it matters and a plain description of what the code does. This lesson reads like a textbook chapter: it introduces the testing philosophy, then walks through the test files with Feynman-style explanations.
+Goal: explain how our multi-layered testing strategy validates the entire stack from protocol encoding to distributed consensus and cross-service behavior. For every excerpt, you will see why it matters and a plain description of what the code does. This lesson reads like a textbook chapter: it introduces the testing philosophy, then walks through the test files with Feynman-style explanations.
 
 ---
 
@@ -24,16 +23,15 @@ If either answer is wrong, the game becomes unfair or unreliable. That is why th
 
 ## 1) Testing philosophy: layers and responsibilities
 
-Our stack needs six kinds of tests:
+Our stack needs five kinds of tests:
 
 1) **Integration tests** for the gateway and client protocol. These use real WebSocket messages, real game flows, and a running gateway.
 2) **Deterministic simulation tests** for the validator stack. These use simulated networks and deterministic time to test consensus and execution without flakiness.
 3) **Security regression tests** for config redaction and secrets. These ensure debug logs do not leak private material.
 4) **Property-based fuzzing tests** for protocol encoding/decoding. These use randomized inputs to discover edge cases that manual tests miss.
-5) **Visual regression tests** for the frontend. These capture screenshots and compare pixel-by-pixel to detect unintended UI changes.
-6) **Cross-service integration tests** that verify the full stack (auth, gateway, simulator) working together end-to-end.
+5) **Cross-service integration tests** that verify the full stack (auth, gateway, simulator) working together end-to-end.
 
-The two focus files cover the first three categories. This lesson also introduces the newer testing approaches: protocol fuzzing, visual regression, and cross-service integration testing.
+The two focus files cover the first three categories. This lesson also introduces the newer testing approaches: protocol fuzzing and cross-service integration testing.
 
 ---
 
@@ -741,127 +739,13 @@ If a fuzzer finds a bug, you add a regression test for that specific case. Over 
 
 ---
 
-## 24) Visual regression testing with Pixelmatch
-
-File: `.github/workflows/visual-regression.yml`
-
-Visual regression tests catch unintended UI changes by comparing screenshots pixel-by-pixel. This is crucial for a casino UI where visual consistency and player trust are paramount. A subtle layout shift or color change could indicate a bug or create confusion for players.
-
-### 24.1 How visual regression works
-
-The workflow:
-
-1. **Capture baseline screenshots** of key screens (game views, betting interfaces, results screens) in a known-good state.
-2. **On every PR**, capture new screenshots of the same screens with the same viewport size and browser.
-3. **Compare images pixel-by-pixel** using Pixelmatch, which generates a diff image highlighting changed pixels.
-4. **Calculate a difference percentage** and fail the test if it exceeds a threshold (typically 0.1-1%).
-5. **Upload diff artifacts** so developers can review the visual changes.
-
-### 24.2 Workflow structure
-
-The visual regression workflow runs on every PR that touches frontend code:
-
-```yaml
-on:
-  pull_request:
-    paths:
-      - 'website/src/**'
-      - 'website/public/**'
-      - 'website/index.html'
-      - 'packages/design-tokens/**'
-```
-
-It only runs when visual code changes, avoiding unnecessary CI time for backend-only changes.
-
-### 24.3 Capture and compare process
-
-The workflow:
-
-1. **Installs Chromium** in a reproducible environment (Ubuntu + specific Chromium version).
-2. **Builds the WASM runtime** to ensure the frontend has the latest protocol code.
-3. **Runs `npm run visual:compare`**, which:
-   - Starts the dev server
-   - Launches Chromium in headless mode
-   - Navigates to each test screen
-   - Captures screenshots at 1920x1080
-   - Compares against baseline images using Pixelmatch
-   - Generates diff images for any mismatches
-   - Writes a summary JSON with pass/fail/error counts
-
-### 24.4 Diff threshold and false positives
-
-Visual regression tests are sensitive. Even anti-aliasing differences or minor font rendering variations can trigger failures. The workflow uses a configurable threshold:
-
-- **<0.1% difference**: Pass (likely just rendering noise)
-- **0.1-1% difference**: Warning zone (review carefully)
-- **>1% difference**: Fail (clear visual change)
-
-The threshold is tuned to avoid false positives while catching real regressions.
-
-### 24.5 PR feedback and artifacts
-
-When visual regression fails, the workflow:
-
-1. **Posts a comment on the PR** with:
-   - Summary of passed/failed/errored screens
-   - List of failed screens with diff percentages
-   - Instructions for reviewing and updating baselines
-2. **Uploads artifacts** containing:
-   - Current screenshots
-   - Diff images (with changed pixels highlighted in red)
-   - summary.json with detailed results
-
-Developers download the artifact, review the diffs, and either fix the regression or update the baseline if the change is intentional.
-
-### 24.6 Updating baselines
-
-If visual changes are intentional (new feature, design update), you update the baselines:
-
-```bash
-npm run visual:capture   # Capture new screenshots
-npm run visual:update    # Copy current → baseline
-git add website/tests/visual-snapshots/baseline/
-git commit -m "chore: update visual regression baselines"
-```
-
-The workflow also includes an `UpdateBaselines` job that can be triggered by:
-- Adding an `update-baselines` label to the PR
-- Manual `workflow_dispatch`
-
-This job automatically captures and commits updated baselines, streamlining the process.
-
-### 24.7 Test coverage and screens
-
-Visual regression tests cover:
-
-- Game screens for each casino game (blackjack, roulette, craps, etc)
-- Betting interfaces with various bet configurations
-- Result screens showing wins, losses, and pushes
-- Balance and history views
-- Both light and dark color schemes
-
-Each screen is tested in both color schemes because CSS changes might only affect one theme.
-
-### 24.8 Why visual regression matters
-
-Visual bugs are hard to catch in code review:
-
-- A CSS change might have unintended effects on unrelated components
-- Responsive layout breakpoints might break in unexpected ways
-- Design token updates could cause widespread visual drift
-- Browser rendering differences might appear only in production
-
-Visual regression tests catch these issues before they reach players. They're especially important for a casino where players scrutinize every detail and visual inconsistencies can erode trust.
-
----
-
-## 25) Cross-service integration tests
+## 24) Cross-service integration tests
 
 Files: `tests/integration/cross-service.test.ts`, `tests/integration/helpers/services.ts`
 
 Cross-service tests verify the full stack working together: authentication service, gateway, and blockchain simulator. Unlike the per-service integration tests, these tests exercise the complete user journey across service boundaries.
 
-### 25.1 What cross-service tests validate
+### 24.1 What cross-service tests validate
 
 These tests answer questions like:
 
@@ -873,7 +757,7 @@ These tests answer questions like:
 
 These are system-level properties that can't be validated by testing services in isolation.
 
-### 25.2 Service orchestration and health checks
+### 24.2 Service orchestration and health checks
 
 Before running tests, the framework verifies all services are healthy:
 
@@ -890,7 +774,7 @@ await waitForAllServices();
 
 The framework polls each service's health endpoint until it responds or times out. This prevents flaky failures from services not being ready.
 
-### 25.3 Full user journey test
+### 24.3 Full user journey test
 
 The most important test validates the complete flow:
 
@@ -910,7 +794,7 @@ This exercises:
 - Game engine execution
 - State synchronization
 
-### 25.4 Concurrent client isolation
+### 24.4 Concurrent client isolation
 
 A critical property for a multi-tenant system is that clients don't interfere with each other:
 
@@ -930,7 +814,7 @@ it('should isolate game state between clients', async () => {
 
 This verifies that session state is properly isolated. If the gateway mixed up sessions, client2 might see or interfere with client1's game.
 
-### 25.5 Error handling across service boundaries
+### 24.5 Error handling across service boundaries
 
 Cross-service tests verify error propagation:
 
@@ -941,7 +825,7 @@ Cross-service tests verify error propagation:
 
 These tests ensure error handling is consistent across the full stack, not just in individual services.
 
-### 25.6 Load testing with concurrent connections
+### 24.6 Load testing with concurrent connections
 
 The tests verify the system handles multiple simultaneous clients:
 
@@ -960,7 +844,7 @@ it('should handle multiple simultaneous clients', async () => {
 
 This is a lightweight load test: if the system can handle 5 clients in parallel, it likely handles connection concurrency correctly. More extensive load tests would use tools like k6 or Locust, but this smoke test catches basic concurrency bugs.
 
-### 25.7 Docker Compose orchestration
+### 24.7 Docker Compose orchestration
 
 The test helpers include utilities for starting the full stack with Docker Compose:
 
@@ -972,7 +856,7 @@ await stopDockerStack();
 
 This allows tests to run in CI without requiring a manually-started stack. The Docker Compose file defines all service dependencies, networking, and initialization order.
 
-### 25.8 Opt-in execution
+### 24.8 Opt-in execution
 
 Like the gateway integration tests, cross-service tests are opt-in:
 
@@ -982,7 +866,7 @@ RUN_CROSS_SERVICE=true pnpm test:cross-service
 
 This prevents them from running in quick local test loops (they're slow and require infrastructure) but ensures they run in CI on every PR.
 
-### 25.9 Why cross-service tests matter
+### 24.9 Why cross-service tests matter
 
 Individual service tests can't catch:
 
@@ -995,60 +879,56 @@ Cross-service tests validate the system as players experience it. They're the la
 
 ---
 
-## 26) CI workflow integration
+## 25) CI workflow integration
 
 The testing strategy is only effective if all tests run automatically on every change. The CI workflows ensure:
 
 1. **Unit tests** run on every commit (fast feedback)
 2. **Integration tests** run on PRs affecting each service
-3. **Visual regression** runs on PRs affecting frontend code
-4. **Cross-service tests** run on PRs affecting multiple services or the integration boundary
-5. **Fuzzing tests** run with reduced iterations in CI (1000) and extended locally (10000+)
+3. **Cross-service tests** run on PRs affecting multiple services or the integration boundary
+4. **Fuzzing tests** run with reduced iterations in CI (1000) and extended locally (10000+)
 
-### 26.1 Test selection and triggers
+### 25.1 Test selection and triggers
 
 Different test suites have different trigger conditions:
 
 - **Unit tests**: Always run (fast, no infrastructure needed)
 - **Gateway integration**: Run when `gateway/**` or `packages/protocol/**` changes
-- **Visual regression**: Run when `website/**` or `packages/design-tokens/**` changes
 - **Cross-service**: Run when multiple services change or on `main` branch
 
 This optimizes CI time by only running expensive tests when relevant code changes.
 
-### 26.2 Timeout configuration
+### 25.2 Timeout configuration
 
 Each test suite has appropriate timeouts:
 
 - Unit tests: 2 minutes (should be fast)
 - Integration tests: 20 minutes (allow for slow startup and message processing)
-- Visual regression: 20 minutes (Chromium startup and screenshot capture can be slow)
 - Cross-service: 30 minutes (full stack startup takes time)
 
 These are deliberately generous to avoid false failures in CI environments with variable performance.
 
-### 26.3 Artifact retention
+### 25.3 Artifact retention
 
 Failed tests upload artifacts for debugging:
 
-- Visual regression: screenshots, diff images, summary.json (14 days)
 - Integration tests: logs from failed test runs (7 days)
 - Fuzzing: minimal failing examples when found (30 days)
 
 Artifact retention balances debuggability with storage costs.
 
-### 26.4 Test reporting and PR comments
+### 25.4 Test reporting and PR comments
 
 Workflows post comments on PRs with:
 
 - Test summaries (passed/failed/skipped counts)
 - Links to detailed logs and artifacts
 - Instructions for reproducing failures locally
-- Guidance on updating baselines or fixtures if needed
+- Guidance on updating fixtures if needed
 
 This keeps the feedback loop tight: developers see results in the PR without leaving GitHub.
 
-### 26.5 Continuous monitoring
+### 25.5 Continuous monitoring
 
 Beyond PR checks, some tests run on a schedule:
 
@@ -1060,9 +940,9 @@ This catches issues that only appear over time or in rare combinations.
 
 ---
 
-## 27) Feynman recap
+## 26) Feynman recap
 
-The testing strategy has six complementary layers:
+The testing strategy has five complementary layers:
 
 1. **Gateway integration tests** provide exhaustive protocol coverage: every bet type, every game, via real WebSocket messages.
 
@@ -1070,18 +950,15 @@ The testing strategy has six complementary layers:
 
 3. **Protocol fuzzing** with fast-check generates thousands of randomized inputs to find edge cases in encoding/decoding that manual tests miss. It verifies decoders never crash, encoders handle extreme values, and bit-flipped messages are handled gracefully.
 
-4. **Visual regression testing** captures screenshots of every UI screen and compares pixel-by-pixel to catch unintended visual changes. This is critical for a casino where UI consistency builds player trust.
+4. **Cross-service integration tests** exercise the complete user journey across authentication, gateway, and simulator boundaries. They verify session isolation, error propagation, and concurrent client handling at the system level.
 
-5. **Cross-service integration tests** exercise the complete user journey across authentication, gateway, and simulator boundaries. They verify session isolation, error propagation, and concurrent client handling at the system level.
-
-6. **CI workflow integration** ensures all tests run automatically on relevant changes with appropriate timeouts, artifact retention, and PR feedback.
+5. **CI workflow integration** ensures all tests run automatically on relevant changes with appropriate timeouts, artifact retention, and PR feedback.
 
 Together these layers provide defense in depth:
 
 - Unit tests catch logic bugs
 - Integration tests catch protocol and API issues
 - Fuzzing catches edge cases and crashes
-- Visual regression catches UI regressions
 - Cross-service tests catch system-level bugs
 - Simulation tests catch consensus and distributed systems issues
 

@@ -34,9 +34,10 @@ export const Pseudo3DDice: React.FC<Pseudo3DDiceProps> = ({
     config: diceConfig,
   }));
 
-  // Dot visibility - hidden during roll, visible on settle
+  // Dot visibility - reduced during roll, fully visible on settle
+  // Changed from hiding completely (0) to showing faintly (0.3) for better visual feedback
   const { dotOpacity } = useSpring({
-    dotOpacity: rolling ? 0 : 1,
+    dotOpacity: rolling ? 0.3 : 1,
     config: successConfig,
     delay: rolling ? 0 : 200,
   });
@@ -146,7 +147,7 @@ export const Pseudo3DDice: React.FC<Pseudo3DDiceProps> = ({
           ))}
         </animated.div>
 
-        {/* Rolling indicator - show a blur/motion effect during roll */}
+        {/* Rolling indicator - subtle motion effect during roll */}
         {rolling && (
           <div
             style={{
@@ -154,8 +155,8 @@ export const Pseudo3DDice: React.FC<Pseudo3DDiceProps> = ({
               inset: 0,
               borderRadius: size * 0.15,
               background: color === 'red'
-                ? 'radial-gradient(circle, rgba(220,38,38,0.8) 0%, rgba(185,28,28,1) 100%)'
-                : 'radial-gradient(circle, rgba(255,255,255,0.9) 0%, rgba(229,229,229,1) 100%)',
+                ? 'radial-gradient(circle, rgba(220,38,38,0.4) 0%, rgba(185,28,28,0.6) 100%)'
+                : 'radial-gradient(circle, rgba(255,255,255,0.4) 0%, rgba(229,229,229,0.5) 100%)',
             }}
           />
         )}

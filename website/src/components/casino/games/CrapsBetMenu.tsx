@@ -336,7 +336,7 @@ export const CrapsBetMenu: React.FC<CrapsBetMenuProps> = ({
                 </button>
 
                 {activeGroup === 'NORMAL' && (
-                    <div className="absolute bottom-full left-0 mb-2 flex gap-1 p-2 bg-black/95 border border-green-900/50 rounded-lg backdrop-blur-sm animate-in slide-in-from-bottom-2 duration-150 z-50">
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 flex gap-1 p-2 bg-black/95 border border-green-900/50 rounded-lg backdrop-blur-sm animate-in slide-in-from-bottom-2 duration-150 z-50">
                         {NORMAL_BETS.map(bet => (
                             <BetButton key={bet.key} bet={bet} color="green" />
                         ))}
@@ -362,7 +362,7 @@ export const CrapsBetMenu: React.FC<CrapsBetMenuProps> = ({
                 </button>
 
                 {activeGroup === 'MODERN' && (
-                    <div className="absolute bottom-full left-0 mb-2 flex gap-1 p-2 bg-black/95 border border-cyan-900/50 rounded-lg backdrop-blur-sm animate-in slide-in-from-bottom-2 duration-150 z-50">
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 flex gap-1 p-2 bg-black/95 border border-cyan-900/50 rounded-lg backdrop-blur-sm animate-in slide-in-from-bottom-2 duration-150 z-50">
                         {MODERN_BETS.map(bet => (
                             <BetButton key={bet.key} bet={bet} color="cyan" />
                         ))}
@@ -394,7 +394,7 @@ export const CrapsBetMenu: React.FC<CrapsBetMenuProps> = ({
                     </button>
 
                     {activeGroup === 'BONUS' && (
-                        <div className="absolute bottom-full left-0 mb-2 flex gap-1 p-2 bg-black/95 border border-amber-900/50 rounded-lg backdrop-blur-sm animate-in slide-in-from-bottom-2 duration-150 z-50">
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 flex flex-wrap justify-center gap-1 p-2 bg-black/95 border border-amber-900/50 rounded-lg backdrop-blur-sm animate-in slide-in-from-bottom-2 duration-150 z-50 max-w-[90vw]">
                             {BONUS_BETS.map(bet => (
                                 <BetButton
                                     key={bet.action}

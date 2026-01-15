@@ -149,16 +149,16 @@ export const SicBoView = React.memo<{
                 </div>
 
                 {/* Dice Display */}
-                <div className="min-h-[110px] flex items-center justify-center">
+                <div className="min-h-[140px] flex flex-col items-center justify-center gap-4">
                     {gameState.dice.length === 0 ? (
                         /* Placeholder dice before first roll */
-                        <div className="flex gap-4 opacity-40">
+                        <div className="flex gap-4">
                             {[1, 2, 3].map((_, i) => (
                                 <div
                                     key={i}
-                                    className="w-14 h-14 rounded-xl border-2 border-dashed border-ns-border flex items-center justify-center"
+                                    className="w-14 h-14 rounded-xl border-2 border-dashed border-mono-400 dark:border-mono-600 bg-mono-100/50 dark:bg-mono-800/50 flex items-center justify-center shadow-sm"
                                 >
-                                    <span className="text-2xl text-ns-muted">?</span>
+                                    <span className="text-2xl font-bold text-mono-500 dark:text-mono-400">?</span>
                                 </div>
                             ))}
                         </div>
@@ -169,6 +169,17 @@ export const SicBoView = React.memo<{
                             settleToRow
                             flatOnSettle
                         />
+                    )}
+                    {/* Dice result display */}
+                    {gameState.dice.length > 0 && (
+                        <div className="flex items-center gap-3 px-4 py-2 rounded-full bg-mono-900/80 dark:bg-mono-100/80">
+                            <span className="text-sm font-bold text-mono-100 dark:text-mono-900">
+                                TOTAL: {gameState.dice.reduce((a, b) => a + b, 0)}
+                            </span>
+                            <span className="text-xs text-mono-300 dark:text-mono-700">
+                                ({gameState.dice.join(' - ')})
+                            </span>
+                        </div>
                     )}
                 </div>
 

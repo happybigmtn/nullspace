@@ -72,14 +72,19 @@ export const useChainTimeouts = ({
           }));
           return;
         }
-        if (currentSessionIdRef.current !== sessionId) return;
+        // Only bail out if we're dealing with a DIFFERENT active session
+        // If currentSessionIdRef is null (cleared by error/poll), still provide feedback
+        const currentRef = currentSessionIdRef.current;
+        if (currentRef !== null && currentRef !== sessionId) return;
 
         try {
           const client: any = clientRef.current;
           if (client) {
             const sessionState = await client.getCasinoSession(sessionId);
             if (!awaitingChainResponseRef.current) return;
-            if (currentSessionIdRef.current !== sessionId) return;
+            // Only bail if we're now dealing with a DIFFERENT active session
+            const postQueryRef = currentSessionIdRef.current;
+            if (postQueryRef !== null && postQueryRef !== sessionId) return;
 
             if (sessionState && !sessionState.isComplete) {
               const frontendGameType =

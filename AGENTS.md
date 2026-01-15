@@ -155,8 +155,6 @@ pnpm -C gateway test                 # Gateway tests only
 scripts/health-check.sh              # Staging health check
 ```
 
-**E2E Tests:** `website/scripts/smoke-playwright.mjs` for browser automation
-
 ## Protocol Versioning (US-149)
 
 When modifying binary protocol encoding/decoding:

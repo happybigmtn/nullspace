@@ -105,6 +105,12 @@ export const HiLoView = React.memo<HiLoViewProps & { lastWin?: number; playMode?
                         <div className="text-lg sm:text-2xl font-bold text-ns tracking-tight leading-tight animate-pulse">
                             {gameState.message}
                         </div>
+                        {/* Edge card hint - visible when at A or K */}
+                        {currentCard && isEdgeCard && gameState.stage === 'PLAYING' && (
+                            <div className="text-xs text-amber-400 font-mono animate-bounce">
+                                {isLowestCard ? '▼ ACE is lowest - bet SAME or HIGHER ▲' : '▲ KING is highest - bet LOWER or SAME ▼'}
+                            </div>
+                        )}
                 </div>
 
                 {/* Current Card & Projections */}

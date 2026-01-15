@@ -26,11 +26,9 @@
 4) Ensure images present: `docker load -i nullspace-node-local-consensus.tar.gz` (and sim).  
 5) Start services: `systemctl start nullspace-node` (all four), then `nullspace-simulator`.  
 6) Redeploy website with current VITE_IDENTITY; restart gateway.  
-7) Wait for indexer to answer `/state/<digest>` with 200, then run `node website/scripts/qa-bet-suite.mjs` with `QA_BASE_URL=https://testnet.regenesis.dev` and `QA_API_BASE=https://api.testnet.regenesis.dev`.
+7) Wait for indexer to answer `/state/<digest>` with 200 before validating UI behavior.
 
 ## QA harness tips
-- Chrom(ium) path defaults to `/usr/bin/chromium`; set `QA_HEADLESS=0` to watch runs.
-- Artifacts land in `qa-artifacts/qa-bet-suite-<timestamp>.{log,json,png,zip}`; check logs first when runs flap.
 - If you see endless 404s, give the chain 2–3 minutes; if still failing, verify indexer URL in node configs and simulator identity.
 
 ## Follow-ups to consider

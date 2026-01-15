@@ -1,6 +1,15 @@
 export const BALANCE_UPDATE_COOLDOWN_MS = 2000;
 const resolveChainResponseTimeoutMs = () => {
   const base = 15_000;
+  // Check environment variable first (works in both SSR and client)
+  try {
+    const envFlag = String((import.meta as any)?.env?.VITE_QA_BETS ?? '').toLowerCase();
+    if (envFlag === 'true' || envFlag === '1') {
+      return 60_000;
+    }
+  } catch {
+    // ignore - import.meta may not be available in all contexts
+  }
   if (typeof window === 'undefined') return base;
   try {
     const params = new URLSearchParams(window.location.search);

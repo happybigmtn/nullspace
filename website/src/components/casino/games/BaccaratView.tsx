@@ -10,17 +10,17 @@ import { Label } from '../ui/Label';
 
 type BetGroup = 'NONE' | 'BONUS';
 
-// Bonus bet definitions with shortcuts
+// Bonus bet definitions with shortcuts - clearer labels for better UX
 const BONUS_BETS = [
-    { key: '1', action: 'TIE', label: 'TIE' },
-    { key: '2', action: 'P_PAIR', label: 'P.PAIR' },
-    { key: '3', action: 'B_PAIR', label: 'B.PAIR' },
-    { key: '4', action: 'LUCKY6', label: 'LUCKY6' },
-    { key: '5', action: 'P_DRAGON', label: 'P.DRAG' },
-    { key: '6', action: 'B_DRAGON', label: 'B.DRAG' },
-    { key: '8', action: 'PANDA8', label: 'PANDA8' },
-    { key: '9', action: 'PERFECT_PAIR', label: 'PERF.PAIR' },
-    { key: '0', action: 'ALL_BONUS', label: '$$$$$' },
+    { key: '1', action: 'TIE', label: 'TIE', desc: '8:1' },
+    { key: '2', action: 'P_PAIR', label: 'Player Pair', desc: '11:1' },
+    { key: '3', action: 'B_PAIR', label: 'Banker Pair', desc: '11:1' },
+    { key: '4', action: 'LUCKY6', label: 'Lucky 6', desc: '12:1' },
+    { key: '5', action: 'P_DRAGON', label: 'P. Dragon', desc: 'Varies' },
+    { key: '6', action: 'B_DRAGON', label: 'B. Dragon', desc: 'Varies' },
+    { key: '8', action: 'PANDA8', label: 'Panda 8', desc: '25:1' },
+    { key: '9', action: 'PERFECT_PAIR', label: 'Perfect Pair', desc: '25:1' },
+    { key: '0', action: 'ALL_BONUS', label: 'ALL BETS', desc: 'All at once' },
 ];
 
 export const BaccaratView = React.memo<{
@@ -478,15 +478,18 @@ export const BaccaratView = React.memo<{
                                             key={bet.action}
                                             type="button"
                                             onClick={() => executeBetAction(bet.action)}
-                                            className={`rounded-xl border px-3 py-3 text-xs font-semibold uppercase tracking-widest transition-all ${
+                                            className={`rounded-xl border px-3 py-3 text-xs font-semibold transition-all ${
                                                 active
                                                     ? 'border-mono-0/60 bg-mono-0/10 text-mono-0 dark:text-mono-1000'
                                                     : 'border-ns bg-ns-surface text-ns hover:border-mono-0/40'
                                             }`}
                                         >
-                                            <div className="flex items-center justify-between gap-2">
-                                                <span>{bet.label}</span>
-                                                <span className="text-[10px] font-mono text-ns-muted">[{bet.key}]</span>
+                                            <div className="flex flex-col gap-1">
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <span className="uppercase tracking-wider">{bet.label}</span>
+                                                    <span className="text-[10px] font-mono text-ns-muted">[{bet.key}]</span>
+                                                </div>
+                                                <span className="text-[9px] font-mono text-mono-0/60 dark:text-mono-1000/60">{bet.desc}</span>
                                             </div>
                                         </button>
                                     );

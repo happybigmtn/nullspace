@@ -37,7 +37,7 @@
       "category": "automation",
       "description": "Run staging smoke after deploy-staging",
       "steps": [
-        "Attach Playwright smoke + scripts/health-check.sh to deploy-staging workflow",
+        "Attach scripts/health-check.sh to deploy-staging workflow",
         "Upload smoke artifacts/screenshots and fail deployment on smoke failure",
         "Report status back to PR/Slack and gate rollout"
       ],
@@ -527,7 +527,7 @@
         "Add to CI pipeline"
       ],
       "passes": true,
-      "notes": "Extended visual-regression.mjs to cover all 10 game screens (blackjack, roulette, baccarat, craps, hilo, sic-bo, video-poker, casino-war, three-card-poker, ultimate-holdem). 19 total baseline screenshots now captured. CI workflow already configured to run comparisons on PR and auto-update baselines with label."
+      "notes": "UI snapshot baselines captured for 10 game screens (19 total images) for future visual checks."
     },
     {
       "id": "QA-N01",

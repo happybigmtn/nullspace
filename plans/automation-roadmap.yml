@@ -38,7 +38,7 @@ streams:
     goal: Automated smoke + rollback for staging/prod
     tasks:
       - id: staging-smoke
-        desc: Run health-check and Playwright smoke after deploy-staging
+        desc: Run health-check after deploy-staging
         status: in-progress
       - id: rollback-hook
         desc: Add rollback on failed smoke
@@ -47,5 +47,5 @@ streams:
     goal: Prevent regressions in app performance
     tasks:
       - id: lighthouse-lite
-        desc: Add perf budget check via Playwright navigation timings in React workflow
+        desc: Add perf budget check via navigation timings in React workflow
         status: done
