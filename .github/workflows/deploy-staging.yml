@@ -247,43 +247,41 @@ jobs:
 
             # Deploy validator 0 (node0.yaml)
             docker rm -f nullspace-node-0 2>/dev/null || true
+            # Use host networking so validators can reach each other directly via host IP
+            # (Docker bridge networking doesn't support hairpin NAT)
             docker run -d --name nullspace-node-0 \
               --restart unless-stopped \
-              -p 9001:9001 \
-              -p 9100:9100 \
+              --network host \
               -v /var/lib/nullspace/node-0:/data \
               -v /etc/nullspace:/etc/nullspace:ro \
               $GHCR_REGISTRY/$IMAGE_PREFIX-node:$IMAGE_TAG \
               --config /etc/nullspace/node0.yaml --peers /etc/nullspace/peers.yaml
 
-            # Deploy validator 1 (node1.yaml)
+            # Deploy validator 1 (node1.yaml, port 9002)
             docker rm -f nullspace-node-1 2>/dev/null || true
             docker run -d --name nullspace-node-1 \
               --restart unless-stopped \
-              -p 9002:9001 \
-              -p 9101:9100 \
+              --network host \
               -v /var/lib/nullspace/node-1:/data \
               -v /etc/nullspace:/etc/nullspace:ro \
               $GHCR_REGISTRY/$IMAGE_PREFIX-node:$IMAGE_TAG \
               --config /etc/nullspace/node1.yaml --peers /etc/nullspace/peers.yaml
 
-            # Deploy validator 2 (node2.yaml)
+            # Deploy validator 2 (node2.yaml, port 9003)
             docker rm -f nullspace-node-2 2>/dev/null || true
             docker run -d --name nullspace-node-2 \
               --restart unless-stopped \
-              -p 9003:9001 \
-              -p 9102:9100 \
+              --network host \
               -v /var/lib/nullspace/node-2:/data \
               -v /etc/nullspace:/etc/nullspace:ro \
               $GHCR_REGISTRY/$IMAGE_PREFIX-node:$IMAGE_TAG \
               --config /etc/nullspace/node2.yaml --peers /etc/nullspace/peers.yaml
 
-            # Deploy validator 3 (node3.yaml)
+            # Deploy validator 3 (node3.yaml, port 9004)
             docker rm -f nullspace-node-3 2>/dev/null || true
             docker run -d --name nullspace-node-3 \
               --restart unless-stopped \
-              -p 9004:9001 \
-              -p 9103:9100 \
+              --network host \
               -v /var/lib/nullspace/node-3:/data \
               -v /etc/nullspace:/etc/nullspace:ro \
               $GHCR_REGISTRY/$IMAGE_PREFIX-node:$IMAGE_TAG \
@@ -582,26 +580,27 @@ jobs:
               docker rm -f nullspace-node-\$i 2>/dev/null || true
             done
 
+            # Use host networking for peer connectivity
             docker run -d --name nullspace-node-0 --restart unless-stopped \
-              -p 9001:9001 -p 9100:9100 -v /var/lib/nullspace/node-0:/data \
+              --network host -v /var/lib/nullspace/node-0:/data \
               -v /etc/nullspace:/etc/nullspace:ro \
               $GHCR_REGISTRY/$IMAGE_PREFIX-node:$TAG \
               --config /etc/nullspace/node0.yaml --peers /etc/nullspace/peers.yaml
 
             docker run -d --name nullspace-node-1 --restart unless-stopped \
-              -p 9002:9001 -p 9101:9100 -v /var/lib/nullspace/node-1:/data \
+              --network host -v /var/lib/nullspace/node-1:/data \
               -v /etc/nullspace:/etc/nullspace:ro \
               $GHCR_REGISTRY/$IMAGE_PREFIX-node:$TAG \
               --config /etc/nullspace/node1.yaml --peers /etc/nullspace/peers.yaml
 
             docker run -d --name nullspace-node-2 --restart unless-stopped \
-              -p 9003:9001 -p 9102:9100 -v /var/lib/nullspace/node-2:/data \
+              --network host -v /var/lib/nullspace/node-2:/data \
               -v /etc/nullspace:/etc/nullspace:ro \
               $GHCR_REGISTRY/$IMAGE_PREFIX-node:$TAG \
               --config /etc/nullspace/node2.yaml --peers /etc/nullspace/peers.yaml
 
             docker run -d --name nullspace-node-3 --restart unless-stopped \
-              -p 9004:9001 -p 9103:9100 -v /var/lib/nullspace/node-3:/data \
+              --network host -v /var/lib/nullspace/node-3:/data \
               -v /etc/nullspace:/etc/nullspace:ro \
               $GHCR_REGISTRY/$IMAGE_PREFIX-node:$TAG \
               --config /etc/nullspace/node3.yaml --peers /etc/nullspace/peers.yaml
