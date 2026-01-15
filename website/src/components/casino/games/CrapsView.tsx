@@ -601,6 +601,7 @@ export const CrapsView = React.memo<{
                                 </div>
                             </div>
                         )}
+                        </div>
                     </div>
                 </>
             )}
