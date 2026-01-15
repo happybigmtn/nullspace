@@ -267,15 +267,19 @@ export class NonceManager {
       this.cleanupConfirmedTransactions(serverNonce - 1);
     }
 
-    // Always sync local nonce to match server - chain is source of truth
+    // Chain is source of truth - always sync to server nonce
     if (serverNonce !== localNonce) {
-      const targetNonce = localNonce > serverNonce ? localNonce : serverNonce;
       if (localNonce > serverNonce) {
-        logDebug(`Local nonce (${localNonce}) ahead of server (${serverNonce}) - keeping local nonce`);
+        // Local nonce ahead of server likely indicates chain reset
+        // Reset to server nonce to avoid "nonce mismatch" rejections
+        logDebug(`Chain reset detected: local nonce (${localNonce}) > server nonce (${serverNonce})`);
+        logDebug('Resetting to server nonce and clearing pending transactions');
+        this.setNonce(serverNonce);
+        this.cleanupAllTransactions();
       } else {
         logDebug(`Advancing local nonce from ${localNonce} to ${serverNonce}`);
+        this.setNonce(serverNonce);
       }
-      this.setNonce(targetNonce);
     }
   }
 

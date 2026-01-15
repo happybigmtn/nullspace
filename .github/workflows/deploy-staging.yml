@@ -136,8 +136,7 @@ jobs:
             set -euo pipefail
             echo "$GHCR_TOKEN" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
             docker pull $GHCR_REGISTRY/$IMAGE_PREFIX-simulator:$IMAGE_TAG || docker pull $GHCR_REGISTRY/$IMAGE_PREFIX-simulator:latest
-            docker stop nullspace-simulator 2>/dev/null || true
-            docker rm nullspace-simulator 2>/dev/null || true
+            docker rm -f nullspace-simulator 2>/dev/null || true
             docker run -d --name nullspace-simulator \
               --restart unless-stopped \
               --env-file /etc/nullspace/simulator.env \
@@ -199,8 +198,7 @@ jobs:
             docker pull $GHCR_REGISTRY/$IMAGE_PREFIX-node:$IMAGE_TAG || docker pull $GHCR_REGISTRY/$IMAGE_PREFIX-node:latest
 
             # Deploy validator 0 (node0.yaml)
-            docker stop nullspace-node-0 2>/dev/null || true
-            docker rm nullspace-node-0 2>/dev/null || true
+            docker rm -f nullspace-node-0 2>/dev/null || true
             docker run -d --name nullspace-node-0 \
               --restart unless-stopped \
               -p 9001:9001 \
@@ -211,8 +209,7 @@ jobs:
               --config /etc/nullspace/node0.yaml --peers /etc/nullspace/peers.yaml
 
             # Deploy validator 1 (node1.yaml)
-            docker stop nullspace-node-1 2>/dev/null || true
-            docker rm nullspace-node-1 2>/dev/null || true
+            docker rm -f nullspace-node-1 2>/dev/null || true
             docker run -d --name nullspace-node-1 \
               --restart unless-stopped \
               -p 9002:9001 \
@@ -223,8 +220,7 @@ jobs:
               --config /etc/nullspace/node1.yaml --peers /etc/nullspace/peers.yaml
 
             # Deploy validator 2 (node2.yaml)
-            docker stop nullspace-node-2 2>/dev/null || true
-            docker rm nullspace-node-2 2>/dev/null || true
+            docker rm -f nullspace-node-2 2>/dev/null || true
             docker run -d --name nullspace-node-2 \
               --restart unless-stopped \
               -p 9003:9001 \
@@ -235,8 +231,7 @@ jobs:
               --config /etc/nullspace/node2.yaml --peers /etc/nullspace/peers.yaml
 
             # Deploy validator 3 (node3.yaml)
-            docker stop nullspace-node-3 2>/dev/null || true
-            docker rm nullspace-node-3 2>/dev/null || true
+            docker rm -f nullspace-node-3 2>/dev/null || true
             docker run -d --name nullspace-node-3 \
               --restart unless-stopped \
               -p 9004:9001 \
@@ -292,8 +287,7 @@ jobs:
             set -euo pipefail
             echo "$GHCR_TOKEN" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
             docker pull $GHCR_REGISTRY/$IMAGE_PREFIX-gateway:$IMAGE_TAG || docker pull $GHCR_REGISTRY/$IMAGE_PREFIX-gateway:latest
-            docker stop nullspace-gateway 2>/dev/null || true
-            docker rm nullspace-gateway 2>/dev/null || true
+            docker rm -f nullspace-gateway 2>/dev/null || true
             docker run -d --name nullspace-gateway \
               --restart unless-stopped \
               --env-file /etc/nullspace/gateway.env \
@@ -345,8 +339,7 @@ jobs:
             set -euo pipefail
             echo "$GHCR_TOKEN" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
             docker pull $GHCR_REGISTRY/$IMAGE_PREFIX-auth:$IMAGE_TAG || docker pull $GHCR_REGISTRY/$IMAGE_PREFIX-auth:latest
-            docker stop nullspace-auth 2>/dev/null || true
-            docker rm nullspace-auth 2>/dev/null || true
+            docker rm -f nullspace-auth 2>/dev/null || true
             docker run -d --name nullspace-auth \
               --restart unless-stopped \
               --env-file /etc/nullspace/auth.env \
@@ -387,8 +380,7 @@ jobs:
             set -euo pipefail
             echo "$GHCR_TOKEN" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
             docker pull $GHCR_REGISTRY/$IMAGE_PREFIX-website:$IMAGE_TAG || docker pull $GHCR_REGISTRY/$IMAGE_PREFIX-website:latest
-            docker stop nullspace-website 2>/dev/null || true
-            docker rm nullspace-website 2>/dev/null || true
+            docker rm -f nullspace-website 2>/dev/null || true
             docker run -d --name nullspace-website \
               --restart unless-stopped \
               -p 127.0.0.1:8080:80 \
@@ -509,8 +501,7 @@ jobs:
             set -euo pipefail
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$OWNER" --password-stdin
             docker pull $GHCR_REGISTRY/$IMAGE_PREFIX-simulator:$TAG
-            docker stop nullspace-simulator 2>/dev/null || true
-            docker rm nullspace-simulator 2>/dev/null || true
+            docker rm -f nullspace-simulator 2>/dev/null || true
             docker run -d --name nullspace-simulator \
               --restart unless-stopped \
               --env-file /etc/nullspace/simulator.env \
@@ -523,8 +514,7 @@ jobs:
             set -euo pipefail
             echo "$GHCR_TOKEN" | docker login ghcr.io -u "$OWNER" --password-stdin
             docker pull $GHCR_REGISTRY/$IMAGE_PREFIX-gateway:$TAG
-            docker stop nullspace-gateway 2>/dev/null || true
-            docker rm nullspace-gateway 2>/dev/null || true
+            docker rm -f nullspace-gateway 2>/dev/null || true
             docker run -d --name nullspace-gateway \
               --restart unless-stopped \
               --env-file /etc/nullspace/gateway.env \
@@ -541,8 +531,7 @@ jobs:
             docker pull $GHCR_REGISTRY/$IMAGE_PREFIX-node:$TAG
 
             for i in 0 1 2 3; do
-              docker stop nullspace-node-\$i 2>/dev/null || true
-              docker rm nullspace-node-\$i 2>/dev/null || true
+              docker rm -f nullspace-node-\$i 2>/dev/null || true
             done
 
             docker run -d --name nullspace-node-0 --restart unless-stopped \

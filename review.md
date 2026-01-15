@@ -4,7 +4,7 @@ This file tracks cumulative issues or potential improvements discovered during t
 Each entry captures the file, issue, impact, and any suggested action.
 
 ## Open Issues
-- gateway live-table: global table rounds never opened during local load/soak attempts (roundId stayed 0, bets never sent); needs root-cause and validation on staging/testnet.
+(none)
 
 ## Resolved
 - gateway/src/session/manager.ts, gateway/src/handlers/base.ts: add UpdatesClient error listeners to avoid unhandled error crashes when updates WS returns 429 under load.

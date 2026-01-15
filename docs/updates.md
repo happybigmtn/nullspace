@@ -42,13 +42,13 @@ nullspace-node --config /etc/nullspace/node0.yaml --peers /etc/nullspace/peers.y
 
 **Deployment Changes**:
 - `.github/workflows/deploy-staging.yml` updated to deploy all 4 validators to a single host
-- Containers: `nullspace-node-1`, `nullspace-node-2`, `nullspace-node-3`, `nullspace-node-4`
+- Containers: `nullspace-node-0`, `nullspace-node-1`, `nullspace-node-2`, `nullspace-node-3`
 - Port mappings:
-  - Node 1: 9001 (P2P), 9100 (metrics)
-  - Node 2: 9002 (P2P), 9101 (metrics)
-  - Node 3: 9003 (P2P), 9102 (metrics)
-  - Node 4: 9004 (P2P), 9103 (metrics)
-- Data volumes: `/var/lib/nullspace/node-1`, `node-2`, `node-3`, `node-4`
+  - Node 0: 9001 (P2P), 9100 (metrics)
+  - Node 1: 9002 (P2P), 9101 (metrics)
+  - Node 2: 9003 (P2P), 9102 (metrics)
+  - Node 3: 9004 (P2P), 9103 (metrics)
+- Data volumes: `/var/lib/nullspace/node-0`, `node-1`, `node-2`, `node-3`
 
 **GitHub Secrets**:
 - Set `STAGING_HOST_VALIDATORS` to the consolidated validator host IP
