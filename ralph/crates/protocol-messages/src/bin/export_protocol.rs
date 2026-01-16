@@ -221,6 +221,61 @@ export const INTEGER_ENCODING = {{
 }} as const;
 
 /**
+ * Consensus payload type tags.
+ * These identify the type of each message in the consensus-ordered action log.
+ */
+export const CONSENSUS_PAYLOAD_TAGS = {{
+  /** Tag for DealCommitment payloads. */
+  DEAL_COMMITMENT: {tag_deal_commitment},
+  /** Tag for DealCommitmentAck payloads. */
+  DEAL_COMMITMENT_ACK: {tag_deal_commitment_ack},
+  /** Tag for GameAction payloads. */
+  GAME_ACTION: {tag_game_action},
+  /** Tag for RevealShare payloads. */
+  REVEAL_SHARE: {tag_reveal_share},
+  /** Tag for TimelockReveal payloads. */
+  TIMELOCK_REVEAL: {tag_timelock_reveal},
+}} as const;
+
+/**
+ * Game action type codes.
+ * These identify the type of action a player takes during a hand.
+ */
+export const GAME_ACTION_CODES = {{
+  /** Player folds their hand. */
+  FOLD: {action_fold},
+  /** Player checks (no bet, passes action). */
+  CHECK: {action_check},
+  /** Player calls the current bet. */
+  CALL: {action_call},
+  /** Player makes an initial bet. */
+  BET: {action_bet},
+  /** Player raises the current bet. */
+  RAISE: {action_raise},
+  /** Player goes all-in. */
+  ALL_IN: {action_all_in},
+}} as const;
+
+/**
+ * Disabled feature tags.
+ * These instruction tags are disabled in the current protocol version.
+ */
+export const DISABLED_FEATURES = {{
+  /** Bridge functionality is disabled. */
+  BRIDGE_DISABLED: {bridge_disabled},
+  /** Liquidity/AMM functionality is disabled. */
+  LIQUIDITY_DISABLED: {liquidity_disabled},
+  /** Staking functionality is disabled. */
+  STAKING_DISABLED: {staking_disabled},
+  /** Tag for BridgeWithdraw instruction (DISABLED). */
+  TAG_BRIDGE_WITHDRAW: {tag_bridge_withdraw},
+  /** Tag for BridgeDeposit instruction (DISABLED). */
+  TAG_BRIDGE_DEPOSIT: {tag_bridge_deposit},
+  /** Tag for FinalizeBridgeWithdrawal instruction (DISABLED). */
+  TAG_FINALIZE_BRIDGE_WITHDRAWAL: {tag_finalize_bridge_withdrawal},
+}} as const;
+
+/**
  * Type definitions for protocol structures.
  */
 export interface ProtocolVersion {{
@@ -270,5 +325,25 @@ export interface ScopedBinding {{
         u64_size = exports.wire_formats.integers.u64_size,
         u32_size = exports.wire_formats.integers.u32_size,
         u16_size = exports.wire_formats.integers.u16_size,
+        // Consensus payload tags
+        tag_deal_commitment = exports.consensus_payload_tags.deal_commitment,
+        tag_deal_commitment_ack = exports.consensus_payload_tags.deal_commitment_ack,
+        tag_game_action = exports.consensus_payload_tags.game_action,
+        tag_reveal_share = exports.consensus_payload_tags.reveal_share,
+        tag_timelock_reveal = exports.consensus_payload_tags.timelock_reveal,
+        // Game action codes
+        action_fold = exports.game_action_codes.fold,
+        action_check = exports.game_action_codes.check,
+        action_call = exports.game_action_codes.call,
+        action_bet = exports.game_action_codes.bet,
+        action_raise = exports.game_action_codes.raise_action,
+        action_all_in = exports.game_action_codes.all_in,
+        // Disabled features
+        bridge_disabled = exports.disabled_features.bridge_disabled,
+        liquidity_disabled = exports.disabled_features.liquidity_disabled,
+        staking_disabled = exports.disabled_features.staking_disabled,
+        tag_bridge_withdraw = exports.disabled_features.tag_bridge_withdraw,
+        tag_bridge_deposit = exports.disabled_features.tag_bridge_deposit,
+        tag_finalize_bridge_withdrawal = exports.disabled_features.tag_finalize_bridge_withdrawal,
     )
 }
