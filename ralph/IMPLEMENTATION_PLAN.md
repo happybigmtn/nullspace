@@ -198,9 +198,10 @@
   - Tests: AC-1.1, AC-1.2, AC-2.1, AC-3.1
   - Perceptual: None
   - Implemented: `roulette.rs` module with `RouletteMove` (payload encoding) and `RouletteState` (state blob encoding); opcodes PlaceBet/Spin/ClearBets/SetRules/AtomicBatch; single bet <=4 bytes for small amounts (AC-1.1); Spin/ClearBets are 1 byte; batch reduction >=40% (AC-1.2); typical state compaction >=30% (AC-2.1); `decode_dual()` accepts v1/v2 (AC-3.1); 33 tests covering all ACs with golden vectors for Spin/ClearBets
-- [ ] Craps v2 payload/state (spec: `compact-encoding-craps.md`).
+- [x] Craps v2 payload/state (spec: `compact-encoding-craps.md`).
   - Tests: AC-1.1, AC-1.2, AC-2.1, AC-3.1
   - Perceptual: None
+  - Implemented: `craps.rs` module with `CrapsMove` (payload encoding) and `CrapsState` (state blob encoding); opcodes PlaceBet/AddOdds/Roll/ClearBets/AtomicBatch; single bet <=4 bytes for small amounts (AC-1.1); Roll/ClearBets are 1 byte; batch reduction >=40% (AC-1.2); typical state compaction >=30% with ATS/Fire tracking via made_points_mask (AC-2.1); `decode_dual()` accepts v1/v2 (AC-3.1); 38 tests covering all ACs with golden vectors for Roll/ClearBets/PassLine/Hardways and mixed batch tests
 - [ ] Sic Bo v2 payload/state (spec: `compact-encoding-sicbo.md`).
   - Tests: AC-1.1, AC-1.2, AC-2.1, AC-3.1
   - Perceptual: None
