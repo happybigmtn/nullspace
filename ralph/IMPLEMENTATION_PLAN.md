@@ -57,7 +57,7 @@
 - [x] Enforce reveal-only phases (flop/turn/river/showdown).
 - [x] Add reveal timeout (`REVEAL_TTL`) and fallback to timelock.
 - [x] Enforce timelock scope and proof validation in consensus path.
-- [ ] Replace full-deck reveal with selective reveal in all flows.
+- [x] Replace full-deck reveal with selective reveal in all flows.
 
 **Exit criteria**
 - Reveal payloads rejected if out-of-phase or invalid.

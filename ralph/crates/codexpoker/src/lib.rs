@@ -13,4 +13,7 @@
 
 pub mod l2;
 
-pub use l2::{CardAssignment, DealPlan, DealPlanBuilder, DealPlanError};
+pub use l2::{
+    CardAssignment, DealPlan, DealPlanBuilder, DealPlanError, SelectiveRevealBuilder,
+    SelectiveRevealError,
+};
