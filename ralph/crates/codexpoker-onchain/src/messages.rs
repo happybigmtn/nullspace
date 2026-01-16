@@ -31,6 +31,39 @@ use protocol_messages::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Reveal Timeout Configuration
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Time-to-live for reveal phases in milliseconds.
+///
+/// When a reveal-only phase begins (after a betting round completes), the expected
+/// player(s) have `REVEAL_TTL` milliseconds to provide their reveal shares. If the
+/// timeout expires without receiving the reveal, the protocol falls back to timelock
+/// decryption.
+///
+/// # Timeout Flow
+///
+/// 1. Betting round completes, validator enters reveal-only phase
+/// 2. Timer starts at `reveal_phase_entered_at`
+/// 3. Players submit `RevealShare` payloads
+/// 4. If `current_time - reveal_phase_entered_at > REVEAL_TTL`:
+///    - Normal `RevealShare` payloads are still accepted (player may just be slow)
+///    - `TimelockReveal` becomes the fallback option
+///    - A timeout error is raised only if NEITHER reveal type is received
+///
+/// # Rationale for 30 seconds
+///
+/// - Fast enough to prevent griefing (player can't stall indefinitely)
+/// - Slow enough to tolerate network latency and slow clients
+/// - Matches typical tournament clock increments for actions
+///
+/// # Configuration
+///
+/// This constant may be made configurable per-table in future versions.
+/// For now, 30 seconds is the protocol-wide default.
+pub const REVEAL_TTL: u64 = 30_000; // 30 seconds in milliseconds
+
 /// Errors that can occur when validating consensus payloads.
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum PayloadError {
@@ -121,6 +154,33 @@ pub enum PayloadError {
     /// rejected until the reveal is received.
     #[error("game action during reveal-only phase: awaiting reveal for {expected_phase:?}")]
     ActionDuringRevealOnlyPhase { expected_phase: RevealPhase },
+
+    /// Reveal timeout has expired.
+    ///
+    /// The reveal phase has been waiting longer than [`REVEAL_TTL`] without receiving
+    /// the required reveal. At this point:
+    /// - A `TimelockReveal` is required to continue the hand
+    /// - Normal `RevealShare` payloads are still accepted if they arrive
+    /// - The timed-out seat should be penalized according to table rules
+    #[error("reveal timeout expired for {phase:?}: waited {elapsed_ms}ms (TTL: {ttl_ms}ms), seat {timeout_seat} failed to reveal")]
+    RevealTimeout {
+        phase: RevealPhase,
+        elapsed_ms: u64,
+        ttl_ms: u64,
+        timeout_seat: u8,
+    },
+
+    /// TimelockReveal received before timeout expired.
+    ///
+    /// Timelock reveals are only valid as a fallback when the regular reveal
+    /// timeout has expired. Submitting a timelock reveal before the timeout
+    /// is a protocol violation (it may indicate an attempt to skip the normal
+    /// reveal process or use knowledge of the timelock key prematurely).
+    #[error("timelock reveal received before timeout: phase {phase:?}, {remaining_ms}ms remaining")]
+    TimelockRevealBeforeTimeout {
+        phase: RevealPhase,
+        remaining_ms: u64,
+    },
 }
 
 /// The consensus payload schema wrapping all onchain message types.
@@ -397,6 +457,20 @@ pub struct ActionLogValidator {
     /// This is set by calling [`enter_reveal_only_phase`](Self::enter_reveal_only_phase)
     /// when a betting round completes and community cards need to be revealed.
     awaiting_reveal_phase: Option<RevealPhase>,
+    /// Timestamp (unix milliseconds) when the current reveal-only phase began.
+    ///
+    /// This is set when [`enter_reveal_only_phase`](Self::enter_reveal_only_phase) is called.
+    /// Used to determine if `REVEAL_TTL` has expired, enabling timelock fallback.
+    ///
+    /// The timestamp is cleared when the reveal is received (either `RevealShare`
+    /// or `TimelockReveal`).
+    reveal_phase_entered_at: Option<u64>,
+    /// The seat expected to provide the reveal for the current phase.
+    ///
+    /// This is typically the dealer for community cards, or specific players
+    /// for hole card reveals during showdown. Used to identify which seat
+    /// timed out for penalty purposes.
+    reveal_expected_from_seat: Option<u8>,
 }
 
 impl Default for ActionLogValidator {
@@ -420,6 +494,8 @@ impl ActionLogValidator {
             expected_context: None,
             completed_phases: Vec::new(),
             awaiting_reveal_phase: None,
+            reveal_phase_entered_at: None,
+            reveal_expected_from_seat: None,
         }
     }
 
@@ -456,6 +532,8 @@ impl ActionLogValidator {
             expected_context: Some(expected),
             completed_phases: Vec::new(),
             awaiting_reveal_phase: None,
+            reveal_phase_entered_at: None,
+            reveal_expected_from_seat: None,
         }
     }
 
@@ -558,7 +636,78 @@ impl ActionLogValidator {
         self.awaiting_reveal_phase
     }
 
+    /// Returns the timestamp when the current reveal phase started, if in reveal-only mode.
+    pub fn reveal_phase_entered_at(&self) -> Option<u64> {
+        self.reveal_phase_entered_at
+    }
+
+    /// Returns the seat expected to provide the reveal, if in reveal-only mode.
+    pub fn reveal_expected_from_seat(&self) -> Option<u8> {
+        self.reveal_expected_from_seat
+    }
+
+    /// Check if the reveal phase has timed out.
+    ///
+    /// Returns `true` if:
+    /// - The validator is in a reveal-only phase
+    /// - The timestamp when the phase started is set
+    /// - `current_time_ms - reveal_phase_entered_at > REVEAL_TTL`
+    ///
+    /// When a timeout is detected, `TimelockReveal` becomes the only valid
+    /// way to continue the hand. Normal `RevealShare` payloads are still
+    /// accepted (in case the player is just slow), but any seat can submit
+    /// the timelock fallback.
+    ///
+    /// # Returns
+    ///
+    /// - `Some((elapsed_ms, expected_seat))` if timed out
+    /// - `None` if not in reveal-only phase or not yet timed out
+    pub fn check_reveal_timeout(&self, current_time_ms: u64) -> Option<(u64, u8)> {
+        let phase_started = self.reveal_phase_entered_at?;
+        let expected_seat = self.reveal_expected_from_seat.unwrap_or(0xFF);
+
+        if current_time_ms > phase_started {
+            let elapsed = current_time_ms - phase_started;
+            if elapsed > REVEAL_TTL {
+                return Some((elapsed, expected_seat));
+            }
+        }
+        None
+    }
+
+    /// Check if a timelock reveal is valid at the given time.
+    ///
+    /// Returns `Ok(())` if the reveal timeout has expired (timelock is valid).
+    /// Returns `Err(TimelockRevealBeforeTimeout)` if the timeout hasn't expired yet.
+    ///
+    /// # Arguments
+    ///
+    /// * `current_time_ms` - Current unix timestamp in milliseconds
+    ///
+    /// # Usage
+    ///
+    /// Call this before accepting a `TimelockReveal` to ensure it's only used
+    /// as a fallback after the normal reveal period has expired.
+    pub fn validate_timelock_allowed(&self, current_time_ms: u64) -> Result<(), PayloadError> {
+        if let Some(phase) = self.awaiting_reveal_phase {
+            if let Some(entered_at) = self.reveal_phase_entered_at {
+                if current_time_ms <= entered_at + REVEAL_TTL {
+                    let remaining = (entered_at + REVEAL_TTL).saturating_sub(current_time_ms);
+                    return Err(PayloadError::TimelockRevealBeforeTimeout {
+                        phase,
+                        remaining_ms: remaining,
+                    });
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Enter a reveal-only phase, blocking game actions until the reveal is received.
+    ///
+    /// This is a convenience method that enters the phase without timeout tracking.
+    /// For production use with timeout enforcement, use
+    /// [`enter_reveal_only_phase_with_timeout`](Self::enter_reveal_only_phase_with_timeout).
     ///
     /// Call this after a betting round completes to signal that the next action
     /// must be a reveal for the specified phase. Game actions will be rejected
@@ -585,6 +734,62 @@ impl ActionLogValidator {
     /// // Now game actions will be rejected until Flop reveal is received
     /// ```
     pub fn enter_reveal_only_phase(&mut self, phase: RevealPhase) -> Result<(), PayloadError> {
+        self.enter_reveal_only_phase_impl(phase, None, None)
+    }
+
+    /// Enter a reveal-only phase with timeout tracking.
+    ///
+    /// This is the preferred method for production use. It records when the
+    /// phase started and which seat is expected to reveal, enabling:
+    ///
+    /// - Timeout detection via [`check_reveal_timeout`](Self::check_reveal_timeout)
+    /// - Timelock fallback validation via [`validate_timelock_allowed`](Self::validate_timelock_allowed)
+    /// - Penalty attribution for timeout violations
+    ///
+    /// # Arguments
+    ///
+    /// * `phase` - The reveal phase to enter
+    /// * `timestamp_ms` - Current unix timestamp in milliseconds
+    /// * `expected_from_seat` - The seat index expected to provide the reveal
+    ///
+    /// # Errors
+    ///
+    /// Same as [`enter_reveal_only_phase`](Self::enter_reveal_only_phase).
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use codexpoker_onchain::ActionLogValidator;
+    /// use protocol_messages::RevealPhase;
+    ///
+    /// let mut validator = ActionLogValidator::new();
+    /// // ... setup with commitment and acks ...
+    ///
+    /// // After preflop betting completes, enter reveal-only for Flop
+    /// // The dealer (seat 0 in this example) has REVEAL_TTL to provide the reveal
+    /// let current_time = 1700000000000u64; // unix ms
+    /// // validator.enter_reveal_only_phase_with_timeout(
+    /// //     RevealPhase::Flop,
+    /// //     current_time,
+    /// //     0, // dealer seat
+    /// // ).unwrap();
+    /// ```
+    pub fn enter_reveal_only_phase_with_timeout(
+        &mut self,
+        phase: RevealPhase,
+        timestamp_ms: u64,
+        expected_from_seat: u8,
+    ) -> Result<(), PayloadError> {
+        self.enter_reveal_only_phase_impl(phase, Some(timestamp_ms), Some(expected_from_seat))
+    }
+
+    /// Internal implementation for entering reveal-only phase.
+    fn enter_reveal_only_phase_impl(
+        &mut self,
+        phase: RevealPhase,
+        timestamp_ms: Option<u64>,
+        expected_from_seat: Option<u8>,
+    ) -> Result<(), PayloadError> {
         // Validate this phase can be entered
         self.validate_reveal_phase(phase)?;
 
@@ -596,9 +801,19 @@ impl ActionLogValidator {
                     got: phase,
                 });
             }
+            // Already awaiting this phase, just update timestamp if provided
+            if timestamp_ms.is_some() {
+                self.reveal_phase_entered_at = timestamp_ms;
+            }
+            if expected_from_seat.is_some() {
+                self.reveal_expected_from_seat = expected_from_seat;
+            }
+            return Ok(());
         }
 
         self.awaiting_reveal_phase = Some(phase);
+        self.reveal_phase_entered_at = timestamp_ms;
+        self.reveal_expected_from_seat = expected_from_seat;
         Ok(())
     }
 
@@ -607,8 +822,15 @@ impl ActionLogValidator {
     /// This is primarily for testing or recovery scenarios. In normal operation,
     /// the reveal-only phase is exited automatically when the expected reveal
     /// is received.
+    ///
+    /// This clears:
+    /// - The awaiting reveal phase
+    /// - The timestamp when the phase started
+    /// - The seat expected to reveal
     pub fn exit_reveal_only_phase(&mut self) {
         self.awaiting_reveal_phase = None;
+        self.reveal_phase_entered_at = None;
+        self.reveal_expected_from_seat = None;
     }
 
     /// Validate that a reveal phase is valid for the current state.
@@ -782,6 +1004,8 @@ impl ActionLogValidator {
                 // Clear reveal-only mode if this was the awaited phase
                 if self.awaiting_reveal_phase == Some(rs.phase) {
                     self.awaiting_reveal_phase = None;
+                    self.reveal_phase_entered_at = None;
+                    self.reveal_expected_from_seat = None;
                 }
             }
             ConsensusPayload::TimelockReveal(tr) => {
@@ -802,6 +1026,8 @@ impl ActionLogValidator {
                 // Clear reveal-only mode if this was the awaited phase
                 if self.awaiting_reveal_phase == Some(tr.phase) {
                     self.awaiting_reveal_phase = None;
+                    self.reveal_phase_entered_at = None;
+                    self.reveal_expected_from_seat = None;
                 }
             }
             ConsensusPayload::DealCommitment(_) => {
@@ -2794,5 +3020,314 @@ mod tests {
         let msg = err.to_string();
         assert!(msg.contains("game action during reveal-only phase"));
         assert!(msg.contains("Flop"));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Reveal Timeout Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_reveal_ttl_constant_is_reasonable() {
+        // REVEAL_TTL should be at least 10 seconds (10_000ms)
+        assert!(REVEAL_TTL >= 10_000, "REVEAL_TTL should be at least 10 seconds");
+        // REVEAL_TTL should be at most 5 minutes (300_000ms)
+        assert!(REVEAL_TTL <= 300_000, "REVEAL_TTL should be at most 5 minutes");
+    }
+
+    #[test]
+    fn test_enter_reveal_only_phase_with_timeout_sets_fields() {
+        let (mut validator, _commitment_hash) = setup_validator_ready_for_reveals();
+
+        let timestamp = 1700000000000u64;
+        let seat = 2u8;
+
+        validator
+            .enter_reveal_only_phase_with_timeout(
+                protocol_messages::RevealPhase::Preflop,
+                timestamp,
+                seat,
+            )
+            .unwrap();
+
+        assert!(validator.is_in_reveal_only_phase());
+        assert_eq!(
+            validator.awaiting_reveal_phase(),
+            Some(protocol_messages::RevealPhase::Preflop)
+        );
+        assert_eq!(validator.reveal_phase_entered_at(), Some(timestamp));
+        assert_eq!(validator.reveal_expected_from_seat(), Some(seat));
+    }
+
+    #[test]
+    fn test_check_reveal_timeout_no_timeout_before_ttl() {
+        let (mut validator, _commitment_hash) = setup_validator_ready_for_reveals();
+
+        let start_time = 1700000000000u64;
+        validator
+            .enter_reveal_only_phase_with_timeout(
+                protocol_messages::RevealPhase::Preflop,
+                start_time,
+                0,
+            )
+            .unwrap();
+
+        // Time within TTL should not trigger timeout
+        let current_time = start_time + REVEAL_TTL - 1;
+        assert!(
+            validator.check_reveal_timeout(current_time).is_none(),
+            "should not timeout before TTL expires"
+        );
+
+        // Exactly at TTL boundary should not trigger (we use > not >=)
+        let current_time = start_time + REVEAL_TTL;
+        assert!(
+            validator.check_reveal_timeout(current_time).is_none(),
+            "should not timeout exactly at TTL"
+        );
+    }
+
+    #[test]
+    fn test_check_reveal_timeout_triggers_after_ttl() {
+        let (mut validator, _commitment_hash) = setup_validator_ready_for_reveals();
+
+        let start_time = 1700000000000u64;
+        let expected_seat = 3u8;
+        validator
+            .enter_reveal_only_phase_with_timeout(
+                protocol_messages::RevealPhase::Preflop,
+                start_time,
+                expected_seat,
+            )
+            .unwrap();
+
+        // Time after TTL should trigger timeout
+        let current_time = start_time + REVEAL_TTL + 1;
+        let result = validator.check_reveal_timeout(current_time);
+        assert!(result.is_some(), "should timeout after TTL expires");
+
+        let (elapsed, seat) = result.unwrap();
+        assert_eq!(elapsed, REVEAL_TTL + 1);
+        assert_eq!(seat, expected_seat);
+    }
+
+    #[test]
+    fn test_check_reveal_timeout_none_when_not_in_reveal_phase() {
+        let (validator, _commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Not in reveal-only phase
+        assert!(!validator.is_in_reveal_only_phase());
+        let current_time = 1700000000000u64;
+        assert!(
+            validator.check_reveal_timeout(current_time).is_none(),
+            "should not timeout when not in reveal phase"
+        );
+    }
+
+    #[test]
+    fn test_validate_timelock_allowed_rejects_before_timeout() {
+        let (mut validator, _commitment_hash) = setup_validator_ready_for_reveals();
+
+        let start_time = 1700000000000u64;
+        validator
+            .enter_reveal_only_phase_with_timeout(
+                protocol_messages::RevealPhase::Preflop,
+                start_time,
+                0,
+            )
+            .unwrap();
+
+        // Before timeout expires, timelock should be rejected
+        let current_time = start_time + 1000; // 1 second in
+        let result = validator.validate_timelock_allowed(current_time);
+        assert!(
+            matches!(result, Err(PayloadError::TimelockRevealBeforeTimeout { .. })),
+            "timelock should be rejected before timeout"
+        );
+
+        if let Err(PayloadError::TimelockRevealBeforeTimeout { phase, remaining_ms }) = result {
+            assert_eq!(phase, protocol_messages::RevealPhase::Preflop);
+            assert_eq!(remaining_ms, REVEAL_TTL - 1000);
+        }
+    }
+
+    #[test]
+    fn test_validate_timelock_allowed_accepts_after_timeout() {
+        let (mut validator, _commitment_hash) = setup_validator_ready_for_reveals();
+
+        let start_time = 1700000000000u64;
+        validator
+            .enter_reveal_only_phase_with_timeout(
+                protocol_messages::RevealPhase::Preflop,
+                start_time,
+                0,
+            )
+            .unwrap();
+
+        // After timeout expires, timelock should be accepted
+        let current_time = start_time + REVEAL_TTL + 1;
+        assert!(
+            validator.validate_timelock_allowed(current_time).is_ok(),
+            "timelock should be allowed after timeout"
+        );
+    }
+
+    #[test]
+    fn test_validate_timelock_allowed_ok_when_no_timeout_tracking() {
+        let (mut validator, _commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Use old method without timestamp tracking
+        validator
+            .enter_reveal_only_phase(protocol_messages::RevealPhase::Preflop)
+            .unwrap();
+
+        // Without timestamp, timelock should be allowed (backward compatible behavior)
+        let current_time = 1700000000000u64;
+        assert!(
+            validator.validate_timelock_allowed(current_time).is_ok(),
+            "timelock should be allowed when no timeout tracking"
+        );
+    }
+
+    #[test]
+    fn test_reveal_clears_timeout_fields() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        let start_time = 1700000000000u64;
+        validator
+            .enter_reveal_only_phase_with_timeout(
+                protocol_messages::RevealPhase::Preflop,
+                start_time,
+                2,
+            )
+            .unwrap();
+
+        assert!(validator.reveal_phase_entered_at().is_some());
+        assert!(validator.reveal_expected_from_seat().is_some());
+
+        // Complete the reveal
+        let reveal = make_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        validator
+            .validate(&ConsensusPayload::RevealShare(reveal))
+            .unwrap();
+
+        // Timeout fields should be cleared
+        assert!(validator.reveal_phase_entered_at().is_none());
+        assert!(validator.reveal_expected_from_seat().is_none());
+        assert!(!validator.is_in_reveal_only_phase());
+    }
+
+    #[test]
+    fn test_timelock_reveal_clears_timeout_fields() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        let start_time = 1700000000000u64;
+        validator
+            .enter_reveal_only_phase_with_timeout(
+                protocol_messages::RevealPhase::Preflop,
+                start_time,
+                2,
+            )
+            .unwrap();
+
+        assert!(validator.reveal_phase_entered_at().is_some());
+        assert!(validator.reveal_expected_from_seat().is_some());
+
+        // Complete with timelock reveal
+        let timelock =
+            make_timelock_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        validator
+            .validate(&ConsensusPayload::TimelockReveal(timelock))
+            .unwrap();
+
+        // Timeout fields should be cleared
+        assert!(validator.reveal_phase_entered_at().is_none());
+        assert!(validator.reveal_expected_from_seat().is_none());
+        assert!(!validator.is_in_reveal_only_phase());
+    }
+
+    #[test]
+    fn test_exit_reveal_only_phase_clears_timeout_fields() {
+        let (mut validator, _commitment_hash) = setup_validator_ready_for_reveals();
+
+        let start_time = 1700000000000u64;
+        validator
+            .enter_reveal_only_phase_with_timeout(
+                protocol_messages::RevealPhase::Preflop,
+                start_time,
+                2,
+            )
+            .unwrap();
+
+        assert!(validator.reveal_phase_entered_at().is_some());
+        assert!(validator.reveal_expected_from_seat().is_some());
+
+        // Manually exit
+        validator.exit_reveal_only_phase();
+
+        // All fields should be cleared
+        assert!(validator.reveal_phase_entered_at().is_none());
+        assert!(validator.reveal_expected_from_seat().is_none());
+        assert!(!validator.is_in_reveal_only_phase());
+    }
+
+    #[test]
+    fn test_reveal_timeout_error_display() {
+        let err = PayloadError::RevealTimeout {
+            phase: protocol_messages::RevealPhase::Flop,
+            elapsed_ms: 35000,
+            ttl_ms: 30000,
+            timeout_seat: 2,
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("reveal timeout expired"));
+        assert!(msg.contains("Flop"));
+        assert!(msg.contains("35000ms"));
+        assert!(msg.contains("30000ms"));
+        assert!(msg.contains("seat 2"));
+    }
+
+    #[test]
+    fn test_timelock_before_timeout_error_display() {
+        let err = PayloadError::TimelockRevealBeforeTimeout {
+            phase: protocol_messages::RevealPhase::Turn,
+            remaining_ms: 15000,
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("timelock reveal received before timeout"));
+        assert!(msg.contains("Turn"));
+        assert!(msg.contains("15000ms"));
+    }
+
+    #[test]
+    fn test_timeout_tracking_through_multiple_phases() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Phase 1: Preflop with timeout
+        let t1 = 1700000000000u64;
+        validator
+            .enter_reveal_only_phase_with_timeout(protocol_messages::RevealPhase::Preflop, t1, 0)
+            .unwrap();
+        assert_eq!(validator.reveal_phase_entered_at(), Some(t1));
+
+        // Complete preflop
+        let preflop = make_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        validator
+            .validate(&ConsensusPayload::RevealShare(preflop))
+            .unwrap();
+        assert!(validator.reveal_phase_entered_at().is_none());
+
+        // Phase 2: Flop with different timestamp
+        let t2 = 1700000030000u64;
+        validator
+            .enter_reveal_only_phase_with_timeout(protocol_messages::RevealPhase::Flop, t2, 1)
+            .unwrap();
+        assert_eq!(validator.reveal_phase_entered_at(), Some(t2));
+        assert_eq!(validator.reveal_expected_from_seat(), Some(1));
+
+        // Check timeout at different times
+        assert!(validator.check_reveal_timeout(t2 + REVEAL_TTL - 1).is_none());
+        let timeout_result = validator.check_reveal_timeout(t2 + REVEAL_TTL + 5000);
+        assert!(timeout_result.is_some());
+        assert_eq!(timeout_result.unwrap().0, REVEAL_TTL + 5000);
     }
 }
