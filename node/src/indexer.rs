@@ -574,4 +574,97 @@ mod tests {
             assert_eq!(second.transactions[0], tx2);
         });
     }
+
+    /// Helper to parse a prometheus gauge metric value from encoded metrics.
+    fn parse_metric(metrics: &str, suffix: &str) -> Option<i64> {
+        for line in metrics.lines() {
+            if line.starts_with('#') {
+                continue;
+            }
+            let mut parts = line.split_whitespace();
+            let name = parts.next()?;
+            let value_str = parts.next()?;
+            if name.ends_with(suffix) {
+                return value_str.parse::<i64>().ok();
+            }
+        }
+        None
+    }
+
+    /// AC-1.1: mempool_connected flips to 0 when indexer WS stream disconnects.
+    #[test_traced]
+    fn mempool_connected_metric_flips_on_disconnect() {
+        let cfg = deterministic::Config::default().with_seed(3);
+        let executor = Runner::from(cfg);
+        executor.start(|context| async move {
+            let pk1 = PrivateKey::from_seed(1);
+            let tx1 = Transaction::sign(&pk1, 0, Instruction::CasinoDeposit { amount: 1 });
+
+            // One successful connection that streams a tx then ends
+            let indexer = ScriptedIndexer::new(vec![ListenOutcome::Stream(vec![Ok(Pending {
+                transactions: vec![tx1.clone()],
+            })])]);
+
+            let mut stream = ReconnectingStream::new(
+                context.with_label("test"),
+                indexer,
+                DEFAULT_TX_STREAM_BUFFER_SIZE,
+            );
+
+            // Wait for connection (receive tx)
+            let item = select! {
+                item = stream.next() => { item },
+                _ = context.sleep(Duration::from_secs(1)) => {
+                    panic!("timed out waiting for mempool item")
+                },
+            };
+            let _ = item.expect("stream item").expect("pending ok");
+
+            // Note: The metric might briefly be 1 while connected, but since the stream ended
+            // immediately after sending, the background task sets it to 0. Give it a moment.
+            context.sleep(Duration::from_millis(100)).await;
+
+            let metrics = context.encode();
+            let connected = parse_metric(&metrics, "_mempool_connected");
+            assert_eq!(connected, Some(0), "mempool_connected should be 0 after stream ends");
+
+            // Verify updated_ms metric is also present
+            let updated_ms = parse_metric(&metrics, "_mempool_connected_updated_ms");
+            assert!(
+                updated_ms.is_some() && updated_ms.unwrap() > 0,
+                "mempool_connected_updated_ms should be set"
+            );
+        });
+    }
+
+    /// AC-1.1: mempool_connected flips to 0 when connection fails.
+    #[test_traced]
+    fn mempool_connected_metric_zero_on_connect_failure() {
+        let cfg = deterministic::Config::default().with_seed(4);
+        let executor = Runner::from(cfg);
+        executor.start(|context| async move {
+            // Connection fails immediately
+            let indexer = ScriptedIndexer::new(vec![ListenOutcome::ConnectError(io::Error::new(
+                io::ErrorKind::ConnectionRefused,
+                "test connection refused",
+            ))]);
+
+            let _stream = ReconnectingStream::new(
+                context.with_label("test"),
+                indexer,
+                DEFAULT_TX_STREAM_BUFFER_SIZE,
+            );
+
+            // Give the background task time to attempt connection and fail
+            context.sleep(Duration::from_millis(100)).await;
+
+            let metrics = context.encode();
+            let connected = parse_metric(&metrics, "_mempool_connected");
+            assert_eq!(
+                connected,
+                Some(0),
+                "mempool_connected should be 0 after connection failure"
+            );
+        });
+    }
 }

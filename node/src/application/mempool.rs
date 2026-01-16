@@ -405,7 +405,7 @@ mod tests {
     use super::*;
     use commonware_cryptography::Digestible;
     use commonware_cryptography::{ed25519::PrivateKey, Signer};
-    use commonware_runtime::{deterministic, Runner};
+    use commonware_runtime::{deterministic, Metrics, Runner};
     use nullspace_types::execution::Instruction;
 
     #[test]
@@ -800,6 +800,75 @@ mod tests {
 
             assert_eq!(mempool.unique.get(), 0);
             assert_eq!(mempool.accounts.get(), 0);
+        });
+    }
+
+    /// Helper to parse a prometheus gauge metric value from encoded metrics.
+    fn parse_metric(metrics: &str, suffix: &str) -> Option<i64> {
+        for line in metrics.lines() {
+            if line.starts_with('#') {
+                continue;
+            }
+            let mut parts = line.split_whitespace();
+            let name = parts.next()?;
+            let value_str = parts.next()?;
+            if name.ends_with(suffix) {
+                return value_str.parse::<i64>().ok();
+            }
+        }
+        None
+    }
+
+    /// AC-1.2: mempool_pending_total stays in sync with internal count.
+    #[test]
+    fn test_mempool_pending_total_exported_via_prometheus() {
+        let runner = deterministic::Runner::default();
+        runner.start(|ctx| async move {
+            let ctx = ctx.with_label("test_mempool");
+            let mut mempool = Mempool::new(ctx.clone());
+
+            // Initially empty
+            let metrics = ctx.encode();
+            let pending = parse_metric(&metrics, "_mempool_pending_total");
+            assert_eq!(pending, Some(0), "mempool_pending_total should start at 0");
+
+            // Add transactions
+            let private = PrivateKey::from_seed(1);
+            for nonce in 0..5 {
+                let tx =
+                    Transaction::sign(&private, nonce, Instruction::CasinoDeposit { amount: 100 });
+                mempool.add(tx, 0);
+            }
+
+            let metrics = ctx.encode();
+            let pending = parse_metric(&metrics, "_mempool_pending_total");
+            assert_eq!(
+                pending,
+                Some(5),
+                "mempool_pending_total should reflect 5 transactions"
+            );
+
+            // Remove some via retain
+            mempool.retain(&private.public_key(), 3);
+
+            let metrics = ctx.encode();
+            let pending = parse_metric(&metrics, "_mempool_pending_total");
+            assert_eq!(
+                pending,
+                Some(2),
+                "mempool_pending_total should reflect 2 remaining transactions"
+            );
+
+            // Remove all
+            mempool.retain(&private.public_key(), 10);
+
+            let metrics = ctx.encode();
+            let pending = parse_metric(&metrics, "_mempool_pending_total");
+            assert_eq!(
+                pending,
+                Some(0),
+                "mempool_pending_total should be 0 after all removed"
+            );
         });
     }
 }
