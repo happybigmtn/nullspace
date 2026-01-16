@@ -65,6 +65,18 @@ pub enum PayloadError {
     /// Payload references wrong commitment hash.
     #[error("commitment hash mismatch: expected {expected:?}, got {got:?}")]
     CommitmentHashMismatch { expected: [u8; 32], got: [u8; 32] },
+
+    /// Action received before all players acknowledged the deal commitment.
+    #[error("action before all acks: received {received}/{required} acks")]
+    ActionBeforeAllAcks { received: usize, required: usize },
+
+    /// Duplicate ack from the same seat.
+    #[error("duplicate ack from seat {seat}")]
+    DuplicateAck { seat: u8 },
+
+    /// Ack from a seat not in the scope's seat order.
+    #[error("ack from invalid seat {seat}: not in seat order")]
+    InvalidAckSeat { seat: u8 },
 }
 
 /// The consensus payload schema wrapping all onchain message types.
@@ -250,10 +262,12 @@ impl GameActionMessage {
 
 /// Validates the ordering and commitment binding of an action log.
 ///
-/// This validator enforces the critical invariant that:
+/// This validator enforces the critical invariants:
 /// 1. The first payload in any hand must be a `DealCommitment`
 /// 2. Exactly one `DealCommitment` is allowed per hand
 /// 3. All subsequent payloads must reference the commitment hash
+/// 4. **Ack gating**: All seated players must acknowledge the commitment before
+///    any `GameAction` or reveal payloads are accepted
 ///
 /// # Deterministic Validation
 ///
@@ -261,6 +275,18 @@ impl GameActionMessage {
 /// identical accept/reject decisions on all validators. This is essential
 /// for consensus: all honest nodes must agree on whether an action log
 /// is valid.
+///
+/// # Ack Gating
+///
+/// After receiving a `DealCommitment`, the validator enters the "ack collection"
+/// phase. During this phase:
+/// - Only `DealCommitmentAck` payloads are accepted
+/// - Each ack must come from a seat listed in the commitment's `scope.seat_order`
+/// - Duplicate acks from the same seat are rejected
+/// - Once all seats have acked, the validator transitions to accepting game actions
+///
+/// This prevents players from taking actions before confirming they received
+/// the deal, which could enable griefing attacks.
 ///
 /// # Usage
 ///
@@ -285,14 +311,19 @@ impl GameActionMessage {
 ///
 /// assert!(validator.validate(&payload).is_ok());
 ///
-/// // Subsequent payloads must reference the commitment
-/// let ack = DealCommitmentAck {
-///     version: ProtocolVersion::current(),
-///     commitment_hash,
-///     seat_index: 0,
-///     player_signature: vec![],
-/// };
-/// assert!(validator.validate(&ConsensusPayload::DealCommitmentAck(ack)).is_ok());
+/// // All seats must ack before game actions are allowed
+/// for seat in [0, 1] {
+///     let ack = DealCommitmentAck {
+///         version: ProtocolVersion::current(),
+///         commitment_hash,
+///         seat_index: seat,
+///         player_signature: vec![],
+///     };
+///     assert!(validator.validate(&ConsensusPayload::DealCommitmentAck(ack)).is_ok());
+/// }
+///
+/// // Now game actions are allowed
+/// assert!(validator.all_acks_received());
 /// ```
 #[derive(Debug, Clone)]
 pub struct ActionLogValidator {
@@ -300,6 +331,10 @@ pub struct ActionLogValidator {
     commitment_hash: Option<[u8; 32]>,
     /// Number of payloads processed.
     payload_count: usize,
+    /// Seats that must acknowledge (from scope.seat_order).
+    required_seats: Vec<u8>,
+    /// Seats that have acknowledged so far.
+    acked_seats: Vec<u8>,
 }
 
 impl Default for ActionLogValidator {
@@ -314,6 +349,8 @@ impl ActionLogValidator {
         Self {
             commitment_hash: None,
             payload_count: 0,
+            required_seats: Vec::new(),
+            acked_seats: Vec::new(),
         }
     }
 
@@ -332,24 +369,61 @@ impl ActionLogValidator {
         self.commitment_hash.is_some()
     }
 
+    /// Returns true if all required seats have acknowledged the commitment.
+    ///
+    /// This returns `false` if no commitment has been received yet.
+    pub fn all_acks_received(&self) -> bool {
+        !self.required_seats.is_empty()
+            && self.acked_seats.len() == self.required_seats.len()
+    }
+
+    /// Returns the number of acks received so far.
+    pub fn ack_count(&self) -> usize {
+        self.acked_seats.len()
+    }
+
+    /// Returns the number of acks required (seats in the commitment scope).
+    pub fn required_ack_count(&self) -> usize {
+        self.required_seats.len()
+    }
+
+    /// Returns the seats that have acknowledged so far.
+    pub fn acked_seats(&self) -> &[u8] {
+        &self.acked_seats
+    }
+
+    /// Returns the seats that still need to acknowledge.
+    pub fn pending_ack_seats(&self) -> Vec<u8> {
+        self.required_seats
+            .iter()
+            .filter(|s| !self.acked_seats.contains(s))
+            .copied()
+            .collect()
+    }
+
     /// Validate a payload and update validator state.
     ///
     /// This method enforces:
     /// 1. First payload must be `DealCommitment`
     /// 2. Only one `DealCommitment` allowed
     /// 3. All other payloads must reference the established commitment hash
+    /// 4. All seats must ack before `GameAction` or reveal payloads are accepted
     ///
     /// # Errors
     ///
     /// - [`PayloadError::MissingInitialCommitment`] if first payload is not a DealCommitment
     /// - [`PayloadError::DuplicateCommitment`] if a second DealCommitment is seen
     /// - [`PayloadError::CommitmentHashMismatch`] if payload references wrong commitment
+    /// - [`PayloadError::ActionBeforeAllAcks`] if action/reveal received before all acks
+    /// - [`PayloadError::DuplicateAck`] if same seat acks twice
+    /// - [`PayloadError::InvalidAckSeat`] if ack comes from seat not in scope
     pub fn validate(&mut self, payload: &ConsensusPayload) -> Result<(), PayloadError> {
         // First payload must be a DealCommitment
         if self.payload_count == 0 {
             match payload {
                 ConsensusPayload::DealCommitment(dc) => {
                     self.commitment_hash = Some(dc.commitment_hash());
+                    self.required_seats = dc.scope.seat_order.clone();
                     self.payload_count += 1;
                     return Ok(());
                 }
@@ -389,6 +463,43 @@ impl ActionLogValidator {
         if let Some(got) = payload.referenced_commitment_hash() {
             if got != expected {
                 return Err(PayloadError::CommitmentHashMismatch { expected, got });
+            }
+        }
+
+        // Handle ack gating
+        match payload {
+            ConsensusPayload::DealCommitmentAck(ack) => {
+                // Validate seat is in required_seats
+                if !self.required_seats.contains(&ack.seat_index) {
+                    return Err(PayloadError::InvalidAckSeat {
+                        seat: ack.seat_index,
+                    });
+                }
+
+                // Reject duplicate acks
+                if self.acked_seats.contains(&ack.seat_index) {
+                    return Err(PayloadError::DuplicateAck {
+                        seat: ack.seat_index,
+                    });
+                }
+
+                // Record this ack
+                self.acked_seats.push(ack.seat_index);
+            }
+            ConsensusPayload::GameAction(_)
+            | ConsensusPayload::RevealShare(_)
+            | ConsensusPayload::TimelockReveal(_) => {
+                // Actions and reveals require all acks to be received first
+                if !self.all_acks_received() {
+                    return Err(PayloadError::ActionBeforeAllAcks {
+                        received: self.acked_seats.len(),
+                        required: self.required_seats.len(),
+                    });
+                }
+            }
+            ConsensusPayload::DealCommitment(_) => {
+                // Already handled above (DuplicateCommitment check)
+                unreachable!("DealCommitment handled above");
             }
         }
 
@@ -811,18 +922,20 @@ mod tests {
             .validate(&ConsensusPayload::DealCommitment(dc))
             .is_ok());
 
-        // Ack with matching hash
-        let ack = DealCommitmentAck {
-            version: ProtocolVersion::current(),
-            commitment_hash,
-            seat_index: 0,
-            player_signature: vec![],
-        };
-        assert!(validator
-            .validate(&ConsensusPayload::DealCommitmentAck(ack))
-            .is_ok());
+        // All seats (0, 1, 2, 3) must ack before actions are allowed
+        for seat in [0, 1, 2, 3] {
+            let ack = DealCommitmentAck {
+                version: ProtocolVersion::current(),
+                commitment_hash,
+                seat_index: seat,
+                player_signature: vec![],
+            };
+            assert!(validator
+                .validate(&ConsensusPayload::DealCommitmentAck(ack))
+                .is_ok());
+        }
 
-        // Action with matching hash
+        // Now action with matching hash should be accepted
         let action = GameActionMessage {
             version: ProtocolVersion::current(),
             deal_commitment_hash: commitment_hash,
@@ -836,7 +949,7 @@ mod tests {
             .validate(&ConsensusPayload::GameAction(action))
             .is_ok());
 
-        assert_eq!(validator.payload_count(), 3);
+        assert_eq!(validator.payload_count(), 6); // 1 commitment + 4 acks + 1 action
     }
 
     #[test]
@@ -876,7 +989,20 @@ mod tests {
             .validate(&ConsensusPayload::DealCommitment(dc))
             .is_ok());
 
-        // Action with wrong hash
+        // Add all required acks first
+        for seat in [0, 1, 2, 3] {
+            let ack = DealCommitmentAck {
+                version: ProtocolVersion::current(),
+                commitment_hash: correct_hash,
+                seat_index: seat,
+                player_signature: vec![],
+            };
+            assert!(validator
+                .validate(&ConsensusPayload::DealCommitmentAck(ack))
+                .is_ok());
+        }
+
+        // Action with wrong hash (now that acks are done, this should fail on hash mismatch)
         let wrong_hash = [0xEE; 32];
         let action = GameActionMessage {
             version: ProtocolVersion::current(),
@@ -901,24 +1027,29 @@ mod tests {
         let dc = test_deal_commitment();
         let commitment_hash = dc.commitment_hash();
 
-        let payloads = vec![
-            ConsensusPayload::DealCommitment(dc),
-            ConsensusPayload::DealCommitmentAck(DealCommitmentAck {
+        // Build payload sequence: commitment + all acks + action
+        let mut payloads = vec![ConsensusPayload::DealCommitment(dc)];
+
+        // Add acks for all seats in scope (0, 1, 2, 3)
+        for seat in [0, 1, 2, 3] {
+            payloads.push(ConsensusPayload::DealCommitmentAck(DealCommitmentAck {
                 version: ProtocolVersion::current(),
                 commitment_hash,
-                seat_index: 0,
+                seat_index: seat,
                 player_signature: vec![],
-            }),
-            ConsensusPayload::GameAction(GameActionMessage {
-                version: ProtocolVersion::current(),
-                deal_commitment_hash: commitment_hash,
-                seat_index: 0,
-                action_type: action_codes::BET,
-                amount: 100,
-                sequence: 1,
-                signature: vec![],
-            }),
-        ];
+            }));
+        }
+
+        // Now add game action
+        payloads.push(ConsensusPayload::GameAction(GameActionMessage {
+            version: ProtocolVersion::current(),
+            deal_commitment_hash: commitment_hash,
+            seat_index: 0,
+            action_type: action_codes::BET,
+            amount: 100,
+            sequence: 1,
+            signature: vec![],
+        }));
 
         let result = ActionLogValidator::validate_log(&payloads);
         assert!(result.is_ok());
@@ -976,5 +1107,310 @@ mod tests {
             .is_ok());
 
         assert_eq!(validator.commitment_hash(), Some(expected_hash));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Ack Gating Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_ack_gating_rejects_action_before_all_acks() {
+        let mut validator = ActionLogValidator::new();
+        let dc = test_deal_commitment();
+        let commitment_hash = dc.commitment_hash();
+
+        assert!(validator
+            .validate(&ConsensusPayload::DealCommitment(dc))
+            .is_ok());
+
+        // Only ack 2 of 4 required seats
+        for seat in [0, 1] {
+            let ack = DealCommitmentAck {
+                version: ProtocolVersion::current(),
+                commitment_hash,
+                seat_index: seat,
+                player_signature: vec![],
+            };
+            assert!(validator
+                .validate(&ConsensusPayload::DealCommitmentAck(ack))
+                .is_ok());
+        }
+
+        // Attempt action with only partial acks
+        let action = GameActionMessage {
+            version: ProtocolVersion::current(),
+            deal_commitment_hash: commitment_hash,
+            seat_index: 0,
+            action_type: action_codes::BET,
+            amount: 100,
+            sequence: 1,
+            signature: vec![],
+        };
+
+        let result = validator.validate(&ConsensusPayload::GameAction(action));
+        assert!(matches!(
+            result,
+            Err(PayloadError::ActionBeforeAllAcks { received: 2, required: 4 })
+        ));
+    }
+
+    #[test]
+    fn test_ack_gating_rejects_reveal_before_all_acks() {
+        let mut validator = ActionLogValidator::new();
+        let dc = test_deal_commitment();
+        let commitment_hash = dc.commitment_hash();
+
+        assert!(validator
+            .validate(&ConsensusPayload::DealCommitment(dc))
+            .is_ok());
+
+        // No acks at all
+        let reveal = RevealShare {
+            version: ProtocolVersion::current(),
+            commitment_hash,
+            phase: protocol_messages::RevealPhase::Flop,
+            card_indices: vec![0, 1, 2],
+            reveal_data: vec![vec![1], vec![2], vec![3]],
+            from_seat: 0,
+            signature: vec![],
+        };
+
+        let result = validator.validate(&ConsensusPayload::RevealShare(reveal));
+        assert!(matches!(
+            result,
+            Err(PayloadError::ActionBeforeAllAcks { received: 0, required: 4 })
+        ));
+    }
+
+    #[test]
+    fn test_ack_gating_rejects_duplicate_ack() {
+        let mut validator = ActionLogValidator::new();
+        let dc = test_deal_commitment();
+        let commitment_hash = dc.commitment_hash();
+
+        assert!(validator
+            .validate(&ConsensusPayload::DealCommitment(dc))
+            .is_ok());
+
+        // First ack from seat 0 succeeds
+        let ack1 = DealCommitmentAck {
+            version: ProtocolVersion::current(),
+            commitment_hash,
+            seat_index: 0,
+            player_signature: vec![],
+        };
+        assert!(validator
+            .validate(&ConsensusPayload::DealCommitmentAck(ack1))
+            .is_ok());
+
+        // Duplicate ack from seat 0 fails
+        let ack2 = DealCommitmentAck {
+            version: ProtocolVersion::current(),
+            commitment_hash,
+            seat_index: 0,
+            player_signature: vec![0xAB], // Different signature doesn't matter
+        };
+        let result = validator.validate(&ConsensusPayload::DealCommitmentAck(ack2));
+        assert!(matches!(result, Err(PayloadError::DuplicateAck { seat: 0 })));
+    }
+
+    #[test]
+    fn test_ack_gating_rejects_invalid_seat() {
+        let mut validator = ActionLogValidator::new();
+        let dc = test_deal_commitment();
+        let commitment_hash = dc.commitment_hash();
+
+        assert!(validator
+            .validate(&ConsensusPayload::DealCommitment(dc))
+            .is_ok());
+
+        // Ack from seat 99 which is not in scope (0, 1, 2, 3)
+        let ack = DealCommitmentAck {
+            version: ProtocolVersion::current(),
+            commitment_hash,
+            seat_index: 99,
+            player_signature: vec![],
+        };
+        let result = validator.validate(&ConsensusPayload::DealCommitmentAck(ack));
+        assert!(matches!(result, Err(PayloadError::InvalidAckSeat { seat: 99 })));
+    }
+
+    #[test]
+    fn test_ack_gating_allows_action_after_all_acks() {
+        let mut validator = ActionLogValidator::new();
+        let dc = test_deal_commitment();
+        let commitment_hash = dc.commitment_hash();
+
+        assert!(validator
+            .validate(&ConsensusPayload::DealCommitment(dc))
+            .is_ok());
+
+        // All 4 seats ack
+        for seat in [0, 1, 2, 3] {
+            let ack = DealCommitmentAck {
+                version: ProtocolVersion::current(),
+                commitment_hash,
+                seat_index: seat,
+                player_signature: vec![],
+            };
+            assert!(validator
+                .validate(&ConsensusPayload::DealCommitmentAck(ack))
+                .is_ok());
+        }
+
+        // Now action should succeed
+        let action = GameActionMessage {
+            version: ProtocolVersion::current(),
+            deal_commitment_hash: commitment_hash,
+            seat_index: 0,
+            action_type: action_codes::BET,
+            amount: 100,
+            sequence: 1,
+            signature: vec![],
+        };
+        assert!(validator
+            .validate(&ConsensusPayload::GameAction(action))
+            .is_ok());
+    }
+
+    #[test]
+    fn test_ack_gating_state_accessors() {
+        let mut validator = ActionLogValidator::new();
+        let dc = test_deal_commitment();
+        let commitment_hash = dc.commitment_hash();
+
+        // Before commitment
+        assert!(!validator.all_acks_received());
+        assert_eq!(validator.ack_count(), 0);
+        assert_eq!(validator.required_ack_count(), 0);
+
+        assert!(validator
+            .validate(&ConsensusPayload::DealCommitment(dc))
+            .is_ok());
+
+        // After commitment, before acks
+        assert!(!validator.all_acks_received());
+        assert_eq!(validator.ack_count(), 0);
+        assert_eq!(validator.required_ack_count(), 4);
+        assert_eq!(validator.pending_ack_seats(), vec![0, 1, 2, 3]);
+
+        // After first ack
+        let ack = DealCommitmentAck {
+            version: ProtocolVersion::current(),
+            commitment_hash,
+            seat_index: 2,
+            player_signature: vec![],
+        };
+        assert!(validator
+            .validate(&ConsensusPayload::DealCommitmentAck(ack))
+            .is_ok());
+
+        assert!(!validator.all_acks_received());
+        assert_eq!(validator.ack_count(), 1);
+        assert_eq!(validator.acked_seats(), &[2]);
+        assert_eq!(validator.pending_ack_seats(), vec![0, 1, 3]);
+
+        // After all acks
+        for seat in [0, 1, 3] {
+            let ack = DealCommitmentAck {
+                version: ProtocolVersion::current(),
+                commitment_hash,
+                seat_index: seat,
+                player_signature: vec![],
+            };
+            assert!(validator
+                .validate(&ConsensusPayload::DealCommitmentAck(ack))
+                .is_ok());
+        }
+
+        assert!(validator.all_acks_received());
+        assert_eq!(validator.ack_count(), 4);
+        assert!(validator.pending_ack_seats().is_empty());
+    }
+
+    #[test]
+    fn test_ack_gating_with_two_player_scope() {
+        // Test with smaller scope (2 players)
+        let scope = ScopeBinding::new([1u8; 32], 42, vec![0, 1], 52);
+        let dc = DealCommitment {
+            version: ProtocolVersion::current(),
+            scope,
+            shuffle_commitment: [2u8; 32],
+            artifact_hashes: vec![],
+            timestamp_ms: 1700000000000,
+            dealer_signature: vec![],
+        };
+        let commitment_hash = dc.commitment_hash();
+
+        let mut validator = ActionLogValidator::new();
+        assert!(validator
+            .validate(&ConsensusPayload::DealCommitment(dc))
+            .is_ok());
+
+        assert_eq!(validator.required_ack_count(), 2);
+
+        // One ack - not enough
+        let ack0 = DealCommitmentAck {
+            version: ProtocolVersion::current(),
+            commitment_hash,
+            seat_index: 0,
+            player_signature: vec![],
+        };
+        assert!(validator
+            .validate(&ConsensusPayload::DealCommitmentAck(ack0))
+            .is_ok());
+        assert!(!validator.all_acks_received());
+
+        // Second ack - now complete
+        let ack1 = DealCommitmentAck {
+            version: ProtocolVersion::current(),
+            commitment_hash,
+            seat_index: 1,
+            player_signature: vec![],
+        };
+        assert!(validator
+            .validate(&ConsensusPayload::DealCommitmentAck(ack1))
+            .is_ok());
+        assert!(validator.all_acks_received());
+
+        // Action now allowed
+        let action = GameActionMessage {
+            version: ProtocolVersion::current(),
+            deal_commitment_hash: commitment_hash,
+            seat_index: 0,
+            action_type: action_codes::FOLD,
+            amount: 0,
+            sequence: 1,
+            signature: vec![],
+        };
+        assert!(validator
+            .validate(&ConsensusPayload::GameAction(action))
+            .is_ok());
+    }
+
+    #[test]
+    fn test_ack_gating_allows_acks_in_any_order() {
+        let mut validator = ActionLogValidator::new();
+        let dc = test_deal_commitment();
+        let commitment_hash = dc.commitment_hash();
+
+        assert!(validator
+            .validate(&ConsensusPayload::DealCommitment(dc))
+            .is_ok());
+
+        // Ack in reverse order (3, 2, 1, 0)
+        for seat in [3, 2, 1, 0] {
+            let ack = DealCommitmentAck {
+                version: ProtocolVersion::current(),
+                commitment_hash,
+                seat_index: seat,
+                player_signature: vec![],
+            };
+            assert!(validator
+                .validate(&ConsensusPayload::DealCommitmentAck(ack))
+                .is_ok());
+        }
+
+        assert!(validator.all_acks_received());
     }
 }
