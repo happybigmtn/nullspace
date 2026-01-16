@@ -25,8 +25,8 @@
 //! - Have reveals for a different commitment
 
 use protocol_messages::{
-    DealCommitment, DealCommitmentAck, ProtocolVersion, RevealShare, TimelockReveal,
-    CURRENT_PROTOCOL_VERSION,
+    DealCommitment, DealCommitmentAck, ProtocolVersion, RevealShare, ShuffleContext,
+    ShuffleContextMismatch, TimelockReveal, CURRENT_PROTOCOL_VERSION,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -77,6 +77,14 @@ pub enum PayloadError {
     /// Ack from a seat not in the scope's seat order.
     #[error("ack from invalid seat {seat}: not in seat order")]
     InvalidAckSeat { seat: u8 },
+
+    /// Shuffle context mismatch.
+    ///
+    /// The deal commitment's scope doesn't match the expected shuffle context.
+    /// This prevents replay attacks where a commitment is reused across different
+    /// tables, hands, or player configurations.
+    #[error("shuffle context mismatch: {0}")]
+    ShuffleContextMismatch(#[from] ShuffleContextMismatch),
 }
 
 /// The consensus payload schema wrapping all onchain message types.
@@ -335,6 +343,12 @@ pub struct ActionLogValidator {
     required_seats: Vec<u8>,
     /// Seats that have acknowledged so far.
     acked_seats: Vec<u8>,
+    /// Expected shuffle context for verification.
+    ///
+    /// When set, the validator will verify that the `DealCommitment`'s scope
+    /// matches this expected context. This prevents replay attacks where a
+    /// commitment from one table/hand is reused in a different context.
+    expected_context: Option<ShuffleContext>,
 }
 
 impl Default for ActionLogValidator {
@@ -345,12 +359,51 @@ impl Default for ActionLogValidator {
 
 impl ActionLogValidator {
     /// Create a new validator for a fresh action log.
+    ///
+    /// This creates a validator without shuffle context verification.
+    /// Use [`with_expected_context`](Self::with_expected_context) to enable
+    /// context verification.
     pub fn new() -> Self {
         Self {
             commitment_hash: None,
             payload_count: 0,
             required_seats: Vec::new(),
             acked_seats: Vec::new(),
+            expected_context: None,
+        }
+    }
+
+    /// Create a new validator with expected shuffle context verification.
+    ///
+    /// When the `DealCommitment` is received, the validator will verify that
+    /// its scope matches the expected context. This prevents replay attacks
+    /// where a commitment is reused across different tables, hands, or player
+    /// configurations.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use codexpoker_onchain::ActionLogValidator;
+    /// use protocol_messages::{ProtocolVersion, ShuffleContext};
+    ///
+    /// let expected = ShuffleContext::new(
+    ///     ProtocolVersion::current(),
+    ///     [1u8; 32],  // table_id
+    ///     42,          // hand_id
+    ///     vec![0, 1],  // seat_order
+    ///     52,          // deck_length
+    /// );
+    ///
+    /// let validator = ActionLogValidator::with_expected_context(expected);
+    /// // Now any DealCommitment will be verified against this context
+    /// ```
+    pub fn with_expected_context(expected: ShuffleContext) -> Self {
+        Self {
+            commitment_hash: None,
+            payload_count: 0,
+            required_seats: Vec::new(),
+            acked_seats: Vec::new(),
+            expected_context: Some(expected),
         }
     }
 
@@ -401,6 +454,16 @@ impl ActionLogValidator {
             .collect()
     }
 
+    /// Returns the expected shuffle context if one was set.
+    pub fn expected_context(&self) -> Option<&ShuffleContext> {
+        self.expected_context.as_ref()
+    }
+
+    /// Returns true if shuffle context verification is enabled.
+    pub fn has_expected_context(&self) -> bool {
+        self.expected_context.is_some()
+    }
+
     /// Validate a payload and update validator state.
     ///
     /// This method enforces:
@@ -408,6 +471,8 @@ impl ActionLogValidator {
     /// 2. Only one `DealCommitment` allowed
     /// 3. All other payloads must reference the established commitment hash
     /// 4. All seats must ack before `GameAction` or reveal payloads are accepted
+    /// 5. **Shuffle context verification** (if enabled): the `DealCommitment`'s scope
+    ///    must match the expected context
     ///
     /// # Errors
     ///
@@ -417,11 +482,19 @@ impl ActionLogValidator {
     /// - [`PayloadError::ActionBeforeAllAcks`] if action/reveal received before all acks
     /// - [`PayloadError::DuplicateAck`] if same seat acks twice
     /// - [`PayloadError::InvalidAckSeat`] if ack comes from seat not in scope
+    /// - [`PayloadError::ShuffleContextMismatch`] if commitment scope doesn't match expected context
     pub fn validate(&mut self, payload: &ConsensusPayload) -> Result<(), PayloadError> {
         // First payload must be a DealCommitment
         if self.payload_count == 0 {
             match payload {
                 ConsensusPayload::DealCommitment(dc) => {
+                    // Verify shuffle context if expected context is set
+                    if let Some(expected) = &self.expected_context {
+                        // Convert the commitment's scope to a ShuffleContext for comparison
+                        let actual = ShuffleContext::from_scope(dc.version, &dc.scope);
+                        expected.verify_matches(&actual)?;
+                    }
+
                     self.commitment_hash = Some(dc.commitment_hash());
                     self.required_seats = dc.scope.seat_order.clone();
                     self.payload_count += 1;
@@ -511,12 +584,44 @@ impl ActionLogValidator {
     ///
     /// This is a convenience method that processes all payloads in order
     /// and returns the first error encountered, if any.
+    ///
+    /// This method does not perform shuffle context verification. Use
+    /// [`validate_log_with_context`](Self::validate_log_with_context) for
+    /// context-aware validation.
     pub fn validate_log(payloads: &[ConsensusPayload]) -> Result<[u8; 32], PayloadError> {
         if payloads.is_empty() {
             return Err(PayloadError::MissingField("action log is empty"));
         }
 
         let mut validator = Self::new();
+        for payload in payloads {
+            validator.validate(payload)?;
+        }
+
+        Ok(validator
+            .commitment_hash
+            .expect("commitment hash must be set after validating non-empty log"))
+    }
+
+    /// Validate an entire action log with shuffle context verification.
+    ///
+    /// This is a convenience method that processes all payloads in order,
+    /// verifying that the `DealCommitment`'s scope matches the expected
+    /// shuffle context.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PayloadError::ShuffleContextMismatch`] if the commitment's scope
+    /// doesn't match the expected context.
+    pub fn validate_log_with_context(
+        payloads: &[ConsensusPayload],
+        expected: ShuffleContext,
+    ) -> Result<[u8; 32], PayloadError> {
+        if payloads.is_empty() {
+            return Err(PayloadError::MissingField("action log is empty"));
+        }
+
+        let mut validator = Self::with_expected_context(expected);
         for payload in payloads {
             validator.validate(payload)?;
         }
@@ -1412,5 +1517,223 @@ mod tests {
         }
 
         assert!(validator.all_acks_received());
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Shuffle Context Verification Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    fn test_shuffle_context() -> ShuffleContext {
+        ShuffleContext::new(ProtocolVersion::current(), [1u8; 32], 42, vec![0, 1, 2, 3], 52)
+    }
+
+    #[test]
+    fn test_validator_with_expected_context_accepts_matching() {
+        let expected = test_shuffle_context();
+        let mut validator = ActionLogValidator::with_expected_context(expected.clone());
+
+        // Create a deal commitment with matching scope
+        let dc = DealCommitment {
+            version: ProtocolVersion::current(),
+            scope: ScopeBinding::new([1u8; 32], 42, vec![0, 1, 2, 3], 52),
+            shuffle_commitment: [2u8; 32],
+            artifact_hashes: vec![],
+            timestamp_ms: 1700000000000,
+            dealer_signature: vec![],
+        };
+
+        assert!(validator.has_expected_context());
+        assert!(validator.validate(&ConsensusPayload::DealCommitment(dc)).is_ok());
+    }
+
+    #[test]
+    fn test_validator_with_expected_context_rejects_table_id_mismatch() {
+        let expected = test_shuffle_context();
+        let mut validator = ActionLogValidator::with_expected_context(expected);
+
+        // Create a deal commitment with different table_id
+        let dc = DealCommitment {
+            version: ProtocolVersion::current(),
+            scope: ScopeBinding::new([99u8; 32], 42, vec![0, 1, 2, 3], 52), // wrong table_id
+            shuffle_commitment: [2u8; 32],
+            artifact_hashes: vec![],
+            timestamp_ms: 1700000000000,
+            dealer_signature: vec![],
+        };
+
+        let result = validator.validate(&ConsensusPayload::DealCommitment(dc));
+        assert!(matches!(
+            result,
+            Err(PayloadError::ShuffleContextMismatch(ShuffleContextMismatch::TableId { .. }))
+        ));
+    }
+
+    #[test]
+    fn test_validator_with_expected_context_rejects_hand_id_mismatch() {
+        let expected = test_shuffle_context();
+        let mut validator = ActionLogValidator::with_expected_context(expected);
+
+        // Create a deal commitment with different hand_id
+        let dc = DealCommitment {
+            version: ProtocolVersion::current(),
+            scope: ScopeBinding::new([1u8; 32], 999, vec![0, 1, 2, 3], 52), // wrong hand_id
+            shuffle_commitment: [2u8; 32],
+            artifact_hashes: vec![],
+            timestamp_ms: 1700000000000,
+            dealer_signature: vec![],
+        };
+
+        let result = validator.validate(&ConsensusPayload::DealCommitment(dc));
+        assert!(matches!(
+            result,
+            Err(PayloadError::ShuffleContextMismatch(ShuffleContextMismatch::HandId {
+                expected: 42,
+                got: 999
+            }))
+        ));
+    }
+
+    #[test]
+    fn test_validator_with_expected_context_rejects_seat_order_mismatch() {
+        let expected = test_shuffle_context();
+        let mut validator = ActionLogValidator::with_expected_context(expected);
+
+        // Create a deal commitment with different seat_order
+        let dc = DealCommitment {
+            version: ProtocolVersion::current(),
+            scope: ScopeBinding::new([1u8; 32], 42, vec![0, 1], 52), // different seats
+            shuffle_commitment: [2u8; 32],
+            artifact_hashes: vec![],
+            timestamp_ms: 1700000000000,
+            dealer_signature: vec![],
+        };
+
+        let result = validator.validate(&ConsensusPayload::DealCommitment(dc));
+        assert!(matches!(
+            result,
+            Err(PayloadError::ShuffleContextMismatch(ShuffleContextMismatch::SeatOrder { .. }))
+        ));
+    }
+
+    #[test]
+    fn test_validator_with_expected_context_rejects_deck_length_mismatch() {
+        let expected = test_shuffle_context();
+        let mut validator = ActionLogValidator::with_expected_context(expected);
+
+        // Create a deal commitment with different deck_length
+        let dc = DealCommitment {
+            version: ProtocolVersion::current(),
+            scope: ScopeBinding::new([1u8; 32], 42, vec![0, 1, 2, 3], 36), // short deck
+            shuffle_commitment: [2u8; 32],
+            artifact_hashes: vec![],
+            timestamp_ms: 1700000000000,
+            dealer_signature: vec![],
+        };
+
+        let result = validator.validate(&ConsensusPayload::DealCommitment(dc));
+        assert!(matches!(
+            result,
+            Err(PayloadError::ShuffleContextMismatch(ShuffleContextMismatch::DeckLength {
+                expected: 52,
+                got: 36
+            }))
+        ));
+    }
+
+    #[test]
+    fn test_validator_without_expected_context_accepts_any_scope() {
+        let mut validator = ActionLogValidator::new();
+
+        // Create a deal commitment with any scope - should be accepted
+        let dc = DealCommitment {
+            version: ProtocolVersion::current(),
+            scope: ScopeBinding::new([99u8; 32], 999, vec![0], 36),
+            shuffle_commitment: [2u8; 32],
+            artifact_hashes: vec![],
+            timestamp_ms: 1700000000000,
+            dealer_signature: vec![],
+        };
+
+        assert!(!validator.has_expected_context());
+        assert!(validator.validate(&ConsensusPayload::DealCommitment(dc)).is_ok());
+    }
+
+    #[test]
+    fn test_validate_log_with_context_accepts_matching() {
+        let expected = test_shuffle_context();
+
+        // Create a valid action log
+        let dc = DealCommitment {
+            version: ProtocolVersion::current(),
+            scope: ScopeBinding::new([1u8; 32], 42, vec![0, 1, 2, 3], 52),
+            shuffle_commitment: [2u8; 32],
+            artifact_hashes: vec![],
+            timestamp_ms: 1700000000000,
+            dealer_signature: vec![],
+        };
+        let commitment_hash = dc.commitment_hash();
+
+        let mut payloads = vec![ConsensusPayload::DealCommitment(dc)];
+
+        // Add acks for all seats
+        for seat in [0, 1, 2, 3] {
+            payloads.push(ConsensusPayload::DealCommitmentAck(DealCommitmentAck {
+                version: ProtocolVersion::current(),
+                commitment_hash,
+                seat_index: seat,
+                player_signature: vec![],
+            }));
+        }
+
+        let result = ActionLogValidator::validate_log_with_context(&payloads, expected);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), commitment_hash);
+    }
+
+    #[test]
+    fn test_validate_log_with_context_rejects_mismatch() {
+        let expected = test_shuffle_context();
+
+        // Create a deal commitment with mismatched scope
+        let dc = DealCommitment {
+            version: ProtocolVersion::current(),
+            scope: ScopeBinding::new([99u8; 32], 42, vec![0, 1, 2, 3], 52), // wrong table_id
+            shuffle_commitment: [2u8; 32],
+            artifact_hashes: vec![],
+            timestamp_ms: 1700000000000,
+            dealer_signature: vec![],
+        };
+
+        let payloads = vec![ConsensusPayload::DealCommitment(dc)];
+
+        let result = ActionLogValidator::validate_log_with_context(&payloads, expected);
+        assert!(matches!(
+            result,
+            Err(PayloadError::ShuffleContextMismatch(ShuffleContextMismatch::TableId { .. }))
+        ));
+    }
+
+    #[test]
+    fn test_validator_context_accessors() {
+        let expected = test_shuffle_context();
+        let validator = ActionLogValidator::with_expected_context(expected.clone());
+
+        assert!(validator.has_expected_context());
+        assert_eq!(validator.expected_context(), Some(&expected));
+
+        let validator_no_ctx = ActionLogValidator::new();
+        assert!(!validator_no_ctx.has_expected_context());
+        assert_eq!(validator_no_ctx.expected_context(), None);
+    }
+
+    #[test]
+    fn test_shuffle_context_mismatch_error_display() {
+        let err = PayloadError::ShuffleContextMismatch(ShuffleContextMismatch::HandId {
+            expected: 1,
+            got: 2,
+        });
+        let msg = err.to_string();
+        assert!(msg.contains("shuffle context mismatch"));
+        assert!(msg.contains("hand_id mismatch"));
     }
 }
