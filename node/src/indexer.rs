@@ -165,7 +165,8 @@ where
     rx: mpsc::Receiver<Result<Pending, I::Error>>,
     _handle: Handle<()>,
     queue_depth: Gauge,
-    mempool_connected: Gauge,
+    #[allow(dead_code)] // Kept alive to maintain the Prometheus gauge registration
+    _mempool_connected: Gauge,
 }
 
 impl<I> ReconnectingStream<I>
@@ -341,7 +342,7 @@ where
             rx,
             _handle: handle,
             queue_depth,
-            mempool_connected,
+            _mempool_connected: mempool_connected,
         }
     }
 }

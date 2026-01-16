@@ -6,7 +6,7 @@ use commonware_cryptography::{
     sha256::{Digest, Sha256},
     Digestible, Hasher,
 };
-use commonware_storage::mmr::{hasher::Standard, Location, Position};
+use commonware_storage::mmr::{hasher::Standard, Location};
 use commonware_storage::qmdb::verify_proof_and_extract_digests;
 use commonware_utils::hex;
 use nullspace_types::{
