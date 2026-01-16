@@ -936,6 +936,8 @@ mod tests {
         use feature_gate_test_helpers::MockState;
         use commonware_runtime::deterministic::Runner;
         use commonware_runtime::Runner as _;
+        #[cfg(feature = "parallel")]
+        use commonware_runtime::ThreadPool;
         use nullspace_types::casino::ERROR_FEATURE_DISABLED;
         use nullspace_types::execution::{Instruction, Output, Transaction};
 
@@ -946,13 +948,28 @@ mod tests {
             let seed = create_seed(&network_secret, 1);
             let mut layer = Layer::new(&state, master_public, b"test", seed);
 
+            #[cfg(feature = "parallel")]
+            let pool = ThreadPool::new(
+                rayon::ThreadPoolBuilder::new()
+                    .num_threads(1)
+                    .build()
+                    .expect("failed to create execution pool"),
+            );
+
             let (signer, _) = create_account_keypair(1);
 
             // Create a staking transaction
             let tx = Transaction::sign(&signer, 0, Instruction::Stake { amount: 100, duration: 10 });
 
             // Execute the transaction
-            let (outputs, _) = layer.execute(vec![tx]).await.expect("execute should not fail");
+            let (outputs, _) = layer
+                .execute(
+                    #[cfg(feature = "parallel")]
+                    pool,
+                    vec![tx],
+                )
+                .await
+                .expect("execute should not fail");
 
             // Filter for CasinoError events
             let error_events: Vec<_> = outputs
@@ -985,6 +1002,8 @@ mod tests {
         use feature_gate_test_helpers::MockState;
         use commonware_runtime::deterministic::Runner;
         use commonware_runtime::Runner as _;
+        #[cfg(feature = "parallel")]
+        use commonware_runtime::ThreadPool;
         use nullspace_types::casino::ERROR_FEATURE_DISABLED;
         use nullspace_types::execution::{Instruction, Output, Transaction};
 
@@ -994,6 +1013,14 @@ mod tests {
             let (network_secret, master_public) = create_network_keypair();
             let seed = create_seed(&network_secret, 1);
             let mut layer = Layer::new(&state, master_public, b"test", seed);
+
+            #[cfg(feature = "parallel")]
+            let pool = ThreadPool::new(
+                rayon::ThreadPoolBuilder::new()
+                    .num_threads(1)
+                    .build()
+                    .expect("failed to create execution pool"),
+            );
 
             let (signer, _) = create_account_keypair(1);
 
@@ -1009,7 +1036,14 @@ mod tests {
             );
 
             // Execute the transaction
-            let (outputs, _) = layer.execute(vec![tx]).await.expect("execute should not fail");
+            let (outputs, _) = layer
+                .execute(
+                    #[cfg(feature = "parallel")]
+                    pool,
+                    vec![tx],
+                )
+                .await
+                .expect("execute should not fail");
 
             // Filter for CasinoError events
             let error_events: Vec<_> = outputs
@@ -1042,6 +1076,8 @@ mod tests {
         use feature_gate_test_helpers::MockState;
         use commonware_runtime::deterministic::Runner;
         use commonware_runtime::Runner as _;
+        #[cfg(feature = "parallel")]
+        use commonware_runtime::ThreadPool;
         use nullspace_types::casino::ERROR_BRIDGE_DISABLED;
         use nullspace_types::execution::{Instruction, Output, Transaction};
 
@@ -1051,6 +1087,14 @@ mod tests {
             let (network_secret, master_public) = create_network_keypair();
             let seed = create_seed(&network_secret, 1);
             let mut layer = Layer::new(&state, master_public, b"test", seed);
+
+            #[cfg(feature = "parallel")]
+            let pool = ThreadPool::new(
+                rayon::ThreadPoolBuilder::new()
+                    .num_threads(1)
+                    .build()
+                    .expect("failed to create execution pool"),
+            );
 
             let (signer, _) = create_account_keypair(1);
 
@@ -1065,7 +1109,14 @@ mod tests {
             );
 
             // Execute the transaction
-            let (outputs, _) = layer.execute(vec![tx]).await.expect("execute should not fail");
+            let (outputs, _) = layer
+                .execute(
+                    #[cfg(feature = "parallel")]
+                    pool,
+                    vec![tx],
+                )
+                .await
+                .expect("execute should not fail");
 
             // Filter for CasinoError events
             let error_events: Vec<_> = outputs
