@@ -92,6 +92,10 @@ pub const ERROR_INVALID_PAYLOAD: u8 = 16;
 pub const ERROR_INVALID_STATE: u8 = 17;
 /// Error when deck is exhausted (no more cards to draw).
 pub const ERROR_DECK_EXHAUSTED: u8 = 18;
+/// Error when a feature is disabled (AMM, staking, liquidity).
+pub const ERROR_FEATURE_DISABLED: u8 = 19;
+/// Error when bridge functionality is disabled.
+pub const ERROR_BRIDGE_DISABLED: u8 = 20;
 
 /// Tournament duration in seconds (5 minutes)
 pub const TOURNAMENT_DURATION_SECS: u64 = 5 * 60;

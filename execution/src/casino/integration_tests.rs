@@ -704,14 +704,17 @@ mod tests {
     #[test]
     fn test_error_code_mapping_table() {
         // This test documents the authoritative error code mapping.
-        // ERROR_INVALID_PAYLOAD (16) ← GameError::InvalidPayload
-        // ERROR_INVALID_MOVE (9)     ← GameError::InvalidMove
-        // ERROR_SESSION_COMPLETE (8) ← GameError::GameAlreadyComplete
-        // ERROR_INVALID_STATE (17)   ← GameError::InvalidState
-        // ERROR_DECK_EXHAUSTED (18)  ← GameError::DeckExhausted
+        // ERROR_INVALID_PAYLOAD (16)   ← GameError::InvalidPayload
+        // ERROR_INVALID_MOVE (9)       ← GameError::InvalidMove
+        // ERROR_SESSION_COMPLETE (8)   ← GameError::GameAlreadyComplete
+        // ERROR_INVALID_STATE (17)     ← GameError::InvalidState
+        // ERROR_DECK_EXHAUSTED (18)    ← GameError::DeckExhausted
+        // ERROR_FEATURE_DISABLED (19)  ← feature disabled (AMM/staking/liquidity)
+        // ERROR_BRIDGE_DISABLED (20)   ← bridge disabled
 
         use nullspace_types::casino::{
-            ERROR_DECK_EXHAUSTED, ERROR_INVALID_MOVE, ERROR_INVALID_PAYLOAD, ERROR_INVALID_STATE,
+            ERROR_BRIDGE_DISABLED, ERROR_DECK_EXHAUSTED, ERROR_FEATURE_DISABLED,
+            ERROR_INVALID_MOVE, ERROR_INVALID_PAYLOAD, ERROR_INVALID_STATE,
             ERROR_SESSION_COMPLETE,
         };
 
@@ -722,6 +725,8 @@ mod tests {
             ERROR_SESSION_COMPLETE,
             ERROR_INVALID_STATE,
             ERROR_DECK_EXHAUSTED,
+            ERROR_FEATURE_DISABLED,
+            ERROR_BRIDGE_DISABLED,
         ];
         let unique: std::collections::HashSet<_> = codes.iter().collect();
         assert_eq!(
@@ -736,6 +741,8 @@ mod tests {
         assert_eq!(ERROR_SESSION_COMPLETE, 8);
         assert_eq!(ERROR_INVALID_STATE, 17);
         assert_eq!(ERROR_DECK_EXHAUSTED, 18);
+        assert_eq!(ERROR_FEATURE_DISABLED, 19);
+        assert_eq!(ERROR_BRIDGE_DISABLED, 20);
     }
 
     /// Test InvalidPayload with out-of-range action byte.
@@ -783,5 +790,25 @@ mod tests {
 
         // GameError::InvalidState exists in the enum
         let _: GameError = GameError::InvalidState;
+    }
+
+    /// Test ERROR_FEATURE_DISABLED code exists for gated AMM/staking/liquidity features.
+    #[test]
+    fn test_feature_disabled_code_exists() {
+        use nullspace_types::casino::ERROR_FEATURE_DISABLED;
+        assert_eq!(
+            ERROR_FEATURE_DISABLED, 19,
+            "ERROR_FEATURE_DISABLED should be code 19"
+        );
+    }
+
+    /// Test ERROR_BRIDGE_DISABLED code exists for gated bridge functionality.
+    #[test]
+    fn test_bridge_disabled_code_exists() {
+        use nullspace_types::casino::ERROR_BRIDGE_DISABLED;
+        assert_eq!(
+            ERROR_BRIDGE_DISABLED, 20,
+            "ERROR_BRIDGE_DISABLED should be code 20"
+        );
     }
 }
