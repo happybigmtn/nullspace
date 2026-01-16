@@ -82,8 +82,15 @@
 //! verification must succeed or fail identically across all validators.
 
 mod payload;
+pub mod codec;
 pub mod exports;
 pub mod golden_vectors;
+
+// Re-export codec primitives for convenience
+pub use codec::{
+    BitReader, BitWriter, CodecError, CodecResult, PayloadHeader,
+    encode_uleb128, decode_uleb128, MAX_ENCODED_SIZE,
+};
 
 pub use payload::{
     ArtifactRequest, ArtifactResponse, DealCommitment, DealCommitmentAck, ProtocolVersion,
