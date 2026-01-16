@@ -1,0 +1,12 @@
+[package]
+name = "codexpoker-onchain"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Consensus payload schema and onchain message types for CodexPoker"
+
+[dependencies]
+protocol-messages = { path = "../protocol-messages" }
+blake3.workspace = true
+serde.workspace = true
+thiserror.workspace = true
