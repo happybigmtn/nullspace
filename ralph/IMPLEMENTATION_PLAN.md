@@ -145,10 +145,11 @@
 
 ### M5: Rust-Canonical Codec Consolidation
 
-- [ ] Define Rust as canonical protocol source and export tags/versions to JS/TS.
+- [x] Define Rust as canonical protocol source and export tags/versions to JS/TS.
   - Tests: AC-1.1
   - Perceptual: None
   - Note: Rust-side work (export tooling) is in scope; JS/TS consumers are in separate repositories.
+  - Implemented: `exports.rs` defines `ProtocolExports` struct with all protocol constants; `export_protocol.rs` CLI outputs JSON or TypeScript; integration tests in `tests/export_protocol_cli.rs` verify binary runs and produces valid output; 8 integration tests cover JSON, compact JSON, TypeScript, file output, determinism, and constant parity with crate.
 - [x] Replace hand-maintained codec logic in `@nullspace/protocol` with generated or WASM-backed bindings.
   - Tests: AC-1.2, AC-3.1, AC-3.2
   - Perceptual: None
