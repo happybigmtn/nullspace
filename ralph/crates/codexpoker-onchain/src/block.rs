@@ -744,4 +744,263 @@ mod tests {
         assert_ne!(domain::BLOCK_HEADER, domain::RECEIPT);
         assert_ne!(domain::BLOCK_BODY, domain::RECEIPT);
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Round-Trip Serialization Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_block_header_json_roundtrip() {
+        let header = BlockHeader::new(
+            test_version(),
+            42,
+            [0xAA; 32],
+            [0xBB; 32],
+            [0xCC; 32],
+            1700000000000,
+            [0xDD; 32],
+        );
+
+        let json = serde_json::to_string(&header).expect("serialize");
+        let decoded: BlockHeader = serde_json::from_str(&json).expect("deserialize");
+
+        assert_eq!(header, decoded, "BlockHeader must roundtrip through JSON");
+    }
+
+    #[test]
+    fn test_block_header_genesis_json_roundtrip() {
+        let header = BlockHeader::genesis(
+            test_version(),
+            [1u8; 32],
+            [2u8; 32],
+            1700000000000,
+            [3u8; 32],
+        );
+
+        let json = serde_json::to_string(&header).expect("serialize");
+        let decoded: BlockHeader = serde_json::from_str(&json).expect("deserialize");
+
+        assert_eq!(header, decoded, "genesis BlockHeader must roundtrip through JSON");
+    }
+
+    #[test]
+    fn test_block_body_json_roundtrip() {
+        // Test empty body
+        let empty_body = BlockBody::empty();
+        let json = serde_json::to_string(&empty_body).expect("serialize empty");
+        let decoded: BlockBody = serde_json::from_str(&json).expect("deserialize empty");
+        assert_eq!(empty_body, decoded, "empty BlockBody must roundtrip through JSON");
+    }
+
+    #[test]
+    fn test_receipt_success_json_roundtrip() {
+        let receipt = Receipt::success([0xAA; 32], [0xBB; 32]);
+
+        let json = serde_json::to_string(&receipt).expect("serialize");
+        let decoded: Receipt = serde_json::from_str(&json).expect("deserialize");
+
+        assert_eq!(receipt, decoded, "success Receipt must roundtrip through JSON");
+    }
+
+    #[test]
+    fn test_receipt_failure_json_roundtrip() {
+        let receipt = Receipt::failure([0xAA; 32], [0xBB; 32], "validation failed: invalid action");
+
+        let json = serde_json::to_string(&receipt).expect("serialize");
+        let decoded: Receipt = serde_json::from_str(&json).expect("deserialize");
+
+        assert_eq!(receipt, decoded, "failure Receipt must roundtrip through JSON");
+    }
+
+    #[test]
+    fn test_block_json_roundtrip() {
+        let header = BlockHeader::genesis(
+            test_version(),
+            [1u8; 32],
+            [2u8; 32],
+            1700000000000,
+            [3u8; 32],
+        );
+        let body = BlockBody::empty();
+        let block = Block::new(header, body);
+
+        let json = serde_json::to_string(&block).expect("serialize");
+        let decoded: Block = serde_json::from_str(&json).expect("deserialize");
+
+        assert_eq!(block, decoded, "Block must roundtrip through JSON");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Hash Stability Tests
+    // ─────────────────────────────────────────────────────────────────────────
+    //
+    // These tests verify that hashes remain stable across encode/decode cycles.
+    // This is critical for consensus: all validators must compute identical
+    // hashes for equivalent data structures.
+
+    #[test]
+    fn test_block_header_hash_stable_after_roundtrip() {
+        let header = BlockHeader::new(
+            test_version(),
+            100,
+            [0xAA; 32],
+            [0xBB; 32],
+            [0xCC; 32],
+            1700000000000,
+            [0xDD; 32],
+        );
+
+        let hash_before = header.block_hash();
+
+        // Roundtrip through JSON
+        let json = serde_json::to_string(&header).expect("serialize");
+        let decoded: BlockHeader = serde_json::from_str(&json).expect("deserialize");
+
+        let hash_after = decoded.block_hash();
+
+        assert_eq!(
+            hash_before, hash_after,
+            "BlockHeader hash must be stable after JSON roundtrip"
+        );
+    }
+
+    #[test]
+    fn test_block_body_hash_stable_after_roundtrip() {
+        let body = BlockBody::empty();
+
+        let hash_before = body.body_hash();
+
+        // Roundtrip through JSON
+        let json = serde_json::to_string(&body).expect("serialize");
+        let decoded: BlockBody = serde_json::from_str(&json).expect("deserialize");
+
+        let hash_after = decoded.body_hash();
+
+        assert_eq!(
+            hash_before, hash_after,
+            "BlockBody hash must be stable after JSON roundtrip"
+        );
+    }
+
+    #[test]
+    fn test_receipt_hash_stable_after_roundtrip() {
+        let receipt = Receipt::failure([0xAA; 32], [0xBB; 32], "test error message");
+
+        let hash_before = receipt.receipt_hash();
+
+        // Roundtrip through JSON
+        let json = serde_json::to_string(&receipt).expect("serialize");
+        let decoded: Receipt = serde_json::from_str(&json).expect("deserialize");
+
+        let hash_after = decoded.receipt_hash();
+
+        assert_eq!(
+            hash_before, hash_after,
+            "Receipt hash must be stable after JSON roundtrip"
+        );
+    }
+
+    #[test]
+    fn test_receipts_root_stable_after_roundtrip() {
+        let receipts = vec![
+            Receipt::success([1u8; 32], [2u8; 32]),
+            Receipt::failure([3u8; 32], [4u8; 32], "error"),
+            Receipt::success([5u8; 32], [6u8; 32]),
+        ];
+
+        let root_before = compute_receipts_root(&receipts);
+
+        // Roundtrip each receipt through JSON
+        let roundtripped: Vec<Receipt> = receipts
+            .iter()
+            .map(|r| {
+                let json = serde_json::to_string(r).expect("serialize");
+                serde_json::from_str(&json).expect("deserialize")
+            })
+            .collect();
+
+        let root_after = compute_receipts_root(&roundtripped);
+
+        assert_eq!(
+            root_before, root_after,
+            "receipts root must be stable after JSON roundtrip of all receipts"
+        );
+    }
+
+    #[test]
+    fn test_block_hash_stable_after_roundtrip() {
+        let header = BlockHeader::genesis(
+            test_version(),
+            [0x11; 32],
+            [0x22; 32],
+            1700000000000,
+            [0x33; 32],
+        );
+        let body = BlockBody::empty();
+        let block = Block::new(header, body);
+
+        let hash_before = block.block_hash();
+
+        // Roundtrip through JSON
+        let json = serde_json::to_string(&block).expect("serialize");
+        let decoded: Block = serde_json::from_str(&json).expect("deserialize");
+
+        let hash_after = decoded.block_hash();
+
+        assert_eq!(
+            hash_before, hash_after,
+            "Block hash must be stable after JSON roundtrip"
+        );
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Preimage Determinism Tests
+    // ─────────────────────────────────────────────────────────────────────────
+    //
+    // These tests verify that preimage() produces identical bytes for
+    // equivalent structures, which is required for deterministic hashing.
+
+    #[test]
+    fn test_block_header_preimage_deterministic_after_roundtrip() {
+        let header = BlockHeader::new(
+            test_version(),
+            50,
+            [0xAA; 32],
+            [0xBB; 32],
+            [0xCC; 32],
+            1700000000000,
+            [0xDD; 32],
+        );
+
+        let preimage_before = header.preimage();
+
+        // Roundtrip through JSON
+        let json = serde_json::to_string(&header).expect("serialize");
+        let decoded: BlockHeader = serde_json::from_str(&json).expect("deserialize");
+
+        let preimage_after = decoded.preimage();
+
+        assert_eq!(
+            preimage_before, preimage_after,
+            "BlockHeader preimage must be identical after JSON roundtrip"
+        );
+    }
+
+    #[test]
+    fn test_receipt_preimage_deterministic_after_roundtrip() {
+        let receipt = Receipt::failure([0xAA; 32], [0xBB; 32], "determinism test");
+
+        let preimage_before = receipt.preimage();
+
+        // Roundtrip through JSON
+        let json = serde_json::to_string(&receipt).expect("serialize");
+        let decoded: Receipt = serde_json::from_str(&json).expect("deserialize");
+
+        let preimage_after = decoded.preimage();
+
+        assert_eq!(
+            preimage_before, preimage_after,
+            "Receipt preimage must be identical after JSON roundtrip"
+        );
+    }
 }

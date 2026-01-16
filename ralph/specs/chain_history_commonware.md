@@ -122,6 +122,6 @@ The block header maps to Commonware's consensus digest:
 - [x] Block header struct with receipts root field
 - [x] Block body struct with payloads
 - [x] Receipt struct with post-state root
-- [ ] Deterministic preimage/hash methods
-- [ ] Round-trip serialization tests
-- [ ] Hash stability tests
+- [x] Deterministic preimage/hash methods
+- [x] Round-trip serialization tests
+- [x] Hash stability tests
