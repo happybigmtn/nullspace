@@ -25,8 +25,8 @@
 //! - Have reveals for a different commitment
 
 use protocol_messages::{
-    DealCommitment, DealCommitmentAck, ProtocolVersion, RevealPhase, RevealShare, ShuffleContext,
-    ShuffleContextMismatch, TimelockReveal, CURRENT_PROTOCOL_VERSION,
+    DealCommitment, DealCommitmentAck, ProtocolVersion, ProtocolVersionError, RevealPhase,
+    RevealShare, ShuffleContext, ShuffleContextMismatch, TimelockReveal, CURRENT_PROTOCOL_VERSION,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -68,7 +68,21 @@ pub const REVEAL_TTL: u64 = 30_000; // 30 seconds in milliseconds
 /// Errors that can occur when validating consensus payloads.
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum PayloadError {
-    /// Protocol version mismatch.
+    /// Protocol version is below the minimum supported version.
+    ///
+    /// The client should upgrade to a newer protocol version.
+    /// This satisfies AC-2.1: invalid version headers return a clear error code.
+    #[error("protocol version {got} is below minimum supported version {minimum}")]
+    VersionBelowMinimum { got: u8, minimum: u8 },
+
+    /// Protocol version is above the maximum supported version.
+    ///
+    /// The server should be upgraded, or the client is from the future.
+    /// This satisfies AC-2.1: invalid version headers return a clear error code.
+    #[error("protocol version {got} is above maximum supported version {maximum}")]
+    VersionAboveMaximum { got: u8, maximum: u8 },
+
+    /// Legacy error for unsupported version (kept for backwards compatibility).
     #[error("unsupported protocol version: expected {expected}, got {got}")]
     UnsupportedVersion { expected: u8, got: u8 },
 
@@ -430,7 +444,45 @@ impl ConsensusPayload {
     }
 
     /// Validate that the payload uses a supported protocol version.
+    ///
+    /// # Protocol Compatibility (AC-3.1, AC-4.1)
+    ///
+    /// This method enforces version range validation:
+    /// - Versions below `MIN_SUPPORTED_PROTOCOL_VERSION` are rejected (AC-3.1)
+    /// - Versions above `MAX_SUPPORTED_PROTOCOL_VERSION` are rejected
+    /// - Both v1 and v2 are accepted during migration (AC-4.1)
+    ///
+    /// The explicit error variants (`VersionBelowMinimum`, `VersionAboveMaximum`)
+    /// provide clear error codes for client diagnostics (AC-2.1).
     pub fn validate_version(&self) -> Result<(), PayloadError> {
+        let v = self.version();
+        // Use range-based validation for dual-decode migration support (AC-4.1)
+        match v.validate() {
+            Ok(()) => Ok(()),
+            Err(ProtocolVersionError::BelowMinimum { version, minimum }) => {
+                Err(PayloadError::VersionBelowMinimum {
+                    got: version,
+                    minimum,
+                })
+            }
+            Err(ProtocolVersionError::AboveMaximum { version, maximum }) => {
+                Err(PayloadError::VersionAboveMaximum {
+                    got: version,
+                    maximum,
+                })
+            }
+        }
+    }
+
+    /// Validate that the payload uses a supported protocol version (legacy).
+    ///
+    /// This is the original strict validation that only accepts `CURRENT_PROTOCOL_VERSION`.
+    /// Use `validate_version()` for range-based validation during migration.
+    #[deprecated(
+        since = "0.2.0",
+        note = "use validate_version() for range-based validation"
+    )]
+    pub fn validate_version_strict(&self) -> Result<(), PayloadError> {
         let v = self.version();
         if v.0 != CURRENT_PROTOCOL_VERSION {
             return Err(PayloadError::UnsupportedVersion {
@@ -1627,7 +1679,9 @@ pub mod action_codes {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use protocol_messages::ScopeBinding;
+    use protocol_messages::{
+        ScopeBinding, MIN_SUPPORTED_PROTOCOL_VERSION, MAX_SUPPORTED_PROTOCOL_VERSION,
+    };
 
     fn test_scope() -> ScopeBinding {
         ScopeBinding::new([1u8; 32], 42, vec![0, 1, 2, 3], 52)
@@ -1752,19 +1806,65 @@ mod tests {
     }
 
     #[test]
-    fn test_version_validation_mismatch() {
+    fn test_version_validation_above_maximum() {
+        // AC-2.1: Invalid version headers return a clear error code
         let mut dc = test_deal_commitment();
         dc.version = ProtocolVersion::new(99);
         let payload = ConsensusPayload::DealCommitment(dc);
 
         let result = payload.validate_version();
         assert!(result.is_err());
-        if let Err(PayloadError::UnsupportedVersion { expected, got }) = result {
-            assert_eq!(expected, CURRENT_PROTOCOL_VERSION);
+        if let Err(PayloadError::VersionAboveMaximum { got, maximum }) = result {
             assert_eq!(got, 99);
+            assert_eq!(maximum, MAX_SUPPORTED_PROTOCOL_VERSION);
         } else {
-            panic!("expected UnsupportedVersion error");
+            panic!("expected VersionAboveMaximum error, got {:?}", result);
         }
+    }
+
+    #[test]
+    fn test_version_validation_below_minimum() {
+        // AC-3.1: Gateway rejects clients below minimum supported version
+        let mut dc = test_deal_commitment();
+        dc.version = ProtocolVersion::new(0);
+        let payload = ConsensusPayload::DealCommitment(dc);
+
+        let result = payload.validate_version();
+        assert!(result.is_err());
+        if let Err(PayloadError::VersionBelowMinimum { got, minimum }) = result {
+            assert_eq!(got, 0);
+            assert_eq!(minimum, MIN_SUPPORTED_PROTOCOL_VERSION);
+        } else {
+            panic!("expected VersionBelowMinimum error, got {:?}", result);
+        }
+    }
+
+    #[test]
+    fn test_version_validation_v2_accepted_during_migration() {
+        // AC-4.1: v1 and v2 are both accepted during migration
+        let mut dc = test_deal_commitment();
+        dc.version = ProtocolVersion::new(2);
+        let payload = ConsensusPayload::DealCommitment(dc);
+
+        // v2 should be accepted (within supported range)
+        assert!(
+            payload.validate_version().is_ok(),
+            "v2 should be accepted during migration (AC-4.1)"
+        );
+    }
+
+    #[test]
+    fn test_version_validation_v1_accepted() {
+        // AC-4.1: v1 and v2 are both accepted during migration
+        let mut dc = test_deal_commitment();
+        dc.version = ProtocolVersion::new(1);
+        let payload = ConsensusPayload::DealCommitment(dc);
+
+        // v1 should be accepted
+        assert!(
+            payload.validate_version().is_ok(),
+            "v1 should be accepted (AC-4.1)"
+        );
     }
 
     #[test]
@@ -1982,22 +2082,24 @@ mod tests {
     // ─────────────────────────────────────────────────────────────────────────
 
     #[test]
-    fn test_validator_rejects_unsupported_commitment_version() {
+    fn test_validator_rejects_version_above_maximum() {
+        // AC-2.1: Invalid version headers return a clear error code
         let mut validator = ActionLogValidator::new();
         let mut dc = test_deal_commitment();
-        dc.version = ProtocolVersion::new(99);
+        dc.version = ProtocolVersion::new(99); // above MAX_SUPPORTED_PROTOCOL_VERSION
         let payload = ConsensusPayload::DealCommitment(dc);
 
         let result = validator.validate(&payload);
         assert!(matches!(
             result,
-            Err(PayloadError::UnsupportedVersion { expected, got })
-                if expected == CURRENT_PROTOCOL_VERSION && got == 99
+            Err(PayloadError::VersionAboveMaximum { got: 99, maximum })
+                if maximum == MAX_SUPPORTED_PROTOCOL_VERSION
         ));
     }
 
     #[test]
-    fn test_validator_rejects_unsupported_ack_version() {
+    fn test_validator_rejects_version_below_minimum() {
+        // AC-3.1: Gateway rejects clients below minimum supported version
         let mut validator = ActionLogValidator::new();
         let dc = test_deal_commitment();
         let commitment_hash = dc.commitment_hash();
@@ -2006,7 +2108,7 @@ mod tests {
             .unwrap();
 
         let ack = DealCommitmentAck {
-            version: ProtocolVersion::new(0), // version 0 is unsupported
+            version: ProtocolVersion::new(0), // below MIN_SUPPORTED_PROTOCOL_VERSION
             commitment_hash,
             seat_index: 0,
             player_signature: vec![],
@@ -2016,13 +2118,13 @@ mod tests {
         let result = validator.validate(&payload);
         assert!(matches!(
             result,
-            Err(PayloadError::UnsupportedVersion { expected, got })
-                if expected == CURRENT_PROTOCOL_VERSION && got == 0
+            Err(PayloadError::VersionBelowMinimum { got: 0, minimum })
+                if minimum == MIN_SUPPORTED_PROTOCOL_VERSION
         ));
     }
 
     #[test]
-    fn test_validator_rejects_unsupported_action_version() {
+    fn test_validator_rejects_action_version_above_maximum() {
         let mut validator = ActionLogValidator::new();
         let dc = test_deal_commitment();
         let commitment_hash = dc.commitment_hash();
@@ -2044,7 +2146,7 @@ mod tests {
         }
 
         let action = GameActionMessage {
-            version: ProtocolVersion::new(255), // version 255 is unsupported
+            version: ProtocolVersion::new(255), // above MAX_SUPPORTED_PROTOCOL_VERSION
             deal_commitment_hash: commitment_hash,
             seat_index: 0,
             action_type: action_codes::BET,
@@ -2057,13 +2159,14 @@ mod tests {
         let result = validator.validate(&payload);
         assert!(matches!(
             result,
-            Err(PayloadError::UnsupportedVersion { expected, got })
-                if expected == CURRENT_PROTOCOL_VERSION && got == 255
+            Err(PayloadError::VersionAboveMaximum { got: 255, maximum })
+                if maximum == MAX_SUPPORTED_PROTOCOL_VERSION
         ));
     }
 
     #[test]
-    fn test_validator_rejects_unsupported_reveal_version() {
+    fn test_validator_accepts_v2_reveal_during_migration() {
+        // AC-4.1: v1 and v2 are both accepted during migration
         let mut validator = ActionLogValidator::new();
         let dc = test_deal_commitment();
         let commitment_hash = dc.commitment_hash();
@@ -2085,7 +2188,7 @@ mod tests {
         }
 
         let reveal = RevealShare {
-            version: ProtocolVersion::new(2), // version 2 is unsupported
+            version: ProtocolVersion::new(2), // v2 is now supported during migration
             commitment_hash,
             phase: protocol_messages::RevealPhase::Preflop,
             card_indices: vec![0, 1],
@@ -2095,16 +2198,22 @@ mod tests {
         };
         let payload = ConsensusPayload::RevealShare(reveal);
 
+        // v2 should now be accepted (version validation passes)
         let result = validator.validate(&payload);
-        assert!(matches!(
-            result,
-            Err(PayloadError::UnsupportedVersion { expected, got })
-                if expected == CURRENT_PROTOCOL_VERSION && got == 2
-        ));
+        // The reveal will fail for other reasons (reveal-only phase check),
+        // but NOT due to version validation
+        assert!(
+            !matches!(result, Err(PayloadError::VersionAboveMaximum { .. })),
+            "v2 should pass version validation (AC-4.1)"
+        );
+        assert!(
+            !matches!(result, Err(PayloadError::VersionBelowMinimum { .. })),
+            "v2 should pass version validation (AC-4.1)"
+        );
     }
 
     #[test]
-    fn test_validator_rejects_unsupported_timelock_version() {
+    fn test_validator_rejects_timelock_version_above_maximum() {
         let mut validator = ActionLogValidator::new();
         let dc = test_deal_commitment();
         let commitment_hash = dc.commitment_hash();
@@ -2126,7 +2235,7 @@ mod tests {
         }
 
         let reveal = TimelockReveal {
-            version: ProtocolVersion::new(42), // version 42 is unsupported
+            version: ProtocolVersion::new(42), // above MAX_SUPPORTED_PROTOCOL_VERSION
             commitment_hash,
             phase: protocol_messages::RevealPhase::Preflop,
             card_indices: vec![0],
@@ -2139,24 +2248,36 @@ mod tests {
         let result = validator.validate(&payload);
         assert!(matches!(
             result,
-            Err(PayloadError::UnsupportedVersion { expected, got })
-                if expected == CURRENT_PROTOCOL_VERSION && got == 42
+            Err(PayloadError::VersionAboveMaximum { got: 42, maximum })
+                if maximum == MAX_SUPPORTED_PROTOCOL_VERSION
         ));
     }
 
     #[test]
-    fn test_version_error_has_correct_format() {
-        // Verify the error message is clear (AC-2.1 requires "clear error code")
-        let err = PayloadError::UnsupportedVersion {
-            expected: 1,
-            got: 99,
+    fn test_version_error_messages_are_clear() {
+        // AC-2.1: Verify the error messages are clear
+        let below_err = PayloadError::VersionBelowMinimum {
+            got: 0,
+            minimum: 1,
         };
-        let msg = err.to_string();
-        assert!(msg.contains("99"), "error must include the received version");
-        assert!(msg.contains("1"), "error must include the expected version");
+        let below_msg = below_err.to_string();
+        assert!(below_msg.contains("0"), "error must include the received version");
+        assert!(below_msg.contains("1"), "error must include the minimum version");
         assert!(
-            msg.to_lowercase().contains("version"),
-            "error must mention version"
+            below_msg.to_lowercase().contains("below"),
+            "error must indicate version is below minimum"
+        );
+
+        let above_err = PayloadError::VersionAboveMaximum {
+            got: 99,
+            maximum: 2,
+        };
+        let above_msg = above_err.to_string();
+        assert!(above_msg.contains("99"), "error must include the received version");
+        assert!(above_msg.contains("2"), "error must include the maximum version");
+        assert!(
+            above_msg.to_lowercase().contains("above"),
+            "error must indicate version is above maximum"
         );
     }
 

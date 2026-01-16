@@ -8,7 +8,24 @@
 use serde::{Deserialize, Serialize};
 
 /// Current protocol version for all messages.
+///
+/// This is the version that new messages should be created with.
+/// During migration windows, both `MIN_SUPPORTED_PROTOCOL_VERSION` and
+/// versions up to `MAX_SUPPORTED_PROTOCOL_VERSION` are accepted.
 pub const CURRENT_PROTOCOL_VERSION: u8 = 1;
+
+/// Minimum supported protocol version (inclusive).
+///
+/// Messages with versions below this are rejected with an explicit error.
+/// This allows graceful deprecation of old protocol versions.
+pub const MIN_SUPPORTED_PROTOCOL_VERSION: u8 = 1;
+
+/// Maximum supported protocol version (inclusive).
+///
+/// Messages with versions above this are rejected with an explicit error.
+/// During v1→v2 migration, this is set to 2 to accept both v1 and v2.
+/// After migration completes, MIN can be raised to 2.
+pub const MAX_SUPPORTED_PROTOCOL_VERSION: u8 = 2;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Size Bounds
@@ -63,6 +80,51 @@ impl Default for ProtocolVersion {
     }
 }
 
+/// Error type for protocol version validation failures.
+///
+/// This error provides explicit, actionable information about why a
+/// protocol version was rejected, satisfying AC-2.1 (clear error codes).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProtocolVersionError {
+    /// Version is below the minimum supported version.
+    ///
+    /// The client should upgrade to a newer protocol version.
+    BelowMinimum {
+        version: u8,
+        minimum: u8,
+    },
+    /// Version is above the maximum supported version.
+    ///
+    /// The server should be upgraded, or the client is from the future.
+    AboveMaximum {
+        version: u8,
+        maximum: u8,
+    },
+}
+
+impl std::fmt::Display for ProtocolVersionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::BelowMinimum { version, minimum } => {
+                write!(
+                    f,
+                    "protocol version {} is below minimum supported version {}",
+                    version, minimum
+                )
+            }
+            Self::AboveMaximum { version, maximum } => {
+                write!(
+                    f,
+                    "protocol version {} is above maximum supported version {}",
+                    version, maximum
+                )
+            }
+        }
+    }
+}
+
+impl std::error::Error for ProtocolVersionError {}
+
 impl ProtocolVersion {
     pub const fn new(version: u8) -> Self {
         Self(version)
@@ -70,6 +132,89 @@ impl ProtocolVersion {
 
     pub const fn current() -> Self {
         Self(CURRENT_PROTOCOL_VERSION)
+    }
+
+    /// Returns the minimum supported protocol version.
+    pub const fn minimum() -> Self {
+        Self(MIN_SUPPORTED_PROTOCOL_VERSION)
+    }
+
+    /// Returns the maximum supported protocol version.
+    pub const fn maximum() -> Self {
+        Self(MAX_SUPPORTED_PROTOCOL_VERSION)
+    }
+
+    /// Check if this version is within the supported range.
+    ///
+    /// Returns `Ok(())` if the version is supported, or an explicit error
+    /// indicating whether it's too old or too new.
+    ///
+    /// # Protocol Compatibility (AC-4.1)
+    ///
+    /// During migration windows, multiple versions are accepted:
+    /// - v1 payloads continue to work until MIN is raised
+    /// - v2 payloads are accepted once MAX includes v2
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use protocol_messages::{ProtocolVersion, ProtocolVersionError};
+    ///
+    /// // Version 1 is currently supported
+    /// assert!(ProtocolVersion::new(1).validate().is_ok());
+    ///
+    /// // Version 2 is also supported (for migration)
+    /// assert!(ProtocolVersion::new(2).validate().is_ok());
+    ///
+    /// // Version 0 is below minimum
+    /// assert!(matches!(
+    ///     ProtocolVersion::new(0).validate(),
+    ///     Err(ProtocolVersionError::BelowMinimum { version: 0, minimum: 1 })
+    /// ));
+    ///
+    /// // Version 99 is above maximum
+    /// assert!(matches!(
+    ///     ProtocolVersion::new(99).validate(),
+    ///     Err(ProtocolVersionError::AboveMaximum { version: 99, maximum: 2 })
+    /// ));
+    /// ```
+    pub fn validate(&self) -> Result<(), ProtocolVersionError> {
+        if self.0 < MIN_SUPPORTED_PROTOCOL_VERSION {
+            return Err(ProtocolVersionError::BelowMinimum {
+                version: self.0,
+                minimum: MIN_SUPPORTED_PROTOCOL_VERSION,
+            });
+        }
+        if self.0 > MAX_SUPPORTED_PROTOCOL_VERSION {
+            return Err(ProtocolVersionError::AboveMaximum {
+                version: self.0,
+                maximum: MAX_SUPPORTED_PROTOCOL_VERSION,
+            });
+        }
+        Ok(())
+    }
+
+    /// Check if this version is the current (latest) version.
+    ///
+    /// This is useful for deciding whether to apply v1-specific handling
+    /// (e.g., version header stripping) vs v2 passthrough.
+    pub const fn is_current(&self) -> bool {
+        self.0 == CURRENT_PROTOCOL_VERSION
+    }
+
+    /// Check if this version requires legacy (v1) handling.
+    ///
+    /// V1 payloads may need special treatment like version header stripping.
+    /// V2+ payloads are passed through without modification.
+    pub const fn is_legacy(&self) -> bool {
+        self.0 == 1
+    }
+
+    /// Check if this version supports compact encoding (v2+).
+    ///
+    /// V2 introduces bitwise compact encoding for move payloads.
+    pub const fn supports_compact_encoding(&self) -> bool {
+        self.0 >= 2
     }
 }
 
@@ -1280,6 +1425,114 @@ mod tests {
         assert!(
             commitment.verify_context(&expected).is_ok(),
             "context verification must succeed regardless of other commitment fields"
+        );
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // ProtocolVersion::validate Tests (AC-2.1, AC-3.1, AC-4.1)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_protocol_version_validate_current() {
+        // Current version should always be valid
+        let v = ProtocolVersion::current();
+        assert!(v.validate().is_ok(), "current version must be valid");
+    }
+
+    #[test]
+    fn test_protocol_version_validate_v1() {
+        // AC-4.1: v1 should be accepted
+        let v = ProtocolVersion::new(1);
+        assert!(v.validate().is_ok(), "v1 must be valid (AC-4.1)");
+    }
+
+    #[test]
+    fn test_protocol_version_validate_v2() {
+        // AC-4.1: v2 should be accepted during migration
+        let v = ProtocolVersion::new(2);
+        assert!(v.validate().is_ok(), "v2 must be valid during migration (AC-4.1)");
+    }
+
+    #[test]
+    fn test_protocol_version_validate_below_minimum() {
+        // AC-3.1: Versions below minimum are rejected
+        let v = ProtocolVersion::new(0);
+        let result = v.validate();
+        assert!(
+            matches!(
+                result,
+                Err(ProtocolVersionError::BelowMinimum { version: 0, minimum: 1 })
+            ),
+            "v0 must be rejected as below minimum (AC-3.1)"
+        );
+    }
+
+    #[test]
+    fn test_protocol_version_validate_above_maximum() {
+        // AC-2.1: Invalid version headers return clear error codes
+        let v = ProtocolVersion::new(99);
+        let result = v.validate();
+        assert!(
+            matches!(
+                result,
+                Err(ProtocolVersionError::AboveMaximum { version: 99, maximum: 2 })
+            ),
+            "v99 must be rejected as above maximum (AC-2.1)"
+        );
+    }
+
+    #[test]
+    fn test_protocol_version_error_display() {
+        // AC-2.1: Error messages must be clear
+        let below_err = ProtocolVersionError::BelowMinimum {
+            version: 0,
+            minimum: 1,
+        };
+        let below_msg = below_err.to_string();
+        assert!(below_msg.contains("0"), "error must include received version");
+        assert!(below_msg.contains("1"), "error must include minimum version");
+        assert!(below_msg.to_lowercase().contains("below"), "error must indicate below");
+
+        let above_err = ProtocolVersionError::AboveMaximum {
+            version: 99,
+            maximum: 2,
+        };
+        let above_msg = above_err.to_string();
+        assert!(above_msg.contains("99"), "error must include received version");
+        assert!(above_msg.contains("2"), "error must include maximum version");
+        assert!(above_msg.to_lowercase().contains("above"), "error must indicate above");
+    }
+
+    #[test]
+    fn test_protocol_version_helper_methods() {
+        // Test is_current()
+        assert!(ProtocolVersion::new(CURRENT_PROTOCOL_VERSION).is_current());
+        assert!(!ProtocolVersion::new(99).is_current());
+
+        // Test is_legacy()
+        assert!(ProtocolVersion::new(1).is_legacy());
+        assert!(!ProtocolVersion::new(2).is_legacy());
+
+        // Test supports_compact_encoding()
+        assert!(!ProtocolVersion::new(1).supports_compact_encoding());
+        assert!(ProtocolVersion::new(2).supports_compact_encoding());
+        assert!(ProtocolVersion::new(3).supports_compact_encoding());
+    }
+
+    #[test]
+    fn test_protocol_version_constants() {
+        // Verify version constants make sense
+        assert!(
+            MIN_SUPPORTED_PROTOCOL_VERSION <= CURRENT_PROTOCOL_VERSION,
+            "min must be <= current"
+        );
+        assert!(
+            CURRENT_PROTOCOL_VERSION <= MAX_SUPPORTED_PROTOCOL_VERSION,
+            "current must be <= max"
+        );
+        assert!(
+            MIN_SUPPORTED_PROTOCOL_VERSION <= MAX_SUPPORTED_PROTOCOL_VERSION,
+            "min must be <= max"
         );
     }
 }

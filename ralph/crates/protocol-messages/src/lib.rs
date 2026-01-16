@@ -85,8 +85,10 @@ mod payload;
 
 pub use payload::{
     ArtifactRequest, ArtifactResponse, DealCommitment, DealCommitmentAck, ProtocolVersion,
-    RevealPhase, RevealShare, ScopeBinding, ShuffleContext, ShuffleContextMismatch, TimelockReveal,
-    CURRENT_PROTOCOL_VERSION,
+    ProtocolVersionError, RevealPhase, RevealShare, ScopeBinding, ShuffleContext,
+    ShuffleContextMismatch, TimelockReveal,
+    // Version constants for protocol compatibility
+    CURRENT_PROTOCOL_VERSION, MIN_SUPPORTED_PROTOCOL_VERSION, MAX_SUPPORTED_PROTOCOL_VERSION,
     // Size bounds for DoS protection
     MAX_SEATS, MAX_ARTIFACT_HASHES, MAX_REVEAL_CARDS, MAX_REVEAL_DATA_SIZE,
     MAX_TIMELOCK_PROOF_SIZE, MAX_SIGNATURE_SIZE, MAX_ARTIFACT_SIZE,
