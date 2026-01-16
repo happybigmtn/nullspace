@@ -101,7 +101,7 @@
 ### M7: Observability and Ops
 
 - [x] Structured audit logs for commitments, reveals, timelock usage.
-- [ ] Metrics for backfill latency, artifact misses, and state root mismatches.
+- [x] Metrics for backfill latency, artifact misses, and state root mismatches.
 - [ ] Operational docs for retention and snapshot schedules.
 
 **Exit criteria**
