@@ -181,6 +181,48 @@ pub enum PayloadError {
         phase: RevealPhase,
         remaining_ms: u64,
     },
+
+    /// TimelockReveal references an invalid timeout seat.
+    ///
+    /// The `timeout_seat` in a `TimelockReveal` must be a seat that was
+    /// present in the original deal commitment's scope. This prevents
+    /// attribution of timeouts to non-existent players.
+    #[error("timelock reveal references invalid timeout seat {seat}: not in seat order {seat_order:?}")]
+    InvalidTimelockTimeoutSeat { seat: u8, seat_order: Vec<u8> },
+
+    /// TimelockReveal has card indices out of bounds.
+    ///
+    /// All card indices in a `TimelockReveal` must be less than the deck
+    /// length specified in the deal commitment's scope. This prevents
+    /// attempts to reveal cards that don't exist.
+    #[error("timelock reveal has card index {index} out of bounds (deck length: {deck_length})")]
+    TimelockCardIndexOutOfBounds { index: u8, deck_length: u8 },
+
+    /// TimelockReveal has mismatched card indices and revealed values.
+    ///
+    /// The number of `card_indices` must match the number of `revealed_values`.
+    /// Each card index corresponds to exactly one revealed value.
+    #[error("timelock reveal has {indices_count} card indices but {values_count} revealed values")]
+    TimelockCardValueMismatch {
+        indices_count: usize,
+        values_count: usize,
+    },
+
+    /// TimelockReveal is missing a proof when revealing values.
+    ///
+    /// When a `TimelockReveal` contains `revealed_values`, it must also
+    /// contain a non-empty `timelock_proof` that can be used to verify
+    /// the revealed values are correct.
+    #[error("timelock reveal is missing proof for {values_count} revealed values")]
+    TimelockMissingProof { values_count: usize },
+
+    /// TimelockReveal proof failed verification.
+    ///
+    /// The `timelock_proof` did not cryptographically verify against the
+    /// `revealed_values` and `card_indices`. This indicates either a
+    /// malformed proof or an attempt to reveal incorrect values.
+    #[error("timelock proof verification failed: {reason}")]
+    TimelockProofInvalid { reason: String },
 }
 
 /// The consensus payload schema wrapping all onchain message types.
@@ -471,6 +513,11 @@ pub struct ActionLogValidator {
     /// for hole card reveals during showdown. Used to identify which seat
     /// timed out for penalty purposes.
     reveal_expected_from_seat: Option<u8>,
+    /// Deck length from the deal commitment's scope.
+    ///
+    /// This is set when the `DealCommitment` is processed and used to validate
+    /// that card indices in reveals are within bounds.
+    deck_length: Option<u8>,
 }
 
 impl Default for ActionLogValidator {
@@ -496,6 +543,7 @@ impl ActionLogValidator {
             awaiting_reveal_phase: None,
             reveal_phase_entered_at: None,
             reveal_expected_from_seat: None,
+            deck_length: None,
         }
     }
 
@@ -534,6 +582,7 @@ impl ActionLogValidator {
             awaiting_reveal_phase: None,
             reveal_phase_entered_at: None,
             reveal_expected_from_seat: None,
+            deck_length: None,
         }
     }
 
@@ -592,6 +641,13 @@ impl ActionLogValidator {
     /// Returns true if shuffle context verification is enabled.
     pub fn has_expected_context(&self) -> bool {
         self.expected_context.is_some()
+    }
+
+    /// Returns the deck length from the deal commitment's scope.
+    ///
+    /// This is `None` until a `DealCommitment` has been processed.
+    pub fn deck_length(&self) -> Option<u8> {
+        self.deck_length
     }
 
     /// Returns the list of reveal phases that have been completed.
@@ -700,6 +756,70 @@ impl ActionLogValidator {
                 }
             }
         }
+        Ok(())
+    }
+
+    /// Validate the scope binding and structural integrity of a timelock reveal.
+    ///
+    /// This validates that:
+    /// 1. The `timeout_seat` is a valid seat from the commitment's scope
+    /// 2. All `card_indices` are within the deck length bounds
+    /// 3. The number of `card_indices` matches the number of `revealed_values`
+    /// 4. If `revealed_values` is non-empty, `timelock_proof` must also be non-empty
+    ///
+    /// This method does NOT verify the cryptographic validity of the timelock proof.
+    /// Cryptographic verification is delegated to a separate proof verifier that
+    /// can be plugged in based on the timelock scheme in use.
+    ///
+    /// # Arguments
+    ///
+    /// * `tr` - The timelock reveal to validate
+    ///
+    /// # Errors
+    ///
+    /// - [`PayloadError::InvalidTimelockTimeoutSeat`] if `timeout_seat` is not in scope
+    /// - [`PayloadError::TimelockCardIndexOutOfBounds`] if any card index >= deck_length
+    /// - [`PayloadError::TimelockCardValueMismatch`] if card_indices.len() != revealed_values.len()
+    /// - [`PayloadError::TimelockMissingProof`] if revealed_values is non-empty but proof is empty
+    pub fn validate_timelock_scope_and_proof(
+        &self,
+        tr: &TimelockReveal,
+    ) -> Result<(), PayloadError> {
+        // Validate timeout_seat is in the commitment's seat order
+        if !self.required_seats.contains(&tr.timeout_seat) {
+            return Err(PayloadError::InvalidTimelockTimeoutSeat {
+                seat: tr.timeout_seat,
+                seat_order: self.required_seats.clone(),
+            });
+        }
+
+        // Validate card indices are within deck bounds
+        if let Some(deck_len) = self.deck_length {
+            for &index in &tr.card_indices {
+                if index >= deck_len {
+                    return Err(PayloadError::TimelockCardIndexOutOfBounds {
+                        index,
+                        deck_length: deck_len,
+                    });
+                }
+            }
+        }
+
+        // Validate card_indices and revealed_values have matching counts
+        if tr.card_indices.len() != tr.revealed_values.len() {
+            return Err(PayloadError::TimelockCardValueMismatch {
+                indices_count: tr.card_indices.len(),
+                values_count: tr.revealed_values.len(),
+            });
+        }
+
+        // Validate that proof is present when revealing values
+        if !tr.revealed_values.is_empty() && tr.timelock_proof.is_empty() {
+            return Err(PayloadError::TimelockMissingProof {
+                values_count: tr.revealed_values.len(),
+            });
+        }
+
         Ok(())
     }
 
@@ -910,6 +1030,7 @@ impl ActionLogValidator {
 
                     self.commitment_hash = Some(dc.commitment_hash());
                     self.required_seats = dc.scope.seat_order.clone();
+                    self.deck_length = Some(dc.scope.deck_length);
                     self.payload_count += 1;
                     return Ok(());
                 }
@@ -1019,6 +1140,9 @@ impl ActionLogValidator {
 
                 // Validate reveal phase ordering
                 self.validate_reveal_phase(tr.phase)?;
+
+                // Validate scope binding and proof structure
+                self.validate_timelock_scope_and_proof(tr)?;
 
                 // Record this phase as completed
                 self.completed_phases.push(tr.phase);
@@ -3579,5 +3703,209 @@ mod tests {
         );
 
         assert!(validator.is_phase_complete(protocol_messages::RevealPhase::Flop));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Timelock Scope and Proof Validation Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_timelock_rejects_invalid_timeout_seat() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Create a timelock with timeout_seat not in the seat order (0, 1, 2, 3)
+        let mut timelock =
+            make_timelock_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        timelock.timeout_seat = 99; // Invalid seat
+
+        let result = validator.validate(&ConsensusPayload::TimelockReveal(timelock));
+        assert!(
+            matches!(
+                result,
+                Err(PayloadError::InvalidTimelockTimeoutSeat { seat: 99, .. })
+            ),
+            "timelock with invalid timeout_seat should be rejected"
+        );
+    }
+
+    #[test]
+    fn test_timelock_accepts_valid_timeout_seat() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Create a timelock with a valid timeout_seat (seat 1 is in the seat order)
+        let timelock =
+            make_timelock_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        // Default make_timelock_reveal uses timeout_seat: 1, which is valid
+
+        let result = validator.validate(&ConsensusPayload::TimelockReveal(timelock));
+        assert!(result.is_ok(), "timelock with valid timeout_seat should be accepted");
+    }
+
+    #[test]
+    fn test_timelock_rejects_card_index_out_of_bounds() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Create a timelock with card_indices out of bounds (deck_length is 52)
+        let mut timelock =
+            make_timelock_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        timelock.card_indices = vec![60]; // Out of bounds for deck_length 52
+        timelock.revealed_values = vec![vec![42]]; // Must match card_indices count
+
+        let result = validator.validate(&ConsensusPayload::TimelockReveal(timelock));
+        assert!(
+            matches!(
+                result,
+                Err(PayloadError::TimelockCardIndexOutOfBounds {
+                    index: 60,
+                    deck_length: 52
+                })
+            ),
+            "timelock with card index out of bounds should be rejected"
+        );
+    }
+
+    #[test]
+    fn test_timelock_accepts_valid_card_indices() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Create a timelock with valid card indices (0 and 51 are valid for deck_length 52)
+        let mut timelock =
+            make_timelock_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        timelock.card_indices = vec![0, 51];
+        timelock.revealed_values = vec![vec![42], vec![43]];
+
+        let result = validator.validate(&ConsensusPayload::TimelockReveal(timelock));
+        assert!(result.is_ok(), "timelock with valid card indices should be accepted");
+    }
+
+    #[test]
+    fn test_timelock_rejects_mismatched_card_indices_and_values() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Create a timelock with mismatched card_indices and revealed_values counts
+        let mut timelock =
+            make_timelock_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        timelock.card_indices = vec![0, 1, 2]; // 3 indices
+        timelock.revealed_values = vec![vec![42]]; // 1 value
+
+        let result = validator.validate(&ConsensusPayload::TimelockReveal(timelock));
+        assert!(
+            matches!(
+                result,
+                Err(PayloadError::TimelockCardValueMismatch {
+                    indices_count: 3,
+                    values_count: 1
+                })
+            ),
+            "timelock with mismatched counts should be rejected"
+        );
+    }
+
+    #[test]
+    fn test_timelock_rejects_missing_proof_when_revealing_values() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Create a timelock with revealed_values but no proof
+        let mut timelock =
+            make_timelock_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        timelock.timelock_proof = vec![]; // Empty proof
+        timelock.revealed_values = vec![vec![42]]; // Non-empty values
+
+        let result = validator.validate(&ConsensusPayload::TimelockReveal(timelock));
+        assert!(
+            matches!(
+                result,
+                Err(PayloadError::TimelockMissingProof { values_count: 1 })
+            ),
+            "timelock with missing proof should be rejected"
+        );
+    }
+
+    #[test]
+    fn test_timelock_accepts_empty_values_without_proof() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Create a timelock with empty revealed_values and empty proof (valid edge case)
+        let mut timelock =
+            make_timelock_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        timelock.card_indices = vec![];
+        timelock.timelock_proof = vec![];
+        timelock.revealed_values = vec![];
+
+        let result = validator.validate(&ConsensusPayload::TimelockReveal(timelock));
+        assert!(
+            result.is_ok(),
+            "timelock with empty values and empty proof should be accepted"
+        );
+    }
+
+    #[test]
+    fn test_timelock_error_display_invalid_seat() {
+        let err = PayloadError::InvalidTimelockTimeoutSeat {
+            seat: 99,
+            seat_order: vec![0, 1, 2],
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("invalid timeout seat"));
+        assert!(msg.contains("99"));
+    }
+
+    #[test]
+    fn test_timelock_error_display_card_out_of_bounds() {
+        let err = PayloadError::TimelockCardIndexOutOfBounds {
+            index: 60,
+            deck_length: 52,
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("out of bounds"));
+        assert!(msg.contains("60"));
+        assert!(msg.contains("52"));
+    }
+
+    #[test]
+    fn test_timelock_error_display_card_value_mismatch() {
+        let err = PayloadError::TimelockCardValueMismatch {
+            indices_count: 3,
+            values_count: 1,
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("3 card indices"));
+        assert!(msg.contains("1 revealed values"));
+    }
+
+    #[test]
+    fn test_timelock_error_display_missing_proof() {
+        let err = PayloadError::TimelockMissingProof { values_count: 5 };
+        let msg = err.to_string();
+        assert!(msg.contains("missing proof"));
+        assert!(msg.contains("5"));
+    }
+
+    #[test]
+    fn test_validate_timelock_scope_and_proof_directly() {
+        let (validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Valid timelock
+        let timelock =
+            make_timelock_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        assert!(
+            validator.validate_timelock_scope_and_proof(&timelock).is_ok(),
+            "direct validation should accept valid timelock"
+        );
+
+        // Invalid timeout_seat
+        let mut bad_seat =
+            make_timelock_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        bad_seat.timeout_seat = 99;
+        assert!(
+            validator.validate_timelock_scope_and_proof(&bad_seat).is_err(),
+            "direct validation should reject invalid timeout_seat"
+        );
+    }
+
+    #[test]
+    fn test_deck_length_getter() {
+        let (validator, _) = setup_validator_ready_for_reveals();
+        assert_eq!(validator.deck_length(), Some(52));
     }
 }
