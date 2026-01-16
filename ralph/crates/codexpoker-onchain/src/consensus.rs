@@ -592,20 +592,20 @@ impl Default for SimplexConfig {
 /// - Block height
 /// - State root (application state commitment)
 /// - Finalized blocks and their receipts
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ChainState {
     /// Current chain tip digest (header hash of latest finalized block).
     /// `Digest::ZERO` if no blocks finalized yet.
-    tip: Digest,
+    pub tip: Digest,
 
     /// Current block height (0 for genesis, increments with each block).
-    height: u64,
+    pub height: u64,
 
     /// Current state root (application state commitment).
-    state_root: [u8; 32],
+    pub state_root: [u8; 32],
 
     /// Whether genesis has been finalized.
-    has_genesis: bool,
+    pub has_genesis: bool,
 }
 
 impl ChainState {
@@ -1001,6 +1001,201 @@ impl<E: PayloadExecutor> Automaton for SimplexAutomaton<E> {
 
     fn state_root(&self) -> [u8; 32] {
         self.state.state_root
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Persistent Automaton
+// ─────────────────────────────────────────────────────────────────────────────
+
+use crate::storage::{BlockStorage, StorageError};
+
+/// A wrapper around [`SimplexAutomaton`] that persists finalized data.
+///
+/// `PersistentAutomaton` intercepts `finalize()` calls to persist blocks,
+/// finalization certificates, and receipts to the configured storage backend.
+/// On startup, use [`PersistentAutomaton::restore`] to recover from storage.
+///
+/// # Usage
+///
+/// ```ignore
+/// use codexpoker_onchain::consensus::{PersistentAutomaton, SimplexConfig};
+/// use codexpoker_onchain::storage::FileBlockStorage;
+///
+/// // Create storage backend
+/// let storage = FileBlockStorage::open("./data").unwrap();
+///
+/// // Create or restore automaton
+/// let mut automaton = PersistentAutomaton::restore_or_new(
+///     SimplexConfig::default(),
+///     storage,
+/// ).unwrap();
+///
+/// // Finalize will automatically persist
+/// automaton.finalize(block, finalization).unwrap();
+/// ```
+pub struct PersistentAutomaton<S: BlockStorage, E: PayloadExecutor = NoOpExecutor> {
+    /// The inner automaton.
+    inner: SimplexAutomaton<E>,
+    /// Storage backend for persistence.
+    storage: S,
+}
+
+impl<S: BlockStorage> PersistentAutomaton<S, NoOpExecutor> {
+    /// Create a new persistent automaton with no-op executor.
+    pub fn new(config: SimplexConfig, storage: S) -> Self {
+        Self {
+            inner: SimplexAutomaton::new(config),
+            storage,
+        }
+    }
+
+    /// Restore from storage or create a fresh automaton if storage is empty.
+    ///
+    /// This is the primary entry point for production use. It:
+    /// 1. Checks if the storage has existing data
+    /// 2. If yes, recovers chain state and creates the automaton
+    /// 3. If no, creates a fresh automaton
+    pub fn restore_or_new(config: SimplexConfig, storage: S) -> Result<Self, StorageError> {
+        Self::restore_or_new_with_executor(config, NoOpExecutor, storage)
+    }
+}
+
+impl<S: BlockStorage, E: PayloadExecutor> PersistentAutomaton<S, E> {
+    /// Create a new persistent automaton with a custom executor.
+    pub fn with_executor(config: SimplexConfig, executor: E, storage: S) -> Self {
+        Self {
+            inner: SimplexAutomaton::with_executor(config, executor),
+            storage,
+        }
+    }
+
+    /// Restore from storage or create fresh with a custom executor.
+    pub fn restore_or_new_with_executor(
+        config: SimplexConfig,
+        executor: E,
+        storage: S,
+    ) -> Result<Self, StorageError> {
+        // Check for existing chain state
+        if let Some(state) = storage.get_chain_state()? {
+            // Load blocks into memory cache
+            let mut blocks = HashMap::new();
+            let mut finalizations = HashMap::new();
+            let mut receipts = HashMap::new();
+
+            // Load recent blocks (could be optimized to load on-demand)
+            let max_height = state.height;
+            // Load the last N blocks into memory for quick access
+            let cache_depth = std::cmp::min(max_height + 1, 100);
+            let start_height = max_height.saturating_sub(cache_depth - 1);
+
+            for height in start_height..=max_height {
+                if storage.has_block(height) {
+                    blocks.insert(height, storage.get_block(height)?);
+                }
+                if storage.has_finalization(height) {
+                    finalizations.insert(height, storage.get_finalization(height)?);
+                }
+                if storage.has_receipts(height) {
+                    receipts.insert(height, storage.get_receipts(height)?);
+                }
+            }
+
+            let inner = SimplexAutomaton::restore(config, executor, state, blocks, finalizations, receipts);
+            Ok(Self { inner, storage })
+        } else {
+            // Fresh start
+            Ok(Self {
+                inner: SimplexAutomaton::with_executor(config, executor),
+                storage,
+            })
+        }
+    }
+
+    /// Get a reference to the inner automaton.
+    pub fn inner(&self) -> &SimplexAutomaton<E> {
+        &self.inner
+    }
+
+    /// Get a mutable reference to the inner automaton.
+    pub fn inner_mut(&mut self) -> &mut SimplexAutomaton<E> {
+        &mut self.inner
+    }
+
+    /// Get a reference to the storage backend.
+    pub fn storage(&self) -> &S {
+        &self.storage
+    }
+
+    /// Get a mutable reference to the storage backend.
+    pub fn storage_mut(&mut self) -> &mut S {
+        &mut self.storage
+    }
+
+    /// Decompose into inner automaton and storage.
+    pub fn into_parts(self) -> (SimplexAutomaton<E>, S) {
+        (self.inner, self.storage)
+    }
+}
+
+impl<S: BlockStorage, E: PayloadExecutor> Automaton for PersistentAutomaton<S, E> {
+    type State = ChainState;
+    type Payload = BlockBody;
+
+    fn propose(
+        &mut self,
+        round: u64,
+        parent: Digest,
+        payload: &Self::Payload,
+    ) -> Result<Block, AutomatonError> {
+        self.inner.propose(round, parent, payload)
+    }
+
+    fn verify(
+        &self,
+        round: u64,
+        block: &Block,
+    ) -> Result<Vec<Receipt>, AutomatonError> {
+        self.inner.verify(round, block)
+    }
+
+    fn finalize(
+        &mut self,
+        block: Block,
+        finalization: Finalization,
+    ) -> Result<(), AutomatonError> {
+        // First, let the inner automaton validate and finalize
+        self.inner.finalize(block.clone(), finalization.clone())?;
+
+        // Now persist to storage
+        let height = block.header.height;
+        let state = ChainState::at(
+            Digest::from_header(&block.header),
+            height,
+            block.header.state_root,
+        );
+
+        // Get receipts from inner automaton
+        let receipts = self.inner.get_receipts(height).unwrap_or(&[]).to_vec();
+
+        // Persist atomically
+        self.storage
+            .persist_finalized(&block, &finalization, &receipts, &state)
+            .map_err(|e| AutomatonError::ExecutionError(format!("storage error: {}", e)))?;
+
+        Ok(())
+    }
+
+    fn tip(&self) -> Digest {
+        self.inner.tip()
+    }
+
+    fn height(&self) -> u64 {
+        self.inner.height()
+    }
+
+    fn state_root(&self) -> [u8; 32] {
+        self.inner.state_root()
     }
 }
 
@@ -1595,5 +1790,148 @@ mod tests {
 
         assert_eq!(receipt, decoded);
         assert_eq!(decoded.error, Some("test error".to_string()));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // PersistentAutomaton Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_persistent_automaton_persists_finalized_blocks() {
+        use crate::storage::InMemoryBlockStorage;
+
+        let config = SimplexConfig {
+            version: test_version(),
+            proposer_id: [0xAA; 32],
+            validator_count: 1,
+        };
+        let storage = InMemoryBlockStorage::new();
+        let mut automaton = PersistentAutomaton::new(config, storage);
+
+        // Propose and finalize genesis
+        let body = BlockBody::empty();
+        let block = automaton.propose(0, Digest::ZERO, &body).unwrap();
+        let digest = Digest::from_header(&block.header);
+
+        let mut fin = Finalization::new(test_version(), digest, 0, 0);
+        fin.add_signature([1u8; 32], vec![0xBB; 64]);
+
+        automaton.finalize(block.clone(), fin.clone()).unwrap();
+
+        // Verify storage has the data
+        assert!(automaton.storage().has_block(0));
+        assert!(automaton.storage().has_finalization(0));
+        assert!(automaton.storage().has_receipts(0));
+
+        let chain_state = automaton.storage().get_chain_state().unwrap().unwrap();
+        assert_eq!(chain_state.tip, digest);
+        assert_eq!(chain_state.height, 0);
+    }
+
+    #[test]
+    fn test_persistent_automaton_restore_from_storage() {
+        use crate::storage::InMemoryBlockStorage;
+
+        let config = SimplexConfig {
+            version: test_version(),
+            proposer_id: [0xAA; 32],
+            validator_count: 1,
+        };
+
+        // First session: create and finalize blocks
+        let storage = InMemoryBlockStorage::new();
+        let mut automaton = PersistentAutomaton::new(config.clone(), storage);
+
+        // Finalize genesis
+        let body0 = BlockBody::empty();
+        let block0 = automaton.propose(0, Digest::ZERO, &body0).unwrap();
+        let digest0 = Digest::from_header(&block0.header);
+
+        let mut fin0 = Finalization::new(test_version(), digest0, 0, 0);
+        fin0.add_signature([1u8; 32], vec![]);
+        automaton.finalize(block0.clone(), fin0).unwrap();
+
+        // Finalize block 1
+        let body1 = BlockBody::empty();
+        let block1 = automaton.propose(1, digest0, &body1).unwrap();
+        let digest1 = Digest::from_header(&block1.header);
+
+        let mut fin1 = Finalization::new(test_version(), digest1, 1, 1);
+        fin1.add_signature([1u8; 32], vec![]);
+        automaton.finalize(block1.clone(), fin1).unwrap();
+
+        // Extract storage for "restart"
+        let (_inner, storage) = automaton.into_parts();
+
+        // "Restart": restore from storage
+        let restored = PersistentAutomaton::restore_or_new(config, storage).unwrap();
+
+        // Verify state was recovered
+        assert_eq!(restored.tip(), digest1);
+        assert_eq!(restored.height(), 1);
+        assert_eq!(restored.state_root(), block1.header.state_root);
+
+        // Can access blocks from restored automaton
+        assert!(restored.inner().get_block(0).is_some());
+        assert!(restored.inner().get_block(1).is_some());
+    }
+
+    #[test]
+    fn test_persistent_automaton_restore_empty_storage() {
+        use crate::storage::InMemoryBlockStorage;
+
+        let config = SimplexConfig {
+            version: test_version(),
+            proposer_id: [0xAA; 32],
+            validator_count: 1,
+        };
+        let storage = InMemoryBlockStorage::new();
+
+        // Restore from empty storage should create fresh automaton
+        let automaton = PersistentAutomaton::restore_or_new(config, storage).unwrap();
+
+        assert_eq!(automaton.tip(), Digest::ZERO);
+        assert_eq!(automaton.height(), 0);
+    }
+
+    #[test]
+    fn test_persistent_automaton_chain_continuation() {
+        use crate::storage::InMemoryBlockStorage;
+
+        let config = SimplexConfig {
+            version: test_version(),
+            proposer_id: [0xAA; 32],
+            validator_count: 1,
+        };
+
+        // First session
+        let storage = InMemoryBlockStorage::new();
+        let mut automaton = PersistentAutomaton::new(config.clone(), storage);
+
+        // Finalize genesis
+        let body = BlockBody::empty();
+        let block0 = automaton.propose(0, Digest::ZERO, &body).unwrap();
+        let digest0 = Digest::from_header(&block0.header);
+
+        let mut fin = Finalization::new(test_version(), digest0, 0, 0);
+        fin.add_signature([1u8; 32], vec![]);
+        automaton.finalize(block0.clone(), fin).unwrap();
+
+        let (_, storage) = automaton.into_parts();
+
+        // "Restart" and continue chain
+        let mut restored = PersistentAutomaton::restore_or_new(config, storage).unwrap();
+
+        // Should be able to propose and finalize block 1
+        let body1 = BlockBody::empty();
+        let block1 = restored.propose(1, digest0, &body1).unwrap();
+        let digest1 = Digest::from_header(&block1.header);
+
+        let mut fin1 = Finalization::new(test_version(), digest1, 1, 1);
+        fin1.add_signature([1u8; 32], vec![]);
+        restored.finalize(block1.clone(), fin1).unwrap();
+
+        assert_eq!(restored.height(), 1);
+        assert_eq!(restored.tip(), digest1);
     }
 }

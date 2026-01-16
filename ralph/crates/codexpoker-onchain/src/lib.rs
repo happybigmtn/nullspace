@@ -81,6 +81,7 @@ pub mod artifact_registry;
 pub mod block;
 pub mod consensus;
 pub mod messages;
+pub mod storage;
 
 pub use artifact_registry::{
     ArtifactMetadata, ArtifactRegistry, ArtifactRegistryError, ArtifactType, AuditEntry,
@@ -92,12 +93,13 @@ pub use block::{
 };
 pub use consensus::{
     Automaton, AutomatonError, ChainState, Digest, Finalization, Marshal, NoOpExecutor,
-    PayloadExecutor, SimplexAutomaton, SimplexConfig,
+    PayloadExecutor, PersistentAutomaton, SimplexAutomaton, SimplexConfig,
 };
 pub use messages::{
     action_codes, ActionLogValidator, ConsensusPayload, GameActionMessage, NoOpTimelockVerifier,
     PayloadError, TimelockProofVerifier, TimelockVerificationInput, GAME_ACTION_DOMAIN, REVEAL_TTL,
 };
+pub use storage::{BlockStorage, FileBlockStorage, InMemoryBlockStorage, StorageError};
 
 // Re-export core protocol types for convenience
 pub use protocol_messages::{
