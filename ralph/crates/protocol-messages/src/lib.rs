@@ -85,6 +85,7 @@ mod payload;
 pub mod baccarat;
 pub mod blackjack;
 pub mod codec;
+pub mod craps;
 pub mod exports;
 pub mod golden_vectors;
 pub mod roulette;
