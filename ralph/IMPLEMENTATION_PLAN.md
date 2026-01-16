@@ -171,9 +171,10 @@
 
 **Framework (shared across games)**
 
-- [ ] Implement core BitWriter/BitReader + AmountCodec in Rust (bitwise v2).
+- [x] Implement core BitWriter/BitReader + AmountCodec in Rust (bitwise v2).
   - Tests: AC-1.1, AC-3.1 (framework)
   - Perceptual: None
+  - Implemented: `codec.rs` with `BitWriter`, `BitReader`, `encode_uleb128`/`decode_uleb128`, `PayloadHeader`; 31 tests covering functionality, round-trips, size reduction (AC-1.1), and determinism (AC-3.1)
 - [ ] Implement unified bet descriptor + per-game bet-type tables in Rust.
   - Tests: AC-2.1, AC-2.2
   - Perceptual: None
