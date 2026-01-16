@@ -81,6 +81,7 @@ pub mod artifact_registry;
 pub mod block;
 pub mod consensus;
 pub mod messages;
+pub mod protocol_audit;
 #[cfg(test)]
 mod adversarial_tests;
 #[cfg(test)]
@@ -119,6 +120,9 @@ pub use state::{
     StateProof, StateProofType, StateProofVerifier, InMemoryProofVerifier,
 };
 pub use storage::{BlockStorage, FileBlockStorage, InMemoryBlockStorage, StorageError};
+pub use protocol_audit::{
+    ProtocolAuditEvent, ProtocolAuditEntry, ProtocolAuditLog, InMemoryProtocolAuditLog,
+};
 
 // Re-export core protocol types for convenience
 pub use protocol_messages::{
