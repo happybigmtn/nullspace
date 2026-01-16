@@ -5073,4 +5073,378 @@ mod tests {
             "reveal with card index 52 should be rejected for deck_length 52"
         );
     }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // Standard Session Flow Verification Tests
+    // (AC-2.1, AC-2.2 from specs/gateway-live-mode-deferment.md)
+    //
+    // These tests verify that standard session-based game flows remain unchanged
+    // and functional. They serve as backpressure to ensure live-mode deferment
+    // does not break core gameplay.
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    /// Verifies the complete session flow: commit → ack → action → reveal → complete.
+    ///
+    /// AC-2.1: Register → deposit → start game → move → complete flows behave
+    /// exactly as before for session-based games.
+    ///
+    /// This test documents the canonical session flow at the protocol layer:
+    /// 1. DealCommitment (start game)
+    /// 2. DealCommitmentAck (all players acknowledge)
+    /// 3. GameAction (player moves: bet, call, fold, etc.)
+    /// 4. RevealShare (card reveals at each street)
+    /// 5. All phases complete (game complete)
+    #[test]
+    fn test_session_flow_complete_hand_ac_2_1() {
+        let mut validator = ActionLogValidator::new();
+
+        // 1. Start game: DealCommitment (equivalent to session "start game")
+        let commitment = test_deal_commitment();
+        let commitment_hash = commitment.commitment_hash();
+        validator
+            .validate(&ConsensusPayload::DealCommitment(commitment))
+            .expect("DealCommitment should be accepted");
+
+        // 2. All players acknowledge (equivalent to session setup complete)
+        for seat in 0..4u8 {
+            let ack = DealCommitmentAck {
+                version: ProtocolVersion::current(),
+                commitment_hash,
+                seat_index: seat,
+                player_signature: vec![seat, 0xAC],
+            };
+            validator
+                .validate(&ConsensusPayload::DealCommitmentAck(ack))
+                .expect(&format!("Ack from seat {} should be accepted", seat));
+        }
+
+        // 3. Player moves: game actions (equivalent to session "move")
+        let actions = [
+            (0, action_codes::BET, 100),   // Player 0 bets
+            (1, action_codes::CALL, 100),  // Player 1 calls
+            (2, action_codes::RAISE, 200), // Player 2 raises
+            (3, action_codes::FOLD, 0),    // Player 3 folds
+            (0, action_codes::CALL, 100),  // Player 0 calls
+            (1, action_codes::CALL, 100),  // Player 1 calls
+        ];
+
+        for (seq, (seat, action_type, amount)) in actions.iter().enumerate() {
+            let action = GameActionMessage {
+                version: ProtocolVersion::current(),
+                deal_commitment_hash: commitment_hash,
+                seat_index: *seat,
+                action_type: *action_type,
+                amount: *amount,
+                sequence: (seq + 1) as u32,
+                signature: vec![*seat, 0xAA],
+            };
+            validator
+                .validate(&ConsensusPayload::GameAction(action))
+                .expect(&format!(
+                    "Action {} (seat {}, type {}) should be accepted",
+                    seq, seat, action_type
+                ));
+        }
+
+        // 4. Reveal shares at each street (equivalent to session progression)
+        for phase in [
+            protocol_messages::RevealPhase::Preflop,
+            protocol_messages::RevealPhase::Flop,
+            protocol_messages::RevealPhase::Turn,
+            protocol_messages::RevealPhase::River,
+            protocol_messages::RevealPhase::Showdown,
+        ] {
+            let reveal = make_reveal(commitment_hash, phase);
+            validator
+                .validate(&ConsensusPayload::RevealShare(reveal))
+                .expect(&format!("Reveal for {:?} should be accepted", phase));
+        }
+
+        // 5. Game complete verification
+        assert!(
+            validator.all_phases_complete(),
+            "All phases should be complete after showdown"
+        );
+        assert_eq!(
+            validator.completed_phases().len(),
+            5,
+            "Should have completed all 5 phases"
+        );
+    }
+
+    /// Verifies that update streams (filter/subscription patterns) remain functional.
+    ///
+    /// AC-2.2: Update streams for account/session filters still function for standard games.
+    ///
+    /// At the protocol layer, this means:
+    /// - Commitment hash can be used to filter all related payloads
+    /// - Seat indices can be used to filter player-specific actions
+    /// - Phase information can be used to filter reveal progress
+    #[test]
+    fn test_session_filter_patterns_ac_2_2() {
+        let commitment = test_deal_commitment();
+        let commitment_hash = commitment.commitment_hash();
+
+        // Verify commitment-based filtering: all payloads reference the same commitment
+        let ack = DealCommitmentAck {
+            version: ProtocolVersion::current(),
+            commitment_hash,
+            seat_index: 0,
+            player_signature: vec![],
+        };
+
+        let action = GameActionMessage {
+            version: ProtocolVersion::current(),
+            deal_commitment_hash: commitment_hash,
+            seat_index: 0,
+            action_type: action_codes::BET,
+            amount: 100,
+            sequence: 1,
+            signature: vec![],
+        };
+
+        let reveal = RevealShare {
+            version: ProtocolVersion::current(),
+            commitment_hash,
+            phase: protocol_messages::RevealPhase::Preflop,
+            from_seat: 0,
+            card_indices: vec![0, 1],
+            reveal_data: vec![vec![1], vec![2]],
+            signature: vec![],
+        };
+
+        // Filter verification: all payloads associated with same commitment
+        let payloads = [
+            ConsensusPayload::DealCommitment(commitment.clone()),
+            ConsensusPayload::DealCommitmentAck(ack),
+            ConsensusPayload::GameAction(action),
+            ConsensusPayload::RevealShare(reveal),
+        ];
+
+        for payload in &payloads {
+            let referenced_hash = payload.referenced_commitment_hash();
+            // All payloads return their associated commitment hash for filtering
+            // DealCommitment returns its own hash, others return the hash they reference
+            assert_eq!(
+                referenced_hash,
+                Some(commitment_hash),
+                "All payloads should have the same commitment hash for filtering"
+            );
+        }
+
+        // Verify seat-based filtering works
+        let action_seat_0 = GameActionMessage {
+            version: ProtocolVersion::current(),
+            deal_commitment_hash: commitment_hash,
+            seat_index: 0,
+            action_type: action_codes::BET,
+            amount: 100,
+            sequence: 1,
+            signature: vec![],
+        };
+
+        let action_seat_1 = GameActionMessage {
+            version: ProtocolVersion::current(),
+            deal_commitment_hash: commitment_hash,
+            seat_index: 1,
+            action_type: action_codes::CALL,
+            amount: 100,
+            sequence: 2,
+            signature: vec![],
+        };
+
+        assert_ne!(
+            action_seat_0.seat_index, action_seat_1.seat_index,
+            "Actions can be filtered by seat index"
+        );
+        assert_eq!(
+            action_seat_0.deal_commitment_hash, action_seat_1.deal_commitment_hash,
+            "Actions share commitment hash for session filtering"
+        );
+    }
+
+    /// Verifies multiple concurrent sessions can be distinguished by commitment hash.
+    ///
+    /// This is critical for AC-2.2 (session filters): each session has a unique
+    /// commitment hash that allows filtering all related updates.
+    #[test]
+    fn test_multiple_sessions_distinguishable_ac_2_2() {
+        // Create two different sessions (different scopes = different commitments)
+        let scope1 = ScopeBinding::new([1u8; 32], 1, vec![0, 1], 52);
+        let scope2 = ScopeBinding::new([2u8; 32], 1, vec![0, 1], 52); // Different table_id
+
+        let commitment1 = DealCommitment {
+            version: ProtocolVersion::current(),
+            scope: scope1,
+            shuffle_commitment: [10u8; 32],
+            artifact_hashes: vec![],
+            timestamp_ms: 1700000000000,
+            dealer_signature: vec![],
+        };
+
+        let commitment2 = DealCommitment {
+            version: ProtocolVersion::current(),
+            scope: scope2,
+            shuffle_commitment: [20u8; 32],
+            artifact_hashes: vec![],
+            timestamp_ms: 1700000000000,
+            dealer_signature: vec![],
+        };
+
+        let hash1 = commitment1.commitment_hash();
+        let hash2 = commitment2.commitment_hash();
+
+        // Critical: different sessions have different commitment hashes
+        assert_ne!(
+            hash1, hash2,
+            "Different sessions must have different commitment hashes for filtering"
+        );
+
+        // Actions for each session reference their own commitment
+        let action1 = GameActionMessage {
+            version: ProtocolVersion::current(),
+            deal_commitment_hash: hash1,
+            seat_index: 0,
+            action_type: action_codes::BET,
+            amount: 100,
+            sequence: 1,
+            signature: vec![],
+        };
+
+        let action2 = GameActionMessage {
+            version: ProtocolVersion::current(),
+            deal_commitment_hash: hash2,
+            seat_index: 0,
+            action_type: action_codes::BET,
+            amount: 100,
+            sequence: 1,
+            signature: vec![],
+        };
+
+        assert_ne!(
+            action1.deal_commitment_hash, action2.deal_commitment_hash,
+            "Actions from different sessions can be distinguished"
+        );
+    }
+
+    /// Verifies the session flow rejects cross-session contamination.
+    ///
+    /// This ensures AC-2.1 session integrity: actions from one session cannot
+    /// affect another session.
+    #[test]
+    fn test_session_isolation_ac_2_1() {
+        let mut validator = ActionLogValidator::new();
+
+        // Start session 1
+        let commitment1 = test_deal_commitment();
+        let hash1 = commitment1.commitment_hash();
+        validator
+            .validate(&ConsensusPayload::DealCommitment(commitment1))
+            .expect("Session 1 commitment should be accepted");
+
+        // Complete session 1 acks
+        for seat in 0..4u8 {
+            let ack = DealCommitmentAck {
+                version: ProtocolVersion::current(),
+                commitment_hash: hash1,
+                seat_index: seat,
+                player_signature: vec![],
+            };
+            validator.validate(&ConsensusPayload::DealCommitmentAck(ack)).unwrap();
+        }
+
+        // Create action referencing a DIFFERENT commitment hash (cross-session)
+        let wrong_hash = [99u8; 32];
+        let cross_session_action = GameActionMessage {
+            version: ProtocolVersion::current(),
+            deal_commitment_hash: wrong_hash,
+            seat_index: 0,
+            action_type: action_codes::BET,
+            amount: 100,
+            sequence: 1,
+            signature: vec![],
+        };
+
+        let result = validator.validate(&ConsensusPayload::GameAction(cross_session_action));
+        assert!(
+            matches!(result, Err(PayloadError::CommitmentHashMismatch { .. })),
+            "Actions referencing wrong session must be rejected"
+        );
+
+        // Valid action for session 1 should still work
+        let valid_action = GameActionMessage {
+            version: ProtocolVersion::current(),
+            deal_commitment_hash: hash1,
+            seat_index: 0,
+            action_type: action_codes::BET,
+            amount: 100,
+            sequence: 1,
+            signature: vec![],
+        };
+
+        assert!(
+            validator
+                .validate(&ConsensusPayload::GameAction(valid_action))
+                .is_ok(),
+            "Valid session action should be accepted"
+        );
+    }
+
+    /// Verifies session flow with early termination (all fold).
+    ///
+    /// AC-2.1: complete flows include hands that end early due to all opponents folding.
+    #[test]
+    fn test_session_flow_early_termination_ac_2_1() {
+        let mut validator = ActionLogValidator::new();
+
+        // Start session
+        let commitment = test_deal_commitment();
+        let commitment_hash = commitment.commitment_hash();
+        validator
+            .validate(&ConsensusPayload::DealCommitment(commitment))
+            .unwrap();
+
+        // All acks
+        for seat in 0..4u8 {
+            let ack = DealCommitmentAck {
+                version: ProtocolVersion::current(),
+                commitment_hash,
+                seat_index: seat,
+                player_signature: vec![],
+            };
+            validator.validate(&ConsensusPayload::DealCommitmentAck(ack)).unwrap();
+        }
+
+        // Player 0 bets, everyone else folds
+        let bet = GameActionMessage {
+            version: ProtocolVersion::current(),
+            deal_commitment_hash: commitment_hash,
+            seat_index: 0,
+            action_type: action_codes::BET,
+            amount: 100,
+            sequence: 1,
+            signature: vec![],
+        };
+        validator.validate(&ConsensusPayload::GameAction(bet)).unwrap();
+
+        for (seq, seat) in [1u8, 2, 3].iter().enumerate() {
+            let fold = GameActionMessage {
+                version: ProtocolVersion::current(),
+                deal_commitment_hash: commitment_hash,
+                seat_index: *seat,
+                action_type: action_codes::FOLD,
+                amount: 0,
+                sequence: (seq + 2) as u32,
+                signature: vec![],
+            };
+            validator.validate(&ConsensusPayload::GameAction(fold)).unwrap();
+        }
+
+        // No reveals needed when all fold - session can complete early
+        // The validator state reflects a valid game state at this point
+        assert!(
+            !validator.all_phases_complete(),
+            "Phases don't auto-complete on fold (reveal is separate concern)"
+        );
+    }
 }

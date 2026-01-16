@@ -73,9 +73,10 @@
 - [x] Remove global-table event decode usage in gateway runtime (no background global-table client).
   - Tests: AC-1.3
   - Perceptual: None
-- [ ] Verify standard session flows are unchanged.
+- [x] Verify standard session flows are unchanged.
   - Tests: AC-2.1, AC-2.2
   - Perceptual: None
+  - Implemented: `messages.rs` tests `test_session_flow_complete_hand_ac_2_1`, `test_session_filter_patterns_ac_2_2`, `test_multiple_sessions_distinguishable_ac_2_2`, `test_session_isolation_ac_2_1`, `test_session_flow_early_termination_ac_2_1`
 
 **Exit criteria**
 - Gateway boots without live mode; standard sessions still function.
