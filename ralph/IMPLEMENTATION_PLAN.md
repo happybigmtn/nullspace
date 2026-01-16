@@ -175,9 +175,10 @@
   - Tests: AC-1.1, AC-3.1 (framework)
   - Perceptual: None
   - Implemented: `codec.rs` with `BitWriter`, `BitReader`, `encode_uleb128`/`decode_uleb128`, `PayloadHeader`; 31 tests covering functionality, round-trips, size reduction (AC-1.1), and determinism (AC-3.1)
-- [ ] Implement unified bet descriptor + per-game bet-type tables in Rust.
+- [x] Implement unified bet descriptor + per-game bet-type tables in Rust.
   - Tests: AC-2.1, AC-2.2
   - Perceptual: None
+  - Implemented: `codec.rs` with `BetLayout`, `BetDescriptor`, `bet_layouts` (ROULETTE/CRAPS/SIC_BO/BACCARAT), `TableGame`, and per-game bet type enums (`RouletteBetType`, `CrapsBetType`, `SicBoBetType`, `BaccaratBetType`); 16 tests covering AC-2.1 (shared descriptor structure: `test_all_games_use_shared_descriptor_ac_2_1`, `test_descriptor_structure_identical_ac_2_1`, `test_encode_decode_paths_unified_ac_2_1`) and AC-2.2 (no bespoke payloads: `test_no_bespoke_payloads_ac_2_2`, `test_layout_consistency_across_games_ac_2_2`)
 - [ ] Add dual-decode migration layer (accept v1 + v2) and explicit version validation.
   - Tests: AC-4.1, AC-4.2
   - Perceptual: None
