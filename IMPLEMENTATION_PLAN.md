@@ -43,7 +43,7 @@
   - Tests: AC-1.1/AC-1.2 (all affected endpoints identified)
   - Perceptual: None
   - Output: `ralph/FEATURE_INVENTORY.md` (comprehensive inventory document)
-- [ ] Establish feature-disable error codes (`feature_disabled`, `bridge_disabled`) and ensure they surface cleanly.
+- [x] Establish feature-disable error codes (`feature_disabled`, `bridge_disabled`) and ensure they surface cleanly.
   - Tests: AC-1.1 (bridge disabled errors), AC-1.1 (liquidity/staking disabled errors)
   - Perceptual: None
 
