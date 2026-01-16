@@ -85,7 +85,8 @@ mod payload;
 
 pub use payload::{
     ArtifactRequest, ArtifactResponse, DealCommitment, DealCommitmentAck, ProtocolVersion,
-    RevealPhase, RevealShare, ScopeBinding, TimelockReveal, CURRENT_PROTOCOL_VERSION,
+    RevealPhase, RevealShare, ScopeBinding, ShuffleContext, ShuffleContextMismatch, TimelockReveal,
+    CURRENT_PROTOCOL_VERSION,
 };
 
 /// Re-export blake3 for consumers who need consistent hashing.

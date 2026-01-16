@@ -75,6 +75,8 @@ pub mod domain {
     pub const ARTIFACT_REQUEST: &[u8] = b"nullspace.artifact_request.v1";
     /// Domain prefix for [`super::ArtifactResponse`] messages.
     pub const ARTIFACT_RESPONSE: &[u8] = b"nullspace.artifact_response.v1";
+    /// Domain prefix for [`super::ShuffleContext`] binding.
+    pub const SHUFFLE_CONTEXT: &[u8] = b"nullspace.shuffle_context.v1";
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -153,6 +155,210 @@ impl ScopeBinding {
         buf
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Shuffle Context
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Binds a shuffle to its execution context for verification.
+///
+/// `ShuffleContext` captures all parameters that must be agreed upon before
+/// a mental poker shuffle begins. This context is hashed and bound into the
+/// shuffle commitment, ensuring that:
+///
+/// 1. A shuffle proof is only valid for the specific table, hand, and players
+///    it was created for.
+/// 2. Changing any context parameter invalidates the shuffle commitment.
+/// 3. Verifiers can deterministically reconstruct the expected context and
+///    reject mismatches.
+///
+/// # Relationship to ScopeBinding
+///
+/// `ShuffleContext` contains a [`ScopeBinding`] plus protocol version info.
+/// While `ScopeBinding` provides the raw table/hand/seat data, `ShuffleContext`
+/// adds the domain separation and versioning needed for shuffle verification.
+///
+/// # Verification Flow
+///
+/// ```text
+/// 1. Dealer proposes shuffle with ShuffleContext
+/// 2. All players verify context matches their local state:
+///    - table_id matches current table
+///    - hand_id matches current hand
+///    - seat_order matches current players (in order)
+///    - deck_length matches expected deck size
+/// 3. Players participate in shuffle protocol
+/// 4. Final shuffle commitment includes context_hash()
+/// 5. During verification, context is reconstructed and compared
+/// ```
+///
+/// # Deterministic Encoding
+///
+/// The context encodes to bytes deterministically:
+/// ```text
+/// [domain prefix][version: 1 byte][scope encoding]
+/// ```
+///
+/// This ensures the same context always produces the same hash,
+/// enabling deterministic verification across all validators.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ShuffleContext {
+    /// Protocol version for this context.
+    pub version: ProtocolVersion,
+    /// The table identifier this shuffle is for.
+    pub table_id: [u8; 32],
+    /// The hand number this shuffle is for.
+    pub hand_id: u64,
+    /// Ordered list of seat indices participating in the shuffle.
+    /// Order determines the shuffle contribution sequence.
+    pub seat_order: Vec<u8>,
+    /// Number of cards in the deck being shuffled.
+    pub deck_length: u8,
+}
+
+impl ShuffleContext {
+    /// Create a new shuffle context.
+    pub fn new(
+        version: ProtocolVersion,
+        table_id: [u8; 32],
+        hand_id: u64,
+        seat_order: Vec<u8>,
+        deck_length: u8,
+    ) -> Self {
+        Self {
+            version,
+            table_id,
+            hand_id,
+            seat_order,
+            deck_length,
+        }
+    }
+
+    /// Create a shuffle context from a scope binding.
+    pub fn from_scope(version: ProtocolVersion, scope: &ScopeBinding) -> Self {
+        Self {
+            version,
+            table_id: scope.table_id,
+            hand_id: scope.hand_id,
+            seat_order: scope.seat_order.clone(),
+            deck_length: scope.deck_length,
+        }
+    }
+
+    /// Convert this shuffle context to a scope binding.
+    pub fn to_scope(&self) -> ScopeBinding {
+        ScopeBinding {
+            table_id: self.table_id,
+            hand_id: self.hand_id,
+            seat_order: self.seat_order.clone(),
+            deck_length: self.deck_length,
+        }
+    }
+
+    /// Domain-separated preimage for hashing.
+    ///
+    /// The preimage includes all context fields with domain separation,
+    /// ensuring shuffle contexts cannot collide with other message types.
+    pub fn preimage(&self) -> Vec<u8> {
+        let mut buf = Vec::new();
+        buf.extend_from_slice(domain::SHUFFLE_CONTEXT);
+        buf.push(self.version.0);
+        buf.extend_from_slice(&self.table_id);
+        buf.extend_from_slice(&self.hand_id.to_le_bytes());
+        buf.push(self.seat_order.len() as u8);
+        buf.extend_from_slice(&self.seat_order);
+        buf.push(self.deck_length);
+        buf
+    }
+
+    /// Canonical hash of this shuffle context.
+    ///
+    /// This hash is included in shuffle commitments to bind the shuffle
+    /// to its context. Verification fails if context hashes don't match.
+    pub fn context_hash(&self) -> [u8; 32] {
+        crate::canonical_hash(&self.preimage())
+    }
+
+    /// Verify that this context matches another.
+    ///
+    /// This is a byte-for-byte comparison that ensures:
+    /// - Same table, hand, seats, and deck length
+    /// - Same protocol version
+    ///
+    /// Returns `Ok(())` if contexts match, or an error describing the mismatch.
+    pub fn verify_matches(&self, other: &ShuffleContext) -> Result<(), ShuffleContextMismatch> {
+        if self.version != other.version {
+            return Err(ShuffleContextMismatch::Version {
+                expected: self.version.0,
+                got: other.version.0,
+            });
+        }
+        if self.table_id != other.table_id {
+            return Err(ShuffleContextMismatch::TableId {
+                expected: self.table_id,
+                got: other.table_id,
+            });
+        }
+        if self.hand_id != other.hand_id {
+            return Err(ShuffleContextMismatch::HandId {
+                expected: self.hand_id,
+                got: other.hand_id,
+            });
+        }
+        if self.seat_order != other.seat_order {
+            return Err(ShuffleContextMismatch::SeatOrder {
+                expected: self.seat_order.clone(),
+                got: other.seat_order.clone(),
+            });
+        }
+        if self.deck_length != other.deck_length {
+            return Err(ShuffleContextMismatch::DeckLength {
+                expected: self.deck_length,
+                got: other.deck_length,
+            });
+        }
+        Ok(())
+    }
+}
+
+/// Error type for shuffle context mismatches during verification.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ShuffleContextMismatch {
+    /// Protocol version mismatch.
+    Version { expected: u8, got: u8 },
+    /// Table ID mismatch.
+    TableId { expected: [u8; 32], got: [u8; 32] },
+    /// Hand ID mismatch.
+    HandId { expected: u64, got: u64 },
+    /// Seat order mismatch.
+    SeatOrder { expected: Vec<u8>, got: Vec<u8> },
+    /// Deck length mismatch.
+    DeckLength { expected: u8, got: u8 },
+}
+
+impl std::fmt::Display for ShuffleContextMismatch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Version { expected, got } => {
+                write!(f, "version mismatch: expected {}, got {}", expected, got)
+            }
+            Self::TableId { expected, got } => {
+                write!(f, "table_id mismatch: expected {:?}, got {:?}", expected, got)
+            }
+            Self::HandId { expected, got } => {
+                write!(f, "hand_id mismatch: expected {}, got {}", expected, got)
+            }
+            Self::SeatOrder { expected, got } => {
+                write!(f, "seat_order mismatch: expected {:?}, got {:?}", expected, got)
+            }
+            Self::DeckLength { expected, got } => {
+                write!(f, "deck_length mismatch: expected {}, got {}", expected, got)
+            }
+        }
+    }
+}
+
+impl std::error::Error for ShuffleContextMismatch {}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DealCommitment
@@ -634,5 +840,221 @@ mod tests {
             ack_preimage[..domain::DEAL_COMMITMENT_ACK.len()],
             "domains must differ"
         );
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // ShuffleContext Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    fn test_shuffle_context() -> ShuffleContext {
+        ShuffleContext::new(
+            ProtocolVersion::current(),
+            [1u8; 32],
+            42,
+            vec![0, 1, 2, 3],
+            52,
+        )
+    }
+
+    #[test]
+    fn test_shuffle_context_hash_stable() {
+        let ctx = test_shuffle_context();
+        let hash1 = ctx.context_hash();
+        let hash2 = ctx.context_hash();
+        assert_eq!(hash1, hash2, "shuffle context hash must be stable");
+    }
+
+    #[test]
+    fn test_shuffle_context_preimage_deterministic() {
+        let ctx = test_shuffle_context();
+        let preimage1 = ctx.preimage();
+        let preimage2 = ctx.preimage();
+        assert_eq!(preimage1, preimage2, "shuffle context preimage must be deterministic");
+    }
+
+    #[test]
+    fn test_shuffle_context_includes_domain_prefix() {
+        let ctx = test_shuffle_context();
+        let preimage = ctx.preimage();
+        assert!(
+            preimage.starts_with(domain::SHUFFLE_CONTEXT),
+            "shuffle context must use its domain prefix"
+        );
+    }
+
+    #[test]
+    fn test_shuffle_context_from_scope() {
+        let scope = test_scope();
+        let ctx = ShuffleContext::from_scope(ProtocolVersion::current(), &scope);
+
+        assert_eq!(ctx.table_id, scope.table_id);
+        assert_eq!(ctx.hand_id, scope.hand_id);
+        assert_eq!(ctx.seat_order, scope.seat_order);
+        assert_eq!(ctx.deck_length, scope.deck_length);
+    }
+
+    #[test]
+    fn test_shuffle_context_to_scope() {
+        let ctx = test_shuffle_context();
+        let scope = ctx.to_scope();
+
+        assert_eq!(scope.table_id, ctx.table_id);
+        assert_eq!(scope.hand_id, ctx.hand_id);
+        assert_eq!(scope.seat_order, ctx.seat_order);
+        assert_eq!(scope.deck_length, ctx.deck_length);
+    }
+
+    #[test]
+    fn test_shuffle_context_roundtrip_scope() {
+        let original_scope = test_scope();
+        let ctx = ShuffleContext::from_scope(ProtocolVersion::current(), &original_scope);
+        let recovered_scope = ctx.to_scope();
+        assert_eq!(original_scope, recovered_scope, "scope must roundtrip through shuffle context");
+    }
+
+    #[test]
+    fn test_shuffle_context_hash_changes_with_table_id() {
+        let ctx1 = test_shuffle_context();
+        let mut ctx2 = test_shuffle_context();
+        ctx2.table_id = [2u8; 32];
+
+        assert_ne!(
+            ctx1.context_hash(),
+            ctx2.context_hash(),
+            "different table_id must produce different hash"
+        );
+    }
+
+    #[test]
+    fn test_shuffle_context_hash_changes_with_hand_id() {
+        let ctx1 = test_shuffle_context();
+        let mut ctx2 = test_shuffle_context();
+        ctx2.hand_id = 999;
+
+        assert_ne!(
+            ctx1.context_hash(),
+            ctx2.context_hash(),
+            "different hand_id must produce different hash"
+        );
+    }
+
+    #[test]
+    fn test_shuffle_context_hash_changes_with_seat_order() {
+        let ctx1 = test_shuffle_context();
+        let mut ctx2 = test_shuffle_context();
+        ctx2.seat_order = vec![3, 2, 1, 0]; // reversed
+
+        assert_ne!(
+            ctx1.context_hash(),
+            ctx2.context_hash(),
+            "different seat_order must produce different hash"
+        );
+    }
+
+    #[test]
+    fn test_shuffle_context_hash_changes_with_deck_length() {
+        let ctx1 = test_shuffle_context();
+        let mut ctx2 = test_shuffle_context();
+        ctx2.deck_length = 36; // short deck
+
+        assert_ne!(
+            ctx1.context_hash(),
+            ctx2.context_hash(),
+            "different deck_length must produce different hash"
+        );
+    }
+
+    #[test]
+    fn test_shuffle_context_verify_matches_success() {
+        let ctx1 = test_shuffle_context();
+        let ctx2 = test_shuffle_context();
+
+        assert!(ctx1.verify_matches(&ctx2).is_ok(), "identical contexts must match");
+    }
+
+    #[test]
+    fn test_shuffle_context_verify_matches_version_mismatch() {
+        let ctx1 = test_shuffle_context();
+        let mut ctx2 = test_shuffle_context();
+        ctx2.version = ProtocolVersion::new(99);
+
+        let result = ctx1.verify_matches(&ctx2);
+        assert!(matches!(
+            result,
+            Err(ShuffleContextMismatch::Version { expected: 1, got: 99 })
+        ));
+    }
+
+    #[test]
+    fn test_shuffle_context_verify_matches_table_id_mismatch() {
+        let ctx1 = test_shuffle_context();
+        let mut ctx2 = test_shuffle_context();
+        ctx2.table_id = [99u8; 32];
+
+        let result = ctx1.verify_matches(&ctx2);
+        assert!(matches!(
+            result,
+            Err(ShuffleContextMismatch::TableId { .. })
+        ));
+    }
+
+    #[test]
+    fn test_shuffle_context_verify_matches_hand_id_mismatch() {
+        let ctx1 = test_shuffle_context();
+        let mut ctx2 = test_shuffle_context();
+        ctx2.hand_id = 999;
+
+        let result = ctx1.verify_matches(&ctx2);
+        assert!(matches!(
+            result,
+            Err(ShuffleContextMismatch::HandId { expected: 42, got: 999 })
+        ));
+    }
+
+    #[test]
+    fn test_shuffle_context_verify_matches_seat_order_mismatch() {
+        let ctx1 = test_shuffle_context();
+        let mut ctx2 = test_shuffle_context();
+        ctx2.seat_order = vec![0, 1]; // fewer seats
+
+        let result = ctx1.verify_matches(&ctx2);
+        assert!(matches!(
+            result,
+            Err(ShuffleContextMismatch::SeatOrder { .. })
+        ));
+    }
+
+    #[test]
+    fn test_shuffle_context_verify_matches_deck_length_mismatch() {
+        let ctx1 = test_shuffle_context();
+        let mut ctx2 = test_shuffle_context();
+        ctx2.deck_length = 36;
+
+        let result = ctx1.verify_matches(&ctx2);
+        assert!(matches!(
+            result,
+            Err(ShuffleContextMismatch::DeckLength { expected: 52, got: 36 })
+        ));
+    }
+
+    #[test]
+    fn test_shuffle_context_mismatch_display() {
+        let err = ShuffleContextMismatch::Version { expected: 1, got: 2 };
+        assert!(err.to_string().contains("version mismatch"));
+
+        let err = ShuffleContextMismatch::HandId { expected: 42, got: 99 };
+        assert!(err.to_string().contains("hand_id mismatch"));
+
+        let err = ShuffleContextMismatch::DeckLength { expected: 52, got: 36 };
+        assert!(err.to_string().contains("deck_length mismatch"));
+    }
+
+    #[test]
+    fn test_shuffle_context_domain_differs_from_others() {
+        // Ensure shuffle context domain is distinct from other domains
+        assert_ne!(domain::SHUFFLE_CONTEXT, domain::DEAL_COMMITMENT);
+        assert_ne!(domain::SHUFFLE_CONTEXT, domain::DEAL_COMMITMENT_ACK);
+        assert_ne!(domain::SHUFFLE_CONTEXT, domain::REVEAL_SHARE);
+        assert_ne!(domain::SHUFFLE_CONTEXT, domain::TIMELOCK_REVEAL);
     }
 }

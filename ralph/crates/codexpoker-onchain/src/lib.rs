@@ -87,5 +87,5 @@ pub use messages::{
 // Re-export core protocol types for convenience
 pub use protocol_messages::{
     DealCommitment, DealCommitmentAck, ProtocolVersion, RevealPhase, RevealShare, ScopeBinding,
-    TimelockReveal, CURRENT_PROTOCOL_VERSION,
+    ShuffleContext, ShuffleContextMismatch, TimelockReveal, CURRENT_PROTOCOL_VERSION,
 };
