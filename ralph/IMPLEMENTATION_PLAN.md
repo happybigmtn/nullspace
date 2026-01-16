@@ -58,7 +58,7 @@
 - [x] Add mempool connectivity and tx inclusion liveness signals (health check + metrics).
   - Tests: AC-1.1, AC-1.2, AC-1.3
   - Perceptual: None
-- [ ] Eliminate protocol payload drift (version header handling, bet format parity).
+- [x] Eliminate protocol payload drift (version header handling, bet format parity).
   - Tests: AC-2.1, AC-3.1, AC-4.1
   - Perceptual: None
 
