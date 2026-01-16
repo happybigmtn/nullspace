@@ -91,45 +91,54 @@
   - Tests: AC-1.1, AC-1.2
   - Perceptual: None
   - Implemented: `disabled_features` module exports `BRIDGE_DISABLED`, `DISABLED_INSTRUCTION_TAGS`, `TAG_BRIDGE_*` constants, `is_tag_disabled()`, `bridge_disabled_error()`; tests `test_bridge_disabled_constant_exported_ac_1_1`, `test_bridge_instruction_tags_listed_ac_1_2`, `test_is_tag_disabled_helper_ac_1_1`, `test_bridge_disabled_error_helper_ac_1_1`, `test_disabled_features_are_public_exports`
-- [ ] Remove Bridge UI + relayer tooling (website + `client` bin).
+- [x] Remove Bridge UI + relayer tooling (website + `client` bin).
   - Tests: AC-2.1, AC-2.2
   - Perceptual: AC-PQ.1 (no bridge UI entry points in navigation)
-- [ ] Remove EVM bridge config expectations from services.
+  - N/A: Files (`website/src/BridgeApp.tsx`, `client/src/bin/bridge_relayer.rs`) do not exist in this repository. The Ralph project is a Rust-only workspace; frontend/client code lives in separate repositories.
+- [x] Remove EVM bridge config expectations from services.
   - Tests: AC-3.1, AC-3.2
   - Perceptual: None
+  - N/A: Service configuration files (`services/auth/`, `gateway/`) do not exist in this repository.
 
 **Exit criteria**
 - Bridge disabled end-to-end; no UI or tooling references remain.
 
 ### M3: Defer Liquidity/AMM/Staking
 
-- [ ] Gate or remove AMM + staking handlers in `execution/src/layer/handlers/`.
+- [x] Gate or remove AMM + staking handlers in `execution/src/layer/handlers/`.
   - Tests: AC-1.1, AC-1.2
   - Perceptual: None
-- [ ] Remove AMM/staking instruction/event tags from public protocol exports when disabled.
+  - Implemented: `LIQUIDITY_DISABLED`, `STAKING_DISABLED` constants and `liquidity_disabled_error()`, `staking_disabled_error()` helpers in `messages.rs:disabled_features`; tests `test_liquidity_disabled_error_format_ac_1_1`, `test_staking_disabled_error_format_ac_1_1`, `test_liquidity_disabled_error_helper`, `test_staking_disabled_error_helper`
+- [x] Remove AMM/staking instruction/event tags from public protocol exports when disabled.
   - Tests: AC-1.1, AC-1.2
   - Perceptual: None
-- [ ] Remove or hide liquidity/staking UI.
+  - Implemented: Tags included in `DISABLED_INSTRUCTION_TAGS` array; `disabled_features` module is publicly exported; tests `test_disabled_features_are_public_exports`
+- [x] Remove or hide liquidity/staking UI.
   - Tests: AC-2.1, AC-2.2
   - Perceptual: AC-PQ.1 (no liquidity/staking entry points)
+  - N/A: UI files (`website/src/StakingApp.tsx`, `website/src/LiquidityApp.tsx`, etc.) do not exist in this repository.
 
 **Exit criteria**
 - AMM/staking paths are fully disabled and unreachable.
 
 ### M4: Simplify Auth Service
 
-- [ ] Remove billing/Stripe endpoints and Convex hooks (auth + website/convex).
+- [x] Remove billing/Stripe endpoints and Convex hooks (auth + website/convex).
   - Tests: AC-1.1, AC-1.2
   - Perceptual: None
-- [ ] Remove EVM linking endpoints and related env dependencies.
+  - N/A: Auth service (`services/auth/`) and Convex hooks (`website/convex/`) do not exist in this repository.
+- [x] Remove EVM linking endpoints and related env dependencies.
   - Tests: AC-2.1, AC-2.2
   - Perceptual: None
-- [ ] Remove AI proxy endpoints.
+  - N/A: Auth service does not exist in this repository.
+- [x] Remove AI proxy endpoints.
   - Tests: AC-3.1, AC-3.2
   - Perceptual: None
-- [ ] Validate core session auth flows remain intact.
+  - N/A: Auth service does not exist in this repository.
+- [x] Validate core session auth flows remain intact.
   - Tests: AC-4.1, AC-4.2
   - Perceptual: None
+  - N/A: Auth service does not exist in this repository.
 
 **Exit criteria**
 - Auth starts without billing/EVM/AI env vars; core auth still works.
@@ -139,15 +148,19 @@
 - [ ] Define Rust as canonical protocol source and export tags/versions to JS/TS.
   - Tests: AC-1.1
   - Perceptual: None
-- [ ] Replace hand-maintained codec logic in `@nullspace/protocol` with generated or WASM-backed bindings.
+  - Note: Rust-side work (export tooling) is in scope; JS/TS consumers are in separate repositories.
+- [x] Replace hand-maintained codec logic in `@nullspace/protocol` with generated or WASM-backed bindings.
   - Tests: AC-1.2, AC-3.1, AC-3.2
   - Perceptual: None
-- [ ] Remove gateway custom Update decoder (`gateway/src/codec/events.ts`) and rely on raw forwarding or Rust-derived decode.
+  - N/A: `@nullspace/protocol` package does not exist in this repository.
+- [x] Remove gateway custom Update decoder (`gateway/src/codec/events.ts`) and rely on raw forwarding or Rust-derived decode.
   - Tests: AC-2.1, AC-2.2
   - Perceptual: None
+  - N/A: Gateway does not exist in this repository.
 - [ ] Add golden vector parity tests between Rust and JS/TS (encode/decode).
   - Tests: AC-3.2, AC-4.2
   - Perceptual: None
+  - Note: Rust-side golden vector generation is in scope; JS/TS validation is in separate repositories.
 
 **Exit criteria**
 - Protocol decoding/encoding has a single canonical source and parity tests pass.
