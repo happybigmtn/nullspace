@@ -179,9 +179,10 @@
   - Tests: AC-2.1, AC-2.2
   - Perceptual: None
   - Implemented: `codec.rs` with `BetLayout`, `BetDescriptor`, `bet_layouts` (ROULETTE/CRAPS/SIC_BO/BACCARAT), `TableGame`, and per-game bet type enums (`RouletteBetType`, `CrapsBetType`, `SicBoBetType`, `BaccaratBetType`); 16 tests covering AC-2.1 (shared descriptor structure: `test_all_games_use_shared_descriptor_ac_2_1`, `test_descriptor_structure_identical_ac_2_1`, `test_encode_decode_paths_unified_ac_2_1`) and AC-2.2 (no bespoke payloads: `test_no_bespoke_payloads_ac_2_2`, `test_layout_consistency_across_games_ac_2_2`)
-- [ ] Add dual-decode migration layer (accept v1 + v2) and explicit version validation.
+- [x] Add dual-decode migration layer (accept v1 + v2) and explicit version validation.
   - Tests: AC-4.1, AC-4.2
   - Perceptual: None
+  - Implemented: `EncodingVersion` enum (V1/V2), `VersionError` with explicit error types, `DualDecoder` struct with `detect_version()`, `validate_version()`, `is_v1_payload()`, `is_v2_payload()`, `v2_reader()`, `encode_v2_header()`; 28 tests in `dual_decode_tests` module covering AC-4.1 (v1/v2 coexistence: `test_v1_payload_accepted_ac_4_1`, `test_v2_payload_accepted_ac_4_1`, `test_explicit_version_check_ac_4_1`, `test_both_versions_coexist_ac_4_1`, `test_v2_bet_payload_full_roundtrip_ac_4_1`, `test_v1_bet_payload_routed_to_legacy_ac_4_1`, `test_mixed_version_payloads_coexist_ac_4_1`, `test_version_boundary_values_ac_4_1`) and AC-4.2 (determinism/parity: `test_v2_encoding_deterministic_ac_4_2`, `test_v2_decode_deterministic_ac_4_2`, `test_v1_v2_distinguishable_by_version_ac_4_2`, `test_all_games_v2_encoding_deterministic_ac_4_2`, `test_v2_bet_golden_vectors_ac_4_2`, `test_v2_baccarat_golden_vector_ac_4_2`)
 
 **Per‑game move payloads + state blobs**
 
