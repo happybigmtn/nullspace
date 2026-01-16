@@ -25,7 +25,7 @@
 //! - Have reveals for a different commitment
 
 use protocol_messages::{
-    DealCommitment, DealCommitmentAck, ProtocolVersion, RevealShare, ShuffleContext,
+    DealCommitment, DealCommitmentAck, ProtocolVersion, RevealPhase, RevealShare, ShuffleContext,
     ShuffleContextMismatch, TimelockReveal, CURRENT_PROTOCOL_VERSION,
 };
 use serde::{Deserialize, Serialize};
@@ -85,6 +85,34 @@ pub enum PayloadError {
     /// tables, hands, or player configurations.
     #[error("shuffle context mismatch: {0}")]
     ShuffleContextMismatch(#[from] ShuffleContextMismatch),
+
+    /// Reveal phase is out of order.
+    ///
+    /// Reveals must occur in sequential phase order:
+    /// Preflop → Flop → Turn → River → Showdown.
+    /// A reveal for an earlier phase after a later phase has been revealed is rejected.
+    #[error("reveal phase out of order: expected {expected:?}, got {got:?}")]
+    RevealPhaseOutOfOrder {
+        expected: RevealPhase,
+        got: RevealPhase,
+    },
+
+    /// Reveal phase has already been completed.
+    ///
+    /// Each phase can only be revealed once. Duplicate reveals for the same phase
+    /// are rejected.
+    #[error("reveal phase already completed: {phase:?}")]
+    RevealPhaseAlreadyCompleted { phase: RevealPhase },
+
+    /// Reveal received before the expected phase.
+    ///
+    /// The first reveal must be for Preflop. Reveals for later phases
+    /// require the prior phase to be completed.
+    #[error("reveal phase too early: received {got:?}, but {missing:?} has not been revealed yet")]
+    RevealPhaseTooEarly {
+        got: RevealPhase,
+        missing: RevealPhase,
+    },
 }
 
 /// The consensus payload schema wrapping all onchain message types.
@@ -349,6 +377,12 @@ pub struct ActionLogValidator {
     /// matches this expected context. This prevents replay attacks where a
     /// commitment from one table/hand is reused in a different context.
     expected_context: Option<ShuffleContext>,
+    /// Phases that have been completed (revealed) so far.
+    ///
+    /// Reveal gating enforces that phases must occur in order:
+    /// Preflop → Flop → Turn → River → Showdown.
+    /// Each phase can only be revealed once.
+    completed_phases: Vec<RevealPhase>,
 }
 
 impl Default for ActionLogValidator {
@@ -370,6 +404,7 @@ impl ActionLogValidator {
             required_seats: Vec::new(),
             acked_seats: Vec::new(),
             expected_context: None,
+            completed_phases: Vec::new(),
         }
     }
 
@@ -404,6 +439,7 @@ impl ActionLogValidator {
             required_seats: Vec::new(),
             acked_seats: Vec::new(),
             expected_context: Some(expected),
+            completed_phases: Vec::new(),
         }
     }
 
@@ -464,6 +500,70 @@ impl ActionLogValidator {
         self.expected_context.is_some()
     }
 
+    /// Returns the list of reveal phases that have been completed.
+    pub fn completed_phases(&self) -> &[RevealPhase] {
+        &self.completed_phases
+    }
+
+    /// Returns the next expected reveal phase, or `None` if all phases are complete.
+    ///
+    /// The phase order is: Preflop → Flop → Turn → River → Showdown.
+    pub fn next_expected_phase(&self) -> Option<RevealPhase> {
+        match self.completed_phases.last() {
+            None => Some(RevealPhase::Preflop),
+            Some(RevealPhase::Preflop) => Some(RevealPhase::Flop),
+            Some(RevealPhase::Flop) => Some(RevealPhase::Turn),
+            Some(RevealPhase::Turn) => Some(RevealPhase::River),
+            Some(RevealPhase::River) => Some(RevealPhase::Showdown),
+            Some(RevealPhase::Showdown) => None, // All phases complete
+        }
+    }
+
+    /// Returns true if all reveal phases have been completed.
+    pub fn all_phases_complete(&self) -> bool {
+        self.completed_phases.contains(&RevealPhase::Showdown)
+    }
+
+    /// Returns true if the given phase has been completed.
+    pub fn is_phase_complete(&self, phase: RevealPhase) -> bool {
+        self.completed_phases.contains(&phase)
+    }
+
+    /// Validate that a reveal phase is valid for the current state.
+    ///
+    /// This enforces the phase ordering: Preflop → Flop → Turn → River → Showdown.
+    /// Each phase can only be revealed once, and phases must occur in order.
+    fn validate_reveal_phase(&self, phase: RevealPhase) -> Result<(), PayloadError> {
+        // Check if this phase was already completed
+        if self.completed_phases.contains(&phase) {
+            return Err(PayloadError::RevealPhaseAlreadyCompleted { phase });
+        }
+
+        // Check phase ordering
+        let expected = self.next_expected_phase();
+        match expected {
+            None => {
+                // All phases complete, no more reveals allowed
+                Err(PayloadError::RevealPhaseAlreadyCompleted { phase })
+            }
+            Some(expected_phase) => {
+                if phase == expected_phase {
+                    // Correct phase
+                    Ok(())
+                } else if (phase as u8) < (expected_phase as u8) {
+                    // Trying to reveal an earlier phase (already completed)
+                    Err(PayloadError::RevealPhaseAlreadyCompleted { phase })
+                } else {
+                    // Trying to reveal a later phase (skipping required phases)
+                    Err(PayloadError::RevealPhaseTooEarly {
+                        got: phase,
+                        missing: expected_phase,
+                    })
+                }
+            }
+        }
+    }
+
     /// Validate a payload and update validator state.
     ///
     /// This method enforces:
@@ -473,6 +573,9 @@ impl ActionLogValidator {
     /// 4. All seats must ack before `GameAction` or reveal payloads are accepted
     /// 5. **Shuffle context verification** (if enabled): the `DealCommitment`'s scope
     ///    must match the expected context
+    /// 6. **Reveal phase gating**: Reveals must occur in sequential phase order
+    ///    (Preflop → Flop → Turn → River → Showdown). Each phase can only be
+    ///    revealed once.
     ///
     /// # Errors
     ///
@@ -483,6 +586,8 @@ impl ActionLogValidator {
     /// - [`PayloadError::DuplicateAck`] if same seat acks twice
     /// - [`PayloadError::InvalidAckSeat`] if ack comes from seat not in scope
     /// - [`PayloadError::ShuffleContextMismatch`] if commitment scope doesn't match expected context
+    /// - [`PayloadError::RevealPhaseAlreadyCompleted`] if reveal is for an already-completed phase
+    /// - [`PayloadError::RevealPhaseTooEarly`] if reveal is for a later phase than expected
     pub fn validate(&mut self, payload: &ConsensusPayload) -> Result<(), PayloadError> {
         // First payload must be a DealCommitment
         if self.payload_count == 0 {
@@ -559,16 +664,44 @@ impl ActionLogValidator {
                 // Record this ack
                 self.acked_seats.push(ack.seat_index);
             }
-            ConsensusPayload::GameAction(_)
-            | ConsensusPayload::RevealShare(_)
-            | ConsensusPayload::TimelockReveal(_) => {
-                // Actions and reveals require all acks to be received first
+            ConsensusPayload::GameAction(_) => {
+                // Actions require all acks to be received first
                 if !self.all_acks_received() {
                     return Err(PayloadError::ActionBeforeAllAcks {
                         received: self.acked_seats.len(),
                         required: self.required_seats.len(),
                     });
                 }
+            }
+            ConsensusPayload::RevealShare(rs) => {
+                // Reveals require all acks to be received first
+                if !self.all_acks_received() {
+                    return Err(PayloadError::ActionBeforeAllAcks {
+                        received: self.acked_seats.len(),
+                        required: self.required_seats.len(),
+                    });
+                }
+
+                // Validate reveal phase ordering
+                self.validate_reveal_phase(rs.phase)?;
+
+                // Record this phase as completed
+                self.completed_phases.push(rs.phase);
+            }
+            ConsensusPayload::TimelockReveal(tr) => {
+                // Timelock reveals require all acks to be received first
+                if !self.all_acks_received() {
+                    return Err(PayloadError::ActionBeforeAllAcks {
+                        received: self.acked_seats.len(),
+                        required: self.required_seats.len(),
+                    });
+                }
+
+                // Validate reveal phase ordering
+                self.validate_reveal_phase(tr.phase)?;
+
+                // Record this phase as completed
+                self.completed_phases.push(tr.phase);
             }
             ConsensusPayload::DealCommitment(_) => {
                 // Already handled above (DuplicateCommitment check)
@@ -1735,5 +1868,440 @@ mod tests {
         let msg = err.to_string();
         assert!(msg.contains("shuffle context mismatch"));
         assert!(msg.contains("hand_id mismatch"));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Reveal Phase Gating Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// Helper to create a validator with commitment and all acks done.
+    fn setup_validator_ready_for_reveals() -> (ActionLogValidator, [u8; 32]) {
+        let mut validator = ActionLogValidator::new();
+        let dc = test_deal_commitment();
+        let commitment_hash = dc.commitment_hash();
+
+        // Add deal commitment
+        validator
+            .validate(&ConsensusPayload::DealCommitment(dc))
+            .unwrap();
+
+        // Add all acks
+        for seat in [0, 1, 2, 3] {
+            validator
+                .validate(&ConsensusPayload::DealCommitmentAck(DealCommitmentAck {
+                    version: ProtocolVersion::current(),
+                    commitment_hash,
+                    seat_index: seat,
+                    player_signature: vec![],
+                }))
+                .unwrap();
+        }
+
+        (validator, commitment_hash)
+    }
+
+    fn make_reveal(commitment_hash: [u8; 32], phase: protocol_messages::RevealPhase) -> RevealShare {
+        RevealShare {
+            version: ProtocolVersion::current(),
+            commitment_hash,
+            phase,
+            card_indices: vec![0, 1, 2],
+            reveal_data: vec![vec![1], vec![2], vec![3]],
+            from_seat: 0,
+            signature: vec![],
+        }
+    }
+
+    fn make_timelock_reveal(
+        commitment_hash: [u8; 32],
+        phase: protocol_messages::RevealPhase,
+    ) -> TimelockReveal {
+        TimelockReveal {
+            version: ProtocolVersion::current(),
+            commitment_hash,
+            phase,
+            card_indices: vec![0],
+            timelock_proof: vec![0xAA, 0xBB],
+            revealed_values: vec![vec![42]],
+            timeout_seat: 1,
+        }
+    }
+
+    #[test]
+    fn test_reveal_phase_gating_accepts_preflop_first() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // First reveal must be Preflop
+        let reveal = make_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        assert!(validator
+            .validate(&ConsensusPayload::RevealShare(reveal))
+            .is_ok());
+
+        assert!(validator.is_phase_complete(protocol_messages::RevealPhase::Preflop));
+        assert_eq!(validator.completed_phases().len(), 1);
+    }
+
+    #[test]
+    fn test_reveal_phase_gating_rejects_flop_before_preflop() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Try to reveal Flop before Preflop
+        let reveal = make_reveal(commitment_hash, protocol_messages::RevealPhase::Flop);
+        let result = validator.validate(&ConsensusPayload::RevealShare(reveal));
+
+        assert!(matches!(
+            result,
+            Err(PayloadError::RevealPhaseTooEarly {
+                got: protocol_messages::RevealPhase::Flop,
+                missing: protocol_messages::RevealPhase::Preflop,
+            })
+        ));
+    }
+
+    #[test]
+    fn test_reveal_phase_gating_rejects_turn_before_flop() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Complete Preflop first
+        let preflop = make_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        validator
+            .validate(&ConsensusPayload::RevealShare(preflop))
+            .unwrap();
+
+        // Try to reveal Turn (skipping Flop)
+        let turn = make_reveal(commitment_hash, protocol_messages::RevealPhase::Turn);
+        let result = validator.validate(&ConsensusPayload::RevealShare(turn));
+
+        assert!(matches!(
+            result,
+            Err(PayloadError::RevealPhaseTooEarly {
+                got: protocol_messages::RevealPhase::Turn,
+                missing: protocol_messages::RevealPhase::Flop,
+            })
+        ));
+    }
+
+    #[test]
+    fn test_reveal_phase_gating_accepts_full_sequence() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Complete all phases in order
+        for phase in [
+            protocol_messages::RevealPhase::Preflop,
+            protocol_messages::RevealPhase::Flop,
+            protocol_messages::RevealPhase::Turn,
+            protocol_messages::RevealPhase::River,
+            protocol_messages::RevealPhase::Showdown,
+        ] {
+            let reveal = make_reveal(commitment_hash, phase);
+            assert!(
+                validator
+                    .validate(&ConsensusPayload::RevealShare(reveal))
+                    .is_ok(),
+                "phase {:?} should be accepted",
+                phase
+            );
+            assert!(validator.is_phase_complete(phase));
+        }
+
+        assert!(validator.all_phases_complete());
+        assert_eq!(validator.completed_phases().len(), 5);
+    }
+
+    #[test]
+    fn test_reveal_phase_gating_rejects_duplicate_phase() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Complete Preflop
+        let preflop1 = make_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        validator
+            .validate(&ConsensusPayload::RevealShare(preflop1))
+            .unwrap();
+
+        // Try to reveal Preflop again
+        let preflop2 = make_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        let result = validator.validate(&ConsensusPayload::RevealShare(preflop2));
+
+        assert!(matches!(
+            result,
+            Err(PayloadError::RevealPhaseAlreadyCompleted {
+                phase: protocol_messages::RevealPhase::Preflop,
+            })
+        ));
+    }
+
+    #[test]
+    fn test_reveal_phase_gating_rejects_earlier_phase_after_later() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Complete Preflop and Flop
+        for phase in [
+            protocol_messages::RevealPhase::Preflop,
+            protocol_messages::RevealPhase::Flop,
+        ] {
+            let reveal = make_reveal(commitment_hash, phase);
+            validator
+                .validate(&ConsensusPayload::RevealShare(reveal))
+                .unwrap();
+        }
+
+        // Try to reveal Preflop again (already completed)
+        let preflop = make_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        let result = validator.validate(&ConsensusPayload::RevealShare(preflop));
+
+        assert!(matches!(
+            result,
+            Err(PayloadError::RevealPhaseAlreadyCompleted {
+                phase: protocol_messages::RevealPhase::Preflop,
+            })
+        ));
+    }
+
+    #[test]
+    fn test_reveal_phase_gating_rejects_showdown_skipping_phases() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Complete only Preflop
+        let preflop = make_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        validator
+            .validate(&ConsensusPayload::RevealShare(preflop))
+            .unwrap();
+
+        // Try to jump to Showdown (skipping Flop, Turn, River)
+        let showdown = make_reveal(commitment_hash, protocol_messages::RevealPhase::Showdown);
+        let result = validator.validate(&ConsensusPayload::RevealShare(showdown));
+
+        assert!(matches!(
+            result,
+            Err(PayloadError::RevealPhaseTooEarly {
+                got: protocol_messages::RevealPhase::Showdown,
+                missing: protocol_messages::RevealPhase::Flop,
+            })
+        ));
+    }
+
+    #[test]
+    fn test_reveal_phase_gating_timelock_reveal_follows_same_rules() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Try to use timelock reveal for Flop before Preflop
+        let timelock = make_timelock_reveal(commitment_hash, protocol_messages::RevealPhase::Flop);
+        let result = validator.validate(&ConsensusPayload::TimelockReveal(timelock));
+
+        assert!(matches!(
+            result,
+            Err(PayloadError::RevealPhaseTooEarly {
+                got: protocol_messages::RevealPhase::Flop,
+                missing: protocol_messages::RevealPhase::Preflop,
+            })
+        ));
+    }
+
+    #[test]
+    fn test_reveal_phase_gating_timelock_reveal_completes_phase() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Use timelock reveal for Preflop
+        let timelock =
+            make_timelock_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        assert!(validator
+            .validate(&ConsensusPayload::TimelockReveal(timelock))
+            .is_ok());
+
+        assert!(validator.is_phase_complete(protocol_messages::RevealPhase::Preflop));
+
+        // Now Flop should be expected
+        assert_eq!(
+            validator.next_expected_phase(),
+            Some(protocol_messages::RevealPhase::Flop)
+        );
+    }
+
+    #[test]
+    fn test_reveal_phase_gating_mixed_reveal_and_timelock() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Preflop with regular reveal
+        let preflop = make_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        validator
+            .validate(&ConsensusPayload::RevealShare(preflop))
+            .unwrap();
+
+        // Flop with timelock reveal
+        let flop_timelock =
+            make_timelock_reveal(commitment_hash, protocol_messages::RevealPhase::Flop);
+        validator
+            .validate(&ConsensusPayload::TimelockReveal(flop_timelock))
+            .unwrap();
+
+        // Turn with regular reveal
+        let turn = make_reveal(commitment_hash, protocol_messages::RevealPhase::Turn);
+        validator
+            .validate(&ConsensusPayload::RevealShare(turn))
+            .unwrap();
+
+        assert!(validator.is_phase_complete(protocol_messages::RevealPhase::Preflop));
+        assert!(validator.is_phase_complete(protocol_messages::RevealPhase::Flop));
+        assert!(validator.is_phase_complete(protocol_messages::RevealPhase::Turn));
+        assert_eq!(
+            validator.next_expected_phase(),
+            Some(protocol_messages::RevealPhase::River)
+        );
+    }
+
+    #[test]
+    fn test_reveal_phase_gating_next_expected_phase() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Initially expect Preflop
+        assert_eq!(
+            validator.next_expected_phase(),
+            Some(protocol_messages::RevealPhase::Preflop)
+        );
+
+        // After each phase, check next expected
+        let phases = [
+            (
+                protocol_messages::RevealPhase::Preflop,
+                Some(protocol_messages::RevealPhase::Flop),
+            ),
+            (
+                protocol_messages::RevealPhase::Flop,
+                Some(protocol_messages::RevealPhase::Turn),
+            ),
+            (
+                protocol_messages::RevealPhase::Turn,
+                Some(protocol_messages::RevealPhase::River),
+            ),
+            (
+                protocol_messages::RevealPhase::River,
+                Some(protocol_messages::RevealPhase::Showdown),
+            ),
+            (protocol_messages::RevealPhase::Showdown, None),
+        ];
+
+        for (phase, expected_next) in phases {
+            let reveal = make_reveal(commitment_hash, phase);
+            validator
+                .validate(&ConsensusPayload::RevealShare(reveal))
+                .unwrap();
+            assert_eq!(
+                validator.next_expected_phase(),
+                expected_next,
+                "after {:?}, expected {:?}",
+                phase,
+                expected_next
+            );
+        }
+    }
+
+    #[test]
+    fn test_reveal_phase_gating_all_phases_complete() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        assert!(!validator.all_phases_complete());
+
+        // Complete all phases
+        for phase in [
+            protocol_messages::RevealPhase::Preflop,
+            protocol_messages::RevealPhase::Flop,
+            protocol_messages::RevealPhase::Turn,
+            protocol_messages::RevealPhase::River,
+            protocol_messages::RevealPhase::Showdown,
+        ] {
+            let reveal = make_reveal(commitment_hash, phase);
+            validator
+                .validate(&ConsensusPayload::RevealShare(reveal))
+                .unwrap();
+        }
+
+        assert!(validator.all_phases_complete());
+        assert!(validator.next_expected_phase().is_none());
+    }
+
+    #[test]
+    fn test_reveal_phase_gating_rejects_after_all_phases_complete() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Complete all phases
+        for phase in [
+            protocol_messages::RevealPhase::Preflop,
+            protocol_messages::RevealPhase::Flop,
+            protocol_messages::RevealPhase::Turn,
+            protocol_messages::RevealPhase::River,
+            protocol_messages::RevealPhase::Showdown,
+        ] {
+            let reveal = make_reveal(commitment_hash, phase);
+            validator
+                .validate(&ConsensusPayload::RevealShare(reveal))
+                .unwrap();
+        }
+
+        // Try to reveal any phase again
+        let preflop = make_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        let result = validator.validate(&ConsensusPayload::RevealShare(preflop));
+        assert!(matches!(
+            result,
+            Err(PayloadError::RevealPhaseAlreadyCompleted { .. })
+        ));
+    }
+
+    #[test]
+    fn test_reveal_phase_error_display() {
+        let err = PayloadError::RevealPhaseOutOfOrder {
+            expected: protocol_messages::RevealPhase::Flop,
+            got: protocol_messages::RevealPhase::Turn,
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("reveal phase out of order"));
+        assert!(msg.contains("Flop"));
+        assert!(msg.contains("Turn"));
+
+        let err = PayloadError::RevealPhaseAlreadyCompleted {
+            phase: protocol_messages::RevealPhase::Preflop,
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("already completed"));
+        assert!(msg.contains("Preflop"));
+
+        let err = PayloadError::RevealPhaseTooEarly {
+            got: protocol_messages::RevealPhase::Turn,
+            missing: protocol_messages::RevealPhase::Flop,
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("too early"));
+        assert!(msg.contains("Turn"));
+        assert!(msg.contains("Flop"));
+    }
+
+    #[test]
+    fn test_reveal_phase_gating_game_actions_allowed_between_phases() {
+        let (mut validator, commitment_hash) = setup_validator_ready_for_reveals();
+
+        // Complete Preflop
+        let preflop = make_reveal(commitment_hash, protocol_messages::RevealPhase::Preflop);
+        validator
+            .validate(&ConsensusPayload::RevealShare(preflop))
+            .unwrap();
+
+        // Game action between reveals should still work
+        let action = GameActionMessage {
+            version: ProtocolVersion::current(),
+            deal_commitment_hash: commitment_hash,
+            seat_index: 0,
+            action_type: action_codes::BET,
+            amount: 100,
+            sequence: 1,
+            signature: vec![],
+        };
+        assert!(validator
+            .validate(&ConsensusPayload::GameAction(action))
+            .is_ok());
+
+        // Can still continue to Flop
+        let flop = make_reveal(commitment_hash, protocol_messages::RevealPhase::Flop);
+        assert!(validator
+            .validate(&ConsensusPayload::RevealShare(flop))
+            .is_ok());
     }
 }
