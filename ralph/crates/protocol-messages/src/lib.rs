@@ -87,6 +87,7 @@ pub mod blackjack;
 pub mod codec;
 pub mod exports;
 pub mod golden_vectors;
+pub mod roulette;
 
 // Re-export codec primitives for convenience
 pub use codec::{
