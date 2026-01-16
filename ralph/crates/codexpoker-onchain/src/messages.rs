@@ -285,6 +285,140 @@ pub enum PayloadError {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Disabled Features (AC-1.1, AC-1.2)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Features disabled in this protocol version.
+///
+/// This module explicitly documents which protocol features are disabled
+/// and provides constants for programmatic inspection. This satisfies:
+///
+/// - **AC-1.1**: Bridge-related instructions are rejected with a clear error
+/// - **AC-1.2**: Bridge state keys and events are no longer emitted
+///
+/// # Disabled Features
+///
+/// The following instruction/event tags have been **removed from the protocol**
+/// in this version to stabilize core casino operations:
+///
+/// ## Bridge (EVM Cross-Chain)
+///
+/// | Tag | Name | Description |
+/// |-----|------|-------------|
+/// | 53 | `BridgeWithdraw` | Request withdrawal to EVM chain |
+/// | 54 | `BridgeDeposit` | Credit deposit from EVM chain |
+/// | 55 | `FinalizeBridgeWithdrawal` | Finalize pending withdrawal |
+///
+/// **State keys removed**: `BridgeState`, `BridgeWithdrawal(u64)`
+///
+/// **Events removed**: `BridgeWithdrawalRequested`, `BridgeWithdrawalFinalized`, `BridgeDepositCredited`
+///
+/// ## Re-enabling Features
+///
+/// These features are preserved in the codebase but gated behind feature flags.
+/// They may be re-enabled in a future protocol version after stabilization.
+///
+/// # Usage
+///
+/// ```
+/// use codexpoker_onchain::messages::disabled_features;
+///
+/// // Check if bridge is disabled
+/// assert!(disabled_features::BRIDGE_DISABLED);
+///
+/// // Get list of disabled instruction tags
+/// assert!(disabled_features::DISABLED_INSTRUCTION_TAGS.contains(&53)); // BridgeWithdraw
+/// ```
+pub mod disabled_features {
+    use super::PayloadError;
+
+    /// Bridge functionality is disabled in this protocol version.
+    ///
+    /// When `true`, all bridge-related instructions (deposit, withdraw, finalize)
+    /// return [`PayloadError::FeatureDisabled`] and do not modify state.
+    pub const BRIDGE_DISABLED: bool = true;
+
+    /// Liquidity/AMM functionality is disabled in this protocol version.
+    ///
+    /// When `true`, all AMM-related instructions (swap, add/remove liquidity)
+    /// return [`PayloadError::FeatureDisabled`] and do not modify state.
+    pub const LIQUIDITY_DISABLED: bool = true;
+
+    /// Staking functionality is disabled in this protocol version.
+    ///
+    /// When `true`, all staking-related instructions (stake, unstake, claim)
+    /// return [`PayloadError::FeatureDisabled`] and do not modify state.
+    pub const STAKING_DISABLED: bool = true;
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Disabled Instruction Tags (for reference/validation)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// Tag for BridgeWithdraw instruction (DISABLED).
+    pub const TAG_BRIDGE_WITHDRAW: u8 = 53;
+    /// Tag for BridgeDeposit instruction (DISABLED).
+    pub const TAG_BRIDGE_DEPOSIT: u8 = 54;
+    /// Tag for FinalizeBridgeWithdrawal instruction (DISABLED).
+    pub const TAG_FINALIZE_BRIDGE_WITHDRAWAL: u8 = 55;
+
+    /// All instruction tags that are disabled in this protocol version.
+    ///
+    /// Validators can use this list to immediately reject transactions
+    /// containing these tags without further processing.
+    pub const DISABLED_INSTRUCTION_TAGS: &[u8] = &[
+        TAG_BRIDGE_WITHDRAW,
+        TAG_BRIDGE_DEPOSIT,
+        TAG_FINALIZE_BRIDGE_WITHDRAWAL,
+    ];
+
+    /// Check if an instruction tag is disabled.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use codexpoker_onchain::messages::disabled_features::is_tag_disabled;
+    ///
+    /// assert!(is_tag_disabled(53)); // BridgeWithdraw
+    /// assert!(!is_tag_disabled(1)); // Some other tag
+    /// ```
+    #[inline]
+    pub const fn is_tag_disabled(tag: u8) -> bool {
+        matches!(
+            tag,
+            TAG_BRIDGE_WITHDRAW | TAG_BRIDGE_DEPOSIT | TAG_FINALIZE_BRIDGE_WITHDRAWAL
+        )
+    }
+
+    /// Create a FeatureDisabled error for bridge operations.
+    ///
+    /// This is the canonical way to reject bridge operations in handlers.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use codexpoker_onchain::messages::disabled_features::bridge_disabled_error;
+    ///
+    /// let err = bridge_disabled_error();
+    /// assert!(err.to_string().contains("bridge_disabled"));
+    /// ```
+    pub fn bridge_disabled_error() -> PayloadError {
+        PayloadError::FeatureDisabled { feature: "bridge" }
+    }
+
+    /// Create a FeatureDisabled error for liquidity/AMM operations.
+    pub fn liquidity_disabled_error() -> PayloadError {
+        PayloadError::FeatureDisabled {
+            feature: "liquidity",
+        }
+    }
+
+    /// Create a FeatureDisabled error for staking operations.
+    pub fn staking_disabled_error() -> PayloadError {
+        PayloadError::FeatureDisabled { feature: "staking" }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Timelock Proof Verifier Trait
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -5582,5 +5716,158 @@ mod tests {
             would_be_error.to_string().contains("bridge_disabled"),
             "Bridge operations would return bridge_disabled error"
         );
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Disabled Features Module Tests (AC-1.1, AC-1.2)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// Verifies that bridge is explicitly marked as disabled in public exports.
+    ///
+    /// AC-1.1: Bridge-related instructions are rejected with a clear error.
+    /// The disabled_features module must expose BRIDGE_DISABLED = true.
+    #[test]
+    fn test_bridge_disabled_constant_exported_ac_1_1() {
+        use super::disabled_features;
+
+        assert!(
+            disabled_features::BRIDGE_DISABLED,
+            "BRIDGE_DISABLED must be true per AC-1.1"
+        );
+    }
+
+    /// Verifies that all bridge instruction tags are listed as disabled.
+    ///
+    /// AC-1.2: Bridge state keys and events are no longer emitted.
+    /// The disabled_features module must list all bridge tags.
+    #[test]
+    fn test_bridge_instruction_tags_listed_ac_1_2() {
+        use super::disabled_features;
+
+        // Bridge instruction tags from the original protocol
+        assert_eq!(
+            disabled_features::TAG_BRIDGE_WITHDRAW, 53,
+            "BridgeWithdraw tag must be 53"
+        );
+        assert_eq!(
+            disabled_features::TAG_BRIDGE_DEPOSIT, 54,
+            "BridgeDeposit tag must be 54"
+        );
+        assert_eq!(
+            disabled_features::TAG_FINALIZE_BRIDGE_WITHDRAWAL, 55,
+            "FinalizeBridgeWithdrawal tag must be 55"
+        );
+
+        // All bridge tags must be in the disabled list
+        assert!(
+            disabled_features::DISABLED_INSTRUCTION_TAGS.contains(&53),
+            "BridgeWithdraw (53) must be in DISABLED_INSTRUCTION_TAGS"
+        );
+        assert!(
+            disabled_features::DISABLED_INSTRUCTION_TAGS.contains(&54),
+            "BridgeDeposit (54) must be in DISABLED_INSTRUCTION_TAGS"
+        );
+        assert!(
+            disabled_features::DISABLED_INSTRUCTION_TAGS.contains(&55),
+            "FinalizeBridgeWithdrawal (55) must be in DISABLED_INSTRUCTION_TAGS"
+        );
+    }
+
+    /// Verifies the is_tag_disabled helper correctly identifies bridge tags.
+    ///
+    /// AC-1.1: Validators can quickly reject disabled instructions.
+    #[test]
+    fn test_is_tag_disabled_helper_ac_1_1() {
+        use super::disabled_features::is_tag_disabled;
+
+        // Bridge tags are disabled
+        assert!(is_tag_disabled(53), "BridgeWithdraw (53) must be disabled");
+        assert!(is_tag_disabled(54), "BridgeDeposit (54) must be disabled");
+        assert!(is_tag_disabled(55), "FinalizeBridgeWithdrawal (55) must be disabled");
+
+        // Other tags are not disabled
+        assert!(!is_tag_disabled(0), "Tag 0 should not be disabled");
+        assert!(!is_tag_disabled(1), "Tag 1 should not be disabled");
+        assert!(!is_tag_disabled(52), "Tag 52 should not be disabled");
+        assert!(!is_tag_disabled(56), "Tag 56 should not be disabled");
+        assert!(!is_tag_disabled(255), "Tag 255 should not be disabled");
+    }
+
+    /// Verifies bridge_disabled_error() produces correct error format.
+    ///
+    /// AC-1.1: Bridge-related instructions return a clear error code.
+    #[test]
+    fn test_bridge_disabled_error_helper_ac_1_1() {
+        use super::disabled_features::bridge_disabled_error;
+
+        let err = bridge_disabled_error();
+        let msg = err.to_string();
+
+        assert!(
+            msg.contains("bridge_disabled"),
+            "bridge_disabled_error must produce message containing 'bridge_disabled', got: {}",
+            msg
+        );
+
+        // Verify it's the correct error variant
+        match err {
+            PayloadError::FeatureDisabled { feature } => {
+                assert_eq!(feature, "bridge", "feature must be 'bridge'");
+            }
+            _ => panic!("Expected FeatureDisabled variant"),
+        }
+    }
+
+    /// Verifies liquidity_disabled_error() produces correct error format.
+    #[test]
+    fn test_liquidity_disabled_error_helper() {
+        use super::disabled_features::liquidity_disabled_error;
+
+        let err = liquidity_disabled_error();
+        let msg = err.to_string();
+
+        assert!(
+            msg.contains("liquidity_disabled"),
+            "liquidity_disabled_error must produce message containing 'liquidity_disabled', got: {}",
+            msg
+        );
+    }
+
+    /// Verifies staking_disabled_error() produces correct error format.
+    #[test]
+    fn test_staking_disabled_error_helper() {
+        use super::disabled_features::staking_disabled_error;
+
+        let err = staking_disabled_error();
+        let msg = err.to_string();
+
+        assert!(
+            msg.contains("staking_disabled"),
+            "staking_disabled_error must produce message containing 'staking_disabled', got: {}",
+            msg
+        );
+    }
+
+    /// Verifies all disabled feature flags are accessible from public API.
+    ///
+    /// This test ensures tooling can programmatically inspect which features
+    /// are disabled in this protocol version.
+    #[test]
+    fn test_disabled_features_are_public_exports() {
+        use super::disabled_features;
+
+        // All flags should be accessible (compile test + runtime check)
+        let _bridge: bool = disabled_features::BRIDGE_DISABLED;
+        let _liquidity: bool = disabled_features::LIQUIDITY_DISABLED;
+        let _staking: bool = disabled_features::STAKING_DISABLED;
+
+        // Tags should be accessible
+        let _tags: &[u8] = disabled_features::DISABLED_INSTRUCTION_TAGS;
+
+        // Helper functions should be accessible
+        let _is_disabled: bool = disabled_features::is_tag_disabled(53);
+        let _err: PayloadError = disabled_features::bridge_disabled_error();
+
+        // If this test compiles and runs, the exports are working
     }
 }

@@ -107,8 +107,9 @@ pub use consensus::{
     PayloadExecutor, PersistentAutomaton, SimplexAutomaton, SimplexConfig,
 };
 pub use messages::{
-    action_codes, ActionLogValidator, ConsensusPayload, GameActionMessage, NoOpTimelockVerifier,
-    PayloadError, TimelockProofVerifier, TimelockVerificationInput, GAME_ACTION_DOMAIN, REVEAL_TTL,
+    action_codes, disabled_features, ActionLogValidator, ConsensusPayload, GameActionMessage,
+    NoOpTimelockVerifier, PayloadError, TimelockProofVerifier, TimelockVerificationInput,
+    GAME_ACTION_DOMAIN, REVEAL_TTL,
 };
 pub use state::{
     // State management
